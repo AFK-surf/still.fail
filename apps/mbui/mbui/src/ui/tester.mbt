@@ -1200,6 +1200,16 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
       out.push((n.text, x, y, n.fw, n.fh, alpha))
     }
   }
+  // (and the words of the window's tree's nodes, where and as faded as they are drawn, as Tester::find finds them)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.words != "" {
+          out.push((d.words, d.x, d.y, d.w, d.h, d.alpha))
+        }
+      }
+    None => ()
+  }
   out
 }
 

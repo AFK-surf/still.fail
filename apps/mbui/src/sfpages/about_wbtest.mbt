@@ -132,7 +132,7 @@ test "关于's 检查更新 pressed: the update dialog over the page asks still.
     t.draw()
     t.draw()
     assert_true(t.find("已是最新版本") is Some(_), msg=at)
-    assert_eq(app.toast.get(), "", msg=at)
+    assert_eq(app.toast.get().words, "", msg=at)
     assert_true(app.nav.top() == Setting(About), msg=at)
     t.click(Button, label="确定")
     t.draw()

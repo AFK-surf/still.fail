@@ -25,10 +25,16 @@ pub fn acting_reset() -> Unit {
 /// Says `words` in the toast from the next frame on (from a call's answer, between frames), with a button of
 /// `action`'s words on it doing `run` ("" none).
 pub fn toast_later(words : String, action? : String = "", run? : () -> Unit = fn() {  }) -> Unit {
-  app.toast.set(words)
-  app.toast_n.set(app.toast_n.get() + 1)
-  app.toast_action = action
-  app.toast_run = run
+  // (its words, which saying it is, its button and what that does said as one: what reads them never sees one without
+  // the others)
+  let n = @signals.untracked(fn() { app.toast.get().n }) + 1
+  app.toast.set({ words, n, action, run })
+}
+
+///|
+/// The words the toast says now ("" none).
+pub fn toast_words() -> String {
+  app.toast.get().words
 }
 
 ///|

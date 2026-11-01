@@ -125,6 +125,10 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     while self.fake.time < end - 1.0e-9 {
       self.clock_frame()
     }
+    // (asked on by a hair, less than the same moment summed another way: on to the frame that is at or past it)
+    if ms > 0.0 && end > self.fake.time {
+      self.clock_frame()
+    }
     return
   }
   // what the last frame left owed (a tell answered at once, a host's answer posted, an input's frame after) drawn at
@@ -147,6 +151,11 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     if next < end - 1.0e-9 {
       self.draw_owed(1)
     }
+  }
+  // (and asked on by a hair, less than the same moment summed another way: there, at what was asked, not left a hair
+  // short of it (a timer's moment summed as its cause's and a length, past the display's frame the clock is at))
+  if ms > 0.0 && end > self.fake.time {
+    self.frame_at(end)
   }
 }
 
@@ -237,8 +246,8 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
   if paint_left() {
     why.push("a frame asked for to paint (\{paint_said.val})")
   }
-  if c.wake_waited >= 0.0 {
-    why.push("a wake in \{(c.wake_waited - c.clock).ceil().to_int()} ms" + by_of(c.wake_by))
+  if c.waited_at() >= 0.0 {
+    why.push("a wake in \{(c.waited_at() - c.clock).ceil().to_int()} ms" + c.waited_by())
   }
   let rt = fx.val.unsettled()
   if rt != "" {
@@ -272,7 +281,7 @@ fn Ctx::at_rest(self : Ctx) -> Bool {
   !self.motion_left &&
   !self.wants_frame &&
   !paint_left() &&
-  self.wake_waited < 0.0 &&
+  self.waited_at() < 0.0 &&
   fx.val.unsettled() == ""
 }
 
@@ -301,8 +310,8 @@ fn Ctx::rest_why(self : Ctx) -> String {
   if self.motion_left {
     why.push("a motion said is not at rest: " + self.moving_now().join("; "))
   }
-  if self.wake_waited >= 0.0 {
-    why.push("a wake in \{(self.wake_waited - self.clock).ceil().to_int()} ms" + by_of(self.wake_by))
+  if self.waited_at() >= 0.0 {
+    why.push("a wake in \{(self.waited_at() - self.clock).ceil().to_int()} ms" + self.waited_by())
   }
   let rt = fx.val.unsettled()
   if rt != "" {
@@ -451,7 +460,8 @@ pub fn Tester::tap_notice(self : Tester, text : String) -> Bool {
 pub fn Tester::next_wake(self : Tester) -> (Double, String)? {
   ignore(self)
   let c = g()
-  let ui = if c.wake_waited < 0.0 { None } else { Some((c.wake_waited, by_of(c.wake_by))) }
+  let waited = c.waited_at()
+  let ui = if waited < 0.0 { None } else { Some((waited, c.waited_by())) }
   let rt = match fx.val.next_due() {
     Some((at, who)) => Some((at.to_double(), " (the runtime's: " + (if who == "" { "a timer" } else { who }) + ")"))
     None => None
@@ -460,5 +470,15 @@ pub fn Tester::next_wake(self : Tester) -> (Double, String)? {
     (Some(a), Some(b)) => if b.0 < a.0 { Some(b) } else { Some(a) }
     (Some(a), None) => Some(a)
     (None, b) => b
+  }
+}
+
+///|
+/// Who said what the app waits on next (Ctx::waited_at): an old view's wake, where it said it; the window's tree's.
+fn Ctx::waited_by(self : Ctx) -> String {
+  if self.wake_waited >= 0.0 && self.waited_at() == self.wake_waited {
+    by_of(self.wake_by)
+  } else {
+    " (the window's tree's)"
   }
 }

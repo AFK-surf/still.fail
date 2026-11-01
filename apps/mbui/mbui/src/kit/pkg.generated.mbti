@@ -305,6 +305,8 @@ pub fn toast_rest(String) -> Double
 
 pub fn toaster(@ui.Ctx, String, Array[Toast], duration? : Double, w? : Double, bottom? : Double, label? : String, close_label? : String, look? : (@ui.Ctx, ToastState, () -> Unit, () -> Unit) -> Unit) -> Toasts
 
+pub fn toaster_node(@view.View, () -> Array[Toast], (Toast) -> Double, () -> Double, (@view.View, ToastNode) -> Unit, (String) -> Unit, (String) -> Unit, key? : String, w? : Double, label? : String) -> @view.View
+
 pub fn toggle(@ui.Ctx, String, Bool, key? : String, disabled? : Bool, look? : (@ui.Ctx, ToggleState) -> Unit) -> @ui.Changed[Bool]
 
 pub fn toggle_group(@ui.Ctx, String, Array[Item], Array[String], multiple? : Bool, orientation? : @ui.Orientation, wrap? : Bool, disabled? : Bool, label? : String, slide? : Bool, grow? : Bool, widths? : Array[(Double, Double)], look? : (@ui.Ctx, ToggleState) -> Unit, thumb? : (@ui.Ctx, Double, Double) -> Unit, ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit, lens? : @paint.Glass, lens_grow? : Double) -> @ui.Changed[Array[String]]
@@ -700,6 +702,15 @@ pub(all) struct Toast {
   description : String
   action : String
 } derive(Eq, Show)
+
+pub struct ToastNode {
+  // private fields
+}
+pub fn ToastNode::action(Self, @view.View, () -> String) -> @view.View
+pub fn ToastNode::dx(Self) -> Double
+pub fn ToastNode::live(Self) -> Bool
+pub fn ToastNode::t(Self) -> Double
+pub fn ToastNode::toast(Self) -> Toast
 
 pub(all) struct ToastState {
   toast : Toast

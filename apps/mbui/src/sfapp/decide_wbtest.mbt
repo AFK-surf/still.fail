@@ -312,6 +312,9 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   // the sheet gone, where it went said
   t.frame()
   assert_true(t.find("开头附一句（可选）") is None)
+  // (said at once, read out: seen as it has come in, toast_said)
+  assert_true(toast_said(t, "已接力到 #dev"))
+  t.run_for(@kit.presence_in_ms)
   assert_true(t.find("已接力到 #dev") is Some(_))
 }
 

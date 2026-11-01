@@ -121,9 +121,9 @@ fn over_toast_foot(foot : Double) -> Double raise {
   t.post(@hostapi.system_channel, "{\"over\":true,\"bars\":{\"top\":24,\"bottom\":\{foot},\"left\":0,\"right\":0}}")
   t.frame()
   sheet_rested(t, "sf-present")
-  app.toast.set("发到了")
-  app.toast_n.set(app.toast_n.get() + 1)
-  t.frame()
+  @sfbase.toast_later("发到了")
+  // (come in: where its words are drawn as it rests)
+  t.run_for(@kit.presence_in_ms)
   match t.rect_of("发到了") {
     Some((_, y, _, h)) => y + h
     None => fail("no toast")

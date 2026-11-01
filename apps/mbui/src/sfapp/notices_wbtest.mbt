@@ -373,10 +373,10 @@ test "settings: notifications switched off on 通知's page, the core keeps it; 
   assert_true(on[on.length() - 1].params.stringify().contains("\"on\":true"))
   // refused by the system: a toast says where to allow them
   (on[on.length() - 1].done)(Err({ "code": "x", "message": "坏了" }))
-  assert_eq(app.toast.get(), "无法开启通知：坏了")
+  assert_eq(app.toast.get().words, "无法开启通知：坏了")
   sys.answer = Some(false)
   t.frame()
-  assert_eq(app.toast.get(), "在系统设置里允许 still.fail 发通知")
+  assert_eq(app.toast.get().words, "在系统设置里允许 still.fail 发通知")
   let told = named(calls, "notify.permission")
   assert_true(told[told.length() - 1].params.stringify().contains("\"denied\""))
   // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)

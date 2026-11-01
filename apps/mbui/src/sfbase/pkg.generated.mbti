@@ -1553,7 +1553,13 @@ pub fn thumb_shows(String) -> Double
 
 pub fn toast_later(String, action? : String, run? : () -> Unit) -> Unit
 
+pub let toast_none : ToastSaid
+
+pub fn toast_words() -> String
+
 pub fn toasts(@ui.Ctx, Double) -> Unit
+
+pub fn toasts_node(@view.View, () -> Double) -> @view.View
 
 pub fn topic_as_read(String, Map[String, Json], Topic) -> Topic
 
@@ -1891,10 +1897,7 @@ pub(all) struct App {
   mut switch_way : Int32
   mut held : Int32
   mut held_long : Bool
-  toast : @signals.Signal[String]
-  toast_n : @signals.Signal[Int32]
-  mut toast_action : String
-  mut toast_run : () -> Unit
+  toast : @signals.Signal[ToastSaid]
 }
 
 pub(all) struct Arrangement {
@@ -3165,6 +3168,13 @@ pub(all) struct ThumbLook {
   id : Int32
   list : String
   over : (Double) -> Unit
+}
+
+pub(all) struct ToastSaid {
+  words : String
+  n : Int32
+  action : String
+  run : () -> Unit
 }
 
 pub(all) struct Topic {

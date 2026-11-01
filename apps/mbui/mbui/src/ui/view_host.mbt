@@ -347,7 +347,8 @@ fn view_forget() -> Unit {
 fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
   let c = g()
   let tl = layout_text(words, c.sp(look.size), look.weight, if width < 0.0 { 1.0e9 } else { width }, look.wrap, line=c.sp(look.line), style=view_words_style())
-  (tl.w, tl.h)
+  // (broken onto more lines than their own where the width ran out: as wide as it, as an old view's words are, leaf_size)
+  (if width >= 0.0 && look.wrap && soft_wrapped(tl.line_end, tl.shaped.cu) { width } else { tl.w }, tl.h)
 }
 
 ///|
@@ -393,7 +394,8 @@ fn view_rich(runs : Array[@view.WordsRun], look : @view.WordsLook) -> Rich {
 /// A node's words in pieces measured as they are drawn (view_rich), in `width` (< 0: as wide as they are).
 fn view_runs_measure(runs : Array[@view.WordsRun], look : @view.WordsLook, width : Double) -> (Double, Double) {
   let lay = layout_rich(view_rich(runs, look), if width < 0.0 || !look.wrap { 1.0e9 } else { width })
-  (lay.w, lay.h)
+  // (broken where the width ran out: as wide as it, as leaf_size has an old view's)
+  (if width >= 0.0 && look.wrap && soft_wrapped(lay.line_end, lay.cu) { width } else { lay.w }, lay.h)
 }
 
 ///|
@@ -638,7 +640,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         marks=self.next_hit_marks,
         bars=self.next_bars,
       ) >=
-        0
+        0 &&
+        !over_all_takes(x, y)
       if over != view_point_seen.val.1 {
         view_point_tell(tree, over~)
       }
@@ -659,6 +662,23 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (the nodes what they hold fades out towards the edges of now, where each is drawn and how far before each edge it
   // fades, the innermost last: View::fades)
   let fading : Array[(@view.NodeId, (Double, Double, Double, Double), (Double, Double, Double, Double))] = []
+  // what the old frame puts over all of it at its root (its layers: the overlays its views open, menus, sheets,
+  // dialogs, raised to the root's end; what is built around the old views over them, a splash), over the tree, in their
+  // order, the one old view the whole window or not (the way there: an old view's overlay not yet placed, cut and
+  // ordered as its island is); under what of the tree is over all else of the window (View::over_all), painted as that
+  // comes, else after all of it
+  let layers_painted = Ref(false)
+  let paint_layers = fn() {
+    layers_painted.val = true
+    let mut ch = self.nodes[root].first
+    while ch >= 0 {
+      let n = self.nodes[ch]
+      if (n.layer || n.portal) && !old_boxes.values().any(fn(i) { i == ch }) {
+        self.paint(ch, 1.0)
+      }
+      ch = n.next
+    }
+  }
   tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
     while clipping.length() > 0 && !tree.holds(clipping[clipping.length() - 1], c.id) {
       clipping.pop() |> ignore
@@ -670,6 +690,14 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // (the root, the window, is drawn by nothing of its own)
     if c.id.at == 0 || a <= 0.002 {
       return
+    }
+    // (the window's top, the root's last: what clipped before it is none of its, out of the way by now)
+    if !layers_painted.val && tree.over_all(c.id) {
+      while clipping.length() > 0 {
+        clipping.pop() |> ignore
+        pop_clip()
+      }
+      paint_layers()
     }
     // (what it draws, and an old view it hosts, faded out towards the edges of each that holds it so, each pixel by
     // where it is; then what it holds towards its own, not its own drawing: View::fades)
@@ -755,17 +783,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   for _ in clipping {
     pop_clip()
   }
-  // what the old frame puts over all of it at its root (its layers: the overlays its views open, menus, sheets,
-  // dialogs, raised to the root's end; what is built around the old views over them, a splash), over the tree, in their
-  // order, the one old view the whole window or not (the way there: an old view's overlay not yet placed, cut and
-  // ordered as its island is)
-  let mut ch = self.nodes[root].first
-  while ch >= 0 {
-    let n = self.nodes[ch]
-    if (n.layer || n.portal) && !old_boxes.values().any(fn(i) { i == ch }) {
-      self.paint(ch, 1.0)
-    }
-    ch = n.next
+  if !layers_painted.val {
+    paint_layers()
   }
   dr.targets_said = false
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
@@ -1543,7 +1562,8 @@ fn view_input_taken() -> Int {
 
 ///|
 /// Whether a press at (x, y) (`pressed`; else the pointer there) is on a hit target of the old frame's that is no old
-/// view's (what it put over all of it at its root: its overlays, a modal's ground among them), as a press finds one.
+/// view's (what it put over all of it at its root: its overlays, a modal's ground among them), as a press finds one, and
+/// nothing of the window's tree over all else of it (View::over_all: a toast) takes it there first.
 fn old_root_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = true) -> Bool {
   let k = if pressed {
     let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
@@ -1551,7 +1571,17 @@ fn old_root_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = true) -> Bool
   } else {
     hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
   }
-  k >= 0 && old_hit_owner(k) is None
+  k >= 0 && old_hit_owner(k) is None && !over_all_takes(x, y)
+}
+
+///|
+/// Whether what of the window's tree takes a finger at (x, y) is over all else of the window (View::over_all), the old
+/// frame's layers under it there.
+fn over_all_takes(x : Double, y : Double) -> Bool {
+  match view_app.val {
+    Some(tree) => @signals.untracked(fn() { tree.over_all_takes(x, y) })
+    None => false
+  }
 }
 
 ///|
@@ -2320,9 +2350,16 @@ fn view_key(code : Int, mods : Int) -> Bool {
   if c.editors.contains(focus) || c.dev.catchers.contains(focus) || c.focus_keeps(code, mods) {
     return false
   }
-  if c.last_layers
+  // (the old frame's layers take the keys; where the focus is on what of the tree is over all of them (View::over_all),
+  // it first, and what of the tree is over all else alone: what none of that takes, the old frame's)
+  let over_all = match tree_said_ids.get(c.focus) {
+    Some(nid) => tree.over_all(nid)
+    None => false
+  }
+  let old_keys = c.last_layers
     .iter()
-    .any(fn(l) { c.layer_takes(l) && (l.modal || c.focus_in_layer(l.id) || (code == key_escape && l.escape)) }) {
+    .any(fn(l) { c.layer_takes(l) && (l.modal || c.focus_in_layer(l.id) || (code == key_escape && l.escape)) })
+  if old_keys && !over_all {
     return false
   }
   // (Enter or Space on a node of its own with the focus, of the keys that press it: its press, at the key's moment)
@@ -2337,7 +2374,7 @@ fn view_key(code : Int, mods : Int) -> Bool {
       _ => ()
     }
   }
-  tree.key_at(code, mods, view_moment())
+  tree.key_at(code, mods, view_moment(), top_only=old_keys)
 }
 
 ///|
@@ -2736,9 +2773,11 @@ fn tree_said_id(id : @view.NodeId) -> Int {
 fn tree_said_action(id : Int, action : Action) -> Bool {
   match (tree_said_ids.get(id), view_app.val) {
     (Some(nid), Some(tree)) => {
-      // (what the old frame put over all of it, modal, keeps it from input as from being read out)
+      // (what the old frame put over all of it, modal, keeps it from input as from being read out; not what is over all
+      // else of the window, View::over_all)
+      let free = g().modal_node() < 0 || tree.over_all(nid)
       match action {
-        Activate if g().modal_node() < 0 => {
+        Activate if free => {
           // (taken, its press found and done as one event of this moment: Tree::activate_at)
           if tree.activate_at(nid, view_moment()) {
             h_frame_owed()
@@ -2746,7 +2785,7 @@ fn tree_said_action(id : Int, action : Action) -> Bool {
         }
         // (the focus to it, as Tab would give it, at the moment it is asked, where a screen reader may give it then (read
         // out, able to take it; nothing of the old frame's modal over it): else the focus where it was)
-        Focus if g().modal_node() < 0 => {
+        Focus if free => {
           tree.event(view_moment(), fn() {
             if tree.focus_asked_takes(nid) {
               g().focus_moved(id, visible=true)
@@ -2804,9 +2843,25 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
     tree_said_of.remove(id)
   }
   // (what the old frame put over all of it, modal: the tree under it read out as hidden, as the old views under it are)
+  // (what the old frame put over all of it at its root: as it is drawn, after the tree, under what of the tree is over
+  // all else of the window: View::over_all)
+  let layers_put = Ref(false)
+  let put_layers = fn() {
+    layers_put.val = true
+    for k in 0..<old.length() {
+      if owner[k] == -2 {
+        put_old(k, -1, 0, false, false)
+      }
+    }
+  }
   let old_modal = self.modal_node() >= 0
   for j, sn in said {
     let parent = if sn.parent >= 0 { at[sn.parent] } else { -1 }
+    // (over all else of the window: read out after the old frame's layers, none of them hiding it)
+    let over_all = tree.over_all(sn.id)
+    if over_all && !layers_put.val {
+      put_layers()
+    }
     if sn.hosted {
       let mine = match old_boxes.get(sn.id) {
         Some(_) => sn.id.at
@@ -2851,7 +2906,7 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
           actions,
           rect: sn.rect,
           focused: self.focus == tree_said_id(sn.id),
-          hidden: !sn.allowed || sn.hidden || old_modal,
+          hidden: !sn.allowed || sn.hidden || (old_modal && !over_all),
           parent,
           depth: if parent >= 0 { out[parent].depth + 1 } else { 0 },
         })
@@ -2860,11 +2915,8 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
       None => at[j] = parent
     }
   }
-  // (what the old frame put over all of it at its root: last)
-  for k in 0..<old.length() {
-    if owner[k] == -2 {
-      put_old(k, -1, 0, false, false)
-    }
+  if !layers_put.val {
+    put_layers()
   }
   out
 }
@@ -2964,7 +3016,21 @@ fn Ctx::in_window_within(self : Ctx, f : () -> Unit) -> Unit {
 fn Ctx::focus_spliced(self : Ctx) -> Array[Focusable] {
   guard view_app.val is Some(tree) else { return self.last_focusables }
   let out : Array[Focusable] = []
+  // (what the old frame put over all of it at its root: after the tree, under what of it is over all else of the
+  // window, View::over_all)
+  let layers_put = Ref(false)
+  let put_layers = fn() {
+    layers_put.val = true
+    for f in self.last_focusables {
+      if f.layer != 0 {
+        out.push(f)
+      }
+    }
+  }
   for at in tree.focus_order() {
+    if !layers_put.val && tree.over_all(at.id) {
+      put_layers()
+    }
     if at.hosted {
       for f in self.last_focusables {
         if f.layer == 0 && (f.island == Some(at.id) || (f.island is None && old_whole.val)) {
@@ -2983,10 +3049,8 @@ fn Ctx::focus_spliced(self : Ctx) -> Array[Focusable] {
       })
     }
   }
-  for f in self.last_focusables {
-    if f.layer != 0 {
-      out.push(f)
-    }
+  if !layers_put.val {
+    put_layers()
   }
   out
 }
@@ -3190,4 +3254,30 @@ fn yields_published(c : Ctx) -> Unit {
   yields_seen.val = now
   yields_said.val = yields_said.val + 1
   view_pointed_again()
+}
+
+///|
+/// Whether focus stop `id` is a node of the window's tree over all else of it (View::over_all): no layer of the old
+/// frame's trapping the focus keeps it from Tab (Ctx::tab_stops).
+fn focus_over_all(id : Int) -> Bool {
+  match (tree_said_ids.get(id), view_app.val) {
+    (Some(nid), Some(tree)) => tree.over_all(nid)
+    _ => false
+  }
+}
+
+///|
+/// The soonest moment the app waits on (Ctx's `wake_waited`: an old view's wake not said `later`) or the window's tree
+/// does, as it is now (Tree::wake_waited: a leaving's end, a moment, steps to their last; asked as it is, not as a frame
+/// last ended: what its clock did since, done): -1 none. What a run goes on to and is not idle before.
+fn Ctx::waited_at(self : Ctx) -> Double {
+  let tree = match view_app.val {
+    Some(t) => t.wake_waited().unwrap_or(-1.0)
+    None => -1.0
+  }
+  if self.wake_waited < 0.0 || (tree >= 0.0 && tree < self.wake_waited) {
+    tree
+  } else {
+    self.wake_waited
+  }
 }

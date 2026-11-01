@@ -58,6 +58,9 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
   assert_eq(text(Some(relayed[0].params), "channel"), "C1")
   // the dialog gone, where it went said
   assert_true(t.find("开头附一句（可选）") is None)
+  // (said at once, read out: seen as it has come in, toast_said)
+  assert_true(toast_said(t, "已接力到 #dev"))
+  t.run_for(@kit.presence_in_ms)
   assert_true(t.find("已接力到 #dev") is Some(_))
 }
 

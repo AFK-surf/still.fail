@@ -512,6 +512,8 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
         app_state_tree(o, src)
       }
     })
+    // what a write said, over all of it, in every state and shell (sfbase's toasts_node)
+    @sfbase.toasts_node(root, fn() { toast_bottom_now(root) }) |> ignore
   }
 }
 
@@ -954,7 +956,23 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 /// navigation bar the view reaches under (Sheet.kt's navigationBars padding); over the system's tabs across the foot
 /// where they are (an iPhone Duo upright: @sf.native_foot).
 fn toast(c : @ui.Ctx) -> Unit {
+  // (where the window is a tree, its own nodes': app_tree's toasts_node)
+  if @ui.old_islands_around() {
+    return
+  }
   @sfbase.toasts(c, if @sfdesk.is_wide(c) { @sf.toast_bottom + @sf.native_foot() } else { bar_room + nav_foot() })
+}
+
+///|
+/// How far over the window's foot the toast is, for the window's tree's (toast's, followed): the wide frame's 24 and
+/// the system's tabs across the foot where they are; the narrow one's over the bar's room and the navigation bar.
+fn toast_bottom_now(v : @view.View) -> Double {
+  let wide = !(@sf.layout(v.window().0) is Small) || @sf.native_able()
+  if wide {
+    @sf.toast_bottom + @sf.native_foot()
+  } else {
+    bar_room + nav_foot()
+  }
 }
 
 ///|

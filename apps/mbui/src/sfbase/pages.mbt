@@ -97,13 +97,24 @@ pub(all) struct App {
   /// a row held: its id, and whether it has been held long (its time on @kit.after)
   mut held : Int
   mut held_long : Bool
-  /// what was said last of a write (a toast), and which saying it is (one said again is a new one)
-  toast : @signals.Signal[String]
-  toast_n : @signals.Signal[Int]
-  /// what the toast offers to do (its button's words, "" none: an archive's 撤销), and what that does
-  mut toast_action : String
-  mut toast_run : () -> Unit
+  /// what was said last of a write (a toast): its words, which saying it is (one said again is a new one), what it
+  /// offers to do (its button's words, "" none: an archive's 撤销) and what that does, said together (toast_later)
+  toast : @signals.Signal[ToastSaid]
 }
+
+///|
+/// A write's toast as it was said (toast_later): its words ("" none), which saying it is, its button's words ("" none)
+/// and what that does, one value: what reads it reads them all as one saying.
+pub(all) struct ToastSaid {
+  words : String
+  n : Int
+  action : String
+  run : () -> Unit
+}
+
+///|
+/// No toast (none said, or the one said gone).
+pub let toast_none : ToastSaid = { words: "", n: 0, action: "", run: fn() {  } }
 
 ///|
 pub let app : App = {
@@ -114,10 +125,7 @@ pub let app : App = {
   switch_way: 0,
   held: 0,
   held_long: false,
-  toast: @signals.signal("", same=fn(a, b) { a == b }),
-  toast_n: @signals.signal(0, same=fn(a, b) { a == b }),
-  toast_action: "",
-  toast_run: fn() {  },
+  toast: @signals.signal(toast_none, same=fn(a, b) { physical_equal(a, b) }),
 }
 
 ///|
@@ -246,9 +254,8 @@ pub fn reset() -> Unit {
   app.switch_way = 0
   app.held = 0
   app.held_long = false
-  app.toast.set("")
-  app.toast_action = ""
-  app.toast_run = fn() {  }
+  // (none said; which saying was last kept: the next a new one, as ever)
+  app.toast.set({ ..toast_none, n: @signals.untracked(fn() { app.toast.get().n }) })
   left_pages.clear()
   // the topics read for what has not ended yet (held.mbt)
   held_reset()
