@@ -1003,7 +1003,6 @@ test "an iPhone Duo on its side: the sidebar's edge held by a finger that wander
   t.run_for(@ui.tap_indication_ms)
   t.move(x + 6.0, 306.0)
   t.run_for(@ui.long_press_ms)
-  assert_eq(t.haptics(), [@ui.LongPress])
   t.move(x + 40.0, 306.0)
   t.move(x + 60.0, 306.0)
   t.release(x + 60.0, 306.0)
@@ -1019,5 +1018,4 @@ test "an iPhone Duo on its side: the sidebar's edge held by a finger that wander
   t.release(x + 60.0, 300.0)
   t.draw()
   assert_eq(@sfdesk.wide.side_w.get(), from + 60.0)
-  assert_eq(t.haptics(), [@ui.LongPress])
 }

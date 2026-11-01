@@ -8,7 +8,7 @@ test "震动 in 外观 turned off: the prefs' haptics off, nothing felt; on agai
   app.nav.push(Settings)
   app.nav.push(Setting(@settings.Route::Appearance))
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Switch, label="震动")
   t.frame()
   t.frame()
