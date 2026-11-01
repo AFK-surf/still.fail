@@ -6,6 +6,7 @@
 priv struct ResolvedFont {
   id : Int
   face : @font.Face
+  shaper : @shape.ShapeFont
   units_per_em : Int
   ascent : Int
   descent : Int
@@ -122,6 +123,7 @@ fn load_resolved_font(db : @font.FontDb, id : Int) -> ResolvedFont? {
   Some({
     id,
     face,
+    shaper: @shape.ShapeFont::new(face),
     units_per_em: upem,
     ascent: f2i16(ascent),
     descent: f2i16(descent),
@@ -1116,7 +1118,7 @@ fn shape_with_font(chunk : TextChunk, font : ResolvedFont, small_caps : Bool, ke
     }
     let run_start = chunk.bytes[a]
     let run_end = if b < chunk.chars.length() { chunk.bytes[b] } else { chunk.byte_len }
-    let shaped = shape_run(font.face, chunk, a, b, rtl, kerning, small_caps)
+    let shaped = shape_run(font.shaper, chunk, a, b, rtl, kerning, small_caps)
     for i, g in shaped {
       let start = g.cluster
       let next = if rtl { i - 1 } else { i + 1 }

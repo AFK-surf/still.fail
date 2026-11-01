@@ -617,6 +617,17 @@ fn Face::glyph_range(self : Face, glyph : Int) -> (Int, Int)? {
 }
 
 ///|
+/// A glyph's ink box from its `glyf` header: x min, y min, x max, y max (all 0 for an empty glyph).
+pub fn Face::glyph_bbox(self : Face, glyph : Int) -> (Int, Int, Int, Int)? {
+  match self.glyph_range(glyph) {
+    Some((_, 0)) => Some((0, 0, 0, 0))
+    Some((at, _)) =>
+      Some((i16(self.data, at + 2), i16(self.data, at + 4), i16(self.data, at + 6), i16(self.data, at + 8)))
+    None => None
+  }
+}
+
+///|
 /// A glyph's outline in font units, None where it has none (an empty glyph has an empty one).
 pub fn Face::outline(self : Face, glyph : Int) -> Array[PathCmd]? {
   if self.tables.contains("glyf") {

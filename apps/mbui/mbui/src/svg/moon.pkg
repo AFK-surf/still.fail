@@ -2,6 +2,7 @@ import {
   "mbui/dmath",
   "mbui/skia",
   "mbui/font",
+  "mbui/shape",
   "mbui/text",
   "mbui/pixels",
   "mbui/zip",
