@@ -345,7 +345,7 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp" } : null),
-      participants: (k: string) => new Map([[k, [starter]]]),
+      starter: () => starter.toLowerCase(),
       latestThread: () => null,
       withdrawCard: () => true,
       subscribe: () => () => {},
@@ -415,7 +415,7 @@ test("at a handover a vault's grants and the requests still waiting go over to t
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp" } : null),
-      participants: (k: string) => new Map([[k, ["bob@x.com"]]]),
+      starter: () => "bob@x.com",
       latestThread: () => null,
       withdrawCard: () => true,
       subscribe: () => () => {},
@@ -474,7 +474,7 @@ test("the plain library (no security mode): listed for its owner's chats, decide
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp" } : null),
-      participants: (k: string) => new Map([[k, [starter]]]),
+      starter: () => starter.toLowerCase(),
       latestThread: () => null,
       withdrawCard: () => true,
       subscribe: () => () => {},
@@ -542,7 +542,7 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
   const hub = {
     store: {
       getSession: (k: string) => (sessions.has(k) ? { key: k, ws: null, workspace: "/tmp", ...sessions.get(k) } : null),
-      participants: (k: string) => new Map([[k, ["bob@x.com"]]]),
+      starter: () => "bob@x.com",
       latestThread: () => thread,
       withdrawCard: () => true,
       restateCard: () => true,

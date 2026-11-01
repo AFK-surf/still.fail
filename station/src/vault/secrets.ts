@@ -316,8 +316,7 @@ export class Secrets {
 
   /// The person a session works for: whoever started its chat (their email).
   #starter(session: string): string | null {
-    const first = this.#d.hub.store.participants(session).get(session)?.[0];
-    return first === undefined ? null : first.toLowerCase();
+    return this.#d.hub.store.starter(session);
   }
 
   /// The items a session may ask for: those with a listing of whoever started its chat, in their vaults (security

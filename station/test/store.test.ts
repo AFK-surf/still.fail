@@ -1121,3 +1121,20 @@ test("a session's usage as its summary says it: kept as told, a change told as t
   assert.deepEqual([...read.sessionUsages(reader, "b")], []);
   h.stop();
 });
+
+test("a session's starter: whom its chat was started for, before anyone wrote in it (a chat an agent opened)", () => {
+  const store = memory();
+  store.insertSession({ key: "opened", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/opened", token: "opened", createdAt: 1, lastActiveAt: 1, createdBy: "Pat@Example.com" });
+  const thread = store.openThread("ember", "EMBER", "3.1", null, "Pat@Example.com");
+  store.joinThread(thread.id, "opened", "ember");
+  say(store, thread.id, "3.2", "agent", "opened", "开始");
+  assert.equal(store.starter("opened"), "pat@example.com", "started for Pat, though only its agent has written");
+  // A session of before createdBy was kept: the first person who wrote in it.
+  session(store, "older");
+  const older = store.openThread("ember", "EMBER", "4.1", null, null);
+  store.joinThread(older.id, "older", "ember");
+  say(store, older.id, "4.2", "person", "Bob@x.com", "hi");
+  assert.equal(store.starter("older"), "bob@x.com");
+  session(store, "nobody");
+  assert.equal(store.starter("nobody"), null);
+});

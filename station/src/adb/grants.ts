@@ -56,7 +56,7 @@ export type GrantsDeps = {
   hub: {
     store: {
       getSession(key: string): { archivedAt?: number | null; ws: string | null } | null;
-      participants(session: string): Map<string, string[]>;
+      starter(session: string): string | null;
       latestThread(session: string): SessionThread | null;
       insertMessage(m: Record<string, unknown>): number[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
@@ -205,8 +205,7 @@ export class PhoneGrants {
 
   /// The person a session works for: whoever started its chat.
   starter(session: string): string | null {
-    const first = this.#d.hub.store.participants(session).get(session)?.[0];
-    return first === undefined ? null : first.toLowerCase();
+    return this.#d.hub.store.starter(session);
   }
 
   /// phone_use: a grant of this session's already live, or a request asked in its chat: not waited for (the agent's turn

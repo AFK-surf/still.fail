@@ -49,7 +49,7 @@ export type SignInDeps = {
   hub: {
     store: {
       getSession(key: string): { archivedAt?: number | null } | null;
-      participants(session: string): Map<string, string[]>;
+      starter(session: string): string | null;
       latestThread(session: string): SessionThread | null;
       insertMessage(m: Record<string, unknown>): readonly unknown[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
@@ -142,8 +142,7 @@ export class SignIns {
 
   /// The person a session works for: whoever started its chat.
   #starter(session: string): string | null {
-    const first = this.#d.hub.store.participants(session).get(session)?.[0];
-    return first === undefined ? null : first.toLowerCase();
+    return this.#d.hub.store.starter(session);
   }
 
   #tell(session: string, text: string) {

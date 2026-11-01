@@ -73,7 +73,7 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp", archivedAt: null } : null),
-      participants: (k: string) => new Map([[k, [starter]]]),
+      starter: () => starter.toLowerCase(),
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
       withdrawCard: () => true,
       restateCard: () => true,
