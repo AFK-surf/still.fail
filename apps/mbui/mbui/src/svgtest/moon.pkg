@@ -1,6 +1,7 @@
 import {
   "mbui/skia",
   "mbui/svg",
+  "mbui/font",
   "mbui/skiatest",
   "moonbitlang/core/encoding/utf8",
 }

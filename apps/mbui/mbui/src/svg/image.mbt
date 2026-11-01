@@ -255,6 +255,7 @@ fn load_sub_svg(data : Bytes, opt : Options) -> ImageData? {
     image_rendering: opt.image_rendering,
     default_width: opt.default_width,
     default_height: opt.default_height,
+    fonts: opt.fonts,
   }
   let data = if data.length() >= 2 && data[0] == b'\x1F' && data[1] == b'\x8B' {
     match @zip.gunzip(data) {

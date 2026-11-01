@@ -1,6 +1,8 @@
 import {
   "mbui/dmath",
   "mbui/skia",
+  "mbui/font",
+  "mbui/text",
   "mbui/pixels",
   "mbui/zip",
   "moonbitlang/core/encoding/utf8",

@@ -1,14 +1,8 @@
-// What is not ported yet: text. Replaced by its port as it lands.
-
-///|
-fn convert_text(doc : SDoc, node : Int, state : State, cache : Cache, parent : Group) -> Unit {
-  ignore((doc, node, state, cache, parent))
-}
+// Text's place in the paint server pass (paint_server.rs): its flattened paths, by its bounding box.
 
 ///|
 fn text_uses_context_bbox(t : SText) -> Bool {
-  ignore(t)
-  false
+  uses_context_bbox(t.flattened)
 }
 
 ///|

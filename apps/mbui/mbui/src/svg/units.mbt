@@ -15,6 +15,8 @@ pub(all) struct Options {
   style_sheet : String?
   /// the files an `href` names, by the name as written (resources_dir and the file system in usvg)
   read_file : (String) -> Bytes?
+  /// the fonts text is drawn with
+  fonts : @font.FontDb
 }
 
 ///|
@@ -31,6 +33,7 @@ pub fn Options::default() -> Options {
     default_height: 100.0,
     style_sheet: None,
     read_file: fn(_) { None },
+    fonts: @font.FontDb::new(),
   }
 }
 

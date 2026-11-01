@@ -72,6 +72,19 @@ test "resvg suite" {
   let index = @utf8.decode(@skiatest.read_file(dir + "index.txt")) catch { _ => "" }
   let only = @skiatest.read_file(dir + "only.txt")
   let only = if only.length() > 0 { @utf8.decode(only) catch { _ => "" } } else { "" }
+  let fonts = @font.FontDb::new()
+  let font_list = @utf8.decode(@skiatest.read_file(dir + "fonts.txt")) catch { _ => "" }
+  for f in font_list.split("\n") {
+    let f = f.trim(chars=" \r").to_string()
+    if f != "" {
+      fonts.load_font_data(@skiatest.read_file(dir + "fonts/" + f))
+    }
+  }
+  fonts.set_serif_family("Noto Serif")
+  fonts.set_sans_serif_family("Noto Sans")
+  fonts.set_cursive_family("Yellowtail")
+  fonts.set_fantasy_family("Sedgwick Ave Display")
+  fonts.set_monospace_family("Noto Mono")
   let mut passed = 0
   let mut total = 0
   for line in index.split("\n") {
@@ -81,7 +94,7 @@ test "resvg suite" {
     }
     total += 1
     let svg = @utf8.decode(@skiatest.read_file(dir + name + ".svg")) catch { _ => "" }
-    let opt = { ..@svg.Options::default(), read_file: fn(f) {
+    let opt = { ..@svg.Options::default(), fonts, read_file: fn(f) {
         let b = @skiatest.read_file(dir + name.rev_find("/").map(fn(i) { name.view(end_offset=i + 1).to_string() }).unwrap_or("") + f)
         if b.length() > 0 { Some(b) } else { None }
       } }
