@@ -284,6 +284,10 @@ API_AVAILABLE(ios(18.0))
 @property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *floatingKeys;
 @property(nonatomic) BOOL shown;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, UINavigationController *> *navs;
+// each id's one tab over its controller, kept as tabs come and go: a tab made again over a controller the one before
+// still had stopped the app (UIKit's assertion in -[UITab viewController], an iPhone Duo back from hours away,
+// 2026-10-30..11-01), even with the tabs before let go of first
+@property(nonatomic, strong) NSMutableDictionary<NSString *, UITab *> *tabsById;
 // (a tab chosen by the app, not the person: not said back)
 @property(nonatomic) BOOL choosing;
 // what is pressed, not gone to (the action most wanted, what opens over the page: `act/`): the navigation bar's items,
@@ -391,6 +395,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   [super viewDidLoad];
   self.delegate = self;
   self.navs = [NSMutableDictionary dictionary];
+  self.tabsById = [NSMutableDictionary dictionary];
   [self applyNone];
 }
 // Where the system put the action's tab (iOS 27's prominent one: an iPhone Duo's round one at its column's foot) in
@@ -595,6 +600,19 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   }
   return nav;
 }
+// The tab of `ident` (made once, over its controller), its words and picture as given.
+- (UITab *)tabFor:(NSString *)ident title:(NSString *)title image:(UIImage *)image {
+  UITab *tab = self.tabsById[ident];
+  if (!tab) {
+    UINavigationController *nav = [self navFor:ident];
+    tab = [[UITab alloc] initWithTitle:title image:image identifier:ident viewControllerProvider:^(UITab *t) { return nav; }];
+    self.tabsById[ident] = tab;
+    return tab;
+  }
+  if (![tab.title isEqualToString:title]) tab.title = title;
+  tab.image = image;
+  return tab;
+}
 // The app reserves only the geometry. UIKit owns the glass, press feedback, title, image and popup menu.
 - (void)floatingItems:(NSArray<NSDictionary *> *)items ink:(UIColor *)ink {
   if (!self.floatingButtons) {
@@ -695,7 +713,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   if (self.tabsKey.length || !self.tabs.count) {
     self.tabsKey = @"";
     self.choosing = YES;
-    self.tabs = @[ [[UITab alloc] initWithTitle:@"" image:nil identifier:@"" viewControllerProvider:^(UITab *t) { return nav; }] ];
+    self.tabs = @[ [self tabFor:@"" title:@"" image:nil] ];
     self.choosing = NO;
   }
   self.tabBarHidden = YES;
@@ -749,18 +767,21 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   if (![key isEqualToString:self.tabsKey]) {
     self.tabsKey = key;
     NSMutableArray<UITab *> *made = [NSMutableArray array];
+    // (an id twice one tab: one controller is never two tabs')
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
     for (NSDictionary *t in places) {
-      UINavigationController *nav = [self navFor:t[@"id"]];
-      [made addObject:[[UITab alloc] initWithTitle:t[@"title"] image:nav_any(t[@"icon"], 26) identifier:t[@"id"]
-                                viewControllerProvider:^(UITab *x) { return nav; }]];
+      if ([seen containsObject:t[@"id"]]) continue;
+      [seen addObject:t[@"id"]];
+      UITab *tab = [self tabFor:t[@"id"] title:t[@"title"] image:nav_any(t[@"icon"], 26)];
+      // (the action's tab before, a place now: pinned no more)
+      tab.preferredPlacement = UITabPlacementDefault;
+      [made addObject:tab];
     }
     // (the action a tab of its own the system sets apart at the bar's end, as Xiaohongshu's 发布 is, on the system's
     // glass, with an accent glyph: never chosen, shouldSelectTab says it)
     self.action = act[@"id"];
-    if (act) {
-      UINavigationController *own = [self navFor:act[@"id"]];
-      UITab *x = [[UITab alloc] initWithTitle:act[@"title"] image:[nav_icon(act[@"icon"], 26) imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal] identifier:act[@"id"]
-                       viewControllerProvider:^(UITab *t) { return own; }];
+    if (act && ![seen containsObject:act[@"id"]]) {
+      UITab *x = [self tabFor:act[@"id"] title:act[@"title"] image:[nav_icon(act[@"icon"], 26) imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal]];
       x.preferredPlacement = UITabPlacementPinned;
       [made addObject:x];
     }
