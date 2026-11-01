@@ -5,8 +5,9 @@ fn main {
   let name = @film.arg("MBUI_FIGURE")
   let path = @film.arg("MBUI_FIGURE_OUT")
   let font = @film.arg("MBUI_FIGURE_FONT")
-  if (name != "wrap" && name != "align") || path == "" {
-    @film.say("figure: MBUI_FIGURE=wrap|align MBUI_FIGURE_OUT=<out.png> [MBUI_FIGURE_FONT=<font.ttf>]")
+  let single = name == "wrap-normal" || name == "wrap-reverse" || name == "align-edge" || name == "align-text"
+  if (name != "wrap" && name != "align" && !single) || path == "" {
+    @film.say("figure: MBUI_FIGURE=wrap|align|wrap-normal|wrap-reverse|align-edge|align-text MBUI_FIGURE_OUT=<out.png> [MBUI_FIGURE_FONT=<font.ttf>]")
     @film.exit(2)
     return
   }
@@ -30,10 +31,17 @@ fn main {
       @sf.set_dark(Some(true))
       initialized.val = true
     }
-    if name == "wrap" { @sfgraphic.wrap_figure(c) } else { @sfgraphic.alignment_figure(c) }
+    match name {
+      "wrap" => @sfgraphic.wrap_figure(c)
+      "align" => @sfgraphic.alignment_figure(c)
+      "wrap-normal" => @sfgraphic.wrap_card_figure(c, false)
+      "wrap-reverse" => @sfgraphic.wrap_card_figure(c, true)
+      "align-edge" => @sfgraphic.alignment_card_figure(c, false)
+      _ => @sfgraphic.alignment_card_figure(c, true)
+    }
   }
-  let ok = @film.picture(view, path~, w=960.0, h=540.0, scale=2.5, corner_faults_ok=fn(faults) {
-    if name == "align" { @sfgraphic.alignment_corner_faults_ok(faults) } else { faults.is_empty() }
+  let ok = @film.picture(view, path~, w=if single { 480.0 } else { 960.0 }, h=if single { 270.0 } else { 540.0 }, scale=if single { 5.0 } else { 2.5 }, corner_faults_ok=fn(faults) {
+    if name == "align" || name == "align-edge" { @sfgraphic.alignment_corner_faults_ok(faults) } else { faults.is_empty() }
   })
   @film.exit(if ok { 0 } else { 1 })
 }
