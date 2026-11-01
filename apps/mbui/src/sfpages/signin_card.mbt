@@ -433,6 +433,7 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
           signin_menu.val = ""
         }
       },
+      as_button=true,
     )
     match m.chosen {
       Some(v) => {

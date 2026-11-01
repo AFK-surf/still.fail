@@ -627,7 +627,7 @@ pub fn vault_foot(
       if over {
         c.box(style=if foot { ask_over.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_over }, pick) |> ignore
       }
-      c.box(style=if foot { @sf.ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { @sf.ask_foot }, flow=true, line_gap=@sf.ask_foot_lines(), fn() {
+      c.box(style=if foot { @sf.ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { @sf.ask_foot }, flow_reverse=true, line_gap=@sf.ask_foot_lines(), fn() {
         acts()
         if !over {
           pick()

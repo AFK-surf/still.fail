@@ -53,11 +53,32 @@ pub fn button(
   reach? : @ui.Style,
   hint? : String = "",
 ) -> Bool {
+  button_part(c, label, key~, tone~, icon~, busy~, disabled~, w~, reach?, hint~).0
+}
+
+///|
+// The same button can anchor a choice's menu. Keep its node for focus and its expanded state for accessibility.
+fn button_part(
+  c : @ui.Ctx,
+  label : String,
+  key? : String = "",
+  tone? : Tone = Plain,
+  icon? : String = "",
+  busy? : Bool = false,
+  disabled? : Bool = false,
+  w? : @ui.Size = Auto,
+  reach? : @ui.Style,
+  hint? : String = "",
+  end_icon? : String = "",
+  lead? : (Int64) -> Unit,
+  active? : Bool = false,
+  expanded? : Bool,
+) -> (Bool, Int) {
   let t = theme()
   let p = t.p
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
-  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id)))
+  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id) || active))
   // (turning and greyed as a control answers: over dur_ms, never at once. With an icon, the spinner in its place, the
   // icon fading out under it as it fades in, nothing moved; with none, the spinner coming in before its words, which
   // stay: they are what it does, said on as it does it. At work is not greyed: it is the button pressed, at full
@@ -119,7 +140,7 @@ pub fn button(
   // can stand at its start; in a wrapping row any of them can. A button with an icon keeps its balanced ends.
   let aligned = card_foot_first.val || card_foot_words_now.val
   card_foot_first.val = false
-  let padx = if aligned && icon == "" && w is Auto && reach is None { card_foot_words_in(height) } else { button_padx }
+  let padx = if aligned && icon == "" && lead is None && w is Auto && reach is None { card_foot_words_in(height) } else { button_padx }
   // (its words' node, as built: how they move with it)
   let mut words_at = -1
   let b = c.box(
@@ -166,6 +187,10 @@ pub fn button(
         })
         |> ignore
       }
+      match lead {
+        Some(f) => f(ink)
+        None => ()
+      }
       let words_in = fn() {
         let words = c.text(
           label,
@@ -198,6 +223,9 @@ pub fn button(
       } else {
         words_in()
       }
+      if end_icon != "" {
+        draw_icon(c, end_icon, button_icon, ink, by_ink=true)
+      }
     },
   )
   // its words changed (复制图片 to 已复制): its ground goes from the width it had to the new one, its words with it, on
@@ -213,11 +241,11 @@ pub fn button(
   }
   // (said a button whether it takes presses or not: one that cannot is said disabled, not left out of the tree, and its
   // faded words are asked no contrast)
-  c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
+  c.semantics(b, Button, id=if live { id } else { 0 }, label~, expanded?, disabled=!live)
   if live {
     tip(c, "sf-btn/" + key + label + "/tip", id, hint)
   }
-  live && c.clicked(id)
+  (live && c.clicked(id), b)
 }
 
 ///|
@@ -3426,7 +3454,8 @@ let command_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// view's; `set_open`: what opens or closes it, as it is pressed (as it is let go) or dismissed (at that moment: Escape,
 /// a press beside it). What was chosen comes back. `lead`: what stands before its words (a station's mark), in the ink
 /// its words have. `disabled`: out of reach, with any open menu closed. `capsule`: round it as a capsule when it sits
-/// at the end of another capsule, so the two can share a centre.
+/// at the end of another capsule, so the two can share a centre. `as_button`: the same solid button as the card's
+/// primary action, with a chevron after its words.
 pub fn chooser(
   c : @ui.Ctx,
   key : String,
@@ -3438,6 +3467,7 @@ pub fn chooser(
   lead? : (Int64) -> Unit,
   disabled? : Bool = false,
   capsule? : Bool = false,
+  as_button? : Bool = false,
 ) -> @kit.Menu {
   let p = theme().p
   let id = c.id(key)
@@ -3474,7 +3504,10 @@ pub fn chooser(
       icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
     })
   }
-  if at_foot {
+  if as_button {
+    let (_, node) = button_part(c, words, key~, tone=Primary, disabled~, end_icon="chevron-down", lead?, active=opened || focused, expanded=opened)
+    b = node
+  } else if at_foot {
     // A 28-high chooser may wrap to the foot's corner on its own. Give it a button-high line and put its capsule
     // where that height meets the card's corner; its words then meet the card's words as the buttons' do.
     let inset = card_foot_in(height) - card_foot_in(button_height())
@@ -3485,7 +3518,9 @@ pub fn chooser(
   if !disabled {
     c.focusable(id, node=b)
   }
-  c.semantics(b, Button, id=if disabled { 0 } else { id }, label=words, expanded=opened, disabled~)
+  if !as_button {
+    c.semantics(b, Button, id=if disabled { 0 } else { id }, label=words, expanded=opened, disabled~)
+  }
   let menu : Ref[@kit.Menu?] = Ref(None)
   c.with_dismissed(fn(_) { set_open(false) }, fn() {
     menu.val = Some(dropdown(c, key + "/menu", opened, if disabled { 0 } else { id }, entries, {}, chooser_menu_w, side~))

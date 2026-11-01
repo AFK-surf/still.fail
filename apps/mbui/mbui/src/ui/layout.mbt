@@ -413,7 +413,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     ch = true
   }
   // a row in lines (Ctx::box `flow`)
-  let fw : @flex.FlexWrap = if n.flow { Wrap } else { NoWrap }
+  let fw : @flex.FlexWrap = if n.flow_reverse { WrapReverse } else if n.flow { Wrap } else { NoWrap }
   if s.wrap != fw {
     s.wrap = fw
     ch = true

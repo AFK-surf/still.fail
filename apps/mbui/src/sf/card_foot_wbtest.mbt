@@ -35,3 +35,27 @@ test "card foot alignment leaves other buttons' room alone" {
   assert_true((end_in - ordinary_in).abs() < 0.01, msg="end \{end_in}, ordinary \{ordinary_in}")
   assert_true((after_in - ordinary_in).abs() < 0.01, msg="after \{after_in}, ordinary \{ordinary_in}")
 }
+
+///|
+test "a wrapping card foot keeps its first action at the bottom left" {
+  let t = @ui.Tester::new(
+    wide_view(fn(c) {
+      page_card(c, footed=true, fn() {
+        c.text("卡片的字") |> ignore
+        ask_buttons(c, fn() {
+          button(c, "主要操作", tone=Primary) |> ignore
+          button(c, "较长的次要操作一", tone=Ghost) |> ignore
+          button(c, "较长的次要操作二", tone=Ghost) |> ignore
+        })
+      })
+    }),
+    w=220.0,
+    h=400.0,
+  )
+  t.draw()
+  let (title_x, _, _, _) = t.rect_of("卡片的字").unwrap()
+  let (primary_x, primary_y, _, _) = t.rect_of("主要操作").unwrap()
+  let (_, last_y, _, _) = t.rect_of("较长的次要操作二").unwrap()
+  assert_true((primary_x - title_x).abs() < 0.01)
+  assert_true(primary_y > last_y, msg="primary \{primary_y}, last \{last_y}")
+}
