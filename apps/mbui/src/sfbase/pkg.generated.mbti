@@ -1025,6 +1025,10 @@ pub let open_titled : @ref.Ref[String]
 
 pub fn open_window(Page) -> Bool
 
+pub fn opened_of(Json?) -> Array[OpenedChat]
+
+pub fn opener_of(Json?) -> Opener?
+
 pub fn opt_number(Json?, String) -> Double?
 
 pub fn opt_text(Json?, String) -> String?
@@ -2003,6 +2007,7 @@ pub(all) struct ChatItem {
   pinned : Bool?
   kept : Bool
   client_key : String
+  opener : Opener?
 }
 
 pub(all) struct ChatPick {
@@ -2071,6 +2076,9 @@ pub(all) struct ChatView {
   tabs : ChatTabs
   cc : Array[ChatCcTo]
   screens : Array[ChatScreen]
+  opener : Opener?
+  opened : Array[OpenedChat]
+  opened_text : String
 }
 
 pub(all) struct ChatsView {
@@ -2604,6 +2612,22 @@ pub(all) struct NoticeState {
   mut token : String
   mut cancelled : String
   mut src : Source?
+}
+
+pub(all) struct OpenedChat {
+  chat : ChatRef
+  mark : String
+  state_lead : String
+  state_text : String
+  archived : Bool
+  note : String
+}
+
+pub(all) struct Opener {
+  chat : ChatRef
+  text : String
+  archived : Bool
+  note : String
 }
 
 pub(all) struct Outgoing {

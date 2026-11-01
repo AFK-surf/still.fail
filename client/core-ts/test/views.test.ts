@@ -756,6 +756,32 @@ test("pinned_rows_go_above_the_days_the_latest_pinned_first", async () => {
   assert.equal(v.days[1].pinned, undefined);
 });
 
+test("a_chat_an_agent_opened_leads_back_to_its_opener_wherever_that_is_and_only_so", async () => {
+  // Each chat stands on its own (its place, its archiving): the one opened only knows the way back to its opener, by
+  // that one's title as its list has it, else as it was called; on its own station or another.
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.set(workspace(), stations(t.nowS()));
+  await t.host.time.pass(100);
+  const now = t.host.nowMs();
+  t.set({ topic: "archivedRows", station: "ws/a" }, [{ ...row("gone", now - 5000), title: "归档的发起者", archived: { at: now, by: "auto" } }]);
+  t.set(rows("ws/a"), [
+    { ...row("opener", now - 3000), title: "RPG 人物与剑术演示" },
+    { ...row("here", now), opener: { session: "opener", title: "旧名字" } },
+    { ...row("orphan", now - 1000), opener: { session: "gone", title: "当时的名字" } },
+  ]);
+  t.set(rows("ws/b"), [{ ...row("there", now - 2000), opener: { station: "a", session: "opener", title: "旧名字" } }]);
+  await t.read(u, 1);
+  const byId = new Map<string, J>(u.value.days.flatMap((d: J) => d.items).map((i: J) => [i.id, i]));
+  assert.deepEqual(byId.get("here").opener, { station: "ws/a", session: "opener", title: "RPG 人物与剑术演示", text: "由「RPG 人物与剑术演示」创建" });
+  assert.deepEqual(byId.get("there").opener, { station: "ws/a", session: "opener", title: "RPG 人物与剑术演示", text: "由「RPG 人物与剑术演示」创建" });
+  assert.deepEqual(byId.get("orphan").opener, { station: "ws/a", session: "gone", title: "归档的发起者", text: "由「归档的发起者」创建", archived: true, note: "已归档" });
+  assert.equal(byId.get("opener").opener, undefined);
+  // Its own place in the list, newest first, whoever opened it.
+  assert.deepEqual(ids(u.value), ["here", "orphan", "there", "opener"]);
+});
+
 test("the_rows_are_led_by_the_agents_whatever_was_set", async () => {
   const t = setup();
   const u = ui();
@@ -1159,6 +1185,44 @@ test("a_message_says_the_chats_it_links_to_their_titles_and_which_are_archived",
   t.set(overview("ws/a"), overviewOf([], []));
   await t.read(u, 1);
   assert.deepEqual(u.value.messages.map((m: J) => m.chats), [[{ href: old, title: "旧的", archived: true, note: "已归档" }, { href: live, title: "c-live 的标题" }], undefined]);
+});
+
+test("a_chat_an_agent_opened_has_the_way_back_to_its_opener_over_its_messages", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(rows("ws/a"), [{ ...row("k", now), thread: 7, opener: { session: "p", title: "当时的名字" } }, { ...row("p", now - 1000), title: "发起的对话" }]);
+  t.set(pageOf("ws/a", 7), page(1, ["开始"], null));
+  t.set(overview("ws/a"), overviewOf([], []));
+  await t.read(u, 1);
+  assert.deepEqual(u.value.opener, { station: "ws/a", session: "p", title: "发起的对话", text: "由「发起的对话」创建" });
+});
+
+test("a_chat_whose_agent_opened_others_lists_them_each_where_it_stands", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set({ topic: "archivedRows", station: "ws/a" }, [{ ...row("old", now), title: "归档的", archived: { at: now, by: "auto" } }]);
+  t.set(rows("ws/a"), [
+    { ...row("k", now), thread: 7, opened: [{ session: "c-need", title: "当时的名字" }, { session: "old" }, { session: "gone", title: "没了的" }] },
+    { ...row("c-need", now), title: "安卓构建", agents: [{ ...session("a1"), lastTurn: { kind: "message", declared: "block", ending: "need_help", need: "选一台测试机", outcome: "completed", startedAt: 1, endedAt: 2 } }] },
+  ]);
+  t.set(pageOf("ws/a", 7), page(1, ["开始"], null));
+  t.set(overview("ws/a"), overviewOf([], []));
+  await t.read(u, 1);
+  const v = u.value;
+  assert.equal(v.openedText, "创建了 3 个对话");
+  assert.deepEqual(v.opened.map((o: J) => [o.session, o.title, o.stateLead ?? null, o.archived ?? false]), [
+    ["c-need", "安卓构建", "need", false],
+    ["old", "归档的", null, true],
+    ["gone", "没了的", null, false],
+  ]);
 });
 
 test("a_chat_that_links_others_reads_their_rows_alone_not_their_stations_lists", async () => {

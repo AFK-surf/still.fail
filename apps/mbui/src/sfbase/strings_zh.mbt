@@ -803,6 +803,7 @@ let zh : Map[String, String] = {
   "web-main.chat.notSent": "未发送",
   "web-main.chat.offline": "无法连接此 station，消息将在连接后送达",
   "web-main.chat.offline.named": "无法连接「{name}」，消息将在连接后送达",
+  "web-main.chat.openOpener": "打开「{title}」",
   "web-main.chat.pin": "固定",
   "web-main.chat.pinFailed": "无法固定：{error}",
   "web-main.chat.quote": "引用",

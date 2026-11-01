@@ -762,6 +762,29 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       d => d
     }
     fact(@sf.t("web-pages.chat.info.started"), fn() {
+      // made by another chat's agent: that chat, its mark before its title (已归档 after one in the archive); pressed,
+      // it opens
+      match v.opener {
+        Some(o) => {
+          let id = c.id("info-opener")
+          if c.clicked(id) {
+            chat_own.info_open = false
+            open_page(Chat(o.chat))
+          }
+          let p = @sf.theme().p
+          let b = c.box(style=info_inline, id~, fn() {
+            @sf.icon(c, "spawned", size=14.0, color=if c.lit(id) { p.text } else { p.muted }) |> ignore
+            c.text(o.chat.title, style=if c.lit(id) { info_words_hot } else { info_words }) |> ignore
+            if o.archived {
+              c.text(o.note, style=info_quiet) |> ignore
+            }
+          })
+          c.semantics(b, Link, id~, label=o.text)
+          @sf.tip(c, "info-opener", id, o.text)
+          return
+        }
+        None => ()
+      }
       if creator == "" {
         c.text(@sf.t("web-pages.chat.info.unknown"), style=info_muted) |> ignore
       } else {
@@ -847,6 +870,22 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         })
         |> ignore
       }
+    })
+    |> ignore
+  }
+  // the chats its agent made (after who works in it): one row, 创建了 N 个对话, each of them in the menu beside the
+  // panel it opens
+  if v.opened.length() > 0 {
+    c.box(style=info_tools(false), fn() {
+      // (beside the panel, to its left: the panel stands at the window's end; pointed at, it opens)
+      @sf.submenu_row(
+        c,
+        "info-pop/opened/" + chat_key(r),
+        v.opened_text,
+        @sfpages.opened_items(v.opened, then=fn() { chat_own.info_open = false }),
+        icon="spawned",
+        side=Left,
+      )
     })
     |> ignore
   }
@@ -1319,6 +1358,11 @@ let info_label_w : Double = 80.0
 ///|
 // kept across runs: a value (no field of it changes)
 let info_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
+
+///|
+/// A chat named in the info (the one whose agent made it) pointed at: its words in the accent.
+// kept across runs: a value (no field of it changes)
+let info_words_hot : @ui.TextStyle = @ui.text_style(size=Ui, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -385,6 +385,10 @@ pub fn open_workspaces(@sfbase.Source, @sf.Anchor, compact? : Bool) -> Unit
 
 pub fn open_xshare(@sfbase.Source, @sfbase.ChatRef, Double?, from~ : @sf.Anchor) -> Unit
 
+pub fn opened_icon(@sfbase.OpenedChat) -> String
+
+pub fn opened_items(Array[@sfbase.OpenedChat], then? : () -> Unit) -> Array[@sf.MenuItem?]
+
 pub fn others_message(@ui.Ctx, Bool, String, @sfbase.Stamp?, emits? : (@sfbase.Emits, String, Double)?, share? : (() -> Unit)?, share_link? : String, () -> Unit, () -> Unit, (() -> Unit)?, () -> Unit) -> Unit
 
 pub fn pair_steps(@ui.Ctx, @settings.Core, String, in_card? : Bool) -> Unit

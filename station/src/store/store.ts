@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addLetters, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addLetters, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 
@@ -147,6 +147,7 @@ export class Store {
       addSizeColumn(db);
       addWaitWatchColumn(db);
       addWorkspaceColumns(db);
+      addOpenerTitle(db);
       addUsageColumns(db);
       addUsageTotals(db);
       addUsageCompactions(db);
@@ -539,10 +540,10 @@ export class Store {
   // ── chats agents opened (opened_chats; sessions/opened.ts) ──
 
   /// Records a chat opened for a session: by its station and key, and its parent's ('' for this station).
-  insertOpened(o: Omit<Opened, "state" | "createdAt">): void {
+  insertOpened(o: Omit<Opened, "state" | "createdAt" | "openerTitle"> & { openerTitle?: string | null }): void {
     this.#run(
-      `INSERT INTO opened_chats (child_station, child, parent_station, parent, key, title, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      o.childStation, o.child, o.parentStation, o.parent, o.key, o.title, o.link, this.now(),
+      `INSERT INTO opened_chats (child_station, child, parent_station, parent, key, title, link, opener_title, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      o.childStation, o.child, o.parentStation, o.parent, o.key, o.title, o.link, o.openerTitle ?? null, this.now(),
     );
   }
 

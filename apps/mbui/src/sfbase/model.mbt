@@ -128,6 +128,62 @@ pub(all) struct ChatItem {
   /// the key a chat asked for here went by before its station made it ("" for none): its row is the same row
   /// throughout
   client_key : String
+  /// the chat an agent opened it from (chat_create): the way back there, a link only
+  opener : Opener?
+}
+
+///|
+/// The chat an agent opened a chat from (the core's Opener): where it is, as its list names it, and what it is to the
+/// chat it opened in words (由「…」创建); `archived` with what says so (已归档).
+pub(all) struct Opener {
+  chat : ChatRef
+  text : String
+  archived : Bool
+  note : String
+}
+
+///|
+/// A chat a chat's agent opened (the core's OpenedChat): where it is, as its list names it, where it stands (its row's
+/// mark, what leads its line and the line), and whether it is in its station's archive (with what says so).
+pub(all) struct OpenedChat {
+  chat : ChatRef
+  mark : String
+  state_lead : String
+  state_text : String
+  archived : Bool
+  note : String
+}
+
+///|
+/// A chat's `opened`, as the core gives it.
+pub fn opened_of(v : Json?) -> Array[OpenedChat] {
+  items(v, "opened").map(fn(j) {
+    let o = Some(j)
+    {
+      chat: { station: text(o, "station"), session: text(o, "session"), title: text(o, "title"), station_name: "" },
+      mark: text(o, "mark"),
+      state_lead: text(o, "stateLead"),
+      state_text: text(o, "stateText"),
+      archived: flag(o, "archived"),
+      note: text(o, "note"),
+    }
+  })
+}
+
+///|
+/// A chat's or a row's `opener`, as the core gives it.
+pub fn opener_of(v : Json?) -> Opener? {
+  let o = field(v, "opener")
+  match o {
+    Some(Object(_)) =>
+      Some({
+        chat: { station: text(o, "station"), session: text(o, "session"), title: text(o, "title"), station_name: "" },
+        text: text(o, "text"),
+        archived: flag(o, "archived"),
+        note: text(o, "note"),
+      })
+    _ => None
+  }
 }
 
 ///|
@@ -231,6 +287,7 @@ pub fn chat_item(v : Json) -> ChatItem {
     },
     kept: flag(s, "kept"),
     client_key: text(s, "clientKey"),
+    opener: opener_of(s),
   }
 }
 

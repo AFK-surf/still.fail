@@ -344,7 +344,8 @@ CREATE TABLE IF NOT EXISTS usage_files (
 );
 -- Chats an agent opened for another (chat_create, sessions/opened.ts): the session opened (child) and the one that
 -- opened it (parent), each by its station ('' for this one) and key, with the key the opener gave the call. The station
--- of either keeps a row: the child's to tell its parent how its turns end, the parent's to know its children by.
+-- of either keeps a row: the child's to tell its parent how its turns end, the parent's to know its children by. The
+-- child's also keeps what its parent was called then (opener_title, addOpenerTitle), for its chat's way back to it.
 CREATE TABLE IF NOT EXISTS opened_chats (
   child_station TEXT NOT NULL,
   child TEXT NOT NULL,
@@ -556,6 +557,12 @@ export function addQueueColumns(db: DatabaseSync): void {
 /// something else; NULL said before it (taken as its watch while one runs).
 export function addWaitWatchColumn(db: DatabaseSync): void {
   if (!has(db, "turns", "wait_watch")) db.exec("ALTER TABLE turns ADD COLUMN wait_watch INTEGER");
+}
+
+/// The column an opened chat's way back to its opener came with (opened_chats.opener_title): what the chat that opened
+/// it was called when it did; NULL before it.
+export function addOpenerTitle(db: DatabaseSync): void {
+  if (!has(db, "opened_chats", "opener_title")) db.exec("ALTER TABLE opened_chats ADD COLUMN opener_title TEXT");
 }
 
 /// The column a job's sandbox size came with (jobs.size, agents/sandbox.ts).

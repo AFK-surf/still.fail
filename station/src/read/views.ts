@@ -550,6 +550,20 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   // When the viewer pinned each to the top of their list, or null.
   const pins = store.pins(s, viewer.email);
   for (const row of rows) row.pinned = typeof row.id === "string" ? (pins.get(row.id) ?? null) : null;
+  // The chat an agent opened it from (chat_create), for its way back there: that chat's station (left out: this one),
+  // session and what it was called; only for those opened so. Nothing else of the list goes by it (its order, its
+  // archiving): each chat stands on its own.
+  const openers = store.openers(s);
+  // and the chats it opened, the first first, for its own list of them
+  const opened = store.openedChats(s);
+  const named = (o: { station: string | null; session: string; title: string | null }) => ({ ...(o.station !== null ? { station: o.station } : {}), session: o.session, ...(o.title !== null ? { title: o.title } : {}) });
+  for (const row of rows) {
+    if (typeof row.id !== "string") continue;
+    const o = openers.get(row.id);
+    if (o) row.opener = named(o);
+    const children = opened.get(row.id);
+    if (children) row.opened = children.map(named);
+  }
   // Which other workspaces each is shared with (docs/chat-share.md), only those that are.
   const shares = store.chatShares(s);
   for (const row of rows) {

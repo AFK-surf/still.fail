@@ -154,6 +154,7 @@
   "web-main.chat.archiveFailed": "Couldn't archive: {error}",
   "web-main.chat.asks.dismiss": "Dismiss",
   "web-main.chat.asks.go": "Go to the message awaiting a decision",
+  "web-main.chat.openOpener": "Open “{title}”",
   "web-main.chat.copyLink": "Copy chat link",
   "web-main.chat.copyMessageLink": "Copy message link",
   "web-main.chat.historyRefTitle": "History: {title}",

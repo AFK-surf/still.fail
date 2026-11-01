@@ -489,6 +489,10 @@ export function Sparks(props: IconProps) {
   return <Svg {...props}><path d="M9.5 8C10.5 12 12 13.5 16 14.5C12 15.5 10.5 17 9.5 21C8.5 17 7 15.5 3 14.5C7 13.5 8.5 12 9.5 8Z M17 3C17.5 5.5 18.5 6.5 21 7C18.5 7.5 17.5 8.5 17 11C16.5 8.5 15.5 7.5 13 7C15.5 6.5 16.5 5.5 17 3Z" /></Svg>;
 }
 
+export function Spawned(props: IconProps) {
+  return <Svg {...props}><path d="M6.5 9V13.5Q6.5 18 11 18H14" /><circle cx="6.5" cy="6" r="2.5" fill="currentColor" stroke="none" /><circle cx="17" cy="18" r="3" /></Svg>;
+}
+
 export function Square(props: IconProps) {
   return <Svg {...props}><path d="M8 4.5H16Q19.5 4.5 19.5 8V16Q19.5 19.5 16 19.5H8Q4.5 19.5 4.5 16V8Q4.5 4.5 8 4.5Z" /></Svg>;
 }
@@ -710,6 +714,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "skip-forward": SkipForward,
   "sliders": Sliders,
   "sparks": Sparks,
+  "spawned": Spawned,
   "square": Square,
   "star": Star,
   "stop": Stop,

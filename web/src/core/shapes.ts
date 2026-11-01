@@ -1835,6 +1835,25 @@ export interface RowShare {
 	write: boolean;
 }
 
+/**
+ * The chat an agent opened a chat from (chat_create), for the way back to it: a link only, nothing of the list
+ * goes by it (its order, its archiving).
+ */
+export interface Opener {
+	/** Its station's address. */
+	station: string;
+	/** Its key: the list's id of it. */
+	session: string;
+	/** Its title as its list says it, else as it was called when it opened this one. */
+	title: string;
+	/** It is not in its station's list (archived, or gone): drawn faded, said so. Absent otherwise. */
+	archived?: boolean;
+	/** With `archived`: 已归档. */
+	note?: string;
+	/** What it is to the chat it opened, in words (由「RPG 演示」创建), for a mark's tip. */
+	text: string;
+}
+
 /** A range of a text, `from` to `to` (UTF-16 units). */
 export interface TextMark {
 	from: number;
@@ -1949,6 +1968,11 @@ export interface ChatItem {
 	tone?: string;
 	/** The other workspaces it is shared with (docs/chat-share.md). Absent when none, and from stations before sharing. */
 	xshare?: RowShare;
+	/**
+	 * The chat an agent opened it from: its row's way back there. Absent for one a person started, and from a
+	 * station before it.
+	 */
+	opener?: Opener;
 	/**
 	 * Another workspace's chat, its name: the `@` menu's `elsewhere` lists them after the workspace's own. Absent for
 	 * the workspace's own.
@@ -2679,6 +2703,25 @@ export interface StationUpdateNotice {
 	dismissible?: boolean;
 }
 
+/** A chat a chat's agent opened (chat_create), as the chat that opened it lists them (`ChatView.opened`). */
+export interface OpenedChat {
+	/** Its station's address. */
+	station: string;
+	session: string;
+	/** As its list names it, else as it was given when opened. */
+	title: string;
+	/** Its agents' mark (run | block | failed). Absent when none. */
+	mark?: Badge;
+	/** Where it stands, as its row's second line says it. Absent with nothing to say. */
+	stateText?: string;
+	/** What leads `stateText`, for a mark of a client's own. */
+	stateLead?: StateLead;
+	/** It is in its station's archive. Absent otherwise. */
+	archived?: boolean;
+	/** With `archived`: 已归档. */
+	note?: string;
+}
+
 /** An item's page: its chat (with the viewer's read position), or its agent before it has one. */
 export interface ChatView {
 	/** Archived chats must be restored before composing another message. */
@@ -2829,6 +2872,15 @@ export interface ChatView {
 	xshare?: ChatShare;
 	/** Its public snapshots (docs/public-share.md); absent while it has no chat. */
 	publish?: ChatPublish;
+	/**
+	 * The chat an agent opened it from, as its row's (`ChatItem.opener`): the way back there over its messages.
+	 * Absent otherwise.
+	 */
+	opener?: Opener;
+	/** The chats its agent opened, the first first, for its bar's list of them. Empty when none. */
+	opened?: OpenedChat[];
+	/** With `opened`: how many, in words (创建了 3 个对话). Absent otherwise. */
+	openedText?: string;
 	/**
 	 * Its side panel's tabs as this device keeps them for it (prefs `chatTabs`, chat-tabs.ts); absent from a core
 	 * before it.

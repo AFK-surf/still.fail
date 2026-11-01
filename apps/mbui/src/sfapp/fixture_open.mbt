@@ -43,7 +43,7 @@ pub fn open_fixture(mode : String) -> Unit {
       }
     }
     // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
-    "chat-letters-pop" => @sfdesk.open_info_pop()
+    "chat-letters-pop" | "chat-opener-pop" | "chat-opened-pop" => @sfdesk.open_info_pop()
     "chat-jobs-pop" => {
       @sfdesk.open_jobs_pop()
       @sfdesk.open_job_pop("j-ci")
@@ -73,7 +73,7 @@ pub fn open_fixture(mode : String) -> Unit {
 fn open_decide_panels(mode : String, src : Source) -> Unit {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   match mode {
-    "chat-info" | "chat-letters-info" | "chat-info-pulls" => open_info(src, r)
+    "chat-info" | "chat-letters-info" | "chat-info-pulls" | "chat-opener-info" | "chat-opened-info" => open_info(src, r)
     "chat-letters" | "chat-letters-many" => open_letters(src, r, 7.0)
     // what was said in it besides words (sfpages things.mbt), from its info
     "chat-things" => open_things(src, r, 7.0)
