@@ -870,3 +870,53 @@ test "an iPhone Duo on its side: another chat opened, its view read a while late
   assert_true(nav_icon_of(t, "page/chat/history") is Some(_), msg=t.nav_said())
   assert_true(nav_icon_of(t, "page/chat/archive") is None, msg=t.nav_said())
 }
+
+///|
+/// A picture looked at on an iPhone Duo (`w` by `h`, its column `side` wide), marking begun from the system's bars (their
+/// 标注图片), then its own bar's 取消 tapped (`frames`: the frame after drawn before what is looked at; else none):
+/// whether the system's bars were on as it marked, whether 标注图片 was handed them then, how many of the window's
+/// tree's own buttons said 取消 there were; whether it was still marking as the finger lifted, and after; whether
+/// 标注图片 is handed them again, and how many of the tree's buttons say 取消 then.
+fn duo_marking(w : Double, h : Double, side : Double, frames : Bool) -> ((Bool, Bool, Int), (Bool, Bool), (Bool, Int)) raise {
+  let t = native_chat(w, h, true, side~, mode="chat-preview-image")
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sf.native_on(), msg="the system's bars")
+  assert_true(t.nav_said().contains("over/mark"), msg=t.nav_said())
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/mark\"}")
+  t.draw()
+  assert_true(marking.on, msg="marking")
+  let cancel = pv("common.cancel")
+  let cancels = fn() {
+    @ui.view_tree().unwrap().said_order().filter(fn(s) {
+      match s.said {
+        Some(said) => said.role == Button && said.label == cancel
+        None => false
+      }
+    }).length()
+  }
+  let marked = (@sf.native_on(), t.nav_said().contains("over/mark"), cancels())
+  let (x, y, bw, bh) = t.get(Button, label=cancel).rect
+  t.touch(0, x + bw / 2.0, y + bh / 2.0)
+  t.touch(2, x + bw / 2.0, y + bh / 2.0)
+  let let_go = marking.on
+  if frames {
+    t.draw()
+  }
+  let left = (let_go, marking.on)
+  t.run_for(@ui.move_most_ms)
+  (marked, left, (t.nav_said().contains("over/mark"), cancels()))
+}
+
+///|
+test "a picture marked on an iPhone Duo, upright and on its side: its own bar the window's tree's while it marks beside the system's; 取消 leaves marking as the finger lifts, the frames drawn after or none, 标注图片 handed back to the system's bars, the bar's nodes gone" {
+  for duo in [(390.0, 844.0, 0.0), (951.0, 669.0, 84.0)] {
+    let (w, h, side) = duo
+    for frames in [true, false] {
+      let (marked, left, back) = duo_marking(w, h, side, frames)
+      let at = "\{w} frames \{frames}"
+      assert_eq(left, (false, false), msg="\{at}: marking left as the finger lifts")
+      assert_eq(marked, (true, false, 1), msg="\{at}: marking beside the system's bars, its 取消 the tree's")
+      assert_eq(back, (true, 0), msg="\{at}: 标注图片 handed back, no 取消 of the tree's")
+    }
+  }
+}
