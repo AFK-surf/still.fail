@@ -218,7 +218,9 @@ fn set_roots(c : @ui.Ctx, src : Source, station : String, roots : Array[String],
 /// The picker on `station` of workspace `ws`, at its home (PickerDialog): the way to where it is, a filter; the
 /// station's places beside the folders where it is (over them, narrow); entered by a click; 选这个文件夹 pins the one
 /// shown (one pinned already, or one the station may not read, is not).
-fn picker_open(src : Source, ws : String, station : String) -> Unit {
+/// `choose`: a folder picked for something else (a preset's, sfpages presets.mbt): 选这个文件夹 goes on with its path,
+/// nothing pinned.
+fn picker_open(src : Source, ws : String, station : String, choose? : (String) -> Unit) -> Unit {
   picker_close()
   dialogs.picking.set(station)
   let lent = fn() {
@@ -228,23 +230,23 @@ fn picker_open(src : Source, ws : String, station : String) -> Unit {
     }
   }
   @sf.panel(
-    @sf.t("web-pages.drive.pick"),
+    if choose is Some(_) { @sf.t("web-main.preset.pickFolder") } else { @sf.t("web-pages.drive.pick") },
     fn(c, _) { picker(c, src, station) },
     from=Unanchored,
-    description=@sf.t("web-pages.drive.pickNote"),
+    description=if choose is Some(_) { "" } else { @sf.t("web-pages.drive.pickNote") },
     wide=true,
     foot=fn(c, close) {
       let v = dialogs.value.get()
       let path = text(v, "path")
       let lent = lent()
-      let taken = v is Some(_) && lent.contains(path)
+      let taken = choose is None && v is Some(_) && lent.contains(path)
       if @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost) {
         close()
         picker_close()
       }
       if @sf.button(
           c,
-          @sf.t(if taken { "web-pages.drive.already" } else { "web-pages.drive.pickThis" }),
+          if choose is Some(_) { @sf.t("web-main.preset.useFolder") } else { @sf.t(if taken { "web-pages.drive.already" } else { "web-pages.drive.pickThis" }) },
           key="drive/picker/pick",
           tone=Primary,
           disabled=v is None || taken || dialogs.denied.get(),
@@ -255,11 +257,21 @@ fn picker_open(src : Source, ws : String, station : String) -> Unit {
         }
         close()
         picker_close()
-        set_roots(c, src, station, lent + [path], done=@sf.t("web-pages.drive.shared", args=[("name", name)]))
+        match choose {
+          Some(f) => f(path)
+          None => set_roots(c, src, station, lent + [path], done=@sf.t("web-pages.drive.shared", args=[("name", name)]))
+        }
       }
     },
     gone=picker_close,
   )
+}
+
+///|
+/// A folder of `station` of workspace `ws` picked as the files' page picks one to pin (its places, its folders entered by
+/// a click, a filter; a folder macOS guards read through still.fail Helper), `done` going on with its path.
+pub fn pick_folder(src : Source, ws : String, station : String, done : (String) -> Unit) -> Unit {
+  picker_open(src, ws, station, choose=done)
 }
 
 ///|

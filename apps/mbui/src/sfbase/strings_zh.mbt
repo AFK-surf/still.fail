@@ -2054,7 +2054,8 @@ let zh : Map[String, String] = {
   "web-main.preset.dirsHint": "这类事要用到的仓库或目录",
   "web-main.preset.remove": "移除",
   "web-main.preset.add": "添加目录",
-  "web-main.preset.typePath": "输入路径",
-  "web-main.preset.addShort": "添加",
   "web-main.preset.instructionsPlaceholder": "比如：改界面先发改前改后对比图",
+  "web-main.preset.browse": "浏览文件夹…",
+  "web-main.preset.pickFolder": "选择文件夹",
+  "web-main.preset.useFolder": "用这个文件夹",
 }

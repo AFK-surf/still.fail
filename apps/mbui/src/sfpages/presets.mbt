@@ -191,7 +191,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
           }
           if @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus") || (e.adding && e.filled) {
             e.adding = false
-            preset_add_pick(offered, e, @sf.Of(c.id(key("add"))))
+            preset_add_pick(src, w, address, stations, e, @sf.Of(c.id(key("add"))))
           }
         })
         |> ignore
@@ -271,30 +271,33 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
 }
 
 ///|
-/// 添加目录: the folders the workspace's stations found and not in the preset yet, a pick searched by name (those their
-/// chats worked in first, each where it is, on which station where it is not the preset's, how many chats used it),
-/// and 输入路径 for one of the preset's station it did not find.
-fn preset_add_pick(offered : Array[Json], e : PresetEditing, from : @sf.Beside) -> Unit {
+/// 添加目录, opened at once: the folders the workspace's stations found and not in the preset yet, as they come (a pick
+/// read each frame: a station's said while it is open; those read before shown meanwhile), searched by name (those
+/// their chats worked in first, each where it is, on which station where it is not the preset's, how many chats used
+/// it); last 浏览文件夹, the files' page's picker of the preset's station's folders, whatever was found.
+fn preset_add_pick(src : Source, w : Workspace, address : String, stations : Array[Json], e : PresetEditing, from : @sf.Beside) -> Unit {
   let has = fn(k : String) { e.dirs.iter().any(fn(d) { dir_key(Some(d)) == k }) }
-  let choices = offered
-    .filter(fn(o) { !has(dir_key(Some(o))) })
-    .map(fn(o) {
-      let one = Some(o)
-      let (name, repo, icon) = (text(one, "name"), text(one, "repo"), text(one, "icon"))
-      @sf.choice(dir_key(one), name, note=dir_note(one, true), mark=fn(c, size) { repo_mark(c, name, repo, icon, size) })
-    })
-  // (its mark in the marks' column, as the folders' are)
-  choices.push(@sf.choice("+path", @sf.t("web-main.preset.typePath"), mark=fn(c, size) { @sf.icon(c, "edit", size~, color=@sf.theme().p.muted) |> ignore }))
-  @sf.pick(@sf.t("web-main.preset.add"), choices, "", fn(k) {
-    if k == "+path" {
-      @sf.ask(@sf.t("web-main.preset.typePath"), @sf.t("web-main.preset.addShort"), fn(typed) {
-        let d = Json::object({ "path": Json::string(typed) })
-        if typed != "" && !has(dir_key(Some(d))) {
+  let browse = @sf.choice("+browse", @sf.t("web-main.preset.browse"), mark=fn(c, size) { @sf.icon(c, "folder", size~, color=@sf.theme().p.muted) |> ignore })
+  @sf.pick_live(@sf.t("web-main.preset.add"), fn() {
+    let choices = offered_dirs(src, address, stations)
+      .filter(fn(o) { !has(dir_key(Some(o))) })
+      .map(fn(o) {
+        let one = Some(o)
+        let (name, repo, icon) = (text(one, "name"), text(one, "repo"), text(one, "icon"))
+        @sf.choice(dir_key(one), name, note=dir_note(one, true), mark=fn(c, size) { repo_mark(c, name, repo, icon, size) })
+      })
+    choices.push(browse)
+    choices
+  }, "", fn(k) {
+    if k == "+browse" {
+      (@sfbase.folder_asked.val)(src, w.id, address, fn(path) {
+        let d = Json::object({ "path": Json::string(path) })
+        if !has(dir_key(Some(d))) {
           e.dirs.push(d)
         }
-      }, placeholder="~/code/app")
+      })
     } else {
-      match offered.iter().find_first(fn(o) { dir_key(Some(o)) == k }) {
+      match offered_dirs(src, address, stations).iter().find_first(fn(o) { dir_key(Some(o)) == k }) {
         Some(o) => if !has(k) { e.dirs.push(o) }
         None => ()
       }

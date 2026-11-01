@@ -123,8 +123,10 @@ function expand(path: string): string {
 function isDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory();
-  } catch {
-    return false;
+  } catch (e) {
+    // (one macOS guards, picked through still.fail Helper: the station is not let look, but it is there)
+    const code = (e as NodeJS.ErrnoException).code;
+    return code === "EPERM" || code === "EACCES";
   }
 }
 
@@ -392,21 +394,20 @@ export async function candidates(reposDir: string, presets: Preset[], found: Can
 
 /// What a project's picture is called where it keeps one (its site's icons, its app's icon, its logo).
 const ICON_NAMES = /^(favicon|apple-touch-icon|app-icon|appicon|icon|logo)([-_.@][\w@.-]*)?\.(png|jpe?g)$/i;
-/// Not looked into for one: what holds dependencies, builds, tests' and docs' pictures of other things.
-const ICON_SKIPPED = new Set(["node_modules", ".git", "dist", "build", "target", "vendor", "out", "coverage", "test", "tests", "fixtures", "__tests__", "Pods", ".next"]);
+/// Where projects keep their picture: the root, a site's public and static folders, assets, docs, .github, an app's.
+const ICON_PLACES = ["", "public", "static", "assets", "images", "img", "icons", "docs", ".github", "resources", "web/public", "app/public", "site/public", "src/assets", "public/icons", "assets/icons", "static/img", "docs/assets"];
 /// A picture larger than this is no icon (a screenshot, a banner): the repository goes without.
 const ICON_MOST_BYTES = 24 * 1024;
 
-/// A repository's own picture, where projects keep one (its root, public/, static/, assets/, docs/, .github/ and the
-/// like, three levels down at most), as a data URL: the best named (a touch icon first), then the nearest the root, then
-/// the smallest; null for none.
+/// A repository's own picture, where projects keep one (ICON_PLACES: a listing each, not a walk of its tree), as a data
+/// URL: the best named (a touch icon first), then the nearest the root, then the smallest; null for none.
 export async function repoIcon(root: string): Promise<string | null> {
   const found: { path: string; rank: number; depth: number; size: number; type: string }[] = [];
-  const into = async (dir: string, depth: number): Promise<void> => {
-    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-    for (const e of entries) {
-      if (e.isFile()) {
-        const m = ICON_NAMES.exec(e.name);
+  await Promise.all(
+    ICON_PLACES.map(async (place, depth) => {
+      const dir = join(root, place);
+      for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+        const m = e.isFile() ? ICON_NAMES.exec(e.name) : null;
         if (!m) continue;
         const at = join(dir, e.name);
         const size = (await stat(at).catch(() => null))?.size ?? 0;
@@ -414,12 +415,9 @@ export async function repoIcon(root: string): Promise<string | null> {
         // (the touch icon first: square and large; a favicon is often 16 or 32 across, blurred where it is drawn)
         const rank = ["apple-touch-icon", "app-icon", "appicon", "icon", "favicon", "logo"].indexOf(m[1]!.toLowerCase());
         found.push({ path: at, rank, depth, size, type: /png$/i.test(e.name) ? "png" : "jpeg" });
-      } else if (e.isDirectory() && depth < 3 && !ICON_SKIPPED.has(e.name) && (!e.name.startsWith(".") || e.name === ".github")) {
-        await into(join(dir, e.name), depth + 1);
       }
-    }
-  };
-  await into(root, 0);
+    }),
+  );
   found.sort((a, b) => a.rank - b.rank || a.depth - b.depth || a.size - b.size);
   const best = found[0];
   if (!best) return null;

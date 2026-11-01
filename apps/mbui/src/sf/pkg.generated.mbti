@@ -1428,6 +1428,8 @@ pub let pick_line_y : @ui.Space
 
 pub let pick_list_most : Double
 
+pub fn pick_live(String, () -> Array[Choice], String, (String) -> Unit, from~ : Beside, along? : @view.Along, search? : Bool) -> Unit
+
 pub let pick_raised : Raised
 
 pub fn pick_reach() -> @ui.Style

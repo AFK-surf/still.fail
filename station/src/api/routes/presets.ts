@@ -18,9 +18,16 @@ function body(r: Request): unknown {
 
 const wsOf = (r: Request) => r.viewer.workspace || null;
 
+/// How long after the station starts the machine's repositories are first looked for.
+const INDEX_AHEAD_MS = 30_000;
+
 const failed = (e: unknown): Answer => (e instanceof NoPreset ? error(404, e.message) : error(400, (e as Error).message));
 
-export const routes = ({ presets, reposDir, index, changed }: PresetDeps): Route[] => [
+export const routes = ({ presets, reposDir, index, changed }: PresetDeps): Route[] => {
+  // The machine's repositories found ahead of the first preset made (its first walk is otherwise waited on), once the
+  // station has started what comes first.
+  if (index) setTimeout(() => void index.repos().catch(() => {}), INDEX_AHEAD_MS).unref?.();
+  return [
   {
     method: "GET",
     pattern: /^\/presets$/,
@@ -72,3 +79,4 @@ export const routes = ({ presets, reposDir, index, changed }: PresetDeps): Route
     },
   },
 ];
+};

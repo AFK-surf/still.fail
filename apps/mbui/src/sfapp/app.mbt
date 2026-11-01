@@ -15,6 +15,8 @@ fn init {
   // ＋'s Station 文件 (a composer's, sfpages): the station files' picker (sfdesk's station_pick.mbt). Said once, as the
   // app starts (reset runs only as a Tester starts: a wire set there is never set in the app)
   station_files_asked.val = @sfdesk.station_files_pick
+  // 浏览文件夹 of a preset's folders (sfpages presets.mbt): the files' page's picker
+  @sfbase.folder_asked.val = @sfdesk.pick_folder
   // an agent's card's jobs (sfpages): the chat's services and jobs as the screen shows them
   @sfbase.chat_jobs_asked.val = fn(c, src, r) {
     if @sf.layout(c.window_size().0) is Small {

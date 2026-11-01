@@ -232,6 +232,8 @@ pub let peek_gap : Double
 
 pub let peek_leave_ms : Double
 
+pub fn pick_folder(@sfbase.Source, String, String, (String) -> Unit) -> Unit
+
 pub fn pick_job(String) -> Unit
 
 pub fn pin_folder(@ui.Ctx, @sfbase.Source, @sfbase.DvStation, String, Bool) -> Unit

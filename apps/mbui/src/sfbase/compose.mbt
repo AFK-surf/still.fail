@@ -411,6 +411,12 @@ pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
 pub let station_files_asked : Ref[(Source, String) -> Unit] = Ref(fn(_, _) {  })
 
 ///|
+/// A folder of a station picked (src, its workspace, the station's address, what goes on with its path): sfdesk's
+/// pick_folder, the files' page's picker.
+// kept across runs: what the app says once as it starts
+pub let folder_asked : Ref[(Source, String, String, (String) -> Unit) -> Unit] = Ref(fn(_, _, _, _) {  })
+
+///|
 /// Chat `r`'s services and jobs put up (an agent's card's jobs pressed, sfpages): the screen's (sfapp's: the desktop's
 /// popover, the phone's panel).
 // kept across runs: what the app says once as it starts

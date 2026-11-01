@@ -28,6 +28,8 @@ pub(all) struct NewFix {
   /// The preset a new chat is opened with ("" for none), and the station's presets (fix_presets)
   mut preset : String
   presets : Array[Json]
+  /// The first station's presets not said yet (their topic as a station still to answer has it)
+  mut presets_late : Bool
 }
 
 ///|
@@ -45,6 +47,7 @@ pub let new_fix : NewFix = {
   crowded: false,
   tall: false,
   preset: "",
+  presets_late: false,
   presets: [fix_preset_design(), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")],
 }
 

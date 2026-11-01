@@ -655,6 +655,7 @@ pub(all) struct NewFix {
   mut tall : Bool
   mut preset : String
   presets : Array[Json]
+  mut presets_late : Bool
 }
 
 // Type aliases

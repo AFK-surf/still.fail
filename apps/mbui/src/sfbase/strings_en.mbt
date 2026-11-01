@@ -2081,7 +2081,8 @@ let en : Map[String, String] = {
   "web-main.preset.dirsHint": "The repositories and folders this kind of work uses",
   "web-main.preset.remove": "Remove",
   "web-main.preset.add": "Add folder",
-  "web-main.preset.typePath": "Type a path",
-  "web-main.preset.addShort": "Add",
   "web-main.preset.instructionsPlaceholder": "e.g. show before-and-after screenshots for UI changes",
+  "web-main.preset.browse": "Browse folders…",
+  "web-main.preset.pickFolder": "Choose a folder",
+  "web-main.preset.useFolder": "Use this folder",
 }

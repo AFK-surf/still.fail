@@ -73,7 +73,7 @@ priv enum Shows {
   Menu(Array[MenuItem?], String, @ui.Along)
   /// a pick: its title, the choices, the one chosen now, what choosing one does; whether a long one has a line to
   /// search them by
-  Pick(String, Array[Choice], String, (String) -> Unit, @ui.Along, Bool)
+  Pick(String, () -> Array[Choice], String, (String) -> Unit, @ui.Along, Bool)
   /// a small panel, or with nothing that opened it a dialog (PanelOf)
   Panel(PanelOf)
   /// a confirm: its title, what it does, its action, whether that cannot be undone, what goes on once it is said
@@ -255,6 +255,21 @@ pub fn link_menu(href : String, from~ : Beside, open : () -> Unit, copy : () -> 
 pub fn pick(
   title : String,
   choices : Array[Choice],
+  chosen : String,
+  choose : (String) -> Unit,
+  from~ : Beside,
+  along? : @ui.Along = Start,
+  search? : Bool = true,
+) -> Unit {
+  present(Pick(title, fn() { choices }, chosen, choose, along, search), from.anchor())
+}
+
+///|
+/// A pick (as `pick`) of what `choices` says as each frame is built: what it offers comes while it is open (a station's
+/// folders, read as it opens), never a pick of what there was as it was pressed.
+pub fn pick_live(
+  title : String,
+  choices : () -> Array[Choice],
   chosen : String,
   choose : (String) -> Unit,
   from~ : Beside,
@@ -981,7 +996,7 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   match p.shows {
     Menu(items, title, along) => menu_popover(c, key, p, items, title, along)
     Pick(title, choices, chosen, choose, along, search) =>
-      pick_popover(c, key, p, title, choices, chosen, choose, along, search)
+      pick_popover(c, key, p, title, choices(), chosen, choose, along, search)
     Panel(x) if p.from == Unanchored || x.form => panel_centred(c, key, p, x)
     Panel(x) => panel_popover(c, key, p, x)
     Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
@@ -1656,7 +1671,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   }
   let over = p.over
   let share = match p.shows {
-    Pick(_, choices, _, _, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
+    Pick(_, choices, _, _, _, _) if choices().length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
     Ask(_, _, _, _, _, _, _, _) => Some(sheet_ask)
     Panel(x) if x.tall > 0.0 && !x.form => Some(x.tall)
@@ -1757,6 +1772,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       |> ignore
     }
     Pick(title, choices, chosen, choose, _, search) => {
+      let choices = choices()
       if title != "" {
         sheet_title(c, title)
       }

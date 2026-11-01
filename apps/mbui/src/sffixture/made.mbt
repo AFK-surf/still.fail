@@ -23,6 +23,10 @@ pub fn fixture_reset() -> Unit {
   new_fix.reading = 0
   new_fix.crowded = false
   new_fix.tall = false
+  new_fix.preset = ""
+  new_fix.presets_late = false
+  new_fix.presets.clear()
+  new_fix.presets.push_iter([fix_preset_design(), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")].iter())
   fix_chats.clear()
   fix_timers.clear()
   fix_downloads.clear()
