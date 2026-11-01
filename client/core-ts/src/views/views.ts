@@ -5,7 +5,7 @@
 import { Effect, type Fiber } from "effect";
 import type { Inner } from "../core.ts";
 import type { Data } from "../data.ts";
-import type { Derive } from "../db/account.ts";
+import type { Derive, ListKind, RowChange } from "../db/account.ts";
 import type { Host } from "../host.ts";
 import type { Runner } from "../runtime.ts";
 import type { Store } from "../store.ts";
@@ -66,6 +66,14 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 
 const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+
+/// A chat still starts these lists, but only their first reading or loss concerns every chat on the station.
+function chatList(topic: Topic): ListKind | null {
+  if (topic.topic === "chatRows") return "chats";
+  if (topic.topic === "sessions") return "sessions";
+  if (topic.topic === "threads") return "threads";
+  return null;
+}
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them.
@@ -527,7 +535,10 @@ export class Views implements Owner {
   readonly #core: ViewsEnv;
   readonly local: Local;
   /// Per live view, the topics it watches.
-  readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
+  readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch>; lists: Map<string, boolean> }>();
+  /// The other chats each chat actually read by id, including links whose rows have yet to arrive.
+  readonly #chatRowReads = new Map<string, Set<string>>();
+  #readingChatRows: Set<string> | null = null;
   /// The latest chats' things read (`#things`), by station and thread, with what they were read from.
   readonly #thingsKept = new Map<string, { entries: unknown; agents: unknown; value: { messages: J[]; things: ReturnType<typeof thingsOf>; whole: boolean; title: unknown } }>();
   readonly #updateNoticesOpen = new Set<string>();
@@ -564,6 +575,9 @@ export class Views implements Owner {
       const session = topicKey({ topic: "session", station, key });
       for (const v of [...this.#views.values()]) if (v.topic.topic === "chat" && v.topic.station === station && v.watches.has(session)) this.#core.store.invalidate(v.topic);
     });
+    // A list's individual row changes already arrive together with their old and new identities. A chat only needs
+    // its own row, its agents' rows and the rows it actually linked to, not every other chat's updates.
+    core.data.onChats((station, changes) => this.#chatRowsChanged(station, changes));
   }
 
   owns(topic: Topic): boolean {
@@ -573,7 +587,7 @@ export class Views implements Owner {
   // ── what the views watch ──
 
   start(view: Topic): void {
-    this.#views.set(topicKey(view), { topic: view, watches: new Map() });
+    this.#views.set(topicKey(view), { topic: view, watches: new Map(), lists: new Map() });
     this.#sync(view);
     this.#core.store.invalidate(view);
   }
@@ -609,6 +623,7 @@ export class Views implements Owner {
     }
     const live = this.#views.get(key);
     this.#views.delete(key);
+    this.#chatRowReads.delete(key);
     this.#vaultShown.delete(key);
     for (const w of live?.watches.values() ?? []) w.drop();
   }
@@ -689,10 +704,10 @@ export class Views implements Owner {
         this.#invalidate((v) => v.topic === "workspaceMarks" || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
         return;
       case "pending":
-        this.#invalidate((v) => (v.topic === "chat" && v.thread === null && v.session === change.key) || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
+        this.#invalidate((v) => (v.topic === "chat" && typeof v.thread !== "number" && v.session === change.key) || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
         return;
       case "first":
-        this.#invalidate((v) => v.topic === "chat" && v.station === change.station && v.thread === null && v.session === change.key);
+        this.#invalidate((v) => v.topic === "chat" && v.station === change.station && typeof v.thread !== "number" && v.session === change.key);
         return;
       case "archiving":
         this.#invalidate((v) => v.topic === "chats" || v.topic === "workspaceMarks");
@@ -717,7 +732,7 @@ export class Views implements Owner {
     return this.#live().filter((view) => {
       if (view.topic !== "chat" || view.station !== station) return false;
       if (view.thread === thread) return true;
-      if (view.thread !== null || typeof view.session !== "string") return false;
+      if (typeof view.thread === "number" || typeof view.session !== "string") return false;
       if (view.session.startsWith(PENDING_PREFIX)) return this.local.pendingThread(station, view.session) === thread;
       return this.boundThread(station, view.session) === thread;
     });
@@ -733,7 +748,7 @@ export class Views implements Owner {
       this.#invalidate((v) => v.station === station && v.thread === thread && ["chatLetters", "chatThings", "imageNear"].includes(v.topic));
     } else if (of.startsWith("s:")) {
       const key = of.slice(2);
-      this.#invalidate((v) => v.station === station && ((v.topic === "history" && v.key === key) || (v.topic === "chat" && v.thread === null && v.session === key)));
+      this.#invalidate((v) => v.station === station && ((v.topic === "history" && v.key === key) || (v.topic === "chat" && typeof v.thread !== "number" && v.session === key)));
     }
   }
 
@@ -754,6 +769,56 @@ export class Views implements Owner {
     this.#invalidate((v) => v.topic === "chat" && v.station === station);
   }
 
+  #chatRowsChanged(station: string, changes: RowChange[]): void {
+    for (const [key, live] of this.#views) {
+      const view = live.topic;
+      if (view.topic !== "chat") continue;
+      const named = this.#chatRowReads.get(key);
+      // Until the first computation has recorded what it reads, err on the side of showing a change.
+      if (named === undefined) {
+        if (view.station === station) this.#core.store.invalidate(view);
+        continue;
+      }
+      const affected = changes.some(({ id, before, after }) => {
+        if (named.has(JSON.stringify([station, id]))) return true;
+        return [before, after].some((row) => {
+          const thread = u64(get(row, "thread"));
+          const session = str(get(row, "session"));
+          // A link can name a row by its id or by the agent's session (data.chatNamed).
+          if (session !== null && named.has(JSON.stringify([station, session]))) return true;
+          if (view.station !== station) return false;
+          if (view.session === id) return true;
+          return (thread !== null && live.watches.has(topicKey({ topic: "thread", station, thread }))) ||
+            (session !== null && (view.session === session || live.watches.has(topicKey({ topic: "session", station, key: session }))));
+        });
+      });
+      if (affected) this.#core.store.invalidate(view);
+    }
+  }
+
+  /// A list starts and reports errors as before. Once read, its individual rows notify only their readers.
+  #sourceChanged(view: Topic, topic: Topic): void {
+    const live = this.#views.get(topicKey(view));
+    const list = view.topic === "chat" ? chatList(topic) : null;
+    if (live && list !== null && typeof topic.station === "string") {
+      const known = this.#core.data.listed(topic.station, list);
+      const wasKnown = live.lists.get(topicKey(topic));
+      const settling = list === "chats" && this.local.settling(topic.station);
+      if (known && wasKnown === true && !settling) return;
+    }
+    this.#core.store.invalidate(view);
+  }
+
+  #rememberChatLists(view: Topic): void {
+    const live = this.#views.get(topicKey(view));
+    if (!live) return;
+    for (const key of live.watches.keys()) {
+      const topic = JSON.parse(key) as Topic;
+      const list = chatList(topic);
+      if (list !== null && typeof topic.station === "string") live.lists.set(key, this.#core.data.listed(topic.station, list));
+    }
+  }
+
   /// Watches what the view needs now and lets go of the rest.
   #sync(view: Topic): void {
     const live = this.#views.get(topicKey(view));
@@ -762,12 +827,13 @@ export class Views implements Owner {
     for (const [key, w] of [...live.watches]) {
       if (!wanted.has(key)) {
         live.watches.delete(key);
+        live.lists.delete(key);
         w.drop();
       }
     }
     for (const [key, topic] of wanted) {
       if (live.watches.has(key)) continue;
-      const watch = this.#core.store.watch(topic, () => this.#core.store.invalidate(view));
+      const watch = this.#core.store.watch(topic, () => this.#sourceChanged(view, topic));
       // Released meanwhile (a watch's start can stop the view).
       if (this.#views.get(topicKey(view)) !== live) {
         watch.drop();
@@ -899,18 +965,19 @@ export class Views implements Owner {
         ];
       case "chat": {
         const session = typeof view.session === "string" ? view.session : null;
-        if (view.thread === null && session !== null && session.startsWith(PENDING_PREFIX)) {
+        const thread = typeof view.thread === "number" ? view.thread : null;
+        if (thread === null && session !== null && session.startsWith(PENDING_PREFIX)) {
           topics.push({ topic: "overview", station });
           const thread = this.local.pendingThread(station, session);
           if (typeof thread === "number") return this.#sources({ topic: "chat", station, thread, session: null });
           topics.push({ topic: "link", station }, { topic: "workspace", workspace: ofAddress(station) });
           return topics;
         }
-        if (view.thread === null && session !== null) {
+        if (thread === null && session !== null) {
           const bound = this.boundThread(station, session);
           if (bound !== null) return this.#sources({ topic: "chat", station, thread: bound, session: null });
         }
-        if (view.thread === null) {
+        if (thread === null) {
           if (session !== null) topics.push({ topic: "session", station, key: session });
           topics.push(
             { topic: "threads", station },
@@ -922,7 +989,6 @@ export class Views implements Owner {
           );
           return topics;
         }
-        const thread = view.thread as number;
         const kept = () => {
           const t0 = get(this.ok({ topic: "thread", station, thread }), "thread");
           return isObject(t0) ? t0 : null;
@@ -1024,6 +1090,12 @@ export class Views implements Owner {
     return out;
   }
 
+  /// A row a chat refers to by id or session, remembered even when the row has not arrived yet.
+  #chatNamed(station: string, id: string): { row: unknown; archived: boolean } | undefined {
+    this.#readingChatRows?.add(JSON.stringify([station, id]));
+    return this.#core.data.chatNamed(station, id);
+  }
+
   /// The chats `text`, said in a chat on `station`, links to, as their stations' lists have them: each found its link,
   /// its title as its row says it, and whether it is archived (archivedRows), said so. One no list has is left out.
   /// Each its row alone, read where it is kept: a station's whole lists, its archive's thousands of rows, read for a
@@ -1031,7 +1103,7 @@ export class Views implements Owner {
   #linkedChats(station: string, text: string): J[] {
     if (!text.includes("/chats/") && !text.includes("/o/")) return [];
     return chatsLinked(text, station).flatMap((c) => {
-      const found = this.#core.data.chatNamed(c.station, c.id);
+      const found = this.#chatNamed(c.station, c.id);
       if (found === undefined || (found.archived && !isObject(get(found.row, "archived")))) return [];
       const row = found.row as J;
       return [{ href: c.href, title: str(get(row, "title")) || t("core-views.new_chat"), ...(found.archived ? { archived: true, note: t("core-views.search.archived") } : {}) }];
@@ -1136,7 +1208,23 @@ export class Views implements Owner {
   compute(view: Topic): Value | undefined {
     if (!this.#views.has(topicKey(view))) return undefined;
     timed(`${view.topic}.sources`, () => this.#sync(view));
-    const out = timed(`${view.topic}.make`, () => this.#compute(view));
+    let out: Value | undefined;
+    if (view.topic === "chat") {
+      const previous = this.#readingChatRows;
+      const reads = new Set<string>();
+      this.#readingChatRows = reads;
+      try {
+        out = timed(`${view.topic}.make`, () => this.#compute(view));
+        this.#chatRowReads.set(topicKey(view), reads);
+        this.#rememberChatLists(view);
+      } catch (error) {
+        this.#chatRowReads.delete(topicKey(view));
+        this.#views.get(topicKey(view))?.lists.clear();
+        throw error;
+      } finally {
+        this.#readingChatRows = previous;
+      }
+    } else out = timed(`${view.topic}.make`, () => this.#compute(view));
     if (view.topic !== "chat" || out === undefined || !("ok" in out)) return out;
     const v = out.ok as J;
     const station = view.station as string;
@@ -1697,7 +1785,7 @@ export class Views implements Owner {
       if (session === null) return [];
       const there = str(get(o, "station"));
       const at = there !== null && there !== "" ? `${ofAddress(station)}/${there}` : station;
-      const found = this.#core.data.chatNamed(at, session);
+      const found = this.#chatNamed(at, session);
       const row = found?.row as J | undefined;
       const title = str(get(row, "title")) || str(get(o, "title")) || t("core-views.new_chat");
       const out: J = { station: at, session, title };
@@ -1729,7 +1817,7 @@ export class Views implements Owner {
     if (session === null) return null;
     const there = str(get(o, "station"));
     const at = there !== null && there !== "" ? `${ofAddress(station)}/${there}` : station;
-    const found = this.#core.data.chatNamed(at, session);
+    const found = this.#chatNamed(at, session);
     const title = str(get(found?.row, "title")) || str(get(o, "title")) || t("core-views.new_chat");
     return { station: at, session, title, text: t("core-views.opener", { title }), ...(found?.archived === true ? { archived: true, note: t("core-views.search.archived") } : {}) };
   }

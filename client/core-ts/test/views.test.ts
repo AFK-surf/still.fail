@@ -1088,6 +1088,93 @@ const chatTopic = (station: string, th: number): Topic => ({ topic: "chat", stat
 const agentPage = (station: string, key: string): Topic => ({ topic: "chat", station, thread: null, session: key });
 const hasTopic = (list: Topic[], topic: Topic) => list.some((x) => topicKey(x) === topicKey(topic));
 
+for (const change of ["chat row", "thread", "session"] as const) {
+  test(`a_chat_is_not_rebuilt_for_an_unrelated_${change.replaceAll(" ", "_")}`, async () => {
+    const t = setup();
+    const u = ui();
+    const now = t.host.nowMs();
+    t.subscribe(1, chatTopic("ws/a", 7));
+    t.set(sessions("ws/a"), [fullSession("k"), fullSession("other")]);
+    t.set(threads("ws/a"), [thread(7, ["k"], now), thread(8, ["other"], now)]);
+    t.set(rows("ws/a"), [{ ...row("k", now), thread: 7 }, { ...row("other", now), thread: 8 }]);
+    t.set(pageOf("ws/a", 7), page(1, ["开始"], null));
+    t.set(overview("ws/a"), overviewOf([], []));
+    await t.read(u, 1);
+    assert.equal(u.value.title, "k 的标题");
+    const computed = t.router.computed;
+    if (change === "chat row") t.data.putChat("ws/a", { ...row("other", now), thread: 8, title: "别的聊天改了" });
+    if (change === "thread") t.data.putThread("ws/a", { ...thread(8, ["other"], now), title: "别的聊天改了" });
+    if (change === "session") t.data.putSummary("ws/a", fullSession("other", { title: "别的聊天改了" }));
+    await t.read(u, 1);
+    assert.equal(t.router.computed, computed, "the shown chat did not change");
+    if (change === "thread") {
+      t.data.putThread("ws/a", { ...thread(7, ["k"], now), title: "当前线程改了" });
+      await t.read(u, 1);
+      assert.equal(u.value.thread.title, "当前线程改了");
+    }
+    if (change === "session") {
+      t.data.putSummary("ws/a", fullSession("k", { title: "当前会话改了" }));
+      await t.read(u, 1);
+      assert.equal(u.value.agents[0].session.title, "当前会话改了");
+    }
+    t.data.putChat("ws/a", { ...row("k", now), thread: 7, title: "当前聊天改了" });
+    await t.read(u, 1);
+    assert.equal(u.value.title, "当前聊天改了", "its own changes still appear");
+  });
+}
+
+test("a_referenced_chat_is_updated_when_its_row_changes", async () => {
+  const t = setup();
+  const u = ui();
+  const now = t.host.nowMs();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  t.set(sessions("ws/a"), [fullSession("k")]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(rows("ws/a"), [{ ...row("k", now), thread: 7, opener: { station: "b", session: "referenced" }, opened: [{ station: "b", session: "referenced" }] }]);
+  const referenced = { ...row("different-id", now), session: "referenced" };
+  t.set(rows("ws/b"), [referenced]);
+  t.set(pageOf("ws/a", 7), page(1, ["https://app.still.fail/o/ws/b/referenced"], null));
+  t.set(overview("ws/a"), overviewOf([], []));
+  await t.read(u, 1);
+  assert.equal(u.value.messages[0].chats[0].title, "different-id 的标题");
+  assert.equal(u.value.opener.title, "different-id 的标题");
+  assert.equal(u.value.opened[0].title, "different-id 的标题");
+  t.data.putChat("ws/b", { ...referenced, title: "关联聊天改了" });
+  await t.read(u, 1);
+  assert.equal(u.value.messages[0].chats[0].title, "关联聊天改了");
+  assert.equal(u.value.opener.title, "关联聊天改了");
+  assert.equal(u.value.opened[0].title, "关联聊天改了");
+  t.set({ topic: "archivedRows", station: "ws/b" }, [{ ...referenced, title: "关联聊天改了", archived: { at: now, by: "auto" } }]);
+  t.data.dropChat("ws/b", "different-id");
+  await t.read(u, 1);
+  assert.equal(u.value.messages[0].chats[0].archived, true);
+  assert.equal(u.value.opener.archived, true);
+  assert.equal(u.value.opened[0].archived, true);
+});
+
+test("a_recently_left_chat_stays_current_without_rebuilding_for_other_chats", async () => {
+  const t = setup();
+  const u = ui();
+  const now = t.host.nowMs();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  t.set(sessions("ws/a"), [fullSession("k")]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(rows("ws/a"), [{ ...row("k", now), thread: 7 }, { ...row("other", now), thread: 8 }]);
+  t.set(pageOf("ws/a", 7), page(1, ["开始"], null));
+  t.set(overview("ws/a"), overviewOf([], []));
+  await t.read(u, 1);
+  t.store.unsubscribe(1, 1);
+  const computed = t.router.computed;
+  t.data.putChat("ws/a", { ...row("other", now), thread: 8, title: "别的聊天改了" });
+  await t.host.time.pass(100);
+  assert.equal(t.router.computed, computed);
+  t.data.putChat("ws/a", { ...row("k", now), thread: 7, title: "当前聊天改了" });
+  await t.host.time.pass(100);
+  t.subscribe(2, chatTopic("ws/a", 7));
+  const sent = t.host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === 2 && m.value !== undefined);
+  assert.equal(sent?.value.title, "当前聊天改了", "opening it again gives its current value at once");
+});
+
 test("hidden_letters_keep_the_loaded_entry_cursors_advancing", async () => {
   const t = setup();
   const u = ui();

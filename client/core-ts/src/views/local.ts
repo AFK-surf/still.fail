@@ -667,9 +667,9 @@ export class Local {
     }
   }
 
-  /// Whether any change of a station's is done and waits for its rows to have it.
+  /// Whether a row change or dismissal is done and waits for the station's rows to have it.
   settling(station: string): boolean {
-    return this.#changing.some((c) => c.station === station && c.done !== undefined);
+    return this.#changing.some((c) => c.station === station && c.done !== undefined) || this.#lettingGo.some((c) => c.station === station && c.done !== undefined);
   }
 
   static #matches(c: Change, station: string, thread: number | null, session: string | null): boolean {

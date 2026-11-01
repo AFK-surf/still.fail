@@ -874,7 +874,7 @@ export class AccountDb {
   setSessions(station: string, list: J[], confirmed: number | null): void {
     this.#write(() => {
       const was = new Map<string, SqlRow>();
-      for (const r of this.sql.all("SELECT key, ord, summary, listed, detail FROM session WHERE station = ?", [station])) was.set(String(r[0]), r);
+      for (const r of this.sql.all("SELECT key, ord, summary, listed FROM session WHERE station = ?", [station])) was.set(String(r[0]), r);
       const items: [string, J][] = [];
       const seen = new Set<string>();
       for (const s of list) {
@@ -890,7 +890,7 @@ export class AccountDb {
         const json = JSON.stringify(s);
         if (r && r[3] === 1 && r[1] === places[i] && r[2] === json) return;
         changed = true;
-        this.#putSummary(station, key, s, json, 1, places[i], r !== undefined, r?.[4] !== null && r?.[4] !== undefined);
+        this.#putSummary(station, key, s, json, 1, places[i], r !== undefined);
       });
       for (const [key, r] of was) {
         if (seen.has(key) || r[3] !== 1) continue;
@@ -898,12 +898,13 @@ export class AccountDb {
         this.#run("UPDATE session SET listed = 0 WHERE station = ? AND key = ?", [station, key]);
         this.#loadedList(station, "sessions")?.delete(key);
         this.#tell({ topic: "sessions", station });
+        this.#tellSession(station, key);
       }
       this.#markListed(station, "sessions", confirmed, changed);
     });
   }
 
-  #putSummary(station: string, key: string, summary: J, json: string, listed: number, ord: number, exists: boolean, hasDetail: boolean): void {
+  #putSummary(station: string, key: string, summary: J, json: string, listed: number, ord: number, exists: boolean): void {
     const cols = this.#sessionCols(summary);
     if (exists) this.#run("UPDATE session SET summary = ?, listed = ?, ord = ?, last_active = ?, process = ?, connect = ?, archived_at = ?, turns = ? WHERE station = ? AND key = ?", [json, listed, ord, ...cols, station, key]);
     else this.#run("INSERT INTO session (station, key, listed, ord, last_active, process, connect, archived_at, turns, summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [station, key, listed, ord, ...cols, json]);
@@ -913,7 +914,8 @@ export class AccountDb {
     if (listed) list?.set(key, kept, [ord]);
     else list?.delete(key);
     this.#tell({ topic: "sessions", station });
-    if (hasDetail) this.#tellSession(station, key);
+    // A view can use this summary before the session's detail has arrived. Tell its own watchers in either case.
+    this.#tellSession(station, key);
   }
 
   #tellSession(station: string, key: string): void {
@@ -946,7 +948,7 @@ export class AccountDb {
       }
       if (r && r[1] === json && r[2] === listed) return;
       // Its detail shows it as it is now too (`detail`).
-      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined, detail !== undefined);
+      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined);
     });
     return again;
   }
@@ -1187,9 +1189,12 @@ export class AccountDb {
         const id = r[0] as number;
         if (seen.has(id)) continue;
         changed = true;
+        const before = this.thread(station, id);
         this.#run("UPDATE thread SET listed = 0 WHERE station = ? AND id = ?", [station, id]);
         this.#loadedList(station, "threads")?.delete(String(id));
         this.#tell({ topic: "threads", station });
+        this.#tell({ topic: "thread", station, thread: id });
+        for (const m of new Set(membersOf(before))) this.#tellSession(station, m);
       }
       this.#markListed(station, "threads", confirmed, changed);
     });
