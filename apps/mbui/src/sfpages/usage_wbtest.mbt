@@ -165,6 +165,18 @@ test "用量, at each width and with either hand: the cost and its change, what 
 }
 
 ///|
+test "价目表: the first column starts in line with the card's note at every width" {
+  for w in [390.0, 1280.0] {
+    let t = setting_tester(UsagePrices(7), w, platform=0)
+    t.draw()
+    t.draw()
+    let (note, _, _, _) = t.rect_of("每百万 token 的美元价格").unwrap()
+    let (first, _) = t.drawn_of("Opus 5.5").unwrap()
+    assert_true((first - note).abs() < 0.5, msg="\{w}: table \{first}, note \{note}")
+  }
+}
+
+///|
 test "价目表, at each width and with either hand: each station's card, its note, its models and rates; none said where it has none" {
   for case in page_cases {
     let (w, platform) = case

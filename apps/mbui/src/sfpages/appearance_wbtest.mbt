@@ -38,6 +38,24 @@ test "外观, at each width on either screen: 主题, 字体, 动画, 语言; �
 }
 
 ///|
+test "外观: a setting opening another page has the same title weight as a setting changed here" {
+  for platform in [0, 2] {
+    let plain = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.setting(c, "主题", fn() {  })
+    }, w=900.0, platform~)
+    plain.draw()
+    let weight = plain.census().weight
+    let link = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.setting_link(c, "fonts", "字体", "") |> ignore
+    }, w=900.0, platform~)
+    link.draw()
+    assert_eq(link.census().weight, weight)
+  }
+}
+
+///|
 test "字体, at each width on either screen: the places' choice, a chat as they set it, the faces a row each" {
   for case in page_cases {
     let (w, platform) = case

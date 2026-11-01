@@ -647,7 +647,7 @@ let setting_in_card_control : @ui.Style = @ui.css("w=Full py=S2")
 /// it. True on the frame it is pressed.
 pub fn setting_link(c : @ui.Ctx, key : String, title : String, value : String, note? : String = "") -> Bool {
   match look() {
-    Wide => link_row(c, key, title, value~, note~)
+    Wide => link_row(c, key, title, value~, note~, title_style=theme().rows.title)
     Narrow => {
       let mut pressed = false
       section(c, title, heads=true, fn() {
@@ -1110,6 +1110,7 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// every width: by its first line it stands in the row's corner, 10 from both its edges, its 14 round in the row's 18,
 /// which would want a corner of 24, on no step of the ladder (docs/ui-panels.md 圆角阶梯); a mark (an icon, a dot) is
 /// by its first line.
+/// `title_style` overrides a wide row's title (a setting's title follows the other settings' titles).
 /// `title_after` after its title on its line (a pill: 你, 当前; a team's name), dropped before the title where
 /// the line has not the room for both; `control` at its
 /// end, last (a button, a switch, a choice: what is done here, no chevron), a button of words alone there with its
@@ -1142,6 +1143,7 @@ pub fn link_row(
   control? : () -> Unit,
   note_cut? : Bool = false,
   face? : Bool = false,
+  title_style? : @ui.TextStyle,
 ) -> Bool {
   let th = theme()
   // (one that acts: its title in the link's ink, no chevron; one that adds, after a ＋)
@@ -1313,10 +1315,11 @@ pub fn link_row(
           None => ()
         }
         let title_words = fn() {
+          let title_style = title_style.unwrap_or(desk_list_title)
           let style = match (strong, danger) {
-            (_, true) => desk_list_title.then(bad)
-            (true, false) => desk_list_title.then(row_strong)
-            (false, false) => desk_list_title
+            (_, true) => title_style.then(bad)
+            (true, false) => title_style.then(row_strong)
+            (false, false) => title_style
           }
           if title_after is Some(_) {
             c.box(style=title_line, keep=true, fn() {

@@ -130,6 +130,7 @@ test("prices are found however a profile spells the model, and cost counts each 
 test("GPT usage has a price, and unknown variants do not borrow one", () => {
   for (const [model, input, cached, output] of [
     ["gpt-6-astra", 10.0, 1.0, 50.0],
+    ["gpt-6.1-terra", 1.0, 0.05, 5.0],
     ["gpt-6.1-sol", 2.0, 0.1, 10.0],
     ["gpt-6-sol", 2.0, 0.2, 10.0],
     ["gpt-6-luna", 0.1, 0.01, 0.5],
@@ -139,13 +140,21 @@ test("GPT usage has a price, and unknown variants do not borrow one", () => {
     assert.ok(Math.abs(cost(g)! - (input + cached + output)) < 1e-9, model);
   }
   assert.deepEqual(price("openai/gpt-6-astra-2026-08-21"), price("gpt-6-astra"));
+  assert.deepEqual(price("gpt-6.1-terra"), { input: 1, cacheRead: 0.05, output: 5 });
   assert.equal(price("gpt-6-astra-unknown"), null);
   assert.equal(price("gpt-6-astra:free"), null);
   const astra = (priceTable("en") as any).rows.find((r: any) => r.model === "gpt-6-astra");
   assert.deepEqual([astra.input, astra.cacheRead, astra.output], [10.0, 1.0, 50.0]);
+  const terra = (priceTable("zh") as any).rows.find((r: any) => r.model === "gpt-6.1-terra");
+  assert.deepEqual([terra.input, terra.cacheRead, terra.cacheWrite, terra.cacheWriteLong, terra.output], [1, 0.05, null, null, 5]);
   // Actual recorded GPT token totals: cached input is already separate from uncached input.
   const g = group({ model: "gpt-6-astra", input: 1_916_566, cacheRead: 71_041_792, output: 245_251 });
   assert.ok(Math.abs(cost(g)! - 102.470002) < 1e-9);
+});
+
+test("the price note finishes its explanation in both languages", () => {
+  assert.ok((priceTable("zh") as any).note.endsWith("。"));
+  assert.ok((priceTable("en") as any).note.endsWith("."));
 });
 
 type Rig = { data: string; store: Store; usage: UsageCounter };
