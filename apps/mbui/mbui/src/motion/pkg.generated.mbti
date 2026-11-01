@@ -144,6 +144,8 @@ pub fn measure(@ui.Ctx, Int32, String) -> Unit
 
 pub fn measured(@ui.Ctx, String) -> Double?
 
+pub fn measured_radii(@ui.Ctx, String) -> MeasuredCorners?
+
 pub fn measured_rect(@ui.Ctx, String) -> (Double, Double, Double, Double)?
 
 pub fn measured_size(@ui.Ctx, String) -> (Double, Double)?
@@ -329,6 +331,13 @@ pub fn Generator::next(Self, Double) -> GenState
 pub fn Generator::retarget(Self, Double, Double, Double) -> Unit
 pub fn Generator::to_css(Self) -> String
 pub fn Generator::velocity(Self, Double, initial? : Double) -> Double
+
+pub struct MeasuredCorners {
+  // private fields
+}
+pub fn MeasuredCorners::each(Self) -> (Double, Double, Double, Double)
+pub fn MeasuredCorners::scaled(Self, Double) -> @ui.Radius
+pub fn MeasuredCorners::uniform(Double) -> Self
 
 pub struct MoveGroup {
   // private fields

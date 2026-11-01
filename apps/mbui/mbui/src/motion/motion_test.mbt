@@ -1370,6 +1370,30 @@ test "a box resized by what holds it, its cause the same, has its ground its new
 }
 
 ///|
+test "a measured node tells what reads its corners when they change without changing its size" {
+  let radius = @signals.signal(12.0)
+  let t = @ui.Tester::new(fn(c) {
+    let target = c.box(w=Px(100.0), h=Px(100.0), radius=radius.get(), fn() {  })
+    @motion.measure(c, target, "corner-target")
+    c.made("corner-reader", fn() {
+      @ui.made_box(fn(c) {
+        let r = @motion.measured_radii(c, "corner-target").unwrap_or(@motion.MeasuredCorners::uniform(0.0)).each()
+        c.text(if r.0 >= 20.0 { "rounder" } else { "round" }) |> ignore
+      })
+    })
+  }, w=300.0, h=200.0)
+  t.draw()
+  t.frame()
+  assert_eq(@motion.measured_radii(t.ctx(), "corner-target").map(fn(r) { r.each() }), Some((12.0, 12.0, 12.0, 12.0)))
+  assert_true(t.find("round") is Some(_))
+  radius.set(24.0)
+  t.draw()
+  t.frame()
+  assert_eq(@motion.measured_radii(t.ctx(), "corner-target").map(fn(r) { r.each() }), Some((24.0, 24.0, 24.0, 24.0)))
+  assert_true(t.find("rounder") is Some(_))
+}
+
+///|
 test "placed: drawn where what it reads is as this frame lays it out, never a frame behind" {
   let room = Ref::new(0.0)
   let t = @ui.Tester::new(fn(c) {

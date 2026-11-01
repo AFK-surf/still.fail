@@ -3152,7 +3152,7 @@ pub(all) struct Thumb {
   y : Double
   w : Double
   h : Double
-  radius : Double
+  corners : @motion.MeasuredCorners
   letterbox : Bool
   top_crop : Bool
   picture : String
