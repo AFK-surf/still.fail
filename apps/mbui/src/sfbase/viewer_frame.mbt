@@ -122,11 +122,16 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
   }
   // (beside the system's bars, an iPhone Duo's: its tabs put away while a file is looked at, the user 2026-10-27;
   // while this one is open and not closing, its bars' part kept or built again)
-  let native = @sf.native_over_up(v.file.name, alive=fn() { v.up_still() })
+  let media = v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo)
+  // (a film filling the window: the bars put away, no title, no actions: @sf.player_full_native)
+  let full = media && @sf.player_fills_native(c.width)
+  let native = @sf.native_over_up(if full { "" } else { v.file.name }, alive=fn() { v.up_still() })
   // played in the player beside the system's bars: its close and download in them, as a picture's (the player draws
   // no bar of its own there: @sf.player_room)
-  if native && (v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo)) {
-    vf_native_media(v, c, src)
+  if native && media {
+    if !full {
+      vf_native_media(v, c, src)
+    }
     return
   }
   // read in the reader, played in the player: their own bars
@@ -261,9 +266,21 @@ fn vf_native_media(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   @sf.native_over_act("close", @sf.t("common.close"), "close", fn() {
     match v.media {
       Some(m) if m.is_sideways() => m.upright()
-      _ => if !v.closing { v.shut(c) }
+      _ =>
+        if !v.closing {
+          @sf.player_full_native_set(false)
+          v.shut(c)
+        }
     }
   }, lead=true)
+  // 全屏, a film's (its controls have it too: @sf.player_full_act)
+  match v.media {
+    Some(m) if v.shown_kind() == Some(KVideo) => {
+      let (words, on, act) = @sf.player_full_act(m, c.width)
+      @sf.native_over_act("full", words, "landscape", act, active=on)
+    }
+    _ => ()
+  }
   vf_native_download(v, c, src, true)
 }
 

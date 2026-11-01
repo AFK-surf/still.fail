@@ -1533,7 +1533,8 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   }
   // (beside the column of the system's bars down the window's side, an iPhone Duo's on its side: the file laid out
   // clear of it, its ground on under it, the user 2026-10-27)
-  let clear = @sf.native_clear()
+  // (a film filling the window beside them: the bars put away, edge to edge: @sf.player_full_native)
+  let clear = if media && @sf.player_fills_native(c.width) { 0.0 } else { @sf.native_clear() }
   c.overlay("preview-layer", modal=true, escape=false, outside=false, initial_focus=0, inert=v.closing, fn() {
     if clear > 0.0 {
       c.layer(fn() {
