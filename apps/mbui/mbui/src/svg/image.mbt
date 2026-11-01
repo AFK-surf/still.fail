@@ -683,8 +683,7 @@ fn gif_lzw(data : Array[Int], min_code : Int, limit : Int) -> Array[Int] {
 
 ///|
 fn decode_jpeg(data : Bytes) -> (Int, Int, FixedArray[Byte])? {
-  ignore(data)
-  None
+  @pixels.decode_jpeg(data)
 }
 
 ///|
