@@ -920,3 +920,25 @@ test "a picture marked on an iPhone Duo, upright and on its side: its own bar th
     }
   }
 }
+
+///|
+test "a picture looked at and marked on an iPhone Duo on its side: laid out clear of the system's column (its ground under it), the picture in the middle of what is left, what the marking bar's own presses all of it clear of the column" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-preview-image")
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sf.native_on(), msg="the system's bars")
+  assert_eq(@sf.native_clear(), 84.0)
+  let clear = 951.0 - 84.0
+  // (the picture in the middle of what is clear of the column)
+  let (x, _, w, _) = viewer.get().unwrap().zoom.rect().unwrap()
+  assert_true((x + w / 2.0 - clear / 2.0).abs() < 0.5, msg="its middle \{x + w / 2.0}, what is clear's \{clear / 2.0}")
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/mark\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(marking.on && @sf.native_on(), msg="marking beside the system's bars")
+  // (each of the bar's own and the tools', whole, clear of the column)
+  let pressed = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && !s.hidden && s.rect.2 > 0.0 })
+  assert_true(pressed.iter().any(fn(s) { s.label == pv("common.cancel") }), msg="取消 there")
+  for s in pressed {
+    let (bx, _, bw, _) = s.rect
+    assert_true(bx + bw <= clear + 0.5, msg="\{s.label} under the system's column: \{s.rect}")
+  }
+}

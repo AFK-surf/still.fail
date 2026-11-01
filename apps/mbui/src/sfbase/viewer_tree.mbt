@@ -212,6 +212,12 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     |> ignore
   })
   |> ignore
+  // (the rest clear of the column of the system's bars down the window's trailing edge, an iPhone Duo's on its side
+  // (@sf.native_clear), its ground on under it, as the old frame's preview layer laid it out)
+  let room = n.box(fn(r) {
+    r.over(Is(true)).row(Is(true)).padding(By(fn() { (0.0, 0.0, @sf.native_clear(), 0.0) })) |> ignore
+  })
+  let n = room.box(fn(m) { m.grow(Is(1.0)) |> ignore })
   // the canvas: what a finger does on it, the picture drawn in it, as far in as its fade has come (as its ground is; a
   // flight's fade is put in whole, its picture the flight's own), sampled as its ground is
   n.box(fn(canvas) {
