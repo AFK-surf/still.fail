@@ -2396,6 +2396,7 @@ pub fn Tester::clipboard_label(Self) -> String
 pub fn Tester::clipboard_png(Self) -> Bytes?
 pub fn Tester::clipboard_reads(Self) -> Int32
 pub fn Tester::clipboard_secret(Self) -> Double?
+pub fn Tester::close(Self, &@hostapi.Host) -> Unit
 pub fn Tester::compose(Self, String) -> Unit
 pub fn Tester::contrast_faults(Self, marks? : Double) -> Array[String]
 pub fn Tester::corner_faults(Self) -> Array[String]

@@ -15,7 +15,7 @@ bash scripts/figure.sh align-edge out/align-edge.png
 bash scripts/figure.sh align-text out/align-text.png
 # Optional: use another font for the view's UI face.
 bash scripts/figure.sh wrap out/wrap-inter.png /absolute/path/to/InterVariable.ttf
-# Several pictures from the same source: build once, then render each.
+# Several pictures from the same source: build once and render them in one process.
 bash scripts/figure.sh --batch out/figures wrap align
 ```
 
@@ -28,7 +28,7 @@ or annotations. These single-card figures are 480 × 270 logical points at 5×, 
 are relative to `apps/mbui` unless absolute. A supplied font that cannot be read,
 an undecodable or pending image, unsupported host, invalid dimensions, or an unwritable output makes the command fail.
 The script writes a temporary file alongside the destination and replaces it only after a successful render.
-Batch output is named `OUTPUT_DIR/NAME.png`. All images are rendered before any are published, so a failed scene
+Batch output is named `OUTPUT_DIR/NAME.png`. The renderer starts once for the whole batch. All images are rendered before any are published, so a failed scene
 keeps the existing pictures. Set `MBUI_FIGURE_FONT` to use the same font for the whole batch.
 
 ## Make another graphic

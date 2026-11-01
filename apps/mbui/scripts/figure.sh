@@ -35,9 +35,8 @@ if [ "$mode" = batch ]; then
   # Render every image before publishing any: one bad scene keeps all the previous pictures.
   tmpdir=$(mktemp -d "$outdir/.figure-batch.XXXXXXXX")
   trap 'rm -rf "$tmpdir"' EXIT
-  for name in "$@"; do
-    MBUI_FIGURE="$name" MBUI_FIGURE_OUT="$tmpdir/$name.png" MBUI_FIGURE_FONT="$font" "$exe"
-  done
+  names=$(IFS=,; printf '%s' "$*")
+  MBUI_FIGURE_BATCH="$names" MBUI_FIGURE_DIR="$tmpdir" MBUI_FIGURE_FONT="$font" "$exe"
   for name in "$@"; do
     mv -f "$tmpdir/$name.png" "$outdir/$name.png"
     echo "figure: $outdir/$name.png"
@@ -48,7 +47,7 @@ else
   # Write beside the destination first: a failed render must not leave a partial PNG at the requested path.
   tmp=$(mktemp "${out}.tmp.XXXXXX")
   trap 'rm -f "$tmp"' EXIT
-  MBUI_FIGURE="$name" MBUI_FIGURE_OUT="$tmp" MBUI_FIGURE_FONT="$font" "$exe"
+  MBUI_FIGURE_BATCH= MBUI_FIGURE="$name" MBUI_FIGURE_OUT="$tmp" MBUI_FIGURE_FONT="$font" "$exe"
   mv -f "$tmp" "$out"
   trap - EXIT
   echo "figure: $out"

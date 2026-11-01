@@ -43,6 +43,20 @@ pub fn run_let_go() -> Unit {
 }
 
 ///|
+/// End this test run and restore the host that was current before it began. This also releases its window tree and
+/// bindings, so a later run cannot call through the ended run's fake host. An older tester cannot close a newer one.
+pub fn Tester::close(self : Tester, restore : &@hostapi.Host) -> Unit {
+  match fake.val {
+    Some(f) if physical_equal(f, self.fake) => {
+      run_let_go()
+      fake.val = None
+      @hostapi.set_host(restore)
+    }
+    _ => ()
+  }
+}
+
+///|
 /// What a test leaves behind forgotten before the next starts: the window's context made anew (every field of it as a
 /// window's first frame has it, by construction), and the state kept outside it (the package's own tables, those of
 /// the packages over it: on_reset) emptied; then checked (leaked_state), so that what is added later and not
