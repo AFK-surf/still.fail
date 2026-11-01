@@ -4,7 +4,8 @@
 /// Render a view to a PNG at `w` × `h` logical points and `scale` pixels per point. Its first frame is built by the
 /// Tester with the native host's text and pictures, then drawn by the host's own offscreen renderer. Returns false if
 /// the dimensions are invalid, the host has no renderer, an image failed or is still pending, or the PNG cannot be
-/// written. The theme's corner rule and word overlap are checked unless the view opts out.
+/// written. The theme's corner rule and word overlap are checked unless the view opts out. A view that deliberately
+/// depicts an exception can accept precisely its expected corner faults with `corner_faults_ok`.
 pub fn picture(
   view : (@ui.Ctx) -> Unit,
   path~ : String,
@@ -14,6 +15,7 @@ pub fn picture(
   platform? : Int = 0,
   dark? : Bool = false,
   corners_held? : Bool = true,
+  corner_faults_ok? : (Array[String]) -> Bool = fn(faults) { faults.is_empty() },
   words_over_held? : Bool = true,
 ) -> Bool {
   if !supported || path == "" || w <= 0.0 || h <= 0.0 || scale <= 0.0 {
@@ -37,7 +39,10 @@ pub fn picture(
   // Check the captured frame explicitly so a bad corner reports why and returns false instead of aborting the process.
   if corners_held {
     let faults = t.corner_faults()
-    if !faults.is_empty() {
+    if !corner_faults_ok(faults) {
+      if faults.is_empty() {
+        say("picture: the expected corner faults were not found")
+      }
       for fault in faults {
         say("picture: \{fault}")
       }

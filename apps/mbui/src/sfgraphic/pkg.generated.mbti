@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn alignment_corner_faults_ok(Array[String]) -> Bool
+
+pub fn alignment_figure(@ui.Ctx) -> Unit
+
 pub fn sign_in_example(@ui.Ctx, Double, Bool, String) -> Unit
 
 pub fn wrap_figure(@ui.Ctx) -> Unit

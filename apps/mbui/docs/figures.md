@@ -8,6 +8,7 @@ On macOS, from `apps/mbui`:
 
 ```sh
 bash scripts/figure.sh wrap out/wrap.png
+bash scripts/figure.sh align out/alignment.png
 # Optional: use another font for the view's UI face.
 bash scripts/figure.sh wrap out/wrap-inter.png /absolute/path/to/InterVariable.ttf
 ```
@@ -15,7 +16,8 @@ bash scripts/figure.sh wrap out/wrap-inter.png /absolute/path/to/InterVariable.t
 The `wrap` example is 960 × 540 logical points at 2.5×, producing 2400 × 1350 pixels. It draws the sign-in card's real
 components three times, with the same content and the same size: once wide, then at the same narrow width with normal
 and reverse wrapping. Only the normal example changes the foot's layout direction. The example shortens the button
-labels for the graphic. The input and output paths are relative to `apps/mbui` unless absolute. A supplied font that cannot be read,
+labels for the graphic. `align` compares the button edge with its label on the same card. The input and output paths
+are relative to `apps/mbui` unless absolute. A supplied font that cannot be read,
 an undecodable or pending image, unsupported host, invalid dimensions, or an unwritable output makes the command fail.
 The script writes a temporary file alongside the destination and replaces it only after a successful render.
 
@@ -33,7 +35,8 @@ theme or font the view needs on its first call, as the example does. Use `mbui/f
 `@film.picture` currently uses the Mac offscreen host, like `mbui/film`; it does not open a window. It rejects a frame
 whose images or native views are still pending, whose images failed, or that contains a native web or video view,
 rather than silently writing an incomplete graphic: those views are not drawn by the offscreen host. The theme's
-corner rule and word overlap are checked by default; a drawing with a different, intentional rule can pass
-`corners_held=false` or `words_over_held=false`. The example uses the app's bundled Inter face by default; the optional font overrides it for
+corner rule and word overlap are checked by default. The `align` picture deliberately shows one misaligned corner;
+its `corner_faults_ok` accepts exactly that fault, so another bad corner still fails the export. A drawing with an
+entirely different, intentional rule can pass `corners_held=false` or `words_over_held=false`. The examples use the app's bundled Inter face by default; the optional font overrides it for
 that invocation. Streamed video frames cannot be captured by this exporter. Graphic content and labels belong to the
 view, not to the renderer.
