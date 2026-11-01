@@ -4,11 +4,6 @@
 // gradients itself, this goes onto that.
 
 ///|
-/// The pictures made, by what they are made of (their key says it all: the same picture each time it is asked for).
-// kept across runs: a cache by content; what is in it never changes for a key
-let gradients_made : Map[String, Bool] = {}
-
-///|
 /// How many pixels across the picture is made (its height in the box's proportion): the colours change slowly, so few
 /// are needed, each stretched.
 let gradient_px : Int = 64
@@ -21,8 +16,8 @@ pub fn gradient(c : @ui.Ctx, w : Double, h : Double, angle : Double, from : Int6
   let pw = gradient_px
   let ph = if w <= 0.0 { 2 } else { dmax_int(2, (h / w * pw.to_double()).round().to_int()) }
   let key = "mem:sf-gradient/\{from}/\{to}/\{angle}/\{pw}x\{ph}"
-  if !gradients_made.contains(key) {
-    gradients_made[key] = true
+  // (made once: its key says it all, the same picture each time it is asked for)
+  if !@ui.has_image(key) {
     @ui.add_image(key, @pixels.png(pw, ph, gradient_pixels(pw, ph, w, h, angle, from, to)))
   }
   c.image(key, w=Fill(1.0), h=Px(h), fit=FitFill, radius~, bg=0L, fade=false) |> ignore

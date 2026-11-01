@@ -44,9 +44,15 @@ fn usage_week(parts : Array[Array[Double]]) -> Json {
 }
 
 ///|
-/// Whether a drawn rect is in `ink`, faded or not (the days but the one shown are drawn faded).
-fn usage_inked(r : (Double, Double, Double, Double, Int64), ink : Int64) -> Bool {
-  r.4 >> 8 == ink >> 8
+/// The days' bars drawn in full (the orange's gradient, a picture 16 wide), from the first day: x, y, w, h.
+fn usage_full_bars(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
+  t.drawn_images().filter(fn(r) { r[2] == 16.0 }).map(fn(r) { (r[0], r[1], r[2], r[3]) })
+}
+
+///|
+/// The days' bars faded (the white thinned on the night), 16 wide.
+fn usage_faded_bars(t : @ui.Tester) -> Array[(Double, Double, Double, Double, Int64)] {
+  t.drawn_rects().filter(fn(r) { r.2 == 16.0 && r.4 == @sf.share_bar })
 }
 
 ///|
@@ -64,17 +70,18 @@ fn days_tester(v : Json) -> @ui.Tester {
 test "usage: each day's bar 16 wide in the middle of its day, over its date, on the days' foot, as high as its share of the top" {
   let costs = [20.0, 16.0, 48.0, 80.0, 32.0, 24.0, 8.0]
   let t = days_tester(usage_week(costs.map(fn(c) { [c] })))
-  let bars = t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 })
+  // (each bar in full the orange's gradient, a picture)
+  let bars = usage_full_bars(t)
   assert_eq(bars.length(), 7)
-  // the most spent 120 high (80 of 100), its foot the days' (its part the corner longer, cut there)
-  let (_, top3, _, _, _) = bars[3]
+  // the most spent 120 high (80 of 100), its foot the days'
+  let (_, top3, _, _) = bars[3]
   let foot = top3 + 120.0
   for i, b in bars {
-    let (x, y, w, h, _) = b
+    let (x, y, w, h) = b
     let high = 150.0 * costs[i] / 100.0
     assert_eq(w, 16.0)
     assert_true((y - (foot - high)).abs() < 0.01)
-    assert_true((h - (high + 4.0)).abs() < 0.01)
+    assert_true((h - high).abs() < 0.01)
     if i < 6 {
       match t.rect_of("10/\{17 + i}") {
         Some((lx, _, lw, _)) => assert_true((lx + lw / 2.0 - (x + w / 2.0)).abs() < 0.5)
@@ -82,9 +89,13 @@ test "usage: each day's bar 16 wide in the middle of its day, over its date, on 
       }
     }
   }
-  // none picked at first: every day's bar in full; the scale's lines said
-  assert_eq(bars.filter(fn(r) { r.4 == @sf.usage_series(0) }).length(), 7)
+  // none picked at first: every day's bar in full, the most spent's cost said over it; the scale's lines said
+  assert_eq(usage_faded_bars(t).length(), 0)
   assert_eq(usage_pick.day.get(), "")
+  match t.rect_of("$80") {
+    Some((_, y, _, h)) => assert_true(y + h <= top3 + 0.01)
+    None => fail("the most spent day's cost not said")
+  }
   assert_true(t.rect_of("50") is Some(_) && t.rect_of("100") is Some(_))
 }
 
@@ -96,9 +107,7 @@ test "usage: a finger slid across the days lets go on a day: it stays, the other
     let (x, y, w, h) = t.rect_of(label).unwrap()
     (x + w / 2.0, y + h / 2.0)
   }
-  let full = fn() {
-    t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 && r.4 == @sf.usage_series(0) })
-  }
+  let full = fn() { usage_full_bars(t) }
   // slid from over 10/19's bar across to 10/21's date and let go there: it stays
   let (x2, y2) = at("10/19")
   let (x4, y4) = at("10/21")
@@ -112,7 +121,8 @@ test "usage: a finger slid across the days lets go on a day: it stays, the other
   t.draw()
   assert_eq(usage_pick.day.get(), "2026-10-17")
   assert_eq(full().length(), 1)
-  assert_eq(full()[0].0, t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 })[0].0)
+  assert_true(usage_faded_bars(t).all(fn(r) { full()[0].0 < r.0 }))
+  assert_eq(usage_faded_bars(t).length(), 6)
   // tapped again: let go, every day in full
   t.tap(x0, y0)
   t.draw()
@@ -138,12 +148,8 @@ test "用量, at each width and with either hand: the cost and its change, what 
     assert_true(t.find("GPT-6") is Some(_) && t.find("Codex 团队") is Some(_), msg=at)
     // the calls and tokens, under the rest
     assert_true(t.find("1,416 次") is Some(_), msg=at)
-    // a day picked (the days far down: scrolled to): everything of it, said over it, its chip back to all the days
-    t.scroll_to_end()
-    t.draw()
+    // a day picked (its bars on the overview): everything of it, said over it, its chip back to all the days
     t.tap_text("10/3")
-    t.draw()
-    t.scroll_to(0)
     t.draw()
     assert_true(t.find("折合费用 · 10/3") is Some(_) && t.find("$20") is Some(_), msg=at)
     t.tap_text("只看 10/3")

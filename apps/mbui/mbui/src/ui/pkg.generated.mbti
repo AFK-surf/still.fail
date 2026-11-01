@@ -166,6 +166,8 @@ pub fn h265_here() -> Bool
 
 pub fn haptic(Haptic) -> Unit
 
+pub fn has_image(String) -> Bool
+
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit
 
 pub let image_fade_ms : Double

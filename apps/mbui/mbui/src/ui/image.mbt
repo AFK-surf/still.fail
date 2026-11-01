@@ -141,6 +141,13 @@ fn looks_like_svg(data : Bytes) -> Bool {
 }
 
 ///|
+/// Whether an image was handed over as `key` (add_image, Ctx::image_bytes): what one made from its key needs make only
+/// once (a Tester starts without any).
+pub fn has_image(key : String) -> Bool {
+  image_data.contains(key)
+}
+
+///|
 fn bucket(px : Double) -> Int {
   let mut b = 64
   while b.to_double() < px && b < 8192 {
