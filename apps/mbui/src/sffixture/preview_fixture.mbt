@@ -21,6 +21,7 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     (at("设计说明.pdf", 2400.0, 0.0, 0.0), fn() { fixture_pdf() }),
     // what its message says of it, as the station read it from its header: 12.5 s, 375 frames
     ({ ..at("演示录屏.mp4", 5242880.0, 1280.0, 720.0), duration: 12500.0, frames: 375 }, fn() { b"" }),
+    ({ ..at("演示录屏.webm", 5242880.0, 1280.0, 720.0), duration: 12500.0, frames: 375 }, fn() { b"" }),
     (at("会议录音.m4a", 1489000.0, 0.0, 0.0), fn() { b"" }),
     (at("报告.html", 900.0, 0.0, 0.0), fn() { @utf8.encode(fixture_html) }),
     // the chat's visualization (chat_fixture.mbt MBUI_FIXTURE=chat-viz)
@@ -47,6 +48,7 @@ pub fn fixture_preview(mode : String) -> Unit {
     "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-coming" | "chat-preview-coming-part" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
     "chat-preview-video" => "演示录屏.mp4"
+    "chat-preview-webm" | "chat-preview-webm-unsupported" => "演示录屏.webm"
     "chat-preview-audio" => "会议录音.m4a"
     "chat-preview-html" => "报告.html"
     "chat-preview-code" => "list.ts"
@@ -82,6 +84,19 @@ pub fn fixture_preview(mode : String) -> Unit {
             duration: 95000.0,
             position: 31000.0,
             buffered: 95000.0,
+            playing: false,
+            buffering: false,
+            ended: false,
+            width: 0.0,
+            height: 0.0,
+          })
+        }
+        if mode == "chat-preview-webm-unsupported" {
+          v.pinned = Some({
+            state: -2,
+            duration: -1.0,
+            position: 0.0,
+            buffered: 0.0,
             playing: false,
             buffering: false,
             ended: false,
@@ -129,7 +144,7 @@ pub fn fixture_fetch(
   match name {
     "station.file" => done(Ok(({ "type": "" }, bytes)))
     "station.file.part" => {
-      if @sf.lower(file).has_suffix(".mp4") || @sf.lower(file).has_suffix(".m4a") {
+      if @sf.lower(file).has_suffix(".mp4") || @sf.lower(file).has_suffix(".webm") || @sf.lower(file).has_suffix(".m4a") {
         // the player waits on the network
         return
       }

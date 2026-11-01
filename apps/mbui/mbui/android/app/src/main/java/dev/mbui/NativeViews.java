@@ -1960,7 +1960,16 @@ final class NativeViews {
 
                 @Override
                 public void onPlayerError(PlaybackException e) {
-                    state = -1;
+                    int code = e.errorCode;
+                    if (code == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
+                            || code == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED
+                            || code == PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES) {
+                        state = -2;
+                    } else if (code == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED) {
+                        state = -3;
+                    } else {
+                        state = -1;
+                    }
                     playing = 0;
                     Host.log("view " + id + ": cannot play: " + e.getErrorCodeName() + " " + e.getMessage());
                     tell(-1);

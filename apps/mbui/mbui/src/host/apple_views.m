@@ -14,8 +14,10 @@
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
 #import <ImageIO/ImageIO.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <WebKit/WebKit.h>
 #import <objc/message.h>
+__asm__(".linker_option \"-framework\", \"UniformTypeIdentifiers\"");
 #if TARGET_OS_OSX
 #import <Cocoa/Cocoa.h>
 typedef NSView PView;
@@ -183,6 +185,8 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) double x, y, w, h, cx0, cy0, cx1, cy1;
 @property(nonatomic) double r0, r1, r2, r3;  // its corners (top left, then round it)
 @property(nonatomic) BOOL shown, placed, failed, closed;
+// A player's failure: -2 unsupported format, -3 unreadable structure, -1 another failure.
+@property(nonatomic) int32_t playerFailure;
 // where it is stacked: over those of a lower z (opened later, or raised later: view_tell 5)
 @property(nonatomic) int64_t z;
 // a player's
@@ -321,6 +325,18 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 }
 
 @end
+
+// A failed byte read and an interrupted player may be tried again. A format the system cannot decode, or a file it
+// cannot parse, needs a different file instead. Keep the system's distinction for the player above the host.
+static int32_t player_failure(NSError *error) {
+  for (NSError *e = error; e; e = e.userInfo[NSUnderlyingErrorKey]) {
+    if (![e.domain isEqualToString:AVFoundationErrorDomain]) continue;
+    if (e.code == AVErrorFileFormatNotRecognized || e.code == AVErrorDecoderNotFound ||
+        e.code == AVErrorFormatUnsupported) return -2;
+    if (e.code == AVErrorFileFailedToParse) return -3;
+  }
+  return -1;
+}
 
 @implementation MBNative {
   double _stoodSaid[10];  // mb_host_view_info's numbers as the app was last told (stood)
@@ -727,6 +743,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     vlog(@"view %d: ready, %.0f ms, %.0fx%.0f", self.vid, [self durationMs], s.width, s.height);
   }
   if (self.item.status == AVPlayerItemStatusFailed && !self.failed) {
+    self.playerFailure = player_failure(self.item.error);
     self.failed = YES;
     vlog(@"view %d: failed: %@", self.vid, self.item.error.localizedDescription);
   }
@@ -971,9 +988,16 @@ static NSString *uti_for(NSString *mime, NSString **ext) {
     @"audio/x-aiff" : @[ AVFileTypeAIFF, @"aiff" ],
     @"audio/flac" : @[ @"org.xiph.flac", @"flac" ],
   };
-  NSArray *e = map[m] ?: @[ AVFileTypeMPEG4, @"mp4" ];
-  *ext = e[1];
-  return e[0];
+  NSArray *e = map[m];
+  if (e) {
+    *ext = e[1];
+    return e[0];
+  }
+  // Ask the system for other known media types too. Unknown is left unknown: telling AVPlayer it is MP4 makes it
+  // parse other formats as MP4 and hides the real reason it cannot play them.
+  UTType *type = m.length ? [UTType typeWithMIMEType:m] : nil;
+  *ext = type.preferredFilenameExtension ?: @"";
+  return type.identifier;
 }
 
 static MBNative *open_video(int32_t vid, NSString *mime) {
@@ -989,7 +1013,8 @@ static MBNative *open_video(int32_t vid, NSString *mime) {
   v.lq = dispatch_queue_create("mbui.view.loader", DISPATCH_QUEUE_SERIAL);
   v.loader = [MBLoader new];
   v.loader.view = v;
-  NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"mbview://%d/file.%@", vid, ext]];
+  NSString *suffix = ext.length ? [@"." stringByAppendingString:ext] : @"";
+  NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"mbview://%d/file%@", vid, suffix]];
   AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
   [asset.resourceLoader setDelegate:v.loader queue:v.lq];
   v.item = [AVPlayerItem playerItemWithAsset:asset];
@@ -1567,7 +1592,7 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
   }
   // at its end and stopped there
   out[9] = (v.player.rate == 0 && out[0] > 0 && out[1] >= out[0] - 50) ? 1 : 0;
-  if (v.failed || it.status == AVPlayerItemStatusFailed) return -1;
+  if (v.failed || it.status == AVPlayerItemStatusFailed) return v.playerFailure ?: -1;
   return it.status == AVPlayerItemStatusReadyToPlay ? 1 : 0;
 }
 

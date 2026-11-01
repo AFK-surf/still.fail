@@ -127,6 +127,61 @@ test "a video plays in the one player (@sf.player_view), its bytes read through 
 }
 
 ///|
+test "an unsupported or damaged video says what is known without offering a retry" {
+  for (w, platform) in [(390.0, 2), (1280.0, 0)] {
+    for (state, why) in [
+      (-2, "此设备不支持此 MP4 文件"),
+      (-3, "文件可能已损坏"),
+      (-4, "此设备可能不支持此 MP4 文件，或文件已损坏"),
+    ] {
+      let t = preview_tester("video", w~, platform~, finish=false)
+      assert_true(t.find(why) is None, msg="\{w} wide: still opening")
+      // The host says whether the format is unsupported or the file could not be parsed.
+      assert_true(t.view_said("{\"info\":{\"view\":1,\"state\":\{state},\"at\":[-1,0,0,0,0,0,0,0,0,0]}}"))
+      t.draw()
+      assert_true(t.find("无法播放此视频") is Some(_), msg="\{w} wide: no failure")
+      assert_true(t.find(why) is Some(_), msg="\{w} wide: no explanation")
+      if state == -2 {
+        assert_true(t.find("此设备可能不支持此格式，或文件已损坏") is None, msg="\{w} wide: the cause is known")
+      }
+      assert_true(t.find("重试") is None, msg="\{w} wide: retry cannot fix this")
+    }
+  }
+}
+
+///|
+test "a WebM video the host cannot play names its format" {
+  for (w, platform) in [(390.0, 2), (1280.0, 0)] {
+    for (state, why) in [
+      (-2, "此设备不支持此 WebM 文件"),
+      (-4, "此设备可能不支持此 WebM 文件，或文件已损坏"),
+    ] {
+      let t = preview_tester("webm", w~, platform~, finish=false)
+      assert_true(t.view_said("{\"info\":{\"view\":1,\"state\":\{state},\"at\":[-1,0,0,0,0,0,0,0,0,0]}}"))
+      t.draw()
+      assert_true(t.find("无法播放此视频") is Some(_), msg="\{w} wide: no failure")
+      assert_true(t.find(why) is Some(_), msg="\{w} wide: WebM format not named")
+      assert_true(t.find("重试") is None, msg="\{w} wide: retry cannot fix this")
+    }
+  }
+}
+
+///|
+test "a video whose read failed can be retried" {
+  for (w, platform) in [(390.0, 2), (1280.0, 0)] {
+    let t = preview_tester("video", w~, platform~, finish=false)
+    t.finish(2, 1, ok=false)
+    t.draw()
+    assert_true(t.find("无法播放此视频") is Some(_), msg="\{w} wide")
+    assert_true(t.find("此设备不支持此格式") is None, msg="\{w} wide: the cause is not known")
+    assert_true(t.find("重试") is Some(_), msg="\{w} wide: no retry")
+    t.tap_text("重试")
+    assert_true(t.views().contains("close 1"), msg="\{w} wide: did not close the failed player")
+    assert_true(t.views().iter().any(fn(line) { line.has_prefix("open 2 1 ") }), msg="\{w} wide: did not reopen")
+  }
+}
+
+///|
 test "a video in the chat: the station's still of it (its poster) on the black, the play mark and its name over it" {
   new_run()
   let asked : Array[String] = []

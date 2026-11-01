@@ -25,7 +25,8 @@ let corner_windows : Array[(String, Double, Double, Int, String)] = [
 ]
 
 ///|
-/// The screens: every mode sffix opens (fixture.mbt open_fixture_mode, settings/fixture.mbt fixture_page).
+/// The screens: every mode sffix opens (fixture.mbt open_fixture_mode, settings/fixture.mbt fixture_page). The other
+/// failure reasons on the player's page are checked against player-failed separately below.
 let corner_modes : Array[String] = [
   // (webdemo: the web's demo workspace, its chats' rows with people's faces, which chat's fixture has none)
   "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "landing", "landing-invited", "blocked", "place",
@@ -169,6 +170,41 @@ test "corners and squeeze: every screen in every window keeps the corner rule an
 ///|
 test "corners and squeeze: every screen in every window keeps the corner rule and fits, in English" {
   corners_check("en")
+}
+
+///|
+/// A fault's node numbers differ when a player card has no button. The boxes and what they hold must still match.
+fn gap_without_nodes(s : String) -> String {
+  let mut rest = s
+  let mut out = ""
+  while rest.find(", node ") is Some(i) {
+    let after = rest.view(start_offset=i + 7)
+    guard after.find(")") is Some(j) else { return out + rest }
+    out = out + rest.view(end_offset=i).to_owned() + ")"
+    rest = after.view(start_offset=j + 1).to_owned()
+  }
+  out + rest
+}
+
+///|
+test "each player failure reason fits without adding a spacing or corner fault" {
+  for win in corner_windows {
+    for lang in ["zh", "en"] {
+      // The player's existing header has a known gap fault on a small screen. These are states of that same page,
+      // so compare their actual faults with it rather than counting that same fault once per message.
+      let baseline = screen_in("player-failed", win, lang).gap_faults().map(gap_without_nodes)
+      for mode in ["player-damaged", "player-unplayable", "player-unsupported"] {
+        let t = screen_in(mode, win, lang)
+        let at = "\{win.0}-\{lang} \{mode}"
+        assert_eq(t.gap_faults().map(gap_without_nodes), baseline, msg=at)
+        assert_true(t.corner_faults().is_empty(), msg=at)
+        assert_true(t.lit_all_faults().is_empty(), msg=at)
+        if squeeze_windows.contains(win.0) {
+          assert_true(t.squeeze_faults().is_empty(), msg=at)
+        }
+      }
+    }
+  }
 }
 
 ///|

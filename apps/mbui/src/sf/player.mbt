@@ -727,13 +727,15 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
 /// What the player asks over its picture (that it cannot play, what comes next at its end): a card that asks (ask.mbt)
 /// alone in the stage's middle (its words in its middle, its buttons across its foot), a confirming dialog's width
 /// whatever it says (its seconds counting down move nothing), on the night over a picture.
-fn player_ask(c : @ui.Ctx, ink : MediaInk, title : String, note : String, buttons : () -> Unit) -> Unit {
+fn player_ask(c : @ui.Ctx, ink : MediaInk, title : String, note : String, buttons : () -> Unit, show_buttons? : Bool = true) -> Unit {
   let draw = fn() {
     c.box(style=player_ask_room, fn() {
       c.box(style=player_ask_card, fn() {
         card(c, fill=true, ground=ink.ground, fn() {
           ask_words(c, title, note, centred=true)
-          ask_buttons_across(c, buttons)
+          if show_buttons {
+            ask_buttons_across(c, buttons)
+          }
         })
         |> ignore
       })
@@ -772,6 +774,28 @@ fn player_cue(c : @ui.Ctx, words : String, up : Bool, right : Double, over~ : Do
 }
 
 ///|
+/// A familiar container name, only when the media type says which it is.
+fn player_format(mime : String) -> String? {
+  let raw = match mime.find(";") {
+    Some(i) => mime.view(end_offset=i).to_owned()
+    None => mime
+  }
+  match raw.trim(chars=" \t\r\n").to_lower() {
+    "video/webm" | "audio/webm" => Some("WebM")
+    "video/mp4" | "audio/mp4" => Some("MP4")
+    "video/quicktime" => Some("MOV")
+    "video/x-matroska" => Some("MKV")
+    "video/x-msvideo" => Some("AVI")
+    "video/ogg" | "audio/ogg" => Some("Ogg")
+    "audio/mpeg" => Some("MP3")
+    "audio/aac" => Some("AAC")
+    "audio/wav" | "audio/x-wav" => Some("WAV")
+    "audio/flac" => Some("FLAC")
+    _ => None
+  }
+}
+
+///|
 /// What it waits on (with how fast its bytes come meanwhile, once a second of it has gone: moving, or not at all), why
 /// it failed, in the stage's middle.
 fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk) -> Unit {
@@ -797,12 +821,26 @@ fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk
             })
             |> ignore
           }
-        Failed =>
-          player_ask(c, ink, t("android-chat.video.failed"), "", fn() {
+        Failed => {
+          let title = t(if f.audio { "android-misc.drive.player.failed" } else { "android-chat.video.failed" })
+          let format = match p.track() {
+            Some(track) => player_format(track.mime)
+            None => None
+          }
+          let note = match (f.status.state, format) {
+            (-2, Some(format)) => t("android-misc.drive.player.unsupportedFormat", args=[("format", format)])
+            (-2, None) => t("android-misc.drive.player.unsupported")
+            (-3, _) => t("android-misc.drive.player.damaged")
+            (-4, Some(format)) => t("android-misc.drive.player.unplayableFormat", args=[("format", format)])
+            (-4, None) => t("android-misc.drive.player.unplayable")
+            _ => ""
+          }
+          player_ask(c, ink, title, note, fn() {
             if button(c, t("android-misc.drive.player.retry"), key=p.key() + "/retry", tone=Primary) {
               p.retry()
             }
-          })
+          }, show_buttons=f.status.state != -2 && f.status.state != -3 && f.status.state != -4)
+        }
         _ => ()
       }
     })

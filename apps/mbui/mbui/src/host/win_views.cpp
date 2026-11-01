@@ -78,7 +78,7 @@ for(let i=0;i<b.length;i++)if(b.start(i)<=t+0.05&&b.end(i)>ahead)ahead=b.end(i);
 post({t:'s',d:isFinite(v.duration)?v.duration*1000:-1,p:t*1000,r:v.playbackRate,
 playing:!v.paused&&!v.ended?1:0,w:v.videoWidth,h:v.videoHeight,drawn:v.readyState>=2?1:0,
 buf:want&&!v.paused&&!v.ended&&v.readyState<3?1:0,ahead:ahead*1000,ended:v.ended?1:0,
-ready:v.readyState>=1?1:0,err:v.error?1:0});};
+ready:v.readyState>=1?1:0,err:v.error?v.error.code:0});};
 for(const e of['loadedmetadata','loadeddata','durationchange','timeupdate','play','playing','pause','waiting',
 'canplay','canplaythrough','seeking','seeked','progress','ended','error','ratechange','stalled','suspend'])
 v.addEventListener(e,say);
@@ -279,6 +279,7 @@ struct View {
   double total = -1, given = 0;
   double dur = -1, pos = 0, rate = 1, ahead = 0;
   int playing = 0, vw = 0, vh = 0, drawn = 0, buffering = 0, ended = 0, ready = 0;
+  int player_failure = -1;  // -1 other, -4 unsupported or damaged
   // how it stands (mb_host_view_info) as the app was last told (stood)
   double stood_said[10] = {0};
   int stood_state = 0;
@@ -337,7 +338,7 @@ static void tell(View *v, int state) {
 }
 
 static void fail(View *v, const char *why, HRESULT hr) {
-  if (v->loaded || v->closed || v->failed) return;
+  if ((v->kind != 1 && v->loaded) || v->closed || v->failed) return;
   v->failed = true;
   vlog("view %d: failed: %s (0x%08lx)", v->vid, why, (unsigned long)hr);
   tell(v, -1);
@@ -786,9 +787,12 @@ static void player_said(View *v, const wchar_t *t) {
   v->buffering = (int)jnum(t, L"buf", 0);
   v->ahead = jnum(t, L"ahead", 0);
   v->ended = (int)jnum(t, L"ended", 0);
-  if (jnum(t, L"err", 0) > 0) {
+  int error = (int)jnum(t, L"err", 0);
+  if (error > 0 && !v->failed) {
+    // A source or decode error can mean an unsupported format or a damaged file. A read error is already marked.
+    v->player_failure = error == 4 || error == 3 ? -4 : -1;
     fail(v, "the player cannot play it", E_FAIL);
-  } else if (!v->ready && jnum(t, L"ready", 0) > 0) {
+  } else if (!v->failed && !v->ready && jnum(t, L"ready", 0) > 0) {
     v->ready = 1;
     vlog("view %d: player ready (%.0f ms, %dx%d)", v->vid, v->dur, v->vw, v->vh);
     tell(v, 1);
@@ -1262,7 +1266,7 @@ extern "C" int32_t mb_host_view_info(int32_t vid, double *out) {
     out[7] = v->buffering;
     out[8] = v->ahead;
     out[9] = v->ended;
-    return v->failed ? -1 : v->ready ? 1 : 0;
+    return v->failed ? v->player_failure : v->ready ? 1 : 0;
   }
   if (v->kind == 2) out[5] = v->html_len;
   out[6] = v->loaded ? 1 : 0;
@@ -1291,6 +1295,15 @@ extern "C" void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes
   auto it = v->reads.find(req);
   if (it == v->reads.end()) return;
   MediaRead *m = it->second;
+  if (total == -2) {
+    v->reads.erase(it);
+    // Tell the app before answering the page: its ensuing media error must not turn a read failure into a format one.
+    fail(v, "its file could not be read", E_FAIL);
+    respond(m->args.Get(), 500, L"Content-Type: text/plain", "", 0);
+    if (m->deferral) m->deferral->Complete();
+    delete m;
+    return;
+  }
   int32_t n = Moonbit_array_length(data);
   m->data.insert(m->data.end(), data, data + n);
   v->given += n;

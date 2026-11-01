@@ -21,7 +21,7 @@ pub(all) struct MediaTrack {
 ///|
 /// How a player stands, as its view says (or pinned, for a fixture's shot).
 pub(all) struct MediaStatus {
-  /// -1 failed, 0 opening, 1 ready
+  /// -1 failed, -2 unsupported format, -3 damaged file, -4 unsupported or damaged, 0 opening, 1 ready
   state : Int
   duration : Double
   position : Double
@@ -382,7 +382,7 @@ pub fn Media::scrubbing(self : Media) -> Double? {
 
 ///|
 fn Media::phase(self : Media, s : MediaStatus) -> MediaPhase {
-  if s.state == -1 {
+  if s.state < 0 {
     Failed
   } else if !self.started {
     Opening

@@ -53,7 +53,8 @@ pub fn fixture_play_read(params : Json, done : (Result[(Json, Bytes), Json]) -> 
 }
 
 ///|
-/// The made-up drive's film of a player's mode (player-video, -audio, -ended, -failed, -opening): its folder made up, the film and
+/// The made-up drive's film of a player's mode (player-video, -audio, -ended, -failed, -unsupported, -damaged,
+/// -unplayable, -opening): its folder made up, the film and
 /// where its player stands (None: still opening); None for another mode.
 pub fn play_fixture(mode : String) -> (DriveAt, @kit.MediaStatus?)? {
   let (file, pin) : (String, @kit.MediaStatus?) = match mode {
@@ -103,11 +104,11 @@ pub fn play_fixture(mode : String) -> (DriveAt, @kit.MediaStatus?)? {
         }),
       )
     // (one that could not play on, its card over where it stopped)
-    "player-failed" =>
+    "player-failed" | "player-unsupported" | "player-damaged" | "player-unplayable" =>
       (
         "第10集.mp4",
         Some({
-          state: -1,
+          state: if mode == "player-unsupported" { -2 } else if mode == "player-damaged" { -3 } else if mode == "player-unplayable" { -4 } else { -1 },
           duration: 1404000.0,
           position: 73000.0,
           buffered: 73000.0,
