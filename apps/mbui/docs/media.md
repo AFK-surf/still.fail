@@ -33,3 +33,37 @@ publication is interrupted, compare the result's SHA-256 to the record before tr
 
 Rendering uses the Mac offscreen host. System keyboards, dialogs and native web or video views are not drawn by mbui;
 use a real system capture for a scene that needs them. `docs/figures.md` describes building reusable graphics.
+
+## Assemble a timeline
+
+Put the scene films, stills, transparent mbui title or caption pictures, and sound on a frame-addressed timeline. A
+scene is held for its `frames`; a picture scene is held still, and a film starts at `start_frame` after conversion to
+the timeline's rate (zero by default).
+Overlays are visible from `at` through the frame before `until`. Audio begins at `at`, and its optional `gain` defaults
+to 1. All frame numbers are at the timeline's `fps`. Paths in the JSON are relative to the JSON file.
+
+```json
+{
+  "width": 1920, "height": 1080, "fps": 60, "background": "#111111",
+  "scenes": [
+    {"kind": "film", "path": "opening.mp4", "frames": 180},
+    {"kind": "picture", "path": "ending.png", "frames": 120}
+  ],
+  "overlays": [{"path": "caption.png", "at": 30, "until": 150, "x": 0, "y": 0}],
+  "audio": [{"path": "music.wav", "at": 0, "gain": 0.5}]
+}
+```
+
+```sh
+# Review representative frames before making the film.
+node scripts/media-compose.mjs still out/timeline.json 60 out/frame-60.png
+node scripts/media-compose.mjs still out/timeline.json 210 out/frame-210.png
+node scripts/media-compose.mjs film out/timeline.json out/finished.mp4
+```
+
+The segments are cut together in order, scaled to fit without distortion and letterboxed on the background. Overlays
+are unscaled PNGs: use `@film.picture(transparent=true)` to render titles and captions with mbui. Audio tracks are
+mixed and cut to the film; sound embedded in a source film is not mixed automatically. The output is H.264 at the
+specified rate, with AAC when sound is present. It needs `node`, `ffmpeg`, and `ffprobe`, but no browser. Each result
+has a `.timeline.json` record containing the timeline and SHA-256 hashes of the inputs and output. An invalid timeline,
+missing input, a source film shorter than requested, or a failed encode leaves an existing result intact.
