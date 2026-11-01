@@ -99,6 +99,27 @@ test "answered phone and sign-in requests show their original reason from the ou
 }
 
 ///|
+test "a granted proxy request reveals its reason and allowed host" {
+  for platform in [0, 2] {
+    let calls : Array[Made] = []
+    let t = cards_core(calls, mode="chat-vault-use", platform~)
+    out_of_sight(t)
+    let (x, y) = t.find("已允许使用 Axiom 查询 token").unwrap()
+    if platform == 0 {
+      t.move(x, y)
+      t.run_for(@sfpages.hover_open_ms)
+    } else {
+      t.press_at(x, y)
+      t.release(x, y)
+    }
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("查询中继连接日志，定位拨号失败的原因") is Some(_))
+    assert_true(t.find("代理 · 限 api.axiom.co") is Some(_))
+    assert_eq(named(calls, "vault.approve").length(), 0)
+  }
+}
+
+///|
 /// `words` tapped where it is, as two inputs (the press, the lift), each drawn.
 fn tap_now(t : @ui.Tester, words : String) -> Unit {
   let (x, y) = t.find(words).unwrap()

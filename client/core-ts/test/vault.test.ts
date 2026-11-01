@@ -584,6 +584,8 @@ test("a chat's card of an agent's request comes answered with its post, from the
   // This device's vault not on: one to keep turns it on first; one to use is approved, for the chat at the longest
   // while its request is not held here.
   assert.deepEqual(asks(), [["r_1", "approve", "chat", null], ["r_s", "setUp", null, null]]);
+  const useAsk = () => chat().messages.find((m: any) => m.card?.vault === "r_1").card.vaultAsk;
+  assert.deepEqual([useAsk().reason, useAsk().howText], ["list PRs", "代理 · 限 api.github.com"]);
   // Set up: the chat's cards say so with no one asking.
   const { made: id } = await r.ask("vault.setup", {});
   assert.deepEqual(asks(), [["r_1", "approve", "chat", null], ["r_s", "approve", null, null]]);
@@ -598,7 +600,8 @@ test("a chat's card of an agent's request comes answered with its post, from the
   // Approved here: how it went on its card at once, before its station restates it.
   await r.ask("vault.approve", { request: "r_1", scope: "once" });
   assert.equal(asks()[0][3], "granted");
-  assert.equal(chat().messages.find((m: any) => m.card?.vault === "r_1").card.vaultAsk.scope, "once");
+  assert.equal(useAsk().scope, "once");
+  assert.deepEqual([useAsk().reason, useAsk().howText], ["list PRs", "代理 · 限 api.github.com"], "the original request remains in the chat after approval");
   r.core.close();
   // A web page keeps no keys: approved elsewhere.
   const w = await rig(true, false, cardsInChat());

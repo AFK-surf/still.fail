@@ -3315,8 +3315,10 @@ pub(all) struct UpdateSource {
 
 pub(all) struct VaultAsk {
   name : String
+  reason : String
   mode : String
   command : String
+  how_text : String
   save_kind : String
   username : String
   filename : String

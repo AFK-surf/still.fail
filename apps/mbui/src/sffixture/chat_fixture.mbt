@@ -1294,13 +1294,13 @@ pub let fix_vault : Ref[String] = Ref("")
 /// they pick), or `use_secret` for an already answered request to use a token; its card as the core says it.
 pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false) -> Json {
   let ask : Map[String, Json] = if use_secret {
-    { "name": "Axiom 查询 token", "mode": "proxy", "command": "curl -s https://api.axiom.co/v1/datasets/_apl", "answer": "approve", "scope": "chat" }
+    { "name": "Axiom 查询 token", "reason": "查询中继连接日志，定位拨号失败的原因", "mode": "proxy", "hosts": ["api.axiom.co"], "howText": "代理 · 限 api.axiom.co", "command": "curl -s https://api.axiom.co/v1/datasets/_apl", "answer": "approve", "scope": "chat" }
   } else if file {
     { "name": "生产集群", "mode": "file", "save": { "kind": "file", "typed": true }, "answer": "approve" }
   } else if typed {
     { "name": "OpenCode Go", "mode": "proxy", "hosts": ["opencode.ai"], "save": { "kind": "token", "typed": true }, "answer": "approve" }
   } else {
-    { "name": "UniFi UX7", "mode": "env", "save": { "kind": "login", "username": "zzj" }, "answer": "approve" }
+    { "name": "UniFi UX7", "reason": "把路由器密码安全保存，方便以后排查网络", "mode": "env", "save": { "kind": "login", "username": "zzj" }, "answer": "approve" }
   }
   if fix_vault.val != "" {
     ask["status"] = Json::string(fix_vault.val)

@@ -322,7 +322,7 @@ pub fn vault_act(Core, String, String, Array[(String, Json)], String, done? : St
 
 pub fn vault_actions(@ui.Ctx, Core, String, String, Bool, who? : String?) -> Unit
 
-pub fn vault_ask(@ui.Ctx, Core, String, String, Asked, Bool, who? : String?, extra? : (() -> Unit)?, said? : Array[String]) -> Unit
+pub fn vault_ask(@ui.Ctx, Core, String, String, Asked, Bool, who? : String?, extra? : (() -> Unit)?) -> Unit
 
 pub fn vault_ask_details(@ui.Ctx, Asked) -> Unit
 
@@ -394,8 +394,10 @@ pub(all) enum Answer {
 
 pub(all) struct Asked {
   name : String
+  reason : String
   mode : String
   command : String
+  how_text : String
   save_kind : String
   username : String
   filename : String

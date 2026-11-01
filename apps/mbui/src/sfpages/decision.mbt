@@ -170,7 +170,8 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                   None => None
                 }
                 c.box(style=settled_room, fn() {
-                  let id = @sf.ask_history_trigger(c, "options/" + key, [@ui.span(w)], settled_line)
+                  let line = c.sp(c.theme().leading(settled_leading).unwrap_or(c.text_size(settled_size).1))
+                  let id = @sf.ask_history_trigger(c, "options/" + key, [@ui.span(w)], settled_line, line)
                   card_history(c, "options/" + key, id, padded=false, fn(p) {
                     @sf.options_card(
                       p,
@@ -216,10 +217,6 @@ fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let card_history_contents : @ui.Style = @ui.css("w=Full gap=S2")
-
-///|
 /// An agent's request about a vault item, in place of its post `m`'s words (VaultAsk.tsx VaultAsk): what is asked as a
 /// card, as wide as what it says (320 at least where there is the room, 560 at most: VaultAsk.css.ts card), its answer
 /// at its foot as the core said it with the message (`ask.answer`: the vault it holds; VaultApproval.tsx VaultCard), so
@@ -230,8 +227,10 @@ let card_history_contents : @ui.Style = @ui.css("w=Full gap=S2")
 fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : VaultAsk) -> Unit {
   let asked : Asked = {
     name: ask.name,
+    reason: ask.reason,
     mode: ask.mode,
     command: ask.command,
+    how_text: ask.how_text,
     save_kind: ask.save_kind,
     username: ask.username,
     filename: ask.filename,
@@ -293,10 +292,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
         fn() {
           ended(Some(("vault/" + key, fn(id) {
             card_history(c, "vault/" + key, id, fn(p) {
-              p.box(style=card_history_contents, fn() {
-                @settings.vault_ask_details(p, asked)
-                p.rich(@settings.vault_outcome_words(asked, ask.status, ask.scope), style=@sf.ask_note) |> ignore
-              }) |> ignore
+              @settings.vault_ask_details(p, asked)
             })
           })))
         },
@@ -369,10 +365,7 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
         fn() {
           ended(Some(("phone/" + key, fn(id) {
             card_history(c, "phone/" + key, id, fn(p) {
-              p.box(style=card_history_contents, fn() {
-                @sf.ask_words(p, @sf.t("android-misc.adb.ask.chat.title"), ask.reason)
-                p.text(@settings.phone_outcome_words(ask.status, ask.scope, ask.why), style=@sf.ask_note) |> ignore
-              }) |> ignore
+              @sf.ask_words(p, @sf.t("android-misc.adb.ask.chat.title"), ask.reason)
             })
           })))
         },
@@ -572,7 +565,15 @@ let options_room : @ui.Style = @ui.css("w=Full pt=S0_5 align=AStart")
 ///|
 /// How it was settled, who decides (settledLine): 12 on 18, the subtle ink.
 // kept across runs: a value (no field of it changes)
-let settled_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle)
+let settled_line : @ui.TextStyle = @ui.text_style(size=settled_size, leading=settled_leading, color=Subtle)
+
+///|
+// kept across runs: a value (no field of it changes)
+let settled_size : @ui.TextSize = Meta
+
+///|
+// kept across runs: a value (no field of it changes)
+let settled_leading : @ui.Leading = L5
 
 ///|
 // kept across runs: a value (no field of it changes)

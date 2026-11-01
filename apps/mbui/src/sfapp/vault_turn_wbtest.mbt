@@ -19,7 +19,9 @@ fn vault_chat_view(status : String, use_secret : Bool) -> Json {
   let ask : Map[String, Json] = if use_secret {
     {
       "name": Json::string("Axiom 查询 token"),
+      "reason": Json::string("查询中继连接日志，定位拨号失败的原因"),
       "mode": Json::string("env"),
+      "howText": Json::string("环境变量"),
       "command": Json::string("query --since=1d --filter=service.name=stillfail --output=the-final-argument"),
       "station": Json::string("Studio"),
       "scope": Json::string("chat"),
@@ -28,6 +30,7 @@ fn vault_chat_view(status : String, use_secret : Bool) -> Json {
   } else {
     {
       "name": Json::string("UniFi UX7"),
+      "reason": Json::string("把路由器密码安全保存，方便以后排查网络"),
       "mode": Json::string("env"),
       "save": Json::object({ "kind": Json::string("login"), "username": Json::string("zzj") }),
       "answer": Json::string("approve"),
@@ -135,6 +138,8 @@ test "an answered secret request can be read again from its outcome without answ
       t.run_for(@ui.move_most_ms)
       assert_true(t.find(outcome) is Some(_))
       assert_true(t.find(detail) is None)
+      let reason = if use_secret { "查询中继连接日志，定位拨号失败的原因" } else { "把路由器密码安全保存，方便以后排查网络" }
+      assert_true(t.find(reason) is None)
       let (x, y) = t.find(outcome).unwrap()
       if platform == 0 {
         t.move(x, y)
@@ -146,7 +151,9 @@ test "an answered secret request can be read again from its outcome without answ
       t.run_for(@ui.move_most_ms)
       assert_true(t.find(title) is Some(_), msg="platform \{platform}: the original request")
       assert_true(t.find(detail) is Some(_), msg="platform \{platform}: its detail")
+      assert_true(t.find(reason) is Some(_), msg="the request's reason is readable again")
       if use_secret {
+        assert_true(t.find("环境变量") is Some(_), msg="how the secret was given")
         assert_true(t.lines_of("query --since=1d").join("").contains("the-final-argument"), msg="the command is readable to its end")
         assert_true(t.find("可读取明文") is Some(_))
         assert_true(t.find("在 Studio 运行") is Some(_))
@@ -164,6 +171,25 @@ test "an answered secret request can be read again from its outcome without answ
       }
       assert_true(t.find(detail) is None, msg="history closes again")
     }
+  }
+}
+
+///|
+test "the disclosure mark is centred on the result's first line" {
+  for (platform, width, height, font_scale) in [(0, 1280.0, 800.0, 1.0), (2, 390.0, 844.0, 1.0), (2, 390.0, 844.0, 1.3)] {
+    new_run()
+    let vc : VaultChat = { status: "denied", version: 1, vaults_asked: false, use_secret: false }
+    let calls : Array[String] = []
+    let src = vault_chat_src(vc, calls)
+    open_chat({ station: "ws1/st1", session: "s-v1", title: "存密码", station_name: "Studio" })
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=height, platform~)
+    t.set_font_scale(font_scale)
+    t.run_for(@ui.move_most_ms)
+    let (x, y, w, h) = t.rect_of("未存入 UniFi UX7").unwrap()
+    let mark = t.shape_boxes().iter().find_first(fn(s) {
+      s.0.has_prefix("sf/icon/chevron-right/12") && s.1 >= x && s.1 <= x + w + 20.0 && (s.2 - y).abs() < 20.0
+    }).unwrap()
+    assert_true((mark.2 + mark.4 / 2.0 - y - h / 2.0).abs() < 0.5, msg="the mark and the words share the first line's centre: \{mark}, \{(x, y, w, h)}")
   }
 }
 
@@ -204,7 +230,7 @@ test "a request decided in its chat: its card closes on screen to how it went, n
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // whole as it comes: its buttons with it
-  for words in ["存入密码 UniFi UX7", "存入", "不存"] {
+  for words in ["存入密码 UniFi UX7", "把路由器密码安全保存，方便以后排查网络", "存入", "不存"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
   let (nx, ny) = t.find("不存").unwrap()

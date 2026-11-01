@@ -17,8 +17,10 @@
 /// on, by name (empty: the chat's).
 pub(all) struct Asked {
   name : String
+  reason : String
   mode : String
   command : String
+  how_text : String
   save_kind : String
   username : String
   filename : String
@@ -196,8 +198,7 @@ fn topic_answer(core : Core, ws : String, request : String, mine : Bool, who : S
 
 ///|
 /// Request `request` in workspace `ws` as a card, from the vaults topic (the vault page's waiting requests): what is
-/// asked (`said`: lines more of it, each its own, where they are not in its chat beside it: why the agent asks, how it
-/// would be given), and its answer at the foot (`mine`, `who`, `extra` as vault_actions').
+/// asked, and its answer at the foot (`mine`, `who`, `extra` as vault_actions').
 pub fn vault_ask(
   c : @ui.Ctx,
   core : Core,
@@ -207,16 +208,10 @@ pub fn vault_ask(
   mine : Bool,
   who? : String? = None,
   extra? : (() -> Unit)? = None,
-  said? : Array[String] = [],
 ) -> Unit {
   let answer = topic_answer(core, ws, request, mine, who)
   @sf.card(c, fill=ask.picks_file(), fn() {
     vault_asked(c, ask)
-    for line in said {
-      if line != "" {
-        c.text(line, style=@sf.ask_note) |> ignore
-      }
-    }
     match answer {
       Some((a, save, _)) => vault_foot(c, core, ws, request, a, save, typed=ask.typed_in(), extra~, foot=a is (Approve(_) | SetUp))
       None => ()
@@ -332,11 +327,17 @@ fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
       runs.push(@ui.span("  " + sub, color=t.p.muted))
     }
     c.rich(runs, style=@sf.ask_title) |> ignore
-    if !save && ask.command != "" {
+    if ask.reason != "" {
+      c.text(ask.reason, style=@sf.ask_note) |> ignore
+    }
+    if ask.command != "" {
       c.rich([@ui.span(ask.command, mono=true)], style=if full_command { @sf.ask_note } else { ask_command }, breaks=full_command) |> ignore
     }
+    if ask.how_text != "" {
+      c.text(ask.how_text, style=@sf.ask_note) |> ignore
+    }
     let risky = !save && (ask.mode == "env" || ask.mode == "file")
-    let elsewhere = !save && ask.station != ""
+    let elsewhere = ask.station != ""
     if risky || elsewhere {
       let runs : Array[@ui.Run] = []
       if risky {
@@ -373,7 +374,7 @@ pub fn ask_outcome(c : @ui.Ctx, granted : Bool, words : Array[@ui.Run], inline? 
     c.box(style=if history is Some(_) { base_style.then(ask_ended_start) } else { base_style }, fn() {
       match history {
         Some((key, show)) => {
-          let id = @sf.ask_history_trigger(c, key, words, ask_ended_words)
+          let id = @sf.ask_history_trigger(c, key, words, ask_ended_words, line)
           show(id)
         }
         None => c.rich(words, style=ask_ended_words) |> ignore

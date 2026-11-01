@@ -1785,6 +1785,8 @@ export interface VaultAsk {
 	mode: string;
 	/** By the proxy: the hosts it is sent to. */
 	hosts: string[];
+	/** How a use is given, including the allowed hosts; absent on a request to save. */
+	howText?: string;
 	/** Decided: granted | denied | expired. Absent while it waits (or before its station said). */
 	status?: string;
 	/** Granted: once | hour | chat. */
