@@ -308,6 +308,9 @@ struct Node {
   /// how big it was laid out, told once all of the layout is done (View::laid_size_told: none till then); made as
   /// first read
   mut size_cell : @signals.Signal[(Double, Double)?]?
+  /// the side it went on beside its anchor, told once all of the layout is done (View::went_told: none till then); made
+  /// as first read
+  mut went_cell : @signals.Signal[Side?]?
   /// what it holds is found by a finger or the pointer within it alone (View::bounds_input)
   mut bounds_input : Bool
   /// what it and what it holds are drawn clear of the fading of (View::fades_clear_of)
@@ -818,6 +821,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.beside = None
       n.focused_cell = None
       n.size_cell = None
+      n.went_cell = None
       n.bounds_input = false
       n.fades_clear = None
       n.bar_near = 0.0
@@ -893,6 +897,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         tab_by_stop: false,
         focused_cell: None,
         size_cell: None,
+        went_cell: None,
         bounds_input: false,
         fades_clear: None,
         bar_near: 0.0,
@@ -4153,6 +4158,7 @@ fn View::let_go(self : View) -> Unit {
   n.focused_cell = None
   n.focus_shown_cell = None
   n.size_cell = None
+  n.went_cell = None
   n.shows = None
   n.claims = None
   n.bounds_input = false
@@ -5243,13 +5249,27 @@ fn Tree::sizes_told(self : Tree) -> Bool {
   @signals.start_batch()
   for at in self.sized {
     let n = self.nodes[at]
-    guard n.live && n.size_cell is Some(cell) else { continue }
+    guard n.live && (n.size_cell is Some(_) || n.went_cell is Some(_)) else { continue }
     if !keep.contains(at) {
       keep.push(at)
-      let size = Some((n.flex.width, n.flex.height))
-      if @signals.untracked(fn() { cell.get() }) != size {
-        told.val = true
-        cell.set(size)
+      match n.size_cell {
+        Some(cell) => {
+          let size = Some((n.flex.width, n.flex.height))
+          if @signals.untracked(fn() { cell.get() }) != size {
+            told.val = true
+            cell.set(size)
+          }
+        }
+        None => ()
+      }
+      // (and the side it went on beside its anchor, where that is followed: View::went_told)
+      match n.went_cell {
+        Some(cell) =>
+          if @signals.untracked(fn() { cell.get() }) != n.went {
+            told.val = true
+            cell.set(n.went)
+          }
+        None => ()
       }
     }
   }

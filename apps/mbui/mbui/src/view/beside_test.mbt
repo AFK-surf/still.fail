@@ -173,3 +173,135 @@ test "beside: two beside each other (a ring), and one beside what it holds: each
   t.frame(400.0, 300.0) |> ignore
   assert_eq(laid(), first, msg="the same, frame after frame")
 }
+
+///|
+test "went_told: the side it went on told the frame it is first placed, and again only the frame it goes to the other side: moved along its anchor or within the room it has, what reads it is not told" {
+  let ax = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = {}
+  let b : Ref[@view.View?] = Ref(None)
+  let reads = Ref(0)
+  let said : Ref[@view.Side?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(By(fn() { (ax.get(), ay.get()) })) |> ignore
+      })
+      |> ignore
+      b.val = Some(
+        root.box(fn(b) {
+          b.width(Is(Some(60.0))).height(Is(Some(30.0))).beside(ids["a"], side=Bottom, along=Middle, offset=6.0) |> ignore
+        }),
+      )
+      // (what reads it: a node as tall as it says)
+      root.box(fn(r) {
+        r
+        .height(By(fn() {
+          reads.val = reads.val + 1
+          said.val = b.val.unwrap().went_told()
+          Some(if said.val is Some(Top) { 2.0 } else { 1.0 })
+        }))
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  let first = (said.val, reads.val)
+  // (moved along it, and down within the room below it)
+  t.event(10.0, fn() { ax.set(200.0) })
+  t.frame(400.0, 300.0) |> ignore
+  t.event(20.0, fn() { ay.set(150.0) })
+  t.frame(400.0, 300.0) |> ignore
+  let moved = (said.val, reads.val)
+  // (no room below: above it)
+  t.event(30.0, fn() { ay.set(260.0) })
+  t.frame(400.0, 300.0) |> ignore
+  let flipped = (said.val, reads.val)
+  t.event(40.0, fn() { ay.set(100.0) })
+  t.frame(400.0, 300.0) |> ignore
+  let back = (said.val, reads.val)
+  assert_eq(
+    (first.0, moved.0, moved.1 - first.1, flipped.0, flipped.1 - moved.1, back.0, back.1 - flipped.1),
+    (Some(@view.Side::Bottom), Some(@view.Side::Bottom), 0, Some(@view.Side::Top), 1, Some(@view.Side::Bottom), 1),
+    msg="first \{first} moved \{moved} flipped \{flipped} back \{back}",
+  )
+}
+
+///|
+/// A tree in a window 400×500: an anchor 40×20 at (100, `ay`) while `on`, a node 60×484 beside it (Bottom, 6 off) and
+/// a node reading the side that one went on (View::went_told): the side read, how many times it was read.
+fn went_tree(
+  ay : @signals.Signal[Double],
+  on : @signals.Signal[Bool],
+  said : Ref[@view.Side?],
+  reads : Ref[Int],
+) -> (@view.Tree, Map[String, @view.NodeId]) {
+  let ids : Map[String, @view.NodeId] = {}
+  let b : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(fn() { on.get() }, fn(s) {
+        s.box(fn(a) {
+          ids["a"] = a.id()
+          a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(By(fn() { (100.0, ay.get()) })) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      b.val = Some(
+        root.box(fn(n) {
+          ids["b"] = n.id()
+          n.over(Is(true)).width(Is(Some(60.0))).height(Is(Some(484.0))).beside(ids["a"], side=Bottom, along=Middle, offset=6.0) |> ignore
+        }),
+      )
+      root.box(fn(r) {
+        r
+        .height(By(fn() {
+          reads.val = reads.val + 1
+          said.val = b.val.unwrap().went_told()
+          Some(if said.val is Some(Top) { 2.0 } else { 1.0 })
+        }))
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  (t, ids)
+}
+
+///|
+test "went_told: as tall as the window less its padding, kept at the window's top on either side, its anchor moved from 200 to 300 down a 500 high window: told it went below, then above, the frame it does, nothing else of it changed" {
+  let ay = @signals.signal(200.0, same=fn(a, b) { a == b })
+  let said : Ref[@view.Side?] = Ref(None)
+  let reads = Ref(0)
+  let (t, ids) = went_tree(ay, @signals.signal(true), said, reads)
+  t.frame(400.0, 500.0) |> ignore
+  let y = fn() { t.drawn_of(ids["b"]).unwrap().y }
+  let first = (y(), said.val, reads.val)
+  t.event(10.0, fn() { ay.set(300.0) })
+  t.frame(400.0, 500.0) |> ignore
+  let moved = (y(), said.val, reads.val)
+  assert_eq(
+    (first.0, first.1, moved.0, moved.1, moved.2 - first.2),
+    (8.0, Some(@view.Side::Bottom), 8.0, Some(@view.Side::Top), 1),
+    msg="first \{first} moved \{moved}",
+  )
+}
+
+///|
+test "went_told: placed above its anchor, then its anchor gone: told it goes beside nothing" {
+  let ay = @signals.signal(300.0, same=fn(a, b) { a == b })
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let said : Ref[@view.Side?] = Ref(None)
+  let reads = Ref(0)
+  let (t, _) = went_tree(ay, on, said, reads)
+  t.frame(400.0, 500.0) |> ignore
+  let placed = said.val
+  t.event(10.0, fn() { on.set(false) })
+  t.frame(400.0, 500.0) |> ignore
+  assert_eq((placed, said.val), (Some(@view.Side::Top), None))
+}
