@@ -662,6 +662,13 @@ export interface ModelBorrow {
 	allow: string[];
 }
 
+/** What a model runs with when it is picked in a model control's panel. */
+export interface ModelUsual {
+	runtime?: RuntimeKind;
+	effort?: string;
+	fast?: boolean;
+}
+
 /** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
 export interface ModelOption {
 	/** The spelling a client sends: the one that is its key when a profile has that, else the first. */
@@ -691,6 +698,18 @@ export interface ModelOption {
 	fromStation?: ModelStation;
 	/** A borrowable one: the profile that would be shared with this station. */
 	borrow?: ModelBorrow;
+	/**
+	 * In a model control (`pick`): what it runs with picked in the panel (the one picked, as drafted; another,
+	 * as it last ran here); none, never used here.
+	 */
+	usual?: ModelUsual;
+	/**
+	 * That in words after its name (DeepSeek Harness · 高 · Fast): the runtime where it runs on more than
+	 * one, how hard it thinks unless the model's own, Fast; none, nothing to say.
+	 */
+	usualText?: string;
+	/** In a model control: how many new chats here started on it. */
+	uses?: number;
 }
 
 /**
@@ -778,6 +797,11 @@ export interface PickView {
 	saveText: string;
 	/** The picked model is another station's: borrowed first (`pick.borrow`), confirmed; saving waits for it. */
 	borrow?: PickBorrow;
+	/**
+	 * A new chat's or a chat's: the models (their `model`) new chats here started on most, most first, at most
+	 * four, the station's own: kept nearest what opened its panel, the rest past them.
+	 */
+	near?: string[];
 }
 
 export interface AutomaticDecisionDraft {

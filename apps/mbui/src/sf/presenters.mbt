@@ -678,6 +678,14 @@ pub fn in_small_panel() -> Bool {
 let small_panel_now : Ref[Bool] = { val: false }
 
 ///|
+/// Whether the panel whose body is drawn now stands above what opened it: a small panel gone up from it (asked to, or
+/// flipped there for want of room below), or a sheet risen from the screen's foot. What a panel keeps nearest what
+/// opened it is at its foot then, else at its top.
+pub fn panel_opens_up() -> Bool {
+  !small_panel_now.val || beside_given.val.side is Top
+}
+
+///|
 /// How far in from the column a panel's body stands in its words go (each block of them, a row's), so they stand on
 /// the panel's words' line wherever it is drawn: a row's padding in a small panel (its column at its padding: text_in),
 /// what a sheet's rows leave of its words' 20 in a sheet a press opened (sheet_held: its column at its rows'), none

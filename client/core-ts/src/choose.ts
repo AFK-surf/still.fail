@@ -24,6 +24,8 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 
 const TABLE = "choice";
+/// How many of the models used most a model control's panel keeps nearest what opened it.
+const NEAR = 4;
 const FIELDS = ["runtime", "model", "effort", "profile", "fast"];
 
 /// What a pick's save does: done here, or a request to the station.
@@ -386,6 +388,7 @@ export class Choose implements Owner {
   used(station: string, choice: J): void {
     const key = `ws:${ofAddress(station)}:frequent`;
     this.#env.data.put(TABLE, key, recordCombo(arr(this.#record(key)), choice, this.#env.now()), false);
+    this.#keepUsual(ofAddress(station), choice);
     this.#changed();
   }
 
@@ -590,13 +593,40 @@ export class Choose implements Owner {
         ? t("core-logic.choose.force.moves_off", { account: currentName, model: modelName ?? "" })
         : null;
     const borrow = option !== undefined && option.availability === "borrowable" ? this.#borrowView(station, option) : null;
+    // Each model as it would run picked in the panel (`usual`: what it last ran with here, the one picked as it is
+    // drafted now) and how often new chats here started on it (`uses`); the few used most, nearest what opened the
+    // panel (`near`): a chat's or a new chat's, of the station's own models.
+    const scope = ofAddress(station);
+    const history = arr(this.#record(`ws:${scope}:frequent`));
+    const uses = new Map<string, number>();
+    for (const h of history) {
+      const found = optionOf(options, text(get(h, "model")));
+      if (found !== undefined) uses.set(found.model, (uses.get(found.model) ?? 0) + (typeof h.count === "number" ? h.count : 1));
+    }
+    const annotated = options.map((opt: J) => {
+      const id = typeof opt.model === "string" ? opt.model : "";
+      const ran = id === m ? { runtime: on ?? null, effort, fast } : this.#usual(scope, id, history);
+      const r = ran === undefined ? null : resolve(options, { model: id, runtime: fixed ? value.runtime : ran.runtime, effort: ran.effort, fast: ran.fast });
+      const parts: string[] = [];
+      if (r !== null) {
+        if (!fixed && arr(opt.runtimes).length > 1 && r.runtime !== null) parts.push(format.runtimeLabel(r.runtime));
+        if (r.effort !== null) parts.push(format.effortLabel(r.effort));
+        if (r.fast === true) parts.push("Fast");
+      }
+      const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast };
+      return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, uses: uses.get(id) ?? 0 };
+    });
+    const near = o.kind === "new" || o.kind === "session"
+      ? annotated.filter((x: J) => x.uses > 0 && x.availability !== "borrowable").sort((a: J, b: J) => b.uses - a.uses).slice(0, NEAR).map((x: J) => x.model)
+      : [];
     let saveText = changed ? t("core-logic.choose.save", { model: modelName ?? t("core-logic.format.default_model"), effort: effortText, account: chosenText }) : t("core-logic.choose.save.unchanged");
     if (changed && fastAvailable) saveText = `${saveText} · ${speedText(fast)}`;
     return {
       ok: {
         fastAvailable,
         fastText: effectiveFast ? "Fast" : null,
-        options,
+        options: annotated,
+        near,
         runtimeFixed: fixed,
         value,
         valueOption: valueOption ?? null,
@@ -642,9 +672,27 @@ export class Choose implements Owner {
     this.#changed();
   }
 
-  /// `pick.save`: what the panel picked, made what it runs on.
-  save(station: string, oName: string): Saved {
+  /// What model `model` last ran with here (`ws:<scope>:usual:<model>`, kept as it is saved and as a new chat starts on
+  /// it), else as the newest new chat on it started; none, never used here.
+  #usual(scope: string, model: string, history: J[]): J {
+    const kept = this.#record(`ws:${scope}:usual:${model}`);
+    if (isObject(kept)) return kept;
+    let newest: J;
+    for (const h of history) if (get(h, "model") === model && (newest === undefined || (h.last ?? 0) > (newest.last ?? 0))) newest = h;
+    return newest === undefined ? undefined : { runtime: newest.runtime ?? null, effort: text(newest.effort), fast: comboFast(newest) };
+  }
+
+  #keepUsual(scope: string, choice: J): void {
+    const model = text(get(choice, "model"));
+    if (model === null) return;
+    this.#env.data.put(TABLE, `ws:${scope}:usual:${model}`, { runtime: get(choice, "runtime") ?? null, effort: text(get(choice, "effort")), fast: typeof get(choice, "fast") === "boolean" ? choice.fast : null }, false);
+  }
+
+  /// `pick.save`: what the panel picked, made what it runs on; with picks of its own (a frequent combination's), those
+  /// picked first.
+  save(station: string, oName: string, params: J = {}): Saved {
     const o = of(oName);
+    if (FIELDS.some((f) => get(params, f) !== undefined)) this.set(station, oName, Object.fromEntries(FIELDS.filter((f) => get(params, f) !== undefined).map((f) => [f, params[f]])));
     const topic: Topic = { topic: "pick", station, of: oName };
     const view = this.#pick(topic, station, oName);
     if (view === undefined) throw CoreError.invalid(t("core-logic.choose.error.no_options_yet"));
@@ -659,6 +707,7 @@ export class Choose implements Owner {
       return { done: { saved: false } };
     }
     const textOf = (field: string) => (typeof next[field] === "string" ? next[field] : "");
+    if (o.kind === "new" || o.kind === "session") this.#keepUsual(ofAddress(station), next);
     let saved: Saved;
     switch (o.kind) {
       case "new":
@@ -684,9 +733,17 @@ export class Choose implements Owner {
         break;
       }
     }
-    this.#drafts.delete(topicKey(topic));
+    // (one asked of the station: what was picked shown until it is answered, the panel open as it is; dropped if it
+    // fails, `unsaved`)
+    if ("done" in saved) this.#drafts.delete(topicKey(topic));
     this.#changed();
     return saved;
+  }
+
+  /// A pick asked of the station that failed: the panel back to what it runs on.
+  unsaved(station: string, oName: string): void {
+    this.#drafts.delete(topicKey({ topic: "pick", station, of: oName }));
+    this.#changed();
   }
 
   /// `pick.repick`: a chat's account given back to the station and picked again now, as a new chat's would be (the

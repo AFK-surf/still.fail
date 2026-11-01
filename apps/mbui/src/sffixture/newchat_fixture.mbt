@@ -208,13 +208,16 @@ pub fn fix_pick() -> Json {
     Json::object(o)
   }
   {
-    "options": if n.tall {
-      Json::array(fix_crowded_models.map(fix_model) + fix_tall_models.map(fix_model))
-    } else if n.crowded {
-      Json::array(fix_crowded_models.map(fix_model))
-    } else {
-      [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
-    },
+    "options": fix_pick_options(
+      if n.tall {
+        fix_crowded_models.map(fix_model) + fix_tall_models.map(fix_model)
+      } else if n.crowded {
+        fix_crowded_models.map(fix_model)
+      } else {
+        [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
+      },
+    ),
+    "near": if n.crowded { ["gpt-6-astra", "deepseek-v4-1-flash", "swe-2"] } else { ["claude-opus-5-5", "gpt-6"] },
     "runtimeFixed": false,
     "value": picked(n.model, n.runtime, n.effort, ""),
     "valueOption": fix_model(n.model),
@@ -262,6 +265,67 @@ pub fn fix_pick() -> Json {
     "accountWarn": false,
     "saveText": "",
   }
+}
+
+///|
+/// The models as the model control has them: each as it last ran here (`usual`, `usualText`; the one drafted as it is
+/// drafted) and how often new chats started on it (`uses`): the new chat's frequent ones, the rest never used.
+fn fix_pick_options(all : Array[Json]) -> Json {
+  let n = new_fix
+  let effort_word = fn(e : String) {
+    match e {
+      "low" => "低"
+      "medium" => "中"
+      "high" => "高"
+      "max" => "最高"
+      _ => ""
+    }
+  }
+  // (model: runtime, effort, uses)
+  let used : Map[String, (String, String, Int)] = if n.crowded {
+    { "gpt-6-astra": ("codex", "medium", 6), "deepseek-v4-1-flash": ("dsh", "high", 4), "swe-2": ("devin", "high", 2) }
+  } else {
+    { "claude-opus-5-5": ("claude", "high", 9), "gpt-6": ("codex", "medium", 5) }
+  }
+  Json::array(
+    all.map(fn(o) {
+      match o {
+        Object(m) => {
+          let m = m.copy()
+          let model = text(Some(o), "model")
+          let many = items(Some(o), "runtimes").length() > 1
+          let ran = if model == n.d_model {
+            Some((n.d_runtime, n.d_effort, used.get(model).map(fn(u) { u.2 }).unwrap_or(0)))
+          } else {
+            used.get(model)
+          }
+          match ran {
+            Some((runtime, effort, uses)) => {
+              m["usual"] = {
+                "runtime": Json::string(runtime),
+                "effort": if effort == "" { Json::null() } else { Json::string(effort) },
+                "fast": Json::null(),
+              }
+              let parts = []
+              if many {
+                parts.push(@settings.runtime_label(runtime))
+              }
+              if effort_word(effort) != "" {
+                parts.push(effort_word(effort))
+              }
+              if parts.length() > 0 {
+                m["usualText"] = Json::string(parts.join(" · "))
+              }
+              m["uses"] = Json::number(uses.to_double())
+            }
+            None => m["uses"] = Json::number(0.0)
+          }
+          Json::object(m)
+        }
+        other => other
+      }
+    }),
+  )
 }
 
 ///|
@@ -515,6 +579,14 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       Some(Ok(Json::object({})))
     }
     "pick.save" => {
+      // (with picks of its own, a model's as it last ran or a change in the panel: those picked first)
+      take("model", fn(s) {
+        n.d_model = s
+        n.d_runtime = fix_runtime_of(s)
+      })
+      take("runtime", fn(s) { n.d_runtime = s })
+      take("effort", fn(s) { n.d_effort = s })
+      take("profile", fn(s) { n.d_profile = s })
       n.model = n.d_model
       n.runtime = n.d_runtime
       n.effort = n.d_effort

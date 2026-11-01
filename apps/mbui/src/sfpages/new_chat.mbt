@@ -1,11 +1,12 @@
-// A new chat (ember web/src/NewChat.tsx and NewChat.css.ts, web/src/mobile/NewChat.tsx and NewChat.css.ts,
-// FrequentCombos.tsx; apps/android NewChat.kt): say what to do, having picked where it runs (the station) and on what
-// (the model, its runtime, how hard it thinks, who runs it), as the core keeps them (the `newChat` topic; `newChat.pick`,
-// `pick.set`, `pick.save`). One page in every frame, laid out by its own width as the web lays out its two:
-// - narrow (under @sf.page_narrow_most), as the web's mobile page: the scene (the picture, what to do and where, the
-//   frequent combinations, what keeps it from starting, the machine's own sessions) over all that is left, scrolled
-//   when it does not fit; at its foot what is wrong for now, the choices in glass capsules (the station, the model: each
-//   through the presenters), the composer where a chat has it;
+// A new chat (ember web/src/NewChat.tsx and NewChat.css.ts, web/src/mobile/NewChat.tsx and NewChat.css.ts;
+// apps/android NewChat.kt; its frequent combinations in the model's panel, model_triple.mbt): say what to do, having
+// picked where it runs (the station) and on what (the model, its runtime, how hard it thinks, who runs it), as the
+// core keeps them (the `newChat` topic; `newChat.pick`, `pick.set`, `pick.save`). One page in every frame, laid out by
+// its own width as the web lays out its two:
+// - narrow (under @sf.page_narrow_most), as the web's mobile page: the scene (the picture, what to do and where, what
+//   keeps it from starting, the machine's own sessions) over all that is left, scrolled when it does not fit; at its
+//   foot what is wrong for now, the choices in glass capsules (the station, the model: each through the presenters),
+//   the composer where a chat has it;
 // - wide, as the web's desktop page: a column 720 wide at most, the scene and the composer in the middle of the pane,
 //   the composer roomy with the choices in the row under its words (the station's chooser, the model control:
 //   model_triple.mbt), what differs by the station and its picks under it, moving nothing over it.
@@ -281,8 +282,8 @@ fn new_narrow(
 
 ///|
 /// The scene narrow (mNewBody): the picture, what to do, where (while its stations are read, its two lines breathing,
-/// still once what they wait on failed), the frequent combinations, what keeps it from starting (or why its stations
-/// could not be read), the machine's own sessions to go on with.
+/// still once what they wait on failed), what keeps it from starting (or why its stations could not be
+/// read), the machine's own sessions to go on with.
 fn new_scene_narrow_body(
   c : @ui.Ctx,
   src : Source,
@@ -293,7 +294,6 @@ fn new_scene_narrow_body(
   state : NewState,
 ) -> Unit {
   new_head(c, station, state, new_scene_narrow_w, fn(_) {  })
-  new_combos(c, src, w, v, state is Going(_, _)) |> ignore
   let problem = match state {
     Held(error) => error
     _ => text(v, "problem")
@@ -507,8 +507,8 @@ fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () 
 ///|
 /// The page wide (NewChatOn, newChat, newChatInner): the scene, 新对话, what it does and where (while its stations are
 /// read, that it starts on the station chosen), the composer, roomy, its choices in its row, the two in the middle of
-/// the pane; under the composer what differs by the station and what is picked on it: what is wrong for now, the
-/// frequent combinations, what it waits for (or why its stations could not be read), the machine's own sessions to go
+/// the pane; under the composer what differs by the station and what is picked on it: what is wrong for now, what
+/// it waits for (or why its stations could not be read), the machine's own sessions to go
 /// on with.
 fn new_wide(
   c : @ui.Ctx,
@@ -540,7 +540,6 @@ fn new_wide(
         // what is sent waits for its quota, or its station went as it was written in (the page stays, said so)
         new_notices(c, v, station, col, part=fn(i) { new_part(c, i, state, false) })
       }
-      new_part(c, new_combos(c, src, w, v, state is Going(_, _)), state, false)
       match state {
         Held(error) =>
           if error != "" {
@@ -685,72 +684,6 @@ fn new_notices(c : @ui.Ctx, v : Json?, station : Json?, width : Double, part? : 
 /// A line of what is wrong for now (spentNotice, mNewSpent): the amber's 12% under it, `width` wide.
 fn new_notice(c : @ui.Ctx, words : String, width : Double) -> Int {
   c.box(style=new_notice_box.then(@ui.style(w=Fixed(width))), fn() { c.text(words, style=new_notice_words) |> ignore })
-}
-
-///|
-/// The frequent combinations (FrequentCombos): their name over them, each one press to pick (`newChat.pick`), the one
-/// in use pressed in; `leaving`, none taken. Nothing when there are none.
-fn new_combos(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, leaving : Bool) -> Int {
-  let combos = items(v, "frequent")
-  if combos.length() == 0 {
-    return c.box(fn() {  })
-  }
-  let b = c.box(style=combos_box, fn() {
-    c.text(@sf.t("web-main.combos.short"), style=combos_label) |> ignore
-    c.box(style=combos_choices, flow=true, fn() {
-      for combo in combos {
-        let v = Some(combo)
-        let selected = flag(v, "selected")
-        let id = c.id("new/combo/" + text(v, "runtime") + ":" + text(v, "model") + ":" + text(v, "effort") + ":" + text(v, "speedText"))
-        if !leaving && c.clicked(id) {
-          let m : Map[String, Json] = {
-            "model": Json::string(text(v, "model")),
-            "runtime": Json::string(text(v, "runtime")),
-          }
-          m["fast"] = field(v, "fast").unwrap_or(Json::null())
-          m["effort"] = match text(v, "effort") {
-            "" => Json::null()
-            e => Json::string(e)
-          }
-          c.tell("new/pick", fn() { @sfbase.pick_new(src, w.id, m) })
-        }
-        let lit = selected || c.lit(id)
-        let words = if lit { combo_words_lit } else { combo_words }
-        // (on one line: the model, the runtime where it is said, how hard it thinks; short of room, the runtime left
-        // out, the model never)
-        let chip = c.box(style=if selected { combo_on } else { combo_off }, id~, fn() {
-          c.text(text(v, "name"), style=words) |> ignore
-          match text(v, "runtimeText") {
-            "" => ()
-            r =>
-              c.box(style=combo_part, drop=1, fn() {
-                c.text("·", style=words) |> ignore
-                c.text(r, style=words) |> ignore
-              })
-              |> ignore
-          }
-          c.box(style=combo_part, fn() {
-            c.text("·", style=words) |> ignore
-            c.text(text(v, "effortText"), style=words) |> ignore
-          })
-          |> ignore
-          match text(v, "speedText") {
-            "" => ()
-            speed =>
-              c.box(style=combo_part, fn() {
-                c.text("·", style=words) |> ignore
-                c.text(speed, style=words) |> ignore
-              })
-              |> ignore
-          }
-        })
-        c.semantics(chip, Button, id~, label=text(v, "label"), check=if selected { On } else { Off })
-      }
-    })
-    |> ignore
-  })
-  c.semantics(b, Group, label=@sf.t("web-main.combos.label"))
-  b
 }
 
 ///|
@@ -1280,39 +1213,3 @@ let new_link_box : @ui.Style = @ui.css("row h=S7 px=S2 radius=Lg align=ACenter h
 // kept across runs: a value (no field of it changes)
 let new_link : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Link, wrap=false, w=Cut)
 
-///|
-/// FrequentCombos.css.ts frequent: its name over them, 8 apart, 12 over and under; label: 12, muted.
-// kept across runs: a value (no field of it changes)
-let combos_box : @ui.Style = @ui.css("w=Full py=S3 gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let combos_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-/// choices: wrapped, centred, 6 apart.
-// kept across runs: a value (no field of it changes)
-let combos_choices : @ui.Style = @ui.css("row w=Full gap=S1_5 justify=JCenter")
-
-///|
-/// combo: 8 by 10 in, the field's corner, on the pointer's ground; pressed in, on the chosen's; its words 13 on 18, muted
-/// (the ink pointed at or pressed in), on one line, its parts 6 apart (a dot between).
-// kept across runs: a value (no field of it changes)
-let combo_off : @ui.Style = @ui.css("row px=S2_5 py=S2 gap=S1_5 align=ACenter radius=Xl bg=Hover")
-
-///|
-/// A part of a combination's line after the model: the dot before it and what it says, left out whole.
-// kept across runs: a value (no field of it changes)
-let combo_part : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let combo_on : @ui.Style = combo_off.then(@ui.css("bg=Selected"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let combo_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let combo_words_lit : @ui.TextStyle = combo_words.then(@ui.text_style(color=Fg))

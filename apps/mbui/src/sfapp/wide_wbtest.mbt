@@ -516,9 +516,8 @@ test "wide: the machine's own sessions offered under the composer as its station
 }
 
 ///|
-/// The fixture's app over its new chat as the core gives it station by station: on Studio, read whole, its frequent
-/// combinations and its machine's own session to go on with; on MBA none of them, but what is wrong for now and what it
-/// waits for.
+/// The fixture's app over its new chat as the core gives it station by station: on Studio, read whole, its machine's
+/// own session to go on with; on MBA none, but what is wrong for now and what it waits for.
 fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
   new_run()
   let base = fixture("home")
@@ -578,8 +577,6 @@ test "wide: a new chat's composer stays where it is as another station is picked
   assert_true(app.nav.top() == NewChat)
   let offer = "继续 Studio 终端中的会话"
   assert_true(t.find(offer) is Some(_), msg="Studio's machine's session offered")
-  // (a combination's words in parts, the model, how hard it thinks: found by what it is called)
-  assert_true(t.query(Button, label="Opus 5.5 · 高") is Some(_), msg="Studio's frequent combinations")
   let (bx, by, _, _) = composer_glass(t)
   let pick = fn(from : String, to : String) raise {
     t.click(Button, label=from)
@@ -587,17 +584,15 @@ test "wide: a new chat's composer stays where it is as another station is picked
     t.click(Button, label=to)
     t.run_for(@kit.presence_in_ms)
   }
-  // MBA: no combinations nor session of its own; what is wrong for now and what it waits for in their place
+  // MBA: no session of its own; what is wrong for now and what it waits for in its place
   pick("Studio", "MBA")
   assert_true(t.find("MBA 上还没有选好要用的模型") is Some(_))
   assert_true(t.find("Opus 5.5 的额度已用完，发出的消息会等它恢复") is Some(_))
-  assert_true(t.query(Button, label="Opus 5.5 · 高") is None)
   assert_true(t.find(offer) is None)
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
   // Studio again: as it was
   pick("MBA", "Studio")
   assert_true(t.find(offer) is Some(_))
-  assert_true(t.query(Button, label="Opus 5.5 · 高") is Some(_))
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
 }
 

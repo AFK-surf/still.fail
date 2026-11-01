@@ -1334,6 +1334,8 @@ pub fn panel_note(@ui.Ctx, String) -> Unit
 
 pub let panel_offset : Double
 
+pub fn panel_opens_up() -> Bool
+
 pub let panel_pad : Double
 
 pub let panel_pill : Double
