@@ -434,15 +434,25 @@ pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double
   )
   |> ignore
   // (the window's size among them: its first frame's too, the first it is laid out in)
+  // (measured once for each change, once it is told whole: what else it tells made and set first (a node shown in it,
+  // its words said again, told after this), whether a frame is drawn after it or not)
+  let asked = Ref(false)
   self.reacts(fn() { (by(), self.window()) }, fn(_) {
-    // (laid out as of the change's moment, what the change under way set counted: the layout's own, read and not placed
-    // by, Tree::measured_now)
-    guard self.live() is Some(n) else { return }
-    self.tree.measured_now()
-    let w = n.flex.width
-    if w > @signals.untracked(fn() { widest.get() }) {
-      widest.set(w)
+    if asked.val {
+      return
     }
+    asked.val = true
+    @signals.after_flush(fn() {
+      asked.val = false
+      // (laid out as of the change's moment, all it told counted: the layout's own, read and not placed by,
+      // Tree::measured_now)
+      guard self.live() is Some(n) else { return }
+      self.tree.measured_now()
+      let w = n.flex.width
+      if w > @signals.untracked(fn() { widest.get() }) {
+        widest.set(w)
+      }
+    })
   })
   self
 }
