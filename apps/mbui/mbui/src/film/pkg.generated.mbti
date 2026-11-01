@@ -21,6 +21,8 @@ pub let film_fps : Int32
 
 pub fn live() -> @ui.Live
 
+pub fn picture((@ui.Ctx) -> Unit, path~ : String, w~ : Double, h~ : Double, scale? : Double, platform? : Int32, dark? : Bool, corners_held? : Bool, words_over_held? : Bool) -> Bool
+
 pub fn read_text(String) -> String
 
 pub fn run((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit

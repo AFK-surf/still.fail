@@ -67,6 +67,12 @@ fn faces_reset() -> Unit {
 pub let desktop_face : String = "\u{1}inter"
 
 ///|
+/// The app's bundled UI face, for drawings made without an app source or a user's font preferences.
+pub fn bundled_ui_face() -> Bytes? {
+  inter_face()
+}
+
+///|
 /// The places' faces as a visualization's page is set in them (viz_file.mbt viz_tokens), by host face (1 ui, 2 text,
 /// 3 code): each one's family as CSS has it ("": the page's own), and the stylesheet a face still.fail keeps is had
 /// from there ("": none, the family the machine's or the page's).

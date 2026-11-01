@@ -255,9 +255,22 @@ test "what is shown awaits the images it asked for until they are in, as the tes
   t.draw()
   assert_eq(t.pending(), [])
   assert_eq(t.awaited(), [])
+  assert_eq(t.failed_images(), [1])
+  assert_eq(t.image_src(1), "a.jpg")
   // b.jpg fades in from the frame it came in; then nothing is left
   t.run_for(@ui.image_fade_ms)
   t.assert_idle()
+}
+
+///|
+test "an image the host fails immediately retains its source and is not pending" {
+  let t = @ui.Tester::new(fn(c) {
+    c.image("missing.png", w=Px(50.0), h=Px(50.0), fade=false) |> ignore
+  }, w=100.0, h=100.0)
+  let failed = t.failed_images()
+  assert_eq(failed.length(), 1)
+  assert_eq(t.image_src(failed[0]), "missing.png")
+  assert_true(t.pending().is_empty())
 }
 
 ///|

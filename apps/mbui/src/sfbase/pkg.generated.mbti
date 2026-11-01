@@ -111,6 +111,8 @@ pub fn browse_view_of(Json?) -> BrowseView?
 
 pub fn browse_where(String, String, String, String, String, String, write? : Bool) -> Map[String, Json]
 
+pub fn bundled_ui_face() -> Bytes?
+
 pub fn by_of(Json?) -> By
 
 pub fn bytes_first_frame(@ui.Ctx, String, String, Bytes) -> String

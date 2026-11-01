@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/figure"
+
+import {
+  "mbui/ui",
+}
+
+// Values
+pub fn auto_panel(@ui.Ctx, Double, Double, Double, Int64, Double, () -> Unit) -> Unit
+
+pub fn canvas(@ui.Ctx, Double, Double, Int64, () -> Unit) -> Unit
+
+pub fn panel(@ui.Ctx, Double, Double, Double, Double, Int64, Double, () -> Unit) -> Unit
+
+pub fn words(@ui.Ctx, Double, Double, String, Double, Int64, weight? : Int32, width? : Double, line? : Double) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
