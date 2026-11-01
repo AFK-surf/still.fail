@@ -528,11 +528,17 @@ test "an APK without the leave to install apps: the system's page, and said to t
   // the system's page for the leave opened in its place, said so (the host's system channel)
   t.post(@hostapi.system_channel, "{\"install\":{\"name\":\"测试版.apk\",\"allow\":true}}")
   t.frame()
+  // (said at once, read out: seen as it has come in, toast_said)
+  assert_true(toast_said(t, "允许 still.fail 安装应用后，再次点击安装"))
+  t.run_for(@kit.presence_in_ms)
   assert_true(t.find("允许 still.fail 安装应用后，再次点击安装") is Some(_))
   t.run_for(toast_ms)
   // what the installer says, later (the host's system channel)
   t.post(@hostapi.system_channel, "{\"install\":{\"name\":\"测试版.apk\",\"error\":\"签名不一致\"}}")
   t.frame()
+  // (said at once, read out: seen as it has come in, toast_said)
+  assert_true(toast_said(t, "无法安装：签名不一致"))
+  t.run_for(@kit.presence_in_ms)
   assert_true(t.find("无法安装：签名不一致") is Some(_))
 }
 

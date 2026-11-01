@@ -377,7 +377,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.run_for(@ui.move_most_ms)
   t.tap_text("重试")
   t.draw()
-  assert_eq(app.toast.get(), "无法重新发送：a.jpg 的上传源已丢失，请在新消息中重新添加附件。")
+  assert_eq(app.toast.get().words, "无法重新发送：a.jpg 的上传源已丢失，请在新消息中重新添加附件。")
   fix_clock.val = None
 }
 

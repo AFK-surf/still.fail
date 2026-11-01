@@ -269,7 +269,8 @@ fn Ctx::tab_stops(self : Ctx) -> Array[Focusable] {
   let out : Array[Focusable] = []
   let seen : Map[Int, Bool] = {}
   for f in self.focus_spliced() {
-    if trap != 0 && !self.layer_within(f.layer, trap) {
+    // (and what of the window's tree is over all else of it: no layer under it traps it, View::over_all)
+    if trap != 0 && !self.layer_within(f.layer, trap) && !focus_over_all(f.id) {
       continue
     }
     if self.layer_inert(f.layer) || !island_allows(f.island) {

@@ -2018,6 +2018,8 @@ pub let toast_line : Double
 
 pub fn toast_look(@ui.Ctx, @kit.ToastState, action? : String, action_id? : Int32) -> Bool
 
+pub fn toast_look_node(@view.View, @kit.ToastNode) -> Unit
+
 pub let toast_max : Double
 
 pub let toast_ms : Double

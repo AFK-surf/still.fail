@@ -539,7 +539,9 @@ test "a chat archived from its row says so with 撤销, which asks it back into 
   assert_eq(named(calls, "chat.archive").length(), 1)
   t.draw()
   assert_true(t.locate("=夜里的构建又失败了").is_empty())
-  assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_))
+  // (said at once: read out as it comes in; its first frame draws it at none of its opacity, as the old view's did,
+  // so it is seen, and found, as it has come in)
+  assert_true(t.query(Status, label="已归档「夜里的构建又失败了」") is Some(_))
   // (come in)
   t.run_for(@kit.presence_in_ms)
   t.tap_text("撤销")
@@ -548,8 +550,11 @@ test "a chat archived from its row says so with 撤销, which asks it back into 
   assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
   assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
   t.draw()
-  // the toast goes, said again once it is done
+  // the toast goes, said again once it is done (read out at once; its first frame at none of its opacity, as the old
+  // view's, seen as it has come in)
   assert_true(t.find("撤销") is None)
+  assert_true(t.query(Status, label="已恢复到列表") is Some(_))
+  t.run_for(@kit.presence_in_ms)
   assert_true(t.find("已恢复到列表") is Some(_))
 }
 
@@ -572,9 +577,7 @@ test "a toast with 撤销 stays its longer time; one without, its 2.6 s" {
 /// The toast saying `words` (with a button of `action`'s words, "" none) as it rests in tester `t`: its rect, its
 /// button's.
 fn rested_toast(t : @ui.Tester, words : String, action : String) -> ((Double, Double, Double, Double), (Double, Double, Double, Double)?) raise {
-  app.toast.set(words)
-  app.toast_action = action
-  app.toast_n.set(app.toast_n.get() + 1)
+  @sfbase.toast_later(words, action~)
   t.frame()
   t.run_for(@kit.presence_in_ms)
   let toast = match t.query(Status, label=words) {
@@ -623,12 +626,16 @@ test "a chat archived from its row: said at once by its title, its station not a
   let (lx, ly) = t.find_last("归档").unwrap()
   t.tap(lx, ly)
   t.draw()
-  assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_))
-  assert_true(t.find("撤销") is Some(_))
+  // (said at once: read out as it comes in; its first frame draws it at none of its opacity, as the old view's did,
+  // so it is seen, and found, as it has come in)
+  assert_true(t.query(Status, label="已归档「夜里的构建又失败了」") is Some(_))
+  assert_true(t.query(Button, label="撤销") is Some(_))
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_) && t.find("撤销") is Some(_))
   // no: why, in its place
   (named(calls, "chat.archive")[0].done)(Err({ "message": "坏了" }))
   t.draw()
-  assert_true(app.toast.get().contains("坏了"), msg=app.toast.get())
+  assert_true(app.toast.get().words.contains("坏了"), msg=app.toast.get().words)
 }
 
 ///|
@@ -685,7 +692,9 @@ test "wide: a chat archived from its row with a mouse says so with 撤销 too, w
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   assert_eq(named(calls, "chat.archive").length(), 1)
   t.draw()
-  assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_))
+  // (said at once: read out as it comes in; its first frame draws it at none of its opacity, as the old view's did,
+  // so it is seen, and found, as it has come in)
+  assert_true(t.query(Status, label="已归档「夜里的构建又失败了」") is Some(_))
   // (come in)
   t.run_for(@kit.presence_in_ms)
   t.tap_text("撤销")

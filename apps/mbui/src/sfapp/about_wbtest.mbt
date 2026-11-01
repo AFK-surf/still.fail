@@ -113,7 +113,7 @@ test "the update dialog with a newer build: what it brings (its first five, è¿˜æ
   assert_eq(t.update_asked(), [
     "fetch stillfail-3.zip false", "fetch stillfail-3.zip true", "fetch stillfail-3.zip false", "apply",
   ])
-  assert_eq(app.toast.get(), "")
+  assert_eq(app.toast.get().words, "")
   update_reset()
 }
 

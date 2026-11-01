@@ -6,8 +6,5 @@ import {
   "mbui/hostapi",
   "moonbitlang/core/math",
   "mbui/dmath",
-}
-
-import {
   "mbui/view",
-} for "test"
+}

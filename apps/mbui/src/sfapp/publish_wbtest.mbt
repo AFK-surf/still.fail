@@ -54,6 +54,9 @@ test "分享图片: the chat's sheet opens it, and lists the public links made b
   }
   tap_last(t, "复制")
   assert_eq(t.clipboard(), "https://share.still.fail/#B5CrvEZwwZq7oct4Vs0Ld90SJHgZO4uOwQdhtJsLRNE.Qm9vSzVnUkN2dUdS.k3Yq-p1")
+  // (said at once, read out: seen as it has come in, toast_said)
+  assert_true(toast_said(t, "已复制链接"))
+  t.run_for(@kit.presence_in_ms)
   assert_true(t.find("已复制链接") is Some(_))
 }
 

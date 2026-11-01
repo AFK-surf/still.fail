@@ -135,3 +135,25 @@ test "a handle on a node let go: what comes and goes made on it reads nothing, f
   assert_false(shown.watched())
   assert_eq(t.alive(), alive)
 }
+
+///|
+test "leaving followed: a reaction on it, of what leaves and of one it holds, told as it starts leaving and as it comes back, not as the frames come; reading no clock" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let own : Array[Bool] = []
+  let held : Array[Bool] = []
+  let t = @view.Tree::new(fn(root) {
+    root.show(fn() { on.get() }, fn(v) {
+      v.reacts(fn() { v.leaving() }, fn(l) { own.push(l) })
+      v.box(fn(k) { k.reacts(fn() { k.leaving() }, fn(l) { held.push(l) }) }) |> ignore
+    }, leave=100.0)
+  })
+  t.frame(390.0, 844.0, now=0.0) |> ignore
+  on.set(false)
+  t.frame(390.0, 844.0, now=10.0) |> ignore
+  t.frame(390.0, 844.0, now=20.0) |> ignore
+  let clock = t.clock_read()
+  t.frame(390.0, 844.0, now=30.0) |> ignore
+  on.set(true)
+  t.frame(390.0, 844.0, now=40.0) |> ignore
+  assert_eq((own, held, clock), ([false, true, false], [false, true, false], false))
+}

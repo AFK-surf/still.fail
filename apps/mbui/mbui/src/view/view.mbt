@@ -251,6 +251,8 @@ struct Node {
   /// let go with it
   mut pressed_cell : @signals.Signal[Bool]?
   mut pointed_cell : @signals.Signal[Bool]?
+  /// whether what the pointer is over is it or held by it, made as first read (View::pointed_in)
+  mut pointed_in_cell : @signals.Signal[Bool]?
   /// whether the pointer is within it as it was last placed, made as first read (View::pointer_within)
   mut within_cell : @signals.Signal[Bool]?
   /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
@@ -332,6 +334,8 @@ struct Node {
   mut inert : Bool
   /// it is a modal layer while this holds (View::modal): what it does not hold takes no input
   mut modal : Bool
+  /// it, and what it holds, are over all else of the window while this holds (View::over_all)
+  mut over_all : Bool
 }
 
 ///|
@@ -691,6 +695,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_back_step = None
       n.pressed_cell = None
       n.pointed_cell = None
+      n.pointed_in_cell = None
       n.within_cell = None
       n.focusable = false
       n.focus_keys = 0
@@ -717,6 +722,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.going = None
       n.inert = false
       n.modal = false
+      n.over_all = false
       i
     }
     None => {
@@ -744,6 +750,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         back_said: 0,
         pressed_cell: None,
         pointed_cell: None,
+        pointed_in_cell: None,
         within_cell: None,
         focusable: false,
         input_cell: None,
@@ -788,6 +795,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         going: None,
         inert: false,
         modal: false,
+        over_all: false,
       })
       self.nodes.length() - 1
     }
@@ -933,6 +941,9 @@ pub fn View::box(self : View, make : (View) -> Unit) -> View {
   guard self.live() is Some(n) else { return self.tree.none() }
   let v = self.tree.made(self.at)
   n.kids.push(v.at)
+  if self.at == 0 {
+    self.tree.top_last()
+  }
   self.boxes_again()
   v.owning(fn() { make(v) })
   v
@@ -1311,6 +1322,7 @@ priv enum Prop {
   LinesUp
   Scale
   DrawnAs
+  OverAll
   MovesWindow
   KeepsHeld
   Clips
@@ -2050,6 +2062,89 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
 }
 
 ///|
+/// Over all else of the window while `on` holds (a toast's), where it is one of what the root holds (elsewhere, nothing):
+/// it and what it holds the window's top, after all else the root holds whatever was made after it (the root's own
+/// that are kept in the order they were made, after the rest), what an old frame hosted in the tree puts over all of
+/// it at its root (its menus, sheets, dialogs) under it; so drawn, found by a press, the pointer and the wheel, read out
+/// and gone to by Tab, the tree's and the old frame's in that one order: no modal layer under it keeping input from it.
+/// A modal layer of its own holds the rest of it, as any. Said at the moment it changes, as whether a layer is modal is.
+pub fn View::over_all(self : View, on : Live[Bool]) -> View {
+  guard self.live() is Some(n) else { return self }
+  match n.props.get(OverAll) {
+    Some(stop) => {
+      n.props.remove(OverAll)
+      stop()
+    }
+    None => ()
+  }
+  let set = fn(on : Bool) {
+    guard self.live() is Some(n) else { return }
+    n.over_all = on
+    self.tree.top_last()
+    self.tree.hits = self.tree.hits + 1
+    self.tree.modals_told()
+  }
+  match on {
+    Is(v) => set(v)
+    By(f) =>
+      self.owning(fn() {
+        let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
+        n.props[OverAll] = stop
+      })
+  }
+  self
+}
+
+///|
+/// Whether node `id` is over all else of the window (in what the root holds that says so: View::over_all). One let go,
+/// not.
+pub fn Tree::over_all(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.over_all_at(id.at)
+}
+
+///|
+/// (Whether what of the root's holds node `at`, or is it, says it is over all else: View::over_all.)
+fn Tree::over_all_at(self : Tree, at : Int) -> Bool {
+  let mut i = at
+  while i >= 0 {
+    let p = self.nodes[i].parent
+    if p == 0 {
+      return self.nodes[i].over_all
+    }
+    i = p
+  }
+  false
+}
+
+///|
+/// What the root holds over all else of the window (View::over_all) put after the rest of what it holds, each kept in
+/// its order: the window's top, whatever was made after it.
+fn Tree::top_last(self : Tree) -> Unit {
+  guard self.nodes.length() > 0 else { return }
+  let kids = self.nodes[0].kids
+  let top = kids.filter(fn(k) { self.nodes[k].over_all })
+  guard !top.is_empty() else { return }
+  let rest = kids.filter(fn(k) { !self.nodes[k].over_all })
+  let now = rest + top
+  if now.mapi(fn(i, k) { kids[i] != k }).contains(true) {
+    kids.clear()
+    kids.append(now)
+    self.order_marked()
+    self.layout_marked_at(0)
+  }
+}
+
+///|
+/// Whether what takes a finger at (x, y) is over all else of the window (Tree::target_at's, View::over_all): what of
+/// the old frame's is put over all of it there under it, taking none of it.
+pub fn Tree::over_all_takes(self : Tree, x : Double, y : Double) -> Bool {
+  match self.target_at(x, y) {
+    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) => self.over_all_at(id.at)
+    Nothing => false
+  }
+}
+
+///|
 /// A modal layer while `on` holds (said at the moment it changes, as whether it takes presses is: View::presses): the
 /// topmost such of the tree's (by the order it is drawn in) takes all input; what it does not hold, drawn under it,
 /// takes none (no press, no finger, no menu, no wheel: Tree::allows, and what a host asks of it: an old view's keys,
@@ -2224,6 +2319,10 @@ fn Tree::allows_at(self : Tree, at : Int) -> Bool {
   match self.modal_top() {
     None => true
     Some(m) => {
+      // (over all else of the window, a modal layer under it: View::over_all)
+      if self.over_all_at(at) && !self.over_all_at(m.at) {
+        return true
+      }
       let mut i = at
       while i >= 0 {
         if i == m.at {
@@ -2479,8 +2578,10 @@ pub fn View::on_key(self : View, f : (Key) -> Bool) -> View {
 ///|
 /// A key (`code`, `mods` held) at `at`: asked of the nodes that take keys (View::on_key) that may take input now, the
 /// one drawn last first (after what holds it, after what is before it among what holds them both), each in turn till one
-/// takes it, as one event of that moment (the tree brought there first where it is in none). True where one took it.
-pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double) -> Bool {
+/// takes it, as one event of that moment (the tree brought there first where it is in none); `top_only`, only what is
+/// over all else of the window (View::over_all: the old frame's layer under it taking the keys, View::over_all's). True
+/// where one took it.
+pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double, top_only? : Bool = false) -> Bool {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return false
   }
@@ -2493,6 +2594,8 @@ pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double) -> Bool {
     // (the topmost first: what a node holds after it, its later kids before its earlier)
     let found : Array[Int] = []
     self.topmost_from(0, fn(n) { n.on_key is Some(_) }, found)
+    // (`top_only`: of what is over all else of the window alone, View::over_all)
+    let found = if top_only { found.filter(fn(i) { self.over_all_at(i) }) } else { found }
     // (each as it was asked: its node and what it said then, asked only while both are still so as its turn comes (one
     // above it may have let it go, its index another's since, or said anew), the tree still there)
     let asked = found.filter_map(fn(i) {
@@ -3287,6 +3390,11 @@ pub fn View::owned_count(self : View) -> Int {
 /// cleanups run), what goes with it run, its callback and measure dropped, its index free.
 fn View::let_go(self : View) -> Unit {
   guard self.live() is Some(n) else { return }
+  // (what the pointer is over let go of, it or one it holds: pointed at no more, what holds it told so while it is
+  // still held by them, View::pointed_in; what it is over then the host's to find again, as what takes it changed)
+  if self.tree.pointed_within_at(self.at) {
+    self.tree.pointed_to(None)
+  }
   for k in n.kids {
     self.tree.handle(k).let_go()
   }
@@ -3333,6 +3441,7 @@ fn View::let_go(self : View) -> Unit {
   n.said_hidden = false
   n.pressed_cell = None
   n.pointed_cell = None
+  n.pointed_in_cell = None
   // (the focus on it: let go of with it, what has it told so)
   self.tree.focus_lost_in(self.at)
   n.focusable = false
@@ -3372,6 +3481,9 @@ fn View::slot(self : View) -> View {
   let v = self.tree.made(self.at)
   self.tree.nodes[v.at].slot = true
   n.kids.push(v.at)
+  if self.at == 0 {
+    self.tree.top_last()
+  }
   v
 }
 
@@ -3679,9 +3791,36 @@ pub fn View::going(self : View) -> Double {
 }
 
 ///|
-/// Whether it is leaving, or what holds it is: no longer pressed.
+/// When its own leaving ends, as it was told to leave (View::leave: let go then), -1 where it is not leaving.
+pub fn View::leaves_at(self : View) -> Double {
+  guard self.live() is Some(n) else { return -1.0 }
+  if n.left_at >= 0.0 {
+    leave_ends(n)
+  } else {
+    -1.0
+  }
+}
+
+///|
+/// Whether it is leaving, or what holds it is: no longer pressed. Followed: what reads it told as it or what holds it
+/// starts leaving and as it comes back (what View::going reads, and not the clock: a reaction on it runs then, not as
+/// the frames come).
 pub fn View::leaving(self : View) -> Bool {
   guard self.live() is Some(_) else { return true }
+  let mut i = self.at
+  while i >= 0 {
+    let n = self.tree.nodes[i]
+    let s = match n.going {
+      Some(s) => s
+      None => {
+        let s = @signals.signal(0, same=fn(a, b) { a == b })
+        n.going = Some(s)
+        s
+      }
+    }
+    s.get() |> ignore
+    i = n.parent
+  }
   self.tree.leaving_at(self.at)
 }
 
@@ -3762,6 +3901,29 @@ pub fn Tree::wake(self : Tree) -> Double? {
   let mut soonest : Double? = None
   for d in self.timeline {
     let at = self.due_at(d)
+    if at >= 0.0 {
+      soonest = match soonest {
+        Some(s) if s <= at => Some(s)
+        _ => Some(at)
+      }
+    }
+  }
+  soonest
+}
+
+///|
+/// The soonest moment what is yet to be done is done with, if anything is: a leaving or coming back ending, a moment's
+/// `f` not said `later` (View::at_moment), what goes by steps at its last step (View::steps: a stretch, its steps all
+/// done by then; Tree::wake still each step's). What a test's run goes on to and is not idle before (an old view's wake,
+/// Ctx::wake_in, as it is). Not what is said `later`, nor a wait drawn by a cycle (View::cycle: no end of its own).
+pub fn Tree::wake_waited(self : Tree) -> Double? {
+  let mut soonest : Double? = None
+  for d in self.timeline {
+    let at = match d {
+      Steps(s, _) => if s.live.val && s.k < s.count { stepped_at(s, s.count - 1) } else { -1.0 }
+      Once(o, _) if o.later => -1.0
+      _ => self.due_at(d)
+    }
     if at >= 0.0 {
       soonest = match soonest {
         Some(s) if s <= at => Some(s)
@@ -3929,6 +4091,8 @@ struct Once {
   at : Double
   f : () -> Unit
   live : Ref[Bool]
+  /// not waited for (View::at_moment's `later`)
+  later : Bool
 }
 
 ///|
@@ -5110,8 +5274,10 @@ pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit) -> Uni
 ///|
 /// `f` done once at the moment `when` of the one clock (its timeline: in its turn among what is due, as of then;
 /// Tree::advance), whatever frames are drawn: what is to show, go or be done at a moment said so, never found by watching
-/// the clock. The node's: not done once it is let go, or once what it returns is called.
-pub fn View::at_moment(self : View, when : Double, f : () -> Unit) -> () -> Unit {
+/// the clock. The node's: not done once it is let go, or once what it returns is called. What is to be done is waited
+/// for, as what has yet to happen (Tree::wake_waited: a test's run goes on to it, and is not idle before it); `later`,
+/// not: a time what is shown does not wait for (a toast's time on screen), as an old view's wake said `later` is.
+pub fn View::at_moment(self : View, when : Double, f : () -> Unit, later? : Bool = false) -> () -> Unit {
   guard self.live() is Some(_) else { return fn() {  } }
   let live = Ref(true)
   let tree = self.tree
@@ -5130,7 +5296,7 @@ pub fn View::at_moment(self : View, when : Double, f : () -> Unit) -> () -> Unit
     (unkeep.val)()
     f()
   }
-  tree.timeline.push(Once({ at: when, f: done, live }, tree.told))
+  tree.timeline.push(Once({ at: when, f: done, live, later }, tree.told))
   tree.told = tree.told + 1
   tree.marked()
   stop
@@ -5195,6 +5361,38 @@ pub fn View::pointed(self : View) -> Bool {
     }
   }
   s.get()
+}
+
+///|
+/// Whether the pointer is over it or over what it holds now, of what takes a press there the topmost (View::pointed: the
+/// topmost that takes it, it or one in it; not where something else over it takes it, nor where it is only within its
+/// box), as an old view's `hovered` is of what its target holds: what reads it told only as that comes and goes. Its cell
+/// made as first read, let go with it.
+pub fn View::pointed_in(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  let s = match n.pointed_in_cell {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(self.tree.lit_every || self.tree.pointed_within_at(self.at), same=fn(a, b) { a == b })
+      n.pointed_in_cell = Some(s)
+      s
+    }
+  }
+  s.get()
+}
+
+///|
+/// (Whether what the pointer is over, of what takes a press, is node `at` or held by it.)
+fn Tree::pointed_within_at(self : Tree, at : Int) -> Bool {
+  guard self.pointed is Some(p) && self.alive_id(p) else { return false }
+  let mut i = p.at
+  while i >= 0 {
+    if i == at {
+      return true
+    }
+    i = self.nodes[i].parent
+  }
+  false
 }
 
 ///|
@@ -5354,6 +5552,18 @@ pub fn Tree::pointed_to(self : Tree, now : NodeId?) -> Unit {
     self.pointed = now
     self.hand_told(was, fn(n) { n.pointed_cell }, false)
     self.hand_told(now, fn(n) { n.pointed_cell }, true)
+    // (and what holds either, as what it is over comes into it or leaves it: View::pointed_in)
+    for id in [was, now] {
+      guard id is Some(i) && self.alive_id(i) else { continue }
+      let mut at = i.at
+      while at >= 0 {
+        match self.nodes[at].pointed_in_cell {
+          Some(c) => c.set(self.lit_every || self.pointed_within_at(at))
+          None => ()
+        }
+        at = self.nodes[at].parent
+      }
+    }
   }
 }
 

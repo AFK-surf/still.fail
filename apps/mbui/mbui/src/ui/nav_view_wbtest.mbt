@@ -174,8 +174,10 @@ test "window tree: a page waited for asks no frames while it waits, frames as it
   let slides = fn() { t.moving().iter().any(fn(m) { m.has_prefix("a stack's slide") }) }
   told_at(t, t0 + 10.0, fn() { nav.push("b") })
   t.frame_at(t0 + 40.0)
-  // (waiting: nothing said to move, no frame asked after this one)
-  assert_true(!slides() && t.at_rest(), msg="waiting: \{t.moving()} \{t.rest_why()}")
+  // (waiting: nothing said to move, no frame asked after this one; what its wait is over at waited for alone, as the
+  // old frame's stack waits on it, Nav::comes_when's wake)
+  let waits = "a wake in \{(t0 + 10.0 + 300.0 - (t0 + 40.0)).ceil().to_int()} ms (the window's tree's)"
+  assert_true(!slides() && t.rest_why() == waits, msg="waiting: \{t.moving()} \{t.rest_why()}")
   told_at(t, t0 + 60.0, fn() { ready.set(true) })
   t.frame_at(t0 + 80.0)
   // (sliding from 60: said to move, frames till it ends)
@@ -193,33 +195,40 @@ fn waits_over_slide(comes : Bool) -> Unit raise {
   let ready = @signals.signal(true, same=fn(a, b) { a == b })
   let (t, nav, _) = stacked(ready~, most=300.0)
   let t0 = t.time()
-  let seen = fn(slides : Bool, at : String) raise {
+  // (`waits`: what its wait is over at, waited for alone, as the old frame's stack waits on it: Nav::comes_when's wake)
+  let seen = fn(slides : Bool, at : String, waits : Double?) raise {
     let said = t.moving().iter().any(fn(m) { m.has_prefix("a stack's slide") })
     assert_eq(said, slides, msg="comes \{comes}, \{at}: \{t.moving()}")
     if slides {
       assert_true(!t.at_rest(), msg="comes \{comes}, \{at}: frames asked")
     } else {
-      assert_true(t.at_rest(), msg="comes \{comes}, \{at}: \{t.rest_why()}")
+      match waits {
+        Some(w) => {
+          let only = "a wake in \{(w - t.time()).ceil().to_int()} ms (the window's tree's)"
+          assert_true(t.rest_why() == only, msg="comes \{comes}, \{at}: \{t.rest_why()}")
+        }
+        None => assert_true(t.at_rest(), msg="comes \{comes}, \{at}: \{t.rest_why()}")
+      }
     }
   }
   told_at(t, t0 + 10.0, fn() { nav.push("b") })
   t.frame_at(t0 + 40.0)
-  seen(true, "the first sliding")
+  seen(true, "the first sliding", None)
   told_at(t, t0 + 60.0, fn() {
     ready.set(false)
     nav.push("c")
   })
   t.frame_at(t0 + 80.0)
-  seen(false, "the second waiting")
+  seen(false, "the second waiting", Some(t0 + 60.0 + 300.0))
   if comes {
     told_at(t, t0 + 160.0, fn() { ready.set(true) })
   }
   // (sliding from 160 as it came, or from 360 as its wait is over)
   let from = if comes { t0 + 160.0 } else { t0 + 360.0 }
   t.frame_at(from + 40.0)
-  seen(true, "the second sliding")
+  seen(true, "the second sliding", None)
   t.frame_at(from + move_most_ms + 10.0)
-  seen(false, "in place")
+  seen(false, "in place", None)
 }
 
 ///|

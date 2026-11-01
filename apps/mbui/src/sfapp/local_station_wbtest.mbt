@@ -79,7 +79,7 @@ test "添加这台 Mac refused by the cloud: said why, nothing installed" {
   let (x, y) = t.find("添加这台 Mac").unwrap()
   t.tap(x, y)
   t.frame()
-  assert_eq(app.toast.get(), "无法添加这台 Mac：只有 owner 和 admin 可以添加 station")
+  assert_eq(app.toast.get().words, "无法添加这台 Mac：只有 owner 和 admin 可以添加 station")
   assert_eq(t.local_acts(), [])
 }
 

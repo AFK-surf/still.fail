@@ -208,7 +208,7 @@ test "a chat picked the core cannot make a mark of: a toast says why, the `@word
   assert_eq(text(Some(made[0].params), "into"), "ws1")
   (made[0].done)(Err({ "message": "没有权限" }))
   t.draw()
-  assert_eq(app.toast.get(), "无法引用「首页的列表改成按天分组」：没有权限")
+  assert_eq(app.toast.get().words, "无法引用「首页的列表改成按天分组」：没有权限")
   let (_, words, _, _) = t.ime()
   assert_eq(words, "@首页")
   // closed for this `@` until its words are gone
