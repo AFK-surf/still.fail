@@ -123,7 +123,7 @@ export function frequentCombos(history: J[], options: J[], current: Resolved): J
     const baseLabel = runtimeText === null ? `${name} · ${effortText}` : `${name} · ${runtimeText} · ${effortText}`;
     const label = speedText === null ? baseLabel : `${baseLabel} · ${speedText}`;
     const selected = current.entry !== null && current.entry.model === m && current.runtime === runtime && current.effort === effort && current.fast === fast;
-    out.push({ model: m, runtime, effort, fast, ...(speedText === null ? {} : { speedText }), label, name, ...(runtimeText === null ? {} : { runtimeText }), effortText, selected });
+    out.push({ model: m, runtime, effort, fast, ...(speedText === null ? {} : { speedText }), label, name, ...(runtimeText === null ? {} : { runtimeText }), effortText, maker: entry.maker ?? null, selected });
   }
   return out;
 }
@@ -590,6 +590,14 @@ export class Choose implements Owner {
         ? t("core-logic.choose.force.moves_off", { account: currentName, model: modelName ?? "" })
         : null;
     const borrow = option !== undefined && option.availability === "borrowable" ? this.#borrowView(station, option) : null;
+    // The combinations used most for new chats here, at the top of its panel: a chat's or a new chat's (one only the one
+    // in use, nothing to pick), the station's own models, a chat's on its runtime alone.
+    let frequent: J[] = [];
+    if (o.kind === "new" || o.kind === "session") {
+      const history = arr(this.#record(`ws:${ofAddress(station)}:frequent`)).filter((h) => !fixed || equal(get(h, "runtime"), value.runtime));
+      const combos = frequentCombos(history, own, { entry: option ?? null, runtime: onName === "" ? null : onName, effort, fast, profile, efforts, accounts });
+      if (combos.length > 1) frequent = combos;
+    }
     let saveText = changed ? t("core-logic.choose.save", { model: modelName ?? t("core-logic.format.default_model"), effort: effortText, account: chosenText }) : t("core-logic.choose.save.unchanged");
     if (changed && fastAvailable) saveText = `${saveText} · ${speedText(fast)}`;
     return {
@@ -623,6 +631,7 @@ export class Choose implements Owner {
         saveText,
         next,
         borrow,
+        frequent,
       },
     };
   }
@@ -642,9 +651,11 @@ export class Choose implements Owner {
     this.#changed();
   }
 
-  /// `pick.save`: what the panel picked, made what it runs on.
-  save(station: string, oName: string): Saved {
+  /// `pick.save`: what the panel picked, made what it runs on; with picks of its own (a frequent combination's), those
+  /// picked first.
+  save(station: string, oName: string, params: J = {}): Saved {
     const o = of(oName);
+    if (FIELDS.some((f) => get(params, f) !== undefined)) this.set(station, oName, Object.fromEntries(FIELDS.filter((f) => get(params, f) !== undefined).map((f) => [f, params[f]])));
     const topic: Topic = { topic: "pick", station, of: oName };
     const view = this.#pick(topic, station, oName);
     if (view === undefined) throw CoreError.invalid(t("core-logic.choose.error.no_options_yet"));

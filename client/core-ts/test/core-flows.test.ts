@@ -820,6 +820,38 @@ test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_
   again.close();
 });
 
+test("the_model_control_offers_the_frequent_combinations_and_saves_one_whole_with_one_press", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  const fresh = { topic: "pick", station: "ws/st", of: "new" };
+  const chat = { topic: "pick", station: "ws/st", of: "session:k1" };
+  subscribe(core, ui, 1, fresh);
+  subscribe(core, ui, 2, chat);
+  subscribe(core, ui, 3, { topic: "newChat", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).frequent, [], "one alone is the one in use: nothing to pick");
+  core.inner.choose.used("ws/st", { model: "claude-sonnet-5", runtime: "claude", effort: null });
+  core.inner.choose.used("ws/st", { model: "claude-opus-5-5", runtime: "claude", effort: null });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).frequent.map((c: J) => c.model).sort(), ["claude-opus-5-5", "claude-sonnet-5", "gpt-6-astra"]);
+  assert.ok(v(values, 1).frequent.every((c: J) => c.maker !== null && c.maker !== undefined), "each with its maker's mark");
+  // a chat's, on its runtime alone
+  assert.deepEqual(v(values, 2).frequent.map((c: J) => c.runtime), ["claude", "claude"]);
+  // pressed: all of it picked and saved at once
+  const astra = v(values, 1).frequent.find((c: J) => c.model === "gpt-6-astra");
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: astra.model, runtime: astra.runtime, effort: astra.effort, fast: astra.fast });
+  apply(host, values);
+  assert.equal(v(values, 3).model.model, "gpt-6-astra");
+  assert.equal(v(values, 3).effort, "medium");
+  assert.equal(v(values, 1).frequent.find((c: J) => c.model === "gpt-6-astra").selected, true);
+  core.close();
+});
+
 test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_has_it", async () => {
   const { host, core } = await choosing();
   let ui = core.connect();

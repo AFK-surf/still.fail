@@ -1,6 +1,6 @@
 // A new chat on a narrow phone, what it runs on as crowded as a person's phone showed it (newchat_fixture.mbt
-// newchat-crowded, 2026-10-26): the station's and the model's controls over the composer, the frequent combinations,
-// the model's panel; each of their words whole, on one line, in the window.
+// newchat-crowded, 2026-10-26): the station's and the model's controls over the composer, the model's panel and
+// the frequent combinations in it; each of their words whole, on one line, in the window.
 
 ///|
 /// A phone as narrow as most get (`w` across), newchat-crowded's page (`mode`) risen over it.
@@ -80,26 +80,36 @@ test "narrower still: the station's name leaves its control whole after what the
 }
 
 ///|
-test "narrow: each frequent combination on one line in the window, a long one leaving its runtime out" {
-  let t = crowded("newchat-crowded")
-  let chips = []
+test "narrow: the model's panel has each frequent combination over the models on one line, a long one leaving its runtime out" {
+  let t = crowded("newchat-crowded-model")
+  run_to_sheet_rest(t)
+  let (sx, _, sw, _) = t.get(@ui.Role::Dialog).rect
+  let rows = []
   for label in ["GPT-6 Astra · 中", "DeepSeek V4.1 Flash · DeepSeek Harness · 高", "SWE-2 · 高"] {
-    chips.push(t.get(Button, label~))
+    rows.push(t.get(Button, label~))
   }
-  for chip in chips {
-    let (x, _, w, _) = chip.rect
-    assert_true(x >= 0.0 && x + w <= crowded_w, msg="\{chip.label} \{chip.rect}")
-    let runs = runs_in(t, chip.rect)
+  // (over the models: the first of them under the last of the combinations)
+  assert_true(rows[2].rect.1 < t.get(Button, label="GPT-6 Astra").rect.1)
+  for row in rows {
+    let (x, _, w, _) = row.rect
+    assert_true(x >= sx && x + w <= sx + sw + 0.5, msg="\{row.label} \{row.rect}")
+    let runs = runs_in(t, row.rect)
     assert_true(runs.length() > 0)
     for r in runs {
-      assert_true(r.base == runs[0].base, msg="\{chip.label} on more than one line")
-      assert_true(r.x0 >= x && r.x1 <= x + w, msg="\{r.text} past \{chip.label}")
+      assert_true(r.base == runs[0].base, msg="\{row.label} on more than one line")
+      assert_true(r.x0 >= x && r.x1 <= x + w, msg="\{r.text} past \{row.label}")
     }
   }
   // the model always, how hard it thinks always
-  let words = runs_in(t, chips[1].rect).map(fn(r) { r.text })
+  let words = runs_in(t, rows[1].rect).map(fn(r) { r.text })
   assert_true(words.contains("DeepSeek V4.1 Flash"))
   assert_true(words.contains("高"))
+}
+
+///|
+test "narrow: no frequent combination left on the new chat's page, the model's panel has them" {
+  let t = crowded("newchat-crowded")
+  assert_true(t.query(Button, label="SWE-2 · 高") is None)
 }
 
 ///|

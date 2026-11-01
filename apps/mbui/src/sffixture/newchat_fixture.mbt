@@ -261,7 +261,35 @@ pub fn fix_pick() -> Json {
     "accountNote": "",
     "accountWarn": false,
     "saveText": "",
+    "frequent": fix_pick_frequent(),
   }
+}
+
+///|
+/// The frequent combinations as the model control has them (its `frequent`): the new chat's, each with its model's
+/// maker, the one drafted picked.
+fn fix_pick_frequent() -> Json {
+  let n = new_fix
+  let all = match if n.crowded { fix_crowded_frequent() } else { fix_frequent() } {
+    Array(a) => a
+    _ => []
+  }
+  Json::array(
+    all.map(fn(c) {
+      match c {
+        Object(o) => {
+          let m = o.copy()
+          let model = text(Some(c), "model")
+          m["maker"] = field(Some(fix_model(model)), "maker").unwrap_or(Json::null())
+          m["selected"] = Json::boolean(
+            n.d_model == model && n.d_runtime == text(Some(c), "runtime") && n.d_effort == text(Some(c), "effort"),
+          )
+          Json::object(m)
+        }
+        other => other
+      }
+    }),
+  )
 }
 
 ///|
@@ -515,6 +543,10 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       Some(Ok(Json::object({})))
     }
     "pick.save" => {
+      // (with picks of its own, a frequent combination's: those picked first)
+      take("model", fn(s) { n.d_model = s })
+      take("runtime", fn(s) { n.d_runtime = s })
+      take("effort", fn(s) { n.d_effort = s })
       n.model = n.d_model
       n.runtime = n.d_runtime
       n.effort = n.d_effort

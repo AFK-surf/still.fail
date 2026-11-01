@@ -516,9 +516,8 @@ test "wide: the machine's own sessions offered under the composer as its station
 }
 
 ///|
-/// The fixture's app over its new chat as the core gives it station by station: on Studio, read whole, its frequent
-/// combinations and its machine's own session to go on with; on MBA none of them, but what is wrong for now and what it
-/// waits for.
+/// The fixture's app over its new chat as the core gives it station by station: on Studio, read whole, its machine's
+/// own session to go on with; on MBA none, but what is wrong for now and what it waits for.
 fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
   new_run()
   let base = fixture("home")
@@ -578,8 +577,6 @@ test "wide: a new chat's composer stays where it is as another station is picked
   assert_true(app.nav.top() == NewChat)
   let offer = "继续 Studio 终端中的会话"
   assert_true(t.find(offer) is Some(_), msg="Studio's machine's session offered")
-  // (a combination's words in parts, the model, how hard it thinks: found by what it is called)
-  assert_true(t.query(Button, label="Opus 5.5 · 高") is Some(_), msg="Studio's frequent combinations")
   let (bx, by, _, _) = composer_glass(t)
   let pick = fn(from : String, to : String) raise {
     t.click(Button, label=from)

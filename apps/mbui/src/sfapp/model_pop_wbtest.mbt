@@ -35,6 +35,20 @@ test "wide, short names: the model's panel as wide as what it holds, not as wide
 }
 
 ///|
+test "wide: the frequent combinations over the models, the one in use checked; one pressed picks all of it and closes the panel" {
+  let t = model_pop("newchat-model")
+  let combo = t.get(Button, label="GPT-6 · 中").rect
+  assert_true(combo.1 < t.get(Button, label="Opus 5.5").rect.1, msg="over the models")
+  // (in the panel, whole)
+  let (px, _, pw, _) = t.get(@ui.Role::Dialog).rect
+  assert_true(combo.0 >= px && combo.0 + combo.2 <= px + pw)
+  t.click(Button, label="GPT-6 · 中")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.query(@ui.Role::Dialog) is None, msg="its panel closed")
+  assert_eq((new_fix.model, new_fix.runtime, new_fix.effort), ("gpt-6", "codex", "medium"))
+}
+
+///|
 /// The thumbs drawn in how hard it thinks (lifted out of its track: the boxes there with a line round them) as they
 /// show, their left edges.
 fn meter_thumbs(t : @ui.Tester) -> Array[Double] raise {

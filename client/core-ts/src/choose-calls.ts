@@ -70,7 +70,7 @@ export function installChoose(inner: Inner): Choose {
           });
         default:
           return Effect.gen(function* () {
-            const saved = yield* attempt(() => choose.save(field("station"), field("of")));
+            const saved = yield* attempt(() => choose.save(field("station"), field("of"), params));
             if ("done" in saved) return saved.done;
             yield* handlers.op!(inner, { kind: "op", op: saved.op }, progress, at, ctx);
             return { saved: true };
