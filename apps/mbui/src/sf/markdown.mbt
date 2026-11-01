@@ -901,6 +901,13 @@ fn Md::placed(
       _ => ()
     }
   }
+  // two or more of its images and nothing else: side by side (Prose.tsx inlineFiles)
+  if task is None && parts.length() > 1 {
+    match self.cell_images(xs) {
+      Some(images) => return Some([{ top, bottom, draw: fn() { self.image_rows(images) } }])
+      None => ()
+    }
+  }
   let has_image = xs.iter().any(fn(x) { x is Image(_, _) && file_of(x) is Some(_) })
   if !has_image {
     return None
@@ -940,6 +947,56 @@ fn Md::placed(
   flush()
   Some(out)
 }
+
+///|
+/// A paragraph's images in rows, 8 apart either way and 8 over and under (Prose.css.ts inlineFiles, Prose.tsx rowItem):
+/// each on the row at least 120 high, as many as fit the message's width, then they grow alike to fill it, 200 high at
+/// most; one wider than the message at 120 is as wide as the message. A row's images share one height.
+fn Md::image_rows(self : Md, images : Array[(Double, (Double) -> Unit)]) -> Unit {
+  let c = self.c
+  self.n = self.n + 1
+  let id = c.id("sf-md/images\{self.n}")
+  let room = match c.laid_size(id) {
+    Some((rw, _)) => rw
+    None => c.width
+  }
+  let rows : Array[Array[(Double, (Double) -> Unit)]] = [[]]
+  let mut used = 0.0
+  for im in images {
+    let row = rows[rows.length() - 1]
+    let w = im.0 * image_row_least + (if row.length() > 0 { image_row_gap } else { 0.0 })
+    if row.length() > 0 && used + w > room {
+      rows.push([im])
+      used = im.0 * image_row_least
+    } else {
+      row.push(im)
+      used = used + w
+    }
+  }
+  c.box(id~, taps=false, w=Fill(1.0), gap=image_row_gap, pady=8.0, fn() {
+    for row in rows {
+      let ratios = row.fold(init=0.0, fn(n, im) { n + im.0 })
+      let h = dmin(image_row_most, (room - image_row_gap * (row.length() - 1).to_double()) / ratios)
+      c.row(gap=image_row_gap, fn() {
+        for im in row {
+          (im.1)((im.0 * h).floor())
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A paragraph's images' rows (Prose.tsx rowItem): at least this high while they fit, at most `image_row_most`.
+let image_row_least : Double = 120.0
+
+///|
+let image_row_most : Double = 200.0
+
+///|
+let image_row_gap : Double = 8.0
 
 ///|
 /// Items with their markers in the list's 20 of indent; numbers wider than that (a list past 9, words drawn larger)
