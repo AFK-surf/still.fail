@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Presets, RepoIndex, candidates, presetCopyInput, presetCopyOf, presetInput, repoName } from "../src/sessions/presets.ts";
 import { routes } from "../src/api/routes/presets.ts";
+import { protectedPlace } from "../src/drive/fs.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { Rig, settle } from "./hub-fakes.ts";
 
@@ -165,7 +166,7 @@ test("the folders are answered while the machine's repositories are still looked
   assert.deepEqual((await ask()).candidates.map((c: { name: string }) => c.name), ["lib", "app"]);
 });
 
-test("a file system mounted under the home is not opened, the home's own disk walked", async () => {
+test("what macOS protects is not opened, a disk mounted in the home among them", async () => {
   const home = mkdtempSync(join(tmpdir(), "presets-home-"));
   clone(join(home, "code"), "app", "git@github.com:acme/app.git");
   clone(join(home, "OrbStack", "docker"), "far", "https://github.com/acme/far.git");
@@ -175,8 +176,8 @@ test("a file system mounted under the home is not opened, the home's own disk wa
     file: () => join(home, "index.json"),
     now: () => 0,
     list: (dir) => (opened.push(dir), readdir(dir, { withFileTypes: true })),
-    // (OrbStack's NFS: another device than the home's)
-    disk: async (dir) => (dir.startsWith(join(home, "OrbStack")) ? 2 : 1),
+    // (OrbStack's NFS mounted in the home, as the machine's mounts say)
+    guarded: (dir) => protectedPlace(dir, home, [join(home, "OrbStack")]) !== null,
   });
   await index.walk();
   assert.deepEqual((await index.repos()).map((c) => c.name), ["app"]);

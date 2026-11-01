@@ -8,6 +8,7 @@ import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
+import { protectedPlace } from "../drive/fs.ts";
 
 /// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`
 /// (its address) and `stationName`: another station of the workspace's it is on; none: the station the preset is on.
@@ -454,18 +455,18 @@ const INDEX_SKIPPED = new Set(["node_modules", "Library", "Applications", "Pictu
 /// The repositories on the machine (directories with a `.git`), found by walking its home a few levels down, so a
 /// preset's folders are picked rather than typed. Kept in `file` (the station's data directory) and walked again when
 /// there is none or the last is old, in the background: what is held is answered meanwhile (none before the first pass
-/// ends: a home can take long to walk). Only the home's own disk is walked: a directory another file system is mounted
-/// on (OrbStack's, a share, a disk) is not looked into, as opening one can wait on its server, or on a dialog on that
-/// machine's screen, for as long as nobody answers.
+/// ends: a home can take long to walk). What macOS protects is not looked into (drive/fs.ts protectedPlace: Documents,
+/// a disk mounted anywhere, OrbStack's NFS in the home among them): opening one waits on a dialog on that machine's
+/// screen for as long as nobody answers.
 export class RepoIndex {
   readonly roots: () => string[];
   readonly file: () => string;
   readonly now: () => number;
   /// Directories it never looks into (the station's own data: its sessions' worktrees are its cache's clones).
   readonly besides: () => string[];
-  /// What a directory holds, and which disk it is on (null: it could not be told).
+  /// What a directory holds; whether it is one the station does not open itself (protectedPlace).
   readonly list: (dir: string) => Promise<Dirent[]>;
-  readonly disk: (dir: string) => Promise<number | null>;
+  readonly guarded: (dir: string) => boolean;
   #held: { at: number; repos: Candidate[] } | null = null;
   #read = false;
   #walking: Promise<void> | null = null;
@@ -476,14 +477,14 @@ export class RepoIndex {
     now: () => number;
     besides?: () => string[];
     list?: (dir: string) => Promise<Dirent[]>;
-    disk?: (dir: string) => Promise<number | null>;
+    guarded?: (dir: string) => boolean;
   }) {
     this.roots = o.roots;
     this.file = o.file;
     this.now = o.now;
     this.besides = o.besides ?? (() => []);
     this.list = o.list ?? ((dir) => readdir(dir, { withFileTypes: true }));
-    this.disk = o.disk ?? (async (dir) => (await stat(dir).catch(() => null))?.dev ?? null);
+    this.guarded = o.guarded ?? ((dir) => protectedPlace(dir) !== null);
   }
 
   /// The repositories found, as the last pass found them (none before the first ends); a pass begun when there is none
@@ -510,11 +511,9 @@ export class RepoIndex {
     const found: Candidate[] = [];
     const skip = new Set(this.besides().map((p) => resolve(p)));
     let looked = 0;
-    let home: number | null = null;
     const into = async (dir: string, depth: number): Promise<void> => {
       if (looked++ >= INDEX_DIRS_MOST || skip.has(dir)) return;
-      // (another file system mounted there: not opened)
-      if (depth > 0 && (await this.disk(dir)) !== home) return;
+      if (this.guarded(dir)) return;
       const entries = await this.list(dir).catch(() => []);
       if (entries.some((e) => e.name === ".git")) {
         const git = join(dir, ".git");
@@ -529,10 +528,7 @@ export class RepoIndex {
         await into(join(dir, e.name), depth + 1);
       }
     };
-    for (const root of this.roots()) {
-      home = await this.disk(resolve(root));
-      await into(resolve(root), 0);
-    }
+    for (const root of this.roots()) await into(resolve(root), 0);
     this.#held = { at: this.now(), repos: found };
     try {
       await writeFile(this.file(), `${JSON.stringify(this.#held)}\n`);

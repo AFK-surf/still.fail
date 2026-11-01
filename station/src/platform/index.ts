@@ -117,6 +117,11 @@ export type Platform = {
   /// /media/<user> and /mnt (each folder there, names in order); Windows' drives, `C:\` to `Z:\`, by their letter.
   /// Each as it is there, not yet looked into: a link to `/` (macOS's own disk) is the caller's to leave out.
   disks(home: string): Promise<{ name: string; path: string }[]>;
+  /// Where file systems other than the machine's own volumes are mounted (a network share, OrbStack's NFS in the home,
+  /// a disk), wherever that is: macOS asks the person before a process opens one, so the station never does itself
+  /// (drive/fs.ts protectedPlace). macOS's, as `mount` says them (read again in the background when asked a while
+  /// after the last read); none elsewhere.
+  mounts(): string[];
   /// Whether making a symbolic link was refused for want of the privilege (Windows without Developer Mode).
   linkRefused(error: unknown): boolean;
   /// Whether a directory's entries can be made durable by syncing it (not on Windows: NTFS journals them).

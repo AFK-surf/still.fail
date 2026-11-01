@@ -232,8 +232,6 @@ export type DriveDeps = {
   files?: Protected | null;
   /// The machine's home: whose trash what is deleted goes to, and where Documents, Desktop and Downloads are (a test's own).
   home?: string;
-  /// Which disk a folder is on (its file system's device; null: it could not be told).
-  disk?: (dir: string) => Promise<number | null>;
 };
 
 /// The station's drive, one for the admin API's routes and the modules' local API (modules/local.ts): config.json's
@@ -273,10 +271,6 @@ export class Drive {
   /// there), else by the station.
   #real(path: string, fs: Fs): Promise<string> {
     return fs.helper && this.#locked(path) !== null ? fs.real(path) : real(path);
-  }
-
-  #disk(dir: string): Promise<number | null> {
-    return this.deps.disk ? this.deps.disk(dir) : stat(dir).then((s) => s.dev, () => null);
   }
 
   /// Whether the station may not list `dir`, even through still.fail Helper: looked at off the main thread.
@@ -621,15 +615,10 @@ export class Drive {
       });
       const protect = await this.protectedNow();
       const entries: Folder[] = [];
-      // (a folder another file system is mounted on is a disk: not opened to see whether it may be listed, as one whose
-      // server is gone holds what opens it for good, 2026-11-02 Studio's ~/OrbStack)
-      const here = await this.#disk(at);
       for (const d of listed.d) {
         if (d.name.startsWith(".")) continue;
         const asked = join(at, d.name);
-        if (!d.stat?.dir || (await this.isProtected(asked, d.real, protect))) continue;
-        if (here !== null && (await this.#disk(asked)) !== here) entries.push({ name: d.name, path: asked, unreadable: false, disk: true });
-        else entries.push({ name: d.name, path: asked, unreadable: await this.#unreadable(asked) });
+        if (d.stat?.dir && !(await this.isProtected(asked, d.real, protect))) entries.push({ name: d.name, path: asked, unreadable: await this.#unreadable(asked) });
       }
       entries.sort((a, b) => collator.compare(a.name, b.name));
       const parent = dirname(at);
