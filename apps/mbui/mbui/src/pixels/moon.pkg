@@ -1,5 +1,5 @@
 import {
   "mbui/dmath",
+  "mbui/zip",
 }
 import { "mbui/codec" } for "test"
-import { "mbui/zip" } for "wbtest"

@@ -119,3 +119,51 @@ The pictures in `test/images` and those `scripts/test_images.swift --gallery`
 makes are drawn by that script from shapes (no photographs, no fonts) and
 dedicated to the public domain (CC0 1.0). The screenshots in `goldens/` are
 mbui's own output over made-up data, drawn with the system's fonts.
+
+## tiny-skia
+
+- What: `src/skia` (paths, strokes, dashes, rasterization, the raster pipeline,
+  shaders, masks, pixmaps), ported from tiny-skia, and the reference pictures
+  in `src/skiatest/images` with the tests in `src/skiatest`, from its tests.
+- From: https://github.com/linebender/tiny-skia (itself after Skia)
+- Licence: BSD 3-Clause. Copyright (c) 2011 Google Inc.; Copyright (c) 2020
+  Yevhenii Reizner.
+
+## resvg, usvg, svgtypes, roxmltree, simplecss, kurbo
+
+- What: `src/svg` (the XML reader, the SVG value parsers, CSS, the usvg tree
+  and its conversion, text layout, filters, and resvg's rendering), ported
+  from these crates. The resvg test suite `src/svgtest` runs against is not in
+  this repository.
+- From: https://github.com/linebender/resvg (resvg, usvg),
+  https://github.com/linebender/svgtypes, https://github.com/RazrFalcon/roxmltree,
+  https://github.com/linebender/simplecss, https://github.com/linebender/kurbo
+- Licence: MIT or Apache-2.0. Copyright (c) the Resvg Authors, Yevhenii
+  Reizner, the Kurbo Authors.
+
+## skrifa, read-fonts, font-types, fontdb, unicode-vo
+
+- What: `src/font` (sfnt tables, glyph outlines, color glyphs, variable fonts,
+  font matching) and `src/svg/vo_table.mbt`, ported from these crates.
+- From: https://github.com/googlefonts/fontations (skrifa, read-fonts,
+  font-types), https://github.com/RazrFalcon/fontdb,
+  https://github.com/RazrFalcon/unicode-vo
+- Licence: MIT or Apache-2.0. Copyright (c) the Fontations Authors, Yevhenii
+  Reizner.
+
+## HarfRust (HarfBuzz)
+
+- What: `src/shape` (OpenType shaping: the Unicode property tables, the
+  buffer, GSUB and GPOS, normalization, the default and Arabic shapers),
+  ported from HarfRust, a Rust port of HarfBuzz.
+- From: https://github.com/harfbuzz/harfrust, https://github.com/harfbuzz/harfbuzz
+- Licence: MIT ("Old MIT"). Copyright © the HarfBuzz and HarfRust authors
+  (Behdad Esfahbod, Google, Red Hat, and others).
+
+## zune-jpeg, image-webp
+
+- What: the JPEG and lossless WebP decoders in `src/pixels`.
+- From: https://github.com/etemesi254/zune-image (zune-jpeg),
+  https://github.com/image-rs/image-webp
+- Licence: MIT or Apache-2.0 (zune-jpeg: also Zlib). Copyright (c) Caleb
+  Etemesi; the image-rs developers.
