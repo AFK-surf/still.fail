@@ -1014,7 +1014,8 @@ fn screen_row_keys() -> Array[RowKey] {
 /// keyboard has not (Esc, Tab, the arrows) and the modifiers (⌘ ⌃ ⌥ ⇧: held, shown solid, for the next key or click,
 /// typed or here), in a row. Where it has not the room for them all, the least used leave it (RowKey's
 /// `drop`; a modifier held never), and a ⋯ key at its end turns the row to them, as a keyboard turns to its other
-/// keys (lit while turned; pressed again, back): nothing scrolled, nothing wrapped, nothing over the keyboard.
+/// keys (lit while turned; pressed again, on to those that had not the room there either, or back): nothing scrolled,
+/// nothing wrapped, nothing over the keyboard.
 fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let mouse = mouse_shown(s, u)
   let keys = screen_row_keys().filter(fn(k) { k.button == 0 || mouse })
@@ -1022,14 +1023,11 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let leaves = fn(k : RowKey) { if held(k) { 0 } else { k.drop } }
   let slot = fn(k : RowKey) { c.id("screen-key-slot/" + s.view + "/" + k.name) }
   let more = c.id("screen-keys-more/" + s.view)
+  let on_face = fn(k : RowKey) { u.keys_turned.is_empty() || u.keys_turned.contains(k.name) }
   if c.clicked(more) {
-    // (turned to those the first face left out as last laid out: read back, the frame built again where that
-    // changes; or back)
-    u.keys_turned = if u.keys_turned.is_empty() {
-      keys.filter(fn(k) { leaves(k) > 0 && c.left_out(slot(k)) }).map(fn(k) { k.name })
-    } else {
-      []
-    }
+    // (turned to those this face left out as last laid out, read back, the frame built again where that changes: from
+    // the first face its others, and from them, where they too have not the room, the rest; none left out, back)
+    u.keys_turned = keys.filter(fn(k) { on_face(k) && leaves(k) > 0 && c.left_out(slot(k)) }).map(fn(k) { k.name })
   }
   let turned = !u.keys_turned.is_empty()
   let key = fn(k : RowKey) {
@@ -1065,18 +1063,15 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     c.semantics(i, Button, id=more, label=@sf.t("common.more"), pressed=turned, actions=[Activate])
   }
   c.box(style=keys_row_box, fn() {
-    if turned {
-      for k in keys {
-        if u.keys_turned.contains(k.name) {
-          key(k)
-        }
-      }
-      more_key()
-    } else {
-      for k in keys {
+    for k in keys {
+      if on_face(k) {
         c.box(id=slot(k), taps=false, drop=leaves(k), fn() { key(k) }) |> ignore
       }
-      // (the ⋯, there only while a key is out)
+    }
+    // (the ⋯: on the first face there only while a key is out; turned, always, the way on or back)
+    if turned {
+      more_key()
+    } else {
       c.box(more=true, fn() { more_key() }) |> ignore
     }
   })

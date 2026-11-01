@@ -319,15 +319,19 @@ fn ScreenRig::tap_label(self : ScreenRig, label : String) -> Unit {
 
 ///|
 /// Key `label` of the keys row pressed: in the row, else (the row short of room for it) the row turned to it by its
-/// ⋯, then back.
+/// ⋯, then on round to its first face (Esc in it).
 fn ScreenRig::press_key(self : ScreenRig, label : String) -> Unit {
   if self.labelled(label) is Some(_) {
     self.tap_label(label)
     return
   }
-  self.tap_label(tr("common.more"))
+  while self.labelled(label) is None {
+    self.tap_label(tr("common.more"))
+  }
   self.tap_label(label)
-  self.tap_label(tr("common.more"))
+  while self.labelled("Esc") is None {
+    self.tap_label(tr("common.more"))
+  }
 }
 
 ///|
@@ -632,19 +636,48 @@ test "the keys row short of room on a phone: Esc and the arrows in it, the least
   assert_true(r.labelled("Esc") is Some(_))
   assert_true(r.labelled(tr("android-misc.screen.key.left")) is Some(_))
   assert_true(r.labelled(tr("android-misc.screen.key.option")) is None)
-  // turned: the keys that were out, Esc not among them
+  // turned: the keys that were out (the most used of them first), Esc not among them
   r.tap_label(tr("common.more"))
-  assert_true(r.labelled(tr("android-misc.screen.key.option")) is Some(_))
+  assert_true(r.labelled(tr("android-misc.screen.key.command")) is Some(_))
   assert_true(r.labelled("Esc") is None)
-  r.tap_label(tr("android-misc.screen.key.option"))
-  // back: ⌥ held, in the row with Esc
-  r.tap_label(tr("common.more"))
+  // ⌥ reached by turning on, held; back round: ⌥ held, in the row with Esc
+  r.press_key(tr("android-misc.screen.key.option"))
   assert_true(r.labelled("Esc") is Some(_))
   let opt = r.t.get(@ui.Role::Button, label=tr("android-misc.screen.key.option"))
   assert_eq(opt.pressed, Some(true))
   // nothing over another, nothing cut
   assert_eq(r.t.squeeze_faults(), [])
   screen_done(r.t)
+}
+
+///|
+test "the keys row turned on a narrow phone: what was out does not all fit either, so it too leaves keys for a next turn; nothing over the keyboard's button, every key reached, then back" {
+  for w in [390.0, 360.0, 320.0] {
+    let r = screen_rig(w~)
+    r.live(others=[])
+    let names = screen_row_keys().map(fn(k) { k.name })
+    let reached : Array[String] = []
+    let seen = fn() {
+      for n in names {
+        if r.labelled(n) is Some(_) && !reached.contains(n) {
+          reached.push(n)
+        }
+      }
+    }
+    seen()
+    // ⋯ pressed till the row is back where it began (Esc in it again), each face whole
+    for turns = 0; turns < names.length(); turns = turns + 1 {
+      r.tap_label(tr("common.more"))
+      assert_eq(r.t.squeeze_faults(), [])
+      seen()
+      if r.labelled("Esc") is Some(_) {
+        break
+      }
+    }
+    assert_true(r.labelled("Esc") is Some(_))
+    assert_eq(reached.length(), names.length())
+    screen_done(r.t)
+  }
 }
 
 ///|
