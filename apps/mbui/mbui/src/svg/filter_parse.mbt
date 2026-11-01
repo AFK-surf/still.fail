@@ -117,7 +117,7 @@ fn convert_filters(doc : SDoc, node : Int, state : State, object_bbox : @skia.No
   let filters : Array[Filter] = []
   let create = fn(kind : FeKind) {
     let base = match kind {
-      FeDropShadow(..) | FeGaussianBlur(..) => @skia.NonZeroRect::from_xywh(-0.5, -0.5, 2.0, 2.0).unwrap()
+      FeDropShadow(_, _, _, _, _, _, _) | FeGaussianBlur(_, _, _) => @skia.NonZeroRect::from_xywh(-0.5, -0.5, 2.0, 2.0).unwrap()
       _ => @skia.NonZeroRect::from_xywh(-0.1, -0.1, 1.2, 1.2).unwrap()
     }
     match object_bbox {
@@ -166,7 +166,8 @@ fn convert_filters(doc : SDoc, node : Int, state : State, object_bbox : @skia.No
       }
       Some(FvContrast(amount)) => {
         let a = fd(amount)
-        let i = -(0.5 * a) + 0.5
+        let half : Float = 0.5
+        let i = -(half * a) + half
         create(FeComponentTransfer(SourceGraphic, TfLinear(a, i), TfLinear(a, i), TfLinear(a, i), TfIdentity))
       }
       Some(FvGrayscale(amount)) => {

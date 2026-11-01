@@ -189,6 +189,9 @@ priv struct Group {
   mut mask : Mask?
   mut filters : Array[Filter]
   children : Array[Node]
+  /// bounding boxes set where they are not the children's (an image's slice: its viewport)
+  mut fixed_bbox : @skia.Rect?
+  mut fixed_abs_bbox : @skia.Rect?
 }
 
 ///|
@@ -205,6 +208,8 @@ fn Group::empty() -> Group {
     mask: None,
     filters: [],
     children: [],
+    fixed_bbox: None,
+    fixed_abs_bbox: None,
   }
 }
 
@@ -233,19 +238,12 @@ fn Node::deep_copy(self : Node) -> Node {
 }
 
 ///|
-priv enum ImageKind {
-  /// decoded raster pixels, premultiplied
-  Raster(@skia.Pixmap)
-  SvgImage(Tree)
-}
-
-///|
 priv struct SImage {
   id : String
   visible : Bool
   size : @skia.Size
   rendering : ImageRendering
-  kind : ImageKind
+  kind : ImageData
   abs_transform : @skia.Transform
   abs_bbox : @skia.NonZeroRect
 }
@@ -397,6 +395,9 @@ fn Group::union_of_children(self : Group, f : (Node) -> @skia.Rect?) -> @skia.Re
 
 ///|
 fn Group::bounding_box(self : Group) -> @skia.Rect? {
+  if self.fixed_bbox is Some(_) {
+    return self.fixed_bbox
+  }
   self.union_of_children(fn(c) {
     match c.bounding_box() {
       Some(r) => Some(c.to_parent_coordinates(r))
@@ -407,11 +408,17 @@ fn Group::bounding_box(self : Group) -> @skia.Rect? {
 
 ///|
 fn Group::abs_bounding_box(self : Group) -> @skia.Rect? {
+  if self.fixed_abs_bbox is Some(_) {
+    return self.fixed_abs_bbox
+  }
   self.union_of_children(fn(c) { c.abs_bounding_box() })
 }
 
 ///|
 fn Group::stroke_bounding_box(self : Group) -> @skia.Rect? {
+  if self.fixed_bbox is Some(_) {
+    return self.fixed_bbox
+  }
   self.union_of_children(fn(c) {
     match c.stroke_bounding_box() {
       Some(r) => Some(c.to_parent_coordinates(r))
@@ -422,6 +429,9 @@ fn Group::stroke_bounding_box(self : Group) -> @skia.Rect? {
 
 ///|
 fn Group::abs_stroke_bounding_box(self : Group) -> @skia.Rect? {
+  if self.fixed_abs_bbox is Some(_) {
+    return self.fixed_abs_bbox
+  }
   self.union_of_children(fn(c) { c.abs_stroke_bounding_box() })
 }
 

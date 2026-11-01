@@ -374,7 +374,7 @@ fn uses_context_bbox(group : Group) -> Bool {
       NPath(p) => fill_uses(p.fill) || stroke_uses(p.stroke)
       NImage(i) =>
         match i.kind {
-          SvgImage(t) => uses_context_bbox(t.root)
+          Nested(t) => uses_context_bbox(t.root)
           _ => false
         }
       NText(t) => text_uses_context_bbox(t)
@@ -417,7 +417,7 @@ fn node_to_user_coordinates(
     }
     NImage(i) =>
       match i.kind {
-        SvgImage(t) => update_paint_servers(t.root, cts, cbbox, None, cache)
+        Nested(t) => update_paint_servers(t.root, cts, cbbox, None, cache)
         _ => ()
       }
     NText(t) => update_text_paint_servers(t, cts, cbbox, cache)

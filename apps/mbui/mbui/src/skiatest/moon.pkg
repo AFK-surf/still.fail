@@ -1,6 +1,6 @@
 import {
   "mbui/skia",
-  "mbui/zip",
+  "mbui/pixels",
   "moonbitlang/core/encoding/utf8",
 }
 
