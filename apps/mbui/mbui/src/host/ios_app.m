@@ -2365,7 +2365,7 @@ int32_t mb_host_mods_held(void) { return 0; }
 
 // ---- files picked (pick.mbt) ----
 // Pictures (kind 1) from the system's photo picker (PHPickerViewController: no leave to ask for), any file (kind 2) from
-// its document picker (UIDocumentPickerViewController, copies of them), a photo taken now (kind 0: the camera's,
+// its document picker (UIDocumentPickerViewController, copies of them), a photo taken now (kind 3: the camera's,
 // UIImagePickerController, as Android's TakePicturePreview; none on a device without one, the simulator's). Photos as
 // the other apps read them (JPEG where the library keeps HEIC, as Android's are). The files are read off the main
 // thread; a pick ends with them, or with none (cancelled, unreadable: state -1).
@@ -2473,9 +2473,9 @@ static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
 
 int32_t mb_host_pick_start(int32_t kind) {
   kind &= 15;  // (16: a big file may be held: none is here, each read whole)
-  if (kind < 0 || kind > 2) return 0;
+  if (kind < 1 || kind > 3) return 0;
   // (no camera: the simulator's, an iPod's)
-  if (kind == 0 && !getenv("MBUI_PICK_FILES") && ![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera]) return 0;
+  if (kind == 3 && !getenv("MBUI_PICK_FILES") && ![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera]) return 0;
   if (!picks) picks = [NSMutableDictionary new];
   if (!pickers) pickers = [NSMutableDictionary new];
   int32_t pid = next_pick++;
@@ -2493,7 +2493,7 @@ int32_t mb_host_pick_start(int32_t kind) {
   pickers[@(pid)] = d;
   dispatch_async(dispatch_get_main_queue(), ^{
     UIViewController *vc;
-    if (kind == 0) {
+    if (kind == 3) {
       UIImagePickerController *p = [UIImagePickerController new];
       p.sourceType = UIImagePickerControllerSourceTypeCamera;
       p.delegate = d;
