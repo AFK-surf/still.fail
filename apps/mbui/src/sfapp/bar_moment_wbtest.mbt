@@ -271,6 +271,25 @@ test "bar: held still on a place, let go without moving: the lens while held, th
 }
 
 ///|
+/// What a finger dragged on the bar from (`x0`, `y0`) to (`x1`, `y1`) felt, the bar at rest on the chats first.
+fn bar_felt(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Array[@ui.Haptic] {
+  let (t, _) = bar_at_rest()
+  let before = t.haptics().length()
+  t.drag(x0, y0, x1, y1, steps=40)
+  t.run_for(@ui.move_most_ms)
+  let felt = t.haptics()
+  felt[before:].to_array()
+}
+
+///|
+test "bar: felt as a finger takes the ball across, a tick at each place it gets to; drawn up, a click as the panel snaps open, nothing as it is let go" {
+  let (xs, y) = bar_places_at()
+  assert_eq(bar_felt(xs[0], y, xs[2], y), [@ui.TextHandleMove, @ui.TextHandleMove])
+  assert_eq(bar_felt(xs[0], y, xs[0] + 10.0, y), [])
+  assert_eq(bar_felt(xs[0], y, xs[0], y - 64.0), [@ui.ContextClick])
+}
+
+///|
 /// The bar's panel's top in the window and its track's top in it (the bar's geometry as it was told), the panel closed
 /// or open.
 fn bar_panel_at() -> (Double, Double) {
