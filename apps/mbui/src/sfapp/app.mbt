@@ -522,20 +522,12 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
     fn() { app_is(src) },
     fn(v, state) {
       v.grow(Is(1.0)) |> ignore
-      let whole = fn(v : @view.View) {
-        @ui.old(v, fn(c) {
-          c.box(style=app_ground_style(), fn() { app_state_island(c, src, state) }) |> ignore
-        })
-        .grow(Is(1.0))
-        |> ignore
-      }
-      if state == Starting || state == Failed {
+      match state {
         // starting or failed, the splash: the window's tree's nodes (splash_tree)
-        splash_tree(v, src, state)
-      } else if state == SignedOut {
+        Starting | Failed => splash_tree(v, src, state)
         // signed out, the sign-in page: the window's tree's nodes (entry_tree.mbt)
-        signed_out_tree(v, src)
-      } else if state == SignedIn {
+        SignedOut => signed_out_tree(v, src)
+        SignedIn => {
         // where the app is, put in the history's entry now as the stack or the workspace in view changes, at that
         // change (sfbase's app_history.mbt: a person's act pushed an entry before it moved the stack, one for all the
         // steps it takes, noted once it is done: history_acts_ended); on the wide frame Home alone is passing (land)
@@ -555,7 +547,7 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         )
         // signed in, the shell it is laid out in a node picked by the window's width and what is in view
         // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; on the tape, its panels' nodes
-        // (tape_shell.mbt); else the old view whole
+        // (tape_shell.mbt); the ways in, the splash, a window of its own; nothing before the window has a width
         v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
           s.grow(Is(1.0)) |> ignore
           match shell {
@@ -565,18 +557,19 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             Landing => landing_tree(s, src)
             Reading => reading_tree(s, src)
             Lone => lone_tree(s, src)
-            Whole => whole(s)
+            // (no width yet: nothing laid out, the window's first frame giving one before anything is (Tree::frame:
+            // the room set before what follows it is worked out), the shell picked again by it)
+            Unsized => ()
           }
         })
-      } else {
-        whole(v)
+        }
       }
     },
   )
 }
 
 ///|
-/// The app in state `state` as an old view (app_ground's, app_tree's): the window's top dragging it where the window's
+/// The app in state `state` as an old view (app_ground's, where the window is no tree): the window's top dragging it where the window's
 /// buttons are in the app's top row, and the state built the old way, saying afresh whether the frame draws the ground
 /// alone and whether the first page waits (frame_bare, first_waiting).
 fn app_state_island(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
