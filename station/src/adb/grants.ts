@@ -51,20 +51,22 @@ export type GrantsDeps = {
   db: DatabaseSync;
   hub: {
     store: {
-      getSession(key: string): { archivedAt?: number | null } | null;
+      getSession(key: string): { archivedAt?: number | null; ws: string | null } | null;
       participants(session: string): Map<string, string[]>;
       latestThread(session: string): SessionThread | null;
       insertMessage(m: Record<string, unknown>): number[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;
-      subscribe(f: (c: { type: string; key: string }) => void): void;
+      subscribe(f: (c: { type: string; key: string; ws?: string | null }) => void): void;
     };
     chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: string[]): Promise<string> };
     shared(thread: number, n: number, session: string, text: string): void;
     notify(session: string, text: string): void;
   };
+  /// The station's home workspace, for sessions from before workspace membership was recorded.
+  home(): string | null;
   now(): number;
-  told?(r: PhoneRequest): void;
+  told?(r: PhoneRequest, workspace: string | null): void;
   /// A request's id (tests give their own).
   id?(): string;
 };
@@ -78,7 +80,11 @@ export class PhoneGrants {
     this.#d = d;
     d.db.exec(SCHEMA);
     d.hub.store.subscribe((c) => {
-      if ((c.type === "sessionRemoved" || c.type === "session") && this.#ended(c.key)) for (const r of this.#bySession(c.key)) this.#end(r, "对话已归档");
+      if ((c.type === "sessionRemoved" || c.type === "session") && this.#ended(c.key)) {
+        // A removed session's row is already gone; the change carries its workspace.
+        const workspace = c.type === "sessionRemoved" ? (c.ws ?? this.#d.home()) : undefined;
+        for (const r of this.#bySession(c.key)) this.#end(r, "对话已归档", workspace);
+      }
     });
   }
 
@@ -89,6 +95,11 @@ export class PhoneGrants {
   #ended(session: string): boolean {
     const row = this.#d.hub.store.getSession(session);
     return row === null || row.archivedAt != null;
+  }
+
+  /// A grant belongs to its chat's workspace, not to the chat's directory on disk.
+  #workspace(r: PhoneRequest): string | null {
+    return this.#d.hub.store.getSession(r.session)?.ws ?? this.#d.home();
   }
 
   #save(r: PhoneRequest) {
@@ -123,8 +134,9 @@ export class PhoneGrants {
   held(session: string): PhoneRequest[] {
     return this.#bySession(session).filter((r) => r.status === "granted" && this.#live(r));
   }
-  ofOwner(owner: string): PhoneRequest[] {
-    return this.#load("SELECT body FROM adb_requests WHERE owner = ? AND status IN ('pending', 'granted')", owner.toLowerCase()).filter((r) => this.#live(r));
+  ofOwner(owner: string, workspace?: string): PhoneRequest[] {
+    return this.#load("SELECT body FROM adb_requests WHERE owner = ? AND status IN ('pending', 'granted')", owner.toLowerCase())
+      .filter((r) => (workspace === undefined || this.#workspace(r) === workspace) && this.#live(r));
   }
   /// Every grant live now, of everyone (the phones lent to this station are lent for these).
   live(): PhoneRequest[] {
@@ -176,7 +188,7 @@ export class PhoneGrants {
         r.cardTs = posted;
         this.#save(r);
       }
-      this.#d.told?.(r);
+      this.#d.told?.(r, this.#workspace(r));
     }
     return r;
   }
@@ -235,9 +247,9 @@ export class PhoneGrants {
   }
 
   /// The owner (`email`) decides request `id`: `scope` grants it, null refuses it. Why it is refused, or null.
-  decide(email: string, id: string, scope: Scope | null): string | null {
+  decide(email: string, id: string, scope: Scope | null, workspace: string): string | null {
     const r = this.get(id);
-    if (r === null) return "no such request";
+    if (r === null || this.#workspace(r) !== workspace) return "no such request";
     if (r.owner !== email.toLowerCase()) return "only the person the chat's agent works for decides its requests";
     if (r.status !== "pending") return `the request is ${r.status} already`;
     if (scope !== null && !SCOPES.includes(scope)) return "scope: hour or chat";
@@ -253,22 +265,22 @@ export class PhoneGrants {
   }
 
   /// The owner takes a grant (or a request) of theirs back.
-  revoke(email: string, id: string): string | null {
+  revoke(email: string, id: string, workspace: string): string | null {
     const r = this.get(id);
-    if (r === null) return "no such request";
+    if (r === null || this.#workspace(r) !== workspace) return "no such request";
     if (r.owner !== email.toLowerCase()) return "only its owner takes a grant back";
     if (r.status !== "granted" && r.status !== "pending") return `the request is ${r.status} already`;
     this.#end(r, "已收回");
     return null;
   }
 
-  #end(r: PhoneRequest, why: string) {
+  #end(r: PhoneRequest, why: string, workspace?: string | null) {
     if (r.status !== "granted" && r.status !== "pending") return;
     r.why = why;
-    this.#settle(r, r.status === "pending" ? "denied" : "ended");
+    this.#settle(r, r.status === "pending" ? "denied" : "ended", workspace);
   }
 
-  #settle(r: PhoneRequest, status: Status) {
+  #settle(r: PhoneRequest, status: Status, workspace?: string | null) {
     r.status = status;
     this.#save(r);
     if (r.thread !== undefined && r.cardTs !== undefined) {
@@ -282,7 +294,7 @@ export class PhoneGrants {
         // The session is gone: nobody to tell.
       }
     }
-    this.#d.told?.(r);
+    this.#d.told?.(r, workspace === undefined ? this.#workspace(r) : workspace);
   }
 }
 

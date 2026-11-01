@@ -23,10 +23,9 @@ export const AdbLive = Layer.effectDiscard(
     // the grants' adb servers, a grant's server stopped as it ends.
     let shares: Shares | null = null;
     const grants = new PhoneGrants({
-      db: store.db, hub: hub as any, now: () => wall.now(),
-      told: (r: PhoneRequest) => {
-        const workspace = store.getSession(r.session)?.workspace ?? plane.state.home() ?? "";
-        events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
+      db: store.db, hub: hub as any, home: () => plane.state.home(), now: () => wall.now(),
+      told: (r: PhoneRequest, workspace) => {
+        if (workspace !== null) events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
         if (r.status === "denied" || r.status === "ended") void servers.stop(r.id);
         shares?.regrant(r.owner);
         // (granted while the phone is offered here already: its card says at once how it is held)
@@ -64,14 +63,14 @@ export const AdbLive = Layer.effectDiscard(
           await stream.finish();
         };
         const email = viewer.email.toLowerCase();
-        if (ask.op === "grants") return reply(200, { grants: grants.ofOwner(email), lasts: grants.lastsOf(email) });
+        if (ask.op === "grants") return reply(200, { grants: grants.ofOwner(email, viewer.workspace), lasts: grants.lastsOf(email) });
         if (ask.op === "lasts") {
           const why = grants.setLasts(email, ask.lasts, ask.at);
           return why === null ? reply(200, { lasts: grants.lastsOf(email) }) : reply(422, { message: why });
         }
         const id = typeof ask.request === "string" ? ask.request : "";
         const scope = ask.scope === "hour" || ask.scope === "chat" ? (ask.scope as Scope) : null;
-        const why = ask.op === "decide" ? grants.decide(email, id, scope) : grants.revoke(email, id);
+        const why = ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace) : grants.revoke(email, id, viewer.workspace);
         return why === null ? reply(200, { request: grants.get(id) }) : reply(422, { message: why });
       }
       return answerAdb(lent, conn, viewer, head, stream, reader);
