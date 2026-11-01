@@ -21,6 +21,15 @@ test "a profile's page, wide: who it is and whether it works, then its allowance
 }
 
 ///|
+test "a subscription's tier is shown on its page at every width" {
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~)
+    assert_true(t.find("订阅账号 · Ultra") is Some(_), msg="tier at width \{w} platform \{platform}")
+  }
+}
+
+///|
 test "a key's profile's page, wide: its key masked, a new one asked for from its row" {
   let t = setting_tester(Profile("ws1/st1", "k2"), 1280.0)
   assert_true(t.find("备用 key") is Some(_))

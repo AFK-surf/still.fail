@@ -2,6 +2,14 @@
 // over the whole app and the settings' fixture (a profile's own page: src/sfpages accounts_wbtest.mbt).
 
 ///|
+test "wide: the profile list shows a subscription's tier" {
+  let t = wide_tester([], mode="settings")
+  app.nav.replace(Place("profiles"))
+  t.draw()
+  assert_true(t.find("Ultra") is Some(_), msg="the subscription's tier")
+}
+
+///|
 /// The desk's page wheeled down until `words` shows on it (above the window's foot).
 fn desk_shown(t : @ui.Tester, words : String) -> Unit {
   t.move(800.0, 400.0)

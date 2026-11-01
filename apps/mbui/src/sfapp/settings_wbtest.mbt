@@ -319,6 +319,8 @@ test "profiles, connects, the vault: their lists" {
   let t = settings_tester("profiles")
   assert_true(t.find("Claude 主账号") is Some(_))
   assert_true(t.find("Claude 订阅") is Some(_))
+  assert_true(t.find("Ultra") is Some(_), msg="the subscription's tier in its row")
+  assert_true(t.find("Pro 200") is Some(_), msg="the Codex subscription's tier in its row")
   // its allowance a line of its own under its words, at the row's start (Profiles.kt)
   let (nx, ny) = t.find("Claude 主账号").unwrap()
   let (qx, qy) = t.find("62%").unwrap()
@@ -337,6 +339,14 @@ test "profiles, connects, the vault: their lists" {
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t3.run_for(bar.rest() - t3.time())
   t3.assert_idle()
+}
+
+///|
+test "an account on several stations shows its subscription tier" {
+  let t = settings_tester("profiles", shows="settings-profile-hosts")
+  t.tap_text("Claude 主账号")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("订阅账号 · Ultra") is Some(_))
 }
 
 ///|
@@ -812,8 +822,8 @@ test "a profile's page: who it is and whether it works, then its allowance, what
   let t = profile_whole("profile:ws1/st1#cc")
   let y = fn(words : String) { t.find(words).unwrap().1 }
   // its head is its title: its name, what it is, its last check and when (no title over it)
-  assert_true(y("订阅账号 · Studio 可用") > y("Claude 主账号"))
-  assert_true(y("订阅有效") > y("订阅账号 · Studio 可用"))
+  assert_true(y("订阅账号 · Ultra · Studio 可用") > y("Claude 主账号"))
+  assert_true(y("订阅有效") > y("订阅账号 · Ultra · Studio 可用"))
   assert_true(t.find("5 分钟前检查") is Some(_))
   // then its parts by what it is come to for: how much is left and what it spent, who uses it, how it runs, whom it is
   // shared with, the account itself

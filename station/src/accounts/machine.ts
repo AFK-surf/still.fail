@@ -138,10 +138,23 @@ async function claudeLogin(env: Env, lang: Lang): Promise<MachineLogin> {
   }
   if (status?.loggedIn !== true) return login(rt, true, false, tr(lang, "station.machine.signedOut", { name }));
   const email = typeof status.email === "string" ? status.email : null;
-  const plan = typeof status.subscriptionType === "string" ? status.subscriptionType : null;
-  const usable = (await readClaudeCredentials(env as Record<string, string | undefined>)) !== undefined;
+  const credentials = await readClaudeCredentials(env as Record<string, string | undefined>);
+  const plan = claudePlan(status.subscriptionType ?? credentials?.subscriptionType, status.rateLimitTier ?? credentials?.rateLimitTier);
+  const usable = credentials !== undefined;
   const text = said(name, email, plan, lang);
   return { runtime: rt, installed: true, loggedIn: true, email, plan, usable, quota: null, text: usable ? text : tr(lang, "station.machine.inKeychainUnreadable", { text }) };
+}
+
+/// Claude's Max 20x subscription is now called Ultra. The subscription family alone says only `max`, so do not
+/// call it Ultra unless the login also identifies the former 20x tier (or says `ultra` itself).
+export function claudePlan(subscription: unknown, tier: unknown): string | null {
+  if (typeof subscription !== "string" || subscription.trim() === "") return null;
+  const plan = subscription.trim();
+  const family = plan.toLowerCase();
+  const rate = typeof tier === "string" ? tier.trim().toLowerCase() : "";
+  const oldUltra = ["default_claude_max_20x", "claude_max_20x", "max_20x"];
+  if (oldUltra.includes(family) || (family === "max" && oldUltra.includes(rate))) return "ultra";
+  return plan;
 }
 
 async function codexLogin(env: Env, lang: Lang): Promise<MachineLogin> {

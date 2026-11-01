@@ -489,6 +489,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
               [
                 text(p, "email"),
                 text(p, "kindText"),
+                text(p, "planText"),
               ],
               " · ",
             ),

@@ -2488,6 +2488,32 @@ test("a_profile_says_what_it_is_who_signs_it_in_and_its_last_check_in_the_cores_
   assert.equal(en.checkLine, "3 models");
 });
 
+test("subscription tiers are presented from the check or allowance, and never guessed", () => {
+  const checked = presentProfile(profile("sub", { name: "a@example.com", check: { state: "ok", detail: "已登录，a@example.com，max", models: [], plan: "max" } }));
+  assert.equal(checked.planText, "Max");
+  assert.equal(checked.checkLine, "已登录");
+  const machineUltra = presentProfile(profile("machine", { runtime: "claude", check: { state: "ok", detail: "已登录，max", models: [], plan: "ultra" } }));
+  assert.deepEqual([machineUltra.planText, machineUltra.checkLine], ["Ultra", "已登录"]);
+  const quota = presentProfile(profile("sub", { runtime: "grok", check: { state: "ok", detail: "已登录", models: [] }, quota: { state: "ok", windows: [], plan: "SuperGrok Heavy" } }));
+  assert.equal(quota.planText, "SuperGrok Heavy");
+  const noWindows = presentProfile(profile("sub", { check: { state: "ok", detail: "", models: [] }, quota: { state: "unavailable", windows: [], plan: "pro" } }));
+  assert.equal(noWindows.planText, "Pro");
+  const shared = presentProfile(profile("sub", { share: { role: "user" }, check: { state: "ok", plan: "ultra", detail: "", models: [] } }));
+  assert.equal(shared.planText, "Ultra");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "promax", detail: "", models: [] } })).planText, "Pro Max");
+  for (const [plan, name] of [["prolite", "Pro 100"], ["pro", "Pro 200"], ["promax", "Pro 500"]]) {
+    assert.equal(presentProfile(profile("codex", { runtime: "codex", runtimes: ["codex"], check: { state: "ok", plan, detail: "", models: [] } })).planText, name);
+  }
+  assert.equal(presentProfile(profile("claude", { check: { state: "ok", plan: "pro", detail: "", models: [] } })).planText, "Pro");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "unknown", detail: "", models: [] } })).planText, "");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "unknown", detail: "", models: [] }, quota: { state: "ok", windows: [], plan: "pro" } })).planText, "Pro");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "plus", checkedAt: 10, detail: "", models: [] }, quota: { state: "ok", windows: [], plan: "pro", checkedAt: 20 } })).planText, "Pro");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "pro", checkedAt: 20, detail: "", models: [] }, quota: { state: "ok", windows: [], plan: "plus", checkedAt: 10 } })).planText, "Pro");
+  assert.equal(presentProfile(profile("old", { check: { state: "ok", detail: "已登录", models: [] } })).planText, "");
+  assert.equal(presentProfile(profile("key", { access: { kind: "api-provider", key: "" }, check: { state: "ok", plan: "pro", detail: "", models: [] } })).planText, "");
+  assert.equal(presentProfile(profile("out", { check: { state: "login", detail: "未登录", models: [] }, quota: { state: "ok", windows: [], plan: "pro" } })).planText, "");
+});
+
 test("still.fail's notice is shown as a line: a failure's mark taken off, no closing 。, a profile's link after its ：", () => {
   assert.deepEqual(noticeOf("⚠️ 运行失败：额度用完了。", false), { failed: true, words: "运行失败：额度用完了" });
   assert.deepEqual(noticeOf("已切换模型", false), { failed: false, words: "已切换模型" });

@@ -5,10 +5,11 @@ import { test } from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkProfile, URLS } from "../src/accounts/profiles.ts";
+import { claudePlan } from "../src/accounts/machine.ts";
 import { RenewRefused } from "../src/accounts/console.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { byDecisionPriority, discover, resolvedModel } from "../src/sessions/decision.ts";
-import { machine, provider, sameAs, temp } from "./accounts-fakes.ts";
+import { idToken, machine, provider, sameAs, temp } from "./accounts-fakes.ts";
 
 const base = { runtime: "claude" as const, key: "k", via: {}, home: "/nonexistent-check-test", env: {}, machine: false, lang: "zh" as const };
 
@@ -57,6 +58,7 @@ test("a subscription is checked by its runtime's own status command, in the prof
   const urls = { ...URLS, anthropic: p.base };
   const claude = await checkProfile({ ...base, kind: "subscription", home, env: m.env, urls });
   assert.deepEqual([claude.state, claude.detail, claude.models], ["ok", "已登录，a@x.com，max", ["claude-opus-5-5"]]);
+  assert.equal(claude.plan, "max");
   const codex = await checkProfile({ ...base, runtime: "codex", kind: "subscription", home: join(m.home, "cx"), env: m.env, urls });
   assert.deepEqual([codex.state, codex.detail], ["login", "未登录"]);
   // A machine profile is handed the machine's token, and never looks in its home's file.
@@ -65,6 +67,43 @@ test("a subscription is checked by its runtime's own status command, in the prof
   await p.close();
   const env = await checkProfile({ ...base, kind: "env" });
   assert.equal(env.state, "unknown");
+});
+
+test("a signed-in Codex profile reports the tier in its own login, and no tier for an absent or invalid claim", async () => {
+  const m = machine({ codex: `echo 'Logged in using ChatGPT'` });
+  const home = join(m.home, "cx");
+  mkdirSync(home);
+  const auth = (claims: unknown) => writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { id_token: idToken(claims) } }));
+  const check = () => checkProfile({ ...base, runtime: "codex", kind: "subscription", home, env: m.env });
+  auth({ "https://api.openai.com/auth": { chatgpt_plan_type: "pro" } });
+  assert.equal((await check()).plan, "pro");
+  auth({ "https://api.openai.com/auth": { chatgpt_plan_type: "ultra" } });
+  assert.equal((await check()).plan, "ultra");
+  auth({ "https://api.openai.com/auth": { chatgpt_plan_type: 42 } });
+  assert.equal((await check()).plan, undefined);
+  writeFileSync(join(home, "auth.json"), "invalid");
+  assert.equal((await check()).plan, undefined);
+});
+
+test("Claude's former Max 20x is Ultra only when its login identifies that tier", async () => {
+  const m = machine({ claude: `echo '{"loggedIn":true,"subscriptionType":"max"}'` });
+  const home = join(m.home, "profile");
+  mkdirSync(home);
+  const credentials = (tier?: string) => writeFileSync(join(home, ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "tok", expiresAt: Date.now() + 3_600_000, subscriptionType: "max", rateLimitTier: tier } }));
+  const p = await provider(() => ({ status: 200, body: { data: [] } }));
+  const check = () => checkProfile({ ...base, kind: "subscription", home, env: m.env, urls: { ...URLS, anthropic: p.base } });
+  credentials("default_claude_max_20x");
+  const ultra = await check();
+  assert.deepEqual([ultra.plan, ultra.detail], ["ultra", "已登录，ultra"]);
+  credentials("default_claude_max_5x");
+  assert.equal((await check()).plan, "max");
+  credentials();
+  assert.equal((await check()).plan, "max");
+  assert.equal(claudePlan("ultra", undefined), "ultra");
+  assert.equal(claudePlan("max_20x", undefined), "ultra");
+  assert.equal(claudePlan("pro", "default_claude_max_20x"), "pro");
+  assert.equal(claudePlan(undefined, "default_claude_max_20x"), null);
+  await p.close();
 });
 
 test("a Claude login kept but no longer renewable is one to sign in again; one not renewed for now is tried as it is", async () => {

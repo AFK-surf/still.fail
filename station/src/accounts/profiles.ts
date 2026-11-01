@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Env } from "../agents/machine-logins.ts";
-import { linkCodexAuth } from "../agents/machine-logins.ts";
+import { linkCodexAuth, parseClaudeCredentials } from "../agents/machine-logins.ts";
 import { fileCredentials, takeBack } from "../agents/no-keychain.ts";
 import { type AccessKind, OPENCODE, profileRuntimes, type Runtime, type Via } from "../agents/profiles.ts";
 import { type Endpoints, endpoints, find, type Source } from "../agents/providers.ts";
@@ -18,12 +18,15 @@ import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./c
 import { devinCatalog, devinData } from "../agents/devin.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
+import { claudePlan, codexClaims } from "./machine.ts";
 
 type Json = any;
 
 /// Whether a profile works, and what models it offers (profiles.rs ProfileCheck, the same JSON).
 export type ProfileCheck = {
   decision?: Capability;
+  /// The subscription tier as reported by its login; absent when the runtime does not say.
+  plan?: string;
   /// runtime → model → reasoning levels, as the runtime reports them.
   modelEfforts?: Record<string, Record<string, string[]>>;
   /// ok: usable; login: needs a subscription sign-in; failed: the key or login was rejected; unknown.
@@ -46,6 +49,8 @@ export type ProfileQuota = {
   windows: QuotaWindow[];
   credits?: QuotaCredits;
   resetCount?: number;
+  /// The subscription tier, when the provider reports it with the allowance.
+  plan?: string;
   detail: string | null;
   checkedAt: number;
   /// Asked with a login that turned out to be over (oauth.ts RenewRefused): its profile is checked again. Not kept.
@@ -239,8 +244,17 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     // What the subscription runs, as Anthropic lists it for the account's own token.
     const token = machineToken ?? (await profileToken(o, urls, lang));
     const models = token === undefined ? null : await claudeModels(urls, token);
-    const detail = [t("station.profile.signedIn"), typeof status.email === "string" ? status.email : "", typeof status.subscriptionType === "string" ? status.subscriptionType : ""].filter((s) => s !== "");
-    return check("ok", detail.join(t("station.list.comma")), models);
+    // For a profile in its own home Claude keeps the more specific tier beside its token. Read only that metadata
+    // into the check; the token itself stays in the home. A machine login's keychain is handled by MachineLogins.
+    let credentials: ReturnType<typeof parseClaudeCredentials> = undefined;
+    if (!o.machine) {
+      try { credentials = parseClaudeCredentials(readFileSync(join(o.home, ".credentials.json"), "utf8")); } catch {}
+    }
+    const plan = claudePlan(status.subscriptionType ?? credentials?.subscriptionType, status.rateLimitTier ?? credentials?.rateLimitTier);
+    const detail = [t("station.profile.signedIn"), typeof status.email === "string" ? status.email : "", plan ?? ""].filter((s) => s !== "");
+    const result = check("ok", detail.join(t("station.list.comma")), models);
+    if (plan !== null) result.plan = plan;
+    return result;
   }
   if (o.kind === "subscription" && o.runtime === "codex") {
     if (o.machine) linkCodexAuth(o.home, o.env);
@@ -248,7 +262,10 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     const text = `${output.stdout}${output.stderr}`.trim();
     if (text.toLowerCase().includes("not logged in")) return check("login", t("station.profile.signedOut"), null);
     if (output.code !== 0) throw new Error(`Command failed: codex login status\n${text}`);
-    return check("ok", text.split("\n")[0] || t("station.profile.signedIn"), null);
+    const result = check("ok", text.split("\n")[0] || t("station.profile.signedIn"), null);
+    const plan = codexClaims(o.home)?.["https://api.openai.com/auth"]?.chatgpt_plan_type;
+    if (typeof plan === "string" && plan.trim() !== "") result.plan = plan.trim();
+    return result;
   }
   if (o.kind === "subscription" && o.runtime === "grok") {
     // `grok models` says whether it is signed in, and the account's models (* the default, - the rest).

@@ -543,6 +543,7 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
     "loginCommand": "",
     "checkText": str(check),
     "checkTone": str(tone),
+    "planText": str(if id == "cc" { "Ultra" } else if id == "cx" { "Pro 200" } else { "" }),
     // (the core's words of it: present.ts profile)
     "signInProvider": str(if group == "chatgpt" { "ChatGPT" } else { "Claude" }),
     "group": str(group),
