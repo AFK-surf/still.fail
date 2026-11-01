@@ -224,15 +224,20 @@ pub fn model_triple(
       if account is Some(Object(_)) {
         // (each of its pieces in the control's row: its name the first to go, then the rest of it)
         let profile = field(account, "profile")
-        c.box(style=triple_part, drop=triple_drop_account, fn() {
-          c.text("·", style=muted) |> ignore
-          if profile is Some(Object(_)) {
+        let marked = profile is Some(Object(_))
+        // (the dot before it goes with what follows it: its mark where it has one, else its name, never left alone)
+        if marked {
+          c.box(style=triple_part, drop=triple_drop_account, fn() {
+            c.text("·", style=muted) |> ignore
             @sf.maker_mark(c, text(profile, "mark"), runtime, 14.0) |> ignore
-          }
-        })
-        |> ignore
+          })
+          |> ignore
+        }
         let level = text(account, "level")
-        c.box(drop=triple_drop_name, fn() {
+        c.box(style=if marked { triple_alone } else { triple_part }, drop=triple_drop_name, fn() {
+          if !marked {
+            c.text("·", style=muted) |> ignore
+          }
           c.text(
             text(account, "text"),
             style=if level == "amber" {
@@ -1053,6 +1058,11 @@ let confirm_w : Double = 420.0
 /// A part of the control's line after the model (triplePart): what it says and the dot before it, left out whole.
 // kept across runs: a value (no field of it changes)
 let triple_part : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+/// Who runs it by name after its mark (in the mark's part, triple_part's gap before it).
+// kept across runs: a value (no field of it changes)
+let triple_alone : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// The order the control's line leaves its parts out in, short of room (ModelTriple.tsx DROPS): who runs it by name

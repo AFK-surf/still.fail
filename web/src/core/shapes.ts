@@ -5165,6 +5165,15 @@ export interface NetMeasured {
 	moved?: string;
 }
 
+/** A folder of a preset as its mark shows it: its picture, else its initial on its colour. */
+export interface PresetMark {
+	name: string;
+	/** Its repository's address (its colour where it has no picture); "" for a folder of none. */
+	repo: string;
+	/** Its own picture, a data URL. */
+	icon?: string;
+}
+
 /** A preset a new chat can be opened with, as its page lists them. */
 export interface NewChatPreset {
 	id: string;
@@ -5174,6 +5183,7 @@ export interface NewChatPreset {
 	/** The station it is of (its address): its folders are there. */
 	station: string;
 	stationName: string;
+	marks?: PresetMark[];
 }
 
 /** Something wrong with a station, in words (StationView `problems`). */
@@ -5591,6 +5601,8 @@ export interface NewChatView {
 	presetName?: string;
 	/** The workspace's presets, every station's up now, to pick from (a station's none until they are read). */
 	presets?: NewChatPreset[];
+	/** The picked preset's first folders' marks, its control's look. */
+	presetMarks?: PresetMark[];
 }
 
 /**

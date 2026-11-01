@@ -263,6 +263,34 @@ fn picker_open(src : Source, ws : String, station : String) -> Unit {
 }
 
 ///|
+/// The picker put inside something else (a preset's dialog: sfbase folder_browse_*): at `station`'s home.
+pub fn folder_browse_open(station : String) -> Unit {
+  picker_close()
+  dialogs.picking.set(station)
+}
+
+///|
+/// What it holds, drawn where it is shown, each frame.
+pub fn folder_browse_body(c : @ui.Ctx, src : Source, station : String) -> Unit {
+  picker(c, src, station)
+}
+
+///|
+/// The folder it shows: "" while it is read, or one the station may not read.
+pub fn folder_browse_here() -> String {
+  match dialogs.value.get() {
+    Some(v) if !dialogs.denied.get() => text(Some(v), "path")
+    _ => ""
+  }
+}
+
+///|
+/// Let go (as it closes).
+pub fn folder_browse_close() -> Unit {
+  picker_close()
+}
+
+///|
 /// What the picker on `station` holds, each frame while it is open.
 fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
   // (closed: what it held last stays drawn as it goes, nothing asked)

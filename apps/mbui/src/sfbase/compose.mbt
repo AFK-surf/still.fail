@@ -411,6 +411,25 @@ pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
 pub let station_files_asked : Ref[(Source, String) -> Unit] = Ref(fn(_, _) {  })
 
 ///|
+/// The files' page's folder picker (sfdesk drive_dialogs.mbt) drawn inside something else (a preset's dialog, in
+/// place of what it held): put at a station's home (its address), drawn each frame where it is shown, the folder it
+/// shows ("" while it is read, or one the station may not read), let go.
+// kept across runs: what the app says once as it starts
+pub let folder_browse_open : Ref[(String) -> Unit] = Ref(fn(_) {  })
+
+///|
+// kept across runs: what the app says once as it starts
+pub let folder_browse_body : Ref[(@ui.Ctx, Source, String) -> Unit] = Ref(fn(_, _, _) {  })
+
+///|
+// kept across runs: what the app says once as it starts
+pub let folder_browse_here : Ref[() -> String] = Ref(fn() { "" })
+
+///|
+// kept across runs: what the app says once as it starts
+pub let folder_browse_close : Ref[() -> Unit] = Ref(fn() {  })
+
+///|
 /// Chat `r`'s services and jobs put up (an agent's card's jobs pressed, sfpages): the screen's (sfapp's: the desktop's
 /// popover, the phone's panel).
 // kept across runs: what the app says once as it starts

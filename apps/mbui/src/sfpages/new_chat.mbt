@@ -369,11 +369,8 @@ fn new_controls(
   going : Bool,
 ) -> Unit {
   let address = text(station, "station")
-  // (what it is for first, then where it runs and on what: the preset's in the composer's row, laid out either way;
-  // over the composer narrow, where it runs and what on are what is chosen most and have its room: new_composer_place)
-  if !floating {
-    new_preset_control(c, src, w, v, station, floating, going)
-  }
+  // (what it is for first, then where it runs and on what; short of room, each gives up its words, not its place)
+  new_preset_control(c, src, w, v, station, floating, going)
   if text(station, "name") != "" {
     new_station_control(c, src, w, v, station, floating, going)
   }
@@ -649,13 +646,7 @@ fn new_composer_place(
         draft: "new:" + w.id,
         session: "",
         placeholder: @sf.t("web-main.newChat.placeholder"),
-        toolbar: if held {
-          None
-        } else if wide {
-          Some(fn() { new_tools(c, src, w, v, station) })
-        } else {
-          Some(fn() { new_preset_control(c, src, w, v, station, false, false) })
-        },
+        toolbar: if wide && !held { Some(fn() { new_tools(c, src, w, v, station) }) } else { None },
         note: [],
         tail: None,
         roomy: wide,

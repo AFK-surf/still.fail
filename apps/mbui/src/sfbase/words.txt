@@ -2034,6 +2034,8 @@ web-main.preset.namePlaceholder
 web-main.preset.dirsHint
 web-main.preset.remove
 web-main.preset.add
-web-main.preset.typePath
-web-main.preset.addShort
 web-main.preset.instructionsPlaceholder
+web-main.preset.browse
+web-main.preset.pickFolder
+web-main.preset.useFolder
+web-main.preset.search

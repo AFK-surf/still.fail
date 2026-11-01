@@ -637,7 +637,7 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
   fix_tick(f)
   // (the same answer while the made-up core is as it was, as the core's own: a subscription's value kept, not worked
   // out again each time it is read)
-  let version = f.version + @settings.fixture_version() + fix_browse.changes
+  let version = f.version + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val
   let key = name + "\u{1}" + f.mode + "\u{1}" + Json::object(params).stringify()
   match fixture_answers.get(key) {
     Some(t) if t.version == version => return t
@@ -884,7 +884,12 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" =>
       @settings.fixture_topic(f.mode, name, params)
     "pick" if params.get("of") is Some(String(o)) && o.has_prefix("session:") => Some(fix_session_pick())
-    "presets" => Some(fix_presets_of(text(Some(Json::object(params)), "station")))
+    "presets" =>
+      if new_fix.presets_late && !text(Some(Json::object(params)), "station").has_suffix("st2") {
+        None
+      } else {
+        Some(fix_presets_of(text(Some(Json::object(params)), "station")))
+      }
     "newChat" | "pick" => fixture_new_topic(f, name)
     _ =>
       match decide_fixture_topic(f, name, params) {

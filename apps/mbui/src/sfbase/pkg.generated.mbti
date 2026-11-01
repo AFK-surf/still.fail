@@ -603,6 +603,14 @@ pub fn fly_share(Bool) -> Double
 
 pub fn focus_chat(ChatRef, ChatView, Bool?) -> Json
 
+pub let folder_browse_body : @ref.Ref[(@ui.Ctx, Source, String) -> Unit]
+
+pub let folder_browse_close : @ref.Ref[() -> Unit]
+
+pub let folder_browse_here : @ref.Ref[() -> String]
+
+pub let folder_browse_open : @ref.Ref[(String) -> Unit]
+
 pub let follow_margin : Double
 
 pub fn follow_newest(@ui.Ctx, Reading, Array[Entry], Array[String], String, top~ : Double) -> Unit

@@ -28,6 +28,8 @@ pub(all) struct NewFix {
   /// The preset a new chat is opened with ("" for none), and the station's presets (fix_presets)
   mut preset : String
   presets : Array[Json]
+  /// The first station's presets not said yet (their topic as a station still to answer has it)
+  mut presets_late : Bool
 }
 
 ///|
@@ -45,6 +47,7 @@ pub let new_fix : NewFix = {
   crowded: false,
   tall: false,
   preset: "",
+  presets_late: false,
   presets: [fix_preset_design(), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")],
 }
 
@@ -69,6 +72,19 @@ fn fix_repo(name : String) -> String {
     "mbui" => "github.com/AFK-surf/mbui"
     _ => "github.com/zzj3720/" + name
   }
+}
+
+///|
+/// How many times the first station's presets were said late (fix_presets_say): a version of the made-up core's.
+// kept across runs: put back by fixture_reset
+pub let fix_presets_said : Ref[Int] = Ref(0)
+
+///|
+/// The first station's presets said, late (newchat's `presets_late` let go), as a station answers once it can.
+pub fn fix_presets_say() -> Unit {
+  new_fix.presets_late = false
+  fix_presets_said.val += 1
+  @settings.fixture_changed()
 }
 
 ///|
@@ -572,6 +588,11 @@ fn fix_new_chat_of(f : Fixture) -> Json {
         }
       }),
     ),
+    "presetMarks": if n.preset == "" {
+      Json::array([])
+    } else {
+      [{ "name": "still.fail", "repo": "github.com/AFK-surf/still.fail", "icon": Json::string(fix_sf_icon) }, { "name": "still.fail 设计稿", "repo": "" }]
+    },
     "presetStation": Json::string(if n.preset == "" { "" } else { text(Some(fix_station(n.station)), "station") }),
     "presetName": Json::string(
       match n.presets.iter().find_first(fn(p) { field(Some(p), "id") == Some(Json::string(n.preset)) }) {

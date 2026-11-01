@@ -116,6 +116,14 @@ pub fn files_tab(@ui.Ctx, @sfbase.Source, String, String, String, only_station? 
 
 pub fn folder_actions(@ui.Ctx, @sfbase.Source, FolderOf, style? : @ui.Style) -> Unit
 
+pub fn folder_browse_body(@ui.Ctx, @sfbase.Source, String) -> Unit
+
+pub fn folder_browse_close() -> Unit
+
+pub fn folder_browse_here() -> String
+
+pub fn folder_browse_open(String) -> Unit
+
 pub fn folder_empty(@ui.Ctx, String, (() -> Unit)?) -> Unit
 
 pub fn folder_name(@sfbase.DvStation, @sfbase.DriveAt) -> String
