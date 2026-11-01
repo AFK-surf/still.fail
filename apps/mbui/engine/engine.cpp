@@ -35,6 +35,7 @@
 #include <jsi/jsi.h>
 
 #include "engine.h"
+#include "ready_queue.h"
 
 namespace jsi = facebook::jsi;
 
@@ -264,7 +265,7 @@ class Engine {
   void post(Task task) {
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      tasks_.push_back(std::move(task));
+      queue_.post(std::move(task), timerMs());
     }
     wake_.notify_one();
   }
@@ -366,15 +367,13 @@ class Engine {
     });
     fn("setTimer", 2, [this](jsi::Runtime&, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
       uint64_t id = uint64_t(a[0].asNumber());
-      double due = timerMs() + a[1].asNumber();
       std::lock_guard<std::mutex> lock(mutex_);
-      timers_[id] = due;
-      dues_.emplace(due, id);
+      queue_.setTimer(id, timerMs() + a[1].asNumber());
       return jsi::Value::undefined();
     });
     fn("clearTimer", 1, [this](jsi::Runtime&, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
       std::lock_guard<std::mutex> lock(mutex_);
-      timers_.erase(uint64_t(a[0].asNumber()));
+      queue_.clearTimer(uint64_t(a[0].asNumber()));
       return jsi::Value::undefined();
     });
     fn("log", 2, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
@@ -440,29 +439,9 @@ class Engine {
         std::unique_lock<std::mutex> lock(mutex_);
         for (;;) {
           if (stopping_) break;
-          if (!tasks_.empty()) {
-            task = std::move(tasks_.front());
-            tasks_.pop_front();
-            break;
-          }
-          // The next timer still set (one cleared, or set again later, is passed over).
-          while (!dues_.empty()) {
-            auto first = dues_.begin();
-            auto it = timers_.find(first->second);
-            if (it == timers_.end() || it->second != first->first) {
-              dues_.erase(first);
-              continue;
-            }
-            break;
-          }
-          if (!dues_.empty()) {
-            double left = dues_.begin()->first - timerMs();
-            if (left <= 0) {
-              timer = dues_.begin()->second;
-              timers_.erase(timer);
-              dues_.erase(dues_.begin());
-              break;
-            }
+          double left;
+          if (queue_.take(timerMs(), task, timer, left)) break;
+          if (left >= 0) {
             // (waits on the steady clock: a sleep in between is caught up on as soon as it wakes)
             wake_.wait_for(lock, std::chrono::microseconds(int64_t(left * 1000)));
           } else {
@@ -480,7 +459,10 @@ class Engine {
         fatal(e.what());
       }
     }
-    tasks_.clear();
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      queue_.clear();
+    }
     rt.reset();
   }
 
@@ -501,9 +483,7 @@ class Engine {
 #endif
   std::mutex mutex_;
   std::condition_variable wake_;
-  std::deque<Task> tasks_;
-  std::unordered_map<uint64_t, double> timers_;
-  std::multimap<double, uint64_t> dues_;
+  ReadyQueue<Task> queue_;
   bool stopping_ = false;
   bool dead_ = false;
   double client_ = 0;
