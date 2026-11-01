@@ -523,6 +523,8 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   before["files"] = Json::array(files)
   heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
   t.frame()
+  // Compare the spinner on the visible tile with the face sent from it, after the composer's opening has shown it.
+  t.run_for(@ui.move_most_ms)
   let lines = t.drawn_lines()
   t.enter()
   t.frame()

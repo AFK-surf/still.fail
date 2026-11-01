@@ -642,6 +642,36 @@ test "a list's rows alike at its start and its end are none of its change: only 
 }
 
 ///|
+test "an action can take a measured node from where it was drawn with its parent" {
+  let down = Ref::new(10.0)
+  let show = Ref::new(true)
+  let t = @ui.Tester::new(fn(c) {
+    let parent = c.box(w=Px(100.0), h=Px(100.0), fn() {
+      if show.val {
+        let child = c.box(w=Px(20.0), h=Px(10.0), fn() {  })
+        c.look(child, @ui.look(dx=3.0, dy=5.0, alpha=0.5))
+        @motion.measure_drawn(c, child, "shown-child")
+      }
+    })
+    c.look(parent, @ui.look(dx=7.0, dy=down.val, alpha=0.7))
+    c.cut_to_top(parent, 8.0, soft=2.0)
+  })
+  assert_eq(@motion.measured_rect(t.ctx(), "shown-child"), Some((0.0, 0.0, 20.0, 10.0)))
+  assert_eq(@motion.measured_drawn_rect(t.ctx(), "shown-child"), Some((10.0, 15.0, 20.0, 10.0)))
+  let shown = @motion.measured_drawn_state(t.ctx(), "shown-child").unwrap()
+  assert_eq(shown.clip.3, 18.0)
+  assert_true((shown.alpha - 0.35).abs() < 0.001)
+  assert_eq(shown.soft, (0.0, 0.0, 0.0, 2.0))
+  down.val = 20.0
+  t.frame()
+  assert_eq(@motion.measured_drawn_rect(t.ctx(), "shown-child"), Some((10.0, 25.0, 20.0, 10.0)))
+  show.val = false
+  t.frame()
+  t.frame()
+  assert_eq(@motion.measured_drawn_rect(t.ctx(), "shown-child"), None)
+}
+
+///|
 test "a node flown from a rect is drawn there first, then at its place" {
   let p = Ref::new(0.0)
   let mut id = 0
@@ -667,6 +697,34 @@ test "a node flown from a rect is drawn there first, then at its place" {
   t.frame()
   let (x3, y3) = drawn_xy(t, 0x00FF00FFL)
   assert_eq((x3, y3), (0.0, 100.0))
+}
+
+///|
+test "moving content in one keyed scope does not cut content in another" {
+  let moved = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.box(w=Px(150.0), h=Px(200.0), fn() {
+      let a = c.box(left=0.0, top=0.0, w=Px(100.0), h=Px(200.0), fn() {
+        let i = c.box(left=0.0, top=100.0, w=Px(30.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+        @motion.layout(c, i, "scope/a/item", by="a")
+      })
+      @motion.scope(c, a)
+      @motion.layout(c, a, "scope/a", by="a")
+      let b = c.box(left=0.0, top=0.0, w=Px(100.0), h=Px(200.0), fn() {
+        let i = c.box(left=0.0, top=if moved.val { 120.0 } else { 100.0 }, w=Px(40.0), h=Px(20.0), bg=0x0000FFFFL, fn() {  })
+        @motion.layout(c, i, "scope/b/item", by="\{moved.val}")
+      })
+      @motion.scope(c, b)
+      @motion.layout(c, b, "scope/b", by="b")
+    }) |> ignore
+  }, w=150.0, h=200.0)
+  t.frame()
+  moved.val = true
+  t.frame()
+  let a = t.drawn_cut().iter().find_first(fn(r) { r.3 == 30.0 && r.4 == 20.0 })
+  assert_true(a is Some(_), msg="the first scope's item was not drawn")
+  let (_, _, _, _, _, (_, _, _, bottom)) = a.unwrap()
+  assert_true(bottom >= 120.0, msg="the other scope's movement cut the first scope's item")
 }
 
 ///|

@@ -165,7 +165,7 @@ the curves: a move's length and curve are a Move's (Curves, above), what goes go
 | 2 | what goes from a list: a row, the agent's line, what leaves the outbox | out 200 ms on `Leave`, a copy shrinking to 0.9 as it fades (`@sf.leave`) | `LEAVE`, web/ui/src/motion.ts:21-22, web/src/listMotion.ts:116 |
 | 2 | a bar | in a Move of its 120 points' drop, out 250 ms on `Leave` | web/src/mobile/Bar.css.ts:17 |
 | 2 | a toast | in 200 ms ease-out, out 150 ms | web/ui/src/toast.css.ts:16-18 |
-| 2 | what is put in the composer: a file's card, a picture's tile, a quote's card; a notice over a chat's composer (archived, its cache over, its station down) | in 180 ms ease-out, up from 6 below (`@sf.waiting_in`); what a draft or a chat opens with is there at once; a notice no longer said leaves as a row does (`@sf.leave`), drawn as it was | web/src/Chat.css.ts:286, 449; web/src/Jobs.css.ts:217 |
+| 2 | what is put in the composer: a file's card, a picture's tile, a quote's card; a notice over a chat's composer (archived, its cache over, its station down) | in 180 ms ease-out, up from 6 below (`@sf.waiting_in`), within the room the composer opens with its ground. What a draft or a chat opens with is there at once; a notice no longer said leaves as a row does (`@sf.leave`), drawn as it was | web/src/Chat.css.ts:286, 449; web/src/Jobs.css.ts:217 |
 | 2 | a page over the whole window: a chat shared as a picture | in 140 ms ease-out, a fade (`@sf.window_page_in`); out as a dialog (`@kit.pop_out`) | web/src/FilePreview.css.ts:29 |
 | 2 | ⌘K | its scrim faded in over 120 ms, its panel grown out of 0.97 from its top over 140 ms ease-out; out at once | web/src/Switcher.css.ts:19, 25 |
 | 2 | a chat's find bar, in place of its buttons | in 120 ms ease-out, a fade (`@kit.tip_in`); out at once | web/src/ChatFind.css.ts:10 |
@@ -235,7 +235,9 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    files, quotes, its being opened, its error) and for its page, its ＋, words, send and choices carried from where
    they showed by the same cause; for its page, what it holds there and did not here (a new chat's choices) carried
    on its ground until that is there (`@motion.reshape` `carry`, morph.ts `morph`); nothing for the window, the
-   sidebar, a keyboard or the tier. Words sent: it is held as tall as it was, its box and its room, while they are in
+   sidebar, a keyboard or the tier. A quote or file sent while it opens sets out from where it was last drawn, with
+   the composer's offsets (`@motion.measure_drawn`); its laid-out place remains the destination for things following it.
+   Words sent: it is held as tall as it was, its box and its room, while they are in
    it, and comes down for their letting go of it, a quarter of their way, not from under them as they set out
    (ChatHost.kt hold, which sfapp's composer had; its box gone down at once since the phone took the shared one,
    #1646, the words left hanging over it, the user 2026-10-26: 「发消息好像会瞬间把 composer 高度重置」).

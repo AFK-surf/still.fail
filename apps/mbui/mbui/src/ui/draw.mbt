@@ -827,6 +827,57 @@ pub fn Ctx::drawn_at(self : Ctx, i : Int) -> (Double, Double) {
   (x, y)
 }
 
+///|
+/// A translating node's drawn rectangle, the rectangular part its ancestors leave visible (left, top, right, bottom),
+/// its inherited opacity, and the softness of that part's edges (left, top, right, bottom).
+pub(all) struct DrawnState {
+  rect : (Double, Double, Double, Double)
+  clip : (Double, Double, Double, Double)
+  alpha : Double
+  soft : (Double, Double, Double, Double)
+}
+
+///|
+/// What of node `i` shows by its and its ancestors' translating looks and rectangular cuts, after layout. For an action
+/// that carries the drawn thing elsewhere; scales, turns and rounded ancestor clips are not described here.
+pub fn Ctx::drawn_state(self : Ctx, i : Int) -> DrawnState {
+  let n = self.nodes[i]
+  let (x, y) = self.drawn_at(i)
+  let mut left = -1.0e9
+  let mut top = -1.0e9
+  let mut right = 1.0e9
+  let mut bottom = 1.0e9
+  let mut sl = 0.0
+  let mut st = 0.0
+  let mut sr = 0.0
+  let mut sb = 0.0
+  let mut alpha = 1.0
+  let mut p = i
+  while p >= 0 {
+    let q = self.nodes[p]
+    let (px, py) = self.drawn_at(p)
+    alpha = alpha * q.opacity
+    if p != i && q.clip {
+      if px > left { left = px; sl = 0.0 }
+      if py > top { top = py; st = 0.0 }
+      if px + q.fw < right { right = px + q.fw; sr = 0.0 }
+      if py + q.fh < bottom { bottom = py + q.fh; sb = 0.0 }
+    }
+    match self.drawn_entry(p) {
+      Some(e) => {
+        alpha = alpha * e.look_now().alpha
+        if e.right >= 0.0 && px + q.fw - e.right > left { left = px + q.fw - e.right; sl = e.cut_soft }
+        if e.bottom >= 0.0 && py + q.fh - e.bottom > top { top = py + q.fh - e.bottom; st = e.cut_soft }
+        if e.left >= 0.0 && px + e.left < right { right = px + e.left; sr = e.cut_soft }
+        if e.top >= 0.0 && py + e.top < bottom { bottom = py + e.top; sb = e.cut_soft }
+      }
+      None => ()
+    }
+    p = q.parent
+  }
+  { rect: (x, y, n.fw, n.fh), clip: (left, top, dmax(left, right), dmax(top, bottom)), alpha, soft: (sl, st, sr, sb) }
+}
+
 // ── painting ────────────────────────────────────────────────────────────
 
 ///|

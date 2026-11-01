@@ -1087,6 +1087,7 @@ pub fn Ctx::drawn_at(Self, Int32) -> (Double, Double)
 pub fn Ctx::drawn_pixels(Self, Int32, inset? : Double) -> ImagePixels
 pub fn Ctx::drawn_rect(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::drawn_scale(Self) -> Double
+pub fn Ctx::drawn_state(Self, Int32) -> DrawnState
 pub fn Ctx::editor(Self, String, placeholder? : String, shorter? : Array[String], w? : Size, font_size? : Double, max_lines? : Int32, plain? : Bool, line? : Double, trim? : Bool, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), field? : Field, files? : Bool) -> EditorResult
 pub fn Ctx::editor_field(Self, String) -> Field
 pub fn Ctx::editor_focused(Self, String) -> Bool
@@ -1411,6 +1412,13 @@ pub struct Drawing {
 pub fn Drawing::copy(Self) -> Self
 pub fn Drawing::is_empty(Self) -> Bool
 pub fn Drawing::new() -> Self
+
+pub(all) struct DrawnState {
+  rect : (Double, Double, Double, Double)
+  clip : (Double, Double, Double, Double)
+  alpha : Double
+  soft : (Double, Double, Double, Double)
+}
 
 pub(all) struct DroppedPath {
   path : String
