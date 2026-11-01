@@ -269,9 +269,10 @@ fn update_known() -> UpdateNow {
 
 ///|
 /// Whether the update wants the person where they are: a build ready that is not put in place by itself, the leave to
-/// install apps wanted, or one being put in place at their word (the sidebar's key, the small screen's card).
+/// install apps wanted, or one being put in place at their word (the sidebar's key, the small screen's card); also while
+/// the person's word asks still.fail cloud first (update_go): what they pressed stays, under way, not gone until it answers.
 pub fn update_wants_you() -> Bool {
-  match update_now() {
+  match update_known() {
     Ready(_, away~) => !away
     Allow(_) | Installing(_) => true
     _ => false

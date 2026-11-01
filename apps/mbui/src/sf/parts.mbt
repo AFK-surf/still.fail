@@ -4553,10 +4553,11 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 
 ///|
 /// A newer build ready for the person's word (Home.kt's update key; one look wherever a frame puts it, the size of the
-/// keys beside it: `side` across, its mark `mark`): the download mark in its middle (the key is there only while the
-/// build waits on its press: no dot over it to say so); while it is `busy` (being put in place), in the mark's place
-/// how far it has come (coming_mark: `coming`, 0 to 1, from its top; None while not known, the spinner's quarter
-/// turning there), no words. `why` its tip. Said to be `label`. True on the frame it is pressed, not while it is busy.
+/// keys beside it: `side` across, its mark `mark`): in its middle the update's mark, an arrow up in a ring (what a
+/// newer version is, as a station's updating_mark; not download's: the build is here already, the key is there only
+/// while it waits on its press, no dot over it to say so); while it is `busy` (being put in place, the app starting
+/// again), its arrow going up as a station's does as it updates (updating_mark), no words. `why` its tip. Said to be
+/// `label`. True on the frame it is pressed, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
   key : String,
@@ -4564,7 +4565,6 @@ pub fn update_key(
   mark : Double,
   label : String,
   why : String,
-  coming : Double?,
   busy : Bool,
 ) -> Bool {
   let t = theme()
@@ -4575,9 +4575,9 @@ pub fn update_key(
     id~,
     fn() {
       if busy {
-        coming_mark(c, key, coming, mark, t.p.text)
+        updating_mark(c, mark, t.p.text) |> ignore
       } else {
-        icon(c, "download", size=mark, color=t.p.text) |> ignore
+        icon(c, "update", size=mark, color=t.p.text) |> ignore
       }
       if !busy {
         press_ripple(c, id, side / 2.0)
@@ -4883,7 +4883,7 @@ let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
 let update_ring_at : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
-/// What comes (a download, a newer build), drawn as an icon in an icon's place (`size`, the box the icons beside it
+/// What comes (a download), drawn as an icon in an icon's place (`size`, the box the icons beside it
 /// are drawn in, in `color`): a ring where those icons draw their circles (as check-circle's, 3.5 to 20.5 of their 24
 /// grid, a line as wide as theirs), the accent from its top as far round as it has come (`coming`, 0 to 1; None, the
 /// spinner's quarter turning: @sf.progress_spinner), a short arrow down in it. No bigger than the icons beside it: a
