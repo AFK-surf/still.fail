@@ -246,7 +246,7 @@ jobs:
       # mbc's units and the core's bytecode: main's newest, and on a branch its own last push's over them (m- and b-, as
       # check-mbui keeps its own). With main's alone, every push of a branch compiled all it had changed since main
       # again: presets' two pushes 273 and 276 of 480 units, 78 s of each Linux x64 build (41288956328, 41289661355,
-      # 2026-11-01).
+      # 2026-11-01; a branch restores its own after main's, then main's newest units over it).
       - uses: actions/cache/restore@v4
         id: store
         with:
