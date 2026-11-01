@@ -1,10 +1,11 @@
 // The one way a model is chosen (ember web/src/ModelTriple.tsx, ModelTriple.css.ts; NewChat.kt's run picker said the
 // same): a control that says the model, the runtime (where it can still change and the model runs on more than one),
 // how hard it thinks and who runs it, in one line; pressed, its panel through the presenters (beside it with keyboard and mouse,
-// a sheet with touch): the models (a filter over them when there are many), under them the runtime, the
-// effort and the speed as segmented choices, every name whole; at its foot who runs it (the accounts in a
-// panel of their own, from it), 取消 and 确定. Its rows are the screen's (Theme::rows pick). Picks there are the
-// core's draft (`pick.set`) until 确定 (`pick.save`); a model another station has is borrowed first, asked in a dialog.
+// a sheet with touch): the models, each saying how it runs picked (as it last ran here), the ones used most nearest
+// what opened it, the rest past them (a filter over them when there are many); between them and it the runtime, the
+// effort and the speed, every name whole; at its foot who runs it (the accounts in a panel of their own, from it).
+// Its rows are the screen's (Theme::rows pick). Each pick is made what it runs on as it is picked (`pick.save`), a
+// model closing the panel; a model another station has is drafted (`pick.set`) and borrowed first, asked in a dialog.
 
 
 ///|
@@ -74,6 +75,17 @@ fn pick_draft(src : Source, station : String, of : String, patch : Map[String, J
 }
 
 ///|
+/// What the panel picked made what it runs on at once (`pick.save` given the picks `patch`), said once done with `done`
+/// ("" nothing: a change in the panel, which stays open and shows it).
+fn pick_save(src : Source, station : String, of : String, patch : Map[String, Json], done? : String = "") -> Unit {
+  let p = pick_params(station, of)
+  for k, v in patch {
+    p[k] = v
+  }
+  act(src, @sf.t("common.confirm"), "pick.save/" + station + "/" + of, "pick.save", Json::object(p), done~)
+}
+
+///|
 /// The panel of the pick `of` on `station` (the control's: see model_triple) opened beside `from`: from the control,
 /// or from elsewhere that says what runs (an agent's card's account: `side` Right, beside the card). Opened already,
 /// it closes (a trigger toggles it: one the panel does not cover, the card's, stays pressable while it is open).
@@ -101,7 +113,7 @@ pub fn open_triple_panel(
     w=triple_panel_w,
     // (as wide as its columns' words, no wider: 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」)
     fits=true,
-    foot=fn(c, close) { triple_foot(c, src, station, of, saved, close) },
+    foot=fn(c, close) { triple_foot(c, src, station, of, close) },
     // (its search beside its title, not a line of its own)
     head_end=fn(c) { triple_find_field(c, (src.topic)("pick", pick_params(station, of)).value) },
     gone=fn() { triple.open = "" },
@@ -118,7 +130,7 @@ pub fn open_triple_panel(
 ///|
 /// The control of the pick `of` on `station` (ModelTriple): its line, and its panel under it while open (above it with
 /// `up`). `page`: the control as a page has it with itself (a new chat's: its `pick`), not read on its own; `small`: in
-/// a composer's row (ModelTriple.css.ts in newChat: 28 high, its words 12). `saved`: what is said once 确定 kept it
+/// a composer's row (ModelTriple.css.ts in newChat: 28 high, its words 12). `saved`: what is said once a model picked
 /// (onConfirm's toast: a chat's, from its next turn; a connect's, its model bound; nothing where nothing runs on it yet,
 /// a new chat's or a new connect's). `floating`: over a page rather than in a row (a new chat's over its
 /// composer, narrow): a capsule of the composer's glass.
@@ -273,8 +285,8 @@ fn triple_sample() -> Json {
 }
 
 ///|
-/// The panel: the filter across its top (more than 8 models), the frequent combinations (`saved` said and the panel
-/// closed as one is pressed: see triple_combos), the models, and under them the runtimes (where there are
+/// The panel: the filter across its top (more than 8 models), the models (one picked, `saved` said and the panel
+/// closed: triple_model_row), and between them and what opened it the runtimes (where there are
 /// more than one), how hard it thinks and how fast, each a segmented choice: the models scrolling by themselves, what
 /// goes with them in view. What borrowing would do under them. Beside what opened it the models scroll past 360 (the
 /// web's); in a sheet the sheet is as tall as all of it up to its most, the models scrolling in what is left then
@@ -314,9 +326,23 @@ fn triple_body(
     text(o, "model").to_lower().contains(words) ||
     items(o, "ids").iter().any(fn(i) { i is String(s) && s.to_lower().contains(words) })
   })
-  // by series, in the core's order
+  // the models used most here (the core's `near`), nearest what opened the panel, out of the list while nothing is typed;
+  // the rest by series, in the core's order
+  let searching = words != ""
+  let near : Array[Json] = []
+  if !searching {
+    for id in items(v, "near") {
+      if id is String(id) {
+        match options.search_by(fn(o) { text(Some(o), "model") == id }) {
+          Some(i) => near.push(options[i])
+          None => ()
+        }
+      }
+    }
+  }
+  let rest = listed.filter(fn(o) { !near.iter().any(fn(n) { text(Some(n), "model") == text(Some(o), "model") }) })
   let series : Array[(String, Array[Json])] = []
-  for o in listed {
+  for o in rest {
     let who = match text(Some(o), "family") {
       "" => @sf.t("web-main.model.otherSeries")
       f => f
@@ -354,9 +380,11 @@ fn triple_body(
     ("standard", @sf.t("web-main.model.standard")),
     ("fast", "Fast"),
   ]
-  let pick_runtime = fn(r : String) { pick_draft(src, station, of, { "runtime": Json::string(r) }) }
+  // (each made what it runs on at once, the panel staying open: kept for the model too, as it runs next time it is
+  // picked)
+  let pick_runtime = fn(r : String) { pick_save(src, station, of, { "runtime": Json::string(r) }) }
   let pick_effort = fn(e : String) {
-    pick_draft(src, station, of, { "effort": if e == "" { Json::null() } else { Json::string(e) } })
+    pick_save(src, station, of, { "effort": if e == "" { Json::null() } else { Json::string(e) } })
   }
   let pick_speed = fn(f : String) {
     let fv : Json = match f {
@@ -364,7 +392,7 @@ fn triple_body(
       "fast" => Json::boolean(true)
       _ => Json::boolean(false)
     }
-    pick_draft(src, station, of, { "fast": fv })
+    pick_save(src, station, of, { "fast": fv })
   }
   // each column's words as wide as the widest of them picked (the models' of all of them, whatever the filter leaves):
   // the panel, as wide as what it holds, as wide whichever is picked and whatever is typed (as a segmented choice's)
@@ -373,79 +401,105 @@ fn triple_body(
     dmax(dmax(m, c.words_across(text(o, "name"), triple_row_picked)), c.words_across(text(field(o, "spent"), "text"), triple_note))
   }).ceil()
   // each as what it is (2026-10-30 用户「思考这些选项各自的特点」): the models many, their names long, each its maker's
-  // mark: a list, scrolling by itself, every name whole (「看不出是什么模型怎么办」). Under it, in view whatever model
+  // mark: a list, scrolling by itself, every name whole (「看不出是什么模型怎么办」). Beside it, in view whatever model
   // is picked (「用户选完模型根本看不到下面的 runtime 和思考深度」), the rest as the few they are, each a segmented
   // choice across the panel with its name over it: the runtimes the model runs on (none where it runs on one: nothing
   // to choose), how hard it thinks (an order, from the model's own to the most, read along its line), how fast (three
   // ways). Each gives way where its line is short as a segmented choice does (its words closer, smaller, else the one
   // chosen alone and the rest in a pick: a narrow sheet's)
-  // (what is used most over all of it, out of the way of a search: 2026-11-01 用户「常用模型应该放到模型选择器里去」)
-  if words == "" {
-    // (as wide as a model's row at first: the widest name, its mark, its sides and its check's room)
-    let row_w = names_w + 14.0 + 3.0 * @ui.Space::px(S1_5) + 2.0 * @ui.Space::px(S2_5) + @ui.Space::px(S3_5)
-    triple_combos(c, src, station, of, v, saved, close, row_w)
+  // nearest what opened the panel what is used most, farthest what is not (2026-11-01 用户「那它就不应该跑到离按钮很远
+  // 的最顶上去啊」): opening up from it (a composer's, at the foot of its page) or a sheet risen from the screen's foot,
+  // from the foot up how it runs, the models used most (the most used lowest), then the rest; opening down, the same
+  // from the top down. What is used most stays put; the rest scrolls by itself.
+  let up = @sf.panel_opens_up()
+  let models = fn() {
+    if rest.length() == 0 && !searching {
+      return
+    }
+    @sf.panel_column(c, "triple/models", triple_list_h, triple_rows, fn() {
+      // (no head of its own: the panel's title says what they are; nor each series one, its models' names and marks
+      // saying it again, most of them a series of one (2026-10-30 用户「有点丑」): a series' models together)
+      for s in series {
+        for o in s.1 {
+          triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close)
+        }
+      }
+      if listed.length() == 0 {
+        c.box(style=triple_empty, fn() { c.text(@sf.t("web-main.model.noMatch"), style=triple_muted) |> ignore })
+        |> ignore
+      }
+    })
   }
-  @sf.panel_column(c, "triple/models", triple_list_h, triple_rows, fn() {
-    // (no head of its own: the panel's title says what they are; nor each series one, its models' names and marks
-    // saying it again, most of them a series of one (2026-10-30 用户「有点丑」): a series' models together)
-    for s in series {
-      for o in s.1 {
-        triple_model_row(c, src, station, of, v, Some(o), names_w)
-      }
+  let used = fn() {
+    if near.length() == 0 {
+      return
     }
-    if listed.length() == 0 {
-      c.box(style=triple_empty, fn() { c.text(@sf.t("web-main.model.noMatch"), style=triple_muted) |> ignore })
-      |> ignore
-    }
-  })
-  // how it runs, on a ground of its own under the models, each as it is used (2026-10-30 用户「这个地方可以有专属设计」
-  // 「不一定每个都要平铺吧」): how hard it thinks, tuned to the work at hand, laid out whole as a level (its stops from
-  // the model's own to the most side by side in one capsule, its track filled up to the one picked, lifted out of it);
-  // the runtime and how fast, set once and seldom changed, each a pill saying what it
-  // is now, the rest a pick away, the two side by side on one line
-  if runs_on.length() > 1 || all_efforts.length() > 0 || fast {
-    let (h_runtime, h_effort, h_speed) = (
-      @sf.t("web-main.model.runtime"),
-      @sf.t("web-main.model.effort"),
-      @sf.t("web-main.model.speed"),
-    )
-    // (each line's name at its start, as wide as the widest of them: what it holds starting alike)
-    let head_w = [h_runtime, h_effort, h_speed].fold(init=0.0, fn(m, h) { dmax(m, c.words_across(h, triple_head)) }).ceil()
-    c.box(style=triple_tray, fn() {
-      if all_efforts.length() > 0 {
-        triple_tray_part(c, h_effort, head_w, fn() { triple_meter(c, all_efforts, text(draft, "effort"), pick_effort) })
-      }
-      if runs_on.length() > 1 {
-        triple_pick_row(
-          c,
-          "triple/runtime",
-          h_runtime,
-          head_w,
-          runs_on.map(fn(o) { @sf.choice(o.0, o.1, icon="runtime:" + o.0) }),
-          text(draft, "runtime"),
-          pick_runtime,
-        )
-      }
-      if fast {
-        triple_pick_row(
-          c,
-          "triple/fast",
-          h_speed,
-          head_w,
-          speeds.map(fn(o) {
-            if o.0 == "fast" {
-              // (Fast its bolt, and what it costs: ModelTriple.tsx's fastNote)
-              @sf.choice(o.0, o.1, note=@sf.t("web-main.model.fastNote"), icon="zap")
-            } else {
-              @sf.choice(o.0, o.1)
-            }
-          }),
-          speed_now,
-          pick_speed,
-        )
+    c.box(style=if up { triple_near_up } else { triple_near_down }, fn() {
+      for o in if up { near.rev() } else { near } {
+        triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close)
       }
     })
     |> ignore
+  }
+  let how = fn() {
+    // how it runs, on a ground of its own under the models, each as it is used (2026-10-30 用户「这个地方可以有专属设计」
+    // 「不一定每个都要平铺吧」): how hard it thinks, tuned to the work at hand, laid out whole as a level (its stops from
+    // the model's own to the most side by side in one capsule, its track filled up to the one picked, lifted out of it);
+    // the runtime and how fast, set once and seldom changed, each a pill saying what it
+    // is now, the rest a pick away, the two side by side on one line
+    if runs_on.length() > 1 || all_efforts.length() > 0 || fast {
+      let (h_runtime, h_effort, h_speed) = (
+        @sf.t("web-main.model.runtime"),
+        @sf.t("web-main.model.effort"),
+        @sf.t("web-main.model.speed"),
+      )
+      // (each line's name at its start, as wide as the widest of them: what it holds starting alike)
+      let head_w = [h_runtime, h_effort, h_speed].fold(init=0.0, fn(m, h) { dmax(m, c.words_across(h, triple_head)) }).ceil()
+      c.box(style=if up { triple_tray } else { triple_tray_first }, fn() {
+        if all_efforts.length() > 0 {
+          triple_tray_part(c, h_effort, head_w, fn() { triple_meter(c, all_efforts, text(draft, "effort"), pick_effort) })
+        }
+        if runs_on.length() > 1 {
+          triple_pick_row(
+            c,
+            "triple/runtime",
+            h_runtime,
+            head_w,
+            runs_on.map(fn(o) { @sf.choice(o.0, o.1, icon="runtime:" + o.0) }),
+            text(draft, "runtime"),
+            pick_runtime,
+          )
+        }
+        if fast {
+          triple_pick_row(
+            c,
+            "triple/fast",
+            h_speed,
+            head_w,
+            speeds.map(fn(o) {
+              if o.0 == "fast" {
+                // (Fast its bolt, and what it costs: ModelTriple.tsx's fastNote)
+                @sf.choice(o.0, o.1, note=@sf.t("web-main.model.fastNote"), icon="zap")
+              } else {
+                @sf.choice(o.0, o.1)
+              }
+            }),
+            speed_now,
+            pick_speed,
+          )
+        }
+      })
+      |> ignore
+    }
+  }
+  if up {
+    models()
+    used()
+    how()
+  } else {
+    how()
+    used()
+    models()
   }
   // the model picked is another station's: said over the foot, which borrows it rather than confirming
   let borrow = field(v, "borrow")
@@ -456,79 +510,6 @@ fn triple_body(
     })
     |> ignore
   }
-}
-
-///|
-/// The frequent combinations (the pick `v`'s `frequent`, none where fewer than two) under their name, each a capsule
-/// of its own on the words' tint, side by side and on as many lines as they need: its model's maker's mark, its name,
-/// then how hard it thinks (the runtime where it says one, how fast) after a dot each, muted; the one in use lifted out
-/// of the tint as the effort picked is (triple_meter's thumb). Capsules, not rows: not taken for the models under them
-/// (2026-11-01 用户「感觉有点容易认错」, of rows as the models' are). Pressed, all of it picked and saved at once
-/// (`pick.save` given its picks), the panel closed: nothing of it is left to pick. The capsules wrap in the room the
-/// rest of the panel leaves them (`least` before it is laid out: a model's row's), never widening it: a panel as wide
-/// as what it holds (fits) would otherwise be as wide as all of them on one line.
-fn triple_combos(
-  c : @ui.Ctx,
-  src : Source,
-  station : String,
-  of : String,
-  v : Json?,
-  saved : String,
-  close : () -> Unit,
-  least : Double,
-) -> Unit {
-  let combos = items(v, "frequent")
-  guard combos.length() > 0 else { return }
-  let room = c.id("triple/combos")
-  let across = match c.laid_size(room) {
-    Some((w, _)) => w
-    None => least
-  }
-  c.box(style=triple_combos_box, id=room, fn() {
-    triple_column_head(c, @sf.t("web-main.combos.short"))
-    c.box(style=triple_combo_flow.then(@ui.style(w=Fixed(across))), flow=true, fn() {
-      for combo in combos {
-        let o = Some(combo)
-        let model = text(o, "model")
-        let id = c.id("triple/combo/" + text(o, "runtime") + ":" + model + ":" + text(o, "effort") + ":" + text(o, "speedText"))
-        let selected = flag(o, "selected")
-        // (after its name each part with the dot before it; short of room, the runtime left out, the model and how
-        // hard it thinks never)
-        let part = fn(words : String, drop : Int) {
-          if words != "" {
-            c.box(style=triple_part, drop~, fn() {
-              c.text("·", style=triple_combo_rest) |> ignore
-              c.text(words, style=triple_combo_rest) |> ignore
-            })
-            |> ignore
-          }
-        }
-        let chip = c.box(style=if selected { triple_combo_on } else { triple_combo }, id~, fn() {
-          @sf.maker_mark(c, text(field(o, "maker"), "id"), text(o, "runtime"), triple_pick_mark) |> ignore
-          c.text(text(o, "name"), style=triple_words) |> ignore
-          part(text(o, "runtimeText"), 1)
-          part(text(o, "effortText"), 0)
-          part(text(o, "speedText"), 0)
-        })
-        c.semantics(chip, Button, id~, label=text(o, "label"), check=if selected { On } else { Off })
-        if c.clicked(id) {
-          let p = pick_params(station, of)
-          p["model"] = Json::string(model)
-          p["runtime"] = Json::string(text(o, "runtime"))
-          p["effort"] = match text(o, "effort") {
-            "" => Json::null()
-            e => Json::string(e)
-          }
-          p["fast"] = field(o, "fast").unwrap_or(Json::null())
-          triple.open = ""
-          close()
-          act(src, text(o, "label"), "pick.save/" + station + "/" + of, "pick.save", Json::object(p), done=saved)
-        }
-      }
-    })
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|
@@ -601,42 +582,21 @@ fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v :
 }
 
 ///|
-/// Its foot (the presenter's, where every panel's foot stands): who runs it, 取消, and 确定 (or borrowing it, asked first).
-fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, saved : String, close : () -> Unit) -> Unit {
+/// Its foot (the presenter's, where every panel's foot stands): who runs it, and where the model picked is another
+/// station's, borrowing it (asked first). Nothing to confirm: each pick is made what it runs on as it is picked
+/// (2026-11-01 用户「从第一性原理出发重新思考这个组件的使用场景」).
+fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, close : () -> Unit) -> Unit {
   let v = (src.topic)("pick", pick_params(station, of)).value
   if v is None {
     return
   }
-  let picked = text(v, "option")
   let borrow = field(v, "borrow")
   triple_runs_who(c, src, station, of, v)
-  if @sf.button(c, @sf.t("common.cancel"), key="triple/cancel", tone=Ghost) {
+  if borrow is Some(Object(_)) &&
+    @sf.button(c, text(borrow, "action"), key="triple/borrow", tone=Primary, disabled=!flag(borrow, "allowed")) {
     triple.open = ""
+    triple.borrow_asking = station + "\u{1}" + of
     close()
-  }
-  if borrow is Some(Object(_)) {
-    if @sf.button(c, text(borrow, "action"), key="triple/borrow", tone=Primary, disabled=!flag(borrow, "allowed")) {
-      triple.open = ""
-      triple.borrow_asking = station + "\u{1}" + of
-      close()
-    }
-  } else if @sf.button(
-      c,
-      @sf.t("common.confirm"),
-      key="triple/confirm",
-      tone=Primary,
-      disabled=picked == "" || !flag(v, "changed"),
-    ) {
-    triple.open = ""
-    close()
-    act(
-      src,
-      @sf.t("common.confirm"),
-      "pick.save/" + station + "/" + of,
-      "pick.save",
-      Json::object(pick_params(station, of)),
-      done=saved,
-    )
   }
 }
 
@@ -651,6 +611,8 @@ fn triple_model_row(
   v : Json?,
   o : Json?,
   names_w : Double,
+  saved : String,
+  close : () -> Unit,
 ) -> Unit {
   let t = @sf.theme()
   let model = text(o, "model")
@@ -661,6 +623,7 @@ fn triple_model_row(
   }
   // (its ids, a line each, over it while it is pointed at: ModelTriple.tsx's tip)
   let ids = items(o, "ids").filter_map(fn(i) { if i is String(s) { Some(s) } else { None } }).join("\n")
+  let usual = text(o, "usualText")
   let from_station = match field(o, "fromStation") {
     Some(Object(_)) as fs =>
       Some(fn() {
@@ -676,7 +639,21 @@ fn triple_model_row(
       })
     _ => None
   }
-  if triple_option(c, "triple/model/" + model, text(o, "name"), picked, trail?=from_station, tip=ids, fn() {
+  // (at its end how it runs picked: as it last ran here, the one picked as it runs now; then where it comes from)
+  let trail = if usual == "" && from_station is None {
+    None
+  } else {
+    Some(fn() {
+      if usual != "" {
+        c.text(usual, style=triple_usual) |> ignore
+      }
+      match from_station {
+        Some(f) => f()
+        None => ()
+      }
+    })
+  }
+  if triple_option(c, "triple/model/" + model, text(o, "name"), picked, trail?, tip=ids, fn() {
       @sf.maker_mark(c, text(field(o, "maker"), "id"), runs, 14.0) |> ignore
       // (all of its name in the room its column leaves it, on a second line where one is not enough: what goes with
       // the model picked beside the models takes the room its words need first)
@@ -689,7 +666,25 @@ fn triple_model_row(
       })
       |> ignore
     }) {
-    pick_draft(src, station, of, { "model": Json::string(model) })
+    if text(o, "availability") == "borrowable" {
+      // (another station's: borrowed first, from the foot)
+      pick_draft(src, station, of, { "model": Json::string(model) })
+    } else {
+      // made what it runs on at once, as it last ran here, and the panel closed: nothing of it left to confirm
+      triple.open = ""
+      close()
+      if !picked || text(field(v, "value"), "model") != model {
+        let p : Map[String, Json] = { "model": Json::string(model) }
+        match field(o, "usual") {
+          Some(Object(u)) =>
+            for k in ["runtime", "effort", "fast"] {
+              p[k] = u.get(k).unwrap_or(Json::null())
+            }
+          _ => ()
+        }
+        pick_save(src, station, of, p, done=saved)
+      }
+    }
   }
 }
 
@@ -893,7 +888,7 @@ fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, clo
           })
         },
       ) {
-      pick_draft(src, station, of, { "profile": Json::null() })
+      pick_save(src, station, of, { "profile": Json::null() })
       close()
     }
     for a in items(v, "accounts") {
@@ -919,7 +914,7 @@ fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, clo
           })
           |> ignore
         }) {
-        pick_draft(src, station, of, { "profile": Json::string(id) })
+        pick_save(src, station, of, { "profile": Json::string(id) })
         close()
       }
     }
@@ -1131,6 +1126,11 @@ pub let triple_models_least : Double = 200.0
 let triple_tray : @ui.Style = @ui.css("w=Full mt=S2 gap=SPx")
 
 ///|
+/// The tray nearest what opened the panel opening down: over the models, as far from them.
+// kept across runs: a value (no field of it changes)
+let triple_tray_first : @ui.Style = @ui.css("w=Full mb=S2 gap=SPx")
+
+///|
 // kept across runs: a value (no field of it changes)
 let triple_tray_part_box : @ui.Style = @ui.css("row w=Full pl=S2_5 gap=S3 align=ACenter")
 
@@ -1233,34 +1233,19 @@ let triple_name_column : @ui.Style = @ui.css("min_w=SPx gap=SPx")
 let triple_check_room : @ui.Style = @ui.css("w=S3_5")
 
 ///|
-/// The frequent combinations over the models: their name over them, as far over the models as the tray is under them.
+/// The models used most: their rows 1 apart, as far from the rest as the tray is from them, on the side the rest is
+/// (over them opening up, under them opening down).
 // kept across runs: a value (no field of it changes)
-let triple_combos_box : @ui.Style = @ui.css("w=Full mb=S2")
+let triple_near_up : @ui.Style = @ui.css("w=Full mt=S2 gap=SPx")
 
 ///|
-/// Their capsules: side by side, on as many lines as they need, 6 apart.
 // kept across runs: a value (no field of it changes)
-let triple_combo_flow : @ui.Style = @ui.css("row gap=S1_5")
+let triple_near_down : @ui.Style = @ui.css("w=Full mb=S2 gap=SPx")
 
 ///|
-/// A combination's capsule: as tall as the search's (@sf.menu_row_min), its words as far in as the effort's stops'
-/// are, on the words' tint as they and the effort's track are, deeper under the pointer.
+/// How a model runs picked, at its row's end: Meta, muted, on one line.
 // kept across runs: a value (no field of it changes)
-let triple_combo : @ui.Style = @ui.css("row px=S2_5 gap=S1_5 align=ACenter radius=Full bg=Tint hovered{bg=TintStrong}").then(
-  @ui.style(h=Fixed(@sf.menu_row_min)),
-)
-
-///|
-/// The one in use: lifted out of the tint as the effort picked is (triple_meter_thumb's ground, line and shadow).
-// kept across runs: a value (no field of it changes)
-let triple_combo_on : @ui.Style = @ui.css("row px=S2_5 gap=S1_5 align=ACenter radius=Full bg=Raised border=B0_5 border_color=Line shadow=Sm").then(
-  @ui.style(h=Fixed(@sf.menu_row_min)),
-)
-
-///|
-/// What a frequent combination says after its model: Ui as its name, muted.
-// kept across runs: a value (no field of it changes)
-let triple_combo_rest : @ui.TextStyle = @ui.text_style(size=Ui, color=Muted, wrap=false)
+let triple_usual : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

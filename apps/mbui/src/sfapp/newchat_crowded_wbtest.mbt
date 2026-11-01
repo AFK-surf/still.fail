@@ -80,35 +80,30 @@ test "narrower still: the station's name leaves its control whole after what the
 }
 
 ///|
-test "narrow: the model's panel has each frequent combination over the models on one line, a long one leaving its runtime out" {
+test "narrow: the models used most nearest how hard it thinks, at the sheet's foot, each with how it runs on its line" {
   let t = crowded("newchat-crowded-model")
   run_to_sheet_rest(t)
   let (sx, _, sw, _) = t.get(@ui.Role::Dialog).rect
-  let rows = []
-  for label in ["GPT-6 Astra · 中", "DeepSeek V4.1 Flash · DeepSeek Harness · 高", "SWE-2 · 高"] {
-    rows.push(t.get(Button, label~))
+  let effort = t.get(Radio, label="高").rect
+  // (a sheet risen from the screen's foot: what is used most lowest, the most used of all nearest how hard it thinks)
+  let rows = ["Opus 5.5", "SWE-2", "DeepSeek V4.1 Flash", "GPT-6 Astra"].map(fn(l) { t.get(Button, label=l) })
+  for i in 1..<rows.length() {
+    assert_true(rows[i].rect.1 > rows[i - 1].rect.1, msg="\{rows[i - 1].label} \{rows[i].label}")
   }
-  // (over the models: the first of them under the last of the combinations)
-  assert_true(rows[2].rect.1 < t.get(Button, label="GPT-6 Astra").rect.1)
+  assert_true(rows[3].rect.1 < effort.1)
   for row in rows {
     let (x, _, w, _) = row.rect
     assert_true(x >= sx && x + w <= sx + sw + 0.5, msg="\{row.label} \{row.rect}")
-    // (its own words: the page's under the sheet, dimmed behind it, not)
-    let runs = runs_in(t, row.rect).filter(fn(r) { row.label.contains(r.text) })
-    assert_true(runs.length() > 0)
-    for r in runs {
-      assert_true(r.base == runs[0].base, msg="\{row.label} on more than one line")
-      assert_true(r.x0 >= x && r.x1 <= x + w, msg="\{r.text} past \{row.label}")
-    }
   }
-  // the model always, how hard it thinks always
-  let words = runs_in(t, rows[1].rect).map(fn(r) { r.text })
-  assert_true(words.contains("DeepSeek V4.1 Flash"))
-  assert_true(words.contains("高"))
+  // what DeepSeek last ran with after its name, on its line: the runtime it runs on of three, how hard it thinks
+  let deep = rows[2].rect
+  let words = runs_in(t, deep).filter(fn(r) { r.x0 >= deep.0 && r.x1 <= deep.0 + deep.2 })
+  assert_true(words.iter().any(fn(r) { r.text.contains("DeepSeek Harness") }), msg="\{words.map(fn(r) { r.text })}")
+  assert_true(words.iter().all(fn(r) { r.base == words[0].base }), msg="DeepSeek's row on more than one line")
 }
 
 ///|
-test "narrow: no frequent combination left on the new chat's page, the model's panel has them" {
+test "narrow: no frequent combination left on the new chat's page" {
   let t = crowded("newchat-crowded")
   assert_true(t.query(Button, label="SWE-2 · 高") is None)
 }
@@ -184,11 +179,13 @@ test "wide: the model's panel beside its control has the models, how hard it thi
   let src = fixture_app("newchat-crowded-model")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(squeeze_opening)
-  let model = t.get(Button, label="SWE-2").rect
+  // (the models used most nearest how it runs, the rest past them: whichever way it opened)
+  let model = t.get(Button, label="Opus 5.5").rect
+  let used = t.get(Button, label="SWE-2").rect
   let runtime = t.get(Button, label="DeepSeek Harness").rect
   let effort = t.get(Radio, label="高").rect
-  assert_true(effort.1 >= model.1 + model.3, msg="\{model} \{effort}")
-  assert_true(runtime.1 >= effort.1 + effort.3, msg="\{effort} \{runtime}")
+  assert_true(in_line(model.1, used.1, effort.1), msg="\{model} \{used} \{effort}")
+  assert_true(runtime.1 != effort.1, msg="\{effort} \{runtime}")
   // pressed, the runtimes in a pick
   t.click(Button, label="DeepSeek Harness")
   t.run_for(squeeze_opening)

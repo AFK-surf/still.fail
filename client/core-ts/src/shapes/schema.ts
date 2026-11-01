@@ -2153,7 +2153,6 @@ export const SHAPES: Record<string, Shape> = {
     ["name", "String", { doc: "The model as people call it." }],
     ["runtimeText", opt("String"), { doc: "The runtime by name, only where the model runs on more than one." }],
     ["effortText", "String", { doc: "How hard it thinks as the model's picker says it (High / 高), or the default's words." }],
-    ["maker", opt("Maker"), { default: true, doc: "The model's maker, for its mark." }],
     ["selected", "bool"],
   ], { doc: "One-click model and depth for a new chat; ranked and labelled by the core." }),
   Picked: struct([
@@ -2198,7 +2197,7 @@ export const SHAPES: Record<string, Shape> = {
     ["accountWarn", "bool"],
     ["saveText", "String"],
     ["borrow", opt("PickBorrow"), { default: true, doc: "The picked model is another station's: borrowed first (`pick.borrow`), confirmed; saving waits for it." }],
-    ["frequent", vec("FrequentCombo"), { default: true, doc: "A new chat's or a chat's: the combinations new chats here were started with most, at the top of its panel,\none press picking and saving all of it (`pick.save` given its picks); a chat's on its runtime alone. None where\nthere are fewer than two (the one would be the one in use)." }],
+    ["near", vec("String"), { default: true, doc: "A new chat's or a chat's: the models (their `model`) new chats here started on most, most first, at most\nfour, the station's own: kept nearest what opened its panel, the rest past them." }],
   ], { doc: "A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,\nuntil `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the\nstation's pick, said so (`dropped`, `force`)." }),
   NotifyView: struct([
     ["on", "bool"],
@@ -3314,7 +3313,15 @@ export const SHAPES: Record<string, Shape> = {
     ["fromText", opt("String"), { said: true, doc: "Where it comes from, in words (借自 Studio, 在 Studio 上: what its mark is said as); none for one of this\nstation's own." }],
     ["fromStation", opt("ModelStation"), { doc: "The station it comes from, after its name: its mark where it has one, else its name." }],
     ["borrow", opt("ModelBorrow"), { doc: "A borrowable one: the profile that would be shared with this station." }],
+    ["usual", opt("ModelUsual"), { default: true, doc: "In a model control (`pick`): what it runs with picked in the panel (the one picked, as drafted; another,\nas it last ran here); none, never used here." }],
+    ["usualText", opt("String"), { default: true, said: true, doc: "That in words after its name (DeepSeek Harness · 高 · Fast): the runtime where it runs on more than\none, how hard it thinks unless the model's own, Fast; none, nothing to say." }],
+    ["uses", opt("u32"), { default: true, doc: "In a model control: how many new chats here started on it." }],
   ], { doc: "A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it." }),
+  ModelUsual: struct([
+    ["runtime", opt("RuntimeKind")],
+    ["effort", opt("String")],
+    ["fast", opt("bool")],
+  ], { doc: "What a model runs with when it is picked in a model control's panel." }),
   ModelStation: struct([
     ["name", "String", { said: true }],
     ["emoji", opt("String")],

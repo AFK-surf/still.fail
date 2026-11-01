@@ -662,6 +662,13 @@ export interface ModelBorrow {
 	allow: string[];
 }
 
+/** What a model runs with when it is picked in a model control's panel. */
+export interface ModelUsual {
+	runtime?: RuntimeKind;
+	effort?: string;
+	fast?: boolean;
+}
+
 /** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
 export interface ModelOption {
 	/** The spelling a client sends: the one that is its key when a profile has that, else the first. */
@@ -691,6 +698,18 @@ export interface ModelOption {
 	fromStation?: ModelStation;
 	/** A borrowable one: the profile that would be shared with this station. */
 	borrow?: ModelBorrow;
+	/**
+	 * In a model control (`pick`): what it runs with picked in the panel (the one picked, as drafted; another,
+	 * as it last ran here); none, never used here.
+	 */
+	usual?: ModelUsual;
+	/**
+	 * That in words after its name (DeepSeek Harness · 高 · Fast): the runtime where it runs on more than
+	 * one, how hard it thinks unless the model's own, Fast; none, nothing to say.
+	 */
+	usualText?: string;
+	/** In a model control: how many new chats here started on it. */
+	uses?: number;
 }
 
 /**
@@ -725,27 +744,6 @@ export interface PickBorrow {
 	allowed: boolean;
 	/** Why not, where not allowed. */
 	why?: string;
-}
-
-/** One-click model and depth for a new chat; ranked and labelled by the core. */
-export interface FrequentCombo {
-	fast?: boolean;
-	/** Explicit speed (Fast / Standard); absent for the account default. */
-	speedText?: string;
-	model: string;
-	runtime: RuntimeKind;
-	effort?: string;
-	/** All of it in a line: the model, the runtime where it shows, the effort. */
-	label: string;
-	/** The model as people call it. */
-	name: string;
-	/** The runtime by name, only where the model runs on more than one. */
-	runtimeText?: string;
-	/** How hard it thinks as the model's picker says it (High / 高), or the default's words. */
-	effortText: string;
-	/** The model's maker, for its mark. */
-	maker?: Maker;
-	selected: boolean;
 }
 
 /**
@@ -800,11 +798,10 @@ export interface PickView {
 	/** The picked model is another station's: borrowed first (`pick.borrow`), confirmed; saving waits for it. */
 	borrow?: PickBorrow;
 	/**
-	 * A new chat's or a chat's: the combinations new chats here were started with most, at the top of its panel,
-	 * one press picking and saving all of it (`pick.save` given its picks); a chat's on its runtime alone. None where
-	 * there are fewer than two (the one would be the one in use).
+	 * A new chat's or a chat's: the models (their `model`) new chats here started on most, most first, at most
+	 * four, the station's own: kept nearest what opened its panel, the rest past them.
 	 */
-	frequent?: FrequentCombo[];
+	near?: string[];
 }
 
 export interface AutomaticDecisionDraft {
@@ -4008,6 +4005,25 @@ export interface FootprintView {
 	/** 内存 · 共 6 GB，已用 5.2 GB. */
 	memoryTitle: string;
 	memory: FootprintRow[];
+}
+
+/** One-click model and depth for a new chat; ranked and labelled by the core. */
+export interface FrequentCombo {
+	fast?: boolean;
+	/** Explicit speed (Fast / Standard); absent for the account default. */
+	speedText?: string;
+	model: string;
+	runtime: RuntimeKind;
+	effort?: string;
+	/** All of it in a line: the model, the runtime where it shows, the effort. */
+	label: string;
+	/** The model as people call it. */
+	name: string;
+	/** The runtime by name, only where the model runs on more than one. */
+	runtimeText?: string;
+	/** How hard it thinks as the model's picker says it (High / 高), or the default's words. */
+	effortText: string;
+	selected: boolean;
 }
 
 export interface HistoryFrom {

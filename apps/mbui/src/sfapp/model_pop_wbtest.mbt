@@ -35,14 +35,28 @@ test "wide, short names: the model's panel as wide as what it holds, not as wide
 }
 
 ///|
-test "wide: the frequent combinations over the models, the one in use checked; one pressed picks all of it and closes the panel" {
+/// Whether `a`, `b`, `c` lie in that order along the panel, one way or the other.
+fn in_line(a : Double, b : Double, c : Double) -> Bool {
+  (a < b && b < c) || (a > b && b > c)
+}
+
+///|
+test "wide: the models used most between the rest and how hard it thinks, the most used nearest it, each saying how it runs; one pressed is made what it runs on and the panel closes" {
   let t = model_pop("newchat-model")
-  let combo = t.get(Button, label="GPT-6 · 中").rect
-  assert_true(combo.1 < t.get(Button, label="Opus 5.5").rect.1, msg="over the models")
-  // (in the panel, whole)
-  let (px, _, pw, _) = t.get(@ui.Role::Dialog).rect
-  assert_true(combo.0 >= px && combo.0 + combo.2 <= px + pw)
-  t.click(Button, label="GPT-6 · 中")
+  let (opus, gpt, sonnet) = (
+    t.get(Button, label="Opus 5.5").rect,
+    t.get(Button, label="GPT-6").rect,
+    t.get(Button, label="Sonnet 5").rect,
+  )
+  let effort = t.get(Radio, label="高").rect
+  // (2026-11-01 用户「那它就不应该跑到离按钮很远的最顶上去啊」)
+  assert_true(in_line(sonnet.1, gpt.1, opus.1) && in_line(gpt.1, opus.1, effort.1), msg="\{sonnet} \{gpt} \{opus} \{effort}")
+  // how it last ran, at its row's end
+  assert_true(
+    t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "中" && b.y >= gpt.1 && b.y + b.h <= gpt.1 + gpt.3 }),
+    msg="GPT-6's 中",
+  )
+  t.click(Button, label="GPT-6")
   t.run_for(@kit.presence_in_ms)
   assert_true(t.query(@ui.Role::Dialog) is None, msg="its panel closed")
   assert_eq((new_fix.model, new_fix.runtime, new_fix.effort), ("gpt-6", "codex", "medium"))
@@ -105,22 +119,14 @@ test "wide, many models and Codex's efforts and speeds: the models, how hard it 
 }
 
 ///|
-test "wide: another model picked, its runtimes fewer, the panel as wide as it opened; every name whole on its line" {
+test "wide: how hard it thinks picked in the panel is made what it runs on at once, the panel open as wide as it opened" {
   let t = model_pop("newchat-crowded-model")
   let opened = t.get(@ui.Role::Dialog).rect
-  for name in ["Opus 5.5", "Grok 4.7 Build Fast", "DeepSeek V4.1 Flash"] {
-    t.click(Button, label=name)
+  for (label, effort) in [("低", "low"), ("最高", "max")] {
+    t.click(Radio, label~)
     t.run_for(squeeze_opening)
-    // (picked, in the picked weight)
-    match pop_words(t, name) {
-      Some(b) => {
-        assert_eq(b.weight, 500, msg="\{name} not picked")
-        assert_true(b.words_w <= b.w + 0.5 && b.h < 2.0 * b.font_size, msg="\{name} not whole on one line")
-      }
-      None => fail("\{name} not drawn")
-    }
-    // (as wide, its sides where they were; as tall as what it holds now)
+    assert_eq(new_fix.effort, effort)
     let now = t.get(@ui.Role::Dialog).rect
-    assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{name} picked: \{now}, opened \{opened}")
+    assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{label} picked: \{now}, opened \{opened}")
   }
 }

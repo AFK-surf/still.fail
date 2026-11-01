@@ -820,7 +820,7 @@ test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_
   again.close();
 });
 
-test("the_model_control_offers_the_frequent_combinations_and_saves_one_whole_with_one_press", async () => {
+test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran", async () => {
   const { host, core } = await choosing();
   const ui = core.connect();
   const fresh = { topic: "pick", station: "ws/st", of: "new" };
@@ -831,24 +831,34 @@ test("the_model_control_offers_the_frequent_combinations_and_saves_one_whole_wit
   await host.settle();
   const values = new Map();
   apply(host, values);
+  const option = (n: number, model: string) => v(values, n).options.find((o: J) => o.model === model);
+  assert.deepEqual(v(values, 1).near, [], "nothing used here yet");
+  assert.equal(option(1, "gpt-6-astra").usual, null);
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
-  apply(host, values);
-  assert.deepEqual(v(values, 1).frequent, [], "one alone is the one in use: nothing to pick");
+  core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
   core.inner.choose.used("ws/st", { model: "claude-sonnet-5", runtime: "claude", effort: null });
-  core.inner.choose.used("ws/st", { model: "claude-opus-5-5", runtime: "claude", effort: null });
+  core.inner.choose.used("other/st", { model: "claude-opus-5-5", runtime: "claude", effort: null });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1).frequent.map((c: J) => c.model).sort(), ["claude-opus-5-5", "claude-sonnet-5", "gpt-6-astra"]);
-  assert.ok(v(values, 1).frequent.every((c: J) => c.maker !== null && c.maker !== undefined), "each with its maker's mark");
-  // a chat's, on its runtime alone
-  assert.deepEqual(v(values, 2).frequent.map((c: J) => c.runtime), ["claude", "claude"]);
-  // pressed: all of it picked and saved at once
-  const astra = v(values, 1).frequent.find((c: J) => c.model === "gpt-6-astra");
-  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: astra.model, runtime: astra.runtime, effort: astra.effort, fast: astra.fast });
+  // the used most first, another workspace's not at all
+  assert.deepEqual(v(values, 1).near, ["gpt-6-astra", "claude-sonnet-5"]);
+  assert.equal(option(1, "gpt-6-astra").uses, 2);
+  assert.deepEqual(option(1, "gpt-6-astra").usual, { runtime: "codex", effort: "medium", fast: null });
+  assert.equal(option(1, "gpt-6-astra").usualText, "中");
+  // a chat's, of the models its runtime runs
+  assert.ok(v(values, 2).near.every((m: J) => m !== "gpt-6-astra"), String(v(values, 2).near));
+  // picked with how it last ran: all of it saved at once
+  const astra = option(1, "gpt-6-astra").usual;
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gpt-6-astra", ...astra });
   apply(host, values);
   assert.equal(v(values, 3).model.model, "gpt-6-astra");
   assert.equal(v(values, 3).effort, "medium");
-  assert.equal(v(values, 1).frequent.find((c: J) => c.model === "gpt-6-astra").selected, true);
+  // how hard it thinks changed for it: kept for it, as it runs next time it is picked
+  await ask(host, core, ui, 5, "pick.save", { station: "ws/st", of: "new", effort: null });
+  await ask(host, core, ui, 6, "pick.save", { station: "ws/st", of: "new", model: "claude-sonnet-5" });
+  apply(host, values);
+  assert.deepEqual(option(1, "gpt-6-astra").usual, { runtime: "codex", effort: null, fast: null });
+  assert.equal(option(1, "gpt-6-astra").usualText, null);
   core.close();
 });
 
