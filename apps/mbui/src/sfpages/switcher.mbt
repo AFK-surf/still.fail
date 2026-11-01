@@ -447,7 +447,8 @@ fn pickable(l : FindLine) -> Bool {
 /// much (⌘K's panel), else the box's height. `close`: what the frame does as a line opens (⌘K closes; the phone's page
 /// stays under the chat). ↑ / ↓ choose a line; a line says who, where and when under its words where the box it is
 /// drawn into is narrow (found_stacked). `at`: where its list stands (a panel's, ⌘K's, as a side column's; the
-/// phone's search across the whole screen), its lines in and rounded so.
+/// phone's search across the whole screen), its lines in and rounded so. `foot_in`: room after its last line, which
+/// also sets the distance over which what scrolls past its foot fades away (⌘K's panel).
 pub fn finder_list(
   c : @ui.Ctx,
   src : Source,
@@ -457,6 +458,7 @@ pub fn finder_list(
   idle_chats? : Bool = false,
   most? : Double,
   at? : @sf.ListAt = Side,
+  foot_in? : Double = 0.0,
 ) -> Unit {
   let f = @sf.theme().chat_list
   let query = finder.query.trim(chars=" \t\n\r\u{3000}").to_string()
@@ -507,16 +509,20 @@ pub fn finder_list(
     _ => false
   }
   let stacked = found_stacked(c.width)
-  let est = lines.fold(init=0.0, fn(h, l) { h + finder_h(l, f.found, stacked) })
+  let est = lines.fold(init=foot_in, fn(h, l) { h + finder_h(l, f.found, stacked) })
   let h : @ui.Size = match most {
     Some(m) => Px(dmin(m, est))
     None => Fill(1.0)
   }
-  c.list(
+  let list = c.list(
     key,
-    lines.length(),
+    lines.length() + (if foot_in > 0.0 { 1 } else { 0 }),
     f.found.row_h,
     fn(i) {
+      if i == lines.length() {
+        c.box(style=@ui.style(h=Fixed(foot_in)), fn() {  }) |> ignore
+        return
+      }
       let line = lines[i]
       let lk = "switcher/row/" + finder_key(line)
       let k = pick_of[i]
@@ -536,7 +542,7 @@ pub fn finder_list(
     },
     h~,
   )
-  |> ignore
+  c.fade_to(list, list, foot=foot_in)
 }
 
 ///|

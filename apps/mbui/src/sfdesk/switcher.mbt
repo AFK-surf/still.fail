@@ -91,7 +91,7 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     switcher_closed()
     c.blur()
   }
-  let most = dmin(switcher_most_h, c.height * switcher_most_share) - switcher_panel_rest
+  let most = dmin(switcher_most_h, c.height * switcher_most_share) - switcher_panel_rest + switcher_edge
   let panel = c.id("switcher")
   // mbui's layer over the page (modal: its scrim takes the presses outside, Tab stays in it; Esc, back or a press
   // outside dismiss it, closed at that moment; Esc in one kind's list back to all of them first, within it), the panel
@@ -138,10 +138,14 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           })
           |> ignore
           if switching.get() {
-            // (its lines as wide as the panel inside its edge: what they go by)
-            c.sized(room - 2.0 * switcher_edge, c.height, fn() {
-              @sfpages.finder_list(c, src, w, offered, close, idle_chats=true, most~)
+            // The list reaches into the panel's foot padding, so the panel cuts what scrolls past to its own curve.
+            // At its end the list gives that room back under its last row, and fades what goes past its foot.
+            c.box(style=@ui.style(w=Full).then(@sf.outset_bottom(switcher_edge)), fn() {
+              c.sized(room - 2.0 * switcher_edge, c.height, fn() {
+                @sfpages.finder_list(c, src, w, offered, close, idle_chats=true, most~, foot_in=switcher_edge)
+              })
             })
+            |> ignore
           }
         },
       )
