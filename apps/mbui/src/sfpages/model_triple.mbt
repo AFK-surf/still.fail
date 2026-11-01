@@ -400,6 +400,30 @@ fn triple_body(
     let o = Some(o)
     dmax(dmax(m, c.words_across(text(o, "name"), triple_row_picked)), c.words_across(text(field(o, "spent"), "text"), triple_note))
   }).ceil()
+  // what each says of how it runs at its row's end, as wide as the widest of it, the one picked's at whatever it is
+  // picked to: the panel as wide whatever is picked in it (its widest kept: a depth picked wider, it would grow)
+  let picked = text(v, "option")
+  let many = options
+    .search_by(fn(o) { text(Some(o), "model") == picked })
+    .map(fn(i) { items(Some(options[i]), "runtimes").length() > 1 && !flag(v, "runtimeFixed") })
+    .unwrap_or(false)
+  let said_as = fn(e : String, fast_on : Bool) {
+    let parts = []
+    if many {
+      parts.push(@settings.runtime_label(text(draft, "runtime")))
+    }
+    if e != "" {
+      parts.push(effort_text(e))
+    }
+    if fast_on {
+      parts.push("Fast")
+    }
+    parts.join(" · ")
+  }
+  let usual_w = options.fold(init=0.0, fn(m, o) { dmax(m, c.words_across(text(Some(o), "usualText"), triple_usual)) })
+  let usual_w = all_efforts.fold(init=usual_w, fn(m, e) {
+    dmax(dmax(m, c.words_across(said_as(e.0, false), triple_usual)), if fast { c.words_across(said_as(e.0, true), triple_usual) } else { 0.0 })
+  }).ceil()
   // each as what it is (2026-10-30 用户「思考这些选项各自的特点」): the models many, their names long, each its maker's
   // mark: a list, scrolling by itself, every name whole (「看不出是什么模型怎么办」). Beside it, in view whatever model
   // is picked (「用户选完模型根本看不到下面的 runtime 和思考深度」), the rest as the few they are, each a segmented
@@ -421,7 +445,7 @@ fn triple_body(
       // saying it again, most of them a series of one (2026-10-30 用户「有点丑」): a series' models together)
       for s in series {
         for o in s.1 {
-          triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close)
+          triple_model_row(c, src, station, of, v, Some(o), names_w, usual_w, saved, close)
         }
       }
       if listed.length() == 0 {
@@ -438,7 +462,7 @@ fn triple_body(
       // (named, as what they are: 2026-11-01 用户「感觉还是得标注一下常用」)
       triple_column_head(c, @sf.t("web-main.combos.short"))
       for o in if up { near.rev() } else { near } {
-        triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close)
+        triple_model_row(c, src, station, of, v, Some(o), names_w, usual_w, saved, close)
       }
     })
     |> ignore
@@ -604,6 +628,7 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, close :
 
 ///|
 /// A model's row: its maker's mark, its name (what it has spent under it) `names_w` wide (the widest of the models'),
+/// at its end how it runs picked `usual_w` wide where the row has the room (its words cut short first where not),
 /// the station it comes from at its end.
 fn triple_model_row(
   c : @ui.Ctx,
@@ -613,6 +638,7 @@ fn triple_model_row(
   v : Json?,
   o : Json?,
   names_w : Double,
+  usual_w : Double,
   saved : String,
   close : () -> Unit,
 ) -> Unit {
@@ -642,12 +668,15 @@ fn triple_model_row(
     _ => None
   }
   // (at its end how it runs picked: as it last ran here, the one picked as it runs now; then where it comes from)
-  let trail = if usual == "" && from_station is None {
+  let trail = if usual_w == 0.0 && from_station is None {
     None
   } else {
     Some(fn() {
-      if usual != "" {
-        c.text(usual, style=triple_usual) |> ignore
+      if usual != "" || usual_w > 0.0 {
+        c.box(style=triple_usual_room.then(@ui.style(min_w=Within(usual_w))), fn() {
+          c.text(usual, style=triple_usual) |> ignore
+        })
+        |> ignore
       }
       match from_station {
         Some(f) => f()
@@ -1247,7 +1276,12 @@ let triple_near_down : @ui.Style = @ui.css("w=Full mb=S2 gap=SPx")
 ///|
 /// How a model runs picked, at its row's end: Meta, muted, on one line.
 // kept across runs: a value (no field of it changes)
-let triple_usual : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+let triple_usual : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
+
+///|
+/// Its room: as wide as the widest of them (`min_w`, Within) where the row has the room, its words at its end.
+// kept across runs: a value (no field of it changes)
+let triple_usual_room : @ui.Style = @ui.css("row w=Cut justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)

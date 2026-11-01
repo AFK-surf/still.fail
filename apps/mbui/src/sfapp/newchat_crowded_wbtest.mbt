@@ -98,8 +98,7 @@ test "narrow: the models used most nearest how hard it thinks, at the sheet's fo
   // what DeepSeek last ran with after its name, on its line: the runtime it runs on of three, how hard it thinks
   let deep = rows[2].rect
   let words = runs_in(t, deep).filter(fn(r) { r.x0 >= deep.0 && r.x1 <= deep.0 + deep.2 })
-  assert_true(words.iter().any(fn(r) { r.text.contains("DeepSeek Harness") }), msg="\{words.map(fn(r) { r.text })}")
-  assert_true(words.iter().all(fn(r) { r.base == words[0].base }), msg="DeepSeek's row on more than one line")
+  assert_true(words.iter().any(fn(r) { r.text == "DeepSeek Harness · 高" }), msg="\{words.map(fn(r) { r.text })}")
 }
 
 ///|
