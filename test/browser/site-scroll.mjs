@@ -23,7 +23,7 @@ const problems = [];
 
 try {
   for (const [label, size] of [['narrow', { width: 390, height: 844 }], ['wide', { width: 1440, height: 900 }]]) {
-    const page = await browser.newPage({ viewport: size, locale: 'zh-CN', ...(label === 'narrow' ? { isMobile: true, hasTouch: true } : {}) });
+    const page = await browser.newPage({ viewport: size, locale: 'zh-CN', ...(label === 'narrow' ? { isMobile: true, hasTouch: true, deviceScaleFactor: 3 } : {}) });
     await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
     await page.waitForFunction((narrow) => {
       const demo = document.querySelector('[data-idea="1"] #demo');
@@ -77,6 +77,35 @@ try {
         console.log(`${label}: ${painted} connection repaints ${moving ? 'while scrolling' : 'while their dashes flow'}`);
         if (painted) problems.push(`the connections repaint on the main thread ${moving ? 'while scrolling' : 'while flowing'}`);
       }
+      // A card's shadow changes as it lands. Moving that shadow must not repaint the card's contents each frame.
+      await page.evaluate(async () => {
+        const cards = [...document.querySelector('[data-drawn]').lastElementChild.children].filter((el) => el.tagName !== 'STYLE');
+        for (const card of cards) card.classList.add('site-scroll-test-card');
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
+      await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline', transferMode: 'ReportEvents' });
+      const moved = await page.evaluate(() => new Promise((resolve) => {
+        const card = [...document.querySelector('[data-drawn]').lastElementChild.children].find((el) => el.tagName !== 'STYLE');
+        const before = card.style.transform, from = scrollY;
+        let frames = 0;
+        function frame() {
+          window.scrollTo(0, from + frames * 3);
+          if (++frames < 20) requestAnimationFrame(frame);
+          else requestAnimationFrame(() => requestAnimationFrame(() => resolve(card.style.transform !== before)));
+        }
+        requestAnimationFrame(frame);
+      }));
+      const stopped = new Promise((resolve) => cdp.once('Tracing.tracingComplete', resolve));
+      await cdp.send('Tracing.end');
+      await stopped;
+      assert.ok(moved, 'the cards moved during the trace');
+      const painted = events.splice(0).filter((e) => {
+        if (e.ph !== 'X' || e.name !== 'Paint') return false;
+        const classes = /class='([^']+)'/.exec(e.args?.data?.nodeName ?? '')?.[1]?.split(/\s+/) ?? [];
+        return classes.includes('site-scroll-test-card');
+      }).length;
+      console.log(`${label}: ${painted} card repaints while their shadows move`);
+      if (painted) problems.push('the moving card shadows repaint their contents');
       await cdp.detach();
       await page.evaluate(() => { for (const animation of window.__otherAnimations) animation.play(); });
     }

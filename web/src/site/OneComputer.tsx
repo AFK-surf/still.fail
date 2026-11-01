@@ -181,12 +181,13 @@ export function OneComputer(props: DemoProps) {
   const phone = useRef<HTMLDivElement>(null);
   const phoneScreen = useRef<HTMLIFrameElement>(null);
   const lines = useRef<HTMLDivElement>(null);
+  const shadows = useRef<HTMLDivElement>(null);
   const air = useRef<HTMLDivElement>(null);
   const demo = useRef<MountedDemo>(null);
 
   useEffect(() => {
     const el = scene.current, space = room.current, outer = win.current, inner = screen.current, hand = phone.current, wires = lines.current;
-    if (!el || !space || !outer || !inner || !hand || !wires || !air.current) return;
+    if (!el || !space || !outer || !inner || !hand || !wires || !shadows.current || !air.current) return;
     const narrow = innerWidth <= 860;
     // The phone's own app beside the computer's, a page of its own as wide as a phone (site/phone.html, in the page's
     // language), so that it is laid out as on one (its rules go by the screen's width); a wide screen only: on a narrow
@@ -197,23 +198,23 @@ export function OneComputer(props: DemoProps) {
     // The rows, where the app has them in the window (in its own size), and each as it is drawn there, for the air;
     // read again until the app is there, when the room changes size, and once the app is drawn anew (the demo taking
     // its box over from the frame the page was built with: those read before fly on till its rows are there).
-    interface Row { el: HTMLElement; box: Box; flying: HTMLElement; shadow: string }
+    interface Row { el: HTMLElement; box: Box; flying: HTMLElement; shadow: HTMLElement }
     let rows: Row[] = [];
     // How large the window is drawn just now; whether the rows are in the air just now.
     let drawn = 1, out = false;
-    const sky = air.current!;
+    const sky = air.current!, shade = shadows.current;
     const links = [...wires.children] as HTMLElement[];
     let wireWidth = 0;
     // A scroll outside the scene holds its first or last frame. Do not redraw it on every scroll down the rest of the
     // page. A resize or restyle can still change that frame, so remember its room and forget it when its rows change.
     let last: { x: number; w: number; h: number; viewportWidth: number } | undefined;
     let appSize: { w: number; h: number; viewportWidth: number } | undefined;
-    const leave = () => { for (const r of rows) r.el.style.visibility = ""; sky.replaceChildren(); rows = []; out = false; last = undefined; };
+    const leave = () => { for (const r of rows) r.el.style.visibility = ""; sky.replaceChildren(); shade.replaceChildren(); rows = []; out = false; last = undefined; };
     // In the air, or home: a row is drawn in one of the two, never both.
     const fly = (on: boolean) => {
       if (on === out) return;
       out = on;
-      for (const r of rows) { r.el.style.visibility = on ? "hidden" : ""; r.flying.style.display = on ? "" : "none"; }
+      for (const r of rows) { r.el.style.visibility = on ? "hidden" : ""; r.flying.style.display = on ? "" : "none"; r.shadow.style.display = on ? "" : "none"; }
     };
     const read = () => {
       const app = inner.querySelector<HTMLElement>("#demo");
@@ -232,13 +233,19 @@ export function OneComputer(props: DemoProps) {
         for (const e of parts) e.style.transition = "none";
         const flying = drawnAs(row, sheet);
         Object.assign(flying.style, { background: ground(row), display: "none", boxSizing: "border-box", width: `${box.w}px`, height: `${box.h}px` });
-        const own = getComputedStyle(row).boxShadow;
+        const shadow = document.createElement("div");
+        Object.assign(shadow.style, {
+          position: "absolute", left: "0", top: "0", width: `${box.w}px`, height: `${box.h}px`,
+          borderRadius: flying.style.borderRadius, background: "black", transformOrigin: "0 0",
+          display: "none", willChange: "transform, filter, opacity",
+        });
         parts.forEach((e, k) => { e.style.transition = was[k]!; });
-        return { el: row, flying, shadow: own === "none" ? "" : `, ${own}`, box };
+        return { el: row, flying, shadow, box };
       });
       const style = document.createElement("style");
       style.textContent = sheet.join("\n");
       sky.replaceChildren(style, ...rows.map((r) => r.flying));
+      shade.replaceChildren(...rows.map((r) => r.shadow));
       return true;
     };
 
@@ -305,9 +312,12 @@ export function OneComputer(props: DemoProps) {
         const x = lerp(from.x - (r.box.w * parts.scale) / 2, home.x, landed), y = lerp(from.y - (r.box.h * parts.scale) / 2, home.y, landed);
         if (landing < 1) {
           const up = 1 - landed;
-          Object.assign(r.flying.style, {
-            transform: `translate(${x}px, ${y}px) scale(${scale})`,
-            boxShadow: `0 ${(30 * up) / scale}px ${(40 * up) / scale}px rgba(0, 0, 0, ${0.18 * up})${r.shadow}`,
+          r.flying.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+          // Draw the changing shadow in its own layer so it does not repaint or blur the card's text. Its Gaussian
+          // blur is half the former box-shadow blur radius; the opaque card covers the inside of the shadow.
+          Object.assign(r.shadow.style, {
+            transform: `translate(${x}px, ${y + 30 * up}px) scale(${scale})`,
+            filter: `blur(${(20 * up) / scale}px)`, opacity: `${0.18 * up}`,
           });
         }
         return { x, y, w: r.box.w * scale, h: r.box.h * scale };
@@ -411,6 +421,7 @@ export function OneComputer(props: DemoProps) {
               <i className={css.oneIsland} />
               <iframe className={css.onePhoneScreen} ref={phoneScreen} width={PHONE.w} height={PHONE.h} title={say.phoneTitle} tabIndex={-1} />
             </div>
+            <div className={css.oneAir} ref={shadows} aria-hidden />
             <div className={css.oneAir} ref={air} />
           </div>
         </div>
