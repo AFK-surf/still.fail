@@ -13,6 +13,8 @@
 //   [MBUI_LOCALE=en-US: the app's language, as a device's] [MBUI_FONT_SCALE=1.3: the system's size of words, as a
 //   device's set bigger] [MBUI_FILM_LAST=<last.png>: the run's last frame as the renderer drew it]
 //   [MBUI_FILM_COPIED=<copied.png.b64>: the picture the app last put on the clipboard, a PNG in base64]
+//   [MBUI_FILM_NAV_ABLE=1: the system lays out the app's tabs in bars of its own, an iPhone Duo's (@hostapi.nav_bar_able;
+//   what the system draws of them not filmed: the app beside them)]
 // The film is H.264, lossy: each frame's pixels are the encoder's guess of them, and a guess that leans on the frames
 // before it and on how the encoder spends its bits. A picture compared to the byte (before and after a change) is the
 // last frame as drawn (MBUI_FILM_LAST), never one taken out of the film.
@@ -90,6 +92,8 @@ pub fn film(
       set_offscreen_view(w / z, h / z, scale * z)
     },
     window_corner~,
+    // (where the system has bars of its own for the app's tabs: MBUI_FILM_NAV_ABLE, an iPhone Duo's)
+    nav_able=arg("MBUI_FILM_NAV_ABLE") == "1",
   )
   // (the window's buttons in the app's top row, as a Mac's window has them: Tester::set_window_inset)
   if inset {

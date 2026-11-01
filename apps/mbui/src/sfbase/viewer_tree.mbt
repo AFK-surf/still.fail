@@ -757,25 +757,26 @@ fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
 ///|
 /// Whether viewer `v`'s floating bar is its nodes (image_head), `w` wide, the old bars' (vf_bar's) not: a picture here
 /// coming or whole or marked (not read or played), on a small screen (a phone's; a fold half open wider than one, its
-/// kind and size with it), its own bar (not the system's beside it: an iPhone Duo's). As each is told.
+/// kind and size with it), its own bar (not the system's beside it: an iPhone Duo's; there too while it marks, its
+/// actions the bar's own, vf_bar's). As each is told.
 pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
   v.in_tree &&
   v.shown_kind() == Some(KImage) &&
   @sf.viewer_bar_floats(w) &&
-  !@sf.native_on()
+  (!@sf.native_on() || marking.on)
 }
 
 ///|
 /// Whether viewer `vw`'s bar across the top is its nodes (image_bar), `w` wide, the old bar's (vf_bar's) not: a picture
 /// here, coming or whole or marked (not read or played), not on a small screen (whose bar floats: head_as_nodes), its own bar
-/// (not the system's beside it). As each is told.
+/// (not the system's beside it; there too while it marks, as head_as_nodes). As each is told.
 pub fn bar_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
   v.in_tree &&
   v.shown_kind() == Some(KImage) &&
   !@sf.viewer_bar_floats(w) &&
-  !@sf.native_on()
+  (!@sf.native_on() || marking.on)
 }
 
 ///|

@@ -9,6 +9,7 @@
 # WINDOW: phone390, phone360 (a phone's), touch600 (a tablet's, medium), tablet840, tablet1280 (expanded), desk600,
 # desk1280 (a Mac's: its window's corners 16; desk390 one made as narrow as a phone), win600, win1280 (Windows 11's: 8); LANG: zh or en.
 # fold890: a fold half open, its crease across (a small screen wider than a phone: tabletop.mbt).
+# duo390, duo951: an iPhone Duo's, upright and on its side, the system's bars beside the app (theirs not filmed).
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
@@ -25,6 +26,8 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
   # (a desktop's window rounded as its system draws it: a Mac's 16, Windows 11's 8; a phone's or a tablet's app fills
   # its screen)
   corner=0
+  # (an iPhone Duo's: the system's bars for the app's tabs, MBUI_FILM_NAV_ABLE; what the system draws of them not filmed)
+  nav=0
   case $win in
     phone390) w=390; h=844; platform=2; system='' ;;
     phone360) w=360; h=740; platform=2; system='' ;;
@@ -33,6 +36,8 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
     touch839) w=839; h=900; platform=2; system='system {"size_class":{"width":"medium","height":"medium"}}' ;;
     tablet840) w=840; h=900; platform=2; system='system {"size_class":{"width":"expanded","height":"medium"}}' ;;
     tablet1280) w=1280; h=900; platform=2; system='system {"size_class":{"width":"expanded","height":"medium"}}' ;;
+    duo390) w=390; h=844; platform=1; nav=1; system='system {"bars":{"top":0,"bottom":20,"left":0,"right":0}}' ;;
+    duo951) w=951; h=669; platform=1; nav=1; system='system {"bars":{"top":0,"bottom":20,"left":0,"right":84}}' ;;
     desk390) w=390; h=760; platform=0; system=''; corner=16 ;;
     desk600) w=600; h=760; platform=0; system=''; corner=16 ;;
     desk1280) w=1280; h=800; platform=0; system=''; corner=16 ;;
@@ -49,7 +54,7 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
   # (the run's whole log kept, <mode>.log; no picture of a run before it left to be taken for this one's)
   log="$dir/$mode.log"
   rm -f "$dir/$mode.png" "$dir/$mode-marked.png" "$dir/$mode.fail.png"
-  MBUI_LOCALE=$lang MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 MBUI_FILM_WINDOW_CORNER=$corner \
+  MBUI_LOCALE=$lang MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 MBUI_FILM_WINDOW_CORNER=$corner MBUI_FILM_NAV_ABLE=$nav \
     MBUI_FILM="$PWD/$film" MBUI_FILM_LAST="$PWD/$dir/$mode.png" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" > "$log" 2>&1
   rc=$?
   grep -a 'DRIVE CORNER' "$log" | sed 's|^.*DRIVE CORNER ||' > "$said"
