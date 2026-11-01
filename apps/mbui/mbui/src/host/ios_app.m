@@ -1804,6 +1804,29 @@ static void watch_keyboard(void) {
     send_text(7, @"", 0, 0);
     [v requestFrame];
   }];
+  // the keyboard come to rest: where the system says it is, and where the keyboard's guide (what the app is laid out
+  // above, ime_over) has it, into the performance record when they differ (2026-11-01: once in a while on an iPhone
+  // Duo the app laid out as if no keyboard were up, the composer under it, till the app was started again)
+  [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardDidShowNotification object:nil
+                                                   queue:NSOperationQueue.mainQueue
+                                              usingBlock:^(NSNotification *n) {
+    MBController *c = the_controller;
+    UIView *root = c.view;
+    if (!root.window) return;
+    CGRect end = [n.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    CGRect at = [root convertRect:end fromCoordinateSpace:root.window.screen.coordinateSpace];
+    double guide = root.keyboardLayoutGuide.layoutFrame.origin.y;
+    double mark = c.kbMark ? c.kbMark.frame.origin.y : -1;
+    double over = ime_over();
+    double h = root.bounds.size.height;
+    // (none of it over the app, a keyboard beside it or floating: nothing to compare)
+    if (at.origin.y >= h || CGRectGetMaxY(at) < h - 1) return;
+    BOOL off = fabs(guide - at.origin.y) > 2 || (c.kbMark && fabs(mark - at.origin.y) > 2) || over < 1;
+    if (!off) return;
+    mb_perf_note([NSString stringWithFormat:@"keyboard: up at %.0f of %.0f, the guide at %.0f, its mark at %.0f, the app above %.0f; edge=%d parent=%@ window=%@ key=%d",
+                                            at.origin.y, h, guide, mark, over, edge, NSStringFromClass(c.parentViewController.class),
+                                            NSStringFromClass(root.window.class), root.window.isKeyWindow].UTF8String);
+  }];
 }
 
 // The device's default network as it changes (Network's path monitor, as Android's NetworkWatch): another one than
