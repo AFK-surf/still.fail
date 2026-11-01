@@ -45,6 +45,9 @@ priv struct OldIsland {
   /// as tall as what it holds at its width (old's `natural`): that height as the old frame last laid it out (None
   /// before it first is), what its node is as tall as; the box it is laid out in, as tall as it (-1: none this frame)
   natural : @signals.Signal[Double?]?
+  /// as wide as what it holds, `most` at most and never narrower than it is (old's `fits`): the least that is, as the
+  /// old frame last laid it out, told the signal (None before it first is)
+  fits : (Double, @signals.Signal[Double?])?
   mut held_box : Int
 }
 
@@ -611,13 +614,31 @@ fn old_frame(c : Ctx) -> Unit {
             // (as tall as what it holds: built for its width, its Ctx::height the window's (where it is built, not how
             // tall it may be), never the height it is given, which is what it holds's)
             let room_h = if o.natural is Some(_) { c.height } else { h }
-            o.room.val = (w, room_h)
+            // (as wide as what it holds: built for the most it may be, whatever it is now)
+            let room_w = match o.fits {
+              Some((most, _)) => most
+              None => w
+            }
+            o.room.val = (room_w, room_h)
             let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
-            c.sized(w, room_h, fn() {
+            c.sized(room_w, room_h, fn() {
               match o.natural {
                 // (as tall as what it holds at its width, in a box of its own: how tall that is laid out, its node's
-                // height, old_natural_after_layout)
-                Some(_) => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
+                // height, old_natural_after_layout; as wide as what it holds, `most` at most, no narrower than its node:
+                // how wide that is laid out, what its node is told)
+                Some(_) =>
+                  match o.fits {
+                    // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
+                    // narrower than its node; whatever its node is now)
+                    Some((most, _)) => {
+                      let most = dmax(w, most)
+                      c.box(style=style(w=Fixed(most), align=AStart), fn() {
+                        o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
+                      })
+                      |> ignore
+                    }
+                    None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
+                  }
                 None => {
                   o.held_box = -1
                   put()
@@ -1908,12 +1929,16 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// built again as that changes. `natural`: as tall as what it holds at the width it is given (laid out so by the old
 /// frame, old_natural_after_layout), not as said of it (a panel's body, as tall as its words): said no taller (max_height),
 /// cut to that. Built then for its width with the window's height as its Ctx::height (where it is built, no bound on
-/// how tall it is), again as either changes, never for the height it is given.
+/// how tall it is), again as either changes, never for the height it is given. `fits`: as wide as what it holds besides, at
+/// most its first and never narrower than its node is (a panel as wide as what it holds, never narrower than it has been):
+/// that width as the old frame last laid it out told its second (None before), built for the most whatever it is; a
+/// `natural` one's alone.
 pub fn old(
   v : @view.View,
   build : (Ctx) -> Unit,
   key? : () -> String = fn() { "" },
   natural? : Bool = false,
+  fits? : (Double, @signals.Signal[Double?]),
 ) -> @view.View {
   v.hosted(make=fn(n) {
     // (as tall as what it holds at the width it is given, as the old frame last laid that out: old_natural_after_layout)
@@ -1972,6 +1997,7 @@ pub fn old(
       part: -1,
       room,
       natural: natural_h,
+      fits: if natural { fits } else { None },
       held_box: -1,
     })
     n.owns(fn() {
@@ -3686,6 +3712,16 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
         if @signals.untracked(fn() { s.get() }) != Some(h) {
           s.set(Some(h))
           c.read_changed("an old view's height, what it holds laid out")
+        }
+        match o.fits {
+          Some((_, f)) => {
+            let w = c.nodes[o.held_box].fw
+            if @signals.untracked(fn() { f.get() }) != Some(w) {
+              f.set(Some(w))
+              c.read_changed("an old view's width, what it holds laid out")
+            }
+          }
+          None => ()
         }
       }
       _ => ()

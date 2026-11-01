@@ -345,3 +345,92 @@ test "old natural: laid out under a node 10.4 tall, or in one moved down 10.4 (a
     (((0.0, 10.4, 100.0, 50.0), (0.0, 10.4, 100.0, 50.0), 0, 1), own, own),
   )
 }
+
+///|
+/// A window 400×800 whose tree holds a node as wide as the old view in it (old's `fits`: `most` at most) says, that
+/// old view as tall as what it holds (`words` wrapped) and as wide; how many times its body was built, in `built`.
+fn fits_tester(
+  most : Double,
+  words : @signals.Signal[String],
+  at : @signals.Signal[(Double, Double)],
+  built : Ref[Int],
+  ids : Map[String, @view.View],
+) -> Tester {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=800.0)
+  set_view_app(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(400.0))) |> ignore
+      let wide = @signals.signal(None, same=fn(a : Double?, b : Double?) { a == b })
+      col.box(fn(p) {
+        p.width(By(fn() { Some(dmin(most, wide.get().unwrap_or(0.0))) })).offset(By(fn() { at.get() })) |> ignore
+        ids["panel"] = p
+        ids["old"] = old(p, natural=true, fits=(most, wide), fn(c) {
+          built.val = built.val + 1
+          c.box(w=Fill(1.0), fn() { c.text(words.get(), wrap=true) |> ignore }) |> ignore
+        })
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.frame()
+  t
+}
+
+///|
+/// The node as wide as its old view, the old view (each x, y, w, h laid out), and its words as the old frame laid them
+/// out (w, h).
+fn fits_said(ids : Map[String, @view.View]) -> ((Double, Double, Double, Double), (Double, Double, Double, Double), (Double, Double)) {
+  let c = g()
+  let mut words = (-1.0, -1.0)
+  for i in 0..<c.count {
+    if c.nodes[i].kind == kind_text && c.nodes[i].text.has_prefix("词") {
+      words = (c.nodes[i].fw, c.nodes[i].fh)
+    }
+  }
+  (laid_of(ids["panel"]), laid_of(ids["old"]), words)
+}
+
+///|
+test "old fits: as wide as what it holds and as tall from the first frame; wider the frame what it holds grows, never narrower as it shrinks, its most at most (wrapped then); moved: painted alone, as wide" {
+  let words = @signals.signal("词词词")
+  let at = @signals.signal((0.0, 0.0))
+  let built = Ref(0)
+  let ids : Map[String, @view.View] = {}
+  let t = fits_tester(200.0, words, at, built, ids)
+  let first = fits_said(ids)
+  words.set("词词词词词词")
+  t.frame()
+  let grown = fits_said(ids)
+  words.set("词")
+  t.frame()
+  let shrunk = fits_said(ids)
+  words.set("词".repeat(40))
+  t.frame()
+  let past = fits_said(ids)
+  t.clock_frame()
+  t.clock_frame()
+  let was = paints_alone.val
+  at.set((10.0, 20.0))
+  t.clock_frame()
+  let moved = (paints_alone.val - was, fits_said(ids).1.2)
+  // (each: the node as wide as the old view, and as its words where they are narrower than the most; as tall)
+  let fits = fn(s : ((Double, Double, Double, Double), (Double, Double, Double, Double), (Double, Double))) {
+    s.0.2 == s.1.2 && s.1.3 == s.2.1 && s.0.2 > 0.0
+  }
+  assert_eq(
+    (
+      fits(first),
+      first.0.2 == first.2.0,
+      fits(grown),
+      grown.0.2 == grown.2.0 && grown.0.2 > first.0.2,
+      fits(shrunk),
+      shrunk.0.2 == grown.0.2,
+      fits(past),
+      past.0.2 == 200.0 && past.2.0 == 200.0 && past.1.3 > grown.1.3,
+      moved,
+    ),
+    (true, true, true, true, true, true, true, true, (1, 200.0)),
+    msg="built \{built.val} first \{first} grown \{grown} shrunk \{shrunk} past \{past}",
+  )
+}
