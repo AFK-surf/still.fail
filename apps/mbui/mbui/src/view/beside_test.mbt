@@ -57,6 +57,34 @@ test "lives_with: a node held elsewhere let go with its owner" {
 }
 
 ///|
+test "lives_with: held beside its owner in one layer, the layer let go whole (a tip of a menu's row, the menu made anew as the theme changes): each let go once, nothing read past what the layer holds" {
+  let theme = @signals.signal(0, same=fn(a, b) { a == b })
+  let mades : Array[@view.View] = []
+  // (one made elsewhere as the owner goes, in the place the tip let go of)
+  let after : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.pick(fn() { theme.get() }, fn(p, _) {
+        let layer = p.box(fn(l) { l.over(Is(true)) |> ignore })
+        layer.box(fn(o) {
+          mades.push(layer.box(fn(x) { x.width(Is(Some(10.0))) |> ignore }).lives_with(o))
+          o.owns(fn() { after.val = Some(root.box(fn(_) {  })) }) |> ignore
+        })
+        |> ignore
+      })
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  t.event(10.0, fn() { theme.set(1) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(mades.length(), 2, msg="made anew")
+  assert_false(mades[0].alive(), msg="the first let go with its owner")
+  assert_true(mades[1].alive(), msg="the new one there")
+  assert_true(after.val.unwrap().alive(), msg="what was made elsewhere as it went, not let go with it")
+}
+
+///|
 test "beside: one beside another that goes beside a third, made and said the other way round: placed in their order, whatever order made or said; following the first's holder moved, in the one frame after; a colour alone changed, none placed again" {
   let hx = @signals.signal(100.0, same=fn(a, b) { a == b })
   let ink = @signals.signal(0x000000FFL, same=fn(a, b) { a == b })

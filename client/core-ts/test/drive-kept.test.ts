@@ -373,6 +373,36 @@ test("a chat's file opened is kept with its chat: read again from the device, li
   t.core.close();
 });
 
+test("a chat's video streamed to a page that takes its bytes away (the web's worker moves them to the page): played, and kept all the same", async () => {
+  const t = await started();
+  const film = bytesOf(64, 30);
+  stationReplies(t.host, (req) => {
+    const u = new URL(req.url);
+    if (!u.pathname.endsWith("/sessions/k1/parts")) return undefined;
+    const offset = Number(u.searchParams.get("offset"));
+    return new Raw({ status: 200, headers: [["content-type", "video/mp4"], ["stillfail-total", "64"]], body: film.slice(offset, offset + Number(u.searchParams.get("length"))) });
+  });
+  const asked = () => t.host.requests.filter((r) => r.url.includes("/sessions/k1/")).length;
+  // (what the page is given is the page's: its buffer moved there, nothing of it left here)
+  const emit = t.host.emit.bind(t.host);
+  t.host.emit = (client, message) => {
+    emit(client, message);
+    if ("bytes" in message && message.bytes !== undefined) structuredClone(message.bytes.buffer, { transfer: [message.bytes.buffer as ArrayBuffer] });
+  };
+  const ui = t.core.connect();
+  call(t.core, ui, 1, "station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 0, length: 32, stream: true, keep: true, size: 64 });
+  await t.host.settle();
+  const said = t.host.takeEmitted().map(([, m]) => m as { id?: number; bytes?: Uint8Array; ok?: unknown; error?: unknown }).filter((m) => m.id === 1);
+  assert.deepEqual(said.flatMap((m) => (m.bytes ? [...m.bytes] : [])), [...film.subarray(0, 32)], "played");
+  assert.equal(said.find((m) => m.error !== undefined)?.error, undefined, "no error");
+  assert.ok(said.some((m) => m.ok !== undefined), "answered");
+  // read again: from the device
+  call(t.core, ui, 2, "station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 8, length: 16, keep: true, size: 64 });
+  await t.host.settle();
+  assert.equal(asked(), 1, "kept as it was played");
+  t.core.close();
+});
+
 test("the page of what the device keeps calls each chat as the chats' list does, the one keeping most first", async () => {
   const t = await started();
   const data = t.core.inner.data;
