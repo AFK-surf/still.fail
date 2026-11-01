@@ -69,6 +69,7 @@ pub fn film(
     say("film: fps must be positive")
     return false
   }
+  let host = @hostapi.host()
   let t = scene_tester(
     view,
     tree?,
@@ -82,6 +83,7 @@ pub fn film(
     corners_held=true,
     words_over_held=false,
   )
+  defer { t.end_run(host) }
   // The application's clock must advance at the film's rate too. Merely giving the encoder a higher rate would
   // duplicate frames of a run still drawn at the Tester's default 60 Hz.
   t.set_frame_period(1000.0 / fps.to_double())

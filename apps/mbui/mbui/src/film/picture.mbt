@@ -38,6 +38,7 @@ pub fn picture(
     say("picture: an output path, positive finite size, non-negative time and a supported host are required")
     return false
   }
+  let host = @hostapi.host()
   let t = scene_tester(
     view,
     tree?,
@@ -51,6 +52,7 @@ pub fn picture(
     corners_held=false,
     words_over_held~,
   )
+  defer { t.end_run(host) }
   t.set_frame_period(1000.0 / fps.to_double())
   let mut ran = false
   if prepare != "" {
