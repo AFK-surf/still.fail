@@ -691,6 +691,9 @@ priv struct BarModel {
   /// a finger: where it has the ball (-1 none), its height once the panel is its own
   mut drag : Double
   mut drag_y : Double
+  /// the place under this finger, and the last place felt as it moved (to avoid feeling it again on release)
+  mut finger_on : (Int, String)?
+  mut felt_on : (Int, String)?
   mut holds : Bool
   mut from_open : Bool
   mut open : Bool
@@ -739,6 +742,8 @@ let bar : BarModel = {
   active_was: "",
   drag: -1.0,
   drag_y: -1.0,
+  finger_on: None,
+  felt_on: None,
   holds: false,
   from_open: false,
   open: false,
@@ -775,6 +780,8 @@ fn bar_reset() -> Unit {
   bar.active_was = ""
   bar.drag = -1.0
   bar.drag_y = -1.0
+  bar.finger_on = None
+  bar.felt_on = None
   bar.holds = false
   bar.from_open = false
   bar.open = false
@@ -1383,6 +1390,8 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
     }
     m.drag = -1.0
     m.drag_y = -1.0
+    m.finger_on = None
+    m.felt_on = None
     m.holds = false
   }
   // the notch's icon: another swaps in as the notch stays open (a short scale and fade); closed or none shown, at once
@@ -2076,8 +2085,27 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
   let py = d.y
   let o_at = m.o.value_at(t)
   let c = @ui.current()
+  // The place the finger would choose, as the bar lights it (including the panel's rows).
+  let finger_on = fn(x : Double, y : Double) {
+    let cs = bar_centres(l.w, if told.action != "" && !m.mode.get() { 1.0 } else { 0.0 }, l.items.length())
+    bar_finger(told, cs, x, y).map(fn(p) { (p.2, p.3) })
+  }
+  // A choice felt under the moving finger needs no second tap when the finger is lifted.
+  let feel_choice = fn(i : Int, key : String?) {
+    let already = match key {
+      Some(k) => m.felt_on == Some((i, k))
+      None => false
+    }
+    if !already && !@sf.pointer_rests() {
+      @ui.haptic(TextHandleMove)
+    }
+  }
+  if how is Pressed {
+    m.felt_on = None
+  }
   let on_tab = fn(place : String) {
     if Some(place) != told.active {
+      feel_choice(l.cur, Some(place))
       go_place(c, place, l.sets, l.cur)
     }
   }
@@ -2091,6 +2119,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
       Some(n) => n
       None => return
     }
+    feel_choice(i, key)
     let lit : Map[String, Double] = Map([])
     for id, g in m.tints {
       lit[id] = g.at(t).0
@@ -2119,6 +2148,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
     m.holds = false
     m.drag = -1.0
     m.drag_y = -1.0
+    m.finger_on = None
   }
   // a tap on the bar's places where they are at `t` (the notch open as far as it is then)
   let tap_bar = fn() {
@@ -2147,6 +2177,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
     if m.holds {
       m.mode.set(true)
     }
+    m.finger_on = finger_on(px, if m.holds && py < l.row_top - 4.0 { py } else { -1.0 })
   }
   if m.swap_at(t) is Some(_) {
     match how {
@@ -2205,13 +2236,27 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
       } else {
         -1.0
       }
+      let now = finger_on(m.drag, m.drag_y)
+      if now != m.finger_on {
+        m.finger_on = now
+        match now {
+          Some(_) if !@sf.pointer_rests() => {
+            @ui.haptic(TextHandleMove)
+            m.felt_on = now
+          }
+          _ => ()
+        }
+      }
     }
     // held still where it went down, on the bar's row: the ball the finger's there, the lens over it as while it
     // slides (iOS's tab bar), going nowhere till the finger moves; let go, as a drag ends
     Held =>
-      if !m.holds && py >= l.row_top - 4.0 {
+      if !m.holds && py >= l.row_top - 4.0 && l.items.length() > 0 {
         m.drag = px
         m.drag_y = -1.0
+        if !@sf.pointer_rests() {
+          @ui.haptic(LongPress)
+        }
       }
     Ended => {
       let had = m.holds
