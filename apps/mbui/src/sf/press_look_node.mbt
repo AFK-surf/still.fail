@@ -21,14 +21,13 @@ priv struct PressRipple {
 }
 
 ///|
-/// A press's ripple and sink over node `v`, as big as `size` says (what its own width and height are said by, as
-/// the press is: nothing read back of its layout), its corners
+/// A press's ripple and sink over node `v`, as big as the press says it is laid out as it goes down (Drag's `w`, `h`:
+/// nothing read back of its layout), its corners
 /// `corner`, the disc in `ink` (black at .1 by default, @motion.ripple_ink); sunk while pressed where `grounded` (a
-/// ground of its own). What its gesture's press is told (View::gesture's `press`): the press's where and when. Its
-/// letting go is the node's (View::pressed).
+/// ground of its own). What its gesture's press is told (View::gesture's `press`): the press's where, when and how big
+/// it is then. Its letting go is the node's (View::pressed).
 fn press_look(
   v : @view.View,
-  size : () -> (Double, Double),
   corner : @view.Live[Double],
   grounded : () -> Bool,
   ink? : Int64 = @motion.ripple_ink,
@@ -49,12 +48,8 @@ fn press_look(
   // (let go: each ripple not yet let go on its way out once its way in is over; the sink back)
   v.reacts(fn() { v.pressed() }, fn(down) {
     let at = v.cause_at()
+    // (sunk as the press goes down, by how big it is then: the press's own)
     if down {
-      if @signals.untracked(grounded) {
-        let (bw, bh) = @signals.untracked(size)
-        sink_most.val = dmin(press_sink_most, @motion.press_sink / dmax(dmax(bw, bh), 1.0))
-        sink.go(1.0, @motion.lift_spring, at~)
-      }
       return
     }
     sink.go(0.0, @motion.lift_spring, at~)
@@ -97,12 +92,15 @@ fn press_look(
   })
   |> ignore
   fn(d) {
+    if @signals.untracked(grounded) {
+      sink_most.val = dmin(press_sink_most, @motion.press_sink / dmax(dmax(d.w, d.h), 1.0))
+      sink.go(1.0, @motion.lift_spring, at=d.at)
+    }
     let way = @motion.Way::new(0.0)
     way.go(0.5, @motion.tween(@motion.ripple_enter_ms, ease=Out), at=d.at)
     let n = next.val
     next.val = n + 1
-    let (w, h) = @signals.untracked(size)
-    made[n] = { x: d.x, y: d.y, w, h, way, at: d.at, lifted: None, due: [] }
+    made[n] = { x: d.x, y: d.y, w: d.w, h: d.h, way, at: d.at, lifted: None, due: [] }
     let now = @signals.untracked(fn() { ripples.get() }).copy()
     now.push(n)
     ripples.set(now)

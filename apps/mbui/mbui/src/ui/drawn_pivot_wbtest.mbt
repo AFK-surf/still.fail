@@ -109,3 +109,74 @@ test "a node grown about the middle of what it draws: a block in it faded and th
   t.frame()
   assert_eq((first, kept, n.rect().0), (15.0, true, 35.0))
 }
+
+///|
+test "a node grown about the middle of what it draws, its ground of no opacity, then of some, then of none again: about the middle of what it holds of colour, then of all of it, then of what it holds again (an old view's held_look, its box's grounded)" {
+  let ground = @signals.signal(0x3366CC00L, same=fn(a, b) { a == b })
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  let node : Ref[@view.View?] = Ref(None)
+  set_view_app(fn(root) {
+    node.val = Some(
+      root.box(fn(p) {
+        p
+        .row(Is(true))
+        .width(Is(Some(200.0)))
+        .height(Is(Some(20.0)))
+        .ground(By(fn() { ground.get() }))
+        .scale(Is(0.5), about=Drawn)
+        |> ignore
+        p.box(fn(a) { a.width(Is(Some(40.0))).ground(Is(0xCC3333FFL)) |> ignore }) |> ignore
+      }),
+    )
+  })
+  t.draw()
+  let clear = node.val.unwrap().rect().0
+  ground.set(0x3366CCFFL)
+  t.frame()
+  let whole = node.val.unwrap().rect().0
+  ground.set(0x3366CC00L)
+  t.frame()
+  // (half as big about 20 in, its left drawn 10 in; about 100 in, 50 in)
+  assert_eq((clear, whole, node.val.unwrap().rect().0), (10.0, 50.0, 10.0))
+}
+
+///|
+/// The red box 40 wide at the left of a box 200 by 20 of `ground`, that grown half as big about the middle of what it
+/// draws: an old view's (Ctx::held_look's, its box's grounded) or the tree's (View::scale's Drawn). Where the red box
+/// is drawn and how big.
+fn clear_ground_drawn(node : Bool, ground : Int64) -> Array[Double] raise {
+  let red = 0xCC3333FFL
+  let t = Tester::new(
+    fn(c) {
+      if !node {
+        let b = c.box(w=Px(200.0), h=Px(20.0), dir=Row, bg=ground, align=AStart, fn() {
+          c.box(w=Px(40.0), h=Px(20.0), bg=red, fn() {  }) |> ignore
+        })
+        // (held_look's scale about its point; drawn whole, as the tree's is: its row_held_look's alpha at half open is
+        // none)
+        c.look_by(b, fn() { { ..c.held_look(b, 0.5), alpha: 1.0 } })
+      }
+    },
+    w=400.0,
+    h=300.0,
+  )
+  if node {
+    set_view_app(fn(root) {
+      root.box(fn(p) {
+        p.row(Is(true)).width(Is(Some(200.0))).height(Is(Some(20.0))).ground(Is(ground)).scale(Is(0.5), about=Drawn) |> ignore
+        p.box(fn(a) { a.width(Is(Some(40.0))).ground(Is(red)) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+  }
+  t.draw()
+  rect_of_color(red)[0:4].to_array()
+}
+
+///|
+test "a box grown about the middle of what it draws, its ground of no opacity or of some: its red box drawn where an old view's held_look draws it, as big" {
+  let seen = [0x3366CC00L, 0x3366CCFFL].map(fn(g) {
+    (clear_ground_drawn(false, g) catch { _ => [] }, clear_ground_drawn(true, g) catch { _ => [] })
+  })
+  assert_eq(seen.map(fn(p) { p.0 == p.1 && p.0.length() == 4 }), [true, true], msg="\{seen}")
+}

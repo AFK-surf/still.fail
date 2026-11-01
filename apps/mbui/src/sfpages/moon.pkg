@@ -11,6 +11,7 @@ import {
   "mbui/motion",
   "mbui/codec",
   "mbui/signals",
+  "mbui/view",
   "stillfail/gallery",
 }
 

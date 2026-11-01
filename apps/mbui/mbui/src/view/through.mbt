@@ -201,6 +201,8 @@ fn Tree::hand_on(self : Tree, th : Through, why : Handed, x : Double, y : Double
           oy: (dy - ny) / ns,
           finger: th.finger,
           since: th.down_at,
+          w: n.flex.width,
+          h: n.flex.height,
         })
       })
       // (moved: the move that handed it its, from where it went down, while it holds it still)
@@ -217,6 +219,8 @@ fn Tree::hand_on(self : Tree, th : Through, why : Handed, x : Double, y : Double
             oy: (dy - ny) / ns,
             finger: th.finger,
             since: th.down_at,
+            w: self.nodes[u.at].flex.width,
+            h: self.nodes[u.at].flex.height,
           })
         })
       }

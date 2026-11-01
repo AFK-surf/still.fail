@@ -117,3 +117,31 @@ fn nav_foot() -> Double {
 fn system_frame() -> PageFrame {
   { back: None, top: status_top(), foot: nav_foot(), named: false }
 }
+
+///|
+/// The status bar's height for a node of the window's tree in a window `width` wide (status_top's, followed): where the
+/// window's buttons are in the app's top row and it is laid out Small, their band.
+fn status_top_now(width : Double) -> Double {
+  let top = @ui.system_bars().top
+  if top == 0.0 && @sf.layout(width) is Small && @ui.window_inset_now() {
+    window_band_now()
+  } else {
+    top
+  }
+}
+
+///|
+/// `page` made in node `v` inside the bars, as within_bars lays out an old view's (a node over all of `v`): under the
+/// status bar (status_top_now, by the width of the window `v` is in) and over the navigation bar (and the keyboard,
+/// nav_foot), in the room between them.
+fn within_bars_tree(v : @view.View, page : (@view.View) -> Unit) -> Unit {
+  v.box(fn(b) {
+    b.over(Is(true)).padding(By(fn() { (0.0, status_top_now(v.window().0), 0.0, nav_foot()) })) |> ignore
+    b.box(fn(body) {
+      body.grow(Is(1.0)) |> ignore
+      page(body)
+    })
+    |> ignore
+  })
+  |> ignore
+}

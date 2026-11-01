@@ -3,13 +3,21 @@
 // opened with, back on screen, the menu bar's items, the network), the number on its icon.
 
 ///|
+/// The words' language as the core says it (its prefs' `lang`: as chosen, else the device's), I18n.kt's follow: told
+/// each frame (appearance) and as the app's tree is made, before any page of nodes says a word.
+pub fn language_said(src : Source) -> Unit {
+  let prefs = (src.topic)("prefs", {}).value
+  @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
+}
+
+///|
 /// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@hostapi.system_dark)
 /// when it follows it; the host told when it changes (its bars follow, or are as dark as the frame's page says:
 /// `page_dark`).
 pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   // the words' language too, the core's (its `lang`: as chosen, else the device's), I18n.kt's follow
-  @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
+  language_said(src)
   // motion as this device is set (the prefs' `motion`: reduce, full), else as the system's
   @ui.set_motion_chosen(match text(prefs, "motion") {
     "reduce" => Some(true)

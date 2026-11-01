@@ -46,6 +46,23 @@ pub(all) struct SignIn {
 }
 
 ///|
+/// How many times how signing in stands (`state`) has changed: what reads it (a page's nodes) told as it does.
+pub let changed : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// How signing in stands, followed (`changed`): read so by what is told as it changes.
+pub fn sign_in_now() -> SignIn {
+  changed.get() |> ignore
+  state
+}
+
+///|
+/// `state` changed: told.
+fn told() -> Unit {
+  changed.set(@signals.untracked(fn() { changed.get() }) + 1)
+}
+
+///|
 pub let state : SignIn = {
   status: "",
   busy: false,
@@ -297,6 +314,7 @@ fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
     // page saying the browser has it
     state.busy = false
     state.waiting = true
+    told()
   })
 }
 
@@ -313,6 +331,7 @@ fn login_back() -> Unit {
   state.busy = true
   state.waiting = false
   state.verifying = true
+  told()
   let params : Map[String, Json] = { "query": Json::string(@core.query_of(back)) }
   @core.call("auth.complete", params=Json::object(params), on_done=fn(r) {
     match r {
@@ -355,6 +374,7 @@ fn login_command() -> Unit {
 /// second press starts it again: the page may have been closed).
 pub fn sign_in() -> Unit {
   state.failed = ""
+  told()
   if !@core.has_browser_session() {
     if login.val is Some((l, _)) {
       l.end()
@@ -363,6 +383,7 @@ pub fn sign_in() -> Unit {
     state.busy = true
     state.waiting = false
     state.status = "正在浏览器里登录…"
+    told()
     loopback_sign_in(fn(r) {
       ended(r)
       @hostapi.log("SIGN_IN " + state.status)
@@ -374,6 +395,7 @@ pub fn sign_in() -> Unit {
   }
   state.busy = true
   state.status = "正在打开登录页…"
+  told()
   @core.sign_in(fn(r) {
     ended(
       match r {
@@ -408,6 +430,7 @@ fn ended(r : Result[String, String]) -> Unit {
       state.status = "没有登录：\{why}"
     }
   }
+  told()
 }
 
 ///|

@@ -117,7 +117,7 @@ pub fn tool_node(
     // (a press's ripple over it and, where its ground is one of its own as it goes down (@ui.stands_alone, as the old
     // view's box's own_ground), its sink: picture_button's, @motion.ripple)
     let rippled = if ripples {
-      Some(press_look(v, fn() { (tool_side, tool_side) }, corner, fn() { @ui.stands_alone(ground()) }))
+      Some(press_look(v, corner, fn() { @ui.stands_alone(ground()) }))
     } else {
       None
     }

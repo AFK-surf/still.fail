@@ -277,6 +277,8 @@ pub fn kind_mark_of(String) -> Double
 
 pub let kind_slot : @ui.Style
 
+pub fn landing_asked() -> Unit
+
 pub fn landing_error_words(Json) -> String
 
 pub fn landing_reset() -> Unit
@@ -358,6 +360,8 @@ pub fn new_connect_dialog(@sfbase.Source, @settings.Core, @settings.Here, String
 pub fn news_of(@sfbase.Source) -> Json?
 
 pub fn no_workspace(@ui.Ctx, @sfbase.Source, Json?, () -> Unit) -> Unit
+
+pub fn no_workspace_node(@view.View, @sfbase.Source, () -> Json?, () -> Unit) -> @view.View
 
 pub fn notify_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
@@ -570,6 +574,8 @@ pub fn settings_side_rows(@ui.Ctx, @settings.Core, @settings.Here, @settings.Rou
 pub fn share_card_open(@sfbase.Source, @sfbase.Workspace) -> Unit
 
 pub fn shortcuts_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
+
+pub fn sign_in_node(@view.View, @sfbase.Source) -> @view.View
 
 pub fn sign_in_page(@ui.Ctx, @sfbase.Source) -> Unit
 
