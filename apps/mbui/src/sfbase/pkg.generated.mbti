@@ -1695,7 +1695,7 @@ pub let viz_css : String
 
 pub fn viz_css_color(Int64) -> String
 
-pub fn viz_document(String, Json?, Bool, Int64, scroll? : Bool, lib? : String) -> String
+pub fn viz_document(String, Json?, Bool, Int64, scroll? : Bool) -> String
 
 pub let viz_file_box : @ui.Style
 
@@ -1707,7 +1707,7 @@ pub let viz_first_height : Int32
 
 pub fn viz_follow_up(String, String) -> (String) -> Bool
 
-pub fn viz_frame(@ui.Ctx, String, String, Json?, VizHears, fill? : Bool, ground? : Int64, lib? : String) -> Unit
+pub fn viz_frame(@ui.Ctx, String, String, Json?, VizHears, fill? : Bool, ground? : Int64) -> Unit
 
 pub let viz_frames : Map[String, VizFrame]
 
@@ -1741,21 +1741,11 @@ pub let viz_loads : Map[String, VizLoad]
 
 pub let viz_max_state : Int32
 
-pub let viz_mermaid : String
-
-pub fn viz_mermaid_block(@ui.Ctx, Source, String, String, Int64) -> Unit
+pub fn viz_mermaid_block(@ui.Ctx, Source, String, String, String, Int64) -> Unit
 
 pub let viz_mermaid_box : @ui.Style
 
-pub fn viz_mermaid_document(String, full? : Bool) -> String
-
-pub fn viz_mermaid_lib() -> String
-
-pub fn viz_mermaid_page(@ui.Ctx, String, String, Int64) -> Unit
-
 pub fn viz_open_full(String, String, String, String, String, linked? : Bool) -> Unit
-
-pub fn viz_open_mermaid(String) -> Unit
 
 pub fn viz_page_document(String) -> String
 
@@ -1788,8 +1778,6 @@ pub fn viz_tokens(Bool) -> Array[(String, String)]
 pub fn viz_tokens_json(Bool) -> String
 
 pub fn viz_tr(String, args? : Array[(String, String)]) -> String
-
-pub let viz_unmade : Map[String, Bool]
 
 pub let viz_wait : @ui.Style
 
@@ -3474,7 +3462,6 @@ pub(all) struct VizFull {
   path : String
   session : String
   linked : Bool
-  mermaid : String?
 }
 
 pub(all) struct VizHears {

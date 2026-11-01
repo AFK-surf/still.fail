@@ -1024,7 +1024,7 @@ pub let viz_css : String
 
 pub fn viz_css_color(Int64) -> String
 
-pub fn viz_document(String, Json?, Bool, Int64, scroll? : Bool, lib? : String) -> String
+pub fn viz_document(String, Json?, Bool, Int64, scroll? : Bool) -> String
 
 pub fn viz_file_of(@ui.Ctx, @sfbase.Source, String, String, String, String, @sfbase.Attachment, () -> Unit, Int64) -> Unit
 
@@ -1032,7 +1032,7 @@ pub let viz_first_height : Int32
 
 pub fn viz_follow_up(String, String) -> (String) -> Bool
 
-pub fn viz_frame(@ui.Ctx, String, String, Json?, @sfbase.VizHears, fill? : Bool, ground? : Int64, lib? : String) -> Unit
+pub fn viz_frame(@ui.Ctx, String, String, Json?, @sfbase.VizHears, fill? : Bool, ground? : Int64) -> Unit
 
 pub let viz_frames : Map[String, @sfbase.VizFrame]
 
@@ -1058,11 +1058,7 @@ pub let viz_loads : Map[String, @sfbase.VizLoad]
 
 pub let viz_max_state : Int32
 
-pub fn viz_mermaid_block(@ui.Ctx, @sfbase.Source, String, String, Int64) -> Unit
-
-pub fn viz_mermaid_document(String, full? : Bool) -> String
-
-pub fn viz_mermaid_page(@ui.Ctx, String, String, Int64) -> Unit
+pub fn viz_mermaid_block(@ui.Ctx, @sfbase.Source, String, String, String, Int64) -> Unit
 
 pub fn viz_open_full(String, String, String, String, String, linked? : Bool) -> Unit
 

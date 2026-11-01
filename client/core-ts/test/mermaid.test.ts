@@ -21,7 +21,8 @@ test("a flowchart in Chinese and English: SVG text, laid out from where its node
   const box = /<rect[^>]*width="([\d.]+)"[^>]*class="basic label-container"/.exec(svg);
   assert(box, "a node's box");
   assert(Number(box[1]) > wordsWidth("用户发消息", 14, false), `${box[1]} wide`);
-  assert(svg.includes("fill:#ffffff") || svg.includes("fill: #ffffff") || svg.includes("#ffffff"), "in the colours asked");
+  // on the ground asked, the first thing drawn
+  assert.match(svg, /^<svg[^>]*><rect x="0" y="0" width="[\d.]+" height="[\d.]+" fill="#ffffff"\/>/);
 });
 
 test("words measured as Inter sets them; Chinese a square each", () => {

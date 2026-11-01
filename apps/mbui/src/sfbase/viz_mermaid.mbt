@@ -1,15 +1,15 @@
 // A ```mermaid block's chart drawn by the app itself: the core makes it (`mermaid.chart`: mermaid.js lays it out
 // there, client/core-ts/src/mermaid.ts, its words measured in the faces the app sets them in) and gives an SVG in the
-// theme's colours, drawn here as a picture (mbui's SVG renderer, as an .svg file is). No page per chart: as wide as it
-// is written, or the column's where that is less, in its proportions. One the core refuses (mermaid does not read it,
-// or part of it would be HTML) is drawn by mermaid in a page as before (viz_page.mbt). mermaid itself is not in the
-// core's own script: the app gives it the one it carries (mermaid_lib.mbt) the first time a chart is drawn.
+// theme's colours, drawn here as a picture (mbui's SVG renderer, as an .svg file is): as wide as it is written, or the
+// column's where that is less, in its proportions; over the whole screen, the viewer's picture (pinched, moved, kept).
+// One the core refuses (mermaid does not read it, or part of it would be HTML) shows as its code. mermaid itself is not
+// in the core's own script: the app gives it the one it carries (mermaid_hbc.mbt) the first time a chart is drawn.
 
 ///|
 priv enum MermaidChart {
   ChartComing
-  /// the picture's key, its width and height as the chart says them
-  ChartMade(String, Double, Double)
+  /// its SVG, the picture's key, its width and height as the chart says them
+  ChartMade(Bytes, String, Double, Double)
   ChartRefused
 }
 
@@ -72,29 +72,22 @@ fn mermaid_ask(code : String, width : Int) -> Json {
 }
 
 ///|
-/// A ```mermaid block: its chart drawn as a picture (`place`: the message it is in), with a way under it to open it
-/// over the whole screen (in `subtle`, the frame's grey); while the core makes it, its place as a page's while it
-/// waits; refused, drawn by mermaid in a page (viz_mermaid_page); one that will not draw at all shown as code.
-pub fn viz_mermaid_block(c : @ui.Ctx, src : Source, place : String, code : String, subtle : Int64) -> Unit {
-  if viz_unmade.contains(code) {
-    @sf.code_block(c, code, "mermaid")
-    return
-  }
+/// A ```mermaid block: its chart drawn as a picture (`place`: the message it is in, on `station`), with a way under it
+/// to open it over the whole screen (in `subtle`, the frame's grey); while the core makes it, its place as a page's
+/// while it waits; refused, its code.
+pub fn viz_mermaid_block(c : @ui.Ctx, src : Source, station : String, place : String, code : String, subtle : Int64) -> Unit {
   ignore(mermaid_made.get())
   let ask = mermaid_ask(code, mermaid_filling)
   let key = ask.stringify()
   match mermaid_charts.get(key) {
-    Some(ChartRefused) => {
-      viz_mermaid_page(c, place, code, subtle)
-      return
-    }
-    Some(ChartMade(picture, w, h)) =>
+    Some(ChartRefused) => @sf.code_block(c, code, "mermaid")
+    Some(ChartMade(svg, picture, w, h)) =>
       c.box(style=viz_mermaid_box, fn() {
         c.box(style=@ui.style(w=Full, max_w=Fixed(w)), aspect=w / h, fn() {
           c.image(picture, w=Fill(1.0), h=Fill(1.0), fit=FitContain, bg=0L, fade=false) |> ignore
         })
         |> ignore
-        mermaid_ways(c, place, code, subtle)
+        mermaid_ways(c, station, place, svg, w, h, subtle)
       })
       |> ignore
     _ => {
@@ -132,8 +125,9 @@ fn mermaid_asked(src : Source, key : String, ask : Json) -> Unit {
     match r {
       Ok({ "svg": String(svg), "width": Number(w, ..), "height": Number(h, ..), .. }) if w > 0.0 && h > 0.0 => {
         let picture = "mem:mermaid/" + key
-        @ui.add_image(picture, @utf8.encode(svg))
-        mermaid_charts[key] = ChartMade(picture, w, h)
+        let bytes = @utf8.encode(svg)
+        @ui.add_image(picture, bytes)
+        mermaid_charts[key] = ChartMade(bytes, picture, w, h)
       }
       // a core that has not mermaid (started anew since it was given it): given it again, asked again
       Err({ "code": String("mermaid_absent"), .. }) if mermaid_given.val => {
@@ -147,12 +141,30 @@ fn mermaid_asked(src : Source, key : String, ask : Json) -> Unit {
 }
 
 ///|
-/// Under a chart, out of its way, as a placed file has it: the whole screen.
-fn mermaid_ways(c : @ui.Ctx, place : String, code : String, subtle : Int64) -> Unit {
+/// Under a chart, out of its way, as a placed file has it: the whole screen, the viewer's (as a picture waiting in the
+/// composer opens: from its bytes, a path of its own, no session's), its SVG `svg` `w` × `h`.
+fn mermaid_ways(c : @ui.Ctx, station : String, place : String, svg : Bytes, w : Double, h : Double, subtle : Int64) -> Unit {
   c.box(style=viz_ways, fn() {
-    let full = c.id("viz/full/" + place + "/mermaid/" + code)
+    let full = c.id("viz/full/" + place + "/mermaid/" + svg.length().to_string())
     if c.clicked(full) {
-      c.tell("viz/open-mermaid", fn() { viz_open_mermaid(code) })
+      c.tell("viz/open-mermaid", fn() {
+        let a : Attachment = {
+          name: "Mermaid.svg",
+          path: "draft:mermaid/" + @zip.sha256(svg).view(end_offset=16).to_owned(),
+          size: svg.length().to_double(),
+          width: w,
+          height: h,
+          thumbhash: "",
+          owner: "",
+          upload: "",
+          duration: 0.0,
+          frames: 0,
+          held: false,
+        }
+        // (the viewer's id of it, Viewer::id: its station, no session, its path)
+        keep_read(station + "//" + a.path, svg)
+        open_preview(station, "", a)
+      })
     }
     viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"), subtle)
   })

@@ -130,9 +130,13 @@ export function mermaidChart(code: string, look: MermaidLook, px: number): Promi
       for (const el of window!.document.body.querySelectorAll(`[id^="dchart"]`)) el.remove();
     }
     if (svg.includes("<foreignObject")) throw new MermaidRefused("HTML in the chart");
-    const [, , width = 0, height = 0] = (/viewBox="([^"]*)"/.exec(svg)?.[1] ?? "").trim().split(/[\s,]+/).map(Number);
+    const [x = 0, y = 0, width = 0, height = 0] = (/viewBox="([^"]*)"/.exec(svg)?.[1] ?? "").trim().split(/[\s,]+/).map(Number);
     if (!(width > 0 && height > 0)) throw new MermaidRefused("a chart of no size");
-    return { svg, width, height };
+    // on its page's ground, as mermaid's own page has it (a style's background no SVG renderer draws): shown anywhere
+    // (the viewer's black), its words and lines read as they do in the message
+    const open = svg.indexOf(">", svg.indexOf("<svg")) + 1;
+    const ground = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${look.background}"/>`;
+    return { svg: svg.slice(0, open) + ground + svg.slice(open), width, height };
   });
   queue = made.catch(() => undefined);
   return made.then(

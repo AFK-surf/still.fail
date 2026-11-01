@@ -370,7 +370,7 @@ writeFileSync(f, transformSync(readFileSync(f, 'utf8'), { babelrc: false, config
   $OUT/hermes/bin/hermes $o/run.hbc
 }
 
-# mermaid as the app carries it (client/core-ts/scripts/mermaid-bundle.ts: sfbase's mermaid_lib.mbt and mermaid_hbc.mbt),
+# mermaid as the app carries it (client/core-ts/scripts/mermaid-bundle.ts: sfbase's mermaid_hbc.mbt),
 # made again with this hermesc: after mermaid or Hermes changes.
 mermaid_lib() {
   have_deps
