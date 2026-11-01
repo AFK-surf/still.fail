@@ -12,7 +12,8 @@ import { TestClock } from "effect/testing";
 import { StationBrowser, IDLE_MS } from "../src/browser/browser.ts";
 import { Browsers } from "../src/browser/browsers.ts";
 import { Gate } from "../src/browser/gate.ts";
-import { expired, ofSites, siteCookies } from "../src/browser/signins.ts";
+import { expired, keptOf, ofSites, siteCookies, stateOf } from "../src/browser/signins.ts";
+import { passkeyOf, sitePasskeys } from "../src/browser/passkeys.ts";
 import type { Cdp, CdpEvent } from "../src/browser/cdp.ts";
 import { type ChromeHost, type Running, chromeArgs, headfulAgent, parseActivePort, readState } from "../src/browser/chrome.ts";
 import { Owners } from "../src/browser/owners.ts";
@@ -922,6 +923,22 @@ test("a site's cookies: its own and its subdomains', set again as DevTools takes
   assert.equal(ofSites("notgithub.com", ["github.com"]), false);
   assert.deepEqual(siteCookies([{ name: "a", value: "1", domain: ".github.com", path: "/", size: 2, session: true, expires: -1, sameSite: "Lax" }, { nope: 1 }], ["github.com"]), [{ name: "a", value: "1", domain: ".github.com", path: "/", sameSite: "Lax" }]);
   assert.deepEqual(expired([{ name: "a", value: "1", domain: "github.com", path: "/" }]), [{ name: "a", value: "", domain: "github.com", path: "/", expires: 1 }]);
+});
+
+test("a sign-in as the vault keeps it: its cookies alone (as every one before passkeys), or with its sites' passkeys", () => {
+  const cookie = { name: "a", value: "1", domain: "github.com", path: "/" };
+  const key = { credentialId: "AQID", rpId: "github.com", privateKey: "MIGHAgEA", userHandle: "BQ", signCount: 2 };
+  assert.equal(keptOf({ cookies: [cookie], passkeys: [] }), JSON.stringify([cookie]));
+  assert.deepEqual(stateOf(JSON.stringify([cookie])), { cookies: [cookie], passkeys: [] });
+  const both = keptOf({ cookies: [cookie], passkeys: [key] });
+  assert.deepEqual(JSON.parse(both), { cookies: [cookie], passkeys: [key] });
+  assert.deepEqual(stateOf(both), { cookies: [cookie], passkeys: [key] });
+  // What is not a passkey is left out; a count not a count is none; nothing readable is nothing.
+  assert.deepEqual(stateOf(JSON.stringify({ cookies: [], passkeys: [{ rpId: "x" }, { ...key, signCount: -1, userHandle: "" }] })).passkeys, [{ credentialId: "AQID", rpId: "github.com", privateKey: "MIGHAgEA", signCount: 0 }]);
+  assert.deepEqual(stateOf("not json"), { cookies: [], passkeys: [] });
+  assert.equal(passkeyOf({ credentialId: "A" }), null);
+  // A site's passkeys: its own and its subdomains', as its cookies.
+  assert.deepEqual(sitePasskeys([key, { ...key, rpId: "api.github.com" }, { ...key, rpId: "notgithub.com" }], ["github.com"]).map((p) => p.rpId), ["github.com", "api.github.com"]);
 });
 
 /// A gate for chat context C1; other targets' contexts as `known` says.

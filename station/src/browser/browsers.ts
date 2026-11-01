@@ -13,11 +13,12 @@ import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type BrowserOptions, type BrowserStatus, StationBrowser } from "./browser.ts";
 import type { GateParts } from "./gate.ts";
-import { type SignedIn, expired, siteCookies } from "./signins.ts";
+import { sitePasskeys } from "./passkeys.ts";
+import { type SignedIn, expired, keptOf, siteCookies, stateOf } from "./signins.ts";
 import type { TabInfo } from "./tabs.ts";
 
-/// A sign-in taken out of a chat's context as its grant ended: its cookies as they were then (the site may have given
-/// new ones since), for the vault to keep (secrets.ts `renewed`).
+/// A sign-in taken out of a chat's context as its grant ended: its cookies (and passkeys) as they were then (the site may
+/// have given new ones since), as the vault keeps them (signins.ts `keptOf`), for it to keep (secrets.ts `renewed`).
 export type TakenOut = (session: string, request: string, cookies: string) => void;
 
 /// Each chat's context in the Chrome that runs, kept beside it (<data>/browser/contexts.json) so the next station
@@ -41,6 +42,9 @@ export class Browsers {
   #takenOut: TakenOut = () => {};
   /// A chat's context made anew (Chrome started again): its sign-ins still granted are to be put in again.
   #fresh: (session: string) => void = () => {};
+  /// A chat's context taken up from the station process before (its passkeys went with that process's connection):
+  /// the passkeys of its sign-ins still granted are to be put in again.
+  #resumed: (session: string) => void = () => {};
 
   constructor(o: BrowserOptions) {
     this.#dir = o.dir;
@@ -76,9 +80,29 @@ export class Browsers {
     this.#fresh = f;
   }
 
+  /// Hears each chat whose context was taken up from the station process before, to put its passkeys in again.
+  onResumed(f: (session: string) => void) {
+    this.#resumed = f;
+  }
+
   /// Takes up the Chrome an earlier station process left running, with the chats' contexts in it.
   async resume(): Promise<void> {
     await this.station.resume();
+    if (this.station.status().running) this.passkeysAgain();
+  }
+
+  /// Each chat with sign-ins in its context: their passkeys asked to be put in again (`onResumed`).
+  passkeysAgain() {
+    for (const session of this.#signedIn.keys()) if (this.#contexts.has(session)) this.#resumed(session);
+  }
+
+  /// The passkeys of a sign-in still granted put into `session`'s chat's context again (its cookies are there still), if
+  /// the browser runs with it.
+  async passkeysIn(session: string, d: { sites: string[]; cookies: string }): Promise<void> {
+    const ctx = this.#contexts.get(session);
+    const passkeys = sitePasskeys(stateOf(d.cookies).passkeys, d.sites);
+    if (ctx === undefined || passkeys.length === 0 || !this.station.status().running) return;
+    await (await this.station.passkeys()).put(ctx, passkeys);
   }
 
   /// The session whose chat's context `ctx` is.
@@ -169,27 +193,35 @@ export class Browsers {
     if (ctx === undefined) return;
     this.#contexts.delete(session);
     this.#write();
-    if (this.station.status().running) await this.station.send("Target.disposeBrowserContext", { browserContextId: ctx }).catch(() => {});
+    if (this.station.status().running) {
+      (await this.station.passkeys()).forget(ctx);
+      await this.station.send("Target.disposeBrowserContext", { browserContextId: ctx }).catch(() => {});
+    }
   }
 
-  /// The cookies of `sites` in `session`'s chat's context, or in the station's own (`station`), as JSON (signins.ts
-  /// CookieParam[]); the browser started if it is not running.
+  /// The sign-in to `sites` in `session`'s chat's context, or in the station's own (`station`), as the vault keeps it
+  /// (signins.ts `keptOf`): its cookies, and its passkeys (a chat's context only: the station's has no authenticator);
+  /// the browser started if it is not running.
   async cookies(session: string, sites: string[], station: boolean): Promise<string> {
     const ctx = station ? undefined : await this.context(session);
     const { cookies } = await this.station.send("Storage.getCookies", ctx ? { browserContextId: ctx } : {});
-    return JSON.stringify(siteCookies(cookies, sites));
+    const passkeys = ctx === undefined ? [] : await (await this.station.passkeys()).read(ctx, sites);
+    return keptOf({ cookies: siteCookies(cookies, sites), passkeys });
   }
 
-  /// A sign-in granted (`request`): its cookies of `sites` put into `session`'s chat's context (the browser started if
-  /// it is not running), taken out again at `until` (unix seconds).
+  /// A sign-in granted (`request`): its cookies and passkeys of `sites` put into `session`'s chat's context (the browser
+  /// started if it is not running), taken out again at `until` (unix seconds).
   async signIn(session: string, d: { request: string; sites: string[]; cookies: string; until: number }): Promise<void> {
-    const cookies = siteCookies(JSON.parse(d.cookies), d.sites);
+    const state = stateOf(d.cookies);
+    const cookies = siteCookies(state.cookies, d.sites);
+    const passkeys = sitePasskeys(state.passkeys, d.sites);
     const ctx = await this.context(session);
     const x: SignedIn = { request: d.request, sites: d.sites, until: d.until };
     this.#signedIn.set(session, [...(this.#signedIn.get(session) ?? []).filter((y) => y.request !== d.request), x]);
     this.#write();
-    await this.station.send("Storage.setCookies", { browserContextId: ctx, cookies });
-    log.info("browser", "a sign-in put into a chat's context", { session, request: d.request, sites: d.sites, cookies: cookies.length });
+    if (cookies.length > 0) await this.station.send("Storage.setCookies", { browserContextId: ctx, cookies });
+    await (await this.station.passkeys()).put(ctx, passkeys);
+    log.info("browser", "a sign-in put into a chat's context", { session, request: d.request, sites: d.sites, cookies: cookies.length, passkeys: passkeys.length });
     this.#arm(session, x);
   }
 
@@ -206,11 +238,13 @@ export class Browsers {
     this.#write();
     if (ctx === undefined) return;
     const { cookies: read } = await this.station.send("Storage.getCookies", { browserContextId: ctx });
+    const keys = await this.station.passkeys();
     for (const x of ended) {
       const cookies = siteCookies(read, x.sites);
       if (cookies.length > 0) await this.station.send("Storage.setCookies", { browserContextId: ctx, cookies: expired(cookies) });
+      const passkeys = await keys.takeOut(ctx, x.sites);
       log.info("browser", "a sign-in taken out of a chat's context as its grant ended", { session, request: x.request, sites: x.sites });
-      if (cookies.length > 0) this.#takenOut(session, x.request, JSON.stringify(cookies));
+      if (cookies.length > 0 || passkeys.length > 0) this.#takenOut(session, x.request, keptOf({ cookies, passkeys }));
     }
   }
 

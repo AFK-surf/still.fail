@@ -465,6 +465,27 @@ offered. macOS writes the client data itself of the challenge and origin given, 
 signature (`clientData`), and the station answers the page with it only where it says the same type, challenge and
 origin as the station's (`sameClientData`).
 
+### Passkeys of the vault
+
+> chat EMBER/1793439516.811000 (2026-11-01, 用户定): a passkey a person adds in a chat's browser is kept in the vault
+> with the site's sign-in, and the browser signs with it wherever that sign-in is granted, whichever device the person
+> watches from (a phone's system gives another site's passkey only to the browsers it lists).
+
+Each tab of a chat's context has an authenticator of Chrome's own (DevTools' `WebAuthn.addVirtualAuthenticator` on the
+station's connection: CTAP2, internal, resident keys, the user verified, presence given without asking;
+browser/passkeys.ts). A site's "add a passkey" makes one there with no prompt (`WebAuthn.credentialAdded`), kept for
+the context in the station's memory and put into each of its tabs, those made later too. A sign-in kept from the
+chat's browser (docs/vault.md 登录态) carries the passkeys of its sites with their cookies (`{cookies, passkeys}`, the
+cookies alone where there are none), its private keys never shown to the agent; granted, they are put into the chat's
+context with the cookies, and taken out again with them, as they were then (their counts). A page's sign-in with a
+passkey for a relying party the context has one of is signed by the browser itself: the hook (above) answers it
+`{browser: true}` and the page's own `navigator.credentials.get` goes on, its authenticator signing; no device is
+asked. While no view watches the tab the hook is off (Chrome keeps an unbound binding's function in the page: the
+view going tells the hook so), and a sign-in is the browser's, as an agent's page has it. Chrome takes one internal
+authenticator an environment, and a page navigating may come into another (a page Playwright opened through the
+gate, 2026-11-01): the tab is given one again in the environment its main frame is in after each navigation. An authenticator lasts as long as the connection that made it: a station process after this one puts the
+passkeys of the sign-ins still granted in again (`passkeysAgain`); one added and not kept is gone with it.
+
 ### Clipboard and files
 
 While a person drives a screen, its clipboard goes both ways. The desktop: the helper sets NSPasteboard (text, or PNG

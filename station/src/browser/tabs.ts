@@ -28,6 +28,8 @@ export type TabsParts = {
   owners?: Owners;
   /// The session whose chat's context a browser context is (browsers.ts).
   contextOwner?: (browserContextId: string | undefined) => string | undefined;
+  /// Whether tab `targetId`'s context has a passkey of relying party `rpId` its authenticator signs (passkeys.ts).
+  ownPasskey?: (targetId: string, rpId: string) => boolean;
 };
 
 /// Chrome tells of a tab's new address, not of its title, which the page sets after (Chrome 155): the titles are read
@@ -193,6 +195,7 @@ export class Tabs {
       const { sessionId } = await cdp.send("Target.attachToTarget", { targetId: tab.info.targetId, flatten: true });
       const view: TabView = new TabView({
         cdp, session: sessionId, targetId: tab.info.targetId, now: () => this.#p.now(),
+        ...(this.#p.ownPasskey ? { ownPasskey: (rpId: string) => this.#p.ownPasskey!(tab.info.targetId, rpId) } : {}),
         sized: (size) => tab.sized(size),
         ended: () => {
           this.#views.delete(view);

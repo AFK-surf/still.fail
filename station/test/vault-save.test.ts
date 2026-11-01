@@ -377,7 +377,7 @@ test("a sign-in to keep: its sites' cookies read from the chat's browser (or the
     await assert.rejects(h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "x", value: "v", hosts: ["github.com"], cwd: h.dir }), /read from this chat's browser/);
     await assert.rejects(h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "x", cwd: h.dir }), /names the sites/);
     await assert.rejects(h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "x", hosts: ["*.github.com"], cwd: h.dir }), /names the sites/);
-    await assert.rejects(h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "x", hosts: ["github.com"], cwd: h.dir }), /holds no cookies of github.com: sign in there first/);
+    await assert.rejects(h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "x", hosts: ["github.com"], cwd: h.dir }), /holds no cookies or passkeys of github.com: sign in there first/);
     h.browser.jar = JSON.stringify([{ name: "user_session", value: "abc", domain: "github.com", path: "/" }]);
     const asked = h.secrets.save("s1", { name: "GitHub · bob", kind: "browser", reason: "登录 GitHub", hosts: ["github.com"], browser: "station", cwd: h.dir });
     await tick();

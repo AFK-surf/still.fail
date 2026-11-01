@@ -9,6 +9,7 @@ import type { Screens } from "../screens/source.ts";
 import type { Cdp } from "./cdp.ts";
 import { type ChromeHost, type Running, readState, writeState } from "./chrome.ts";
 import { Owners } from "./owners.ts";
+import { Authenticators } from "./passkeys.ts";
 import { BEHIND } from "./gate.ts";
 import { type TabInfo, Tabs } from "./tabs.ts";
 
@@ -51,7 +52,7 @@ export type BrowserOptions = {
   contextOwner?: (browserContextId: string | undefined) => string | undefined;
 };
 
-type Up = { running: Running; cdp: Cdp; tabs: Tabs; since: number };
+type Up = { running: Running; cdp: Cdp; tabs: Tabs; keys: Authenticators; since: number };
 
 export class StationBrowser {
   readonly #o: BrowserOptions;
@@ -134,6 +135,12 @@ export class StationBrowser {
     return up.cdp.send(method, params);
   }
 
+  /// The chats' tabs' authenticators (passkeys.ts), the browser started if it is not running.
+  async passkeys(): Promise<Authenticators> {
+    this.used();
+    return (await this.#ensure()).keys;
+  }
+
   /// The browser context of target `targetId` (any target: a page, a frame, a worker), when it is known.
   contextOf(targetId: string): string | undefined {
     return this.#up?.tabs.contextOf(targetId);
@@ -195,6 +202,7 @@ export class StationBrowser {
     this.#up = null;
     if (up) {
       up.tabs.close();
+      up.keys.close();
       up.cdp.close();
     }
     this.#note();
@@ -237,23 +245,33 @@ export class StationBrowser {
   async #take(running: Running): Promise<Up> {
     const { chrome, screens } = this.#o;
     const cdp = await chrome.connect(running.ws);
+    // (each chat's tab its authenticator: passkeys.ts; the station's own context has none)
+    const owner = this.#o.contextOwner;
+    const keys = new Authenticators(cdp, (ctx) => owner?.(ctx) !== undefined);
     const tabs = new Tabs({
       cdp, screens, connect: () => chrome.connect(running.ws), now: () => this.#fibers.now(), activity: () => this.used(), later: this.#o.later,
-      owners: this.#owners, ...(this.#o.contextOwner ? { contextOwner: this.#o.contextOwner } : {}),
+      owners: this.#owners, ...(owner ? { contextOwner: owner } : {}),
+      ownPasskey: (targetId, rpId) => {
+        const ctx = tabs.contextOf(targetId);
+        return ctx !== undefined && keys.has(ctx, rpId);
+      },
     });
     try {
+      await keys.start();
       await tabs.start();
     } catch (e) {
+      keys.close();
       tabs.close();
       cdp.close();
       throw e;
     }
     if (this.#closed) {
+      keys.close();
       tabs.close();
       cdp.close();
       throw new Error("The station is stopping.");
     }
-    const up: Up = { running, cdp, tabs, since: this.#fibers.now() };
+    const up: Up = { running, cdp, tabs, keys, since: this.#fibers.now() };
     this.#up = up;
     this.#leaving = false;
     void cdp.closed.then(() => this.#lost(up));
@@ -266,6 +284,7 @@ export class StationBrowser {
     if (this.#up !== up) return;
     this.#up = null;
     up.tabs.close();
+    up.keys.close();
     this.#idle();
     if (this.#leaving || this.#closed) return;
     const inUse = this.#fibers.now() - this.#lastUse < this.#idleMs;
@@ -308,6 +327,7 @@ export class StationBrowser {
     this.#restart();
     log.info("browser", "closing Chrome", { why, pid: up.running.pid });
     up.tabs.close();
+    up.keys.close();
     await up.cdp.send("Browser.close").catch(() => {});
     up.cdp.close();
     if (this.#up === up) this.#up = null;

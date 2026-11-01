@@ -46,10 +46,14 @@ export const VaultLive = Layer.effectDiscard(
       workOf: (ws, peer, session) => remote.work(ws, peer, session),
       coming: () => coming,
       // Sign-ins (kind browser) go into each chat's own context in the station's browser (docs/vault.md 登录态).
-      browsers: { cookies: (session, sites, station) => browsers.cookies(session, sites, station), signIn: (session, d) => browsers.signIn(session, d) },
+      browsers: {
+        cookies: (session, sites, station) => browsers.cookies(session, sites, station), signIn: (session, d) => browsers.signIn(session, d),
+        passkeysIn: (session, d) => browsers.passkeysIn(session, d),
+      },
     });
     browsers.onTakenOut((session, request, cookies) => secrets.renewed(session, request, cookies));
     browsers.onFresh((session) => secrets.signInAgain(session));
+    browsers.onResumed((session) => secrets.passkeysAgain(session));
     secrets.onPlainWritten((i) => events.tell("vault-plain", shown(i), `vault-plain\0${i.id}`, { workspace: i.ws, email: i.owner }));
     // The grants, the boxes of requests waiting and the secrets to keep, only in memory: over to the next process at a
     // handover (an update), so no agent asks again.
@@ -68,6 +72,8 @@ export const VaultLive = Layer.effectDiscard(
       if (!coming) return;
       coming = false;
       secrets.reboxed();
+      // (the grants carried over or restored: their passkeys into the contexts taken up)
+      browsers.passkeysAgain();
     }
     void previous.gone.then(came, came);
     parts.routes([

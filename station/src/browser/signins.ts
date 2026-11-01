@@ -1,10 +1,11 @@
-// Sign-ins in a chat's browser (docs/vault.md 登录态): a site's sign-in is its cookies, kept in the vault as an item of
-// kind browser and put into a chat's browser while a grant for it lasts. Here: which cookies are a site's, the cookies
+// Sign-ins in a chat's browser (docs/vault.md 登录态): a site's sign-in is its cookies (and its passkeys: passkeys.ts),
+// kept in the vault as an item of kind browser and put into a chat's browser while a grant for it lasts. Here: which cookies are a site's, the cookies
 // of a browser as they are set again (DevTools' Storage.getCookies gives more than Storage.setCookies takes), and the
 // sign-ins put into a chat's browser, written down in its directory (signins.json) until each is taken out again, so a
 // station process after this one still takes them out on time.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { type Passkey, passkeyOf } from "./passkeys.ts";
 
 /// A cookie as DevTools sets it (Network.CookieParam): what of a cookie it read is kept.
 export type CookieParam = {
@@ -36,6 +37,26 @@ export function siteCookies(read: unknown, sites: string[]): CookieParam[] {
     });
   }
   return out;
+}
+
+/// A sign-in as the vault keeps it (the item's `cookies` field): its cookies, as JSON; with its sites' passkeys too
+/// (passkeys.ts), an object of both. One without passkeys stays the cookies alone, as every sign-in was before.
+export type SignInState = { cookies: CookieParam[]; passkeys: Passkey[] };
+
+/// A sign-in's state read from what the vault keeps: the cookies alone (a list), or both.
+export function stateOf(kept: string): SignInState {
+  let v: any = null;
+  try {
+    v = JSON.parse(kept);
+  } catch {}
+  if (Array.isArray(v)) return { cookies: v, passkeys: [] };
+  const passkeys = Array.isArray(v?.passkeys) ? v.passkeys.map(passkeyOf).filter((p: Passkey | null): p is Passkey => p !== null) : [];
+  return { cookies: Array.isArray(v?.cookies) ? v.cookies : [], passkeys };
+}
+
+/// What the vault keeps of a sign-in's state: the cookies alone where it has no passkeys.
+export function keptOf(s: SignInState): string {
+  return JSON.stringify(s.passkeys.length === 0 ? s.cookies : { cookies: s.cookies, passkeys: s.passkeys });
 }
 
 /// The same cookies set to have expired: setting them so takes them out of the browser.

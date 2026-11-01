@@ -230,8 +230,13 @@ export const PASSKEY_BINDING = "__stillfailPasskey";
 /// browser makes it, or the error the browser would give. The platform is said to have an authenticator, so that sites
 /// offer passkeys. Anything else (a password asked, a passkey made) goes to the browser as before.
 export const PASSKEY_HOOK = `(() => {
-  if (window !== window.top || window.__stillfailPasskeyHook || !navigator.credentials) return;
+  if (window !== window.top || !navigator.credentials) return;
+  // (watched again after a view let it go: on again)
+  if (window.__stillfailPasskeyHook) return window.__stillfailPasskeyOff(false);
   window.__stillfailPasskeyHook = true;
+  // Off while no view watches (the binding's function stays as it is unbound): a sign-in is the browser's then.
+  let off = false;
+  Object.defineProperty(window, "__stillfailPasskeyOff", { value: (v) => { off = v; } });
   const creds = navigator.credentials;
   const get = creds.get.bind(creds);
   const bytes = (v) => v instanceof ArrayBuffer ? new Uint8Array(v) : ArrayBuffer.isView(v) ? new Uint8Array(v.buffer, v.byteOffset, v.byteLength) : null;
@@ -244,6 +249,8 @@ export const PASSKEY_HOOK = `(() => {
     const w = waiting.get(id);
     if (!w) return;
     waiting.delete(id);
+    // (one of the vault's: the browser signs it, with the tab's own authenticator)
+    if (a.browser) return get(w.options).then(w.yes, w.no);
     if (a.error) return w.no(new DOMException(a.error === "NotAllowedError" ? "The operation either timed out or was not allowed." : String(a.error), a.error === "NotAllowedError" ? "NotAllowedError" : "UnknownError"));
     const response = { clientDataJSON: buf(a.clientData), authenticatorData: buf(a.authenticatorData), signature: buf(a.signature), userHandle: a.userHandle ? buf(a.userHandle) : null };
     const credential = { id: a.credential, rawId: buf(a.credential), type: "public-key", authenticatorAttachment: "platform", response,
@@ -255,14 +262,14 @@ export const PASSKEY_HOOK = `(() => {
   } });
   creds.get = function (options) {
     const pk = options && options.publicKey;
-    if (!pk || !bytes(pk.challenge)) return get(options);
+    if (off || !pk || !bytes(pk.challenge)) return get(options);
     const id = String(++next);
     const allow = Array.isArray(pk.allowCredentials) ? pk.allowCredentials.map((c) => b64(c && c.id)).filter((x) => x) : [];
     const ask = { id, rpId: typeof pk.rpId === "string" && pk.rpId !== "" ? pk.rpId : location.hostname, challenge: b64(pk.challenge), allow, userVerification: pk.userVerification || "preferred" };
     return new Promise((yes, no) => {
       const signal = options.signal;
       if (signal && signal.aborted) return no(signal.reason !== undefined ? signal.reason : new DOMException("The operation was aborted.", "AbortError"));
-      waiting.set(id, { yes, no });
+      waiting.set(id, { yes, no, options });
       if (signal) signal.addEventListener("abort", () => {
         if (!waiting.delete(id)) return;
         said({ id, gone: true });
@@ -321,6 +328,9 @@ export type ViewParts = {
   sized?: (size: { width: number; height: number }) => void;
   /// When the view ends.
   ended?: () => void;
+  /// Whether the tab's context has a passkey of relying party `rpId` its own authenticator signs (passkeys.ts): a
+  /// page's sign-in for it is the browser's, not the person's device's.
+  ownPasskey?: (rpId: string) => boolean;
 };
 
 export class TabView implements ScreenView {
@@ -575,6 +585,11 @@ export class TabView implements ScreenView {
           void this.#answer({ id, error: "NotAllowedError" });
           return;
         }
+        // A passkey of the vault's in the tab's context: its own authenticator signs it, no device asked.
+        if (this.#p.ownPasskey?.(said.rpId) === true) {
+          void this.#answer({ id, browser: true });
+          return;
+        }
         const clientData = JSON.stringify({ type: "webauthn.get", challenge: said.challenge, origin, crossOrigin: false });
         // (one asked at a time, the latest: one before it is answered as given up)
         if (this.#asked !== null) void this.#answer({ id: this.#asked.id, error: "NotAllowedError" });
@@ -587,6 +602,8 @@ export class TabView implements ScreenView {
       if (this.#ended) return;
       if (this.#asked !== null) void this.#answer({ id: this.#asked.id, error: "NotAllowedError" });
       this.#asked = null;
+      // (Chrome keeps the binding's function as it is unbound: the hook told, or a sign-in after would wait on nobody)
+      void cdp.send("Runtime.evaluate", { expression: "window.__stillfailPasskeyOff && window.__stillfailPasskeyOff(true)" }, session).catch(() => {});
       void cdp.send("Runtime.removeBinding", { name: PASSKEY_BINDING }, session).catch(() => {});
       if (script !== null) void cdp.send("Page.removeScriptToEvaluateOnNewDocument", { identifier: script }, session).catch(() => {});
     };
