@@ -95,7 +95,8 @@ pub struct ShapePlan {
   priv global_mask : Int
   /// GSUB's and GPOS's lookups, and where each stage's end
   priv lookups : Array[Array[LookupMap]]
-  priv stages : Array[Array[Int]]
+  /// each stage's end in the lookups and the pause run after it (0 none; the Indic shaper's 1 to 4)
+  priv stages : Array[Array[(Int, Int)]]
   priv frac_mask : Int
   priv numr_mask : Int
   priv dnom_mask : Int
@@ -114,6 +115,7 @@ pub struct ShapePlan {
   priv shaper : Int
   /// the Arabic shaper's mask for each joining action (the last, no action, is 0)
   priv arabic_masks : Array[Int]
+  priv indic : IndicPlan?
 }
 
 ///|
@@ -207,7 +209,7 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
   // collect_features (the default shaper adds none of its own)
   let infos : Array[FeatureInfo] = []
   let current_stage = [0, 0]
-  let pauses : Array[Array[Int]] = [[], []]
+  let pauses : Array[Array[(Int, Int)]] = [[], []]
   let add = fn(t : Int, flags : Int, value : Int) {
     infos.push({
       tag: t,
@@ -219,10 +221,11 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
     })
   }
   let enable = fn(t : Int, flags : Int, value : Int) { add(t, flags | F_GLOBAL, value) }
-  let add_pause = fn(ti : Int) {
-    pauses[ti].push(current_stage[ti])
+  let add_pause_fn = fn(ti : Int, f : Int) {
+    pauses[ti].push((current_stage[ti], f))
     current_stage[ti] += 1
   }
+  let add_pause = fn(ti : Int) { add_pause_fn(ti, 0) }
   enable(tag("rvrn"), 0, 1)
   add_pause(0)
   match direction {
@@ -244,6 +247,20 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
   enable(tag("Harf"), 0, 1)
   enable(tag("HARF"), 0, 1)
   let shaper = categorize(script, direction, chosen_script[0])
+  if shaper == SHAPER_INDIC {
+    add_pause_fn(0, 1)
+    enable(tag("locl"), F_PER_SYLLABLE, 1)
+    enable(tag("ccmp"), F_PER_SYLLABLE, 1)
+    add_pause_fn(0, 2)
+    for k in 0..<11 {
+      add(tag(indic_features[k].0), indic_features[k].1, 1)
+      add_pause(0)
+    }
+    add_pause_fn(0, 3)
+    for k in 11..<indic_features.length() {
+      add(tag(indic_features[k].0), indic_features[k].1, 1)
+    }
+  }
   if shaper == SHAPER_ARABIC {
     let has_feature = fn(t : Int) -> Bool {
       for ti in 0..<2 {
@@ -298,6 +315,11 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
   }
   for f in user_features {
     add(f.tag, if f.is_global() { F_GLOBAL } else { 0 }, f.value)
+  }
+  if shaper == SHAPER_INDIC {
+    // override_features
+    add(tag("liga"), F_GLOBAL, 0)
+    add_pause_fn(0, 4)
   }
   // compile: the required feature
   let required_index = [-1, -1]
@@ -422,7 +444,7 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
   add_pause(1)
   // collect_lookup_stages
   let lookups : Array[Array[LookupMap]] = [[], []]
-  let stages : Array[Array[Int]] = [[], []]
+  let stages : Array[Array[(Int, Int)]] = [[], []]
   for ti in 0..<2 {
     let mut stage_index = 0
     let mut last_lookup = 0
@@ -489,8 +511,8 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
         }
       }
       last_lookup = list.length()
-      if stage_index < pauses[ti].length() && pauses[ti][stage_index] == stage {
-        stages[ti].push(last_lookup)
+      if stage_index < pauses[ti].length() && pauses[ti][stage_index].0 == stage {
+        stages[ti].push((last_lookup, pauses[ti][stage_index].1))
         stage_index += 1
       }
     }
@@ -521,6 +543,9 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
   // the old `kern` table, when GPOS does not kern (the default shaper positions as a fallback)
   let has_kern_table = ot.has_kern
   let apply_kern = (!has_gpos_kern || !apply_gpos) && has_kern_table
+  // the shaper's zero_width_marks and fallback_position (the Indic shaper: neither)
+  let script_fallback = shaper != SHAPER_INDIC
+  let apply_kern = apply_kern && script_fallback
   let adjust = !apply_gpos
   {
     direction,
@@ -538,28 +563,35 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
     requested_kerning: kern_mask != 0,
     has_frac: frac_mask != 0 || (numr_mask != 0 && dnom_mask != 0),
     has_vert: ot_get_1("vert") != 0,
-    zero_marks: true,
+    zero_marks: shaper != SHAPER_INDIC,
     fallback_glyph_classes: !ot.has_glyph_classes(),
-    fallback_mark_positioning: adjust,
+    fallback_mark_positioning: adjust && script_fallback,
     adjust_mark_positioning_when_zeroing: adjust,
     apply_gpos,
     apply_kern,
     user_features,
     shaper,
     arabic_masks: arabic_features.map(fn(f) { ot_get_1(f) }) + [0],
+    indic: if shaper == SHAPER_INDIC {
+      Some(indic_plan_new(script, chosen_script[0], features, stages[0]))
+    } else {
+      None
+    },
   }
 }
 
 ///|
 /// Applies GSUB's or GPOS's lookups, stage by stage.
-fn ShapePlan::apply_layout_table(self : ShapePlan, buffer : Buffer, is_gsub : Bool) -> Unit {
+fn ShapePlan::apply_layout_table(self : ShapePlan, face : @font.Face, buffer : Buffer, is_gsub : Bool) -> Unit {
   let ti = if is_gsub { 0 } else { 1 }
-  guard self.ot.table(is_gsub) is Some(table) else { return }
+  let table = self.ot.table(is_gsub)
   let ctx = ApplyContext::new(is_gsub, self.ot, buffer)
   let mut start = 0
-  for end in self.stages[ti] {
+  for stage in self.stages[ti] {
+    let (end, pause) = stage
     for k in start..<end {
       let lm = self.lookups[ti][k]
+      guard table is Some(table) else { continue }
       guard table.lookup(self.ot.data, lm.index) is Some(lookup) else { continue }
       ctx.lookup_index = lm.index
       ctx.set_lookup_mask(lm.mask)
@@ -568,6 +600,9 @@ fn ShapePlan::apply_layout_table(self : ShapePlan, buffer : Buffer, is_gsub : Bo
       ctx.random = lm.random
       ctx.per_syllable = lm.per_syllable
       apply_string(ctx, lookup)
+    }
+    if pause != 0 {
+      indic_pause(self, face, buffer, pause)
     }
     start = end
   }

@@ -181,3 +181,135 @@ fn apply_context(ctx : ApplyContext, s : Int, chained : Bool) -> Bool {
     _ => false
   }
 }
+
+///|
+/// Whether a GSUB lookup would substitute exactly these glyphs, without looking at a buffer (CachedLookup's
+/// would_apply); `zero_context` refuses rules with backtrack or lookahead.
+fn would_apply_lookup(ot : OtData, lookup : Lookup, glyphs : Array[Int], zero_context : Bool) -> Bool {
+  let d = ot.data
+  let n = glyphs.length()
+  if n == 0 {
+    return false
+  }
+  for s in lookup.subtables {
+    let index = coverage_get(d, subtable_coverage(d, true, lookup.kind, s), glyphs[0])
+    if index < 0 {
+      continue
+    }
+    let applies = match lookup.kind {
+      1 | 2 | 3 | 8 => n == 1
+      4 => {
+        let set = if index < rd16(d, s + 4) { off16(d, s, s + 6 + index * 2) } else { 0 }
+        let mut any = false
+        if set != 0 {
+          for i in 0..<rd16(d, set) {
+            let lig = off16(d, set, set + 2 + i * 2)
+            if lig == 0 {
+              continue
+            }
+            let count = rd16(d, lig + 2)
+            let comps = if count > 0 { count - 1 } else { 0 }
+            if n == comps + 1 {
+              let mut ok = true
+              for k in 0..<comps {
+                if rd16(d, lig + 4 + k * 2) != glyphs[k + 1] {
+                  ok = false
+                  break
+                }
+              }
+              if ok {
+                any = true
+                break
+              }
+            }
+          }
+        }
+        any
+      }
+      5 | 6 => context_would_apply(d, s, lookup.kind == 6, index, glyphs, zero_context)
+      _ => false
+    }
+    if applies {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn context_would_apply(d : Bytes, s : Int, chained : Bool, index : Int, glyphs : Array[Int], zero_context : Bool) -> Bool {
+  let n = glyphs.length()
+  let rules_would_apply = fn(set : Int, matches : (Int, Int) -> Bool) -> Bool {
+    if set == 0 {
+      return false
+    }
+    for i in 0..<rd16(d, set) {
+      let r = off16(d, set, set + 2 + i * 2)
+      if r == 0 {
+        continue
+      }
+      let rule = read_rule(d, r, chained)
+      if zero_context && (rule.backtrack.length() > 0 || rule.lookahead.length() > 0) {
+        continue
+      }
+      if n != rule.input.length() + 1 {
+        continue
+      }
+      let mut ok = true
+      for k in 0..<rule.input.length() {
+        if !matches(glyphs[k + 1], rule.input[k]) {
+          ok = false
+          break
+        }
+      }
+      if ok {
+        return true
+      }
+    }
+    false
+  }
+  match rd16(d, s) {
+    1 => {
+      let count = rd16(d, s + 4)
+      if index >= count {
+        return false
+      }
+      rules_would_apply(off16(d, s, s + 6 + index * 2), fn(g, v) { g == v })
+    }
+    2 => {
+      let (input_cd, count, sets) = if chained {
+        (off16(d, s, s + 6), rd16(d, s + 10), s + 12)
+      } else {
+        (off16(d, s, s + 4), rd16(d, s + 6), s + 8)
+      }
+      let class = class_get(d, input_cd, glyphs[0])
+      if class >= count {
+        return false
+      }
+      rules_would_apply(off16(d, s, sets + class * 2), fn(g, v) { class_get(d, input_cd, g) == v })
+    }
+    3 => {
+      let (back, input_count, input_at, ahead) = if chained {
+        let back = rd16(d, s + 2)
+        let input_count = rd16(d, s + 4 + back * 2)
+        let input_at = s + 4 + back * 2 + 2
+        (back, input_count, input_at, rd16(d, input_at + input_count * 2))
+      } else {
+        (0, rd16(d, s + 2), s + 6, 0)
+      }
+      if zero_context && (back > 0 || ahead > 0) {
+        return false
+      }
+      if n != input_count {
+        return false
+      }
+      for k in 1..<input_count {
+        if coverage_get(d, off16(d, s, input_at + k * 2), glyphs[k]) < 0 {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}

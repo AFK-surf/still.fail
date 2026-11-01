@@ -60,7 +60,8 @@ test "outline debug" {
     if parts.length() < 2 {
       continue
     }
-    guard @font.Face::parse(@skiatest.read_file(dir + "fonts/" + parts[0]), 0) is Some(face) else { continue }
+    let path = if parts[0].has_prefix("/") { parts[0] } else { dir + "fonts/" + parts[0] }
+    guard @font.Face::parse(@skiatest.read_file(path), 0) is Some(face) else { continue }
     for g in parts[1].split(" ") {
       let mut id = 0
       for ch in g {

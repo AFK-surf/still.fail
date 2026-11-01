@@ -55,6 +55,13 @@ fn categorize(script : Int, direction : Direction, gsub_script : Int) -> Int {
     } else {
       SHAPER_DEFAULT
     }
+  } else if ["Beng", "Deva", "Gujr", "Guru", "Knda", "Mlym", "Orya", "Taml", "Telu"].iter().any(fn(t) { tag(t) == script }) {
+    // the Universal Shaping Engine's (for a font with the '3' tags) is not ported: these get the Indic shaper
+    if gsub_script == tag("DFLT") || gsub_script == tag("latn") {
+      SHAPER_DEFAULT
+    } else {
+      SHAPER_INDIC
+    }
   } else {
     SHAPER_DEFAULT
   }
