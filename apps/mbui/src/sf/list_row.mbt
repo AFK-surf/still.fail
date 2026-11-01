@@ -218,7 +218,7 @@ let side_more : @ui.Style = @ui.css("w=Full pb=S0_5")
 /// the list stands (`at`).
 pub fn list_heading(c : @ui.Ctx, label : String, at : ListAt) -> Unit {
   let l = theme().chat_list
-  c.box(style=l.heading.then(list_heading_in(at)), fn() { c.text(label, style=l.heading_words) |> ignore }) |> ignore
+  c.box(style=l.heading.then(list_heading_in(at)), fn() { c.text(label, style=l.heading_words.then(in_lines)) |> ignore }) |> ignore
 }
 
 ///|

@@ -37,7 +37,8 @@ let rows_back_least : Double = 2.0
 priv struct RowsSteady {
   mut held : Bool
   mut file : String
-  seen : Map[String, Array[(Double, Double)]]
+  /// each sample's first time in the frame, the time of its last position, and that position
+  seen : Map[String, Array[(Double, Double, Double)]]
   found : Set[String]
   /// each list's id, and when it was first shown (-1e9: long since)
   lists : Map[Int, Double]
@@ -137,7 +138,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
         }
       }
       // (the frame before not the display's last, or the list not free: from here anew)
-      let gap = seen.length() > 0 && now - seen[seen.length() - 1].0 > 2.5 * period
+      let gap = seen.length() > 0 && now - seen[seen.length() - 1].1 > 2.5 * period
       // (a row coming in where it is from nothing, its room opening: it has no place before this one to go on from: a
       // row gone ahead of others leaves by a copy and comes in so, docs/list-motion.md)
       let anew = match st.causes {
@@ -153,10 +154,11 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
       }
       if seen.length() > 0 && now - seen[seen.length() - 1].0 < 0.5 * period {
         // (laid out again in the frame, or drawn again within half of one, a moment something outside said: one frame,
-        // as it stands now; its speed over a sliver of a frame is none to read)
-        seen[seen.length() - 1] = (seen[seen.length() - 1].0, y)
+        // as it stands now; its speed over a sliver of a frame is none to read. Keep the first time to bound the frame,
+        // and the last with its position: an earlier time paired with a later position invents a speed change.)
+        seen[seen.length() - 1] = (seen[seen.length() - 1].0, now, y)
       } else {
-        seen.push((now, y))
+        seen.push((now, now, y))
       }
       while seen.length() > 4 {
         seen.remove(0) |> ignore
@@ -192,13 +194,14 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
 }
 
 ///|
-/// A row's last places (times and places, oldest first; the display's frames `period` apart): the frame before the
-/// last going at a speed off the frames round it, or a move one way then back within rows_back_frames.
-fn rows_steady_fault(seen : Array[(Double, Double)], period : Double) -> String? {
+/// A row's last places (each frame's first time, the last position's time and that position, oldest first; the display's
+/// frames `period` apart): the frame before the last going at a speed off the frames round it, or a move one way then
+/// back within rows_back_frames.
+fn rows_steady_fault(seen : Array[(Double, Double, Double)], period : Double) -> String? {
   let n = seen.length()
   let speed = fn(a : Int) {
-    let (t0, y0) = seen[a]
-    let (t1, y1) = seen[a + 1]
+    let (_, t0, y0) = seen[a]
+    let (_, t1, y1) = seen[a + 1]
     (y1 - y0) / dmax(t1 - t0, 1.0)
   }
   // its speed off the way the frames round it go: a step (a spike), a stop on its way (a dip), a start at full speed
@@ -208,19 +211,19 @@ fn rows_steady_fault(seen : Array[(Double, Double)], period : Double) -> String?
     let v2 = speed(2) * period
     let off = (v1 - (v0 + v2) / 2.0).abs()
     if off > rows_speed_least && off > 0.5 * dmax(v0.abs(), v2.abs()) {
-      return Some("went \{v1} a frame between \{v0} and \{v2} at \{seen[2].0}")
+      return Some("went \{v1} a frame between \{v0} and \{v2} at \{seen[2].1}")
     }
   }
   // one way, then back
   if n >= 3 {
-    let e = seen[n - 1].1 - seen[n - 2].1
+    let e = seen[n - 1].2 - seen[n - 2].2
     for a in (n - 1 - rows_back_frames)..<(n - 2) {
       if a < 0 {
         continue
       }
-      let d = seen[a + 1].1 - seen[a].1
+      let d = seen[a + 1].2 - seen[a].2
       if d.abs() >= rows_back_least && e.abs() >= rows_back_least && d * e < 0.0 {
-        return Some("moved \{d} at \{seen[a + 1].0}, back \{e} at \{seen[n - 1].0}")
+        return Some("moved \{d} at \{seen[a + 1].1}, back \{e} at \{seen[n - 1].1}")
       }
     }
   }

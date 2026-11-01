@@ -398,8 +398,8 @@ fn nc_team(c : @ui.Ctx, core : Core, f : NcFlow, v : Json?, close : () -> Unit) 
   if picked != chosen {
     nc_edit(core, f, obj([("team", str(picked))]))
   }
-  c.box(style=nc_team_more, fn() {
-    if @sf.button(c, @sf.t("web-pages.connect.addTeamToken"), key="nc-add-token/" + f.form, tone=Ghost, icon="plus") {
+  c.box(style=nc_team_more, flow=true, line_gap=@ui.Space::px(S1), fn() {
+    if @sf.button(c, @sf.t("web-pages.connect.addTeamToken"), key="nc-add-token/" + f.form, tone=Ghost, icon="plus", reach=@sf.button_start_reach()) {
       nc_edit(core, f, obj([("adding", Json::boolean(true))]))
     }
     if cd_text_button(c, "nc-manual-short/" + f.form, @sf.t("web-pages.connect.manualShort")) {

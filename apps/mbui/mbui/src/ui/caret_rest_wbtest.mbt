@@ -36,3 +36,17 @@ test "a frame on a blink's start a hair short of it by the division is in that b
   // between two starts, as ever
   assert_eq(periods_at(1300.0, 1000.0, 530.0), (0, 1530.0))
 }
+
+///|
+test "a frame before a blink's scheduled start stays in the previous blink" {
+  // Subtraction rounds this frame's elapsed time up to exactly 17 periods, although it precedes the wake made from
+  // the same origin. The paint must not change until that wake, or a retained frame misses the caret's change.
+  let from = 2716.666666666667
+  let now = 11216.666666666666
+  let period = 500.0
+  let start = from + 17.0 * period
+  assert_true(now < start)
+  assert_eq(now - from, 17.0 * period)
+  assert_eq(periods_at(now, from, period), (16, start))
+  assert_eq(periods_at(start, from, period), (17, from + 18.0 * period))
+}

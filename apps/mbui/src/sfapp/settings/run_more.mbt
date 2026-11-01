@@ -143,7 +143,7 @@ fn run_view(
   // (a row of the library's list card, as every page's: the user, 2026-10-29, cards each page rounded its own way)
   let setting_row = fn(k : String, title : String, note : String, trouble : String, lead : (() -> Unit)?) {
     let mut tapped = false
-    @sf.group(c, fn() { tapped = @sf.link_row(c, k, title, note~, trouble~, lead?) })
+    @sf.group(c, fn() { tapped = @sf.link_row(c, k, title, note~, trouble~, lead?, title_cut=true) })
     tapped
   }
   let fast = flag(v, "fastAvailable")

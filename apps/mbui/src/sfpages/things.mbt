@@ -253,10 +253,10 @@ fn media_said(c : @ui.Ctx, group : Json?) -> Unit {
   let when = [text(group, "clock"), text(group, "by")].filter(fn(s) { s != "" })
   c.box(style=things_said, fn() {
     if when.length() > 0 {
-      c.text(when.join(" · "), style=things_said_when) |> ignore
+      c.text(when.join(" · "), style=things_said_when, allow_ellipsis=true) |> ignore
     }
     if text(group, "words") != "" {
-      c.text(text(group, "words"), style=things_said_words) |> ignore
+      c.text(text(group, "words"), style=things_said_words, allow_ellipsis=true) |> ignore
     }
   })
   |> ignore

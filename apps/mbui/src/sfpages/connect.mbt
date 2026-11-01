@@ -690,6 +690,8 @@ fn cd_session_row(c : @ui.Ctx, core : Core, station : String, s : Json?) -> Unit
       "connect-session-row/" + key,
       text(s, "titleText"),
       value=text(field(field(s, "time"), "lastActiveAt"), "ago"),
+      title_cut=true,
+      value_cut=true,
       chevron=false,
       tail=fn() {
         match text(s, "statusLead") {
@@ -1052,4 +1054,3 @@ let cd_time_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// What is wrong on its callout (the ui's 13, the words' ink).
 // kept across runs: a value (no field of it changes)
 let cd_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
-

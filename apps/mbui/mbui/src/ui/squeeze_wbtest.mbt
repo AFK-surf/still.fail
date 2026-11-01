@@ -284,6 +284,64 @@ test "squeeze_faults: words on one line cut to nothing, plain or in runs" {
 }
 
 ///|
+test "squeeze_faults: an unannounced ellipsis is a fault even with several characters showing" {
+  let t = Tester::new(fn(c) {
+    c.box(w=Px(20.0), fn() { c.text("10:06", size=10.0, wrap=false) |> ignore }) |> ignore
+    c.box(w=Px(20.0), fn() { c.text("12.3%", size=10.0, wrap=false) |> ignore }) |> ignore
+    c.box(w=Px(20.0), fn() { c.text("Ready", size=10.0, wrap=false) |> ignore }) |> ignore
+    // The title explicitly says it may be cut, so its ellipsis is not an unexpected one.
+    c.box(w=Px(20.0), fn() { c.text("A long title", size=10.0, wrap=false, w=Cut) |> ignore }) |> ignore
+    c.box(w=Px(20.0), fn() { c.text("Another title", size=10.0, wrap=false, max_lines=1) |> ignore }) |> ignore
+  }, w=400.0, h=100.0)
+  t.draw()
+  assert_true(t.lines_of("10:06")[0].has_suffix("…"))
+  assert_true(t.lines_of("12.3%")[0].has_suffix("…"))
+  assert_true(t.lines_of("Ready")[0].has_suffix("…"))
+  assert_true(t.lines_of("A long title")[0].has_suffix("…"))
+  let faults = t.squeeze_faults()
+  assert_eq(faults.length(), 3, msg=faults.join("\n"))
+}
+
+///|
+test "squeeze_faults finds a title given no room beside a fixed control" {
+  let t = Tester::new(fn(c) {
+    c.box(dir=Row, w=Px(20.0), h=Px(20.0), fn() {
+      c.text("Missing title", size=10.0, wrap=false) |> ignore
+      c.box(w=Px(20.0), h=Px(20.0), keep=true, fn() {  }) |> ignore
+    }) |> ignore
+  }, w=400.0, h=100.0)
+  t.draw()
+  assert_true(laid_words("Missing title").fw < 0.001)
+  let faults = t.squeeze_faults()
+  assert_true(faults.iter().any(fn(f) { f.contains("Missing title") && f.contains("cut to 0") }), msg=faults.join("\n"))
+}
+
+///|
+test "squeeze_faults: a shorter wording ending in an ellipsis is not a layout cut" {
+  let t = Tester::new(fn(c) {
+    c.box(w=Px(60.0), fn() {
+      c.text("Search all conversations and their contents", size=10.0, wrap=false, shorter=["Search…"]) |> ignore
+    }) |> ignore
+  }, w=400.0, h=100.0)
+  t.draw()
+  assert_eq(t.lines_of("Search all"), ["Search…"])
+  assert_eq(t.squeeze_faults(), [])
+}
+
+///|
+test "squeeze_faults does not report a line faded out by its holder's look" {
+  for width in [10.0, 20.0] {
+    let t = Tester::new(fn(c) {
+      let i = c.box(w=Px(width), fn() { c.text("10:06", size=10.0, wrap=false) |> ignore })
+      c.look(i, look(alpha=0.0))
+    }, w=400.0, h=100.0)
+    t.draw()
+    assert_true(t.words().iter().any(fn(w) { w.0 == "10:06" && w.5 == 0.0 }))
+    assert_eq(t.squeeze_faults(), [], msg="width=\{width}")
+  }
+}
+
+///|
 /// The node of the first words that start with `s`, as the last frame laid them out.
 fn laid_words(s : String) -> Node {
   let c = g()
@@ -302,7 +360,7 @@ test "a row without the room for every least cuts the words that say not how the
     fn(c) {
       c.box(dir=Row, w=Px(200.0), h=Px(20.0), gap=4.0, fn() {
         c.text("Station", size=10.0, wrap=false) |> ignore
-        c.text("words written by someone else, much longer than the row has room for", size=10.0, wrap=false)
+        c.text("words written by someone else, much longer than the row has room for", size=10.0, wrap=false, allow_ellipsis=true)
         |> ignore
         c.box(w=Px(20.0), h=Px(20.0), fn() {  }) |> ignore
       })
@@ -333,10 +391,10 @@ test "a last resort brings the widest down first, to one width, each in what hol
       c.box(dir=Row, w=Px(200.0), h=Px(20.0), fn() {
         c.box(dir=Row, gap=2.0, fn() {
           c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
-          c.text("first words, long enough to need cutting here", size=10.0, wrap=false) |> ignore
+          c.text("first words, long enough to need cutting here", size=10.0, wrap=false, allow_ellipsis=true) |> ignore
         })
         |> ignore
-        c.text("second words, as long as they need to be cut too", size=10.0, wrap=false) |> ignore
+        c.text("second words, as long as they need to be cut too", size=10.0, wrap=false, allow_ellipsis=true) |> ignore
       })
       |> ignore
     },
@@ -362,7 +420,7 @@ test "a last resort never cuts a control: what is pressed keeps its words whole,
       let b = c.id("button")
       ids.val = b
       c.box(dir=Row, w=Px(120.0), h=Px(20.0), gap=4.0, fn() {
-        c.text("words written by someone else, longer than the row", size=10.0, wrap=false) |> ignore
+        c.text("words written by someone else, longer than the row", size=10.0, wrap=false, allow_ellipsis=true) |> ignore
         c.box(dir=Row, id=b, padx=6.0, fn() { c.text("Cancel", size=10.0, wrap=false) |> ignore }) |> ignore
       })
       |> ignore

@@ -89,7 +89,8 @@ fn card_head(c : @ui.Ctx, mark : () -> Unit, name : String, said : String?, end 
     // In a box as large whatever it is: an emoji is drawn wider than an icon, and the names line up.
     c.box(w=Px(card_mark), h=Px(card_mark), align=ACenter, justify=JCenter, mark) |> ignore
     c.box(w=Fill(1.0), fn() {
-      c.text(name, size=t.t.title, weight=700, color=t.p.text, wrap=false, line=22.0) |> ignore
+      // A card is a summary; its page can show the station's name in full.
+      c.text(name, size=t.t.title, weight=700, color=t.p.text, wrap=false, line=22.0, allow_ellipsis=true) |> ignore
       match said {
         Some(line) => c.text(line, size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
         None => ()

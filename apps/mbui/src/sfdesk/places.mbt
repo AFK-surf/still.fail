@@ -274,7 +274,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               fn() { nav_title(c, @settings.runtime_label(text(l, "runtime"))) },
               lines=fn() {
                 @sf.list_row_line(c, fn() {
-                  c.box(style=place_grow, fn() { c.text(text(l, "email"), style=nav_meta()) |> ignore }) |> ignore
+                  c.box(style=place_grow, fn() { c.text(text(l, "email"), style=nav_meta(), allow_ellipsis=true) |> ignore }) |> ignore
                   c.text(@sf.t("android-settings.machine.use"), style=nav_meta().then(place_use)) |> ignore
                 })
               },

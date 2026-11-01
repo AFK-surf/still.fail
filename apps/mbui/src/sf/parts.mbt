@@ -121,6 +121,7 @@ pub fn button(
     style=reach.unwrap_or(@ui.style()),
     dir=Row,
     w~,
+    keep=foot_fills.val && w is Fill(_),
     h=Px(height),
     padx=button_padx,
     gap=if t.touch { 8.0 } else { 6.0 },
@@ -221,6 +222,12 @@ let button_reshape : @motion.Spec = @motion.move()
 ///|
 /// How far a button's words are in from its sides.
 let button_padx : Double = 16.0
+
+///|
+/// Keep a button's leading icon or words on the line of the surrounding words, with its ground reaching past them.
+pub fn button_start_reach() -> @ui.Style {
+  outset_start(button_padx)
+}
 
 ///|
 /// How big a button's icon is.
@@ -2017,7 +2024,7 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : Str
       draw_icon(c, icon, pill_icon, ink)
     }
     if words != "" {
-      c.text(words, style=pill_words, color=ink) |> ignore
+      c.text(words, style=pill_words, color=ink, allow_ellipsis=true) |> ignore
     }
   })
   c.bone_whole(b)

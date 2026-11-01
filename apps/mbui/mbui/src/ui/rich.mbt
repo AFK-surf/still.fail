@@ -847,6 +847,7 @@ pub fn Ctx::rich(
   face? : Int = 0,
   tabular? : Bool,
   breaks? : Bool = false,
+  allow_ellipsis? : Bool = false,
 ) -> Int {
   // its style (style.mbt) under what is said here, as Ctx::text's
   let st = self.text_patch(style)
@@ -934,6 +935,7 @@ pub fn Ctx::rich(
   }
   let i = self.alloc_part(kind_rich, true, false)
   let n = self.nodes[i]
+  n.allow_ellipsis = allow_ellipsis
   n.text = text
   n.font_size = size
   n.weight = weight

@@ -98,6 +98,20 @@ test "a pill is 22 high; a status dot 7 round, online in the online green, offli
 }
 
 ///|
+test "a long status stays a one-line pill" {
+  let words = "A very long status that does not fit in the row"
+  let t = @ui.Tester::new(
+    wide_view(fn(c) { c.box(w=Px(120.0), fn() { pill(c, words) }) |> ignore }),
+    w=800.0,
+    h=600.0,
+  )
+  t.draw()
+  let lines = t.lines_of(words)
+  assert_eq(lines.length(), 1, msg="\{lines}")
+  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
+}
+
+///|
 test "a dialog: 520 wide, its title and its lead, what it holds; its close button closes it" {
   let open = Ref(true)
   let t = @ui.Tester::new(

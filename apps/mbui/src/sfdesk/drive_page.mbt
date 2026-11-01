@@ -163,7 +163,7 @@ let head_way : @ui.Style = @ui.style(w=@sf.grow, min_w=S0)
 ///|
 /// Its name (h1): 22, 600.
 // kept across runs: a value (no field of it changes)
-let head_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
+let head_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg)
 
 ///|
 /// Why it was not read: its words, then 重试 in the link's ink, 12 apart.

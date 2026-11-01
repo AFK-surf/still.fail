@@ -385,7 +385,7 @@ fn history_row(
             "" => text(turn, "text")
             time => time + " · " + text(turn, "text")
           }
-          c.text(said, style=h_turn_words) |> ignore
+          c.text(said, style=h_turn_words, allow_ellipsis=true) |> ignore
         })
         |> ignore
       _ => ()
@@ -548,7 +548,7 @@ fn item_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : Str
       let ends = text(content, "ends")
       let failed = flag(content, "failed")
       ev(c, "send", "", if failed { "red" } else { "accent" }, rail=ends != "", rail_last=ends == "" && rail, fn() {
-        c.box(style=h_label, fn() {
+        c.box(style=h_label, flow=true, fn() {
           c.text(@sf.t("web-main.history.sentTo"), style=h_label_words) |> ignore
           match field(content, "place") {
             Some(Object(_)) as p => place_view(c, station, ik + "/place", p)
@@ -697,7 +697,7 @@ fn received(c : @ui.Ctx, src : Source, station : String, key : String, m : Json?
   let notice = text(m, "notice")
   let job = notice == "job"
   ev(c, "received", "", "", rail~, rail_last~, fn() {
-    c.box(style=h_label, fn() {
+    c.box(style=h_label, flow=true, fn() {
       c.text(
         @sf.t(if job { "web-main.history.jobMessage.before" } else { "web-main.history.message.before" }),
         style=h_label_words,
@@ -1408,7 +1408,7 @@ let h_label_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_strong : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg, wrap=false)
+let h_strong : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1425,7 +1425,7 @@ let h_place_hot : @ui.Style = h_place.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_place_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg, wrap=false)
+let h_place_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg)
 
 ///|
 /// A person's words (hWords: 13, the ink); a job's (hOutput: 11 mono on 1.55).
@@ -1529,7 +1529,7 @@ let h_state_line : @ui.Style = @ui.css("row w=Full min_h=S5 gap=S1_5 align=ACent
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_state_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+let h_state_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 /// How much of the most it waits has gone (hWaitBar): a 3 bar under the words, its fill in the blue.

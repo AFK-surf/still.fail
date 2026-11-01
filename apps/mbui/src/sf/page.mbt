@@ -1115,7 +1115,8 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// the line has not the room for both; `control` at its
 /// end, last (a button, a switch, a choice: what is done here, no chevron), a button of words alone there with its
 /// words on the line of what rows say at their ends, its ground under the hand reaching out past them to the card's
-/// edge (row_end; docs/ui-panels.md 页面卡片: 文字按钮). True on the frame it is pressed.
+/// edge (row_end; docs/ui-panels.md 页面卡片: 文字按钮). `title_cut` and `value_cut` say when either is a summary that
+/// may be shortened on its line, rather than words expected to fit whole. True on the frame it is pressed.
 pub fn link_row(
   c : @ui.Ctx,
   key : String,
@@ -1144,6 +1145,8 @@ pub fn link_row(
   note_cut? : Bool = false,
   face? : Bool = false,
   title_style? : @ui.TextStyle,
+  title_cut? : Bool = false,
+  value_cut? : Bool = false,
 ) -> Bool {
   let th = theme()
   // (one that acts: its title in the link's ink, no chevron; one that adds, after a ＋)
@@ -1210,7 +1213,8 @@ pub fn link_row(
         }
         let said = fn() {
           let words = fn() {
-            c.text(value, style=if value_bad { pg_value.then(bad) } else { pg_value }, color?=if value_lit {
+            let style = if value_bad { pg_value.then(bad) } else { pg_value }
+            c.text(value, style=if value_cut { style.then(cut_words) } else { style }, color?=if value_lit {
               Some(link_ink())
             } else {
               None
@@ -1248,7 +1252,14 @@ pub fn link_row(
           }
         }
         if !under {
-          c.text(title, style=titled, color?=ink) |> ignore
+          if title_cut {
+            // A name and what follows it can both give way, but the name keeps enough room to identify it.
+            c.box(style=pg_row_words, keep=true, fn() {
+              c.text(title, style=titled.then(cut_words), color?=ink) |> ignore
+            }) |> ignore
+          } else {
+            c.text(title, style=titled, color?=ink) |> ignore
+          }
           after()
           if value != "" {
             said()
@@ -1260,12 +1271,12 @@ pub fn link_row(
               if value == "" {
                 if title_after is Some(_) {
                   c.box(style=title_line, keep=true, fn() {
-                    c.text(title, style=titled.then(cut_words), color?=ink) |> ignore
+                    c.text(title, style=titled.then(cut_words), color?=ink, allow_ellipsis=title_cut) |> ignore
                     after()
                   })
                   |> ignore
                 } else {
-                  c.text(title, style=if note_cut { titled.then(cut_words) } else { titled }, color?=ink) |> ignore
+                  c.text(title, style=if note_cut || title_cut { titled.then(cut_words) } else { titled }, color?=ink) |> ignore
                 }
               } else {
                 // its title and what it says in a line (what it says under the title where the line has not the
@@ -1274,7 +1285,8 @@ pub fn link_row(
                   c.box(style=pg_title_value, flow=true, line_gap=0.0, fn() {
                     // (what is after its title beside it, one piece: the line's ends are its title's and what it says)
                     let named = fn() {
-                      c.text(title, style=if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in })
+                      let style = if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in }
+                      c.text(title, style=if title_cut { style.then(cut_words) } else { style })
                       |> ignore
                       after()
                     }
@@ -1323,19 +1335,20 @@ pub fn link_row(
           }
           if title_after is Some(_) {
             c.box(style=title_line, keep=true, fn() {
-              c.text(title, style=style.then(cut_words), color?=ink) |> ignore
+              c.text(title, style=style.then(cut_words), color?=ink, allow_ellipsis=title_cut) |> ignore
               after()
             })
             |> ignore
           } else {
-            c.text(title, style~, color?=ink) |> ignore
+            c.text(title, style=if title_cut { style.then(cut_words) } else { style }, color?=ink) |> ignore
           }
         }
         // what it says, what follows it, its chevron
         let end = fn() {
           if value != "" {
             let words = fn() {
-              c.text(value, style=if value_bad { wide_value.then(bad) } else { wide_value }, color?=if value_lit {
+              let style = if value_bad { wide_value.then(bad) } else { wide_value }
+              c.text(value, style=if value_cut { style.then(cut_words) } else { style }, color?=if value_lit {
                 Some(th.p.accent_text)
               } else {
                 None
@@ -1365,12 +1378,12 @@ pub fn link_row(
           }
         }
         if !under {
-          c.box(style=desk_list_text, title_words) |> ignore
+          c.box(style=desk_list_text, keep=title_cut, title_words) |> ignore
           end()
         } else {
           c.box(style=desk_list_text, fn() {
             c.box(style=row_first_line, fn() {
-              c.box(style=desk_list_text, title_words) |> ignore
+              c.box(style=desk_list_text, keep=title_cut, title_words) |> ignore
               end()
             })
             |> ignore
@@ -1604,7 +1617,7 @@ pub fn choice_row(
     let color = if disabled { Some(th.p.subtle) } else { ink }
     let label_line = fn() {
       c.box(style=choice_label_line, fn() {
-        c.text(label, style=if narrow { pg_row_title } else { desk_list_title }, color?) |> ignore
+        c.text(label, style=(if narrow { pg_row_title } else { desk_list_title }).then(in_lines), color?) |> ignore
         match tag {
           Some(f) => f()
           None => ()
@@ -2098,7 +2111,7 @@ pub fn own_head(
       }
     }
     match state {
-      Some(f) => c.box(style=head_state, f) |> ignore
+      Some(f) => c.box(style=head_state, flow=true, f) |> ignore
       None => ()
     }
     // (red where it does not work, else amber)

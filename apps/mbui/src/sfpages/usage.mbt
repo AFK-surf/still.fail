@@ -816,7 +816,7 @@ let ug_change_versus : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, col
 ///|
 /// A change's words: up in the accent's (more spent), down in the words' ink, the same muted.
 // kept across runs: a value (no field of it changes)
-let ug_trend_up : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=AccentText, wrap=false)
+let ug_trend_up : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=AccentText)
 
 ///|
 // kept across runs: a value (no field of it changes)

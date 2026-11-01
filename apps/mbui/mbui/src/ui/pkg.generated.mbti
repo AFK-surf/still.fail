@@ -1098,6 +1098,7 @@ pub fn Ctx::field_paste(Self, Int32) -> Unit
 pub fn Ctx::field_right_clicked(Self) -> (Int32, Double, Double)?
 pub fn Ctx::field_words(Self, String) -> ((Double, Double), (Double, Double, Double, Double))?
 pub fn Ctx::finger_reads(Self) -> (Double, Double)?
+pub fn Ctx::fitting_width(Self, Double, Array[Double]) -> Double
 pub fn Ctx::floats_over(Self, Int32) -> Unit
 pub fn Ctx::focus_editor(Self, String) -> Unit
 pub fn Ctx::focus_gained(Self, Int32) -> Bool
@@ -1261,7 +1262,7 @@ pub fn Ctx::reduced_motion(Self) -> Bool
 #callsite(autofill(loc))
 pub fn Ctx::request_frame(Self, loc~ : SourceLoc) -> Unit
 pub fn Ctx::reveal_from(Self, Double, Double, dark? : () -> Bool) -> Unit
-pub fn Ctx::rich(Self, Array[Run], key? : String, style? : TextStyle, size? : Double, weight? : Int32, color? : Int64, line? : Double, trim? : Bool, wrap? : Bool, w? : Size, link_color? : Int64, pressed_bg? : Int64, code_color? : Int64, code_bg? : Int64, code_scale? : Double, tracking? : Double, max_lines? : Int32, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, words? : Bool, face? : Int32, tabular? : Bool, breaks? : Bool) -> Int32
+pub fn Ctx::rich(Self, Array[Run], key? : String, style? : TextStyle, size? : Double, weight? : Int32, color? : Int64, line? : Double, trim? : Bool, wrap? : Bool, w? : Size, link_color? : Int64, pressed_bg? : Int64, code_color? : Int64, code_bg? : Int64, code_scale? : Double, tracking? : Double, max_lines? : Int32, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, words? : Bool, face? : Int32, tabular? : Bool, breaks? : Bool, allow_ellipsis? : Bool) -> Int32
 pub fn Ctx::right_clicked(Self, Int32) -> (Double, Double)?
 pub fn Ctx::roving(Self, String, orientation? : Orientation, wrap? : Bool, current? : Int32, () -> Unit) -> Unit
 pub fn Ctx::roving_prefer(Self, Int32) -> Unit
@@ -1321,7 +1322,7 @@ pub fn Ctx::takes_presses(Self, Int32) -> Unit
 pub fn Ctx::taking_shot(Self, String) -> Bool
 pub fn Ctx::tapped_anywhere(Self) -> (Double, Double)?
 pub fn Ctx::tell(Self, String, () -> Unit) -> Unit
-pub fn Ctx::text(Self, String, style? : TextStyle, size? : Double, weight? : Int32, color? : Int64, wrap? : Bool, w? : Size, line? : Double, trim? : Bool, center? : Bool, tracking? : Double, max_lines? : Int32, tabular? : Bool, keep? : Bool, breaks? : Bool, shorter? : Array[String]) -> Int32
+pub fn Ctx::text(Self, String, style? : TextStyle, size? : Double, weight? : Int32, color? : Int64, wrap? : Bool, w? : Size, line? : Double, trim? : Bool, center? : Bool, tracking? : Double, max_lines? : Int32, tabular? : Bool, keep? : Bool, breaks? : Bool, shorter? : Array[String], allow_ellipsis? : Bool) -> Int32
 pub fn Ctx::text_asked(Self, Int32) -> String?
 pub fn Ctx::text_size(Self, TextSize) -> (Double, Double)
 pub fn Ctx::theme(Self) -> Theme

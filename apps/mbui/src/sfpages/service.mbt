@@ -426,7 +426,7 @@ fn address_or_marking(
       c.box(style=file_name_box, fn() { c.text(name, style=file_name_words) |> ignore }) |> ignore
       return
     }
-    c.text(name, size=t.t.meta, weight=500, color=t.p.text, wrap=false) |> ignore
+    c.text(name, size=t.t.meta, weight=500, color=t.p.text, wrap=false, allow_ellipsis=true) |> ignore
     // where it went is what the bar says, unless someone is typing there
     if !n.editing && n.at != p.shown_path {
       p.shown_path = n.at

@@ -300,6 +300,8 @@ pub fn file_card(
   } else {
     card_box
   }
+  // Keep an end control at the capsule's end even when pixel rounding leaves a fraction of a point after the words.
+  let ground = if !composer && (retry || restore || remove || slot) { ground.then(card_end_justified) } else { ground }
   let b = c.box(
     // (in the composer, pointed at: the hover's tint over its own ground, not in its place)
     style=if open && !(composer && !named) && c.hovered(id) { ground.then(card_hot) } else { ground },
@@ -518,9 +520,12 @@ pub fn file_card_across(c : @ui.Ctx, name : String, size : Double, meta? : Strin
     c.words_across(name, card_name),
     c.words_across(if meta != "" { meta } else { file_size(size) }, card_meta),
   )
-  let room = @ui.Space::px(S3_5) + card_mark_size + @ui.Space::px(S2) + @ui.Space::px(S3_5) +
-    ends.to_double() * (@ui.Space::px(S2) + @ui.Space::px(S6))
-  dmin(file_card_w, room + words)
+  let parts = [@ui.Space::px(S3_5), card_mark_size, @ui.Space::px(S2), @ui.Space::px(S3_5)]
+  for _ in 0..<ends {
+    parts.push(@ui.Space::px(S2))
+    parts.push(@ui.Space::px(S6))
+  }
+  dmin(file_card_w, c.fitting_width(words, parts))
 }
 
 ///|
@@ -546,6 +551,10 @@ let card_box : @ui.Style = @ui.style(
   radius=InnerOr(Full),
   align=ACenter,
 )
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_end_justified : @ui.Style = @ui.css("justify=JBetween")
 
 ///|
 // kept across runs: a value (no field of it changes)

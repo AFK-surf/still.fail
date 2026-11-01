@@ -1589,13 +1589,14 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     fn() {
       c.box(w=Px(16.0), align=ACenter, fn() { job_dot(c, text(job, "tone")) }) |> ignore
       c.box(w=Fill(1.0), fn() {
-        c.text(text(job, "name"), size=t.t.ui, color=t.p.text, wrap=false, line=18.0) |> ignore
+        c.text(text(job, "name"), size=t.t.ui, color=t.p.text, wrap=false, line=18.0, allow_ellipsis=true) |> ignore
         c.text(
           text(job, "whereText") + " · " + text(job, "age"),
           size=t.t.caption,
           color=t.p.muted,
           wrap=false,
           line=16.0,
+          allow_ellipsis=true,
         )
         |> ignore
       })

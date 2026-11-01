@@ -1889,7 +1889,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           if x.ruled {
             c.box(style=sheet_foot_rule, fn() {  }) |> ignore
           }
-          c.box(style=sheet_foot_at, fn() {
+          c.box(style=sheet_foot_at, flow=true, line_gap=ask_foot_lines(), fn() {
             // its buttons across it, each its share (in a thumb's reach)
             foot_fills.val = true
             f(c, close)
@@ -2047,7 +2047,7 @@ let sheet_title_row : @ui.Style = @ui.css("row w=Full pt=S1 pb=S2_5 align=ACente
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_title_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, color=Fg, wrap=false)
+let sheet_title_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, color=Fg)
 
 ///|
 /// A sheet's rows: 12 in at its sides, 24 under the last.

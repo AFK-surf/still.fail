@@ -73,7 +73,7 @@ pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// The buttons of a card alone in the middle of what it is over: across its foot, each its share (foot_fills), the
 /// first and the last concentric with its foot corners (foot_reach); nothing to one side.
 pub fn ask_buttons_across(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=ask_across.then(foot_reach(button_height())), fn() {
+  c.box(style=ask_across.then(foot_reach(button_height())), flow=true, line_gap=ask_foot_lines(), fn() {
     let was = foot_fills.val
     foot_fills.val = true
     body()
