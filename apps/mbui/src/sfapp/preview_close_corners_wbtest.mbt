@@ -8,12 +8,30 @@ test "a picture returning to a rounded card keeps all four thumbnail corners thr
     let a = flight_photo()
     @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", a.path)] = "sent-key"
     let src = fixture("chat")
-    let t = @ui.Tester::new(fn(c) {
-      let radius = @ui.Radius::Corners(corners.0, corners.1, corners.2, corners.3)
-      c.box(style=@ui.style(w=Fixed(300.0), h=Fixed(225.0), radius~, clip=true), fn() { chat_file(c, src, a) })
-      |> ignore
-      preview(c, src)
-    }, w=390.0, h=844.0, scale~, images=[("sent-key", 1200, 900), ("mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg", 1200, 900)])
+    // (the card an old view the window's tree hosts, the viewer beside it as the shells have it: sfbase's viewer_node,
+    // its stage the window)
+    let t = @ui.Tester::new(
+      fn(c) { @ui.old_views_here(c) },
+      tree=fn(root) {
+        root.box(fn(v) {
+          v.grow(Is(1.0)) |> ignore
+          @ui.old(v, fn(c) {
+            let radius = @ui.Radius::Corners(corners.0, corners.1, corners.2, corners.3)
+            c.box(style=@ui.style(w=Fixed(300.0), h=Fixed(225.0), radius~, clip=true), fn() { chat_file(c, src, a) })
+            |> ignore
+            preview(c, src)
+          })
+          .over(Is(true))
+          |> ignore
+          @sfbase.viewer_node(v, src, fn() { v.window() })
+        })
+        |> ignore
+      },
+      w=390.0,
+      h=844.0,
+      scale~,
+      images=[("sent-key", 1200, 900), ("mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg", 1200, 900)],
+    )
     t.draw()
     t.run_for(@ui.image_fade_ms)
     let pictures = fn() { t.drawn_instances().filter(fn(p) { p[5] == 4.0 && p[2] > 40.0 && p[11] > 0.5 }) }

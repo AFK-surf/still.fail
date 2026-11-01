@@ -111,7 +111,7 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
   }
   // (told as it changes: the floating bar's nodes follow it, Viewer::bars_shown; the window's tree's viewer follows the
   // pointer along the top itself, as it moves: viewer_tree.mbt's image_layer)
-  if !v.in_tree && near != v.near_bar {
+  if near != v.near_bar {
     v.near_bar = near
   }
   // going, beside the system's bars (an iPhone Duo's): the page's tabs handed back to them as it goes, not once it is
@@ -140,15 +140,11 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
   }
   let ink = @sf.page_viewer_ink()
   let kind = v.shown_kind()
-  // Esc closes it (marking: leaves the marks first), ← and → step
-  if keys && marking.on {
-    if !v.closing && c.key_pressed(@ui.key_escape) {
-      marks_back(c)
-    }
-  } else if keys {
+  // Esc closes it, ← and → step
+  if keys {
     v.shut_on_escape(c)
   }
-  if keys && !v.closing && !marking.on && kind == Some(KImage) {
+  if keys && !v.closing && kind == Some(KImage) {
     if c.key_pressed(@ui.key_code_left) {
       v.go(c, src, -1, 0.0)
     } else if c.key_pressed(@ui.key_code_right) {
@@ -156,8 +152,8 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
     }
     @sf.viewer_zoom_keys(c, v.zoom)
   }
-  // Pictures and HTML use the system bars on Duo; marking keeps its own tools.
-  if native && (kind == Some(KImage) || kind == Some(KHtml)) && !marking.on {
+  // Pictures and HTML use the system bars on Duo.
+  if native && (kind == Some(KImage) || kind == Some(KHtml)) {
     vf_native(v, c, src)
     return
   }
@@ -166,9 +162,9 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
   if head_as_nodes(v, c.width) || bar_as_nodes(v, c.width) {
     return
   }
-  // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays
+  // a picture's bar goes as the pointer rests (not while it comes); what is read stays
   let hidden = kind == Some(KImage) && !v.bars_shown()
-  let awake = v.bars_shown() || v.coming() || marking.on
+  let awake = v.bars_shown() || v.coming()
   let (closed, wide) = @sf.viewer_frame_bar(
     c,
     "preview",
@@ -244,7 +240,10 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   }
   match v.bytes.get() {
     Some(b) => {
-      @sf.native_over_act("mark", @sf.t("web-main.annotate.image"), "edit", fn() { marks_start() })
+      // (marked where its picture is shown, the window's tree's: one too big to show, told of, none)
+      if v.tree_draws() {
+        @sf.native_over_act("mark", @sf.t("web-main.annotate.image"), "edit", fn() { marks_start() })
+      }
       @sf.native_over_act("copy", @sf.t("common.copy"), "copy", fn() {
         c.copy_image(b)
         v.copied += 1
@@ -306,13 +305,9 @@ fn vf_native_download(v : Viewer, c : @ui.Ctx, src : Source, there : Bool) -> Un
 pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Unit {
   let v = vw
   match v.shown_kind() {
-    Some(KImage) if marking.on =>
-      marks_actions(c, v.draft_key() != "", fn(draft) { v.finish_marks(c, draft) }, ink=ink.muted)
+    // (an image the old frame shows is one too big to show, told of: no marks, its picture not shown to mark on;
+    // one shown, the window's tree's, viewer_tree.mbt)
     Some(KImage) if !v.coming() => {
-      // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
-      if v.bytes.get() is Some(_) && @sf.viewer_tool(c, "preview/mark", "edit", @sf.t("web-main.annotate.image"), ink) {
-        marks_start()
-      }
       // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
       match v.bytes.get() {
         Some(b) => {
@@ -347,7 +342,7 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
     }
     _ => ()
   }
-  if !v.coming() && !marking.on {
+  if !v.coming() {
     // what is here saved at once; one told of, or played as it comes, read whole first
     let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
     // (while the core downloads it, how far it has come in its place: once it is all here it is kept by itself)
@@ -360,9 +355,9 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
 }
 
 ///|
-/// The ways to the image before and after (@sf.viewer_steps), while an image steps through others and is not marked.
+/// The ways to the image before and after (@sf.viewer_steps), while an image steps through others.
 pub fn vf_steps(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
-  if vw.shown_kind() != Some(KImage) || marking.on {
+  if vw.shown_kind() != Some(KImage) {
     return
   }
   let (before, after) = vw.near(src)

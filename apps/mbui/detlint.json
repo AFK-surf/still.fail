@@ -252,8 +252,8 @@
       "src/sfapp/sheets.mbt": 174,
       "src/sfapp/station_files.mbt": 30,
       "src/sfbase/flight.mbt": 1,
-      "src/sfbase/viewer.mbt": 51,
-      "src/sfbase/viewer_marks.mbt": 89,
+      "src/sfbase/viewer.mbt": 48,
+      "src/sfbase/viewer_marks.mbt": 14,
       "src/sfkit/glass.mbt": 49,
       "src/sfkit/kit.mbt": 29,
       "src/sfpages/service.mbt": 13,
@@ -301,8 +301,8 @@
       "src/sfapp/sheets.mbt": 106,
       "src/sfapp/station_files.mbt": 11,
       "src/sfbase/flight.mbt": 1,
-      "src/sfbase/viewer.mbt": 33,
-      "src/sfbase/viewer_marks.mbt": 36,
+      "src/sfbase/viewer.mbt": 31,
+      "src/sfbase/viewer_marks.mbt": 7,
       "src/sfdesk/switcher.mbt": 1,
       "src/sfkit/glass.mbt": 17,
       "src/sfkit/kit.mbt": 20,
@@ -358,9 +358,7 @@
       "src/sfpages/vault_item.mbt": 10,
       "src/sfpages/workspace_page.mbt": 1
     },
-    "follow-layout": {
-      "src/sfbase/viewer.mbt": 1
-    },
+    "follow-layout": {},
     "motion-read": {
       "src/sfreplay/steps.mbt": 1
     },

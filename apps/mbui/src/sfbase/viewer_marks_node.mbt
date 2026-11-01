@@ -1,4 +1,4 @@
-// Marking's tools as nodes of the window's tree (marks_foot's MarksTools, ImageMarks.kt): the tools, the colour and
+// Marking's tools as nodes of the window's tree (ImageMarks.kt's MarksTools): the tools, the colour and
 // its palette, the picked one's removal, undo and redo, each done at the moment it is pressed (its press let go on
 // it), as the picture's own drawing is (Viewer::finger_on): the tool a stroke is drawn with the one taken up, whatever
 // frames came between. The note being written too (note_box_node): its pin and what it is, 删除 and 完成 nodes, done as
@@ -14,7 +14,7 @@ fn marks_ink() -> @sf.ViewerInk {
 }
 
 ///|
-/// Marking's foot in `h` (a layer over the viewer's, all of it), as marks_foot lays it out, one column: the notes
+/// Marking's foot in `h` (a layer over the viewer's, all of it), one column: the notes
 /// (their cards, note_cards_node, or the note being written, note_box_node) as far down as what is under them lets
 /// them; under them, while no note is written, the colours' row while asked for over the row of tools on dark
 /// glass (选择, 框, 箭头, 画笔, 文字 · the colour · 删除 the picked · 撤销, 重做), each a picture_button's 32, in its
@@ -216,7 +216,7 @@ fn marks_tools_node(col : @view.View, tips : @sf.TipLayer) -> Unit {
 }
 
 ///|
-/// Between the tools' groups (mark_gap's): a line 1 by 18, white at 10%, 4 either side.
+/// Between the tools' groups: a line 1 by 18, white at 10%, 4 either side.
 fn gap_node(row : @view.View) -> Unit {
   row.box(fn(g) {
     g.padding(Is((4.0, 0.0, 4.0, 0.0))) |> ignore
@@ -226,7 +226,7 @@ fn gap_node(row : @view.View) -> Unit {
 }
 
 ///|
-/// A colour's swatch in `b`'s middle (mark_swatch's): a disc of it 16 across, ringed 1.5 inside its edge in white at
+/// A colour's swatch in `b`'s middle: a disc of it 16 across, ringed 1.5 inside its edge in white at
 /// 50% (the ring the white over what is under it, as the old box's edge is: its ground within its edge; the disc
 /// within it the colour).
 fn swatch_node(b : @view.View, color : () -> Int64) -> Unit {
@@ -277,7 +277,7 @@ fn marks_actions_node_of(row : @view.View, vw : Viewer, ink : () -> @sf.ViewerIn
 }
 
 ///|
-/// The note being written, as marking says (marks_foot's: none, a note asked for of no numbered mark).
+/// The note being written, as marking says (none: a note asked for of no numbered mark).
 fn marks_note_shown() -> (Int, Int, String, Int64)? {
   if marking.note < 0 {
     return None
@@ -286,7 +286,7 @@ fn marks_note_shown() -> (Int, Int, String, Int64)? {
 }
 
 ///|
-/// The note being written in `w` (note_box's, Notes.kt NoteBox, in the dark), 12 in at its sides and 8 over the
+/// The note being written in `w` (Notes.kt NoteBox, in the dark), 12 in at its sides and 8 over the
 /// navigation bar: a frosted card (26 round, its round buttons' room in from its sides and foot, 10 over, 6 between),
 /// its pin and what it is, muted; then 删除批注 (a bin, 36 round), the field (16 on 21, 添加批注（可选） till something
 /// is written, 8 lines at most: an old view's, the card as tall as it lays out), 完成 (a tick on the ink, 36 round), at
@@ -366,7 +366,7 @@ fn note_box_node(w : @view.View) -> Unit {
       })
       // the field, a field of the tree's: as tall as it lays out (at least as a key is, its words in its middle)
       row.box(fn(f) {
-        // (the room its row leaves between its keys, as note_box's Fill: none of its own before it is shared out, giving
+        // (the room its row leaves between its keys, as a Fill: none of its own before it is shared out, giving
         // way as they do; as tall as a key at least, its 7 over and under round it, its words in its middle)
         f
         .grow(Is(1.0))
@@ -440,7 +440,7 @@ fn NotePop::shown(self : NotePop, n : @view.View) -> Double {
 }
 
 ///|
-/// One of a note's round keys (note_box's) in `row`: 36 across and round, on `ground` (0: none), icon `icon` `size`
+/// One of a note's round keys in `row`: 36 across and round, on `ground` (0: none), icon `icon` `size`
 /// across in `ink` in its middle, read out as a button `label`; pressed (its press let go on it), `press`.
 fn note_key_node(row : @view.View, icon : String, size : Double, ground : Int64, ink : Int64, label : String, press : () -> Unit) -> Unit {
   let inset = (36.0 - size) / 2.0
@@ -461,7 +461,7 @@ fn note_key_node(row : @view.View, icon : String, size : Double, ground : Int64,
 }
 
 ///|
-/// A note's pin (picture_pin's small one, 16): round in the mark's colour but for its corner at the foot towards the
+/// A note's pin (the small one, 16): round in the mark's colour but for its corner at the foot towards the
 /// mark (2), its number in white in its middle (10, 650), as `pin` says (its number, its colour) as it changes.
 fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
   let color = fn() {
@@ -499,7 +499,7 @@ fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
 }
 
 ///|
-/// The notes said so far in `r` (marks_foot's, Notes.kt's tray), 10 over the tools: a card each across the foot (16 in
+/// The notes said so far in `r` (Notes.kt's tray), 10 over the tools: a card each across the foot (16 in
 /// at its sides, 8 between), in their numbers' order; where they do not all fit, the last leave the row first, a +N
 /// card at its end standing for them (a menu of them, in their order): nothing scrolled, nothing wrapped. Each card,
 /// pressed (its press let go on it), opens its note; +N's, its menu. Which are left out, how many +N says and what its
@@ -509,7 +509,7 @@ fn note_cards_node(r : @view.View) -> Unit {
   // (each card's node by its mark: what +N reads of which are left out)
   let cards : Map[Int, @view.View] = {}
   r.box(fn(row) {
-    // (each card as tall as what it holds, +N's its one line: marks_notes_row's, its items at its top)
+    // (each card as tall as what it holds, +N's its one line, its items at its top)
     row
     .row(Is(true))
     .lines_up(Is(Some(Start)))
@@ -609,7 +609,7 @@ fn note_cards_node(r : @view.View) -> Unit {
 }
 
 ///|
-/// A card of the notes' tray in `card` (note_tray_card's: `w` wide, frosted, round by the ladder's row step, its pin
+/// A card of the notes' tray in `card` (`w` wide, frosted, round by the ladder's row step, its pin
 /// concentric in its corner, its first line level with it): its head row (`head`) over what `body` puts under it,
 /// read out as a button `label` says; pressed (its press let go on it), `press`.
 fn note_tray_card_node(
@@ -644,7 +644,7 @@ fn note_tray_card_node(
 }
 
 ///|
-/// A tray card's first line (note_first's) in `head`: `words`, muted where `quiet` (only quoting), cut by its card where
+/// A tray card's first line in `head`: `words`, muted where `quiet` (only quoting), cut by its card where
 /// long, in the meta's size on lines 20 apart.
 fn note_first_node(head : @view.View, words : () -> String, quiet : () -> Bool) -> Unit {
   head.box(fn(f) {
@@ -665,8 +665,8 @@ fn note_first_node(head : @view.View, words : () -> String, quiet : () -> Bool) 
 }
 
 ///|
-/// The numbered marks' pins over viewer `vw`'s picture in `h` (a layer over the viewer's, all of it; marks_draw's,
-/// ImageMarks.kt Pins): each picture_pin's 24 at its own size whatever the zoom, up and to the right of its point (a
+/// The numbered marks' pins over viewer `vw`'s picture in `h` (a layer over the viewer's, all of it;
+/// ImageMarks.kt Pins): each pin 24 at its own size whatever the zoom, up and to the right of its point (a
 /// box's corner, an arrow's start; kept 2 in from the picture's sides, 22 down from its top), where the picture is as
 /// each frame draws it while the zoom or the lift goes; a little bigger from its point while its note is open. Pressed
 /// (its press let go on it): its note opened, or closed where it was the one open. Each read out as 标注 n.
@@ -740,7 +740,7 @@ fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
         |> ignore
       })
       |> ignore
-      // within its halo's 2, the mark's colour, cornered the same (its corner a square at its own foot, as picture_pin's)
+      // within its halo's 2, the mark's colour, cornered the same (its corner a square at its own foot, as a pin's)
       p.box(fn(q) {
         q.over(Is(true)).offset(Is((2.0, 2.0))).width(Is(Some(20.0))).height(Is(Some(20.0))).radius(Is(10.0)).ground(By(color))
         |> ignore
@@ -782,7 +782,7 @@ fn Viewer::marks_rect_on(self : Viewer, n : @view.View) -> (Double, Double, Doub
 }
 
 ///|
-/// The marks drawn over viewer `vw`'s picture in `h` (a layer over the canvas, all of it; marks_draw's, ImageMarks.kt
+/// The marks drawn over viewer `vw`'s picture in `h` (a layer over the canvas, all of it; ImageMarks.kt
 /// drawMarks, drawPicked): the lines (a box's rounded edge, an arrow and its barbs, a line drawn by hand, the picked
 /// mark's dashed frame: marks_lines), words edged in their halo (eight times a little off each way, the words over
 /// them), the picked mark's handles (12 round and white, edged 1.5 in the marking colour), each where the picture is

@@ -40,9 +40,16 @@ fn tree_viewer() -> Viewer? {
     None => pv_leaving.get()
   }
   match v {
-    Some(v) if v.shown_kind() == Some(KImage) && v.file.size <= big_file => Some(v)
+    Some(v) if v.tree_draws() => Some(v)
     _ => None
   }
+}
+
+///|
+/// Whether the window's tree draws this viewer (an image it shows, not one too big to show), its node made or not yet:
+/// the old frame's viewer_layer none of it.
+pub fn Viewer::tree_draws(self : Viewer) -> Bool {
+  self.shown_kind() == Some(KImage) && self.file.size <= big_file
 }
 
 ///|
@@ -654,7 +661,7 @@ struct NativeSaid {
 
 ///|
 /// A finger's event on the canvas of viewer `v` (node `canvas`), at its own moment: what the old view's stage worked
-/// out from the frames (Viewer::gestures), from the events themselves. One finger moves the picture where it is larger
+/// out from the frames, from the events themselves. One finger moves the picture where it is larger
 /// than the stage, else the strip to the one beside it (let go: on to it, or back); two pinch round the point between
 /// them; let go moving, it flings on; a tap shows or hides the bars, two zoom in or back; held still, its menu;
 /// marking, one finger draws. Everything it decides is decided as things are at the event's moment (the picture's
