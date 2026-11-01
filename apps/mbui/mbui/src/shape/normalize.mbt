@@ -169,7 +169,7 @@ fn decompose_multi_char_cluster(face : @font.Face, buffer : Buffer, end : Int, s
 
 ///|
 /// Normalizes in the default shaper's way (ComposedDiacritics, which short-circuits).
-fn normalize(face : @font.Face, buffer : Buffer) -> Unit {
+fn normalize(face : @font.Face, buffer : Buffer, shaper : Int) -> Unit {
   if buffer.len == 0 {
     return
   }
@@ -232,6 +232,9 @@ fn normalize(face : @font.Face, buffer : Buffer) -> Unit {
         buffer.sort(i, end, fn(a, b) {
           a.modified_combining_class() > b.modified_combining_class()
         })
+        if shaper == SHAPER_ARABIC {
+          arabic_reorder_marks(buffer, i, end)
+        }
       }
       i = end + 1
     }

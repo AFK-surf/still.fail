@@ -111,6 +111,9 @@ pub struct ShapePlan {
   priv apply_gpos : Bool
   priv apply_kern : Bool
   priv user_features : Array[Feature]
+  priv shaper : Int
+  /// the Arabic shaper's mask for each joining action (the last, no action, is 0)
+  priv arabic_masks : Array[Int]
 }
 
 ///|
@@ -240,6 +243,40 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
   enable(tag("trak"), F_HAS_FALLBACK, 1)
   enable(tag("Harf"), 0, 1)
   enable(tag("HARF"), 0, 1)
+  let shaper = categorize(script, direction, chosen_script[0])
+  if shaper == SHAPER_ARABIC {
+    let has_feature = fn(t : Int) -> Bool {
+      for ti in 0..<2 {
+        guard tables[ti] is Some(table) else { continue }
+        if script_index[ti] >= 0 && table.find_feature(d, script_index[ti], lang_index[ti], t) >= 0 {
+          return true
+        }
+      }
+      false
+    }
+    enable(tag("stch"), 0, 1)
+    add_pause(0)
+    enable(tag("ccmp"), F_MANUAL_ZWJ, 1)
+    enable(tag("locl"), F_MANUAL_ZWJ, 1)
+    add_pause(0)
+    for f in arabic_features {
+      let fallback = script == tag("Arab") && !feature_is_syriac(f)
+      add(tag(f), F_MANUAL_ZWJ | (if fallback { F_HAS_FALLBACK } else { 0 }), 1)
+      add_pause(0)
+    }
+    add_pause(0)
+    enable(tag("rlig"), F_MANUAL_ZWJ | F_HAS_FALLBACK, 1)
+    if script == tag("Arab") {
+      add_pause(0)
+    }
+    enable(tag("calt"), F_MANUAL_ZWJ, 1)
+    if !has_feature(tag("rclt")) {
+      add_pause(0)
+    }
+    enable(tag("liga"), F_MANUAL_ZWJ, 1)
+    enable(tag("clig"), F_MANUAL_ZWJ, 1)
+    enable(tag("mset"), F_MANUAL_ZWJ, 1)
+  }
   enable(tag("Buzz"), 0, 1)
   enable(tag("BUZZ"), 0, 1)
   for t in ["abvm", "blwm", "ccmp", "locl"] {
@@ -508,6 +545,8 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
     apply_gpos,
     apply_kern,
     user_features,
+    shaper,
+    arabic_masks: arabic_features.map(fn(f) { ot_get_1(f) }) + [0],
   }
 }
 

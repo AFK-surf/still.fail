@@ -486,7 +486,7 @@ pub fn Face::fs_selection(self : Face) -> Int {
 /// OS/2's subscript and superscript y offsets.
 pub fn Face::script_offsets(self : Face) -> (Int, Int)? {
   match self.tables.get("OS/2") {
-    Some((o, _)) => Some((i16(self.data, o + 18), i16(self.data, o + 26)))
+    Some((o, _)) => Some((i16(self.data, o + 16), i16(self.data, o + 24)))
     None => None
   }
 }

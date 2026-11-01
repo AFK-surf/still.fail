@@ -49,7 +49,7 @@ pub fn shape(font : ShapeFont, buffer : Buffer, features : Array[Feature]) -> Un
   ensure_native_direction(buffer)
   // substitute_pre
   rotate_chars(face, plan, buffer, target_direction)
-  normalize(face, buffer)
+  normalize(face, buffer, plan.shaper)
   setup_masks(plan, buffer)
   if plan.fallback_mark_positioning {
     recategorize_marks(buffer)
@@ -333,6 +333,9 @@ fn setup_masks(plan : ShapePlan, buffer : Buffer) -> Unit {
         i += 1
       }
     }
+  }
+  if plan.shaper == SHAPER_ARABIC {
+    arabic_setup_masks(plan, buffer)
   }
   for f in plan.user_features {
     if !f.is_global() {
