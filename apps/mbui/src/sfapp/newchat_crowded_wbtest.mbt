@@ -98,7 +98,9 @@ test "narrow: the models used most nearest how hard it thinks, at the sheet's fo
   // what DeepSeek last ran with after its name, on its line: the runtime it runs on of three, how hard it thinks
   let deep = rows[2].rect
   let words = runs_in(t, deep).filter(fn(r) { r.x0 >= deep.0 && r.x1 <= deep.0 + deep.2 })
-  assert_true(words.iter().any(fn(r) { r.text == "DeepSeek Harness · 高" }), msg="\{words.map(fn(r) { r.text })}")
+  // (whole where the row has the room, else cut short: the name whole)
+  assert_true(words.iter().any(fn(r) { r.text.has_prefix("DeepSeek H") }), msg="\{words.map(fn(r) { r.text })}")
+  assert_true(words.iter().any(fn(r) { r.text == "DeepSeek V4.1 Flash" }), msg="\{words.map(fn(r) { r.text })}")
 }
 
 ///|

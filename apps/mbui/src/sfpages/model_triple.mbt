@@ -673,8 +673,9 @@ fn triple_model_row(
   } else {
     Some(fn() {
       if usual != "" || usual_w > 0.0 {
-        // (left out where its row has not the room even for it cut short: the name never)
-        c.box(style=triple_usual_room.then(@ui.style(min_w=Within(usual_w))), drop=1, fn() {
+        // (as wide as the widest of them where the row has the room, giving way to the name where not: cut short,
+        // left out once it would keep too little)
+        c.box(style=triple_usual_room.then(@ui.style(w=Fixed(usual_w), min_w=Fixed(1.0))), drop=1, fn() {
           c.text(usual, style=triple_usual) |> ignore
         })
         |> ignore
@@ -1280,9 +1281,9 @@ let triple_near_down : @ui.Style = @ui.css("w=Full mb=S2 gap=SPx")
 let triple_usual : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// Its room: as wide as the widest of them (`min_w`, Within) where the row has the room, its words at its end.
+/// Its room: its words at its end.
 // kept across runs: a value (no field of it changes)
-let triple_usual_room : @ui.Style = @ui.css("row w=Cut justify=JEnd")
+let triple_usual_room : @ui.Style = @ui.css("row justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
