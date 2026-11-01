@@ -667,3 +667,113 @@ fn note_first_node(head : @view.View, words : () -> String, quiet : () -> Bool) 
   })
   |> ignore
 }
+
+///|
+/// The numbered marks' pins over viewer `vw`'s picture in `h` (a layer over the viewer's, all of it; marks_draw's,
+/// ImageMarks.kt Pins): each picture_pin's 24 at its own size whatever the zoom, up and to the right of its point (a
+/// box's corner, an arrow's start; kept 2 in from the picture's sides, 22 down from its top), where the picture is as
+/// each frame draws it while the zoom or the lift goes; a little bigger from its point while its note is open. Pressed
+/// (its press let go on it): its note opened, or closed where it was the one open. Each read out as 标注 n.
+fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
+  h.over(Is(true)) |> ignore
+  h.each(
+    fn() {
+      marks_said()
+      let numbers = mark_numbers(marking.shapes)
+      marking.shapes.filter_map(fn(s) {
+        match numbers.get(s.id) {
+          Some(n) => {
+            let (px, py) = if s.kind == "box" {
+              let (bx, by, _, _) = s.bounds()
+              (bx, by)
+            } else {
+              (s.pts[0], s.pts[1])
+            }
+            Some((s.id, n, s.color, px, py))
+          }
+          None => None
+        }
+      })
+    },
+    fn(x) { x.0 },
+    fn(p, pin) {
+      let color = fn() { pin.get().2 }
+      let halo = fn() { halo_of(color()) }
+      let open = fn() {
+        marks_said()
+        marking.note == pin.get().0
+      }
+      p
+      .over(Is(true))
+      .width(Is(Some(24.0)))
+      .height(Is(Some(24.0)))
+      .radius(Is(12.0))
+      .ground(By(halo))
+      .shadow(Is((@sf.pin_raised.sigma, @sf.pin_raised.dy, @sf.pin_raised.color)))
+      // (where the picture is: as each frame draws it while the zoom or the lift goes, else where they have it)
+      .offset(By(fn() {
+        vw.zoom.told()
+        vw.lift.said()
+        let now = p.logic_at()
+        let t = if vw.zoom.goes_at(now) || vw.lift.goes_at(now) { p.drawn_at() } else { @double.infinity }
+        let (_, _, _, x0, y0) = pin.get()
+        match vw.marks_rect(t) {
+          Some((rx, ry, rw, _)) if vw.zoom.nw > 0.0 => {
+            let k = rw / vw.zoom.nw
+            let x = dmax(2.0 / k, dmin(dmax(2.0 / k, vw.zoom.nw - 22.0 / k), x0))
+            let y = dmax(22.0 / k, dmin(dmax(22.0 / k, vw.zoom.nh - 2.0 / k), y0))
+            (rx + x * k - 2.0, ry + y * k - 22.0)
+          }
+          _ => (0.0, 0.0)
+        }
+      }))
+      .scale(By(fn() { if open() { pin_open_scale } else { 1.0 } }), about=@view.At(2.0 / 24.0, 22.0 / 24.0))
+      .presses(Is(true))
+      .says(By(fn() { Some(@view.said(Button, label=pv_fill("android-chat.marks.pin", [("n", pin.get().1.to_string())]))) }))
+      .on_press(fn() {
+        let id = @signals.untracked(fn() { pin.get().0 })
+        if marking.note == id {
+          marks_put_down(@ui.current())
+          marking.picked = -1
+          marking.note = -1
+          marks_changed()
+        } else {
+          marks_open_note(@ui.current(), id)
+        }
+      })
+      |> ignore
+      // its pointed corner: a square over the round one at the foot towards the mark
+      p.box(fn(q) {
+        q.over(Is(true)).offset(Is((0.0, 12.0))).width(Is(Some(12.0))).height(Is(Some(12.0))).radius(Is(3.0)).ground(By(halo))
+        |> ignore
+      })
+      |> ignore
+      // within its halo's 2, the mark's colour, cornered the same (its corner a square at its own foot, as picture_pin's)
+      p.box(fn(q) {
+        q.over(Is(true)).offset(Is((2.0, 2.0))).width(Is(Some(20.0))).height(Is(Some(20.0))).radius(Is(10.0)).ground(By(color))
+        |> ignore
+        q.box(fn(c) {
+          c.over(Is(true)).offset(Is((0.0, 10.0))).width(Is(Some(10.0))).height(Is(Some(10.0))).radius(Is(1.5)).ground(By(color))
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      // its number, in its middle, in its halo's colour
+      p.box(fn(m) {
+        m.over(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+        m.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+        m.box(fn(t) {
+          t
+          .words(By(fn() { "\{pin.get().1}" }))
+          .words_look(By(fn() { { size: 11.0, weight: 700, line: @ui.tree_theme().text_line * 11.0, wrap: false } }))
+          .ink(By(halo))
+          |> ignore
+        })
+        |> ignore
+        m.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+  )
+}

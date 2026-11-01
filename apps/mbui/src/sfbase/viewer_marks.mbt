@@ -620,9 +620,17 @@ pub fn marks_finger_off() -> Unit {
 /// The marks drawn over the picture at `r` (x, y, w, h on the stage), of `nw` × `nh` natural pixels (ImageMarks.kt
 /// drawMarks, drawPicked, Pins, WritingField): the lines (a box's rounded edge, an arrow and its barbs, a line drawn by
 /// hand smoothed through its midpoints) in one drawing over the stage; words with their halo; the picked mark's
-/// dashed frame and its handles; the numbered marks' pins; the words being written. Each placed where it is on the
-/// stage, a layer of its own (nothing in it flows after what came before).
-pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double, nh : Double) -> Unit {
+/// dashed frame and its handles; the numbered marks' pins (`pins`: else nodes of the window's tree's, marks_pins_node);
+/// the words being written (`writing`: else on their own, marks_writing). Each placed where it is on the stage, a layer
+/// of its own (nothing in it flows after what came before).
+pub fn marks_draw(
+  c : @ui.Ctx,
+  r : (Double, Double, Double, Double),
+  nw : Double,
+  nh : Double,
+  pins? : Bool = true,
+  writing? : Bool = true,
+) -> Unit {
   marks_said()
   let (rx, ry, rw, _) = r
   let k = rw / dmax(1.0, nw)
@@ -697,6 +705,7 @@ pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double
   // the numbered marks' pins, each at its own size whatever the zoom, up and to the right of their point; tapped, its
   // note; a little bigger while it is open
   for s in marking.shapes {
+    guard pins else { break }
     match numbers.get(s.id) {
       Some(n) => {
         let (px0, py0) = if s.kind == "box" {
@@ -733,6 +742,21 @@ pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double
     }
   }
   // the words being written, where they go, in their size and colour
+  if writing {
+    marks_writing(c, r, nw)
+  }
+}
+
+///|
+/// The words being written over the picture at `r` (x, y, w, h on the stage), of `nw` natural pixels wide
+/// (ImageMarks.kt WritingField): where they go, in their size and colour, a layer of their own; done, put down.
+pub fn marks_writing(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double) -> Unit {
+  marks_said()
+  let (rx, ry, rw, _) = r
+  let k = rw / dmax(1.0, nw)
+  let at_place = fn(x : Double, y : Double, body : () -> Unit) {
+    c.layer(fn() { c.box(tx=x, ty=y, body) |> ignore }) |> ignore
+  }
   match marking.writing {
     Some((_, x, y, w, color)) => {
       let size = w * k

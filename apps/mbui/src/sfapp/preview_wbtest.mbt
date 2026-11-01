@@ -985,9 +985,9 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
   t.draw()
   // its pin (24 square, 2 left of the corner and 22 over it), its number in its middle
-  let (px, py, pw, ph) = t.rect_of("1").unwrap()
-  assert_true((px + pw / 2.0 - (x + 100.0 * k - 2.0 + 12.0)).abs() < 1.0, msg="the pin's x")
-  assert_true((py + ph / 2.0 - (y + 100.0 * k - 22.0 + 12.0)).abs() < 1.0, msg="the pin's y")
+  let (mx, my) = pin_number_middle(t, 1).unwrap()
+  assert_true((mx - (x + 100.0 * k - 2.0 + 12.0)).abs() < 1.0, msg="the pin's x")
+  assert_true((my - (y + 100.0 * k - 22.0 + 12.0)).abs() < 1.0, msg="the pin's y")
   // its note open: 框, the field's 添加批注（可选）, the tick; the tools and their cards away (seen once the note, coming
   // in from nothing as it is asked for, shows: what is drawn faded to nothing is not on screen)
   assert_eq(marking.note, marking.shapes[1].id)
@@ -1091,4 +1091,28 @@ fn shown_scale(t : @ui.Tester, z : @kit.Zoom) -> Double {
 fn shown_x(t : @ui.Tester, z : @kit.Zoom) -> Double {
   let (x, _, w, _) = z.rect_at(t.time()).unwrap()
   x + w / 2.0 - z.bw / 2.0
+}
+
+///|
+/// The middle of mark `n`'s pin's number as it is laid out (a pin bigger from its point while its note is open drawn so:
+/// its middle as before that): where the window's tree has a pin read out as 标注 n (marks_pins_node), its own number's
+/// in it; else the old view's.
+fn pin_number_middle(t : @ui.Tester, n : Int) -> (Double, Double)? {
+  let label = pv_fill("android-chat.marks.pin", [("n", n.to_string())])
+  let tree = @ui.view_tree().unwrap()
+  let pins = tree.said_order().filter(fn(s) {
+    match s.said {
+      Some(said) => said.role == Button && said.label == label
+      None => false
+    }
+  })
+  guard pins.get(0) is Some(pin) else { return t.rect_of(n.to_string()).map(fn(r) { (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0) }) }
+  let (bx, by, bw, bh) = tree.drawn_of(pin.id).map(fn(d) { (d.x, d.y, d.w, d.h) }).unwrap_or((0.0, 0.0, 0.0, 0.0))
+  let words = tree.drawn().filter(fn(d) { d.words == n.to_string() && tree.holds(pin.id, d.id) })
+  guard words.get(0) is Some(d) && bw > 0.0 else { return None }
+  // (drawn bigger by `k` from its point, 2 in and 22 down of its 24)
+  let k = bw / 24.0
+  let (ox, oy) = (bx + 2.0 * k, by + 22.0 * bh / 24.0)
+  let (cx, cy) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
+  Some((ox + (cx - ox) / k, oy + (cy - oy) / k))
 }

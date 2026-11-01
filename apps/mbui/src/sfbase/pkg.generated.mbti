@@ -855,7 +855,7 @@ pub fn marks_changed() -> Unit
 
 pub fn marks_commit(Array[Mark], before? : Array[Mark]) -> Unit
 
-pub fn marks_draw(@ui.Ctx, (Double, Double, Double, Double), Double, Double) -> Unit
+pub fn marks_draw(@ui.Ctx, (Double, Double, Double, Double), Double, Double, pins? : Bool, writing? : Bool) -> Unit
 
 pub fn marks_drawn() -> Array[Mark]
 
@@ -896,6 +896,8 @@ pub fn marks_shown_color() -> Int64
 pub fn marks_start() -> Unit
 
 pub fn marks_undo() -> Unit
+
+pub fn marks_writing(@ui.Ctx, (Double, Double, Double, Double), Double) -> Unit
 
 pub fn marks_writing_bottom(@kit.Zoom) -> Double?
 
