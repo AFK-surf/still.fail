@@ -377,6 +377,7 @@ fn install() -> Unit {
   @ui.on_after_layout(after_layout)
   // fx.mbt's layout animations (after the layer's looks)
   @ui.on_after_layout(layouts_after)
+  @ui.on_frame_built(lapsed_told)
   @ui.on_list_underlay(draw_ghosts)
   @ui.on_reset(reset)
 }
@@ -1251,11 +1252,19 @@ fn after_layout(c : @ui.Ctx) -> Unit {
     }
   }
   together.clear()
-  for e in if order.is_empty() { mo.entries } else { order } {
-    // (what its move reads, read for what draws its node: the part's or the row's kept, whoever told it: Ctx::reads_for)
-    c.reads_for(e.node, fn() { layout_entry(c, e, still, frame, scrolled) })
-  }
-  moved_together()
+  // (what reads where each goes told once all of it is worked out, and only where it came out otherwise: a build of
+  // the frame again lays it out from where the frame began, as the first did)
+  measures_told_once(frame, fn() {
+    laid_once(
+      fn() {
+        for e in if order.is_empty() { mo.entries } else { order } {
+          // (what its move reads, read for what draws its node: the part's or the row's kept, whoever told it: Ctx::reads_for)
+          c.reads_for(e.node, fn() { layout_entry(c, e, still, frame, scrolled) })
+        }
+        moved_together()
+      },
+    )
+  })
   // what is drawn where things are this frame (placed): once every place this frame lays out is kept
   for e in mo.entries {
     match e.placed {
@@ -1604,6 +1613,9 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.driven = r.was_driven
           r.fx = r.was_fx
           r.fy = r.was_fy
+          // (where each went before set by hand: laid_once)
+          ignore(r.ox.tells_now())
+          ignore(r.oy.tells_now())
           r.ox.value = r.was_ox
           r.oy.value = r.was_oy
           // (on its way again as it was told: the same spec, its way as long as it was, not one of its own)
@@ -1717,8 +1729,10 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             let spec = spec.delayed(delay)
             r.driven = false
             r.moved_now = true
+            ignore(r.ox.tells_now())
             r.ox.value = cx + dx
             moves_with(group, far, r.ox, 0.0, spec)
+            ignore(r.oy.tells_now())
             r.oy.value = cy + dy
             moves_with(group, far, r.oy, 0.0, spec)
           }
@@ -2045,6 +2059,16 @@ fn measure_read(said : Map[Int, @signals.Signal[Int]], key : Int, name~ : String
 ///|
 /// Measure `key` laid out other than `said`'s readers read it (or for the first time, or no longer): they are told.
 fn measure_changed(said : Map[Int, @signals.Signal[Int]], key : Int, why : String) -> Unit {
+  // (as a layout's motions are worked out: told once it is done, if it came out otherwise: measures_told_once)
+  match measures_held.val {
+    Some(held) => {
+      if !held.iter().any(fn(h) { physical_equal(h.0, said) && h.1 == key }) {
+        held.push((said, key, why))
+      }
+      return
+    }
+    None => ()
+  }
   match said.get(key) {
     Some(s) => {
       if @ui.perf_counting() && s.watched() {
@@ -2053,6 +2077,56 @@ fn measure_changed(said : Map[Int, @signals.Signal[Int]], key : Int, why : Strin
       s.set(@signals.untracked(fn() { s.get() }) + 1)
     }
     None => ()
+  }
+}
+
+///|
+/// While a layout's measures are taken (measures_told_once): each told and why, told once it is done.
+// kept across runs: set and let go within one layout
+let measures_held : Ref[Array[(Map[Int, @signals.Signal[Int]], Int, String)]?] = Ref(None)
+
+///|
+/// What of kept `r` the readers of measure `said` read (measured_size: its size and whether it was laid out the frame
+/// before `frame`; measured_rect's place: where it lies; measured_radii: its corners), as measure_changed tells them.
+fn measured_as(
+  said : Map[Int, @signals.Signal[Int]],
+  r : (Double, Double, Double, Double, (Double, Double, Double, Double), Int)?,
+  frame : Int,
+) -> (Double, Double, (Double, Double, Double, Double), Bool)? {
+  r.map(fn(r) {
+    let (x, y, w, h, rad, seen) = r
+    if physical_equal(said, measure_at) {
+      (x, y, (0.0, 0.0, 0.0, 0.0), true)
+    } else if physical_equal(said, measure_radii) {
+      (0.0, 0.0, rad, true)
+    } else {
+      (w, h, (0.0, 0.0, 0.0, 0.0), seen >= frame - 1)
+    }
+  })
+}
+
+///|
+/// Kept `r`'s place, size, corners and the frame it was last laid out in.
+fn measured_now(r : Rec?) -> (Double, Double, Double, Double, (Double, Double, Double, Double), Int)? {
+  r.map(fn(r) { (r.x, r.y, r.w, r.h, r.rad, r.seen) })
+}
+
+///|
+/// `f`, the measures it tells told only once it is done, each whose kept came out otherwise than before it: a build of
+/// the frame again lays it out as the first did, and two nodes measured by one key (two pages' alike) each told in it.
+fn measures_told_once(frame : Int, f : () -> Unit) -> Unit {
+  let was : Map[Int, (Double, Double, Double, Double, (Double, Double, Double, Double), Int)] = {}
+  mo.recs.each(fn(k, r) { was[k] = measured_now(Some(r)).unwrap() })
+  let held = []
+  let outer = measures_held.val
+  measures_held.val = Some(held)
+  f()
+  measures_held.val = outer
+  for h in held {
+    let (said, key, why) = h
+    if measured_as(said, measured_now(mo.recs.get(key)), frame) != measured_as(said, was.get(key), frame) {
+      measure_changed(said, key, why)
+    }
   }
 }
 
@@ -2102,9 +2176,32 @@ fn measures_said(span : Double) -> String {
 }
 
 ///|
+/// The measures the frame's last build found laid out the frame before and not in it (measures_lapsed), by their keys:
+/// what reads them told once the frame's builds are over (lapsed_told).
+// kept across runs: put anew by each layout, told and let go as its frame's builds are over
+let lapsed : Array[(Int, @signals.Signal[Int])] = []
+
+///|
+/// What reads the measures lapsed in this frame told: none from the next frame (on_frame_built).
+fn lapsed_told(c : @ui.Ctx) -> Unit {
+  ignore(c)
+  for l in lapsed {
+    let (k, s) = l
+    if @ui.perf_counting() {
+      measure_count(k, "not laid out")
+    }
+    s.set(@signals.untracked(fn() { s.get() }) + 1)
+  }
+  lapsed.clear()
+}
+
+///|
 /// The frame `frame` is laid out: the measures read that were laid out the frame before and not in this one are
-/// nowhere from the next frame on (measured_size, measured_rect), what read them told; those nothing reads let go.
+/// nowhere from the next frame on (measured_size, measured_rect), what read them told once the frame's builds are over
+/// (lapsed_told: what they read is the same in each build of this frame, told for the next, not this one built again
+/// for it; the last build's, one that lays it out again telling nothing); those nothing reads let go.
 fn measures_lapsed(frame : Int) -> Unit {
+  lapsed.clear()
   let unread : Array[Int] = []
   measure_at.each(fn(k, s) { if !s.watched() { unread.push(k) } })
   for k in unread {
@@ -2125,10 +2222,7 @@ fn measures_lapsed(frame : Int) -> Unit {
     } else {
       match mo.recs.get(k) {
         Some(r) if r.seen == frame - 1 => {
-          if @ui.perf_counting() {
-            measure_count(k, "not laid out")
-          }
-          s.set(@signals.untracked(fn() { s.get() }) + 1)
+          lapsed.push((k, s))
         }
         _ => ()
       }

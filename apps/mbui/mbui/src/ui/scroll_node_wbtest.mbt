@@ -46,10 +46,12 @@ priv struct ScrollNodeCase {
 /// `there`: the column there while it says so (none: always); `over_empty`: over all of the window an old view with
 /// nothing of its own over the column (a button of its own under it, at 260).
 /// `platform`: the Tester's (0 a desktop's fields, a mouse picking their words; 2 Android's, a finger's tap).
+/// `tree_fields`: its two fields the tree's own (ui's field) in the old views' places.
 fn scroll_node_case(
   there? : @signals.Signal[Bool],
   over_empty? : Bool = false,
   platform? : Int = 0,
+  tree_fields? : Bool = false,
 ) -> (Tester, ScrollNodeCase) {
   let k : ScrollNodeCase = { scroll: @view.Scroll::new(), pressed: Ref(0) }
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform~)
@@ -75,12 +77,20 @@ fn scroll_node_case(
           |> ignore
         }
         button("上面的按钮", true)
-        old(held, fn(c) { c.editor("body/field", placeholder="字段") |> ignore }).height(Is(Some(40.0))) |> ignore
+        if tree_fields {
+          field(held, Field::new(), placeholder="字段").height(Is(Some(40.0))) |> ignore
+        } else {
+          old(held, fn(c) { c.editor("body/field", placeholder="字段") |> ignore }).height(Is(Some(40.0))) |> ignore
+        }
         for i in 0..<8 {
           held.box(fn(r) { r.width(Is(Some(160.0))).height(Is(Some(40.0))).words(Is("第\{i}行")) |> ignore })
           |> ignore
         }
-        old(held, fn(c) { c.editor("body/below", placeholder="下面的字段") |> ignore }).height(Is(Some(40.0))) |> ignore
+        if tree_fields {
+          field(held, Field::new(), placeholder="下面的字段").height(Is(Some(40.0))) |> ignore
+        } else {
+          old(held, fn(c) { c.editor("body/below", placeholder="下面的字段") |> ignore }).height(Is(Some(40.0))) |> ignore
+        }
         button("最后的按钮", false)
       })
       |> ignore
@@ -209,29 +219,50 @@ test "a column of the tree's that scrolls: a finger down on its button, moved ac
 }
 
 ///|
-test "a column of the tree's that scrolls, a finger's fields (Android's): a finger down on an old view's field in it, moved up: what it holds dragged, the field given no focus" {
-  let (t, k) = scroll_node_case(platform=2)
-  let (x, y, w, h) = t.query(TextField).unwrap().rect
-  t.drag(x + w / 2.0, y + h / 2.0, x + w / 2.0, y + h / 2.0 - 60.0)
-  assert_eq((scroll_node_at(k) >= 40.0, t.focused().map(fn(s) { s.role })), (true, None), msg="\{scroll_node_at(k)}")
+test "a column of the tree's that scrolls, a finger's fields (Android's): a finger down on a field in it (an old view's, the tree's), moved up: what it holds dragged, the field given no focus" {
+  for tree_fields in [false, true] {
+    let (t, k) = scroll_node_case(platform=2, tree_fields~)
+    let (x, y, w, h) = t.query(TextField).unwrap().rect
+    t.drag(x + w / 2.0, y + h / 2.0, x + w / 2.0, y + h / 2.0 - 60.0)
+    assert_eq(
+      (scroll_node_at(k) >= 40.0, t.focused().map(fn(s) { s.role }), t.ime().0),
+      (true, None, false),
+      msg="\{tree_fields}: \{scroll_node_at(k)}",
+    )
+  }
 }
 
 ///|
-test "a column of the tree's that scrolls, a desktop's fields: the pointer down on an old view's field in it, moved up: its words picked, nothing scrolled" {
-  let (t, k) = scroll_node_case()
-  let (x, y, w, h) = t.query(TextField).unwrap().rect
-  t.drag(x + w / 2.0, y + h / 2.0, x + w / 2.0, y + h / 2.0 - 60.0)
-  assert_eq((scroll_node_at(k), t.focused().map(fn(s) { s.role })), (0.0, Some(TextField)))
+test "a column of the tree's that scrolls, a finger's fields (Android's): a field in it (an old view's, the tree's) tapped: the focus its, the keyboard told, nothing scrolled" {
+  for tree_fields in [false, true] {
+    let (t, k) = scroll_node_case(platform=2, tree_fields~)
+    let (x, y, w, h) = t.query(TextField).unwrap().rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.draw()
+    assert_eq((scroll_node_at(k), t.focused().map(fn(s) { s.role }), t.ime().0), (0.0, Some(TextField), true), msg="\{tree_fields}")
+  }
 }
 
 ///|
-test "a column of the tree's that scrolls, a finger's fields: its field with the focus, a finger down on a row, moved up: what it holds dragged, the field let go of" {
-  let (t, k) = scroll_node_case(platform=2)
-  let (x, y, w, h) = t.query(TextField).unwrap().rect
-  t.tap(x + w / 2.0, y + h / 2.0)
-  let had = t.focused().map(fn(s) { s.role })
-  t.drag(80.0, 220.0, 80.0, 140.0)
-  assert_eq((had, scroll_node_at(k) > 0.0, t.focused().map(fn(s) { s.role })), (Some(TextField), true, None))
+test "a column of the tree's that scrolls, a desktop's fields: the pointer down on a field in it (an old view's, the tree's), moved up: its words picked, nothing scrolled" {
+  for tree_fields in [false, true] {
+    let (t, k) = scroll_node_case(tree_fields~)
+    let (x, y, w, h) = t.query(TextField).unwrap().rect
+    t.drag(x + w / 2.0, y + h / 2.0, x + w / 2.0, y + h / 2.0 - 60.0)
+    assert_eq((scroll_node_at(k), t.focused().map(fn(s) { s.role })), (0.0, Some(TextField)), msg="\{tree_fields}")
+  }
+}
+
+///|
+test "a column of the tree's that scrolls, a finger's fields: its field (an old view's, the tree's) with the focus, a finger down on a row, moved up: what it holds dragged, the field let go of" {
+  for tree_fields in [false, true] {
+    let (t, k) = scroll_node_case(platform=2, tree_fields~)
+    let (x, y, w, h) = t.query(TextField).unwrap().rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    let had = t.focused().map(fn(s) { s.role })
+    t.drag(80.0, 220.0, 80.0, 140.0)
+    assert_eq((had, scroll_node_at(k) > 0.0, t.focused().map(fn(s) { s.role })), (Some(TextField), true, None), msg="\{tree_fields}")
+  }
 }
 
 ///|

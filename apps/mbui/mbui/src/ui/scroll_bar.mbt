@@ -225,12 +225,12 @@ fn Ctx::floating_found(self : Ctx) -> Unit {
 /// How much of the top and of the foot of what scrolls, `n`, in (x0 y0 x1 y1) what floats over it takes
 /// (Ctx::floats_over; not what it holds itself, which scrolls with it), with scroll_bar_clear more each, and the
 /// system's bars over the window's edges (the status bar, the navigation bar): 0 where nothing does.
-fn Ctx::floated(self : Ctx, n : Node, x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> (Double, Double) {
+fn Ctx::floated(self : Ctx, n : Node?, x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> (Double, Double) {
   let bars = system_bars()
   let mut top = dmax(0.0, bars.top - y0)
   let mut foot = dmax(0.0, y1 - (self.height - bars.bottom))
   for i in self.floating {
-    let (t, f) = self.float_takes(i, x0, y0, x1, y1, Some(n))
+    let (t, f) = self.float_takes(i, x0, y0, x1, y1, n)
     top = dmax(top, t)
     foot = dmax(foot, f)
   }
@@ -362,48 +362,75 @@ fn Ctx::bar_at(self : Ctx, n : Node) -> BarAt? {
 }
 
 ///|
+/// The bar along the right of a box `id` at (`x`, `y`) `w` by `h` scrolling up and down (in the clip it is painted in:
+/// its own pushed), what it holds `content` tall, scrolled `off` into it; what floats over its ends as `floated` says
+/// (Ctx::floated): where it runs (Ctx::bar_where's), for an old view's node or a field of the tree's alike. None where
+/// it shows nothing, or nothing of it scrolls past its view.
+fn Ctx::side_bar(
+  self : Ctx,
+  id : Int,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  content : Double,
+  off : Double,
+  floated : () -> (Double, Double),
+) -> BarAt? {
+  // (where the hand has the bars: read so)
+  bars_said.get() |> ignore
+  let ((cx0, cy0, cx1, cy1), (_, r_tr, r_br, _), _) = clip_at(clip_top())
+  let x0 = dmax(x, cx0)
+  let y0 = dmax(y, cy0)
+  let x1 = dmin(x + w, cx1)
+  let y1 = dmin(y + h, cy1)
+  if x1 - x0 < 1.0 || y1 - y0 < 1.0 {
+    return None
+  }
+  if content <= h + 1.0 {
+    return None
+  }
+  // (what floats over it is read across its own box, as its ends are: the clip it shows in may cut its sides short
+  // of what floats over it, a sidebar's list a point inside its panel's line, its band not cut so)
+  let (top, foot) = floated()
+  let (ty, th, ratio) = bar_track(y, h, h, content, off, dmax(top, r_tr), dmax(foot, r_br))
+  if th <= 0.0 {
+    return None
+  }
+  Some({
+    id,
+    foot: false,
+    x0,
+    y0,
+    x1,
+    y1,
+    top_in: dmax(0.0, y + top - y0),
+    foot_in: dmax(0.0, y1 - (y + h - foot)),
+    tx: x1 - scroll_bar_inset - scroll_bar_size,
+    ty,
+    tw: scroll_bar_size,
+    th,
+    ratio,
+    thumb: bar_thumb_id(id),
+  })
+}
+
+///|
 /// Where the bar of what scrolls in node `n` runs (Ctx::bar_at), nothing kept of it: what its thumb is a target where
 /// (Ctx::bar_target), as the frame's targets are found.
 fn Ctx::bar_where(self : Ctx, n : Node) -> BarAt? {
   // (where the hand has the bars: read so)
   bars_said.get() |> ignore
-  let ((cx0, cy0, cx1, cy1), (_, r_tr, r_br, r_bl), _) = clip_at(clip_top())
+  let side = fn(content : Double, off : Double) -> BarAt? {
+    self.side_bar(n.id, n.x, n.y, n.fw, n.fh, content, off, fn() { self.floated(Some(n), n.x, n.y, n.x + n.fw, n.y + n.fh) })
+  }
+  let ((cx0, cy0, cx1, cy1), (_, _, r_br, r_bl), _) = clip_at(clip_top())
   let x0 = dmax(n.x, cx0)
   let y0 = dmax(n.y, cy0)
   let x1 = dmin(n.x + n.fw, cx1)
   let y1 = dmin(n.y + n.fh, cy1)
   if x1 - x0 < 1.0 || y1 - y0 < 1.0 {
     return None
-  }
-  // along its right: what it holds, how far into it its view is
-  let side = fn(content : Double, off : Double) -> BarAt? {
-    let size = n.fh
-    if content <= size + 1.0 {
-      return None
-    }
-    // (what floats over it is read across its own box, as its ends are: the clip it shows in may cut its sides short
-    // of what floats over it, a sidebar's list a point inside its panel's line, its band not cut so)
-    let (top, foot) = self.floated(n, n.x, n.y, n.x + n.fw, n.y + n.fh)
-    let (ty, th, ratio) = bar_track(n.y, n.fh, size, content, off, dmax(top, r_tr), dmax(foot, r_br))
-    if th <= 0.0 {
-      return None
-    }
-    Some({
-      id: n.id,
-      foot: false,
-      x0,
-      y0,
-      x1,
-      y1,
-      top_in: dmax(0.0, n.y + top - y0),
-      foot_in: dmax(0.0, y1 - (n.y + n.fh - foot)),
-      tx: x1 - scroll_bar_inset - scroll_bar_size,
-      ty,
-      tw: scroll_bar_size,
-      th,
-      ratio,
-      thumb: bar_thumb_id(n.id),
-    })
   }
   let b = if n.kind == kind_list {
     match self.lists.get(n.id) {
@@ -522,7 +549,7 @@ fn Ctx::across_targets(self : Ctx, n : Node, from : Int, alpha : Double) -> Unit
 
 ///|
 /// Bar `b` drawn as it shows now (none while hidden), its thumb a target for a mouse.
-fn Ctx::paint_bar(self : Ctx, b : BarAt, alpha : Double) -> Unit {
+fn Ctx::paint_bar(self : Ctx, b : BarAt, alpha : Double, target? : Bool = true, pointed? : Bool = false) -> Unit {
   guard self.bar_owner(b.id) is Some((bar, until, theme)) else { return }
   // (the clock followed only while it fades in or out: shown or hidden, it is the same each frame, woken as it begins
   // to hide)
@@ -538,7 +565,8 @@ fn Ctx::paint_bar(self : Ctx, b : BarAt, alpha : Double) -> Unit {
   }
   // (lit while held or pointed at: what the pointer is over read as the hand says it as the frame begins, followed, so
   // that it is drawn again as the pointer comes over it or leaves it, whatever moved it there: hand.mbt)
-  let lit = bar.held || hand.over.has(b.thumb)
+  // (`pointed`: a field of the tree's thumb the pointer is on, as its field finds it, tree_field.mbt)
+  let lit = bar.held || hand.over.has(b.thumb) || pointed
   self.emit_rect(
     b.tx,
     b.ty,
@@ -550,7 +578,10 @@ fn Ctx::paint_bar(self : Ctx, b : BarAt, alpha : Double) -> Unit {
     0L,
     (if lit { 0.45 } else { 0.26 }) * shown,
   )
-  self.bar_target(b)
+  // (a target where it is drawn as placed; a field of the tree's finds its own where it is drawn: tree_field.mbt)
+  if target {
+    self.bar_target(b)
+  }
 }
 
 ///|
@@ -613,7 +644,18 @@ fn Ctx::bar_pointer(self : Ctx, x : Double, y : Double) -> Unit {
   if self.down {
     return
   }
-  let at = if pointing() is Mouse && x >= 0.0 { self.bar_near_at(x, y) } else { 0 }
+  // (the pointer over none of the old views (gone from them: -1): over the window's tree where it is, where a field of
+  // the tree's is what the tree finds there, its bar, tree_field.mbt)
+  let at = if !(pointing() is Mouse) {
+    0
+  } else if x >= 0.0 {
+    self.bar_near_at(x, y)
+  } else {
+    match view_point.val {
+      Some((vx, vy)) => tree_field_bar_near(vx, vy).unwrap_or(0)
+      None => 0
+    }
+  }
   if at == self.bar_near {
     return
   }

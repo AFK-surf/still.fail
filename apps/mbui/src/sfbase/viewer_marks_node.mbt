@@ -364,36 +364,32 @@ fn note_box_node(w : @view.View) -> Unit {
           @ui.current().blur()
         }
       })
-      // the field, an old view's: as tall as it lays out (at least as a key is, its words in its middle)
+      // the field, a field of the tree's: as tall as it lays out (at least as a key is, its words in its middle)
       row.box(fn(f) {
         // (the room its row leaves between its keys, as note_box's Fill: none of its own before it is shared out, giving
-        // way as they do)
-        f.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).padding(Is((8.0, 7.0, 8.0, 7.0))) |> ignore
-        @ui.old(f, fn(c) {
-          c.box(style=@sf.centred_y, fn() {
-            c.editor(
-              "marks/note",
-              placeholder=pv("android-chat.annotate.write"),
-              font_size=16.0,
-              line=21.0,
-              max_lines=8,
-              plain=true,
-              color=note_ink,
-              placeholder_color=note_subtle,
-              caret_color=note_accent,
-              enter_sends=false,
-              field=marking.note_field,
-            )
-            |> ignore
-          })
-          |> ignore
-        })
+        // way as they do; as tall as a key at least, its 7 over and under round it, its words in its middle)
+        f
         .grow(Is(1.0))
-        .measured(By(fn() { marking.note_field.laid(font_size=16.0, line=21.0, max_lines=8) }), fn(l, w) {
-          let (lw, lh) = l.size(w)
-          // (as tall as a key at least, its 7 over and under round it: the old box's min_h)
-          (lw, if lh > 36.0 - 14.0 { lh } else { 36.0 - 14.0 })
-        })
+        .basis(Is(Some(0.0)))
+        .shrink(Is(1.0))
+        .padding(Is((8.0, 7.0, 8.0, 7.0)))
+        .min_height(Is(Some(36.0)))
+        .row(Is(true))
+        .lines_up(Is(Some(Middle)))
+        |> ignore
+        @ui.field(
+          f,
+          marking.note_field,
+          placeholder=pv("android-chat.annotate.write"),
+          font_size=16.0,
+          line=21.0,
+          max_lines=8,
+          color=note_ink,
+          placeholder_color=note_subtle,
+          caret_color=note_accent,
+          enter_sends=false,
+        )
+        .grow(Is(1.0))
         |> ignore
       })
       |> ignore
@@ -879,4 +875,66 @@ fn marks_shapes_node(h : @view.View, vw : Viewer) -> Unit {
       |> ignore
     },
   )
+}
+
+
+///|
+/// The words being written over viewer `vw`'s picture while it marks (marking.writing; ImageMarks.kt WritingField), in
+/// `h` (over the canvas, all of it): a field of the tree's where they begin on the picture as it is drawn while the zoom
+/// or the lift goes (marks_rect_on), as wide as six of their size at least 120, in their size on the picture and their
+/// colour, its placeholder that colour at 55%; given up (Enter), put down (marks_put_down).
+fn marks_writing_node(h : @view.View, vw : Viewer) -> Unit {
+  h.over(Is(true)) |> ignore
+  h.box(fn(b) {
+    let at = fn() {
+      marks_said()
+      match marking.writing {
+        Some((_, x, y, w, color)) => Some((x, y, w, color))
+        None => None
+      }
+    }
+    // (how big a natural pixel of the picture is drawn)
+    let k = fn() {
+      match vw.marks_rect_on(b) {
+        Some((_, _, rw, _)) if vw.zoom.nw > 0.0 => rw / vw.zoom.nw
+        _ => 1.0
+      }
+    }
+    let size = fn() {
+      match at() {
+        Some((_, _, w, _)) => w * k()
+        None => mark_text
+      }
+    }
+    b
+    .over(Is(true))
+    .offset(By(fn() {
+      match (at(), vw.marks_rect_on(b)) {
+        (Some((x, y, _, _)), Some((rx, ry, rw, _))) if vw.zoom.nw > 0.0 => {
+          let k = rw / vw.zoom.nw
+          (rx + x * k, ry + y * k)
+        }
+        _ => (0.0, 0.0)
+      }
+    }))
+    .width(By(fn() { Some(dmax(size() * 6.0, 120.0)) }))
+    |> ignore
+    @ui.field(
+      b,
+      marking.write_field,
+      placeholder=pv("android-chat.marks.write"),
+      max_lines=1,
+      size_by=size,
+      colors_by=fn() {
+        let color = match at() {
+          Some((_, _, _, c)) => c
+          None => marking.color
+        }
+        (color, @sf.alpha(color, 0.55), color)
+      },
+      submitted=fn(_) { marks_put_down(@ui.current()) },
+    )
+    |> ignore
+  })
+  |> ignore
 }

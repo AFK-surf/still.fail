@@ -1117,12 +1117,9 @@ fn Ctx::moved_shift(self : Ctx, i : Int, dx : Double, dy : Double) -> Unit {
   n.y = n.y + dy
   if n.kind == kind_editor {
     match self.editors.get(n.id) {
-      Some(st) => {
-        // The node may have been restored from a kept layout, while its Field still holds the last placement.
-        // Place the words from the node, rather than accumulating that placement's shift again.
-        st.ox = n.x + n.pad_l - st.scroll_x
-        st.oy = n.y + n.pad_t - st.scroll
-      }
+      // The node may have been restored from a kept layout, while its Field still holds the last placement.
+      // Place the words from the node, rather than accumulating that placement's shift again.
+      Some(st) => st.placed_in(n.field_box())
       None => ()
     }
   }
@@ -1145,10 +1142,7 @@ fn Ctx::replace(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   n.y = py + f.top + n.ty + n.moved_y
   if n.kind == kind_editor {
     match self.editors.get(n.id) {
-      Some(st) => {
-        st.ox = n.x + n.pad_l - st.scroll_x
-        st.oy = n.y + n.pad_t - st.scroll
-      }
+      Some(st) => st.placed_in(n.field_box())
       None => ()
     }
   }
@@ -1224,55 +1218,7 @@ fn Ctx::commit_at(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> U
     n.rich_layout(iw) |> ignore
   } else if n.kind == kind_editor {
     match self.editors.get(n.id) {
-      Some(st) => {
-        let tl = layout_text(st.shown(), n.font_size, n.weight, iw, n.wrap, line=n.line_h, trim=n.line_trim, style=faces_style(st.words, 0))
-        st.tl = Some(tl)
-        // taller than the field: scrolled so that the caret's line shows; a field of more lines, where it was scrolled
-        // to (the wheel, a finger, its bar: Ctx::editor) until the caret or the words change
-        let (cx, cl) = st.place_of(tl, st.caret + st.marked.length())
-        if n.wrap {
-          st.scroll_x = 0.0
-        } else {
-          let room = dmax(0.0, iw - caret_w)
-          if cx < st.scroll_x {
-            st.scroll_x = cx
-          } else if cx > st.scroll_x + room {
-            st.scroll_x = cx - room
-          }
-          st.scroll_x = dmax(0.0, dmin(st.scroll_x, dmax(0.0, tl.w - room)))
-        }
-        let top = cl.to_double() * tl.line_h
-        let most = dmax(0.0, tl.h - ih)
-        let sw = sideways.get(n.id)
-        let was = match sw {
-          Some(s) => s.x
-          None => st.scroll
-        }
-        let now = (st.caret, st.anchor, st.text.length() + st.marked.length())
-        st.scroll = was
-        if sw is None || now != st.followed {
-          st.followed = now
-          if top - st.scroll < 0.0 {
-            st.scroll = top
-          } else if top + tl.line_h - st.scroll > ih {
-            st.scroll = top + tl.line_h - ih
-          }
-        }
-        st.scroll = dmax(0.0, dmin(st.scroll, most))
-        match sw {
-          Some(s) => {
-            s.max = most
-            s.x = st.scroll
-            // (brought to the caret where its bar was drawn: it scrolled)
-            if st.scroll != was && self.bar_drawn(n.id) is Some(_) {
-              self.sideways_scrolled(s)
-            }
-          }
-          None => ()
-        }
-        st.ox = ix - st.scroll_x
-        st.oy = iy - st.scroll
-      }
+      Some(st) => self.lay_out_field(st, n.field_box())
       None => ()
     }
   } else if n.kind == kind_list {
@@ -1284,4 +1230,58 @@ fn Ctx::commit_at(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> U
       c = self.nodes[c].next
     }
   }
+}
+
+///|
+/// Field `st` laid out where it is placed as `fb` (its words in the room its box leaves them, scrolled so that its caret
+/// shows where they are more than it holds), wherever it is held: its layout and its words' origin.
+fn Ctx::lay_out_field(self : Ctx, st : EditorState, fb : FieldBox) -> Unit {
+  let iw = dmax(fb.w - fb.pad_l - fb.pad_r, 0.0)
+  let ih = dmax(fb.h - fb.pad_t - fb.pad_b, 0.0)
+  let tl = layout_text(st.shown(), fb.font_size, fb.weight, iw, fb.wrap, line=fb.line_h, trim=fb.trim, style=faces_style(st.words, 0))
+  st.tl = Some(tl)
+  // taller than the field: scrolled so that the caret's line shows; a field of more lines, where it was scrolled
+  // to (the wheel, a finger, its bar: Ctx::editor) until the caret or the words change
+  let (cx, cl) = st.place_of(tl, st.caret + st.marked.length())
+  if fb.wrap {
+    st.scroll_x = 0.0
+  } else {
+    let room = dmax(0.0, iw - caret_w)
+    if cx < st.scroll_x {
+      st.scroll_x = cx
+    } else if cx > st.scroll_x + room {
+      st.scroll_x = cx - room
+    }
+    st.scroll_x = dmax(0.0, dmin(st.scroll_x, dmax(0.0, tl.w - room)))
+  }
+  let top = cl.to_double() * tl.line_h
+  let most = dmax(0.0, tl.h - ih)
+  let sw = sideways.get(fb.id)
+  let was = match sw {
+    Some(s) => s.x
+    None => st.scroll
+  }
+  let now = (st.caret, st.anchor, st.text.length() + st.marked.length())
+  st.scroll = was
+  if sw is None || now != st.followed {
+    st.followed = now
+    if top - st.scroll < 0.0 {
+      st.scroll = top
+    } else if top + tl.line_h - st.scroll > ih {
+      st.scroll = top + tl.line_h - ih
+    }
+  }
+  st.scroll = dmax(0.0, dmin(st.scroll, most))
+  match sw {
+    Some(s) => {
+      s.max = most
+      s.x = st.scroll
+      // (brought to the caret where its bar was drawn: it scrolled)
+      if st.scroll != was && self.bar_drawn(fb.id) is Some(_) {
+        self.sideways_scrolled(s)
+      }
+    }
+    None => ()
+  }
+  st.placed_in(fb)
 }

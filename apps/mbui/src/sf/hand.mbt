@@ -93,10 +93,13 @@ pub fn menu_held(c : @ui.Ctx, key : String) -> Bool {
   }
   c.take_press()
   let at = c.press().frame
-  if held_felt.get(key) != Some(at) {
-    held_felt[key] = at
-    c.after_build("haptic/hold/" + key, fn() { @ui.haptic(LongPress) })
-  }
+  // (told once the frame's builds are over, whichever build took the hold: one built again sees the press taken)
+  c.tell("haptic/hold/" + key, fn() {
+    if held_felt.get(key) != Some(at) {
+      held_felt[key] = at
+      @ui.haptic(LongPress)
+    }
+  })
   true
 }
 

@@ -294,6 +294,34 @@ test "scroll bar: a field of more lines than it shows scrolls by the wheel, its 
 }
 
 ///|
+/// A field six lines high holding twelve (20 a line), 10 inside a box 200 by 140 whose corners are `r` round and cut
+/// what it holds, scrolled by the wheel: its bar's thumbs as drawn.
+fn inset_field_thumbs(r : Double) -> Array[(Double, Double, Double, Double, Int64)] {
+  let f = @ui.Field::new(text=twelve_lines())
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Px(200.0), h=Px(140.0), pad=10.0, radius=r, clip=true, bg=0xEEEEEEFFL, fn() {
+        c.editor("f", field=f, max_lines=6, plain=true, font_size=10.0, line=20.0) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  t.move(100.0, 40.0)
+  t.wheel(100.0, 40.0, -100.0)
+  t.run_for(@ui.scrollbar_fade_ms)
+  thumbs(t)
+}
+
+///|
+test "scroll bar: a field inset in a box cut round, its corners clear of the field's: its thumb where it is in a box cut square" {
+  let square = inset_field_thumbs(0.0)
+  assert_eq(square.length(), 1, msg="its thumb out: \{square}")
+  assert_eq(inset_field_thumbs(30.0), square, msg="cut round: the same thumb")
+}
+
+///|
 test "scroll bar: a finger dragging a field of more lines than it shows scrolls it, the caret put nowhere" {
   let f = @ui.Field::new(text=twelve_lines())
   let t = @ui.Tester::new(field_rows(f), w=300.0, h=400.0, platform=2)

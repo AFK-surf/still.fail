@@ -105,6 +105,107 @@ test "window tree: a press on the second old view is its own, the first not buil
 }
 
 ///|
+test "window tree: a press on the last old view changes what the first read (itself), built before it: the frame it is taken in draws the first so, the one between that read nothing of it not built again" {
+  islands_read_late("itself")
+}
+
+///|
+test "window tree: a press on the last old view changes what the first read (a part kept in it), built before it: the frame it is taken in draws the first so, the one between that read nothing of it not built again" {
+  islands_read_late("a part")
+}
+
+///|
+test "window tree: a press on the last old view changes what the first read (a part kept in a part kept in it), built before it: the frame it is taken in draws the first so, the one between that read nothing of it not built again" {
+  islands_read_late("a part in a part")
+}
+
+///|
+test "window tree: a press on the last old view changes what the first read (its list's row), built before it: the frame it is taken in draws the first so, the one between that read nothing of it not built again" {
+  islands_read_late("a list's row")
+}
+
+///|
+test "window tree: a press taken in a list's row of the last old view (built as it is laid out) changes what the first read, built before it: the frame it is taken in draws the first so, the one between not built again" {
+  islands_read_late("itself", in_row=true)
+}
+
+///|
+/// Old views A, C and B side by side, B's press setting the colour A reads (`where_read`: in A's build itself, in a
+/// part kept in it, in a part kept in that, in its list's one row, each its own watch's): A drawn so in the frame the
+/// press is taken in, C built no more, the press taken once. `in_row`: B's press taken in its list's one row (built as
+/// it is laid out, after A and C are built).
+fn islands_read_late(where_read : String, in_row? : Bool = false) -> Unit raise {
+  let colour = @signals.signal(islands_green, same=fn(x, y) { x == y })
+  let view_a = fn(c : Ctx) {
+    let body = fn() { c.box(w=Fill(1.0), h=Px(100.0), bg=colour.get(), fn() {  }) |> ignore }
+    match where_read {
+      "a part" => c.kept_part(c.id("a-part"), "", body)
+      "a part in a part" => c.kept_part(c.id("a-part"), "", fn() { c.kept_part(c.id("a-inner"), "", body) })
+      "a list's row" => c.list("a-rows", 1, 100.0, fn(_) { body() }) |> ignore
+      _ => body()
+    }
+  }
+  let builds_c = Ref(0)
+  let view_c = fn(c : Ctx) {
+    builds_c.val = builds_c.val + 1
+    c.box(w=Fill(1.0), h=Fill(1.0), bg=islands_green, fn() {  }) |> ignore
+  }
+  let taps = Ref(0)
+  let view_b = fn(c : Ctx) {
+    let pressed = fn() {
+      let id = c.id("b")
+      if c.clicked(id) {
+        taps.val = taps.val + 1
+        colour.set(islands_red)
+      }
+      c.box(w=Fill(1.0), h=Px(800.0), id~, fn() {  }) |> ignore
+    }
+    if in_row {
+      c.list("b-rows", 1, 800.0, fn(_) { pressed() }) |> ignore
+    } else {
+      pressed()
+    }
+  }
+  let t = Tester::new(fn(_c) {  })
+  t.keep_parts(true)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.row(Is(true)) |> ignore
+    root.box(fn(v) {
+      v.width(Is(Some(130.0))) |> ignore
+      old(v, view_a).grow(Is(1.0)) |> ignore
+    })
+    |> ignore
+    root.box(fn(v) {
+      v.width(Is(Some(130.0))) |> ignore
+      old(v, view_c).grow(Is(1.0)) |> ignore
+    })
+    |> ignore
+    root.box(fn(v) {
+      v.grow(Is(1.0)) |> ignore
+      old(v, view_b).grow(Is(1.0)) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  let c0 = builds_c.val
+  // (each frame drawn: whether the press was taken, what the first is drawn in, how many times the one between was
+  // built)
+  let frames : Array[(Int, Array[Int64], Int)] = []
+  t.each_frame(
+    Some(fn() { frames.push((taps.val, t.drawn_rects().filter(fn(r) { r.0 == 0.0 && r.2 == 130.0 }).map(fn(r) { r.4 }), builds_c.val - c0)) }),
+  )
+  tree_tap(t, 300.0, 400.0)
+  t.each_frame(None)
+  let taken = frames.filter(fn(f) { f.0 == 1 })
+  assert_true(taken.length() > 0, msg="\{where_read}, in a row \{in_row}: the press not taken: \{frames}")
+  assert_eq(taken[0].1, [islands_red], msg="\{where_read}, in a row \{in_row}: the frame the press was taken in: \{frames}")
+  assert_eq(taken[0].2, 0, msg="\{where_read}, in a row \{in_row}: the one between, built again in the frame the press was taken in: \{frames}")
+  assert_eq(taps.val, 1, msg="\{where_read}, in a row \{in_row}: the press taken once: \{frames}")
+}
+
+///|
 test "window tree: one old view let go: what it read no longer followed, the other drawn on in the room left it" {
   let w = islands()
   assert_true(w.a.watched())

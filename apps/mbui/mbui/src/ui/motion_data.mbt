@@ -145,8 +145,12 @@ fn Ctx::movers_sample(self : Ctx) -> Unit {
 
 ///|
 /// The same as Ctx::moving, `what` saying all of what it is and who told it (what moves again by itself, as first told).
-pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String) -> Unit {
-  who.changed()
+/// `tell`: what was built from where it was built again (Mover::changed); not where the caller tells it once its way
+/// is known whole (a layout's motions: the motion package's after_layout).
+pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String, tell? : Bool = true) -> Unit {
+  if tell {
+    who.changed()
+  }
   for e in self.movers {
     if physical_equal(e.who, who) {
       e.m = m

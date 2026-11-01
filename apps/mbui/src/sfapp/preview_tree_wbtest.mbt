@@ -4221,7 +4221,7 @@ test "viewer on the tree, from a card: its corners changed as the picture flies 
 }
 
 ///|
-test "viewer on the tree: what its canvas holds of an old view's, not marking: the words being written's alone (no old view drawing the picture)" {
+test "viewer on the tree: what its canvas holds of an old view's, not marking: none (no old view drawing the picture, nor the words being written)" {
   let t = preview_tester("image")
   t.run_for(@ui.move_most_ms)
   let v = viewer.get().unwrap()
@@ -4237,11 +4237,11 @@ test "viewer on the tree: what its canvas holds of an old view's, not marking: t
   // (what holds the picture: the canvas; of what it holds, those an old view draws)
   let canvas = held[at.unwrap()].1
   let hosted = held.filter(fn(e) { e.1 == canvas && e.0.hosted })
-  assert_eq(hosted.length(), 1, msg="an old view's: the words being written's alone: \{hosted.length()}")
+  assert_eq(hosted.length(), 0, msg="an old view's: none: \{hosted.length()}")
 }
 
 ///|
-test "viewer on the tree: what it adds of an old view's to the window, open, not marking: the words being written's alone (none drawing its bars)" {
+test "viewer on the tree: what it adds of an old view's to the window, open, not marking: none (none drawing its bars, nor the words being written)" {
   let t = preview_tester("image")
   t.run_for(@ui.move_most_ms)
   let hosted = fn() { @ui.view_tree().unwrap().drawn().filter(fn(d) { d.hosted }).length() }
@@ -4251,5 +4251,39 @@ test "viewer on the tree: what it adds of an old view's to the window, open, not
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None && @sfbase.pv_leaving.get() is None, msg="gone")
-  assert_eq(open - hosted(), 1, msg="of an old view's, open: the words being written's alone")
+  assert_eq(open - hosted(), 0, msg="of an old view's, open: none")
+}
+
+///|
+test "viewer on the tree, marking on a phone and on a wide window, words being written and a note open: none of it an old view's" {
+  for wide in [false, true] {
+    let t = if wide { preview_tester("image", w=1280.0, platform=0) } else { preview_tester("image", w=390.0, platform=2) }
+    t.run_for(@ui.move_most_ms)
+    let hosted = fn() { @ui.view_tree().unwrap().drawn().filter(fn(d) { d.hosted }).length() }
+    marks_start()
+    t.draw()
+    let v = viewer.get().unwrap()
+    let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+    // (words begun on it first)
+    marking.tool = Words
+    t.touch(0, rx + rw / 3.0, ry + rh / 3.0)
+    t.touch(2, rx + rw / 3.0, ry + rh / 3.0)
+    t.draw()
+    assert_true(marking.writing is Some(_), msg="\{wide}: words begun")
+    let marking_now = hosted()
+    // (then what was being written put down, and a box drawn: its note asked for)
+    @sfbase.marks_put_down(t.ctx())
+    t.draw()
+    marking.tool = Rect
+    t.drag(rx + rw * 0.55, ry + rh * 0.55, rx + rw * 0.8, ry + rh * 0.8)
+    t.run_for(note_pop_ms)
+    assert_true(marking.note >= 0, msg="\{wide}: its note open")
+    let with_note = hosted()
+    marks_leave()
+    t.back()
+    t.run_for(@ui.move_most_ms)
+    t.run_for(@ui.move_most_ms)
+    let closed = hosted()
+    assert_eq((with_note - closed, marking_now - closed), (0, 0), msg="\{wide}: of an old view's while it marks, its note open, words being written: none")
+  }
 }

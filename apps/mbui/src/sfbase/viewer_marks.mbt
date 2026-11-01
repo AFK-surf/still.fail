@@ -503,7 +503,7 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
           }
           marks_changed()
           if far && m.numbered() {
-            c.focus_editor("marks/note")
+            c.focus_field(marking.note_field)
           }
         }
         Some(Moving(_, _, _, _, _, before, changed)) => {
@@ -564,7 +564,7 @@ fn marks_finger_down(c : @ui.Ctx, x : Double, y : Double, k : Double) -> Unit {
         if s.kind == "words" && marking.tool == Words {
           marking.writing = Some((s.id, s.pts[0], s.pts[1], s.w, s.color))
           marking.write_field.set(s.text)
-          c.focus_editor("marks/write")
+          c.focus_field(marking.write_field)
           return
         }
         marking.picked = s.id
@@ -577,7 +577,7 @@ fn marks_finger_down(c : @ui.Ctx, x : Double, y : Double, k : Double) -> Unit {
           let w = mark_text / k
           marking.writing = Some((-1, x, y - w * 0.65, w, marking.color))
           marking.write_field.set("")
-          c.focus_editor("marks/write")
+          c.focus_field(marking.write_field)
         }
     }
     return
@@ -692,7 +692,7 @@ pub fn marks_draw(
           }
           marks_changed()
           if marking.note >= 0 {
-            c.focus_editor("marks/note")
+            c.focus_field(marking.note_field)
           }
         }
         at_place(rx + px * k - 2.0, ry + py * k - 22.0, fn() {
@@ -1241,7 +1241,7 @@ pub fn marks_open_note(c : @ui.Ctx, id : Int) -> Unit {
   marking.note = id
   marking.note_field.set(marking.comments.get(id).unwrap_or(""))
   marks_changed()
-  c.focus_editor("marks/note")
+  c.focus_field(marking.note_field)
 }
 
 ///|
