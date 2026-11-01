@@ -28,10 +28,22 @@ test "添加目录 opens before the station's folders are said, and they come in
   assert_false(shows(t, "tstst"))
   assert_false(shows(t, "输入路径"))
   // said: in the pick that is open, not one opened again
-  @sffixture.new_fix.presets_late = false
-  @settings.fixture_changed()
+  @sffixture.fix_presets_say()
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_true(shows(t, "tstst"), msg="\{t.text_runs().map(fn(r) { r.text })}")
   assert_true(shows(t, "浏览文件夹…"))
+}
+
+///|
+test "a phone's new chat shows its preset's control, the composer a capsule as touch has it" {
+  new_run()
+  let src = fixture("newchat")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_mode("newchat")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  // (in a row of its own over where it runs and on what: not in the composer's row, which a capsule has not)
+  assert_true(shows(t, "预设"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_true(shows(t, "Studio"))
 }

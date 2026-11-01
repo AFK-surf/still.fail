@@ -637,7 +637,7 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
   fix_tick(f)
   // (the same answer while the made-up core is as it was, as the core's own: a subscription's value kept, not worked
   // out again each time it is read)
-  let version = f.version + @settings.fixture_version() + fix_browse.changes
+  let version = f.version + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val
   let key = name + "\u{1}" + f.mode + "\u{1}" + Json::object(params).stringify()
   match fixture_answers.get(key) {
     Some(t) if t.version == version => return t

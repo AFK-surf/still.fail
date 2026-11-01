@@ -199,6 +199,10 @@ pub fn fix_preset(String, String, Array[String], String) -> Json
 
 pub fn fix_presets_of(String) -> Json
 
+pub let fix_presets_said : @ref.Ref[Int32]
+
+pub fn fix_presets_say() -> Unit
+
 pub fn fix_preview() -> Json
 
 pub let fix_put_up : Map[String, String]

@@ -75,6 +75,19 @@ fn fix_repo(name : String) -> String {
 }
 
 ///|
+/// How many times the first station's presets were said late (fix_presets_say): a version of the made-up core's.
+// kept across runs: put back by fixture_reset
+pub let fix_presets_said : Ref[Int] = Ref(0)
+
+///|
+/// The first station's presets said, late (newchat's `presets_late` let go), as a station answers once it can.
+pub fn fix_presets_say() -> Unit {
+  new_fix.presets_late = false
+  fix_presets_said.val += 1
+  @settings.fixture_changed()
+}
+
+///|
 /// still.fail 开发: still.fail on the first station, its design folder on MBA.
 fn fix_preset_design() -> Json {
   match fix_preset("p-sf", "still.fail 开发", ["still.fail"], "改界面先发改前改后对比图。") {

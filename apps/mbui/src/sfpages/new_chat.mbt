@@ -330,7 +330,14 @@ fn new_choosers(
         })
         |> ignore
       })
-    _ => c.box(style=new_choosers_row, fn() { new_controls(c, src, w, v, station, true, going) }) |> ignore
+    _ => {
+      // what it is for in a row of its own over where it runs and what on (they have all the row's room, the person's
+      // narrowest phone's: newchat_crowded_wbtest.mbt), as the composer's row has it laid out wide
+      if text(station, "station") != "" {
+        c.box(style=new_preset_row, fn() { new_preset_control(c, src, w, v, station, true, going) }) |> ignore
+      }
+      c.box(style=new_choosers_row, fn() { new_controls(c, src, w, v, station, true, going) }) |> ignore
+    }
   }
 }
 
@@ -369,8 +376,8 @@ fn new_controls(
   going : Bool,
 ) -> Unit {
   let address = text(station, "station")
-  // (what it is for first, then where it runs and on what: the preset's in the composer's row, laid out either way;
-  // over the composer narrow, where it runs and what on are what is chosen most and have its room: new_composer_place)
+  // (what it is for first, then where it runs and on what; over the composer narrow, a row of its own over theirs:
+  // new_choosers)
   if !floating {
     new_preset_control(c, src, w, v, station, floating, going)
   }
@@ -649,13 +656,7 @@ fn new_composer_place(
         draft: "new:" + w.id,
         session: "",
         placeholder: @sf.t("web-main.newChat.placeholder"),
-        toolbar: if held {
-          None
-        } else if wide {
-          Some(fn() { new_tools(c, src, w, v, station) })
-        } else {
-          Some(fn() { new_preset_control(c, src, w, v, station, false, false) })
-        },
+        toolbar: if wide && !held { Some(fn() { new_tools(c, src, w, v, station) }) } else { None },
         note: [],
         tail: None,
         roomy: wide,
@@ -1084,6 +1085,11 @@ let new_band : @ui.Style = @ui.css("w=Full align=ACenter radius=InnerOr(Sharp)")
 /// The choices narrow (mChoosers: 6 apart, 6 over the composer, 2 in).
 // kept across runs: a value (no field of it changes)
 let new_choosers_row : @ui.Style = @ui.css("row w=Full px=S0_5 pb=S1_5 gap=S1_5 align=ACenter")
+
+///|
+/// The preset's row over theirs: as far over them as leaves each capsule (30) a finger's room (44) between them.
+// kept across runs: a value (no field of it changes)
+let new_preset_row : @ui.Style = @ui.css("row w=Full px=S0_5 pb=S3_5 align=ACenter")
 
 ///|
 /// A glass choice (mChooser): 30 high, 12 in, 6 between its parts, a capsule; as wide as what it holds needs, never cut
