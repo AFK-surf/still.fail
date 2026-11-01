@@ -183,56 +183,129 @@ pub(all) struct NativeOver {
 pub let native_over : NativeOver = { up: false, title: "", acts: [], active: [], alive: fn() { false } }
 
 ///|
-/// None up.
-pub fn native_over_clear() -> Unit {
-  native_over.up = false
-  native_over.title = ""
-  native_over.acts.clear()
-  native_over.active.clear()
-  native_over.alive = fn() { false }
+/// One of what has said it is up over the whole window (native_over_up): what it said, kept as it said it while it is
+/// alive, by what said it (`owner`) and how high over the rest it is (`over`: the viewer over the pages it is opened
+/// from).
+struct NativeClaim {
+  over : Int
+  /// when it was said, in the order of all said (native_said_n): of two as high, the one said last handed
+  said : Int
+  title : String
+  acts : Array[(String, String, String, () -> Unit)]
+  active : Array[String]
+  alive : () -> Bool
 }
 
 ///|
-/// What said it no longer up (its `alive`): none up, the tabs back; asked as the frame ends, before the bars are
-/// handed. While it is, what it said last stays, built again this frame or not.
-pub fn native_over_gone() -> Unit {
-  if native_over.up && !(native_over.alive)() {
-    native_over_clear()
+// kept across runs: what has said it is up, by what said it (its owner), put back as each is gone
+// (native_over_gone), all of them by native_over_clear as the app begins anew
+let native_claims : Map[String, NativeClaim] = Map([])
+
+///|
+// kept across runs: what said it is up last (native_over_up), what its actions are said for (native_over_act)
+let native_claiming : Ref[String] = Ref("")
+
+///|
+// kept across runs: how many times one has said it is up (native_over_up), each claim's `said` its count then
+let native_said_n : Ref[Int] = Ref(0)
+
+///|
+/// What is handed to the system's bars (native_over): of what has said it is up and is still, the one highest over the
+/// rest, of two as high the one that said it last (each claim's `said`); none, none up. A page under the viewer saying
+/// it again as it is built takes nothing of the viewer's place there.
+fn native_over_publish() -> Unit {
+  let mut top : NativeClaim? = None
+  for _, c in native_claims {
+    match top {
+      Some(t) if t.over > c.over || (t.over == c.over && t.said > c.said) => ()
+      _ => top = Some(c)
+    }
   }
+  match top {
+    Some(c) => {
+      native_over.up = true
+      native_over.title = c.title
+      native_over.acts.clear()
+      native_over.acts.append(c.acts)
+      native_over.active.clear()
+      native_over.active.append(c.active)
+      native_over.alive = c.alive
+    }
+    None => {
+      native_over.up = false
+      native_over.title = ""
+      native_over.acts.clear()
+      native_over.active.clear()
+      native_over.alive = fn() { false }
+    }
+  }
+}
+
+///|
+/// None up.
+pub fn native_over_clear() -> Unit {
+  native_claims.clear()
+  native_claiming.val = ""
+  native_said_n.val = 0
+  native_over_publish()
+}
+
+///|
+/// What said it no longer up (its `alive`) let go of, the one under it handed in its place, or none: the tabs back;
+/// asked as the frame ends, before the bars are handed. While one is, what it said last stays, built again this frame
+/// or not.
+pub fn native_over_gone() -> Unit {
+  let gone = []
+  for k, c in native_claims {
+    if !(c.alive)() {
+      gone.push(k)
+    }
+  }
+  for k in gone {
+    native_claims.remove(k)
+  }
+  native_over_publish()
 }
 
 ///|
 /// Something is up over the whole window this frame, `title` its name: the system's tabs put away while it is. True
 /// where the system's bars are (native_on): it then hands them its actions (native_over_act) for what it would
 /// draw of its own; false elsewhere, nothing done. Its actions are one set, said whole as it is built: this begins
-/// it anew, in place of what was said before (by it built before, or by what was up before it), so an action it no
-/// longer says is gone. Kept as said while `alive` (it is still up: its page shown, the viewer open), whether it is
-/// built again or not; gone as the frame ends once it is not (native_over_gone).
-pub fn native_over_up(title : String, alive~ : () -> Bool) -> Bool {
+/// its set anew, in place of what it said before, so an action it no longer says is gone. Kept as said while `alive`
+/// (it is still up: its page shown, the viewer open), whether it is built again or not; gone as the frame ends once it
+/// is not (native_over_gone). Each by what says it (`owner`), `over` the rest as high as it is (a page 0, a full
+/// visualization 1, the viewer 2): what is handed is the highest of them (native_over_publish), of two as high the one
+/// said last.
+pub fn native_over_up(title : String, alive~ : () -> Bool, owner? : String = "page", over? : Int = 0) -> Bool {
   if !native_bars.on.get() {
     return false
   }
-  native_over.up = true
-  native_over.title = title
-  native_over.acts.clear()
-  native_over.active.clear()
-  native_over.alive = alive
+  native_said_n.val += 1
+  native_claims[owner] = { over, said: native_said_n.val, title, acts: [], active: [], alive }
+  native_claiming.val = owner
+  native_over_publish()
   true
 }
 
 ///|
 /// One of its actions in the system's bars (`id`, its words, an icon's name; `lead`: at the bar's lead, where the
-/// system puts back and close), `act` what it does chosen. `active`: the panel it controls is open, shown in the accent.
-/// One action an id in the set: said twice, the one said last, in its place.
+/// system puts back and close), `act` what it does chosen, for what said it is up last (native_over_up). `active`: the
+/// panel it controls is open, shown in the accent. One action an id in the set: said twice, the one said last, in its
+/// place.
 pub fn native_over_act(id : String, title : String, icon : String, act : () -> Unit, lead? : Bool = false, active? : Bool = false) -> Unit {
+  let c = match native_claims.get(native_claiming.val) {
+    Some(c) => c
+    None => return
+  }
   let key = (if lead { "lead/over/" } else { "over/" }) + id
-  let at = native_over.acts.search_by(fn(a) { a.0 == key })
+  let at = c.acts.search_by(fn(a) { a.0 == key })
   match at {
-    Some(i) => native_over.acts[i] = (key, title, icon, act)
-    None => native_over.acts.push((key, title, icon, act))
+    Some(i) => c.acts[i] = (key, title, icon, act)
+    None => c.acts.push((key, title, icon, act))
   }
-  native_over.active.retain(fn(k) { k != key })
+  c.active.retain(fn(k) { k != key })
   if active {
-    native_over.active.push(key)
+    c.active.push(key)
   }
+  native_over_publish()
 }

@@ -1156,7 +1156,7 @@ pub fn native_over_clear() -> Unit
 
 pub fn native_over_gone() -> Unit
 
-pub fn native_over_up(String, alive~ : () -> Bool) -> Bool
+pub fn native_over_up(String, alive~ : () -> Bool, owner? : String, over? : Int32) -> Bool
 
 pub fn native_side() -> Bool
 
@@ -2664,6 +2664,8 @@ pub(all) struct NativeBars {
   corners : FixedArray[Double]
 }
 
+type NativeClaim
+
 pub(all) struct NativeOver {
   mut up : Bool
   mut title : String
@@ -2994,6 +2996,7 @@ pub(all) struct ViewerFile {
   bytes : Bytes?
   read : (Int32, (Got) -> Unit, (Result[Bytes, String]) -> Unit) -> Unit
   stream : ((Double, Int32, (Bytes, Double, Bool) -> Unit) -> (() -> Unit))?
+  direct : String
   beside : ((ViewerEntry, (Result[Bytes, String]) -> Unit) -> Unit)?
   place : () -> PlaceNow
   keep_place : (Double, Double) -> Unit

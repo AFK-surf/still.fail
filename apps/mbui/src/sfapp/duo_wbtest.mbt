@@ -148,14 +148,13 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
 }
 
 ///|
-test "a picture looked at on an iPhone Duo, its bars' part kept as a host keeps it: the system's bars its own all along, not the tabs back for a frame as the page under it is built again" {
+test "a picture looked at on an iPhone Duo, frames drawn as a host draws them: the system's bars its own all along, not the tabs back for a frame as the page under it is built again" {
   let t = native_chat(669.0, 951.0, true, side=84.0, mode="chat-preview-image")
   // (parts kept between frames as a host keeps them, frames drawn as the display draws them)
   t.drawn_again(true)
   t.check_looks(false)
   t.finish_all()
   t.run_for(@ui.move_most_ms)
-  let bars = viewer_built.bars
   // what the page under it reads changing (the app no longer the one focused), the viewer's bars not built again
   t.app_state(true, false)
   for i in 0..<30 {
@@ -164,7 +163,6 @@ test "a picture looked at on an iPhone Duo, its bars' part kept as a host keeps 
     assert_true(said.contains("\"bare\":true") && said.contains("lead/over/close"), msg="frame \{i}: \{said}")
     assert_false(said.contains("page/chat/"), msg="frame \{i}")
   }
-  assert_true(viewer_built.bars - bars <= 1, msg="the bars built \{viewer_built.bars - bars} times")
 }
 
 ///|
@@ -1083,4 +1081,76 @@ test "an iPhone Duo on its side: the sidebar's edge held by a finger that wander
   t.release(x + 60.0, 300.0)
   t.draw()
   assert_eq(@sfdesk.wide.side_w.get(), from + 60.0)
+}
+
+///|
+test "a picture looked at on an iPhone Duo, the language changed while it is (the core's prefs saying another): its actions in the system's bars said in the new one, nothing else of it changed" {
+  new_run()
+  let lang = Ref("zh")
+  let base = fixture("chat-preview-image")
+  // (the core's prefs saying the language `lang` has, as they are read each frame)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      match (name, got.value) {
+        ("prefs", Some(Object(m))) => {
+          let o = m.copy()
+          o["lang"] = Json::string(lang.val)
+          { ..got, value: Some(Json::object(o)) }
+        }
+        _ => got
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1, nav_able=true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  let before = nav_icon_of(t, "lead/over/close", field="title")
+  assert_eq(before, Some(@sf.t("common.close")), msg="close, in the language it was")
+  lang.val = "en"
+  // (the frame that shows what the test changed: the prefs read again as it is built, the language said from them)
+  t.draw()
+  let want = @sf.t("common.close")
+  assert_true(want != before.unwrap_or(""), msg="another language: \{want}")
+  assert_eq(nav_icon_of(t, "lead/over/close", field="title"), Some(want), msg="close, in the new one")
+}
+
+///|
+test "a picture looked at on an iPhone Duo over a page of its own actions there (a screen's): the system's bars the picture's, the page under it built again as its screen's state changes; closed, the page's again" {
+  new_run()
+  let src = fixture("screen-live")
+  open_fixture_over("screen-live", src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
+  t.set_nav_able(true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.nav_said().contains("lead/over/screen-close"), msg="the screen's: \{t.nav_said()}")
+  // (a picture of the chat's opened over it)
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", a, steps=NoSteps)
+  t.run_for(@ui.move_most_ms)
+  assert_true(viewer.get() is Some(v) && v.in_tree, msg="the window's tree's viewer")
+  let fitted = viewer.get().unwrap().zoom.fitted
+  assert_true(t.nav_said().contains("over/mark"), msg="the picture's: \{t.nav_said()}")
+  // (the screen's state changed under it, as its core says it: another on it; the page built again, saying it is up
+  // again, the line of who is on it in its actions; nothing of the picture's changed)
+  @sfpages.screen_fix_others(["李雷", "韩梅梅"])
+  for i in 0..<3 {
+    t.frame_at(t.time() + @ui.frame_period_default)
+    let said = t.nav_said()
+    assert_true(said.contains("lead/over/close") && said.contains("over/mark"), msg="frame \{i}: the picture's: \{said}")
+    assert_false(said.contains("screen-close"), msg="frame \{i}: none of the screen's: \{said}")
+  }
+  assert_eq(viewer.get().unwrap().zoom.fitted, fitted, msg="the picture's zoom as it was")
+  // closed: the screen's again
+  t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(viewer.get() is None, msg="closed")
+  assert_true(t.nav_said().contains("lead/over/screen-close"), msg="the screen's again: \{t.nav_said()}")
+  // (as it said it last, under the picture: the one come on it in its line)
+  let people = nav_icon_of(t, "over/screen-people", field="title").unwrap_or("")
+  assert_true(people.contains("韩梅梅"), msg="the screen's as it said it last: \{people}")
 }

@@ -29,6 +29,21 @@
 let screen_fix_mode : Ref[String] = Ref("")
 
 ///|
+/// What the fixture's core says of its screen's view to, as it streams it (screen_fixture_stream): none before.
+let screen_fix_heard : Ref[((Json, Bytes?) -> Unit)?] = Ref(None)
+
+///|
+/// The fixture's live screen said again with `others` also on it (its state alone changed, as the core says a change of
+/// it): nothing where nothing streams.
+pub fn screen_fix_others(others : Array[String]) -> Unit {
+  match screen_fix_heard.val {
+    Some(said) =>
+      said({ "state": screen_fix_state("live", true, true, others, "", None, None, None, None, None, None) }, None)
+    None => ()
+  }
+}
+
+///|
 /// The fixture's screen, as Android's test has it.
 // kept across runs: a value (no field of it changes)
 let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false }
@@ -76,6 +91,7 @@ pub fn screen_fixture_stream(
   done : (Result[Json, Json]) -> Unit,
 ) -> Int {
   ignore(params)
+  screen_fix_heard.val = Some(on_value)
   let m = screen_fix_mode.val
   let agent = "Agent「修登录」"
   let drop : Json = { "folder": "/Users/alice/Downloads", "reveal": true }

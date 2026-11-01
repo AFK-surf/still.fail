@@ -1002,8 +1002,6 @@ pub fn view_of_chat(@sfbase.Source, @sfbase.ChatRef) -> (@sfbase.ChatView?, Arra
 
 pub let viewer : @signals.Signal[@sfbase.Viewer?]
 
-pub let viewer_built : @sfbase.ViewerBuilt
-
 pub fn viewer_folder_label(@sfbase.Source, String, String, String) -> String
 
 pub fn viz_base_name(String) -> String

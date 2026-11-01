@@ -16,6 +16,7 @@ fn init {
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
   screen_fix_mode.val = ""
+  screen_fix_heard.val = None
   screens_open.clear()
   screen_uis.clear()
   screens_made.val = 0

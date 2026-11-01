@@ -245,6 +245,8 @@ pub let desk_whole : Double
 
 pub let desktop_face : String
 
+pub fn direct_part(String, Map[String, Json], Double) -> String
+
 pub let dismiss_turn_ms : Double
 
 pub fn doing(String) -> Bool
@@ -1675,8 +1677,6 @@ pub fn view_of_chat(Source, ChatRef) -> (ChatView?, Array[Entry], Json?)
 
 pub let viewer : @signals.Signal[Viewer?]
 
-pub let viewer_built : ViewerBuilt
-
 pub fn viewer_folder_label(Source, String, String, String) -> String
 
 pub fn viewer_layer(@ui.Ctx, Source) -> Unit
@@ -2620,6 +2620,8 @@ pub(all) struct Message {
 }
 pub fn Message::linked(Self, String) -> LinkedChat?
 
+type NativeSaid derive(Eq)
+
 pub(all) struct NoticeHost {
   show : (String, String, String, String) -> Unit
   cancel : (String) -> Unit
@@ -3432,7 +3434,6 @@ pub fn Viewer::gestures(Self, @ui.Ctx, Source, Int32, @kit.Zoom, Bool, Bool) -> 
 pub fn Viewer::go(Self, @ui.Ctx, Source, Int32, Double) -> Unit
 pub fn Viewer::id(Self) -> String
 pub fn Viewer::image_stage(Self, @ui.Ctx, Source, Int32) -> Unit
-pub fn Viewer::image_view(Self, @ui.Ctx, Source, Int32, Bool) -> Unit
 pub fn Viewer::kept_whole(Self) -> Bool
 pub fn Viewer::left_with_frame(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::let_go(Self) -> Unit
@@ -3471,11 +3472,6 @@ pub fn Viewer::view(Self) -> @ui.NativeView?
 pub fn Viewer::wake(Self) -> Unit
 pub fn Viewer::wheel(Self, @ui.Ctx, Int32, @kit.Zoom) -> Unit
 pub fn Viewer::wheeled(Self, @kit.Zoom, Double, Double, Double, Double, Int32, Double) -> Unit
-
-pub(all) struct ViewerBuilt {
-  mut drawing : Int32
-  mut bars : Int32
-}
 
 pub(all) struct Viewport {
   width : Int32

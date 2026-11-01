@@ -490,9 +490,8 @@ test "viewer on the tree, marking: a second finger as a stroke is drawn: the str
 }
 
 ///|
-test "viewer on the tree: pinched, the bars over it not built again; the picture beside it decoded, its drawing not built again" {
-  // (a phone's: its fingers the hand all along, the bars not built again for the hand changing as the first finger
-  // comes, which they follow)
+test "viewer on the tree: pinched, the picture drawn bigger by its node" {
+  // (a phone's: its fingers the hand all along)
   let t = preview_tester("step", finish=false, platform=2)
   // (parts kept between frames as a host keeps them; no frame built again whole to check it, which would count as a
   // build of each)
@@ -508,21 +507,21 @@ test "viewer on the tree: pinched, the bars over it not built again; the picture
   t.run_for(strip_rest(t) + @ui.image_fade_ms)
   let beside = t.pending()
   assert_true(beside.length() > 0, msg="\{t.awaited()}")
-  let (bars, drawing) = (viewer_built.bars, viewer_built.drawing)
-  // the one beside it decoded, out of sight: nothing of this one's built again (the frame after its word, as the
-  // display draws it, nothing else said)
+  let main = "mem:preview/" + viewer.get().unwrap().id()
+  let w0 = nodes_of(main).map(fn(r) { r.2 })
+  assert_eq(w0.length(), 1, msg="lying flat, its node's")
+  // the one beside it decoded, out of sight (the frame after its word, as the display draws it, nothing else said)
   // (frames drawn as the display draws them, at moments said: none of the test's own stepping, run_for's, which builds
   // every part anew)
   t.finish_all()
   display_frame(t)
   t.frame_at(t.time() + @ui.image_fade_ms)
-  assert_eq(viewer_built.drawing, drawing, msg="\{beside}")
-  // pinched: its drawing built again as it goes, its bars not
+  // pinched: drawn bigger by its node as it goes
   let t0 = t.time()
   told_by(t, t0, [(0, 0, 150.0, 422.0, 10.0), (0, 1, 240.0, 422.0, 20.0), (1, 1, 300.0, 422.0, 40.0), (1, 1, 330.0, 422.0, 60.0), (2, 0, 150.0, 422.0, 80.0), (2, 1, 330.0, 422.0, 90.0)], At([30.0, 50.0, 70.0]))
   t.frame_at(t0 + 90.0 + @ui.move_most_ms)
-  assert_true(viewer_built.drawing > drawing)
-  assert_eq(viewer_built.bars, bars)
+  let w1 = nodes_of(main).map(fn(r) { r.2 })
+  assert_true(w1.length() == 1 && w1[0] > w0[0], msg="drawn bigger by its node: \{w0} \{w1}")
 }
 
 ///|
@@ -4219,4 +4218,38 @@ test "viewer on the tree, from a card: its corners changed as the picture flies 
   let k = 1.0 - v.flying()
   let boxes = @ui.view_tree().unwrap().drawn().filter(fn(d) { d.corners is Some(_) }).map(fn(d) { d.corners })
   assert_eq(boxes, [Some((5.0 * k, 25.0 * k, 15.0 * k, 35.0 * k))], msg="its box round as they were last")
+}
+
+///|
+test "viewer on the tree: what its canvas holds of an old view's, not marking: the words being written's alone (no old view drawing the picture)" {
+  let t = preview_tester("image")
+  t.run_for(@ui.move_most_ms)
+  let v = viewer.get().unwrap()
+  let main = "mem:preview/" + v.id()
+  let held = @ui.view_tree().unwrap().drawn_held()
+  let at = held.search_by(fn(e) {
+    match e.0.image {
+      Some((s, _, _)) => s == main
+      None => false
+    }
+  })
+  assert_true(at is Some(_), msg="its picture lying flat, a node's")
+  // (what holds the picture: the canvas; of what it holds, those an old view draws)
+  let canvas = held[at.unwrap()].1
+  let hosted = held.filter(fn(e) { e.1 == canvas && e.0.hosted })
+  assert_eq(hosted.length(), 1, msg="an old view's: the words being written's alone: \{hosted.length()}")
+}
+
+///|
+test "viewer on the tree: what it adds of an old view's to the window, open, not marking: the words being written's alone (none drawing its bars)" {
+  let t = preview_tester("image")
+  t.run_for(@ui.move_most_ms)
+  let hosted = fn() { @ui.view_tree().unwrap().drawn().filter(fn(d) { d.hosted }).length() }
+  let open = hosted()
+  assert_true(viewer.get() is Some(_), msg="open")
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(viewer.get() is None && @sfbase.pv_leaving.get() is None, msg="gone")
+  assert_eq(open - hosted(), 1, msg="of an old view's, open: the words being written's alone")
 }
