@@ -183,6 +183,23 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
+  # A branch's the rest of what main builds (scripts/native.ts ensure, all of mini1's), into mini1's cache, which main's
+  # natives job takes them from: not built there, every job of main's run waiting on them. Beside the branch's checks,
+  # which need none of them (BRANCH_NATIVES). main a4967d00 built four, one after another, its natives job 197 s of a
+  # 566 s run (mesh linux-arm64 40 s, station-load 27, shell-apple ios 21 and ios-sim 18), 2026-11-01.
+  natives-main:
+    needs: [plan, natives]
+    if: needs.plan.outputs.natives == 'needed' && github.ref != 'refs/heads/main' && needs.natives.result == 'success'
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mac
+      - name: Build what main builds besides the branch's (into mini1's cache)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/native.ts ensure
+
   # The mbui app's Windows shell and engine (scripts/native.ts `msvc`) are prebuilt, by the prebuild workflow when asked
   # (.github/workflows/prebuild.yml) or on a Mac, and fetched by their keys; nothing else builds them. Here, on GitHub's
   # Windows (no runner of ours is), for a change to what they are made of: both fetched (a key not there fails, saying
