@@ -96,6 +96,8 @@ fn panel_node(
         .beside(at.id(), side=x.side, along=x.along, offset=x.offset, padding=8.0)
         .width(Is(Some(x.w)))
         .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
+        // (`tall`: a share of the window, no taller than the room beside what opened it, small_panel's `h`)
+        .height(By(fn() { if x.tall > 0.0 { Some(dmin(x.tall * layer.window().1, dmax(0.0, layer.window().1 - 16.0))) } else { None } }))
         // (small_panel's: its padding round what it holds, its corner, ground, line and shadow)
         .padding(Is((panel_pad, panel_pad, panel_pad, panel_pad)))
         .radius(Is(r_menu))
@@ -110,32 +112,28 @@ fn panel_node(
         .presses(Is(true))
         .on_press(fn() {  })
         |> ignore
+        // (each part of it out to the panel's edges it stands by, the panel's padding round what it holds inside it: what
+        // reaches into that padding on purpose (a head's search in its top corner, a foot's buttons in its foot corner, a
+        // row out to its sides) drawn and pressed there, cut by the panel alone, as small_panel's are)
+        let headed = x.title != "" || x.head_end is Some(_)
+        let footed = x.foot is Some(_)
+        let (over, under) = (if headed { 0.0 } else { panel_pad }, if footed { 0.0 } else { panel_pad })
         // (its title, panel_head's)
-        if x.title != "" || x.head_end is Some(_) {
+        if headed {
           @ui.old(p, natural=true, key=fn() { key + "/head" }, fn(c) {
-            let held = c.box(style=panel_part_at, fn() { panel_head(c, x.title, end?=x.head_end) })
+            let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, x.title, end?=x.head_end) })
             words_look(c, held)
           })
+          .margin(Is((-panel_pad, -panel_pad, -panel_pad, 0.0)))
           |> ignore
         }
-        // (what it holds, as small_panel lays it out; scrolling where the window leaves the panel short of room, out to the
-        // panel's sides, what it holds as far in as without (held_reach, held_in: in_room's))
-        p.box(fn(b) {
-          let scroll = @view.Scroll::new()
-          b
-          .shrink(Is(1.0))
-          .min_height(Is(Some(0.0)))
-          .margin(Is((-panel_pad, 0.0, -panel_pad, 0.0)))
-          // (the focus its own as it opens where it takes it (`focus`, kit's popover's: on what holds its body, said
-          // nothing of itself): no key presses it)
-          .focusable(Is(x.focus), keys=0, tab=false)
-          |> ignore
-          body_box.val = Some(b)
-          b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
-            @ui.old(s, natural=true, key=fn() { key + "/body" }, fn(c) {
-              let held = c.box(style=held_in(), fn() {
-                // (held shorter than what it holds: what would scroll in itself there laid out whole, panel_held)
-                panel_held_now.val = scroll.goes()
+        // (`tall`: what it holds fills the room it is given, laid out in it, scrolling as it does itself: panel_grows)
+        if x.tall > 0.0 {
+          p.box(fn(b) {
+            b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(Is((-panel_pad, -over, -panel_pad, -under))).focusable(Is(x.focus), keys=0, tab=false) |> ignore
+            body_box.val = Some(b)
+            @ui.old(b, key=fn() { key + "/body" }, fn(c) {
+              let held = c.box(style=panel_grows.then(panel_part_in(over, under)), fn() {
                 panel_sides_in.val = panel_pad
                 small_panel_now.val = true
                 words_in_now.val = text_in
@@ -145,25 +143,61 @@ fn panel_node(
                 small_panel_now.val = false
                 words_in_now.val = 0.0
                 rule_over_now.val = 0.0
-                panel_held_now.val = false
               })
               words_look(c, held)
-            })
+            }).grow(Is(1.0))
             |> ignore
           })
-          // (cut at its box while what it holds is taller than it, as @kit.in_room's held list (pick_node's): else what
-          // reaches past it drawn whole, in the panel's round corners; what it paints alone, nothing laid out by it)
-          .clips(By(fn() { scroll.goes() }))
-          // (and taking presses within its box alone then too)
-          .bounds_input(By(fn() { scroll.goes() }))
           |> ignore
-        })
-        |> ignore
+        } else {
+          // (what it holds, as small_panel lays it out; scrolling where the window leaves the panel short of room, out to the
+          // panel's sides, what it holds as far in as without (held_reach, held_in: in_room's))
+          p.box(fn(b) {
+            let scroll = @view.Scroll::new()
+            b
+            .shrink(Is(1.0))
+            .min_height(Is(Some(0.0)))
+            .margin(Is((-panel_pad, 0.0, -panel_pad, 0.0)))
+            // (the focus its own as it opens where it takes it (`focus`, kit's popover's: on what holds its body, said
+            // nothing of itself): no key presses it)
+            .focusable(Is(x.focus), keys=0, tab=false)
+            |> ignore
+            body_box.val = Some(b)
+            b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
+              @ui.old(s, natural=true, key=fn() { key + "/body" }, fn(c) {
+                let held = c.box(style=held_in().then(@ui.style(pt=room(over), pb=room(under))), fn() {
+                  // (held shorter than what it holds: what would scroll in itself there laid out whole, panel_held)
+                  panel_held_now.val = scroll.goes()
+                  panel_sides_in.val = panel_pad
+                  small_panel_now.val = true
+                  words_in_now.val = text_in
+                  rule_over_now.val = if x.ruled && x.foot is Some(_) { panel_pad } else { 0.0 }
+                  draw_panel_body(x, c, close, keyed~)
+                  panel_sides_in.val = 0.0
+                  small_panel_now.val = false
+                  words_in_now.val = 0.0
+                  rule_over_now.val = 0.0
+                  panel_held_now.val = false
+                })
+                words_look(c, held)
+              })
+              .margin(Is((0.0, -over, 0.0, -under)))
+              |> ignore
+            })
+            // (cut at its box while what it holds is taller than it, as @kit.in_room's held list (pick_node's): else what
+            // reaches past it drawn whole, in the panel's round corners; what it paints alone, nothing laid out by it)
+            .clips(By(fn() { scroll.goes() }))
+            // (and taking presses within its box alone then too)
+            .bounds_input(By(fn() { scroll.goes() }))
+            |> ignore
+          })
+          |> ignore
+        }
         // (its foot: its buttons in its foot corner, a line over them where `ruled`)
         match x.foot {
           Some(f) =>
             @ui.old(p, natural=true, key=fn() { key + "/foot" }, fn(c) {
-              let held = c.box(style=panel_part_at, fn() {
+              let held = c.box(style=panel_part_in(0.0, panel_pad), fn() {
                 if x.ruled {
                   c.box(style=foot_rule.then(@ui.style(mx=room(-panel_pad), mt=room(panel_pad))), fn() {  }) |> ignore
                 }
@@ -172,6 +206,7 @@ fn panel_node(
               })
               words_look(c, held)
             })
+            .margin(Is((-panel_pad, 0.0, -panel_pad, -panel_pad)))
             |> ignore
           None => ()
         }
@@ -189,5 +224,8 @@ fn panel_node(
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let panel_part_at : @ui.Style = @ui.css("w=Full")
+/// A part of a panel's out to its sides (and `over` above it, `under` below it, where it stands by the panel's top or
+/// foot): the panel's padding round what it holds, inside it.
+fn panel_part_in(over : Double, under : Double) -> @ui.Style {
+  @ui.style(w=Full, pl=room(panel_pad), pt=room(over), pr=room(panel_pad), pb=room(under))
+}

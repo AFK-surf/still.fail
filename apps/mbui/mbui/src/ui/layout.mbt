@@ -1068,7 +1068,7 @@ fn Ctx::moved_now(self : Ctx, n : Node, w : Double, h : Double) -> Unit {
 ///|
 /// How far node `n` is moved across or down by what moves it, `d` as that says: on the device's pixels (Ctx::moved_now);
 /// what only carries it to where it is drawn (Ctx::moved_carries: an old view hosted in a node) as it says, which says
-/// itself where that is on them (island_on_pixels: not where it is drawn bigger or smaller).
+/// itself where that is on them (where the tree draws it, old_frame's).
 fn Ctx::moved_on_pixels(self : Ctx, n : Node, d : Double) -> Double {
   if n.moved_carries {
     d

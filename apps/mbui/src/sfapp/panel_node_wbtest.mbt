@@ -485,3 +485,171 @@ test "panel, 大屏 keyboard and mouse: at a point, a column of its own in it: i
     "short, grown, 4 rows: dialog (600, 106, 280, 130) row0 [(616, 142, 248, 22)] row4 [] held Some(false) | wheel: row0 [(616, 142, 248, 22)] row4 [] held Some(false)",
   ])
 }
+
+///|
+test "panel, 大屏 keyboard and mouse: tall 0.5, at a point high and low in the window, its body a column that fills it and its rows: where it is, how tall, what the wheel scrolls: as main has it" {
+  let out = []
+  for at in [100.0, 500.0, 700.0] {
+    let held : Array[Bool] = []
+    let rows = @signals.signal(40)
+    let t = menu_tester(1280.0, 800.0, 0)
+    @sf.panel("面板", panel_column_body(rows, held), from=At(600.0, at, 0.0, 0.0), tall=0.5)
+    t.run_for(@ui.move_most_ms)
+    let w = fn(s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
+    let d = t.query(Dialog, label="面板").map(fn(s) { tenth4(s.rect) })
+    let before = "dialog \{d} row0 \{w("第0行")} held \{held.last()}"
+    match d {
+      Some((x, y, dw, dh)) => t.wheel(x + dw / 2.0, y + dh / 2.0, 120.0)
+      None => ()
+    }
+    t.run_for(@ui.move_most_ms)
+    out.push("at \{at}: \{before} | wheel: row0 \{w("第0行")}")
+  }
+  for o in out {
+    println("PANELTALL \{o}")
+  }
+  // (as main has it, a4c845604)
+  assert_eq(out, [
+    "at 100: dialog Some((600, 106, 280, 400)) row0 [(616, 142, 248, 22)] held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "at 500: dialog Some((600, 94, 280, 400)) row0 [(616, 130, 248, 22)] held Some(false) | wheel: row0 [(616, 10, 248, 22)]",
+    "at 700: dialog Some((600, 294, 280, 400)) row0 [(616, 330, 248, 22)] held Some(false) | wheel: row0 [(616, 210, 248, 22)]",
+  ])
+}
+
+///|
+test "panel, 大屏 keyboard and mouse: tall 0.5, at a point: its title, words and button where main has them, drawn by the window's tree" {
+  let said : Array[String] = []
+  let t = menu_tester(1280.0, 800.0, 0)
+  @sf.panel("面板", panel_test_body(said), from=At(600.0, 100.0, 0.0, 0.0), tall=0.5)
+  t.run_for(@ui.move_most_ms)
+  // (as main has it, a4c845604: PANELSAID kinds' tall)
+  assert_eq(
+    (panel_said(t), tree_said(Dialog, "面板") is Some(_)),
+    ("dialog Some((600, 106, 280, 400)) title [(616, 118, 248, 20)] words [(616, 142, 248, 22)] button Some((826.1918000000001, 168, 44, 24)) focus None", true),
+  )
+}
+
+///|
+test "panel, 大屏 keyboard and mouse: tall 0.5 with a foot of its own, its body a column: opened, the window made shorter and taller again, and opened at that height: where its body and foot are, what the wheel scrolls: as main has it" {
+  let w = fn(t : @ui.Tester, s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
+  let said = fn(t : @ui.Tester, held : Array[Bool]) {
+    let d = t.query(Dialog, label="面板").unwrap().rect
+    let foot = t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) })
+    let before = "dialog \{tenth4(d)} row0 \{w(t, "第0行")} foot \{foot} held \{held.last()}"
+    // (the wheel over the middle of what it holds)
+    t.wheel(d.0 + d.2 / 2.0, d.1 + 120.0, 120.0)
+    t.run_for(@ui.move_most_ms)
+    let after = "row0 \{w(t, "第0行")}"
+    t.wheel(d.0 + d.2 / 2.0, d.1 + 120.0, -240.0)
+    t.run_for(@ui.move_most_ms)
+    "\{before} | wheel: \{after}"
+  }
+  let open = fn(held : Array[Bool]) {
+    let rows = @signals.signal(40)
+    @sf.panel(
+      "面板",
+      panel_column_body(rows, held),
+      from=At(600.0, 100.0, 0.0, 0.0),
+      tall=0.5,
+      foot=fn(c, close) {
+        if @sf.button(c, "好的", key="ok34", tone=Primary) {
+          close()
+        }
+      },
+    )
+  }
+  let out = []
+  let held : Array[Bool] = []
+  let t = menu_tester(1280.0, 800.0, 0)
+  open(held)
+  t.run_for(@ui.move_most_ms)
+  out.push("800: \{said(t, held)}")
+  t.resize(1280.0, 500.0)
+  t.run_for(@ui.move_most_ms)
+  out.push("800 to 500: \{said(t, held)}")
+  t.resize(1280.0, 800.0)
+  t.run_for(@ui.move_most_ms)
+  out.push("500 to 800: \{said(t, held)}")
+  let held2 : Array[Bool] = []
+  let t2 = menu_tester(1280.0, 500.0, 0)
+  open(held2)
+  t2.run_for(@ui.move_most_ms)
+  out.push("opened at 500: \{said(t2, held2)}")
+  for o in out {
+    println("PANELTALLFOOT \{o}")
+  }
+  // (as main has it, a4c845604)
+  assert_eq(out, [
+    "800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((817.2, 467.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "800 to 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((817.2, 317.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "500 to 800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((817.2, 467.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "opened at 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((817.2, 317.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+  ])
+}
+
+///|
+/// A panel's body: the words `words` says.
+fn fits_words_body(words : @signals.Signal[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
+  fn(c, _) { @sf.panel_text(c, fn() { c.text(words.get(), style=@sf.paragraph) |> ignore }) }
+}
+
+///|
+/// A button `label` of a panel's as the window shows it: where it is, how much of its ground the clips' rects it is drawn
+/// in leave (x0, y0, x1, y1: its own, scene.mbt 16-19, and the rounded one outside it, 40-43; their round corners not:
+/// the corner rule's), and whether presses just inside its capsule by its edges are its own (`pressed` told so): 0.5 in
+/// from its right end and from its foot, each at its middle (`top`: from its top instead of its foot).
+fn panel_reach_said(t : @ui.Tester, label : String, pressed : Ref[Int], top? : Bool = false) -> String raise {
+  let (x, y, w, h) = t.get(Button, label~).rect
+  let shown = t
+    .drawn_instances()
+    .filter(fn(d) { d[5] == 0.0 && (d[0] - x).abs() < 0.01 && (d[1] - y).abs() < 0.01 && (d[2] - w).abs() < 0.01 && (d[3] - h).abs() < 0.01 })
+    .map(fn(d) {
+      let outer = d[44] > 0.0 || d[45] > 0.0 || d[46] > 0.0 || d[47] > 0.0
+      let (x0, y0) = (dmax(x, dmax(d[16], if outer { d[40] } else { x })), dmax(y, dmax(d[17], if outer { d[41] } else { y })))
+      let (x1, y1) = (dmin(x + w, dmin(d[18], if outer { d[42] } else { x + w })), dmin(y + h, dmin(d[19], if outer { d[43] } else { y + h })))
+      tenth4((x0, y0, x1, y1))
+    })
+  let points = [(x + w - 0.5, y + h / 2.0), (x + w / 2.0, if top { y + 0.5 } else { y + h - 0.5 })]
+  let presses = []
+  for q in points {
+    let was = pressed.val
+    t.tap(q.0, q.1)
+    t.run_for(@ui.move_most_ms)
+    presses.push(pressed.val - was)
+  }
+  "\{tenth4((x, y, w, h))} shows \{shown} pressed \{presses}"
+}
+
+///|
+test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its foot corner, a head's at its end in its top corner: drawn whole where they reach into the panel's padding, pressed there: as main has it" {
+  let out = []
+  for kind in ["tall foot", "foot", "head end"] {
+    let t = menu_tester(1280.0, 800.0, 0)
+    let pressed = Ref(0)
+    let foot = fn(c : @ui.Ctx, _close : () -> Unit) {
+      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+        pressed.val = pressed.val + 1
+      }
+    }
+    match kind {
+      "tall foot" =>
+        @sf.panel("面板", panel_column_body(@signals.signal(40), []), from=At(600.0, 100.0, 0.0, 0.0), tall=0.5, foot~)
+      "foot" => @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), foot~)
+      _ =>
+        @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), head_end=fn(c) {
+          if @sf.button(c, "尾", key="end34", tone=Primary) {
+            pressed.val = pressed.val + 1
+          }
+        })
+    }
+    t.run_for(@ui.move_most_ms)
+    out.push("\{kind}: \{panel_reach_said(t, if kind == "head end" { "尾" } else { "好的" }, pressed, top=kind == "head end")}")
+  }
+  // (as main has it, a4c845604: each wholly within the panel's clip there, (601, 107) to (879, 505), (879, 209.8),
+  // (879, 175.8))
+  assert_eq(out, [
+    "tall foot: (817.2, 467.2, 58, 34) shows [(817.2, 467.2, 875.2, 501.2)] pressed [1, 1]",
+    "foot: (817.2, 172, 58, 34) shows [(817.2, 172, 875.2, 206)] pressed [1, 1]",
+    "head end: (654, 110.8, 221.2, 34) shows [(654, 110.8, 875.2, 144.8)] pressed [1, 1]",
+  ])
+}

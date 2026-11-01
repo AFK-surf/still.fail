@@ -572,7 +572,7 @@ fn on_glyph_row(base : Double, oy : Double, sc : Double) -> Double {
 
 ///|
 /// How far the old view painted now is carried off the pixels from where it was laid out (an old view hosted in a node
-/// drawn bigger or smaller: island_on_pixels): its words set on the pixels where they are laid out, then carried with
+/// drawn off its place by its tree, old_frame): its words set on the pixels where they are laid out, then carried with
 /// it, as an old view's look sets them before it moves and scales them (draw.mbt); none (0, 0) for the rest.
 // kept across runs: (0, 0) but while what is in such an old view is painted (Ctx::paint, Ctx::glyphs_carried_of)
 let glyphs_carried : Ref[(Double, Double)] = Ref((0.0, 0.0))

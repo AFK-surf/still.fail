@@ -272,3 +272,76 @@ test "old natural: holding a row that grows in its column, a box in it scrolling
   }
   assert_eq(out, [(100.0, 100.0), (100.0, 100.0)])
 }
+
+///|
+/// A box 100 by 50 (taller than a press's room: its own edges where it takes one) under one 10.4 tall (a place off the pixels), read out "old block" and its presses counted into
+/// `pressed`: the old frame's own, one under the other (`how` 0); an old view as tall as what it holds under a node of
+/// the window's tree 10.4 tall (1); or in a node of the tree's moved down 10.4 (View::offset, 2). Where it is drawn and read out, and how many times it was pressed by a press just
+/// over its top edge and one just under it.
+fn off_pixels_block(how : Int) -> ((Double, Double, Double, Double), (Double, Double, Double, Double), Int, Int) {
+  let pressed = Ref(0)
+  let block = fn(c : Ctx) {
+    let id = c.id("old block")
+    if c.clicked(id) {
+      pressed.val = pressed.val + 1
+    }
+    let b = c.box(w=Px(100.0), h=Px(50.0), bg=natural_mark, id~, fn() {  })
+    c.semantics(b, Button, id~, label="old block")
+  }
+  let t = if how > 0 {
+    let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+    set_view_app(fn(root) {
+      root.box(fn(col) {
+        col.width(Is(Some(400.0))) |> ignore
+        if how == 1 {
+          col.box(fn(top) { top.height(Is(Some(10.4))) |> ignore }) |> ignore
+          old(col, natural=true, fn(c) { block(c) }).width(Is(Some(240.0))) |> ignore
+        } else {
+          col.box(fn(moved) {
+            moved.offset(Is((0.0, 10.4))) |> ignore
+            old(moved, natural=true, fn(c) { block(c) }).width(Is(Some(240.0))) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    })
+    t
+  } else {
+    Tester::new(
+      fn(c) {
+        c.box(w=Px(400.0), fn() {
+          c.box(w=Px(240.0), h=Px(10.4), fn() {  }) |> ignore
+          block(c)
+        })
+        |> ignore
+      },
+      w=400.0,
+      h=300.0,
+      platform=0,
+    )
+  }
+  t.frame()
+  t.clock_frame()
+  let f = fn(r : (Double, Double, Double, Double)) {
+    let g = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
+    (g(r.0), g(r.1), g(r.2), g(r.3))
+  }
+  let drawn = t.drawn_rects().filter(fn(r) { r.4 == natural_mark }).map(fn(r) { f((r.0, r.1, r.2, r.3)) })
+  let read = f(t.query(Button, label="old block").unwrap().rect)
+  t.tap(50.0, 10.35)
+  t.draw()
+  let over = pressed.val
+  t.tap(50.0, 10.45)
+  t.draw()
+  (drawn.get(0).unwrap_or((-1.0, -1.0, -1.0, -1.0)), read, over, pressed.val - over)
+}
+
+///|
+test "old natural: laid out under a node 10.4 tall, or in one moved down 10.4 (a place off the pixels): drawn, read out and pressed there, as the old frame's own one under the other is, not its top moved onto the pixels" {
+  let own = off_pixels_block(0)
+  assert_eq(
+    (own, off_pixels_block(1), off_pixels_block(2)),
+    (((0.0, 10.4, 100.0, 50.0), (0.0, 10.4, 100.0, 50.0), 0, 1), own, own),
+  )
+}
