@@ -28,7 +28,10 @@ export interface OperationParams {
   "decision.dismiss": { thread: number; seq: number };
   "decision.close": { thread: number; seq: number; option: string };
   "chat.report": { thread: number; seq: number };
-  "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined };
+  "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; preset?: string | null | undefined };
+  "preset.add": { name: string; dirs: unknown; instructions?: string | null | undefined };
+  "preset.put": { id: string; name: string; dirs: unknown; instructions?: string | null | undefined };
+  "preset.delete": { id: string };
   "chats.archived": {  };
   "chat.forSession": { session?: string | null | undefined };
   "widget.state": { key: string; path: string };
@@ -180,6 +183,9 @@ export function bindStationOperations(call: Call) {
     decisionClose: <T = unknown>(params: OperationParams["decision.close"]) => call("decision.close", params) as Promise<T>,
     chatReport: <T = unknown>(params: OperationParams["chat.report"]) => call("chat.report", params) as Promise<T>,
     sessionNew: <T = unknown>(params: OperationParams["session.new"] = {}) => call("session.new", params) as Promise<T>,
+    presetAdd: <T = unknown>(params: OperationParams["preset.add"]) => call("preset.add", params) as Promise<T>,
+    presetPut: <T = unknown>(params: OperationParams["preset.put"]) => call("preset.put", params) as Promise<T>,
+    presetDelete: <T = unknown>(params: OperationParams["preset.delete"]) => call("preset.delete", params) as Promise<T>,
     chatsArchived: <T = unknown>(params: OperationParams["chats.archived"] = {}) => call("chats.archived", params) as Promise<T>,
     chatForSession: <T = unknown>(params: OperationParams["chat.forSession"] = {}) => call("chat.forSession", params) as Promise<T>,
     widgetState: <T = unknown>(params: OperationParams["widget.state"]) => call("widget.state", params) as Promise<T>,

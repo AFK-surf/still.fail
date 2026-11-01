@@ -64,8 +64,40 @@ pub fn avatar(c : @ui.Ctx, id : String, name : String, picture : String, size : 
       c.image(picture, w=Px(size), h=Px(size), radius=half, bg=0L, fade=false) |> ignore
     } else {
       // its initial half the face's size, as the side its caller asks (18 by a message, 46 on the settings' card)
-      c.text(initial(name), style=avatar_letter, size=half, line=half) |> ignore
+      avatar_initial(c, name, half)
     }
   })
   c.bone_whole(b)
 }
+
+///|
+/// A thing's mark (a repository, a project), a rounded square as an agent's tile is (agent_mark_corner): `picture` (a
+/// data URL of its own, its favicon or touch icon) once decoded at the size it is shown; else its initial on a colour
+/// of its own, by `id` (its repository's address), as a face's is.
+pub fn tile_avatar(c : @ui.Ctx, id : String, name : String, picture : String, size : Double) -> Unit {
+  let key = data_image(picture)
+  let decoded = key != "" && c.image_ready(key, size * c.scale)
+  let half = size / 2.0
+  let corner = size * 0.3
+  let ground = if decoded { transparent_ground } else { avatar_color(id) }
+  let round = agent_mark_corner(size)
+  let tile = avatar_disc.then(@ui.style(w=Fixed(size), h=Fixed(size), radius=round, bg=Data(ground)))
+  let b = c.box(style=tile, fn() {
+    if decoded {
+      c.image(key, w=Px(size), h=Px(size), radius=corner, bg=0L, fade=false) |> ignore
+    } else {
+      avatar_initial(c, name, half)
+    }
+  })
+  c.bone_whole(b)
+}
+
+///|
+/// A face's or a tile's initial, `half` its side.
+fn avatar_initial(c : @ui.Ctx, name : String, half : Double) -> Unit {
+  c.text(initial(name), style=avatar_letter, size=half, line=half) |> ignore
+}
+
+///|
+/// Under a picture that fills its tile: nothing.
+let transparent_ground : Int64 = 0L

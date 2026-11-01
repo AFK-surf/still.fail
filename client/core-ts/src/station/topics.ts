@@ -43,7 +43,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "outflowGrants", "linkPreview", "filePeek"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "outflowGrants", "linkPreview", "filePeek"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -206,6 +206,8 @@ export class StationTopics implements Owner {
     if (topic.topic === "stationSearch") this.#sync.searchShown(topic);
     // The agents' memory: read each time it is shown (agents write it as they work), what was read last shown meanwhile.
     if (topic.topic === "memory") this.#sync.memoryShown(station);
+    // The presets: read each time shown (the directories offered move as chats work), and as one changes.
+    if (topic.topic === "presets") this.#sync.presetsShown(station);
     // The programs granted the station's data: read each time shown, then as the station tells.
     if (topic.topic === "outflowGrants") this.#sync.outflowShown(station);
     // What a web link in a message is: read each time its card shows (a pull request's state moves), what was read
@@ -306,6 +308,12 @@ export class StationTopics implements Owner {
         // not read, once known.
         if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
         return error ? { err: error } : undefined;
+      case "presets": {
+        const v = this.#sync.presets(station);
+        if (v !== undefined) return { ok: structuredClone(v) as never };
+        if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
+        return error ? { err: error } : undefined;
+      }
       case "memory": {
         // As the station said it last (kept: there as the app opens again), with what the clients show of it; nothing
         // read yet, as `drive`.

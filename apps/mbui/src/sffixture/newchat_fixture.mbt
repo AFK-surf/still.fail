@@ -25,6 +25,9 @@ pub(all) struct NewFix {
   /// MBUI_FIXTURE=newchat-tall-model: as crowded, how hard it thinks and how fast as Codex offers them (2026-10-30: the
   /// column beside the models taller than they are at most)
   mut tall : Bool
+  /// The preset a new chat is opened with ("" for none), and the station's presets (fix_presets)
+  mut preset : String
+  presets : Array[Json]
 }
 
 ///|
@@ -41,6 +44,112 @@ pub let new_fix : NewFix = {
   reading: 0,
   crowded: false,
   tall: false,
+  preset: "",
+  presets: [fix_preset_design(), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")],
+}
+
+///|
+/// A preset of the made-up station's: its directories clones in its repository cache (fix_candidates).
+pub fn fix_preset(id : String, name : String, dirs : Array[String], instructions : String) -> Json {
+  {
+    "id": Json::string(id),
+    "name": Json::string(name),
+    "dirs": Json::array(dirs.map(fn(d) { { "path": Json::string(if d == "still.fail" { "/Users/me/WebstormProjects/still.fail" } else { "/Users/me/code/" + d }), "repo": Json::string(fix_repo(d)) } })),
+    "instructions": Json::string(instructions),
+    "createdBy": "me@example.com",
+    "createdAt": 1793500000000.0,
+    "updatedAt": 1793500000000.0,
+  }
+}
+
+///|
+fn fix_repo(name : String) -> String {
+  match name {
+    "still.fail" => "github.com/AFK-surf/still.fail"
+    "mbui" => "github.com/AFK-surf/mbui"
+    _ => "github.com/zzj3720/" + name
+  }
+}
+
+///|
+/// still.fail 开发: still.fail on the first station, its design folder on MBA.
+fn fix_preset_design() -> Json {
+  match fix_preset("p-sf", "still.fail 开发", ["still.fail"], "改界面先发改前改后对比图。") {
+    Object(m) => {
+      let p = m.copy()
+      let dirs = match p.get("dirs") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      dirs.push({ "path": "/Users/me/Design/still.fail 设计稿", "repo": Json::null(), "station": "ws1/st2", "stationName": "MBA" })
+      p["dirs"] = Json::array(dirs)
+      Json::object(p)
+    }
+    other => other
+  }
+}
+
+///|
+/// A made-up station's presets and the folders it offers (the `presets` topic): MBA's a design folder and a clone of
+/// still.fail of its own (offered once, as the first station's), the first station's the rest.
+pub fn fix_presets_of(station : String) -> Json {
+  if station.has_suffix("st2") {
+    {
+      "presets": [],
+      "candidates": [
+        {
+          "path": "/Users/me/Design/still.fail 设计稿",
+          "name": "still.fail 设计稿",
+          "repo": Json::null(),
+          "chats": 0.0,
+          "lastAt": 1793500000000.0,
+          "where": "~/Design/still.fail 设计稿",
+        },
+        {
+          "path": "/Users/me/code/still.fail",
+          "name": "still.fail",
+          "repo": "github.com/AFK-surf/still.fail",
+          "chats": 2.0,
+          "lastAt": 1793500000000.0,
+          "where": "~/code/still.fail",
+        },
+      ],
+    }
+  } else {
+    { "presets": Json::array(new_fix.presets), "candidates": fix_candidates() }
+  }
+}
+
+///|
+/// The directories the made-up station offers for a new preset: its clones, those its chats worked in most first.
+pub fn fix_candidates() -> Json {
+  Json::array(
+    [
+      ("still.fail", "~/WebstormProjects/still.fail", "github.com/AFK-surf/still.fail", 41, false),
+      ("tstst", "~/code/tstst", "github.com/zzj3720/tstst", 9, false),
+      ("iroh", "github.com/zzj3720/iroh", "github.com/zzj3720/iroh", 3, true),
+      ("riff", "~/code/riff", "github.com/zzj3720/riff", 0, false),
+    ].map(fn(x) {
+      let (name, at, repo, chats, cached) = x
+      let path = if cached { "/Users/me/.stillfail/repos/" + name } else { "/Users/me" + at.unsafe_substring(start=1, end=at.length()) }
+      let o : Map[String, Json] = {
+        "path": Json::string(path),
+        "name": Json::string(name),
+        "repo": if repo == "" { Json::null() } else { Json::string(repo) },
+        "chats": Json::number(chats.to_double()),
+        "lastAt": 1793500000000.0,
+        "where": Json::string(at),
+      }
+      if cached {
+        o["cached"] = Json::boolean(true)
+      }
+      // (still.fail's own touch icon, as the station finds it in web/public)
+      if name == "still.fail" {
+        o["icon"] = Json::string(fix_sf_icon)
+      }
+      Json::object(o)
+    }),
+  )
 }
 
 ///|
@@ -446,6 +555,30 @@ fn fix_new_chat_of(f : Fixture) -> Json {
     "pick": fix_pick(),
     "frequent": if n.crowded { fix_crowded_frequent() } else { fix_frequent() },
     "label": Json::string(effort_word),
+    "preset": Json::string(n.preset),
+    "presets": Json::array(
+      n.presets.map(fn(p) {
+        {
+          "id": field(Some(p), "id").unwrap_or(Json::string("")),
+          "name": field(Some(p), "name").unwrap_or(Json::string("")),
+          "dirs": Json::number(
+            match field(Some(p), "dirs") {
+              Some(Array(a)) => a.length().to_double()
+              _ => 0.0
+            },
+          ),
+          "station": Json::string(text(Some(fix_station(n.station)), "station")),
+          "stationName": Json::string(text(Some(fix_station(n.station)), "name")),
+        }
+      }),
+    ),
+    "presetStation": Json::string(if n.preset == "" { "" } else { text(Some(fix_station(n.station)), "station") }),
+    "presetName": Json::string(
+      match n.presets.iter().find_first(fn(p) { field(Some(p), "id") == Some(Json::string(n.preset)) }) {
+        Some(p) => field(Some(p), "name").unwrap_or(Json::string("")).as_string().unwrap_or("")
+        None => ""
+      },
+    ),
   }
 }
 
@@ -558,6 +691,32 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
         n.effort = s
         n.d_effort = s
       })
+      take("preset", fn(s) { n.preset = s })
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
+    "preset.add" | "preset.put" => {
+      let id = match field(p, "id") {
+        Some(String(s)) => s
+        _ => "p-\{n.presets.length()}"
+      }
+      let dirs = match field(p, "dirs") {
+        Some(Array(a)) => a.map(fn(d) { d.as_string().unwrap_or("") })
+        _ => []
+      }
+      let made = fix_preset(id, field(p, "name").unwrap_or(Json::string("")).as_string().unwrap_or(""), dirs.map(fn(d) {
+        match d.rev_find("/") {
+          Some(i) => d.unsafe_substring(start=i + 1, end=d.length())
+          None => d
+        }
+      }), "")
+      n.presets.retain(fn(x) { field(Some(x), "id") != Some(Json::string(id)) })
+      n.presets.push(made)
+      f.changed()
+      Some(Ok(made))
+    }
+    "preset.delete" => {
+      take("id", fn(s) { n.presets.retain(fn(x) { field(Some(x), "id") != Some(Json::string(s)) }) })
       f.changed()
       Some(Ok(Json::object({})))
     }
@@ -630,3 +789,7 @@ pub fn fix_split_tabs() -> Json {
     "current": "t0",
   }
 }
+
+///|
+/// still.fail's web/public/apple-touch-icon.png, as a data URL.
+let fix_sf_icon : String = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAIFUlEQVR4nOzda1BU5x3H8f/CgoBCAOWiBQFJhCY1tRCFoNOapsUU6iXSTjNTOyGJkqlRpjPtGNux7Ys2Tt9oWkPMiJTUtiZNnSFEkAHRNpBWUBRRo1FMzBKQi1wliNyieTLOGCf6i8ueJ+7D7O/zymEOnnOW7z7n7HN2z9qjomOF6Ha8hAhgHAQxDoIYB0GMgyDGQRDjIIhxEMQ4CGIcBDEOghgHQYyDIMZBEOMgiHEQxDgIYhwEMQ6CGAdBjIMgxkEQ4yCIcRDEOAhiHAQxDoIYB0GMgyDGQRDjIIhxEMQ4CGIcBDEOghgHQYyDIMZBEOMgiHEQxDgIYhwEMQ6CGAdBjIMgxkEQ4yCIcRDEOAhiHAQxDoIYB0GMgyDGQRDjIIhxEMQ4CGIcBDEOghgHQYyDIMZBEOMgiHEQxDgIYhwEMQ6CGAdBjIMgxkEQ4yCIcRBklwkiKCgoMjJiypQpnZ2dbW3tY2NjMnH4+PiojQ8LCxsYGGhv7+jv75eJwPQ4Zs2alZX1+JIfZsbFxd34oSrj/wcPlpbsfWtPyZUrV8RU/v7+y5YuWbHi8ZSU+V5enw/S58+fLyndW1RUrP4hBrNFRceKkRITEnJz12ZmZtz8sH5BT09P/o6CwsK/mZZIYGDgk0/+LGf1qpCQELTM1atXS0vLNm950dhEDI1j4cIF+dtfUQ+xMwsfPly3avWzvb29Yobg4OBXCwseeijZmYX7+z9es2ZtVXW1mMfEE9KVK3/6z3/sdLIMZf78eSV7imfOjBYDxMfHl+0tcbIM+excKnDnzsKsrBViHu+ge4LFJImJiXkv/cXPz29cvxUcfM+suDh1IFdjtbiP3W7/a0F+YmLCuH5LHTfT0tLKyyvMGfyuM27keDlvq/Njxs0eeWRRTs5qcSu1AcnJSTJ+avzYvn2bGMasOJYuXTJ79n3iqrXP/Vy91hU3CQ0NVRsgrlIn4Gr3xSRmxbHqmafFAjXkLF++TNwkI+MHro15N1jcfe0MiiM8PGzu3G+KNYsXp4ubWF+12v2IiHAxhkFxJCcn22w2sWae0y8T9PL29k5NTRFr1O4nJblyyvIVMSiOGTNmiGWTJ09WE+1y16kTDr9Jk8QyLQ+CLgbFER0VJTqoSxhy1+laabg7Nh4x6NqKrstRw8PDctdN6I1HDIrjYmen6NCp6f9xy0qbW1rEGAYdVk6fPi2WNTe3uOXJp1aqVi2WnTv3vhjDoDjq64+pq1BiTVWV265gWV91R8fFhoYGMYZZk2B7y8rEmqI33xQ3sb7qysr9YhKz4ti6NW/IwkHh7arquroj4iZq1W9bGDyGh0fyXjbr8opZcbS0tOTn7xCXqKpe+OMmcSu1AS7HvW3bKxcuXBCTGHfJvqamVs0ix8XFyjiteW5dbe0hcauu7m6Hw5GZmSHjVF39zvrnN4hhjItDqdx/4N7PxDu5vHqybvzt74uK3Ha2cbPGxsaurq4FCxfY7c5OE7y1pyQ39xejo6NiGBPjGBkZKSkpdTiaHn449Y7v+lFH+uzsp934IuVWJ06c3Ldv35w5c6ZPj/zyJfv6+tav37Bly58NLEPMjOO6M2fOvP76G9OmTlNjiN3ufesCbW1tL2z608aNv+vpMesNVEp3d/e/3vh3e0fHNx64/7bX8dXppxrqsp96pqHhuJjK3Hef3xAQEPDYY4tjY2Ju/GRsbOxgTc2RI0dlIkhNSVEXbG9+D72jqam8vGJwcFDMNgHiIHfhxyEJYhwEMQ6CGAdBjIMgxkEQ4yCIcRDEOAhiHAQxDoIYB0GMgyDGQRDjIIhxEMQ4CGIcBDEOghgHQYyDIMZBEOMg6Cu57ZOv3Xvlo/PnzZ6ZEB0ZFXbnT9R9PDh0+qP2U01tf6881Np9STxVZGhQdnrqAzHT758ZGRhw57u/N1/sbWzpONzYtOtA3cjYJ6Kb/g81qR3b/GxW/IxpMn6Xh4Y3vVax+51j4nl+sij5N0+k+0/ylfH7oLXrVzuKTjnaRCvNn5WdGx+169fZ4cEu3uXZ125/9FsJw6OfHD33kXiSdcsWbXgi3ed2Hwl2RmhgwPK0B//T0Njdf1n00XnO4WWzbc5Z4efrI9b88kffVcOPeIyEr4WvW/4dsUY97Hlrf+ztpfUPKvp8LykxOjxELLPZbE8tThWPsSojTXSIiZiqxl3RR2cc6cmJosn3k74uHkPjzn77wXtFH51xRIZou+l4gJ9vUMD4vqxpglK7qXZWNIkNDxV9OM9BkM442nu1fZdu/+Wh/sEh8QBqNweHRkQTx8Ue0UdnHPuOnhFN/nv8rHiMyvr3RJPqEzrvjq0zjgPHzjZ1dIsOBWUHxWO8WlF77do1sexsc8f+em3PT9E7Cab28OSHrUtS59i9XZzMue6l4qqyulPiMTovDdjElpIYKxYMjYzmbtvd1qPtyC7aZ0jVaUf1u+/Pmx2j5uxk/NT0+R92lRdW1IiHOXzWcWlwKPm+aF+7K1e71PR5zouvnXS0ilb6bzXZ2Tewu7p+cHg0NiI00OmXo+qkrLjmhGr/0HsO8UjHz18oqT052X9SXMRU5+fRW7v68sv+93xBcXuv1S+cuBXvJkgQ5zkIYhwEMQ6CGAdBjIMgxkEQ4yCIcRDEOAhiHAQxDoIYB0GMgyDGQRDjIIhxEMQ4CGIcBDEOghgHQYyDIMZBEOMgiHEQxDgIYhwEMQ6CGAdBjIMgxkEQ4yCIcRDEOAhiHAQxDoIYB0GMgyDGQRDjIIhxEMQ4CGIcBDEOgj4FAAD//6wPddkAAAAGSURBVAMArrQw4kjD5jMAAAAASUVORK5CYII="

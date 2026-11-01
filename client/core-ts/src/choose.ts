@@ -145,6 +145,8 @@ export class Choose implements Owner {
   readonly #adding = new Map<string, J>();
   /// The key each scope's next new chat is to be made under (`next`), until one is made under it.
   readonly #next = new Map<string, string>();
+  /// The presets of each scope's stations, followed while its new chat page is (docs/presets.md): by station address.
+  readonly #presets = new Map<string, Map<string, Watch>>();
 
   constructor(env: ChooseEnv) {
     this.#env = env;
@@ -184,6 +186,10 @@ export class Choose implements Owner {
     this.#watches.delete(topicKey(topic));
     this.#drafts.delete(topicKey(topic));
     for (const w of live?.watches ?? []) w.drop();
+    if (topic.topic === "newChat") {
+      for (const w of this.#presets.get(topic.scope as string)?.values() ?? []) w.drop();
+      this.#presets.delete(topic.scope as string);
+    }
   }
 
   compute(topic: Topic): Value | undefined {
@@ -307,6 +313,14 @@ export class Choose implements Owner {
     const addr = typeof station.station === "string" ? station.station : "";
     const pick = this.#pick({ topic: "pick", station: addr, of: "new" }, addr, "new");
     view.pick = pick !== undefined && "ok" in pick ? pick.ok : null;
+    // The workspace's presets, every station's up now (each as it was read last), to pick from where the page's
+    // control opens; the one picked whichever station it is of.
+    const listed = this.#workspacePresets(scope, online);
+    view.presets = listed.map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", dirs: arr(get(p, "dirs")).length, station: at, stationName }));
+    const picked = this.#picked(scope, listed);
+    view.preset = picked === undefined ? "" : (text(get(picked.p, "id")) ?? "");
+    view.presetStation = picked?.station ?? "";
+    view.presetName = picked === undefined ? "" : (text(get(picked.p, "name")) ?? "");
     view.station = station;
     return view;
   }
@@ -317,21 +331,49 @@ export class Choose implements Owner {
     return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)))];
   }
 
+  /// The presets of the scope's stations `online` (their addresses' `presets` topics), followed while its page is: as
+  /// each station said them last, with the station each is of.
+  #workspacePresets(scope: string, online: J[], follow = true): { p: J; station: string; stationName: string }[] {
+    const page: Topic = { topic: "newChat", scope };
+    const held = this.#presets.get(scope) ?? new Map<string, Watch>();
+    if (follow) this.#presets.set(scope, held);
+    const out: { p: J; station: string; stationName: string }[] = [];
+    for (const s of online) {
+      const at = typeof s.station === "string" ? s.station : "";
+      if (at === "") continue;
+      const topic: Topic = { topic: "presets", station: at };
+      if (follow && !held.has(at)) held.set(at, this.#env.store.watch(topic, () => this.#env.store.invalidate(page)));
+      for (const p of arr(get(this.#env.store.get(topic), "presets"))) out.push({ p, station: at, stationName: typeof s.name === "string" ? s.name : "" });
+    }
+    return out;
+  }
+
+  /// The preset the scope's new chats are opened with, as last picked on this device, among those `listed`; none for
+  /// none picked, or one no station has (as their presets were read last).
+  #picked(scope: string, listed: { p: J; station: string; stationName: string }[]): { p: J; station: string; stationName: string } | undefined {
+    const kept = this.#record(`ws:${scope}:preset`);
+    if (!isObject(kept) || typeof kept.id !== "string" || kept.id === "") return undefined;
+    return listed.find((x) => x.station === kept.station && get(x.p, "id") === kept.id);
+  }
+
+  /// The station the scope's new chat page is on: the one picked, up or not, else the first up (its id).
+  #shown(scope: string): string {
+    const found = this.#online(scope);
+    if (!Array.isArray(found)) throw CoreError.invalid(t("core-logic.choose.error.no_stations_yet"));
+    const current = this.#held(scope) ?? found[0][0];
+    if (current === undefined) throw CoreError.invalid(t("core-logic.choose.error.none_online"));
+    return typeof current.id === "string" ? current.id : "";
+  }
+
   /// `newChat.pick`: the station a scope's new chat starts on, and what it runs there.
   pickNew(scope: string, params: J): void {
     const station = text(get(params, "station"));
     if (station !== null) this.#keepStation(scope, station);
+    // the preset, whichever station it is of (`presetStation`, its address; "" for none)
+    const preset = get(params, "preset");
+    if (typeof preset === "string") this.#env.data.put(TABLE, `ws:${scope}:preset`, { id: preset, station: text(get(params, "presetStation")) ?? "" }, false);
     if (FIELDS.some((f) => get(params, f) !== undefined)) {
-      let id: string;
-      if (station !== null) id = station;
-      else {
-        const found = this.#online(scope);
-        if (!Array.isArray(found)) throw CoreError.invalid(t("core-logic.choose.error.no_stations_yet"));
-        // (the one the page shows: the one picked, up or not)
-        const current = this.#held(scope) ?? found[0][0];
-        if (current === undefined) throw CoreError.invalid(t("core-logic.choose.error.none_online"));
-        id = typeof current.id === "string" ? current.id : "";
-      }
+      const id = station ?? this.#shown(scope);
       const [options, now] = this.#onStation(address(scope, id));
       const next: J = { runtime: now.runtime, model: now.entry !== null ? now.entry.model : null, effort: now.effort, fast: now.fast, profile: now.profile };
       const m = text(get(params, "model"));
@@ -362,6 +404,28 @@ export class Choose implements Owner {
     if (r.effort !== null) ask.effort = r.effort;
     if (r.profile !== null) ask.profile = r.profile;
     if (r.fast !== null) ask.fast = r.fast;
+    // The preset picked: by its id where it is this station's, else all of it as its station said it (its folders
+    // that station's).
+    const scope = ofAddress(station);
+    const online = (() => {
+      const v = this.#env.store.value({ topic: "stations", scope });
+      return v !== undefined && "ok" in v ? arr(v.ok) : [];
+    })();
+    const picked = this.#picked(scope, this.#workspacePresets(scope, online, false));
+    if (picked !== undefined) {
+      if (picked.station === station) ask.preset = get(picked.p, "id");
+      else {
+        // each folder where it is: this station's as they are, another's said to be there (by its name)
+        const names = new Map(online.map((s) => [typeof s.station === "string" ? s.station : "", typeof s.name === "string" ? s.name : ""]));
+        const dirs = arr(get(picked.p, "dirs")).map((d) => {
+          const at = text(get(d, "station")) ?? picked.station;
+          const dir: J = { path: get(d, "path"), repo: get(d, "repo") ?? null };
+          if (at !== station) dir.elsewhere = text(get(d, "stationName")) ?? names.get(at) ?? at;
+          return dir;
+        });
+        ask.presetCopy = { id: get(picked.p, "id"), name: get(picked.p, "name"), dirs, instructions: get(picked.p, "instructions") ?? "" };
+      }
+    }
     this.#keepStation(ofAddress(station), stationId(station));
     this.#changed();
     return ask;

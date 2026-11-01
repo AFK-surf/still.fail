@@ -2,6 +2,7 @@
 // add_to_thread, say, bind_single, configure, archive, archive_chat, auto_archive, delete_session,
 // continue_machine_session). Archiving here is the record (archived, hidden) and what goes with it (the process ends,
 // other stations are told); packing an archived session's files is the hub's ColdStorage.
+import { type PresetCopy, keepCopy } from "./presets.ts";
 import { copyFileSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
@@ -33,6 +34,10 @@ export type NewChat = {
   clientKey?: string | null;
   /// The workspace its chat is in (the asker's, or the opening session's); absent: the station's home one.
   ws?: string | null;
+  /// The preset it is opened with (presets.ts), its copy kept with it; or the copy itself, another station's preset as
+  /// the app read it there (`presetCopy`).
+  preset?: string | null;
+  presetCopy?: PresetCopy | null;
 };
 
 const trimmed = (v: string | null | undefined) => {
@@ -136,6 +141,10 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const key = newChatKey();
   const workspace = join(config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
   mkdirSync(workspace, { recursive: true });
+  // (before its rows: one that names no preset of its workspace makes no chat)
+  const preset = trimmed(options.preset);
+  if (options.presetCopy) keepCopy(workspace, options.presetCopy);
+  else if (preset !== null) hub.presets.keepFor(workspace, options.ws ?? hub.workspaces()[0] ?? null, preset);
   mkdirSync(join(config.dataDir, "repos"), { recursive: true });
   const now = hub.now();
   // Known before its rows are (their events can reach the client before this answers), and for a while after.
@@ -165,7 +174,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     lastActiveAt: now,
     ws: options.ws ?? null,
   });
-  log.info("hub", "session created", { session: key, connect: INTERNAL_CONNECT, runtime, profile: profile.id, model });
+  log.info("hub", "session created", { session: key, connect: INTERNAL_CONNECT, runtime, profile: profile.id, model, preset });
   return [key, openChat(hub, key, options.createdBy, title)];
 }
 

@@ -5165,6 +5165,17 @@ export interface NetMeasured {
 	moved?: string;
 }
 
+/** A preset a new chat can be opened with, as its page lists them. */
+export interface NewChatPreset {
+	id: string;
+	name: string;
+	/** How many folders it names. */
+	dirs: number;
+	/** The station it is of (its address): its folders are there. */
+	station: string;
+	stationName: string;
+}
+
 /** Something wrong with a station, in words (StationView `problems`). */
 export interface StationProblem {
 	/** silent | blocked | away */
@@ -5569,6 +5580,17 @@ export interface NewChatView {
 	pick?: PickView;
 	/** Up to four combinations used on this device in this workspace, filtered to this station. */
 	frequent?: FrequentCombo[];
+	/**
+	 * The preset its chat is opened with on the station (one of the `presets` topic's ids), as last picked
+	 * there on this device (`newChat.pick` `preset`); "" for none.
+	 */
+	preset?: string;
+	/** The station the preset picked is of (its address): any of the workspace's, not only the one it runs on. */
+	presetStation?: string;
+	/** Its name, as the station's presets say it ("" until they are read). */
+	presetName?: string;
+	/** The workspace's presets, every station's up now, to pick from (a station's none until they are read). */
+	presets?: NewChatPreset[];
 }
 
 /**
@@ -5920,6 +5942,43 @@ export interface PrefsView {
 	keymap?: KeymapView;
 	/** The wide screen's rail as clients draw it (the core's, from `rail` and `rails`; none from a core before it). */
 	railView?: RailView;
+}
+
+export interface PresetDir {
+	path: string;
+	/** The repository a clone there is of: github.com/acme/app. */
+	repo?: string;
+	/** Another station of the workspace's it is on (its address); none: the preset's own station's. */
+	station?: string;
+	stationName?: string;
+}
+
+/** What a chat starts knowing, chosen as it is opened: the directories it works with, what people want there. */
+export interface Preset {
+	id: string;
+	name: string;
+	dirs: PresetDir[];
+	/** What people want of its chats, as they wrote it. */
+	instructions: string;
+	createdBy: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+/** A directory offered for a new preset: a clone of the station's repository cache, or one a preset names. */
+export interface PresetCandidate {
+	path: string;
+	name: string;
+	repo?: string;
+	/** How many of the station's chats made worktrees of it. */
+	chats: number;
+	lastAt: number;
+	/** Where it is as people read it: ~/code/app; a repository only the station's cache has, its address. */
+	where?: string;
+	/** Only the station's cache has it (no checkout of the person's on the machine). */
+	cached?: boolean;
+	/** Its own picture (its favicon, its logo), a data URL. */
+	icon?: string;
 }
 
 /** Providers of one group, as the picker lists them. */
@@ -6851,6 +6910,15 @@ export interface StationNet {
 	 * whether macOS lets it reach them (Local Network).
 	 */
 	lan?: string[];
+}
+
+/**
+ * A workspace's presets on a station (the `presets` topic, docs/presets.md), and the directories offered for a
+ * new one.
+ */
+export interface StationPresets {
+	presets: Preset[];
+	candidates: PresetCandidate[];
 }
 
 /**

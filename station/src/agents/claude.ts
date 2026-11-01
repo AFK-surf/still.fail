@@ -294,6 +294,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     // None for a session continued from a terminal: its system prompt and tools stay as they began, so its cache holds.
     const ours = options.instructions !== "";
     if (ours) args.push("--append-system-prompt", options.instructions);
+    for (const dir of options.dirs ?? []) args.push("--add-dir", dir);
     args.push("--mcp-config", JSON.stringify(mcpConfig));
     if (ours) args.push("--disallowedTools", DISALLOWED.join(","));
     // A key the station renews in a file (a Kimi sign-in's token, minutes long): Claude Code's key helper reads it,
@@ -305,6 +306,8 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "claude"), options.route) };
     if (file !== undefined) env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "60000";
     env.CLAUDE_CONFIG_DIR = home;
+    // A preset's directories (--add-dir): their CLAUDE.md loaded as its own directory's is.
+    if ((options.dirs ?? []).length > 0) env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD = "1";
     env[MCP_TOKEN_VAR] = options.mcpToken;
     // Web services of the workspace's other stations: <this>/<station>/<port>/<path> (mesh/peer-http.ts).
     env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);

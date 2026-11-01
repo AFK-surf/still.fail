@@ -983,6 +983,9 @@ pub let said_paths : Map[String, Array[String]] = {
     "pick.borrow.note",
     "pick.borrow.title",
     "pick.borrow.why",
+    "presetName",
+    "presets.*.name",
+    "presets.*.stationName",
   ],
   "notices": [
     "items.*.title",
@@ -1084,6 +1087,15 @@ pub let said_paths : Map[String, Array[String]] = {
     "borrow.note",
     "borrow.title",
     "borrow.why",
+  ],
+  "presets": [
+    "presets.*.name",
+    "presets.*.dirs.*.path",
+    "presets.*.dirs.*.stationName",
+    "presets.*.instructions",
+    "candidates.*.path",
+    "candidates.*.name",
+    "candidates.*.where",
   ],
   "profiles": [
     "items.*.stationName",

@@ -5,6 +5,7 @@
 //   tool answers once it is recorded: a turn's end comes after the tool's answer, so nothing a tool said is lost.
 // Its process is a runner's (src/agents/runner.ts): this actor can go (a station stopping or handing over) and the
 // next take it up (`snapshot` / `adopt`), its turn going on all along.
+import { presetCopyOf, presetInstructions } from "./presets.ts";
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
@@ -1002,7 +1003,8 @@ export class SessionActor {
         if (row) {
           const { writeFileSync } = await import("node:fs");
           try {
-            writeFileSync(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key)));
+            const preset = row.cwd ? null : presetCopyOf(row.workspace);
+            writeFileSync(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key)) + (preset ? presetInstructions(preset) : ""));
           } catch {}
         }
         store.setToldNotes(this.key, latestNote());
@@ -1553,6 +1555,8 @@ export class SessionActor {
 export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath">): OpenOptions {
   // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
   const model = row.model ? (profile.spelling?.(row.model) ?? row.model) : undefined;
+  // What its chat was opened with (presets.ts): told after the station's own instructions, its directories the runtime's too.
+  const preset = row.cwd ? null : presetCopyOf(row.workspace);
   return {
     key: row.key,
     profile,
@@ -1560,7 +1564,9 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     model,
     effort: row.effort ?? undefined,
     // A session continued from a terminal keeps the system prompt it began with (its cache holds).
-    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key)),
+    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key)) + (preset ? presetInstructions(preset) : ""),
+    // (its folders this machine's: another station's are told of, read there)
+    ...(preset && preset.dirs.some((d) => d.elsewhere === undefined) ? { dirs: preset.dirs.flatMap((d) => (d.elsewhere === undefined ? [d.path] : [])) } : {}),
     mcpToken: row.token,
     mcpUrl: deps.mcpUrl(),
     route: row.key,

@@ -22,6 +22,8 @@ export type Effect =
   | { kind: "job" }
   /// The agents' memory (the `memory` topic): read again.
   | { kind: "memory" }
+  /// The workspace's presets on the station (the `presets` topic): read again.
+  | { kind: "presets" }
   /// The programs granted the station's data (the `outflowGrants` topic, docs/data-outflow.md): read again.
   | { kind: "outflowGrants" }
   | { kind: "identity" }
@@ -91,7 +93,10 @@ export const PARAMS: Record<string, string> = {
   "decision.dismiss": "thread:number seq:number",
   "decision.close": "thread:number seq:number option:string",
   "chat.report": "thread:number seq:number",
-  "session.new": "runtime?:string profile?:string model?:string effort?:string fast?:boolean",
+  "session.new": "runtime?:string profile?:string model?:string effort?:string fast?:boolean preset?:string",
+  "preset.add": "name:string dirs:json instructions?:string",
+  "preset.put": "id:string name:string dirs:json instructions?:string",
+  "preset.delete": "id:string",
   "chats.archived": "",
   "chat.forSession": "session?:string",
   "widget.state": "key:string path:string",
@@ -401,7 +406,14 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/threads/${thread}/report`, { n: p.u64("seq") }, NONE);
     }
     case "session.new":
-      return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast"]), { kind: "session", key: null });
+      return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast", "preset"]), { kind: "session", key: null });
+    // The workspace's presets on the station (docs/presets.md): what a chat starts knowing, chosen as it is opened.
+    case "preset.add":
+      return op("POST", () => "/presets", { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
+    case "preset.put":
+      return op("PUT", () => `/presets/${p.at("id")}`, { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
+    case "preset.delete":
+      return op("DELETE", () => `/presets/${p.at("id")}`, null, { kind: "presets" });
     case "chats.archived":
       return op("GET", () => "/chats?archived=1", null, NONE);
     case "chat.forSession":

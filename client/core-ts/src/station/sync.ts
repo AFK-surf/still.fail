@@ -30,7 +30,7 @@ import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, LETTERS, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, lettersOf, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, PRESETS, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
 import { readAll, replyHeader, type StationWire } from "./wire.ts";
 import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
@@ -389,6 +389,35 @@ export class StationsSync {
   /// meanwhile. Not read, why: once nothing is held.
   memoryShown(address: string): void {
     this.#enqueue(address, "memory", Priority.shown, this.#memory(address));
+  }
+
+  /// The workspace's presets on the station (GET /presets, the `presets` topic), read as a page shows them (with the
+  /// directories offered for a new one, which change as its chats work), and as one is made, changed or removed; what
+  /// was read last shows meanwhile.
+  presetsShown(address: string): void {
+    this.#enqueue(address, "presets", Priority.shown, this.#presets(address));
+  }
+
+  #presets(address: string): Effect.Effect<void, CoreError> {
+    const key = topicKey({ topic: "presets", station: address });
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/presets", null, { quiet: true }));
+      if (answer._tag === "Success") {
+        link.errors.delete(key);
+        link.memory.set(PRESETS, answer.success);
+        this.onChange(address, "log", key);
+      } else if (answer.failure.status !== undefined && !link.memory.has(PRESETS)) {
+        link.errors.set(key, answer.failure);
+        this.onChange(address, "errors", key);
+      }
+    });
+  }
+
+  /// The presets as the station said them last; undefined while it has not.
+  presets(address: string): unknown {
+    return this.#links.get(address)?.memory.get(PRESETS);
   }
 
   #memory(address: string): Effect.Effect<void, CoreError> {
@@ -1452,6 +1481,9 @@ export class StationsSync {
           break;
         case "outflowGrants":
           reads.push(["outflowGrants", this.#outflow(address)]);
+          break;
+        case "presets":
+          reads.push(["presets", this.#presets(address)]);
           break;
         case "identity":
           read("overview", { topic: "overview", station: address }, "/overview");
