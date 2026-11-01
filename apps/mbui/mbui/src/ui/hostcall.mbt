@@ -1382,7 +1382,11 @@ fn h_image_load(src : String, max_px : Int) -> Int {
       }
       // one it does not know failed at once: nothing of it is left to wait for
       match f.images.get(id) {
-        Some(im) if im.state < 0 => return id
+        Some(im) if im.state < 0 => {
+          // Keep its source even on an immediate failure; image_src must describe the same id as a live host's.
+          f.image_srcs[id] = src
+          return id
+        }
         _ => ()
       }
       id

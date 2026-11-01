@@ -2426,6 +2426,7 @@ pub fn Tester::each_frame(Self, (() -> Unit)?) -> Unit
 pub fn Tester::edit_can(Self) -> Int32
 pub fn Tester::enter(Self) -> Unit
 pub fn Tester::face_wider(Self, Int32, Double) -> Unit
+pub fn Tester::failed_images(Self) -> Array[Int32]
 pub fn Tester::family_given(Self, Int32) -> String
 pub fn Tester::field_words(Self) -> String
 pub fn Tester::film(Self, String, fps? : Double, max? : Int32, draw~ : (Self) -> Unit, put~ : (Int32) -> Unit) -> Array[String]

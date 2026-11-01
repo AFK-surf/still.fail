@@ -483,6 +483,20 @@ pub fn Tester::pending(self : Tester) -> Array[(Int, Int)] {
 }
 
 ///|
+/// Images the host could not decode, by the id it gave them. `image_src` says each one's source. Unlike `pending`,
+/// these will not become ready; a picture exporter can refuse to write an incomplete image.
+pub fn Tester::failed_images(self : Tester) -> Array[Int] {
+  let ids = self.fake.images.keys().collect()
+  ids.sort()
+  ids.filter(fn(id) {
+    match self.fake.images.get(id) {
+      Some(im) => im.state < 0
+      None => false
+    }
+  })
+}
+
+///|
 /// What the app asked the host for is done, now (the host's event): `kind` 1 an image decoded (`ok` false: it could
 /// not be), 2 a native view ready (or failed). Seen from the next frame on. Nothing if it is not pending.
 pub fn Tester::finish(self : Tester, kind : Int, id : Int, ok? : Bool = true) -> Unit {

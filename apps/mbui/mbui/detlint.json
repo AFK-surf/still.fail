@@ -58,6 +58,11 @@
     "scripts/bench*",
     "src/bench"
   ],
+  "style": {
+    "outside": [
+      "src/figure/figure.mbt"
+    ]
+  },
   "counts": {
     "frame-request": {},
     "settle": {},
