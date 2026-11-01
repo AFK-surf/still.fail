@@ -1,8 +1,9 @@
 // Visualizations (ember apps/android shared/ui/Viz.kt, chat/screens/VizFiles.kt, Prose.kt; web/src/Viz.tsx): an HTML
 // file an agent placed in its message's text (`[title](figure.html)` on a line of its own), drawn there in a page's
 // view (src/ui/native.mbt NativeView::page) instead of shown as a card, with ways under it to open it over the whole
-// screen or as a page of its own (PreviewFile, service.mbt); a ```mermaid block drawn the same way, by mermaid (from
-// the CDN the web loads it from), shown as code while it will not draw.
+// screen or as a page of its own (PreviewFile, service.mbt); a ```mermaid block drawn the same way, by mermaid (the
+// copy the app carries, mermaid_lib.mbt; in a browser from the CDN the web loads it from), shown as code while it will
+// not draw.
 //
 // The page is the web's: its stylesheet and bridge (web/src/viz, web_assets.mbt), the web's tokens for the theme shown
 // (as --e-*), the same CSP (scripts and styles from a few public CDNs, no requests of its own). It is as tall as its
@@ -162,6 +163,7 @@ pub fn viz_frame(
   hears : VizHears,
   fill? : Bool = false,
   ground? : Int64 = @sf.theme().p.bg,
+  lib? : String = "",
 ) -> Unit {
   let dark = @sf.theme().dark
   if !viz_left_chats.is_empty() {
@@ -172,7 +174,7 @@ pub fn viz_frame(
     Some(f) => f
     None => {
       let page = !viz_is_fragment(html)
-      let doc = if page { viz_page_document(html) } else { viz_document(html, state, dark, ground, scroll=fill) }
+      let doc = if page { viz_page_document(html) } else { viz_document(html, state, dark, ground, scroll=fill, lib~) }
       let cell : Ref[VizFrame?] = Ref(None)
       let view = @ui.NativeView::page(doc, said=fn(w) {
         match cell.val {
@@ -711,6 +713,7 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
               },
               fill=true,
               ground=t.p.bg,
+              lib=if chart { viz_mermaid_lib() } else { "" },
             )
           })
           |> ignore
@@ -766,7 +769,8 @@ pub fn viz_mermaid_document(code : String, full? : Bool = false) -> String {
   (if full { "true" } else { "false" }) +
   ", READABLE = 0.8;\n" +
   "  let mermaid;\n" +
-  "  try { mermaid = (await import(\"" +
+  "  // (the app's own copy where it carries one, run ahead of this; else the CDN's)\n" +
+  "  try { mermaid = globalThis.mermaid ?? (await import(\"" +
   viz_mermaid +
   "\")).default; } catch (e) { post({ type: \"failed\", message: \"" +
   viz_tr("android-misc.viz.mermaidFailed") +
@@ -915,7 +919,7 @@ pub fn viz_mermaid_block(c : @ui.Ctx, place : String, code : String, subtle : In
       keep: None,
       failed: Some(fn(_why) { viz_unmade[code] = true }),
       follow_up: None,
-    })
+    }, lib=viz_mermaid_lib())
     // under the chart, out of its way, as a placed file has it
     c.box(style=viz_ways, fn() {
       let full = c.id("viz/full/" + place + "/mermaid/" + code)

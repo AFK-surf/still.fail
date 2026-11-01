@@ -214,8 +214,15 @@ pub fn viz_is_fragment(html : String) -> Bool {
 
 ///|
 /// The page: the content in the stylesheet, the bridge (and what the widget kept) ahead of it, the theme as the app
-/// shows it now (Viz.kt documentOf).
-pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64, scroll? : Bool = false) -> String {
+/// shows it now (Viz.kt documentOf); `lib`: a script the app carries for it (mermaid's), run ahead of the content.
+pub fn viz_document(
+  html : String,
+  state : Json?,
+  dark : Bool,
+  ground : Int64,
+  scroll? : Bool = false,
+  lib? : String = "",
+) -> String {
   // (one with no value left out: an empty one would stand in place of the stylesheet's own)
   let vars = viz_tokens(dark).filter(fn(t) { t.1 != "" }).map(fn(t) { t.0 + ":" + t.1.replace_all(old="<", new="").replace_all(old=">", new="") }).join(";")
   let sheets = viz_sheets()
@@ -250,7 +257,9 @@ pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64, s
   viz_bridge +
   "</script><script>" +
   viz_components +
-  "</script></head><body>" +
+  "</script>" +
+  (if lib == "" { "" } else { "<script>" + lib.replace_all(old="</script", new="<\\/script") + "</script>" }) +
+  "</head><body>" +
   html +
   "</body></html>"
 }

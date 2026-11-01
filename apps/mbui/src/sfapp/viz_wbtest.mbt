@@ -311,6 +311,21 @@ test "a mermaid chart is drawn as a page of its own; one that will not draw is s
 }
 
 ///|
+test "a mermaid chart's page carries mermaid itself: it draws with no network to fetch it from" {
+  let lib = @sfbase.viz_mermaid_lib()
+  assert_true(lib.contains("globalThis[\"mermaid\"]"))
+  let t = chat_tester("chat-viz")
+  t.frame()
+  let (_, chart) = viz_views(t)
+  let opened = t.views().iter().find_first(fn(l) { l.has_prefix("open \{chart} ") }).unwrap()
+  let words = opened.split(" ").map(fn(x) { x.to_owned() }).to_array()
+  assert_true(test_num(words[words.length() - 1]).to_int() > lib.length())
+  // ahead of the chart's own script, closed only where it ends
+  let doc = viz_document("<p>图</p>", None, false, 0xFFFFFFFFL, lib="globalThis.mermaid={s:\"</script>\"}")
+  assert_true(doc.contains("<script>globalThis.mermaid={s:\"<\\/script>\"}</script></head><body><p>图</p>"))
+}
+
+///|
 test "under a mermaid chart: the whole screen, the chart as written to pinch, its touches its own; back closes it" {
   let t = chat_tester("chat-viz")
   t.frame()
