@@ -764,6 +764,22 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     for entry in rows {
       let (q, list) = entry
       let a = self.nodes[q]
+      // A page or a pane can have rows too, but its other content follows the page's own layout, not the rows'. This
+      // rule is for a rounded list card or panel: use its drawn ground, which may be a layer beneath the layout box.
+      let ground = ground_of(q).unwrap_or(q)
+      if self.nodes[ground].corner() <= gap_slack {
+        continue
+      }
+      // Its rows are the ones inset from both sides by the list-card reach. A rounded pane may hold a narrower list
+      // beside its own rail; those rows do not set the alignment of the pane's other contents.
+      let list = list.filter(fn(i) {
+        let row = self.nodes[i]
+        (row.x - a.x - self.lit_reach).abs() <= gap_slack &&
+        (a.x + a.fw - row.x - row.fw - self.lit_reach).abs() <= gap_slack
+      })
+      if list.is_empty() {
+        continue
+      }
       let in_rows = fn(k : Int) {
         let mut p = k
         while p >= 0 && p != q {
@@ -923,5 +939,3 @@ fn Ctx::gap_steps(self : Ctx, whole : Array[Bool], layer : Array[Int], out : Arr
 /// How far apart two edges of a column are on purpose at least (an indent, a step of the scale): nearer, they were
 /// meant to be one.
 let gap_align_step : Double = 16.0
-
-
