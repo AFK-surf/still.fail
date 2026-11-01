@@ -1871,10 +1871,19 @@ pub fn card_lines(
 /// A footed card's buttons, last on it (cardFoot: 8 apart), reaching its foot corners as far as they are tall: at its
 /// start, or its end where `at_end`. Out across the card's words to its corners at its sides alone: its foot is the
 /// footed card's own (page_card's `footed`: as far under them as concentric with its corner), not reached again (the
-/// start's did, 4 past the card's edge: the spacing rule 4).
+/// start's did, 4 past the card's edge: the spacing rule 4). The first button without an icon starts its words at the
+/// card's words; the button itself remains in the corner.
 pub fn card_foot(c : @ui.Ctx, body : () -> Unit, at_end? : Bool = false) -> Unit {
+  let was = card_foot_first.val
+  card_foot_first.val = !at_end
   c.box(style=(if at_end { pg_card_foot_end } else { pg_card_foot }).then(foot_across(button_height())), body) |> ignore
+  card_foot_first.val = was
 }
+
+///|
+/// The first button in a card foot at its start, while its body is built.
+// kept across runs: set while a card foot is built and put back afterwards
+let card_foot_first : Ref[Bool] = Ref(false)
 
 ///|
 /// What a part does, at its heading's end (wide: the web's quiet button with its mark; narrow: SectionHeader's

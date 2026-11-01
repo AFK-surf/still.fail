@@ -77,10 +77,12 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
         until => note(until, false)
       }
       c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
-        if @sf.button(c, @sf.t("web-pages.security.pairAgain"), key="lock-pair-again/" + ws, tone=Ghost) {
-          c.clear_code_field(key)
-          @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairAgain"), [])
-        }
+        @sf.card_foot_words(on=in_card, fn() {
+          if @sf.button(c, @sf.t("web-pages.security.pairAgain"), key="lock-pair-again/" + ws, tone=Ghost) {
+            c.clear_code_field(key)
+            @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairAgain"), [])
+          }
+        })
       })
       |> ignore
     }
@@ -100,9 +102,11 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     }
     // (actions: its row, the button as wide as its words)
     c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
-      if @sf.button(c, @sf.t("web-pages.security.request"), key="lock-pair/" + ws, tone=Primary) {
-        @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.request"), [])
-      }
+      @sf.card_foot_words(on=in_card, fn() {
+        if @sf.button(c, @sf.t("web-pages.security.request"), key="lock-pair/" + ws, tone=Primary) {
+          @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.request"), [])
+        }
+      })
     })
     |> ignore
   }

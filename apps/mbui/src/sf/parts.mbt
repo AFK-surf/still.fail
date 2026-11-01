@@ -115,6 +115,11 @@ pub fn button(
     None if (tone == Ghost || tone == GhostDanger) && at_row_end() => Some(outset_end(button_padx))
     r => r
   }
+  // The corner sets the outside edge; padding puts the words on the card's line. In a fixed row only the first button
+  // can stand at its start; in a wrapping row any of them can. A button with an icon keeps its balanced ends.
+  let aligned = card_foot_first.val || card_foot_words_now.val
+  card_foot_first.val = false
+  let padx = if aligned && icon == "" && w is Auto && reach is None { card_foot_words_in(height) } else { button_padx }
   // (its words' node, as built: how they move with it)
   let mut words_at = -1
   let b = c.box(
@@ -123,7 +128,7 @@ pub fn button(
     w~,
     keep=foot_fills.val && w is Fill(_),
     h=Px(height),
-    padx=button_padx,
+    padx~,
     gap=if t.touch { 8.0 } else { 6.0 },
     align=ACenter,
     justify=JCenter,
@@ -2570,6 +2575,7 @@ pub fn input(
       (true, false) => input_box_small
       (true, true) => input_box_small_hot
     }
+    let look = if card_foot_words_now.val { look.then(@ui.style(px=room(card_foot_words_in(button_height())))) } else { look }
     c.box(
       id=s.id,
       style=if solid {
@@ -2630,6 +2636,7 @@ pub fn textarea(
     None => field_corner().then(@ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in)))
   }
   let look = if hot { textarea_box_hot } else { textarea_box }
+  let look = if card_foot_words_now.val { look.then(@ui.style(px=room(card_foot_words_in(button_height())))) } else { look }
   let look = if solid { look.then(if hot { field_solid_hot } else { field_solid }) } else { look }
   c.box(id=box_id, style=look.then(tall), fn() {
     words = c.editor(
@@ -3452,14 +3459,29 @@ pub fn chooser(
   let opened = open() && !disabled
   let focused = !disabled && c.focus_shown(id)
   let lit = !disabled && (c.lit(id) || opened || focused)
-  let b = c.box(style=if capsule { chooser_box.then(chooser_capsule) } else { chooser_box }, selected=opened || focused, disabled~, id=if disabled { 0 } else { id }, fn() {
-    match lead {
-      Some(f) => f(if lit { p.text } else { p.muted })
-      None => ()
-    }
-    c.text(words, style=if lit { chooser_words_lit } else { chooser_words }) |> ignore
-    icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
-  })
+  let at_foot = card_foot_words_now.val
+  let height = @ui.Space::px(S7)
+  let mut b = -1
+  let draw = fn() {
+    let look = if capsule || at_foot { chooser_box.then(chooser_capsule) } else { chooser_box }
+    let look = if at_foot && lead is None { look.then(@ui.style(px=room(card_foot_words_in(height)))) } else { look }
+    b = c.box(style=look, selected=opened || focused, disabled~, id=if disabled { 0 } else { id }, fn() {
+      match lead {
+        Some(f) => f(if lit { p.text } else { p.muted })
+        None => ()
+      }
+      c.text(words, style=if lit { chooser_words_lit } else { chooser_words }) |> ignore
+      icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
+    })
+  }
+  if at_foot {
+    // A 28-high chooser may wrap to the foot's corner on its own. Give it a button-high line and put its capsule
+    // where that height meets the card's corner; its words then meet the card's words as the buttons' do.
+    let inset = card_foot_in(height) - card_foot_in(button_height())
+    c.box(style=@ui.style(row=true, h=Fixed(button_height()), pl=room(inset), align=ACenter), draw) |> ignore
+  } else {
+    draw()
+  }
   if !disabled {
     c.focusable(id, node=b)
   }

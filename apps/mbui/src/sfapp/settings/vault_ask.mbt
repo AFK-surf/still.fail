@@ -495,51 +495,53 @@ pub fn vault_foot(
   match (answer, typed) {
     (Approve(_), Some(ty)) =>
       // (reaching out to the foot's corners as the buttons do: a field's ends, a file's button, where theirs are)
-      c.box(style=if foot { ask_typed.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_typed }, fn() {
-        if ty.kind == "login" && ty.username == "" {
-          let words = tr("android-settings.vault.ask.typed.username")
-          username = @sf.input(c, "vault/" + request + "/username", placeholder=words, disabled=under, solid=true, field=typed_field(request, "/username")).text
-        }
-        let words = tr("android-settings.vault.ask.typed." + ty.kind)
-        if ty.kind == "file" {
-          // the system's picker answered: the file it gave (one too big said so, and none kept)
-          match vault_file_picks.get(request) {
-            Some(p) =>
-              if take_picked_file(core, p, fn(content, name) { vault_files[request] = (content, name) }) {
-                vault_file_picks.remove(request)
-              }
-            None => ()
+      @sf.card_foot_words(on=foot, fn() {
+        c.box(style=if foot { ask_typed.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_typed }, fn() {
+          if ty.kind == "login" && ty.username == "" {
+            let words = tr("android-settings.vault.ask.typed.username")
+            username = @sf.input(c, "vault/" + request + "/username", placeholder=words, disabled=under, solid=true, field=typed_field(request, "/username")).text
           }
-          // (the button the same before and after, the card as wide (it fills its column): what was picked fades in
-          // beside it, the row no higher)
-          c.box(style=ask_file, fn() {
-            if @sf.button(c, words, key="vault/" + request + "/file", tone=Plain, disabled=under) {
-              match @ui.pick(Files) {
-                Some(p) => vault_file_picks[request] = p
-                None => ()
-              }
-            }
-            match vault_files.get(request) {
-              Some((content, name)) => {
-                secret = content
-                filename = name
-                let shown = @kit.presence(c, "vault/" + request + "/file/" + name, true).t
-                c.rich([@ui.span(name + " · " + file_size(content), color=@sf.alpha(@sf.theme().p.text, shown))], style=ask_file_name)
-                |> ignore
-              }
+          let words = tr("android-settings.vault.ask.typed." + ty.kind)
+          if ty.kind == "file" {
+            // the system's picker answered: the file it gave (one too big said so, and none kept)
+            match vault_file_picks.get(request) {
+              Some(p) =>
+                if take_picked_file(core, p, fn(content, name) { vault_files[request] = (content, name) }) {
+                  vault_file_picks.remove(request)
+                }
               None => ()
             }
-          })
-          |> ignore
-        } else if ty.kind == "ssh_key" {
-          secret = @sf.textarea(c, "vault/" + request + "/secret", rows=4, placeholder=words, solid=true, field=typed_field(request, "/secret"))
-        } else {
-          let f = @sf.input(c, "vault/" + request + "/secret", placeholder=words, secret=true, disabled=under, solid=true, field=typed_field(request, "/secret"))
-          secret = f.text
-          entered = f.submitted
-        }
+            // (the button the same before and after, the card as wide (it fills its column): what was picked fades in
+            // beside it, the row no higher)
+            c.box(style=ask_file, fn() {
+              if @sf.button(c, words, key="vault/" + request + "/file", tone=Plain, disabled=under) {
+                match @ui.pick(Files) {
+                  Some(p) => vault_file_picks[request] = p
+                  None => ()
+                }
+              }
+              match vault_files.get(request) {
+                Some((content, name)) => {
+                  secret = content
+                  filename = name
+                  let shown = @kit.presence(c, "vault/" + request + "/file/" + name, true).t
+                  c.rich([@ui.span(name + " · " + file_size(content), color=@sf.alpha(@sf.theme().p.text, shown))], style=ask_file_name)
+                  |> ignore
+                }
+                None => ()
+              }
+            })
+            |> ignore
+          } else if ty.kind == "ssh_key" {
+            secret = @sf.textarea(c, "vault/" + request + "/secret", rows=4, placeholder=words, solid=true, field=typed_field(request, "/secret"))
+          } else {
+            let f = @sf.input(c, "vault/" + request + "/secret", placeholder=words, secret=true, disabled=under, solid=true, field=typed_field(request, "/secret"))
+            secret = f.text
+            entered = f.submitted
+          }
+        })
+        |> ignore
       })
-      |> ignore
     _ => ()
   }
   let empty = typed is Some(_) && secret.trim(chars=" \n\t").to_string() == ""
@@ -620,23 +622,25 @@ pub fn vault_foot(
     })
     |> ignore
   }
-  c.box(style=ask_room, id=room_id, fn() {
-    if over {
-      c.box(style=if foot { ask_over.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_over }, pick) |> ignore
-    }
-    c.box(style=if foot { @sf.ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { @sf.ask_foot }, flow=true, line_gap=@sf.ask_foot_lines(), fn() {
-      acts()
-      if !over {
-        pick()
+  @sf.card_foot_words(on=foot, fn() {
+    c.box(style=ask_room, id=room_id, fn() {
+      if over {
+        c.box(style=if foot { ask_over.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_over }, pick) |> ignore
       }
-      match extra {
-        Some(f) => f()
-        None => ()
-      }
+      c.box(style=if foot { @sf.ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { @sf.ask_foot }, flow=true, line_gap=@sf.ask_foot_lines(), fn() {
+        acts()
+        if !over {
+          pick()
+        }
+        match extra {
+          Some(f) => f()
+          None => ()
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
-  |> ignore
 }
 
 ///|

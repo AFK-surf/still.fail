@@ -204,6 +204,8 @@ pub fn card_foot(@ui.Ctx, () -> Unit, at_end? : Bool) -> Unit
 
 pub fn card_foot_in(Double) -> Double
 
+pub fn card_foot_words(() -> Unit, on? : Bool) -> Unit
+
 pub let card_line : @ui.TextStyle
 
 pub fn card_lines(@ui.Ctx, String, words? : String, note? : String, bad? : String, title_after? : () -> Unit) -> Unit

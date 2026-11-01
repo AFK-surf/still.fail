@@ -352,10 +352,12 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
       // (reaching out to the foot's corners as the buttons under it do: the field's ends where theirs are, its words
       // where theirs are: vault_foot's typed field)
       let mut typed : @kit.Field = { text: "", submitted: false }
-      c.box(style=signin_typed.then(@sf.over_foot_reach(@sf.button_height())), fn() {
-        typed = @sf.input(c, "signin/" + id + "/code", placeholder=@sf.t("android-misc.signin.codeField"), solid=true, field=f)
+      @sf.card_foot_words(fn() {
+        c.box(style=signin_typed.then(@sf.over_foot_reach(@sf.button_height())), fn() {
+          typed = @sf.input(c, "signin/" + id + "/code", placeholder=@sf.t("android-misc.signin.codeField"), solid=true, field=f)
+        })
+        |> ignore
       })
-      |> ignore
       let code = typed.text.trim(chars=" ").to_owned()
       @sf.ask_buttons(c, fn() {
         if @sf.button(c, @sf.t("android-misc.signin.codeSend"), key="signin/" + id + "/code-go", tone=Primary, busy=step == "sending", disabled=code == "" || step == "sending") ||

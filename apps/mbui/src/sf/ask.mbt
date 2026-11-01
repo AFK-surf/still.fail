@@ -66,7 +66,7 @@ let ask_in_middle : @ui.TextStyle = @ui.text_style(center=true)
 /// Its answer's buttons, as vault_foot lays them last on its card: a line of them, on to a second what has not the room
 /// on the first, out in the card's foot corners.
 pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=ask_foot.then(foot_reach(button_height())), flow=true, line_gap=ask_foot_lines(), body) |> ignore
+  c.box(style=ask_foot.then(foot_reach(button_height())), flow=true, line_gap=ask_foot_lines(), fn() { card_foot_words(body) }) |> ignore
 }
 
 ///|
