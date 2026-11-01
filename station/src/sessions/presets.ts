@@ -3,7 +3,7 @@
 // workspace as every chat does). A workspace's presets are its agent home's presets.json; a chat opened with one keeps a
 // copy of it in its session workspace (`.stillfail-preset.json`), so a preset changed later changes none of the chats
 // already opened with it.
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
@@ -12,7 +12,11 @@ import { randomBytes } from "node:crypto";
 /// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`
 /// (its address) and `stationName`: another station of the workspace's it is on; none: the station the preset is on.
 /// In a chat's copy, `elsewhere`: the station it is on by name, where that is not the chat's.
-export type PresetDir = { path: string; repo: string | null; station?: string; stationName?: string; elsewhere?: string };
+export type PresetDir = { path: string; repo: string | null; station?: string; stationName?: string; elsewhere?: string; guides?: Guide[]; skills?: string[] };
+
+/// A folder's instructions for agents as the chat was opened with them (its AGENTS.md, its CLAUDE.md): the file, what
+/// it said (its start, where it is long), whether that is all of it.
+export type Guide = { file: string; text: string; whole: boolean };
 
 export type Preset = {
   id: string;
@@ -43,6 +47,8 @@ function dirsOf(v: unknown): PresetDir[] {
     if (typeof d?.path !== "string") return [];
     const dir: PresetDir = { path: d.path, repo: str(d.repo) };
     for (const k of ["station", "stationName", "elsewhere"] as const) if (typeof d[k] === "string" && d[k] !== "") dir[k] = d[k];
+    if (Array.isArray(d.guides)) dir.guides = d.guides.filter((g: any) => typeof g?.file === "string" && typeof g?.text === "string").map((g: any) => ({ file: g.file, text: g.text, whole: g.whole !== false }));
+    if (Array.isArray(d.skills)) dir.skills = d.skills.filter((n: unknown) => typeof n === "string");
     return [dir];
   });
 }
@@ -227,9 +233,57 @@ export class NoPreset extends Error {
 }
 
 /// Keeps `copy` as what a chat in `workspace` is opened with.
+/// The files a folder's instructions for agents are in, as Claude Code and Codex read them in their own directory.
+const GUIDES = ["AGENTS.md", "CLAUDE.md", join(".claude", "CLAUDE.md")];
+/// What of a folder's instruction file the chat is told at most (the rest is read there).
+const GUIDE_MOST = 16 * 1024;
+/// Where the runtimes find skills in the directory they run in: Claude Code's project skills, Codex's repository ones.
+const SKILL_HOMES = [join(".claude", "skills"), join(".agents", "skills")];
+
+/// Keeps `copy` as what a chat in `workspace` is opened with. Its folders on this machine are made the chat's as a
+/// runtime opened in them would have them (neither reads them where it does not run): their instruction files kept
+/// with the copy (told with the station's instructions), their skills linked into the chat's workspace under both
+/// runtimes' skill directories, so each finds them as its own.
 export function keepCopy(workspace: string, copy: PresetCopy): PresetCopy {
-  writeFileSync(join(workspace, COPY), `${JSON.stringify(copy, null, 2)}\n`);
-  return copy;
+  const linked = new Set<string>();
+  const dirs = copy.dirs.map((d) => {
+    if (d.elsewhere !== undefined) return d;
+    const guides = GUIDES.flatMap((file): Guide[] => {
+      try {
+        const bytes = readFileSync(join(d.path, file));
+        const whole = bytes.length <= GUIDE_MOST;
+        return [{ file, text: bytes.subarray(0, GUIDE_MOST).toString("utf8").trim(), whole }];
+      } catch {
+        return [];
+      }
+    });
+    const skills: string[] = [];
+    for (const home of SKILL_HOMES) {
+      let names: string[] = [];
+      try {
+        names = readdirSync(join(d.path, home));
+      } catch {}
+      for (const n of names) {
+        const from = join(d.path, home, n);
+        if (!existsSync(join(from, "SKILL.md"))) continue;
+        // (one of the same name already linked: this folder's under its folder's name before it)
+        const name = linked.has(n) ? `${basename(d.path)}-${n}` : n;
+        if (linked.has(name)) continue;
+        linked.add(name);
+        skills.push(name);
+        for (const to of SKILL_HOMES) {
+          mkdirSync(join(workspace, to), { recursive: true });
+          try {
+            symlinkSync(from, join(workspace, to, name), "dir");
+          } catch {}
+        }
+      }
+    }
+    return { ...d, ...(guides.length > 0 ? { guides } : {}), ...(skills.length > 0 ? { skills } : {}) };
+  });
+  const kept = { ...copy, dirs };
+  writeFileSync(join(workspace, COPY), `${JSON.stringify(kept, null, 2)}\n`);
+  return kept;
 }
 
 /// A preset of another station's as the asking app gives it (POST /sessions `presetCopy`: what it read there, each
@@ -240,7 +294,7 @@ export function presetCopyInput(v: unknown): PresetCopy {
   if (name === "" || Array.from(name).length > NAME_MAX) throw new Error("presetCopy: a preset needs a name");
   const dirs = dirsOf(o.dirs).slice(0, DIRS_MAX);
   const instructions = (str(o.instructions) ?? "").slice(0, INSTRUCTIONS_MAX);
-  return { id: str(o.id) ?? "", name, dirs: dirs.map(({ station: _s, stationName: _n, ...d }) => d), instructions };
+  return { id: str(o.id) ?? "", name, dirs: dirs.map(({ station: _s, stationName: _n, guides: _g, skills: _k, ...d }) => d), instructions };
 }
 
 /// What a chat whose session workspace is `workspace` was opened with, if anything.
@@ -271,7 +325,16 @@ export function presetInstructions(copy: PresetCopy): string {
       ? [
           "- The directories it works with (no need to ask which; you still run in your session workspace and may go anywhere):",
           ...dirs,
-          "  Before the first task, read each one's AGENTS.md and CLAUDE.md if there, and the skills in its .claude/skills and .agents/skills, as you would your own.",
+          ...(copy.dirs.some((d) => (d.skills ?? []).length > 0) ? [`  Their skills are linked into your workspace (.claude/skills, .agents/skills): ${copy.dirs.flatMap((d) => d.skills ?? []).join(", ")}; use them as your own.`] : []),
+          ...copy.dirs.flatMap((d) =>
+            (d.guides ?? []).flatMap((g) => [
+              `<folder-instructions path="${join(d.path, g.file)}">`,
+              g.text,
+              ...(g.whole ? [] : [`(only its start: read the rest there)`]),
+              "</folder-instructions>",
+            ]),
+          ),
+          ...(copy.dirs.some((d) => d.elsewhere !== undefined) ? ["  For those on other stations, read their AGENTS.md, CLAUDE.md and skills there before the first task."] : []),
         ]
       : []),
     ...(copy.instructions !== "" ? ["- What people want of chats with this preset (theirs to change, not yours):", "<preset-instructions>", copy.instructions, "</preset-instructions>"] : []),
