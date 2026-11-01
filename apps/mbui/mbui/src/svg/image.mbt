@@ -688,6 +688,5 @@ fn decode_jpeg(data : Bytes) -> (Int, Int, FixedArray[Byte])? {
 
 ///|
 fn decode_webp(data : Bytes) -> (Int, Int, FixedArray[Byte])? {
-  ignore(data)
-  None
+  @pixels.decode_webp(data)
 }
