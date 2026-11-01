@@ -984,6 +984,22 @@ pub fn held_topics(base : Source, held : Array[String]) -> Source {
 }
 
 ///|
+/// `base` with the topics named in `failed` failing to be read, the core saying why as `why` (src/sffilm's MBUI_FAILED):
+/// what shows when reading them fails, filmed.
+pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Source {
+  {
+    ..base,
+    topic: fn(name, params) {
+      if failed.contains(name) {
+        @sfbase.topic_as_read(name, params, { value: None, error: Some({ "message": Json::string(why) }), version: 1 })
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+}
+
+///|
 /// A source of made-up chats (see the top of this file for `mode`).
 pub fn fixture(mode : String) -> Source {
   fixture_answers.clear()
