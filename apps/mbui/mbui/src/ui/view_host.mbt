@@ -70,6 +70,13 @@ let old_made : Ref[Int] = Ref(0)
 let old_placed : Array[(@view.NodeId, Double, Double, Double, Double, Double, Double, Double, Double)] = []
 
 ///|
+/// How far each old view placed (old_placed) would be drawn off where its layout alone puts it were nothing in its way
+/// grown, shrunk or drawn off (Tree::each_drawn_laid less Tree::laid_origin: what places it beside another, its offset):
+/// where its words are set on the pixels, as the tree's own are (glyphs_carried_of).
+// kept across runs: put back as a run begins (view_forget)
+let old_placed_off : Map[@view.NodeId, (Double, Double)] = {}
+
+///|
 /// Whether the one old view is the whole window, wholly opaque: the old frame is its build, as with no tree.
 // kept across runs: put back as a run begins (view_forget)
 let old_whole : Ref[Bool] = Ref(true)
@@ -357,6 +364,7 @@ fn view_forget() -> Unit {
   view_input_to.val = -3
   old_islands.clear()
   old_placed.clear()
+  old_placed_off.clear()
   old_hits.clear()
   next_old_hits.clear()
   layer_hits.clear()
@@ -532,12 +540,16 @@ let view_window : Ref[(Double, Double)] = Ref((0.0, 0.0))
 fn old_place(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
   old_placed.clear()
+  old_placed_off.clear()
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
-  tree.each_drawn_scaled(fn(c, x, y, a, s) {
+  tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
     if c.hosted && old_islands.iter().any(fn(o) { o.id == c.id }) {
       let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
       old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy, s))
+      // (where it would be drawn were nothing grown, shrunk or drawn off, as the tree's own words are set on the pixels
+      // there: off where its layout alone puts it by what places it beside another or offsets it)
+      old_placed_off[c.id] = (ux - ox, uy - oy)
     }
   })
   // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
@@ -2120,14 +2132,19 @@ fn island_scale(id : @view.NodeId) -> Double {
 }
 
 ///|
-/// How far what old node `i` is in is carried off where it was laid out to where it is drawn (its old view's box moved
-/// so: Ctx::moved_carries): what its words are set on the pixels by (glyphs_carried); none (0, 0)
-/// for one in no old view hosted, or in one drawn where it is laid out.
+/// How far what old node `i` is in is carried off where its words are set on the pixels to where it is drawn: its old
+/// view's box moved so (Ctx::moved_carries, from where its layout alone puts it) less what places it beside another or
+/// offsets it (old_placed_off): its words on the pixels where it would be drawn were nothing grown, shrunk or drawn off,
+/// as the tree's own words are (each_drawn_laid), then carried with what moves it from there (glyphs_carried); none (0,
+/// 0) for one in no old view hosted, or in one drawn there.
 fn Ctx::glyphs_carried_of(self : Ctx, i : Int) -> (Double, Double) {
   match self.nodes[i].island {
     Some(id) =>
       match old_boxes.get(id) {
-        Some(b) if b >= 0 && b < self.count && self.nodes[b].moved_carries => (self.nodes[b].moved_x, self.nodes[b].moved_y)
+        Some(b) if b >= 0 && b < self.count && self.nodes[b].moved_carries => {
+          let (sx, sy) = old_placed_off.get(id).unwrap_or((0.0, 0.0))
+          (self.nodes[b].moved_x - sx, self.nodes[b].moved_y - sy)
+        }
         _ => (0.0, 0.0)
       }
     None => (0.0, 0.0)
