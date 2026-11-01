@@ -156,12 +156,14 @@ for t in ${TARGETS:-native}; do
       done
     fi
   fi
-  # The flows seen again (src/sfreplay/flows, one program): their files in REPLAY_SHARDS moon tests side by side (3),
+  # The flows seen again (src/sfreplay/flows, one program): their files in REPLAY_SHARDS moon tests side by side (4:
+  # three left a core of CI's four to the core's tests, 0 s of the run, while the flows' took 53, main bb091fcd
+  # 41265169250, 2026-11-01),
   # the core's tests in another. One moon test ran them one after another, 83 s of the replay part's run on CI's four
   # cores, the part the pipeline's longest on a branch (mbui-parts-nodes, 40573326799, 2026-10-28).
   if [[ " $pkgs " = *" -p stillfail/sfreplay/flows "* ]] && [ "${MBC_LTO:-0}" != thin ]; then
     flows=(src/sfreplay/flows/*_test.mbt)
-    n=${REPLAY_SHARDS:-3}
+    n=${REPLAY_SHARDS:-4}
     rest=()
     for r in "${runs[@]}"; do rest+=("$(echo " $r " | sed 's| -p stillfail/sfreplay/flows | |')"); done
     runs=("${rest[@]}")
@@ -258,7 +260,7 @@ for t in ${TARGETS:-native}; do
     # (each run's time with TIMES: the part's run is the longest of them, and which one it is is said)
     { if [ "${runs[i]%% *}" = @flows ]; then
         f=_build/native/release/test/stillfail/sfreplay/flows
-        exe_run $f/flows.blackbox_test.exe $f/__blackbox_test_info.json ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
+        exe_run $f/flows.blackbox_test.exe $f/__blackbox_test_info.json ${REPLAY_SHARDS:-4} stillfail/sfreplay/flows \
           ${runs[i]#@flows } > "$out.$i" 2>&1
       elif [ -n "${APP_EXE:-}" ]; then
         exe_run "$APP_EXE" "$APP_INFO" ${APP_JOBS:-1} stillfail/sfapp ${runs[i]} > "$out.$i" 2>&1
