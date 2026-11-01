@@ -79,3 +79,28 @@ test "a video capsule shows the whole download percentage on whole-pixel hosts" 
     }
   }
 }
+
+///|
+test "a video capsule keeps its visible words whole while it changes between time and progress" {
+  for duration in [5500.0, 3605000.0] {
+    let coming = @signals.signal(false, same=fn(a, b) { a == b })
+    let t = @ui.Tester::new(fn(c) {
+      begin(c) |> ignore
+      c.with_theme(ui_theme(), fn() {
+        c.box(w=Px(200.0), h=Px(160.0), fn() {
+          video_capsule(c, "changing-duration/\{duration}", duration, coming=if coming.get() { Some(0.99) } else { None })
+        }) |> ignore
+      })
+    }, w=390.0, h=844.0, platform=2, native=Finger, scale=3.25)
+    t.draw()
+    for on in [true, false] {
+      coming.set(on)
+      t.frame()
+      for _ in 0..<10 {
+        t.run_for(dur_ms / 10.0)
+        let faults = t.squeeze_faults()
+        assert_eq(faults, [], msg="duration=\{duration}, coming=\{on}, at=\{t.time()}: \{faults}")
+      }
+    }
+  }
+}

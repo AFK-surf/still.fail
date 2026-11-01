@@ -136,7 +136,10 @@ pub fn video_capsule(c : @ui.Ctx, key : String, duration : Double, coming? : Dou
     if length != "" { [video_capsule_mark, gap, end, end] } else { [video_capsule_mark, end, end] },
   )
   let share_w = c.fitting_width(c.words_across(share, video_capsule_words), [video_capsule_ring, gap, end, end])
-  let across = length_w + (share_w - length_w) * k
+  // The wider label needs all of its room until it has faded out, and before it fades in. The capsule can change
+  // width during the other half, while the shorter label is showing, without cutting either label on the way.
+  let width_way = if length_w >= share_w { dmax(0.0, 2.0 * k - 1.0) } else { dmin(1.0, 2.0 * k) }
+  let across = length_w + (share_w - length_w) * @ui.Ease::Move.at(width_way)
   c.layer(fn() {
     c.box(style=video_capsule_foot, fn() {
       c.box(style=video_capsule_box.then(@ui.style(w=Fixed(across))), fn() {
