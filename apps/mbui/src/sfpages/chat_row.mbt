@@ -479,8 +479,13 @@ fn row_lifted(ink : Double) -> @ui.Style {
   @ui.style(
     bg=Data(@sf.alpha(t.p.raised, ink)),
     radius=@sf.row_radius,
-    // (what a finger holds: its shadow, coming as far as it lifts)
-    shadow=Cast(@sf.held_raised.sigma * ink, @sf.held_raised.dy * ink, @sf.held_raised.color),
+    // (what a finger holds: its shadow, coming as far as it lifts and as strong as the card that casts it: the card
+    // going clear over it, a shadow at its whole strength and almost no blur showed through it as a dark row)
+    shadow=Cast(
+      @sf.held_raised.sigma * ink,
+      @sf.held_raised.dy * ink,
+      @sf.alpha(@sf.held_raised.color, ink),
+    ),
   )
 }
 
