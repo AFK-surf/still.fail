@@ -7,6 +7,7 @@
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+. "$D/render_dl.sh"
 cd "$D/.."
 O=out/render-check
 rm -rf $O; mkdir -p $O
@@ -68,6 +69,11 @@ else
   echo "render_check: what a rounded clip cuts is not the box's own rounded ground ($(md5 -q $O/clip-cut.png) / $(md5 -q $O/clip-box.png))"
   exit 1
 fi
+render_matte_dl "$O"
+for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
+  MBUI_DL="$PWD/$O/$k.dl" MBUI_DL_PNG="$PWD/$O/$k.png" ./_build/native/release/build/render/render.exe
+done
+render_matte mac "$O"
 if cmp -s $O/render.png $O/host.png; then
   echo "render_check: the draw list drawn offscreen is the host's picture, to the byte ($(md5 -q $O/render.png))"
 else

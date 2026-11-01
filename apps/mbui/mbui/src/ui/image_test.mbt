@@ -166,6 +166,73 @@ test "an image's background shows until it is in, and never under it once it is"
 }
 
 ///|
+test "a picture at its own rect keeps its waiting ground until it can be drawn" {
+  let ground = 0x000000FFL
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.picture("frame.jpg", x=10.0, y=20.0, w=100.0, h=60.0, bg=ground) |> ignore
+    },
+    w=200.0,
+    h=100.0,
+    images=[("frame.jpg", 400, 240)],
+    finish=false,
+  )
+  let grounds = fn() { t.drawn_rects().filter(fn(r) { r.4 == ground }) }
+  t.draw()
+  assert_eq(t.drawn_images().length(), 0)
+  assert_eq(grounds(), [(10.0, 20.0, 100.0, 60.0, ground)])
+  t.finish(1, 1)
+  t.draw()
+  assert_eq(grounds().length(), 0)
+  let picture = t.drawn_images()[0]
+  assert_eq((picture[0], picture[1], picture[2], picture[3], picture[8]), (10.0, 20.0, 100.0, 60.0, 1.0))
+}
+
+///|
+test "a contained image and its matte share one frame while the image fades in" {
+  let t = @ui.Tester::new(
+    fn(c) { c.image("wide.jpg", w=Px(100.0), h=Px(100.0), fit=FitContain, bg=0x000000FFL, matte=true) |> ignore },
+    w=100.0,
+    h=100.0,
+    images=[("wide.jpg", 400, 200)],
+    finish=false,
+  )
+  t.draw()
+  assert_eq(t.drawn_images().length(), 0)
+  assert_true(t.drawn_rects().iter().any(fn(r) { r == (0.0, 0.0, 100.0, 100.0, 0x000000FFL) }))
+  t.finish(1, 1)
+  t.draw()
+  let img = t.drawn_instances().filter(fn(a) { a[5] == 4.0 })[0]
+  // One frame spans the box, with the image in its middle and its matte in the top and foot. Its fade is inside that
+  // frame, not a partly covered image laid over a second rounded edge.
+  assert_eq((img[0], img[1], img[2], img[3]), (0.0, 0.0, 100.0, 100.0))
+  assert_eq((img[12], img[13], img[14], img[15]), (0.0, -0.5, 1.0, 2.0))
+  assert_eq((img[21], img[22], img[23]), (1.0, 1.0, 0.0))
+  assert_false(t.drawn_rects().iter().any(fn(r) { r.4 == 0x000000FFL }))
+  t.run_for(@ui.image_fade_ms / 2.0)
+  let halfway = t.drawn_instances().filter(fn(a) { a[5] == 4.0 })[0]
+  assert_true(halfway[23] > 0.0 && halfway[23] < 1.0)
+  t.run_for(@ui.image_fade_ms / 2.0)
+  assert_eq(t.drawn_instances().filter(fn(a) { a[5] == 4.0 })[0][23], 1.0)
+}
+
+///|
+test "a picture at a rect in a matte keeps the matte around the picture" {
+  let t = @ui.Tester::new(
+    fn(c) { c.picture("frame.jpg", x=10.0, y=20.0, w=100.0, h=60.0, bg=0x000000FFL, matte=true) |> ignore },
+    w=200.0,
+    h=100.0,
+    images=[("frame.jpg", 400, 240)],
+  )
+  t.draw()
+  let img = t.drawn_instances().filter(fn(a) { a[5] == 4.0 })[0]
+  assert_eq((img[0], img[1], img[2], img[3]), (0.0, 0.0, 200.0, 100.0))
+  assert_true((img[12] + 0.1).abs() < 0.000001 && (img[13] + 1.0 / 3.0).abs() < 0.000001)
+  assert_true((img[14] - 2.0).abs() < 0.000001 && (img[15] - 5.0 / 3.0).abs() < 0.000001)
+  assert_eq((img[21], img[22], img[23]), (1.0, 1.0, 1.0))
+}
+
+///|
 test "what is shown awaits the images it asked for until they are in, as the test says when" {
   let view = fn(c : @ui.Ctx) {
     c.column(fn() {

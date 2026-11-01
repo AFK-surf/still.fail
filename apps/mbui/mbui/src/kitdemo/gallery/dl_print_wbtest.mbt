@@ -140,6 +140,61 @@ test "contained glass's draw list printed when asked" {
 }
 
 ///|
+/// A light picture over black, cut by a rounded frame: filling it, letterboxed, or inset between device pixels. The
+/// matching references show the same frames: a white fill, a precomposed 160 × 160 picture, or an inset white box.
+/// The picture and matte must share their cut to match them.
+fn matte_shown(reference : Bool, which : String) -> @ui.Tester {
+  let h = if which == "fill" { 40.0 } else { 80.0 }
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(pad=20.0, align=AStart, fn() {
+        c.box(w=Px(80.0), h=Px(h), radius=12.0, tx=0.125, clip=true,
+          bg=if reference && which == "inset" { 0x000000FFL } else { 0L }, fn() {
+          if reference && which == "inset" {
+            c.box(w=Px(59.5), h=Px(39.5), tx=10.0, ty=20.125, bg=0xFFFFFFFFL, fn() {  }) |> ignore
+          } else if reference && which == "fill" {
+            // The reference fills beyond the frame; the same clip alone covers its edge, even between pixels.
+            c.box(w=Px(82.0), h=Px(42.0), tx= -1.0, ty= -1.0, bg=0xFFFFFFFFL, fn() {  }) |> ignore
+          } else if reference {
+            // The black and white bands already in these pixels: one frame, one clip, the same geometry as the image
+            // under test. At scale 2 its 160 pixels land on the 80-point frame's pixels without resampling. Black
+            // behind the opaque picture makes its alpha exactly one even where texture filtering rounds it down.
+            c.image("mem:matte-bars", w=Px(80.0), h=Px(h), fit=FitFill, bg=0x000000FFL, fade=false, matte=true) |> ignore
+          } else if which == "inset" {
+            c.picture("mem:matte-white", x=10.0, y=20.125, w=59.5, h=39.5, bg=0x000000FFL, matte=true) |> ignore
+          } else {
+            c.image("mem:matte-white", w=Px(80.0), h=Px(h), fit=if which == "contain" { FitContain } else { FitCover },
+              bg=0x000000FFL, fade=false, matte=true) |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=120.0,
+    h=120.0,
+    scale=2.0,
+  )
+  // The Tester's byte decoder makes a 4:3 picture; these matching solid-white pixels are what the renderer sees.
+  @ui.add_image("mem:matte-white", @codec.from_base64("iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAADklEQVR4nGP4jwQYcHIAu4cj3ZP55DwAAAAASUVORK5CYII="))
+  @ui.add_image("mem:matte-bars", @codec.from_base64("iVBORw0KGgoAAAANSUhEUgAAAKAAAACgCAIAAAAErfB6AAAA4UlEQVR42u3RQREAAAzCMPyb3kzw4hIJbQIAAAAAAAAAAEDNMc1ggzEYgzEYgzEYgw3GYAzGYAzGYAw2GIMxGIMxGIMxGIMNxmAMxmAMxmAMNhiDMRiDMRiDMdhgDMZgDMZgDMZgDDYYgzEYgzEYgzHYYAzGYAzGYAzGYIMlMBiDMRiDMRiDMdhgDMZgDMZgDMZggzEYgzEYgzEYgzHYYAzGYAzGYAzGYIMxGIMxGIMxGIMNxmAMxmAMxmAMxmCDMRiDMRiDMRiDDcZgDMZgDMZgDDaY7cEAAAAAAAAAAADUPDtlLCFksrJqAAAAAElFTkSuQmCC"))
+  t.draw()
+  t
+}
+
+///|
+test "a picture and its matte drawn through a rounded frame (scripts/render_dl.sh)" {
+  let which = node_env("MBUI_DL_PRINT")
+  if which.has_prefix("matte-") {
+    let shape = if which.has_prefix("matte-fill") { "fill" } else if which.has_prefix("matte-contain") { "contain" } else { "inset" }
+    let t = matte_shown(which.has_suffix("-reference"), shape)
+    println("DLBEGIN")
+    println(t.drawlist(bytes=true))
+    println("DLEND")
+  }
+}
+
+///|
 /// Lines (Ctx::lines, scene.mbt's kind 10) in a window 160 by 160 at scale 2, on white (scripts/chk lines reads its
 /// picture): in its top 40 a line from (20, 20) to (100, 20) 8 wide, and 40 under it a box 88 by 8 rounded 4 at (16,
 /// 56), the same shape drawn as a rounded rect; under them, in a box from (0, 80), a line from (20, 10) to (60, 50) 6

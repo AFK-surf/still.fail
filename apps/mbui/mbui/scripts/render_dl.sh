@@ -39,6 +39,28 @@ render_dl() {
       awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/$k.dl"
     [ -s "$(dirname "$out")/$k.dl" ] || { echo "render_dl: no $k draw list"; return 1; }
   done
+  render_matte_dl "$(dirname "$out")"
+}
+
+# Light pictures over a matte, filling a rounded frame or letterboxed, and references with the same appearance.
+render_matte_dl() {
+  local dir=$1 k
+  for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
+    MBUI_DL_PRINT=$k moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+      awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$dir/$k.dl"
+    [ -s "$dir/$k.dl" ] || { echo "render_matte_dl: no $k draw list"; return 1; }
+  done
+}
+
+render_matte() {
+  local host=$1 dir=${2:-out/render} k
+  for k in matte-fill matte-contain matte-inset; do
+    if ! cmp -s "$dir/$k.png" "$dir/$k-reference.png"; then
+      echo "render_$host: $k differs from its reference frame"
+      return 1
+    fi
+  done
+  echo "render_$host: pictures and mattes share their rounded frames"
 }
 
 # Partial redraw (docs/partial-redraw.md): out/render/partial.png, partial-b.dl drawn only where it differs from

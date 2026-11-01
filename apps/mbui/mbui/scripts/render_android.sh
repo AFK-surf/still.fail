@@ -59,6 +59,10 @@ case "${1:-run}" in
     "$D/chk" shapes $O/shapes.png
     draw contained $O/contained.png
     "$D/chk" contained $O/contained.png
+    for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
+      draw "$k" "$O/$k.png"
+    done
+    render_matte android
     # partial-b drawn only where it differs from partial-a, and whole (render_partial)
     $ADB shell am force-stop $APP_ID
     $ADB shell run-as $APP_ID rm -f files/partial.png files/partial.whole.png

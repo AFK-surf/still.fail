@@ -307,6 +307,7 @@
     if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }
     gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);
     v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs; v_rr = a_rr;
+    if (kind == 4 && a_pad.z > 0.5) v_pad.x = a_rot.w;
     v_oclip = a_oclip; v_orc = a_orc; v_ors = a_ors;
     vec2 cq = a_rot.w > 0.5 ? at : pos;
     v_ramp = vec4(a_fadex.y > 0.0 ? (cq.x - a_fadex.x) / a_fadex.y : 2.0, a_fade.y > 0.0 ? (cq.y - a_fade.x) / a_fade.y : 2.0,
@@ -734,7 +735,23 @@
     if (kind == 0 || kind == 5) d = notch_cut(d, p, v_rect, v_pad);
     if (kind == 4) {
       vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;
-      o = texture(u_img, uv) * (col.a * clamp(0.5 - d * u_scale, 0.0, 1.0));
+      vec4 pic = texture(u_img, clamp(uv, 0.0, 1.0));
+      float edge = clamp(0.5 - d * u_scale, 0.0, 1.0);
+      if (v_pad.z > 0.5) {
+        // Only picture edges inside the frame cut it; the frame's clip covers shared edges once.
+        vec2 size = v_rect.zw / v_c2.zw, lo = v_rect.xy - v_c2.xy * size, hi = lo + size;
+        vec2 a = lo - p, b = p - hi;
+        if (v_c2.x >= 0.0) a.x = -1e9; if (v_c2.y >= 0.0) a.y = -1e9;
+        if (v_c2.x + v_c2.z <= 1.0) b.x = -1e9; if (v_c2.y + v_c2.w <= 1.0) b.y = -1e9;
+        vec2 q = max(a, b);
+        float pd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+        pic *= v_pad.w * clamp(0.5 - pd * u_scale, 0.0, 1.0);
+        pic += vec4(col.rgb * v_pad.y, v_pad.y) * (1.0 - pic.a);
+        if (v_pad.x < 0.5 && max(max(v_rr.x, v_rr.y), max(v_rr.z, v_rr.w)) <= 0.0 &&
+            max(max(v_rc.x, v_rc.y), max(v_rc.z, v_rc.w)) > 0.0 &&
+            all(greaterThanEqual(v_clip.xy, v_rect.xy)) && all(lessThanEqual(v_clip.zw, v_rect.xy + v_rect.zw))) edge = 1.0;
+      }
+      o = pic * (col.a * edge);
       return;
     }
     if (kind == 2) {
