@@ -12,7 +12,11 @@ export APP=${APP:-stillfail}
 if [ "${MBUI_CORE:-0}" != 0 ]; then export APP=coredemo; fi
 if [ $APP = coredemo ] || [ $APP = stillfail ]; then
   if [ "${1:-build}" = build ]; then
+    # (each part's time said, mac-app.sh shows it: a release's Mac job was 185-238 s, the app's part 114-166 s of it,
+    # its compile 11 s, the rest not told apart, 2026-11-01)
+    t0=$SECONDS
     bash "$D/core.sh" apple-native aarch64-apple-darwin || exit 1
+    echo "mac.sh: the core's native parts in $((SECONDS - t0)) s"
     # (moon does not see the engine's archive: an app linked before it was made has its stub touched, so it is linked
     # again)
     exe=$A/_build/native/${MODE:-release}/build/stillfail/$APP/$APP.exe
@@ -26,8 +30,12 @@ if [ "${1:-}" = login ]; then
   cd "$A" && MBUI_AUTH_LOGIN=1 exec ./_build/native/${MODE:-release}/build/coredemo/coredemo.exe
 fi
 [ -n "${hbc:-}" ] || exec bash "$MBUI_DIR/scripts/mac.sh" "$@"
+t0=$SECONDS
 bash "$MBUI_DIR/scripts/mac.sh" "$@"
 code=$?
+echo "mac.sh: the app built in $((SECONDS - t0)) s"
+t0=$SECONDS
 wait $hbc || { cat "$A/out/core/hermes.log"; echo "mac.sh: the core's bytecode was not made (scripts/core.sh hermes apple)" >&2; exit 1; }
 cat "$A/out/core/hermes.log"
+echo "mac.sh: the core's bytecode waited for $((SECONDS - t0)) s more"
 exit $code
