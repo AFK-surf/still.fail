@@ -3,7 +3,9 @@
 Settings › 关于 › 诊断 › 性能记录, on iOS (other hosts keep none: the row is not shown). On, the app writes what the
 device spends its time on to files of its own, every 5 s, until it is turned off; it starts again with the app while
 it is on (a setting of the device's, not synced). Nothing leaves the device. It is MBUI_PROBE=1's probe, kept in a
-file, with what it takes to find the culprit, not only the totals.
+file, with what it takes to find the culprit, not only the totals. A Mac keeps no record: started with MBUI_PROBE=1
+(`open --env MBUI_PROBE=1 --stderr <file> -b <its id>`), its log says the app's lines as `PROBE <line>` (frames, frames
+why, messages, core, page) and the core's thread as `PROBE core js:` every 5 s.
 
 ## Where it is
 

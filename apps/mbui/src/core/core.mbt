@@ -213,7 +213,7 @@ pub fn fatal() -> String? {
 /// frame sees depends on frames, not on when the core's thread answered. A kept conversation given again (replay.mbt)
 /// comes this way too.
 pub fn receive(text : String, bytes : Bytes?) -> Unit {
-  let t0 = if @hostapi.perf_recording() { ffi_now() } else { -1.0 }
+  let t0 = if perf_counts() { ffi_now() } else { -1.0 }
   let msg = @json.parse(text) catch { _ => return }
   let what = if t0 >= 0.0 { client.perf_name(msg) } else { "" }
   take(msg, bytes)
@@ -221,6 +221,20 @@ pub fn receive(text : String, bytes : Bytes?) -> Unit {
     perf_in(what, text, bytes, ffi_now() - t0)
   }
 }
+
+///|
+/// Whether what goes between the app and the core is counted: while the device's performance record is kept, or with
+/// MBUI_PROBE=1 (mbui's probe, which says perf_said's line on the log: a Mac's, which keeps no record).
+fn perf_counts() -> Bool {
+  if probe_env.val < 0 {
+    probe_env.val = if @hostapi.env("MBUI_PROBE") == "1" { 1 } else { 0 }
+  }
+  probe_env.val == 1 || @hostapi.perf_recording()
+}
+
+///|
+// kept across runs: read once from the environment (-1: not yet)
+let probe_env : Ref[Int] = Ref(-1)
 
 ///|
 /// While the device's performance record is kept: what the core said to the app, by what it was (Client::perf_name),
@@ -249,7 +263,7 @@ fn perf_in(what : String, text : String, bytes : Bytes?, ms : Double) -> Unit {
 /// What the app asked of the core (a call's name, `sub <topic>`), counted while the record is kept (Client::call,
 /// Client::ask).
 fn perf_out(what : String) -> Unit {
-  if @hostapi.perf_recording() {
+  if perf_counts() {
     perf_outs[what] = perf_outs.get(what).unwrap_or(0) + 1
   }
 }
@@ -260,7 +274,7 @@ fn perf_out(what : String) -> Unit {
 /// …`; "" where none came or went. Begun again.
 pub fn perf_said(span : Double) -> String {
   ignore(span)
-  if !@hostapi.perf_recording() {
+  if !perf_counts() {
     client.perf_forget()
   }
   if perf_ins.is_empty() && perf_outs.is_empty() {
@@ -297,7 +311,7 @@ pub fn perf_said(span : Double) -> String {
 /// answer nobody reads), before the frame decides what it does: what read the topic is built again, nothing else
 /// (@ui.on_message_said, "core"). Whether it was; else it is left for `receive`, as the frame is built.
 pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
-  let t0 = if @hostapi.perf_recording() { ffi_now() } else { -1.0 }
+  let t0 = if perf_counts() { ffi_now() } else { -1.0 }
   let msg = @json.parse(text) catch { _ => return false }
   match msg {
     Object(m) if !m.contains("mbui_auth") &&
