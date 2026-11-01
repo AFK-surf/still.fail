@@ -15,8 +15,13 @@ function world() {
   const cards: { ts: string; card: any }[] = [];
   const told: string[] = [];
   const heard: PhoneRequest[] = [];
-  const sessions = new Map<string, { archivedAt?: number | null }>([["s1", {}], ["s2", {}]]);
-  const subscribers: ((c: { type: string; key: string }) => void)[] = [];
+  const audiences: (string | null | undefined)[] = [];
+  const sessions = new Map<string, { archivedAt?: number | null; ws: string | null; workspace: string }>([
+    ["s1", { ws: "work-a", workspace: "/chat/s1" }],
+    ["s2", { ws: "work-b", workspace: "/chat/s2" }],
+    ["s3", { ws: null, workspace: "/chat/s3" }],
+  ]);
+  const subscribers: ((c: { type: string; key: string; ws?: string | null }) => void)[] = [];
   let n = 0;
   const hub = {
     store: {
@@ -33,23 +38,51 @@ function world() {
         c.card = f(c.card);
         return true;
       },
-      subscribe: (f: (c: { type: string; key: string }) => void) => void subscribers.push(f),
+      subscribe: (f: (c: { type: string; key: string; ws?: string | null }) => void) => void subscribers.push(f),
     },
     chat: () => ({ post: async () => `t${n + 1}` }),
     shared: () => {},
     notify: (_s: string, text: string) => void told.push(text),
   };
   let ids = 0;
-  const grants = new PhoneGrants({ db: new DatabaseSync(":memory:"), hub, now: () => now, told: (r) => void heard.push({ ...r }), id: () => `p${++ids}` });
+  const grants = new PhoneGrants({ db: new DatabaseSync(":memory:"), hub, home: () => "home", now: () => now, told: (r, workspace) => { heard.push({ ...r }); audiences.push(workspace); }, id: () => `p${++ids}` });
   return {
-    grants, cards, told, heard,
+    grants, cards, told, heard, audiences,
     pass: (ms: number) => void (now += ms),
     archive: (s: string) => {
-      sessions.set(s, { archivedAt: now });
+      sessions.set(s, { ...sessions.get(s)!, archivedAt: now });
       for (const f of subscribers) f({ type: "session", key: s });
+    },
+    remove: (s: string) => {
+      const ws = sessions.get(s)!.ws;
+      sessions.delete(s);
+      for (const f of subscribers) f({ type: "sessionRemoved", key: s, ws });
     },
   };
 }
+
+test("phone grants are listed, decided and announced only in their chat's workspace", async () => {
+  const w = world();
+  await w.grants.ask("s1", "debug here");
+  await w.grants.ask("s2", "debug there");
+  await w.grants.ask("s3", "debug in the home workspace");
+  const listed = (ws: string) => w.grants.ofOwner("pat@example.com", ws).map((r) => r.id);
+  assert.deepEqual(listed("work-a"), ["p1"]);
+  assert.deepEqual(listed("work-b"), ["p2"]);
+  assert.deepEqual(listed("home"), ["p3"]);
+  assert.deepEqual(w.audiences, ["work-a", "work-b", "home"]);
+  assert.match(w.grants.decide("pat@example.com", "p1", "chat", "work-b")!, /no such request/);
+  assert.equal(w.grants.get("p1")!.status, "pending");
+  assert.equal(w.grants.decide("pat@example.com", "p1", "chat", "work-a"), null);
+  assert.equal(w.audiences.at(-1), "work-a");
+  assert.match(w.grants.revoke("pat@example.com", "p1", "work-b")!, /no such request/);
+  assert.equal(w.grants.get("p1")!.status, "granted");
+  // Deletion removes the session row before notifying: the end still goes to that chat's workspace.
+  w.remove("s1");
+  assert.equal(w.grants.get("p1")!.status, "ended");
+  assert.equal(w.audiences.at(-1), "work-a");
+  assert.deepEqual(listed("work-a"), []);
+});
 
 test("a phone asked for in a chat: a card to the person its agent works for, granted to that chat alone", async () => {
   const w = world();
@@ -65,8 +98,8 @@ test("a phone asked for in a chat: a card to the person its agent works for, gra
   assert.equal((await w.grants.ask("s1", "again")).id, "p1");
   assert.equal(w.cards.length, 1);
   // Only its person decides it.
-  assert.match(w.grants.decide("someone@example.com", "p1", "chat")!, /only the person/);
-  assert.equal(w.grants.decide("pat@example.com", "p1", "hour"), null);
+  assert.match(w.grants.decide("someone@example.com", "p1", "chat", "work-a")!, /only the person/);
+  assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a"), null);
   assert.equal(w.grants.get("p1")!.status, "granted");
   assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "granted", scope: "hour" });
   assert.match(w.told.at(-1)!, /granted \(for an hour\)/);
@@ -84,15 +117,15 @@ test("a phone asked for in a chat: a card to the person its agent works for, gra
 test("a grant until the chat is archived ends with it, and its owner takes one back", async () => {
   const w = world();
   await w.grants.ask("s1", "debug the crash");
-  assert.equal(w.grants.decide("pat@example.com", "p1", "chat"), null);
+  assert.equal(w.grants.decide("pat@example.com", "p1", "chat", "work-a"), null);
   await w.grants.ask("s2", "screenshots");
-  assert.equal(w.grants.decide("pat@example.com", "p2", "chat"), null);
+  assert.equal(w.grants.decide("pat@example.com", "p2", "chat", "work-b"), null);
   assert.deepEqual(w.grants.ofOwner("PAT@example.com").map((r) => r.id), ["p1", "p2"]);
   w.archive("s1");
   assert.equal(w.grants.get("p1")!.status, "ended");
   assert.equal(w.grants.get("p1")!.why, "对话已归档");
-  assert.match(w.grants.revoke("other@example.com", "p2")!, /only its owner/);
-  assert.equal(w.grants.revoke("pat@example.com", "p2"), null);
+  assert.match(w.grants.revoke("other@example.com", "p2", "work-b")!, /only its owner/);
+  assert.equal(w.grants.revoke("pat@example.com", "p2", "work-b"), null);
   assert.equal(w.grants.get("p2")!.status, "ended");
   assert.deepEqual(w.cards[1]!.card.adb.outcome, { status: "ended", scope: "chat", why: "已收回" });
   assert.deepEqual(w.grants.ofOwner("pat@example.com"), []);
@@ -103,7 +136,7 @@ test("a grant until the chat is archived ends with it, and its owner takes one b
 test("a granted card says how its station's adb holds the phone, and its agent is told as it is reached", async () => {
   const w = world();
   await w.grants.ask("s1", "install the mod");
-  assert.equal(w.grants.decide("pat@example.com", "p1", "chat"), null);
+  assert.equal(w.grants.decide("pat@example.com", "p1", "chat", "work-a"), null);
   assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "granted", scope: "chat" });
   const told = w.told.length;
   // Lent here, this station's adb not paired with it: the card says so, the agent is told to leave it to the card.
@@ -126,7 +159,7 @@ test("a granted card says how its station's adb holds the phone, and its agent i
   assert.equal(w.cards[0]!.card.adb.outcome.link, "gone");
   assert.equal(w.told.length, told + 2);
   // Ended, the card's outcome says no more of it.
-  assert.equal(w.grants.revoke("pat@example.com", "p1"), null);
+  assert.equal(w.grants.revoke("pat@example.com", "p1", "work-a"), null);
   assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "ended", scope: "chat", why: "已收回" });
 });
 
@@ -140,20 +173,20 @@ test("its owner's 默认最长授权: the card offers no longer, and a longer gr
   await w.grants.ask("s1", "x");
   assert.deepEqual(w.cards[0]!.card.options.map((o: any) => o.label), ["本对话 1 小时内", "拒绝"]);
   assert.equal(w.cards[0]!.card.adb.lasts, "hour");
-  assert.match(w.grants.decide("pat@example.com", "p1", "chat")!, /默认最长授权/);
-  assert.equal(w.grants.decide("pat@example.com", "p1", "hour"), null);
+  assert.match(w.grants.decide("pat@example.com", "p1", "chat", "work-a")!, /默认最长授权/);
+  assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a"), null);
 });
 
 test("refused, the agent is told, and a request of an archived chat is not granted", async () => {
   const w = world();
   await w.grants.ask("s1", "x");
-  assert.equal(w.grants.decide("pat@example.com", "p1", null), null);
+  assert.equal(w.grants.decide("pat@example.com", "p1", null, "work-a"), null);
   assert.equal(w.grants.get("p1")!.status, "denied");
   assert.match(w.told.at(-1)!, /refused/);
   await w.grants.ask("s2", "y");
   w.archive("s2");
   assert.equal(w.grants.get("p2")!.status, "denied");
-  assert.match(w.grants.decide("pat@example.com", "p2", "chat")!, /denied already/);
+  assert.match(w.grants.decide("pat@example.com", "p2", "chat", "work-b")!, /denied already/);
   await assert.rejects(w.grants.ask("s1", " "), /reason/);
 });
 
