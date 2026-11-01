@@ -105,3 +105,15 @@ export function idleOfIoreg(text: string): number | null {
   const m = /"HIDIdleTime"\s*=\s*([0-9]+)/.exec(text);
   return m === null ? null : Number(m[1]) / 1e6;
 }
+
+/// The mount points `mount` lists (macOS: `<what> on <where> (<type>, <flags>)`) besides the machine's own volumes: its
+/// root, the system's volumes under /System/Volumes, its devices.
+export function parseMounts(out: string): string[] {
+  const found: string[] = [];
+  for (const line of out.split("\n")) {
+    const at = / on (\/.*?) \([^()]*\)$/.exec(line)?.[1];
+    if (at === undefined || at === "/" || at === "/dev" || at.startsWith("/System/Volumes/")) continue;
+    found.push(at);
+  }
+  return found;
+}

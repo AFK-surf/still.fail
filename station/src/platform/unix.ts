@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { holder } from "./processes.ts";
-import { fieldOrNull, firstWord, idleOfIoreg, output, parseF64, parseLsof, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
+import { fieldOrNull, firstWord, idleOfIoreg, output, parseF64, parseLsof, parseMounts, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
 /// Names in the order people read them (numbers by value, case aside), as the drive sorts them.
@@ -269,6 +269,28 @@ function procListening(pids: number[], port: number): string[] | null {
 /// std::env::consts::OS for the Unixes Node names otherwise.
 const OS: Record<string, string> = { darwin: "macos", linux: "linux", freebsd: "freebsd", openbsd: "openbsd" };
 
+/// macOS's mounts as last read (platform `mounts`), and when; read again in the background once this old.
+let mounted: { at: number; points: string[] } | null = null;
+let mounting = false;
+const MOUNTS_FRESH_MS = 2_000;
+function mounts(): string[] {
+  if (!MACOS) return [];
+  if (mounted === null) {
+    let out = "";
+    try {
+      out = execFileSync("/sbin/mount", { encoding: "utf8" });
+    } catch {}
+    mounted = { at: wall.now(), points: parseMounts(out) };
+  } else if (!mounting && wall.now() - mounted.at > MOUNTS_FRESH_MS) {
+    mounting = true;
+    execFile("/sbin/mount", { encoding: "utf8" }, (error, out) => {
+      mounting = false;
+      mounted = { at: wall.now(), points: error ? mounted!.points : parseMounts(out) };
+    });
+  }
+  return mounted.points;
+}
+
 export const unix: Platform = {
   os: OS[process.platform] ?? process.platform,
   buildOs: process.platform === "darwin" || process.platform === "linux" ? process.platform : null,
@@ -419,6 +441,7 @@ export const unix: Platform = {
     }
     return found;
   },
+  mounts,
   linkRefused: () => false,
   syncsDirectories: true,
   shareFile(target, link) {

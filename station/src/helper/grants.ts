@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { LOCAL_NETWORK_SETTINGS, lanReach, localNetworkName } from "../mesh/lan.ts";
+import { platform } from "../platform/index.ts";
 import type { HelperApp } from "./app.ts";
 
 /// The grants, in the order they are shown: the screen's two, the folders', then the LAN's (`localNetwork`: not the
@@ -89,6 +90,7 @@ export class HelperGrants {
   readonly #listeners = new Set<() => void>();
   /// Where removable and network disks are mounted (the test's own).
   readonly #volumes: string;
+  readonly #mounts: () => string[];
   /// Whether the station may reach its LAN, as last looked at (null: no LAN, or not known).
   #lan: GrantState | null = null;
   readonly #reach: () => Promise<"granted" | "denied" | null>;
@@ -99,6 +101,8 @@ export class HelperGrants {
     folders?: boolean;
     now?: () => number;
     volumes?: string;
+    /// The disks mounted elsewhere than `volumes` (platform `mounts`): OrbStack's NFS in the home.
+    mounts?: () => string[];
     reach?: () => Promise<"granted" | "denied" | null>;
     open?: (url: string) => void;
   }) {
@@ -106,6 +110,7 @@ export class HelperGrants {
     this.#folders = options.folders ?? true;
     this.#now = options.now ?? (() => wall.now());
     this.#volumes = options.volumes ?? "/Volumes";
+    this.#mounts = options.mounts ?? (() => platform.mounts());
     this.#reach = options.reach ?? (() => lanReach());
     this.#open = options.open ?? ((url) => void execFile("open", [url], () => undefined));
     // A grant changed (its window saw it), or the helper came back: looked at again.
@@ -257,8 +262,9 @@ export class HelperGrants {
           }
         });
     } catch {
-      return null;
+      tops = [];
     }
+    tops.push(...this.#mounts().filter((m) => !m.startsWith(`${this.#volumes}/`)));
     if (tops.length === 0) return null;
     const answer = await this.helper.request({ op: "files.access", paths: tops }).catch(() => null);
     const found = (answer?.access ?? []).find((a: any) => a?.grant === grant && typeof a.path === "string");

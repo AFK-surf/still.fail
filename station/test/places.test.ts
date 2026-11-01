@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { protectedPlace, protectedTop } from "../src/drive/fs.ts";
+import { parseMounts } from "../src/platform/text.ts";
 import type { Fs } from "../src/drive/fs.ts";
 import { HelperFiles } from "../src/helper/files.ts";
 import { HelperGrants } from "../src/helper/grants.ts";
@@ -52,6 +53,32 @@ test("the folders macOS protects are told by their names, one source for the dri
   assert.equal(protectedTop(join(h, "Desktop", "a"), h), join(h, "Desktop"));
   assert.equal(protectedTop(join(h, "Library", "Mobile Documents", "a"), h), null);
   rmSync(h, { recursive: true });
+});
+
+test("a disk is protected wherever it is mounted, not only in /Volumes", () => {
+  // (2026-11-02: OrbStack's NFS mounted at ~/OrbStack; the station opened it itself and waited for good on macOS asking)
+  const h = home();
+  const mounts = [join(h, "OrbStack"), join(h, "OrbStack", "inner")];
+  assert.deepEqual(protectedPlace(join(h, "OrbStack", "docker", "x"), h, mounts), { top: join(h, "OrbStack"), helper: true });
+  assert.deepEqual(protectedPlace(join(h, "OrbStack", "inner", "y"), h, mounts), { top: join(h, "OrbStack", "inner"), helper: true }, "the deepest mount");
+  assert.equal(protectedTop(join(h, "OrbStack"), h, mounts), join(h, "OrbStack"));
+  assert.equal(protectedPlace(join(h, "OrbStackNot"), h, mounts), null, "a name that only starts so");
+  assert.equal(protectedPlace(join(h, "code"), h, mounts), null);
+  rmSync(h, { recursive: true });
+});
+
+test("mount's list is read for the disks mounted, the machine's own volumes left out", () => {
+  const out = [
+    "/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)",
+    "devfs on /dev (devfs, local, nobrowse)",
+    "/dev/disk3s6 on /System/Volumes/VM (apfs, local, noexec, journaled, noatime, nobrowse)",
+    "/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)",
+    "map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)",
+    "OrbStack:/OrbStack on /Users/lin/OrbStack (nfs, nodev, nosuid, noatime, mounted by lin)",
+    "/dev/disk5s1 on /Volumes/T7 (exfat, local, nodev, nosuid, noowners, noatime, mounted by lin)",
+    "//lin@nas/share on /Users/lin/mnt/share name (smbfs, nodev, nosuid, mounted by lin)",
+  ].join("\n");
+  assert.deepEqual(parseMounts(out), ["/Users/lin/OrbStack", "/Volumes/T7", "/Users/lin/mnt/share name"]);
 });
 
 test("a path is walked link by link and stops at a protected folder, never stepping into it", { skip: WINDOWS }, () => {

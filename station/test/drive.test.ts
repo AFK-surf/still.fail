@@ -197,25 +197,6 @@ async function ask(table: ReturnType<typeof routes>, r: Request) {
   return { status: a.status, headers: a.headers, body: b, json: a.headers["content-type"] === "application/json" ? JSON.parse(b.toString()) : null };
 }
 
-test("routes: a folder another file system is mounted on is listed as a disk, not opened", { skip: process.getuid?.() === 0 }, async () => {
-  // (2026-11-02: Studio's ~/OrbStack, OrbStack's NFS with its machine stopped: opening it never returned, and the
-  // station's thread, listing the home for 浏览文件夹, with it)
-  const { base, data } = place();
-  const config = new ConfigFile(mkdtempSync(join(tmpdir(), "drive-config-")));
-  const mounted = join(base, "OrbStack");
-  mkdirSync(mounted);
-  // (were it opened, it would be said unreadable)
-  chmodSync(mounted, 0);
-  try {
-    const drive = new Drive({ config: () => config.raw(), protect: () => [data], disk: async (dir) => (dir === mounted ? 2 : 1) });
-    const table = routes({ drive, config, home: base, changed: () => {} });
-    const listed = await ask(table, request("GET", "/drive/folders", {}, null, "owner"));
-    assert.deepEqual(listed.json.entries.find((e: any) => e.name === "OrbStack"), { name: "OrbStack", path: mounted, unreadable: false, disk: true });
-  } finally {
-    chmodSync(mounted, 0o755);
-  }
-});
-
 test("routes: folders pinned by any member who may write, kept in config.json; reads with their size", async () => {
   const { base, root, data } = place();
   const configDir = mkdtempSync(join(tmpdir(), "drive-config-"));

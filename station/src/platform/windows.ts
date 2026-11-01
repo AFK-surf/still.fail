@@ -453,6 +453,7 @@ export const windows: Platform = {
   },
 
   disks: () => drives((path) => stat(path).then((s) => s.isDirectory(), () => false)),
+  mounts: () => [],
   linkRefused: (error) => (error as NodeJS.ErrnoException).code === "EPERM",
   syncsDirectories: false,
   /// A symbolic link needs a privilege most users lack (Developer Mode gives it): a hard link then, the same file as

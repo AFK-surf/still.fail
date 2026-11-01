@@ -109,7 +109,7 @@ function station(options: { folders?: boolean } = {}) {
   // Whether the station reaches its LAN (none by default: no LAN), and System Settings' panes opened on the Mac.
   const lan: { now: "granted" | "denied" | null } = { now: null };
   const opened: string[] = [];
-  const grants = new HelperGrants({ helper, folders: options.folders, now: () => clock.now, volumes, reach: async () => lan.now, open: (url) => void opened.push(url) });
+  const grants = new HelperGrants({ helper, folders: options.folders, now: () => clock.now, volumes, mounts: () => [], reach: async () => lan.now, open: (url) => void opened.push(url) });
   let changes = 0;
   grants.onChange(() => changes++);
   // Ends with its test: nothing left to keep the process.
