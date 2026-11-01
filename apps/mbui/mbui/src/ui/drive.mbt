@@ -623,10 +623,14 @@ fn h_drive(kind : Int, text : String) -> Bool {
 }
 
 ///|
-/// The run over: the app ends with its verdict (a test's fake host notes it).
+/// The run over: the app ends with its verdict (a test's fake host notes it). An interactive preview may keep a
+/// successfully replayed scene open; a failed script still ends with its error.
 fn drive_end(code : Int) -> Unit {
   h_log(if code == 0 { "DRIVE PASS" } else { "DRIVE END \{code}" })
   driver.val = None
+  if code == 0 && h_env("MBUI_DRIVE_KEEP_OPEN") == "1" {
+    return
+  }
   match fake.val {
     Some(f) => f.logs.push("EXIT \{code}")
     None => @hostapi.exit(code)

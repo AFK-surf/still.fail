@@ -67,3 +67,16 @@ mixed and cut to the film; sound embedded in a source film is not mixed automati
 specified rate, with AAC when sound is present. It needs `node`, `ffmpeg`, and `ffprobe`, but no browser. Each result
 has a `.timeline.json` record containing the timeline and SHA-256 hashes of the inputs and output. An invalid timeline,
 missing input, a source film shorter than requested, or a failed encode leaves an existing result intact.
+
+## Preview in a native window
+
+`MBUI_FIXTURE=home MBUI_WIN=320x560 bash scripts/media.sh preview out/home.drive` opens the same scene and view tree
+in a native window, replays the drive and leaves it open for interaction. An optional second path supplies preparation
+steps, just as for a picture or film. Close the window to end the preview; run the command again to reset it.
+`MBUI_FILM_PLATFORM`, `MBUI_POINTING`, `MBUI_DARK` and the scene's fixture settings apply to both paths.
+
+The preview uses the real window's display clock, screen scale, system bars and native controls. The offscreen host's
+simulated native input, keyboard, font scale, local station, window inset, window corner and native navigation bars
+are not supplied by a native window; the command rejects their explicit overrides rather than ignoring them. Drive
+steps only supported under a Tester, such as `system` and `ime`, cannot be replayed in this window. Use the exported
+PNG or film to inspect those settings and frame-accurate timing.
