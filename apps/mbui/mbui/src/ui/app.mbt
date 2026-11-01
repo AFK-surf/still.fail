@@ -356,6 +356,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       // what of an old view's came to have the focus, brought into sight by what of the window's tree holds it
       // (view_host.mbt)
       old_show_after_layout(c)
+      // (an old view as tall as what it holds: that height, as laid out now, told its node (view_host.mbt))
+      old_natural_after_layout(c)
     })
     laying.val = false
     layout_coming.val = false

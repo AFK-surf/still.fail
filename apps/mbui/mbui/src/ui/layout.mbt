@@ -679,9 +679,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     k == kind_editor ||
     k == kind_list ||
     k == kind_image {
-    // (measured or not goes with its kind, compared above)
+    // (measured or not goes with its kind, compared above: told how as it is laid out as a leaf, and let go of as it is
+    // laid out as one no more, so that a node never laid out as a leaf (one put among the frame's to be read, as the
+    // corner rule puts the window's tree's: with_tree_nodes) holds nothing that holds it, and goes when let go of)
     if f.measure is None {
-      f.measure = n.leaf
+      f.measure = Some(fn(w, wm, h, hm) { leaf_size(n, w, wm, h, hm) })
     }
     if f.children.length() > 0 {
       f.children.clear()
@@ -1053,13 +1055,25 @@ fn Ctx::moved_now(self : Ctx, n : Node, w : Double, h : Double) -> Unit {
   match n.moved_by {
     Some(f) => {
       let (dx, dy) = @signals.untracked(fn() { f(w, h) })
-      n.moved_x = on_pixels(dx, self.scale)
-      n.moved_y = on_pixels(dy, self.scale)
+      n.moved_x = self.moved_on_pixels(n, dx)
+      n.moved_y = self.moved_on_pixels(n, dy)
     }
     None => {
       n.moved_x = 0.0
       n.moved_y = 0.0
     }
+  }
+}
+
+///|
+/// How far node `n` is moved across or down by what moves it, `d` as that says: on the device's pixels (Ctx::moved_now);
+/// what only carries it to where it is drawn (Ctx::moved_carries: an old view hosted in a node) as it says, which says
+/// itself where that is on them (island_on_pixels: not where it is drawn bigger or smaller).
+fn Ctx::moved_on_pixels(self : Ctx, n : Node, d : Double) -> Double {
+  if n.moved_carries {
+    d
+  } else {
+    on_pixels(d, self.scale)
   }
 }
 
@@ -1079,8 +1093,8 @@ fn Ctx::moved_place(self : Ctx) -> Unit {
     match n.moved_by {
       Some(f) => {
         let (dx, dy) = f(n.fw, n.fh)
-        let mx = on_pixels(dx, self.scale)
-        let my = on_pixels(dy, self.scale)
+        let mx = self.moved_on_pixels(n, dx)
+        let my = self.moved_on_pixels(n, dy)
         if mx != n.moved_x || my != n.moved_y {
           self.moved_shift(i, mx - n.moved_x, my - n.moved_y)
           n.moved_x = mx

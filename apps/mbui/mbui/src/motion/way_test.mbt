@@ -59,23 +59,15 @@ let odd_ms : Double = 200.5
 let odd_delay : Double = 10.25
 
 ///|
-/// A way from 0 to 1 over `way_ms` set out at `at`: when it set out and ends, and where it is a quarter and half way and
-/// a hair before its end, each at a moment `frac` into its ms.
-fn set_out_at_fraction(at : Double, frac : Double) -> (Double, Double, Array[Double]) {
+test "a way set out a fraction into a ms: its time counted from that moment in whole ms, as an Anim's (way_anim_test): its end its length after it" {
+  // (set out at 1000.7: from there, ending its length after; read at a moment a fraction into a ms of its own time, where
+  // it is at that ms's start, as an Anim told at 1000.7 is)
   let w = @motion.Way::new(0.0)
-  w.go(1.0, @motion.tween(way_ms, ease=Linear), at~)
-  let s = w.starts_at()
-  (s, w.ends_at(), [0.25, 0.5].map(fn(k) { w.value_at(s + way_ms * k + frac) }) + [w.value_at(w.ends_at() - 1.0 + frac)])
-}
-
-///|
-test "a way set out a fraction into a ms: its time goes on the one clock's whole ms from that ms, as any motion's (where a moment falls in its ms changes nothing)" {
-  // (set out at 1000.7: from 1000, ending at 1000 + its length; read at any fraction of a ms, as at its start)
-  let whole = set_out_at_fraction(1000.0, 0.0)
-  assert_eq(set_out_at_fraction(1000.7, 0.0), whole)
-  assert_eq(set_out_at_fraction(1000.7, 0.6), whole)
-  assert_eq(set_out_at_fraction(1000.0, 0.999), whole)
-  assert_eq(whole, (1000.0, 1000.0 + way_ms, [0.25, 0.5, (way_ms - 1.0) / way_ms]))
+  w.go(1.0, @motion.tween(way_ms, ease=Linear), at=1000.7)
+  assert_eq(
+    (w.starts_at(), w.ends_at(), [w.value_at(1050.7), w.value_at(1051.3), w.value_at(1050.6), w.value_at(w.ends_at() - 0.4)]),
+    (1000.7, 1000.7 + way_ms, [0.25, 0.25, 49.0 / way_ms, (way_ms - 1.0) / way_ms]),
+  )
 }
 
 ///|

@@ -22,7 +22,7 @@ pub struct Made {
   /// the list's row or the part kept as its nodes it was last put in, if it was (kept_nodes.mbt): told with it
   priv held : Ref[RowNodes?]
   /// what it is where it is built the old way (made_island): its name, what it is built from besides what it reads
-  priv island : (String, () -> String, Bool)?
+  priv island : (String, () -> String, Bool, Bool)?
   /// built the old way each time it is put, kept as nothing (made_old)
   priv old : Bool
 }
@@ -74,7 +74,13 @@ pub fn made_box(fill : (Ctx) -> Unit, kids? : Array[Made] = []) -> Made {
 /// else of the frame is built anew: what is made once holds it, and what it reads it reads itself, never what was
 /// handed it as it was made (docs/retained.md, the way there's 3: the old view as an island). `read_out`: what reads
 /// the widgets reads it.
-pub fn made_island(name : String, key : () -> String, body : (Ctx) -> Unit, read_out? : Bool = true) -> Made {
+pub fn made_island(
+  name : String,
+  key : () -> String,
+  body : (Ctx) -> Unit,
+  read_out? : Bool = true,
+  flows? : Bool = false,
+) -> Made {
   let held = Ref(None)
   {
     fill: body,
@@ -83,7 +89,7 @@ pub fn made_island(name : String, key : () -> String, body : (Ctx) -> Unit, read
     watch: made_watch(held),
     on_press: None,
     held,
-    island: Some((name, key, read_out)),
+    island: Some((name, key, read_out, flows)),
     old: false,
   }
 }
@@ -311,9 +317,9 @@ fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
     return
   }
   match m.island {
-    Some((name, key, read_out)) => {
+    Some((name, key, read_out, flows)) => {
       let k = @signals.untracked(key)
-      self.part_nodes(self.id(name), k, fn() { (m.fill)(self) }, read_out, own=true, named=name)
+      self.part_nodes(self.id(name), k, fn() { (m.fill)(self) }, read_out, own=true, named=name, flows~)
       return
     }
     None => ()

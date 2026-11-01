@@ -585,7 +585,7 @@ fn lifted_for_words(seen : Double, ahead : Double) -> (Double, Double, Double, (
   let should = @sfbase.marks_writing_bottom_in(z, z.rect_at(t0 + 30.0)).unwrap() +
     @sfbase.marks_keyboard_gap -
     t.size().1
-  (v.lift.starts_at() - @ui.whole_ms(t0 + 30.0), v.lift.target(), should, v.marks_rect(t0 + 200.0))
+  (v.lift.starts_at() - (t0 + 30.0), v.lift.target(), should, v.marks_rect(t0 + 200.0))
 }
 
 ///|
@@ -594,7 +594,7 @@ test "viewer on the tree, marking: the keyboard up as words are written on a gli
   assert_eq(lifted_for_words(20.0, 0.0), at)
   assert_eq(lifted_for_words(-1.0, 40.0), at)
   assert_eq(lifted_for_words(20.0, 40.0), at)
-  // (set out at the keyboard's moment, on the ms it falls in)
+  // (set out at the keyboard's moment)
   assert_eq(at.0, 0.0)
   assert_true(at.1 > 0.0, msg="\{at}")
   assert_eq(at.1, at.2)

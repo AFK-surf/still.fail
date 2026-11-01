@@ -12,7 +12,8 @@ pub struct Way {
   priv mut v0 : Double
   priv mut to : Double
   priv mut spec : Spec
-  /// when it set out (ms, the one clock: its whole ms, the grid every motion's time goes on), and how long it goes
+  /// when it set out (ms, the one clock: its cause's moment, its time counted from there in whole ms as an Anim's),
+  /// and how long it goes
   priv mut start : Double
   priv mut dur : Double
   priv mover : @ui.Mover
@@ -48,9 +49,9 @@ pub fn Way::at(self : Way, t : Double) -> (Double, Double) {
   } else if t <= self.start {
     (self.from, self.v0)
   } else {
-    // (its time in whole ms of the one clock: where it is at a moment the same whatever fraction of a ms the moment
-    // or its cause came at, as any motion's, Run's)
-    self.spec.value_at(@ui.whole_ms(t) - self.start, self.dur, self.from, self.to, self.v0)
+    // (its time from its start in whole ms, as an Anim's (Spec::value_at): told alike at the same moment, where each is
+    // at a moment the same, whatever fraction of a ms its cause came at)
+    self.spec.value_at(t - self.start, self.dur, self.from, self.to, self.v0)
   }
 }
 
@@ -116,7 +117,7 @@ pub fn Way::go(
   self.v0 = velocity.unwrap_or(v)
   self.to = target
   self.spec = spec
-  self.start = @ui.whole_ms(at)
+  self.start = at
   self.dur = if @ui.current().still() { 0.0 } else { spec.duration(x, target, self.v0) }
   self.mover.changed()
   // (who it is for the performance record: who sent it, not where to)

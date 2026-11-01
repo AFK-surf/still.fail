@@ -92,6 +92,9 @@ struct Node {
   mut sem_hid : Bool
   /// the old view it was built in (view_host.mbt's island_allows), none in a layer of its own (a menu, a sheet)
   mut island : @view.NodeId?
+  /// a node of the window's tree's, put among the frame's for the corner rule (corners.mbt with_tree_nodes), that
+  /// scrolls what it holds up and down (Tree::scrolls_now): as a list does, what is in it lies under its top and foot
+  mut tree_scrolls : Bool
   /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
   mut floats : Bool
   /// it scrolls what it holds, as the scrolling box `scroller` is (sideways.mbt: its id, 0 none), what it holds its
@@ -355,12 +358,8 @@ struct Node {
   // held this far below the top of the list it is in as its row scrolls past, within its parent (Ctx::stick; NaN:
   // where it is laid out)
   mut stick : Double
-  // its node in the flex engine, and how the engine measures it as a leaf
+  // its node in the flex engine (how the engine measures it as a leaf told it as it is laid out as one: layout.mbt)
   fl : @flex.Node
-  mut leaf : ((Double, @flex.MeasureMode, Double, @flex.MeasureMode) -> (
-    Double,
-    Double,
-  ))?
   // what the flex node was last given (layout.mbt, Ctx::flex_tree): the
   // kind, what a leaf measures (text and its font, a rich paragraph, an
   // image's size), the layout epoch
@@ -402,6 +401,7 @@ fn Node::new() -> Node {
     sem: None,
     sem_hid: false,
     island: None,
+    tree_scrolls: false,
     floats: false,
     scroller: 0,
     scroller_inner: false,
@@ -545,7 +545,6 @@ fn Node::new() -> Node {
     item: -1,
     stick: 0.0 / 0.0,
     fl: @flex.Node::new(),
-    leaf: None,
     lk_kind: -1,
     lk_text: "",
     lk_shorter: no_words,
@@ -566,7 +565,6 @@ fn Node::new() -> Node {
     oty: 0.0,
     same: false,
   }
-  n.leaf = Some(fn(w, wm, h, hm) { leaf_size(n, w, wm, h, hm) })
   n
 }
 
@@ -585,6 +583,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.sem = None
   self.sem_hid = false
   self.island = None
+  self.tree_scrolls = false
   self.floats = false
   self.scroller = 0
   self.scroller_inner = false

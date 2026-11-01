@@ -304,7 +304,7 @@ pub fn[T, K : Hash + Eq] made_each(() -> Array[T], (T) -> K, (@signals.Signal[T]
 
 pub fn made_holding((Ctx) -> Unit, () -> Array[Made]) -> Made
 
-pub fn made_island(String, () -> String, (Ctx) -> Unit, read_out? : Bool) -> Made
+pub fn made_island(String, () -> String, (Ctx) -> Unit, read_out? : Bool, flows? : Bool) -> Made
 
 pub fn made_old((Ctx) -> Unit) -> Made
 
@@ -358,7 +358,7 @@ pub fn notice_show(channel~ : String, tag~ : String, title~ : String, body~ : St
 
 pub fn now() -> Double
 
-pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String) -> @view.View
+pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String, natural? : Bool) -> @view.View
 
 pub fn old_anchor(@view.View, Int32, (Double, Double, Double, Double)) -> @view.View
 

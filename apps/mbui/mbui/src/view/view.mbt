@@ -324,6 +324,9 @@ struct Node {
   mut claims_said : Int
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
+  /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
+  /// far it can go (Scroll's room); -1 for one that does not
+  mut scroll_held : Int
   mut focus_shown_cell : @signals.Signal[Bool]?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
@@ -823,6 +826,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.claims = None
       n.claims_said = 0
       n.claims_scroll = false
+      n.scroll_held = -1
       n.focus_shown_cell = None
       n.key_said = 0
       n.wheel_said = 0
@@ -897,6 +901,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         claims: None,
         claims_said: 0,
         claims_scroll: false,
+        scroll_held: -1,
         focus_shown_cell: None,
         on_drag: None,
         fingers: 1,
@@ -5704,9 +5709,32 @@ pub fn Tree::drawn_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
       h = self.order_holder[h]
     }
     at_out[i] = out.length()
-    // (its corner as big as it is drawn, as its size is: where the window draws it, in the window's points)
-    let d = { ..unfolded(c, x, y, a, s), radius: c.radius * s }
+    // (its corners as big as it is drawn, as its size is: where the window draws it, in the window's points)
+    let d = {
+      ..unfolded(c, x, y, a, s),
+      radius: c.radius * s,
+      corners: c.corners.map(fn(k) { (k.0 * s, k.1 * s, k.2 * s, k.3 * s) }),
+    }
     out.push((d, if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
+  })
+  out
+}
+
+///|
+/// The scene as Tree::drawn_held has it, but each where it is laid out (Tree::laid_origin) as big as it is laid out, its
+/// corner too: where an old view hosted in it is laid out, as the old frame lays it out (view_host.mbt's old_place),
+/// what it holds worked out against it before it is drawn (ui's corners said Inner).
+pub fn Tree::laid_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
+  let out : Array[(Drawn, Int, Bool)] = []
+  let at_out : Array[Int] = Array::make(self.order.length(), -1)
+  self.each_drawn_in_order(fn(i, c, x, y, a, _, _, _) {
+    let mut h = self.order_holder[i]
+    while h >= 0 && at_out[h] < 0 {
+      h = self.order_holder[h]
+    }
+    at_out[i] = out.length()
+    let (lx, ly) = self.laid_origin(c.id).unwrap_or((x, y))
+    out.push((unfolded(c, lx, ly, a, 1.0), if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
   })
   out
 }
