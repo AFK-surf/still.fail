@@ -874,6 +874,11 @@ final class NativeViews {
         }
         v.closed = true;
         Host.log("view " + id + ": closed (" + (long) v.bytes + " bytes given)");
+        // (those its own reader reads stopped: the app stops its own as the view closes)
+        if (v instanceof Video) {
+            for (Runnable stop : ((Video) v).directs.values()) stop.run();
+            ((Video) v).directs.clear();
+        }
         // (no frame draws its picture from now on; its surface let go once nothing draws on it)
         Picture p = v.picture;
         int ext = p.drop();
@@ -1192,7 +1197,8 @@ final class NativeViews {
     /**
      * What the app tells a view beyond its controls (host_native.mbt view_tell): 1 a script for its page, 2 who takes
      * a finger on it ("MODE SLOP", the slop in points), 3 a site's settings (JSON: head_wait_ms, backlog), 4 where the
-     * app draws what takes a press over it ("X0 Y0 X1 Y1 …", points from the canvas's top left; "" none).
+     * app draws what takes a press over it ("X0 Y0 X1 Y1 …", points from the canvas's top left; "" none), 6 how a
+     * video's reads are read past the app (Direct).
      */
     static void tell(int id, int what, String text) {
         NView v = views.get(id);
@@ -1235,6 +1241,9 @@ final class NativeViews {
             Host.main.post(() -> {
                 if (v.clip != null) v.clip.covers = c;
             });
+        } else if (what == 6 && v instanceof Video) {
+            // its reads from now on read by the host's own reader, where the app has one (Direct)
+            if (direct != null && !text.isEmpty()) ((Video) v).direct = text;
         } else if (what == 3 && v instanceof Site) {
             try {
                 org.json.JSONObject o = new org.json.JSONObject(text);
@@ -1268,6 +1277,31 @@ final class NativeViews {
         Video vid = (Video) v;
         Read r = vid.waiting.get(req);
         if (r == null) return;
+        answered(vid, r, data, total, more);
+    }
+
+    /**
+     * How a video's reads are read by the host itself, past the app and its (GL) thread, where its app has a reader
+     * of its own (still.fail's core: AdbCore.read) and told the view how (view_tell 6): set once by the app's Java.
+     */
+    interface Direct {
+        /**
+         * `length` bytes from `offset` of what `how` names read, each piece handed to `to` as it comes (on any
+         * thread), as the app answers a read (readAnswer); what stops it, or null where it cannot be read so (read
+         * through the app then).
+         */
+        Runnable read(String how, long offset, int length, Answers to);
+    }
+
+    interface Answers {
+        void answer(byte[] data, double total, boolean more);
+    }
+
+    static volatile Direct direct;
+
+    /** Read `r`'s next bytes, from the app (readAnswer) or the host's own reader (Direct), on whichever thread. */
+    static void answered(Video vid, Read r, byte[] data, double total, boolean more) {
+        int id = vid.id;
         int k;
         synchronized (r) {
             if (r.done) return;
@@ -1279,18 +1313,25 @@ final class NativeViews {
             if (total == -2) r.failed = true;
             if (!more || total == -2) {
                 r.done = true;
-                vid.waiting.remove(req);
+                vid.waiting.remove(r.id);
+                vid.directs.remove(r.id);
             }
             r.notifyAll();
         }
         if (k > 0) {
-            double before = vid.bytes;
-            vid.bytes += k;
+            double before, after;
+            boolean log;
+            synchronized (vid.waiting) {
+                before = vid.bytes;
+                after = vid.bytes += k;
+                // the first pieces, then one line every 4 MB
+                log = vid.pieces++ < 4 || Math.floor(before / (4 << 20)) != Math.floor(after / (4 << 20));
+            }
             vid.stood();
-            // the first pieces, then one line every 4 MB
-            if (vid.pieces++ < 4 || Math.floor(before / (4 << 20)) != Math.floor(vid.bytes / (4 << 20))) {
-                Host.log("view " + id + ": read @" + r.offset + ": " + r.got + " of " + r.length + " bytes through the app"
-                        + (more ? "" : ", its last") + " (total " + (long) vid.total + ", " + (long) vid.bytes + " so far)");
+            if (log) {
+                Host.log("view " + id + ": read @" + r.offset + ": " + r.got + " of " + r.length + " bytes through the "
+                        + (vid.direct != null ? "host's reader" : "app") + (more ? "" : ", its last") + " (total "
+                        + (long) vid.total + ", " + (long) after + " so far)");
             }
         } else if (total == -2) {
             Host.log("view " + id + ": read @" + r.offset + " failed");
@@ -1364,9 +1405,12 @@ final class NativeViews {
         final ConcurrentLinkedQueue<Read> asked = new ConcurrentLinkedQueue<>();
         final ConcurrentLinkedQueue<Integer> lettingGo = new ConcurrentLinkedQueue<>();
         final ConcurrentHashMap<Integer, Read> waiting = new ConcurrentHashMap<>();
+        /** How its reads are read past the app (view_tell 6; null: through it), and what stops each one under way so. */
+        volatile String direct;
+        final ConcurrentHashMap<Integer, Runnable> directs = new ConcurrentHashMap<>();
         final AtomicInteger nextRead = new AtomicInteger();
         volatile long total = -1;
-        /** the pieces answered (GL thread): the first are logged */
+        /** the pieces answered (under `waiting`'s lock): the first are logged */
         int pieces;
         /** since when it has waited once ready (elapsedRealtime; -1 it does not), and the bytes given by then (main thread) */
         long waitSince = -1;
@@ -1427,7 +1471,7 @@ final class NativeViews {
          * a block or more: what lies between is not waited for), a reader done; what came of it is kept.
          * One that brings nothing for STALL_NS fails (its reader's load tried again by the player).
          */
-        static final int BLOCK = 256 << 10, RUN = 16;
+        static final int BLOCK = 256 << 10, RUN = 16, AHEAD = 2;
         static final long STALL_NS = TimeUnit.SECONDS.toNanos(120);
         final Object keptLock = new Object();
         /** The blocks here whole (the file's last, to its end), and the runs on their way by the blocks they bring. */
@@ -1453,6 +1497,8 @@ final class NativeViews {
             int end = -1, run = 1;
             Read read;
             boolean player;
+            /** The runs asked ahead of the one it reads (AHEAD), in their order, none of them read from yet. */
+            final java.util.ArrayList<Read> ahead = new java.util.ArrayList<>();
         }
 
         /**
@@ -1504,15 +1550,21 @@ final class NativeViews {
                 boolean here;
                 synchronized (keptLock) {
                     here = have.get(b);
+                    // (read on through what is here: going on from it as from a run of its own)
+                    if (here && b == pace.end) pace.end = b + 1;
+                    if (here && pace.player && pace.run == RUN) askAhead(pace, b);
                     if (!here) {
                         Read on = coming.get(b);
-                        // (one ended, its keeper not done with it yet: not to be read from again)
-                        if (on != null && on.done) {
+                        // (one ended short, its keeper not done with it yet: not to be read from again; one read
+                        // whole, asked ahead, is read from as it is while its keeper puts it on the disk)
+                        if (on != null && on.done && (on.failed || on.got < on.length)) {
                             coming.remove(b, on);
                             on = null;
                         }
                         if (on == null) {
                             int run = b == pace.end ? Math.min(pace.run * 2, RUN) : 1;
+                            // (a jump: what was asked ahead of where it was is not wanted)
+                            if (run == 1) dropAhead(pace);
                             int n = 0;
                             while (n < run && !have.get(b + n) && !coming.containsKey(b + n)
                                     && (n == 0 || total < 0 || (long) (b + n) * BLOCK < total)) n++;
@@ -1521,7 +1573,11 @@ final class NativeViews {
                             on = new Read(nextRead.incrementAndGet(), (long) b * BLOCK, n * BLOCK, b, n);
                             for (int i = 0; i < n; i++) coming.put(b + i, on);
                             ask(on);
+                        } else if (pace.ahead.remove(on) && b == pace.end) {
+                            // (reading on into what was asked ahead of it: on from its end as from its own run's)
+                            pace.end = on.block + on.blocks;
                         }
+                        if (pace.player && pace.run == RUN) askAhead(pace, b);
                         if (pace.read != on) {
                             leave(pace);
                             pace.read = on;
@@ -1538,6 +1594,55 @@ final class NativeViews {
                     have.clear(b);
                 }
             }
+        }
+
+        /**
+         * The player reading on from one run to the next (its runs grown to RUN): the AHEAD runs after the one it reads
+         * asked now, not once it has come to them. Each run is a request through the app and the core, the next one
+         * asked only when the last is read through, so a reader that waits for each in turn has the bytes of one run at
+         * a time, its asking and answering between them each time: on a phone ~4 MB in ~0.5 s however fast the link
+         * is, less than a 4K film plays through. Asked ahead, they come one after another while it reads (keptLock held).
+         */
+        void askAhead(Pace pace, int at) {
+            // (those come whole are on the disk, or on their way to it: read from there, not held here)
+            pace.ahead.removeIf(r -> r.done);
+            int from = Math.max(pace.end, at + 1);
+            int to = at + 1 + AHEAD * RUN;
+            while (from < to) {
+                if (total >= 0 && (long) from * BLOCK >= total) return;
+                if (have.get(from) || coming.containsKey(from)) {
+                    from++;
+                    continue;
+                }
+                // (a whole run at a time, as the window moves on by one)
+                if (to - from < RUN && (total < 0 || (long) to * BLOCK < total)) return;
+                int n = 0;
+                while (n < RUN && !have.get(from + n) && !coming.containsKey(from + n)
+                        && (total < 0 || (long) (from + n) * BLOCK < total)) n++;
+                Read r = new Read(nextRead.incrementAndGet(), (long) from * BLOCK, n * BLOCK, from, n);
+                for (int i = 0; i < n; i++) coming.put(from + i, r);
+                ask(r);
+                pace.ahead.add(r);
+                from += n;
+            }
+        }
+
+        /** What was asked ahead of `pace` and is not read from: let go of, as a run no reader is on (keptLock held). */
+        void dropAhead(Pace pace) {
+            for (Read r : pace.ahead) {
+                if (r.users > 0) continue;
+                boolean drop;
+                synchronized (r) {
+                    drop = !r.done && r.got < r.length;
+                    if (drop) {
+                        r.done = true;
+                        r.gone = true;
+                        r.notifyAll();
+                    }
+                }
+                if (drop) letGo(r);
+            }
+            pace.ahead.clear();
         }
 
         /** The reader `pace` off the run it read from: that run let go of when no reader is on it and some of it is to come (keptLock held). */
@@ -1563,13 +1668,32 @@ final class NativeViews {
             Host.log("view " + id + ": the read at " + r.offset + " let go of, " + r.got + " of its " + r.length + " bytes here");
             waiting.remove(r.id);
             for (int i = 0; i < r.blocks; i++) coming.remove(r.block + i, r);
-            askApp(() -> lettingGo.add(r.id));
+            stop(r);
         }
 
-        /** The run `r` asked of the app, its bytes kept on the disk as they come, block by block (keptLock held). */
+        /** Whoever reads `r` (the app, or the host's own reader) told to stop. */
+        void stop(Read r) {
+            Runnable stop = directs.remove(r.id);
+            if (stop != null) stop.run();
+            else askApp(() -> lettingGo.add(r.id));
+        }
+
+        /**
+         * The run `r` asked of the host's own reader where the app told the view how (Direct: its asking and its bytes
+         * never wait on the app's thread, which draws the app and the video's picture in it), else of the app; its
+         * bytes kept on the disk as they come, block by block (keptLock held).
+         */
         void ask(Read r) {
             waiting.put(r.id, r);
-            askApp(() -> asked.add(r));
+            Direct d = NativeViews.direct;
+            String how = this.direct;
+            Runnable stop = d != null && how != null ? d.read(how, r.offset, r.length, (data, total, more) -> answered(this, r, data, total, more)) : null;
+            if (stop != null) {
+                // (one ended already: not to be stopped)
+                if (!r.done) directs.put(r.id, stop);
+            } else {
+                askApp(() -> asked.add(r));
+            }
             keepers.execute(() -> keepAsItComes(r));
         }
 
@@ -1611,9 +1735,7 @@ final class NativeViews {
                 if (done) {
                     synchronized (keptLock) {
                         // failed or stalled: told to stop, as one let go of
-                        if (r.failed && waiting.remove(r.id) != null && !closed) {
-                            askApp(() -> lettingGo.add(r.id));
-                        }
+                        if (r.failed && waiting.remove(r.id) != null && !closed) stop(r);
                         for (int i = 0; i < r.blocks; i++) coming.remove(r.block + i, r);
                     }
                     return;
@@ -1665,6 +1787,7 @@ final class NativeViews {
         /** The reader `pace` done: off the run it read from (let go of if no other reader is on it). */
         void done(Pace pace) {
             synchronized (keptLock) {
+                dropAhead(pace);
                 leave(pace);
             }
         }

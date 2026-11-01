@@ -22,7 +22,7 @@ test "a player: a double tap on the right third jumps on, said a moment; the spe
     w=390.0,
     h=844.0,
   )
-  m.open({ name: "a.mp4", mime: "video/mp4", audio: false, read: fn(_, _, _) { fn() {  } } })
+  m.open({ name: "a.mp4", mime: "video/mp4", audio: false, read: fn(_, _, _) { fn() {  } }, direct: "" })
   t.draw()
   assert_true(m.started())
   // the right third, twice: 15 s on (the fake is 10 s long: to its end), about there at once (the nearest key frame)

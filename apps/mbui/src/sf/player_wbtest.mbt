@@ -22,6 +22,7 @@ fn film(name : String, kind? : String = "video", facts? : FileFacts = no_facts) 
     bytes: None,
     read: fn(_, _, done) { done(Err("")) },
     stream: Some(fn(_, _, _) { fn() {  } }),
+    direct: "",
     beside: None,
     place: fn() { NeverLeft },
     keep_place: fn(_, _) {  },

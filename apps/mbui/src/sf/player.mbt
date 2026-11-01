@@ -146,7 +146,16 @@ pub fn player_media(c : @ui.Ctx, key : String, file : ViewerFile, siblings : Arr
     match start {
       Some(start) => {
         pl.opened.set(true)
-        pl.media.open({ name: file.name, mime: file.mime, audio: file.kind == "audio", read: player_read(file) }, start~)
+        pl.media.open(
+          {
+            name: file.name,
+            mime: file.mime,
+            audio: file.kind == "audio",
+            read: player_read(file),
+            direct: if file.stream is Some(_) { file.direct } else { "" },
+          },
+          start~,
+        )
       }
       None => ()
     }

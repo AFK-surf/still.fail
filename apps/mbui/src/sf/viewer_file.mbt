@@ -51,6 +51,8 @@ pub(all) struct ViewerFile {
   bytes : Bytes?
   read : (Int, (Got) -> Unit, (Result[Bytes, String]) -> Unit) -> Unit
   stream : ((Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit)?
+  /// how a host reads its `stream`'s parts itself, past the app (@kit.MediaTrack's `direct`; "": none)
+  direct : String
   beside : ((ViewerEntry, (Result[Bytes, String]) -> Unit) -> Unit)?
   place : () -> PlaceNow
   keep_place : (Double, Double) -> Unit
@@ -96,6 +98,7 @@ pub fn blob_file(
       done(Ok(if max >= 0 && max < bytes.length() { bytes[:max].to_bytes() } else { bytes }))
     },
     stream: None,
+    direct: "",
     beside: None,
     place: fn() { NeverLeft },
     keep_place: fn(_, _) {  },

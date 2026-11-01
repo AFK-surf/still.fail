@@ -1112,6 +1112,20 @@ pub fn stream_part(
 }
 
 ///|
+/// How a host's own reader reads the parts `stream_part` would (@ui.NativeView::video's `direct`), past the app: the
+/// core's `call` with `p` (its `offset` and `length` each part's own), the whole's size as `size` says it (0 not known).
+pub fn direct_part(call : String, p : Map[String, Json], size : Double) -> String {
+  let q : Map[String, Json] = {}
+  for k, v in p {
+    if k != "offset" && k != "length" {
+      q[k] = v
+    }
+  }
+  q["stream"] = Json::boolean(true)
+  Json::object({ "call": Json::string(call), "params": Json::object(q), "size": Json::number(size) }).stringify()
+}
+
+///|
 /// A chat's file read through the core kept on the device with its chat, and answered from there when it is kept (the
 /// core's drive-kept.ts `chat`), as Android keeps those its viewers open on the phone's disk (ChatFiles.kt toDisk,
 /// onDisk), by its size as its message says (none known: not kept).
@@ -1291,6 +1305,12 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
                   Err(e) => @ui.log("preview: \{v.name} @\{offset.to_int()} failed: \{e.stringify()}")
                 }
               })
+            },
+            // (its bytes here, or one a message names: read by the app alone, as above)
+            direct: if v.bytes.get() is None && !v.named && !v.file.path.has_prefix("draft:") {
+              direct_part(v.part_call(), v.part_params(0.0, 0, "played"), v.listed_size())
+            } else {
+              ""
             },
           },
           start~,
@@ -2983,6 +3003,7 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     bytes: None,
     read: fn(_, _, done) { done(Err("")) },
     stream: None,
+    direct: "",
     beside: None,
     place: fn() { NeverLeft },
     keep_place: fn(_, _) {  },
