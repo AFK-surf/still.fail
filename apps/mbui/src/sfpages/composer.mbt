@@ -345,10 +345,15 @@ pub fn composer(
         composer_extras(c, src, spec, w)
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tools_row(), fn() {
-          plus = attach(c, src, spec, w, no_files)
           match spec.beside_plus {
-            Some(f) => f()
-            None => ()
+            // what goes beside ＋ (a new chat's preset): a step of the scale apart, each with its own press's room
+            Some(f) =>
+              c.box(style=plus_pair, fn() {
+                plus = attach(c, src, spec, w, no_files)
+                f()
+              })
+              |> ignore
+            None => plus = attach(c, src, spec, w, no_files)
           }
           match (spec.toolbar, composing.toolbar_leaving) {
             (Some(f), _) => {
@@ -379,10 +384,15 @@ pub fn composer(
         })
         |> ignore
       } else {
-        plus = attach(c, src, spec, w, no_files)
         match spec.beside_plus {
-          Some(f) => f()
-          None => ()
+          // what goes beside ＋ (a new chat's preset): a step of the scale apart, each with its own press's room
+          Some(f) =>
+            c.box(style=plus_pair, fn() {
+              plus = attach(c, src, spec, w, no_files)
+              f()
+            })
+            |> ignore
+          None => plus = attach(c, src, spec, w, no_files)
         }
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tail_row, fn() {
@@ -1407,6 +1417,11 @@ fn tools_row() -> @ui.Style {
 ///|
 // kept across runs: a value (no field of it changes)
 let tools_row_base : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
+
+///|
+/// ＋ and what goes beside it: 12 apart, so two rounds of a finger's 36 stand 48 centre to centre.
+// kept across runs: a value (no field of it changes)
+let plus_pair : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 
 ///|
 /// The page's choices (composerChoices: in what is left of the row, at its start).

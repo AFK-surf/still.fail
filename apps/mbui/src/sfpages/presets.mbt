@@ -84,7 +84,7 @@ fn preset_round(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : J
     preset_menu(src, w, address, v, picked, @sf.Of(id))
   }
   let marks = if picked == "" { [] } else { items(v, "presetMarks") }
-  let face = @sf.round_face().then(preset_round_apart)
+  let face = @sf.round_face()
   let b = c.box(style=if c.lit(id) { face.then(round_hot) } else { face }, id~, fn() {
     match marks.get(0) {
       // (picked: its first folder's mark, as it is shown where it is picked)
@@ -381,7 +381,7 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, offered : Array[
       if has(k) || (q != "" && !name.to_lower().contains(q) && !repo.to_lower().contains(q) && !text(one, "where").to_lower().contains(q)) {
         continue
       }
-      if @sf.menu_item(c, name, key=key("offer/" + k), mark=fn(c, size) { repo_mark(c, name, repo, icon, size) }, under=dir_note(one, true), panel=true) {
+      if @sf.menu_item(c, name, key=key("offer/" + k), mark=fn(c, size) { repo_face(c, name, repo, icon, size) }, note=dir_note(one, true), panel=true) {
         e.dirs.push(o)
         e.step = 0
       }
@@ -458,13 +458,17 @@ fn repo_mark(c : @ui.Ctx, name : String, repo : String, icon : String, size : Do
 }
 
 ///|
+/// A folder's mark in a row of the list to add from (one line, where it is at its end: a mark leading two would stand
+/// by the first, in the row's rounded corner): round, as small a mark this near those corners is to be concentric with
+/// them (a tile's corner would be off them).
+fn repo_face(c : @ui.Ctx, name : String, repo : String, icon : String, size : Double) -> Unit {
+  @sf.avatar(c, if repo != "" { repo } else { name }, name, icon, size)
+}
+
+///|
 /// A folder's mark in the preset's dialog: as high as its two lines.
 let preset_dir_mark : Double = 32.0
 
-///|
-/// The narrow control as far from ＋ as leaves each a finger's room (44) between their middles.
-// kept across runs: a value (no field of it changes)
-let preset_round_apart : @ui.Style = @ui.css("ml=S3")
 
 ///|
 /// The picked preset's folders' marks, side by side in its control.
