@@ -47,6 +47,9 @@ pub fn shape(font : ShapeFont, buffer : Buffer, features : Array[Feature]) -> Un
   set_unicode_props(buffer, plan.global_mask)
   form_clusters(buffer)
   ensure_native_direction(buffer)
+  if plan.shaper == SHAPER_INDIC {
+    preprocess_vowel_constraints(buffer)
+  }
   // substitute_pre
   rotate_chars(face, plan, buffer, target_direction)
   normalize(face, buffer, plan.shaper)
@@ -73,7 +76,7 @@ pub fn shape(font : ShapeFont, buffer : Buffer, features : Array[Feature]) -> Un
       info.set_glyph_props(class)
     }
   }
-  plan.apply_layout_table(buffer, true)
+  plan.apply_layout_table(face, buffer, true)
   // position
   buffer.clear_positions()
   let horizontal = buffer.direction.is_horizontal()
@@ -100,7 +103,7 @@ pub fn shape(font : ShapeFont, buffer : Buffer, features : Array[Feature]) -> Un
   let adjust_offsets = plan.adjust_mark_positioning_when_zeroing && buffer.direction.is_forward()
   position_start(buffer)
   if plan.apply_gpos {
-    plan.apply_layout_table(buffer, false)
+    plan.apply_layout_table(face, buffer, false)
   }
   if plan.apply_kern {
     apply_kern_table(face, plan, buffer)
@@ -336,6 +339,9 @@ fn setup_masks(plan : ShapePlan, buffer : Buffer) -> Unit {
   }
   if plan.shaper == SHAPER_ARABIC {
     arabic_setup_masks(plan, buffer)
+  }
+  if plan.shaper == SHAPER_INDIC {
+    indic_setup_masks(buffer)
   }
   for f in plan.user_features {
     if !f.is_global() {

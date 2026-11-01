@@ -29,8 +29,8 @@ fn next_char(buffer : Buffer, glyph : Int) -> Unit {
 }
 
 ///|
-fn decompose_char(face : @font.Face, buffer : Buffer, shortest : Bool, ab : Int) -> Int {
-  guard decompose(ab) is Some((a, b)) else { return 0 }
+fn decompose_char(face : @font.Face, buffer : Buffer, shortest : Bool, ab : Int, indic : Bool) -> Int {
+  guard (if indic { indic_decompose(ab) } else { decompose(ab) }) is Some((a, b)) else { return 0 }
   let a_glyph = nominal_glyph(face, a)
   let b_glyph = if b != 0 {
     match nominal_glyph(face, b) {
@@ -48,7 +48,7 @@ fn decompose_char(face : @font.Face, buffer : Buffer, shortest : Bool, ab : Int)
     }
     return 1
   }
-  let ret = decompose_char(face, buffer, shortest, a)
+  let ret = decompose_char(face, buffer, shortest, a, indic)
   if ret != 0 {
     if b_glyph is Some(bg) {
       output_char(buffer, b, bg)
@@ -68,14 +68,14 @@ fn decompose_char(face : @font.Face, buffer : Buffer, shortest : Bool, ab : Int)
 }
 
 ///|
-fn decompose_current_character(face : @font.Face, buffer : Buffer, shortest : Bool) -> Unit {
+fn decompose_current_character(face : @font.Face, buffer : Buffer, shortest : Bool, indic : Bool) -> Unit {
   let u = buffer.cur(0).glyph_id
   let glyph = nominal_glyph(face, u)
   if glyph is Some(g) && shortest {
     next_char(buffer, g)
     return
   }
-  if decompose_char(face, buffer, shortest, u) > 0 {
+  if decompose_char(face, buffer, shortest, u, indic) > 0 {
     buffer.skip_glyph()
     return
   }
@@ -155,7 +155,7 @@ fn handle_variation_selector_cluster(face : @font.Face, buffer : Buffer, end : I
 }
 
 ///|
-fn decompose_multi_char_cluster(face : @font.Face, buffer : Buffer, end : Int, short_circuit : Bool) -> Unit {
+fn decompose_multi_char_cluster(face : @font.Face, buffer : Buffer, end : Int, short_circuit : Bool, indic : Bool) -> Unit {
   for i in buffer.idx..<end {
     if is_variation_selector(buffer.info[i].glyph_id) {
       handle_variation_selector_cluster(face, buffer, end)
@@ -163,7 +163,7 @@ fn decompose_multi_char_cluster(face : @font.Face, buffer : Buffer, end : Int, s
     }
   }
   while buffer.idx < end && buffer.successful {
-    decompose_current_character(face, buffer, short_circuit)
+    decompose_current_character(face, buffer, short_circuit, indic)
   }
 }
 
@@ -173,7 +173,9 @@ fn normalize(face : @font.Face, buffer : Buffer, shaper : Int) -> Unit {
   if buffer.len == 0 {
     return
   }
-  let might_short_circuit = true
+  // the Indic shaper normalizes as ComposedDiacriticsNoShortCircuit, with its own decompositions
+  let indic = shaper == SHAPER_INDIC
+  let might_short_circuit = !indic
   let mut all_simple = true
   // first round: decompose
   buffer.clear_output()
@@ -199,7 +201,7 @@ fn normalize(face : @font.Face, buffer : Buffer, shaper : Int) -> Unit {
       buffer.next_glyphs(done)
     }
     while buffer.idx < end && buffer.successful {
-      decompose_current_character(face, buffer, might_short_circuit)
+      decompose_current_character(face, buffer, might_short_circuit, indic)
     }
     if buffer.idx == count || !buffer.successful {
       break
@@ -209,7 +211,7 @@ fn normalize(face : @font.Face, buffer : Buffer, shaper : Int) -> Unit {
     while end < count && buffer.info[end].is_unicode_mark() {
       end += 1
     }
-    decompose_multi_char_cluster(face, buffer, end, false)
+    decompose_multi_char_cluster(face, buffer, end, false, indic)
     if buffer.idx >= count || !buffer.successful {
       break
     }
@@ -264,7 +266,7 @@ fn normalize(face : @font.Face, buffer : Buffer, shaper : Int) -> Unit {
           starter == buffer.out_len - 1 ||
           buffer.out_info()[buffer.out_len - 1].modified_combining_class() < cur.modified_combining_class()
         ) {
-        match compose(buffer.out_info()[starter].glyph_id, cur.glyph_id) {
+        match (if indic { indic_compose(buffer.out_info()[starter].glyph_id, cur.glyph_id) } else { compose(buffer.out_info()[starter].glyph_id, cur.glyph_id) }) {
           Some(composed) =>
             match nominal_glyph(face, composed) {
               Some(g) => {
