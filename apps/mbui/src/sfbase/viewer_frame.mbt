@@ -123,6 +123,12 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
   // (beside the system's bars, an iPhone Duo's: its tabs put away while a file is looked at, the user 2026-10-27;
   // while this one is open and not closing, its bars' part kept or built again)
   let native = @sf.native_over_up(v.file.name, alive=fn() { v.up_still() })
+  // played in the player beside the system's bars: its close and download in them, as a picture's (the player draws
+  // no bar of its own there: @sf.player_room)
+  if native && (v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo)) {
+    vf_native_media(v, c, src)
+    return
+  }
   // read in the reader, played in the player: their own bars
   if vf_reads(v) || v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo) {
     return
@@ -241,16 +247,39 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     }
     None => ()
   }
-  let dl = v.download(src)
-  if (v.bytes.get() is Some(_) || (v.told_of() && !v.asked)) && !downloading(dl) {
-    // (a picture or a film on a phone: into its photo album, said so)
-    let label = if keep_way_of(v.file.name) == Photos {
-      @sf.t("web-main.stations.saveToPhotos")
-    } else {
-      @sf.t("android-chat.file.download")
-    }
-    @sf.native_over_act("download", label, "download", fn() { v.ask_save(c) })
+  vf_native_download(v, c, src, v.bytes.get() is Some(_) || (v.told_of() && !v.asked))
+}
+
+///|
+/// A film's or a song's actions where the system has bars of its own (an iPhone Duo's): close at their lead (a film
+/// turned on its side by the player upright again first, as its own back did), download as a file's; its controls
+/// over its foot as anywhere.
+fn vf_native_media(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
+  if v.closing {
+    return
   }
+  @sf.native_over_act("close", @sf.t("common.close"), "close", fn() {
+    match v.media {
+      Some(m) if m.is_sideways() => m.upright()
+      _ => if !v.closing { v.shut(c) }
+    }
+  }, lead=true)
+  vf_native_download(v, c, src, true)
+}
+
+///|
+/// Download among the actions in the system's bars, where there is something to keep (`there`) and it is not on its
+/// way already: into the photo album for a picture or a film on a phone, said so.
+fn vf_native_download(v : Viewer, c : @ui.Ctx, src : Source, there : Bool) -> Unit {
+  if !there || downloading(v.download(src)) {
+    return
+  }
+  let label = if keep_way_of(v.file.name) == Photos {
+    @sf.t("web-main.stations.saveToPhotos")
+  } else {
+    @sf.t("android-chat.file.download")
+  }
+  @sf.native_over_act("download", label, "download", fn() { v.ask_save(c) })
 }
 
 ///|
