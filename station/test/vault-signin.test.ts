@@ -24,6 +24,8 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
   const subscribers: ((c: { type: string; key?: string }) => void)[] = [];
   const sessions = new Map<string, { archivedAt?: number | null }>([["s1", {}]]);
   let n = 0;
+  let hidden = false;
+  let now = 1_800_000_000_000;
   let tabs = [{ id: "T1", url: "https://github.com/login" }];
   let form = { username: true, password: true, code: false, blocked: false };
   const hub = {
@@ -31,10 +33,13 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
       getSession: (k: string) => sessions.get(k) ?? null,
       starter: () => "pat@example.com",
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }) as any,
+      sessionThreads: () => [{ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }] as any,
       insertMessage: (m: any) => {
         cards.push({ ts: m.ts, card: m.card, text: m.text });
+        hidden = false;
         return [++n];
       },
+      pendingCard: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
       withdrawCard: (_a: string, _t: number, ts: string) => (withdrawn.push(ts), true),
       restateCard: (_a: string, _t: number, ts: string, f: (was: any) => any) => {
         const c = cards.find((x) => x.ts === ts)!;
@@ -49,7 +54,7 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
   };
   const timers: (() => void)[] = [];
   const signIns = new SignIns({
-    db: new DatabaseSync(":memory:"), hub, now: () => 1_800_000_000_000, after: (_ms, f) => (timers.push(f), () => {}),
+    db: new DatabaseSync(":memory:"), hub, now: () => now, after: (_ms, f) => (timers.push(f), () => {}),
     workspace: () => "ws", screenLink: (tab) => `https://app/w/ws/s/st/screen/browser%3A${tab}`, id: () => "g1",
     browser: {
       tabs: () => tabs,
@@ -73,7 +78,7 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
     },
   });
   return {
-    signIns, cards, withdrawn, told, driven, kept, used, answers, timers,
+    signIns, cards, withdrawn, told, driven, kept, used, answers, timers, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; }, pass: (ms: number) => { now += ms; },
     setTabs: (t: typeof tabs) => void (tabs = t), setForm: (f: typeof form) => void (form = f),
     archive: (s: string) => {
       sessions.set(s, { archivedAt: 1 });
@@ -85,6 +90,34 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
 test("a site as asked: its host, without scheme, path, port or www.", () => {
   assert.equal(siteOf("https://www.GitHub.com/login?x=1"), "github.com");
   assert.equal(siteOf("accounts.google.com:443"), "accounts.google.com");
+});
+
+test("an expired sign-in is not reissued as an actionable card", async () => {
+  const w = world();
+  await w.signIns.ask("s1", { site: "github.com", reason: "看 PR" });
+  w.hideCard();
+  w.pass(86401_000);
+  await assert.rejects(w.signIns.ask("s1", { site: "github.com", reask: true }), /expired/);
+  assert.equal(w.cards.length, 1);
+  assert.equal(w.signIns.get("g1")!.status, "expired");
+});
+
+test("a still-needed sign-in can be asked again after its card stopped waiting", async () => {
+  const w = world();
+  await w.signIns.ask("s1", { site: "github.com", reason: "看 PR" });
+  w.hideCard();
+  assert.match(await w.signIns.ask("s1", { site: "github.com" }), /card is no longer pending/);
+  assert.equal(w.cards.length, 1, "checking does not ask the person again");
+  w.cards.push({ ts: "another", text: "another question", card: { type: "text" } });
+  w.showCard();
+  await assert.rejects(w.signIns.ask("s1", { site: "github.com", reask: true }), /Another card is pending/);
+  w.hideCard();
+  await w.signIns.ask("s1", { site: "github.com", reask: true });
+  assert.equal(w.cards.length, 3);
+  assert.equal(w.cards[2]!.card.signin.id, "g1", "the original sign-in is reused");
+  assert.equal(w.signIns.fill("pat@example.com", "ws", "g1", { username: "pat", password: "pw" }), null);
+  await tick();
+  assert.equal(w.cards[2]!.card.signin.outcome.status, "left");
 });
 
 test("a sign-in the vault keeps (or grants already) is asked for as any secret: no card of the sign-in's", async () => {

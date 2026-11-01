@@ -48,6 +48,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           reason: { type: "string", description: "Why you need to be signed in, for the person, in the language they use (e.g. 查看 PR #512 的 Actions 日志)." },
           tab: { type: "string", description: "The tab (its target id, from the browser tool's tabs) whose sign-in page it is; default this chat's last tab on the site." },
           again: { type: "boolean", description: "The sign-in kept in the vault ran out: ask the person to sign in anew (kept again)." },
+          reask: { type: "boolean", description: "The existing sign-in is still needed but its card is no longer pending: post a new card for that sign-in." },
           done: { type: "boolean", description: "You looked after being told the page left its sign-in: it is signed in." },
           stuck: { type: "string", description: "You looked: it is not signed in yet; what is left for the person to do there, in their language." },
         },
@@ -60,6 +61,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           ...(text(args, "reason") ? { reason: text(args, "reason") } : {}),
           ...(text(args, "tab") ? { tab: text(args, "tab") } : {}),
           ...(args.again === true ? { again: true } : {}),
+          ...(args.reask === true ? { reask: true } : {}),
           ...(args.done === true ? { done: true } : {}),
           ...(typeof args.stuck === "string" ? { stuck: args.stuck } : {}),
         }),
@@ -148,6 +150,17 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           cwd: home,
         });
       },
+    },
+    {
+      name: "secret_reask",
+      description: "Post a new card for an existing secret_use or secret_save request whose card stopped waiting after a chat message, if the request is still needed. It reuses the same request and never reads the secret again. A different pending card is not replaced. Only this chat's own undecided request may be reasked.",
+      inputSchema: {
+        type: "object",
+        properties: { request: { type: "string", description: "The pending request id (r_…) from secret_use, secret_save or the card-state notice." } },
+        required: ["request"],
+        additionalProperties: false,
+      },
+      run: (key, args) => secrets.reask(key, text(args, "request")),
     },
     {
       name: "secret_run",

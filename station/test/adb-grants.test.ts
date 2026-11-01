@@ -7,6 +7,7 @@ import net from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { PhoneGrants, type PhoneRequest } from "../src/adb/grants.ts";
+import { phoneTools } from "../src/adb/tool.ts";
 import { platform } from "../src/platform/index.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
 
@@ -25,15 +26,19 @@ function world() {
   ]);
   const subscribers: ((c: { type: string; key?: string; id?: number; ws?: string | null }) => void)[] = [];
   let n = 0;
+  let hidden = false;
   const hub = {
     store: {
       getSession: (k: string) => sessions.get(k) ?? null,
       starter: () => "pat@example.com",
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any,
+      sessionThreads: () => [{ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }] as any,
       insertMessage: (m: any) => {
         cards.push({ ts: m.ts, card: m.card });
+        hidden = false;
         return [++n];
       },
+      pendingCard: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
       withdrawCard: () => true,
       restateCard: (_a: string, _t: number, ts: string, f: (was: any) => any) => {
         const c = cards.find((x) => x.ts === ts)!;
@@ -50,7 +55,7 @@ function world() {
   let ids = 0;
   const grants = new PhoneGrants({ db: new DatabaseSync(":memory:"), hub, home: () => "home", title: (r) => titles.get(r.session) ?? null, now: () => now, told: (r, workspace, change) => { heard.push({ ...r }); audiences.push(workspace); changes.push(change); }, id: () => `p${++ids}` });
   return {
-    grants, cards, told, heard, audiences, changes,
+    grants, cards, told, heard, audiences, changes, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; },
     pass: (ms: number) => void (now += ms),
     archive: (s: string) => {
       sessions.set(s, { ...sessions.get(s)!, archivedAt: now });
@@ -89,6 +94,25 @@ test("phone grants are listed, decided and announced only in their chat's worksp
   assert.equal(w.grants.get("p1")!.status, "ended");
   assert.equal(w.audiences.at(-1), "work-a");
   assert.deepEqual(listed("work-a"), []);
+});
+
+test("a still-needed phone request can be asked again after its card stopped waiting", async () => {
+  const w = world();
+  const first = await w.grants.ask("s1", "debug the screen");
+  w.hideCard();
+  const tool = phoneTools(w.grants, async () => "ready")[0]!;
+  assert.match(await tool.run("s1", { reason: "debug the screen" }), /card is no longer pending/);
+  assert.equal(w.cards.length, 1, "checking does not ask the person again");
+  w.cards.push({ ts: "another", card: { type: "text" } });
+  w.showCard();
+  await assert.rejects(w.grants.ask("s1", "debug the screen", true), /Another card is pending/);
+  w.hideCard();
+  const again = await w.grants.ask("s1", "debug the screen", true);
+  assert.equal(again.id, first.id, "the existing authorization request is reused");
+  assert.equal(w.cards.length, 3, "there is an actionable new card");
+  assert.equal(w.cards[2]!.card.adb.request, first.id);
+  assert.equal(w.grants.decide("pat@example.com", first.id, "hour", "work-a"), null);
+  assert.equal(w.cards[2]!.card.adb.outcome.status, "granted");
 });
 
 test("a grant reports its chat title and actual use, and follows a rename", async () => {
