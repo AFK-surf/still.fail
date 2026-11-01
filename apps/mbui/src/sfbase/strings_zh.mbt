@@ -543,6 +543,8 @@ let zh : Map[String, String] = {
   "android-misc.screen.fill.noOp": "要先装 1Password 命令行工具，并在 1Password › 设置 › 开发者 里打开「与 1Password CLI 集成」",
   "android-misc.screen.fill.failed": "1Password 没有给出：{why}",
   "android-misc.screen.fill.empty": "这条登录里没有账号和密码",
+  "android-misc.screen.fill.offerAuto": "用密码管理器填入",
+  "android-misc.screen.fill.autoPick": "在密码管理器里选一个 {host} 的登录",
   "android-misc.screen.passkey.offer": "用通行密钥登录",
   "android-misc.screen.passkey.button": "登录",
   "android-misc.screen.passkey.asking": "在 Windows 的窗口里确认…",

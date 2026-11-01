@@ -731,6 +731,26 @@ impl @hostapi.Host for Native with pw_end(_, id) {
 }
 
 ///|
+impl @hostapi.Host for Native with af_able(_) {
+  af_able() != 0
+}
+
+///|
+impl @hostapi.Host for Native with af_ask(_, host) {
+  af_ask(host)
+}
+
+///|
+impl @hostapi.Host for Native with af_take(_) {
+  af_take()
+}
+
+///|
+impl @hostapi.Host for Native with af_end(_) {
+  af_end()
+}
+
+///|
 impl @hostapi.Host for Native with wa_able(_) {
   wa_able() != 0
 }

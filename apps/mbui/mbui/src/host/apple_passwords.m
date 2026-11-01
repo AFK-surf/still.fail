@@ -326,3 +326,9 @@ void mb_host_passkeys_end(int32_t id) {
 }
 
 #endif
+
+// The system's autofill (host_native.mbt `af_*`): none on macOS or iOS (android_host.c).
+int32_t mb_host_autofill_able(void) { return 0; }
+int32_t mb_host_autofill_ask(moonbit_string_t host) { (void)host; return 0; }
+moonbit_string_t mb_host_autofill_take(void) { return mb_string_from_ns(@""); }
+void mb_host_autofill_end(void) {}

@@ -626,6 +626,51 @@ impl @hostapi.Host for FakeHost with pw_end(_, _) {
   ()
 }
 
+// The system's autofill (@hostapi autofill.mbt) as a test has it: none, unless it says there is a service
+// (`fake_autofill`); the sites asked for kept, the login the person picked there given by `fake_autofill_picks`.
+
+///|
+/// Whether a test's host has an autofill service.
+pub let fake_autofill : Ref[Bool] = Ref(false)
+
+///|
+/// The sites the autofill service was asked for in a test, in order; "" where the ask was let go of.
+pub let fake_autofill_asks : Array[String] = []
+
+///|
+let fake_autofill_picked : Ref[String] = Ref("")
+
+///|
+/// The person picks a login in the autofill service's offer: its site's host, account and password, taken once.
+pub fn fake_autofill_picks(host : String, username : String, password : String) -> Unit {
+  fake_autofill_picked.val = "\{host}\u{1f}\{username}\u{1f}\{password}\u{1f}"
+}
+
+///|
+impl @hostapi.Host for FakeHost with af_able(_) {
+  fake_autofill.val
+}
+
+///|
+impl @hostapi.Host for FakeHost with af_ask(_, host) {
+  guard fake_autofill.val else { return 0 }
+  fake_autofill_asks.push(host)
+  1
+}
+
+///|
+impl @hostapi.Host for FakeHost with af_take(_) {
+  let p = fake_autofill_picked.val
+  fake_autofill_picked.val = ""
+  p
+}
+
+///|
+impl @hostapi.Host for FakeHost with af_end(_) {
+  fake_autofill_picked.val = ""
+  fake_autofill_asks.push("")
+}
+
 // This device's passkeys (@hostapi passkeys.mbt) as a test has them: none, unless it says how the device answers
 // (`fake_passkey`: given the relying party, the client data, the verification and the ids asked, the host's answer as
 // it gives it), each ask ended at once.

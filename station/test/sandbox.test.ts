@@ -231,12 +231,16 @@ describe("a connection lost", () => {
     fakeSsh(dir);
     const pidFile = join(dir, "pid");
     const lostFile = join(dir, "lost");
-    const spec = { ssh: [join(dir, "ssh"), "s-x.ws@host"], program: "/bin/sh", args: ["-c", `echo $$ > ${pidFile}; exec tail -f /dev/null`], cwd: dir, ports: [], lostFile };
-    const child = spawn(process.execPath, [BRIDGE, "host", JSON.stringify(spec)], { stdio: ["pipe", "ignore", "pipe"] });
+    // The program says it runs on its stdout: the bridge here passes that on only after it heard the program started
+    // (the far side says so first, on the same stream), while its pid file is written before the bridge may have.
+    const spec = { ssh: [join(dir, "ssh"), "s-x.ws@host"], program: "/bin/sh", args: ["-c", `echo $$ > ${pidFile}; echo runs; exec tail -f /dev/null`], cwd: dir, ports: [], lostFile };
+    const child = spawn(process.execPath, [BRIDGE, "host", JSON.stringify(spec)], { stdio: ["pipe", "pipe", "pipe"] });
     let err = "";
+    let out = "";
     child.stderr.on("data", (b) => (err += b));
+    child.stdout.on("data", (b) => (out += b));
     const ended = new Promise<number | null>((r) => child.on("close", (code) => r(code)));
-    await until("the program runs", () => existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() !== "");
+    await until("the bridge heard the program runs", () => out.includes("runs"));
     const pid = Number(readFileSync(pidFile, "utf8"));
     process.kill(sshPids(dir)[0], "SIGKILL");
     assert.equal(await ended, LOST_EXIT);

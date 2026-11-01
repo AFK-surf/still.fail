@@ -2,8 +2,10 @@
 // this viewer drives a tab of a station's browser whose focus is in a login field, the station says the site (the
 // tab's address, not the page's word); the person's own 1Password (@hostapi passwords.mbt: its command-line tool,
 // which asks them itself) is asked for that site's logins, they pick one where there are more, and its account and
-// password go to the station to fill the form (`screen.input` fill), for that site only. Nothing of a password is kept
-// here, logged or shown.
+// password go to the station to fill the form (`screen.input` fill), for that site only. Where there is no such tool
+// but the system has an autofill service (Android's: @hostapi autofill.mbt), that service is asked for the site's
+// login instead and offers its logins itself; the one picked goes the same way. Nothing of a password is kept here,
+// logged or shown.
 
 ///|
 /// The login field in focus, while this viewer drives the screen: the site's host; None in none, or only looking.
@@ -30,7 +32,36 @@ fn ScreenSess::fill_start(self : ScreenSess) -> Unit {
   guard self.login_host() is Some(host) else { return }
   self.fill_stop()
   self.fill_host = host
+  if !@hostapi.passwords() && @hostapi.autofill_ask(host) {
+    // the system's autofill service offers the site's logins itself; the one picked comes back (fill_auto_took)
+    self.fill_step.set("auto")
+    return
+  }
   self.fill_ask(["item", "list", "--categories", "Login", "--format", "json"], "listing")
+}
+
+///|
+/// The login picked in the system's autofill service: filled, where it is for the site asked for and the focus is
+/// still in that site's login.
+fn ScreenSess::fill_auto_took(self : ScreenSess, got : (String, String, String)) -> Unit {
+  let (host, username, password) = got
+  guard self.fill_step.get() == "auto" && host == self.fill_host && self.login_host() == Some(host) else { return }
+  @hostapi.autofill_end()
+  self.fill_step.set("")
+  self.fill_send(username, password)
+}
+
+///|
+/// The login's account and password sent to the station to fill the page's form, for the site asked for only.
+fn ScreenSess::fill_send(self : ScreenSess, username : String, password : String) -> Unit {
+  let input : Map[String, Json] = { "t": Json::string("fill"), "host": Json::string(self.fill_host) }
+  if username != "" {
+    input["username"] = Json::string(username)
+  }
+  if password != "" {
+    input["password"] = Json::string(password)
+  }
+  self.input(self.src, Json::object(input))
 }
 
 ///|
@@ -66,6 +97,9 @@ fn ScreenSess::fill_stop(self : ScreenSess) -> Unit {
     None => ()
   }
   self.fill_run = None
+  if self.fill_step.get() == "auto" {
+    @hostapi.autofill_end()
+  }
   self.fill_choices = []
   self.fill_note = ""
   self.fill_step.set("")
@@ -108,14 +142,7 @@ fn ScreenSess::fill_took(self : ScreenSess) -> Unit {
         self.fill_said(@sf.t("android-misc.screen.fill.empty"))
         return
       }
-      let input : Map[String, Json] = { "t": Json::string("fill"), "host": Json::string(self.fill_host) }
-      if username != "" {
-        input["username"] = Json::string(username)
-      }
-      if password != "" {
-        input["password"] = Json::string(password)
-      }
-      self.input(self.src, Json::object(input))
+      self.fill_send(username, password)
       self.fill_step.set("")
     }
     _ => ()
@@ -123,8 +150,9 @@ fn ScreenSess::fill_took(self : ScreenSess) -> Unit {
 }
 
 ///|
-/// 用 1Password 填入, over the stage while the focus is in a login field of a page this viewer drives (on a host that
-/// has a password manager to ask): what it is at, the logins to pick from, or why it did not fill.
+/// 用 1Password 填入 (用密码管理器填入 where the system's autofill service is asked), over the stage while the focus is
+/// in a login field of a page this viewer drives (on a host that has a password manager to ask): what it is at, the
+/// logins to pick from, or why it did not fill.
 fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
   // a run under way: its end taken once it came (after this frame: what the page shows changes then)
   match s.fill_run {
@@ -133,7 +161,19 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
   }
   let step = s.fill_step.get()
   let host = s.login_host()
-  if !@hostapi.passwords() || (host is None && step == "") {
+  let op = @hostapi.passwords()
+  if step == "auto" {
+    if host != Some(s.fill_host) {
+      // the focus left the login it was asked for: the service's offer let go of
+      c.tell("screen-fill-gone/" + s.view, fn() { s.fill_stop() })
+    } else {
+      match @hostapi.autofill_take() {
+        Some(got) => c.tell("screen-fill-auto/" + s.view, fn() { s.fill_auto_took(got) })
+        None => ()
+      }
+    }
+  }
+  if (!op && !@hostapi.autofill()) || (host is None && step == "") {
     return
   }
   c.box(style=drops_box, fn() {
@@ -145,9 +185,10 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
       @sf.row_lines(c, fn() {
         let title = match step {
           "listing" | "getting" => @sf.t("android-misc.screen.fill.asking")
+          "auto" => @sf.t("android-misc.screen.fill.autoPick", args=[("host", s.fill_host)])
           "choosing" => @sf.t("android-misc.screen.fill.pick", args=[("host", s.fill_host)])
           "said" => s.fill_note
-          _ => @sf.t("android-misc.screen.fill.offer")
+          _ => @sf.t(if op { "android-misc.screen.fill.offer" } else { "android-misc.screen.fill.offerAuto" })
         }
         c.box(style=drop_words, fn() { c.text(title, style=if step == "said" { drop_path_words } else { drop_name }) |> ignore })
         |> ignore

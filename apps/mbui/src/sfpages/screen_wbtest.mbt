@@ -949,6 +949,45 @@ test "a login field in focus while driving a tab: 用 1Password 填入; its logi
 }
 
 ///|
+test "no 1Password tool but the system's autofill: 用密码管理器填入 asks it for the site; the login picked there filled, for that site only" {
+  let r = screen_rig()
+  r.live(others=[])
+  @ui.fake_autofill.val = true
+  r.state("live", others=[], more={ "login": { "host": "github.com", "field": "username" } })
+  r.t.draw()
+  assert_true(r.t.find("用密码管理器填入") is Some(_))
+  assert_true(r.t.find("用 1Password 填入") is None)
+  r.tap_label("填入")
+  r.t.draw()
+  assert_eq(@ui.fake_autofill_asks, ["github.com"])
+  assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is Some(_))
+  // a login for another site than the one asked for: not filled
+  @ui.fake_autofill_picks("evil.example", "zzj", "pw-evil")
+  r.t.draw()
+  r.t.draw()
+  assert_eq(r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" }).length(), 0)
+  @ui.fake_autofill_picks("github.com", "zzj-work", "pw-zzj-work")
+  r.t.draw()
+  r.t.draw()
+  let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
+  assert_eq(fill.length(), 1)
+  assert_eq(text(Some(fill[0]), "host"), "github.com")
+  assert_eq(text(Some(fill[0]), "username"), "zzj-work")
+  assert_eq(text(Some(fill[0]), "password"), "pw-zzj-work")
+  assert_eq(@ui.fake_autofill_asks, ["github.com", ""])
+  assert_true(r.t.find("用密码管理器填入") is Some(_))
+  // asked again, then the focus left the login: the ask let go of
+  r.tap_label("填入")
+  r.t.draw()
+  r.state("live", others=[])
+  r.t.draw()
+  r.t.draw()
+  assert_eq(@ui.fake_autofill_asks, ["github.com", "", "github.com", ""])
+  assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is None)
+  screen_done(r.t)
+}
+
+///|
 /// Live and driven, a station that carries the clipboard both ways and takes files.
 fn driven(r : ScreenRig) -> Unit {
   r.live(others=[], clipboard=["text", "png"], drop={ "folder": "/Users/alice/Downloads", "reveal": true })

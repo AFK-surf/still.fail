@@ -155,6 +155,10 @@ pub(open) trait Host {
   pw_run(Self, String) -> Int = _
   pw_out(Self, Int) -> String = _
   pw_end(Self, Int) -> Unit = _
+  af_able(Self) -> Bool = _
+  af_ask(Self, String) -> Int = _
+  af_take(Self) -> String = _
+  af_end(Self) -> Unit = _
   wa_able(Self) -> Bool = _
   wa_get(Self, String) -> Int = _
   wa_out(Self, Int) -> String = _
@@ -949,6 +953,26 @@ impl Host with pw_out(_, _) {
 
 ///|
 impl Host with pw_end(_, _) {
+  ()
+}
+
+///|
+impl Host with af_able(_) {
+  false
+}
+
+///|
+impl Host with af_ask(_, _) {
+  0
+}
+
+///|
+impl Host with af_take(_) {
+  ""
+}
+
+///|
+impl Host with af_end(_) {
   ()
 }
 
@@ -2515,6 +2539,28 @@ fn pw_out(id : Int) -> String {
 ///|
 fn pw_end(id : Int) -> Unit {
   current.val.pw_end(id)
+}
+
+// The system's autofill (autofill.mbt): a login of a site asked of its service, the one picked taken.
+
+///|
+fn af_able() -> Bool {
+  current.val.af_able()
+}
+
+///|
+fn af_ask(host : String) -> Int {
+  current.val.af_ask(host)
+}
+
+///|
+fn af_take() -> String {
+  current.val.af_take()
+}
+
+///|
+fn af_end() -> Unit {
+  current.val.af_end()
 }
 
 // This device's passkeys (passkeys.mbt): a sign-in signed, how it ended.

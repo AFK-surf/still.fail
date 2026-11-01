@@ -246,6 +246,12 @@ int32_t mb_host_passwords_run(moonbit_string_t args) { (void)args; return 0; }
 moonbit_string_t mb_host_passwords_out(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
 void mb_host_passwords_end(int32_t id) { (void)id; }
 
+// The system's autofill (host_native.mbt `af_*`): none here (android_host.c).
+int32_t mb_host_autofill_able(void) { return 0; }
+int32_t mb_host_autofill_ask(moonbit_string_t host) { (void)host; return 0; }
+moonbit_string_t mb_host_autofill_take(void) { return moonbit_make_string_raw(0); }
+void mb_host_autofill_end(void) {}
+
 // This device's passkeys (host_native.mbt `wa_*`): none here (win_passkeys.c).
 int32_t mb_host_passkeys_able(void) { return 0; }
 int32_t mb_host_passkeys_get(moonbit_string_t ask) { (void)ask; return 0; }
