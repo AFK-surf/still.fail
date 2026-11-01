@@ -2018,18 +2018,17 @@ test "wide: a new connect in a dialog as the web's: the core's wizard a step at 
 }
 
 ///|
-test "wide: 用量 as the web's: what it counts beside its title, who spent it the list shown first, how it is counted at its foot" {
+test "wide: 用量: what it counts beside its title, the chats that cost the most and what it is made of at once" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Place("usage"))
   // (the chats' sidebar closing to the rail's bar meanwhile, as the web's)
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="说明") is Some(_), msg="what it counts")
-  assert_true(t.find("整理发布清单") is None, msg="not the chats' list first: " + t.words().map(fn(w) { w.0 }).join("|"))
-  let (bx, by) = t.find_last("按对话").unwrap()
-  t.tap(bx, by)
-  t.run_for(@ui.move_most_ms)
-  assert_true(t.find("整理发布清单") is Some(_), msg="the chats' list picked")
+  // the chats and the people, the accounts and the models side by side, no list to pick
+  assert_true(t.find("整理发布清单") is Some(_), msg="the chats: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("按人") is Some(_) && t.find("按账号") is Some(_) && t.find("按模型") is Some(_), msg="the makeup")
+  assert_true(t.find("按对话") is None, msg="no list to pick")
 }
 
 ///|

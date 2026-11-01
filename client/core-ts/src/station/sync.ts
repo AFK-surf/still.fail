@@ -850,8 +850,9 @@ export class StationsSync {
     if (link && !link.usageCurrent) this.#enqueue(address, "usage", Priority.shown, this.#usage(address));
   }
 
-  /// What the station's agents spent over the last 30 days, days as this device's clock has them. Current from when it is
-  /// asked: a change said meanwhile has it read again.
+  /// What the station's agents spent over the last 60 days, days as this device's clock has them: the usage page's 30 at
+  /// most and as many before, to say its totals against (views/usage.ts). Current from when it is asked: a change said
+  /// meanwhile has it read again.
   #usage(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const link = this.#links.get(address);
@@ -860,7 +861,7 @@ export class StationsSync {
       const offset = this.#core.host.utcOffsetMin(now);
       const day = 86_400_000;
       const local = Math.trunc(now) + offset * 60_000;
-      const from = local - (((local % day) + day) % day) - 29 * day - offset * 60_000;
+      const from = local - (((local % day) + day) % day) - 59 * day - offset * 60_000;
       return this.#read(address, { topic: "stationUsage", station: address }, `/usage?from=${from}&tz=${offset}`, undefined, ctx);
     });
   }

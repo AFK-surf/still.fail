@@ -193,7 +193,13 @@ fn long_profile(s : Source) -> Source {
           p[k] = shaped(x)
         }
         if o.contains("lists") && o.contains("tiles") {
-          let lists = match o.get("lists") { Some(Array(a)) => a.copy(); _ => [] }
+          // (in place of the fixture's own accounts)
+          let lists = match o.get("lists") { Some(Array(a)) => a.filter(fn(l) {
+                match l {
+                  Object(m) => !(m.get("key") is Some(String("profiles", ..)))
+                  _ => true
+                }
+              }); _ => [] }
           lists.push({ "key": "profiles", "items": [{ "key": "ws1/st1/cc", "costText": "$1,735", "shareText": "64%", "callsText": "2.2 万", "tokensText": "49.7 亿", "topModel": "最多 Opus 5.5" }] })
           p["lists"] = Json::array(lists)
         }

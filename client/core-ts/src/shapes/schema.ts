@@ -2796,9 +2796,15 @@ export const SHAPES: Record<string, Shape> = {
   ], { keepNone: true }),
   UsageView: struct([
     ["days", "u32"],
+    ["split", "String", { default: true, doc: "The list each day's bar is split by (people, chats, profiles, models): the one asked for, else\nthe people's where several spent, the models' where one did." }],
+    ["only", opt("UsageOnly"), { doc: "The one person, account or model everything is of, when one was asked for." }],
+    ["day", opt("String"), { doc: "The one day (2026-10-01) everything but the days' bars is of, when one was asked for." }],
+    ["accounts", vec("UsageAccount"), { default: true, doc: "Each subscription with an allowance the core can read: what is left of it, and what it spent in the days." }],
     ["wait", "ListNote", { doc: "What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be." }],
     ["empty", "bool"],
     ["tiles", vec("UsageTile")],
+    ["versus", "String", { default: true, doc: "What each tile's `change` is against: 比前 7 天." }],
+    ["period", "String", { default: true, doc: "The days counted, as said over them: 近 7 天." }],
     ["series", vec("UsageSeries")],
     ["daily", vec("UsageDay")],
     ["many", "bool", { default: true, doc: "Days too many for each to say its date under its bar (more than 10): narrower bars, a date a week." }],
@@ -2957,7 +2963,14 @@ export const SHAPES: Record<string, Shape> = {
     ["label", "String"],
     ["value", "String"],
     ["sub", "String"],
+    ["change", opt("String"), { doc: "Against the days before as many (`versus`): ↑18%, 持平; none where they spent nothing or are not all read." }],
+    ["trend", "String", { default: true, doc: "Which way `change` goes: up, down, or \"\" (the same, or none)." }],
   ], { doc: "折合费用 $1,911 (按 API 价算).", keepNone: true }),
+  UsageOnly: struct([
+    ["list", "String", { doc: "people, profiles or models" }],
+    ["key", "String", { doc: "Its item's `key` in that list." }],
+    ["title", "String", { said: true }],
+  ], { doc: "The one the usage page shows alone: 只看 林.", keepNone: true }),
   UsageTick: struct([
     ["value", "f64"],
     ["label", "String", { doc: "2k" }],
@@ -2965,7 +2978,7 @@ export const SHAPES: Record<string, Shape> = {
   UsageSeries: struct([
     ["key", "String"],
     ["name", "String", { said: true }],
-  ], { doc: "A part of each day's bar: a person (`key` their email or reference), or the rest (`key` empty).", keepNone: true }),
+  ], { doc: "A part of each day's bar: an item of the list it is split by (`key` its key there), or the rest (`key` empty).", keepNone: true }),
   UsageDay: struct([
     ["day", "String"],
     ["label", "String"],
@@ -2979,11 +2992,28 @@ export const SHAPES: Record<string, Shape> = {
     ["name", "String", { default: true, doc: "What the day is called where it is picked: 今天, else `label`." }],
     ["tick", "String", { default: true, doc: "What its bar says under it: its `name`, or \"\" where days are many (`many`) and it is not\ntoday nor a week back from the last." }],
     ["shares", vec("f64"), { default: true, doc: "Each of `parts` as a share of the day's cost (0 to 1; 0.01 at least for one spent at all)." }],
+    ["sharesText", vec("String"), { default: true, doc: "Each of `parts` as a share of the day's cost in words: 60%, <1%." }],
   ], { doc: "A day (`day` 2026-10-01, `label` 10/1): what it cost, split as `series` (`parts`, in dollars, and in words), and its\ncalls.", keepNone: true }),
+  UsageAccount: struct([
+    ["key", "String"],
+    ["title", "String", { said: true }],
+    ["quota", "Quota"],
+    ["cost", "f64"],
+    ["costText", "String"],
+  ], { doc: "A subscription on the usage page: its allowance as its profile shows it, what its copies spent in the days.", keepNone: true }),
+  UsagePart: struct([
+    ["key", "String", { doc: "Its item's `key`; empty for the rest (其他)." }],
+    ["title", "String", { said: true }],
+    ["cost", "f64"],
+    ["costText", "String"],
+    ["share", "f64"],
+    ["shareText", "String"],
+  ], { doc: "One of a list's first few, or the rest of it, as its share of the whole.", keepNone: true }),
   UsageList: struct([
     ["key", "String"],
     ["title", "String"],
     ["items", vec("UsageItem")],
+    ["parts", vec("UsagePart"), { default: true, doc: "Its first three and the rest (其他), or its first four: what it is made of at a glance; none\nwith one item (one person, one model: nothing to tell apart)." }],
   ], { doc: "按人 / 按对话 / 按账号 / 按模型 (`key` people, chats, profiles, models), the most spent first.", keepNone: true }),
   UsageItem: struct([
     ["key", "String"],

@@ -587,6 +587,52 @@ pub fn rings(c : @ui.Ctx, shares : Array[(Double, Int64)], side : Double, track 
 }
 
 ///|
+/// A ring of parts one after another (a donut chart), `side` across and `width` wide, from its top round the way a
+/// clock goes: each as much of the turn as its share of all of them, in its colour, round at its ends, a gap of
+/// donut_apart between them beyond what their round ends take; a part too small for its ends a dot. Nothing to share:
+/// the ring's track alone, in `track`.
+pub fn donut(c : @ui.Ctx, parts : Array[(Double, Int64)], side : Double, width : Double, track : Int64) -> Int {
+  let mid = side / 2.0
+  let r = mid - width / 2.0
+  let total = parts.fold(init=0.0, fn(sum, p) { if p.0 > 0.0 { sum + p.0 } else { sum } })
+  let path = fn(d : String, stroke : Int64) -> @pixels.VectorPath {
+    { d, fill: 0L, stroke, width, even_odd: false, sx: 1.0, sy: 1.0, tx: 0.0, ty: 0.0 }
+  }
+  let circle = "M \{mid - r} \{mid} A \{r} \{r} 0 1 1 \{mid + r} \{mid} A \{r} \{r} 0 1 1 \{mid - r} \{mid}"
+  let layers : Array[@pixels.VectorPath] = []
+  let keys : Array[String] = []
+  let shown = parts.filter(fn(p) { p.0 > 0.0 })
+  if total <= 0.0 {
+    layers.push(path(circle, track))
+  } else if shown.length() == 1 {
+    layers.push(path(circle, shown[0].1))
+    keys.push("\{shown[0].1}")
+  } else {
+    // (the round ends reach width / 2 past each end: the gap is theirs and donut_apart more, as an angle on r)
+    let gap = (width + donut_apart) / r
+    let at = fn(a : Double) { (mid + r * @dmath.sin(a), mid - r * @dmath.cos(a)) }
+    let mut a = 0.0
+    for p in shown {
+      let (share, colour) = p
+      let sweep = share / total * 2.0 * @math.PI
+      let a0 = a + gap / 2.0
+      let a1 = if a + sweep - gap / 2.0 > a0 { a + sweep - gap / 2.0 } else { a0 + 0.001 }
+      let (x0, y0) = at(a0)
+      let (x1, y1) = at(a1)
+      let large = if a1 - a0 > @math.PI { 1 } else { 0 }
+      layers.push(path("M \{x0} \{y0} A \{r} \{r} 0 \{large} 1 \{x1} \{y1}", colour))
+      keys.push("\{share}/\{colour}")
+      a = a + sweep
+    }
+  }
+  vector(c, "donut/\{side}/\{width}/\{track}/" + keys.join(","), { w: side, h: side, layers }, side)
+}
+
+///|
+/// How far apart a donut's parts are past their round ends.
+let donut_apart : Double = 3.0
+
+///|
 /// The hole in the middle of rings (rings): round as far as a ring is wide (Activity's: three rings, the hole as wide
 /// as one).
 let ring_hole : Double = 1.0

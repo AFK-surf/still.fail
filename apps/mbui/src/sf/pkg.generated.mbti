@@ -460,6 +460,8 @@ pub let diff_mark_in : @ui.Space
 
 pub fn done_waiting(@ui.Ctx, String) -> Unit
 
+pub fn donut(@ui.Ctx, Array[(Double, Int64)], Double, Double, Int64) -> Int32
+
 pub let dot_size : @ui.Len
 
 pub fn drawable(@ui.Ctx, String, Double, tint? : Int64) -> Int32
