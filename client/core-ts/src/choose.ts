@@ -307,6 +307,7 @@ export class Choose implements Owner {
     const addr = typeof station.station === "string" ? station.station : "";
     const pick = this.#pick({ topic: "pick", station: addr, of: "new" }, addr, "new");
     view.pick = pick !== undefined && "ok" in pick ? pick.ok : null;
+    view.preset = this.#preset(scope, id, addr);
     view.station = station;
     return view;
   }
@@ -317,21 +318,32 @@ export class Choose implements Owner {
     return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)))];
   }
 
+  /// The preset a new chat on station `id` (at `addr`) of the scope is opened with, as last picked there: "" for none,
+  /// or for one the station no longer has (as its presets were read last).
+  #preset(scope: string, id: string, addr: string): string {
+    const kept = this.#record(`ws:${scope}:station:${id}:preset`);
+    if (typeof kept !== "string" || kept === "") return "";
+    const listed = this.#env.store.get({ topic: "presets", station: addr });
+    return listed === undefined || arr(get(listed, "presets")).some((p) => get(p, "id") === kept) ? kept : "";
+  }
+
+  /// The station the scope's new chat page is on: the one picked, up or not, else the first up (its id).
+  #shown(scope: string): string {
+    const found = this.#online(scope);
+    if (!Array.isArray(found)) throw CoreError.invalid(t("core-logic.choose.error.no_stations_yet"));
+    const current = this.#held(scope) ?? found[0][0];
+    if (current === undefined) throw CoreError.invalid(t("core-logic.choose.error.none_online"));
+    return typeof current.id === "string" ? current.id : "";
+  }
+
   /// `newChat.pick`: the station a scope's new chat starts on, and what it runs there.
   pickNew(scope: string, params: J): void {
     const station = text(get(params, "station"));
     if (station !== null) this.#keepStation(scope, station);
+    const preset = get(params, "preset");
+    if (typeof preset === "string") this.#env.data.put(TABLE, `ws:${scope}:station:${station ?? this.#shown(scope)}:preset`, preset, false);
     if (FIELDS.some((f) => get(params, f) !== undefined)) {
-      let id: string;
-      if (station !== null) id = station;
-      else {
-        const found = this.#online(scope);
-        if (!Array.isArray(found)) throw CoreError.invalid(t("core-logic.choose.error.no_stations_yet"));
-        // (the one the page shows: the one picked, up or not)
-        const current = this.#held(scope) ?? found[0][0];
-        if (current === undefined) throw CoreError.invalid(t("core-logic.choose.error.none_online"));
-        id = typeof current.id === "string" ? current.id : "";
-      }
+      const id = station ?? this.#shown(scope);
       const [options, now] = this.#onStation(address(scope, id));
       const next: J = { runtime: now.runtime, model: now.entry !== null ? now.entry.model : null, effort: now.effort, fast: now.fast, profile: now.profile };
       const m = text(get(params, "model"));
@@ -362,6 +374,8 @@ export class Choose implements Owner {
     if (r.effort !== null) ask.effort = r.effort;
     if (r.profile !== null) ask.profile = r.profile;
     if (r.fast !== null) ask.fast = r.fast;
+    const preset = this.#preset(ofAddress(station), stationId(station), station);
+    if (preset !== "") ask.preset = preset;
     this.#keepStation(ofAddress(station), stationId(station));
     this.#changed();
     return ask;

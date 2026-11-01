@@ -25,6 +25,9 @@ pub(all) struct NewFix {
   /// MBUI_FIXTURE=newchat-tall-model: as crowded, how hard it thinks and how fast as Codex offers them (2026-10-30: the
   /// column beside the models taller than they are at most)
   mut tall : Bool
+  /// The preset a new chat is opened with ("" for none), and the station's presets (fix_presets)
+  mut preset : String
+  presets : Array[Json]
 }
 
 ///|
@@ -41,6 +44,48 @@ pub let new_fix : NewFix = {
   reading: 0,
   crowded: false,
   tall: false,
+  preset: "",
+  presets: [fix_preset("p-sf", "still.fail 开发", ["still.fail"], "改界面先发改前改后对比图。"), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")],
+}
+
+///|
+/// A preset of the made-up station's: its directories clones in its repository cache (fix_candidates).
+pub fn fix_preset(id : String, name : String, dirs : Array[String], instructions : String) -> Json {
+  {
+    "id": Json::string(id),
+    "name": Json::string(name),
+    "dirs": Json::array(dirs.map(fn(d) { { "path": Json::string("/Users/me/.stillfail/repos/" + d), "repo": Json::string(fix_repo(d)) } })),
+    "instructions": Json::string(instructions),
+    "createdBy": "me@example.com",
+    "createdAt": 1793500000000.0,
+    "updatedAt": 1793500000000.0,
+  }
+}
+
+///|
+fn fix_repo(name : String) -> String {
+  match name {
+    "still.fail" => "github.com/AFK-surf/still.fail"
+    "mbui" => "github.com/AFK-surf/mbui"
+    _ => "github.com/zzj3720/" + name
+  }
+}
+
+///|
+/// The directories the made-up station offers for a new preset: its clones, those its chats worked in most first.
+pub fn fix_candidates() -> Json {
+  Json::array(
+    [("still.fail", 41), ("tstst", 9), ("iroh", 3), ("mbui", 2), ("Cue", 0)].map(fn(x) {
+      let (name, chats) = x
+      {
+        "path": Json::string("/Users/me/.stillfail/repos/" + name),
+        "name": Json::string(name),
+        "repo": Json::string(fix_repo(name)),
+        "chats": Json::number(chats.to_double()),
+        "lastAt": 1793500000000.0,
+      }
+    }),
+  )
 }
 
 ///|
@@ -446,6 +491,7 @@ fn fix_new_chat_of(f : Fixture) -> Json {
     "pick": fix_pick(),
     "frequent": if n.crowded { fix_crowded_frequent() } else { fix_frequent() },
     "label": Json::string(effort_word),
+    "preset": Json::string(n.preset),
   }
 }
 
@@ -527,6 +573,7 @@ pub fn fixture_new_topic(f : Fixture, name : String) -> Json? {
   match name {
     "newChat" => Some(fix_new_chat(f))
     "pick" => Some(fix_pick())
+    "presets" => Some({ "presets": Json::array(new_fix.presets), "candidates": fix_candidates() })
     _ => None
   }
 }
@@ -558,6 +605,32 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
         n.effort = s
         n.d_effort = s
       })
+      take("preset", fn(s) { n.preset = s })
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
+    "preset.add" | "preset.put" => {
+      let id = match field(p, "id") {
+        Some(String(s)) => s
+        _ => "p-\{n.presets.length()}"
+      }
+      let dirs = match field(p, "dirs") {
+        Some(Array(a)) => a.map(fn(d) { d.as_string().unwrap_or("") })
+        _ => []
+      }
+      let made = fix_preset(id, field(p, "name").unwrap_or(Json::string("")).as_string().unwrap_or(""), dirs.map(fn(d) {
+        match d.rev_find("/") {
+          Some(i) => d.unsafe_substring(start=i + 1, end=d.length())
+          None => d
+        }
+      }), "")
+      n.presets.retain(fn(x) { field(Some(x), "id") != Some(Json::string(id)) })
+      n.presets.push(made)
+      f.changed()
+      Some(Ok(made))
+    }
+    "preset.delete" => {
+      take("id", fn(s) { n.presets.retain(fn(x) { field(Some(x), "id") != Some(Json::string(s)) }) })
       f.changed()
       Some(Ok(Json::object({})))
     }

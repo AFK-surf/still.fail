@@ -428,6 +428,10 @@ pub fn open_mode(mode : String) -> Unit {
     }
     match mode {
       "newchat-station" => @sfpages.new_chat_ask("station")
+      "newchat-preset" => @sfpages.new_chat_ask("preset")
+      "newchat-preset-new" => @sfpages.new_chat_ask("preset-new")
+      "newchat-preset-edit" => @sfpages.new_chat_ask("preset-edit")
+      "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
       "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" => @sfpages.new_chat_ask("model")
       _ => ()
     }

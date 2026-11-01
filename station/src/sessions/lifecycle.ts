@@ -33,6 +33,8 @@ export type NewChat = {
   clientKey?: string | null;
   /// The workspace its chat is in (the asker's, or the opening session's); absent: the station's home one.
   ws?: string | null;
+  /// The preset it is opened with (presets.ts), its copy kept with it.
+  preset?: string | null;
 };
 
 const trimmed = (v: string | null | undefined) => {
@@ -136,6 +138,9 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const key = newChatKey();
   const workspace = join(config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
   mkdirSync(workspace, { recursive: true });
+  // (before its rows: one that names no preset of its workspace makes no chat)
+  const preset = trimmed(options.preset);
+  if (preset !== null) hub.presets.keepFor(workspace, options.ws ?? hub.workspaces()[0] ?? null, preset);
   mkdirSync(join(config.dataDir, "repos"), { recursive: true });
   const now = hub.now();
   // Known before its rows are (their events can reach the client before this answers), and for a while after.
@@ -165,7 +170,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     lastActiveAt: now,
     ws: options.ws ?? null,
   });
-  log.info("hub", "session created", { session: key, connect: INTERNAL_CONNECT, runtime, profile: profile.id, model });
+  log.info("hub", "session created", { session: key, connect: INTERNAL_CONNECT, runtime, profile: profile.id, model, preset });
   return [key, openChat(hub, key, options.createdBy, title)];
 }
 

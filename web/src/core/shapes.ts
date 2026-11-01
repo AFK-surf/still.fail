@@ -5569,6 +5569,11 @@ export interface NewChatView {
 	pick?: PickView;
 	/** Up to four combinations used on this device in this workspace, filtered to this station. */
 	frequent?: FrequentCombo[];
+	/**
+	 * The preset its chat is opened with on the station (one of the `presets` topic's ids), as last picked
+	 * there on this device (`newChat.pick` `preset`); "" for none.
+	 */
+	preset?: string;
 }
 
 /**
@@ -5920,6 +5925,34 @@ export interface PrefsView {
 	keymap?: KeymapView;
 	/** The wide screen's rail as clients draw it (the core's, from `rail` and `rails`; none from a core before it). */
 	railView?: RailView;
+}
+
+export interface PresetDir {
+	path: string;
+	/** The repository a clone there is of: github.com/acme/app. */
+	repo?: string;
+}
+
+/** What a chat starts knowing, chosen as it is opened: the directories it works with, what people want there. */
+export interface Preset {
+	id: string;
+	name: string;
+	dirs: PresetDir[];
+	/** What people want of its chats, as they wrote it. */
+	instructions: string;
+	createdBy: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+/** A directory offered for a new preset: a clone of the station's repository cache, or one a preset names. */
+export interface PresetCandidate {
+	path: string;
+	name: string;
+	repo?: string;
+	/** How many of the station's chats made worktrees of it. */
+	chats: number;
+	lastAt: number;
 }
 
 /** Providers of one group, as the picker lists them. */
@@ -6851,6 +6884,15 @@ export interface StationNet {
 	 * whether macOS lets it reach them (Local Network).
 	 */
 	lan?: string[];
+}
+
+/**
+ * A workspace's presets on a station (the `presets` topic, docs/presets.md), and the directories offered for a
+ * new one.
+ */
+export interface StationPresets {
+	presets: Preset[];
+	candidates: PresetCandidate[];
 }
 
 /**

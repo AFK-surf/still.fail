@@ -43,6 +43,7 @@ import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
+import { Presets } from "./presets.ts";
 import { type Roots, roots as machineRoots } from "../read/machine.ts";
 import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
@@ -171,6 +172,8 @@ export class Hub {
   readonly gates = new Map<string, { tail: Promise<void>; waiting: number }>();
   /// The station's background jobs (made after the hub, which tells their agents).
   jobs: Jobs | null = null;
+  /// Each workspace's presets, in its agent home (presets.ts).
+  readonly presets = new Presets((ws) => workspaceAgentHome(this.config().agentHome, ws, this.workspaces()[0] ?? null), () => this.now());
   private closedHook: ((key: string) => void) | null = null;
   private peersHook: ((station: string, request: Json) => Promise<Json>) | null = null;
   private outsideHook: ((ws: string | null) => OutsideChat[]) | null = null;

@@ -408,6 +408,7 @@ export const routes = (tools: Tools): Route[] => {
                 createdBy: r.viewer.email,
                 clientKey: given("clientKey"),
                 ws: r.viewer.workspace || null,
+                preset: given("preset"),
               },
               r.lang,
             ),

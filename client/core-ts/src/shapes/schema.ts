@@ -1271,6 +1271,30 @@ export const SHAPES: Record<string, Shape> = {
     ["type", "String"],
     ["data", "String", { doc: "Base64." }],
   ], { doc: "An image file's picture (its thumbnail where it is big)." }),
+  StationPresets: struct([
+    ["presets", vec("Preset")],
+    ["candidates", vec("PresetCandidate")],
+  ], { doc: "A workspace's presets on a station (the `presets` topic, docs/presets.md), and the directories offered for a\nnew one." }),
+  Preset: struct([
+    ["id", "String"],
+    ["name", "String", { said: true }],
+    ["dirs", vec("PresetDir")],
+    ["instructions", "String", { said: true, doc: "What people want of its chats, as they wrote it." }],
+    ["createdBy", "String"],
+    ["createdAt", "i64", { client: "I54" }],
+    ["updatedAt", "i64", { client: "I54" }],
+  ], { doc: "What a chat starts knowing, chosen as it is opened: the directories it works with, what people want there." }),
+  PresetDir: struct([
+    ["path", "String", { said: true }],
+    ["repo", opt("String"), { doc: "The repository a clone there is of: github.com/acme/app." }],
+  ]),
+  PresetCandidate: struct([
+    ["path", "String", { said: true }],
+    ["name", "String", { said: true }],
+    ["repo", opt("String")],
+    ["chats", "i64", { client: "I54", doc: "How many of the station's chats made worktrees of it." }],
+    ["lastAt", "i64", { client: "I54" }],
+  ], { doc: "A directory offered for a new preset: a clone of the station's repository cache, or one a preset names." }),
   StationMemory: struct([
     ["global", "MemoryFile"],
     ["skills", vec("SkillFile")],
@@ -2125,6 +2149,7 @@ export const SHAPES: Record<string, Shape> = {
     ["spent", opt("String"), { said: true, doc: "Every account of the model has used up its allowance: what is sent waits for it." }],
     ["pick", opt("PickView"), { doc: "Its model control (the `pick` topic of `new` on the station), with the page." }],
     ["frequent", opt(vec("FrequentCombo")), { doc: "Up to four combinations used on this device in this workspace, filtered to this station." }],
+    ["preset", "String", { default: true, doc: "The preset its chat is opened with on the station (one of the `presets` topic's ids), as last picked\nthere on this device (`newChat.pick` `preset`); \"\" for none." }],
   ], { doc: "A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs\nthere, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has." }),
   ShareInView: struct([
     ["site", opt("String"), { doc: "The site of the link shared (`youtube.com`, its www./m. left out); none for text without one." }],
@@ -3888,6 +3913,7 @@ export const TOPIC_SHAPES: Record<string, Ty> = {
   jobLog: "JobLogView",
   machineLogins: "MachineLoginsView",
   memory: "StationMemory",
+  presets: "StationPresets",
   linkPreview: { opt: "LinkPreview" },
   filePeek: { opt: "FilePeek" },
   machineLogin: { opt: "MachineLoginShown" },

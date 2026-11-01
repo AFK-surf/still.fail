@@ -1085,6 +1085,13 @@ pub let said_paths : Map[String, Array[String]] = {
     "borrow.title",
     "borrow.why",
   ],
+  "presets": [
+    "presets.*.name",
+    "presets.*.dirs.*.path",
+    "presets.*.instructions",
+    "candidates.*.path",
+    "candidates.*.name",
+  ],
   "profiles": [
     "items.*.stationName",
     "items.*.profile.name",

@@ -372,6 +372,7 @@ fn new_controls(
   if text(station, "name") != "" {
     new_station_control(c, src, w, v, station, floating, going)
   }
+  new_preset_control(c, src, w, v, station, floating, going)
   let p = field(v, "pick")
   if flag(v, "waiting") {
     // (its profiles read: a made-up model's, in its bones)

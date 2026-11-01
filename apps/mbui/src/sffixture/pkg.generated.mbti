@@ -71,6 +71,8 @@ pub fn fix_browse_topic(Fixture, String, Map[String, Json]) -> Json?
 
 pub fn fix_browse_with_drive(Fixture, Json?, String) -> Json?
 
+pub fn fix_candidates() -> Json
+
 pub fn fix_chat(String) -> FixChat
 
 pub fn fix_chat_jobs() -> Json
@@ -192,6 +194,8 @@ pub let fix_phone_link : @ref.Ref[String]
 pub fn fix_pick() -> Json
 
 pub let fix_places : Map[String, Json]
+
+pub fn fix_preset(String, String, Array[String], String) -> Json
 
 pub fn fix_preview() -> Json
 
@@ -647,6 +651,8 @@ pub(all) struct NewFix {
   mut reading : Int32
   mut crowded : Bool
   mut tall : Bool
+  mut preset : String
+  presets : Array[Json]
 }
 
 // Type aliases
