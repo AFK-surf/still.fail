@@ -1,7 +1,7 @@
 // A message's files on the desktop (ember web/src/Chat.tsx Files, FileItem, MessageFileCard, imageBox.ts; Chat.css.ts
 // msgFiles, msgImage, msgImageWait, msgVideo, fileCardOpen; styles/later.css.ts): side by side, wrapping 6 apart; an
 // image in a box of its own proportions (known before it loads), brushed in from its top once decoded; a video's
-// still on black with its play mark and its name; anything else a card. Pressed, each opens in the file viewer
+// still on black with its capsule (its length) in its foot's corner; anything else a card. Pressed, each opens in the file viewer
 // (viewer.mbt). While the core downloads one (downloads.mbt), how far on its card, ✕ to call it off, ↻ to ask it
 // again.
 
@@ -29,7 +29,7 @@ pub fn message_files(
     match file_kind(a.name) {
       "image" => dmin(image_box(a, image_least, min_tall_width=image_tall_min_w).0, room)
       "video" => dmin(image_box(a, video_least).0, room)
-      _ => dmin(@sf.file_card_across(c, a.name, a.size), room)
+      _ => dmin(card_across(c, src, here, a), room)
     }
   })
   // (in a picture of the chat being shared, each with the room its ✕ hangs in past its top and right: publish.mbt)
@@ -449,12 +449,11 @@ fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
 }
 
 ///|
-/// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its play
-/// mark in its middle, its name at its foot over a dark band, how long it is at the band's end; while the core
-/// downloads it, or brings it (loaded, or after everything else once opened and let go: fill.ts), how far there over a
-/// bar. Held or right clicked, its menu: 引用; 加载 (brought onto this device by the core before everything else, from
-/// what of it is here, whatever page shows, to play from here at once), 停止加载 while it is brought either way (what
-/// came stays).
+/// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its
+/// capsule in its foot's start corner: a play mark and how long it is; while the core downloads it, or brings it
+/// (loaded, or after everything else once opened and let go: fill.ts), how far there. Held or right clicked, its menu:
+/// 引用; 加载 (brought onto this device by the core before everything else, from what of it is here, whatever page
+/// shows, to play from here at once), 停止加载 while it is brought either way (what came stays).
 fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
@@ -488,7 +487,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     ]
   }
   file_menu(c, open, "", quote=quote_of(here, a, owner, by), more=load)
-  // (its name whole, where its band cuts it short)
+  // (its name, which nothing over its picture says)
   @sf.tip(c, "msg-file/" + @sfbase.file_key(a), open, a.name, repeats=true)
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw
@@ -515,37 +514,13 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   }
   let target = if landing { 0.0 } else { 1.0 }
   let marks = @motion.animate(c, "video-marks/" + @sfbase.file_key(a), target, spec=@motion.tween(@sf.dur_ms, ease=Out), from=target)
-  // its play mark in its middle, its band at its foot, at `alpha`: here, and over its picture as the viewer flies it
-  // out of here and back (note_thumb's over)
+  // its capsule in its foot's start corner (its length; while the core brings it, how far), at `alpha`: here, and over
+  // its picture as the viewer flies it out of here and back (note_thumb's over)
+  let coming = if flag(dl, "active") || kept is Some(_) { Some(number(dl, "progress")) } else { None }
   let over = fn(alpha : Double) {
     c.layer(fn() {
-      let middle = c.box(style=video_middle, fn() {
-        @sf.play_mark(c, video_play_side, @sf.video_shade) |> ignore
-      })
-      c.look(middle, @ui.look(alpha~))
-    })
-    |> ignore
-    c.layer(fn() {
-      let foot = c.box(style=video_foot_room, fn() {
-        c.box(style=video_name_band, fn() {
-          let coming = flag(dl, "active") || kept is Some(_)
-          if coming {
-            c.text(text(dl, "statusText"), style=video_name) |> ignore
-            c.box(style=video_bar, fn() { @sf.progress(c, "video/" + a.path, Some(number(dl, "progress"))) }) |> ignore
-          } else {
-            // its name, cut short before how long it is (as its message says: the station read it from its header)
-            c.box(style=video_name_row, fn() {
-              c.text(a.name, style=video_name.then(@ui.text_style(w=Cut))) |> ignore
-              if a.duration > 0.0 {
-                c.text(@sf.clock(a.duration), style=video_name) |> ignore
-              }
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-      })
-      c.look(foot, @ui.look(alpha~))
+      let at = c.box(style=video_over, fn() { @sf.video_capsule(c, "video/" + @sfbase.file_key(a), a.duration, coming~) })
+      c.look(at, @ui.look(alpha~))
     })
     |> ignore
   }
@@ -553,7 +528,8 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // their rounded edge. The same ground fills the room around a letterboxed picture and while it is decoded.
   let has_still = still != "" && still != "!"
   let frame = if has_still { video_frame } else { video_frame.then(@ui.style(bg=@sf.video_ground)) }
-  let b = c.box(style=frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
+  // (called by its name, as a scripted run finds it: nothing over it says it)
+  let b = c.box(style=frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, label=a.name, fn() {
     if has_still {
       c.layer(fn() {
         c.image(still, w=Px(w), h=Px(h), fit=if letterbox { FitContain } else { FitCover }, bg=c.color(@sf.video_ground), matte=true)
@@ -580,10 +556,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 /// everything else once opened and let go (fill.ts), how far in its size's place, ✕ at its end to call it off; failed, why, ↻ to ask it again. Held or right clicked, its menu (引用).
 fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ : (String, String, String)?) -> Unit {
   let owner = owner_of(here, a)
-  let dl = download_of(src, here.station, owner, stored_name(a.path))
-  // opened and let go, being brought after everything else (fill.ts): how far in its size's place, ✕ stops it
-  let kept = if flag(dl, "active") { None } else { keeping_of(src, here.station, owner, stored_name(a.path)) }
-  let dl = if kept is Some(_) { kept } else { dl }
+  let (dl, kept) = card_coming(src, here, a)
   let active = flag(dl, "active") || kept is Some(_)
   let failed = text(dl, "state") == "failed"
   let key = "msg-card/" + @sfbase.file_key(a)
@@ -610,6 +583,28 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
   } else if done.opened {
     open_file(here, a)
   }
+}
+
+///|
+/// What the core says of a file's card's download (dl), and of its being brought after everything else once opened
+/// and let go (fill.ts: kept), which stands in the download's place.
+fn card_coming(src : Source, here : MessageHere, a : Attachment) -> (Json?, Json?) {
+  let owner = owner_of(here, a)
+  let dl = download_of(src, here.station, owner, stored_name(a.path))
+  // opened and let go, being brought after everything else (fill.ts): how far in its size's place, ✕ stops it
+  let kept = if flag(dl, "active") { None } else { keeping_of(src, here.station, owner, stored_name(a.path)) }
+  (if kept is Some(_) { kept } else { dl }, kept)
+}
+
+///|
+/// A file's card's width as card_item draws it: what it says under its name (how far it has come, why it failed, in
+/// its size's place) and its ✕ or ↻ at its end counted, so that neither cuts its name short.
+fn card_across(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment) -> Double {
+  let (dl, kept) = card_coming(src, here, a)
+  let active = flag(dl, "active") || kept is Some(_)
+  let failed = text(dl, "state") == "failed"
+  let meta = if active || failed { text(dl, "statusText") } else { "" }
+  @sf.file_card_across(c, a.name, a.size, meta~, ends=if active || failed { 1 } else { 0 })
 }
 
 ///|
@@ -779,7 +774,7 @@ let reveal_steps : Int = 16
 let image_px_most : Double = 8192.0
 
 ///|
-/// The least an image's box is across (16) and a video's (96: its play mark and its name); the box of one sent before
+/// The least an image's box is across (16) and a video's (96: room round its capsule); the box of one sent before
 /// sizes were kept (240×160); the most (360×300); a tiny one drawn to 40 on its longer side (imageBox.ts).
 pub let image_least : Double = 16.0
 
@@ -812,10 +807,6 @@ let files_gap : Double = 6.0
 ///|
 /// An unavailable image's mark (20).
 let no_preview_icon : Double = 20.0
-
-///|
-/// A video's play mark, 40 round.
-let video_play_side : Double = 40.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -864,36 +855,14 @@ let no_preview_box : @ui.Style = @ui.css("w=Full h=Full gap=S1_5 align=ACenter j
 let no_preview_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
-/// A video's box (msgVideo): black, clipped to its corners; its play mark 40 round in its middle on black at 65%
-/// (msgVideoPlay); its name at its foot 6 by 8 in on the same (msgVideoName), 12, white, cut short; a bar 4 under it.
+/// A video's box (msgVideo): black, clipped to its corners; nothing over its picture but its capsule
+/// (@sf.video_capsule).
 // kept across runs: a value (no field of it changes)
 let video_frame : @ui.Style = @ui.style(radius=InnerOr(@sf.message_file_radius), clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let video_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let video_foot_room : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
-
-///|
-/// The band over a video's foot: its words as far in as a file card's (16 across: clear of its card's corner), 8 down.
-// kept across runs: a value (no field of it changes)
-let video_name_band : @ui.Style = @ui.style(w=Full, px=S4, py=S2, bg=@sf.video_shade)
-
-///|
-// kept across runs: a value (no field of it changes)
-let video_name : @ui.TextStyle = @ui.text_style(size=Caption, color=@sf.white_ink, wrap=false, max_lines=1)
-
-///|
-/// Its name and how long it is in one line, 8 apart, the length at its end.
-// kept across runs: a value (no field of it changes)
-let video_name_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify=JBetween")
-
-///|
-// kept across runs: a value (no field of it changes)
-let video_bar : @ui.Style = @ui.css("w=Full pt=S1")
+let video_over : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// What an image waits on with no likeness (msgImageWait): the neutral ground; the frost over it on its way in.

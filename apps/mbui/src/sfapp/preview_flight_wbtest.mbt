@@ -229,7 +229,7 @@ test "a letterboxed video's light picture has no black rim where it meets its ro
 ///|
 test "a video's light rounded corners leave no black as it returns to its thumbnail" {
   let t = video_in_chat()
-  t.tap_text("演示录屏.mp4")
+  tap_video(t, "演示录屏.mp4")
   t.run_for(@ui.move_most_ms)
   t.set_player(1, position=4000.0)
   t.draw()
@@ -474,7 +474,7 @@ test "a picture cut by its card's foot: what shows of it said as where it shows,
 ///|
 test "a video taken down and let go goes from where the finger left it: its picture stays there, then flies back from there" {
   let t = video_in_chat()
-  t.tap_text("演示录屏.mp4")
+  tap_video(t, "演示录屏.mp4")
   t.run_for(@ui.move_most_ms)
   t.set_player(1, position=4000.0)
   t.draw()

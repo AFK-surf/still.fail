@@ -49,13 +49,13 @@ test "a picture of the chat opened on a phone: drawn in each frame from the tap 
 }
 
 ///|
-test "a film flying in: its name's band and play mark go with the still as it leaves its thumbnail; the player's bars come as it grows" {
-  let t = video_in_chat()
-  // the band's words over the thumbnail
-  assert_true(words_show(t, "演示录屏.mp4"))
-  let (bx, by) = t.find("演示录屏.mp4").unwrap()
-  t.tap_text("演示录屏.mp4")
-  // set out: the band still there, going with the still
+test "a film flying in: its capsule goes with the still as it leaves its thumbnail; the player's bars come as it grows" {
+  let t = video_in_chat(duration=72500.0)
+  // its capsule's words (how long it is) over the thumbnail
+  assert_true(words_show(t, "1:13"))
+  let (bx, by) = t.find("1:13").unwrap()
+  tap_video(t, "演示录屏.mp4")
+  // set out: the capsule still there, going with the still
   assert_true(
     t.glyphs_shown().iter().any(fn(g) { g.1 <= by + 2.0 && by - 2.0 <= g.3 && g.0 < bx + 150.0 && g.2 > bx - 150.0 }),
   )
@@ -73,8 +73,8 @@ test "a film flying in: its name's band and play mark go with the still as it le
 
 ///|
 test "a film closed back into its thumbnail: the player's bars go with it as it shrinks, not at once" {
-  let t = video_in_chat()
-  t.tap_text("演示录屏.mp4")
+  let t = video_in_chat(duration=72500.0)
+  tap_video(t, "演示录屏.mp4")
   t.run_for(@ui.move_most_ms)
   t.set_player(1, position=4000.0)
   t.draw()
@@ -86,9 +86,9 @@ test "a film closed back into its thumbnail: the player's bars go with it as it 
   // flying back: the controls still there, going as it shrinks
   t.frame()
   assert_true(words_show(t, "0:04"))
-  // landed: gone, the thumbnail's band shown again
+  // landed: gone, the thumbnail's capsule shown again
   t.run_for(@ui.move_most_ms)
   assert_true(pv_leaving.get() is None)
   assert_false(words_show(t, "0:04"))
-  assert_true(words_show(t, "演示录屏.mp4"))
+  assert_true(words_show(t, "1:13"))
 }

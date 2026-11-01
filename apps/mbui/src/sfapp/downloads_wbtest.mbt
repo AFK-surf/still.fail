@@ -77,10 +77,9 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
-  // (above its name, in its picture: while it comes, how far is said where its name was)
-  let w = t.words().filter(fn(w) { w.0.has_prefix("演示录屏") })
-  assert_true(w.length() > 0)
-  let (x, y) = (w[0].1 + 4.0, w[0].2 - 40.0)
+  // (in its picture's middle: nothing is over it there)
+  let (rx, ry, rw, rh) = t.get(Button, label=tr("web-main.file.play", args=[("name", "演示录屏.mp4")])).rect
+  let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
   let video = fn() {
     t.right_click(x, y)
     t.draw()
@@ -124,7 +123,8 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   }
   keeping.push(brought("going", "正在加载 20% · 5 MB", true))
   t.draw()
-  assert_true(t.find("正在加载 20% · 5 MB") is Some(_))
+  t.run_for(@sf.dur_ms)
+  assert_true(t.find("20%") is Some(_))
   let stop_it = fn() raise {
     video()
     assert_true(@sf.last_presented() != first && @sf.presented_open_of(@sf.last_presented()))
@@ -142,7 +142,8 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   keeping.clear()
   keeping.push(brought("queued", "后台缓存排队中 · 20%", false))
   t.draw()
-  assert_true(t.find("后台缓存排队中 · 20%") is Some(_))
+  t.run_for(@sf.dur_ms)
+  assert_true(t.find("20%") is Some(_))
   stop_it()
   assert_eq(calls.filter(fn(m) { m.0 == "fill.stop" }).length(), 2)
   assert_eq(calls.filter(fn(m) { m.0 == "fill.want" }).length(), 1, msg="加载 not asked again over it")
@@ -229,7 +230,7 @@ test "downloads: a file's card says how far the core has downloaded it in its si
 }
 
 ///|
-test "downloads: a video's block in the chat says how far the core has downloaded it in its name's place" {
+test "downloads: a video's block in the chat says how far the core has downloaded it in its capsule" {
   new_run()
   let calls : Array[(String, Json)] = []
   let going = listed("演示录屏.mp4", "waiting", 1048576.0, 5242880.0, "等待连接 station · 20%")
@@ -237,7 +238,7 @@ test "downloads: a video's block in the chat says how far the core has downloade
   open_fixture_mode("chat-download")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("等待连接 station · 20%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("20%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
 ///|

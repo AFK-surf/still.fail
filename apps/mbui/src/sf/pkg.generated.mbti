@@ -556,7 +556,7 @@ pub let file_capsule_h : @ui.Len
 
 pub fn file_card(@ui.Ctx, String, String, Double, path? : String, dir? : Bool, named? : Bool, pending? : Bool, sent? : Double?, error? : String, download? : (Double, String)?, remove? : Bool, retry? : Bool, slot? : Bool, open? : Bool, title? : String, meta? : String, restore? : Bool, remove_label? : String, retry_label? : String, composer? : Bool) -> FileCardDone
 
-pub fn file_card_across(@ui.Ctx, String, Double) -> Double
+pub fn file_card_across(@ui.Ctx, String, Double, meta? : String, ends? : Int32) -> Double
 
 pub let file_card_button : @ui.Len
 
@@ -2107,6 +2107,10 @@ pub let value : @ui.TextStyle
 pub fn vector(@ui.Ctx, String, @pixels.Vector, Double) -> Int32
 
 pub fn verify_ok(@ui.Ctx, String) -> Unit
+
+pub fn video_capsule(@ui.Ctx, String, Double, coming? : Double?) -> Unit
+
+pub let video_capsule_h : Double
 
 pub let video_ground : @ui.Color
 

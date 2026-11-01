@@ -182,7 +182,7 @@ test "a video whose read failed can be retried" {
 }
 
 ///|
-test "a video in the chat: the station's still of it (its poster) on the black, the play mark and its name over it" {
+test "a video in the chat: the station's still of it (its poster) on the black, nothing over it but its capsule" {
   new_run()
   let asked : Array[String] = []
   let src : Source = {
@@ -215,13 +215,13 @@ test "a video in the chat: the station's still of it (its poster) on the black, 
   assert_true(
     t.drawn_images().iter().any(fn(i) { (i[2] - 300.0).abs() < 0.5 && (i[3] - h).abs() < 0.5 }),
   )
-  assert_true(t.find("演示录屏.mp4") is Some(_))
-  // its message saying none, no length beside its name
+  // no band with its name over its picture (the user, 2026-11-01); its message saying none, no length in its capsule
+  assert_true(t.find("演示录屏.mp4") is None)
   assert_true(t.find("0:") is None)
 }
 
 ///|
-test "a video in the chat says how long it is at its name's end, as its message does (the station read it from its header)" {
+test "a video in the chat says how long it is in its foot's start corner, as its message does (the station read it from its header)" {
   new_run()
   let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
   let a : Attachment = {
@@ -241,9 +241,13 @@ test "a video in the chat says how long it is at its name's end, as its message 
   t.draw()
   t.run_for(@ui.image_fade_ms)
   let (lx, ly) = t.find("1:13").unwrap()
-  let (nx, ny) = t.find("一段很长").unwrap()
-  // on the name's line, after it; the name cut short for it, nothing squeezed past that
-  assert_true((ly - ny).abs() < 1.0 && lx > nx)
+  // 16:9 in 300 wide: in the picture's bottom left, its name nowhere over it
+  let (bw, bh, _) = @sfpages.image_box(a, @sfpages.video_least)
+  let h = bh * 300.0 / bw
+  let pic = t.drawn_images().iter().find_first(fn(i) { (i[2] - 300.0).abs() < 0.5 && (i[3] - h).abs() < 0.5 }).unwrap()
+  assert_true(lx > pic[0] && lx < pic[0] + 300.0 / 3.0, msg="\{lx} \{pic}")
+  assert_true(ly > pic[1] + h * 2.0 / 3.0 && ly < pic[1] + h, msg="\{ly} \{pic}")
+  assert_true(t.find("一段很长") is None)
   assert_eq(t.squeeze_faults(), [])
 }
 
@@ -353,8 +357,9 @@ test "a video's ‹ and › go to a frame's very start, a frame on from the one 
 }
 
 ///|
-/// A chat's video (16:9, its still the station's poster) alone on a page, the viewer over it once it is tapped open.
-fn video_in_chat() -> @ui.Tester {
+/// A chat's video (16:9, its still the station's poster) alone on a page, the viewer over it once it is tapped open;
+/// how long it is as its message says, `duration` (none: not said).
+fn video_in_chat(duration? : Double = 0.0) -> @ui.Tester {
   new_run()
   let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
   let a : Attachment = {
@@ -366,7 +371,7 @@ fn video_in_chat() -> @ui.Tester {
     thumbhash: "",
     owner: "s-c1",
     upload: "",
-    duration: 0.0,
+    duration: duration,
     frames: 0,
     held: false,
   }
@@ -398,7 +403,7 @@ fn hex_bytes(b : Bytes) -> String {
 ///|
 test "a video flies from its thumbnail in the chat, its still flying; the player's picture once it is in" {
   let t = video_in_chat()
-  t.tap_text("演示录屏.mp4")
+  tap_video(t, "演示录屏.mp4")
   assert_true(viewer.get() is Some(_))
   // halfway: its still flies (the thumbnail hidden meanwhile), the player's picture not yet
   t.run_for(@ui.move_most_ms / 2.0)
@@ -415,7 +420,7 @@ test "a video flies from its thumbnail in the chat, its still flying; the player
 ///|
 test "a video closed: the frame it shows grabbed, flown back with and kept by its thumbnail; opened again, on from there" {
   let t = video_in_chat()
-  t.tap_text("演示录屏.mp4")
+  tap_video(t, "演示录屏.mp4")
   t.run_for(@ui.move_most_ms)
   // the player 4 s in
   t.set_player(1, position=4000.0)
@@ -453,7 +458,7 @@ test "a video closed: the frame it shows grabbed, flown back with and kept by it
 ///|
 test "a video closed before its first frame shows: back into its thumbnail with its still, nothing kept" {
   let t = video_in_chat()
-  t.tap_text("演示录屏.mp4")
+  tap_video(t, "演示录屏.mp4")
   t.run_for(@ui.move_most_ms)
   t.set_player(1, shown=false)
   t.draw()
@@ -1176,4 +1181,11 @@ fn pin_number_middle(t : @ui.Tester, n : Int) -> (Double, Double)? {
   let (ox, oy) = (bx + 2.0 * k, by + 22.0 * bh / 24.0)
   let (cx, cy) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
   Some((ox + (cx - ox) / k, oy + (cy - oy) / k))
+}
+
+///|
+/// A message's video `name` tapped in its middle (nothing over it says its name: its capsule its length alone).
+fn tap_video(t : @ui.Tester, name : String) -> Unit raise {
+  let (x, y, w, h) = t.get(Button, label=tr("web-main.file.play", args=[("name", name)])).rect
+  t.tap(x + w / 2.0, y + h / 2.0)
 }
