@@ -1,7 +1,8 @@
 #!/bin/bash
 # still.fail's app in a browser, on the web's own core (web/mbui.html, web/src/mbui/core.ts): the app built for the
 # browser (scripts/web.sh, APP=stillfail) and mbui's web host put where the web's build serves them, web/public/mbui
-# (ignored); `pnpm run build:cloud` (or `pnpm dev:web`) then serves it at /mbui.html.
+# (ignored); `pnpm run build:cloud` then makes it every page of the web app's (web/vite.config.ts), `pnpm dev:web` serves it
+# at /mbui.html.
 #   scripts/web-app.sh
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"

@@ -12,6 +12,9 @@ test("each host serves its own static site, the API and the relay on their paths
     assert.deepEqual(await text(await h.fetch("/")), [200, "<title>still.fail</title>"]);
     assert.deepEqual(await text(await h.fetch("/w/some-workspace/chats")), [200, "<title>still.fail</title>"]);
     assert.deepEqual(await text(await h.fetch("/assets/app.js")), [200, "// the web app"]);
+    // The app's page answers every page but the few the web's own React pages still have (src/web.ts WEB_PAGES).
+    for (const page of ["/auth/callback?code=x&state=y", "/slack/installed?code=x", "/share?text=hi", "/w/ws1/s/st1/services/job1"]) assert.deepEqual(await text(await h.fetch(page)), [200, "<title>still.fail · web</title>"], page);
+    for (const page of ["/mbui", "/o/ws1/st1/s1", "/w/ws1/s/st1/chats/c1", "/invite", "/auth/callbacks", "/w/ws1/s/st1/services"]) assert.deepEqual(await text(await h.fetch(page)), [200, "<title>still.fail</title>"], page);
     // The app's pages are kept by nothing, its files as their host says (src/web.ts unkept).
     for (const page of ["/", "/w/some-workspace/chats", "/auth/callback?code=x&state=y"]) assert.equal((await h.fetch(page)).headers.get("cache-control"), "no-store", page);
     assert.notEqual((await h.fetch("/assets/app.js")).headers.get("cache-control"), "no-store");

@@ -41,7 +41,7 @@ let server;
 let origin = cloud.origin;
 if (opt.dist) {
   const root = join(opt.dist, "cloud-web");
-  if (!existsSync(join(root, "index.html"))) throw new Error(`no ${root}/index.html`);
+  if (!existsSync(join(root, "web.html"))) throw new Error(`no ${root}/web.html`);
   server = await proxy(root, cloud);
   origin = `http://127.0.0.1:${server.address().port}`;
 }
