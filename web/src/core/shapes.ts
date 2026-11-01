@@ -5948,6 +5948,9 @@ export interface PresetDir {
 	path: string;
 	/** The repository a clone there is of: github.com/acme/app. */
 	repo?: string;
+	/** Another station of the workspace's it is on (its address); none: the preset's own station's. */
+	station?: string;
+	stationName?: string;
 }
 
 /** What a chat starts knowing, chosen as it is opened: the directories it works with, what people want there. */

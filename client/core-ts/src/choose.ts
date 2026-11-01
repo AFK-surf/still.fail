@@ -414,7 +414,17 @@ export class Choose implements Owner {
     const picked = this.#picked(scope, this.#workspacePresets(scope, online, false));
     if (picked !== undefined) {
       if (picked.station === station) ask.preset = get(picked.p, "id");
-      else ask.presetCopy = { id: get(picked.p, "id"), name: get(picked.p, "name"), dirs: arr(get(picked.p, "dirs")), instructions: get(picked.p, "instructions") ?? "", elsewhere: picked.stationName };
+      else {
+        // each folder where it is: this station's as they are, another's said to be there (by its name)
+        const names = new Map(online.map((s) => [typeof s.station === "string" ? s.station : "", typeof s.name === "string" ? s.name : ""]));
+        const dirs = arr(get(picked.p, "dirs")).map((d) => {
+          const at = text(get(d, "station")) ?? picked.station;
+          const dir: J = { path: get(d, "path"), repo: get(d, "repo") ?? null };
+          if (at !== station) dir.elsewhere = text(get(d, "stationName")) ?? names.get(at) ?? at;
+          return dir;
+        });
+        ask.presetCopy = { id: get(picked.p, "id"), name: get(picked.p, "name"), dirs, instructions: get(picked.p, "instructions") ?? "" };
+      }
     }
     this.#keepStation(ofAddress(station), stationId(station));
     this.#changed();

@@ -197,6 +197,8 @@ pub let fix_places : Map[String, Json]
 
 pub fn fix_preset(String, String, Array[String], String) -> Json
 
+pub fn fix_presets_of(String) -> Json
+
 pub fn fix_preview() -> Json
 
 pub let fix_put_up : Map[String, String]

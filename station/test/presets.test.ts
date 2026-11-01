@@ -139,7 +139,7 @@ test("a repository is offered once, the person's checkout of it where there is o
 
 test("a chat opened with another station's preset is told where its folders are, its repositories as this station's clones", async () => {
   const r = new Rig();
-  const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "local", presetCopy: presetCopyInput({ id: "p1", name: "Docs", dirs: [{ path: "/Users/a/code/app", repo: "github.com/acme/app" }, { path: "/Users/a/Design" }], instructions: "Be brief.", elsewhere: "Studio" }) });
+  const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "local", presetCopy: presetCopyInput({ id: "p1", name: "Docs", dirs: [{ path: "/Users/a/code/app", repo: "github.com/acme/app", elsewhere: "Studio" }, { path: "/Users/a/Design", elsewhere: "Studio" }], instructions: "Be brief." }) });
   sayIn(r.hub, thread.id, "local", "go");
   await settle();
   const opened = r.claude.last().options;
@@ -147,5 +147,22 @@ test("a chat opened with another station's preset is told where its folders are,
   assert.ok(opened.instructions.includes("/Users/a/Design on station Studio: read it there with the station tools"), opened.instructions);
   assert.ok(opened.instructions.includes("<preset-instructions>\nBe brief.\n</preset-instructions>"));
   assert.equal(opened.dirs, undefined, "another station's folders are not this machine's");
+  await r.close();
+});
+
+test("a preset names folders of several stations: those here checked and given, the others' taken as said and told of", async () => {
+  const r = new Rig();
+  const here = mkdtempSync(join(tmpdir(), "presets-"));
+  const p = r.hub.presets.add(null, { name: "Both", dirs: [here, { path: "/Users/b/Design", station: "ws/mba", stationName: "MBA" }, { path: "/Users/b/code/app", repo: "github.com/acme/app", station: "ws/mba", stationName: "MBA" }] }, "local");
+  assert.deepEqual(p.dirs.map((d) => [d.path, d.station ?? null]), [[here, null], ["/Users/b/Design", "ws/mba"], ["/Users/b/code/app", "ws/mba"]]);
+  assert.throws(() => presetInput({ name: "x", dirs: [join(here, "gone")] }), /no directory on this station/, "this station's are still looked for");
+  const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "local", preset: p.id });
+  sayIn(r.hub, thread.id, "local", "go");
+  await settle();
+  const opened = r.claude.last().options;
+  assert.deepEqual(opened.dirs, [here], "only this machine's to the runtime");
+  assert.ok(opened.instructions.includes(`  - ${here}\n`), opened.instructions);
+  assert.ok(opened.instructions.includes("/Users/b/Design on station MBA: read it there"), opened.instructions);
+  assert.ok(opened.instructions.includes("github.com/acme/app: this station's clone of it"), opened.instructions);
   await r.close();
 });

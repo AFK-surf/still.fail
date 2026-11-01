@@ -19,16 +19,16 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
   let label = if name == "" { @sf.t("web-main.preset.label") } else { name }
   let asked = take_asked("preset")
   if take_asked("preset-new") {
-    preset_dialog(src, w, address, "")
+    preset_dialog(src, w, address, "", items(v, "stations"))
   }
   if take_asked("preset-edit") {
-    preset_dialog(src, w, address, text(items(v, "presets").get(0), "id"))
+    preset_dialog(src, w, address, text(items(v, "presets").get(0), "id"), items(v, "stations"))
   }
   if take_asked("preset-add") {
-    preset_dialog(src, w, address, text(items(v, "presets").get(0), "id"), adding=true)
+    preset_dialog(src, w, address, text(items(v, "presets").get(0), "id"), items(v, "stations"), adding=true)
   }
   if take_asked("preset-new-add") {
-    preset_dialog(src, w, address, "", adding=true)
+    preset_dialog(src, w, address, "", items(v, "stations"), adding=true)
   }
   if (new_capsule(c, "new/preset", label, floating, fn() {
       @sf.icon(c, "boxes", size=new_mark, color=if name == "" { t.p.muted } else { t.p.text }) |> ignore
@@ -67,12 +67,12 @@ fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, picked 
     menu.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.preset.editNamed", args=[("name", text(v, "presetName"))]), fn() {
-          preset_dialog(src, w, if at == "" { address } else { at }, picked)
+          preset_dialog(src, w, if at == "" { address } else { at }, picked, items(v, "stations"))
         }, icon="edit"),
       ),
     )
   }
-  menu.push(Some(@sf.menu_item_of(@sf.t("web-main.preset.newRow"), fn() { preset_dialog(src, w, address, "") }, icon="plus")))
+  menu.push(Some(@sf.menu_item_of(@sf.t("web-main.preset.newRow"), fn() { preset_dialog(src, w, address, "", items(v, "stations")) }, icon="plus")))
   @sf.menu(menu, from~, title=@sf.t("web-main.preset.label"))
 }
 
@@ -92,11 +92,12 @@ fn dir_label(path : String) -> String {
 }
 
 ///|
-/// A preset being made or changed: its folders (their paths, as picked), what its name was filled with (the first
+/// A preset being made or changed: its folders (each its path, its repository, the station it is on where that is not
+/// the preset's: `station`, `stationName`; what it shows as: `name`, `where`, `icon`), what its name was filled with (the first
 /// folder's, until another is typed), whether what it was is in it yet (one changed: once the station's presets are
 /// read), being saved, why it was not.
 priv struct PresetEditing {
-  dirs : Array[String]
+  dirs : Array[Json]
   mut auto : String
   mut filled : Bool
   mut saving : Bool
@@ -115,7 +116,8 @@ let preset_serial : Ref[Int] = Ref(0)
 /// them), what people want of its chats; at its foot 删除 for one there, 取消, 创建 or 保存. Made, it is the one picked
 /// for the station's new chats.
 /// `adding`: 添加目录 asked open as it is first drawn (a fixture's screen of it).
-fn preset_dialog(src : Source, w : Workspace, address : String, id : String, adding? : Bool = false) -> Unit {
+/// `stations`: the workspace's up now (the `newChat` view's), whose folders are offered too.
+fn preset_dialog(src : Source, w : Workspace, address : String, id : String, stations : Array[Json], adding? : Bool = false) -> Unit {
   preset_serial.val += 1
   let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding }
   let key = fn(part : String) { "preset-editor/" + e.serial.to_string() + "/" + part }
@@ -137,7 +139,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, add
       @sf.t("web-main.preset.edit")
     },
     fn(c, _) {
-      let offered = items(presets_of(src, address), "candidates")
+      let offered = offered_dirs(src, address, stations)
       // (one changed: what it is, once the station's presets are read)
       if !e.filled {
         match was() {
@@ -146,7 +148,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, add
             name.set(text(Some(p), "name"))
             instructions.set(text(Some(p), "instructions"))
             for d in items(Some(p), "dirs") {
-              e.dirs.push(text(Some(d), "path"))
+              e.dirs.push(d)
             }
           }
           None => ()
@@ -154,7 +156,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, add
       }
       // its name: the first folder's until one is typed
       let auto = match e.dirs.get(0) {
-        Some(d) => dir_label(d)
+        Some(d) => dir_label(text(Some(d), "path"))
         None => ""
       }
       if id == "" && name.text() == e.auto && auto != e.auto {
@@ -166,21 +168,23 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, add
       })
       @sf.field(c, @sf.t("web-main.preset.dirs"), hint=if e.dirs.length() == 0 { @sf.t("web-main.preset.dirsHint") } else { "" }, fn() {
         c.box(style=preset_dirs, fn() {
-          for path in e.dirs {
-            let at = path
-            let one = match offered.iter().find_first(fn(o) { text(Some(o), "path") == at }) {
+          for d in e.dirs {
+            let at = dir_key(Some(d))
+            // (what it shows as: as the station offers it, where it does)
+            let one = match offered.iter().find_first(fn(o) { dir_key(Some(o)) == at }) {
               Some(x) => Some(x)
-              None => None
+              None => Some(d)
             }
+            let path = text(one, "path")
             c.box(style=preset_dir_row, fn() {
-              repo_mark(c, dir_label(at), text(one, "repo"), text(one, "icon"), preset_dir_mark)
+              repo_mark(c, dir_label(path), text(one, "repo"), text(one, "icon"), preset_dir_mark)
               c.box(style=preset_dir_words, fn() {
-                c.text(if text(one, "name") != "" { text(one, "name") } else { dir_label(at) }, style=preset_dir_name) |> ignore
-                c.text(if text(one, "where") != "" { text(one, "where") } else { at }, style=preset_dir_note) |> ignore
+                c.text(if text(one, "name") != "" { text(one, "name") } else { dir_label(path) }, style=preset_dir_name) |> ignore
+                c.text(dir_note(one, false), style=preset_dir_note) |> ignore
               })
               |> ignore
               if @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove")) {
-                e.dirs.retain(fn(x) { x != at })
+                e.dirs.retain(fn(x) { dir_key(Some(x)) != at })
               }
             })
             |> ignore
@@ -227,7 +231,22 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, add
         let params : Map[String, Json] = {
           "station": Json::string(address),
           "name": Json::string(name.text().trim(chars=" \n").to_owned()),
-          "dirs": Json::array(e.dirs.map(Json::string)),
+          // (this station's by their paths; another's as it was read there, with its station)
+          "dirs": Json::array(
+            e.dirs.map(fn(d) {
+              let one = Some(d)
+              if text(one, "station") == "" {
+                Json::string(text(one, "path"))
+              } else {
+                Json::object({
+                  "path": Json::string(text(one, "path")),
+                  "repo": if text(one, "repo") == "" { Json::null() } else { Json::string(text(one, "repo")) },
+                  "station": Json::string(text(one, "station")),
+                  "stationName": Json::string(text(one, "stationName")),
+                })
+              }
+            }),
+          ),
           "instructions": Json::string(instructions.text()),
         }
         if id != "" {
@@ -252,36 +271,91 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, add
 }
 
 ///|
-/// 添加目录: the folders the station found and not in the preset yet, a pick searched by name (those its chats worked in
-/// first, each where it is from and how many chats used it), and 输入路径 for one it did not find.
+/// 添加目录: the folders the workspace's stations found and not in the preset yet, a pick searched by name (those their
+/// chats worked in first, each where it is, on which station where it is not the preset's, how many chats used it),
+/// and 输入路径 for one of the preset's station it did not find.
 fn preset_add_pick(offered : Array[Json], e : PresetEditing, from : @sf.Beside) -> Unit {
+  let has = fn(k : String) { e.dirs.iter().any(fn(d) { dir_key(Some(d)) == k }) }
   let choices = offered
-    .filter(fn(o) { !e.dirs.contains(text(Some(o), "path")) })
+    .filter(fn(o) { !has(dir_key(Some(o))) })
     .map(fn(o) {
       let one = Some(o)
       let (name, repo, icon) = (text(one, "name"), text(one, "repo"), text(one, "icon"))
-      @sf.choice(text(one, "path"), name, note=offer_note(one), mark=fn(c, size) { repo_mark(c, name, repo, icon, size) })
+      @sf.choice(dir_key(one), name, note=dir_note(one, true), mark=fn(c, size) { repo_mark(c, name, repo, icon, size) })
     })
   // (its mark in the marks' column, as the folders' are)
   choices.push(@sf.choice("+path", @sf.t("web-main.preset.typePath"), mark=fn(c, size) { @sf.icon(c, "edit", size~, color=@sf.theme().p.muted) |> ignore }))
-  @sf.pick(@sf.t("web-main.preset.add"), choices, "", fn(path) {
-    if path == "+path" {
+  @sf.pick(@sf.t("web-main.preset.add"), choices, "", fn(k) {
+    if k == "+path" {
       @sf.ask(@sf.t("web-main.preset.typePath"), @sf.t("web-main.preset.addShort"), fn(typed) {
-        if typed != "" && !e.dirs.contains(typed) {
-          e.dirs.push(typed)
+        let d = Json::object({ "path": Json::string(typed) })
+        if typed != "" && !has(dir_key(Some(d))) {
+          e.dirs.push(d)
         }
       }, placeholder="~/code/app")
-    } else if !e.dirs.contains(path) {
-      e.dirs.push(path)
+    } else {
+      match offered.iter().find_first(fn(o) { dir_key(Some(o)) == k }) {
+        Some(o) => if !has(k) { e.dirs.push(o) }
+        None => ()
+      }
     }
   }, from~)
 }
 
 ///|
-/// What an offered folder says under its name: the repository it is a clone of, how many chats worked in it.
-fn offer_note(o : Json?) -> String {
-  let chats = count(o, "chats")
-  let parts = [if text(o, "where") != "" { text(o, "where") } else { text(o, "repo") }, if chats > 0 { @sf.t("web-main.preset.chats", args=[("n", chats.to_string())]) } else { "" }]
+/// A folder by where it is: its station ("" the preset's own) and its path.
+fn dir_key(d : Json?) -> String {
+  text(d, "station") + "\n" + text(d, "path")
+}
+
+///|
+/// The folders the workspace's stations offer (each one's `presets` topic, read as it is shown): the preset's
+/// station's first, then the others', each marked with its station; a repository once (where it is on the preset's
+/// station, else on the first that has it), as its chats find it by its address on whichever station they run.
+fn offered_dirs(src : Source, address : String, stations : Array[Json]) -> Array[Json] {
+  let out : Array[Json] = []
+  let repos : Map[String, Bool] = {}
+  let take = fn(at : String, station_name : String) {
+    for o in items(presets_of(src, at), "candidates") {
+      let repo = text(Some(o), "repo")
+      if repo != "" && repos.contains(repo) {
+        continue
+      }
+      if repo != "" {
+        repos[repo] = true
+      }
+      match o {
+        Object(m) if at != address => {
+          let marked = m.copy()
+          marked["station"] = Json::string(at)
+          marked["stationName"] = Json::string(station_name)
+          out.push(Json::object(marked))
+        }
+        _ => out.push(o)
+      }
+    }
+  }
+  take(address, "")
+  for s in stations {
+    let at = text(Some(s), "station")
+    if at != "" && at != address {
+      take(at, text(Some(s), "name"))
+    }
+  }
+  out
+}
+
+///|
+/// What a folder says under its name: where it is (and on which station, where it is not the preset's), how many chats
+/// worked in it (`chats`: where it is offered).
+fn dir_note(o : Json?, chats : Bool) -> String {
+  let n = count(o, "chats")
+  let at = if text(o, "where") != "" { text(o, "where") } else if text(o, "repo") != "" { text(o, "repo") } else { text(o, "path") }
+  let parts = [
+    at,
+    text(o, "stationName"),
+    if chats && n > 0 { @sf.t("web-main.preset.chats", args=[("n", n.to_string())]) } else { "" },
+  ]
   join(parts.filter(fn(x) { x != "" }), " · ")
 }
 

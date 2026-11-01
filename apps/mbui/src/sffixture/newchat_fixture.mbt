@@ -45,7 +45,7 @@ pub let new_fix : NewFix = {
   crowded: false,
   tall: false,
   preset: "",
-  presets: [fix_preset("p-sf", "still.fail 开发", ["still.fail"], "改界面先发改前改后对比图。"), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")],
+  presets: [fix_preset_design(), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")],
 }
 
 ///|
@@ -72,6 +72,55 @@ fn fix_repo(name : String) -> String {
 }
 
 ///|
+/// still.fail 开发: still.fail on the first station, its design folder on MBA.
+fn fix_preset_design() -> Json {
+  match fix_preset("p-sf", "still.fail 开发", ["still.fail"], "改界面先发改前改后对比图。") {
+    Object(m) => {
+      let p = m.copy()
+      let dirs = match p.get("dirs") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      dirs.push({ "path": "/Users/me/Design/still.fail 设计稿", "repo": Json::null(), "station": "ws1/st2", "stationName": "MBA" })
+      p["dirs"] = Json::array(dirs)
+      Json::object(p)
+    }
+    other => other
+  }
+}
+
+///|
+/// A made-up station's presets and the folders it offers (the `presets` topic): MBA's a design folder and a clone of
+/// still.fail of its own (offered once, as the first station's), the first station's the rest.
+pub fn fix_presets_of(station : String) -> Json {
+  if station.has_suffix("st2") {
+    {
+      "presets": [],
+      "candidates": [
+        {
+          "path": "/Users/me/Design/still.fail 设计稿",
+          "name": "still.fail 设计稿",
+          "repo": Json::null(),
+          "chats": 0.0,
+          "lastAt": 1793500000000.0,
+          "where": "~/Design/still.fail 设计稿",
+        },
+        {
+          "path": "/Users/me/code/still.fail",
+          "name": "still.fail",
+          "repo": "github.com/AFK-surf/still.fail",
+          "chats": 2.0,
+          "lastAt": 1793500000000.0,
+          "where": "~/code/still.fail",
+        },
+      ],
+    }
+  } else {
+    { "presets": Json::array(new_fix.presets), "candidates": fix_candidates() }
+  }
+}
+
+///|
 /// The directories the made-up station offers for a new preset: its clones, those its chats worked in most first.
 pub fn fix_candidates() -> Json {
   Json::array(
@@ -80,7 +129,6 @@ pub fn fix_candidates() -> Json {
       ("tstst", "~/code/tstst", "github.com/zzj3720/tstst", 9, false),
       ("iroh", "github.com/zzj3720/iroh", "github.com/zzj3720/iroh", 3, true),
       ("riff", "~/code/riff", "github.com/zzj3720/riff", 0, false),
-      ("设计稿", "~/Design/设计稿", "", 0, false),
     ].map(fn(x) {
       let (name, at, repo, chats, cached) = x
       let path = if cached { "/Users/me/.stillfail/repos/" + name } else { "/Users/me" + at.unsafe_substring(start=1, end=at.length()) }
@@ -612,7 +660,6 @@ pub fn fixture_new_topic(f : Fixture, name : String) -> Json? {
   match name {
     "newChat" => Some(fix_new_chat(f))
     "pick" => Some(fix_pick())
-    "presets" => Some({ "presets": Json::array(new_fix.presets), "candidates": fix_candidates() })
     _ => None
   }
 }

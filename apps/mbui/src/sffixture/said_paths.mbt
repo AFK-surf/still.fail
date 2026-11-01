@@ -1091,6 +1091,7 @@ pub let said_paths : Map[String, Array[String]] = {
   "presets": [
     "presets.*.name",
     "presets.*.dirs.*.path",
+    "presets.*.dirs.*.stationName",
     "presets.*.instructions",
     "candidates.*.path",
     "candidates.*.name",

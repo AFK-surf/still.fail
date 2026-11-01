@@ -9,8 +9,10 @@ import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
 
-/// A directory a preset works with: a path on this station, and the repository it is a clone of (its origin), if one.
-export type PresetDir = { path: string; repo: string | null };
+/// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`
+/// (its address) and `stationName`: another station of the workspace's it is on; none: the station the preset is on.
+/// In a chat's copy, `elsewhere`: the station it is on by name, where that is not the chat's.
+export type PresetDir = { path: string; repo: string | null; station?: string; stationName?: string; elsewhere?: string };
 
 export type Preset = {
   id: string;
@@ -23,9 +25,9 @@ export type Preset = {
   updatedAt: number;
 };
 
-/// What a chat was opened with: the preset as it was then. `elsewhere`: the station it is of, by name, where that is
-/// not this one (its folders are there).
-export type PresetCopy = { id: string; name: string; dirs: PresetDir[]; instructions: string; elsewhere?: string | null };
+/// What a chat was opened with: the preset as it was then, each folder's `elsewhere` said where it is not the chat's
+/// station's.
+export type PresetCopy = { id: string; name: string; dirs: PresetDir[]; instructions: string };
 
 const FILE = "presets.json";
 const COPY = ".stillfail-preset.json";
@@ -37,7 +39,12 @@ const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
 function dirsOf(v: unknown): PresetDir[] {
   if (!Array.isArray(v)) return [];
-  return v.flatMap((d) => (typeof d?.path === "string" ? [{ path: d.path, repo: str(d.repo) }] : []));
+  return v.flatMap((d) => {
+    if (typeof d?.path !== "string") return [];
+    const dir: PresetDir = { path: d.path, repo: str(d.repo) };
+    for (const k of ["station", "stationName", "elsewhere"] as const) if (typeof d[k] === "string" && d[k] !== "") dir[k] = d[k];
+    return [dir];
+  });
 }
 
 function presetOf(v: any): Preset | null {
@@ -85,9 +92,16 @@ export function presetInput(v: unknown): { name: string; dirs: PresetDir[]; inst
   for (const d of o.dirs) {
     const given = typeof d === "string" ? d : str((d as { path?: unknown })?.path);
     if (given === null || given.trim() === "") throw new Error("a directory needs a path");
+    // (another station's, as the app read it there: taken as said, not looked for here)
+    const at = typeof d === "object" && d !== null ? str((d as { station?: unknown }).station) : null;
+    if (at !== null && at !== "") {
+      const stationName = str((d as { stationName?: unknown }).stationName) ?? "";
+      if (!dirs.some((x) => x.path === given && x.station === at)) dirs.push({ path: given, repo: str((d as { repo?: unknown }).repo), station: at, ...(stationName ? { stationName } : {}) });
+      continue;
+    }
     const path = expand(given.trim());
     if (!isDirectory(path)) throw new Error(`${given} is no directory on this station`);
-    if (dirs.some((x) => x.path === path)) continue;
+    if (dirs.some((x) => x.path === path && x.station === undefined)) continue;
     dirs.push({ path, repo: originOf(path) });
   }
   if (dirs.length > DIRS_MAX) throw new Error(`a preset has ${DIRS_MAX} directories at most`);
@@ -200,7 +214,9 @@ export class Presets {
   keepFor(workspace: string, ws: string | null, id: string): PresetCopy {
     const p = this.get(ws, id);
     if (p === null) throw new NoPreset(id);
-    return keepCopy(workspace, { id: p.id, name: p.name, dirs: p.dirs, instructions: p.instructions });
+    // (its other stations' folders said to be there)
+    const dirs = p.dirs.map(({ station, stationName, ...d }) => (station === undefined ? d : { ...d, elsewhere: stationName || station }));
+    return keepCopy(workspace, { id: p.id, name: p.name, dirs, instructions: p.instructions });
   }
 }
 
@@ -216,15 +232,15 @@ export function keepCopy(workspace: string, copy: PresetCopy): PresetCopy {
   return copy;
 }
 
-/// A preset of another station's as the asking app gives it (POST /sessions `presetCopy`: what it read there, the
-/// station it is of by name): its folders are that station's, taken as said.
+/// A preset of another station's as the asking app gives it (POST /sessions `presetCopy`: what it read there, each
+/// folder's `elsewhere` where it is not this station's), taken as said.
 export function presetCopyInput(v: unknown): PresetCopy {
   const o = (v ?? {}) as Record<string, unknown>;
   const name = (str(o.name) ?? "").trim();
   if (name === "" || Array.from(name).length > NAME_MAX) throw new Error("presetCopy: a preset needs a name");
   const dirs = dirsOf(o.dirs).slice(0, DIRS_MAX);
   const instructions = (str(o.instructions) ?? "").slice(0, INSTRUCTIONS_MAX);
-  return { id: str(o.id) ?? "", name, dirs, instructions, elsewhere: str(o.elsewhere) };
+  return { id: str(o.id) ?? "", name, dirs: dirs.map(({ station: _s, stationName: _n, ...d }) => d), instructions };
 }
 
 /// What a chat whose session workspace is `workspace` was opened with, if anything.
@@ -232,7 +248,7 @@ export function presetCopyOf(workspace: string): PresetCopy | null {
   try {
     const v = JSON.parse(readFileSync(join(workspace, COPY), "utf8"));
     if (typeof v?.id !== "string" || typeof v?.name !== "string") return null;
-    return { id: v.id, name: v.name, dirs: dirsOf(v.dirs), instructions: str(v.instructions) ?? "", elsewhere: str(v.elsewhere) };
+    return { id: v.id, name: v.name, dirs: dirsOf(v.dirs), instructions: str(v.instructions) ?? "" };
   } catch {
     return null;
   }
@@ -240,13 +256,12 @@ export function presetCopyOf(workspace: string): PresetCopy | null {
 
 /// What the agent of a chat opened with `copy` is told of it, after the station's own instructions.
 export function presetInstructions(copy: PresetCopy): string {
-  const there = copy.elsewhere ?? null;
   const dirs = copy.dirs.map((d) =>
-    there === null
+    d.elsewhere === undefined
       ? `  - ${d.path}${d.repo ? ` (a clone of ${d.repo}: change it in a worktree of your own, as with any repository)` : ""}`
       : d.repo
-        ? `  - ${d.repo}: this station's clone of it (in the repository cache; clone it there if it is not yet), a worktree of your own to change it (on ${there} it is ${d.path})`
-        : `  - ${d.path} on station ${there}: read it there with the station tools (station_task, station_file), not copied here`,
+        ? `  - ${d.repo}: this station's clone of it (in the repository cache; clone it there if it is not yet), a worktree of your own to change it (on ${d.elsewhere} it is ${d.path})`
+        : `  - ${d.path} on station ${d.elsewhere}: read it there with the station tools (station_task, station_file), not copied here`,
   );
   const lines = [
     "",

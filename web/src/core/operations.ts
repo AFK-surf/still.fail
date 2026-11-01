@@ -29,8 +29,8 @@ export interface OperationParams {
   "decision.close": { thread: number; seq: number; option: string };
   "chat.report": { thread: number; seq: number };
   "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; preset?: string | null | undefined };
-  "preset.add": { name: string; dirs: string[]; instructions?: string | null | undefined };
-  "preset.put": { id: string; name: string; dirs: string[]; instructions?: string | null | undefined };
+  "preset.add": { name: string; dirs: unknown; instructions?: string | null | undefined };
+  "preset.put": { id: string; name: string; dirs: unknown; instructions?: string | null | undefined };
   "preset.delete": { id: string };
   "chats.archived": {  };
   "chat.forSession": { session?: string | null | undefined };

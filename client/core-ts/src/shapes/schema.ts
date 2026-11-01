@@ -1287,6 +1287,8 @@ export const SHAPES: Record<string, Shape> = {
   PresetDir: struct([
     ["path", "String", { said: true }],
     ["repo", opt("String"), { doc: "The repository a clone there is of: github.com/acme/app." }],
+    ["station", opt("String"), { doc: "Another station of the workspace's it is on (its address); none: the preset's own station's." }],
+    ["stationName", opt("String"), { said: true }],
   ]),
   PresetCandidate: struct([
     ["path", "String", { said: true }],
