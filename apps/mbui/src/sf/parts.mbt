@@ -71,6 +71,7 @@ fn button_part(
   hint? : String = "",
   end_icon? : String = "",
   lead? : (Int64) -> Unit,
+  ink_override? : Int64,
   active? : Bool = false,
   expanded? : Bool,
 ) -> (Bool, Int) {
@@ -95,7 +96,7 @@ fn button_part(
     },
     spec=@motion.tween(dur_ms, ease=Out),
   )
-  let (ground, line, ink) = if on_night.val {
+  let (ground, line, tone_ink) = if on_night.val {
     // (on a stage: the night under it whatever the theme)
     match tone {
       Primary | DangerSolid => (mix(0xFFFFFFFFL, h, share_ink), 0L, share_ground)
@@ -126,6 +127,7 @@ fn button_part(
       }
     }
   }
+  let ink = ink_override.unwrap_or(tone_ink)
   // (among the tools of a bar across the top: level with them and the window's buttons)
   let height = if tools_across.val { viewer_tool_h } else { button_height() }
   let solid = tone == Primary || tone == DangerSolid
@@ -3454,8 +3456,8 @@ let command_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// view's; `set_open`: what opens or closes it, as it is pressed (as it is let go) or dismissed (at that moment: Escape,
 /// a press beside it). What was chosen comes back. `lead`: what stands before its words (a station's mark), in the ink
 /// its words have. `disabled`: out of reach, with any open menu closed. `capsule`: round it as a capsule when it sits
-/// at the end of another capsule, so the two can share a centre. `as_button`: the same solid button as the card's
-/// primary action, with a chevron after its words.
+/// at the end of another capsule, so the two can share a centre. `as_button`: the size and text style of a button,
+/// retaining the chooser's quiet colors, with a chevron after its words.
 pub fn chooser(
   c : @ui.Ctx,
   key : String,
@@ -3505,7 +3507,18 @@ pub fn chooser(
     })
   }
   if as_button {
-    let (_, node) = button_part(c, words, key~, tone=Primary, disabled~, end_icon="chevron-down", lead?, active=opened || focused, expanded=opened)
+    let (_, node) = button_part(
+      c,
+      words,
+      key~,
+      tone=Ghost,
+      disabled~,
+      end_icon="chevron-down",
+      lead?,
+      ink_override=if lit { p.text } else { p.muted },
+      active=opened || focused,
+      expanded=opened,
+    )
     b = node
   } else if at_foot {
     // A 28-high chooser may wrap to the foot's corner on its own. Give it a button-high line and put its capsule

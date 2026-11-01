@@ -29,7 +29,7 @@ test "a sign-in card keeps its primary action at the bottom when the choice wrap
 }
 
 ///|
-test "the sign-in choice has the same button appearance as the primary action" {
+test "the sign-in choice has the button's size and keeps its quiet colors" {
   let calls : Array[Made] = []
   let t = cards_core(calls, mode="chat-signin")
   @ui.fake_autofill.val = true
@@ -42,9 +42,12 @@ test "the sign-in choice has the same button appearance as the primary action" {
       r.0 <= w.1 && r.0 + r.2 >= w.1 + w.3 && r.1 <= w.2 && r.1 + r.3 >= w.2 + w.4 && r.3 <= 40.0
     })
   }
-  let primary_ground = ground_at(primary).unwrap()
-  let choice_ground = ground_at(choice).unwrap()
-  assert_eq((choice_ground.3, choice_ground.4), (primary_ground.3, primary_ground.4))
+  assert_true(ground_at(primary) is Some(_))
+  assert_true(ground_at(choice) is None, msg="the choice has no solid ground when it is not pointed at or open")
+  let inks = t.drawn_glyphs().filter(fn(g) {
+    g.0 >= choice.1 - 1.0 && g.0 <= choice.1 + choice.3 + 1.0 && g.1 >= choice.2 - 1.0 && g.1 <= choice.2 + choice.4 + 1.0
+  }).map(fn(g) { g.2 })
+  assert_true(!inks.is_empty() && inks.iter().all(fn(ink) { ink == @sf.theme().p.muted }), msg="choice ink \{inks}")
 }
 
 ///|
@@ -59,6 +62,21 @@ test "the wrapped sign-in choice opens and stays aligned after choosing" {
   let (title_x, _, _, _) = t.rect_of("登录 github.com").unwrap()
   let (choice_x, _, _, _) = t.rect_of("不存入密钥库").unwrap()
   assert_true((choice_x - title_x).abs() < 0.01, msg="title \{title_x}, choice \{choice_x}")
+}
+
+///|
+test "the sign-in choice's menu leaves the primary action visible" {
+  let calls : Array[Made] = []
+  let t = cards_core(calls, mode="chat-signin")
+  @ui.fake_autofill.val = true
+  t.draw()
+  let (ax, ay, aw, ah) = t.get(Button, label="用密码管理器登录").rect
+  t.click(Button, label="登录后存入密钥库")
+  let (mx, my, mw, mh) = t.get(Menu).rect
+  assert_true(
+    mx + mw <= ax || mx >= ax + aw || my + mh <= ay || my >= ay + ah,
+    msg="menu (\{mx}, \{my}, \{mw}, \{mh}) covers primary action (\{ax}, \{ay}, \{aw}, \{ah})",
+  )
 }
 
 ///|
