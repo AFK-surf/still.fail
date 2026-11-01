@@ -183,7 +183,7 @@ pub fn Ctx::shows_motion(self : Ctx, who : Mover, going : Bool) -> Unit {
   // (going, what reads it reads the clock: built again each frame, frame_watch.mbt; and the next frame asked for as
   // this one ends, to read it again: what goes is sampled each frame it is read in, whatever else is said to move)
   if going {
-    clock_read_here()
+    clock_read_here(who~)
     if self.in_frame() {
       self.motion_read = true
     }

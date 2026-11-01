@@ -215,6 +215,25 @@ test "an animated value starts the frame it is asked in, and follows its target"
 }
 
 ///|
+test "a frame built again for an animated value going says which: its key and the place that told it, not the motion package's" {
+  let shown = Ref(false)
+  // the tween's length
+  let tween_ms = 400.0
+  let t = @ui.Tester::new(fn(c) {
+    let v = @motion.animate(c, "slide", if shown.val { 1.0 } else { 0.0 }, spec=@motion.tween(tween_ms, ease=Linear))
+    c.box(w=Px(10.0 + 10.0 * v), h=Px(10.0), fn() {  }) |> ignore
+  })
+  shown.val = true
+  t.frame()
+  t.run_for(tween_ms / 8.0)
+  let why = t.built_why()
+  assert_true(why.has_prefix("the clock read at a motion of Anim \"slide\", told at "), msg=why)
+  assert_true(why.contains("motion_test.mbt"), msg=why)
+  t.run_for(tween_ms)
+  t.assert_idle()
+}
+
+///|
 test "a spring told anew mid-way goes on as fast as it went" {
   let to = Ref::new(0.0)
   let seen : Array[Double] = []

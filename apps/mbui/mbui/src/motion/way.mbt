@@ -102,7 +102,15 @@ pub fn Way::goes_at(self : Way, t : Double) -> Bool {
 /// Off to `target` by `spec` from the moment `at` (its cause's), from where it is then and as fast (or at `velocity`,
 /// per second). With motion reduced (Ctx::still), there at once, as any motion is. What reads it asks for the frames
 /// it needs as it reads it (Way::get, Way::said): nothing of its own goes on.
-pub fn Way::go(self : Way, target : Double, spec : Spec, at~ : Double, velocity? : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn Way::go(
+  self : Way,
+  target : Double,
+  spec : Spec,
+  at~ : Double,
+  velocity? : Double,
+  loc~ : SourceLoc,
+) -> Unit {
   let (x, v) = self.at(at)
   self.from = x
   self.v0 = velocity.unwrap_or(v)
@@ -111,6 +119,8 @@ pub fn Way::go(self : Way, target : Double, spec : Spec, at~ : Double, velocity?
   self.start = @ui.whole_ms(at)
   self.dur = if @ui.current().still() { 0.0 } else { spec.duration(x, target, self.v0) }
   self.mover.changed()
+  // (who it is for the performance record: who sent it, not where to)
+  self.mover.told_as("a Way", loc)
   self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
 }
 

@@ -72,3 +72,27 @@ test "the performance record's frames: a pause between them is not slow, and a s
   assert_true(frames[0].has_suffix(" slow=0"), msg=frames[0])
   @hostapi.set_perf(false)
 }
+
+///|
+test "the performance record names the motions the frames were built for: what each is, who told it, its frames and work" {
+  let who = Mover::new()
+  let t = Tester::new(fn(c) {
+    c.shows_motion(who, true)
+    perf_scene(c)
+  })
+  t.set_perf(0)
+  @hostapi.set_perf(true)
+  t.ctx().moving(who, Endless::{  }, what="Anim \"slide\" to 1")
+  let at = place_here()
+  who.told_as("Anim \"slide\"", at)
+  t.frame()
+  t.run_for(probe_record_ms + 100.0)
+  let lines = t.perf_said().1
+  let named = "a motion of Anim \"slide\", told at \{at}"
+  let motions = lines.filter(fn(l) { l.has_prefix("frames motions (the 5 heaviest, ms/frames): ") })
+  assert_eq(motions.length(), 1, msg=lines.to_string())
+  assert_true(motions[0].has_suffix(" " + named) && !motions[0].contains(" | "), msg=motions[0])
+  let whys = lines.filter(fn(l) { l.has_prefix("frames why (the 5 heaviest, ms/frames): ") })
+  assert_true(whys[0].contains("built: the clock read at " + named), msg=whys[0])
+  @hostapi.set_perf(false)
+}

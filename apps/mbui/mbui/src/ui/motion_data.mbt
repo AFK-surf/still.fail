@@ -44,12 +44,35 @@ pub struct Mover {
   priv mut told : Int
   /// how many times it was told, as a signal, once a part or a row kept read where it is (Ctx::shows_motion)
   priv mut said : @signals.Signal[Int]?
+  /// what it moves and who last told it (Ctx::moving, Mover::told_as; "" and None: nobody said), without where to: what
+  /// the performance record names as the motion that read the clock (frame_watch.mbt's clock_said)
+  priv mut what : String
+  priv mut by : SourceLoc?
 }
 
 ///|
 /// A mover of its own, for what moves.
 pub fn Mover::new() -> Mover {
-  { told: 0, said: None }
+  { told: 0, said: None, what: "", by: None }
+}
+
+///|
+/// What it moves is `what` (an Anim and its key, a Value), told at `loc` (the app's place that set it going): what the
+/// performance record says read the clock as it goes (docs/perf-record.md), never what moves. Said as it sets out, after
+/// Ctx::moving (which says its own `what`, with where to).
+pub fn Mover::told_as(self : Mover, what : String, loc : SourceLoc) -> Unit {
+  self.what = what
+  self.by = Some(loc)
+}
+
+///|
+/// What it moves and who told it, in words ("" nobody said): the record's (Mover::told_as), formatted only as it is
+/// written.
+fn Mover::named(self : Mover) -> String {
+  match self.by {
+    Some(loc) => (if self.what == "" { "a motion" } else { self.what }) + ", told at \{loc}"
+    None => self.what
+  }
 }
 
 ///|
@@ -77,6 +100,7 @@ struct MoverEntry {
 /// test is told of it while it moves (Tester::moving).
 #callsite(autofill(loc))
 pub fn Ctx::moving(self : Ctx, who : Mover, m : &Moving, what? : String = "", loc~ : SourceLoc) -> Unit {
+  who.told_as(what, loc)
   self.moving_as(who, m, (if what == "" { "" } else { what + ", " }) + "told at \{loc}")
 }
 
@@ -87,6 +111,7 @@ pub fn Ctx::moving(self : Ctx, who : Mover, m : &Moving, what? : String = "", lo
 /// the clock. Not for a fiber: its clock is the runtime's (whole ms), not the frames'.
 #callsite(autofill(loc))
 pub fn Ctx::set_out(self : Ctx, who : Mover, m : &Moving, what? : String = "", loc~ : SourceLoc) -> Double {
+  who.told_as(what, loc)
   self.moving_as(who, m, (if what == "" { "" } else { what + ", " }) + "told at \{loc}")
   if self.in_frame() {
     self.clock
@@ -114,7 +139,7 @@ fn Ctx::movers_sample(self : Ctx) -> Unit {
   let n = self.movers.length()
   for i in 0..<n {
     let m = self.movers[i].m
-    m.sample(if m.keeps_time() { self.now() } else { self.clock })
+    m.sample(if m.keeps_time() { self.now_of(self.movers[i].who) } else { self.clock })
   }
 }
 
@@ -224,7 +249,7 @@ pub fn Ctx::cycle(self : Ctx, period : Double, resident? : Bool = false, loc~ : 
   } else {
     self.cycling = true
     part_live()
-    self.now()
+    self.now(loc~)
   }
   let p = at / period
   p - p.floor()
@@ -386,6 +411,8 @@ pub fn SpringPath::go(
     self.end = now + 1000.0 * spring_end(x - to, self.v0, self.k, self.c, self.rest)
   }
   g().moving(self.id, self as &Moving, what=what + " to \{to}", loc~)
+  // (named for the record without where to: the same spring told elsewhere is the same motion)
+  self.id.what = what
 }
 
 ///|

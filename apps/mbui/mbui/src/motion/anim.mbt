@@ -87,7 +87,8 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
     c.moving_as(self.id, self as &@ui.Moving, self.told)
   }
   // (going: what reads it reads the clock, built again each frame: frame_watch.mbt)
-  let ms = c.now() - self.start
+  // (read for its mover: the performance record names it, not this place)
+  let ms = c.now_of(self.id) - self.start
   match (self.gen, self.spec) {
     (Some(g), Motion(tr)) => {
       // as Motion plays it: its generator at the time since it started (whole ms), done when it says so
@@ -282,14 +283,16 @@ pub fn Anim::animate(
   } else {
     self.running = true
     // said once, as it is told to go: frames until it is there
-    self.told = (if self.name == "" { "an Anim" } else { "Anim \"" + self.name + "\"" }) +
-      " to \{target}, told at \{loc}"
+    let what = if self.name == "" { "an Anim" } else { "Anim \"" + self.name + "\"" }
+    self.told = what + " to \{target}, told at \{loc}"
     if c.in_frame() {
       c.moving_as(self.id, self as &@ui.Moving, self.told)
     } else {
       // (told between frames: from the moment it was told, a frame asked for to show it)
       ignore(c.set_out(self.id, self as &@ui.Moving, what=self.told))
     }
+    // (who it is for the performance record: its key and who told it, not where to)
+    self.id.told_as(what, loc)
   }
 }
 
