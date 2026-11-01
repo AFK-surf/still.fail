@@ -326,6 +326,8 @@ struct Node {
   // width from its widest line up to that)
   mut full : TextLayout?
   mut full_max : Double
+  // whether full is cut after its max_lines (words left off it)
+  mut full_cut : Bool
   // rich text: its runs, and as laid out (in rl_max)
   mut rich : Rich?
   // lines drawn over its ground (Ctx::lines: line.mbt)
@@ -521,6 +523,7 @@ fn Node::new() -> Node {
     tl: None,
     full: None,
     full_max: 0.0,
+    full_cut: false,
     rich: None,
     lines: [],
     said_of: "",

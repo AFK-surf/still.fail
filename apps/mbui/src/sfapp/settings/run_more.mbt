@@ -527,7 +527,7 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
               look_at_machine_session(core, station, name, s)
             }
             // its first words whole while it is pointed at (MachineSessions.tsx's tip: its title cut short is often them)
-            @sf.tip(c, key + "/tip", c.id(key), text(sv, "first"))
+            @sf.tip(c, key + "/tip", c.id(key), text(sv, "first"), repeats=text(sv, "title") == "")
           }
         }
       })

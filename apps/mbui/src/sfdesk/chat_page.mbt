@@ -780,7 +780,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
             }
           })
           c.semantics(b, Link, id~, label=o.text)
-          @sf.tip(c, "info-opener", id, o.text)
+          @sf.tip(c, "info-opener", id, o.text, repeats=true)
           return
         }
         None => ()

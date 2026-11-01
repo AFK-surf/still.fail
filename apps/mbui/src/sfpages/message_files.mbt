@@ -488,7 +488,8 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     ]
   }
   file_menu(c, open, "", quote=quote_of(here, a, owner, by), more=load)
-  @sf.tip(c, "msg-file/" + @sfbase.file_key(a), open, a.name)
+  // (its name whole, where its band cuts it short)
+  @sf.tip(c, "msg-file/" + @sfbase.file_key(a), open, a.name, repeats=true)
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw
   let thumb = here.station + "/" + owner + "/" + a.path
