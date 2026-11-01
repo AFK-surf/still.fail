@@ -717,6 +717,8 @@ pub let kept_places : Map[String, KeptPlace]
 
 pub fn kept_read(String) -> Bytes?
 
+pub fn language_said(Source) -> Unit
+
 pub fn leaving_back() -> Unit
 
 pub fn leaving_done() -> Unit

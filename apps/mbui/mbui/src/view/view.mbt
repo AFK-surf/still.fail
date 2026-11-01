@@ -130,7 +130,8 @@ pub(all) struct Content {
 /// Whether it draws anything of its own: a ground, words, shapes, lines, a picture, glass, or what hosts it (the one place that says what
 /// a node draws, for what asks whether it draws nothing: Tree::alone).
 pub fn Content::draws(self : Content) -> Bool {
-  self.ground != 0L ||
+  // (a ground of no opacity draws nothing: ui's paint of it, an old view's box's grounded)
+  (self.ground & 0xFFL) != 0L ||
   self.words != "" ||
   !self.shapes.is_empty() ||
   !self.lines.is_empty() ||
@@ -1317,6 +1318,9 @@ priv enum Prop {
   CutsSoftly
   DrawnOff
   GroundDrawn
+  MinHeight
+  Aspect
+  Nowhere
 } derive(Eq, Hash)
 
 ///|
@@ -1685,7 +1689,8 @@ fn Tree::pivot_of(self : Tree, at : Int, w : Double, h : Double) -> (Double, Dou
 /// Whether node `n` draws something of its own: a ground, words, shapes, lines, a picture, or an old view it hosts.
 fn draws_of(n : Node) -> Bool {
   let l = n.look
-  l.ground != 0L ||
+  // (a ground of no opacity draws nothing: ui's paint of it, an old view's box's grounded)
+  (l.ground & 0xFFL) != 0L ||
   l.words != "" ||
   !l.runs.is_empty() ||
   !l.shapes.is_empty() ||
@@ -2627,6 +2632,10 @@ pub(all) struct Drag {
   /// when the finger went down: a hold another node held first and handed it (Tree::hand_through) keeps the moment it
   /// began, what it counts how long it is held from
   since : Double
+  /// how wide and how tall the node is laid out as of then, in its own terms (what `x` and `y` are within: a press's
+  /// ripple as big as what it ripples, nothing of its layout read back for it; nothing, called off)
+  w : Double
+  h : Double
 } derive(Eq, Show, Debug)
 
 ///|
@@ -2848,7 +2857,7 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
         for g in fingers {
           // (each told only while the node and this on_drag are still its: what one told let go of hears no more)
           guard bound_still(n, h, said) else { break }
-          f({ kind: Off, x: 0.0, y: 0.0, at: t, wx: 0.0, wy: 0.0, ox: 0.0, oy: 0.0, finger: g, since: t })
+          f({ kind: Off, x: 0.0, y: 0.0, at: t, wx: 0.0, wy: 0.0, ox: 0.0, oy: 0.0, finger: g, since: t, w: 0.0, h: 0.0 })
         }
       })
     }
@@ -2934,7 +2943,20 @@ pub fn Tree::drag_at(
       Some(f) => {
         let (nx, ny, ns) = self.placed(id.at)
         let told = fn(kind : DragIs, finger : Int) {
-          f({ kind, x: (x - nx) / ns, y: (y - ny) / ns, at: t, wx: x, wy: y, ox: (x - nx) / ns, oy: (y - ny) / ns, finger, since: t })
+          f({
+            kind,
+            x: (x - nx) / ns,
+            y: (y - ny) / ns,
+            at: t,
+            wx: x,
+            wy: y,
+            ox: (x - nx) / ns,
+            oy: (y - ny) / ns,
+            finger,
+            since: t,
+            w: n.flex.width,
+            h: n.flex.height,
+          })
         }
         // (called off, all of it: the hold and the fingers let go of first, then each finger down told so while the node
         // and this on_drag are still its: what one told let go of hears no more)

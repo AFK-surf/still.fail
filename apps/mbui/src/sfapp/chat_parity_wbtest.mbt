@@ -386,6 +386,16 @@ fn words_node(t : @ui.Tester, s : String) -> (Double, Double)? {
       return Some((x + w / 2.0, y + h / 2.0))
     }
   }
+  // (or a node of the window's tree saying those words alone, where it is drawn)
+  match @ui.view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.words == s && d.alpha > 0.0 {
+          return Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
+        }
+      }
+    None => ()
+  }
   None
 }
 

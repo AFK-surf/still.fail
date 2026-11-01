@@ -864,7 +864,8 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
         self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
       }
   }
-  if c.ground != 0L {
+  // (a ground of no opacity draws nothing, as an old view's box's: scene.mbt's paint of its bg)
+  if (c.ground & 0xFFL) != 0L {
     self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, 0.0, 0L, 1.0)
   }
   // (its ground's instances: its shadow, its glass, its fill and edge, drawn off and bigger as it says, View::ground_drawn)
@@ -873,7 +874,8 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
     // (in pieces each set its own way: one paragraph, as Ctx::rich's; one line given less than it is wide cut to it,
     // ending in an ellipsis, as its plain words are)
     let r = view_rich(c.runs, c.words_look)
-    let lay = layout_rich(r, if r.wrap { c.w + 0.5 } else { 1.0e9 })
+    // (wrapped in its width as laid out, as an old view's paragraph is where it is placed: Node::rich_layout's)
+    let lay = layout_rich(r, if r.wrap { c.w } else { 1.0e9 })
     let over = !r.wrap && lay.w > c.w + 0.5
     let (r, lay) = if over {
       let cut_r = cut_rich({ ..r, max_lines: 1 }, lay, c.w)
@@ -904,7 +906,8 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
     // (one line given less than it is wide: cut to it, ending in an ellipsis, as an old view's words on one line are)
     // (at the system's size of words, in the theme's digits, as measured: view_words_measure)
     let (size, line, style) = (self.sp(k.size), self.sp(k.line), view_words_style())
-    let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w + 0.5 } else { 1.0e9 }, k.wrap, line~, style~)
+    // (wrapped in its width as laid out, as an old view's words are where they are placed: Node::text_layout's)
+    let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~)
     let tl = if !k.wrap && tl.w > c.w + 0.5 {
       ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~) })
     } else {

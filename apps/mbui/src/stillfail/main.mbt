@@ -278,9 +278,9 @@ let core_source : @sfapp.Source = {
   },
   cancel: fn(id) { @core.cancel(id) },
   sign_in: fn() { @sfcore.sign_in() },
-  signing_in: fn() { @sfcore.state.busy },
+  signing_in: fn() { @sfcore.sign_in_now().busy },
   sign_in_step: fn() {
-    let s = @sfcore.state
+    let s = @sfcore.sign_in_now()
     @sfbase.SignInStep::of(busy=s.busy, verifying=s.verifying, waiting=s.waiting, failed=s.failed)
   },
   picture,

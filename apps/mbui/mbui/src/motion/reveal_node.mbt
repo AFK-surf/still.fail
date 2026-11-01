@@ -33,6 +33,8 @@ pub fn reveal_node(parent : @view.View, open : () -> Bool, make : (@view.View) -
         Some(if k > 0.0 { k } else { 0.0 })
       }
     }))
+    // (shut: no room of its own, nor the gap what holds it leaves before it, as an old view's room shut is not built)
+    .laid_nowhere(By(fn() { !open() && shown() <= 0.0 }))
     .clips(By(fn() { shown() < 1.0 }))
     .cuts_softly(By(fn() { shown() < 1.0 }))
     .presses(By(fn() { open() }))

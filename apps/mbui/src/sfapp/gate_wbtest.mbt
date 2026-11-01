@@ -25,14 +25,14 @@ fn gate_tester(
   calls : Array[(String, Json)],
   signed : Ref[Int],
   answer? : (String, Json) -> Result[Json, Json] = fn(_, _) { Ok(Json::object({})) },
-  step? : Ref[@sfbase.SignInStep] = Ref::new(Idle),
+  step? : @signals.Signal[@sfbase.SignInStep] = @signals.signal(Idle, same=fn(a, b) { a == b }),
 ) -> @ui.Tester raise {
   new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,
     sign_in: fn() { signed.val += 1 },
-    sign_in_step: fn() { step.val },
+    sign_in_step: fn() { step.get() },
     call: fn(name, params, done) {
       match name {
         "workspace.create" | "invitation.accept" | "auth.signOut" => {
@@ -93,26 +93,26 @@ test "signed out, at each width on either screen: where signing in stands said u
     let (w, platform, regular) = case
     let at = "\{w} platform \{platform}"
     let signed = Ref::new(0)
-    let step : Ref[@sfbase.SignInStep] = Ref::new(Failed("登录已取消"))
+    let step : @signals.Signal[@sfbase.SignInStep] = @signals.signal(Failed("登录已取消"), same=fn(a, b) { a == b })
     let t = gate_tester("signin", w, platform, regular, [], signed, step~)
     t.run_for(@ui.move_most_ms)
     // the core's words under the button, the button as it was
     assert_true(t.find("登录已取消") is Some(_), msg=at)
     assert_true(t.find("登录或注册") is Some(_), msg=at)
     // none of the core's: that it failed
-    step.val = Failed("")
+    step.set(Failed(""))
     t.run_for(@ui.move_most_ms)
     assert_true(t.find("登录失败") is Some(_), msg=at)
     assert_true(t.find("登录已取消") is None, msg=at)
     // the page out in the browser: said so, the button opening it again
-    step.val = InBrowser
+    step.set(InBrowser)
     t.run_for(@ui.move_most_ms)
     assert_true(t.find("在浏览器中完成登录") is Some(_), msg=at)
     assert_true(t.find("登录失败") is None, msg=at)
     t.tap_text("重新打开登录页")
     assert_eq(signed.val, 1, msg=at)
     // what the browser brought being checked: 正在登录, not pressed again, nothing said under it
-    step.val = Verifying
+    step.set(Verifying)
     t.run_for(@ui.move_most_ms)
     assert_true(t.find("正在登录") is Some(_), msg=at)
     assert_true(t.find("在浏览器中完成登录") is None, msg=at)
@@ -177,4 +177,84 @@ test "an account not let in, at each width on either screen: why, its email; 退
     t.tap_text("切换账号")
     assert_eq(signed.val, 1, msg=at)
   }
+}
+
+///|
+test "signed out: where signing in stands, changed with no frame drawn since, is what its button does at once: at work not pressed, out in the browser pressed to open it again" {
+  let signed = Ref::new(0)
+  let step : @signals.Signal[@sfbase.SignInStep] = @signals.signal(Idle, same=fn(a, b) { a == b })
+  let t = gate_tester("signin", 390.0, 2, false, [], signed, step~)
+  let (x, y, bw, bh) = t.rect_of("登录或注册").unwrap()
+  let (bx, by) = (x + bw / 2.0, y + bh / 2.0)
+  // (no frame drawn from here: each told as a host tells it, between frames)
+  step.set(Verifying)
+  t.touch(0, bx, by)
+  t.touch(2, bx, by)
+  let at_work = signed.val
+  step.set(InBrowser)
+  t.touch(0, bx, by)
+  t.touch(2, bx, by)
+  assert_eq((at_work, signed.val), (0, 1))
+}
+
+///|
+/// The app signed out as it is first made, 390 wide to touch: no words of the app's said yet (a key said as it is,
+/// sf's words_of as a run starts), the fixture's prefs saying `lang` where given, its device's locale `locale`; the
+/// Tester as made, its first frame drawn and none after. Its sign-in step.
+fn gate_cold(
+  lang? : String = "",
+  locale? : String = "zh-CN",
+) -> (@ui.Tester, @signals.Signal[@sfbase.SignInStep]) {
+  new_run()
+  // (as a run starts: no words told, each key said as it is)
+  @sf.set_words(fn(key, _) { key })
+  let base = fixture("signin")
+  let step : @signals.Signal[@sfbase.SignInStep] = @signals.signal(Idle, same=fn(a, b) { a == b })
+  let src : Source = {
+    ..base,
+    sign_in_step: fn() { step.get() },
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      if name == "prefs" && lang != "" {
+        let prefs = match got.value {
+          Some(Object(m)) => m.copy()
+          _ => {}
+        }
+        prefs["lang"] = Json::string(lang)
+        { ..got, value: Some(Json::object(prefs)) }
+      } else {
+        got
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, env=[("MBUI_LOCALE", locale)])
+  (t, step)
+}
+
+///|
+/// The middle across of the words `s` as the tree draws them, and whether the tree reads the clock (something going).
+fn gate_words_at(s : String) -> (Double, Bool) {
+  let tree = @ui.view_tree().unwrap()
+  match tree.drawn().iter().find_first(fn(d) { d.words == s }) {
+    Some(d) => (d.x + d.w / 2.0, tree.clock_read())
+    None => (-1.0, tree.clock_read())
+  }
+}
+
+///|
+test "signed out, its words told as the app's tree is made: its button's words in its middle from the first frame the page is drawn, nothing going; changed then (重新打开登录页), going to their new place" {
+  let (t, step) = gate_cold()
+  let first = gate_words_at("登录或注册")
+  step.set(InBrowser)
+  t.frame_at(t.time() + 40.0)
+  let (on_way, going) = gate_words_at("重新打开登录页")
+  t.run_for(@ui.move_most_ms)
+  let (there, still_going) = gate_words_at("重新打开登录页")
+  assert_eq((first, going, on_way != there, still_going), ((195.0, false), true, true, false), msg="\{first} \{on_way} \{there}")
+}
+
+///|
+test "signed out, the prefs saying English, the device Chinese: its button's English words in its middle from the first frame the page is drawn, nothing going" {
+  let (_t, _) = gate_cold(lang="en", locale="zh-CN")
+  assert_eq(gate_words_at("Sign in or sign up"), (195.0, false))
 }

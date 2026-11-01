@@ -766,8 +766,11 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     // what is written, as the core's composers keep it (compose_fixture.mbt): its files up at once
     "composer" => Some(fix_compose_view(f, text(Some(Json::object(params)), "key")))
     // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the
-    // account not let into this app)
-    "workspaces" if f.mode == "landing" || f.mode == "landing-invited" || f.mode == "blocked" => {
+    // account not let into this app), landing-code (still.fail cloud asking for an invite code to make one)
+    "workspaces" if f.mode == "landing" ||
+      f.mode == "landing-invited" ||
+      f.mode == "blocked" ||
+      f.mode == "landing-code" => {
       let o : Map[String, Json] = {
         "account": account,
         "workspaces": [],
@@ -1125,6 +1128,11 @@ pub fn fixture(mode : String) -> Source {
           return
         }
         None => ()
+      }
+      // a workspace asked to be made, still.fail cloud wanting an invite code first (landing-code)
+      if name == "workspace.create" && f.mode == "landing-code" && text(Some(params), "invite_code") == "" {
+        done(Err({ "code": "invite_code_required", "message": "invite code required" }))
+        return
       }
       // asked back (a toast's 撤销, the archive's 还原): in the lists again, as well as out of the archive
       if name == "chat.archive" && field(Some(params), "archived") is Some(False) {

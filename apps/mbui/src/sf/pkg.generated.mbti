@@ -172,6 +172,8 @@ pub let button_h : Double
 
 pub fn button_height() -> Double
 
+pub fn button_node(@view.View, () -> String, () -> Unit, tone? : Tone, busy? : () -> Bool, disabled? : () -> Bool, across? : Bool) -> @view.View
+
 pub let button_raised : Raised
 
 pub fn capsule_end_room(Double, Double) -> @ui.Space
@@ -2214,13 +2216,25 @@ pub fn way_in(@ui.Ctx, String, String, String, String, String, busy? : Bool, sai
 
 pub fn way_in_button(@ui.Ctx, String, String, solid? : Bool, busy? : Bool) -> Bool
 
+pub fn way_in_button_node(@view.View, () -> String, () -> Unit, solid? : Bool, busy? : () -> Bool) -> @view.View
+
 pub fn way_in_link(@ui.Ctx, String, String, busy? : Bool) -> Bool
+
+pub fn way_in_link_node(@view.View, () -> String, () -> Unit, busy? : () -> Bool) -> @view.View
+
+pub fn way_in_node(@view.View, () -> String, () -> String, () -> String, () -> String, () -> String, () -> Unit, busy? : () -> Bool, said? : () -> (String, Bool)) -> @view.View
 
 pub fn way_in_note(@ui.Ctx, String) -> Unit
 
+pub fn way_in_note_node(@view.View, () -> String) -> @view.View
+
 pub fn way_in_page(@ui.Ctx, String, () -> Unit) -> Unit
 
+pub fn way_in_page_node(@view.View, () -> String, (@view.View) -> Unit) -> @view.View
+
 pub fn way_in_title(@ui.Ctx, String) -> Unit
+
+pub fn way_in_title_node(@view.View, () -> String) -> @view.View
 
 pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit) -> Unit
 

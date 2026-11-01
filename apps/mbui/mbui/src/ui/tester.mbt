@@ -1214,6 +1214,16 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
       return Some((n.x, n.y, n.fw, n.fh))
     }
   }
+  // (or the words of a node of the window's tree, where it is drawn, as Tester::find finds them)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.words.contains(s) && d.alpha > 0.0 {
+          return Some((d.x, d.y, d.w, d.h))
+        }
+      }
+    None => ()
+  }
   None
 }
 

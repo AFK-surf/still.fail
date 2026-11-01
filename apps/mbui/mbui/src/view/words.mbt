@@ -113,6 +113,38 @@ pub fn View::min_width(self : View, w : Live[Double?]) -> View {
 }
 
 ///|
+/// How tall it is at least as a share of what holds it (0 to 1, of the height what holds it is laid out at; None: as
+/// what it holds makes it), as it changes: as tall as that, or taller as what it holds needs. Layout's.
+pub fn View::min_height_share(self : View, share : Live[Double?]) -> View {
+  self.bind(MinHeight, share, Layout, fn(s) {
+    self.tree.nodes[self.at].flex.style.set_min_height(match s {
+      Some(s) => Pct(s * 100.0)
+      None => Auto
+    })
+  })
+  self
+}
+
+///|
+/// How wide it is for how tall (0: neither said by the other), as it changes: the side its holder or its own size leaves
+/// open worked out from the other (a picture laid out as wide as it is given, as tall as it is drawn then). Layout's.
+pub fn View::aspect(self : View, wide_for_tall : Live[Double]) -> View {
+  self.bind(Aspect, wide_for_tall, Layout, fn(a) { self.tree.nodes[self.at].flex.style.aspect = a })
+  self
+}
+
+///|
+/// Laid out nowhere while `on` says so, as it changes: no room of its own in what holds it, none of the gap that leaves
+/// between what it holds (a room shut: an old view's not built while it is), left out as one its row has not the room
+/// for is (View::drops, View::left_out): it and all it holds not drawn, pressed (by a finger, by its id, by a screen
+/// reader) or read out, a press held on it called off, from the layout that lays it out so; back, the same nodes, as
+/// it is laid out again. Layout's.
+pub fn View::laid_nowhere(self : View, on : Live[Bool]) -> View {
+  self.bind(Nowhere, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.display = if on { @flex.DisplayNone } else { @flex.Flex } })
+  self
+}
+
+///|
 /// How what it holds lines up across it (None: stretched across it; their starts, middles or ends), as it changes:
 /// layout's.
 pub fn View::lines_up(self : View, along : Live[Along?]) -> View {
@@ -132,5 +164,13 @@ pub fn View::lines_up(self : View, along : Live[Along?]) -> View {
 /// changes: layout's.
 pub fn View::width_share(self : View, share : Live[Double]) -> View {
   self.bind(Width, share, Layout, fn(s) { self.tree.nodes[self.at].flex.style.set_width(Pct(s * 100.0)) })
+  self
+}
+
+///|
+/// How tall it is as a share of what holds it (0 to 1; the same binding as View::height, which says it in points), as
+/// it changes: layout's.
+pub fn View::height_share(self : View, share : Live[Double]) -> View {
+  self.bind(Height, share, Layout, fn(s) { self.tree.nodes[self.at].flex.style.set_height(Pct(s * 100.0)) })
   self
 }

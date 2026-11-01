@@ -2,17 +2,22 @@
 package "stillfail/sfcore"
 
 import {
+  "mbui/signals",
   "stillfail/core",
 }
 
 // Values
 pub fn begin() -> Unit
 
+pub let changed : @signals.Signal[Int32]
+
 pub fn env_text(String) -> String
 
 pub fn frame(@core.Sub) -> Unit
 
 pub fn sign_in() -> Unit
+
+pub fn sign_in_now() -> SignIn
 
 pub fn start() -> Bool
 

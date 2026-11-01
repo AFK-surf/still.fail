@@ -388,6 +388,9 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
     // (starting or failed, nodes of the window's tree with no old view to say it: said here, as the state is)
     match app_is(src) {
       (Starting | Failed) as state => splash_said(src, state)
+      // (signed out, or signed in at the landing: the ways in's nodes, entry_tree.mbt)
+      SignedOut => entry_said()
+      SignedIn if shell_is(src, @ui.current().window_size().0) is Landing => entry_said()
       _ => ()
     }
     @ui.old_views_here(c)
@@ -483,6 +486,11 @@ fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
 /// theme, the window's sides, the layers over it).
 pub fn app_tree(src : Source) -> (@view.View) -> Unit {
   fn(root) {
+    // (the library's words, the app's catalog's, and their language as the core's prefs say it, said before any page of
+    // nodes is made: what one says on its first frame is its words in that language, not their keys or the device's
+    // laid out and then said again; the old frame tells them each build, the same)
+    @sf.set_words(fill)
+    @sfbase.language_said(src)
     // (what the splash waits by, kept by what lives through the app's states: splash_begin)
     splash_owner.val = Some(root)
     // (its nodes drawn in still.fail's theme, the one its old views are built in, as light or dark is set: view's
@@ -520,6 +528,9 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
       if state == Starting || state == Failed {
         // starting or failed, the splash: the window's tree's nodes (splash_tree)
         splash_tree(v, src, state)
+      } else if state == SignedOut {
+        // signed out, the sign-in page: the window's tree's nodes (entry_tree.mbt)
+        signed_out_tree(v, src)
       } else if state == SignedIn {
         // where the app is, put in the history's entry now as the stack or the workspace in view changes, at that
         // change (sfbase's app_history.mbt: a person's act pushed an entry before it moved the stack, one for all the
@@ -547,6 +558,7 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             Stacked => narrow_shell(s, src)
             Taped => taped_shell(s, src)
             Paned => paned_shell(s, src)
+            Landing => landing_tree(s, src)
             Whole => whole(s)
           }
         })

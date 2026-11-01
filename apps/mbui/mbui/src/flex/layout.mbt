@@ -1715,8 +1715,11 @@ fn layout_flex(
       n.left = on_grid(ox + x + dx)
       n.top = on_grid(oy + y + dy)
     }
+    // (one laid out nowhere: left out as one its row has not the room for is, its last layout forgotten, what it holds
+    // of no size)
     for c in node.children {
       if c.style.display == DisplayNone {
+        left_out(c)
         zero(c)
       }
     }
