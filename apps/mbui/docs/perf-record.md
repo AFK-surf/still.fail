@@ -28,7 +28,8 @@ drawn or not. Off, nothing runs: no timer, no file touched, a flag read each fra
 | `core js: busy=N% tasks=N 120ms/30 shell:fetch \| 80ms/2 app:chat.send \| …` | apple_core.mm | the core's thread by what each task was: `app:<call>`, `app:sub <topic>` (asked by the app), `shell:<op>` (the shell's answer to what the core asked: its JS handling it), `timer` (a JS timer), `task` (anything else) |
 | `shell: tap.views=… istream.read=… ops: name=N …` | apple_core.mm | what the Rust shell did: the remote screen's taps, and the 6 operations asked most since |
 | `frames: fps= fps_peak= span= cpu= looks_alone= painted_alone= (last: …) main_busy= avg msgs/build/layout/paint/present= drawn whole/part/none= gpu_avg= slow=` | mbui app.mbt | the main thread's frames since the last summary, said as the first frame after its 5 s comes (`span`: how long that was, longer where nothing was drawn for a while): how many a second on average and in its busiest second (`fps_peak`: a burst not averaged away by a pause after it), how busy, what its last frame was for, where each frame's time went on average, how much of the window each drew, the GPU's time, frames whose own work took longer than 24 ms (a pause before a frame is not one) |
-| `frames why (the 5 heaviest, ms/frames): 310ms/120 built: the clock read at src/…:42 \| …` | mbui app.mbt | what the frames were for, by why (frame_watch.mbt's `built_why` / `painted_why`; `looks: cycles at src/…` for the looks alone, where each cycle drawn was said, Ctx::cycle_look), each its main-thread work and count |
+| `frames why (the 5 heaviest, ms/frames): 310ms/120 built: the clock read at src/…:42 \| …` | mbui app.mbt | what the frames were for, by why (frame_watch.mbt's `built_why` / `painted_why`; `looks: cycles at src/…` for the looks alone, where each cycle drawn was said, Ctx::cycle_look), each its main-thread work and count. A clock read by a motion going names the motion and who told it, not the framework's place: `the clock read at a motion of Anim "slide", told at src/sf/x.mbt:12:5-12:40@stillfail` (an Anim: its key and where `animate`/`told`/`follow` was called; a Value, a Way: where it was started; a list's fling, a stack's slide, a spring: what it is and where it was set out), as it was built, laid out (`the clock read as it was laid out at …`) or painted (`… as it was painted at …`); a part or a list's row built again for it adds `, the clock read in it at a motion of …`. Unnamed (a mover never said, @ui.now, @hostapi.polled): `the clock read at a motion, the host's clock or its state (…)` as before |
+| `frames motions (the 5 heaviest, ms/frames): 290ms/118 a motion of Anim "slide", told at src/sf/x.mbt:12:5-12:40@stillfail \| …` | mbui app.mbt | the motions the frames were for (the ones `frames why` names as what read the clock), each its work and count, whether its frames were built, laid out or painted for it: the animations that keep the frames going. Not written when no frame was for a named motion |
 | `measures: 150 now-room/… 39x18 to 0x18 \| 150 emit-tail/… not laid out \| …` | mbui motion/layer.mbt | the measures (measure, measured_size, measured_rect) that told what read them since the last summary, the 6 most told first, each its count, key and why: its size from to, `laid out again` / `not laid out` (gone a frame, back the next: a reader that measures only some frames), `moved`, `first`, `forgotten`. A row built again each frame for a measure shows here by its key |
 | `frames heaviest: Nms <why>` | mbui app.mbt | the slowest frame and why it was |
 | `messages (bytes/count, by channel): …` | mbui messages.mbt | what was posted to the app (`core`, the screens', the system's), each its bytes and count |
@@ -79,7 +80,8 @@ relay or addresses iroh kept, so neither says whether the dial needed the DHT.
    working for the app (Metal, the decoder, networking).
 3. The main thread: `frames:` gives fps and `main_busy`. A page at rest should draw nothing: fps near 0. If fps stays
    high at rest, `frames why` says why each frame was built or painted, with the place in the sources (a clock read, a
-   moment waited for, what a read changed and where it was set); the heaviest of them is the one to fix. High
+   moment waited for, what a read changed and where it was set); the heaviest of them is the one to fix. A motion
+   that keeps going is named with who told it, and `frames motions` sums the frames each motion was for. High
    `avg … build` with few frames: building is slow (nodes=); high `present` or `gpu_avg`: the GPU's side (`drawn
    whole/part/none`: whole frames redrawn for little).
 4. The core: `core js:` says which task kind the core's thread spent its time on (an app call, a shell answer, a
@@ -93,7 +95,7 @@ relay or addresses iroh kept, so neither says whether the dial needed the DHT.
 
 ## What it costs
 
-Off: one flag read per frame and per core task. On: counters and sums, one map entry per frame's why, per core task
-kind and per core message kind; each 5 s a few lines appended (a file opened, written, closed on a queue of its own).
-The per-slow-frame lines of MBUI_PROBE=1 are not written (counted as `slow=`). MBUI_PROBE=1 still prints its lines on
-the log as before, with or without the record.
+Off: one flag read per frame and per core task. On: counters and sums, one map entry per frame's why (and its motion),
+per core task kind and per core message kind; each 5 s a few lines appended (a file opened, written, closed on a queue
+of its own). The per-slow-frame lines of MBUI_PROBE=1 are not written (counted as `slow=`). MBUI_PROBE=1 still prints
+its lines on the log as before, with or without the record.

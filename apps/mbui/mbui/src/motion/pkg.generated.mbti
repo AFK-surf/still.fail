@@ -399,7 +399,8 @@ pub fn Value::get(Self) -> Double
 pub fn Value::is_animating(Self) -> Bool
 pub fn Value::new(Double) -> Self
 pub fn Value::set(Self, Double) -> Unit
-pub fn Value::start(Self, Double, Spec, velocity? : Double) -> @effect.Fiber[Bool]
+#callsite(autofill(loc))
+pub fn Value::start(Self, Double, Spec, velocity? : Double, loc~ : SourceLoc) -> @effect.Fiber[Bool]
 pub fn Value::stop(Self) -> Unit
 pub fn Value::target(Self) -> Double
 pub fn Value::velocity(Self) -> Double
@@ -411,7 +412,8 @@ pub fn Way::at(Self, Double) -> (Double, Double)
 pub fn Way::end(Self) -> Double
 pub fn Way::ends_at(Self) -> Double
 pub fn Way::get(Self) -> Double
-pub fn Way::go(Self, Double, Spec, at~ : Double, velocity? : Double) -> Unit
+#callsite(autofill(loc))
+pub fn Way::go(Self, Double, Spec, at~ : Double, velocity? : Double, loc~ : SourceLoc) -> Unit
 pub fn Way::goes_at(Self, Double) -> Bool
 pub fn Way::new(Double) -> Self
 pub fn Way::put(Self, Double) -> Unit

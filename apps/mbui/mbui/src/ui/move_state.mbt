@@ -268,7 +268,9 @@ pub fn Ctx::move_state(
     waits_late: true,
     late_at,
   }
-  self.moving_as(who, run as &Moving, "a move of \{names.keys().collect()} set out at \{loc}")
+  let what = "a move of \{names.keys().collect()} set out at \{loc}"
+  who.what = what
+  self.moving_as(who, run as &Moving, what)
   self.move_runs.push(run)
 }
 

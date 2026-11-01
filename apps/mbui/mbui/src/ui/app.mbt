@@ -2140,6 +2140,13 @@ pub fn perf_counting() -> Bool {
 let probe_whys : Map[String, (Int, Double)] = {}
 
 ///|
+/// The motions the frames since the last summary were for, each its count and work (ms), by the motion their why names
+/// as what read the clock (frame_watch.mbt's built_motion: an Anim's key and who told it), whether it was built, laid
+/// out or painted for it.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_motions : Map[String, (Int, Double)] = {}
+
+///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
 let probe_worst : Ref[(Double, String)] = { val: (0.0, "") }
 
@@ -2255,6 +2262,10 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   if recording {
     let (k, ms) = probe_whys.get(why).unwrap_or((0, 0.0))
     probe_whys[why] = (k + 1, ms + work + present)
+    if built_motion.val != "" {
+      let (k, ms) = probe_motions.get(built_motion.val).unwrap_or((0, 0.0))
+      probe_motions[built_motion.val] = (k + 1, ms + work + present)
+    }
     if probe_worst.val.1 == "" || work + present > probe_worst.val.0 {
       probe_worst.val = (work + present, why)
     }
@@ -2327,6 +2338,10 @@ fn probe_said(c : Ctx, t : Double, recording : Bool) -> Unit {
     let r = (fn(x : Double) { (x * 10.0).round() / 10.0 })
     let whys = probe_whys.map(fn(_, v) { (v.0, r(v.1)) })
     @hostapi.perf_line("frames why (the 5 heaviest, ms/frames):" + probe_top(whys, 5, "ms", sep=" | "))
+    if probe_motions.length() > 0 {
+      let motions = probe_motions.map(fn(_, v) { (v.0, r(v.1)) })
+      @hostapi.perf_line("frames motions (the 5 heaviest, ms/frames):" + probe_top(motions, 5, "ms", sep=" | "))
+    }
     if probe_worst.val.1 != "" {
       @hostapi.perf_line("frames heaviest: \{r(probe_worst.val.0)}ms \{probe_worst.val.1}")
     }
@@ -2383,6 +2398,7 @@ fn probe_reset(t : Double) -> Unit {
   probe_sec_n.val = 0
   probe_peak.val = 0
   probe_whys.clear()
+  probe_motions.clear()
   probe_worst.val = (0.0, "")
   probe_channels.clear()
   probe_since.val = t

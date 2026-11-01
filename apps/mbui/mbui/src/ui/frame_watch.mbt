@@ -234,34 +234,94 @@ fn paint_watch_of() -> @signals.Watch {
 /// The clock read followed where something reads (Ctx::now: a frame's build or paint, a computed), `loc` the reader.
 fn clock_read(loc : SourceLoc) -> Unit {
   if @signals.active_sub() is Some(_) {
-    clock_read_by(loc.to_string())
+    clock_read_by(loc.to_string(), None)
     frame_clock.get() |> ignore
   }
 }
 
 ///|
-/// The clock read followed by what shows a motion going (Ctx::shows_motion).
-fn clock_read_here() -> Unit {
+/// The clock read followed by what shows a motion going (Ctx::shows_motion: `who`'s, else the host's clock or its
+/// state): the record names the motion (Mover::told_as) where it was told who it is.
+fn clock_read_here(who? : Mover) -> Unit {
   if @signals.active_sub() is Some(_) {
-    clock_read_by("a motion, the host's clock or its state (Ctx::shows_motion, @ui.now, @hostapi.polled)")
+    clock_read_by("a motion, the host's clock or its state (Ctx::shows_motion, @ui.now, @hostapi.polled)", who)
     frame_clock.get() |> ignore
   }
 }
 
 ///|
-/// Where the clock was read followed (`at`), kept as the first such read of the frame's build or of its paint.
-fn clock_read_by(at : String) -> Unit {
-  let first = if paint_phase.val == 1 {
-    paint_clock_at
+/// Where the last frame built, laid out or painted first read the clock followed, which motion read it (`who`: the
+/// mover, kept beside `*_clock_at` as it is set and read only while that says a place; named as the record is written:
+/// clock_said).
+// kept across runs: written with clock_read_at, layout_clock_at and paint_clock_at
+let clock_read_who : Ref[Mover?] = Ref(None)
+
+///|
+// kept across runs: as clock_read_who
+let layout_clock_who : Ref[Mover?] = Ref(None)
+
+///|
+// kept across runs: as clock_read_who
+let paint_clock_who : Ref[Mover?] = Ref(None)
+
+///|
+/// Where a part or a list's row kept as its nodes (kept_part.mbt) first read the clock followed as the last frame
+/// built it, and which motion ("" none): its watch told by the frames' clock as the next begins, why it is built again.
+// kept across runs: put back as each frame begins (frame_drawn)
+let part_clock_at : Ref[String] = Ref("")
+
+///|
+// kept across runs: as part_clock_at
+let part_clock_who : Ref[Mover?] = Ref(None)
+
+///|
+/// Where the clock was read followed (`at`; by `who`'s motion, where it is known), kept as the first such read of the
+/// frame's build, of its layout or of its paint (and of the parts it built). Only a place and a mover kept: the words
+/// are worked out as the frame's why is (clock_said).
+fn clock_read_by(at : String, who : Mover?) -> Unit {
+  if paint_phase.val == 1 {
+    if paint_clock_at.val == "" {
+      paint_clock_at.val = at
+      paint_clock_who.val = who
+    }
   } else if laying.val {
-    layout_clock_at
+    if layout_clock_at.val == "" {
+      layout_clock_at.val = at
+      layout_clock_who.val = who
+    }
   } else {
-    clock_read_at
-  }
-  if first.val == "" {
-    first.val = at
+    if clock_read_at.val == "" {
+      clock_read_at.val = at
+      clock_read_who.val = who
+    }
+    if part_building() && part_clock_at.val == "" {
+      part_clock_at.val = at
+      part_clock_who.val = who
+    }
   }
 }
+
+///|
+/// Where the clock was read (`at`) by `who`, in words: the motion it is, as it was told (`a motion of Anim "key", told
+/// at <the app's place>`: Mover::told_as), else the place itself.
+fn clock_said(at : String, who : Mover?) -> String {
+  match who {
+    Some(m) => {
+      let named = m.named()
+      if named == "" {
+        at
+      } else {
+        "a motion of " + named
+      }
+    }
+    None => at
+  }
+}
+
+///|
+/// The motion the last frame's why names (clock_said: "" none), counted by the record (app.mbt's probe_motions).
+// kept across runs: written by each frame
+let built_motion : Ref[String] = Ref("")
 
 ///|
 /// What the host keeps and changes with no event of its own, read (@hostapi.polled: a browser come back to a login),
@@ -277,6 +337,18 @@ fn init {
 pub fn Ctx::now_before(self : Ctx, end : Double, loc~ : SourceLoc) -> Double {
   if self.clock < end {
     clock_read(loc)
+  }
+  self.clock
+}
+
+///|
+/// The frames' clock (ms), followed as Ctx::now is, read for `who`'s motion (an Anim stepped to the frame): the
+/// performance record names that motion (Mover::told_as) as what read it, not the place it was read at.
+#callsite(autofill(loc))
+pub fn Ctx::now_of(self : Ctx, who : Mover, loc~ : SourceLoc) -> Double {
+  if @signals.active_sub() is Some(_) {
+    clock_read_by(loc.to_string(), Some(who))
+    frame_clock.get() |> ignore
   }
   self.clock
 }
@@ -798,13 +870,25 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (and what came from outside that is no signal: a part kept whatever else the frame built anew is built anew for it)
   let outside = outside_events.val != outside_seen.val
   outside_seen.val = outside_events.val
+  // (the motions that read the clock as the last frame was built, laid out or painted: named as said here)
+  built_motion.val = ""
+  let said_clock = fn(at : String, who : Mover?) {
+    let words = clock_said(at, who)
+    if words != at {
+      built_motion.val = words
+    }
+    words
+  }
+  let (part_at, part_who) = (part_clock_at.val, part_clock_who.val)
+  part_clock_at.val = ""
+  part_clock_who.val = None
   let why = if said != "" {
     said
   } else if bench_whole.val && bench_measuring.val {
     "a bench building each frame whole"
   } else if watch.is_stale() {
     if clock_read_at.val != "" {
-      "the clock read at \{clock_read_at.val}"
+      "the clock read at \{said_clock(clock_read_at.val, clock_read_who.val)}"
     } else {
       "what it read changed" + (if frame_told_at.val != "" { ", set at \{frame_told_at.val}" } else { "" })
     }
@@ -825,7 +909,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     layout_said.val
   } else if layout_watch_of().is_stale() {
     if layout_clock_at.val != "" {
-      "the clock read as it was laid out at \{layout_clock_at.val}"
+      "the clock read as it was laid out at \{said_clock(layout_clock_at.val, layout_clock_who.val)}"
     } else {
       "what its layout read changed"
     }
@@ -834,7 +918,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     (match nodes_run.told_at {
       Some(at) => ", set at \{at}"
       None => ""
-    })
+    }) +
+    (if part_at != "" { ", the clock read in it at \{said_clock(part_at, part_who)}" } else { "" })
   } else if !paint_base.laid_same {
     "the one before it laid out otherwise"
   } else {
@@ -863,7 +948,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     paint_told
   } else if paint.is_stale() {
     if paint_clock_at.val != "" {
-      "the clock read as it was painted at \{paint_clock_at.val}"
+      "the clock read as it was painted at \{said_clock(paint_clock_at.val, paint_clock_who.val)}"
     } else {
       "what its paint read changed"
     }

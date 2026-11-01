@@ -209,7 +209,14 @@ pub fn Value::set(self : Value, x : Double) -> Unit {
 /// and as fast as it moves now (or at `velocity`, per second), interrupting the animation that moved it. The fiber
 /// gives true once the value is there, false when another animation took it over first. It starts at the moment it is
 /// told (the runtime's clock), and is said to move until its end.
-pub fn Value::start(self : Value, target : Double, spec : Spec, velocity? : Double) -> @effect.Fiber[Bool] {
+#callsite(autofill(loc))
+pub fn Value::start(
+  self : Value,
+  target : Double,
+  spec : Spec,
+  velocity? : Double,
+  loc~ : SourceLoc,
+) -> @effect.Fiber[Bool] {
   let rt = @ui.runtime()
   let now = rt.now()
   let (from, v) = self.sample(now)
@@ -219,7 +226,9 @@ pub fn Value::start(self : Value, target : Double, spec : Spec, velocity? : Doub
   self.to = target
   let r = Run::new(spec, from, target, velocity.unwrap_or(v), now, @ui.current().still())
   self.run = Some(r)
-  @ui.current().moving(self.mover, self as &@ui.Moving, what="Value to \{target}")
+  @ui.current().moving(self.mover, self as &@ui.Moving, what="Value to \{target}", loc~)
+  // (who it is for the performance record: who told it, not where to)
+  self.mover.told_as("a Value", loc)
   let f = rt.fork(name="animate", () => self.play(r))
   self.runner = Some(f)
   f
