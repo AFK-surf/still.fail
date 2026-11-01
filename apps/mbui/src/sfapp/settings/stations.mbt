@@ -76,7 +76,7 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       None => ["waiting"]
     }
     keys.push("foot")
-    scroll_page(c, "stations", blocks, keys~)
+    scroll_page(c, "stations", blocks, keys~, continuity=fn(k) { k.has_prefix("st/") })
   })
 }
 
