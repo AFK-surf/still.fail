@@ -503,7 +503,9 @@
     "fixture-import": {},
     "motion-spring": {},
     "built-by-hand": {},
-    "layout-read-back": {},
+    "layout-read-back": {
+      "src/sf/markdown.mbt": 1
+    },
     "motion-length": {
       "src/sfbase/under_post.mbt": 1,
       "src/sfpages/composer.mbt": 3
