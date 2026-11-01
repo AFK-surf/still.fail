@@ -1,5 +1,5 @@
 // The ways a folder of a station's drive is shown (the files' page, a chat's 文件 tab), switched over its list and kept
-// for each place on this device (prefs' `driveViews`): columns (the default: a column a folder, from where it is to
+// for each place on this device (prefs' `driveViews`): columns (a column a folder, from where it is to
 // the one open, as Finder's), a tree (folders opened in place, several at once), or a list (one folder). Each row is
 // the same (DriveRow): chosen by a press, opened by a double click, dragged, its menu on a right click; the place says
 // what a row does (`rowOf`, ../drive/browse.ts) and in what order a folder's entries go (`arranged`, as the core says).
@@ -88,10 +88,10 @@ export function useDropZone(target: DropTarget | undefined): {
   };
 }
 
-/** How `place` shows a folder, as last chosen there (columns where never chosen), and choosing another. */
+/** How `place` shows a folder, as last chosen there (the page starts as a list, a chat's tab as columns). */
 export function useDriveView(place: "page" | "tab"): [DriveView, (v: DriveView) => void] {
   const kept = usePrefs((p) => p.driveViews[place]);
-  const view: DriveView = kept === "tree" || kept === "list" ? kept : "columns";
+  const view: DriveView = kept === "tree" || kept === "list" || kept === "columns" ? kept : place === "page" ? "list" : "columns";
   return [view, (v) => setPrefs({ driveViews: { [place]: v } })];
 }
 
@@ -182,7 +182,7 @@ export function ColumnsView({ owner, at, open, shown, empty }: { owner: Owner; a
   return (
     <div ref={strip} className={css.columns}>
       {paths.map((path, i) => (
-        <Column key={path} owner={owner} at={{ ...at, path }} next={parts[i] ?? null} shown={shown} empty={i === 0 ? empty : undefined}
+        <Column key={path} owner={owner} at={{ ...at, path }} next={parts[i] ?? null} shown={shown} empty={i === paths.length - 1 ? empty : undefined}
           every={all ?? kept} dragging={dragging} onDrag={setDragging} onEvery={setEvery} />
       ))}
     </div>

@@ -71,7 +71,7 @@ test "a folder: what it holds in a line, folders first, hidden files left out; i
   let t = drive_tester("files")
   t.tap_text("文档")
   nav_rested(t)
-  assert_true(t.find("2 个文件夹 · 7 个文件") is Some(_))
+  assert_true(t.find("2 个文件夹 · 6 个文件") is Some(_))
   assert_true(t.find(".草稿缓存") is None)
   let (_, y1) = t.find("设计稿").unwrap()
   let (_, y2) = t.find("长篇小说.txt").unwrap()

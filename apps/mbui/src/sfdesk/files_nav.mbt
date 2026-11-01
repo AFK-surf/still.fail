@@ -101,6 +101,7 @@ pub fn files_places(
   let stations = known.unwrap_or([])
   // (what the stations pin and the favourites' stations are among those with a drive: the one list read)
   let views = stations
+  let favs = favorites(src, ws)
   let rows : Array[PlaceItem] = [PTop(top)]
   match (known, error) {
     (None, Some(e)) => rows.push(PTrouble(e))
@@ -123,7 +124,9 @@ pub fn files_places(
   let pinned : Array[PlaceItem] = []
   for s in views {
     for r in s.roots {
-      pinned.push(PShared(s, r))
+      if !favorite_has(favs, s.station, r.path, "") {
+        pinned.push(PShared(s, r))
+      }
     }
   }
   if pinned.length() > 0 {
@@ -139,7 +142,7 @@ pub fn files_places(
         PReading => @sf.waiting(c, fn() { places_sample(c) })
         PNone =>
           c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
-        PFavorites => places_favorites(c, src, ws, views, go)
+        PFavorites => places_favorites(c, src, ws, views, favs, go)
         PHeading(h) => @sf.list_heading(c, h, Side)
         PStation(s) => {
           let more = i + 1 < rows.length() && rows[i + 1] is PStation(_)
@@ -176,7 +179,15 @@ pub fn files_places(
 /// Whether the folder is the one shown (the side in front: the stack's top), its row lit.
 fn place_lit(station : String, root : String, path : String) -> Bool {
   match app.nav.top() {
-    Drive(h) => h.station == station && h.root == Some(root) && h.path == path
+    Drive(h) =>
+      if h.station != station {
+        false
+      } else {
+        match h.root {
+          Some(r) => favorite_same_path(r, h.path, root, path)
+          None => false
+        }
+      }
     _ => false
   }
 }
@@ -189,10 +200,10 @@ fn places_favorites(
   src : Source,
   ws : String,
   views : Array[DvStation],
+  favs : Array[Favorite],
   go : (DriveAt) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
-  let favs = favorites(src, ws)
   let kid = c.id("files/keep")
   let keeping = fdrag_target(c, kid, "keep", None, "", true, true, 0, outside=false) is Some(_)
   c.box(style=if keeping { keep_on } else { keep_off }, id=kid, fn() {
@@ -209,18 +220,24 @@ fn places_favorites(
         Some(st) => {
           let place = f.station + "/" + f.root + "/" + f.path
           let rid = c.id("files/unfav/" + place)
-          let into : DriveAt = { station: f.station, root: Some(f.root), path: f.path }
+          let shared = st.roots.iter().find_first(fn(r) { favorite_same_path(f.root, f.path, r.path, "") })
+          // When this is also a shared root, open it through that root: a read-only member may not reach its parent.
+          let into : DriveAt = match shared {
+            Some(r) => { station: f.station, root: Some(r.path), path: "" }
+            None => { station: f.station, root: Some(f.root), path: f.path }
+          }
           fdrag_side_row(c, "fav/" + place, into, f.name, dv_rights(src, ws, Some(st)).write, st.transfers, fn() {
             if c.clicked(rid) {
               favorite_remove(src, ws, f.station, f.root, f.path)
             } else if nav_row(
                 c,
                 "files/fav/" + place,
-                place_lit(f.station, f.root, f.path),
+                place_lit(f.station, into.root.unwrap_or(""), into.path),
                 fn() {
-                  @sf.icon(c, "folder", size=nav_icon, color=t.p.muted) |> ignore
+                  @sf.icon(c, if shared is Some(_) { "pin" } else { "folder" }, size=nav_icon, color=t.p.muted) |> ignore
                   nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) })
-                  c.text(st.name, style=nav_meta(), allow_ellipsis=true) |> ignore
+                  let station_name = if shared is Some(_) { @sf.t("web-pages.files.sharedShort") + " · " + st.name } else { st.name }
+                  c.text(station_name, style=nav_meta(), allow_ellipsis=true) |> ignore
                   let ub = c.box(style=unkeep(), id=rid, fn() {
                     @sf.icon(c, "close", size=nav_icon, color=t.p.subtle) |> ignore
                   })

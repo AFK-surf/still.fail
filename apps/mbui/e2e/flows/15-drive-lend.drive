@@ -5,12 +5,12 @@ timeout 90000
 until 个人收藏
 shot 1-files
 tap icon:plus
-until Pin 这个文件夹
+until 共享此文件夹
 until e2e-{T}
 shot 2-picker
 tap e2e-{T}
 until 子文件夹
-tap =Pin 这个文件夹
-until 已 pin「e2e-{T}」
+tap =共享此文件夹
+until 已共享「e2e-{T}」
 until =e2e-{T}
 shot 3-lent

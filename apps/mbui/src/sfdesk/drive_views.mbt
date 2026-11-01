@@ -1,6 +1,6 @@
 // The ways a folder of a station's drive is shown (ember web/src/pages/DriveViews.tsx: the files' page, a chat's 文件
-// tab), switched over its list and kept for each place on this device (prefs `driveViews`: `page`, `tab`): columns (the
-// default: a column a folder, from where it is to the one open, as Finder's), a tree (folders opened in place, several
+// tab), switched over its list and kept for each place on this device (prefs `driveViews`: `page`, `tab`): columns (a
+// column a folder, from where it is to the one open, as Finder's), a tree (folders opened in place, several
 // at once), or a list (one folder). Each row is the same (DriveRow, drive.mbt): chosen by a press, opened by a double
 // click, dragged, its menu on a right click; the place says what a row does (`RowProps`) and in what order a folder's
 // entries go (the core's, through the place: Browse). How far each folder was scrolled is its list's own (kept by
@@ -105,12 +105,14 @@ fn drag_carried(at : DriveAt, name : String) -> Bool {
 }
 
 ///|
-/// How `place` (page or tab) shows a folder, as last chosen there (columns where never chosen).
+/// How `place` (page or tab) shows a folder, as last chosen there. The files page starts with the detailed list; a
+/// chat's narrower files tab starts with columns where they fit.
 pub fn drive_view(src : Source, place : String) -> String {
   match text(field((src.topic)("prefs", {}).value, "driveViews"), place) {
+    "columns" => "columns"
     "tree" => "tree"
     "list" => "list"
-    _ => "columns"
+    _ => if place == "page" { "list" } else { "columns" }
   }
 }
 
@@ -142,7 +144,7 @@ pub fn view_in(src : Source, place : String, room : Double) -> String {
 /// Another way chosen for `place` (`prefs.set {driveViews: {place}}`).
 pub fn set_drive_view(src : Source, place : String, v : String) -> Unit {
   let o : Map[String, Json] = {}
-  o[place] = if v == "columns" { Json::null() } else { Json::string(v) }
+  o[place] = if place != "page" && v == "columns" { Json::null() } else { Json::string(v) }
   (src.call)("prefs.set", { "driveViews": Json::object(o) }, fn(_) {  })
 }
 
@@ -538,7 +540,7 @@ pub fn columns_view(
   }
   c.box(style=columns_strip, fn() {
     for i in from..<paths.length() {
-      column(c, src, { ..at, path: paths[i] }, parts.get(i), s, widths[i], halves, if i == 0 { empty } else { None })
+      column(c, src, { ..at, path: paths[i] }, parts.get(i), s, widths[i], halves, if i == paths.length() - 1 { empty } else { None })
     }
   })
   |> ignore

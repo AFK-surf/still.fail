@@ -992,6 +992,7 @@ export const SHAPES: Record<string, Shape> = {
   DriveBrowseView: struct([
     ["arrangement", "DriveArrangement"],
     ["folders", map(vec("String")), { doc: "Each folder the place shows (its path relative to the root), its entries' names in the order shown: the folder,\nand in columns those before it, in a tree those open under it; one not read yet is not here." }],
+    ["countText", opt("String"), { doc: "The current folder's visible files and folders in words; absent while it is read." }],
     ["chosen", "DriveChosen"],
     ["open", vec("String"), { doc: "The folders a tree has open under the folder shown (relative to the root)." }],
     ["widths", map("u32"), { doc: "The columns dragged to a width of their own, by folder (the rest as every column is)." }],
@@ -1953,7 +1954,7 @@ export const SHAPES: Record<string, Shape> = {
     ["openChat", map("OpenChat"), { default: true, doc: "The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it\nwas; a new chat shown, none): what the workspace's page goes back to." }],
     ["chatTabs", map("KeptTabs"), { default: true, doc: "Each chat's history tabs, by `<station>:<chat>` (the latest 200)." }],
     ["dropFiles", map("bool"), { default: true, doc: "Chats whose files dragged in go otherwise than `dropAs` says, by `<station>:<chat>`: true as files, false\nnamed by their path (folders are named all the same)." }],
-    ["driveViews", map("String"), { default: true, doc: "How a station's files are listed on this device: each place's view (`page`: the files' page, `tab`: a\nchat's 文件 tab; tree, columns or list, none: columns), their order (`sort`: name, time, size or kind, `-down`\nafter it for the other way; none: name), whether hidden files show (`hidden`: shown) and how wide columns are\n(`column`: in pixels; none: 240)." }],
+    ["driveViews", map("String"), { default: true, doc: "How a station's files are listed on this device: each place's view (`page`: the files' page, `tab`: a\nchat's 文件 tab; tree, columns or list, none: list for the page and columns for the tab), their order (`sort`: name, time, size or kind, `-down`\nafter it for the other way; none: name), whether hidden files show (`hidden`: shown) and how wide columns are\n(`column`: in pixels; none: 240)." }],
     ["filesTabs", map("String"), { default: true, doc: "The files' page's tabs on this device, by workspace: what each shows (one folder, or two side by side), which\nis in front, kept as `files.tabs` writes it (JSON; the `filesTabs` topic reads it)." }],
     ["driveFavorites", map("String"), { default: true, doc: "Folders this person keeps at hand on the files' page, by workspace, on this device: each a station's folder\n(JSON: [{station, path, name}]), whoever else browses there." }],
     ["shareLook", opt("String"), { doc: "The look the card shared of the agents at work is drawn in, as last chosen under it on this device:\n`poster`, `receipt`, `terminal`, or (none) `night`." }],

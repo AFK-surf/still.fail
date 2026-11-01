@@ -492,6 +492,8 @@ export interface Device {
   newId(): string;
   invalid(what: string): Error;
   changed(pick: (place: Params) => boolean): void;
+  /// The visible counts in the person's language (also says when all entries are hidden).
+  countText(folders: number, files: number, hiddenOnly: boolean): string;
   /// Names in the order people read them (the host's), where it can say.
   collate?: Collate;
 }
@@ -499,7 +501,7 @@ export interface Device {
 /// What is chosen as it goes out (none of `anchor` and `lead` left out).
 export interface ChosenShown { folder: string; names: string[]; anchor?: string; lead?: string }
 /// The `driveBrowse` topic's value.
-export interface BrowseView { arrangement: Arrangement; folders: Record<string, string[]>; chosen: ChosenShown; open: string[]; widths: Record<string, number>; keys: string[] }
+export interface BrowseView { arrangement: Arrangement; folders: Record<string, string[]>; countText?: string; chosen: ChosenShown; open: string[]; widths: Record<string, number>; keys: string[] }
 /// The `filesTabs` topic's value: the tabs, and the pane in front of the one shown.
 export interface TabsView { tabs: FilesTab[]; current: string; front: Pane }
 /// What `drive.browse` answers of a place: what is chosen after it, and what the client does.
@@ -597,11 +599,13 @@ export class Browsing {
   }
 
   /// The place at `at` as `key` and the rest take it, its folders read and ordered as they are asked for (once each).
-  #place(at: At, a: Arrangement): Place & { read: (folder: string) => Ordered[] | null } {
+  #place(at: At, a: Arrangement): Place & { read: (folder: string) => Ordered[] | null; hasHidden: (folder: string) => boolean } {
     const read = new Map<string, Ordered[] | null>();
+    const total = new Map<string, number>();
     const shown = (folder: string): Ordered[] | null => {
       if (!read.has(folder)) {
         const held = this.#d.entries(at.station, at.root, folder);
+        if (held !== null) total.set(folder, held.length);
         read.set(folder, held === null ? null : arrange(held, a, this.#d.collate));
       }
       return read.get(folder) ?? null;
@@ -613,6 +617,7 @@ export class Browsing {
       open: new Set(this.#trees.get(keyOf(at.owner, at.station, at.root, at.path)) ?? []),
       entries: (folder) => shown(folder) ?? [],
       read: shown,
+      hasHidden: (folder) => (total.get(folder) ?? 0) > (shown(folder)?.length ?? 0),
     };
   }
 
@@ -633,9 +638,16 @@ export class Browsing {
     const place = this.#place(at, a);
     const chosen = this.#chosen(at);
     const folders: Record<string, string[]> = {};
+    let countText: string | undefined;
     const add = (folder: string): Ordered[] => {
       const es = place.read(folder);
-      if (es !== null) folders[folder] = es.map((e) => e.name);
+      if (es !== null) {
+        folders[folder] = es.map((e) => e.name);
+        if (folder === at.path) {
+          const dirs = es.filter((e) => e.dir).length;
+          countText = this.#d.countText(dirs, es.length - dirs, es.length === 0 && place.hasHidden(folder));
+        }
+      }
       return es ?? [];
     };
     const parts = at.path.split("/").filter(Boolean);
@@ -658,6 +670,7 @@ export class Browsing {
     return {
       arrangement: { ...a },
       folders,
+      ...(countText === undefined ? {} : { countText }),
       chosen: chosenShown(chosen),
       open: [...place.open],
       widths,

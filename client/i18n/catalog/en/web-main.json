@@ -810,7 +810,7 @@
   "web-main.composer.retryUpload": "Retry upload",
   "web-main.rail.label": "Main",
   "web-main.rail.chats": "Chats",
-  "web-main.rail.filesNone": "No pinned folders yet",
+  "web-main.rail.filesNone": "No folders to browse yet",
   "web-main.rail.lendsNone": "No lent folders yet",
   "web-main.rail.title": "Rail",
   "web-main.rail.lead": "Choose what the left column shows and in what order; this device only",

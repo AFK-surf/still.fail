@@ -19,16 +19,17 @@
 /// a phone's profiles' bar settings-profiles has too; one more with player-failed swept, the player's bar its
 /// other screens have; eight fewer in each with a diff's line as far in at its end as its mark at its start, and the
 /// way to allow banners as far in from both its ends, Medium's tape's panels measured where they stand; 56 fewer with
-/// the navigation bar's ends equally inset, including the newly swept 共享调试 grants pages).
+/// the navigation bar's ends equally inset, including the newly swept 共享调试 grants pages; six fewer with the files'
+/// page starting in its list, the columns' rows no longer at the page's edge on those screens).
 let gaps_known : Map[String, Int] = {
   "zh rule 1": 0,
   "zh rule 2": 0,
   "zh rule 3": 0,
-  "zh rule 4": 16,
+  "zh rule 4": 10,
   "en rule 1": 0,
   "en rule 2": 0,
   "en rule 3": 0,
-  "en rule 4": 16,
+  "en rule 4": 10,
   "zh rule 5": 0,
   "en rule 5": 0,
   "zh rule 6": 0,

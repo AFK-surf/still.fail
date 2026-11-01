@@ -34,6 +34,7 @@ pub fn chosen_none() -> Chosen {
 pub(all) struct BrowseView {
   arrangement : Arrangement
   folders : Map[String, Array[String]]
+  count_text : String?
   chosen : Chosen
   open : Array[String]
   widths : Map[String, Double]
@@ -105,6 +106,7 @@ pub fn browse_view_of(v : Json?) -> BrowseView? {
       Some({
         arrangement: arrangement_of(field(v, "arrangement")),
         folders,
+        count_text: opt_text(v, "countText"),
         chosen: chosen_of(field(v, "chosen")),
         open: words_of(field(v, "open").unwrap_or(Json::null())),
         widths,

@@ -19,6 +19,7 @@ const FOLDERS: Record<string, unknown[]> = {
   "": [entry("b", true), entry("A", true), entry(".env"), entry("note-10.md", false, 5, 300), entry("note-2.md", false, 9, 100)],
   A: [entry("x.txt"), entry("y.txt")],
   b: [],
+  hidden: [entry(".draft")],
 };
 
 /// A core whose station has a drive (its home ROOT, FOLDERS in it), each folder read as a page shows it; `values`: each
@@ -90,6 +91,21 @@ test("a place shows its folders in the order kept on the device, hidden files on
   await ask("drive.browse", { ...place("p", "list"), act: "key", key: "mod+shift+Period" });
   assert.deepEqual(now().folders[""], ["A", "b", "note-10.md", "note-2.md", ".env"]);
   assert.equal(now().arrangement.hidden, true);
+  core.close();
+});
+
+test("the folder's count follows the files actually shown", async () => {
+  const { core, ask, watch } = await browsing();
+  const at = place("count", "list");
+  const now = await watch(1, { topic: "driveBrowse", ...at });
+  assert.equal(now().countText, "2 个文件夹 · 2 个文件");
+  const hidden = await watch(3, { topic: "driveBrowse", ...place("hidden", "list", "hidden") });
+  assert.equal(hidden().countText, "没有可见的项目");
+  await ask("drive.browse", { ...at, act: "key", key: "mod+shift+Period" });
+  assert.equal(now().countText, "2 个文件夹 · 3 个文件");
+  assert.equal(hidden().countText, "1 个文件");
+  const empty = await watch(2, { topic: "driveBrowse", ...place("empty", "columns", "b") });
+  assert.equal(empty().countText, "空文件夹");
   core.close();
 });
 
@@ -255,6 +271,7 @@ test("a snapshot given to a new browsing answers each act as the one it was take
     let now = 1000;
     return {
       prefs: () => prefs,
+      countText: (dirs: number, files: number, hiddenOnly: boolean) => `${dirs}/${files}/${hiddenOnly}`,
       setPrefs: (patch: Record<string, any>) => {
         const next = { ...prefs };
         for (const [k, v] of Object.entries(patch)) next[k] = { ...(prefs[k] ?? {}), ...v };
@@ -270,6 +287,7 @@ test("a snapshot given to a new browsing answers each act as the one it was take
   };
   const live = new Browsing(device());
   const at = (view: string, path = "") => ({ owner: "page", place: "p1", view, station: ST, root: ROOT, path });
+  assert.equal(Object.hasOwn(live.view(at("list", "unread")), "countText"), false, "a folder being read has no count yet");
   const acts: [string, Record<string, unknown>][] = [
     ["drive.browse", { ...at("columns"), act: "at" }],
     ["drive.browse", { ...at("columns"), act: "press", folder: "", name: "A" }],

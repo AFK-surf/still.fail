@@ -1214,6 +1214,8 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
     _ => fail("no folder open")
   }
   assert_true(t.query(Radio, label="分栏") is Some(_))
+  t.click(Radio, label="分栏")
+  t.frame()
   // in columns a folder pressed opens beside its column
   t.tap_text("设计稿")
   assert_true(t.find("配色说明.md") is Some(_), msg="设计稿 beside")
@@ -1238,9 +1240,18 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
   }
   // 收藏: in the sidebar's 个人收藏 then
   let before = named(calls, "prefs.set").length()
-  t.click(Button, label="把「旧版」加入个人收藏")
+  let (_, y, _, h) = t.get(Radio, label="分栏").rect
+  let more = t.all(Button, label="更多操作").filter(fn(b) { b.rect.1 <= y + h / 2.0 && b.rect.1 + b.rect.3 >= y + h / 2.0 })
+  assert_eq(more.length(), 1)
+  let (mx, my, mw, mh) = more[0].rect
+  t.tap(mx + mw / 2.0, my + mh / 2.0)
+  t.run_for(@kit.presence_in_ms)
+  t.tap_text("把「旧版」加入个人收藏")
+  t.frame()
   assert_eq(named(calls, "prefs.set").length(), before + 1)
-  assert_true(t.query(Button, label="从个人收藏移除「旧版」") is Some(_))
+  t.tap(mx + mw / 2.0, my + mh / 2.0)
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.find("从个人收藏移除「旧版」") is Some(_))
 }
 
 ///|
@@ -2560,17 +2571,17 @@ test "wide: 文件's tabs as the core keeps them (filesTabs, files.tabs): the ad
 test "wide: 文件's Pin 文件夹 is the web's (Drive.tsx useAddFolder, PickerDialog): which station, then its folders from its home, pinned (drive.setRoots)" {
   let calls : Array[Made] = []
   let t = files_dragging(calls)
-  t.tap_text("Pin 文件夹")
+  t.tap_text("共享文件夹")
   t.frame()
   // (two stations it can be done on: which first)
-  assert_true(t.find("选择一台 station，然后选择其中要 pin 的文件夹") is Some(_), msg="which station")
+  assert_true(t.find("选择一台 station，然后选择其中要共享的文件夹") is Some(_), msg="which station")
   t.click(Button, label="Studio")
   t.frame()
   t.frame()
-  assert_true(t.find("从 station 的主目录开始，进入要 pin 的文件夹后选择它") is Some(_), msg="the picker")
+  assert_true(t.find("从 station 的主目录进入要共享的文件夹") is Some(_), msg="the picker")
   assert_true(named(calls, "drive.folders").length() > 0, msg="its folders asked")
   t.frame()
-  t.click(Button, label="Pin 这个文件夹")
+  t.click(Button, label="共享此文件夹")
   t.frame()
   let set = named(calls, "drive.setRoots")
   assert_eq(set.length(), 1)

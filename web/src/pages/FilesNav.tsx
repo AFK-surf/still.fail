@@ -19,7 +19,7 @@ import { drive, drivePath, folderName, type PickFolder } from "../drive/useDrive
 import { carriesDrive, draggedNow, droppedOf } from "../drive/drag.ts";
 import { effectOf, takes } from "../drive/browse.ts";
 import { transfer } from "../drive/transfer.ts";
-import { useFavorites } from "../drive/favorites.ts";
+import { sameFolder, useFavorites } from "../drive/favorites.ts";
 import { modsOf } from "./DriveViews.tsx";
 import { useAddFolder } from "./Drive.tsx";
 import * as css from "./FilesNav.css.ts";
@@ -141,12 +141,12 @@ export function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
   const root = q.get("root");
   const path = q.get("path") ?? "";
   const shownStation = /^\/w\/[^/]+\/s\/([^/]+)\/files/.exec(where.pathname)?.[1];
-  const lit = (station: string, r: string, p: string) => shownStation !== undefined && station.endsWith(`/${shownStation}`) && root === r && path === p;
+  const lit = (station: string, r: string, p: string) => shownStation !== undefined && station.endsWith(`/${shownStation}`) && root !== null && sameFolder({ station, root: r, path: p }, { station, root, path });
   const add = useAddFolder(scope);
   const fav = useFavorites(scope);
   // Those with a drive, as the workspace lists them.
   const stations = useDriveStations(scope).value ?? [];
-  const pinned = views.flatMap((s) => (driveOf(s)?.roots ?? []).map((r) => ({ s, r })));
+  const pinned = views.flatMap((s) => (driveOf(s)?.roots ?? []).filter((r) => !fav.has({ station: s.station, root: r.path, path: "" })).map((r) => ({ s, r })));
   const [keeping, setKeeping] = useState(false);
   // A folder dragged onto 个人收藏: kept there.
   const keepDrop = {
@@ -170,9 +170,14 @@ export function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
             {fav.list.map((f) => {
               const s = views.find((v) => v.station === f.station);
               if (!s) return null;
+              const shared = driveOf(s)?.roots.find((r) => sameFolder(f, { station: s.station, root: r.path, path: "" }));
+              // A read-only member can reach the shared root even if the favorite was kept from its parent.
+              const target = shared ? { root: shared.path, path: "" } : f;
               return (
                 <div key={`${f.station}\n${f.root}\n${f.path}`} className={css.favorite}>
-                  <FolderRow s={s} root={f.root} path={f.path} name={f.name} lit={lit(f.station, f.root, f.path)} away={!s.online} mark={<Folder {...ICON} />} end={<span><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span>} />
+                  <FolderRow s={s} root={target.root} path={target.path} name={f.name} lit={lit(f.station, target.root, target.path)} away={!s.online}
+                    mark={shared ? <Pin {...ICON} /> : <Folder {...ICON} />}
+                    end={<span>{shared && <>{t("web-pages.files.sharedShort")} · </>}<StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span>} />
                   <button type="button" className={css.unkeep} aria-label={t("web-pages.files.unfavorite", { name: f.name })} onClick={() => fav.remove(f)}><Close size={12} strokeWidth={2} /></button>
                 </div>
               );

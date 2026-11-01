@@ -17,7 +17,7 @@ import type { Inner } from "../core.ts";
 import { handlers } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
 import type { Owner } from "../core/routing.ts";
-import { kindOf } from "../drive.ts";
+import { driveCount, kindOf } from "../drive.ts";
 import { Browsing, type Named } from "../drive-browse.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
@@ -39,6 +39,7 @@ function browsingOf(inner: Inner): Browsing {
   if (b) return b;
   b = new Browsing({
     prefs: () => inner.data.shared({ topic: "prefs" }),
+    countText: driveCount,
     collate: (names) => inner.host.collate?.(names) ?? null,
     setPrefs: (patch) => prefs.set(inner.data, patch, false, inner.host.nowMs()),
     // A folder's entries as its station said them (held), each with what opens it.

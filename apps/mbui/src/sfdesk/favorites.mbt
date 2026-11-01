@@ -26,7 +26,10 @@ pub fn favorites(src : Source, ws : String) -> Array[Favorite] {
         let f = Some(f)
         let all = ["station", "root", "path", "name"].iter().all(fn(k) { field(f, k) is Some(String(_)) })
         if all {
-          out.push({ station: text(f, "station"), root: text(f, "root"), path: text(f, "path"), name: text(f, "name") })
+          let kept : Favorite = { station: text(f, "station"), root: text(f, "root"), path: text(f, "path"), name: text(f, "name") }
+          if !favorite_has(out, kept.station, kept.root, kept.path) {
+            out.push(kept)
+          }
         }
       }
     _ => ()
@@ -45,9 +48,24 @@ fn favorites_keep(src : Source, ws : String, list : Array[Favorite]) -> Unit {
 }
 
 ///|
-/// Whether the folder (`station`, `root`, `path`) is among them.
+/// A folder's absolute path for comparing places: a Windows root's separators are interchangeable, while a backslash
+/// in a Unix name is a name, not a separator. Keep the stored root and path for reaching the folder.
+fn favorite_path(root : String, path : String) -> String {
+  let abs = dv_absolute(root, path)
+  let abs = if root.contains("\\") && !root.has_prefix("/") { abs.replace_all(old="\\", new="/") } else { abs }
+  if abs == "/" { abs } else { abs.trim_end(chars="/").to_owned() }
+}
+
+///|
+/// Two ways to the same folder on a station (a shared root and the same folder reached from its parent).
+fn favorite_same_path(root : String, path : String, other_root : String, other_path : String) -> Bool {
+  favorite_path(root, path) == favorite_path(other_root, other_path)
+}
+
+///|
+/// Whether the folder (`station`, `root`, `path`) is among them, whatever root it was reached under.
 pub fn favorite_has(list : Array[Favorite], station : String, root : String, path : String) -> Bool {
-  list.iter().any(fn(f) { f.station == station && f.root == root && f.path == path })
+  list.iter().any(fn(f) { f.station == station && favorite_same_path(f.root, f.path, root, path) })
 }
 
 ///|
@@ -63,5 +81,5 @@ pub fn favorite_add(src : Source, ws : String, f : Favorite) -> Unit {
 ///|
 /// One let go.
 pub fn favorite_remove(src : Source, ws : String, station : String, root : String, path : String) -> Unit {
-  favorites_keep(src, ws, favorites(src, ws).filter(fn(f) { !(f.station == station && f.root == root && f.path == path) }))
+  favorites_keep(src, ws, favorites(src, ws).filter(fn(f) { !(f.station == station && favorite_same_path(f.root, f.path, root, path)) }))
 }

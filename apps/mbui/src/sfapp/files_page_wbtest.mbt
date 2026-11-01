@@ -31,13 +31,72 @@ fn rightmost(t : @ui.Tester, words : String) -> (Double, Double) {
 }
 
 ///|
+test "a wide folder initially shows the files' details; a chosen columns view is kept" {
+  let t = files_page_tester(1280.0, 800.0, 0)
+  // A person finding a file can compare its size and time without first changing the view.
+  assert_true(t.find("4 KB") is Some(_), msg="file size")
+  assert_true(t.find("09:30") is Some(_), msg="file time")
+  assert_true(t.find("2 个文件夹 · 6 个文件") is Some(_), msg="the count excludes hidden files")
+  t.click(Radio, label="分栏")
+  t.frame()
+  assert_eq(text(fix_browse.prefs.get("driveViews").map(fn(m) { Json::object(m) }), "page"), "columns")
+  let (x, y) = rightmost(t, "设计稿")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("配色说明.md") is Some(_), msg="the chosen columns view opens the folder beside it")
+}
+
+///|
+test "an empty folder opened in columns offers to upload into that folder" {
+  new_run()
+  let src = fixture("drive-empty")
+  open_fixture_mode("drive-empty")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  t.click(Radio, label="分栏")
+  t.frame()
+  assert_true(t.find("会议记录") is Some(_), msg="the parent folder has loaded")
+  // One upload button is in the bar; another belongs to the empty folder itself.
+  assert_eq(t.all(Button, label="上传文件").length(), 2)
+}
+
+///|
+test "the folder's count matches its visible entries" {
+  let t = files_page_tester(1280.0, 800.0, 0)
+  assert_true(t.find(".草稿缓存") is None, msg="hidden files are not shown")
+  assert_true(t.find("2 个文件夹 · 6 个文件") is Some(_), msg="hidden files are not counted")
+  let (_, y, _, h) = t.get(Radio, label="列表").rect
+  let more = t.all(Button, label="更多操作").filter(fn(b) { b.rect.1 <= y + h / 2.0 && b.rect.1 + b.rect.3 >= y + h / 2.0 })
+  assert_eq(more.length(), 1)
+  let (x, y, w, h) = more[0].rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@kit.presence_in_ms)
+  t.tap_text("显示隐藏文件")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(".草稿缓存") is Some(_), msg="hidden files are shown")
+  assert_true(t.find("2 个文件夹 · 7 个文件") is Some(_), msg="the newly shown file is counted")
+}
+
+///|
+test "a list's sort controls have room to press with either native input" {
+  for platform in [0, 2] {
+    let t = files_page_tester(1280.0, 800.0, platform)
+    t.click(Radio, label="列表")
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("名称") is Some(_), msg="the list's headings")
+    let faults = t.room_faults().filter(fn(f) { f.contains("「名称」") || f.contains("「大小」") || f.contains("「修改时间」") })
+    assert_eq(faults, [], msg="\{platform}: \{faults}")
+  }
+}
+
+///|
 test "文件's page narrow in every frame: what the folder holds in a line, its entries on a card; a folder pressed goes in" {
   for size in [(390.0, 844.0, 2), (390.0, 844.0, 0), (720.0, 900.0, 0)] {
     let (w, h, platform) = size
     let at = "\{w} \{platform}"
     let t = files_page_tester(w, h, platform)
     files_page_over(t, w, h)
-    assert_true(t.find("2 个文件夹 · 7 个文件") is Some(_), msg=at)
+    assert_true(t.find("2 个文件夹 · 6 个文件") is Some(_), msg=at)
     // narrow: no tabs; its ways those its room has (columns where two fit side by side: not a phone's)
     if w < 400.0 {
       assert_true(t.query(Radio, label="分栏") is None, msg=at)
@@ -86,6 +145,8 @@ test "文件's page wide with a finger and with a mouse: its ways, its heads; a 
   for platform in [2, 0] {
     let t = files_page_tester(1280.0, 800.0, platform)
     assert_true(t.query(Radio, label="分栏") is Some(_), msg="\{platform}")
+    t.click(Radio, label="分栏")
+    t.frame()
     // (a finger opens what it taps, as a double click does)
     let (x, y) = rightmost(t, "设计稿")
     t.tap(x, y)
@@ -104,6 +165,7 @@ test "文件's page wide with a finger and with a mouse: its ways, its heads; a 
 test "a folder opened in the columns while its station has not said what it holds: the columns stay where they were" {
   new_run()
   let src = fixture("home")
+  fix_browse_prefs_set({ "driveViews": { "page": "columns" } }) |> ignore
   // (设计稿 never read: as a station slow to answer)
   let held : @sfbase.Source = {
     ..src,
@@ -195,13 +257,13 @@ test "Pin 文件夹 on a phone: which station, then the picker in a sheet from t
   @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
   sheet_rested(t, "sf-present")
   // (two stations it can be done on: which first)
-  assert_true(t.find("选择一台 station，然后选择其中要 pin 的文件夹") is Some(_), msg="which station")
+  assert_true(t.find("选择一台 station，然后选择其中要共享的文件夹") is Some(_), msg="which station")
   t.click(Button, label="Studio")
   t.frame()
   sheet_rested(t, "sf-present")
   assert_eq(named(calls, "drive.folders").length(), 1)
   // a sheet from the foot; the places (a disk among them) over the folders here (those not among the places)
-  let (_, pin_y) = t.find("Pin 这个文件夹").unwrap()
+  let (_, pin_y) = t.find("共享此文件夹").unwrap()
   assert_true(pin_y > 844.0 / 2.0)
   let (_, disk_y) = t.find("外接硬盘").unwrap()
   let (x, folder_y) = t.find("项目").unwrap()
@@ -210,7 +272,7 @@ test "Pin 文件夹 on a phone: which station, then the picker in a sheet from t
   t.frame()
   assert_eq(text(Some(named(calls, "drive.folders")[1].params), "path"), "/Users/lin/项目")
   t.frame()
-  t.click(Button, label="Pin 这个文件夹")
+  t.click(Button, label="共享此文件夹")
   t.frame()
   let set = named(calls, "drive.setRoots")
   assert_eq(set.length(), 1)

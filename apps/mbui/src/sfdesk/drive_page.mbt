@@ -37,7 +37,7 @@ pub fn folder_page(
         }
       None => ()
     }
-    folder_view(c, src, f, head=fn() { folder_head(c, src, f, front_it, bar is None) }, foot=match bar {
+    folder_view(c, src, f, head=fn(count) { folder_head(c, src, f, front_it, bar is None, count) }, foot=match bar {
       Some(n) => n.frame.foot
       None => 0.0
     })
@@ -49,7 +49,7 @@ pub fn folder_page(
 /// The folder's head (Drive.tsx FolderView's pageHead; the phone's Crumbs and mCount): its way (its station's button,
 /// then the way down from its root to it), its name where the frame's bar has not said it (`titled`: h1), what it holds
 /// in a line, or why it was not read again (its 重试). In as far as the rows' words are, wherever it is shown.
-fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit, titled : Bool) -> Unit {
+fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit, titled : Bool, count : String?) -> Unit {
   let at = f.at
   let root = at.root.unwrap_or("")
   let (value, error) = drive_folder(src, at.station, root, at.path)
@@ -67,31 +67,38 @@ fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit, t
         so_far = dv_join(so_far, p)
         levels.push((p, so_far))
       }
-      c.box(style=head_way, fn() {
-        @sf.way_line(c, "files/way/" + f.key + "/" + at.station + "/" + root, levels.map(fn(l) { l.0 }), folder_crumb_way(), fn(i) {
-          front_it()
-          (f.go)({ ..at, path: levels[i].1 }, false)
+      // The folder itself is already named by the page or its bar; the trail contains only places one can go back to.
+      let ancestors : Array[(String, String)] = []
+      for i in 0..<(levels.length() - 1) {
+        ancestors.push(levels[i])
+      }
+      if !ancestors.is_empty() {
+        c.box(style=head_way, fn() {
+          @sf.way_line(c, "files/way/" + f.key + "/" + at.station + "/" + root, ancestors.map(fn(l) { l.0 }), folder_crumb_way(), fn(i) {
+            front_it()
+            (f.go)({ ..at, path: ancestors[i].1 }, false)
+          }, last_link=true)
         })
-      })
-      |> ignore
+        |> ignore
+      }
     })
     |> ignore
     if titled {
       c.text(name, style=head_title) |> ignore
     }
-    match (value, error) {
-      (Some(_), Some(e)) =>
+    match (value, error, count) {
+      (Some(_), Some(e), _) =>
         head_retry(c, @sf.t("android-misc.drive.stale", args=[("error", e)]), false, fn() { refresh_folder(c, src, at) })
-      (None, Some(e)) => head_retry(c, e, true, fn() { refresh_folder(c, src, at) })
-      (Some(v), None) => {
-        let count = text(Some(v), "countText") +
+      (None, Some(e), _) => head_retry(c, e, true, fn() { refresh_folder(c, src, at) })
+      (Some(v), None, Some(shown)) => {
+        let count = shown +
           (if flag(Some(v), "truncated") { " · " + @sf.t("web-pages.drive.truncated") } else { "" })
         if count != "" {
           c.text(count, style=@sf.theme().rows.note) |> ignore
         }
       }
       // what it holds while it is read, in its bones: the line's room kept, as the columns under it stay
-      (None, None) =>
+      (_, None, _) =>
         @sf.bones(c, fn() { c.text(@sf.sample_words(8), style=@sf.theme().rows.note) |> ignore })
     }
   })

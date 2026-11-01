@@ -1,7 +1,7 @@
 // A folder of a station's drive as the clients show it (the `drive` topic; docs/drive.md): each entry with what kind it
 // is (which mark it has) and what a press on it does, its size and time in words, and the folder's count in a line.
 import { bytes, clock, local, localDay } from "./format.ts";
-import { current, tr } from "./i18n.ts";
+import { current, tr, type Lang } from "./i18n.ts";
 import type { Clock } from "./present.ts";
 import { get, isObject } from "./util.ts";
 import { kindOf, opensOf, type DriveKind } from "./drive-kind.ts";
@@ -25,10 +25,15 @@ export function driveTime(ms: number, c: Clock): string {
   return year === local(c.now, c.offsetMin)[0] ? `${month}/${day}` : `${year}/${month}/${day}`;
 }
 
+/// A folder's visible entries in words; a folder with only hidden entries is not an empty folder.
+export function driveCount(folders: number, files: number, hiddenOnly = false, lang: Lang = current()): string {
+  const parts = [folders > 0 ? tr(lang, "core-logic.drive.folders", { n: folders }) : null, files > 0 ? tr(lang, "core-logic.drive.files", { n: files }) : null].filter((p) => p !== null);
+  return parts.length > 0 ? parts.join(" · ") : tr(lang, hiddenOnly ? "core-logic.drive.noVisible" : "core-logic.drive.empty");
+}
+
 /// The topic's value as it goes out: entries with their kind and words, the count in a line.
 export function shown(raw: J, c: Clock): J {
   if (!isObject(raw)) return raw;
-  const lang = current();
   const entries = (Array.isArray(raw.entries) ? raw.entries : []).filter(isObject).map((e: J) => {
     const dir = e.dir === true;
     const size = typeof e.size === "number" ? e.size : 0;
@@ -38,6 +43,5 @@ export function shown(raw: J, c: Clock): J {
   });
   const folders = entries.filter((e: J) => e.dir).length;
   const files = entries.length - folders;
-  const parts = [folders > 0 ? tr(lang, "core-logic.drive.folders", { n: folders }) : null, files > 0 ? tr(lang, "core-logic.drive.files", { n: files }) : null].filter((p) => p !== null);
-  return { ...raw, entries, folders, files, countText: parts.length > 0 ? parts.join(" · ") : tr(lang, "core-logic.drive.empty") };
+  return { ...raw, entries, folders, files, countText: driveCount(folders, files) };
 }

@@ -536,6 +536,7 @@ pub fn open_mode(mode : String) -> Unit {
       @sffixture.fix_browse_do(None, mode, "drive.browse", Json::object(o)) |> ignore
     }
     match mode {
+      "files-columns" => @sffixture.fix_browse_prefs_set({ "driveViews": { "page": "columns" } }) |> ignore
       "files-tree" => {
         @sffixture.fix_browse_prefs_set({ "driveViews": { "page": "tree" } }) |> ignore
         browse({ "act": "tree", "folder": "设计稿", "view": "tree" })

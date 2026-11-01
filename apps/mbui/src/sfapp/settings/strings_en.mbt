@@ -1725,6 +1725,6 @@ let en : Map[String, String] = {
   "web-pages.vault.uses.title": "Usage",
   "web-pages.vault.vaults": "Vaults",
   "web-pages.drive.viewAll": "View all files",
-  "web-pages.drive.pinnedFolders": "Pinned folders",
+  "web-pages.drive.pinnedFolders": "Shared folders",
   "web-pages.screen.none": "No screens yet",
 }

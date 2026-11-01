@@ -741,7 +741,7 @@
   "web-main.composer.retryUpload": "重试上传",
   "web-main.rail.label": "主导航",
   "web-main.rail.chats": "对话",
-  "web-main.rail.filesNone": "暂无 pin 的文件夹",
+  "web-main.rail.filesNone": "暂无可浏览的文件夹",
   "web-main.rail.lendsNone": "暂无借出的文件夹",
   "web-main.rail.title": "侧边条",
   "web-main.rail.lead": "设置左侧栏显示的内容和顺序，仅对此设备生效",

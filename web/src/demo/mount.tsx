@@ -106,6 +106,10 @@ function extendedValueOf(topic: Topic): unknown {
 /** How the station's files are browsed here: as the core does it (drive-browse.ts), on what the demo has. */
 const browsing = new Browsing({
   prefs: () => prefs,
+  countText: (folders, files, hiddenOnly) => {
+    const parts = [folders ? t("web-pages.drive.rootsCount", { n: folders }) : "", files ? t("web-pages.files.filesCount", { n: files }) : ""].filter(Boolean);
+    return parts.length ? parts.join(" · ") : t(hiddenOnly ? "web-pages.drive.noVisible" : "web-pages.drive.emptyFolder");
+  },
   // Names in the order the page's language reads them, as the core's web host has them.
   collate,
   setPrefs: (patch) => void answer("prefs.set", patch),

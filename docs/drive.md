@@ -243,7 +243,7 @@ of a folder within one station by the disk's own clone.
 - How it is browsed, the same for every client (views/browse.ts; what follows
   from what, drive-browse.ts; docs/client-core.md has each): view `driveBrowse
   {owner, place, view, station, root, path, write?}` (a place's folders in the
-  order kept on the device, what is chosen there, a tree's folders open, the
+  order kept on the device, the count of those visible, what is chosen there, a tree's folders open, the
   columns' widths, the keys that act now) and `drive.browse` (a press, a key, a
   letter typed: what is chosen after it and what the client does), `drive.arrange`
   (the order, hidden files), `drive.name` (a new folder's name, a copy kept
@@ -281,7 +281,8 @@ a name, ⏎ changes a name in place, space previews, ⌘⌫ deletes what is chos
 ⌘⇧N makes a folder (named as Finder names one, its name then changed). Hidden
 files (a name starting with `.`) show only after ⌘⇧. ; the order (name, time,
 size or kind, by the list's heads or the folder's right-click menu) and whether
-they show are the person's, on the device (prefs `driveViews`); names go in the order the device's language reads
+they show are the person's, on the device (prefs `driveViews`); the count follows the entries shown. The files' page
+starts as a list and a chat's files tab as columns, until another view is chosen. Names go in the order the device's language reads
 them (the host's `collate`: 中文 by pinyin), by hand where it has none. A column's edge is
 dragged as Finder's: that column wider or narrower (kept while the page is), with ⌥
 every column (kept on the device, `driveViews.column`), a double click as wide as its
@@ -315,7 +316,10 @@ On a wide screen the files' page is a window of Finder's over every station of t
 - **The sidebar** (FilesNav.tsx): 个人收藏, the person's own folders of any station (prefs `driveFavorites`, by
   workspace; ☆ on a folder's page or its menu, or a folder dragged onto it); then each station with a drive, a row
   each (this machine marked 本机, its disk's fill, offline faint), its home on a press and its places (the home's own
-  folders, its disks) under it opened; then 团队共享, the folders the stations pin for every member.
+  folders, its disks) under it opened; then 团队共享, the folders the stations pin for every member. A favorite that is
+  also shared appears once, among the favorites, marked shared; it opens through the shared root so a read-only member
+  can reach it. Removing the favorite leaves the shared folder in 团队共享. A folder reached by different roots is one
+  favorite on that station, even where an older preference kept it more than once.
 - **Another station** from the start of a folder's trail: the same folder there where it has one, else its home (said
   so); ⌥ opens it in a new tab. **前往文件夹** (⌘⇧G): a path, the station's name before a colon if another
   (`mba:~/Projects`), `~` its home, a path without a slash in front under the folder shown; Tab completes a folder's
@@ -330,4 +334,3 @@ On a wide screen the files' page is a window of Finder's over every station of t
   under is a rename, at once; anything else a copy as above. The bar's 传输 says how many go and how far; its list
   stops one, tries one that failed again, or shows the folder of one done. A station from before copies takes none
   (`transfers` absent): what is dragged onto it is not taken, and 复制到… says it needs an update.
-

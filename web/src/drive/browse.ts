@@ -71,6 +71,8 @@ export interface Drawing {
 
 export interface Browse {
   chosen: Chosen;
+  /** Count for this folder, absent until the core has read it. */
+  countText: string | undefined;
   arrangement: DriveArrangement;
   arrangeAs: (next: Partial<DriveArrangement>) => void;
   drawing: Drawing;
@@ -194,7 +196,7 @@ export function useBrowse(o: BrowseOptions): Browse {
 
   const open = new Set(v?.open ?? []);
   return {
-    chosen, arrangement,
+    chosen, arrangement, countText: got.value?.countText,
     arrangeAs: (next) => void core().call("drive.arrange", next).catch(() => undefined),
     drawing: {
       arranged: (in_, entries) => {

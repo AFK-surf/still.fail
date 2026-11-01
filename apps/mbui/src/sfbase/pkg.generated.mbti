@@ -1911,6 +1911,7 @@ pub(all) struct Attachment {
 pub(all) struct BrowseView {
   arrangement : Arrangement
   folders : Map[String, Array[String]]
+  count_text : String?
   chosen : Chosen
   open : Array[String]
   widths : Map[String, Double]

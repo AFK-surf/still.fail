@@ -3,7 +3,7 @@
 timeout 20000
 until 设计稿
 wait 600
-tap Pin 文件夹
+tap 共享文件夹
 wait 900
 tap Studio
 wait 1500

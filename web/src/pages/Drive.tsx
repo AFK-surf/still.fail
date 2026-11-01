@@ -323,7 +323,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
       { label: t("web-pages.files.openInTab"), onSelect: () => filesPage.open({ station: station.address, root, path: joinPath(in_.path, e.name) }, "tab") },
       { label: t("web-pages.files.openBeside"), onSelect: () => filesPage.open({ station: station.address, root, path: joinPath(in_.path, e.name) }, "side") },
     ] : []),
-    ...(e.dir ? [{ label: t("web-pages.files.favoriteIt"), icon: Star, onSelect: () => fav.add({ station: station.address, root, path: joinPath(in_.path, e.name), name: e.name }) }] : []),
+    ...(e.dir && !fav.has({ station: station.address, root, path: joinPath(in_.path, e.name) }) ? [{ label: t("web-pages.files.favoriteIt"), icon: Star, onSelect: () => fav.add({ station: station.address, root, path: joinPath(in_.path, e.name), name: e.name }) }] : []),
     ...copyItems([{ at: in_, entry: e }]),
     ...(e.dir && d.anywhere ? [(() => {
       const abs = absoluteOf(root, joinPath(in_.path, e.name));
@@ -348,7 +348,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
   });
   const shown: Shown = { ...browse.drawing, rowOf, dropOn: into, clear: browse.clear };
   const newFolder = () => act(browse.newFolder(at, entries), t("web-pages.drive.mkdirWhat"));
-  const empty = <Empty text={t("web-pages.drive.emptyFolder")} action={d.write ? <Button icon={Upload} onClick={() => files.current?.click()}>{t("web-pages.drive.upload")}</Button> : undefined} />;
+  const empty = <Empty text={t(entries.length ? "web-pages.drive.noVisible" : "web-pages.drive.emptyFolder")} action={d.write ? <Button icon={Upload} onClick={() => files.current?.click()}>{t("web-pages.drive.upload")}</Button> : undefined} />;
   // ⌘⇧P (the keymap's files.preview): the preview beside the list, shown or not, while this folder is in front.
   useShortcut("files.preview", front ? () => setPreviewing(!previewing) : null);
   const newFolderRef = useRef(newFolder);
@@ -434,7 +434,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
           <h1>{name}</h1>
           <p className={css.headMeta}>
             <StationNamedAt station={station.address} name={station.name} />
-            {folder.value && <> · {folder.value.countText}{folder.value.truncated ? ` · ${t("web-pages.drive.truncated")}` : ""}</>}
+            {folder.value && browse.countText && <> · {browse.countText}{folder.value.truncated ? ` · ${t("web-pages.drive.truncated")}` : ""}</>}
           </p>
         </div>
         {!toBar && actions}

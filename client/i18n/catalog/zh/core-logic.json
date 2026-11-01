@@ -494,6 +494,7 @@
     "other": "{n} 个文件"
   },
   "core-logic.drive.empty": "空文件夹",
+  "core-logic.drive.noVisible": "没有可见的项目",
   "core-logic.drive.name.empty": "名称不能为空",
   "core-logic.drive.name.bad": "名称不能包含 / 或 \\",
   "core-logic.memory.lead": "开头",

@@ -126,7 +126,7 @@ test "station menus keep a wide chat open and route files and details into its t
   t.run_for(@kit.presence_in_ms)
   t.tap_text("文件")
   t.run_for(@kit.presence_in_ms)
-  assert_true(t.find("固定文件夹") is Some(_))
+  assert_true(t.find("共享文件夹") is Some(_))
   t.tap_text("查看所有文件")
   t.frame()
   assert_true(app.nav.top() == before)

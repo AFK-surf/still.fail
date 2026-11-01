@@ -124,8 +124,6 @@ pub fn folder_browse_here() -> String
 
 pub fn folder_browse_open(String) -> Unit
 
-pub fn folder_empty(@ui.Ctx, String, (() -> Unit)?) -> Unit
-
 pub fn folder_name(@sfbase.DvStation, @sfbase.DriveAt) -> String
 
 pub fn folder_page(@ui.Ctx, @sfbase.Source, FolderOf, NarrowOf?, front_it? : () -> Unit) -> Unit
@@ -481,6 +479,7 @@ pub(all) struct Browse {
   write : Bool
   does : BrowseDoes
   shown : @sfbase.BrowseView?
+  count_text : String?
 }
 pub fn Browse::arrange_as(Self, @ui.Ctx, @sfbase.Source, by? : String, down? : Bool, hidden? : Bool) -> Unit
 pub fn Browse::arranged(Self, String, Array[@sfbase.DvEntry]) -> Array[@sfbase.DvEntry]?

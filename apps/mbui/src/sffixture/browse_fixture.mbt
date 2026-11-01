@@ -171,7 +171,7 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
     prefs[k] = Json::object(fix_browse.prefs.get(k).unwrap_or({}).copy())
   }
   for _ in 0..<16 {
-    let ask : Json = {
+    let fields : Map[String, Json] = {
       "state": fix_browse.state,
       "prefs": Json::object(prefs),
       "folders": Json::object(folders.copy()),
@@ -180,6 +180,10 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
       "id": Json::number(fix_browse.id.to_double()),
       "op": op,
     }
+    if @sf.language() == "en" && text(field(Some(op), "topic"), "topic") == "driveBrowse" {
+      fields["lang"] = Json::string("en")
+    }
+    let ask = Json::object(fields)
     match kept("browse", ask, None) {
       Some(Ok((answer, _))) =>
         match field(Some(answer), "need") {
