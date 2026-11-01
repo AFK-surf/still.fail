@@ -194,7 +194,7 @@ const clientAttr = (m: MessageRow) => (m.client !== null && m.client !== undefin
 
 /// Messages handed to a session, each with its source and sender, and a hint where a thread is new to it.
 /// `posts`: the agent's first post in a message's thread made after it (by ts), said as its `before`.
-export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map(), cards: Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: boolean }> = new Map(), selfKey = ""): string {
+export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map(), cards: Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }> = new Map(), selfKey = ""): string {
   const lines: string[] = [];
   const hinted = new Set<number>();
   for (const p of messages) {
@@ -218,8 +218,8 @@ export function formatInbound(messages: PendingMessage[], newThreads: Set<number
     if (change !== undefined) {
       const whose = change.ended.author === selfKey ? "Your card" : "A card";
       const now = change.current === null ? "No newer card is pending." : `A newer card (message ts ${change.current.ts}) is pending; the person may not have seen it.`;
-      const next = change.special
-        ? "The underlying login or authorization may still be pending: check its tool before deciding what is needed."
+      const next = change.ended.author !== selfKey ? "The agent that posted it can decide whether to ask again."
+        : change.special !== null ? `The underlying login or authorization may still be pending. ${change.special}`
         : "If the decision is still needed and no newer card asks it, ask again with a new card.";
       lines.push(`<card-state thread="${escapeAttr(address)}" ts="${escapeAttr(change.ended.ts)}">${whose} is no longer pending after this message. The message is not necessarily a decision; read what it says. ${now} ${next}</card-state>`);
     }
@@ -245,7 +245,12 @@ export function formatHistory(messages: MessageRow[], surface: string, address: 
       let card = "";
       if (found !== undefined) {
         const options = Array.isArray(found.card?.options) ? found.card.options : undefined;
-        const facts = { type: found.card?.type, ...(options === undefined ? {} : { options }), ...(typeof found.card?.placeholder === "string" ? { placeholder: found.card.placeholder } : {}) };
+        const facts = { type: found.card?.type, ...(options === undefined ? {} : { options }), ...(typeof found.card?.placeholder === "string" ? { placeholder: found.card.placeholder } : {}),
+          ...(typeof found.card?.vault?.request === "string" ? { request: found.card.vault.request } : {}),
+          ...(typeof found.card?.adb?.request === "string" ? { phoneRequest: found.card.adb.request } : {}),
+          ...(typeof found.card?.signin?.site === "string" ? { site: found.card.signin.site } : {}),
+          ...(typeof found.card?.login === "string" ? { login: found.card.login } : {}),
+          ...(typeof found.card?.station === "string" ? { station: found.card.station } : {}) };
         card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}; ${JSON.stringify(facts)}]`;
       }
       return `<message via="${via(surface)}" thread="${address}" from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;

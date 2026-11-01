@@ -944,14 +944,19 @@ export class SessionActor {
       const ts = store.postAfter(this.key, m.message.thread, m.message.n);
       if (ts !== null) posts.set(m, ts);
     }
-    const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: boolean }>();
+    const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }>();
     for (const m of said as PendingMessage[]) {
       if (m.message.apart === true || m.message.authorKind !== "person") continue;
       const ended = store.cardEndedByMessage(m.message.thread, m.message.n);
       if (ended === null) continue;
       const card = ended[1];
       const current = store.pendingCard(m.message.thread)?.[0] ?? null;
-      cards.set(m, { ended: ended[0], current, special: card?.type === "login" || !!(card?.vault || card?.adb || card?.signin) });
+      const special = typeof card?.vault?.request === "string" ? `Use secret_reask {request: ${JSON.stringify(card.vault.request)}} if the request is still needed.`
+        : typeof card?.adb?.request === "string" ? `Use phone_use {reason: ${JSON.stringify(card.adb.reason ?? "")}, reask: true} if the request is still needed.`
+        : typeof card?.signin?.site === "string" ? `Use sign_in {site: ${JSON.stringify(card.signin.site)}, reask: true} if the sign-in is still needed.`
+        : card?.type === "login" ? "Check the login with its tool; if it still needs the person, post its login card again."
+        : null;
+      cards.set(m, { ended: ended[0], current, special });
     }
     const text = formatInbound(said, newThreads, names, selves, posts, cards, this.key);
     const models = store.untoldWidgetModels(this.key);

@@ -10,6 +10,8 @@
 >   answers how to use the phone (its serial, `ANDROID_ADB_SERVER_PORT`); with nothing else to do meanwhile it ends its
 >   turn need_human about the card. Someone
 >   writing yes in the chat is not a grant.
+>   A later message closes the card without deciding the request. If still needed, `phone_use {reason, reask: true}`
+>   posts a new card for the same request; another pending card is not replaced.
 > - **Approved for a scope**, as a vault grant's: 本对话 1 小时内 (`hour`) or 本对话直到归档 (`chat`, 30 days at most),
 >   up to the owner's 默认最长授权 (a setting of theirs, default `chat`); the card offers what that allows and
 >   recommends the longest. Answered on the phone itself while it lacks something to be lent (Developer options, Wi-Fi,

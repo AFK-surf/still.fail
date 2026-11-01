@@ -329,6 +329,28 @@ test("a card withdrawn before a message is not attributed to that message", asyn
   }
 });
 
+test("a closed authorization card tells its agent how to reask the same request", async () => {
+  for (const [extra, action] of [
+    [{ vault: { request: "r_test" } }, 'secret_reask {request: "r_test"}'],
+    [{ adb: { request: "p_test", reason: "check the screen" } }, 'phone_use {reason: "check the screen", reask: true}'],
+    [{ signin: { site: "example.com" } }, 'sign_in {site: "example.com", reask: true}'],
+  ] as const) {
+    const r = new Rig();
+    try {
+      const [key, thread] = newSession(r.hub, web());
+      sayIn(r.hub, thread.id, "ada@x.com", "做这个");
+      await settle();
+      r.store.insertMessage({ thread: thread.id, ts: r.hub.nextTs(), authorKind: "agent", author: key, text: "需要授权", card: { type: "options", options: [{ label: "允许" }], ...extra } });
+      sayIn(r.hub, thread.id, "ada@x.com", "为什么需要？");
+      await settle();
+      const prompt = r.claude.last().steers.at(-1)!;
+      assert.ok(prompt.includes("no longer pending") && prompt.includes(action), prompt);
+    } finally {
+      await r.close();
+    }
+  }
+});
+
 test("a message sent before a card was posted does not cancel that card", async () => {
   const r = new Rig();
   try {

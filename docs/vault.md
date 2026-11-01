@@ -150,6 +150,7 @@ chat EMBER/1793439516.811000（「agent 那边只剩一个动作」）。agent �
 
 - **密钥库里有这个网站的登录态**：照 `secret_use`（方式 `browser`）申请，批准后放进浏览器。已经授权着就直接说。授权了网站还要登录（cookie 过期）：网站支持通行密钥就点通行密钥登录（浏览器自己签），否则 `again: true` 重新走下面这条。
 - **没有**：agent 先在 chat 的浏览器里打开网站的登录页（station 检查那个标签页上确有登录框，否则拒绝），station 在 chat 里发一张卡片（`card.signin {id, site, reason, screen}`，`screen` 是那个标签页的 `browser:<targetId>`），给 chat 的发起人。Slack/飞书里没有卡片，文字里给标签页的画面链接。
+- 人在 chat 里说话会让卡片不再等待，但登录本身继续。还需要人登录时，`sign_in {site, reask: true}` 为同一次登录重发卡片，保留验证码等当前进度；另有卡片等待时不会替换它。
 - **卡片上**：「用 1Password 登录」（电脑上用 `op`，会再取一次性验证码 `--otp`；安卓用系统自动填充服务，和远程画面里的「填入」同一套，docs/remote-screens.md「Filling a login」）→ 账号密码（和验证码）经 `signin.fill {id, login, keep}` 交给 station（`login` 是对象，core 的 `doing` 不留副本）→ station 另开一条 DevTools 连接，在页面自己的隔离环境里找登录框（账号、密码、验证码；一位一格的验证码按格输入），用 `Input.insertText` 当作键入，回车提交，页面没动就点它的提交按钮，一步步走完（`browser/signin-form.ts drive`）。只在标签页还在那个网站时输入。输入的值只在 station 内存里，最后一次使用 15 分钟后丢掉，从不写日志、不写盘。
 - **中途**：页面要验证码而没给 → 卡片 `code`，在卡片上输入；人机验证、网页不接受、页面不动、跑到别的网站 → 卡片 `person`，按钮打开那个标签页的画面，人处理完点「我已登录」（`signin.self {done: true}`）。人也可以一开始就选「在画面中登录」。
 - **结束**：页面离开登录框（或人说登好了）→ 卡片 `left`，告诉 agent 去看；agent 看过确认登录了调 `sign_in {site, done: true}`，没登好调 `stuck: "还要做什么"`（卡片转给人）。确认后若卡片上选了「登录后存入密钥库」（默认），station 照 `secret_save {kind: browser, hosts: [site]}` 申请存入，但**不发存入卡片**（`quiet`），申请号写在登录卡片上（`outcome.save`），登录的那台设备直接 `vault.approve` 批准；存入结果（`outcome.kept`）出来后收回卡片。密钥库没开的人照常发存入卡片（要先开启）。
@@ -312,6 +313,7 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 |---|---|
 | `secret_list` | 有 `listing` 的条目：id、名字、方式、域名，加上这个 session 手上还能用的授权 |
 | `secret_use {item, mode, reason, command?, hosts?}` | 建申请，往这个 chat 发一张申请卡片（库 owner 是 assignee），推送。不等决定，当场回「等批准」（2026-10-30 用户：「密钥存储申请不是异步的，没法在 agent 申请的时候询问其它事项」：工具调用挂着，agent 这一轮就停在那，chat 里别的话都得等它），批准或拒绝时往 session 里发一条消息（正在跑的轮次里直接收到），批准的带授权号和用法；`secret_save`、`phone_use` 同样 |
+| `secret_reask {request}` | 人说话后卡片不再等待、原申请仍需批准时，为原申请重发卡片；不重新读取密钥，不替换另一张正在等待的卡片，过期或已决定的申请不能重发 |
 | `secret_run {grant, command, env?, cwd?, timeout_seconds?}` | station 在 session 的工作目录里 `sh -c` 跑这个命令，按授权的方式给它密钥，返回退出码和遮过的输出（太长时留头 4KB、尾 28KB）。默认 10 分钟超时 |
 
 先不做命令行（`stillfail-secret run`）：要往 agent 的 PATH 里放东西、还要让 Codex 的进程也能证明自己是哪个 session，MCP 工具这两件都现成。以后需要在管道里用再加。

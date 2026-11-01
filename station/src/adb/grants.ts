@@ -6,6 +6,7 @@
 // itself to the station while one is live.
 import type { DatabaseSync } from "node:sqlite";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
+import { CARD_OCCUPIED, cardPlace } from "../sessions/card-place.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 
 export type Scope = "hour" | "chat";
@@ -58,6 +59,8 @@ export type GrantsDeps = {
       getSession(key: string): { archivedAt?: number | null; ws: string | null } | null;
       starter(session: string): string | null;
       latestThread(session: string): SessionThread | null;
+      sessionThreads(session: string): SessionThread[];
+      pendingCard(thread: number): [{ ts: string }, unknown] | null;
       insertMessage(m: Record<string, unknown>): number[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;
@@ -210,7 +213,7 @@ export class PhoneGrants {
 
   /// phone_use: a grant of this session's already live, or a request asked in its chat: not waited for (the agent's turn
   /// goes on with the chat), its decision told to the session (#settle).
-  async ask(session: string, reason: string): Promise<PhoneRequest> {
+  async ask(session: string, reason: string, reask = false): Promise<PhoneRequest> {
     const held = this.held(session)[0];
     if (held !== undefined) return held;
     if (reason.trim() === "") throw new Refused("say why you need the phone (reason)");
@@ -223,6 +226,25 @@ export class PhoneGrants {
       id: this.#d.id?.() ?? `p_${this.#d.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
       session, chat: threadAddress(thread.thread.channel, thread.thread.threadTs), owner, reason: reason.trim(), at: this.#secs(), status: "pending",
     };
+    if (pending !== undefined && reask) {
+      const place = cardPlace(this.#d.hub.store, session, r.thread, r.cardTs);
+      if (place?.state === "other") throw new Refused(CARD_OCCUPIED);
+      if (place?.state === "none") {
+        const posted = await this.#post(session, place.thread, r, true);
+        const current = this.get(r.id);
+        // A person may have decided the original request while the post was being sent.
+        if (current === null || current.status !== "pending") {
+          if (posted !== null) this.#d.hub.store.withdrawCard(session, place.thread.thread.id, posted);
+          return current ?? r;
+        }
+        if (posted !== null) {
+          current.thread = place.thread.thread.id;
+          current.cardTs = posted;
+          this.#save(current);
+        }
+        return current;
+      }
+    }
     if (pending === undefined) {
       this.#save(r);
       const posted = await this.#post(session, thread, r);
@@ -236,7 +258,13 @@ export class PhoneGrants {
     return r;
   }
 
-  async #post(session: string, thread: SessionThread, r: PhoneRequest): Promise<string | null> {
+  /// Whether the current card of a still-open request can be acted on; null for a surface without one.
+  cardPending(r: PhoneRequest): boolean | null {
+    const place = cardPlace(this.#d.hub.store, r.session, r.thread, r.cardTs);
+    return place === null ? null : place.state === "same";
+  }
+
+  async #post(session: string, thread: SessionThread, r: PhoneRequest, requireEmpty = false): Promise<string | null> {
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     const text = [`申请调试你的手机：${r.reason}`, ...(stillfail ? [] : ["请在 still.fail 安卓 app 中批准。"])].join("\n\n");
     // The scopes its owner allows (their 默认最长授权), the longest recommended.
@@ -253,6 +281,7 @@ export class PhoneGrants {
       : null;
     const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
     const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
+    if (requireEmpty && this.#d.hub.store.pendingCard(thread.thread.id) !== null) throw new Refused(CARD_OCCUPIED);
     const [n] = this.#d.hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
     this.#d.hub.shared(thread.thread.id, n!, session, text);
     return card !== null ? posted : null;

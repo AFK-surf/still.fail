@@ -12,6 +12,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
+import { CARD_OCCUPIED, cardPlace } from "../sessions/card-place.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Driven, FormAsks, FormField, FormValues } from "../browser/signin-form.ts";
 import type { Request } from "./crypto.ts";
@@ -51,6 +52,8 @@ export type SignInDeps = {
       getSession(key: string): { archivedAt?: number | null } | null;
       starter(session: string): string | null;
       latestThread(session: string): SessionThread | null;
+      sessionThreads(session: string): SessionThread[];
+      pendingCard(thread: number): [{ ts: string }, unknown] | null;
       insertMessage(m: Record<string, unknown>): readonly unknown[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;
@@ -157,10 +160,14 @@ export class SignIns {
   /// keeps, asked for (secret_use); none (or `again`: the one kept ran out), a card asks the person to sign in on the
   /// chat's tab on the site (`tab`, else the last one there). `done`: the agent looked and it is signed in; `stuck`: it
   /// is not, and what is left (given to the person on the tab's screen).
-  async ask(session: string, a: { site: string; reason?: string; tab?: string; again?: boolean; done?: boolean; stuck?: string }): Promise<string> {
+  async ask(session: string, a: { site: string; reason?: string; tab?: string; again?: boolean; reask?: boolean; done?: boolean; stuck?: string }): Promise<string> {
     const site = siteOf(a.site);
     if (site === "" || !site.includes(".")) throw new Refused("site is the site's host, e.g. github.com");
     const open = this.#bySession(session).filter((x) => x.site === site && OPEN.includes(x.status)).at(-1);
+    if (open?.status === "pending" && open.at + PENDING_SECS < this.#secs()) {
+      this.#end(open, "expired");
+      throw new Refused(`The sign-in to ${site} expired. Ask for a new sign-in if it is still needed.`);
+    }
     if (a.done || a.stuck !== undefined) {
       if (open === undefined) throw new Refused(`No sign-in to ${site} is under way in this chat: sign_in {site, reason} asks for one.`);
       return a.done ? this.#done(open) : this.#stuck(open, a.stuck ?? "");
@@ -177,7 +184,31 @@ export class SignIns {
       });
       return `Filling ${site}'s sign-in form on tab ${open.tab} again with what ${open.owner}'s password manager gave; you are told here when the page has left it.`;
     }
-    if (open !== undefined) return this.#waiting(open);
+    if (open !== undefined) {
+      const place = cardPlace(this.#d.hub.store, session, open.thread, open.cardTs);
+      if (a.reask && open.status !== "left") {
+        if (place?.state === "other") throw new Refused(CARD_OCCUPIED);
+        if (place?.state === "none") {
+          const posted = await this.#post(session, place.thread, open, true);
+          const current = this.get(open.id);
+          if (current === null || !OPEN.includes(current.status) || current.status === "left") {
+            if (posted !== null) this.#d.hub.store.withdrawCard(session, place.thread.thread.id, posted);
+            return current === null ? `The sign-in to ${site} is no longer pending.` : this.#waiting(current);
+          }
+          if (posted !== null) {
+            current.thread = place.thread.thread.id;
+            current.cardTs = posted;
+            this.#save(current);
+            this.#restate(current);
+          }
+          return this.#waiting(current);
+        }
+      }
+      if (place !== null && place.state !== "same" && open.status !== "left") {
+        return `The sign-in to ${site} (${open.id}) is ${open.status}, but its card is no longer pending. If it is still needed, call sign_in with site and reask: true.`;
+      }
+      return this.#waiting(open);
+    }
     const reason = (a.reason ?? "").trim();
     if (reason === "") throw new Refused("reason is required: why you need to be signed in, for the person, in the language they use");
     if (!a.again) {
@@ -222,7 +253,7 @@ export class SignIns {
     }
   }
 
-  async #post(session: string, thread: SessionThread, x: SignInAsk): Promise<string | null> {
+  async #post(session: string, thread: SessionThread, x: SignInAsk, requireEmpty = false): Promise<string | null> {
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     const link = this.#d.screenLink(x.tab);
     const text = [`要登录 ${x.site}：${x.reason}`, ...(stillfail ? [] : [link !== null ? `请在 still.fail 中打开此画面登录，登录后在此回复：\n${link}` : "请在 still.fail 客户端里登录。"])].join("\n\n");
@@ -237,6 +268,7 @@ export class SignIns {
       : null;
     const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
     const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
+    if (requireEmpty && this.#d.hub.store.pendingCard(thread.thread.id) !== null) throw new Refused(CARD_OCCUPIED);
     const [n] = this.#d.hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
     this.#d.hub.shared(thread.thread.id, n as number, session, text);
     return card !== null ? posted : null;

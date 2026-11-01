@@ -14,6 +14,7 @@ import { type Entry, entryHash, genesis, signedBytes as lockBytes } from "../src
 import { type BoxCert, type Deny, type Grant, type Item, type Request, type Sig, type Vault, TAG, encryptWith, grantContext, itemContext, keyContext, newBoxPair, openSeal, saveContext, seal, signedBytes } from "../src/vault/crypto.ts";
 import { PLAIN, PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
+import { vaultTools } from "../src/vault/tool.ts";
 import { VaultStore } from "../src/vault/store.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
 import { isFor } from "../src/api/events.ts";
@@ -70,17 +71,22 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
   const plain = new PlainStore(db);
   const notified: [string, string][] = [];
   const cards: { text: string; card: any }[] = [];
+  const withdrawn: string[] = [];
+  let hidden = false;
+  let onPost: (() => void) | null = null;
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp", archivedAt: null } : null),
       starter: () => starter.toLowerCase(),
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
-      withdrawCard: () => true,
+      sessionThreads: () => [{ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }],
+      withdrawCard: (_session: string, _thread: number, ts: string) => (withdrawn.push(ts), true),
       restateCard: () => true,
-      insertMessage: (m: { text: string; card: unknown }) => (cards.push({ text: m.text, card: m.card }), [1]),
+      insertMessage: (m: { text: string; card: unknown }) => (cards.push({ text: m.text, card: m.card }), hidden = false, [cards.length]),
+      pendingCard: () => hidden || cards.length === 0 ? null : [{ ts: String(cards.length) }, cards.at(-1)!.card],
       subscribe: () => () => {},
     },
-    chat: () => ({ post: async () => "1.0" }),
+    chat: () => ({ post: async () => { onPost?.(); return String(cards.length + 1); } }),
     shared: () => {},
     notify: (k: string, text: string) => notified.push([k, text]),
   };
@@ -92,7 +98,7 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
     signIn: async (session: string, d: { request: string; sites: string[]; cookies: string; until: number }) => void browser.signedIn.push([session, d]),
   };
   const make = () => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => 1_000_000, browsers });
-  return { db, vaults, plain, notified, cards, dir, make, browser, secrets: make() };
+  return { db, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; } };
 }
 
 /// What the agent was told of request `asked` once decided: secret_save answers at once that it waits, and the decision
@@ -105,6 +111,93 @@ const decided = async (h: { notified: [string, string][] }, asked: Promise<strin
 };
 const pendingOf = (secrets: Secrets, lock: ReturnType<typeof world>["state"] | null, email: string, sub = email.split("@")[0]!) => secrets.pending(WS, lock, { sub, email });
 const opened = (r: Request, p: Person) => JSON.parse(Buffer.from(openSeal(p.box.priv, r.sealed!.find((s) => s.box === p.box.pub)!.secret, saveContext(WS, r.id))).toString());
+
+test("a still-needed secret save can be asked again without reading the secret again", async () => {
+  const h = harness(() => null);
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    const tool = vaultTools(h.secrets, () => h.dir).find((t) => t.name === "secret_reask")!;
+    await tool.run("s1", { request });
+    assert.equal(h.cards.length, 2);
+    assert.equal(h.cards[1]!.card.vault.request, request, "the same request and secret are used");
+    await tool.run("s1", { request });
+    assert.equal(h.cards.length, 2, "an active card is not posted again");
+    h.occupyCard();
+    await assert.rejects(tool.run("s1", { request }), /Another card is pending/);
+    assert.equal(h.cards.length, 3, "a different question was not replaced");
+    assert.notEqual(typeof h.secrets.savedPlain(WS, null, "alice@x.com", { request }), "string");
+    await assert.rejects(tool.run("s1", { request }), /no longer pending/i);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a still-needed secret use can be asked again as the same request", async () => {
+  const h = harness(() => null);
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const saved = h.secrets.savedPlain(WS, null, "alice@x.com", { request: h.cards[0]!.card.vault.request });
+    assert.notEqual(typeof saved, "string");
+    await h.secrets.ask("s1", { item: "Test key", reason: "use it", command: "true" });
+    const request = h.cards[1]!.card.vault.request;
+    h.hideCard();
+    const tool = vaultTools(h.secrets, () => h.dir).find((t) => t.name === "secret_reask")!;
+    await tool.run("s1", { request });
+    assert.equal(h.cards[2]!.card.vault.request, request);
+    assert.equal(h.cards[2]!.card.vault.command, "true");
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a vanished secret is not reasked after a restart", async () => {
+  const h = harness(() => null);
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    const restarted = h.make();
+    await assert.rejects(restarted.reask("s1", request), /no longer pending/);
+    assert.equal(h.cards.length, 1);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a decision arriving while a secret card is reissued is not reset", async () => {
+  const h = harness(() => null);
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    h.onPost(() => {
+      h.onPost(null);
+      assert.notEqual(typeof h.secrets.savedPlain(WS, null, "alice@x.com", { request }), "string");
+    });
+    await assert.rejects(h.secrets.reask("s1", request), /no longer pending/);
+    assert.deepEqual(h.withdrawn, ["1", "2"], "both the old card and the raced new card were closed");
+    assert.equal(h.secrets.held("s1")[0]!.request.id, request, "the decision survived");
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a new question arriving while a secret card is reissued is not replaced", async () => {
+  const h = harness(() => null);
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    h.onPost(() => { h.onPost(null); h.occupyCard(); });
+    await assert.rejects(h.secrets.reask("s1", request), /Another card is pending/);
+    assert.equal(h.cards.length, 2);
+    assert.equal(h.cards[1]!.text, "another question");
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
 
 test("a secret to keep in a vault: sealed to its owner's devices, decided by them alone, kept once their app wrote it", async () => {
   const w = world();
