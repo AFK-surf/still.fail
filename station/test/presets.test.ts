@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { RepoIndex, candidates, presetCopyOf, presetInput, repoName } from "../src/sessions/presets.ts";
+import { RepoIndex, candidates, presetCopyInput, presetCopyOf, presetInput, repoName } from "../src/sessions/presets.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { Rig, settle } from "./hub-fakes.ts";
 
@@ -116,4 +116,36 @@ test("the repositories on the machine are found under its home, a few levels dow
   assert.deepEqual((await again.repos()).map((c) => c.name).sort(), ["app", "deep"]);
   await again.walk();
   assert.deepEqual((await again.repos()).map((c) => c.name).sort(), ["app", "deep", "later"]);
+});
+
+test("a repository is offered once, the person's checkout of it where there is one, with its own picture", async () => {
+  const home = mkdtempSync(join(tmpdir(), "presets-home-"));
+  const mine = clone(join(home, "code"), "app", "git@github.com:acme/app.git");
+  mkdirSync(join(mine, "web", "public"), { recursive: true });
+  const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+  writeFileSync(join(mine, "web", "public", "apple-touch-icon.png"), png);
+  writeFileSync(join(mine, "favicon.png"), Buffer.from("89504e47", "hex"));
+  const repos = join(home, "station", "repos");
+  clone(repos, "app", "https://github.com/acme/app.git", ["c-1", "c-2"]);
+  clone(repos, "lib", "https://github.com/acme/lib.git", ["c-3"]);
+  const found = await new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => 0, besides: () => [join(home, "station")] }).repos();
+  const offered = await candidates(repos, [], found);
+  assert.deepEqual(offered.map((c) => [c.name, c.path, c.chats, c.cached ?? false]), [["app", mine, 2, false], ["lib", join(repos, "lib"), 1, true]]);
+  assert.equal(offered[1]!.where, "github.com/acme/lib", "a clone of the cache's said as its repository");
+  // its touch icon before its favicon (deeper, but square and large), as a picture to draw
+  assert.equal(offered[0]!.icon, `data:image/png;base64,${png.toString("base64")}`);
+  assert.equal(offered[1]!.icon, undefined);
+});
+
+test("a chat opened with another station's preset is told where its folders are, its repositories as this station's clones", async () => {
+  const r = new Rig();
+  const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "local", presetCopy: presetCopyInput({ id: "p1", name: "Docs", dirs: [{ path: "/Users/a/code/app", repo: "github.com/acme/app" }, { path: "/Users/a/Design" }], instructions: "Be brief.", elsewhere: "Studio" }) });
+  sayIn(r.hub, thread.id, "local", "go");
+  await settle();
+  const opened = r.claude.last().options;
+  assert.ok(opened.instructions.includes("github.com/acme/app: this station's clone of it"), opened.instructions);
+  assert.ok(opened.instructions.includes("/Users/a/Design on station Studio: read it there with the station tools"), opened.instructions);
+  assert.ok(opened.instructions.includes("<preset-instructions>\nBe brief.\n</preset-instructions>"));
+  assert.equal(opened.dirs, undefined, "another station's folders are not this machine's");
+  await r.close();
 });

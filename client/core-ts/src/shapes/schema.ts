@@ -1294,6 +1294,9 @@ export const SHAPES: Record<string, Shape> = {
     ["repo", opt("String")],
     ["chats", "i64", { client: "I54", doc: "How many of the station's chats made worktrees of it." }],
     ["lastAt", "i64", { client: "I54" }],
+    ["where", opt("String"), { said: true, doc: "Where it is as people read it: ~/code/app; a repository only the station's cache has, its address." }],
+    ["cached", opt("bool"), { doc: "Only the station's cache has it (no checkout of the person's on the machine)." }],
+    ["icon", opt("String"), { doc: "Its own picture (its favicon, its logo), a data URL." }],
   ], { doc: "A directory offered for a new preset: a clone of the station's repository cache, or one a preset names." }),
   StationMemory: struct([
     ["global", "MemoryFile"],
@@ -2150,13 +2153,16 @@ export const SHAPES: Record<string, Shape> = {
     ["pick", opt("PickView"), { doc: "Its model control (the `pick` topic of `new` on the station), with the page." }],
     ["frequent", opt(vec("FrequentCombo")), { doc: "Up to four combinations used on this device in this workspace, filtered to this station." }],
     ["preset", "String", { default: true, doc: "The preset its chat is opened with on the station (one of the `presets` topic's ids), as last picked\nthere on this device (`newChat.pick` `preset`); \"\" for none." }],
+    ["presetStation", "String", { default: true, doc: "The station the preset picked is of (its address): any of the workspace's, not only the one it runs on." }],
     ["presetName", "String", { default: true, said: true, doc: "Its name, as the station's presets say it (\"\" until they are read)." }],
-    ["presets", vec("NewChatPreset"), { default: true, doc: "The station's presets, to pick from (none until they are read)." }],
+    ["presets", vec("NewChatPreset"), { default: true, doc: "The workspace's presets, every station's up now, to pick from (a station's none until they are read)." }],
   ], { doc: "A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs\nthere, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has." }),
   NewChatPreset: struct([
     ["id", "String"],
     ["name", "String", { said: true }],
     ["dirs", "i64", { client: "I54", doc: "How many folders it names." }],
+    ["station", "String", { doc: "The station it is of (its address): its folders are there." }],
+    ["stationName", "String", { said: true }],
   ], { doc: "A preset a new chat can be opened with, as its page lists them." }),
   ShareInView: struct([
     ["site", opt("String"), { doc: "The site of the link shared (`youtube.com`, its www./m. left out); none for text without one." }],

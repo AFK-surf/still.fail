@@ -27,6 +27,9 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
   if take_asked("preset-add") {
     preset_dialog(src, w, address, text(items(v, "presets").get(0), "id"), adding=true)
   }
+  if take_asked("preset-new-add") {
+    preset_dialog(src, w, address, "", adding=true)
+  }
   if (new_capsule(c, "new/preset", label, floating, fn() {
       @sf.icon(c, "boxes", size=new_mark, color=if name == "" { t.p.muted } else { t.p.text }) |> ignore
       // (its words left out first, short of room: its mark says what it is, the station's name and the model's matter more)
@@ -46,17 +49,26 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
 /// The station's presets as a menu (the model's and the station's picks' look): 不用预设 and each preset, the one
 /// picked checked; under a line, 编辑 the one picked and 新预设.
 fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, picked : String, from : @sf.Beside) -> Unit {
-  let pick = fn(id : String) { fn() { @sfbase.pick_new(src, w.id, { "preset": Json::string(id) }) } }
-  let menu : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(@sf.t("web-main.preset.none"), pick(""), chosen=picked == ""))]
-  for p in items(v, "presets") {
-    let id = text(Some(p), "id")
-    menu.push(Some(@sf.menu_item_of(text(Some(p), "name"), pick(id), chosen=id == picked)))
+  let pick = fn(id : String, at : String) { fn() { @sfbase.pick_new(src, w.id, { "preset": Json::string(id), "presetStation": Json::string(at) }) } }
+  let all = items(v, "presets")
+  // (which station each is of, said only where they are of more than one)
+  let several = all.iter().any(fn(p) { text(Some(p), "station") != text(all.get(0), "station") })
+  let menu : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(@sf.t("web-main.preset.none"), pick("", ""), chosen=picked == ""))]
+  for p in all {
+    let one = Some(p)
+    let id = text(one, "id")
+    let at = text(one, "station")
+    let label = if several { text(one, "name") + " · " + text(one, "stationName") } else { text(one, "name") }
+    menu.push(Some(@sf.menu_item_of(label, pick(id, at), chosen=id == picked && at == text(v, "presetStation"))))
   }
   menu.push(None)
   if picked != "" {
+    let at = text(v, "presetStation")
     menu.push(
       Some(
-        @sf.menu_item_of(@sf.t("web-main.preset.editNamed", args=[("name", text(v, "presetName"))]), fn() { preset_dialog(src, w, address, picked) }, icon="edit"),
+        @sf.menu_item_of(@sf.t("web-main.preset.editNamed", args=[("name", text(v, "presetName"))]), fn() {
+          preset_dialog(src, w, if at == "" { address } else { at }, picked)
+        }, icon="edit"),
       ),
     )
   }
@@ -161,10 +173,10 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, add
               None => None
             }
             c.box(style=preset_dir_row, fn() {
-              @sf.icon(c, if text(one, "repo") != "" { "file-code" } else { "folder" }, size=16.0, color=@sf.theme().p.muted) |> ignore
+              repo_mark(c, dir_label(at), text(one, "repo"), text(one, "icon"), preset_dir_mark)
               c.box(style=preset_dir_words, fn() {
-                c.text(dir_label(at), style=preset_dir_name) |> ignore
-                c.text(if text(one, "repo") != "" { text(one, "repo") } else { at }, style=preset_dir_note) |> ignore
+                c.text(if text(one, "name") != "" { text(one, "name") } else { dir_label(at) }, style=preset_dir_name) |> ignore
+                c.text(if text(one, "where") != "" { text(one, "where") } else { at }, style=preset_dir_note) |> ignore
               })
               |> ignore
               if @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove")) {
@@ -247,9 +259,11 @@ fn preset_add_pick(offered : Array[Json], e : PresetEditing, from : @sf.Beside) 
     .filter(fn(o) { !e.dirs.contains(text(Some(o), "path")) })
     .map(fn(o) {
       let one = Some(o)
-      @sf.choice(text(one, "path"), text(one, "name"), note=offer_note(one), icon=if text(one, "repo") != "" { "file-code" } else { "folder" })
+      let (name, repo, icon) = (text(one, "name"), text(one, "repo"), text(one, "icon"))
+      @sf.choice(text(one, "path"), name, note=offer_note(one), mark=fn(c, size) { repo_mark(c, name, repo, icon, size) })
     })
-  choices.push(@sf.choice("+path", @sf.t("web-main.preset.typePath"), icon="edit"))
+  // (its mark in the marks' column, as the folders' are)
+  choices.push(@sf.choice("+path", @sf.t("web-main.preset.typePath"), mark=fn(c, size) { @sf.icon(c, "edit", size~, color=@sf.theme().p.muted) |> ignore }))
   @sf.pick(@sf.t("web-main.preset.add"), choices, "", fn(path) {
     if path == "+path" {
       @sf.ask(@sf.t("web-main.preset.typePath"), @sf.t("web-main.preset.addShort"), fn(typed) {
@@ -267,9 +281,19 @@ fn preset_add_pick(offered : Array[Json], e : PresetEditing, from : @sf.Beside) 
 /// What an offered folder says under its name: the repository it is a clone of, how many chats worked in it.
 fn offer_note(o : Json?) -> String {
   let chats = count(o, "chats")
-  let parts = [text(o, "repo"), if chats > 0 { @sf.t("web-main.preset.chats", args=[("n", chats.to_string())]) } else { "" }]
+  let parts = [if text(o, "where") != "" { text(o, "where") } else { text(o, "repo") }, if chats > 0 { @sf.t("web-main.preset.chats", args=[("n", chats.to_string())]) } else { "" }]
   join(parts.filter(fn(x) { x != "" }), " · ")
 }
+
+///|
+/// A folder's mark: its own picture where the station found one, else its first letter on its repository's colour.
+fn repo_mark(c : @ui.Ctx, name : String, repo : String, icon : String, size : Double) -> Unit {
+  @sf.tile_avatar(c, if repo != "" { repo } else { name }, name, icon, size)
+}
+
+///|
+/// A folder's mark in the preset's dialog: as high as its two lines.
+let preset_dir_mark : Double = 32.0
 
 ///|
 /// Short of room, the preset's words go with the first of the model's parts (model_triple.mbt triple_drop_name: who

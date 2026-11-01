@@ -432,6 +432,7 @@ pub fn open_mode(mode : String) -> Unit {
       "newchat-preset-new" => @sfpages.new_chat_ask("preset-new")
       "newchat-preset-edit" => @sfpages.new_chat_ask("preset-edit")
       "newchat-preset-add" => @sfpages.new_chat_ask("preset-add")
+      "newchat-preset-new-add" => @sfpages.new_chat_ask("preset-new-add")
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
       "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" => @sfpages.new_chat_ask("model")
       _ => ()

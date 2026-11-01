@@ -23,8 +23,9 @@ export type Preset = {
   updatedAt: number;
 };
 
-/// What a chat was opened with: the preset as it was then.
-export type PresetCopy = { id: string; name: string; dirs: PresetDir[]; instructions: string };
+/// What a chat was opened with: the preset as it was then. `elsewhere`: the station it is of, by name, where that is
+/// not this one (its folders are there).
+export type PresetCopy = { id: string; name: string; dirs: PresetDir[]; instructions: string; elsewhere?: string | null };
 
 const FILE = "presets.json";
 const COPY = ".stillfail-preset.json";
@@ -199,9 +200,7 @@ export class Presets {
   keepFor(workspace: string, ws: string | null, id: string): PresetCopy {
     const p = this.get(ws, id);
     if (p === null) throw new NoPreset(id);
-    const copy: PresetCopy = { id: p.id, name: p.name, dirs: p.dirs, instructions: p.instructions };
-    writeFileSync(join(workspace, COPY), `${JSON.stringify(copy, null, 2)}\n`);
-    return copy;
+    return keepCopy(workspace, { id: p.id, name: p.name, dirs: p.dirs, instructions: p.instructions });
   }
 }
 
@@ -211,12 +210,29 @@ export class NoPreset extends Error {
   }
 }
 
+/// Keeps `copy` as what a chat in `workspace` is opened with.
+export function keepCopy(workspace: string, copy: PresetCopy): PresetCopy {
+  writeFileSync(join(workspace, COPY), `${JSON.stringify(copy, null, 2)}\n`);
+  return copy;
+}
+
+/// A preset of another station's as the asking app gives it (POST /sessions `presetCopy`: what it read there, the
+/// station it is of by name): its folders are that station's, taken as said.
+export function presetCopyInput(v: unknown): PresetCopy {
+  const o = (v ?? {}) as Record<string, unknown>;
+  const name = (str(o.name) ?? "").trim();
+  if (name === "" || Array.from(name).length > NAME_MAX) throw new Error("presetCopy: a preset needs a name");
+  const dirs = dirsOf(o.dirs).slice(0, DIRS_MAX);
+  const instructions = (str(o.instructions) ?? "").slice(0, INSTRUCTIONS_MAX);
+  return { id: str(o.id) ?? "", name, dirs, instructions, elsewhere: str(o.elsewhere) };
+}
+
 /// What a chat whose session workspace is `workspace` was opened with, if anything.
 export function presetCopyOf(workspace: string): PresetCopy | null {
   try {
     const v = JSON.parse(readFileSync(join(workspace, COPY), "utf8"));
     if (typeof v?.id !== "string" || typeof v?.name !== "string") return null;
-    return { id: v.id, name: v.name, dirs: dirsOf(v.dirs), instructions: str(v.instructions) ?? "" };
+    return { id: v.id, name: v.name, dirs: dirsOf(v.dirs), instructions: str(v.instructions) ?? "", elsewhere: str(v.elsewhere) };
   } catch {
     return null;
   }
@@ -224,7 +240,14 @@ export function presetCopyOf(workspace: string): PresetCopy | null {
 
 /// What the agent of a chat opened with `copy` is told of it, after the station's own instructions.
 export function presetInstructions(copy: PresetCopy): string {
-  const dirs = copy.dirs.map((d) => `  - ${d.path}${d.repo ? ` (a clone of ${d.repo}: change it in a worktree of your own, as with any repository)` : ""}`);
+  const there = copy.elsewhere ?? null;
+  const dirs = copy.dirs.map((d) =>
+    there === null
+      ? `  - ${d.path}${d.repo ? ` (a clone of ${d.repo}: change it in a worktree of your own, as with any repository)` : ""}`
+      : d.repo
+        ? `  - ${d.repo}: this station's clone of it (in the repository cache; clone it there if it is not yet), a worktree of your own to change it (on ${there} it is ${d.path})`
+        : `  - ${d.path} on station ${there}: read it there with the station tools (station_task, station_file), not copied here`,
+  );
   const lines = [
     "",
     "",
@@ -242,7 +265,10 @@ export function presetInstructions(copy: PresetCopy): string {
 }
 
 /// A directory to offer for a new preset: one this station has, by how many chats worked in it.
-export type Candidate = { path: string; name: string; repo: string | null; chats: number; lastAt: number };
+/// `where`: where it is as people read it (`~/code/app`); `cached`: only the station's cache has it (no checkout of the
+/// person's on the machine).
+/// `icon`: its own picture, found where projects keep one (repoIcon), as a data URL.
+export type Candidate = { path: string; name: string; repo: string | null; chats: number; lastAt: number; where?: string; cached?: boolean; icon?: string };
 
 /// The directories offered as a preset is made (GET /presets `candidates`): the clones in the station's repository
 /// cache and the repositories found on the machine (`found`, RepoIndex), the ones its chats made worktrees of first
@@ -266,14 +292,77 @@ export async function candidates(reposDir: string, presets: Preset[], found: Can
         if (when) lastAt = Math.max(lastAt, when.mtimeMs);
       }
       const config = await readFile(join(git, "config"), "utf8").catch(() => "");
-      return { path, name, repo: originIn(config), chats: sessions.size, lastAt: Math.floor(lastAt) };
+      const icon = await cachedIcon(path, lastAt);
+      return { path, name, repo: originIn(config), chats: sessions.size, lastAt: Math.floor(lastAt), ...(icon ? { icon } : {}) };
     }),
   );
+  // One a repository (by its origin), a folder of no repository by its path: the person's own checkout where the
+  // machine has one, the cache's clone (said as its repository, not its path) where it has not; the chats that worked
+  // in the cache's clone counted on it either way.
   const out = new Map<string, Candidate>();
-  for (const c of cached) if (c !== null) out.set(c.path, c);
-  for (const c of found) if (!out.has(c.path)) out.set(c.path, c);
-  for (const p of presets) for (const d of p.dirs) if (!out.has(d.path)) out.set(d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt });
+  const keyOf = (c: Candidate) => c.repo ?? c.path;
+  for (const c of found) if (!out.has(keyOf(c))) out.set(keyOf(c), { ...c, where: shortPath(c.path) });
+  for (const c of cached) {
+    if (c === null) continue;
+    const mine = out.get(keyOf(c));
+    if (mine) out.set(keyOf(c), { ...mine, chats: mine.chats + c.chats, lastAt: Math.max(mine.lastAt, c.lastAt), ...(mine.icon || !c.icon ? {} : { icon: c.icon }) });
+    else out.set(keyOf(c), { ...c, cached: true, where: c.repo ?? shortPath(c.path) });
+  }
+  for (const p of presets) for (const d of p.dirs) if (!out.has(d.repo ?? d.path)) out.set(d.repo ?? d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt, where: shortPath(d.path) });
   return [...out.values()].sort((a, b) => b.chats - a.chats || b.lastAt - a.lastAt || a.name.localeCompare(b.name));
+}
+
+/// What a project's picture is called where it keeps one (its site's icons, its app's icon, its logo).
+const ICON_NAMES = /^(favicon|apple-touch-icon|app-icon|appicon|icon|logo)([-_.@][\w@.-]*)?\.(png|jpe?g)$/i;
+/// Not looked into for one: what holds dependencies, builds, tests' and docs' pictures of other things.
+const ICON_SKIPPED = new Set(["node_modules", ".git", "dist", "build", "target", "vendor", "out", "coverage", "test", "tests", "fixtures", "__tests__", "Pods", ".next"]);
+/// A picture larger than this is no icon (a screenshot, a banner): the repository goes without.
+const ICON_MOST_BYTES = 24 * 1024;
+
+/// A repository's own picture, where projects keep one (its root, public/, static/, assets/, docs/, .github/ and the
+/// like, three levels down at most), as a data URL: the best named (a touch icon first), then the nearest the root, then
+/// the smallest; null for none.
+export async function repoIcon(root: string): Promise<string | null> {
+  const found: { path: string; rank: number; depth: number; size: number; type: string }[] = [];
+  const into = async (dir: string, depth: number): Promise<void> => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const e of entries) {
+      if (e.isFile()) {
+        const m = ICON_NAMES.exec(e.name);
+        if (!m) continue;
+        const at = join(dir, e.name);
+        const size = (await stat(at).catch(() => null))?.size ?? 0;
+        if (size === 0 || size > ICON_MOST_BYTES) continue;
+        // (the touch icon first: square and large; a favicon is often 16 or 32 across, blurred where it is drawn)
+        const rank = ["apple-touch-icon", "app-icon", "appicon", "icon", "favicon", "logo"].indexOf(m[1]!.toLowerCase());
+        found.push({ path: at, rank, depth, size, type: /png$/i.test(e.name) ? "png" : "jpeg" });
+      } else if (e.isDirectory() && depth < 3 && !ICON_SKIPPED.has(e.name) && (!e.name.startsWith(".") || e.name === ".github")) {
+        await into(join(dir, e.name), depth + 1);
+      }
+    }
+  };
+  await into(root, 0);
+  found.sort((a, b) => a.rank - b.rank || a.depth - b.depth || a.size - b.size);
+  const best = found[0];
+  if (!best) return null;
+  const bytes = await readFile(best.path).catch(() => null);
+  return bytes ? `data:image/${best.type};base64,${bytes.toString("base64")}` : null;
+}
+
+/// The cache's clones' pictures as last looked for, by path and when the clone last changed (looked for again then).
+const icons = new Map<string, { at: number; icon: string | null }>();
+async function cachedIcon(path: string, at: number): Promise<string | null> {
+  const held = icons.get(path);
+  if (held && held.at === at) return held.icon;
+  const icon = await repoIcon(path);
+  icons.set(path, { at, icon });
+  return icon;
+}
+
+/// A path as people read it: under the home, `~/…`.
+export function shortPath(path: string): string {
+  const home = homedir();
+  return path === home ? "~" : path.startsWith(home + sep) ? `~${path.slice(home.length)}` : path;
 }
 
 /// Where on the machine repositories are looked for: under its home, so many levels down.
@@ -334,7 +423,8 @@ export class RepoIndex {
       if (entries.some((e) => e.name === ".git")) {
         const git = join(dir, ".git");
         const [config, head] = await Promise.all([readFile(join(git, "config"), "utf8").catch(() => ""), stat(join(git, "index")).catch(() => stat(git).catch(() => null))]);
-        found.push({ path: dir, name: basename(dir), repo: originIn(config), chats: 0, lastAt: Math.floor(head?.mtimeMs ?? 0) });
+        const icon = await repoIcon(dir);
+        found.push({ path: dir, name: basename(dir), repo: originIn(config), chats: 0, lastAt: Math.floor(head?.mtimeMs ?? 0), ...(icon ? { icon } : {}) });
         return;
       }
       if (depth >= INDEX_DEPTH) return;

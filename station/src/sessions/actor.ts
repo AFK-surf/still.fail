@@ -1565,7 +1565,8 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     effort: row.effort ?? undefined,
     // A session continued from a terminal keeps the system prompt it began with (its cache holds).
     instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key)) + (preset ? presetInstructions(preset) : ""),
-    ...(preset && preset.dirs.length > 0 ? { dirs: preset.dirs.map((d) => d.path) } : {}),
+    // (its folders this machine's: another station's are told of, read there)
+    ...(preset && !preset.elsewhere && preset.dirs.length > 0 ? { dirs: preset.dirs.map((d) => d.path) } : {}),
     mcpToken: row.token,
     mcpUrl: deps.mcpUrl(),
     route: row.key,

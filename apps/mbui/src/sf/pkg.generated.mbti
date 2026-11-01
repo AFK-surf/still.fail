@@ -1990,6 +1990,8 @@ pub fn textarea(@ui.Ctx, String, rows? : Int32, most? : Int32, placeholder? : St
 
 pub fn theme() -> Theme
 
+pub fn tile_avatar(@ui.Ctx, String, String, String, Double) -> Unit
+
 pub fn tile_whole() -> Bool
 
 pub fn tip(@ui.Ctx, String, Int32, String, side? : @view.Side, shortcut? : String, shown? : Bool, repeats? : Bool) -> Unit

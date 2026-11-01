@@ -5171,6 +5171,9 @@ export interface NewChatPreset {
 	name: string;
 	/** How many folders it names. */
 	dirs: number;
+	/** The station it is of (its address): its folders are there. */
+	station: string;
+	stationName: string;
 }
 
 /** Something wrong with a station, in words (StationView `problems`). */
@@ -5582,9 +5585,11 @@ export interface NewChatView {
 	 * there on this device (`newChat.pick` `preset`); "" for none.
 	 */
 	preset?: string;
+	/** The station the preset picked is of (its address): any of the workspace's, not only the one it runs on. */
+	presetStation?: string;
 	/** Its name, as the station's presets say it ("" until they are read). */
 	presetName?: string;
-	/** The station's presets, to pick from (none until they are read). */
+	/** The workspace's presets, every station's up now, to pick from (a station's none until they are read). */
 	presets?: NewChatPreset[];
 }
 
@@ -5965,6 +5970,12 @@ export interface PresetCandidate {
 	/** How many of the station's chats made worktrees of it. */
 	chats: number;
 	lastAt: number;
+	/** Where it is as people read it: ~/code/app; a repository only the station's cache has, its address. */
+	where?: string;
+	/** Only the station's cache has it (no checkout of the person's on the machine). */
+	cached?: boolean;
+	/** Its own picture (its favicon, its logo), a data URL. */
+	icon?: string;
 }
 
 /** Providers of one group, as the picker lists them. */

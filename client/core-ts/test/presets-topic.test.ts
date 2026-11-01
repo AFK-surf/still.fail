@@ -46,16 +46,19 @@ test("presets_are_read_as_shown_again_once_one_is_made_and_the_one_picked_goes_w
   assert.deepEqual(v(values, 1).presets.map((p: { name: string }) => p.name), ["App", "Lib"]);
 
   // Picked for the station's new chats: the page says so, and the chat made there is opened with it.
-  call(core, ui, 4, "newChat.pick", { scope: "ws", preset: "lib" });
+  call(core, ui, 4, "newChat.pick", { scope: "ws", preset: "lib", presetStation: S });
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 2).preset, "lib");
   assert.equal(v(values, 2).presetName, "Lib", "named as the station says, the page asking nothing more");
-  assert.deepEqual(v(values, 2).presets, [{ id: "app", name: "App", dirs: 1 }, { id: "lib", name: "Lib", dirs: 1 }]);
+  assert.equal(v(values, 2).presetStation, S);
+  assert.deepEqual(v(values, 2).presets, [{ id: "app", name: "App", dirs: 1, station: S, stationName: "studio" }, { id: "lib", name: "Lib", dirs: 1, station: S, stationName: "studio" }]);
   call(core, ui, 5, "newChat.create", { station: S, key: v(values, 2).next });
   await host.settle();
   const asked = host.requests.find((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions"));
-  assert.equal(JSON.parse(new TextDecoder().decode(asked!.body!)).preset, "lib");
+  const body = JSON.parse(new TextDecoder().decode(asked!.body!));
+  assert.equal(body.preset, "lib", "this station's: by its id");
+  assert.equal(body.presetCopy, undefined);
 
   // Gone from the station: no longer picked, nor sent with a chat.
   said["GET /presets"] = { presets: [preset("app", "App")], candidates: [candidate] };

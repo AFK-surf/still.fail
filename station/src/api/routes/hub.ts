@@ -2,6 +2,7 @@
 // uploads, messages, adding a session to a chat, archiving, deleting, stopping, evicting, warming, a session's settings,
 // clearing a chat's ended jobs, stopping a job. What is only written to the store is routes/marks.ts's; the reads are
 // routes/chats.ts's and routes/sessions.ts's (GET /sessions/:key/files among them).
+import { presetCopyInput } from "../../sessions/presets.ts";
 import { createHash, randomBytes, type Hash } from "node:crypto";
 import { appendFileSync, constants as fsConstants, copyFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -409,6 +410,7 @@ export const routes = (tools: Tools): Route[] => {
                 clientKey: given("clientKey"),
                 ws: r.viewer.workspace || null,
                 preset: given("preset"),
+                presetCopy: i.presetCopy !== undefined && i.presetCopy !== null ? presetCopyInput(i.presetCopy) : null,
               },
               r.lang,
             ),

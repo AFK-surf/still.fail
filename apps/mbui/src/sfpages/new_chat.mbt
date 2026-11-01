@@ -369,13 +369,13 @@ fn new_controls(
   going : Bool,
 ) -> Unit {
   let address = text(station, "station")
-  if text(station, "name") != "" {
-    new_station_control(c, src, w, v, station, floating, going)
-  }
-  // (the preset's in the composer's row, laid out either way: over the composer narrow, where it runs and what on are
-  // what is chosen most and have its room; new_composer_place)
+  // (what it is for first, then where it runs and on what: the preset's in the composer's row, laid out either way;
+  // over the composer narrow, where it runs and what on are what is chosen most and have its room: new_composer_place)
   if !floating {
     new_preset_control(c, src, w, v, station, floating, going)
+  }
+  if text(station, "name") != "" {
+    new_station_control(c, src, w, v, station, floating, going)
   }
   let p = field(v, "pick")
   if flag(v, "waiting") {
