@@ -20,10 +20,11 @@ export type ShareStation = { id: string; station: string; name: string; online: 
 /// Which account a profile is: the same one on several stations has the same identity (null: none to tell by).
 function account(p: J): string | null {
   const a = isObject(p.access) ? p.access : {};
-  if (a.kind === "subscription") {
-    const email = typeof p.email === "string" && p.email !== "" ? p.email.toLowerCase() : null;
-    return email === null ? null : `sub:${p.runtime}:${email}`;
-  }
+  const email = typeof p.email === "string" && p.email !== "" ? p.email.toLowerCase() : null;
+  if (a.kind === "subscription") return email === null ? null : `sub:${p.runtime}:${email}`;
+  // Signed in to an account (OpenCode Go's, Kimi Code's): its key is that sign-in's token, each station's its own, so
+  // the account is told by the address signed in, as a subscription is.
+  if (a.login === true && email !== null) return `login:${a.provider ?? a.kind}:${email}`;
   // The key as the station shows it (its first five and last four characters): enough to tell two apart.
   if ((KEYED.has(a.kind) || (a.kind === "env" && a.provider)) && typeof a.key === "string" && a.key !== "") return `key:${a.provider ?? a.kind}:${a.endpoint ?? ""}:${a.key}`;
   return null;
@@ -79,7 +80,7 @@ export function workspaceProfiles(stations: J[]): J {
     const first = (ok: (m: J, i: number) => boolean) => members.findIndex(ok);
     const at = [first((m, i) => owns(m) && m.online && !troubled(i)), first((m) => owns(m) && m.online), first(owns), 0].find((i) => i >= 0)!;
     const [s, p] = list[at]!;
-    const subscription = p.access?.kind === "subscription";
+    const subscription = p.access?.kind === "subscription" || p.access?.login === true;
     const servesHere = list.map(([station, profile]) => profileServes(profile, String(station.station).split("/")[0] ?? "", station.joined === true));
     // The host's sharing permission and workspace scope are authoritative over an old copy's; different shares of
     // this account can each allow different stations. A copy whose host has not been read carries what it knows.
@@ -152,8 +153,8 @@ export function workspaceProfiles(stations: J[]): J {
       stationId: String(s.id),
       stationName: String(s.name),
       profile: p,
-      // What it is called: a subscription by the account signed in (what makes it one row: each station's copy may be
-      // named otherwise), a key by its profile's name.
+      // What it is called: a subscription or a sign-in by the account signed in (what makes it one row: each station's
+      // copy may be named otherwise), a key by its profile's name.
       title: subscription && typeof p.email === "string" && p.email !== "" ? p.email : String(p.name ?? ""),
       shared: share !== null,
       host,
@@ -249,7 +250,7 @@ function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>):
   let about: string;
   if (role === "user") about = t(subscription ? "core-views.profiles.borrows" : "core-views.profiles.copyOf", { station: name(String(share.host)) });
   else if (role === "host") about = users.length > 0 ? t(subscription ? "core-views.profiles.lends" : "core-views.profiles.sharedWith", { stations: users.join(t("core-views.list_separator")) }) : t("core-views.profiles.sharedNone");
-  else about = t(subscription ? "core-views.profiles.ownLogin" : "core-views.profiles.ownKey");
+  else about = t(subscription || p.access?.login === true ? "core-views.profiles.ownLogin" : "core-views.profiles.ownKey");
   return {
     station: String(s.station),
     stationId: String(s.id),

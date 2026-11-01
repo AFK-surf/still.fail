@@ -206,7 +206,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             c,
             "profiles/" + text(e, "key"),
             picked == Some(route),
-            fn() { @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), nav_mark_side) |> ignore },
+            fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), nav_mark_side, text(p, "providerMark")) },
             // (a subscription by its account, a key by its name: the core's)
             fn() { nav_title(c, if text(e, "title") == "" { text(p, "name") } else { text(e, "title") }, away=!usable) },
             lines=fn() {

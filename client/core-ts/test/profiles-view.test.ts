@@ -94,6 +94,26 @@ test("the same account signed in on two stations each is one row, each station a
   assert.equal(two.items.length, 2);
 });
 
+test("the same OpenCode Go account signed in on two stations is one row, though each sign-in has its own token", () => {
+  const go = (id: string, email: string, key: string) => profile(id, { name: email, email, runtime: "claude", access: { kind: "opencode-go", key, login: true } });
+  const view = workspaceProfiles([
+    station(A, "studio", true, [go("opencode-go", "Z@x.test", "eyJhb…1111")]),
+    station(B, "mini", true, [go("opencode-go", "z@x.test", "eyJhb…2222")]),
+  ]);
+  assert.equal(view.items.length, 1);
+  const row = view.items[0];
+  assert.equal(row.group, "opencode");
+  assert.equal(row.title, "Z@x.test");
+  assert.equal(row.where, "studio、mini 可用");
+  assert.deepEqual(row.members.map((m: any) => [m.stationName, m.about]), [["studio", "在此 station 单独登录"], ["mini", "在此 station 单独登录"]]);
+  // Two accounts, or the same key given by hand (not signed in), stay apart by what tells them apart.
+  const two = workspaceProfiles([
+    station(A, "studio", true, [go("opencode-go", "a@x.test", "eyJhb…1111")]),
+    station(B, "mini", true, [go("opencode-go", "b@x.test", "eyJhb…1111"), profile("go-key", { access: { kind: "opencode-go", key: "sk-1…2345" } })]),
+  ]);
+  assert.equal(two.items.length, 3);
+});
+
 test("an account is called by what it is signed in to, and said usable where any station has it: no one copy's share limit or name", () => {
   const C = "c".repeat(64);
   const share = { id: "sh-1", host: A, allow: [C] };
