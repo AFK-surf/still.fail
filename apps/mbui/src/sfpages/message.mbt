@@ -682,6 +682,7 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
               ],
               key="notice-profile/" + m.ts,
               style=(if open { notice_words_open } else { notice_words }).then(@ui.text_style(color=ink)),
+              allow_ellipsis=!open,
               link_color=if failed { p.red } else { p.text },
               on_link=fn(_) { open_page(Setting(@settings.Route::Profile(station, m.profile))) },
             )

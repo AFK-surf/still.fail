@@ -242,6 +242,8 @@ struct Node {
   mut flex : @flex.Node
   look : Look
   mut parent : Int
+  /// A last-resort ellipsis in its own words was deliberately allowed, without changing their sizing.
+  mut allow_ellipsis : Bool
   kids : Array[Int]
   /// its scope (what it was made with, and what is set on it, owned), and what stops it
   mut owner : @signals.ReactiveNode?
@@ -788,6 +790,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.drawn_off = (0.0, 0.0, 0.0, 0.0)
       n.went = None
       n.parent = parent
+      n.allow_ellipsis = false
       n.slot = false
       n.hosted = false
       n.on_press = None
@@ -853,6 +856,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         flex: @flex.Node::new(),
         look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
         parent,
+        allow_ellipsis: false,
         kids: [],
         owner: None,
         stop: None,
@@ -1502,6 +1506,7 @@ priv enum Prop {
   MaxWidth
   MaxHeight
   WordsLook
+  AllowEllipsis
   Shrink
   Gap
   MinWidth

@@ -1102,8 +1102,9 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// 注销账号), and a chevron (none where not `chevron`: what it does is done here; down where it `folds` what follows
 /// it, up while that is open), or an arrow out where it goes `out` of the app; `lead` before its words (a mark, a dot), `tail` after what it says (a pill, a spinner); going nowhere
 /// where not `goes` (a value said); `below` under its note (its allowance's chips). Its note, what is wrong and what is
-/// below are lines of their own as wide as its words, what it says, its tail and its chevron on its first line beside
-/// its title (row_top). One that `acts` (does something at once where it is: 检查未决策的 chat) says so at either width:
+/// below are lines of their own as wide as its words. Its title, value and tail share a line where they fit and go on
+/// below otherwise; its chevron or control stays at the end. One that `acts` (does something at once where it is:
+/// 检查未决策的 chat) says so at either width:
 /// its title in the link's ink, no chevron; one that `adds` one more to the list it ends (添加: an option, a station) is
 /// one that acts, a ＋ before its title. `note_cut`: its note one line, cut short (what is in a memory, how a connect
 /// runs). `face`: its `lead` is a round picture (a person's, a connect's: 28), which stands across the row's middle on
@@ -1210,7 +1211,7 @@ pub fn link_row(
         }
         let said = fn() {
           let words = fn() {
-            c.text(value, style=if value_bad { pg_value.then(bad) } else { pg_value }, color?=if value_lit {
+            c.text(value, style=(if value_bad { pg_value.then(bad) } else { pg_value }).then(in_lines), color?=if value_lit {
               Some(link_ink())
             } else {
               None
@@ -1232,12 +1233,14 @@ pub fn link_row(
           (true, false) => pg_row_title.then(row_strong)
           (false, false) => pg_row_title
         }
-        // its end: what follows what it says, its chevron
-        let end = fn() {
+        let tail_words = fn() {
           match tail {
             Some(f) => f()
             None => ()
           }
+        }
+        // The chevron and control stay at the row's end even if its words need another line.
+        let controls = fn() {
           if goes && (chevron || out) {
             icon(c, mark, size=pg_chevron, color=th.p.subtle) |> ignore
           }
@@ -1247,13 +1250,30 @@ pub fn link_row(
             control_at_end(under)
           }
         }
+        let end = fn() {
+          tail_words()
+          controls()
+        }
         if !under {
-          c.text(title, style=titled, color?=ink) |> ignore
-          after()
-          if value != "" {
-            said()
+          if title_after is None && (value != "" || tail is Some(_)) {
+            // Each keeps its own room; a long value or status goes below the title rather than squeezing it away.
+            c.box(style=pg_title_value.then(@ui.style(w=grow)), flow=true, line_gap=0.0, fn() {
+              let style = match (strong, danger) {
+                (_, true) => pg_row_title_in.then(bad)
+                (true, false) => pg_row_title_in.then(row_strong)
+                (false, false) => pg_row_title_in
+              }
+              c.box(fn() { c.text(title, style=style.then(in_lines), color?=ink) |> ignore }) |> ignore
+              if value != "" { said() }
+              tail_words()
+            }) |> ignore
+            controls()
+          } else {
+            c.text(title, style=titled.then(in_lines), color?=ink) |> ignore
+            after()
+            if value != "" { said() }
+            end()
           }
-          end()
         } else {
           c.box(style=pg_row_words, fn() {
             c.box(style=row_first_line, fn() {
@@ -1265,7 +1285,7 @@ pub fn link_row(
                   })
                   |> ignore
                 } else {
-                  c.text(title, style=if note_cut { titled.then(cut_words) } else { titled }, color?=ink) |> ignore
+                  c.text(title, style=if note_cut { titled.then(cut_words) } else { titled.then(in_lines) }, color?=ink) |> ignore
                 }
               } else {
                 // its title and what it says in a line (what it says under the title where the line has not the
@@ -1274,7 +1294,7 @@ pub fn link_row(
                   c.box(style=pg_title_value, flow=true, line_gap=0.0, fn() {
                     // (what is after its title beside it, one piece: the line's ends are its title's and what it says)
                     let named = fn() {
-                      c.text(title, style=if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in })
+                      c.text(title, style=(if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in }).then(in_lines))
                       |> ignore
                       after()
                     }
@@ -1328,14 +1348,13 @@ pub fn link_row(
             })
             |> ignore
           } else {
-            c.text(title, style~, color?=ink) |> ignore
+            c.text(title, style=style.then(in_lines), color?=ink) |> ignore
           }
         }
-        // what it says, what follows it, its chevron
-        let end = fn() {
+        let said = fn() {
           if value != "" {
             let words = fn() {
-              c.text(value, style=if value_bad { wide_value.then(bad) } else { wide_value }, color?=if value_lit {
+              c.text(value, style=(if value_bad { wide_value.then(bad) } else { wide_value }).then(in_lines), color?=if value_lit {
                 Some(th.p.accent_text)
               } else {
                 None
@@ -1352,10 +1371,14 @@ pub fn link_row(
               words()
             }
           }
+        }
+        let tail_words = fn() {
           match tail {
             Some(f) => f()
             None => ()
           }
+        }
+        let controls = fn() {
           if goes && (chevron || out) {
             icon(c, mark, size=desk_chevron, color=th.p.muted) |> ignore
           }
@@ -1364,15 +1387,31 @@ pub fn link_row(
             control_at_end(under)
           }
         }
+        let end = fn() {
+          said()
+          tail_words()
+          controls()
+        }
+        let line = fn() {
+          if title_after is None && (value != "" || tail is Some(_)) {
+            c.box(style=desk_list_text, fn() {
+              c.box(style=pg_title_value, flow=true, line_gap=0.0, fn() {
+                c.box(title_words) |> ignore
+                said()
+                tail_words()
+              }) |> ignore
+            }) |> ignore
+            controls()
+          } else {
+            c.box(style=desk_list_text, title_words) |> ignore
+            end()
+          }
+        }
         if !under {
-          c.box(style=desk_list_text, title_words) |> ignore
-          end()
+          line()
         } else {
           c.box(style=desk_list_text, fn() {
-            c.box(style=row_first_line, fn() {
-              c.box(style=desk_list_text, title_words) |> ignore
-              end()
-            })
+            c.box(style=row_first_line, line)
             |> ignore
             if note != "" {
               let style = if lacks { wide_list_note.then(lacking) } else { wide_list_note }
@@ -1604,7 +1643,7 @@ pub fn choice_row(
     let color = if disabled { Some(th.p.subtle) } else { ink }
     let label_line = fn() {
       c.box(style=choice_label_line, fn() {
-        c.text(label, style=if narrow { pg_row_title } else { desk_list_title }, color?) |> ignore
+        c.text(label, style=(if narrow { pg_row_title } else { desk_list_title }).then(in_lines), color?) |> ignore
         match tag {
           Some(f) => f()
           None => ()
@@ -2098,7 +2137,7 @@ pub fn own_head(
       }
     }
     match state {
-      Some(f) => c.box(style=head_state, f) |> ignore
+      Some(f) => c.box(style=head_state, flow=true, f) |> ignore
       None => ()
     }
     // (red where it does not work, else amber)

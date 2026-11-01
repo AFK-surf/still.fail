@@ -654,7 +654,7 @@ let wide_section_line : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 /// A section's title in the wide frame: its scale's Xl2, 14 on 22 there (page: wide_heading), as the library's section
 /// title is, one size for every page's.
 // kept across runs: a value (no field of it changes)
-let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, wrap=false)
+let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)

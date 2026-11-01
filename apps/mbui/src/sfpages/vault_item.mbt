@@ -247,11 +247,11 @@ fn item_uses(c : @ui.Ctx, core : Core, ws : String, key : String, uses : Array[J
               }
               // (underlined under the pointer, or a finger's press: words in the words' colour, lit)
               c.box(id~, fn() {
-                c.rich([@ui.span(chat, underline=c.lit(id))], style=vi_chat) |> ignore
+                c.rich([@ui.span(chat, underline=c.lit(id))], style=vi_chat, allow_ellipsis=true) |> ignore
               })
               |> ignore
             } else {
-              c.text(chat, style=vi_chat) |> ignore
+              c.text(chat, style=vi_chat, allow_ellipsis=true) |> ignore
             }
             if flag(uv, "denied") {
               @sf.pill(c, @sf.t("web-pages.vault.uses.denied"), tone=Red)

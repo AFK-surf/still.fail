@@ -592,7 +592,7 @@ let cn_owner_box : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_owner_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false)
+let cn_owner_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)

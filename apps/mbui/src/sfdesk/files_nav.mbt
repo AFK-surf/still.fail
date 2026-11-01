@@ -157,7 +157,7 @@ pub fn files_places(
                 fn() {
                   @sf.icon(c, "pin", size=nav_icon, color=t.p.muted) |> ignore
                   nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
-                  c.text(s.name, style=nav_meta()) |> ignore
+                  c.text(s.name, style=nav_meta(), allow_ellipsis=true) |> ignore
                 },
                 more=i + 1 < rows.length() && rows[i + 1] is PShared(_),
               ) {
@@ -220,7 +220,7 @@ fn places_favorites(
                 fn() {
                   @sf.icon(c, "folder", size=nav_icon, color=t.p.muted) |> ignore
                   nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) })
-                  c.text(st.name, style=nav_meta()) |> ignore
+                  c.text(st.name, style=nav_meta(), allow_ellipsis=true) |> ignore
                   let ub = c.box(style=unkeep(), id=rid, fn() {
                     @sf.icon(c, "close", size=nav_icon, color=t.p.subtle) |> ignore
                   })

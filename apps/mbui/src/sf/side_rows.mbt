@@ -136,7 +136,7 @@ pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
     Some(k) => base.then(@ui.text_style(color=Data(k)))
     None => base
   }
-  c.text(words, style=look) |> ignore
+  c.text(words, style=look, allow_ellipsis=true) |> ignore
 }
 
 ///|
@@ -267,7 +267,7 @@ pub fn nav_item(
 /// `away`, what it is not there now: faint.
 pub fn nav_title(c : @ui.Ctx, words : String, away? : Bool = false) -> Unit {
   let look = theme().chat_list.title.then(nav_title_grow)
-  c.text(words, style=if away { look.then(nav_title_away) } else { look }) |> ignore
+  c.text(words, style=if away { look.then(nav_title_away) } else { look }, allow_ellipsis=true) |> ignore
 }
 
 ///|

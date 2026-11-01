@@ -32,7 +32,7 @@ fn letters_list_of(c : @ui.Ctx, key : String, chats : Array[Json]) -> Unit {
       }
       let b = c.box(style=letters_row, id~, fn() {
         c.box(style=letters_row_head, fn() {
-          c.box(style=letters_grow, fn() { c.text(text(cv, "title"), style=letters_row_title) |> ignore })
+          c.box(style=letters_grow, fn() { c.text(text(cv, "title"), style=letters_row_title, allow_ellipsis=true) |> ignore })
           |> ignore
           let n = @sf.t("web-main.letters.count", args=[("n", items(cv, "letters").length().to_string())])
           let ago = text(field(field(cv, "time"), "lastActiveAt"), "ago")
@@ -95,7 +95,7 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
           let title = text(cv, "title")
           let to = text(cv, "link")
           if to == "" {
-            c.text(title, style=letters_name) |> ignore
+            c.text(title, style=letters_name, allow_ellipsis=true) |> ignore
           } else {
             let nid = c.id("letters/name")
             if c.clicked(nid) {
@@ -103,7 +103,7 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
             }
             let b = c.box(style=letters_name_box, id=nid, fn() {
               // (underlined on hover)
-              c.rich([@ui.span(title, underline=c.lit(nid))], style=letters_name) |> ignore
+              c.rich([@ui.span(title, underline=c.lit(nid))], style=letters_name, allow_ellipsis=true) |> ignore
             })
             c.semantics(b, Link, id=nid, label=title)
           }

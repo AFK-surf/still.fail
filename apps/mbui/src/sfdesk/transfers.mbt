@@ -241,7 +241,7 @@ fn opened_title(c : @ui.Ctx, j : Json?, key : String, way : String?) -> Unit {
   if there && c.clicked(id) {
     open_coming(j)
   }
-  let b = c.box(style=ftransfer_title, id=if there { id } else { 0 }, fn() {
+  let b = c.box(style=ftransfer_title, flow=true, id=if there { id } else { 0 }, fn() {
     c.text(text(j, "title"), style=ftransfer_title_words) |> ignore
     match way {
       Some(w) => c.text(w, style=ftransfer_way) |> ignore
@@ -310,7 +310,7 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
     }
     c.box(style=ftransfer_mark, fn() { @sf.icon(c, mark, size=transfer_icon, color=ink) |> ignore }) |> ignore
     c.box(style=ftransfer_text, fn() {
-      c.box(style=ftransfer_title, fn() {
+      c.box(style=ftransfer_title, flow=true, fn() {
         c.text(text(j, "title"), style=ftransfer_title_words) |> ignore
         c.text(if flag(j, "move") { @sf.t("web-pages.files.moving", args=[("way", way)]) } else { way }, style=ftransfer_way) |> ignore
       })
@@ -411,19 +411,19 @@ let ftransfer_title : @ui.Style = @ui.css("row gap=S1 clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_title_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
+let ftransfer_title_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_way : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+let ftransfer_way : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_status : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+let ftransfer_status : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
+let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
 // kept across runs: a value (no field of it changes)

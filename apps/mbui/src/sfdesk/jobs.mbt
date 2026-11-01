@@ -95,7 +95,7 @@ fn job_meta(c : @ui.Ctx, job : Json?) -> Unit {
       _ => @ui.span(text(pv, "text"))
     }
   })
-  c.rich(runs, style=job_meta_words) |> ignore
+  c.rich(runs, style=job_meta_words, allow_ellipsis=true) |> ignore
 }
 
 ///|
@@ -125,7 +125,7 @@ fn job_row(
     c.box(style=job_row_on, fn() {
       c.box(style=job_dot_room, fn() { job_dot(c, text(job, "tone")) }) |> ignore
       c.box(style=job_text, fn() {
-        c.text(text(job, "name"), style=if off { job_name_off } else { job_name }) |> ignore
+        c.text(text(job, "name"), style=if off { job_name_off } else { job_name }, allow_ellipsis=true) |> ignore
         job_meta(c, job)
       })
       |> ignore

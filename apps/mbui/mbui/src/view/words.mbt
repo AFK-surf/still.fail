@@ -106,6 +106,36 @@ pub fn View::words_look(self : View, look : Live[WordsLook]) -> View {
 }
 
 ///|
+/// A last-resort ellipsis is intended without changing the words' layout sizing (as Ctx::text's allow_ellipsis).
+pub fn View::allow_ellipsis(self : View, on : Live[Bool]) -> View {
+  self.bind(AllowEllipsis, on, Said, fn(v) { self.tree.nodes[self.at].allow_ellipsis = v })
+  self
+}
+
+///|
+/// Whether a node's words or their enclosing layout explicitly say that the words may be cut. A fixed width is the
+/// boundary: a constraint on a more distant holder cannot allow cutting everything inside this one.
+pub fn Tree::allows_ellipsis(self : Tree, id : NodeId) -> Bool {
+  if !self.lives(id) {
+    return false
+  }
+  let mut at = id.at
+  while at >= 0 && at < self.nodes.length() {
+    let n = self.nodes[at]
+    let style = n.flex.style
+    if (at == id.at && n.allow_ellipsis) || style.shrink > 0.0 || style.max_width_kind() != @flex.LEN_AUTO ||
+      (at == id.at && style.width_kind() == @flex.LEN_PCT) {
+      return true
+    }
+    if style.width_kind() == @flex.LEN_PT {
+      return false
+    }
+    at = n.parent
+  }
+  false
+}
+
+///|
 /// How much it gives way where what holds it is short of room, as it changes (0: none, laid out as big as it would
 /// be): one that does gives way down to as wide as it is at least (View::min_width: its own, else as wide as what it
 /// holds needs; Some(0) to give way down to nothing), what it shows cut to what is left (words on one line ending in an

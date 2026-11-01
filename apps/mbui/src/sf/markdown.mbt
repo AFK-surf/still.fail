@@ -591,7 +591,7 @@ pub fn markdown(
   }
   if one_line {
     let xs = first_words(blocks)
-    return c.box(fn() { c.scope(c.id(key), fn() { md.words(xs, md.size, 0, md.ink, None, wrap=false) }) })
+    return c.box(fn() { c.scope(c.id(key), fn() { md.words(xs, md.size, 0, md.ink, None, wrap=false, allow_ellipsis=true) }) })
   }
   md.column(key, md.pieces(blocks, false))
 }
@@ -1158,6 +1158,7 @@ fn Md::words(
   _task : Bool?,
   wrap? : Bool = true,
   breaks? : Bool = false,
+  allow_ellipsis? : Bool = false,
 ) -> Unit {
   let c = self.c
   let p = theme().p
@@ -1205,6 +1206,7 @@ fn Md::words(
     size~,
     wrap~,
     breaks~,
+    allow_ellipsis~,
     weight=if weight > 0 { weight } else { 400 },
     color=ink,
     line=self.lh(size),

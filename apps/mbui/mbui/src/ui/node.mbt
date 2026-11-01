@@ -208,6 +208,8 @@ struct Node {
   mut weight : Int
   mut color : Int64
   mut wrap : Bool
+  // A last-resort ellipsis is intentional even though the words' sizing does not say Cut or Fill.
+  mut allow_ellipsis : Bool
   // a wrapped text's lines each centred across its box
   mut center : Bool
   // a line's height (0: the font's own)
@@ -510,6 +512,7 @@ fn Node::new() -> Node {
     shrinks: false,
     past_most: false,
     keep: false,
+    allow_ellipsis: false,
     drop: 0,
     one_of: false,
     tallest: false,
@@ -633,6 +636,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.shrinks = false
   self.past_most = false
   self.keep = false
+  self.allow_ellipsis = false
   self.drop = 0
   self.one_of = false
   self.tallest = false

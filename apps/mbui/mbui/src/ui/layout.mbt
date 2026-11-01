@@ -241,6 +241,15 @@ fn Ctx::on_px(self : Ctx, v : Double, whole : Bool) -> Double {
 }
 
 ///|
+/// Width for measured content and the separate fixed widths, gaps and paddings around it. On a host that lays out on
+/// whole pixels, each of those lengths is rounded as layout rounds it, and the box is rounded up so it can hold the
+/// content. Adding unrounded lengths and rounding only the total can leave the contents narrower than measured.
+pub fn Ctx::fitting_width(self : Ctx, content : Double, lengths : Array[Double]) -> Double {
+  let width = lengths.fold(init=content, fn(sum, length) { sum + self.on_px(length, self.whole_px) })
+  if self.whole_px { (width * self.scale).ceil() / self.scale } else { width }
+}
+
+///|
 /// Whether the host sets things on whole device pixels, its lengths as its lines (Android's: Compose rounds each
 /// length to pixels, StaticLayout each line; whole_pixel_lines, as the host says of its fonts).
 fn whole_px_layout() -> Bool {

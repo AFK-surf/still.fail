@@ -1713,6 +1713,7 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 /// `shorter`: other ways to say words on one line where they have less room, each shorter than the one before
 /// (搜索全部内容, then 搜索): the longest of them all that fits is shown whole, the shortest cut with an ellipsis only
 /// where none does; in a row they need no more than the shortest at least (SwiftUI's ViewThatFits).
+/// `allow_ellipsis`: a last-resort ellipsis is intended even though these words do not say `w=Cut` or `Fill`.
 pub fn Ctx::text(
   self : Ctx,
   s : String,
@@ -1731,6 +1732,7 @@ pub fn Ctx::text(
   keep? : Bool = false,
   breaks? : Bool = false,
   shorter? : Array[String] = no_words,
+  allow_ellipsis? : Bool = false,
 ) -> Int {
   let st = self.text_patch(style)
   let (s_size, s_line) = self.text_sizes(st)
@@ -1799,6 +1801,7 @@ pub fn Ctx::text(
     None => st.tabular.unwrap_or(self.theme.tabular)
   }
   n.keep = keep
+  n.allow_ellipsis = allow_ellipsis
   n.shorter = shorter
   i
 }

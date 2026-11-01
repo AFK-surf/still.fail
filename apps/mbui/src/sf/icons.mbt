@@ -130,10 +130,13 @@ pub fn video_capsule(c : @ui.Ctx, key : String, duration : Double, coming? : Dou
   let length = if duration > 0.0 { clock(duration) } else { "" }
   let share = "\{(dmin(1.0, dmax(0.0, part)) * 100.0).floor().to_int()}%"
   let gap = @ui.Space::px(S1)
-  let length_w = video_capsule_mark + (if length != "" { gap + c.words_across(length, video_capsule_words) } else { 0.0 })
-  let share_w = video_capsule_ring + gap + c.words_across(share, video_capsule_words)
-  // (its words and its ends' room, 6 each side)
-  let across = length_w + (share_w - length_w) * k + 2.0 * @ui.Space::px(S1_5)
+  let end = @ui.Space::px(S1_5)
+  let length_w = c.fitting_width(
+    if length != "" { c.words_across(length, video_capsule_words) } else { 0.0 },
+    if length != "" { [video_capsule_mark, gap, end, end] } else { [video_capsule_mark, end, end] },
+  )
+  let share_w = c.fitting_width(c.words_across(share, video_capsule_words), [video_capsule_ring, gap, end, end])
+  let across = length_w + (share_w - length_w) * k
   c.layer(fn() {
     c.box(style=video_capsule_foot, fn() {
       c.box(style=video_capsule_box.then(@ui.style(w=Fixed(across))), fn() {

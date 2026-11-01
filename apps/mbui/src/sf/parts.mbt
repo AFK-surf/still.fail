@@ -121,6 +121,7 @@ pub fn button(
     style=reach.unwrap_or(@ui.style()),
     dir=Row,
     w~,
+    keep=foot_fills.val && w is Fill(_),
     h=Px(height),
     padx=button_padx,
     gap=if t.touch { 8.0 } else { 6.0 },
@@ -1999,9 +2000,9 @@ pub(all) enum PillTone {
 } derive(Eq)
 
 ///|
-/// A pill (parts.tsx Pill, parts.css.ts pill): words 12, 500, on one line, 22 high, 9 in, round; on the quiet grey in
-/// the muted ink, or in a tone (its pale ground, its ink). `icon`: what leads it, 14, in its ink (a status's check or
-/// wait: ui.tsx StatusText), 4 before its words.
+/// A pill (parts.tsx Pill, parts.css.ts pill): words 12, 500, 22 high at least, 9 in, round; words go onto more lines
+/// when there is not room for one. On the quiet grey in the muted ink, or in a tone (its pale ground, its ink). `icon`:
+/// what leads it, 14, in its ink (a status's check or wait: ui.tsx StatusText), 4 before its words.
 pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : String = "") -> Unit {
   let p = theme().p
   let (ground, ink) = match tone {
@@ -2012,7 +2013,14 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : Str
     Red => (p.red_bg, p.red)
     Accented => (p.accent_bg, p.accent_text)
   }
-  let b = c.box(style=pill_box, padx=pill_in, bg=ground, fn() {
+  // Keep its words on one line when the row has room. A longer pill may use the row's full width and wrap there.
+  let parts = [pill_in, pill_in]
+  if icon != "" {
+    parts.push(pill_icon)
+    if words != "" { parts.push(@ui.Space::px(S1)) }
+  }
+  let across = c.fitting_width(if words == "" { 0.0 } else { c.words_across(words, pill_words) }, parts)
+  let b = c.box(style=pill_box.then(@ui.style(min_w=Within(across))), padx=pill_in, bg=ground, fn() {
     if icon != "" {
       draw_icon(c, icon, pill_icon, ink)
     }
@@ -2091,11 +2099,11 @@ let verify_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Pos
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pill_box : @ui.Style = @ui.style(row=true, h=Fixed(pill_h), gap=S1, radius=Full, align=ACenter)
+let pill_box : @ui.Style = @ui.style(row=true, min_h=Fixed(pill_h), gap=S1, radius=Full, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pill_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, wrap=false)
+let pill_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium)
 
 ///|
 /// How something stands, at a glance (parts.tsx StatusDot, parts.css.ts statusDot): a dot 7 round, online the online

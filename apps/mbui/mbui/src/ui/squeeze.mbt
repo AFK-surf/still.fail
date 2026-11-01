@@ -1,6 +1,7 @@
 // What the last frame laid out in less room than it needs, as it shows (Tester::squeeze_faults): two things side by
-// side drawn over each other, something cut off by the window's edge, words cut down to nothing or wrapped a letter
-// or two a line, a field's placeholder cut down to nothing, words broken or cut short only for what shares their row.
+// side drawn over each other, something cut off by the window's edge, words cut without saying they may be or cut down
+// to nothing, words wrapped a letter or two a line, a field's placeholder cut down to nothing, words broken or cut
+// short only for what shares their row.
 // Room runs short by design in four ways only, none of them a fault: words said a shorter way (Ctx::text's, a field's
 // placeholder's: `shorter`), words cut short with an ellipsis (keeping some of them; for what is beside them, only
 // those said to be: `w=Cut`), what a row says may go left out of it (Ctx::box `drop`, into its ⋯ where it has one),
@@ -23,7 +24,8 @@ let squeeze_wrap_ems : Double = 4.0
 ///|
 /// Where the last frame shows something squeezed (see the file's head), a line each: two things beside each other in
 /// a box drawn over each other (by how far), the outermost box that runs past the window's edge, words cut down to
-/// less than `squeeze_kept_chars` characters before their ellipsis, words wrapped narrower than a word of them (broken
+/// an ellipsis not said by the words or a containing `Cut`, less than `squeeze_kept_chars` characters before an
+/// ellipsis, words wrapped narrower than a word of them (broken
 /// inside it) or than `squeeze_wrap_ems` of their size, a field's placeholder cut so (said its shortest way: Ctx::editor
 /// `shorter`), words broken onto lines or cut short only for what shares their row (Ctx::beside_faults).
 pub fn Tester::squeeze_faults(self : Tester) -> Array[String] {
@@ -119,8 +121,18 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
     }
     // words cut down to nothing
     match b.squeeze_kept() {
-      Some((kept, need)) if kept < squeeze_kept_chars =>
-        out.push("\{self.named(i)}: its words cut to \{kept} characters (they need \{need.round()})")
+      Some((kept, need)) if self.squeeze_words_visible(i) => {
+        if kept < squeeze_kept_chars {
+          out.push("\{self.named(i)}: its words cut to \{kept} characters (they need \{need.round()})")
+        } else if !self.squeeze_cut_said(i) {
+          let shown = if b.kind == kind_text {
+            match b.tl { Some(tl) => tl.text; None => "" }
+          } else {
+            match b.rl { Some(rl) => rl.text; None => "" }
+          }
+          out.push("\{self.named(i)}: its words cut short without saying they may be (showing ‘\{shown}’)")
+        }
+      }
       _ => ()
     }
     // a field's placeholder cut down to nothing, said its shortest way (Node::hint_shown)
@@ -195,7 +207,23 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
       }
     }
   }
-  out + self.beside_faults(seen)
+  out + self.beside_faults(seen) + self.view_squeeze_faults()
+}
+
+///|
+/// Whether the words are actually drawn: looks can fade an ancestor independently of its node's opacity.
+fn Ctx::squeeze_words_visible(self : Ctx, i : Int) -> Bool {
+  let mut alpha = 1.0
+  let mut p = i
+  while p >= 0 {
+    alpha = alpha * self.nodes[p].opacity
+    match self.drawn_entry(p) {
+      Some(e) => alpha = alpha * e.look_now().alpha
+      None => ()
+    }
+    p = self.nodes[p].parent
+  }
+  alpha > 0.01
 }
 
 ///|
@@ -212,6 +240,90 @@ fn Ctx::squeeze_seen(self : Ctx) -> Array[Bool] {
 }
 
 ///|
+/// A line may be cut when it says `Cut` or `Fill`, or a containing box says `Cut` or a maximum width.
+fn Ctx::squeeze_cut_said(self : Ctx, i : Int) -> Bool {
+  let mut k = i
+  while k >= 0 && k < self.count {
+    let n = self.nodes[k]
+    let limited_lines = if k != i {
+      false
+    } else if n.kind == kind_rich {
+      match n.rich { Some(r) => r.max_lines > 0; None => false }
+    } else {
+      n.max_lines > 0
+    }
+    if (k == i && n.allow_ellipsis) || limited_lines || n.w is Cut || (k == i && n.w is Fill(_)) || n.max_w < 1.0e9 {
+      return true
+    }
+    // A fixed-width box is the boundary that constrained these words. A `Cut` or maximum on a more distant page
+    // cannot say that everything inside this box was meant to be cut.
+    if n.w is Px(_) {
+      return false
+    }
+    k = n.parent
+  }
+  false
+}
+
+///|
+/// The same check for words made by the window tree. Its drawn scene carries each node's own width and the opacity
+/// and scale of what holds it; only nodes visible within the window and the boxes that clip them are inspected.
+fn Ctx::view_squeeze_faults(self : Ctx) -> Array[String] {
+  let out : Array[String] = []
+  guard view_tree() is Some(tree) else { return out }
+  let drawn = tree.drawn_held()
+  let regions : Array[(Double, Double, Double, Double)] = []
+  let visible : Map[@view.NodeId, Bool] = Map::new()
+  for (d, parent, _) in drawn {
+    let inherited = if parent >= 0 { regions[parent] } else { (0.0, 0.0, self.width, self.height) }
+    let region = if parent >= 0 && drawn[parent].0.clips {
+      let holder = drawn[parent].0
+      (
+        dmax(inherited.0, holder.x),
+        dmax(inherited.1, holder.y),
+        dmin(inherited.2, holder.x + holder.w),
+        dmin(inherited.3, holder.y + holder.h),
+      )
+    } else {
+      inherited
+    }
+    regions.push(region)
+    visible[d.id] = d.alpha > 0.01 && d.w > 0.0 && d.h > 0.0 && d.x < region.2 && d.y < region.3 &&
+      d.x + d.w > region.0 && d.y + d.h > region.1
+  }
+  tree.each_drawn_scaled(fn(c, _, _, alpha, _) {
+    if c.words == "" || c.words_look.wrap || c.w <= 0.0 || alpha <= 0.01 || !visible.get(c.id).unwrap_or(false) {
+      return
+    }
+    let say = fn(kept : Int, need : Double) {
+      if kept < squeeze_kept_chars {
+        out.push("window tree ‘\{c.words}’: its words cut to \{kept} characters (they need \{need.round()})")
+      } else if !tree.allows_ellipsis(c.id) {
+        out.push("window tree ‘\{c.words}’: its words cut short without saying they may be")
+      }
+    }
+    let k = c.words_look
+    if c.runs.is_empty() {
+      let (size, line, style) = (self.sp(k.size), self.sp(k.line), view_words_style())
+      let whole = layout_text(c.words, size, k.weight, 1.0e9, false, line~, style~)
+      if whole.w > c.w + 0.5 {
+        let shown = ellipsized(c.words, whole, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~) })
+        say(shown.shaped.starts.length() - 1, whole.w)
+      }
+    } else {
+      let rich = view_rich(c.runs, k)
+      let whole = layout_rich(rich, 1.0e9)
+      if whole.w > c.w + 0.5 {
+        let cut = cut_rich({ ..rich, max_lines: 1 }, whole, c.w)
+        let shown = layout_rich(cut, 1.0e9)
+        say(shown.starts.length() - 1, whole.w)
+      }
+    }
+  })
+  out
+}
+
+///|
 /// Words on one line cut short with an ellipsis (Ctx::text's, Ctx::rich's): how many characters of them show before it,
 /// and how wide all of them are (said their shortest way: Ctx::text `shorter`); None where they are not cut.
 fn Node::squeeze_kept(self : Node) -> (Int, Double)? {
@@ -220,9 +332,9 @@ fn Node::squeeze_kept(self : Node) -> (Int, Double)? {
   }
   // (the ellipsis is the last of what shows)
   match (self.tl, self.full, self.rcut, self.rl) {
-    (Some(shown), Some(_), _, _) if self.kind == kind_text => {
+    (Some(shown), Some(whole), _, _) if self.kind == kind_text => {
       let need = self.one_line_least_w()
-      if need > self.fw + squeeze_slack {
+      if shown.text != whole.text && shown.text.has_suffix("…") && !self.shorter.contains(shown.text) {
         Some((shown.shaped.starts.length() - 1, need))
       } else {
         None

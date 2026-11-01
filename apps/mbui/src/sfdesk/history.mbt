@@ -439,7 +439,7 @@ let wh_dot : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
+let wh_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)

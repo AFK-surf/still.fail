@@ -29,7 +29,7 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=keys_group, fn() {
             c.box(style=keys_group_head, fn() { c.text(g.0, style=keys_group_title) |> ignore }) |> ignore
             for k in g.1 {
-              c.box(style=keys_line, fn() {
+              c.box(style=keys_line, flow=true, line_gap=@ui.Space::px(S1), fn() {
                 c.text(k.0, style=keys_line_words) |> ignore
                 c.text(k.1, style=keys_line_keys) |> ignore
               })
@@ -103,9 +103,9 @@ let keys_line : @ui.Style = @ui.css("row w=Full py=S1 gap=S4 align=AEnd justify=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_line_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
+let keys_line_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg)
 
 ///|
 /// (keys: muted, their digits as wide as each other)
 // kept across runs: a value (no field of it changes)
-let keys_line_keys : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+let keys_line_keys : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)

@@ -181,6 +181,13 @@ nothing else gives way:
     least what its last way needs, and the ways it does not show are laid out, drawn, pressed and read out nowhere;
   - what is cut or scrolled by its own box: `clip`, `sideways` (not a box's corners: what draws inside them keeps to
     them itself, as a press's ripple does).
+
+`Tester::squeeze_faults` reports an ellipsis in words that did not say they may be cut, even when several characters
+remain. Say `w=Cut`, `w=Fill` or `max_lines` on the words, or `w=Cut` or a maximum width on a containing box, for an
+intentional ellipsis. Where a row's last resort is intended without changing the words' sizing, say `allow_ellipsis=true` on them.
+A fixed-width box is the boundary: a cut said outside it does not permit cutting everything inside it.
+In the window tree the corresponding declarations are `View::shrink`, `View::max_width`, or
+`View::allow_ellipsis` where the sizing itself stays unchanged.
 - A row that has not the room for every least even so (a page that said not how something gives, words longer than
   anyone thought) does not run past its room: as a last resort (flex's `soft_min`, `last_resort`) words on one line in
   it that say not how they give, and what holds them, come down, the widest first, all to one width where that is

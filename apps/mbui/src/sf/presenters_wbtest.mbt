@@ -280,6 +280,32 @@ fn ok_foot(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
 }
 
 ///|
+test "a sheet's action buttons keep their words whole, sharing the row or going onto another" {
+  for (first, second, separate, disabled) in [
+    ("取消", "添加到此 workspace", false, false),
+    ("取消", "添加到此 workspace", false, true),
+    ("Doesn't match, deny", "Turn off security mode", true, false),
+  ] {
+    let t = presenting_tester((2, 320.0, 844.0), fn(from) {
+      panel("Actions", from~, fn(c, _) { c.text("Content") |> ignore }, foot=fn(c, _) {
+        button(c, first, key="first") |> ignore
+        button(c, second, key="second", tone=Primary, disabled~) |> ignore
+      })
+    })
+    open_it(t)
+    assert_eq(t.lines_of(first), [first], msg="first: \{t.lines_of(first)}")
+    assert_eq(t.lines_of(second), [second], msg="second: \{t.lines_of(second)}")
+    let a = t.rect_of(first).unwrap()
+    let b = t.rect_of(second).unwrap()
+    if separate {
+      assert_true(b.1 >= a.1 + a.3, msg="buttons overlap: \{a}, \{b}")
+    } else {
+      assert_true((a.1 - b.1).abs() < 1.0, msg="the buttons fit side by side: \{a}, \{b}")
+    }
+  }
+}
+
+///|
 /// Where `words` are drawn now (their top and bottom, moved as what holds them scrolls), or a failure.
 fn drawn_span(t : @ui.Tester, words : String) -> (Double, Double) raise {
   match t.words().iter().find_first(fn(w) { w.0 == words }) {
