@@ -1,0 +1,55 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/media"
+
+import {
+  "mbui/ui",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn device(@ui.Ctx, Device, String, Double) -> Int32
+
+pub fn frame(@ui.Ctx, Double, Double, FrameStyle, () -> Unit) -> Int32
+
+// Errors
+
+// Types and methods
+pub(all) enum Device {
+  IPhone11Pro
+  IPadPro11
+  MacBookPro16
+} derive(Eq, @debug.Debug)
+pub fn Device::geometry(Self) -> DeviceGeometry
+pub fn Device::screen(Self) -> DeviceScreen
+
+pub(all) struct DeviceGeometry {
+  width : Double
+  height : Double
+  screen_x : Double
+  screen_y : Double
+  screen_width : Double
+  screen_height : Double
+}
+
+pub(all) struct DeviceScreen {
+  width : Double
+  height : Double
+  scale : Double
+  top : Double
+  bottom : Double
+  left : Double
+  right : Double
+  platform : Int32
+}
+
+pub(all) struct FrameStyle {
+  fill : Int64
+  edge : Int64
+  edge_width : Double
+  radius : Double
+  inset : Double
+}
+
+// Type aliases
+
+// Traits

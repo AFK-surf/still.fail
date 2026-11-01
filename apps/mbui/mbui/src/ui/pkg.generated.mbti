@@ -16,6 +16,8 @@ import {
 // Values
 pub fn add_image(String, Bytes) -> Unit
 
+pub fn add_vector_image(String, Bytes, (Bytes, Int32) -> (Int32, Int32, FixedArray[Byte])?) -> Unit
+
 pub fn alpha(Int64, Double) -> Int64
 
 pub fn app_awake() -> Bool
