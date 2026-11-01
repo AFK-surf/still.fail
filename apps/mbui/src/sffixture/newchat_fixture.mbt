@@ -270,7 +270,8 @@ pub fn fix_pick() -> Json {
 /// maker, the one drafted picked.
 fn fix_pick_frequent() -> Json {
   let n = new_fix
-  let all = match if n.crowded { fix_crowded_frequent() } else { fix_frequent() } {
+  let combos = if n.crowded { fix_crowded_frequent() } else { fix_frequent() }
+  let all = match combos {
     Array(a) => a
     _ => []
   }

@@ -727,6 +727,27 @@ export interface PickBorrow {
 	why?: string;
 }
 
+/** One-click model and depth for a new chat; ranked and labelled by the core. */
+export interface FrequentCombo {
+	fast?: boolean;
+	/** Explicit speed (Fast / Standard); absent for the account default. */
+	speedText?: string;
+	model: string;
+	runtime: RuntimeKind;
+	effort?: string;
+	/** All of it in a line: the model, the runtime where it shows, the effort. */
+	label: string;
+	/** The model as people call it. */
+	name: string;
+	/** The runtime by name, only where the model runs on more than one. */
+	runtimeText?: string;
+	/** How hard it thinks as the model's picker says it (High / 高), or the default's words. */
+	effortText: string;
+	/** The model's maker, for its mark. */
+	maker?: Maker;
+	selected: boolean;
+}
+
 /**
  * A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
  * until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
@@ -778,6 +799,12 @@ export interface PickView {
 	saveText: string;
 	/** The picked model is another station's: borrowed first (`pick.borrow`), confirmed; saving waits for it. */
 	borrow?: PickBorrow;
+	/**
+	 * A new chat's or a chat's: the combinations new chats here were started with most, at the top of its panel,
+	 * one press picking and saving all of it (`pick.save` given its picks); a chat's on its runtime alone. None where
+	 * there are fewer than two (the one would be the one in use).
+	 */
+	frequent?: FrequentCombo[];
 }
 
 export interface AutomaticDecisionDraft {
@@ -3981,25 +4008,6 @@ export interface FootprintView {
 	/** 内存 · 共 6 GB，已用 5.2 GB. */
 	memoryTitle: string;
 	memory: FootprintRow[];
-}
-
-/** One-click model and depth for a new chat; ranked and labelled by the core. */
-export interface FrequentCombo {
-	fast?: boolean;
-	/** Explicit speed (Fast / Standard); absent for the account default. */
-	speedText?: string;
-	model: string;
-	runtime: RuntimeKind;
-	effort?: string;
-	/** All of it in a line: the model, the runtime where it shows, the effort. */
-	label: string;
-	/** The model as people call it. */
-	name: string;
-	/** The runtime by name, only where the model runs on more than one. */
-	runtimeText?: string;
-	/** How hard it thinks as the model's picker says it (High / 高), or the default's words. */
-	effortText: string;
-	selected: boolean;
 }
 
 export interface HistoryFrom {

@@ -459,7 +459,7 @@ fn triple_body(
 ///|
 /// The frequent combinations (the pick `v`'s `frequent`, none where fewer than two) under their name, a row each as the
 /// models' are: its model's maker's mark, its name, then how hard it thinks (the runtime where it says one, how fast)
-/// after a dot each, muted; the one picked checked. Pressed, all of it picked and saved at once (`pick.save` given its
+/// after a dot each, muted; the one picked checked, on no ground of its own. Pressed, all of it picked and saved at once (`pick.save` given its
 /// picks), the panel closed: nothing of it is left to pick.
 fn triple_combos(
   c : @ui.Ctx,
@@ -490,7 +490,8 @@ fn triple_combos(
           |> ignore
         }
       }
-      if triple_option(c, key, text(o, "label"), selected, fn() {
+      // (the one in use checked, its ground left to its model's row under it: one row picked on a ground, not two)
+      if triple_option(c, key, text(o, "label"), selected, ground=false, fn() {
           @sf.maker_mark(c, text(field(o, "maker"), "id"), text(o, "runtime"), 14.0) |> ignore
           c.box(style=triple_part, fn() {
             c.text(text(o, "name"), style=if selected { triple_picked } else { triple_words }) |> ignore
@@ -798,7 +799,8 @@ fn triple_column_head(c : @ui.Ctx, words : String) -> Unit {
 ///|
 /// A row of a column (runPickerOption): as high as the screen's picker rows at least (Theme::rows pick), 4 by 10 in, its ground under the pointer and while picked,
 /// `trail` (a button of its own, the station a model comes from) at its end, a check after it while picked (its room
-/// kept while not, as the web's hidden check); `tip` over it while it is pointed at. True on the frame after a press.
+/// kept while not, as the web's hidden check); `tip` over it while it is pointed at; `ground` false, picked with its
+/// check alone (the ground the list's own picked row's). True on the frame after a press.
 fn triple_option(
   c : @ui.Ctx,
   key : String,
@@ -807,11 +809,12 @@ fn triple_option(
   body : () -> Unit,
   trail? : () -> Unit,
   tip? : String = "",
+  ground? : Bool = true,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   // (across its column, as wide as its words need at least: what the column needs, the panel's columns laid out by it)
-  let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
+  let b = c.box(style=(if on && ground { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
     body()
     // what is at its end, at the end: the room left (no spacer of its own, whose gap took a gap's room from the
     // words), never less than it needs; the check's room kept while it is not picked
