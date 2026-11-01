@@ -8,7 +8,7 @@ import {
 // Values
 pub fn alignment_corner_faults_ok(Array[String]) -> Bool
 
-pub fn alignment_figure(@ui.Ctx) -> Unit
+pub fn alignment_figure(@ui.Ctx, runs? : Array[@ui.TextRun]) -> Unit
 
 pub fn sign_in_example(@ui.Ctx, Double, Bool, String) -> Unit
 

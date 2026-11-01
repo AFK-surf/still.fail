@@ -13,6 +13,8 @@ fn main {
   // Tester resets the app's theme and faces when it starts. Give them after that reset, before the first view reads
   // either, just as sffilm's source gives the app its faces. The closure is built once for this picture.
   let initialized = Ref(false)
+  // The alignment graphic highlights its card's lines where its first frame drew their letters.
+  let runs : Ref[Array[@ui.TextRun]] = Ref([])
   let view = fn(c : @ui.Ctx) {
     if !initialized.val {
       let font_ok = if font == "" {
@@ -30,10 +32,24 @@ fn main {
       @sf.set_dark(Some(true))
       initialized.val = true
     }
-    if name == "wrap" { @sfgraphic.wrap_figure(c) } else { @sfgraphic.alignment_figure(c) }
+    if name == "wrap" { @sfgraphic.wrap_figure(c) } else { @sfgraphic.alignment_figure(c, runs=runs.val) }
   }
-  let ok = @film.picture(view, path~, w=960.0, h=540.0, scale=2.5, corner_faults_ok=fn(faults) {
-    if name == "align" { @sfgraphic.alignment_corner_faults_ok(faults) } else { faults.is_empty() }
-  })
+  let ok = @film.picture(
+    view,
+    path~,
+    w=960.0,
+    h=540.0,
+    scale=2.5,
+    corner_faults_ok=fn(faults) {
+      if name == "align" { @sfgraphic.alignment_corner_faults_ok(faults) } else { faults.is_empty() }
+    },
+    settle=fn(t) {
+      if name != "align" {
+        return false
+      }
+      runs.val = t.text_runs()
+      true
+    },
+  )
   @film.exit(if ok { 0 } else { 1 })
 }

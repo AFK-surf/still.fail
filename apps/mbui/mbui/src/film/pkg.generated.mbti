@@ -21,7 +21,7 @@ pub let film_fps : Int32
 
 pub fn live() -> @ui.Live
 
-pub fn picture((@ui.Ctx) -> Unit, path~ : String, w~ : Double, h~ : Double, scale? : Double, platform? : Int32, dark? : Bool, corners_held? : Bool, corner_faults_ok? : (Array[String]) -> Bool, words_over_held? : Bool) -> Bool
+pub fn picture((@ui.Ctx) -> Unit, path~ : String, w~ : Double, h~ : Double, scale? : Double, platform? : Int32, dark? : Bool, corners_held? : Bool, corner_faults_ok? : (Array[String]) -> Bool, words_over_held? : Bool, settle? : (@ui.Tester) -> Bool) -> Bool
 
 pub fn read_text(String) -> String
 
