@@ -1663,6 +1663,8 @@ pub fn viewer_folder_label(Source, String, String, String) -> String
 
 pub fn viewer_layer(@ui.Ctx, Source) -> Unit
 
+pub fn viewer_moved(String, Array[ChatDay]) -> Bool
+
 pub fn viewer_node(@view.View, Source, () -> (Double, Double)) -> Unit
 
 pub fn viewer_place(Viewer, Source) -> (Int32, Int32)
@@ -2000,6 +2002,7 @@ pub(all) struct ChatItem {
   unsent : Bool
   decision_text : String?
   last : String?
+  wrote : Double?
   offline : String?
   updating : Bool
   reconnecting : String?
