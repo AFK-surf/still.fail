@@ -278,6 +278,9 @@ struct Node {
   /// let go with it
   mut pressed_cell : @signals.Signal[Bool]?
   mut pointed_cell : @signals.Signal[Bool]?
+  /// what it does as the pointer moves onto it or over it (View::on_pointer_moved): the pointer's own moving, not a
+  /// layout putting it under a still pointer
+  mut on_pointer_moved : (() -> Unit)?
   /// whether what the pointer is over is it or held by it, made as first read (View::pointed_in)
   mut pointed_in_cell : @signals.Signal[Bool]?
   /// whether the pointer is within it as it was last placed, made as first read (View::pointer_within)
@@ -297,6 +300,8 @@ struct Node {
   mut focus_keys : Int
   /// whether Tab stops on it as it takes the focus (View::focusable's `tab`)
   mut focus_tab : Bool
+  /// whether Tab's stop on it is said by View::tab_stop (the last saying of it), not by View::focusable's `tab`
+  mut tab_by_stop : Bool
   mut focused_cell : @signals.Signal[Bool]?
   /// how big it was laid out, told once all of the layout is done (View::laid_size_told: none till then); made as
   /// first read
@@ -384,6 +389,9 @@ struct Node {
   mut modal : Bool
   /// as a modal layer, a back gesture under way as it comes over what holds it goes on to that (View::held_back_goes_on)
   mut back_goes_on : Bool
+  /// as a modal layer, what is typed still the field of an old view under it that has the focus as it comes over it
+  /// (View::leaves_typing)
+  mut leaves_typing : Bool
   /// it, and what it holds, are over all else of the window while this holds (View::over_all)
   mut over_all : Bool
   /// where it is in the window's stack of layers, the old frame's among them (View::stacked); -1 none
@@ -514,12 +522,15 @@ pub struct Tree {
   mut focused : NodeId?
   mut focus_visible : Bool
   mut on_focus_lost : (NodeId) -> Unit
+  /// what hosts it gives a node of its asking for the focus (Tree::on_focus_asked: its own focus moved there, told
+  /// back), none where nothing hosts it (View::ask_focus: the tree's alone)
+  mut on_focus_asked : ((NodeId, Bool) -> Unit)?
   /// the layers that give the focus as they open (View::focus_opens) opened and gone since what a modal layer said was
   /// last told (Tree::modals_now), each with the node it gives it to; and what hosts the tree is told of them
   /// (Tree::on_layers_focus)
-  focus_opened : Array[(NodeId, NodeId)]
+  focus_opened : Array[(NodeId, NodeId?)]
   focus_gone : Array[NodeId]
-  mut on_layers_focus : (Array[NodeId], Array[(NodeId, NodeId)]) -> Unit
+  mut on_layers_focus : (Array[NodeId], Array[(NodeId, NodeId?)]) -> Unit
   /// what follows what is under the pointer, while it is over the window (Tree::point_at)
   mut point_stop : (() -> Unit)?
   /// let go (Tree::dispose): what is made for it after stops at once
@@ -664,6 +675,7 @@ pub fn Tree::new(
     focused: None,
     focus_visible: false,
     on_focus_lost: fn(_) {  },
+    on_focus_asked: None,
     focus_opened: [],
     focus_gone: [],
     on_layers_focus: fn(_, _) {  },
@@ -788,11 +800,13 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_back_step = None
       n.pressed_cell = None
       n.pointed_cell = None
+      n.on_pointer_moved = None
       n.pointed_in_cell = None
       n.within_cell = None
       n.focusable = false
       n.focus_keys = 0
       n.focus_tab = true
+      n.tab_by_stop = false
       n.input_cell = None
       n.cursor = None
       n.beside = None
@@ -827,6 +841,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.inert = false
       n.modal = false
       n.back_goes_on = false
+      n.leaves_typing = false
       n.over_all = false
       n.stack = -1
       i
@@ -857,6 +872,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         back_said: 0,
         pressed_cell: None,
         pointed_cell: None,
+        on_pointer_moved: None,
         pointed_in_cell: None,
         within_cell: None,
         focusable: false,
@@ -866,6 +882,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         went: None,
         focus_keys: 0,
         focus_tab: true,
+        tab_by_stop: false,
         focused_cell: None,
         size_cell: None,
         bounds_input: false,
@@ -913,6 +930,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         inert: false,
         modal: false,
         back_goes_on: false,
+        leaves_typing: false,
         over_all: false,
         stack: -1,
       })
@@ -1475,6 +1493,7 @@ priv enum Prop {
   Says
   Hides
   Focusable
+  TabStop
   Cursor
   Basis
   Ink
@@ -2688,6 +2707,16 @@ fn Tree::modals_now(self : Tree) -> Unit {
   // (what hosts it holds of its own, asked whether it may still take input, whatever changed it: a modal layer, a node
   // let go, leaving, said to take no press)
   (self.on_modals)()
+}
+
+///|
+/// Whether the topmost modal layer now leaves what is typed to the field of an old view under it that has the focus
+/// (View::leaves_typing).
+pub fn Tree::typing_left_under(self : Tree) -> Bool {
+  match self.modal_top() {
+    Some(m) => self.nodes[m.at].leaves_typing
+    None => false
+  }
 }
 
 ///|
@@ -4084,12 +4113,14 @@ fn View::let_go(self : View) -> Unit {
   n.said_hidden = false
   n.pressed_cell = None
   n.pointed_cell = None
+  n.on_pointer_moved = None
   n.pointed_in_cell = None
   // (the focus on it: let go of with it, what has it told so)
   self.tree.focus_lost_in(self.at)
   n.focusable = false
   n.focus_keys = 0
   n.focus_tab = true
+  n.tab_by_stop = false
   n.input_cell = None
   n.cursor = None
   n.beside = None
@@ -4509,6 +4540,17 @@ fn Tree::out_at(self : Tree, at : Int) -> Bool {
     i = self.nodes[i].parent
   }
   false
+}
+
+///|
+/// Whether node `id` is leaving, or what holds it is (drawn on its way out, pressed no more: View::leaving), as the
+/// tree is now; a node let go of, not.
+pub fn Tree::leaving(self : Tree, id : NodeId) -> Bool {
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return false
+  }
+  let n = self.nodes[id.at]
+  n.live && n.gen == id.gen && self.leaving_at(id.at)
 }
 
 ///|
@@ -6270,11 +6312,38 @@ pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
 }
 
 ///|
+/// What it does as the pointer moves onto it or over it (a mouse's, as it is pointed at: View::pointed), at that
+/// moment: the pointer's own moving alone, never the layout or the order putting it under a pointer that stays still.
+pub fn View::on_pointer_moved(self : View, f : () -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_pointer_moved = Some(f)
+  self
+}
+
+///|
 /// What is at (x, y) followed (Tree::target_at, what decides where a node takes it (View::takes) read so): `then` told
 /// it now and as it changes, whatever it is (a node's, the old view's, nothing), till the next point is followed, or
 /// none (x or y below 0: nothing told, nothing followed), or the tree is let go. What is where, as the layout or the
 /// order changes, is followed by being said again (Tree::hits_said).
 pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -> Unit) -> Unit {
+  // (the pointer moved: what it is over as this is first told told so after `then`, View::on_pointer_moved, whoever
+  // follows it (Tree::point_at, what hosts the tree); what comes under it after as the layout or the order changes, or
+  // the same point followed again, not)
+  let moved = Ref(x >= 0.0 && y >= 0.0 && self.pointer_xy != (x, y))
+  let then = fn(t : Target) {
+    then(t)
+    if moved.val {
+      moved.val = false
+      match t {
+        Pressed(id) | Dragged(id) if self.alive_id(id) =>
+          match self.nodes[id.at].on_pointer_moved {
+            Some(f) => @signals.untracked(f)
+            None => ()
+          }
+        _ => ()
+      }
+    }
+  }
   self.pointer_now(x, y)
   self.point_stopped()
   if x < 0.0 || y < 0.0 {

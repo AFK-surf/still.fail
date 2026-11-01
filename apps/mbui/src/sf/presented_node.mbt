@@ -1,9 +1,11 @@
-// What is presented drawn as nodes of the window's tree, where a tree hosts them (presented_nodes): a confirm in the
-// middle of the window (How AsDialog: not a sheet) as confirm_node, at its place in the window's stack of layers (its
-// serial), over or under the old frame's presented as each was presented; the rest the host's (presented) still.
-// Closed (cancel, Escape, back), it closes as the host's closes it (dismissed_now: what is over it too, what it holds
-// let go of, once); said, it closes and what it says goes on, at that moment; going, it is presented till its way out
-// is over (tree_presented: the host lets it go then).
+// What is presented drawn as nodes of the window's tree, where a tree hosts them (presented_nodes), not on a sheet
+// (小屏's, the host's still): a confirm (confirm_node) and a question (ask_node) in the middle of the window, a menu
+// (menu_node) beside what opened it, each at its place in the window's stack of layers (its serial), over or under the
+// old frame's presented as each was presented; the rest the host's (presented) still. Closed (cancel, Escape, back), it
+// closes as the host's closes it (dismissed_now: what is over it too, what it holds let go of, once); said, it closes
+// and what it says goes on, at that moment. A confirm or a question going is presented till its way out is over
+// (tree_presented: the host lets it go then); a menu is let go of as it closes, as the host's menu_popover is. A menu's
+// items given anew where they are kept (presented_changed) are read again by its rows, keys and choices.
 
 ///|
 /// The serials of what of the presented the window's tree draws, while it is drawn (made, till it has gone).
@@ -16,9 +18,11 @@ let tree_presented : Set[Int] = Set::new()
 let presented_in_tree : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether `p` is the window's tree's to draw: a confirm or a question not on a sheet, where a tree draws them.
+/// Whether `p` is the window's tree's to draw: a confirm, a question or a menu not on a sheet, where a tree draws them.
 fn tree_draws(p : Presented, sheet : Bool) -> Bool {
-  presented_in_tree.val && !sheet && p.shows is (Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _))
+  presented_in_tree.val &&
+  !sheet &&
+  p.shows is (Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _))
 }
 
 ///|
@@ -89,8 +93,62 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             shown~,
             gone~,
           )
+        Menu(items, title, along) => {
+          // (beside what opened it, where it was drawn as it opened; opened by the keyboard where that showed its focus:
+          // menu_popover's anchor_of and offset)
+          let (anchor, by_key, offset, keep_field) = @signals.untracked(fn() { menu_anchor_now(p.from) })
+          // (what it holds as it is now, where it is kept: given anew there whole, then told, presented_changed; what
+          // reads it, its rows, keys and choices, read it again then; what a choice does, as it is there then)
+          menu_node(
+            row,
+            open,
+            anchor,
+            fn() {
+              presented_said.get() |> ignore
+              items
+            },
+            title,
+            along,
+            offset,
+            by_key,
+            keep_field,
+            fn(item) { done(item.select) },
+            fn() { dismissed_now(serial) },
+            shown~,
+            gone~,
+          )
+        }
         _ => ()
       }
     },
   )
+}
+
+///|
+/// What a menu presented `from` goes beside, as menu_popover's anchor_of has it: what opened it where it is drawn
+/// (@ui.old_anchor: the window's corner, nothing wide, where it never was, as kit's menu_anchor has it), a point,
+/// or the window's middle a third down; whether the keyboard opened it (what opened it shows the focus), how far off it
+/// it stands (at a point, none), and whether a finger opened it with a field focused (kit's dropdown_menu: the focus
+/// left there).
+fn menu_anchor_now(from : Anchor) -> ((@view.View) -> @view.View, Bool, Double, Bool) {
+  let c = @ui.current()
+  // (as kit's dropdown_menu: opened by the keyboard, its first item's; else by a finger with a field focused, that
+  // field's still)
+  let keep = @ui.pointing() is Finger && c.field_focused()
+  let (ww, wh) = c.window_size()
+  let middle = (ww / 2.0, wh / 3.0, 0.0, 0.0)
+  match from {
+    Of(id) => {
+      let by_key = c.focus_shown(id)
+      (fn(layer) { @ui.old_anchor(layer, id, (0.0, 0.0, 0.0, 0.0)) }, by_key, panel_offset, keep && !by_key)
+    }
+    At(x, y, w, h) =>
+      (
+        fn(layer) { fixed_anchor(layer, (x, y, w, h)) },
+        false,
+        if w == 0.0 && h == 0.0 { 0.0 } else { panel_offset },
+        keep,
+      )
+    Unanchored => (fn(layer) { fixed_anchor(layer, middle) }, false, panel_offset, keep)
+  }
 }

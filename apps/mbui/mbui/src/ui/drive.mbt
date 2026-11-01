@@ -294,15 +294,20 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 ///|
 /// What of the window's tree shows `what` (its words, `=WORDS` exactly, `icon:NAME` what it draws is called so:
 /// View::drawn_as; or is called `what`, its label whole: View::says), the middle of each where it is drawn, in the
-/// window, not faded to nothing: what is seen, as on_screen_nodes finds an old view's, whether it takes a press or not,
-/// whatever lies over it (reachable says which of it a finger reaches).
+/// window, as it is made, however faded this frame (made transparent, coming in), as on_screen_nodes finds an old
+/// view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
+/// whether it takes a press or not, whatever lies over it (reachable says which of it a finger
+/// reaches). What is seen is the glyphs' to say (Tester::glyphs_seen), not this.
 fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId)] {
   guard view_app.val is Some(tree) else { return [] }
-  let found = []
+  // (each: where, which, and whether by its words, not its label alone)
+  let hits : Array[(Double, Double, @view.NodeId, Bool)] = []
   for d in tree.drawn() {
     // (or by what it is called, its label whole, as an old view's box is: as Compose's test finds a node by its
     // contentDescription, on_screen_nodes)
     let label = tree.said_label(d.id)
+    let by_words = !what.has_prefix("icon:") && d.words != "" &&
+      (if what.has_prefix("=") { d.words == what.unsafe_substring(start=1, end=what.length()) } else { d.words.contains(what) })
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
     } else if what.has_prefix("=") && what.length() > 1 {
@@ -314,11 +319,15 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
       (d.words != "" && d.words.contains(what)) || (label != "" && label == what)
     }
     let (x, y) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
-    if hit && d.alpha > 0.002 && d.w > 0.0 && d.h > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
-      found.push((x, y, d.id))
+    if hit && !tree.leaving(d.id) && d.w > 0.0 && d.h > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
+      hits.push((x, y, d.id, by_words))
     }
   }
-  found
+  // (one called so that holds words found: those words, once, as an old view's row read out by its words is found by
+  // its text alone)
+  hits
+  .filter(fn(h) { h.3 || !hits.iter().any(fn(w) { w.3 && w.2 != h.2 && tree.holds(h.2, w.2) }) })
+  .map(fn(h) { (h.0, h.1, h.2) })
 }
 
 ///|

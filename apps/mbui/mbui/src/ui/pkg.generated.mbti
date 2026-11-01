@@ -360,6 +360,8 @@ pub fn now() -> Double
 
 pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String) -> @view.View
 
+pub fn old_anchor(@view.View, Int32, (Double, Double, Double, Double)) -> @view.View
+
 pub fn old_islands_around() -> Bool
 
 pub fn old_takes_none(@view.View) -> @view.View

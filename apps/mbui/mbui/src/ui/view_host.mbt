@@ -269,6 +269,13 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   t.on_through(view_through)
   // (the focus on one of its nodes let go of at a cause: none's from then, on either side)
   t.on_focus_lost(view_focus_lost)
+  // (a node asking for the focus (View::ask_focus): the old frame's focus moved there, the tree told back as of any
+  // move: one focus on either side)
+  t.on_focus_asked(fn(id, visible) {
+    if @signals.untracked(fn() { t.can_focus(id) }) {
+      g().focus_moved(tree_said_id(id), visible~)
+    }
+  })
   // (a layer of the tree's giving the focus as it opens, given back as it goes: either side's, as the old frame's
   // layers do)
   t.on_layers_focus(fn(gone, opened) { view_layers_focus(t, gone, opened) })
@@ -1440,6 +1447,21 @@ fn Ctx::focus_allowed(self : Ctx) -> Int {
     self.focus
   } else {
     0
+  }
+}
+
+///|
+/// What has the focus where what is typed may go into it now: what may take input (Ctx::focus_allowed), or else a field
+/// of an old view the topmost modal layer of the tree's leaves what is typed to (View::leaves_typing: a menu a finger
+/// opened beside it), its keys none the less the layer's (view_key).
+fn Ctx::typing_allowed(self : Ctx) -> Int {
+  let focus = self.focus_allowed()
+  if focus != 0 || !self.editors.contains(self.focus) {
+    return focus
+  }
+  match view_app.val {
+    Some(tree) if @signals.untracked(fn() { tree.typing_left_under() }) => self.focus
+    _ => 0
   }
 }
 
@@ -3649,7 +3671,7 @@ fn focus_node_of(id : Int) -> @view.NodeId? {
 /// what that one gives it back to (as Ctx::layers_focus does for the old frame's layers). Opened: each keeps what had
 /// it before it (the one under it's, the lowest what has it now) and the layer that holds that; the focus to the
 /// topmost's where it can take it.
-fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[(@view.NodeId, @view.NodeId)]) -> Unit {
+fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[(@view.NodeId, @view.NodeId?)]) -> Unit {
   let c = g()
   let going = layer_focus_open.filter(fn(l) { gone.contains(l.layer) })
   // (given back through what goes: each in it given back to what it would have, till none is)
@@ -3694,12 +3716,20 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
       }
       None => layer_focus_open.push({ layer, back: had, back_in: had_in, fresh: true })
     }
-    had = tree_said_id(to)
-    had_in = Some(layer)
+    // (one that gives the focus nothing as it opens (View::focus_returns): what had it before it still what had it, for
+    // what opens over it)
+    match to {
+      Some(to) => {
+        had = tree_said_id(to)
+        had_in = Some(layer)
+      }
+      None => ()
+    }
   }
-  let (_, top) = opened[opened.length() - 1]
-  if t.can_focus(top) {
-    c.focus_moved(tree_said_id(top))
+  // (the focus to the topmost's that gives it to something: one that gives it nothing leaves it where that put it)
+  match opened.iter().filter_map(fn(o) { o.1 }).last() {
+    Some(top) if t.can_focus(top) => c.focus_moved(tree_said_id(top))
+    _ => ()
   }
 }
 
@@ -3997,4 +4027,61 @@ fn Ctx::root_layer_stack(self : Ctx, i : Int) -> Int {
   } else {
     -1
   }
+}
+
+///|
+/// The old views' targets followed by what of the tree goes by them (old_anchor): for each of their ids, where it was
+/// drawn as the old frame last published its targets (anchors_published; where it was last, drawn no more), and how
+/// many follow it.
+// kept across runs: each let go with the last node following it
+let old_anchor_rects : Map[Int, (@signals.Signal[(Double, Double, Double, Double)], Int)] = {}
+
+///|
+/// The old frame's targets published whole (frame_paint): each id followed (old_anchor_rects) told where it is drawn
+/// now, where that changed; drawn no more, where it was last kept.
+fn anchors_published(c : Ctx) -> Unit {
+  // (a copy: what one told does may let go of another)
+  for p in old_anchor_rects.to_array() {
+    let (id, e) = p
+    match c.rect_of(id) {
+      Some(r) if @signals.untracked(fn() { e.0.get() }) != r => e.0.set(r)
+      _ => ()
+    }
+  }
+}
+
+///|
+/// A node of `parent`'s where what the old frame calls `id` (a trigger of an old view's, or what of the tree it reads out)
+/// was drawn as the old frame last published its targets (anchors_published: as big, placed there, told so as they are
+/// published again, what goes beside it with it); drawn no more, where it was last (a menu going out where it hung, as
+/// kit's menu_anchor has it); never drawn yet, `nowhere` (x, y, w, h in the window). What the app has instead of
+/// reading back where the old view laid it out (detlint's layout-read-back).
+pub fn old_anchor(parent : @view.View, id : Int, nowhere : (Double, Double, Double, Double)) -> @view.View {
+  let at = match old_anchor_rects.get(id) {
+    Some((s, n)) => {
+      old_anchor_rects[id] = (s, n + 1)
+      s
+    }
+    None => {
+      let s = @signals.signal(g().rect_of(id).unwrap_or(nowhere), same=fn(a, b) { a == b })
+      old_anchor_rects[id] = (s, 1)
+      s
+    }
+  }
+  parent.box(fn(a) {
+    a
+    .width(By(fn() { Some(at.get().2) }))
+    .height(By(fn() { Some(at.get().3) }))
+    .offset(By(fn() {
+      let (x, y, _, _) = at.get()
+      (x, y)
+    }))
+    .owns(fn() {
+      match old_anchor_rects.get(id) {
+        Some((s, n)) if n > 1 => old_anchor_rects[id] = (s, n - 1)
+        _ => old_anchor_rects.remove(id)
+      }
+    })
+    |> ignore
+  })
 }

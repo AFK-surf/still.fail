@@ -99,11 +99,13 @@ fn drive_row_menu_now(key : String, items : Array[@sf.MenuItem?]) -> Unit {
     let said = fn(a : Array[@sf.MenuItem?]) {
       a.map(fn(x) { x.map(fn(m) { (m.label, m.icon, m.danger, m.disabled, m.chosen, m.heading) }) })
     }
-    if said(held.menu_items) != said(items) {
-      @sf.presented_changed()
-    }
+    let changed = said(held.menu_items) != said(items)
+    // (written whole, then told: what reads it as it is told finds all of it new)
     held.menu_items.clear()
     held.menu_items.push_iter(items.iter())
+    if changed {
+      @sf.presented_changed()
+    }
   }
 }
 
