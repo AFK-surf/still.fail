@@ -927,6 +927,8 @@ pub fn nav_home() -> Unit
 
 pub let nav_tapped : Array[String]
 
+pub let nav_tapped_said : @signals.Signal[Int32]
+
 pub let near_asked : Map[String, Map[String, Json]]
 
 pub fn near_left(Source, String) -> Unit

@@ -443,6 +443,36 @@ test "an iPhone Duo: a chat's actions each its own in the system's bars, its his
 }
 
 ///|
+test "an iPhone Duo: the chat's info chosen in the system's column opens its popover at the item in the frames that take it, no other input after" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  assert_true(t.at_rest())
+  // (ⓘ chosen where the column has it: the host says where, the app draws only the frames it asks for after, as a
+  // device does; the hand does nothing more. Taken by the island under the frame, after the page's was built: the
+  // user's Duo, 2026-11-01, showed nothing till a finger moved)
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\",\"at\":[867,40,84,44]}")
+  t.frames_owed()
+  assert_true(@sfdesk.chat_pops_open().0)
+  assert_true(t.find(@sf.t("web-pages.chat.info.created")) is Some(_))
+  // (beside the item chosen, not where the bell was last)
+  guard t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Dialog }) is Some(d) else {
+    fail("no popover in the semantics")
+  }
+  let (dx, dy, dw, _) = d.rect
+  assert_true(dy >= 40.0 && dy < 84.0, msg="its top at \{dy}")
+  assert_true(dx + dw <= 867.0, msg="its right edge at \{dx + dw}")
+  // (its coming over in its own time, then at rest)
+  t.run_for(@ui.move_most_ms)
+  t.assert_idle()
+  // (chosen again: closed, in the frames that take it)
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\",\"at\":[867,40,84,44]}")
+  t.frames_owed()
+  assert_false(@sfdesk.chat_pops_open().0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(@sf.t("web-pages.chat.info.created")) is None)
+  t.assert_idle()
+}
+
+///|
 test "Duo side panel switch closes all tabs even when a job is in front of its history" {
   let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-tabs-side")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }

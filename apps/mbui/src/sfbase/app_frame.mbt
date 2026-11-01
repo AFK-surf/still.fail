@@ -135,6 +135,14 @@ pub fn attend(src : Source, workspace : String, new_chat : Bool) -> Unit {
 pub let nav_tapped : Array[String] = []
 
 ///|
+/// How many items of the system's bars have been chosen (nav_tapped), followed: what takes them (sfdesk's
+/// rail_native.mbt, in the island under the frame) and what is put where one was chosen (its mark, over the frame) are
+/// built again as one comes, not kept as they were till something else of theirs changes (an iPhone Duo's ⓘ,
+/// 2026-11-01: its popover only once a finger moved).
+// kept across runs: it only counts on
+pub let nav_tapped_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 /// What the system said between frames (@hostapi.system_channel; its handler set as the package starts, before the first
 /// frame takes what came with the app's start), to the core: back on screen after `away` ms off it, the
 /// core gives up requests that went out before and reconnects links gone quiet (MainActivity.kt wake: `client.wake
@@ -149,7 +157,10 @@ fn system_said(json : String) -> Unit {
       // shown over another app, or in its own window again (share.mbt)
       Over(over) => share_over.set(over)
       // a tab or an item of the system's own bars chosen (sfdesk's rail_native.mbt takes it as it draws)
-      NavTapped(id) => nav_tapped.push(id)
+      NavTapped(id) => {
+        nav_tapped.push(id)
+        nav_tapped_said.set(@signals.untracked(fn() { nav_tapped_said.get() }) + 1)
+      }
       // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
       _ => ()
     }
