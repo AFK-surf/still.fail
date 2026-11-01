@@ -738,7 +738,8 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             let station = text(g, "station")
             let session = text(g, "session")
             let opens = station != "" && session != ""
-            if @sf.link_row(c, "adb-request/" + text(g, "id"), text(g, "reason"), note=named(station), goes=opens, strong=true, title_after=fn() {
+            let title = text(g, "chatTitle")
+            if @sf.link_row(c, "adb-request/" + text(g, "id"), if title == "" { @sf.t("android-chat.new.title") } else { title }, note=text(g, "reason"), note_cut=true, goes=opens, strong=true, title_after=fn() {
                 @sf.pill(c, tr("web-main.attention.entry"), tone=Amber)
               }) {
               (core.open_chat)(station, session, "")
@@ -811,18 +812,17 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           let g = Some(g)
           let station = text(g, "station")
           let request = text(g, "id")
-          let scope = if text(g, "scope") == "hour" { "hour" } else { "chat" }
+          let session = text(g, "session")
+          let title = text(g, "chatTitle")
+          let ago = stamp(g, "lastUsedAt", "ago")
+          let when = if ago == "" { tr("android-misc.adb.chats.noUsage") } else { ago }
           let busy = is_doing(core, ["adb.revoke"], [("request", request)])
-          if list_row(c, key=if busy { "" } else { "adb-revoke/" + request }, fn() {
-              row_lines(c, text(g, "reason"), named(station) + " · " + tr("android-settings.vault.scope." + scope), title_color=@sf.theme().p.muted, wrap_title=true, end=fn() {
-                if busy {
-                  doing_mark(c, true, None)
-                } else {
-                  c.text(tr("android-misc.adb.chats.revoke"), style=adb_go) |> ignore
-                }
-              })
+          if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, value=when, note=text(g, "reason"), note_cut=true, face=true, goes=station != "" && session != "", control=fn() {
+              if @sf.button(c, tr("android-misc.adb.chats.revoke"), key="adb-revoke/" + station + "/" + request, tone=Ghost, busy~, disabled=busy) {
+                act(core, tr("android-misc.adb.chats.revoke"), "adb.revoke", obj([("station", str(station)), ("request", str(request))]))
+              }
             }) {
-            act(core, tr("android-misc.adb.chats.revoke"), "adb.revoke", obj([("station", str(station)), ("request", str(request))]))
+            (core.open_chat)(station, session, "")
           }
         }
       })

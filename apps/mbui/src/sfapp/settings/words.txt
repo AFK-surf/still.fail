@@ -62,6 +62,7 @@ android-misc.adb.ask.pair.title
 android-misc.adb.chats.about
 android-misc.adb.chats.count
 android-misc.adb.chats.live
+android-misc.adb.chats.noUsage
 android-misc.adb.chats.none
 android-misc.adb.chats.revoke
 android-misc.adb.chats.waiting

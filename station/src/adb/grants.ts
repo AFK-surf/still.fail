@@ -21,6 +21,10 @@ export type Status = "pending" | "granted" | "denied" | "ended";
 export type PhoneRequest = {
   id: string; session: string; chat: string; owner: string; reason: string; at: number; status: Status;
   scope?: Scope; exp?: number; thread?: number; cardTs?: string; why?: string;
+  /// Last actual adb activity in this grant, milliseconds; absent for older grants until they are used again.
+  lastUsedAt?: number;
+  /// The chat's current title, filled when sent (not kept in the record).
+  chatTitle?: string | null;
   /// Granted, how this station's adb holds the phone (link.ts `AdbState.adb`: `connected`, `unpaired`, `off`,
   /// `unauthorized`, `missing`, `failed`; `gone`: not offered here now; none yet: not heard since it was granted), and
   /// the last of them the agent was told of (`linked`).
@@ -57,7 +61,8 @@ export type GrantsDeps = {
       insertMessage(m: Record<string, unknown>): number[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;
-      subscribe(f: (c: { type: string; key: string; ws?: string | null }) => void): void;
+      threadSessions(thread: number): { session: string }[];
+      subscribe(f: (c: { type: string; key?: string; id?: number; ws?: string | null }) => void): void;
     };
     chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: string[]): Promise<string> };
     shared(thread: number, n: number, session: string, text: string): void;
@@ -65,8 +70,10 @@ export type GrantsDeps = {
   };
   /// The station's home workspace, for sessions from before workspace membership was recorded.
   home(): string | null;
+  /// The chat's current name, or null before it has one.
+  title(r: PhoneRequest): string | null;
   now(): number;
-  told?(r: PhoneRequest, workspace: string | null): void;
+  told?(r: PhoneRequest, workspace: string | null, change: "grant" | "used" | "title"): void;
   /// A request's id (tests give their own).
   id?(): string;
 };
@@ -75,15 +82,23 @@ export class Refused extends Error {}
 
 export class PhoneGrants {
   readonly #d: GrantsDeps;
+  readonly #titles = new Map<string, string | null>();
+  readonly #used = new Map<string, number>();
 
   constructor(d: GrantsDeps) {
     this.#d = d;
     d.db.exec(SCHEMA);
     d.hub.store.subscribe((c) => {
-      if ((c.type === "sessionRemoved" || c.type === "session") && this.#ended(c.key)) {
+      if ((c.type === "sessionRemoved" || c.type === "session") && typeof c.key === "string" && this.#ended(c.key)) {
         // A removed session's row is already gone; the change carries its workspace.
         const workspace = c.type === "sessionRemoved" ? (c.ws ?? this.#d.home()) : undefined;
         for (const r of this.#bySession(c.key)) this.#end(r, "对话已归档", workspace);
+      } else if (c.type === "thread" && typeof c.id === "number") {
+        // A renamed chat changes its list entry even when no adb command is run.
+        for (const { session } of this.#d.hub.store.threadSessions(c.id)) for (const r of this.#bySession(session)) {
+          const title = this.#d.title(r);
+          if (this.#titles.has(r.id) && this.#titles.get(r.id) !== title) this.#tell(r, "title");
+        }
       }
     });
   }
@@ -102,10 +117,39 @@ export class PhoneGrants {
     return this.#d.hub.store.getSession(r.session)?.ws ?? this.#d.home();
   }
 
+  /// A title is read from the chat, so it follows renames and is never a stale copy in the grant record.
+  shown(r: PhoneRequest): PhoneRequest & { chatTitle: string | null } {
+    const chatTitle = this.#d.title(r);
+    this.#titles.set(r.id, chatTitle);
+    return { ...r, chatTitle };
+  }
+
+  #tell(r: PhoneRequest, change: "grant" | "used" | "title", workspace?: string | null): void {
+    this.#d.told?.(this.shown(r), workspace === undefined ? this.#workspace(r) : workspace, change);
+  }
+
+  /// A service of a grant's is in use. Long streams can send many packets; announce them at most once a second,
+  /// but every new or closed service immediately, so another chat's more recent command can reorder the list.
+  used(id: string, force: boolean): void {
+    const now = Math.floor(this.#d.now());
+    const previous = this.#used.get(id);
+    if (!force && previous !== undefined && now >= previous && now - previous < 1000) return;
+    const r = this.get(id);
+    if (r === null || r.status !== "granted" || !this.#live(r)) return;
+    if (r.lastUsedAt === now) return;
+    r.lastUsedAt = now;
+    this.#used.set(id, now);
+    this.#save(r);
+    this.#tell(r, "used");
+  }
+
   #save(r: PhoneRequest) {
+    // Titles are read from the chat, so a later rename is reflected in every grant.
+    const body = { ...r };
+    delete body.chatTitle;
     this.#d.db
       .prepare("INSERT INTO adb_requests (id, session, owner, status, body) VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET status = excluded.status, body = excluded.body")
-      .run(r.id, r.session, r.owner, r.status, JSON.stringify(r));
+      .run(r.id, r.session, r.owner, r.status, JSON.stringify(body));
   }
 
   #load(sql: string, ...args: (string | number)[]): PhoneRequest[] {
@@ -136,7 +180,7 @@ export class PhoneGrants {
   }
   ofOwner(owner: string, workspace?: string): PhoneRequest[] {
     return this.#load("SELECT body FROM adb_requests WHERE owner = ? AND status IN ('pending', 'granted')", owner.toLowerCase())
-      .filter((r) => (workspace === undefined || this.#workspace(r) === workspace) && this.#live(r));
+      .filter((r) => (workspace === undefined || this.#workspace(r) === workspace) && this.#live(r)).map((r) => this.shown(r));
   }
   /// Every grant live now, of everyone (the phones lent to this station are lent for these).
   live(): PhoneRequest[] {
@@ -188,7 +232,7 @@ export class PhoneGrants {
         r.cardTs = posted;
         this.#save(r);
       }
-      this.#d.told?.(r, this.#workspace(r));
+      this.#tell(r, "grant");
     }
     return r;
   }
@@ -282,6 +326,8 @@ export class PhoneGrants {
 
   #settle(r: PhoneRequest, status: Status, workspace?: string | null) {
     r.status = status;
+    // Last use is only needed while the grant can appear in the person's list.
+    if (status === "ended" || status === "denied") delete r.lastUsedAt;
     this.#save(r);
     if (r.thread !== undefined && r.cardTs !== undefined) {
       this.#d.hub.store.withdrawCard(r.session, r.thread, r.cardTs);
@@ -294,7 +340,11 @@ export class PhoneGrants {
         // The session is gone: nobody to tell.
       }
     }
-    this.#d.told?.(r, workspace === undefined ? this.#workspace(r) : workspace);
+    this.#tell(r, "grant", workspace);
+    if (status === "ended" || status === "denied") {
+      this.#titles.delete(r.id);
+      this.#used.delete(r.id);
+    }
   }
 }
 

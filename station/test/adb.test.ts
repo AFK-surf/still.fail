@@ -549,8 +549,8 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     while (state.adb !== "connected");
     // Held, it is made to keep lending with no one at it: the app may turn Wireless debugging on itself (after the
     // phone starts again), and Android's idling leaves its connection be; no one asked
-    await until(() => adb.calls().some((c) => c.join(" ") === `-s ${serial} shell cmd deviceidle whitelist +fail.still.android`));
-    assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
+    await until(() => adb.calls().some((c) => c.join(" ") === `-s ${serial} shell STILLFAIL_ADB_KEEP=1 cmd deviceidle whitelist +fail.still.android`));
+    assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell STILLFAIL_ADB_KEEP=1 pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
     const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en" });
     assert.deepEqual(wrong, { head: { status: 422, headers: { "content-type": "application/json" } }, body: { message: "The pairing code is 6 digits" } });
     const granted = await mesh.answer({ op: "grant", phone: PHONE });

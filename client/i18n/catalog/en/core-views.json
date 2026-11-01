@@ -517,6 +517,7 @@
   "core-views.adb.card.elsewhere": "Shared with another station",
   "core-views.adb.card.connecting": "Connecting to station",
   "core-views.adb.card.attaching": "Connecting adb",
+  "core-views.adb.card.shared": "Sharing",
   "core-views.adb.card.connected": {
     "one": "Sharing · 1 min left",
     "other": "Sharing · {n} min left"

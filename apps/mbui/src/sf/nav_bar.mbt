@@ -4,7 +4,7 @@
 // each in its middle; a title's second line hangs below it, the bar taller by it. (NavBar sets the title's line 30, 1
 // higher, to stand on the back word's baseline, with 2 under it: on the Mac's text its letters then stood 1 over the
 // back word's. Here the title's line is the 32 and nothing under it: the line under the title and the bar's height
-// are NavBar's.) The title is in the middle of the bar inside its padding (10 at the start, 16 at the end) and keeps 84 clear
+// are NavBar's.) The title is in the middle of the bar inside its padding (16 at either end) and keeps 84 clear
 // at either side.
 
 ///|
@@ -19,9 +19,9 @@ let nav_back_box : @ui.Style = @ui.css("row pr=S1_5 pt=S1 pb=S1 radius=Lg align=
 let nav_back_words : @ui.TextStyle = @ui.text_style(size=Title, leading=Font, color=Link, wrap=false)
 
 ///|
-/// The bar: 10 in at its start, 16 at its end, 6 over and 10 under (NavBar).
+/// The bar: 16 in at each end, 6 over and 10 under.
 // kept across runs: a value (no field of it changes)
-let nav_bar_box : @ui.Style = @ui.css("w=Full pl=S2_5 pr=S4 pt=S1_5 pb=S2_5")
+let nav_bar_box : @ui.Style = @ui.css("w=Full px=S4 pt=S1_5 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

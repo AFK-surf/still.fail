@@ -3,6 +3,8 @@
 import { Effect, Layer } from "effect";
 import { writeLine } from "../mesh/serve.ts";
 import { readOnly } from "../mesh/credential.ts";
+import { titleOf } from "../read/views.ts";
+import { STILLFAIL_SURFACE } from "../store/store.ts";
 import { Agents } from "../sessions/agents.ts";
 import { wall } from "../ops/fibers.ts";
 import { ControlPlane, Events, Parts, Store } from "../services.ts";
@@ -24,8 +26,20 @@ export const AdbLive = Layer.effectDiscard(
     let shares: Shares | null = null;
     const grants = new PhoneGrants({
       db: store.db, hub: hub as any, home: () => plane.state.home(), now: () => wall.now(),
-      told: (r: PhoneRequest, workspace) => {
+      title: (r) => {
+        const slash = r.chat.indexOf("/");
+        const own = slash < 0 ? null : store.sessionThread(r.session, r.chat.slice(0, slash), r.chat.slice(slash + 1))?.thread ?? null;
+        const latest = store.sessionChat(r.session);
+        const thread = own ?? latest?.thread;
+        if (!thread) return null;
+        const named = thread.title?.trim() || thread.autoTitle?.trim();
+        if (named) return named;
+        if (thread.surface === STILLFAIL_SURFACE) return null;
+        return titleOf(thread, latest?.thread.id === thread.id ? latest.firstText : null, null);
+      },
+      told: (r: PhoneRequest, workspace, change) => {
         if (workspace !== null) events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
+        if (change !== "grant") return;
         if (r.status === "denied" || r.status === "ended") void servers.stop(r.id);
         shares?.regrant(r.owner);
         // (granted while the phone is offered here already: its card says at once how it is held)
@@ -41,6 +55,7 @@ export const AdbLive = Layer.effectDiscard(
             servers,
             granted: (email) => grants.ofOwner(email).filter((r) => r.status === "granted").map((r) => r.id),
             stated: (email, state) => grants.linked(email, state),
+            used: (id, force) => grants.used(id, force),
           }),
       ),
       (s) => Effect.promise(() => s.close()),
@@ -71,7 +86,8 @@ export const AdbLive = Layer.effectDiscard(
         const id = typeof ask.request === "string" ? ask.request : "";
         const scope = ask.scope === "hour" || ask.scope === "chat" ? (ask.scope as Scope) : null;
         const why = ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace) : grants.revoke(email, id, viewer.workspace);
-        return why === null ? reply(200, { request: grants.get(id) }) : reply(422, { message: why });
+        const request = grants.get(id);
+        return why === null ? reply(200, { request: request === null ? null : grants.shown(request) }) : reply(422, { message: why });
       }
       return answerAdb(lent, conn, viewer, head, stream, reader);
     });

@@ -24,6 +24,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import type { Connection, Stream } from "../mesh/native.ts";
 import { Reader, writeLine } from "../mesh/serve.ts";
 import type { GrantServers } from "./servers.ts";
+import { AdbActivity, KEEP_LENDING } from "./activity.ts";
 
 type Json = any;
 
@@ -66,6 +67,8 @@ export type SharesOptions = {
   /// How the station's adb holds a person's phone changed (its `AdbState`), or the phone is offered no longer (null):
   /// told to their chats' grants (adb/grants.ts `linked`), so that a granted card says whether it is reached yet.
   stated?: (email: string, state: AdbState | null) => void;
+  /// Actual commands or data on a grant's adb transport; not an automatic connection or maintenance.
+  used?: (grant: string, force: boolean) => void;
 };
 
 let nextOffer = 1;
@@ -398,13 +401,14 @@ function listen(shares: Shares, share: Share) {
     const ids = shares.options.granted?.(share.owner.email) ?? [];
     if (ids.length > 0 && shares.options.servers) {
       // Granted to chats: only their adb servers are let in (another chat's agent, knowing the port, is not).
-      void shares.options.servers.allowed(socket, ids).then((ok) => {
+      void shares.options.servers.owner(socket, ids).then((id) => {
         if (signal.aborted) return;
-        if (!ok) {
+        if (id === null) {
           log.info("adb", "a connection to a granted phone's port from no grant's adb server turned away", { port: share.port });
           return void socket.destroy();
         }
-        tunnel(conn, "connect", socket, signal).catch((error) => {
+        const activity = new AdbActivity(share.info.package, (force) => shares.options.used?.(id, force));
+        tunnel(conn, "connect", socket, signal, activity).catch((error) => {
           log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
           share.refuse((error as Error).message, error instanceof Unpaired);
         });
@@ -460,7 +464,7 @@ class Unpaired extends Error {}
 
 /// A stream to the phone for `socket`: `{"tunnel": kind}`, the phone's answer once it reached adbd (or why not), then
 /// the bytes both ways until either side ends. `signal` ends it at once (the pairing done).
-export async function tunnel(conn: Connection, kind: string, socket: net.Socket, signal?: AbortSignal): Promise<void> {
+export async function tunnel(conn: Connection, kind: string, socket: net.Socket, signal?: AbortSignal, activity?: AdbActivity): Promise<void> {
   socket.on("error", () => {});
   let stream: Stream | null = null;
   const abort = () => {
@@ -479,7 +483,10 @@ export async function tunnel(conn: Connection, kind: string, socket: net.Socket,
     const s = stream;
     const up = (async () => {
       try {
-        for await (const chunk of socket) await s.write(chunk as Buffer);
+        for await (const chunk of socket) {
+          activity?.take(chunk as Buffer);
+          await s.write(chunk as Buffer);
+        }
       } finally {
         await s.finish().catch(() => {});
       }
@@ -692,13 +699,13 @@ function keepLending(shares: Shares, share: Share, server: string[]): void {
   const adb = shares.adb();
   if (!pkg || !isPackage(pkg) || adb === null) return;
   const asks = [
-    ["shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"],
-    ["shell", "cmd", "deviceidle", "whitelist", `+${pkg}`],
+    ["shell", KEEP_LENDING, "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"],
+    ["shell", KEEP_LENDING, "cmd", "deviceidle", "whitelist", `+${pkg}`],
   ];
   void (async () => {
     for (const ask of asks) {
       const said = await run(adb, [...server, "-s", share.serial(), ...ask], shares.limits.long).catch((error: Error) => error.message);
-      log.info("adb", "adb kept the phone lending", { ask: ask.slice(1, 3).join(" "), said: said.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
+      log.info("adb", "adb kept the phone lending", { ask: ask.slice(2, 4).join(" "), said: said.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
     }
   })();
 }
@@ -781,4 +788,3 @@ export function text(value: unknown, max: number): string {
 export function isPackage(name: string): boolean {
   return name.length > 0 && name.length <= 200 && /^[A-Za-z0-9._]+$/.test(name);
 }
-

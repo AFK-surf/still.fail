@@ -2167,6 +2167,8 @@ test("a_phone_s_ports_are_taken_before_its_app_says_it_is_a_phone_and_lent_once_
   const values = new Map();
   apply(host, values);
   assert.deepEqual(v(values, 2).lends.map((l: J) => l.station), ["ws1/st1"]);
+  // The internal offer deadline is not the end of a chat's grant (it can end sooner or be renewed).
+  assert.equal(v(values, 2).until, undefined);
   core.close();
 });
 
@@ -2225,6 +2227,39 @@ test("a_phone_s_grants_kept_on_the_device_lend_it_from_a_core_started_anew", asy
   assert.ok(values.has(1), JSON.stringify(emitted).slice(0, 2000));
   assert.deepEqual([v(values, 1).known, v(values, 1).wanted, v(values, 1).grants.map((g: J) => g.id)], [true, ["ws1/st1"], ["g1"]]);
   again.close();
+});
+
+test("a_phone_shows_each_chat_once_ordered_by_the_last_actual_use", async () => {
+  const { host, core } = await started();
+  const exp = Math.floor(host.nowMs() / 1000) + 3600;
+  const at = Math.floor(host.nowMs());
+  const grant = (id: string, chat: string, lastUsedAt?: number) => ({
+    id, session: `session-${id}`, chat, reason: `reason-${id}`, chatTitle: `title-${chat}`,
+    status: "granted", scope: "chat", exp, at: 1, ...(lastUsedAt === undefined ? {} : { lastUsedAt }),
+  });
+  core.inner.adb.heard("ws1/st1", grant("old", "chat-a", at - 120_000));
+  core.inner.adb.heard("ws1/st1", grant("other", "chat-b", at - 90_000));
+  core.inner.adb.heard("ws1/st1", grant("new", "chat-a", at - 60_000));
+  core.inner.adb.heard("ws1/st1", grant("unknown", "chat-c"));
+  assert.deepEqual(core.inner.adb.grants().map((g: J) => [g.id, g.chat, g.lastUsedAt]), [
+    ["new", "chat-a", at - 60_000], ["other", "chat-b", at - 90_000], ["unknown", "chat-c", undefined],
+  ]);
+  assert.deepEqual(core.inner.adb.wanted(), ["ws1/st1"]);
+  // The view has the title and relative time, and that time advances while the page remains open.
+  core.keepTime();
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "adbShare" });
+  await host.settle();
+  apply(host, values);
+  const shown = v(values, 1).grants[0];
+  assert.equal(shown.chatTitle, "title-chat-a");
+  const ago = shown.time.lastUsedAt.ago;
+  await host.time.pass(120_000, 50);
+  await host.settle();
+  apply(host, values);
+  assert.notEqual(v(values, 1).grants[0].time.lastUsedAt.ago, ago);
+  core.close();
 });
 
 test("automatic_decision_drafts_require_a_model_and_preserve_failed_saves", async () => {

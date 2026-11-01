@@ -12,6 +12,7 @@ import type { IrohStream } from "./iroh.ts";
 import type { CredentialSource, Link, Mesh } from "./mesh.ts";
 import type { Runner } from "./runtime.ts";
 import { StationAddr } from "./station/addr.ts";
+import { Retold } from "./station/retold.ts";
 import { LANG_HEADER } from "./station/requests.ts";
 import type { RequestHead } from "./station/wire.ts";
 import type { Store } from "./store.ts";
@@ -19,6 +20,11 @@ import { fromUtf8, parseJson, utf8 } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
+
+/// The identity used both to show a chat once and to take back everything behind its row.
+function grantChat(g: J): string {
+  return typeof g.chat === "string" && g.chat !== "" ? g.chat : typeof g.session === "string" && g.session !== "" ? g.session : g.id;
+}
 
 const RETRY_MS = 1_000;
 /// Where this person's chats' grants of their phone are kept on the device, as the stations last said them: a core
@@ -79,6 +85,8 @@ function readLine(stream: IrohStream, carry: { bytes: Uint8Array }): Effect.Effe
 /// This phone lent to one station: its offer, the stream saying it, the tunnels the station opens.
 class Lend {
   readonly #env: AdbEnv;
+  /// A grant-backed lending's fallback deadline is not a grant's expiry and is not shown.
+  readonly #grantBased: boolean;
   #offer: Offer | null = null;
   #until = 0;
   #run = 0;
@@ -95,8 +103,9 @@ class Lend {
   readonly #accepting = new Set<Link>();
   #changed: Deferred.Deferred<void> = Deferred.makeUnsafe<void>();
 
-  constructor(env: AdbEnv) {
+  constructor(env: AdbEnv, grantBased = false) {
     this.#env = env;
+    this.#grantBased = grantBased;
   }
 
   run(call: AdbCall): Effect.Effect<unknown, CoreError> {
@@ -135,7 +144,7 @@ class Lend {
       serial: this.#offer !== null ? said("serial") : null,
       adb: phase === "offered" ? said("adb") : null,
       message: this.#problem ?? (phase === "offered" ? said("message") : null),
-      until: this.#offer !== null ? Math.trunc(this.#until) : null,
+      until: this.#offer !== null && !this.#grantBased ? Math.trunc(this.#until) : null,
       tunnels: this.#tunnels,
       connectPort: this.#offer?.connect ?? null,
       pairPort: this.#offer?.pair ?? null,
@@ -144,7 +153,7 @@ class Lend {
   }
 
   /// A link to a station's 共享调试 as a message shows it (the `adbCard` topic): what it is, and in a line how this
-  /// phone's adb stands with that station (its minutes left, sent again each minute as every shown time is).
+  /// phone's adb stands with that station (a legacy timed offer's minutes left, if any).
   card(station: string): J {
     const title = t("core-views.adb.card.title");
     const sharing = this.#offer !== null && this.#offer.station === station;
@@ -156,7 +165,7 @@ class Lend {
     const line = view.phase !== "offered"
       ? (view.message ?? t("core-views.adb.card.connecting"))
       : view.adb === "connected"
-        ? t("core-views.adb.card.connected", { n: minutes })
+        ? (this.#grantBased ? t("core-views.adb.card.shared") : t("core-views.adb.card.connected", { n: minutes }))
         : view.adb === "unpaired"
           ? t("core-views.adb.card.unpaired")
           : view.adb === "off"
@@ -451,6 +460,7 @@ export class Adb {
   #ports: Omit<Offer, "station" | "minutes"> | null = null;
   /// This person's chats' grants of their phone (and requests waiting), by station address and id.
   readonly #grants = new Map<string, Map<string, J>>();
+  readonly #retold = new Retold();
   /// Their 默认最长授权 as last set here or said by a station.
   #lasts: "hour" | "chat" = "chat";
   /// Whether the grants kept on the device were read (`adbShare` `known`): before, none known is not none granted.
@@ -491,7 +501,7 @@ export class Adb {
   /// The grants as they stand kept on the device (the live ones and the requests waiting: those ended let go).
   #keep(): void {
     const out: Record<string, J[]> = {};
-    for (const g of this.grants()) (out[g.station as string] ??= []).push(Object.fromEntries(Object.entries(g).filter(([k]) => k !== "station")));
+    for (const g of this.#allGrants()) (out[g.station as string] ??= []).push(Object.fromEntries(Object.entries(g).filter(([k]) => k !== "station")));
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(GRANTS_KEY, utf8(JSON.stringify(out))), { log: "Unhandled", message: "debugging grants kept" }));
   }
 
@@ -536,11 +546,17 @@ export class Adb {
           this.heard(call.station, (r as J)?.request);
           return null;
         });
-      case "revoke":
-        return Effect.map(this.#legacy.askAt(call.station, { op: "revoke", request: call.request }), (r) => {
+      case "revoke": {
+        // One list row represents the whole chat, including multiple agents' grants in that chat.
+        const selected = this.#grants.get(call.station)?.get(call.request);
+        const matching = selected === undefined ? [] : this.#allGrants()
+          .filter((g) => g.station === call.station && grantChat(g) === grantChat(selected))
+          .map((g) => g.id as string);
+        const ids = matching.length > 0 ? matching : [call.request];
+        return Effect.as(Effect.forEach(ids, (request) => Effect.map(this.#legacy.askAt(call.station, { op: "revoke", request }), (r) => {
           this.heard(call.station, (r as J)?.request);
-          return null;
-        });
+        }), { discard: true }), null);
+      }
       case "lasts": {
         // at once here, then told to every station this person's grants are read from (the latest `at` wins there)
         this.#lasts = call.lasts;
@@ -575,28 +591,38 @@ export class Adb {
   /// A station said how a grant or request of this person's stands (its `adb-grant` event, or a decision's answer).
   heard(station: string, d: J): void {
     if (typeof d?.id !== "string") return;
-    const at = this.#grants.get(station) ?? new Map<string, J>();
-    if (d.status === "pending" || d.status === "granted") at.set(d.id, d);
-    else at.delete(d.id);
-    this.#grants.set(station, at);
+    this.#retold.told(station, "adb-grant", d);
+    this.#putGrant(station, d);
     this.#keep();
     this.#sync();
   }
 
+  #putGrant(station: string, d: J): void {
+    const at = this.#grants.get(station) ?? new Map<string, J>();
+    if (d.status === "pending" || d.status === "granted") at.set(d.id, d);
+    else at.delete(d.id);
+    this.#grants.set(station, at);
+  }
+
   /// A station's grants read whole, as it is reached (one from before grants answers with none).
   readGrants(station: string): Effect.Effect<void, CoreError> {
-    return Effect.map(Effect.orElseSucceed(this.#legacy.askAt(station, { op: "grants" }), () => null), (r) => {
-      const list = Array.isArray((r as J)?.grants) ? ((r as J).grants as J[]) : null;
-      if (list === null) return;
-      if ((r as J)?.lasts === "hour" || (r as J)?.lasts === "chat") this.#lasts = (r as J).lasts;
-      this.#grants.set(station, new Map(list.filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
-      this.#keep();
-      this.#sync();
+    return Effect.suspend(() => {
+      const read = this.#retold.asked();
+      return Effect.map(Effect.orElseSucceed(this.#legacy.askAt(station, { op: "grants" }), () => null), (r) => {
+        const list = Array.isArray((r as J)?.grants) ? ((r as J).grants as J[]) : null;
+        if (list === null) return;
+        if ((r as J)?.lasts === "hour" || (r as J)?.lasts === "chat") this.#lasts = (r as J).lasts;
+        this.#grants.set(station, new Map(list.filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
+        // A change heard while the read was out is newer than the snapshot it brought.
+        for (const { data } of this.#retold.since(read, station)) this.#putGrant(station, data as J);
+        this.#keep();
+        this.#sync();
+      }).pipe(Effect.ensuring(Effect.sync(() => this.#retold.over(read))));
     });
   }
 
   /// The grants live now and the requests waiting, every station's: `{station, id, chat, reason, status, scope, exp}`.
-  grants(): J[] {
+  #allGrants(): J[] {
     const now = this.#env.host.nowMs() / 1000;
     const out: J[] = [];
     for (const [station, at] of this.#grants)
@@ -604,9 +630,22 @@ export class Adb {
     return out.sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
   }
 
+  /// One row per chat, most recently used first. All underlying grants stay kept and are taken back together.
+  grants(): J[] {
+    const out = new Map<string, J>();
+    for (const g of this.#allGrants()) {
+      const key = JSON.stringify([g.station, grantChat(g)]);
+      const before = out.get(key);
+      const used = typeof g.lastUsedAt === "number" ? g.lastUsedAt : 0;
+      const wasUsed = typeof before?.lastUsedAt === "number" ? before.lastUsedAt : 0;
+      if (before === undefined || (before.status !== "granted" && g.status === "granted") || (before.status === g.status && (used > wasUsed || (used === wasUsed && (g.at ?? 0) > (before.at ?? 0))))) out.set(key, g);
+    }
+    return [...out.values()].sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0) || (b.at ?? 0) - (a.at ?? 0));
+  }
+
   /// The stations a grant lends this phone to now.
   wanted(): string[] {
-    return [...new Set(this.grants().filter((g) => g.status === "granted").map((g) => g.station as string))];
+    return [...new Set(this.#allGrants().filter((g) => g.status === "granted").map((g) => g.station as string))];
   }
 
   /// Each wanted station lent to (with the ports the app found), each no longer wanted let go.
@@ -620,7 +659,7 @@ export class Adb {
     for (const station of wanted) {
       let lend = this.#lends.get(station);
       if (lend === undefined) {
-        lend = new Lend(this.#env);
+        lend = new Lend(this.#env, true);
         this.#lends.set(station, lend);
       }
       // (lent for as long as a grant is: the grants end it, not its own clock)

@@ -1231,6 +1231,23 @@ test("a_stream_coming_back_after_its_link_went_is_told_what_it_missed_and_reads_
   core.close();
 });
 
+test("a_resumed_station_refreshes_its_phone_grants_kept_by_an_older_core", async () => {
+  const { host, core, streams, end, gate } = await started();
+  const reads: string[] = [];
+  const unchanged: string[] = [];
+  core.inner.stations.also.push({ read: (address) => Effect.sync(() => { reads.push(address); }), event: () => {}, resume: true });
+  core.inner.stations.also.push({ read: (address) => Effect.sync(() => { unchanged.push(address); }), event: () => {} });
+  Queue.offerUnsafe(streams.at(-1)!.queue, new TextEncoder().encode('id: 1f2e3d4c.9\nevent: overview\ndata: {}\n\n'));
+  await host.settle();
+  gate.resumes = true;
+  end();
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  await host.settle();
+  assert.deepEqual(reads, [ST], "refresh the station's grants even when its event stream resumes");
+  assert.deepEqual(unchanged, [], "parts that did not ask for a refresh are not read");
+  core.close();
+});
+
 test("a_chat_open_is_asked_what_was_said_since_before_the_station_is_read_again", async () => {
   const answers: J = { ...base(), "GET /threads/7/entries?after=3": { last: 3, entries: [] } };
   const { host, core, end, values, read } = await ui(answers);

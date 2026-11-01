@@ -53,6 +53,15 @@ export interface AdbCard {
 	lendable: boolean;
 }
 
+/** A moment in words, fresh each minute: 3 分钟前 (`ago`), 9/20 14:05:09 (`full`), 3 小时后 (`until`), whether it has come. */
+export interface Stamp {
+	at: number;
+	ago: string;
+	full: string;
+	until: string;
+	past: boolean;
+}
+
 /** A chat's grant of this person's phone, or its request waiting (the `adbShare` topic's `grants`). */
 export interface AdbGrant {
 	/** Its station's address. */
@@ -62,6 +71,8 @@ export interface AdbGrant {
 	session: string;
 	/** Its chat's address on the station. */
 	chat: string;
+	/** The chat's current title, when named. */
+	chatTitle?: string;
 	/** Why the agent asked (its words). */
 	reason: string;
 	/** `pending` (waiting for the person) or `granted`. */
@@ -71,6 +82,10 @@ export interface AdbGrant {
 	/** Granted: when it ends at the latest (unix seconds). */
 	exp?: number;
 	at: number;
+	/** The last actual adb activity, in milliseconds; absent before it was recorded. */
+	lastUsedAt?: number;
+	/** Last use in words, refreshed each minute. */
+	time?: Record<string, Stamp>;
 }
 
 /** This phone lent to one station for its chats' grants (the `adbShare` topic's `lends`): as `phase`, `adb`, `serial` and `message` are for the switch's. */
@@ -534,15 +549,6 @@ export interface Attention {
 	text: string;
 	more?: string;
 	quota?: QuotaAttention;
-}
-
-/** A moment in words, fresh each minute: 3 分钟前 (`ago`), 9/20 14:05:09 (`full`), 3 小时后 (`until`), whether it has come. */
-export interface Stamp {
-	at: number;
-	ago: string;
-	full: string;
-	until: string;
-	past: boolean;
 }
 
 export interface AutomaticDecisionCheck {
