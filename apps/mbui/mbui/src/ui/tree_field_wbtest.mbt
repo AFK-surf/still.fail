@@ -1430,3 +1430,68 @@ test "a field of the tree's of more lines than it shows, drawn half as big about
   // (its words at their top: its thumb at its bar's top, its own top where it is drawn, nothing over it to keep clear of)
   assert_true(thumb.1 >= fy && thumb.1 < fy + scroll_bar_size, msg="its thumb from its top: \{thumb} in \{(fx, fy, fw, fh)}")
 }
+
+///|
+/// A window 300 by 200 whose tree holds a box at `at` drawn `s` as big about its top left, holding one at `local` in
+/// it, 200 wide, holding a field of the tree's of "abcdefghij" (10 big, one line, nothing about its words: plain) or,
+/// in its place (`words`), the same words of the tree's laid out as the field lays out its own (as big, its line its
+/// theme's for that size, one line): each `put` in turn, the same nodes moved and drawn so, the glyphs drawn each time.
+fn field_or_words(
+  words : Bool,
+  put : Array[((Double, Double), (Double, Double), Double)],
+) -> Array[Array[(Double, Double)]] {
+  let (at0, local0, s0) = put[0]
+  let at = @signals.signal(at0, same=fn(a, b) { a == b })
+  let local = @signals.signal(local0, same=fn(a, b) { a == b })
+  let s = @signals.signal(s0, same=fn(a, b) { a == b })
+  let f = Field::new(text="abcdefghij")
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.over(Is(true)).offset(By(fn() { at.get() })).width(Is(Some(220.0))).scale(By(fn() { s.get() }), about=At(0.0, 0.0))
+      |> ignore
+      h.box(fn(v) {
+        v.over(Is(true)).offset(By(fn() { local.get() })).width(Is(Some(200.0))) |> ignore
+        if words {
+          v
+          .words(Is("abcdefghij"), look={ size: 10.0, weight: 400, line: tree_theme().text_line * 10.0, wrap: false })
+          .ink(By(fn() { tree_theme().color(Fg) }))
+          |> ignore
+        } else {
+          field(v, f, font_size=10.0, max_lines=1) |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  put.map(fn(p) {
+    at.set(p.0)
+    local.set(p.1)
+    s.set(p.2)
+    t.draw()
+    t.drawn_glyphs().map(fn(g) { (g.0, g.1) })
+  })
+}
+
+///|
+test "a field of the tree's and words of the tree's in its place: its node off the pixels itself, on them in one off them, drawn as big or half as big: each glyph where the words' is" {
+  // (the same nodes each time: the outer one a quarter pixel and more off the pixels; then on them, the inner one so
+  // far off them in it; then only drawn otherwise, half as big, 0.7 as big)
+  let put = [
+    ((20.13, 20.37), (0.0, 0.0), 1.0),
+    ((20.0, 20.0), (0.13, 0.37), 1.0),
+    ((20.0, 20.0), (0.13, 0.37), 0.5),
+    ((20.0, 20.0), (0.13, 0.37), 0.7),
+  ]
+  let fields = field_or_words(false, put)
+  let words = field_or_words(true, put)
+  for k, p in put {
+    assert_true(words[k].length() == 10, msg="\{p}: the words' glyphs drawn: \{words[k]}")
+    // (as scaled_words_wbtest's glyphs_alike: the same to the last bits but what the two ways of working out the
+    // same place round off, 1e-14 at 0.7)
+    let alike = fields[k].length() == words[k].length() &&
+      fields[k].iter().zip(words[k].iter()).all(fn(q) { (q.0.0 - q.1.0).abs() <= 1.0e-9 && (q.0.1 - q.1.1).abs() <= 1.0e-9 })
+    assert_true(alike, msg="\{p}: the field's glyphs where the words' are: \{fields[k]}, the words' \{words[k]}")
+  }
+}

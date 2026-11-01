@@ -378,6 +378,8 @@ pub fn on_after_layout((Ctx) -> Unit) -> Unit
 
 pub fn on_app_change((Bool, Bool) -> Unit) -> Unit
 
+pub fn on_frame_built((Ctx) -> Unit) -> Unit
+
 pub fn on_list_underlay((Ctx, Int32) -> Unit) -> Unit
 
 pub fn on_message(String, (String, Bytes?) -> Unit) -> Unit
