@@ -91,6 +91,7 @@ fn parts_forget() -> Unit {
 /// read out as its build said it, built or drawn again (a panel in use: what reads the widgets reads it as a list's
 /// row kept, semantics.mbt), built each frame while it holds what is built each frame wherever it is (a native view, the
 /// field that takes the keys).
+#callsite(autofill(loc))
 pub fn Ctx::kept_part(
   self : Ctx,
   id : Int,
@@ -98,11 +99,12 @@ pub fn Ctx::kept_part(
   body : () -> Unit,
   read_out? : Bool = false,
   own? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Unit {
   // kept as its nodes, under a watch of its own (kept_nodes.mbt); `own`: built from its key and what it reads alone,
   // nothing handed it as what builds it was built, so kept whatever else the frame built anew (docs/retained.md, the
   // way there's 3: an island)
-  self.part_nodes(id, key, body, read_out, own~)
+  self.part_nodes(id, key, body, read_out, own~, made_at=loc)
 }
 
 ///|

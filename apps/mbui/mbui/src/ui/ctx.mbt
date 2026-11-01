@@ -68,6 +68,10 @@ struct ListState {
   mut rows_read : Bool
   // gliding to its end where it showed as the glide set out: its scroll bar shows meanwhile (not where it is put)
   mut glide_shows : Bool
+  // its key and where Ctx::list was said, as the last frame built it: what the performance record names a row of it by
+  // (kept_nodes.mbt's told_said)
+  mut named : String
+  mut made_at : SourceLoc?
   // its scroll bar (scroll_bar.mbt)
   bar : Bar
   // the frame it was last laid out in; where it stood as that frame's first layout of it began and where that frame's

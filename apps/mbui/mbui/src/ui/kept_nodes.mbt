@@ -82,6 +82,10 @@ priv struct RowNodes {
   /// a part's: what its caller builds it from (Ctx::kept_part's `key`), and whether it is read out
   mut key : String
   mut read : Bool
+  /// a part's name and where it was said (Ctx::kept_part's caller; an island's name: made.mbt), as the last frame built
+  /// it: what the performance record names it by (told_said)
+  mut named : String
+  mut made_at : SourceLoc?
   /// the frame and the moment it was last built (said where it parts from it built whole: rows_check_end)
   mut built_frame : Int
   mut built_at : Double
@@ -429,6 +433,31 @@ fn row_watch(list : Int, item : Int, laid_pass : Ref[Int], holder : Ref[RowNodes
 }
 
 ///|
+/// The row or part told last (nodes_run's `told_by`), in words for the performance record ("" not known): `the island
+/// "<name>"`, `the part kept at <where Ctx::kept_part was said>`, `a row of list "<key>" made at <where Ctx::list was
+/// said>`. Worked out only as the record's why is, from what each build left (no words made as it is built).
+fn Ctx::told_said(self : Ctx) -> String {
+  let (list, item) = nodes_run.told_by
+  if item < 0 {
+    match kept_nodes.get((list, item)) {
+      Some(rn) if rn.named != "" => "the island \"\{rn.named}\""
+      Some({ made_at: Some(at), .. }) => "the part kept at \{at}"
+      _ => ""
+    }
+  } else {
+    match self.lists.get(list) {
+      Some(st) =>
+        "a row of list \"\{st.named}\"" +
+        (match st.made_at {
+          Some(at) => " made at \{at}"
+          None => ""
+        })
+      None => ""
+    }
+  }
+}
+
+///|
 /// Row or part `rn`, its watch made anew where what owned it stopped it (an old view gone, its island built by another
 /// with the same key): stale, its build owned here, never put back as though it still followed what it read.
 fn row_nodes_owned(rn : RowNodes) -> RowNodes {
@@ -492,6 +521,8 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     inner: [],
     inner_now: [],
     building_at: 0,
+    named: "",
+    made_at: None,
   }
 }
 
@@ -944,8 +975,16 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
 /// What `body` builds, kept as its nodes (Ctx::part_nodes) whether parts are drawn again as recorded or not
 /// (Tester::keep_parts, kept_part.mbt's way, kept by tests alone): a part over the others whose build says what floats
 /// over them (Ctx::floats_over), said again with its nodes, so what scrolls under it keeps clear of it kept or not.
-pub fn Ctx::kept_as_nodes(self : Ctx, id : Int, key : String, body : () -> Unit, read_out? : Bool = false) -> Unit {
-  self.part_nodes(id, key, body, read_out)
+#callsite(autofill(loc))
+pub fn Ctx::kept_as_nodes(
+  self : Ctx,
+  id : Int,
+  key : String,
+  body : () -> Unit,
+  read_out? : Bool = false,
+  loc~ : SourceLoc,
+) -> Unit {
+  self.part_nodes(id, key, body, read_out, made_at=loc)
 }
 
 ///|
@@ -960,6 +999,8 @@ fn Ctx::part_nodes(
   body : () -> Unit,
   read_out : Bool,
   own? : Bool = false,
+  named? : String = "",
+  made_at? : SourceLoc,
 ) -> Unit {
   let build = fn() {
     self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
@@ -985,6 +1026,8 @@ fn Ctx::part_nodes(
   rn.shown = self.frame_no
   rn.laid_pass.val = nodes_run.pass
   rn.own = own
+  rn.named = named
+  rn.made_at = made_at
   rn.holder.val = outer
   // (`own`: what puts it here is made once (made.mbt's made_island), so what it is built from is its key and what it
   // read alone, whatever else the frame built anew)

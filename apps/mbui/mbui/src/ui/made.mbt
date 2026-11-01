@@ -313,7 +313,7 @@ fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
   match m.island {
     Some((name, key, read_out)) => {
       let k = @signals.untracked(key)
-      self.part_nodes(self.id(name), k, fn() { (m.fill)(self) }, read_out, own=true)
+      self.part_nodes(self.id(name), k, fn() { (m.fill)(self) }, read_out, own=true, named=name)
       return
     }
     None => ()
