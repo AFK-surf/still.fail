@@ -161,7 +161,7 @@ priv enum PaintOrder {
 
 ///|
 priv struct SPath {
-  mut id : String
+  id : String
   visible : Bool
   mut fill : Fill?
   mut stroke : SStroke?

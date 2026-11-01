@@ -401,8 +401,50 @@ fn layout_and_flatten(text : ParsedText, opt : Options) -> SText? {
       Some(p) => group.children.push(NPath({ ..p, rendering }))
       None => ()
     }
-    let builder = @skia.PathBuilder::new()
+    let mut builder = @skia.PathBuilder::new()
+    // the outlines gathered so far, as one path of the span's paint (push_outline_paths)
+    let flush = fn() {
+      match builder.finish() {
+        Some(data) =>
+          group.children.push(
+            NPath({
+              id: "",
+              visible: span.visible,
+              fill: span.fill,
+              stroke: span.stroke,
+              paint_order: span.paint_order,
+              rendering,
+              data,
+              abs_transform: text.abs_transform,
+            }),
+          )
+        None => ()
+      }
+      builder = @skia.PathBuilder::new()
+    }
     for g in span.glyphs {
+      match svg_glyph(g.face, g.id) {
+        Some(node) => {
+          flush()
+          let glyph_group = Group::empty()
+          glyph_group.transform = g.transform()
+          glyph_group.children.push(node)
+          group.children.push(NGroup(glyph_group))
+          continue
+        }
+        None => ()
+      }
+      match raster_glyph(g) {
+        Some((image, transform)) => {
+          flush()
+          let glyph_group = Group::empty()
+          glyph_group.transform = transform
+          glyph_group.children.push(NImage(image))
+          group.children.push(NGroup(glyph_group))
+          continue
+        }
+        None => ()
+      }
       match g.face.outline(g.id) {
         Some(cmds) => {
           let gb = @skia.PathBuilder::new()
@@ -427,22 +469,7 @@ fn layout_and_flatten(text : ParsedText, opt : Options) -> SText? {
         None => ()
       }
     }
-    match builder.finish() {
-      Some(data) =>
-        group.children.push(
-          NPath({
-            id: "",
-            visible: span.visible,
-            fill: span.fill,
-            stroke: span.stroke,
-            paint_order: span.paint_order,
-            rendering,
-            data,
-            abs_transform: text.abs_transform,
-          }),
-        )
-      None => ()
-    }
+    flush()
     match span.line_through {
       Some(p) => group.children.push(NPath({ ..p, rendering }))
       None => ()
@@ -1135,4 +1162,89 @@ fn shape_with_font(chunk : TextChunk, font : ResolvedFont, small_caps : Bool, ke
     }
   }
   out
+}
+
+///|
+/// A glyph's SVG document from the font's `SVG ` table, or the part of it for this glyph (`glyph<id>`).
+fn svg_glyph(face : @font.Face, glyph : Int) -> Node? {
+  guard face.svg_document(glyph) is Some((data, start, end)) else { return None }
+  let data = if data.length() >= 2 && data[0] == b'\x1F' && data[1] == b'\x8B' {
+    match @zip.gunzip(data) {
+      Some(d) => d
+      None => return None
+    }
+  } else {
+    data
+  }
+  let text = @utf8.decode(data) catch { _ => return None }
+  guard tree_from_str(text, Options::default()) is Some(tree) else { return None }
+  if start == end {
+    Some(NGroup(tree.root))
+  } else {
+    node_by_id(tree.root, "glyph\{glyph}")
+  }
+}
+
+///|
+fn node_by_id(parent : Group, id : String) -> Node? {
+  for child in parent.children {
+    let child_id = match child {
+      NGroup(g) => g.id
+      NPath(p) => p.id
+      NImage(i) => i.id
+      NText(t) => t.id
+    }
+    if child_id == id {
+      return Some(child)
+    }
+    match child {
+      NGroup(g) =>
+        match node_by_id(g, id) {
+          Some(n) => return Some(n)
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+/// A glyph's embedded PNG picture (sbix or CBDT) as an image, with where it goes.
+fn raster_glyph(g : PosGlyph) -> (SImage, @skia.Transform)? {
+  guard g.face.bitmap_glyph(g.id) is Some(bg) else { return None }
+  if bg.png.length() == 0 {
+    return None
+  }
+  let w = fi(bg.width)
+  let h = fi(bg.height)
+  guard @skia.Size::from_wh(w, h) is Some(size) else { return None }
+  guard @skia.NonZeroRect::from_xywh(0.0, 0.0, w, h) is Some(abs_bbox) else { return None }
+  let image : SImage = {
+    id: "",
+    visible: true,
+    size,
+    rendering: OptimizeQuality,
+    kind: Encoded("png", bg.png),
+    abs_transform: @skia.Transform::default(),
+    abs_bbox,
+  }
+  let upem = fi(g.units_per_em)
+  let x = fi(f2i(bg.inner_bearing_x))
+  let y = fi(f2i(bg.inner_bearing_y))
+  let ppem = fi(f2i(bg.ppem_x))
+  let ts = if bg.is_sbix {
+    let (x_min, y_min) = match g.face.glyph_bbox(g.id) {
+      Some((x0, y0, _, _)) => (fi(x0), fi(y0))
+      None => (0.0, 0.0)
+    }
+    let y_shift : Float = if approx_eq_ulps(y_min, 0.0, 4) { 0.128 * upem } else { -y_min }
+    g.transform()
+    .pre_concat(@skia.Transform::from_translate(-x_min, y_shift))
+    .pre_concat(@skia.Transform::from_scale(upem / ppem, upem / ppem))
+    .pre_translate(x, -h - y)
+  } else {
+    g.transform().pre_concat(@skia.Transform::from_scale(upem / ppem, upem / ppem)).pre_translate(x, -y)
+  }
+  Some((image, ts))
 }
