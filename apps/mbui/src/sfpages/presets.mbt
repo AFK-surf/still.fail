@@ -327,8 +327,9 @@ let preset_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color
 let preset_offered_most : Int = 8
 
 ///|
-/// Short of room, the preset's words go first (before the model's parts: model_triple.mbt triple_drop_name).
-let preset_drop_words : Int = 0
+/// Short of room, the preset's words go with the first of the model's parts (model_triple.mbt triple_drop_name: who
+/// runs it by name, later in the row, goes before them), before the station's name.
+let preset_drop_words : Int = 1
 
 ///|
 /// The control's words while no preset is picked: as quiet as what says what is not chosen.
