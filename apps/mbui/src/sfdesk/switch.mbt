@@ -41,6 +41,7 @@ fn page_switch_frame(c : @ui.Ctx) -> Unit {
     page_switch.from_new = page_switch.was == Some(NewChat)
     if page_switch.from_new {
       fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
+      fresh.foot.set(@motion.measured(c, "new/foot").unwrap_or(0.0))
       // the new chat left: its scene leaves by its own way, from now
       became_starts(wide=true)
     }

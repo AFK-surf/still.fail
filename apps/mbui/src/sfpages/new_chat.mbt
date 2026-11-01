@@ -219,6 +219,12 @@ fn new_narrow(
     |> ignore
   })
   |> ignore
+  // gone to the chat: the scene seen only where it was seen, over the foot; what the band frosted and the composer
+  // covered stays hidden as they leave (the choices and the band fade sooner than the scene, the composer is the
+  // chat's, under it)
+  if going {
+    list_space(c, @sfbase.fresh.foot.get())
+  }
   let width = composer_width(c.width)
   // (as far from the page's foot as a chat's composer: composer_foot_in)
   let under : @ui.Space = @sf.room_of(composer_foot_in(c.width))
@@ -946,6 +952,7 @@ fn new_send(
   fresh.scene.set(v)
   fresh.became.set(Some(r))
   fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
+  fresh.foot.set(@motion.measured(c, "new/foot").unwrap_or(0.0))
   @sfbase.became_starts(wide=!frame.in_place)
   @sfbase.writing_starting(src, d, true)
   // what the core does, in order: the words taken, the chat made, what is written meanwhile on into its draft; then

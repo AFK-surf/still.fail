@@ -1779,6 +1779,40 @@ pub fn Tester::glyphs_shown(self : Tester) -> Array[(Double, Double, Double, Dou
 }
 
 ///|
+/// What of each glyph drawn in the last frame is seen (glyphs_shown's), but for those whose middle something drawn
+/// after them hides (a fill nearly whole, a picture, glass: words_over_hides): what a person can read.
+pub fn Tester::glyphs_seen(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  ignore(self)
+  let c = g()
+  let a = c.inst
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if a[b + 5] == 1.0 && a[b + 11] > 0.0 {
+      let x0 = dmax(a[b], a[b + 16])
+      let y0 = dmax(a[b + 1], a[b + 17])
+      let x1 = dmin(a[b] + a[b + 2], a[b + 18])
+      let y1 = dmin(a[b + 1] + a[b + 3], a[b + 19])
+      if x1 > x0 && y1 > y0 {
+        let px = (x0 + x1) / 2.0
+        let py = (y0 + y1) / 2.0
+        let mut hidden = false
+        for j in (k + 1)..<c.ninst {
+          if words_over_hides(a, j, px, py) {
+            hidden = true
+            break
+          }
+        }
+        if !hidden {
+          out.push((x0, y0, x1, y1))
+        }
+      }
+    }
+  }
+  out
+}
+
+///|
 /// The rich paragraph whose text contains `s`, as laid out, and where it
 /// is (its content's top left).
 pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double)? {

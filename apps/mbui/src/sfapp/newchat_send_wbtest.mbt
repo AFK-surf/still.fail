@@ -280,6 +280,34 @@ test "a new chat's first words and picture sent with the keyboard up: no words o
 }
 
 ///|
+test "a new chat's first words sent on a short page: nothing of its scene the foot hid is seen as the foot fades" {
+  // (the scene longer than the page: its combinations under the band, frosted, and under the composer, hidden)
+  let src = fixture_app("newchat-crowded")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=470.0, platform=2)
+  t.drive("timeout 20000\nuntil 想让 agent 做什么？\n") |> ignore
+  t.tap_text("做任何事")
+  t.type_text("把发布说明写一下")
+  t.run_for(@ui.move_most_ms)
+  // the foot's top: what is seen under it is the choices' and the composer's alone
+  let top = 470.0 - @motion.measured(t.ctx(), "new/foot").unwrap()
+  let under = fn() { t.glyphs_seen().filter(fn(g) { g.3 > top + 1.0 }).length() }
+  let before = under()
+  tap_send(t)
+  t.draw()
+  assert_true(app.nav.top() is Chat(_))
+  // as it is sent, halfway through the choices' fading (the band's), as they have gone, as the scene is half gone
+  for i, ms in [0.0, new_fade_ms / 2.0, new_fade_ms / 2.0, new_leave_ms / 2.0 - new_fade_ms] {
+    if i > 0 {
+      t.run_for(ms)
+    }
+    let now = under()
+    if now > before {
+      fail("\{now - before} glyphs more seen under the foot's top at \{t.time()} than before the words were sent")
+    }
+  }
+}
+
+///|
 test "a new chat's first words sent: its scene fades where it is from then, as they go, not once the chat is made" {
   let held : Map[String, () -> Unit] = {}
   let t = held_core(held, Ref(true))

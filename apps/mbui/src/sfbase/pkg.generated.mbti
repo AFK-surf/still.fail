@@ -2373,6 +2373,7 @@ pub(all) struct FreshChat {
   became : @signals.Signal[ChatRef?]
   scene : @signals.Signal[Json?]
   room : @signals.Signal[Double]
+  foot : @signals.Signal[Double]
 }
 
 pub(all) struct Install {
