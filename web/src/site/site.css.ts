@@ -326,12 +326,22 @@ export const sceneStick = style({
  *  has placed them (data-drawn), at the scene's first frame. Unseen by its opacity, not its visibility: the rows read
  *  for the air till then are copied with every style the app gives them, and a visibility would be inherited into them. */
 export const oneRoom = style({ position: "relative", flex: "1", minHeight: "0", marginTop: "12px", selectors: { "&:not([data-drawn])": { opacity: 0 } } });
-export const oneWires = style({ position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" });
-const flowing = keyframes({ to: { strokeDashoffset: -26 } });
-globalStyle(`${oneWires} path`, {
-  fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 60%, transparent)`, strokeWidth: 1.5, strokeDasharray: "5 8",
-  animation: `${flowing} 1.4s linear infinite`, "@media": { [STILL]: { animation: "none" } },
+export const oneWires = style({ position: "absolute", inset: "0", pointerEvents: "none" });
+// Each line is clipped to its length by scaling this box. Its child cancels that scale, so the moving dashes keep
+// their size as the endpoints move. Both the moving pattern and the clip can then be composited without repainting.
+export const oneWire = style({
+  position: "absolute", left: "0", top: "0", height: "1.5px", overflow: "hidden", transformOrigin: "0 50%",
+  transform: "scaleX(0)", willChange: "transform",
+  "@media": { [NARROW]: { selectors: { "&:nth-child(n+7)": { display: "none" } } } },
 });
+export const oneWireScale = style({ width: "100%", height: "100%", transformOrigin: "0 50%", willChange: "transform" });
+const flowing = keyframes({ to: { transform: "translateX(-26px)" } });
+export const oneWireDashes = style({
+  width: "calc(100% + 26px)", height: "100%",
+  background: `repeating-linear-gradient(90deg, color-mix(in srgb, ${ORANGE} 60%, transparent) 0 5px, transparent 5px 13px)`,
+  animation: `${flowing} 1.4s linear infinite`, willChange: "transform", "@media": { [STILL]: { animation: "none" } },
+});
+globalStyle(`${oneWires}[data-offscreen] ${oneWireDashes}`, { animationPlayState: "paused" });
 /** The computer's window (OneComputer.tsx): placed and stepped back by script; its shadow follows what of it shows. */
 /** The window under its shadow (of what of it shows: the devices flying, then the window growing out of them). */
 export const oneLift = style({ position: "absolute", inset: "0", zIndex: 1, pointerEvents: "none", filter: "drop-shadow(0 30px 40px rgba(0, 0, 0, .18))" });

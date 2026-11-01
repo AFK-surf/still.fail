@@ -42,7 +42,7 @@ for (const [label, size, path] of [['wide', { width: 1440, height: 900 }, '/'], 
   await shot(before, `${label}-0-before-scripts`);
   // The scene's room: where its wires are drawn, under all of it.
   const unseen = await before.evaluate(() => {
-    const room = document.querySelector('[data-idea="1"] section[style] svg')?.parentElement;
+    const room = (document.querySelector('[data-idea="1"] section[style] [data-site-wires]') ?? document.querySelector('[data-idea="1"] section[style] svg'))?.parentElement;
     return room ? getComputedStyle(room).opacity : null;
   });
   report.push(`${label}: before scripts, the scene's room opacity ${unseen}`);
