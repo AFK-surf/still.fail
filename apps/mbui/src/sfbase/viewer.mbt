@@ -2204,7 +2204,7 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
 pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int, inputs : Bool) -> Unit {
   let v = self
   let picture = v.picture(src)
-  if v.image != "" && @ui.image_state(v.image) == -1 {
+  if v.picture_failed() {
     if inputs {
       tap_stage(c, v, stage)
     }
@@ -2306,6 +2306,8 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
     // (the whole picture decoded for where it lands, asked for as it sets out: it takes its stand-in's place there)
     Some(r) if picture != "" && flying =>
       v.draw_flight(c, v.shown_picture(c, src, r), r, v.flying())
+    // (lying flat where the window's tree draws the viewer: its node's, Viewer::picture_flat_at)
+    Some(_) if picture != "" && v.picture_flat_at(c.moment()) => ()
     Some(r) if picture != "" => {
       let (x, y, w, h) = r
       // flat on the canvas, as a photo viewer's (FilePreview.css.ts fpImage)
@@ -2439,6 +2441,16 @@ fn[T] Viewer::near_by(self : Viewer, src : Source, made : (String, () -> Viewer)
 /// A drive's file as the viewer takes one (no size of its picture, no likeness).
 pub fn drive_attachment(f : DriveFile) -> Attachment {
   { name: f.name, path: f.path, size: f.size, width: 0.0, height: 0.0, thumbhash: "", owner: "", upload: "", duration: 0.0, frames: 0, held: false }
+}
+
+///|
+/// Whether its whole picture, read, could not be decoded (what draws it then says so alone, Viewer::image_view: no
+/// picture, no stand-in, no marks). As the host says it.
+pub fn Viewer::picture_failed(self : Viewer) -> Bool {
+  match self.bytes.get() {
+    Some(_) => @ui.image_state(self.image_name()) == -1
+    None => false
+  }
 }
 
 ///|

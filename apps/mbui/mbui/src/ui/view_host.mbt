@@ -688,7 +688,17 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       fading.pop() |> ignore
     }
     // (the root, the window, is drawn by nothing of its own)
-    if c.id.at == 0 || a <= 0.002 {
+    if c.id.at == 0 {
+      return
+    }
+    if a <= 0.002 {
+      // (its picture not seen yet asked for all the same, for the pixels it is laid out at, as an old view's is as it
+      // is built whatever is seen of it: decoded by the time it shows, View::image)
+      match c.image {
+        Some((src, _, most)) =>
+          self.image_ready(src, dmin(dmax(c.w * s, c.h * s) * self.scale, most.to_double())) |> ignore
+        None => ()
+      }
       return
     }
     // (the window's top, the root's last: what clipped before it is none of its, out of the way by now)
@@ -770,13 +780,43 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       let (outer, outer_r, outer_s) = clip_at(clip_top())
       self.transform_insts(i0, self.ninst, x, y, s, s, 0.0, 0.0, outer, outer_r, outer_s)
     }
+    // (its picture, each frame where it is drawn and as big, over what its block draws: its decode the one for that
+    // size, asked for as an old view's is, its own kept as one shown this frame, View::image; not in its block, whose
+    // instances are kept as they were made)
+    match c.image {
+      Some((src, stand_in, most)) => {
+        // (its instances the node's, as what its block makes are: view_made's)
+        let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
+        inst_owners.painting = -1
+        inst_owners.tree_painting = Some(c.id)
+        // (what stands in for it till it is decoded for the pixels it is drawn at, now: asked for then)
+        let (w, h) = (c.w * s, c.h * s)
+        let shown = if stand_in == "" || self.image_ready(src, dmin(dmax(w, h) * self.scale, most.to_double())) {
+          src
+        } else {
+          stand_in
+        }
+        self.draw_image(shown, x, y, w, h, FitFill, c.radius * s, a, fade=false, max_px=most)
+        inst_owners.painting = was
+        inst_owners.tree_painting = was_tree
+      }
+      None => ()
+    }
     // (what it draws itself turned where it is drawn, as a look's turn is: about its middle, or the middle of what it
-    // draws, as its block was made: View::turn)
+    // draws, as its block was made, its picture all of it: View::turn)
     let (r, about_drawn) = tree.turn_of(c.id)
     if r != 0.0 {
       let (outer, _, _) = clip_at(clip_top())
-      let (mx, my) = if about_drawn { block.drawn_mid } else { (c.w / 2.0, c.h / 2.0) }
-      turn_insts(self.inst, i0, self.ninst, r, x + mx * s, y + my * s, outer)
+      // (where it turns about, in the window: its middle, the middle of what its block draws, or, with a picture, of
+      // what it drew this frame, its picture as far as it drew one)
+      let (px, py) = if !about_drawn {
+        (x + c.w / 2.0 * s, y + c.h / 2.0 * s)
+      } else if c.image is Some(_) {
+        inst_range_middle(self.inst, i0, self.ninst)
+      } else {
+        (x + block.drawn_mid.0 * s, y + block.drawn_mid.1 * s)
+      }
+      turn_insts(self.inst, i0, self.ninst, r, px, py, outer)
     }
     view_paint_work.copied = view_paint_work.copied + 1
   })
@@ -2497,6 +2537,23 @@ fn inst_middle(inst : FixedArray[Double]) -> (Double, Double) {
   }
   let (x0, y0, x1, y1) = (Ref(1.0e30), Ref(1.0e30), Ref(-1.0e30), Ref(-1.0e30))
   for k in 0..<n {
+    let b = k * inst_size
+    x0.val = dmin(x0.val, inst[b])
+    y0.val = dmin(y0.val, inst[b + 1])
+    x1.val = dmax(x1.val, inst[b] + inst[b + 2])
+    y1.val = dmax(y1.val, inst[b + 1] + inst[b + 3])
+  }
+  ((x0.val + x1.val) / 2.0, (y0.val + y1.val) / 2.0)
+}
+
+///|
+/// The middle of the box round the instances `from` up to `upto` in `inst` (where they are drawn; none: the origin).
+fn inst_range_middle(inst : FixedArray[Double], from : Int, upto : Int) -> (Double, Double) {
+  if upto <= from {
+    return (0.0, 0.0)
+  }
+  let (x0, y0, x1, y1) = (Ref(1.0e30), Ref(1.0e30), Ref(-1.0e30), Ref(-1.0e30))
+  for k in from..<upto {
     let b = k * inst_size
     x0.val = dmin(x0.val, inst[b])
     y0.val = dmin(y0.val, inst[b + 1])

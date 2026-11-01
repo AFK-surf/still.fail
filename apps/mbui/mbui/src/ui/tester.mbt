@@ -300,6 +300,7 @@ pub fn Tester::new(
     logs: [],
     image_sizes: {},
     image_loads: [],
+    image_srcs: {},
     images: {},
     bold: 0.0,
     ui_face: 0.0,
@@ -1894,6 +1895,12 @@ pub fn Tester::add_image(self : Tester, src : String, w : Int, h : Int) -> Unit 
 pub fn Tester::add_pixels(self : Tester, src : String, w : Int, h : Int, rgba : FixedArray[Byte]) -> Unit {
   self.fake.image_sizes[src] = (w, h)
   self.fake.pixels_of_src[src] = rgba
+}
+
+///|
+/// The source decode `id` the host was asked for is of ("" none).
+pub fn Tester::image_src(self : Tester, id : Int) -> String {
+  self.fake.image_srcs.get(id).unwrap_or("")
 }
 
 ///|

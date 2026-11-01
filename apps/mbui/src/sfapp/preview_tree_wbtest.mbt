@@ -3339,3 +3339,224 @@ test "viewer on the tree, marking: words written again and set otherwise (anothe
   assert_eq(now.map(fn(d) { (d.id.at, d.id.gen) }), before, msg="by the same nodes")
   marks_leave()
 }
+
+///|
+/// What the window's tree's node draws of the viewer's picture (View::image): its source, else none.
+fn picture_node() -> String? {
+  for d in @ui.view_tree().unwrap().drawn() {
+    match d.image {
+      Some((src, _, _)) => return Some(src)
+      None => ()
+    }
+  }
+  None
+}
+
+///|
+test "viewer on the tree: the picture lying flat drawn by its node, its stand-in as it comes, then the picture itself as the host says it is decoded; drawn once" {
+  let t = preview_tester("image", finish=false)
+  let v = viewer.get().unwrap()
+  let main = "mem:preview/" + v.id()
+  // (each decode but the picture's own done: its stand-in ready)
+  for _ in 0..<3 {
+    for p in t.pending() {
+      if p.0 != 1 || !t.image_src(p.1).has_prefix(main) {
+        t.finish(p.0, p.1)
+      }
+    }
+    t.draw()
+  }
+  t.run_for(@ui.move_most_ms)
+  // (what it shows where it lies: the source of the decode drawn there)
+  let shown = fn() {
+    let (x, y, w, h) = v.zoom.rect().unwrap()
+    t.drawn_instances().filter(fn(i) { i[5] == 4.0 && (i[0] - x).abs() < 0.5 && (i[1] - y).abs() < 0.5 && (i[2] - w).abs() < 0.5 && (i[3] - h).abs() < 0.5 }).map(fn(i) { t.image_src(i[20].to_int()) })
+  }
+  assert_true(picture_node() is Some(_), msg="the node's")
+  let before = shown()
+  assert_true(before.length() == 1 && before[0] != "mem:preview/" + v.id(), msg="its stand-in first: \{before}")
+  for p in t.pending() {
+    t.finish(p.0, p.1)
+  }
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(shown(), ["mem:preview/" + v.id()], msg="the picture itself once decoded")
+  // (drawn once: by its node alone, what draws the picture leaving it)
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  let at = drawn_pictures(t).filter(fn(d) { (d.0 - x).abs() < 0.5 && (d.1 - y).abs() < 0.5 && (d.2 - w).abs() < 0.5 && (d.3 - h).abs() < 0.5 })
+  assert_eq(at.length(), 1, msg="drawn once where it lies: \{drawn_pictures(t)}")
+}
+
+///|
+test "viewer on the tree: the strip put aside and still (no way going), the picture moved with it by what draws the picture, the node drawing none; stepped and the strip come to rest (the one gone still said), the node's again" {
+  let t = preview_tester("step")
+  let v = viewer.get().unwrap()
+  t.run_for(@ui.move_most_ms)
+  assert_true(picture_node() is Some(_), msg="flat: the node's")
+  // (put aside 50, still: as a film's fixture holds it)
+  pv_strip.way.put(50.0)
+  t.draw()
+  assert_true(!pv_strip.way.goes_at(t.time()), msg="no way going")
+  assert_eq(picture_node(), None, msg="put aside: none of the node's")
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  let moved = drawn_pictures(t).filter(fn(d) { (d.0 - (x + 50.0)).abs() < 0.5 && (d.1 - y).abs() < 0.5 && (d.2 - w).abs() < 0.5 && (d.3 - h).abs() < 0.5 })
+  assert_eq(moved.length(), 1, msg="drawn 50 aside, once: \{drawn_pictures(t)}")
+  pv_strip.way.put(0.0)
+  t.draw()
+  // (stepped to the one after, the strip come to rest)
+  t.drag(300.0, 422.0, 100.0, 422.0)
+  t.run_for(strip_rest(t))
+  t.run_for(@ui.move_most_ms)
+  assert_true(pv_strip.leaving is Some(_), msg="the one gone still said")
+  let w2 = viewer.get().unwrap()
+  assert_true(!physical_equal(w2, v), msg="stepped")
+  assert_true(picture_node() is Some(_), msg="at rest: the node's again")
+  let (x, y, w, h) = w2.zoom.rect().unwrap()
+  let at = drawn_pictures(t).filter(fn(d) { (d.0 - x).abs() < 0.5 && (d.1 - y).abs() < 0.5 && (d.2 - w).abs() < 0.5 && (d.3 - h).abs() < 0.5 })
+  assert_eq(at.length(), 1, msg="drawn once: \{drawn_pictures(t)}")
+}
+
+///|
+/// The pictures drawn now where viewer `v`'s lies, `dx` aside.
+fn main_pictures(t : @ui.Tester, v : Viewer, dx : Double) -> Int {
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  drawn_pictures(t).filter(fn(d) { (d.0 - (x + dx)).abs() < 0.5 && (d.1 - y).abs() < 0.5 && (d.2 - w).abs() < 0.5 && (d.3 - h).abs() < 0.5 }).length()
+}
+
+///|
+test "viewer on the tree: the strip going back to rest, nothing else of it changing: the picture drawn once in each frame, by what draws the picture till the way ends, by its node from the frame it ends in" {
+  let t = preview_tester("step")
+  let v = viewer.get().unwrap()
+  t.run_for(@ui.move_most_ms)
+  pv_strip.way.put(50.0)
+  t.draw()
+  pv_strip.way.go(0.0, @motion.animate_spring, at=t.time())
+  let end = pv_strip.way.end()
+  assert_true(end > t.time() + 2.0 * @ui.frame_period_default, msg="a way of some frames")
+  // (the frame before it ends: still aside, what draws the picture's)
+  t.frame_at(end - @ui.frame_period_default)
+  let aside = pv_strip.way.value_at(t.time())
+  assert_true(aside != 0.0 && picture_node() is None, msg="before its end: aside \{aside}, none of the node's")
+  assert_eq(main_pictures(t, v, aside), 1, msg="before its end: drawn once")
+  // (the frame it ends in, and the one after)
+  t.frame_at(end)
+  assert_true(picture_node() is Some(_), msg="at its end: the node's")
+  assert_eq(main_pictures(t, v, 0.0), 1, msg="at its end: drawn once")
+  t.frame_at(end + @ui.frame_period_default)
+  assert_eq(main_pictures(t, v, 0.0), 1, msg="after: drawn once")
+}
+
+///|
+test "viewer on the tree: its stand-in decoded and shown, then the picture itself said not to decode: its words saying so alone, no picture where it lay, neither the stand-in nor it" {
+  let t = preview_tester("image", finish=false)
+  let v = viewer.get().unwrap()
+  let main = "mem:preview/" + v.id()
+  // (each decode but the picture's own done)
+  for _ in 0..<3 {
+    for p in t.pending() {
+      if p.0 != 1 || !t.image_src(p.1).has_prefix(main) {
+        t.finish(p.0, p.1)
+      }
+    }
+    t.draw()
+  }
+  t.run_for(@ui.move_most_ms)
+  assert_true(picture_node() is Some(_), msg="the node's")
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  let shown = t.drawn_instances().filter(fn(i) { i[5] == 4.0 && (i[0] - x).abs() < 0.5 && (i[1] - y).abs() < 0.5 && (i[2] - w).abs() < 0.5 && (i[3] - h).abs() < 0.5 }).map(fn(i) { t.image_src(i[20].to_int()) })
+  assert_true(shown.length() == 1 && shown[0] != main, msg="its stand-in shown: \{shown}")
+  assert_eq(main_pictures(t, v, 0.0), 1, msg="drawn where it lies")
+  // (the picture's own decode said not to be)
+  let own = t.pending().filter(fn(p) { p.0 == 1 && t.image_src(p.1).has_prefix(main) })
+  assert_eq(own.length(), 1, msg="its own decode asked for, one")
+  t.finish(1, own[0].1, ok=false)
+  t.draw()
+  assert_eq(@ui.image_state(main), -1, msg="not to be decoded")
+  assert_true(t.find(pv("android-chat.file.image.failed")) is Some(_), msg="said so")
+  assert_eq(picture_node(), None, msg="none of the node's")
+  assert_eq(main_pictures(t, v, 0.0), 0, msg="nothing where it lay")
+}
+
+///|
+/// A picture of the chat opened by its thumbnail tapped (preview_wbtest's flight back: chat-preview-named, the chat at
+/// rest, a row put up at a time till compare.png shows), its flight set out, nothing run yet: the tester.
+fn opening() -> @ui.Tester raise {
+  new_run()
+  let src = fixture("chat-preview-named")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
+  nav_rested(t)
+  let mut tries = 0
+  while t.locate("img:compare.png").length() == 0 && tries < 12 {
+    let (first, _) = t.visible()
+    t.scroll_to(if first > 0 { first - 1 } else { 0 })
+    t.draw()
+    tries += 1
+  }
+  let at = t.locate("img:compare.png")
+  assert_true(at.length() > 0, msg="its thumbnail")
+  t.tap(at[0].0, at[0].1)
+  t
+}
+
+///|
+/// The pictures drawn now at least half as wide as viewer `v`'s where it lies.
+fn big_pictures(t : @ui.Tester, v : Viewer) -> Int {
+  let (_, _, w, _) = v.zoom.rect().unwrap()
+  drawn_pictures(t).filter(fn(d) { d.2 >= w / 2.0 }).length()
+}
+
+///|
+test "viewer on the tree: its picture flying in drawn once by what draws the picture till the flight ends, by its node from the frame it ends in; the same with no frame drawn between" {
+  for between in [true, false] {
+    let t = opening()
+    let v = viewer.get().unwrap()
+    assert_true(v.flies && !v.fly_back && v.fly.goes_at(t.time()), msg="flying in")
+    let end = v.fly.end()
+    if between {
+      t.frame_at(end - @ui.frame_period_default)
+      assert_true(picture_node() is None, msg="flying: none of the node's")
+      assert_eq(big_pictures(t, v), 1, msg="flying: drawn once")
+    }
+    t.frame_at(end)
+    assert_true(!v.flies, msg="landed")
+    assert_true(picture_node() is Some(_), msg="\{between}: landed, the node's")
+    assert_eq(main_pictures(t, v, 0.0), 1, msg="\{between}: landed, drawn once")
+    t.frame_at(end + @ui.frame_period_default)
+    assert_eq(main_pictures(t, v, 0.0), 1, msg="\{between}: after, drawn once")
+  }
+}
+
+///|
+/// The decode each picture drawn now at least `w` wide is drawn from (its instance's id, image.mbt's draw_image).
+fn decodes_drawn(t : @ui.Tester, w : Double) -> Array[Int] {
+  t.drawn_instances().filter(fn(i) { i[5] == 4.0 && i[2] >= w }).map(fn(i) { i[20].to_int() })
+}
+
+///|
+test "viewer on the tree: its picture zoomed in at once, a sharper decode asked for, bigger; drawn from the one before till it is done, from it in the frame after the host says so" {
+  let t = preview_tester("image", finish=false)
+  let v = viewer.get().unwrap()
+  for p in t.pending() {
+    t.finish(p.0, p.1)
+  }
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let main = "mem:preview/" + v.id()
+  assert_eq(picture_node(), Some(main), msg="the picture itself")
+  let before = decodes_drawn(t, 300.0)
+  assert_eq(before.length(), 1, msg="drawn, from one decode")
+  let asked = fn() { t.image_loads().filter(fn(l) { l.0.has_prefix("bytes:") }).map(fn(l) { l.1 }) }
+  let sizes = asked()
+  // (four times as big, at once)
+  v.zoom.zoom_to(v.zoom.fit() * 4.0, v.zoom.bw / 2.0, v.zoom.bh / 2.0, false, at=t.time())
+  t.draw()
+  let sharper = t.pending().filter(fn(p) { p.0 == 1 && t.image_src(p.1) == main })
+  assert_eq(sharper.length(), 1, msg="a sharper decode asked for, one")
+  let now = asked()
+  assert_true(now.length() == sizes.length() + 1 && now[now.length() - 1] > sizes[sizes.length() - 1], msg="asked bigger: \{sizes} then \{now}")
+  assert_eq(decodes_drawn(t, 300.0), before, msg="drawn from the one before while it decodes")
+  t.finish(1, sharper[0].1)
+  t.draw()
+  assert_eq(decodes_drawn(t, 300.0), [sharper[0].1], msg="drawn from the sharper one in the frame after")
+}

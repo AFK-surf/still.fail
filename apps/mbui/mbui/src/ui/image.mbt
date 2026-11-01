@@ -652,6 +652,7 @@ fn image_decodes_read(src : String) -> Unit {
   image_said(src).decodes.get() |> ignore
 }
 
+
 ///|
 /// What is said of the picture `src`, let go with its decodes: unless something follows it still (its signal, the one it
 /// reads, kept for it).
