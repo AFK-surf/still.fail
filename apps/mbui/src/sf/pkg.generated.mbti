@@ -1458,6 +1458,14 @@ pub fn play_mark(@ui.Ctx, Double, @ui.Color) -> Int32
 
 pub fn player(@ui.Ctx, String, ViewerFile, Array[ViewerEntry], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit) -> Unit
 
+pub fn player_fills_native(Double) -> Bool
+
+pub fn player_full_act(@kit.Media, Double) -> (String, Bool, () -> Unit)
+
+pub fn player_full_native() -> Bool
+
+pub fn player_full_native_set(Bool) -> Unit
+
 pub let player_keep_ms : Double
 
 pub fn player_let_go(String) -> Unit

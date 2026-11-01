@@ -189,6 +189,30 @@ test "a film played on an iPhone Duo: its close and download in the system's bar
 }
 
 ///|
+test "a film played on an iPhone Duo, 全屏 in the system's bars: the window filled, the bars put away, back leaving it first" {
+  for size in [(951.0, 669.0, 84.0), (669.0, 951.0, 0.0)] {
+    let (w, h, side) = size
+    let at = "\{w}x\{h}"
+    let t = native_chat(w, h, true, side~, mode="chat-preview-video")
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.nav_said().contains("over/full"), msg="\{at}: \{t.nav_said()}")
+    t.post(@hostapi.system_channel, "{\"nav\":\"over/full\"}")
+    t.run_for(@ui.move_most_ms)
+    let said = t.nav_said()
+    // (the bars put away: no title, no actions)
+    assert_true(said.contains("\"bare\":true") && said.contains("\"title\":\"\""), msg="\{at}: \{said}")
+    assert_false(said.contains("lead/over/close"), msg="\{at}: \{said}")
+    assert_true(@sf.player_full_native(), msg=at)
+    // back: out of it, the film still played, its actions in the bars again
+    t.back()
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.player_full_native(), msg=at)
+    assert_true(viewer.get() is Some(_), msg=at)
+    assert_true(t.nav_said().contains("lead/over/close"), msg="\{at}: \{t.nav_said()}")
+  }
+}
+
+///|
 test "a picture looked at elsewhere: its own bar, as it was" {
   let t = native_chat(951.0, 669.0, false, mode="chat-preview-image")
   t.run_for(@ui.move_most_ms)

@@ -341,6 +341,51 @@ priv struct PlayerView {
 }
 
 ///|
+/// Whether the player fills the window beside the system's bars (an iPhone Duo's): the bars put away (no title, no
+/// actions), its picture edge to edge, its controls over it as anywhere; 全屏 among the bars' actions and the controls,
+/// back leaving it first.
+// kept across runs: the player over the window is one at a time; put back as another file is shown in it
+let native_full : Ref[Bool] = Ref(false)
+
+///|
+/// Whether the player fills the window beside the system's bars (native_full).
+pub fn player_full_native() -> Bool {
+  native_full.val
+}
+
+///|
+/// The player filling the window beside the system's bars, or not (native_full).
+pub fn player_full_native_set(on : Bool) -> Unit {
+  native_full.val = on
+}
+
+///|
+/// Whether the player drawn `width` wide fills the window beside the system's bars: a phone's player (laid out Small)
+/// turns sideways instead, the bars as they were.
+pub fn player_fills_native(width : Double) -> Bool {
+  native_full.val && !(layout(width) is Small)
+}
+
+///|
+/// 全屏 among the actions in the system's bars for film `p` played `width` wide: its words, whether it is on, what it
+/// does. Laid out Small, turned sideways as a phone's player's 全屏 turns it; wider, the window filled, the bars put
+/// away (native_full).
+pub fn player_full_act(p : @kit.Media, width : Double) -> (String, Bool, () -> Unit) {
+  if layout(width) is Small {
+    let on = p.is_sideways()
+    (t(if on { "android-misc.drive.player.unfull" } else { "android-misc.drive.player.full" }), on, fn() {
+      p.toggle_sideways()
+      p.wake()
+    })
+  } else {
+    (t("android-misc.drive.player.full"), false, fn() {
+      native_full.val = true
+      p.wake()
+    })
+  }
+}
+
+///|
 /// What a finger dragging the picture does.
 priv enum PlayerDrag {
   NoDrag
@@ -640,8 +685,16 @@ pub fn player_room(width : Double) -> (Double, Double) {
   }
   let (top, foot) = (viewer_host().room)()
   let said = if desk_narrow(width) { desk_time_over - media_bar_top + desk_time_h } else { 0.0 }
-  // (beside the system's bars, an iPhone Duo's: its bar's actions in them, none of its own over the film)
-  (if native_on() { top } else { viewer_bar_h + top }, media_bar_h() + said + media_bar_in + foot)
+  // (beside the system's bars, an iPhone Duo's: its bar's actions in them, none of its own over the film; filling the
+  // window, nothing of them either)
+  let top = if native_on() && native_full.val {
+    0.0
+  } else if native_on() {
+    top
+  } else {
+    viewer_bar_h + top
+  }
+  (top, media_bar_h() + said + media_bar_in + foot)
 }
 
 ///|
@@ -885,6 +938,7 @@ pub fn player_view(
   let v = view_for(p.key())
   if v.file != file.key {
     v.file = file.key
+    native_full.val = false
     v.zoom.fit_now()
     v.grabbing = false
     v.ended_off = ""
@@ -953,10 +1007,19 @@ fn desk_player(
     on_go(other)
   }
   let full = fn() {
+    // (beside the system's bars, an iPhone Duo's: the window filled, the bars put away: native_full)
+    if native_on() {
+      native_full.val = !native_full.val
+      p.wake()
+      return
+    }
     let on = @ui.full_screen()
     c.set_full_screen(!on)
     v.fulled = !on
     p.wake()
+  }
+  if native_on() && native_full.val {
+    c.on_back(fn() { native_full.val = false })
   }
   let z = v.zoom
   let (room_top, room_foot) = player_room(c.width)
@@ -1155,6 +1218,7 @@ fn desk_player(
 ///|
 /// Back from a player (`go_back`), the window as it was if the player made it fill the screen.
 fn desk_leave(c : @ui.Ctx, v : PlayerView, go_back : () -> Unit) -> Unit {
+  native_full.val = false
   if v.fulled {
     v.fulled = false
     if @ui.full_screen() {
@@ -1311,9 +1375,10 @@ fn desk_play_controls(
           )
         }
       }
-      // 全屏: the window filling the screen (macOS's), back as it was (and as the player is left)
-      if picture && @ui.platform() == 0 {
-        let is_full = @ui.full_screen()
+      // 全屏: the window filling the screen (macOS's), back as it was (and as the player is left); beside the system's
+      // bars, the window filled, the bars put away (native_full)
+      if picture && (@ui.platform() == 0 || native_on()) {
+        let is_full = if native_on() { native_full.val } else { @ui.full_screen() }
         if media_key(c, key + "/full", if is_full { "shrink" } else { "expand" }, t(if is_full { "web-pages.drive.player.unfull" } else { "web-pages.drive.player.full" }), on, small=true, ink~) {
           full()
         }
