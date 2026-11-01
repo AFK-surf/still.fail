@@ -19,6 +19,7 @@
 #include <string.h>
 #include "win.h"
 #include "corner_sl.h"
+#include "contained.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -56,10 +57,11 @@ static double vw = 800, vh = 600, vscale = 1;
 // capture yet, the glass and the blur's margin round it, not of the target: a composer's strip, not the window; [4] a
 // Gaussian's first half), the glass's own constants, the blurred copy in view
 static ID3D11VertexShader *pvs;
-static ID3D11PixelShader *pps;
+static ID3D11PixelShader *pps, *edge_ps;
 static ID3D11Buffer *pbuf, *gbuf;
 struct level { ID3D11Texture2D *t; ID3D11RenderTargetView *rtv; ID3D11ShaderResourceView *srv; int w, h; };
 static level lv[5];
+static MBContained post_edge;
 static int lv_w, lv_h;
 struct GU { float map[4]; float uvc[4]; float gb[4]; float shape[8][4]; float rad[8][4]; float misc[4]; };
 static GU gu;
@@ -327,7 +329,7 @@ static const char *shader_src =
 static const char *post_src =
     "// The backdrop's passes: pa.xy the source's texel, pa.z 1 halving (dual Kawase's down), 2 a Gaussian along pb.zw of\n"
     "// deviation pa.w (texels); pb.xy the last texel's centre of what the source holds\n"
-    "cbuffer PU : register(b0) { float4 pa; float4 pb; };\n"
+    "cbuffer PU : register(b0) { float4 pa; float4 pb; float4 pc[9]; };\n"
     "Texture2D src : register(t0);\n"
     "SamplerState samp : register(s0);\n"
     "float4 vpost(uint vid : SV_VertexID) : SV_Position {\n"
@@ -361,6 +363,21 @@ static const char *post_src =
     "    wsum += 2.0 * w;\n"
     "  }\n"
     "  return s / wsum;\n"
+    "}\n";
+
+// The corner extension is a pass of its own, before the ordinary blur.
+static const char *edge_src =
+    "#define MB_CONTAINED_LOOP [loop]\n"
+    MB_CORNER_SL
+    "cbuffer PU : register(b0) { float4 pa; float4 pb; float4 pc[9]; };\n"
+    "Texture2D src : register(t0);\n"
+    "SamplerState samp : register(s0);\n"
+    "float4 fedge(float4 pos : SV_Position) : SV_Target {\n"
+    "  float2 ts = pa.xy;\n"
+    "  float2 lo = ts * 0.5, hi = pb.xy;\n"
+    "  float2 p = pc[0].xy + pos.xy * pc[0].zw;\n"
+    "  p = mb_contained_point(p, pc[1], pc[2], pc[3], pc[4], pc[5], pc[6], pc[7], pc[8], pc[0].z);\n"
+    "  return src.SampleLevel(samp, clamp((p - pc[0].xy) / pc[0].zw * ts, lo, hi), 0);\n"
     "}\n";
 
 static ID3DBlob *compile(const char *entry, const char *target, const char *src = shader_src) {
@@ -483,14 +500,17 @@ static void make_pipeline(void) {
   vcode->Release();
   pcode->Release();
   ID3DBlob *pv = compile("vpost", "vs_4_0", post_src), *pp = compile("fpost", "ps_4_0", post_src);
+  ID3DBlob *ep = compile("fedge", "ps_4_0", edge_src);
   dev->CreateVertexShader(pv->GetBufferPointer(), pv->GetBufferSize(), NULL, &pvs);
   dev->CreatePixelShader(pp->GetBufferPointer(), pp->GetBufferSize(), NULL, &pps);
+  dev->CreatePixelShader(ep->GetBufferPointer(), ep->GetBufferSize(), NULL, &edge_ps);
   pv->Release();
   pp->Release();
+  ep->Release();
 
   D3D11_BUFFER_DESC ud = {16, D3D11_USAGE_DEFAULT, D3D11_BIND_CONSTANT_BUFFER, 0, 0, 0};
   dev->CreateBuffer(&ud, NULL, &ubuf);
-  D3D11_BUFFER_DESC pd = {32, D3D11_USAGE_DEFAULT, D3D11_BIND_CONSTANT_BUFFER, 0, 0, 0};
+  D3D11_BUFFER_DESC pd = {32 + sizeof(MBContained), D3D11_USAGE_DEFAULT, D3D11_BIND_CONSTANT_BUFFER, 0, 0, 0};
   dev->CreateBuffer(&pd, NULL, &pbuf);
   D3D11_BUFFER_DESC gd = {(UINT)sizeof(GU), D3D11_USAGE_DEFAULT, D3D11_BIND_CONSTANT_BUFFER, 0, 0, 0};
   dev->CreateBuffer(&gd, NULL, &gbuf);
@@ -632,8 +652,9 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
   ctx->OMSetRenderTargets(1, &dst->rtv, NULL);
   D3D11_VIEWPORT vp = {0, 0, (float)w, (float)h, 0, 1};
   ctx->RSSetViewports(1, &vp);
-  float u[8] = {1.0f / src->w, 1.0f / src->h, (float)mode, sg, (sw - 0.5f) / src->w, (sh - 0.5f) / src->h, dx, dy};
-  ctx->UpdateSubresource(pbuf, 0, NULL, u, 0, 0);
+  struct { float a[4], b[4]; MBContained edge; } u = {
+    {1.0f / src->w, 1.0f / src->h, (float)mode, sg}, {(sw - 0.5f) / src->w, (sh - 0.5f) / src->h, dx, dy}, post_edge};
+  ctx->UpdateSubresource(pbuf, 0, NULL, &u, 0, 0);
   ctx->PSSetConstantBuffers(0, 1, &pbuf);
   ctx->PSSetShaderResources(0, 1, &src->srv);
   ctx->Draw(3, 0);
@@ -733,13 +754,10 @@ static void ensure_canvas(int tw, int th) {
 static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *f, int32_t start, int32_t end,
                    int32_t count) {
   const float *a = f + start * MB_INST;
-  // (a blur said below 0: frosting only what is under its own box, its edges carried on past them: glass.mbt
-  // contained; in from its edges as far as its roundest corner's curve comes in at 45°, so nothing out of its corners
-  // is in it either)
+  // A negative blur is contained: its straight edges are the capture's edges, its curved ones extended separately.
   float blur = fabsf(a[7]);
   int kind = (int)(a[5] + 0.5f);
-  float round = fmaxf(fmaxf(fmaxf(a[4], a[24]), fmaxf(a[25], a[26])), a[27]);
-  float margin = a[7] < 0.0f ? -0.2929f * round - 0.5f : 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
+  float margin = a[7] < 0.0f ? 0.0f : 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   int n = 0;
   for (int32_t i = start; i < end; i++) {
@@ -794,6 +812,12 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
   ctx->OMSetBlendState(NULL, NULL, 0xffffffff);
   // (the passes over the levels whole, not cut to the part)
   ctx->RSSetState(raster);
+  int contained = mb_contained_make(&post_edge, a, px0 / sc, py0 / sc, 1.0f / sc, 1.0f / sc);
+  if (contained) {
+    ctx->PSSetShader(edge_ps, NULL, 0);
+    post_pass(&lv[0], w, h, &lv[4], w, h, 3, 0, 0, 0);
+    ctx->PSSetShader(pps, NULL, 0);
+  }
   float sp = blur * sc;
   int k = 0;
   while (k < 3 && sp / (float)(1 << (k + 1)) >= 2.0f) k++;
@@ -801,19 +825,21 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
   for (int j = 1; j <= k; j++) {
     lw[j] = (lw[j - 1] + 1) / 2;
     lh[j] = (lh[j - 1] + 1) / 2;
-    post_pass(&lv[j - 1], lw[j - 1], lh[j - 1], &lv[j], lw[j], lh[j], 1, 0, 0, 0);
+    post_pass(j == 1 && contained ? &lv[4] : &lv[j - 1], lw[j - 1], lh[j - 1], &lv[j], lw[j], lh[j], 1, 0, 0, 0);
   }
   // what is left of the deviation once the halvings' and the last look's (bilinear) spread are taken out
   float sk = sp / (float)(1 << k);
   float pre = k > 0 ? 0.75f * (1.0f - powf(0.25f, (float)k)) / 3.0f + 1.0f / 6.0f : 0.0f;
   float sg = sqrtf(sk * sk - pre > 0 ? sk * sk - pre : 0);
   if (sg > 0.3f) {
-    post_pass(&lv[k], lw[k], lh[k], &lv[4], lw[k], lh[k], 2, sg, 1, 0);
-    post_pass(&lv[4], lw[k], lh[k], &lv[k], lw[k], lh[k], 2, sg, 0, 1);
+    level *from = contained && k == 0 ? &lv[4] : &lv[k];
+    level *tmp = contained && k == 0 ? &lv[0] : &lv[4];
+    post_pass(from, lw[k], lh[k], tmp, lw[k], lh[k], 2, sg, 1, 0);
+    post_pass(tmp, lw[k], lh[k], from, lw[k], lh[k], 2, sg, 0, 1);
   }
   ID3D11ShaderResourceView *none[3] = {NULL, NULL, NULL};
   ctx->PSSetShaderResources(0, 3, none);
-  level *L = &lv[k];
+  level *L = contained && k == 0 ? &lv[4] : &lv[k];
   float d = (float)(1 << k);
   gsrv = L->srv;
   gu.map[0] = sc / d / L->w; gu.map[1] = sc / d / L->h;

@@ -12,6 +12,7 @@
 //                                     (draw_kept below)
 // What is drawn where is the host's to say: the frame's size in points and its scale (cur_w, cur_h, cur_scale), the
 // surface's in pixels (fb_w, fb_h), the framebuffer drawn into (target_fb); gl_setup once its context is current.
+#include "contained.h"
 
 // the numbers of an instance (src/ui/scene.mbt)
 #define MB_INST 60
@@ -298,15 +299,25 @@ static const char *PVS =
 static const char *PFS =
     "#version 300 es\n"
     "precision highp float;\n"
+    "#define float2 vec2\n"
+    "#define float4 vec4\n"
+    MB_CORNER_SL
     "// The backdrop's passes: u_a.xy the source's texel, u_a.z 1 halving (dual Kawase's down), 2 a Gaussian along u_b.zw\n"
     "// of deviation u_a.w (texels); u_b.xy the last texel's centre of what the source holds\n"
     "uniform highp sampler2D u_src;\n"
     "uniform vec4 u_a;\n"
     "uniform vec4 u_b;\n"
+    "uniform vec4 u_c[9];\n"
     "out vec4 o;\n"
     "void main() {\n"
     "  vec2 ts = u_a.xy;\n"
     "  vec2 lo = ts * 0.5, hi = u_b.xy;\n"
+    "  if (u_a.z > 2.5) {\n"
+    "    vec2 p = u_c[0].xy + gl_FragCoord.xy * u_c[0].zw;\n"
+    "    p = mb_contained_point(p, u_c[1], u_c[2], u_c[3], u_c[4], u_c[5], u_c[6], u_c[7], u_c[8], u_c[0].z);\n"
+    "    o = texture(u_src, clamp((p - u_c[0].xy) / u_c[0].zw * ts, lo, hi));\n"
+    "    return;\n"
+    "  }\n"
     "  if (u_a.z < 1.5) {\n"
     "    vec2 uv = gl_FragCoord.xy * 2.0 * ts;\n"
     "    vec4 s = texture(u_src, clamp(uv, lo, hi)) * 4.0;\n"
@@ -336,7 +347,7 @@ static const char *PFS =
     "}\n";
 
 static GLuint prog, vao, vbo, atlas, catlas, post;
-static GLint u_vp, u_scale, u_atlas, u_catlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b;
+static GLint u_vp, u_scale, u_atlas, u_catlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b, pu_c;
 static float *fbuf;
 // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the shader
 // to read (u_segs): a float texture of SEGS_ROW fours a row (136 instances' 15), as many rows as they take
@@ -401,6 +412,7 @@ static void gl_setup(void) {
   pu_src = glGetUniformLocation(post, "u_src");
   pu_a = glGetUniformLocation(post, "u_a");
   pu_b = glGetUniformLocation(post, "u_b");
+  pu_c = glGetUniformLocation(post, "u_c");
   glass_lost();
   canvas_lost();
   glGenVertexArrays(1, &vao);
@@ -616,13 +628,10 @@ static void ensure_canvas(void) {
 // too; 0 when none of it shows
 static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
   const float *a = f + start * MB_INST;
-  // (a blur said below 0: frosting only what is under its own box, its edges carried on past them: glass.mbt
-  // contained; in from its edges as far as its roundest corner's curve comes in at 45°, so nothing out of its corners
-  // is in it either)
+  // A negative blur is contained: its straight edges are the capture's edges, its curved ones extended separately.
   float blur = fabsf(a[7]);
   int kind = (int)(a[5] + 0.5f);
-  float round = fmaxf(fmaxf(fmaxf(a[4], a[24]), fmaxf(a[25], a[26])), a[27]);
-  float margin = a[7] < 0.0f ? -0.2929f * round - 0.5f : 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
+  float margin = a[7] < 0.0f ? 0.0f : 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   gn = 0;
   for (int32_t i = start; i < end; i++) {
@@ -674,6 +683,12 @@ static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lv[0].fb);
   glBlitFramebuffer(px0, pb0, px1, pb1, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
   glUseProgram(post);
+  MBContained edge;
+  int contained = mb_contained_make(&edge, a, px0 / sc, (top - pb0) / sc, 1.0f / sc, -1.0f / sc);
+  if (contained) {
+    glUniform4fv(pu_c, 9, (const float *)&edge);
+    post_pass(&lv[0], w, h, &lv[4], w, h, 3, 0, 0, 0);
+  }
   float sp = blur * sc;
   int k = 0;
   while (k < 3 && sp / (float)(1 << (k + 1)) >= 2.0f) k++;
@@ -681,17 +696,19 @@ static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
   for (int j = 1; j <= k; j++) {
     lw[j] = (lw[j - 1] + 1) / 2;
     lh[j] = (lh[j - 1] + 1) / 2;
-    post_pass(&lv[j - 1], lw[j - 1], lh[j - 1], &lv[j], lw[j], lh[j], 1, 0, 0, 0);
+    post_pass(j == 1 && contained ? &lv[4] : &lv[j - 1], lw[j - 1], lh[j - 1], &lv[j], lw[j], lh[j], 1, 0, 0, 0);
   }
   // what is left of the deviation once the halvings' and the last look's (bilinear) spread are taken out
   float sk = sp / (float)(1 << k);
   float pre = k > 0 ? 0.75f * (1.0f - powf(0.25f, (float)k)) / 3.0f + 1.0f / 6.0f : 0.0f;
   float sg = sqrtf(sk * sk - pre > 0 ? sk * sk - pre : 0);
   if (sg > 0.3f) {
-    post_pass(&lv[k], lw[k], lh[k], &lv[4], lw[k], lh[k], 2, sg, 1, 0);
-    post_pass(&lv[4], lw[k], lh[k], &lv[k], lw[k], lh[k], 2, sg, 0, 1);
+    level *from = contained && k == 0 ? &lv[4] : &lv[k];
+    level *tmp = contained && k == 0 ? &lv[0] : &lv[4];
+    post_pass(from, lw[k], lh[k], tmp, lw[k], lh[k], 2, sg, 1, 0);
+    post_pass(tmp, lw[k], lh[k], from, lw[k], lh[k], 2, sg, 0, 1);
   }
-  level *L = &lv[k];
+  level *L = contained && k == 0 ? &lv[4] : &lv[k];
   float d = (float)(1 << k);
   bd_tex = L->t;
   gmap[0] = sc / d / L->w; gmap[1] = -sc / d / L->h;

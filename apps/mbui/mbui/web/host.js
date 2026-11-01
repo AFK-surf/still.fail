@@ -312,27 +312,7 @@
     v_ramp = vec4(a_fadex.y > 0.0 ? (cq.x - a_fadex.x) / a_fadex.y : 2.0, a_fade.y > 0.0 ? (cq.y - a_fade.x) / a_fade.y : 2.0,
       a_fadex.w > 0.0 ? (a_fadex.z - cq.x) / a_fadex.w : 2.0, a_fade.w > 0.0 ? (a_fade.z - cq.y) / a_fade.w : 2.0);
   }`;
-  const FS = `#version 300 es
-  precision highp float;
-  in vec2 v_pos; in vec2 v_cpos;
-  flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
-  flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr; flat in vec4 v_oclip; flat in vec4 v_orc; flat in vec4 v_ors;
-  in vec4 v_ramp;
-  uniform float u_scale;
-  uniform sampler2D u_atlas;
-  uniform sampler2D u_img;
-  // glass (src/ui/glass.mbt): the blurred copy under it and where a point is in it (uv = p * u_map.xy + u_map.zw, kept
-  // in u_uvc), a liquid group's shapes and corners, how many
-  uniform highp sampler2D u_bd;
-  uniform vec4 u_map;
-  uniform vec4 u_uvc;
-  uniform vec4 u_shape[8];
-  uniform vec4 u_rad[2];
-  uniform int u_n;
-  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2040 fours
-  // (136 instances) a row
-  uniform highp sampler2D u_segs;
-  out vec4 o;
+  const CORNERS = `
   // corner.sl begin (scripts/chk corner-sl: not edited here)
   #define float2 vec2
   #define float4 vec4
@@ -449,6 +429,86 @@
     float rr = min(r, room);
     return mb_sd_corner(p, hs, rr, mb_smoothness(rr, room), band);
   }
+  // A contained blur extends the picture at its actual curved boundary, rather than cropping all four straight edges
+  // to a corner's inset. Points already in the picture stay where they are. Near a curve, keep a little inside its
+  // antialiased edge so the bilinear sample itself cannot bring in the background outside the clip.
+  #ifndef MB_CONTAINED_LOOP
+  #define MB_CONTAINED_LOOP
+  #endif
+  float mb_max4(float4 v) { return max(max(v.x, v.y), max(v.z, v.w)); }
+  float mb_contained_rect_dist(float2 p, float4 c) {
+    float2 hs = (c.zw - c.xy) * 0.5;
+    float2 q = abs(p - c.xy - hs) - hs;
+    return length(max(q, float2(0.0, 0.0))) + min(max(q.x, q.y), 0.0);
+  }
+  // The same clip as mb_sd_clip, traversed so a runtime shader compiler need only compile one corner's calculation.
+  float mb_contained_clip_dist(float2 p, float4 c, float4 r, float4 s) {
+    float2 hs = max((c.zw - c.xy) * 0.5, float2(0.0, 0.0));
+    float2 q = abs(p - (c.xy + hs)) - hs;
+    float d = length(max(q, float2(0.0, 0.0))) + min(max(q.x, q.y), 0.0);
+    MB_CONTAINED_LOOP for (int i = 0; i < 4; i++) {
+      if (r[i] > 0.0) {
+        float2 inward = float2(i == 0 || i == 3 ? 1.0 : -1.0, i < 2 ? 1.0 : -1.0);
+        float2 corner = float2(inward.x > 0.0 ? c.x : c.z, inward.y > 0.0 ? c.y : c.w);
+        d = max(d, mb_clip_corner(p, corner, inward, hs, r[i], s[i], 1e9));
+      }
+    }
+    return d;
+  }
+  float mb_contained_dist(float2 p, float4 box, float4 rr, float4 clip, float4 rc, float4 rs,
+                          float4 outer, float4 orc, float4 ors) {
+    float2 hs = (box.zw - box.xy) * 0.5;
+    float2 q = p - box.xy - hs;
+    float d = max(mb_sd_box(q, hs, mb_corner_of(q, rr), 1e9), mb_contained_clip_dist(p, clip, rc, rs));
+    if (mb_max4(orc) > 0.0) d = max(d, mb_contained_clip_dist(p, outer, orc, ors));
+    return d;
+  }
+  // Skip the distance and search entirely along the straight parts of the edges and in the middle of the picture.
+  bool mb_contained_corner(float2 p, float4 c, float4 r, float pad) {
+    // A capsule's easing can reach two radii along its long edge.
+    float4 R = r * 2.5 + float4(pad, pad, pad, pad);
+    return (r.x > 0.0 && p.x < c.x + R.x && p.y < c.y + R.x) ||
+           (r.y > 0.0 && p.x > c.z - R.y && p.y < c.y + R.y) ||
+           (r.z > 0.0 && p.x > c.z - R.z && p.y > c.w - R.z) ||
+           (r.w > 0.0 && p.x < c.x + R.w && p.y > c.w - R.w);
+  }
+  float2 mb_contained_point(float2 p, float4 box, float4 rr, float4 clip, float4 rc, float4 rs,
+                            float4 outer, float4 orc, float4 ors, float pixel) {
+    float pad = 1.5 * pixel;
+    if (!mb_contained_corner(p, box, rr, pad) && !mb_contained_corner(p, clip, rc, pad) &&
+        !mb_contained_corner(p, outer, orc, pad)) return p;
+    float2 lo = max(box.xy, clip.xy), hi = min(box.zw, clip.zw);
+    if (mb_max4(orc) > 0.0) { lo = max(lo, outer.xy); hi = min(hi, outer.zw); }
+    float2 inside = (lo + hi) * 0.5;
+    float2 outside = p;
+    float id = 0.0, inset = 0.0;
+    // One distance evaluation in the shader: check p, find an interior point, then bisect towards the edge twelve times.
+    // A clip can leave only a corner of the box visible, so try each shape's centre clamped to the intersection too.
+    MB_CONTAINED_LOOP for (int i = 0; i < 17; i++) {
+      float2 probe = p;
+      if (i == 1) probe = (lo + hi) * 0.5;
+      else if (i == 2) probe = clamp((clip.xy + clip.zw) * 0.5, lo, hi);
+      else if (i == 3) probe = clamp((box.xy + box.zw) * 0.5, lo, hi);
+      else if (i == 4) probe = mb_max4(orc) > 0.0 ? clamp((outer.xy + outer.zw) * 0.5, lo, hi) : inside;
+      else if (i > 4) probe = (outside + inside) * 0.5;
+      float d = mb_contained_dist(probe, box, rr, clip, rc, rs, outer, orc, ors);
+      if (i == 0) {
+        if (d <= -pad) return p;
+        // Near a straight edge, the original pixel is already picture even in the antialiasing band.
+        float straight = max(mb_contained_rect_dist(p, box), mb_contained_rect_dist(p, clip));
+        if (mb_max4(orc) > 0.0) straight = max(straight, mb_contained_rect_dist(p, outer));
+        if (d <= straight + 0.001 * pixel) return p;
+      } else if (i <= 4) {
+        if (i == 1 || d < id) { inside = probe; id = d; }
+        if (i == 4) {
+          if (id >= 0.0) return p;
+          inset = min(pad, -id * 0.5);
+        }
+      } else if (d > -inset) outside = probe;
+      else inside = probe;
+    }
+    return inside;
+  }
   // A shadow as Core Animation draws one (CALayer shadowRadius: a Gaussian blur of the shape, sigma its radius): the box
   // of half sides hs about p, its corners r, blurred by sigma; how much of it covers p, 0 … 1. The blur across worked
   // out whole (erf); along, four samples of the Gaussian over where it is not nothing (Evan Wallace's rounded box shadow).
@@ -527,6 +587,29 @@
     return float(m) / 64.0 - 63.0 / 128.0;
   }
   // corner.sl end
+  `;
+  const FS = `#version 300 es
+  precision highp float;
+  in vec2 v_pos; in vec2 v_cpos;
+  flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
+  flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr; flat in vec4 v_oclip; flat in vec4 v_orc; flat in vec4 v_ors;
+  in vec4 v_ramp;
+  uniform float u_scale;
+  uniform sampler2D u_atlas;
+  uniform sampler2D u_img;
+  // glass (src/ui/glass.mbt): the blurred copy under it and where a point is in it (uv = p * u_map.xy + u_map.zw, kept
+  // in u_uvc), a liquid group's shapes and corners, how many
+  uniform highp sampler2D u_bd;
+  uniform vec4 u_map;
+  uniform vec4 u_uvc;
+  uniform vec4 u_shape[8];
+  uniform vec4 u_rad[2];
+  uniform int u_n;
+  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2040 fours
+  // (136 instances) a row
+  uniform highp sampler2D u_segs;
+  out vec4 o;
+  ${CORNERS}
   float sd_rr(vec2 p, vec4 r, vec4 rad) {
     vec2 hs = r.zw * 0.5;
     return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);
@@ -721,15 +804,23 @@
   }`;
   const PFS = `#version 300 es
   precision highp float;
+  ${CORNERS}
   // The backdrop's passes: u_a.xy the source's texel, u_a.z 1 halving (dual Kawase's down), 2 a Gaussian along u_b.zw
   // of deviation u_a.w (texels); u_b.xy the last texel's centre of what the source holds
   uniform highp sampler2D u_src;
   uniform vec4 u_a;
   uniform vec4 u_b;
+  uniform vec4 u_c[9];
   out vec4 o;
   void main() {
     vec2 ts = u_a.xy;
     vec2 lo = ts * 0.5, hi = u_b.xy;
+    if (u_a.z > 2.5) {
+      vec2 p = u_c[0].xy + gl_FragCoord.xy * u_c[0].zw;
+      p = mb_contained_point(p, u_c[1], u_c[2], u_c[3], u_c[4], u_c[5], u_c[6], u_c[7], u_c[8], u_c[0].z);
+      o = texture(u_src, clamp((p - u_c[0].xy) / u_c[0].zw * ts, lo, hi));
+      return;
+    }
     if (u_a.z < 1.5) {
       vec2 uv = gl_FragCoord.xy * 2.0 * ts;
       vec4 s = texture(u_src, clamp(uv, lo, hi)) * 4.0;
@@ -782,7 +873,7 @@
     gl.linkProgram(post);
     if (!gl.getProgramParameter(post, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(post));
     for (const n of ['u_vp', 'u_scale', 'u_atlas', 'u_img', 'u_bd', 'u_map', 'u_uvc', 'u_gb', 'u_shape', 'u_rad', 'u_n', 'u_segs']) U[n] = gl.getUniformLocation(prog, n);
-    for (const n of ['u_src', 'u_a', 'u_b']) PU[n] = gl.getUniformLocation(post, n);
+    for (const n of ['u_src', 'u_a', 'u_b', 'u_c']) PU[n] = gl.getUniformLocation(post, n);
     vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     instBuf = gl.createBuffer();
@@ -902,12 +993,9 @@
   // shares_capture) too; false when none of it shows
   function capture(start, end, count) {
     const a = start * INST;
-    // (a blur said below 0: frosting only what is under its own box, its edges carried on past them: glass.mbt
-    // contained; in from its edges as far as its roundest corner's curve comes in at 45°, so nothing out of its
-    // corners is in it either)
+    // A negative blur is contained: its straight edges are the capture's edges, its curved ones extended separately.
     const blur = Math.abs(f32[a + 7]), kind = Math.round(f32[a + 5]);
-    const round = Math.max(f32[a + 4], f32[a + 24], f32[a + 25], f32[a + 26], f32[a + 27]);
-    const margin = f32[a + 7] < 0 ? -0.2929 * round - 0.5 : 3 * blur + (kind === 6 ? f32[a + 21] * (1 + f32[a + 22]) + f32[a + 23] : 0) + 2;
+    const margin = f32[a + 7] < 0 ? 0 : 3 * blur + (kind === 6 ? f32[a + 21] * (1 + f32[a + 22]) + f32[a + 23] : 0) + 2;
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     gn = 0;
     for (let i = start; i < end; i++) {
@@ -948,6 +1036,20 @@
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, lv[0].fb);
     gl.blitFramebuffer(px0, pb0, px1, pb1, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
     gl.useProgram(post);
+    const contained = f32[a + 7] < 0 && (f32[a + 4] > 0 ||
+      [24, 25, 26, 27, 44, 45, 46, 47].some(i => f32[a + i] > 0));
+    if (contained) {
+      const edge = new Float32Array(36);
+      edge.set([px0 / sc, (Hh - pb0) / sc, 1 / sc, -1 / sc], 0);
+      edge.set([f32[a], f32[a + 1], f32[a] + f32[a + 2], f32[a + 1] + f32[a + 3]], 4);
+      for (let i = 0; i < 4; i++) {
+        edge[8 + i] = f32[a + 36 + i]; edge[12 + i] = f32[a + 16 + i];
+        edge[16 + i] = f32[a + 24 + i]; edge[20 + i] = f32[a + 28 + i];
+        edge[24 + i] = f32[a + 40 + i]; edge[28 + i] = f32[a + 44 + i]; edge[32 + i] = f32[a + 48 + i];
+      }
+      gl.uniform4fv(PU.u_c, edge);
+      postPass(lv[0], w, h, lv[4], w, h, 3, 0, 0, 0);
+    }
     const sp = blur * sc;
     let k = 0;
     while (k < 3 && sp / (1 << (k + 1)) >= 2) k++;
@@ -955,17 +1057,18 @@
     for (let j = 1; j <= k; j++) {
       lw[j] = (lw[j - 1] + 1) >> 1;
       lh[j] = (lh[j - 1] + 1) >> 1;
-      postPass(lv[j - 1], lw[j - 1], lh[j - 1], lv[j], lw[j], lh[j], 1, 0, 0, 0);
+      postPass(j === 1 && contained ? lv[4] : lv[j - 1], lw[j - 1], lh[j - 1], lv[j], lw[j], lh[j], 1, 0, 0, 0);
     }
     // what is left of the deviation once the halvings' and the last look's (bilinear) spread are taken out
     const sk = sp / (1 << k);
     const pre = k > 0 ? 0.75 * (1 - Math.pow(0.25, k)) / 3 + 1 / 6 : 0;
     const sg = Math.sqrt(Math.max(sk * sk - pre, 0));
     if (sg > 0.3) {
-      postPass(lv[k], lw[k], lh[k], lv[4], lw[k], lh[k], 2, sg, 1, 0);
-      postPass(lv[4], lw[k], lh[k], lv[k], lw[k], lh[k], 2, sg, 0, 1);
+      const from = contained && k === 0 ? lv[4] : lv[k], tmp = contained && k === 0 ? lv[0] : lv[4];
+      postPass(from, lw[k], lh[k], tmp, lw[k], lh[k], 2, sg, 1, 0);
+      postPass(tmp, lw[k], lh[k], from, lw[k], lh[k], 2, sg, 0, 1);
     }
-    const L = lv[k], d = 1 << k;
+    const L = contained && k === 0 ? lv[4] : lv[k], d = 1 << k;
     bdTex = L.t;
     gmap[0] = sc / d / L.w; gmap[1] = -sc / d / L.h;
     gmap[2] = -px0 / d / L.w; gmap[3] = (Hh - pb0) / d / L.h;

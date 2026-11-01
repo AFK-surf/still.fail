@@ -1,6 +1,7 @@
 // Metal renderer: one pipeline, one instanced quad per scene instance.
 #import "apple.h"
 #include "corner_sl.h"
+#include "contained.h"
 #import <ImageIO/ImageIO.h>
 #import <CoreGraphics/CoreGraphics.h>
 
@@ -272,7 +273,7 @@ MB_CORNER_SL
 "}\n"
 "// The backdrop's passes: a.xy the source's texel, a.z 1 halving (dual Kawase's down), 2 a Gaussian along b.zw of\n"
 "// deviation a.w (texels); b.xy the last texel's centre of what the source holds\n"
-"struct PU { float4 a; float4 b; };\n"
+"struct PU { float4 a; float4 b; float4 map, box, rr, clip, rc, rs, outer, orc, ors; };\n"
 "vertex float4 vpost(uint vid [[vertex_id]]) {\n"
 "  float2 c = float2(vid == 1 ? 3.0 : -1.0, vid == 2 ? 3.0 : -1.0);\n"
 "  return float4(c, 0.0, 1.0);\n"
@@ -281,6 +282,11 @@ MB_CORNER_SL
 "  constexpr sampler s(filter::linear, address::clamp_to_edge);\n"
 "  float2 ts = u.a.xy;\n"
 "  float2 lo = ts * 0.5, hi = u.b.xy;\n"
+"  if (u.a.z > 2.5) {\n"
+"    float2 p = u.map.xy + pos.xy * u.map.zw;\n"
+"    p = mb_contained_point(p, u.box, u.rr, u.clip, u.rc, u.rs, u.outer, u.orc, u.ors, u.map.z);\n"
+"    return src.sample(s, clamp((p - u.map.xy) / u.map.zw * ts, lo, hi));\n"
+"  }\n"
 "  if (u.a.z < 1.5) {\n"
 "    float2 uv = pos.xy * 2.0 * ts;\n"
 "    float4 o = src.sample(s, clamp(uv, lo, hi)) * 4.0;\n"
@@ -436,7 +442,7 @@ static void ensure_levels(int w, int h) {
 
 // one pass of the blur: src into dst's top left (w × h); mode 1 halving, 2 a Gaussian of deviation sg along (dx, dy)
 static void post_pass(id<MTLCommandBuffer> cb, id<MTLTexture> src, int sw, int sh, id<MTLTexture> dst, int w, int h,
-                      int mode, float sg, float dx, float dy) {
+                      int mode, float sg, float dx, float dy, const MBContained *edge) {
   MTLRenderPassDescriptor *rp = [MTLRenderPassDescriptor renderPassDescriptor];
   rp.colorAttachments[0].texture = dst;
   rp.colorAttachments[0].loadAction = MTLLoadActionDontCare;
@@ -446,7 +452,8 @@ static void post_pass(id<MTLCommandBuffer> cb, id<MTLTexture> src, int sw, int s
   [e setViewport:(MTLViewport){0, 0, (double)w, (double)h, 0, 1}];
   [e setScissorRect:(MTLScissorRect){0, 0, (NSUInteger)w, (NSUInteger)h}];
   float tw = 1.0f / (float)src.width, th = 1.0f / (float)src.height;
-  struct { float a[4]; float b[4]; } u = {{tw, th, (float)mode, sg}, {((float)sw - 0.5f) * tw, ((float)sh - 0.5f) * th, dx, dy}};
+  struct { float a[4]; float b[4]; MBContained edge; } u = {{tw, th, (float)mode, sg}, {((float)sw - 0.5f) * tw, ((float)sh - 0.5f) * th, dx, dy}, {0}};
+  if (edge) u.edge = *edge;
   [e setFragmentBytes:&u length:sizeof u atIndex:0];
   [e setFragmentTexture:src atIndex:0];
   [e drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
@@ -530,20 +537,17 @@ static void glass_through(const double *f, int32_t count) {
 // What a capture of glass is of, worked out before any of the GPU's work: its rectangle in the target's pixels, how
 // many times it is halved (k, at most 3) and the Gaussian left after (sg), and the glass's own numbers (gu's but map
 // and uvc, which follow from these and the level's size). Zeroed whole first, so two of the same compare the same.
-typedef struct { int px0, py0, w, h, k; float sg; GU g; } Grab;
+typedef struct { int px0, py0, w, h, k, contained; float sg; GU g; MBContained edge; } Grab;
 
 // The capture the run [start, end) of glass makes, of a target tw × th pixels; 0 when none of it shows.
 // Frosted glass of the same capture further on (glass.mbt shares_capture) is under it too.
 static int grab_of(Grab *m, const float *f, int32_t start, int32_t end, int32_t count, int tw, int th) {
   memset(m, 0, sizeof *m);
   const float *a = f + start * MB_INST;
-  // (a blur said below 0: frosting only what is under its own box, its edges carried on past them: glass.mbt
-  // contained; in from its edges as far as its roundest corner's curve comes in at 45°, so nothing out of its corners
-  // is in it either)
+  // A negative blur is contained: its straight edges are the capture's edges, its curved ones extended separately.
   float blur = fabsf(a[7]);
   int kind = (int)(a[5] + 0.5f);
-  float round = fmaxf(fmaxf(fmaxf(a[4], a[24]), fmaxf(a[25], a[26])), a[27]);
-  float margin = a[7] < 0.0f ? -0.2929f * round - 0.5f : 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
+  float margin = a[7] < 0.0f ? 0.0f : 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   int n = 0;
   for (int32_t i = start; i < end; i++) {
@@ -581,6 +585,7 @@ static int grab_of(Grab *m, const float *f, int32_t start, int32_t end, int32_t 
   if (py1 > th) py1 = th;
   if (px1 <= px0 || py1 <= py0 || x1 <= x0 || y1 <= y0) return 0;
   m->px0 = px0; m->py0 = py0; m->w = px1 - px0; m->h = py1 - py0;
+  m->contained = mb_contained_make(&m->edge, a, px0 / sc, py0 / sc, 1.0f / sc, 1.0f / sc);
   // down to where the deviation is 2 texels or more, at most 1/8
   float sp = blur * sc;
   int k = 0;
@@ -607,7 +612,7 @@ static void show_blur(const Grab *m) {
   int lw[4], lh[4];
   grab_levels(m, lw, lh);
   gu = m->g;
-  gtex = lv[m->k];
+  gtex = m->contained && m->k == 0 ? ltmp : lv[m->k];
   float sc = (float)vscale;
   float W = (float)gtex.width, H = (float)gtex.height, d = (float)(1 << m->k);
   gu.map[0] = sc / d / W; gu.map[1] = sc / d / H;
@@ -628,10 +633,13 @@ static void blur(id<MTLCommandBuffer> cb, id<MTLTexture> target, const Grab *m) 
   int lw[4], lh[4];
   grab_levels(m, lw, lh);
   int k = m->k;
-  for (int j = 1; j <= k; j++) post_pass(cb, lv[j - 1], lw[j - 1], lh[j - 1], lv[j], lw[j], lh[j], 1, 0, 0, 0);
+  if (m->contained) post_pass(cb, lv[0], lw[0], lh[0], ltmp, lw[0], lh[0], 3, 0, 0, 0, &m->edge);
+  for (int j = 1; j <= k; j++) post_pass(cb, j == 1 && m->contained ? ltmp : lv[j - 1], lw[j - 1], lh[j - 1], lv[j], lw[j], lh[j], 1, 0, 0, 0, NULL);
   if (m->sg > 0.3f) {
-    post_pass(cb, lv[k], lw[k], lh[k], ltmp, lw[k], lh[k], 2, m->sg, 1, 0);
-    post_pass(cb, ltmp, lw[k], lh[k], lv[k], lw[k], lh[k], 2, m->sg, 0, 1);
+    id<MTLTexture> from = m->contained && k == 0 ? ltmp : lv[k];
+    id<MTLTexture> tmp = m->contained && k == 0 ? lv[0] : ltmp;
+    post_pass(cb, from, lw[k], lh[k], tmp, lw[k], lh[k], 2, m->sg, 1, 0, NULL);
+    post_pass(cb, tmp, lw[k], lh[k], from, lw[k], lh[k], 2, m->sg, 0, 1, NULL);
   }
   show_blur(m);
 }

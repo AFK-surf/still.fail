@@ -18,6 +18,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
       - "apps/mbui/mbui/src/ui/smooth.mbt"
       - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/src/host/contained.h"
       - "apps/mbui/mbui/goldens/render/**"
       - "apps/mbui/mbui/scripts/render_offscreen.sh"
       - ".github/workflows/mbui-render.yml"
@@ -35,6 +36,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
       - "apps/mbui/mbui/src/ui/smooth.mbt"
       - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/src/host/contained.h"
       - "apps/mbui/mbui/goldens/render/**"
   workflow_dispatch:
 

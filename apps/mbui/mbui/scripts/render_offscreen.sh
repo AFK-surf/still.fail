@@ -26,6 +26,11 @@ MBUI_DL_PRINT=shapes moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>
 [ -s $O/shapes.dl ] || { echo "render_offscreen: no shapes draw list"; exit 1; }
 MBUI_DL=$PWD/$O/shapes.dl MBUI_DL_PNG=$PWD/$O/shapes.png ./_build/native/release/build/render/render.exe
 "$D/chk" shapes $O/shapes.png
+MBUI_DL_PRINT=contained moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+  awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/contained.dl
+[ -s $O/contained.dl ] || { echo "render_offscreen: no contained draw list"; exit 1; }
+MBUI_DL=$PWD/$O/contained.dl MBUI_DL_PNG=$PWD/$O/contained.png ./_build/native/release/build/render/render.exe
+"$D/chk" contained $O/contained.png
 # partial redraw (docs/partial-redraw.md): a spinner's two moments (src/kitdemo/gallery/dl_print_wbtest.mbt
 # partial_shown), the second drawn only where it differs from the first, the same picture as the second drawn whole,
 # to the byte

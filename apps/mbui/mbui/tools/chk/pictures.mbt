@@ -31,6 +31,48 @@ fn num_text(x : Double) -> String {
 }
 
 ///|
+/// The picture under contained glass keeps detail at its straight edges and does not take in the red outside its
+/// rounded corners. The scene is contained_shown in src/kitdemo/gallery/dl_print_wbtest.mbt, drawn at scale 2.
+fn contained(args : Array[String]) -> Int {
+  if args.length() != 1 {
+    @sys.eprintln("chk contained PNG")
+    return 2
+  }
+  let pic = match picture(args[0]) {
+    Some(p) => p
+    None => return 1
+  }
+  if pic.w != 400 || pic.h != 600 {
+    say("contained check: \{args[0]}: \{pic.w}x\{pic.h}, not 400x600")
+    return 1
+  }
+  let bad = []
+  // A one-device-pixel mark at the straight edge must contribute even when it is near a rounded corner.
+  let edge = pic.rgb(40, 160)
+  if edge.0 > 130 || edge.1 > 130 || edge.2 > 130 {
+    bad.push("the first pixel of the straight edge was replaced: \{rgb_text(edge)}")
+  }
+  for p in [(25, 80), (175, 80), (100, 25), (100, 135)] {
+    let c = pic.rgb(p.0 * 2, p.1 * 2)
+    if !near_max(c, (0, 0, 0), 40) {
+      bad.push("ink at \{p} lost: \{rgb_text(c)}")
+    }
+  }
+  for p in [(30, 170), (170, 170), (170, 270), (30, 270)] {
+    let c = pic.rgb(p.0 * 2, p.1 * 2)
+    if !near_max(c, (0x15, 0x59, 0xC4), 20) {
+      bad.push("outside colour reaches the rounded corner at \{p}: \{rgb_text(c)}")
+    }
+  }
+  if bad.length() > 0 {
+    say("contained check: \{args[0]}:\n  " + bad.join("\n  "))
+    return 1
+  }
+  say("contained check: detail at straight edges and colour inside rounded corners preserved")
+  0
+}
+
+///|
 /// Whether a renderer draws lines (scene.mbt's kind 10) as they are: the picture of
 /// src/kitdemo/gallery/dl_print_wbtest.mbt's lines_shown (160 by 160 at scale 2, on white) drawn by it. Its horizontal
 /// line is the same as the rounded rect of the same shape drawn 40 under it (each pixel's channels within 3) but where

@@ -114,6 +114,86 @@
   "  float rr = min(r, room);\n" \
   "  return mb_sd_corner(p, hs, rr, mb_smoothness(rr, room), band);\n" \
   "}\n" \
+  "// A contained blur extends the picture at its actual curved boundary, rather than cropping all four straight edges\n" \
+  "// to a corner's inset. Points already in the picture stay where they are. Near a curve, keep a little inside its\n" \
+  "// antialiased edge so the bilinear sample itself cannot bring in the background outside the clip.\n" \
+  "#ifndef MB_CONTAINED_LOOP\n" \
+  "#define MB_CONTAINED_LOOP\n" \
+  "#endif\n" \
+  "float mb_max4(float4 v) { return max(max(v.x, v.y), max(v.z, v.w)); }\n" \
+  "float mb_contained_rect_dist(float2 p, float4 c) {\n" \
+  "  float2 hs = (c.zw - c.xy) * 0.5;\n" \
+  "  float2 q = abs(p - c.xy - hs) - hs;\n" \
+  "  return length(max(q, float2(0.0, 0.0))) + min(max(q.x, q.y), 0.0);\n" \
+  "}\n" \
+  "// The same clip as mb_sd_clip, traversed so a runtime shader compiler need only compile one corner's calculation.\n" \
+  "float mb_contained_clip_dist(float2 p, float4 c, float4 r, float4 s) {\n" \
+  "  float2 hs = max((c.zw - c.xy) * 0.5, float2(0.0, 0.0));\n" \
+  "  float2 q = abs(p - (c.xy + hs)) - hs;\n" \
+  "  float d = length(max(q, float2(0.0, 0.0))) + min(max(q.x, q.y), 0.0);\n" \
+  "  MB_CONTAINED_LOOP for (int i = 0; i < 4; i++) {\n" \
+  "    if (r[i] > 0.0) {\n" \
+  "      float2 inward = float2(i == 0 || i == 3 ? 1.0 : -1.0, i < 2 ? 1.0 : -1.0);\n" \
+  "      float2 corner = float2(inward.x > 0.0 ? c.x : c.z, inward.y > 0.0 ? c.y : c.w);\n" \
+  "      d = max(d, mb_clip_corner(p, corner, inward, hs, r[i], s[i], 1e9));\n" \
+  "    }\n" \
+  "  }\n" \
+  "  return d;\n" \
+  "}\n" \
+  "float mb_contained_dist(float2 p, float4 box, float4 rr, float4 clip, float4 rc, float4 rs,\n" \
+  "                        float4 outer, float4 orc, float4 ors) {\n" \
+  "  float2 hs = (box.zw - box.xy) * 0.5;\n" \
+  "  float2 q = p - box.xy - hs;\n" \
+  "  float d = max(mb_sd_box(q, hs, mb_corner_of(q, rr), 1e9), mb_contained_clip_dist(p, clip, rc, rs));\n" \
+  "  if (mb_max4(orc) > 0.0) d = max(d, mb_contained_clip_dist(p, outer, orc, ors));\n" \
+  "  return d;\n" \
+  "}\n" \
+  "// Skip the distance and search entirely along the straight parts of the edges and in the middle of the picture.\n" \
+  "bool mb_contained_corner(float2 p, float4 c, float4 r, float pad) {\n" \
+  "  // A capsule's easing can reach two radii along its long edge.\n" \
+  "  float4 R = r * 2.5 + float4(pad, pad, pad, pad);\n" \
+  "  return (r.x > 0.0 && p.x < c.x + R.x && p.y < c.y + R.x) ||\n" \
+  "         (r.y > 0.0 && p.x > c.z - R.y && p.y < c.y + R.y) ||\n" \
+  "         (r.z > 0.0 && p.x > c.z - R.z && p.y > c.w - R.z) ||\n" \
+  "         (r.w > 0.0 && p.x < c.x + R.w && p.y > c.w - R.w);\n" \
+  "}\n" \
+  "float2 mb_contained_point(float2 p, float4 box, float4 rr, float4 clip, float4 rc, float4 rs,\n" \
+  "                          float4 outer, float4 orc, float4 ors, float pixel) {\n" \
+  "  float pad = 1.5 * pixel;\n" \
+  "  if (!mb_contained_corner(p, box, rr, pad) && !mb_contained_corner(p, clip, rc, pad) &&\n" \
+  "      !mb_contained_corner(p, outer, orc, pad)) return p;\n" \
+  "  float2 lo = max(box.xy, clip.xy), hi = min(box.zw, clip.zw);\n" \
+  "  if (mb_max4(orc) > 0.0) { lo = max(lo, outer.xy); hi = min(hi, outer.zw); }\n" \
+  "  float2 inside = (lo + hi) * 0.5;\n" \
+  "  float2 outside = p;\n" \
+  "  float id = 0.0, inset = 0.0;\n" \
+  "  // One distance evaluation in the shader: check p, find an interior point, then bisect towards the edge twelve times.\n" \
+  "  // A clip can leave only a corner of the box visible, so try each shape's centre clamped to the intersection too.\n" \
+  "  MB_CONTAINED_LOOP for (int i = 0; i < 17; i++) {\n" \
+  "    float2 probe = p;\n" \
+  "    if (i == 1) probe = (lo + hi) * 0.5;\n" \
+  "    else if (i == 2) probe = clamp((clip.xy + clip.zw) * 0.5, lo, hi);\n" \
+  "    else if (i == 3) probe = clamp((box.xy + box.zw) * 0.5, lo, hi);\n" \
+  "    else if (i == 4) probe = mb_max4(orc) > 0.0 ? clamp((outer.xy + outer.zw) * 0.5, lo, hi) : inside;\n" \
+  "    else if (i > 4) probe = (outside + inside) * 0.5;\n" \
+  "    float d = mb_contained_dist(probe, box, rr, clip, rc, rs, outer, orc, ors);\n" \
+  "    if (i == 0) {\n" \
+  "      if (d <= -pad) return p;\n" \
+  "      // Near a straight edge, the original pixel is already picture even in the antialiasing band.\n" \
+  "      float straight = max(mb_contained_rect_dist(p, box), mb_contained_rect_dist(p, clip));\n" \
+  "      if (mb_max4(orc) > 0.0) straight = max(straight, mb_contained_rect_dist(p, outer));\n" \
+  "      if (d <= straight + 0.001 * pixel) return p;\n" \
+  "    } else if (i <= 4) {\n" \
+  "      if (i == 1 || d < id) { inside = probe; id = d; }\n" \
+  "      if (i == 4) {\n" \
+  "        if (id >= 0.0) return p;\n" \
+  "        inset = min(pad, -id * 0.5);\n" \
+  "      }\n" \
+  "    } else if (d > -inset) outside = probe;\n" \
+  "    else inside = probe;\n" \
+  "  }\n" \
+  "  return inside;\n" \
+  "}\n" \
   "// A shadow as Core Animation draws one (CALayer shadowRadius: a Gaussian blur of the shape, sigma its radius): the box\n" \
   "// of half sides hs about p, its corners r, blurred by sigma; how much of it covers p, 0 … 1. The blur across worked\n" \
   "// out whole (erf); along, four samples of the Gaussian over where it is not nothing (Evan Wallace's rounded box shadow).\n" \
