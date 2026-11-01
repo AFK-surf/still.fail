@@ -162,6 +162,22 @@ fn ListState::easing(self : ListState) -> Bool {
 }
 
 ///|
+/// Whether a wheel turned `dy` down (up where less than 0) moves it, as the last layout left it: under way already (what
+/// the hand moved not laid out yet, a notch's ease), or not at its end that way (its foot at the view's going down, its top
+/// row's top at the view's going up). None turned down or up, nothing.
+fn ListState::wheel_moves(self : ListState, dy : Double) -> Bool {
+  if dy == 0.0 {
+    false
+  } else if self.pending != 0.0 || self.easing() {
+    true
+  } else if dy > 0.0 {
+    !self.at_end
+  } else {
+    self.anchor > 0 || self.anchor_off > 0.001
+  }
+}
+
+///|
 /// How much of a wheel's ease of `total` has come `t` ms after it set out at `v0` (px a ms, the way `total` goes when
 /// positive): solved for the time (critically damped, wheel_ease_ms: what is left (total + (total / τ - v0) t)
 /// e^(-t / τ)), in whole 1/64 px, all of it from ease_end on. The same at any time whatever frames it went by.

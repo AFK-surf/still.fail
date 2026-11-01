@@ -353,6 +353,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       c.reads_after_layout()
       // how far what scrolls sideways can (sideways.mbt)
       c.sideways_after_layout()
+      // what of an old view's came to have the focus, brought into sight by what of the window's tree holds it
+      // (view_host.mbt)
+      old_show_after_layout(c)
     })
     laying.val = false
     layout_coming.val = false
@@ -743,10 +746,10 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
 
 ///|
 /// The pointer's track, for its velocity when let go (scroll.mbt).
-let track_x : Tracker = Tracker::new()
+let track_x : @view.Tracker = @view.Tracker::new()
 
 ///|
-let track_y : Tracker = Tracker::new()
+let track_y : @view.Tracker = @view.Tracker::new()
 
 ///|
 /// What an editor holds was written by the app (Field::set, take): an event, as an input is, wherever it came from
@@ -813,6 +816,10 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     took_input("pointer", h_event_time(), args)
     view_pointed()
     old_pointer_now(kind, x, y, button, mods, h_event_time())
+    // (a hold of the old view's it has not made its own, moved: what of the tree's holds it may take it over)
+    if kind == 1 {
+      view_old_moved(x, y)
+    }
   }
   // (a finger or button down, wherever it went (a node of the tree's, the old view): a press of its own from here, a
   // hold handed before it none's, view_handed)
@@ -1588,16 +1595,109 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
 fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   // what was held with it, above its phase (wheel_mod_*: ⇧ ⌃ ⌥ ⌘, and a trackpad's pinch as a wheel with ⌃ held)
   let mods = phase / 16
-  // (over a node of the window's tree's that takes the wheel: its, at the wheel's own moment, where it is then; no input
-  // of the old view's: taped alone)
-  if view_wheel(x, y, dx, dy, mods) {
-    input_taped("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
+  // (over a node of the window's tree's that takes the wheel, or what holds it: its, at the wheel's own moment, where it
+  // is then; no input of the old view's: taped alone. Over an old view hosted in it, what of that old view's is there
+  // first, where it takes it (old_wheel_takes): the old frame's input then, as ever; what of other old views' is there
+  // too, none of it, the tree's as it is. Where the tree asks nothing (over what takes presses only, a drag's edge),
+  // the old frame's, as ever)
+  let old_took = Ref(false)
+  let old = fn(island : @view.NodeId) {
+    guard old_wheel_takes(x, y, dx, dy, phase, island=Some(island)) else { return false }
+    old_took.val = true
+    old_wheel(x, y, dx, dy, phase, island=Some(island))
+    true
+  }
+  if view_wheel(x, y, dx, dy, mods, old~) {
+    if !old_took.val {
+      input_taped("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
+    }
     return
   }
+  old_wheel(x, y, dx, dy, phase)
+}
+
+///|
+/// What scrolls in the old frame, as the last frame laid it out (its ids, their rects as hit_in reads them), or, of the
+/// old view node `island` of the window's tree's hosts, what of it does alone (its place among them, OldHits').
+fn wheel_scrolls(c : Ctx, island : @view.NodeId?) -> (Array[Int], Array[Double]) {
+  guard island is Some(want) else { return (c.scroll_ids, c.scroll_rects) }
+  let ids = []
+  let rects = []
+  for h in old_hits {
+    if h.id != want {
+      continue
+    }
+    for k in h.scrolls_from..<h.scrolls_to {
+      if k >= c.scroll_ids.length() || k * 4 + 3 >= c.scroll_rects.length() {
+        continue
+      }
+      ids.push(c.scroll_ids[k])
+      for j in 0..<4 {
+        rects.push(c.scroll_rects[k * 4 + j])
+      }
+    }
+  }
+  (ids, rects)
+}
+
+///|
+/// Whether what of the old frame's is at (x, y) takes a wheel turned `dy` down (old_wheel's): what scrolls there
+/// sideways or up and down not at its end that way (sideways_wheel_moves; else the list it lies in), takes the pointer,
+/// or a pinch, or a list not at its end that way (ListState::wheel_moves), or what a modal layer of the window's tree
+/// keeps from input (taken, nothing scrolling); none where nothing there moves by it. `island`: of what the old view
+/// built in that node of the window's tree's has there alone (wheel_scrolls).
+fn old_wheel_takes(
+  x : Double,
+  y : Double,
+  dx : Double,
+  dy : Double,
+  phase : Int,
+  island? : @view.NodeId? = None,
+) -> Bool {
+  let c = g()
+  let (ids, rects) = wheel_scrolls(c, island)
+  let mut target = hit_in(ids, rects, x, y)
+  if target == 0 {
+    return false
+  }
+  if !island_allows(c.island_of_id(target)) {
+    return true
+  }
+  if sideways.contains(target) {
+    if sideways_wheel_moves(target, dx, dy) {
+      return true
+    }
+    target = outer_scroll_in(ids, rects, x, y)
+  }
+  if captures.contains(target) {
+    return true
+  }
+  if ((phase / 16) & wheel_mod_pinch) != 0 {
+    return true
+  }
+  match c.lists.get(target) {
+    Some(st) => st.wheel_moves(dy)
+    None => false
+  }
+}
+
+///|
+/// A wheel turned at (x, y) as the old frame takes it: its input, what scrolls there scrolled (`island`: of what the old
+/// view built in that node of the window's tree's has there alone, wheel_scrolls).
+fn old_wheel(
+  x : Double,
+  y : Double,
+  dx : Double,
+  dy : Double,
+  phase : Int,
+  island? : @view.NodeId? = None,
+) -> Unit {
+  let mods = phase / 16
   took_input("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
   let phase = phase % 16
   let c = g()
-  let mut target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
+  let (ids, rects) = wheel_scrolls(c, island)
+  let mut target = hit_in(ids, rects, x, y)
   // (what scrolls there in an old view a modal layer of the window's tree keeps from input: nothing scrolls, the wheel
   // taken: island_allows)
   if target != 0 && !island_allows(c.island_of_id(target)) {
@@ -1611,7 +1711,7 @@ fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -
       h_request_frame()
       return
     }
-    target = outer_scroll(c, x, y)
+    target = outer_scroll_in(ids, rects, x, y)
   }
   if captures.contains(target) {
     // a box that takes the pointer keeps the wheel (native.mbt `wheel`, `wheel_of`)
@@ -1903,7 +2003,14 @@ fn handle_move(c : Ctx, x : Double, y : Double, t : Double) -> Unit {
 ///|
 /// Moves focus to an editor (used by tests and the bench).
 pub fn Ctx::focus_editor(self : Ctx, key : String) -> Unit {
-  self.focus_moved(self.id(key))
+  let id = self.id(key)
+  // (asked for in an old view a modal layer of the tree's keeps from input (a chat's composer as it is first drawn
+  // under a question opened over it): not taken from that layer, hidden there; given it as that layer goes, as an old
+  // overlay built over it gives back what had it as it opened: view_focus_kept_for)
+  if view_focus_kept_for(self, id) {
+    return
+  }
+  self.focus_moved(id)
 }
 
 ///|

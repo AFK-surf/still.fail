@@ -512,8 +512,12 @@ fn Ctx::shows_after_layout(self : Ctx) -> Unit {
 ///|
 /// The scroll target under (x, y) that is not a sideways box (what a vertical move on one goes to).
 fn outer_scroll(c : Ctx, x : Double, y : Double) -> Int {
-  let ids = c.scroll_ids
-  let rects = c.scroll_rects
+  outer_scroll_in(c.scroll_ids, c.scroll_rects, x, y)
+}
+
+///|
+/// outer_scroll's, of what scrolls in `ids` (laid out at `rects`) alone.
+fn outer_scroll_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
@@ -611,16 +615,29 @@ fn sideways_up(c : Ctx, id : Int, vx : Double, vy : Double) -> Unit {
 fn sideways_wheel(id : Int, dx : Double, dy : Double) -> Bool {
   match sideways.get(id) {
     Some(st) => {
-      let (along, across) = if st.vertical { (dy, dx) } else { (dx, dy) }
-      let can = if along > 0.0 { st.x < st.max } else { st.x > 0.0 }
-      if along == 0.0 || along.abs() < across.abs() || !can {
+      if !sideways_wheel_moves(id, dx, dy) {
         return false
       }
+      let along = if st.vertical { dy } else { dx }
       st.vel = 0.0
       st.rest = -1.0
       st.x = dclamp(st.x + along, 0.0, st.max)
       g().sideways_scrolled(st)
       true
+    }
+    None => false
+  }
+}
+
+///|
+/// Whether the wheel over scrolling box `id` moves it (sideways_wheel's): its part along the box's way, more than across,
+/// the way it can still go.
+fn sideways_wheel_moves(id : Int, dx : Double, dy : Double) -> Bool {
+  match sideways.get(id) {
+    Some(st) => {
+      let (along, across) = if st.vertical { (dy, dx) } else { (dx, dy) }
+      let can = if along > 0.0 { st.x < st.max } else { st.x > 0.0 }
+      along != 0.0 && along.abs() >= across.abs() && can
     }
     None => false
   }

@@ -89,6 +89,14 @@ priv enum ViewHeld {
 let view_held : Ref[ViewHeld?] = Ref(None)
 
 ///|
+/// Where the press held now went down in the window (its primary button's or a finger's), what may take it over as it
+/// moves, as found as it went down (Tree::claimers_at: of what it went down on, the old view it went on to under an
+/// empty one over it), and its events since (when, where: what it goes at taken over, Drag's `vy`); none once
+/// something has or it is let go.
+// kept across runs: put back as a run begins (view_forget)
+let view_down : Ref[(Double, Double, Array[(@view.NodeId, Int)], Array[(Double, Double, Double)])?] = Ref(None)
+
+///|
 /// A hold the window's tree handed the old views (view_through) as a long press: what of them it was handed to (where
 /// it went down, old_press_owner's), the press it is (the downs before it, downs_made), where the finger went down,
 /// the build it comes to (the next begun as it was handed) and the frame that build is of (set as that build begins:
@@ -319,6 +327,9 @@ fn view_forget() -> Unit {
   }
   view_app.val = None
   view_held.val = None
+  view_down.val = None
+  old_focus_shown.val = 0
+  old_show_due.val = None
   view_handed.val = None
   view_point.val = None
   view_fingers[0] = -1
@@ -776,7 +787,11 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     defer {
       for f in fading {
-        let (_, (x0, y0, x1, y1), (start, top, end, foot)) = f
+        let (by, (x0, y0, x1, y1), (start, top, end, foot)) = f
+        // (what is drawn clear of it, none of its fading: View::fades_clear)
+        if tree.fades_clear_of(c.id, by) {
+          continue
+        }
         for k in k0..<self.ninst {
           inst_fade(self.inst, k * inst_size, y0, top, y1, foot)
           inst_fade_across(self.inst, k * inst_size, x0, start, x1, end)
@@ -1432,9 +1447,18 @@ fn Ctx::focus_allowed(self : Ctx) -> Int {
 /// A wheel turned at (x, y) (`dx`, `dy`, `mods` held) as the tree routes it, by the order things are drawn in as a
 /// press is (view_pointer): the tree as of the event's moment, what the old views take there placed where the tree has
 /// them then; over what the old frame put over all of it at its root (a menu, a sheet, a scrim), the old view's (what
-/// scrolls there scrolls, what is under it gets none); else a node's of the tree's that takes the wheel, at that moment.
-/// True where a node took it.
-fn view_wheel(x : Double, y : Double, dx : Double, dy : Double, mods : Int) -> Bool {
+/// scrolls there scrolls, what is under it gets none); else a node's of the tree's that takes the wheel, or what holds it
+/// (Tree::wheel_at), at that moment, `old` asked of the node where an old view is hosted (one with nothing of its own
+/// there passed: old_wheel_there). True where it was the tree's
+/// so (taken or not: none of what is under it, of other old views', asked).
+fn view_wheel(
+  x : Double,
+  y : Double,
+  dx : Double,
+  dy : Double,
+  mods : Int,
+  old? : (@view.NodeId) -> Bool = fn(_) { false },
+) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
     None => return false
@@ -1445,7 +1469,81 @@ fn view_wheel(x : Double, y : Double, dx : Double, dy : Double, mods : Int) -> B
   if old_root_hit(g(), x, y, pressed=false) {
     return false
   }
-  tree.wheel_at(x, y, dx, dy, mods, at)
+  tree.wheel_at(x, y, dx, dy, mods, at, old~, there=fn(id) { old_wheel_there(id, x, y) })
+}
+
+///|
+/// Whether the old view hosted in node `id` has something of its own at (x, y) for a wheel (view_wheel's): what scrolls
+/// in it there (wheel_scrolls), or its own hit target topmost there (old_takes_own's, as the old frame finds them as
+/// the tree has things then: old_hits_place). One with nothing there (a page's over view, all of the window, bare
+/// there) the wheel passes, to what is under it.
+fn old_wheel_there(id : @view.NodeId, x : Double, y : Double) -> Bool {
+  let c = g()
+  let (ids, rects) = wheel_scrolls(c, Some(id))
+  if hit_in(ids, rects, x, y) != 0 {
+    return true
+  }
+  let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
+  let k = press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
+  k >= 0 && old_hit_owner(k) == Some(id)
+}
+
+///|
+/// How many of a held press's last events are kept for what may take it over (view_down): as many as a finger's speed is
+/// told from (Tracker's).
+let view_down_most : Int = 20
+
+///|
+/// The hold now (a press of a node's, an old view's, nobody's) taken over at (x, y) at `at` by what holds what it went
+/// down on, where one says it takes it as it has moved so far (Tree::claimer_of): what had it called off (a node's press
+/// let go unpressed; the old view's told the press is called off, as the host calls one off), the rest of it that one's,
+/// down where it went down, moved to where it is now. Whether it was.
+fn view_claimed(tree : @view.Tree, x : Double, y : Double, at : Double) -> Bool {
+  guard view_down.val is Some((x0, y0, chain, events)) else { return false }
+  guard tree.claimer_of(chain, x - x0, y - y0) is Some(id) else { return false }
+  view_down.val = None
+  // (a finger setting off scrolling lets go of the keyboard, as an old view's list does: Ctx::scroll_lets_go; one
+  // taking it over for anything else, not)
+  if tree.claims_scroll(id) {
+    g().scroll_lets_go(-1)
+  }
+  match view_held.val {
+    Some(Node(n)) => tree.press_held(n) |> ignore
+    Some(Old(part, _)) => {
+      view_input_went(part)
+      old_pointer_now(3, x, y, 0, 0, h_event_time())
+    }
+    _ => ()
+  }
+  view_held.val = Some(Dragging(id))
+  view_fingers[0] = 0
+  view_fingers[1] = -1
+  view_fingers[2] = 1
+  // (down where it went down, its events since its own: how fast it goes from them, Drag's `vy`; this move told next)
+  let before = events.copy()
+  if before.length() > 1 && before[before.length() - 1] == (at, x, y) {
+    before.pop() |> ignore
+  }
+  tree.drag_at(id, Down, x0, y0, at, finger=0, track=before) |> ignore
+  tree.drag_at(id, Moved, x, y, at, finger=0) |> ignore
+  h_frame_owed()
+  true
+}
+
+///|
+/// A move of a hold on an old view, once the old view has taken it (old_pointer_now): where nothing of the old view's
+/// has made it its own (a list or a box of its own scrolling by it, a field's words picked or its caret moved, a handle
+/// or a bar dragged, a page's edge), taken over by what of the tree's holds it as it may be (view_claimed).
+fn view_old_moved(x : Double, y : Double) -> Unit {
+  guard view_held.val is Some(Old(_, _)) && view_app.val is Some(tree) else { return }
+  let c = g()
+  if c.dragging || c.editor_drag || c.handle_drag != 0 || c.word_drag != 0 || c.bar_drag != 0 || c.edge > 0 ||
+    picked.dragging {
+    // (the old view's own now: nothing of the tree's takes it over after)
+    view_down.val = None
+    return
+  }
+  view_event(fn() { view_claimed(tree, x, y, view_moment()) |> ignore })
 }
 
 ///|
@@ -1472,6 +1570,38 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   // what it takes there, a press or a pointer's move with none held, is its own before anything of the tree's under it)
   let over = (kind == 0 || (kind == 1 && view_held.val is None)) &&
     old_root_hit(g(), x, y, pressed=kind == 0)
+  // (where it went down, for what may take it over as it moves: none over the old frame's own over all of it, nor for
+  // the secondary button)
+  if kind == 0 {
+    view_down.val = if over || button == 2 {
+      None
+    } else {
+      // (on an old view: the one the press goes on to, where that has something of its own there; one bare there
+      // passed, as the wheel passes it: old_wheel_there)
+      let from = match tree.target_at(x, y) {
+        Hosted(island) =>
+          match old_press_owner(g(), x, y, island) {
+            Some(o) if old_wheel_there(o, x, y) => Some(o)
+            _ => None
+          }
+        _ => None
+      }
+      Some((x, y, tree.claimers_at(x, y, from?, there=fn(id) { old_wheel_there(id, x, y) }), [(at, x, y)]))
+    }
+  } else if kind == 2 || kind == 3 || kind == 4 {
+    view_down.val = None
+  } else if kind == 1 {
+    // (its last events alone, as many as how fast it goes is told from: Tracker's; none where nothing may take it over)
+    match view_down.val {
+      Some((_, _, chain, events)) if chain.length() > 0 => {
+        events.push((at, x, y))
+        if events.length() > view_down_most {
+          events.remove(0) |> ignore
+        }
+      }
+      _ => ()
+    }
+  }
   match (kind, view_held.val) {
     (0, _) if over => {
       view_held.val = Some(Old(-1, None))
@@ -1556,6 +1686,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           true
         }
       }
+    // (moved: taken over by what holds where it went down, where that says it takes it (a column scrolling it up or
+    // down: View::claims), what had it called off)
+    (1, Some(Node(_) | Nowhere)) if view_claimed(tree, x, y, at) => true
     (1, Some(Old(part, _))) => {
       view_input_went(part)
       false
@@ -1666,6 +1799,10 @@ fn view_frame_end(c : Ctx) -> Unit {
   // (where the old frame's topmost modal layer is in the window's stack of layers, as this frame built it: what of the
   // tree is not over it takes no input, Tree::hold_under)
   tree.hold_under(c.old_modal_stack())
+  // (the tree's layers that gave the focus as they opened: opened before this frame ended, no longer: view_focus_kept_for)
+  for l in layer_focus_open {
+    l.fresh = false
+  }
   if tree.clock_read() {
     c.motion_left = true
   }
@@ -2598,7 +2735,14 @@ fn view_key(code : Int, mods : Int) -> Bool {
   }
   let c = g()
   let focus = c.focus_allowed()
-  if c.editors.contains(focus) || c.dev.catchers.contains(focus) || c.focus_keeps(code, mods) {
+  if c.dev.catchers.contains(focus) || c.focus_keeps(code, mods) {
+    return false
+  }
+  // (a field with the focus: its own keys (field_key: its moves, deletions, Enter) and those read with ⌘ or Ctrl held
+  // (its undo and redo, paste, the app's shortcuts: key_in) the old frame's, as ever; what it takes not (Escape) the
+  // layers', of the tree's what holds it alone, by the stack as any focus's)
+  let field = c.editors.contains(focus)
+  if field && (field_key(code) || (mods & (mod_cmd | mod_ctrl)) != 0) {
     return false
   }
   // (the old frame's layers take the keys; where the focus is on what of the tree is over all of them (View::over_all),
@@ -2611,11 +2755,17 @@ fn view_key(code : Int, mods : Int) -> Bool {
     .filter(fn(l) { c.layer_takes(l) && (l.modal || c.focus_in_layer(l.id) || (code == key_escape && l.escape)) })
     .map(fn(l) { c.layer_stack(l) })
     .fold(init=-3, fn(a, b) { if b > a { b } else { a } })
-  let over = match tree_said_ids.get(c.focus) {
+  // (where the focus is in the tree: its node, or the one an old view's stop or field with it is hosted in)
+  let held = focus_node_of(c.focus)
+  let over = match held {
     Some(nid) => tree.stack_of(nid) > old_keys
     None => false
   }
   if old_keys > -3 && !over {
+    return false
+  }
+  // (a field's in none of the tree: the old frame's)
+  if field && held is None {
     return false
   }
   // (Enter or Space on a node of its own with the focus, of the keys that press it: its press, at the key's moment)
@@ -2630,7 +2780,7 @@ fn view_key(code : Int, mods : Int) -> Bool {
       _ => ()
     }
   }
-  tree.key_at(code, mods, view_moment(), above=old_keys)
+  tree.key_at(code, mods, view_moment(), above=old_keys, within=if field { held } else { None })
 }
 
 ///|
@@ -3377,8 +3527,57 @@ fn focus_told_tree(c : Ctx) -> Unit {
         c.focus = 0
       }
       tree.focus_to(None) |> ignore
+      // (come to an old view's stop hosted in it: that brought into sight by what of the tree holds it, once laid out)
+      // (where it is in the old view found once that is laid out as it is next: old_show_after_layout)
+      if c.focus != 0 && c.focus != old_focus_shown.val {
+        old_show_due.val = Some(c.focus)
+      }
     }
   }
+  old_focus_shown.val = c.focus
+}
+
+///|
+/// What of the old views' has come to have the focus, to be brought into sight once the old view it is in is laid out
+/// with it (old_show_after_layout).
+// kept across runs: put back as a run begins (view_forget)
+let old_show_due : Ref[Int?] = Ref(None)
+
+///|
+/// What of the old views' came to have the focus (old_show_due), the old frame laid out: where it is laid out in the old
+/// view it is in now, brought into sight by what of the window's tree holds that (Tree::show_in_sight); not laid out in
+/// this pass, kept for the next.
+fn old_show_after_layout(c : Ctx) -> Unit {
+  guard old_show_due.val is Some(id) && view_app.val is Some(tree) else { return }
+  guard c.focus == id else {
+    old_show_due.val = None
+    return
+  }
+  guard c.island_of_id(id) is Some(island) && old_part_within(c, island, id) is Some(w) else { return }
+  old_show_due.val = None
+  // (what holds it scrolled to it: the tree marked due by it, drawn so in this frame, what goes on asked for as the
+  // frame ends: view_frame_end; no old view built again for it)
+  tree.show_in_sight(island, within=fn() { Some(w) })
+}
+
+///|
+/// What of the old views' had the focus as the tree was last told (focus_told_tree): one come to it anew is brought
+/// into sight, once.
+// kept across runs: only ever compared with the focus told next
+let old_focus_shown : Ref[Int] = Ref(0)
+
+///|
+/// Where the old node whose id is `id` is in the old view hosted in node `island`, as it is laid out now: its top and
+/// its foot from the top of the old view's box (none where either is not known: all of the old view then).
+fn old_part_within(c : Ctx, island : @view.NodeId, id : Int) -> (Double, Double)? {
+  guard old_boxes.get(island) is Some(b) && b < c.count else { return None }
+  for i in 0..<c.count {
+    if c.nodes[i].id == id {
+      let top = c.nodes[i].y - c.nodes[b].y
+      return Some((top, top + c.nodes[i].fh))
+    }
+  }
+  None
 }
 
 ///|
@@ -3388,6 +3587,9 @@ priv struct LayerFocus {
   layer : @view.NodeId
   mut back : Int
   mut back_in : @view.NodeId?
+  /// opened since the last frame ended: what under it asks for the focus as that frame builds it (a page first drawn
+  /// under it) is what had it as it opened, as an old overlay built after the page has it (view_focus_kept_for)
+  mut fresh : Bool
 }
 
 ///|
@@ -3398,8 +3600,45 @@ let layer_focus_open : Array[LayerFocus] = []
 ///|
 /// The layer of layer_focus_open that holds what Ctx's focus names `id` (a node of tree `t`'s), if one does.
 fn layer_focus_holding(t : @view.Tree, id : Int) -> @view.NodeId? {
-  guard tree_said_ids.get(id) is Some(n) else { return None }
+  guard focus_node_of(id) is Some(n) else { return None }
   layer_focus_open.iter().find_first(fn(l) { t.holds(l.layer, n) }).map(fn(l) { l.layer })
+}
+
+///|
+/// Whether field `id`, asked to have the focus in an old view built now (what it says is said in: Ctx::island_said, none
+/// in an old layer of its own), is kept from it by a modal layer of the tree's that gives the focus, open over that old
+/// view: not taken from the layer, hidden under it (as an old modal overlay gives back what a field under it took:
+/// Ctx::layers_focus). Asked as the frame the layer opened in builds it (before the page under it was first drawn, as a
+/// fixture's question; or in the change that opened it), what that layer gives back as it goes, as an old overlay built
+/// over the page in that frame has what the page gave the focus to before it (Ctx::overlay's layer_return, recorded as
+/// it opens); asked after, what it had as it opened kept (the old overlay's, recorded once).
+fn view_focus_kept_for(c : Ctx, id : Int) -> Bool {
+  guard view_app.val is Some(t) && c.island_said() is Some(island) else { return false }
+  if @signals.untracked(fn() { t.allows_as_its_own(island) }) {
+    return false
+  }
+  // (the layer just over it: the lowest open that does not hold it, over the one that does, if one does)
+  let under = layer_focus_open.iter().find_first(fn(l) { t.holds(l.layer, island) }).map(fn(l) { l.layer })
+  match layer_focus_open.search_by(fn(l) { !t.holds(l.layer, island) && l.back_in == under }) {
+    Some(i) => {
+      // (asked as the frame it opened in builds it: what it gives back; asked after: what had it as it opened kept)
+      if layer_focus_open[i].fresh {
+        layer_focus_open[i].back = id
+      }
+      true
+    }
+    None => false
+  }
+}
+
+///|
+/// The node of the window's tree what Ctx's focus names `id` is in: the node itself, or the old view a stop of an old
+/// view's (as the last frame built it) is in; none where it is neither (a layer of the old frame's own).
+fn focus_node_of(id : Int) -> @view.NodeId? {
+  match tree_said_ids.get(id) {
+    Some(n) => Some(n)
+    None => g().last_focusables.iter().find_first(fn(f) { f.id == id }).bind(fn(f) { f.island })
+  }
 }
 
 ///|
@@ -3423,7 +3662,8 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
     }
   }
   // (the focus in one gone, or nowhere: back to what that gives it back to, the whole of it given back first)
-  let focused_in = match tree_said_ids.get(c.focus) {
+  // (the focus in one gone: on a node of the tree's in it (or let go with it), or on a stop of an old view it hosts)
+  let focused_in = match focus_node_of(c.focus) {
     Some(n) => going.iter().find_first(fn(l) { t.holds(l.layer, n) || !t.holds(n, n) })
     None => None
   }
@@ -3450,8 +3690,9 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
       Some(i) => {
         layer_focus_open[i].back = had
         layer_focus_open[i].back_in = had_in
+        layer_focus_open[i].fresh = true
       }
-      None => layer_focus_open.push({ layer, back: had, back_in: had_in })
+      None => layer_focus_open.push({ layer, back: had, back_in: had_in, fresh: true })
     }
     had = tree_said_id(to)
     had_in = Some(layer)

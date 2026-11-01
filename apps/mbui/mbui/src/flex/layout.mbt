@@ -1010,6 +1010,9 @@ fn layout_flex(
   let inner_cross = if row { inner_h } else { inner_w }
   let avail_main = if row { avail_inner_w } else { avail_inner_h }
   let avail_cross = if row { avail_inner_h } else { avail_inner_w }
+  // (what it holds sized by what each holds along its main axis with no bound where it scrolls (CSS's and Yoga's overflow:
+  // scroll): its content runs on past it, its own size bound as ever; across, bound as ever, its words wrapping)
+  let held_main = if s.overflow == Scroll { undef } else { avail_main }
   let gap_main = if row {
     edge_of(s.gap_col_k, s.gap_col_v, inner_main)
   } else {
@@ -1254,7 +1257,7 @@ fn layout_flex(
             c,
             undef,
             kc,
-            if known(avail_main) { avail_main - margin_main } else { undef },
+            if known(held_main) { held_main - margin_main } else { undef },
             if known(avail_cross) { avail_cross - margin_cross } else { undef },
             cb_w,
             cb_h,
@@ -1266,7 +1269,7 @@ fn layout_flex(
             kc,
             undef,
             if known(avail_cross) { avail_cross - margin_cross } else { undef },
-            if known(avail_main) { avail_main - margin_main } else { undef },
+            if known(held_main) { held_main - margin_main } else { undef },
             cb_w,
             cb_h,
             false,

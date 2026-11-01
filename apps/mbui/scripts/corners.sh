@@ -7,7 +7,7 @@
 #                                            perhaps with a drive step after them: `tapxy 830 450`, a pane beside it
 #                                            brought over)
 # WINDOW: phone390, phone360 (a phone's), touch600 (a tablet's, medium), tablet840, tablet1280 (expanded), desk600,
-# desk1280 (a Mac's: its window's corners 16; desk390 one made as narrow as a phone), win600, win1280 (Windows 11's: 8); LANG: zh or en.
+# desk1280 (a Mac's: its window's corners 16; desk390 one made as narrow as a phone; desk1280short one 340 tall), win600, win1280 (Windows 11's: 8); LANG: zh or en.
 # fold890: a fold half open, its crease across (a small screen wider than a phone: tabletop.mbt).
 # duo390, duo951: an iPhone Duo's, upright and on its side, the system's bars beside the app (theirs not filmed).
 D="$(cd "$(dirname "$0")" && pwd)"
@@ -41,6 +41,7 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
     desk390) w=390; h=760; platform=0; system=''; corner=16 ;;
     desk600) w=600; h=760; platform=0; system=''; corner=16 ;;
     desk1280) w=1280; h=800; platform=0; system=''; corner=16 ;;
+    desk1280short) w=1280; h=340; platform=0; system=''; corner=16 ;;
     win600) w=600; h=760; platform=3; system=''; corner=8 ;;
     win1280) w=1280; h=800; platform=3; system=''; corner=8 ;;
     *) echo "corners.sh: no window $win" >&2; continue ;;

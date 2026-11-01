@@ -113,7 +113,7 @@ struct Nav[P] {
   // (for how fast, scroll.mbt)
   mut x0 : Double
   mut vel : Double
-  track : Tracker
+  track : @view.Tracker
   // the system's gesture (Android's): where its finger last moved to, when, and the progress and the page's place
   // then; the system's progress said with it after that is its own going back as it calls the gesture off
   mut moved_x : Double
@@ -193,7 +193,7 @@ pub fn[P] Nav::new(
     room_h: 0.0,
     x0: 0.0,
     vel: 0.0,
-    track: Tracker::new(),
+    track: @view.Tracker::new(),
     moved_x: 0.0,
     moved_at: 0.0,
     moved_progress: -1.0,

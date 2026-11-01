@@ -16,9 +16,9 @@ let tree_presented : Set[Int] = Set::new()
 let presented_in_tree : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether `p` is the window's tree's to draw: a confirm not on a sheet, where a tree draws them.
+/// Whether `p` is the window's tree's to draw: a confirm or a question not on a sheet, where a tree draws them.
 fn tree_draws(p : Presented, sheet : Bool) -> Bool {
-  presented_in_tree.val && !sheet && p.shows is Confirm(_, _, _, _, _)
+  presented_in_tree.val && !sheet && p.shows is (Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _))
 }
 
 ///|
@@ -38,33 +38,59 @@ pub fn presented_nodes(root : @view.View) -> Unit {
       let serial = @signals.untracked(fn() { item.get() })
       guard presented_now.search_by(fn(q) { q.serial == serial }) is Some(i) else { return }
       let p = presented_now[i]
-      guard p.shows is Confirm(title, words, action, danger, run) else { return }
       // (the root's node it is in at its place in the window's stack of layers: its serial, as the host's presented are)
       row.over(Is(true)).stacked(Is(serial)) |> ignore
-      confirm_node(
-        row,
-        fn() {
-          presented_said.get() |> ignore
-          presented_open_of(serial)
-        },
-        fn() { title },
-        fn() { words },
-        fn() { action },
-        danger,
-        fn() { dismissed_now(serial) },
-        fn() {
-          p.ended = true
-          close_from_serial(serial)
-          run()
-        },
-        // (drawn from its layer made till its way out is over: one closed before it ever showed, never)
-        shown=fn() { tree_presented.add(serial) },
-        gone=fn() {
-          // (its way out over: the host lets it go, as its own once drawn no more)
-          tree_presented.remove(serial)
-          presented_told()
-        },
-      )
+      let open = fn() {
+        presented_said.get() |> ignore
+        presented_open_of(serial)
+      }
+      // (drawn from its layer made till its way out is over: one closed before it ever showed, never)
+      let shown = fn() { tree_presented.add(serial) }
+      let gone = fn() {
+        // (its way out over: the host lets it go, as its own once drawn no more)
+        tree_presented.remove(serial)
+        presented_told()
+      }
+      // (said: it closes, and what is over it, then what it says goes on, at that moment)
+      let done = fn(f : () -> Unit) {
+        p.ended = true
+        close_from_serial(serial)
+        f()
+      }
+      match p.shows {
+        Confirm(title, words, action, danger, run) =>
+          confirm_node(
+            row,
+            open,
+            fn() { title },
+            fn() { words },
+            fn() { action },
+            danger,
+            fn() { dismissed_now(serial) },
+            fn() { done(run) },
+            shown~,
+            gone~,
+          )
+        Ask(title, value, placeholder, action, hint, secret, empty, run) =>
+          ask_node(
+            row,
+            "sf-present/\{serial}",
+            open,
+            title,
+            p.line,
+            value,
+            placeholder,
+            action,
+            hint,
+            secret,
+            empty,
+            fn() { dismissed_now(serial) },
+            fn(line) { done(fn() { run(line) }) },
+            shown~,
+            gone~,
+          )
+        _ => ()
+      }
     },
   )
 }
