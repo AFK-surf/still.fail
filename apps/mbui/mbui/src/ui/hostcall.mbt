@@ -65,6 +65,8 @@ struct FakeHost {
   // asked for (source, max_px); decodes, ready from the next frame on
   image_sizes : Map[String, (Int, Int)]
   image_loads : Array[(String, Int)]
+  /// what each decode asked for is of: its source (bytes handed over, the source they were handed for)
+  image_srcs : Map[Int, String]
   images : Map[Int, FakeImage]
   // what bold adds to a cluster's advance, in ems (0 by default: weight
   // changes nothing)
@@ -1387,6 +1389,10 @@ fn h_image_load(src : String, max_px : Int) -> Int {
       id
     }
   }
+  match fake.val {
+    Some(f) => f.image_srcs[id] = src
+    None => ()
+  }
   outside_start(outside_image, id, "image \{id} \{src}")
   id
 }
@@ -1418,6 +1424,10 @@ fn h_image_load_bytes(data : Bytes, max_px : Int, src : String) -> Int {
       rec_image_asked(id, { "ib": head })
       id
     }
+  }
+  match fake.val {
+    Some(f) => f.image_srcs[id] = src
+    None => ()
   }
   outside_start(outside_image, id, "image \{id} (\{data.length()} bytes) \{src}")
   id

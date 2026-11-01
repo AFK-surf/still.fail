@@ -253,6 +253,45 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     .over(Is(true))
     |> @ui.old_takes_own
     |> ignore
+    // (the picture lying flat where its zoom has it, its node (what draws the picture leaves it to it then: a flight, a
+    // strip moved or going, the old view's still), under what is drawn over it)
+    canvas.box(fn(p) {
+      // (as each frame draws it while the strip or the flight goes, the moment what draws the picture reads them at;
+      // where neither goes, the clock read no more)
+      let flat = fn() {
+        vw.fly.said()
+        pv_strip.way.said()
+        vw.bytes.get() |> ignore
+        let now = p.logic_at()
+        let t = if pv_strip.way.goes_at(now) || vw.fly.goes_at(now) { p.drawn_at() } else { now }
+        vw.picture_flat_at(t)
+      }
+      p
+      .over(Is(true))
+      .offset(By(fn() {
+        match vw.marks_rect_on(p) {
+          Some((x, y, _, _)) => (x, y)
+          None => (0.0, 0.0)
+        }
+      }))
+      .width(By(fn() { vw.marks_rect_on(p).map(fn(r) { r.2 }) }))
+      .height(By(fn() { vw.marks_rect_on(p).map(fn(r) { r.3 }) }))
+      // (its whole picture once read, what stands in for it till it is decoded for the size it is drawn at, as
+      // Viewer::shown_picture has them: which of them decided as it is drawn, at its pixels then)
+      .image(By(fn() {
+        match (flat(), vw.marks_rect_on(p)) {
+          (true, Some(_)) =>
+            match vw.picture(src) {
+              "" => None
+              picture if picture != vw.image => Some((picture, "", stage_px))
+              picture => Some((picture, vw.stand_in(src), stage_px))
+            }
+          _ => None
+        }
+      }))
+      |> ignore
+    })
+    |> ignore
     // (over the picture while it marks, once where it is is known: the marks drawn and the numbered marks' pins, its
     // nodes; over them the words being written, an old view's taking a finger only on them)
     canvas.show(fn() { vw.marks_shown() }, fn(h) {
@@ -627,16 +666,21 @@ pub fn Viewer::marks_rect(self : Viewer, at : Double) -> (Double, Double, Double
 }
 
 ///|
+/// Whether viewer `vw`'s picture lies flat where its zoom has it at `t` (its node draws it then, View::image; what draws
+/// the picture, Viewer::image_view, leaves it to it): drawn by the window's tree, not flying, the strip of pictures where
+/// it rests (none beside it shown, none going), not a picture that could not be decoded (what draws the picture says
+/// so alone: Viewer::picture_failed). Read the same by both at the same moment.
+pub fn Viewer::picture_flat_at(self : Viewer, t : Double) -> Bool {
+  self.in_tree && !self.flies && pv_strip.way.value_at(t) == 0.0 && !pv_strip.way.goes_at(t) && !self.picture_failed()
+}
+
+///|
 /// Whether what draws viewer `vw`'s picture draws its marks over it (Viewer::image_view's): marking, where the picture is
 /// known, not one that could not be decoded (its words saying so alone). As each is told.
 fn Viewer::marks_shown(self : Viewer) -> Bool {
   marks_said()
   self.zoom.told()
-  let failed = match self.bytes.get() {
-    Some(_) => @ui.image_state(self.image_name()) == -1
-    None => false
-  }
-  marking.on && !failed && self.zoom.rect() is Some(_)
+  marking.on && !self.picture_failed() && self.zoom.rect() is Some(_)
 }
 
 ///|

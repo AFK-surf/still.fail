@@ -3420,6 +3420,8 @@ pub fn Viewer::part_call(Self) -> String
 pub fn Viewer::part_params(Self, Double, Int32, String) -> Map[String, Json]
 pub fn Viewer::pdf_stage(Self, @ui.Ctx, Bytes, Int32) -> Unit
 pub fn Viewer::picture(Self, Source) -> String
+pub fn Viewer::picture_failed(Self) -> Bool
+pub fn Viewer::picture_flat_at(Self, Double) -> Bool
 pub fn Viewer::player_stage(Self, @ui.Ctx, Source, Int32) -> Unit
 pub fn Viewer::read_near(Self, Source, Self?, Self?) -> Unit
 pub fn Viewer::read_on(Self, Source) -> Unit
