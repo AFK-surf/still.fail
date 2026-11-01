@@ -542,7 +542,7 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
       text(p, "name"),
       note=join(facts, " · "),
       lead=fn() {
-        c.box(style=st_profile_mark, fn() { @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), st_profile_glyph) |> ignore })
+        c.box(style=st_profile_mark, fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), st_profile_glyph, text(p, "providerMark")) })
         |> ignore
       },
       // (its allowance under what it is, a line of its own: as the profiles' page lists it)

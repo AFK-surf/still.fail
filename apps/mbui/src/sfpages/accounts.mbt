@@ -186,7 +186,7 @@ fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, name : 
   let facts = join([text(p, "kindText"), if email != text(p, "name") { email } else { "" }, place], " · ")
   @sf.own_head(
     c,
-    fn(_) { @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), pf_mark_glyph) |> ignore },
+    fn(_) { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), pf_mark_glyph, text(p, "providerMark")) },
     text(p, "name"),
     // its new name shows while it is saved
     busy=is_doing(core, ["profile.put"], on),
