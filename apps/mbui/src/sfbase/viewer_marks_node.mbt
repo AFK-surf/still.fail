@@ -3,7 +3,8 @@
 // it), as the picture's own drawing is (Viewer::finger_on): the tool a stroke is drawn with the one taken up, whatever
 // frames came between. The note being written too (note_box_node): its pin and what it is, 删除 and 完成 nodes, done as
 // their press is let go; what is written in it an old view's field, the note as tall as it lays out. The notes' cards
-// over the tools are the old view's still (marks_foot).
+// over the tools (note_cards_node): each opening its note as its press is let go, those the row has not the room for
+// left out of it, the last first, a +N card standing for them (a menu of them).
 
 ///|
 /// How a marking tool is drawn (picture_button's, in the viewer's dark): its icon in the quieter white, near white on
@@ -25,17 +26,16 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
   let tips = @sf.TipLayer::new(fn() { tips_at.val })
   h.box(fn(col) {
     col.over(Is(true)).padding(By(fn() { (0.0, 0.0, 0.0, foot()) })) |> ignore
-    // (the notes, the old view's: down to the tools, as far as it holds them)
-    // (taking a press only where it has something to press: the rest the picture's)
-    @ui.old(col, fn(c) {
-      // (marking as it is: built again as it changes, as image_bars' was)
-      marks_said()
-      c.spacer()
-      marks_foot(c, tools=false, note=false)
-    })
-    .grow(Is(1.0))
-    |> @ui.old_takes_own
-    |> ignore
+    // (the room over them the picture's: nothing of the foot's)
+    col.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+    // (the notes' cards, while no note is written: note_cards_node)
+    col.show(
+      fn() {
+        marks_said()
+        marking.note < 0 && mark_notes().length() > 0
+      },
+      fn(r) { note_cards_node(r) },
+    )
     // (the note being written, over the tools' room: note_box_node)
     col.show(
       fn() {
@@ -496,6 +496,172 @@ fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
       })
       |> ignore
       m.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The notes said so far in `r` (marks_foot's, Notes.kt's tray), 10 over the tools: a card each across the foot (16 in
+/// at its sides, 8 between), in their numbers' order; where they do not all fit, the last leave the row first, a +N
+/// card at its end standing for them (a menu of them, in their order): nothing scrolled, nothing wrapped. Each card,
+/// pressed (its press let go on it), opens its note; +N's, its menu. Which are left out, how many +N says and what its
+/// menu holds one fact: the row's as it was laid out (View::left_out).
+fn note_cards_node(r : @view.View) -> Unit {
+  r.padding(Is((0.0, 0.0, 0.0, marks_notes_over_tools))) |> ignore
+  // (each card's node by its mark: what +N reads of which are left out)
+  let cards : Map[Int, @view.View] = {}
+  r.box(fn(row) {
+    // (each card as tall as what it holds, +N's its one line: marks_notes_row's, its items at its top)
+    row
+    .row(Is(true))
+    .lines_up(Is(Some(Start)))
+    .fits(Is(true))
+    .padding(Is((@ui.Space::px(S4), 0.0, @ui.Space::px(S4), 0.0)))
+    .gap(Is(@ui.Space::px(S2)))
+    |> ignore
+    row.each(
+      fn() {
+        marks_said()
+        mark_notes()
+      },
+      fn(x) { x.0 },
+      fn(card, note) {
+        let mid = @signals.untracked(fn() { note.get().0 })
+        cards[mid] = card
+        card.owns(fn() { cards.remove(mid) }) |> ignore
+        // (the last in the row leaving it first)
+        card.drops(By(fn() {
+          marks_said()
+          let notes = mark_notes()
+          match notes.search_by(fn(x) { x.0 == mid }) {
+            Some(i) => notes.length() - i
+            None => 1
+          }
+        }))
+        |> ignore
+        note_tray_card_node(
+          card,
+          note_card_w,
+          fn(head) {
+            note_pin_node(head, fn() {
+              let (_, n, _, color) = note.get()
+              (n, color)
+            })
+            note_first_node(head, fn() {
+              marks_said()
+              note_said(mid)
+            }, fn() {
+              marks_said()
+              marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string() == ""
+            })
+          },
+          fn(b) {
+            b.box(fn(t) {
+              t
+              .words(By(fn() { note.get().2 }))
+              .words_look(By(fn() {
+                let (size, _) = @ui.tree_theme().text_size(Caption)
+                { size, weight: 400, line: 17.0, wrap: false }
+              }))
+              .ink(Is(note_muted))
+              |> ignore
+            })
+            |> ignore
+          },
+          label=fn() {
+            let (_, n, _, _) = note.get()
+            "\{n}  " + note_said(mid)
+          },
+          press=fn() { marks_open_note(@ui.current(), mid) },
+        )
+      },
+    )
+    // +N, while some are left out: their notes' menu
+    row.box(fn(more) {
+      more.drops(Is(-1)) |> ignore
+      let gone = fn() {
+        marks_said()
+        mark_notes().filter(fn(x) {
+          match cards.get(x.0) {
+            Some(v) => v.left_out()
+            None => false
+          }
+        })
+      }
+      note_tray_card_node(
+        more,
+        note_more_w,
+        fn(head) {
+          note_first_node(head, fn() { "+\{gone().length()}" }, fn() { false })
+        },
+        fn(_) {  },
+        label=fn() { "+\{gone().length()}" },
+        press=fn() {
+          let (x, y, w, h) = more.rect()
+          let items : Array[@sf.MenuItem?] = gone().map(fn(x) {
+            Some(@sf.menu_item_of("\{x.1}  " + note_said(x.0), fn() { marks_open_note(@ui.current(), x.0) }))
+          })
+          @sf.menu(items, from=At(x, y, w, h), along=End)
+        },
+      )
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A card of the notes' tray in `card` (note_tray_card's: `w` wide, frosted, round by the ladder's row step, its pin
+/// concentric in its corner, its first line level with it): its head row (`head`) over what `body` puts under it,
+/// read out as a button `label` says; pressed (its press let go on it), `press`.
+fn note_tray_card_node(
+  card : @view.View,
+  w : Double,
+  head : (@view.View) -> Unit,
+  body : (@view.View) -> Unit,
+  label~ : () -> String,
+  press~ : () -> Unit,
+) -> Unit {
+  let pin_in = @sf.capsule_in(note_card_corner, note_pin)
+  card
+  .width(Is(Some(w)))
+  .padding(Is((pin_in, pin_in - (note_first_line - note_pin) / 2.0, note_card_end, note_card_foot)))
+  .gap(Is(3.0))
+  .radius(Is(note_card_corner))
+  .ground(Is(note_ground))
+  .shadow(Is((@sf.floating.sigma, @sf.floating.dy, @sf.floating.color)))
+  .presses(Is(true))
+  .says(By(fn() {
+    marks_said()
+    Some(@view.said(Button, label=label()))
+  }))
+  .on_press(press)
+  |> ignore
+  card.box(fn(h) {
+    h.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S1_5))) |> ignore
+    head(h)
+  })
+  |> ignore
+  body(card)
+}
+
+///|
+/// A tray card's first line (note_first's) in `head`: `words`, muted where `quiet` (only quoting), cut by its card where
+/// long, in the meta's size on lines 20 apart.
+fn note_first_node(head : @view.View, words : () -> String, quiet : () -> Bool) -> Unit {
+  head.box(fn(f) {
+    f.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).clips(Is(true)) |> ignore
+    f.box(fn(t) {
+      t
+      .words(By(words))
+      .words_look(By(fn() {
+        let (size, _) = @ui.tree_theme().text_size(Meta)
+        { size, weight: 400, line: 20.0, wrap: false }
+      }))
+      .ink(By(fn() { if quiet() { note_muted } else { note_ink } }))
+      |> ignore
     })
     |> ignore
   })
