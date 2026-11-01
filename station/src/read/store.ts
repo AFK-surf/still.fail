@@ -485,6 +485,44 @@ export function chatShares(s: Store): Map<string, { to: { workspace: string; nam
   );
 }
 
+// ── chats an agent opened (opened_chats) ──
+
+/// The chats of this station another agent opened (chat_create), by their session's key: the session that opened each,
+/// on its station (null: this one), and what it was called then, else (one of this station's, opened before that was
+/// kept) its session's title. None on a database from before the table or the column.
+export function openers(s: Store): Map<string, { station: string | null; session: string; title: string | null }> {
+  let rows: Json[];
+  try {
+    rows = all(s, "SELECT o.child, o.parent_station, o.parent, o.opener_title, p.title AS parent_title FROM opened_chats o LEFT JOIN sessions p ON o.parent_station = '' AND p.key = o.parent WHERE o.child_station = ''");
+  } catch {
+    return new Map();
+  }
+  return new Map(
+    rows.map((r) => [
+      r.child as string,
+      { station: r.parent_station === "" ? null : (r.parent_station as string), session: r.parent as string, title: (r.opener_title ?? r.parent_title ?? null) as string | null },
+    ]),
+  );
+}
+
+/// The chats each session of this station opened (chat_create), by its key, the first first: each on its station
+/// (null: this one), its session, and its title as given then, else (one of this station's) its session's.
+export function openedChats(s: Store): Map<string, { station: string | null; session: string; title: string | null }[]> {
+  let rows: Json[];
+  try {
+    rows = all(s, "SELECT o.parent, o.child_station, o.child, o.title, c.title AS child_title FROM opened_chats o LEFT JOIN sessions c ON o.child_station = '' AND c.key = o.child WHERE o.parent_station = '' ORDER BY o.created_at, o.rowid");
+  } catch {
+    return new Map();
+  }
+  const out = new Map<string, { station: string | null; session: string; title: string | null }[]>();
+  for (const r of rows) {
+    const list = out.get(r.parent) ?? [];
+    list.push({ station: r.child_station === "" ? null : (r.child_station as string), session: r.child as string, title: (r.title ?? r.child_title ?? null) as string | null });
+    out.set(r.parent, list);
+  }
+  return out;
+}
+
 // ── chats published as snapshots (published) ──
 
 /// Each chat's published snapshots, the latest first, by thread (none on a database from before the table).

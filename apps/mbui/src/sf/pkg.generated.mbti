@@ -1912,7 +1912,7 @@ pub fn strokes_ms(Int32) -> Double
 
 pub let strong : @ui.TextStyle
 
-pub fn submenu_row(@ui.Ctx, String, String, Array[MenuItem?]) -> Unit
+pub fn submenu_row(@ui.Ctx, String, String, Array[MenuItem?], icon? : String, side? : @view.Side) -> Unit
 
 pub fn surface(Double, Double) -> Surface
 

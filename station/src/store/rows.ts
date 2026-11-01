@@ -355,12 +355,14 @@ export function toSession(r: Json): SessionRow {
 export type Opened = {
   childStation: string; child: string; parentStation: string; parent: string; key: string; title: string | null;
   link: string | null; state: string | null; createdAt: number;
+  /// What the parent was called when it opened the child (kept by the child's station only; null before it).
+  openerTitle: string | null;
 };
 
 export function toOpened(r: Json): Opened {
   return {
     childStation: r.child_station, child: r.child, parentStation: r.parent_station, parent: r.parent, key: r.key, title: r.title,
-    link: r.link, state: r.state, createdAt: r.created_at,
+    link: r.link, state: r.state, createdAt: r.created_at, openerTitle: r.opener_title ?? null,
   };
 }
 

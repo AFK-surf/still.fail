@@ -297,13 +297,33 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
       }
     })
     |> ignore
+    // opened by another chat's agent: the way back there (由「…」创建), pressed as a row is
+    match view {
+      Some({ opener: Some(o), .. }) => {
+        let id = c.id("info/opener")
+        if c.clicked(id) {
+          close()
+          open_page(Chat(o.chat))
+        }
+        let said = if o.archived { o.text + " · " + o.note } else { o.text }
+        let b = c.box(style=info_opener, id~, fn() {
+          @sf.icon(c, "spawned", size=16.0, color=t.p.accent_text) |> ignore
+          c.text(said, style=info_opener_words) |> ignore
+          @motion.ripple(c, id, 8.0)
+        })
+        c.semantics(b, Link, id~, label=said)
+      }
+      _ => ()
+    }
     // who started it and when, how many take part, when it was last written in: what there is of them, in a line
     let facts : Array[String] = []
     match text(chat, "place") {
       "" => ()
       p => facts.push(fill("android-chat.info.from.slack", [("place", p)]))
     }
+    // (made by another chat's agent: that chat said over this line, not a person)
     let creator = match field(thread, "creator") {
+      _ if view is Some({ opener: Some(_), .. }) => ""
       Some(Object(_)) as cr =>
         match text(field(cr, "shown"), "display") {
           "" => text(cr, "name")
@@ -393,6 +413,22 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
         }
       })
       c.box(h=Px(10.0), fn() {  }) |> ignore
+    }
+    // the chats its agent made (after who works in it): one row, 创建了 N 个对话, each of them in the menu it opens
+    match view {
+      Some({ opened: [_, ..] as opened, opened_text, .. }) =>
+        info_list(c, fn() {
+          let key = "info/opened"
+          let pressed = info_row(c, key, fn() {
+            @sf.icon(c, "spawned", size=16.0, color=t.p.muted) |> ignore
+            c.text(opened_text, style=info_opened_title) |> ignore
+            chevron(c)
+          })
+          if pressed {
+            @sf.menu(@sfpages.opened_items(opened, then=close), from=Of(c.id(key)), title=opened_text)
+          }
+        })
+      _ => ()
     }
     // then what is in it, one card (the user, 2026-10-30: who works in it before what it made, what it holds apart
     // from what is done with it): its pull requests, what else was said, what its agents and other chats' wrote
@@ -1829,3 +1865,17 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
   })
   |> ignore
 }
+
+///|
+/// The way back to the chat an agent opened it from (chat_info_body): a row a finger presses, its words in the accent.
+// kept across runs: a value (no field of it changes)
+let info_opener : @ui.Style = @ui.css("row w=Full min_h=S11 gap=S1_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let info_opener_words : @ui.TextStyle = @ui.text_style(size=Body, color=AccentText, wrap=false, w=Cut)
+
+///|
+/// The row of the chats its agent made, in the chat's sheet (chat_info_body): how many, its words a row's.
+// kept across runs: a value (no field of it changes)
+let info_opened_title : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, wrap=false, w=Full)

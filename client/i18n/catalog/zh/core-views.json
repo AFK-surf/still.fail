@@ -520,6 +520,8 @@
   "core-views.search.offline": "离线",
   "core-views.search.offlineStations": "{names} 离线，其上的内容未搜索",
   "core-views.search.older": "{names} 需要更新后才能搜索",
+  "core-views.opened": "创建了 {n} 个对话",
+  "core-views.opener": "由「{title}」创建",
   "core-views.search.archived": "已归档",
   "core-views.feishu": "飞书",
   "core-views.admin.enterprise": "企业版",

@@ -598,6 +598,8 @@
   "core-views.search.offline": "Offline",
   "core-views.search.offlineStations": "{names} offline, not searched",
   "core-views.search.older": "{names} must be updated to be searched",
+  "core-views.opened": {"one": "Created 1 chat", "other": "Created {n} chats"},
+  "core-views.opener": "Created by “{title}”",
   "core-views.search.archived": "Archived",
   "core-views.feishu": "Feishu",
   "core-views.admin.enterprise": "Enterprise",

@@ -188,7 +188,7 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
     const chosen = model === null ? chosenHere(hub, createdBy, row.ws ?? null, runtime as RuntimeName | null) : choice;
     const [child, chat] = makeChat(hub, { ...choice, ...chosen, title, createdBy, ws: row.ws ?? null });
     const link = hub.link(child) ?? null;
-    hub.store.insertOpened({ childStation: "", child, parentStation: "", parent: key, key: k, title, link });
+    hub.store.insertOpened({ childStation: "", child, parentStation: "", parent: key, key: k, title, link, openerTitle: from });
     const thread: SessionThread = { thread: chat, connect: INTERNAL_CONNECT };
     await sendHere(child, thread);
     await sayOpened(hub, key, title ?? text.split("\n")[0]!.slice(0, 60), link);
@@ -248,7 +248,9 @@ export function createForPeer(hub: Hub, peer: string, request: Json, ws: string 
   // Its opener named no model: what its starter uses most here (an opener from before this sends its own, inherited).
   const chosen = request?.choose === true && model === null ? chosenHere(hub, createdBy, ws, request?.runtimeGiven === true ? (runtime as RuntimeName) : null) : { runtime: runtime as RuntimeName, model };
   const [child] = makeChat(hub, { ...chosen, effort: given(request, "effort"), inherited: request?.inherited === true, title, createdBy, ws });
-  hub.store.insertOpened({ childStation: "", child, parentStation: peer, parent, key: k, title, link: hub.link(child) ?? null });
+  // What its opener was called (its chat's way back to it says so while that chat is not in the viewer's list).
+  const openerTitle = typeof request?.from?.title === "string" && request.from.title !== "" ? (request.from.title as string) : null;
+  hub.store.insertOpened({ childStation: "", child, parentStation: peer, parent, key: k, title, link: hub.link(child) ?? null, openerTitle });
   log.info("hub", "chat opened for another station's session", { session: child, station: peer, opener: parent });
   return answer(child);
 }

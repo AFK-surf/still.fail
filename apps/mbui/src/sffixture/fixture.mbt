@@ -304,6 +304,63 @@ fn fix_pins(r : Json) -> Json {
 }
 
 ///|
+/// A row's or a chat's `opener`, as the core says one an agent opened (chat-opener, its sheet open: chat-opener-info): the chat of 和 Ana 一起看新版的引导页.
+fn with_opener(v : Json?) -> Json? {
+  match v {
+    Some(Object(m)) => {
+      let m = m.copy()
+      m["opener"] = {
+        "station": "ws1/st1",
+        "session": "s-c6",
+        "title": "和 Ana 一起看新版的引导页",
+        "text": "由「和 Ana 一起看新版的引导页」创建",
+      }
+      Some(Json::object(m))
+    }
+    other => other
+  }
+}
+
+///|
+/// A row made by the first row's chat's agent (chat-opened): its `opener` that chat.
+fn opened_by_first(r : Json) -> Json {
+  match r {
+    Object(m) => {
+      let m = m.copy()
+      m["opener"] = { "station": "ws1/st1", "session": "s-c1", "title": "整理发布清单", "text": "由「整理发布清单」创建" }
+      Json::object(m)
+    }
+    other => other
+  }
+}
+
+///|
+/// The first row's chat with the chats its agent made (chat-opened), as the core lists them: one waiting for the
+/// viewer, one done, one in the archive.
+fn with_opened(v : Json?) -> Json? {
+  match v {
+    Some(Object(m)) => {
+      let m = m.copy()
+      m["opened"] = [
+        {
+          "station": "ws1/st2",
+          "session": "s-c3",
+          "title": "夜里的构建又失败了",
+          "mark": "block",
+          "stateLead": "need",
+          "stateText": "要你帮忙：测试机的磁盘满了，要不要清理旧的缓存？",
+        },
+        { "station": "ws1/st1", "session": "s-c4", "title": "给设置页加一个深色模式开关", "stateLead": "done", "stateText": "做完了：开关和三处颜色都改好了" },
+        { "station": "ws1/st1", "session": "s-c12", "title": "旧版引导页的截图", "archived": true, "note": "已归档" },
+      ]
+      m["openedText"] = "创建了 3 个对话"
+      Some(Json::object(m))
+    }
+    other => other
+  }
+}
+
+///|
 /// The chats of the first workspace, newest first, by day.
 pub fn fixture_days(f : Fixture) -> Array[Json] {
   if f.mode == "webdemo" {
@@ -355,6 +412,15 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
   ]
   // home-pins: rows from a station that knows pins, for their menus' 固定 and 保留
   let today = if f.mode == "home-pins" { today.map(fix_pins) } else { today }
+  // chat-opener: the first row's chat and 夜里的构建 opened by 和 Ana 一起看新版的引导页's agent (chat_create)
+  let today = if f.mode.has_prefix("chat-opener") {
+    today.mapi(fn(i, r) { if i == 0 || i == 2 { with_opener(Some(r)).unwrap_or(r) } else { r } })
+  } else if f.mode.has_prefix("chat-opened") {
+    // chat-opened: 夜里的构建 and 深色模式开关 made by the first row's chat's agent
+    today.mapi(fn(i, r) { if i == 2 || i == 3 { opened_by_first(r) } else { r } })
+  } else {
+    today
+  }
   let yesterday = [
     row("c6", "和 Ana 一起看新版的引导页", "ws1/st1", "昨天 21:14", {
       "last": last("Ana：第二屏的插画可以再小一点"),
@@ -595,6 +661,10 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
     "stations" if params.get("drive") is Some(True) =>
       fix_browse_with_drive(f, fixture_stations_way(value), text(Some(Json::object(params)), "here"))
     "stations" => fixture_stations_way(value)
+    "chat" if f.mode.has_prefix("chat-opened") && params.get("session") is Some(String("s-c1")) =>
+      fixture_with_tabs(f, params, with_opened(value))
+    "chat" if f.mode.has_prefix("chat-opener") && params.get("session") is Some(String("s-c1")) =>
+      fixture_with_tabs(f, params, with_opener(value))
     "chat" => fixture_with_tabs(f, params, value)
     "stationNet" => {
       let address = text(Some(Json::object(params)), "station")

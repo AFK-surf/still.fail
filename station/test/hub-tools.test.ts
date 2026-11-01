@@ -10,11 +10,13 @@ import { test } from "node:test";
 import { cardArg, optionsArg } from "../src/sessions/args.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
-import { fromPeer } from "../src/sessions/messages.ts";
+import { fromPeer, sender } from "../src/sessions/messages.ts";
 import { handedOf } from "../src/store/rows.ts";
 import { CREATE, MAX_OPEN, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { forPeer } from "../src/sessions/others.ts";
+import { makeStore } from "../src/read/store.ts";
+import { chats } from "../src/read/views.ts";
 import { FETCHED, fileForPeer, putForPeer } from "../src/sessions/peer-files.ts";
 import { packWorkspaceIf } from "../src/sessions/archive.ts";
 import { roomOf } from "../src/sessions/footprint.ts";
@@ -937,6 +939,9 @@ test("files go between stations: a chat's attachments come with reading it, and 
 
 // ── chat_create ──
 
+/// Whoever reads the list in these tests: the station's own viewer, of every workspace.
+const LIST_VIEWER = { sub: "local", email: "local", name: "local", role: "owner", workspace: "ws", device: "d" } as any;
+
 /// The fake runtime session of session `key`.
 const runtimeOf = (r: Rig, key: string) => {
   const found = [...r.claude.sessions, ...r.codex.sessions].filter((s) => s.options.key === key).at(-1);
@@ -978,6 +983,16 @@ test("an agent opens a chat here: it begins with its message, goes to its starte
   const notice = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
   assert.equal(notice.authorKind, "ember");
   assert.ok(notice.text.includes(`<https://ember.test/o/ws/st/${child.replaceAll(":", "%3A")}|安卓构建>`), notice.text);
+  // Its row in the list leads back to the chat that opened it, named as that chat was then; the opener's row says
+  // nothing of it, and archiving the opener leaves it as it was.
+  const listed = () => new Map(chats(makeStore(r.store.db, r.dir), LIST_VIEWER, false).map((x: any) => [x.id, x]));
+  assert.deepEqual(listed().get(child).opener, { session: keyA, title: sender(r.hub, keyA)[0] });
+  assert.equal(listed().get(keyA).opener, undefined);
+  // the opener's row lists the chats it opened
+  assert.deepEqual(listed().get(keyA).opened, [{ session: child, title: "安卓构建" }]);
+  r.store.setArchived(keyA, true, "manual");
+  assert.deepEqual(listed().get(child).opener?.session, keyA);
+  r.store.setArchived(keyA, false, "manual");
   // The same key again: that chat, nothing new.
   const again = await r.call(keyA, "chat_create", { key: "android", text: "build the android app" });
   assert.ok(again.includes("already opened"), again);
@@ -1049,6 +1064,12 @@ test("an agent opens a chat on another station: made there once per key, its fir
   assert.ok(said.includes("station far"), said);
   const [child] = far.store.listSessions().map((s) => s.key);
   assert.ok(child !== undefined && far.store.openerOf(child)!.parent === keyA);
+  // Its row there leads back to the opener on this station, named as it was called.
+  const row = chats(makeStore(far.store.db, far.dir), LIST_VIEWER, false).find((x: any) => x.id === child);
+  assert.deepEqual(row.opener, { station: "near", session: keyA, title: sender(near.hub, keyA)[0] });
+  // and the opener's here, the chat there it opened
+  const opener = chats(makeStore(near.store.db, near.dir), LIST_VIEWER, false).find((x: any) => x.id === keyA);
+  assert.deepEqual(opener.opened, [{ station: "far", session: child, title: "跑测试" }]);
   assert.deepEqual(near.store.openedBy(keyA).map((o) => [o.childStation, o.child]), [["far", child]]);
   const thread = far.store.homeChat(child!)!;
   assert.equal(thread.title, "跑测试");

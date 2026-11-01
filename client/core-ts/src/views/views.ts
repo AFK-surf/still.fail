@@ -1678,8 +1678,57 @@ export class Views implements Owner {
         for (const k of ["stateLead", "stateLeadText", "stateRest", "stateAbout"]) delete row[k];
       }
     }
+    const opener = this.#opener(s.address, raw);
+    if (opener !== null) row.opener = opener;
+    else delete row.opener;
     if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;
+  }
+
+  /// The chats a chat's agent opened (its station's row's `opened`), as their lists have them: each on its station, titled
+  /// as its row is (else as it was given), where it stands as its row's second line says it (what it needs of the viewer,
+  /// a card, done), its mark; one in its station's archive said so. The first opened first.
+  #opened(station: string, raw: J): J[] {
+    return arr(get(raw, "opened")).flatMap((o) => {
+      const session = str(get(o, "session"));
+      if (session === null) return [];
+      const there = str(get(o, "station"));
+      const at = there !== null && there !== "" ? `${ofAddress(station)}/${there}` : station;
+      const found = this.#core.data.chatNamed(at, session);
+      const row = found?.row as J | undefined;
+      const title = str(get(row, "title")) || str(get(o, "title")) || t("core-views.new_chat");
+      const out: J = { station: at, session, title };
+      if (isObject(row)) {
+        const agents = arr(row.agents);
+        const mark = present.rowState(agents);
+        if (mark !== null) out.mark = mark;
+        const shown = decisions.presentRow({ ...structuredClone(row), agents: agents.map((a: J) => present.session(a)) });
+        const line = present.rowStateLine(shown);
+        if (line !== null) {
+          out.stateText = line[0];
+          if (line[3] !== null) out.stateLead = line[3].kind;
+        }
+      }
+      if (found?.archived === true) {
+        out.archived = true;
+        out.note = t("core-views.search.archived");
+      }
+      return [out];
+    });
+  }
+
+  /// The chat an agent opened a row's chat from (its station's `opener`), as its list has it: on its station (the row's
+  /// own when the station names none), titled as its row is, else as it was called then; one in its archive is said
+  /// so. Null for a chat a person started.
+  #opener(station: string, raw: J): J | null {
+    const o = get(raw, "opener");
+    const session = str(get(o, "session"));
+    if (session === null) return null;
+    const there = str(get(o, "station"));
+    const at = there !== null && there !== "" ? `${ofAddress(station)}/${there}` : station;
+    const found = this.#core.data.chatNamed(at, session);
+    const title = str(get(found?.row, "title")) || str(get(o, "title")) || t("core-views.new_chat");
+    return { station: at, session, title, text: t("core-views.opener", { title }), ...(found?.archived === true ? { archived: true, note: t("core-views.search.archived") } : {}) };
   }
 
   /// A row whose chat has a message sent here that did not go: marked red, its second line saying which (`unsent`: drawn
@@ -1968,6 +2017,14 @@ export class Views implements Owner {
     const archived = this.local.archivedChanging(station, id, null);
     if (archived !== null) view.archived = archived;
     if (row !== undefined && row.pinned !== undefined) view.pinned = typeof row.pinned === "number";
+    const opener = row !== undefined ? this.#opener(station, row) : null;
+    if (opener !== null) view.opener = opener;
+    // the chats it opened, each where it stands, for its bar's list of them
+    const opened = row !== undefined ? this.#opened(station, row) : [];
+    if (opened.length > 0) {
+      view.opened = opened;
+      view.openedText = t("core-views.opened", { n: opened.length });
+    }
     const sessions = arr(view.agents).flatMap((a) => (a.session !== undefined ? [a.session] : []));
     const watch = present.rowWatch(sessions);
     if (watch !== null) view.watch = watch;

@@ -131,8 +131,9 @@ pub fn chat_row(
   let kind = c.id("row/kind/" + key)
   let away = c.id("row/away/" + key)
   let line = c.id("row/line/" + key)
+  let opener = c.id("row/opener/" + key)
   let archive = c.id("row/archive/" + key)
-  let parts = [id, slot, kind, away, line]
+  let parts = [id, slot, kind, away, line, opener]
   let r = row_ref(item)
   let renaming = rows.renaming == key
   let pressed = parts.iter().any(fn(p) { c.pressed(p) })
@@ -348,6 +349,19 @@ pub fn chat_row(
                   @sf.tip(c, "row/away-tip/" + key, away, said)
                 }
             }
+            // opened by another chat's agent: marked so, that chat named on it (由「…」创建), the way there in its menu
+            // (a link only: the two are listed, ordered and archived each on its own)
+            match item.opener {
+              Some(o) if !renaming => {
+                let said = if o.archived { o.text + " · " + o.note } else { o.text }
+                let b = c.box(style=kind_slot, id=opener, taps=false, points=true, fn() {
+                  @sf.icon(c, "spawned", size=kind_glyph, color=t.p.subtle) |> ignore
+                })
+                c.semantics(b, Image, id=opener, label=said)
+                @sf.tip(c, "row/opener-tip/" + key, opener, said)
+              }
+              _ => ()
+            }
             // the station it runs on, by its mark (the core gives one only with several stations): last, so it stands in
             // the same column at every row's end whatever marks come before it
             if @sf.has_station_mark(item.station_emoji, item.station_icon) && !renaming {
@@ -429,6 +443,39 @@ pub fn chat_row(
     })
   } else {
     draw(0.0, more)
+  }
+}
+
+///|
+/// The chats a chat's agent made (ChatView `opened`) as a menu's items (its info's next menu): each its title (已归档
+/// after one in the archive), where it stands its mark (opened_icon); chosen, `then` (what showed them closed), its chat
+/// opened.
+pub fn opened_items(opened : Array[@sfbase.OpenedChat], then? : () -> Unit = fn() {  }) -> Array[@sf.MenuItem?] {
+  opened.map(fn(o) {
+    let label = if o.archived { o.chat.title + " · " + o.note } else { o.chat.title }
+    Some(
+      @sf.menu_item_of(label, icon=opened_icon(o), fn() {
+        then()
+        open_page(Chat(o.chat))
+      }),
+    )
+  })
+}
+
+///|
+/// The mark of a chat a chat's agent made (ChatView `opened`), where it stands: what it needs of the viewer (a bell),
+/// failed, at work, done, in the archive; else the mark of a chat made by another's agent.
+pub fn opened_icon(o : @sfbase.OpenedChat) -> String {
+  if o.archived {
+    "archive"
+  } else {
+    match (o.state_lead, o.mark) {
+      ("need", _) | ("decision", _) | (_, "block") => "bell"
+      (_, "failed") => "close"
+      (_, "run") => "wait"
+      ("done", _) => "check"
+      _ => "spawned"
+    }
   }
 }
 
@@ -574,7 +621,7 @@ let row_icon : Double = 16.0
 ///|
 /// A row's menu (Sidebar.tsx ContextMenu, mobile/Home.tsx useRowMenu), from row `id` at (`x`, `y`): 固定 / 取消固定 (a
 /// station from before pins says nothing: none), 重命名, 保留 / 取消保留 (a chat of its own: a thread; pinned, none: a
-/// pin keeps it out of the archive already), 复制会话链接,
+/// pin keeps it out of the archive already), 打开「…」 (one an agent opened: the chat it opened it from), 复制会话链接,
 /// 转到频道 (a thread with an agent), 复制 session 文件路径, 归档. Held by a finger, felt as it opens and from the row
 /// (a sheet, or under it); right clicked, at the pointer.
 fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y : Double) -> Unit {
@@ -633,6 +680,18 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
         ),
       )
     _ => ()
+  }
+  // the chat an agent opened it from: gone to (its own page, its row as it is)
+  match item.opener {
+    Some(o) =>
+      items.push(
+        Some(
+          @sf.menu_item_of(@sf.t("web-main.chat.openOpener", args=[("title", o.chat.title)]), icon="spawned", fn() {
+            open_page(Chat(o.chat))
+          }),
+        ),
+      )
+    None => ()
   }
   let link = @sfbase.chat_link(item.station, item.session)
   if link != "" {

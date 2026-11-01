@@ -587,6 +587,11 @@ pub(all) struct ChatView {
   cc : Array[ChatCcTo]
   /// the screens of the station it runs on (the core's `screens`), its own display first: its bar's way to them
   screens : Array[ChatScreen]
+  /// the chat an agent opened it from: before its title in its bar, the way back there
+  opener : Opener?
+  /// the chats its agent made, the first first, and how many in words (创建了 3 个对话): its info's list of them
+  opened : Array[OpenedChat]
+  opened_text : String
 }
 
 ///|
@@ -712,7 +717,9 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     screens: items(s, "screens").map(fn(o) {
       let o = Some(o)
       { id: text(o, "id"), kind: text(o, "kind"), title: text(o, "title"), line: text(o, "line"), agent: flag(o, "agent") }
-    }),
+    }),    opener: opener_of(s),
+    opened: opened_of(s),
+    opened_text: text(s, "openedText"),
   }
 }
 

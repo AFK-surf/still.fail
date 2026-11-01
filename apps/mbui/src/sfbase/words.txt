@@ -793,6 +793,7 @@ web-main.chat.newMessages
 web-main.chat.notSent
 web-main.chat.offline
 web-main.chat.offline.named
+web-main.chat.openOpener
 web-main.chat.pin
 web-main.chat.pinFailed
 web-main.chat.quote
