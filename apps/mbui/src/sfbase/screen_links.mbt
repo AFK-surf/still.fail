@@ -16,7 +16,7 @@ pub let peek_ms : Double = 500.0
 pub let peek_size : Double = 640.0
 
 ///|
-/// A preview's shape when its station has not said the screen's size (16:10), and the shapes it is kept within.
+/// The shape of a browser's preview (16:10), and the default before another screen's size is known.
 pub let peek_ratio : Double = 1.6
 
 ///|
@@ -492,9 +492,10 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
 
 ///|
 /// The screen live in its card (ScreenLinks.kt Peek): only looking (not among those on it, its tab not brought
-/// forward), its mark until a picture comes (a tab behind another casts none); in its shape as its station lists it,
-/// within bounds, so the card does not change size as it comes. The newest picture decoded is shown, cropped to the
-/// preview from its top; a newer one is drawn over it once it is decoded. `target`: its card's (peeks_settle).
+/// forward), its mark until a picture comes (a tab behind another casts none). A browser's preview keeps its shape as
+/// its viewport adapts to a viewer; another screen's shape follows its listed size, within bounds. The newest picture
+/// decoded fills the preview, cropped from the top; a newer one is drawn over it once it is decoded.
+/// `target`: its card's (peeks_settle).
 pub fn screen_peek(
   c : @ui.Ctx,
   key : String,
@@ -509,7 +510,7 @@ pub fn screen_peek(
   // (and each frame its row or part is put back as built, kept as its nodes: mbui's kept_nodes.mbt)
   @ui.built_used(fn() { peeks_built[key] = true })
   let listed = if card.width > 0.0 && card.height > 0.0 { card.width / card.height } else { 0.0 }
-  let ratio = if listed > 0.0 {
+  let ratio = if card.kind != "browser" && listed > 0.0 {
     dclamp(listed, peek_ratio_least, peek_ratio_most)
   } else {
     peek_ratio
@@ -524,34 +525,19 @@ pub fn screen_peek(
     if shown < 0 {
       link_mark(c, Some(if card.kind == "browser" { globe_mark } else { monitor_mark }), Muted)
     }
-    // the shown one's shape (else the screen's as listed) for those over it: a screen's frames keep its size
-    let shape = if shown < 0 {
-      listed
-    } else {
-      match @ui.image_natural(p.pictures[shown]) {
-        Some((w, h)) if h > 0.0 => w / h
-        _ => listed
-      }
-    }
     let from = if shown < 0 { 0 } else { shown }
     for i in from..<p.pictures.length() {
       let k = p.pictures[i]
-      c.layer(fn() { peek_picture(c, k, shape, ratio) }) |> ignore
+      c.layer(fn() { peek_picture(c, k) }) |> ignore
     }
   })
   |> ignore
 }
 
 ///|
-/// A picture over the preview as Android's Crop at TopCenter: as wide as the preview from its top when it is
-/// taller than the preview, else as high, its middle across.
-pub fn peek_picture(c : @ui.Ctx, key : String, shape : Double, ratio : Double) -> Unit {
-  if shape > 0.0 && shape < ratio {
-    c.image(key, w=Fill(1.0), h=Px(@sf.peek_frame_px / shape), fit=FitFill, bg=0L, fade=false)
-    |> ignore
-  } else {
-    c.image(key, w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L, fade=false) |> ignore
-  }
+/// A picture fills the preview, centered across and cropped from the top if it is taller than the preview.
+pub fn peek_picture(c : @ui.Ctx, key : String) -> Unit {
+  c.image(key, w=Fill(1.0), h=Fill(1.0), fit=FitCoverAt(0.0), bg=0L, fade=false) |> ignore
 }
 
 ///|
