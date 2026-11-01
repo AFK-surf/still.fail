@@ -832,6 +832,8 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   const values = new Map();
   apply(host, values);
   const option = (n: number, model: string) => v(values, n).options.find((o: J) => o.model === model);
+  // (as it last ran: a field none is left out of the topic)
+  const ran = (o: J) => ["runtime", "effort", "fast"].map((f) => o.usual?.[f] ?? null);
   assert.deepEqual(v(values, 1).near, [], "nothing used here yet");
   assert.equal(option(1, "gpt-6-astra").usual ?? null, null);
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
@@ -843,13 +845,13 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   // the used most first, another workspace's not at all
   assert.deepEqual(v(values, 1).near, ["gpt-6-astra", "claude-sonnet-5"]);
   assert.equal(option(1, "gpt-6-astra").uses, 2);
-  assert.deepEqual(option(1, "gpt-6-astra").usual, { runtime: "codex", effort: "medium", fast: null });
+  assert.deepEqual(ran(option(1, "gpt-6-astra")), ["codex", "medium", null]);
   assert.equal(option(1, "gpt-6-astra").usualText, "中");
   // a chat's, of the models its runtime runs
   assert.ok(v(values, 2).near.every((m: J) => m !== "gpt-6-astra"), String(v(values, 2).near));
   // picked with how it last ran: all of it saved at once
-  const astra = option(1, "gpt-6-astra").usual;
-  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gpt-6-astra", ...astra });
+  const [runtime, effort, fast] = ran(option(1, "gpt-6-astra"));
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gpt-6-astra", runtime, effort, fast });
   apply(host, values);
   assert.equal(v(values, 3).model.model, "gpt-6-astra");
   assert.equal(v(values, 3).effort, "medium");
@@ -857,7 +859,7 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   await ask(host, core, ui, 5, "pick.save", { station: "ws/st", of: "new", effort: null });
   await ask(host, core, ui, 6, "pick.save", { station: "ws/st", of: "new", model: "claude-sonnet-5" });
   apply(host, values);
-  assert.deepEqual(option(1, "gpt-6-astra").usual, { runtime: "codex", effort: null, fast: null });
+  assert.deepEqual(ran(option(1, "gpt-6-astra")), ["codex", null, null]);
   assert.equal(option(1, "gpt-6-astra").usualText ?? null, null);
   core.close();
 });
