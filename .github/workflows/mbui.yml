@@ -256,7 +256,7 @@ jobs:
             .ci/hbc
           key: mbui-linux-${{ matrix.arch }}-m-${{ github.sha }}
           # (m- alone: GitHub tries every restore key on the branch's own caches before main's, so a wider name took the
-          # branch's last push for main's newest, as the android job's did)
+          # branch's last push for main's newest, as the android job's did: see there)
           restore-keys: mbui-linux-${{ matrix.arch }}-m-
       - if: github.ref != 'refs/heads/main'
         run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
