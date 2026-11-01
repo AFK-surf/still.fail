@@ -2263,7 +2263,8 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   probe_phase[3] = probe_phase[3] + c.t_paint
   probe_phase[4] = probe_phase[4] + present
   probe_last_why.val = why
-  if recording {
+  // (what the frames were for, by why: the record's, and the log's with MBUI_PROBE=1)
+  if recording || probe_on.val == 1 {
     let (k, ms) = probe_whys.get(why).unwrap_or((0, 0.0))
     probe_whys[why] = (k + 1, ms + work + present)
     if built_motion.val != "" {
@@ -2334,29 +2335,38 @@ fn probe_said(c : Ctx, t : Double, recording : Bool) -> Unit {
     "avg msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / n * 10.0).round() / 10.0 })} nodes=\{c.count} " +
     "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=\{probe_why} damage_avg=\{(probe_damage.val / n * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / n).round()}% " +
     "gpu_avg=\{if probe_gpu_n.val > 0 { (probe_gpu.val / probe_gpu_n.val.to_double() * 100.0).round() / 100.0 } else { -1.0 }}ms slow=\{probe_slow.val}"
+  // (each line into the record, and on the log with MBUI_PROBE=1: a Mac's, which keeps no record)
+  let say = fn(line : String) {
+    if probe_on.val == 1 {
+      h_log("PROBE " + line)
+    }
+    if recording {
+      @hostapi.perf_line(line)
+    }
+  }
   if probe_on.val == 1 {
     h_log("PROBE " + said)
   }
   if recording {
     @hostapi.perf_line("frames: " + said)
-    let r = (fn(x : Double) { (x * 10.0).round() / 10.0 })
-    let whys = probe_whys.map(fn(_, v) { (v.0, r(v.1)) })
-    @hostapi.perf_line("frames why (the 5 heaviest, ms/frames):" + probe_top(whys, 5, "ms", sep=" | "))
-    if probe_motions.length() > 0 {
-      let motions = probe_motions.map(fn(_, v) { (v.0, r(v.1)) })
-      @hostapi.perf_line("frames motions (the 5 heaviest, ms/frames):" + probe_top(motions, 5, "ms", sep=" | "))
-    }
-    if probe_worst.val.1 != "" {
-      @hostapi.perf_line("frames heaviest: \{r(probe_worst.val.0)}ms \{probe_worst.val.1}")
-    }
-    if probe_channels.length() > 0 {
-      @hostapi.perf_line("messages (bytes/count, by channel):" + probe_top(probe_channels, 6, "B", sep=" | "))
-    }
-    for name, f in probe_also {
-      let line = @signals.untracked(fn() { f(span) })
-      if line != "" {
-        @hostapi.perf_line(name + ": " + line)
-      }
+  }
+  let r = (fn(x : Double) { (x * 10.0).round() / 10.0 })
+  let whys = probe_whys.map(fn(_, v) { (v.0, r(v.1)) })
+  say("frames why (the 5 heaviest, ms/frames):" + probe_top(whys, 5, "ms", sep=" | "))
+  if probe_motions.length() > 0 {
+    let motions = probe_motions.map(fn(_, v) { (v.0, r(v.1)) })
+    say("frames motions (the 5 heaviest, ms/frames):" + probe_top(motions, 5, "ms", sep=" | "))
+  }
+  if probe_worst.val.1 != "" {
+    say("frames heaviest: \{r(probe_worst.val.0)}ms \{probe_worst.val.1}")
+  }
+  if probe_channels.length() > 0 {
+    say("messages (bytes/count, by channel):" + probe_top(probe_channels, 6, "B", sep=" | "))
+  }
+  for name, f in probe_also {
+    let line = @signals.untracked(fn() { f(span) })
+    if line != "" {
+      say(name + ": " + line)
     }
   }
 }

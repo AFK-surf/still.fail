@@ -283,7 +283,7 @@ pub fn Client::call(
   let id = self.next_id
   self.next_id += 1
   self.calls[id] = on_done
-  if @hostapi.perf_recording() {
+  if perf_counts() {
     self.perf_calls[id] = name
     perf_out(name)
   }
