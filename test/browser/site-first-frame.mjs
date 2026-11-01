@@ -32,8 +32,15 @@ const browser = await playwright.chromium.launch(process.env.PLAYWRIGHT_CHANNEL 
 const shot = async (page, name) => { if (out) writeFileSync(join(out, `${name}.png`), await page.screenshot()); };
 const report = [];
 
-for (const [label, size, path] of [['wide', { width: 1440, height: 900 }, '/'], ['narrow', { width: 390, height: 844 }, '/'], ['wide-en', { width: 1440, height: 900 }, '/en/']]) {
-  const context = await browser.newContext({ viewport: size, locale: path === '/en/' ? 'en-US' : 'zh-CN' });
+for (const [label, size, path, colorScheme] of [
+  ['wide', { width: 1440, height: 900 }, '/'],
+  ['narrow', { width: 390, height: 844 }, '/'],
+  ['narrow-en', { width: 390, height: 844 }, '/en/'],
+  ['narrow-dark', { width: 360, height: 780 }, '/', 'dark'],
+  ['wide-en', { width: 1440, height: 900 }, '/en/'],
+]) {
+  const context = await browser.newContext({ viewport: size, locale: path === '/en/' ? 'en-US' : 'zh-CN', ...(colorScheme ? { colorScheme } : {}) });
+  if (colorScheme === 'dark') await context.addInitScript(() => localStorage.setItem('stillfail.site.theme', 'dark'));
 
   // Before any script: the scene unseen, nothing of it drawn out of its place.
   const before = await context.newPage();
@@ -66,6 +73,13 @@ for (const [label, size, path] of [['wide', { width: 1440, height: 900 }, '/'], 
     throw e;
   });
   await page.waitForTimeout(500);
+  await page.evaluate(async () => { await document.fonts.ready; });
+  await page.evaluate(() => {
+    const air = document.querySelector('[data-drawn]').lastElementChild;
+    window.__openingFlying = [...air.children].filter((e) => e.tagName !== 'STYLE');
+    window.__openingStudio = [...document.querySelectorAll('[data-idea="1"] #demo button')]
+      .find((e) => e.getClientRects().length && e.textContent.includes('Studio'));
+  });
   await shot(page, `${label}-1-page-script`);
   const first = await page.evaluate(() => {
     const room = document.querySelector('[data-drawn]');
@@ -79,9 +93,10 @@ for (const [label, size, path] of [['wide', { width: 1440, height: 900 }, '/'], 
   report.push(`${label}: page's own script: ${JSON.stringify(first)}; demo's scripts held: ${held.length}`);
   assert.equal(first.flying.length, 4, `${label}: the four devices are not in the air at the first frame`);
   assert.ok(first.frame, `${label}: the window's frame is gone before the demo's script is here`);
-  if (label !== 'narrow') assert.ok(first.phoneFrame, `${label}: the phone shows no frame while its app is on its way`);
+  if (colorScheme === 'dark') assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', `${label}: the chosen theme was not applied`);
+  if (!label.startsWith('narrow')) assert.ok(first.phoneFrame, `${label}: the phone shows no frame while its app is on its way`);
 
-  // The demo's scripts arrive: it takes its boxes over; what flies is read again from it at the next frame drawn.
+  // The demo's scripts arrive: it takes its boxes over. The narrow opening frame has the same cards as the app.
   for (const route of held.splice(0)) await route.continue();
   await page.unroute('**/*.js');
   await page.waitForFunction(() => !document.querySelector('[data-idea="1"] #demo > [inert]'));
@@ -99,6 +114,9 @@ for (const [label, size, path] of [['wide', { width: 1440, height: 900 }, '/'], 
   report.push(`${label}: demo here: ${JSON.stringify(after)}`);
   assert.deepEqual(after.flying, first.flying, `${label}: what flies changed as the demo took over`);
   assert.equal(after.hiddenInList, 4, `${label}: the demo's own rows show in its list while their copies fly`);
+  const kept = await page.evaluate(() => window.__openingFlying.filter((e) => e.isConnected).length);
+  report.push(`${label}: ${kept} of 4 opening cards retained as the demo takes over`);
+  if (label.startsWith('narrow')) assert.equal(kept, 4, `${label}: the unchanged opening cards were rebuilt as the demo took over`);
   // Taken over as it was built: nothing thrown, nothing said wrong (a page that does not hydrate is drawn again whole).
   assert.deepEqual(said.filter((m) => m.startsWith('error')), [], `${label}: errors as the page was taken over`);
 
@@ -107,6 +125,15 @@ for (const [label, size, path] of [['wide', { width: 1440, height: 900 }, '/'], 
     await page.evaluate((f) => { const s = document.querySelector('[data-idea="1"] section[style]'); window.scrollTo(0, s.offsetTop + (s.offsetHeight - innerHeight) * f); }, at);
     await page.waitForTimeout(700);
     await shot(page, `${label}-3-scrolled-${at}`);
+  }
+  if (label.startsWith('narrow')) {
+    // The row taken over from the opening frame must respond to input, not just retain its appearance.
+    const studio = page.locator('[data-idea="1"] #demo button').filter({ hasText: 'Studio' }).first();
+    assert.ok(await studio.evaluate((el) => el === window.__openingStudio), `${label}: the opening Studio card was replaced`);
+    await studio.click({ force: true });
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-idea="1"] #demo button')]
+      .some((e) => e.textContent.trim() === 'Station' && e.getClientRects().length));
+    report.push(`${label}: the opening Studio card opened its page`);
   }
   await context.close();
 }

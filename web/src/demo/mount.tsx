@@ -6,7 +6,7 @@ import "../viewer/whole.ts";
 import { startScrollbars } from "../scrollbars.ts";
 import { StrictMode, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
-import { createRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import "@fontsource-variable/inter";
 import { t } from "../i18n.ts";
@@ -646,8 +646,8 @@ let at: string | undefined;
 /** The language the demo is in: the app's and what it makes up (the site's English page: "en"); else as the app's own. */
 let language: "zh" | "en" | undefined;
 
-/** Where the demo opens and the language it is in. */
-export interface DemoOptions { start?: "chat" | "stations"; at?: string; lang?: "zh" | "en" }
+/** Where the demo opens, its language, and whether the caller's phone frame can be taken over in place. */
+export interface DemoOptions { start?: "chat" | "stations"; at?: string; lang?: "zh" | "en"; reusePhoneFrame?: boolean }
 
 /** The demo opens as `options` say: as it is mounted, and as its opening frame is built into the page (prerender.tsx). */
 export function openOn(options: DemoOptions): void {
@@ -680,10 +680,15 @@ export function mountDemo(element: HTMLElement, options: DemoOptions = {}): Moun
   mounted = true;
   openOn(options);
   root = element;
-  // What the page was built with (its opening frame, as HTML) gives way to the demo itself.
-  root.replaceChildren();
+  // The narrow opening scene was built from this same demo. Take its phone frame over in place so the scene keeps
+  // the rows it already measured and copied, instead of replacing them while the visitor is scrolling.
+  const frame = options.reusePhoneFrame && options.start === "stations" && !options.at && root.dataset.phone !== undefined && root.clientWidth < PHONE_BELOW
+    ? root.querySelector(":scope > [inert]") : null;
+  const built = frame?.children.length === 2 ? frame.lastElementChild as HTMLElement : null;
+  const app = built ?? document.createElement("div");
+  if (built) built.removeAttribute("class");
+  root.replaceChildren(app);
   withoutDownloads();
-  const app = root.appendChild(document.createElement("div"));
   app.style.height = "100%";
   startScrollbars();
   followFonts();
@@ -736,10 +741,12 @@ export function mountDemo(element: HTMLElement, options: DemoOptions = {}): Moun
     void story.play();
   }, { threshold: 0.6 }).observe(root);
 
-  createRoot(app).render(
+  const view = (
     <StrictMode>
       <Demo />
-    </StrictMode>,
+    </StrictMode>
   );
+  if (built) hydrateRoot(app, view);
+  else createRoot(app).render(view);
   return mountedDemo;
 }

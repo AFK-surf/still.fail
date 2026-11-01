@@ -411,7 +411,7 @@ export function OneComputer(props: DemoProps) {
                 <div className={css.oneBase} />
                 <div className={css.oneKeysInWindow} />
                 <div className={css.oneScreen} ref={screen}>
-                  <Demo v="1" start="stations" className={css.oneDemo} held={demo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo.stations } : {})} />
+                  <Demo v="1" start="stations" reusePhoneFrame className={css.oneDemo} held={demo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo.stations } : {})} />
                 </div>
                 <div className={css.oneIslandInWindow} />
               </div>

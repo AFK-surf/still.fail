@@ -60,17 +60,17 @@ export function frameHtml(frame: { wide?: string; phone: string }): string {
 
 /**
  * Where the app runs: mounted once its script is in the browser (demo/mount.tsx, loaded after the page's own: main.tsx),
- * in the idea the page shows. Built to HTML, it holds the demo's opening frame (`frame`), which the demo replaces as it
- * mounts; React leaves what is in it alone. `held`: the demo, once it runs.
+ * in the idea the page shows. Built to HTML, it holds the demo's opening frame (`frame`); React leaves it alone until
+ * the demo takes it over. `held`: the demo, once it runs.
  */
-export function Demo({ mount, frame, v, className, start, held }: { mount?: DemoProps["mountDemo"]; frame?: DemoFrame; v: string; className?: string; start?: "chat" | "stations"; held?: RefObject<MountedDemo | null> }) {
+export function Demo({ mount, frame, v, className, start, held, reusePhoneFrame }: { mount?: DemoProps["mountDemo"]; frame?: DemoFrame; v: string; className?: string; start?: "chat" | "stations"; held?: RefObject<MountedDemo | null>; reusePhoneFrame?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const lang = useSiteLang();
   useEffect(() => {
     if (!root.current || !mount || !showing(v)) return;
-    const demo = mount(root.current, { ...(start ? { start } : {}), lang });
+    const demo = mount(root.current, { ...(start ? { start } : {}), lang, ...(reusePhoneFrame ? { reusePhoneFrame } : {}) });
     if (held) held.current = demo;
-  }, [mount, v, start, lang, held]);
+  }, [mount, v, start, lang, held, reusePhoneFrame]);
   const html = frame ? frameHtml(frame) : "";
   return <div className={`${css.demo} ${className ?? ""}`} id="demo" ref={root} dangerouslySetInnerHTML={{ __html: html }} suppressHydrationWarning />;
 }
