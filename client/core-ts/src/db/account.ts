@@ -376,11 +376,16 @@ export class AccountDb {
       } catch {
         // Rolled back already.
       }
+      // A row change tells noticing what was committed. The retry below only keeps this device's own tables, not
+      // the station's chat rows, so none of the rolled-back rows or first-list marker can be announced.
+      changes.chats.clear();
+      changes.firstChats.clear();
       // What was read is not what is kept any more.
       this.#cache.clear();
       this.#logCache.clear();
       this.#logIndices.clear();
       this.#lists.clear();
+      this.#slackNames.clear();
       const again = [...this.#unwritten, ...precious];
       this.#unwritten = [];
       if (again.length > 0) {

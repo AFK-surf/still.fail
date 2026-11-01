@@ -429,6 +429,54 @@ test("a_burst_says_each_chat_row_before_and_after", async () => {
   runner.shutdown();
 });
 
+test("a_rolled_back_chat_row_does_not_announce_a_change", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  try {
+    data.set(rows("w/a"), [{ id: "x", unread: false }]);
+    await run(data.written);
+    const heard: [string, RowChange[], boolean][] = [];
+    data.onChats((station, changes, first) => heard.push([station, changes, first]));
+    let fail = true;
+    db().failing = (sql) => {
+      if (sql !== "COMMIT" || !fail) return null;
+      fail = false;
+      return new SqlError("database or disk is full", "full");
+    };
+    data.putChat("w/a", { id: "x", unread: true });
+    await run(data.written);
+    assert.deepEqual(data.chat("w/a", "x"), { id: "x", unread: false });
+    assert.deepEqual(heard, [], "a rolled-back row cannot create an unread notice");
+
+    data.putChat("w/a", { id: "x", unread: true });
+    await run(data.written);
+    assert.deepEqual(heard, [["w/a", [{ id: "x", before: { id: "x", unread: false }, after: { id: "x", unread: true } }], false]]);
+  } finally { runner.shutdown(); }
+});
+
+test("a_rolled_back_first_chat_list_does_not_start_noticing", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  try {
+    const heard: [string, RowChange[], boolean][] = [];
+    data.onChats((station, changes, first) => heard.push([station, changes, first]));
+    let fail = true;
+    db().failing = (sql) => {
+      if (sql !== "COMMIT" || !fail) return null;
+      fail = false;
+      return new SqlError("database or disk is full", "full");
+    };
+    data.set(rows("w/a"), [{ id: "x", unread: true }]);
+    await run(data.written);
+    assert.equal(data.listed("w/a", "chats"), false);
+    assert.deepEqual(heard, [], "a rolled-back first list cannot initialize notices");
+
+    data.set(rows("w/a"), [{ id: "x", unread: true }]);
+    await run(data.written);
+    assert.deepEqual(heard, [["w/a", [{ id: "x", before: undefined, after: { id: "x", unread: true } }], true]]);
+  } finally { runner.shutdown(); }
+});
+
 test("the_rows_that_ask_something_and_the_first_screen_are_found_by_their_columns", async () => {
   const { host, runner } = fresh();
   const data = new Data(host, runner, { owner: () => "s1", derive: { tone: (r) => (r.unread === true && r.mine === true ? "done" : null), asks: (r) => r.decision !== undefined } });
@@ -1010,6 +1058,28 @@ test("the_slack_people_a_stations_agents_heard_from_are_named_by_their_slack_id_
   await flush();
   assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"], ["UB2", "GPT-Ember"]]);
   runner.shutdown();
+});
+
+test("a_rolled_back_transcript_does_not_leave_a_slack_name_in_the_cache", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  try {
+    const heard = (i: number, from: string) => [i, { at: `1970-01-01T00:00:0${i}Z`, kind: "user", text: `<message via="slack" thread="C0OPS/1.2" from="${from}" ts="${i}">hi</message>` }] as [number, J];
+    data.putItems("transcript", "w/a", "k1", [heard(3, "Mia (U9)")]);
+    await flush();
+    assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"]]);
+
+    let fail = true;
+    db().failing = (q) => {
+      if (q !== "COMMIT" || !fail) return null;
+      fail = false;
+      return new SqlError("database or disk is full", "full");
+    };
+    data.putItems("transcript", "w/a", "k2", [heard(4, "Mia Wu (U9)")]);
+    assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia Wu"]], "reads see the open transaction");
+    await flush();
+    assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"]], "the cache reflects the rolled-back database");
+  } finally { runner.shutdown(); }
 });
 
 
