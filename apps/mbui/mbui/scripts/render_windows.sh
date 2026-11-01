@@ -38,6 +38,8 @@ case "${1:-run}" in
     "$D/chk" lines $O/lines.png
     MBUI_DL="$(cygpath -w "$PWD/$O/shapes.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/shapes.png")" ./$EXE
     "$D/chk" shapes $O/shapes.png
+    MBUI_DL="$(cygpath -w "$PWD/$O/contained.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/contained.png")" ./$EXE
+    "$D/chk" contained $O/contained.png
     MBUI_DL_FROM="$(cygpath -w "$PWD/$O/partial-a.dl")" MBUI_DL="$(cygpath -w "$PWD/$O/partial-b.dl")" \
       MBUI_DL_PNG="$(cygpath -w "$PWD/$O/partial.png")" ./$EXE
     render_partial windows

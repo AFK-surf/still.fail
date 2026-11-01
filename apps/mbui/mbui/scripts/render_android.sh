@@ -57,6 +57,8 @@ case "${1:-run}" in
     "$D/chk" lines $O/lines.png
     draw shapes $O/shapes.png
     "$D/chk" shapes $O/shapes.png
+    draw contained $O/contained.png
+    "$D/chk" contained $O/contained.png
     # partial-b drawn only where it differs from partial-a, and whole (render_partial)
     $ADB shell am force-stop $APP_ID
     $ADB shell run-as $APP_ID rm -f files/partial.png files/partial.whole.png

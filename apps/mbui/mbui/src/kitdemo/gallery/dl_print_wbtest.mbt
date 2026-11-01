@@ -89,6 +89,57 @@ test "a rounded clip's draw lists printed when asked (MBUI_DL_PRINT=clip-cut or 
 }
 
 ///|
+/// A lightly blurred picture with ink near each straight edge, and a strongly blurred solid picture over red.
+/// Both are clipped to rounded rectangles. Their rendered pixels are checked by scripts/chk contained.
+fn contained_shown() -> @ui.Tester {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=20.0, gap=20.0, bg=0xFF0000FFL, align=AStart, fn() {
+        c.box(w=Px(160.0), h=Px(120.0), radius=26.0, clip=true, align=AStart, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFFFFFFFFL, fn() { () }) |> ignore
+          c.layer(fn() {
+            c.lines(
+              [
+                @ui.line([(0.25, 35.0), (0.25, 85.0)], width=0.5, color=0x000000FFL),
+                @ui.line([(5.0, 35.0), (5.0, 85.0)], width=4.0, color=0x000000FFL),
+                @ui.line([(155.0, 35.0), (155.0, 85.0)], width=4.0, color=0x000000FFL),
+                @ui.line([(45.0, 5.0), (115.0, 5.0)], width=4.0, color=0x000000FFL),
+                @ui.line([(45.0, 115.0), (115.0, 115.0)], width=4.0, color=0x000000FFL),
+              ],
+              w=Px(160.0),
+              h=Px(120.0),
+            ) |> ignore
+          }) |> ignore
+          c.layer(fn() {
+            c.box(w=Fill(1.0), h=Fill(1.0), glass=@ui.Glass::frosted(blur=0.5, tint=0L, solid=0L, contained=true), fn() { () }) |> ignore
+          }) |> ignore
+        }) |> ignore
+        c.box(w=Px(160.0), h=Px(120.0), radius=26.0, clip=true, align=AStart, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=0x1559C4FFL, fn() { () }) |> ignore
+          c.layer(fn() {
+            c.box(w=Fill(1.0), h=Fill(1.0), glass=@ui.Glass::frosted(blur=14.0, tint=0L, solid=0L, contained=true), fn() { () }) |> ignore
+          }) |> ignore
+        }) |> ignore
+      }) |> ignore
+    },
+    w=200.0,
+    h=300.0,
+    scale=2.0,
+  )
+  t.draw()
+  t
+}
+
+///|
+test "contained glass's draw list printed when asked" {
+  if node_env("MBUI_DL_PRINT") == "contained" {
+    println("DLBEGIN")
+    println(contained_shown().drawlist())
+    println("DLEND")
+  }
+}
+
+///|
 /// Lines (Ctx::lines, scene.mbt's kind 10) in a window 160 by 160 at scale 2, on white (scripts/chk lines reads its
 /// picture): in its top 40 a line from (20, 20) to (100, 20) 8 wide, and 40 under it a box 88 by 8 rounded 4 at (16,
 /// 56), the same shape drawn as a rounded rect; under them, in a box from (0, 80), a line from (20, 10) to (60, 50) 6

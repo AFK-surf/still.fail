@@ -12,6 +12,7 @@
 //     chk logwait …               waits for a log's line, a process's end, a path's going (logwait.mbt)
 //     chk lines PNG               a renderer's lines drawn as they are (pictures.mbt)
 //     chk shapes PNG              a renderer's shapes drawn as they are (pictures.mbt)
+//     chk contained PNG           contained glass keeps edge detail and excludes rounded-corner surroundings
 //     chk views-round LOG PNG     Android's round page and tall page pictured (pictures.mbt)
 //     chk views LOG HOST          a native view put where it was told (contracts.mbt)
 //     chk site LOG HOST           a site's page and a page speaking with the app, step by step (contracts.mbt)
@@ -94,6 +95,7 @@ fn main {
     ["logwait", .. rest] => logwait(rest.to_array())
     ["lines", .. rest] => lines(rest.to_array())
     ["shapes", .. rest] => shapes(rest.to_array())
+    ["contained", .. rest] => contained(rest.to_array())
     ["views-round", .. rest] => views_round(rest.to_array())
     ["views", .. rest] => views(rest.to_array())
     ["site", .. rest] => site(rest.to_array())

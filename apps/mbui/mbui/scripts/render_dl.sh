@@ -27,6 +27,10 @@ render_dl() {
   MBUI_DL_PRINT=shapes moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/shapes.dl"
   [ -s "$(dirname "$out")/shapes.dl" ] || { echo "render_dl: no shapes draw list"; return 1; }
+  # The contained blur's straight-edge detail and rounded corners (checked by scripts/chk contained).
+  MBUI_DL_PRINT=contained moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+    awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/contained.dl"
+  [ -s "$(dirname "$out")/contained.dl" ] || { echo "render_dl: no contained draw list"; return 1; }
   # and a spinner's two moments' (src/kitdemo/gallery/dl_print_wbtest.mbt partial_shown), partial-a.dl and
   # partial-b.dl: the second drawn only where it differs from the first (mbui-render's MBUI_DL_FROM), render_partial
   local k

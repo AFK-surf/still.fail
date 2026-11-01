@@ -21,6 +21,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
       - "apps/mbui/mbui/src/ui/smooth.mbt"
       - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/src/host/contained.h"
       - "apps/mbui/mbui/goldens/render/windows*"
       - "apps/mbui/mbui/goldens/render/controls.dl"
       - "apps/mbui/mbui/scripts/render_dl.sh"
