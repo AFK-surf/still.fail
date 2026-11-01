@@ -1032,9 +1032,10 @@ fn Ctx::layer_retired_now(self : Ctx, id : Int) -> Bool {
 
 ///|
 /// The layer the keys go to as the last frame built them (Ctx::layer_escape's): the topmost open that is modal or has
-/// the focus in it; 0 none (the window's, under every layer).
-fn Ctx::keys_layer(self : Ctx) -> Int {
-  let open = self.last_layers.filter(fn(l) { self.layer_takes(l) }).rev()
+/// the focus in it; 0 none (the window's, under every layer). `from`: of those at that place in the window's stack of
+/// layers or over it alone (Ctx::keys_reach).
+fn Ctx::keys_layer(self : Ctx, from? : Int = -3) -> Int {
+  let open = self.last_layers.filter(fn(l) { self.layer_takes(l) && self.layer_stack(l) >= from }).rev()
   match open.iter().find_first(fn(l) { l.modal || self.focus_in_layer(l.id) }) {
     Some(l) => l.id
     None => 0
@@ -1043,11 +1044,17 @@ fn Ctx::keys_layer(self : Ctx) -> Int {
 
 ///|
 /// Whether the keys reach `id` (the focus) as the last frame built the layers: the layer they go to is the one it is in
-/// (none, under every layer, where it is in none).
+/// (none, under every layer, where it is in none). Where it is in the window's tree (a node of it, or an old view's stop
+/// or field hosted in one: focus_node_of), the old frame's layers under that in the window's stack of layers keep none
+/// of them from it, as those over it do (view_key's rule for the keys it leaves the tree).
 fn Ctx::keys_reach(self : Ctx, id : Int) -> Bool {
-  let layer = self.keys_layer()
+  let from = match (focus_node_of(id), view_app.val) {
+    (Some(n), Some(t)) => t.stack_of(n)
+    _ => -3
+  }
+  let layer = self.keys_layer(from~)
   if layer == 0 {
-    !self.last_layers.iter().any(fn(l) { self.layer_takes(l) && self.focus_in_layer(l.id) })
+    !self.last_layers.iter().any(fn(l) { self.layer_takes(l) && self.layer_stack(l) >= from && self.focus_in_layer(l.id) })
   } else {
     self.focus_in_layer(layer) && self.focus == id
   }

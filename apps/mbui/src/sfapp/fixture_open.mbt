@@ -4,10 +4,23 @@
 
 ///|
 /// What the modes of the cards and words set going as the chat opens: chat-answering's option under way, chat-pick's
-/// word picked, chat-link-menu's link held.
+/// word picked, chat-link-menu's link held, chat-ask's and chat-ask-long's question asked.
 pub fn open_cards_fixture(mode : String) -> Unit {
   match mode {
     "chat-answering" => acting.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
+    // a question over the chat (the presenters' ask): a short one, its line given; or a long title and a hint taller than
+    // a short window leaves it (its body scrolling in the panel)
+    "chat-ask" => @sf.ask("重新命名这个对话", "保存", fn(_) {  }, value="周报整理", hint="名字会同步给所有成员。")
+    "chat-ask-long" =>
+      @sf.ask(
+        "重新命名这个对话，新的名字会同步给这个工作区里的所有成员，并出现在他们的对话列表和通知里",
+        "保存",
+        fn(_) {  },
+        value="周报整理",
+        hint="改名后，旧的名字仍会出现在通知和历史记录里，直到它们更新；分享出去的链接不受影响，打开时显示新的名字。" +
+        "这一段说明故意写得很长，好让它在窄小的窗口里折成很多行，比面板能放下的还高。再多写一些：搜索时新旧两个名字都能找到，" +
+        "导出的记录里保留改名的时间。说明到此为止。",
+      )
     // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
     "chat-pick" => {
       pk.ts = "ts11"

@@ -71,6 +71,33 @@ pub fn View::max_width(self : View, w : Live[Double?]) -> View {
 }
 
 ///|
+/// How tall it is at the least, as it changes (none: as tall as what it holds makes it), whatever else lays it out
+/// shorter: a dialog's title row as tall as its close button's room, its title on more lines taller. Its field is
+/// min_height_share's too (one binding to a field: the one said last).
+pub fn View::min_height(self : View, h : Live[Double?]) -> View {
+  self.bind(MinHeight, h, Layout, fn(h) {
+    self.tree.nodes[self.at].flex.style.set_min_height(match h {
+      Some(h) => Pt(h)
+      None => Auto
+    })
+  })
+  self
+}
+
+///|
+/// How tall it is at the most, as it changes (none: no bound), what it holds shrinking (View::shrink) or scrolling in it
+/// past that: a dialog no taller than the window leaves it.
+pub fn View::max_height(self : View, h : Live[Double?]) -> View {
+  self.bind(MaxHeight, h, Layout, fn(h) {
+    self.tree.nodes[self.at].flex.style.set_max_height(match h {
+      Some(h) => Pt(h)
+      None => Auto
+    })
+  })
+  self
+}
+
+///|
 /// How its words are set, as it changes (a theme's for the window's width): layout's (what they measure) and paint's
 /// (how they are drawn), one said value read by both.
 pub fn View::words_look(self : View, look : Live[WordsLook]) -> View {

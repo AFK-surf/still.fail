@@ -10,8 +10,8 @@ fn approx(got : Double, want : Double, tol : Double) -> Unit raise {
 }
 
 ///|
-fn track_of(samples : Array[(Double, Double)]) -> Tracker {
-  let tr = Tracker::new()
+fn track_of(samples : Array[(Double, Double)]) -> @view.Tracker {
+  let tr = @view.Tracker::new()
   for s in samples {
     tr.add(s.0, s.1)
   }

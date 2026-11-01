@@ -210,7 +210,22 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
     self.hand_told(was, fn(n) { n.focus_shown_cell }, false)
     self.hand_told(id, fn(n) { n.focus_shown_cell }, visible)
   }
+  // (come to one: brought into sight by what holds it, once laid out: Tree::show_in_sight)
+  match id {
+    Some(to) if was != id => self.show_in_sight(to)
+    _ => ()
+  }
   @signals.end_batch()
+}
+
+///|
+/// What brings a part of what it holds into its sight (Tree::show_in_sight: the focus come to it): `f` given where that
+/// is in its own terms (its top, its foot), answering how far it moved what it holds to (down: a column that scrolls,
+/// View::scrolls), all of it laid out, before it is drawn.
+pub fn View::shows(self : View, f : (Double, Double) -> Double) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.shows = Some(f)
+  self
 }
 
 ///|

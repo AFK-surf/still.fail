@@ -740,3 +740,29 @@ fn Ctx::bars_frame_end(self : Ctx) -> Unit {
   }
   self.bar_pointer(self.px, self.py)
 }
+
+///|
+/// The bar of a column of the window's tree's that scrolls (@view.View::scrolls' `bar`), as these bars are: drawn for a
+/// mouse alone, in the words' colour at 26% (45% pointed at or held), as wide, as far in, as long at least, brought out
+/// as near, taken as far round, held and fading as long, coming and going as these do.
+pub fn tree_scroll_bar() -> @view.ScrollBar {
+  let at = fn(share : Double) {
+    fn() {
+      let fg = tree_theme().fg
+      (fg & 0xFFFFFF00L) | ((fg & 0xFFL).to_double() * share).round().to_int64()
+    }
+  }
+  {
+    drawn: fn() { bars_drawn() },
+    ink: at(0.26),
+    ink_held: at(0.45),
+    ease: fn(t) { Ease::at(Out, t) },
+    size: scroll_bar_size,
+    inset: scroll_bar_inset,
+    least: scroll_bar_least,
+    near: scroll_bar_near,
+    grab: scroll_bar_grab,
+    hold_ms: scrollbar_hold_ms,
+    fade_ms: scrollbar_fade_ms,
+  }
+}

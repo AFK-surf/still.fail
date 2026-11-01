@@ -25,6 +25,31 @@ pub fn confirm_node(
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
 ) -> Unit {
+  // (a press outside an alert does not close it: confirm_dialog's outside=false)
+  dialog_layer_node(parent, open, cancel, shown~, gone~, fn(across, layer, look) {
+    confirm_panel(across, layer, look, title, words, action, danger, cancel, confirm) |> ignore
+    // (the focus on its own ground as it opens, as confirm_dialog's (an overlay that traps it, with no stop of its own:
+    // the layer's own), Enter and Space doing nothing there; back to what had it as it goes)
+    layer
+  })
+}
+
+///|
+/// A dialog of the presenters' as nodes of the window's tree in `parent` while `open()` (going over pop_out_ms once not):
+/// a modal layer over the whole window, what is under it dimmed as far as its ground has come, its panel (`panel`: built
+/// in the row across the window's middle, looking as the look it is given says; the node given the focus as it opens)
+/// in its middle, coming in by @kit.dialog_in and going by @kit.pop_out; Escape and back close it (`cancel`), and a
+/// press outside its panel where `outside` (a dialog's; an alert's not). `shown` as its layer is made, `gone` once its
+/// way out is over.
+fn dialog_layer_node(
+  parent : @view.View,
+  open : () -> Bool,
+  cancel : () -> Unit,
+  panel : (@view.View, @view.View, () -> @ui.Look) -> @view.View,
+  outside? : Bool = false,
+  shown? : () -> Unit = fn() {  },
+  gone? : () -> Unit = fn() {  },
+) -> Unit {
   parent.show(
     open,
     fn(layer) {
@@ -59,10 +84,17 @@ pub fn confirm_node(
       // it began; the next its)
       .held_back_goes_on()
       .ground(By(fn() { confirm_faded(@ui.tree_theme().scrim, dim.shown(layer)) }))
-      // (a press outside it its own: an alert stays open)
+      // (a press outside its panel its own, nothing under it pressed: closing it as it goes down where it is a dialog's,
+      // as the old frame's layer is dismissed then (Ctx::overlay's outside), whatever the finger does after; nothing
+      // where an alert's)
       .presses(Is(true))
       // (the focus its own as it opens: no key presses it)
       .focusable(Is(true), keys=0, tab=false)
+      .on_drag(fn(d) {
+        if d.kind == Down && outside && @signals.untracked(live) {
+          cancel()
+        }
+      })
       .on_key(fn(k) {
         if k.code == @ui.key_escape && @signals.untracked(live) {
           cancel()
@@ -82,10 +114,9 @@ pub fn confirm_node(
       layer.box(fn(across) {
         across.row(Is(true)) |> ignore
         across.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
-        confirm_panel(across, layer, look, title, words, action, danger, cancel, confirm) |> ignore
-        // (the focus on its own ground as it opens, as confirm_dialog's (an overlay that traps it, with no stop of its
-        // own: the layer's own), Enter and Space doing nothing there; back to what had it as it goes)
-        layer.focus_opens(layer) |> ignore
+        let first = panel(across, layer, look)
+        // (the focus given as it opens; back to what had it as it goes)
+        layer.focus_opens(first) |> ignore
         across.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
       })
       |> ignore

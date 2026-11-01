@@ -80,6 +80,8 @@ pub fn ask_line_start(Double) -> @ui.Style
 
 pub fn ask_line_words(@ui.TextStyle) -> @ui.TextStyle
 
+pub fn ask_node(@view.View, String, () -> Bool, String, @ui.Field, String, String, String, String, Bool, Bool, () -> Unit, (String) -> Unit, shown? : () -> Unit, gone? : () -> Unit) -> Unit
+
 pub let ask_note : @ui.TextStyle
 
 pub let ask_title : @ui.TextStyle

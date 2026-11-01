@@ -1819,6 +1819,23 @@ pub fn Tester::glyphs_shown(self : Tester) -> Array[(Double, Double, Double, Dou
 }
 
 ///|
+/// Each glyph drawn in the last frame (seen at all) as it is drawn: its picture's box and the clip it is cut by (x0, y0,
+/// x1, y1 each), for what asks where words show within what cuts them (a column that scrolls).
+pub fn Tester::glyph_clips(self : Tester) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))] {
+  ignore(self)
+  let c = g()
+  let a = c.inst
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if a[b + 5] == 1.0 && a[b + 11] > 0.0 {
+      out.push(((a[b], a[b + 1], a[b] + a[b + 2], a[b + 1] + a[b + 3]), (a[b + 16], a[b + 17], a[b + 18], a[b + 19])))
+    }
+  }
+  out
+}
+
+///|
 /// What of each glyph drawn in the last frame is seen (glyphs_shown's), but for those whose middle something drawn
 /// after them hides (a fill nearly whole, a picture, glass: words_over_hides): what a person can read.
 pub fn Tester::glyphs_seen(self : Tester) -> Array[(Double, Double, Double, Double)] {
