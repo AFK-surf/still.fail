@@ -134,6 +134,9 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: |
+          # This checkout is the reviewed release and can be older than the workflow.
+          git show "$GITHUB_SHA:apps/mbui/scripts/win-compiler.sh" > "$RUNNER_TEMP/win-compiler.sh"
+          . "$RUNNER_TEMP/win-compiler.sh"
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release.sh desktop-win
       - name: Put its files, then its feeds
