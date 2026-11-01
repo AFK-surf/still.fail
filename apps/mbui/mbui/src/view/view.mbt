@@ -277,6 +277,8 @@ struct Node {
   /// the side it went on beside its anchor, as it was last placed there (none: not placed beside one yet)
   mut went : Side?
   mut focus_keys : Int
+  /// whether Tab stops on it as it takes the focus (View::focusable's `tab`)
+  mut focus_tab : Bool
   mut focused_cell : @signals.Signal[Bool]?
   mut focus_shown_cell : @signals.Signal[Bool]?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
@@ -729,6 +731,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.within_cell = None
       n.focusable = false
       n.focus_keys = 0
+      n.focus_tab = true
       n.input_cell = None
       n.cursor = None
       n.beside = None
@@ -790,6 +793,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         beside: None,
         went: None,
         focus_keys: 0,
+        focus_tab: true,
         focused_cell: None,
         focus_shown_cell: None,
         on_drag: None,
@@ -3631,6 +3635,7 @@ fn View::let_go(self : View) -> Unit {
   self.tree.focus_lost_in(self.at)
   n.focusable = false
   n.focus_keys = 0
+  n.focus_tab = true
   n.input_cell = None
   n.cursor = None
   n.beside = None

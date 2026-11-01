@@ -88,15 +88,38 @@ test "大屏: a confirm asked and closed in one change, never shown: no confirm 
 }
 
 ///|
-test "大屏: a confirm opened: the focus on its 取消 at once, no frame waited for; Enter closes it, its action not done; the focus back where it was" {
+test "大屏: a confirm opened from what has the focus: the focus on none of its buttons, its own (no frame waited for, and a frame on); Enter does nothing; Escape closes it, the focus back where it was" {
   let t = confirm_wide()
+  t.act(Button, Focus, label="新建对话")
   let before = t.focused().map(fn(s) { s.label })
   let runs = Ref(0)
   @sf.confirm("删除", "删除这个对话？", "删除", fn() { runs.val += 1 })
-  let at_once = t.focused().map(fn(s) { s.label })
+  // (no frame drawn: where the focus is as it opens)
+  let at_once = (t.focused().map(fn(s) { s.label }), @ui.current().focus != 0)
   t.draw()
+  let drawn = (t.focused().map(fn(s) { s.label }), @ui.current().focus != 0)
   t.enter()
   let entered = (runs.val, @sf.presenting())
+  t.key_named("escape") |> ignore
   t.run_for(@ui.move_most_ms)
-  assert_eq((at_once, entered, runs.val, t.focused().map(fn(s) { s.label }) == before), (Some("取消"), (0, false), 0, true))
+  assert_eq(
+    (before, at_once, drawn, entered, runs.val, @sf.presenting(), t.focused().map(fn(s) { s.label })),
+    (Some("新建对话"), (None, true), (None, true), (0, true), 0, false, Some("新建对话")),
+  )
+}
+
+///|
+test "大屏: a confirm opened, the focus its own: Tab to its cancel, its action, round to its cancel again, never its ground; Enter on its action does it" {
+  let t = confirm_wide()
+  let runs = Ref(0)
+  @sf.confirm("删除", "删除这个对话？", "删除", fn() { runs.val += 1 })
+  t.draw()
+  let stops = []
+  for _ in 0..<3 {
+    t.tab()
+    stops.push(t.focused().map(fn(s) { s.label }))
+  }
+  t.tab()
+  t.enter()
+  assert_eq((stops, runs.val), ([Some("取消"), Some("删除"), Some("取消")], 1))
 }
