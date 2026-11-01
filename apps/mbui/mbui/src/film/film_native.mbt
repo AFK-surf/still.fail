@@ -29,6 +29,9 @@ extern "C" fn ffi_put(k : Int) -> Int = "mbf_put"
 extern "C" fn ffi_close(frames : Int) -> Int = "mbf_close"
 
 ///|
+extern "C" fn ffi_finish(publish : Int) -> Int = "mbf_finish"
+
+///|
 extern "C" fn ffi_spin(ms : Double) -> Unit = "mbf_spin"
 
 ///|
@@ -114,8 +117,8 @@ fn open(path : String, w : Int, h : Int, fps : Int) -> Bool {
 
 ///|
 /// The instances drawn offscreen, read back as the film's picture from now on.
-fn draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Unit {
-  ignore(ffi_draw(inst, count, r, g, b))
+fn draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Bool {
+  ffi_draw(inst, count, r, g, b) != 0
 }
 
 ///|
@@ -128,6 +131,12 @@ fn put_frame(k : Int) -> Bool {
 /// The film ended after `frames` frames and written out whole.
 fn close(frames : Int) -> Bool {
   ffi_close(frames) != 0
+}
+
+///|
+/// Publish a completed film, or discard a failed one without replacing the previous file.
+fn finish(publish : Bool) -> Bool {
+  ffi_finish(if publish { 1 } else { 0 }) != 0
 }
 
 ///|

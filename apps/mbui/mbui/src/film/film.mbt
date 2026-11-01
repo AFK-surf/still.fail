@@ -117,28 +117,35 @@ pub fn film(
   let buf = Ref::new(FixedArray::make(0, 0.0))
   let drawn = Ref::new(0)
   let put = Ref::new(0)
-  let lost = Ref::new(0)
-  let logs = t.film(
+  let run = t.film(
     script,
     fps=film_fps.to_double(),
     max~,
     draw=fn(t) {
-      draw_frame(t, buf)
-      drawn.val = drawn.val + 1
+      if draw_frame(t, buf) {
+        drawn.val = drawn.val + 1
+        true
+      } else {
+        false
+      }
     },
     put=fn(k) {
       if put_frame(k) {
         put.val = put.val + 1
+        true
       } else {
-        lost.val = lost.val + 1
+        false
       }
     },
   )
+  let logs = run.logs
+  let passed = logs.iter().any(fn(l) { l == "DRIVE PASS" })
+  let drawn_ok = run.failure is None && passed
   // (the last frame as drawn, before the film is closed: what was drawn last is still the renderer's)
-  let shot = last == "" || drawn.val > 0 && snapshot(last)
+  let shot = last == "" || drawn_ok && drawn.val > 0 && snapshot(last)
   let closed = close(put.val)
   // (what the app put on the clipboard as a picture last, as the host drew it: a shot's, Ctx::take_shot)
-  let copy = copied == "" ||
+  let copy = copied == "" || drawn_ok && closed &&
     (match t.clipboard_png() {
       Some(png) => write_text(copied, @codec.base64(png))
       None => false
@@ -146,30 +153,36 @@ pub fn film(
   let text = logs
     .filter(fn(l) { l.has_prefix("TEXTREC ") })
     .map(fn(l) { l.unsafe_substring(start=8, end=l.length()) })
-  let kept = write_text(out + ".textrec", text.join("\n") + "\n")
+  let kept = drawn_ok && closed && shot && copy && write_text(out + ".textrec", text.join("\n") + "\n")
   for l in logs {
     if l.has_prefix("DRIVE") {
       say(l)
     }
   }
-  let passed = logs.iter().any(fn(l) { l == "DRIVE PASS" })
+  let ok = drawn_ok && closed && shot && copy && kept
+  let published = finish(ok)
   let secs = put.val.to_double() / film_fps.to_double()
   say(
     "film: \{out}: \{put.val} frames (\{secs} s), \{drawn.val} drawn" +
-    (if lost.val > 0 { ", \{lost.val} not written" } else { "" }) +
+    (match run.failure {
+      Some(@ui.FilmFailure::Draw) => ", a frame could not be drawn"
+      Some(@ui.FilmFailure::Write(k)) => ", frame \{k} could not be written"
+      None => ""
+    }) +
     (if closed { "" } else { ", not finished" }) +
     (if kept { "" } else { ", its text not kept" }) +
     (if shot { "" } else { ", its last frame not written" }) +
     (if copy { "" } else { ", nothing copied to write" }) +
-    (if passed { "" } else { ", the script did not pass" }),
+    (if passed { "" } else { ", the script did not pass" }) +
+    (if published { "" } else { ", could not publish" }),
   )
-  closed && lost.val == 0 && passed && shot && copy
+  ok && published
 }
 
 ///|
 /// The frame the Tester presented last drawn by this host's renderer, as the film's picture from now on: its
 /// pictures the host's own (Tester::live_image), one the host has not (a stream's frame) left out.
-fn draw_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> Unit {
+fn draw_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> Bool {
   let (n, (r, g, b)) = host_frame(t, buf)
   draw(buf.val, n, r, g, b)
 }
