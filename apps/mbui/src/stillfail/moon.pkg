@@ -6,6 +6,7 @@ import {
   "mbui/hostapi",
   "mbui/ui",
   "mbui/svg",
+  "mbui/font",
   "stillfail/sfcore",
   "stillfail/sfbase",
   "stillfail/sfapp",

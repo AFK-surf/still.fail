@@ -17,7 +17,7 @@ pub(all) enum Fit {
 ///|
 priv struct ImageEntry {
   id : Int
-  px : Int // the long side it was asked for
+  mut px : Int // the long side it was asked for (0: drawn again since, shown only until that drawing is ready)
   mut state : Int // 0 decoding, 1 ready, -1 failed
   mut w : Double
   mut h : Double
@@ -101,6 +101,28 @@ fn host_bytes(data : Bytes, px : Int) -> Bytes {
     }
   }
   data
+}
+
+///|
+/// Draws the vector pictures handed over again, as what draws them can draw more of them now (a font it lacked come):
+/// each shown as it was until its new drawing is ready (followed on from, not faded in again).
+pub fn redraw_vector_pictures() -> Unit {
+  @signals.start_batch()
+  for src, list in image_cache {
+    guard image_data.get(src) is Some(d) && looks_like_svg(d) else { continue }
+    for e in list {
+      if e.state == -1 {
+        h_image_free(e.id)
+      }
+    }
+    list.retain(fn(e) { e.state != -1 })
+    for e in list {
+      e.px = 0
+    }
+    let said = image_said(src)
+    said.decodes.set(@signals.untracked(fn() { said.decodes.get() }) + 1)
+  }
+  @signals.end_batch()
 }
 
 ///|

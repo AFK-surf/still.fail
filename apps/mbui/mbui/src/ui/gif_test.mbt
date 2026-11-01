@@ -111,6 +111,11 @@ test "an SVG handed over goes to the host drawn as a picture, at the size it is 
   assert_eq(asked, [256])
   let loads = t.image_loads()
   assert_true(loads.length() == 1 && loads[0].0 != "bytes:\{svg.length()}")
+  // drawn again (a font come): asked again at the same size, the first shown until then
+  @ui.redraw_vector_pictures()
+  t.run_for(a_moment)
+  assert_eq(asked, [256, 256])
+  assert_eq(t.image_loads().length(), 2)
   // (the tests after this one draw no vector pictures)
   @ui.set_vector_pictures(fn(_, _) { None })
 }
