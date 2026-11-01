@@ -956,6 +956,7 @@ fn Md::image_rows(self : Md, images : Array[(Double, (Double) -> Unit)]) -> Unit
   let c = self.c
   self.n = self.n + 1
   let id = c.id("sf-md/images\{self.n}")
+  // det-ok(layout-read-back): a message's image is drawn at a width it is given (its box, its picture decoded that size), as message_files' rows are, so the rows are said in widths from the message's room as laid out
   let room = match c.laid_size(id) {
     Some((rw, _)) => rw
     None => c.width
@@ -973,11 +974,11 @@ fn Md::image_rows(self : Md, images : Array[(Double, (Double) -> Unit)]) -> Unit
       used = used + w
     }
   }
-  c.box(id~, taps=false, w=Fill(1.0), gap=image_row_gap, pady=8.0, fn() {
+  c.box(style=image_rows_box, id~, taps=false, fn() {
     for row in rows {
       let ratios = row.fold(init=0.0, fn(n, im) { n + im.0 })
       let h = dmin(image_row_most, (room - image_row_gap * (row.length() - 1).to_double()) / ratios)
-      c.row(gap=image_row_gap, fn() {
+      c.box(style=image_row, fn() {
         for im in row {
           (im.1)((im.0 * h).floor())
         }
@@ -996,7 +997,18 @@ let image_row_least : Double = 120.0
 let image_row_most : Double = 200.0
 
 ///|
+/// Between a paragraph's images, across and down (Prose.css.ts inlineFiles: gap 8px).
 let image_row_gap : Double = 8.0
+
+///|
+/// A paragraph's images' rows: 8 over and under them (Prose.css.ts inlineFile: margin 8px 0), 8 between.
+// kept across runs: a value (no field of it changes)
+let image_rows_box : @ui.Style = @ui.css("w=Full gap=S2 py=S2")
+
+///|
+/// One row of them, 8 apart.
+// kept across runs: a value (no field of it changes)
+let image_row : @ui.Style = @ui.css("row gap=S2")
 
 ///|
 /// Items with their markers in the list's 20 of indent; numbers wider than that (a list past 9, words drawn larger)
