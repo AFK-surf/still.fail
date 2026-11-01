@@ -852,7 +852,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     })
     keys.push("foot")
     blocks.push(fn() { gap(c, 30.0) })
-    scroll_page(c, "adb/", blocks, keys~, moves=true)
+    scroll_page(c, "adb/", blocks, keys~, moves=true, continuity=fn(_) { view is Some(_) })
   })
   |> ignore
 }

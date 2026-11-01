@@ -9,7 +9,7 @@
 let page_rows : Map[String, @ui.ListRows[() -> Unit]] = {}
 
 ///|
-/// Each page's blocks' keys as last given.
+/// Each page's keys that can make its list continuous, as last given.
 // kept across runs: put back by settings' reset (parts_reset)
 let page_keys : Map[String, Array[String]] = {}
 
@@ -49,8 +49,17 @@ fn wide_side(c : @ui.Ctx) -> Double {
 /// under what stays at its top. `key` keeps its place while it is on the stack. `keys`: each block's own (a station's
 /// id, a person's), as many as the blocks: what came or went comes and goes where it is, as a chat's rows do
 /// (ListRows, docs/list-motion.md); `moves` also closes a block that changes order and opens it at its new place. A
-/// page whose blocks are all others now (what waited, then what came) shows them as they are.
-fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], keys? : Array[String], moves? : Bool = false) -> Unit {
+/// page whose blocks are all others now (what waited, then what came) shows them as they are. `continuity` identifies
+/// the blocks that mean this is the same list: a spacer or a waiting view is not an existing item in it, and an
+/// unanswered view has none. Only those blocks are remembered for the next time.
+fn scroll_page(
+  c : @ui.Ctx,
+  key : String,
+  blocks : Array[() -> Unit],
+  keys? : Array[String],
+  moves? : Bool = false,
+  continuity? : (String) -> Bool = fn(_) { true },
+) -> Unit {
   // (its blocks drawn as its list lays them out, maybe after this returns: in the page's arrangement, @sf.look)
   let l = @sf.look()
   let blocks = blocks.map(fn(b) { fn() { @sf.with_look(l, b) } })
@@ -59,8 +68,9 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], keys? : Ar
     Some(ks) if ks.length() == blocks.length() && !@sf.in_panel() => {
       let lr = page_rows_of(key)
       let was = page_keys.get(key).unwrap_or([])
-      page_keys[key] = ks
-      let watched = ks.iter().any(fn(k) { was.contains(k) })
+      let present = ks.filter(continuity)
+      page_keys[key] = present
+      let watched = present.iter().any(fn(k) { was.contains(k) })
       let (b, k) = lr.rows(c, ks, blocks, fn(_) { "" }, watched~, moves=fn(_) { moves })
       (b, k, Some(lr))
     }
