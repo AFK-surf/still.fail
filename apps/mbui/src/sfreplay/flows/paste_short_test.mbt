@@ -2,6 +2,17 @@
 
 ///|
 test "08-paste-short" {
+  replay_paste_short()
+}
+
+///|
+test "a short paste after multiple downloads keeps the rows steady" {
+  replay_drive_download_many()
+  replay_paste_short()
+}
+
+///|
+fn replay_paste_short() -> Unit raise {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("paste-short"), seed~)
     f.tap("端到端测试")
