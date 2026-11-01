@@ -25,7 +25,11 @@ try {
   for (const [label, size] of [['narrow', { width: 390, height: 844 }], ['wide', { width: 1440, height: 900 }]]) {
     const page = await browser.newPage({ viewport: size, locale: 'zh-CN', ...(label === 'narrow' ? { isMobile: true, hasTouch: true } : {}) });
     await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
-    await page.waitForFunction(() => document.querySelector('[data-drawn]') && !document.querySelector('[data-idea="1"] #demo > [inert]'));
+    await page.waitForFunction((narrow) => {
+      const demo = document.querySelector('[data-idea="1"] #demo');
+      return document.querySelector('[data-drawn]') && demo && !demo.querySelector(':scope > [inert]') &&
+        demo.querySelector(narrow ? '[data-tab="files"]' : '[data-rail-item="files"] a');
+    }, label === 'narrow');
     await page.evaluate(async () => {
       document.documentElement.style.scrollBehavior = 'auto';
       await document.fonts.ready;
