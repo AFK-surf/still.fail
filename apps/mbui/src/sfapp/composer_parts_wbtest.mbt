@@ -120,11 +120,12 @@ test "what waits to go has its ✕ hung on its corner, its centre on the curve, 
       None => fail("no card for build.log (platform \{platform})")
     }
     let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
+    let (_, corner, _, _) = first.corners.each()
     // each ✕'s centre on the curve of the corner it is hung on, as far past the top as past the right edge
     for one in [
-      ("照片.png", first.x, first.y, first.w, first.corners.1),
+      ("照片.png", first.x, first.y, first.w, corner),
       // (a file's card as round as a picture's: what waits, all alike)
-      ("build.log", card.0, card.1, card.2, first.corners.1),
+      ("build.log", card.0, card.1, card.2, corner),
     ] {
       let (name, ox, oy, ow, corner) = one
       let (x, y, bw, bh) = match t.query(Button, label=@sf.t("web-main.file.remove", args=[("name", name)])) {

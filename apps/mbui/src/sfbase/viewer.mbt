@@ -295,7 +295,7 @@ pub(all) struct Thumb {
   y : Double
   w : Double
   h : Double
-  corners : (Double, Double, Double, Double)
+  corners : @motion.MeasuredCorners
   /// its picture letterboxed in it (ChatFiles.kt imageBox's fit): fitted inside its box, not cropped to it
   letterbox : Bool
   /// a cropped picture starts at its top, rather than its middle
@@ -520,7 +520,7 @@ pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
         y,
         w,
         h,
-        corners: @motion.measured_radii(c, "pv-thumb/" + id).unwrap_or((l.radius, l.radius, l.radius, l.radius)),
+        corners: @motion.measured_radii(c, "pv-thumb/" + id).unwrap_or(@motion.MeasuredCorners::uniform(l.radius)),
         letterbox: l.letterbox,
         top_crop: l.top_crop,
         picture: l.picture,
@@ -2149,8 +2149,7 @@ pub fn Viewer::draw_flight(
   let along = fn(a : Double, b : Double) { a + (b - a) * p }
   let (bx, by, bw, bh) = (along(from.x, tx), along(from.y, ty), along(from.w, tw), along(from.h, th))
   let (px, py, pw, ph) = (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))
-  let (tl, tr, br, bl) = from.corners
-  let corners = @ui.Radius::Corners(tl * (1.0 - p), tr * (1.0 - p), br * (1.0 - p), bl * (1.0 - p))
+  let corners = from.corners.scaled(1.0 - p)
   // The film's black and its picture share the box's cut, with black around a letterboxed picture or while it decodes.
   // cut, at the thumbnail, as the thumbnail is by what it is in (its card's edge), the stage whole at the other end
   let (cx, cy) = (along(sx, 0.0), along(sy, 0.0))

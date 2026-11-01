@@ -717,14 +717,39 @@ pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Doub
 }
 
 ///|
+/// The resolved corners of a measured node, for a moving copy to keep its shape. Unequal corners come only from that
+/// node's own shape; a fallback made without a node has the same radius at every corner.
+pub struct MeasuredCorners {
+  priv values : (Double, Double, Double, Double)
+}
+
+///|
+pub fn MeasuredCorners::uniform(radius : Double) -> MeasuredCorners {
+  { values: (radius, radius, radius, radius) }
+}
+
+///|
+/// The corners as laid out: top left, top right, bottom right, bottom left.
+pub fn MeasuredCorners::each(self : MeasuredCorners) -> (Double, Double, Double, Double) {
+  self.values
+}
+
+///|
+/// The same shape scaled uniformly, for a copy moving out from it or back into it.
+pub fn MeasuredCorners::scaled(self : MeasuredCorners, by : Double) -> @ui.Radius {
+  let (tl, tr, br, bl) = self.values
+  @ui.Radius::Corners(tl * by, tr * by, br * by, bl * by)
+}
+
+///|
 /// The four corners of the node kept as `key` (measure), as the last layout resolved them. What reads them is told
 /// when their shape changes, even if the node's size stays the same.
-pub fn measured_radii(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
+pub fn measured_radii(c : @ui.Ctx, key : String) -> MeasuredCorners? {
   let k = motion_key("measure\u{1}" + key)
   measure_read(measure_size, k, name=key)
   measure_read(measure_radii, k, name=key)
   match mo.recs.get(k) {
-    Some(r) if r.seen >= c.frame_number() - 1 => Some(r.rad)
+    Some(r) if r.seen >= c.frame_number() - 1 => Some({ values: r.rad })
     _ => None
   }
 }

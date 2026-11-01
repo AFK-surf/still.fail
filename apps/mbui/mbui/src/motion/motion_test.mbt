@@ -1377,19 +1377,19 @@ test "a measured node tells what reads its corners when they change without chan
     @motion.measure(c, target, "corner-target")
     c.made("corner-reader", fn() {
       @ui.made_box(fn(c) {
-        let r = @motion.measured_radii(c, "corner-target").unwrap_or((0.0, 0.0, 0.0, 0.0))
+        let r = @motion.measured_radii(c, "corner-target").unwrap_or(@motion.MeasuredCorners::uniform(0.0)).each()
         c.text(if r.0 >= 20.0 { "rounder" } else { "round" }) |> ignore
       })
     })
   }, w=300.0, h=200.0)
   t.draw()
   t.frame()
-  assert_eq(@motion.measured_radii(t.ctx(), "corner-target"), Some((12.0, 12.0, 12.0, 12.0)))
+  assert_eq(@motion.measured_radii(t.ctx(), "corner-target").map(fn(r) { r.each() }), Some((12.0, 12.0, 12.0, 12.0)))
   assert_true(t.find("round") is Some(_))
   radius.set(24.0)
   t.draw()
   t.frame()
-  assert_eq(@motion.measured_radii(t.ctx(), "corner-target"), Some((24.0, 24.0, 24.0, 24.0)))
+  assert_eq(@motion.measured_radii(t.ctx(), "corner-target").map(fn(r) { r.each() }), Some((24.0, 24.0, 24.0, 24.0)))
   assert_true(t.find("rounder") is Some(_))
 }
 
