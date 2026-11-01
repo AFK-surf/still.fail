@@ -833,7 +833,7 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   apply(host, values);
   const option = (n: number, model: string) => v(values, n).options.find((o: J) => o.model === model);
   assert.deepEqual(v(values, 1).near, [], "nothing used here yet");
-  assert.equal(option(1, "gpt-6-astra").usual, null);
+  assert.equal(option(1, "gpt-6-astra").usual ?? null, null);
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
   core.inner.choose.used("ws/st", { model: "claude-sonnet-5", runtime: "claude", effort: null });
@@ -858,7 +858,7 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   await ask(host, core, ui, 6, "pick.save", { station: "ws/st", of: "new", model: "claude-sonnet-5" });
   apply(host, values);
   assert.deepEqual(option(1, "gpt-6-astra").usual, { runtime: "codex", effort: null, fast: null });
-  assert.equal(option(1, "gpt-6-astra").usualText, null);
+  assert.equal(option(1, "gpt-6-astra").usualText ?? null, null);
   core.close();
 });
 

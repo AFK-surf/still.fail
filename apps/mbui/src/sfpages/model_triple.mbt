@@ -435,6 +435,8 @@ fn triple_body(
       return
     }
     c.box(style=if up { triple_near_up } else { triple_near_down }, fn() {
+      // (named, as what they are: 2026-11-01 用户「感觉还是得标注一下常用」)
+      triple_column_head(c, @sf.t("web-main.combos.short"))
       for o in if up { near.rev() } else { near } {
         triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close)
       }
