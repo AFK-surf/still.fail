@@ -224,6 +224,12 @@ let button_reshape : @motion.Spec = @motion.move()
 let button_padx : Double = 16.0
 
 ///|
+/// Keep a button's leading icon or words on the line of the surrounding words, with its ground reaching past them.
+pub fn button_start_reach() -> @ui.Style {
+  outset_start(button_padx)
+}
+
+///|
 /// How big a button's icon is.
 let button_icon : Double = 16.0
 

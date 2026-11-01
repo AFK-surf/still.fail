@@ -178,6 +178,8 @@ pub fn button_node(@view.View, () -> String, () -> Unit, tone? : Tone, busy? : (
 
 pub let button_raised : Raised
 
+pub fn button_start_reach() -> @ui.Style
+
 pub fn capsule_end_room(Double, Double) -> @ui.Space
 
 pub fn capsule_fit(Double, Double, Double) -> Double
