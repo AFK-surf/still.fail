@@ -206,14 +206,22 @@ export function applySettings(manifest: Json, edit: SlackAppEdit): Json {
 /// The events of the groups on (base always).
 const eventsOn = (groups: Record<string, boolean>) => SLACK_GROUPS.filter((g) => g.id === "base" || groups[g.id] === true).flatMap((g) => g.events);
 
-/// Add the native stop event to an existing Socket Mode app, keeping every other manifest field as Slack has it.
+const agentDescription = (manifest: Json) => {
+  const description = text(at(manifest, ["display_information", "description"])).trim();
+  return (description || "A coding agent in your threads (still.fail)").slice(0, 300);
+};
+
+/// Enable the agent and its native stop event on an existing Socket Mode app. Keep an existing assistant view: moving
+/// one to the new agent view is irreversible.
 /// Null means there is nothing to change.
 export function withStopEvent(manifest: Json): Json | null {
   if (at(manifest, ["settings", "socket_mode_enabled"]) !== true) return null;
   const events = strings(at(manifest, ["settings", "event_subscriptions", "bot_events"]));
-  if (events.includes("agent_session_stopped")) return null;
+  const hasView = isObject(at(manifest, ["features", "agent_view"])) || isObject(at(manifest, ["features", "assistant_view"]));
+  if (events.includes("agent_session_stopped") && hasView) return null;
   const next = structuredClone(manifest);
-  object(object(next, "settings"), "event_subscriptions").bot_events = [...events, "agent_session_stopped"];
+  if (!events.includes("agent_session_stopped")) object(object(next, "settings"), "event_subscriptions").bot_events = [...events, "agent_session_stopped"];
+  if (!hasView) object(next, "features").agent_view = { agent_description: agentDescription(next) };
   return next;
 }
 
@@ -254,6 +262,7 @@ export function slackManifest(name: string, description: string | null = null, r
     features: {
       bot_user: { display_name: name, always_online: true },
       app_home: { home_tab_enabled: false, messages_tab_enabled: true, messages_tab_read_only_enabled: false },
+      agent_view: { agent_description: (description?.trim() || "A coding agent in your threads (still.fail)").slice(0, 300) },
     },
     oauth_config: oauth,
     settings: {

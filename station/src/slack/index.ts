@@ -108,7 +108,7 @@ export type SlackParts = ReturnType<typeof makeConnections>;
 export function makeConnections(options: SlackOptions) {
   const { config } = options;
   const client = options.client ?? new SlackClient();
-  let onWorking = (_id: string) => {};
+  let onWorking = async (_id: string) => false;
   const create =
     options.create ??
     ((c: SlackConnect, book: NameBook, web: SlackClient) =>
@@ -153,7 +153,6 @@ export function makeConnections(options: SlackOptions) {
   const attempted = new Map<string, string>();
   const completed = new Map<string, string>();
   const upgrading = new Map<string, Promise<void>>();
-  const retryAtEnd = new Set<string>();
   let closed = false;
   const upgradeStops = () => {
     if (closed) return;
@@ -192,16 +191,18 @@ export function makeConnections(options: SlackOptions) {
       })().catch((error) => log.warn("slack", "could not enable the native stop button", { connect: c.id, error: (error as Error)?.message ?? String(error) }))
         .finally(() => {
           upgrading.delete(c.id);
-          if (retryAtEnd.delete(c.id) && completed.get(c.id) !== attempted.get(c.id)) attempted.delete(c.id);
           upgradeStops();
         });
       upgrading.set(c.id, work);
     }
   };
-  onWorking = (id) => {
-    if (upgrading.has(id)) retryAtEnd.add(id);
-    else attempted.delete(id);
+  onWorking = async (id) => {
+    // A real turn is the opportunity to retry setup if it failed; there is no timer polling Slack.
+    await upgrading.get(id);
+    attempted.delete(id);
     upgradeStops();
+    await upgrading.get(id);
+    return completed.has(id);
   };
   const offChanges = connects.onChange(upgradeStops);
   const offConfig = config.listen(upgradeStops);
