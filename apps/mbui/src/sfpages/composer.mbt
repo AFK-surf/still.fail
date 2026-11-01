@@ -19,9 +19,6 @@ pub(all) struct ComposerSpec {
   session : String
   placeholder : String
   toolbar : (() -> Unit)?
-  /// what stands beside ＋ on one line and in its row once opened alike, a round of ＋'s own (a new chat's preset,
-  /// narrow: its choices' row has the room of where it runs and what on only)
-  beside_plus : (() -> Unit)?
   /// what it says just before send (where a chat's messages are copied: each thread's mark, "slack" or "feishu", and
   /// its place), nothing to press: on one line and in its row once opened alike, in one place, going with send as it
   /// changes shape; empty nothing
@@ -345,16 +342,7 @@ pub fn composer(
         composer_extras(c, src, spec, w)
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tools_row(), fn() {
-          match spec.beside_plus {
-            // what goes beside ＋ (a new chat's preset): a step of the scale apart, each with its own press's room
-            Some(f) =>
-              c.box(style=plus_pair, fn() {
-                plus = attach(c, src, spec, w, no_files)
-                f()
-              })
-              |> ignore
-            None => plus = attach(c, src, spec, w, no_files)
-          }
+          plus = attach(c, src, spec, w, no_files)
           match (spec.toolbar, composing.toolbar_leaving) {
             (Some(f), _) => {
               chosen = c.box(style=choices, f)
@@ -384,16 +372,7 @@ pub fn composer(
         })
         |> ignore
       } else {
-        match spec.beside_plus {
-          // what goes beside ＋ (a new chat's preset): a step of the scale apart, each with its own press's room
-          Some(f) =>
-            c.box(style=plus_pair, fn() {
-              plus = attach(c, src, spec, w, no_files)
-              f()
-            })
-            |> ignore
-          None => plus = attach(c, src, spec, w, no_files)
-        }
+        plus = attach(c, src, spec, w, no_files)
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tail_row, fn() {
           said = composer_note(c, spec.note)
@@ -1419,11 +1398,6 @@ fn tools_row() -> @ui.Style {
 let tools_row_base : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
 
 ///|
-/// ＋ and what goes beside it: 12 apart, so two rounds of a finger's 36 stand 48 centre to centre.
-// kept across runs: a value (no field of it changes)
-let plus_pair : @ui.Style = @ui.css("row gap=S3 align=ACenter")
-
-///|
 /// The page's choices (composerChoices: in what is left of the row, at its start).
 // kept across runs: a value (no field of it changes)
 let choices : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1, align=ACenter)
@@ -1940,7 +1914,6 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
       "web-main.composer.placeholder"
     }),
     toolbar: None,
-    beside_plus: None,
     note: match v {
       Some(v) => v.cc.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
       None => []

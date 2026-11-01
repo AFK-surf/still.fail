@@ -40,16 +40,26 @@ fn runs_in(t : @ui.Tester, r : (Double, Double, Double, Double)) -> Array[@ui.Te
 }
 
 ///|
-test "narrow: the station's control says its name whole beside the model's, which leaves out what has not the room and keeps none empty" {
+/// The glass controls over the composer, in their order: the preset's, the station's, the model's.
+fn crowded_controls(t : @ui.Tester) -> Array[@ui.Laid] {
+  t.boxes().filter(fn(b) { b.glass && b.kind == "row" && (b.h - 30.0).abs() < 0.5 })
+}
+
+///|
+test "narrow: the preset's, the station's and the model's controls side by side, what each says whole or left out, the model's name whole" {
   let t = crowded("newchat-crowded", w=crowded_narrowest)
-  // its name, all of it (not 「Stu…」)
-  assert_true(t.text_runs().iter().any(fn(r) { r.text == "Studio" }), msg="\{t.text_runs().map(fn(r) { r.text })}")
-  // the two glass controls over the composer, side by side in the window
-  let glass = t.boxes().filter(fn(b) { b.glass && b.kind == "row" && (b.h - 30.0).abs() < 0.5 })
-  assert_eq(glass.length(), 2, msg="\{t.boxes().filter(fn(b) { b.glass }).map(fn(b) { (b.kind, b.x, b.y, b.w, b.h) })}")
-  let (station, model) = (glass[0], glass[1])
+  // the three glass controls over the composer, side by side in the window
+  let glass = crowded_controls(t)
+  assert_eq(glass.length(), 3, msg="\{t.boxes().filter(fn(b) { b.glass }).map(fn(b) { (b.kind, b.x, b.y, b.w, b.h) })}")
+  let (preset, station, model) = (glass[0], glass[1], glass[2])
+  assert_true(preset.x + preset.w <= station.x)
   assert_true(station.x + station.w <= model.x)
   assert_true(model.x + model.w <= crowded_narrowest)
+  // what the preset's and the station's say: whole, or left out (never 「Stu…」, 「预…」)
+  let preset_words = runs_in(t, (preset.x, preset.y, preset.w, preset.h))
+  assert_true(preset_words.iter().all(fn(r) { r.text == "预设" }), msg="\{preset_words.map(fn(r) { r.text })}")
+  let station_words = runs_in(t, (station.x, station.y, station.w, station.h))
+  assert_true(station_words.iter().all(fn(r) { r.text == "Studio" }), msg="\{station_words.map(fn(r) { r.text })}")
   // the model's: as wide as what it keeps (its padding past the last of it, no more)
   let kept = t
     .boxes()
@@ -57,20 +67,23 @@ test "narrow: the station's control says its name whole beside the model's, whic
     .fold(init=0.0, fn(m, b) { if b.x + b.w > m { b.x + b.w } else { m } })
   assert_true(model.x + model.w - kept <= 12.5, msg="\{model.x + model.w - kept} past what it keeps")
   // what it keeps of itself: the model's name, whole
-  assert_true(runs_in(t, (model.x, model.y, model.w, model.h)).iter().any(fn(r) { r.text == "DeepSeek V4.1 Flash" }))
+  let model_words = runs_in(t, (model.x, model.y, model.w, model.h))
+  assert_true(model_words.iter().any(fn(r) { r.text == "DeepSeek V4.1 Flash" }), msg="\{model_words.map(fn(r) { r.text })} in \{model.w}; \{preset.w}, \{station.w}")
 }
 
 ///|
-test "narrower still: the station's name leaves its control whole after what the model's leaves, the model's name stays" {
+test "narrower still: the preset's words and the station's name leave their controls whole after what the model's leaves, the model's name stays, cut short last" {
   let t = crowded("newchat-crowded", w=crowded_cramped)
-  let glass = t.boxes().filter(fn(b) { b.glass && b.kind == "row" && (b.h - 30.0).abs() < 0.5 })
-  assert_eq(glass.length(), 2)
-  let (station, model) = (glass[0], glass[1])
+  let glass = crowded_controls(t)
+  assert_eq(glass.length(), 3)
+  let (preset, station, model) = (glass[0], glass[1], glass[2])
   assert_true(model.x + model.w <= crowded_cramped)
-  let station_words = runs_in(t, (station.x, station.y, station.w, station.h))
-  // no part of its name (not 「Stu…」): its mark and its chevron (the page says where it starts)
-  assert_true(station_words.length() == 0, msg="\{station_words.map(fn(r) { r.text })}")
-  assert_true(runs_in(t, (model.x, model.y, model.w, model.h)).iter().any(fn(r) { r.text == "DeepSeek V4.1 Flash" }))
+  // no part of their words: their marks and their chevrons (the page says where it starts)
+  let words = runs_in(t, (preset.x, preset.y, station.x + station.w - preset.x, station.h))
+  assert_true(words.length() == 0, msg="\{words.map(fn(r) { r.text })}")
+  // narrower than phones are: the model's name kept, cut short once all else has gone
+  let model_words = runs_in(t, (model.x, model.y, model.w, model.h))
+  assert_true(model_words.iter().any(fn(r) { r.text.has_prefix("DeepSeek") }), msg="\{model_words.map(fn(r) { r.text })}")
   // nothing past what it keeps
   let kept = t
     .boxes()

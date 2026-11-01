@@ -215,9 +215,9 @@ test "a new chat: its station picked in the sheet, its model in the model's pane
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("它会在 Studio 上") is Some(_))
-  // the station's control, beside the model's
-  let (_, cy) = t.find("Opus 5.5").unwrap()
-  t.tap(50.0, cy)
+  // the station's control, after the preset's, beside the model's
+  let (sx, sy) = t.find_last("Studio").unwrap()
+  t.tap(sx, sy)
   assert_true(t.find("选择运行的 station") is Some(_))
   run_to_sheet_rest(t)
   let (mx, my) = t.find_last("MBA").unwrap()

@@ -68,7 +68,6 @@ fn default_spec(f : ComposerFor) -> @sfpages.ComposerSpec {
     session: "",
     placeholder: "发消息",
     toolbar: None,
-    beside_plus: None,
     note: [],
     tail: None,
     roomy: false,
