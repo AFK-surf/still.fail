@@ -1255,6 +1255,16 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
             mime: v.mime,
             audio: v.shown_kind() == Some(KAudio),
             read: fn(offset, length, answer) {
+              // its bytes here already (one waiting in the composer: no station has it yet), played from them
+              match v.bytes.get() {
+                Some(b) => {
+                  let from = offset.to_int()
+                  let to = if from + length < b.length() { from + length } else { b.length() }
+                  answer(if from < to { b[from:to].to_bytes() } else { b"" }, b.length().to_double(), false)
+                  return fn() {  }
+                }
+                None => ()
+              }
               // (one a message names: each part in one piece, `file.open` streams none)
               if v.named {
                 let gone = Ref(false)
