@@ -124,8 +124,15 @@ for platform in $platforms; do
       variant=${beta:+beta}
       variant=${variant:-stable}
       mbui_cache=${MBUI_MAC_CACHE:-$HOME/stillfail-ci/mbui-mac-$variant}
-      MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
-      MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=$variant RELEASE_DIR="$out/mbui" \
+      tools=
+      # A fresh CI checkout already has MoonBit on PATH; a persistent machine keeps its own toolchain in the cache.
+      if [ "${MBUI_FRESH:-}" = 1 ]; then
+        mbui_cache=${MBUI_MAC_CACHE:-${MBUI_CACHE:-$mbui_cache}}
+      else
+        MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
+        tools=$mbui_cache/tools
+      fi
+      MBUI_CACHE=$mbui_cache MBUI_TOOLS=$tools MBUI_VARIANT=$variant RELEASE_DIR="$out/mbui" \
         bash "$root/apps/mbui/scripts/beta.sh" mac
       app_zip="$out/mbui/mac/app-$variant.zip"
       id=fail.still.desktop${beta:+.beta}

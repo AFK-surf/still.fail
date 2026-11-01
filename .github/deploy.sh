@@ -1,6 +1,6 @@
 #!/bin/sh
 # cloud/deploy.py in CI (.github/workflows/pipeline.yml): its deploy directory made for this run from the
-# environment's secrets (removed after), the builds kept for promote-web in mini1's ~/stillfail-deploy/builds,
+# environment's secrets (removed after); the web build is handed to promote-web as a GitHub Actions artifact,
 # and a dropped connection ("fetch failed") tried again, up to three times.
 #   sh .github/deploy.sh [--dry-run] PART…
 # The secrets, each a file's content (none of them needed for --dry-run): CLOUDFLARE_API_TOKEN (without it, the

@@ -26,8 +26,8 @@ runs:
         # Keep native artifacts within 5 GiB when old enough to be unused by any running job (scripts/native.ts).
         echo "STILLFAIL_NATIVE_CACHE_MAX_BYTES=5368709120" >> "$GITHUB_ENV"
         echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
-        # Cloudflare's API reached directly by the releases' puts (scripts/release-put.sh), not through the proxy the
-        # machine's DNS sends everything to; GitHub stays through it (github.com is not reached directly at all).
+        # Cloudflare's API and the native artifact store resolved directly by the releases' puts and native.ts;
+        # GitHub keeps the machine's usual route.
         echo "STILLFAIL_DIRECT_DNS=223.5.5.5" >> "$GITHUB_ENV"
         # The targets kept before (target-*, check-*, linux-*): no job reads them now.
         find "$HOME/stillfail-ci" -mindepth 1 -maxdepth 1 -type d \( -name 'target*' -o -name 'check-*' -o -name 'linux*' \) -mmin +240 -exec rm -rf {} + 2>/dev/null || true
