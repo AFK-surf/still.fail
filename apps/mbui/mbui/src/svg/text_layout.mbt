@@ -423,6 +423,16 @@ fn layout_and_flatten(text : ParsedText, opt : Options) -> SText? {
       builder = @skia.PathBuilder::new()
     }
     for g in span.glyphs {
+      match colr_glyph(g.face, g.id) {
+        Some(tree) => {
+          let glyph_group = Group::empty()
+          glyph_group.transform = g.transform().pre_concat(@skia.Transform::from_scale(1.0, -1.0))
+          glyph_group.children.push(NGroup(tree.root))
+          group.children.push(NGroup(glyph_group))
+          continue
+        }
+        None => ()
+      }
       match svg_glyph(g.face, g.id) {
         Some(node) => {
           flush()
