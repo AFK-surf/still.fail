@@ -9,6 +9,10 @@ On macOS, from `apps/mbui`:
 ```sh
 bash scripts/figure.sh wrap out/wrap.png
 bash scripts/figure.sh align out/alignment.png
+bash scripts/figure.sh wrap-normal out/wrap-normal.png
+bash scripts/figure.sh wrap-reverse out/wrap-reverse.png
+bash scripts/figure.sh align-edge out/align-edge.png
+bash scripts/figure.sh align-text out/align-text.png
 # Optional: use another font for the view's UI face.
 bash scripts/figure.sh wrap out/wrap-inter.png /absolute/path/to/InterVariable.ttf
 ```
@@ -16,7 +20,9 @@ bash scripts/figure.sh wrap out/wrap-inter.png /absolute/path/to/InterVariable.t
 The `wrap` example is 960 × 540 logical points at 2.5×, producing 2400 × 1350 pixels. It draws the sign-in card's real
 components three times, with the same content and the same size: once wide, then at the same narrow width with normal
 and reverse wrapping. Only the normal example changes the foot's layout direction. The example shortens the button
-labels for the graphic. `align` compares the button edge with its label on the same card. The input and output paths
+labels for the graphic. `align` compares the button edge with its label on the same card. `wrap-normal`,
+`wrap-reverse`, `align-edge`, and `align-text` each draw one of the same cards on a neutral canvas, without headings
+or annotations. These single-card figures are 480 × 270 logical points at 5×, also 2400 × 1350 pixels. The input and output paths
 are relative to `apps/mbui` unless absolute. A supplied font that cannot be read,
 an undecodable or pending image, unsupported host, invalid dimensions, or an unwritable output makes the command fail.
 The script writes a temporary file alongside the destination and replaces it only after a successful render.

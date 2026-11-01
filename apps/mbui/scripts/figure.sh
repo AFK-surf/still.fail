@@ -4,7 +4,7 @@ set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
-name=${1:?figure name (wrap or align)}
+name=${1:?figure name (wrap, align, wrap-normal, wrap-reverse, align-edge or align-text)}
 out=${2:?output PNG path}
 font=${3:-}
 case "$out" in /*) ;; *) out="$PWD/$out" ;; esac
