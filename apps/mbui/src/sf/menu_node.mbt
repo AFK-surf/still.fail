@@ -35,6 +35,8 @@ pub fn menu_node(
   cancel : () -> Unit,
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
+  extras? : (Int) -> MenuExtra = fn(_) { menu_no_extra },
+  min_w? : Double = menu_w,
 ) -> Unit {
   parent.show(
     open,
@@ -185,6 +187,21 @@ pub fn menu_node(
       let iconed = fn() { content().iter().any(fn(x) { x is Some(i) && i.chosen is None && i.icon != "" }) }
       let lead = fn() { iconed() || content().iter().any(fn(x) { x is Some(i) && i.chosen is Some(_) }) }
       let gap = fn() { if lead() && !iconed() { chooser_gap } else { menu_gap } }
+      // (how far in a heading's words are: past the check's or icon's column, and a mark's where a row has one, as the
+      // dropdown's heading_look has them)
+      let marked = fn() {
+        let n = content().length()
+        let mut any = false
+        for i in 0..<n {
+          if extras(i).mark is Some(_) {
+            any = true
+          }
+        }
+        any
+      }
+      let past = fn() {
+        (if lead() { menu_check_w + gap() } else { 0.0 }) + (if marked() { menu_check_w + gap() } else { 0.0 })
+      }
       let reach = menu_row_reach(t.rows.pick)
       let first_row = fn() {
         let items = content()
@@ -197,7 +214,7 @@ pub fn menu_node(
       layer.box(fn(p) {
         p
         .beside(at.id(), side=Bottom, along=view_along(along), offset~, padding=8.0)
-        .min_width(Is(Some(menu_w)))
+        .min_width(Is(Some(min_w)))
         .max_width(By(fn() { Some(layer.window().0 - 16.0) }))
         .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
         // (small_panel: its padding, its rows reaching past it to stand concentric with its corners)
@@ -225,7 +242,7 @@ pub fn menu_node(
         p.box(fn(body) {
           body.scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
             if title != "" {
-              menu_heading_node(b, fn() { title }, lead, gap, reach, words_in)
+              menu_heading_node(b, fn() { title }, past, reach, words_in)
             }
             // (each of what it holds by its place and its kind: one changing what it is (a line, a heading, a row) made
             // anew there; a row's words, icon, check and whether it can be chosen read again as they change, the row the
@@ -240,9 +257,9 @@ pub fn menu_node(
               }
               match kind {
                 0 => menu_rule_node(cell, reach)
-                1 => menu_heading_node(cell, fn() { item().label }, lead, gap, reach, words_in)
+                1 => menu_heading_node(cell, fn() { item().label }, past, reach, words_in)
                 _ => {
-                  rows[i] = menu_row_node(cell, item, i, lead, gap, reach, go, words_in, current, stop)
+                  rows[i] = menu_row_node(cell, item, i, lead, gap, reach, go, words_in, current, stop, extras(i))
                   cell.owns(fn() { rows.remove(i) }) |> ignore
                 }
               }
@@ -307,6 +324,7 @@ fn menu_row_node(
   words_in : () -> Double,
   current : @signals.Signal[Int],
   stop : () -> Int,
+  extra : MenuExtra,
 ) -> @view.View {
   let t = theme()
   let off = fn() { item().disabled }
@@ -352,58 +370,130 @@ fn menu_row_node(
       }
     })
     |> ignore
-    // (its column before its words, where the menu has one: a choice's check, or its icon)
-    r.show(lead, fn(col) {
-      col.width(Is(Some(menu_check_w))).lines_up(Is(Some(Middle))).alpha(By(words_in)) |> ignore
-      let mark = fn() {
-        let it = item()
-        match it.chosen {
-          Some(true) => "\u{1}check"
-          Some(false) => ""
-          None => it.icon
+    // (its first line: its column before its words, where the menu has one (a choice's check, or its icon), its own
+    // mark after it, its words, and its value pushed to its end)
+    let first_line = fn(into : @view.View) {
+      into.show(lead, fn(col) {
+        col.width(Is(Some(menu_check_w))).lines_up(Is(Some(Middle))).alpha(By(words_in)) |> ignore
+        let mark = fn() {
+          let it = item()
+          match it.chosen {
+            Some(true) => "\u{1}check"
+            Some(false) => ""
+            None => it.icon
+          }
         }
-      }
-      col.each(fn() { if mark() == "" { [] } else { [mark()] } }, fn(m) { m }, fn(slot, m) {
-        let name = @signals.untracked(fn() { m.get() })
-        if name == "\u{1}check" {
-          icon_node(slot, "check", 14.0, By(fn() { library_theme().p.text })) |> ignore
-        } else {
-          icon_node(slot, name, 14.0, By(fn() {
-            let p = library_theme().p
-            if item().danger {
-              if off() { p.subtle } else { p.red }
-            } else {
-              p.muted
-            }
-          }))
-          |> ignore
-        }
+        col.each(fn() { if mark() == "" { [] } else { [mark()] } }, fn(m) { m }, fn(slot, m) {
+          let name = @signals.untracked(fn() { m.get() })
+          if name == "\u{1}check" {
+            icon_node(slot, "check", 14.0, By(fn() { library_theme().p.text })) |> ignore
+          } else {
+            icon_node(slot, name, 14.0, By(fn() {
+              let p = library_theme().p
+              if item().danger {
+                if off() { p.subtle } else { p.red }
+              } else {
+                p.muted
+              }
+            }))
+            |> ignore
+          }
+        })
       })
-    })
-    r.box(fn(w) {
-      w
-      .words(By(fn() { item().label }), look=toast_words_look(Ui, L5, 400, false))
-      .ink(By(fn() { @ui.tree_theme().color(if off() { Subtle } else if item().danger { Danger } else { Fg }) }))
-      .alpha(By(words_in))
+      // (its own mark (a station's, a maker's), drawn by the old frame, as wide as the check's column)
+      match extra.mark {
+        Some(m) =>
+          @ui.old(into, fn(c) { m(c, menu_check_w) })
+          .width(Is(Some(menu_check_w)))
+          .height(Is(Some(menu_check_w)))
+          .alpha(By(words_in))
+          |> ignore
+        None => ()
+      }
+      into.box(fn(w) {
+        w
+        .words(By(fn() { item().label }), look=toast_words_look(Ui, L5, 400, false))
+        .ink(By(fn() { @ui.tree_theme().color(if off() { Subtle } else if item().danger { Danger } else { Fg }) }))
+        .alpha(By(words_in))
+        |> ignore
+      })
       |> ignore
-    })
-    |> ignore
+      if extra.value != "" {
+        into.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
+        into.box(fn(w) {
+          w
+          .words(Is(extra.value), look=toast_words_look(Meta, L5, 400, false))
+          .ink(By(fn() { @ui.tree_theme().color(Muted) }))
+          .alpha(By(words_in))
+          |> ignore
+        })
+        |> ignore
+      }
+    }
+    if extra.note == "" {
+      first_line(r)
+    } else {
+      // (what it is under its words, as far in as they are; what leads it by its first line: lead_by_first_line)
+      r.box(fn(lines) {
+        lines.grow(Is(1.0)) |> ignore
+        lines.box(fn(l) {
+          l.row(Is(true)).lines_up(Is(Some(Middle))).gap(By(gap)) |> ignore
+          first_line(l)
+        })
+        |> ignore
+        lines.box(fn(u) {
+          u
+          .padding(
+            By(fn() {
+              let w = (if lead() { menu_check_w + gap() } else { 0.0 }) +
+                (if extra.mark is Some(_) { menu_check_w + gap() } else { 0.0 })
+              (w, 0.0, 0.0, 0.0)
+            }),
+          )
+          |> ignore
+          // (its words a node of their own in it: what holds words is laid out as they are, not padded)
+          u.box(fn(w) {
+            w
+            .words(Is(extra.note), look=toast_words_look(Meta, L5, 400, true))
+            .ink(By(fn() { @ui.tree_theme().color(Muted) }))
+            .alpha(By(words_in))
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    }
   })
 }
 
 ///|
+/// What a row of a menu has besides its item (a pick's choice's): what it is under its words (`note`), what it is at
+/// now at its end (`value`), its own mark drawn by the old frame (`mark`, given the column's width).
+pub(all) struct MenuExtra {
+  note : String
+  value : String
+  mark : ((@ui.Ctx, Double) -> Unit)?
+}
+
+///|
+/// A row with nothing besides its item.
+let menu_no_extra : MenuExtra = { note: "", value: "", mark: None }
+
+///|
 /// A heading among a menu's items (menu_popover's heading_look): its words (`label()`) as far in as its rows' words
-/// (past the column before them where there is one), small and muted, 6 over and 4 under it.
+/// (`past()`: past the columns before them where there are: a check's or an icon's, a mark's), small and muted, 6 over and
+/// 4 under it.
 fn menu_heading_node(
   b : @view.View,
   label : () -> String,
-  lead : () -> Bool,
-  gap : () -> Double,
+  past : () -> Double,
   reach : Double,
   words_in : () -> Double,
 ) -> Unit {
   b.box(fn(h) {
-    h.padding(By(fn() { (text_in + (if lead() { menu_check_w + gap() } else { 0.0 }) + reach, 6.0, 10.0 + reach, 4.0) })) |> ignore
+    h.padding(By(fn() { (text_in + past() + reach, 6.0, 10.0 + reach, 4.0) })) |> ignore
     h.box(fn(w) {
       w
       .words(By(label), look=toast_words_look(Meta, L4_75, 400, false))

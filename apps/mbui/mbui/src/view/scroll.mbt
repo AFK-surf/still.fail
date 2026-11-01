@@ -135,6 +135,14 @@ pub fn Scroll::most(self : Scroll) -> Double {
 }
 
 ///|
+/// Whether what it holds is taller than it, as last laid out, followed (asked once it scrolls: View::scrolls): what is
+/// painted by that alone reads it (cut at its box only while it scrolls, as @kit.in_room's held list), never what lays
+/// it out.
+pub fn Scroll::goes(self : Scroll) -> Bool {
+  self.most_now() > 0.0
+}
+
+///|
 /// How far it can go as last laid out, followed (0 before it first is).
 fn Scroll::most_now(self : Scroll) -> Double {
   match (self.room)() {
