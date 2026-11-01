@@ -1058,9 +1058,11 @@ pub let viz_loads : Map[String, @sfbase.VizLoad]
 
 pub let viz_max_state : Int32
 
-pub fn viz_mermaid_block(@ui.Ctx, String, String, Int64) -> Unit
+pub fn viz_mermaid_block(@ui.Ctx, @sfbase.Source, String, String, Int64) -> Unit
 
 pub fn viz_mermaid_document(String, full? : Bool) -> String
+
+pub fn viz_mermaid_page(@ui.Ctx, String, String, Int64) -> Unit
 
 pub fn viz_open_full(String, String, String, String, String, linked? : Bool) -> Unit
 

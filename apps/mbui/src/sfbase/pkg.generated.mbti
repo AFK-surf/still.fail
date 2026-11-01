@@ -1743,13 +1743,15 @@ pub let viz_max_state : Int32
 
 pub let viz_mermaid : String
 
-pub fn viz_mermaid_block(@ui.Ctx, String, String, Int64) -> Unit
+pub fn viz_mermaid_block(@ui.Ctx, Source, String, String, Int64) -> Unit
 
 pub let viz_mermaid_box : @ui.Style
 
 pub fn viz_mermaid_document(String, full? : Bool) -> String
 
 pub fn viz_mermaid_lib() -> String
+
+pub fn viz_mermaid_page(@ui.Ctx, String, String, Int64) -> Unit
 
 pub fn viz_open_full(String, String, String, String, String, linked? : Bool) -> Unit
 

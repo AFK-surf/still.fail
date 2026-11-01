@@ -65,7 +65,7 @@ test "two scoped copies of a visualization each own their native view" {
     c.with_theme(@sf.ui_theme(), fn() {
       for page in [1, 2] {
         c.scope(page, fn() {
-          viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+          viz_mermaid_page(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
         })
       }
     })
@@ -87,7 +87,7 @@ test "two copies of a visualization move with their rows while scrolling" {
       c.list("rows", 6, 160.0, fn(i) {
         c.column(h=Px(160.0), fn() {
           if i == 1 || i == 2 {
-            viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+            viz_mermaid_page(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
           } else {
             c.text("row \{i}") |> ignore
           }
@@ -117,7 +117,7 @@ test "a visualization view is reused after its page leaves and all its copies cl
     @sf.begin(c) |> ignore
     c.with_theme(@sf.ui_theme(), fn() {
       c.nav(nav, fn(_) {
-        viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+        viz_mermaid_page(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
       }) |> ignore
     })
   }, w=390.0, h=700.0, platform=1)

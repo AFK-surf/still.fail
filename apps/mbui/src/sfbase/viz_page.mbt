@@ -907,9 +907,10 @@ pub fn viz_mermaid_document(code : String, full? : Bool = false) -> String {
 pub let viz_unmade : Map[String, Bool] = Map([])
 
 ///|
-/// A ```mermaid block: drawn as a chart (`place`: the message it is in), with a way under it to open it over the whole
-/// screen (in `subtle`, the frame's grey); shown as code while it will not draw.
-pub fn viz_mermaid_block(c : @ui.Ctx, place : String, code : String, subtle : Int64) -> Unit {
+/// A ```mermaid block drawn by mermaid in a page (`place`: the message it is in), where the core does not make its
+/// chart (viz_mermaid.mbt), with a way under it to open it over the whole screen (in `subtle`, the frame's grey); shown
+/// as code while it will not draw.
+pub fn viz_mermaid_page(c : @ui.Ctx, place : String, code : String, subtle : Int64) -> Unit {
   if viz_unmade.contains(code) {
     @sf.code_block(c, code, "mermaid")
     return
@@ -920,15 +921,7 @@ pub fn viz_mermaid_block(c : @ui.Ctx, place : String, code : String, subtle : In
       failed: Some(fn(_why) { viz_unmade[code] = true }),
       follow_up: None,
     }, lib=viz_mermaid_lib())
-    // under the chart, out of its way, as a placed file has it
-    c.box(style=viz_ways, fn() {
-      let full = c.id("viz/full/" + place + "/mermaid/" + code)
-      if c.clicked(full) {
-        c.tell("viz/open-mermaid", fn() { viz_open_mermaid(code) })
-      }
-      viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"), subtle)
-    })
-    |> ignore
+    mermaid_ways(c, place, code, subtle)
   })
   |> ignore
 }
@@ -946,5 +939,6 @@ pub fn viz_pages_reset() -> Unit {
   viz_heights.clear()
   viz_full.set(None)
   viz_unmade.clear()
+  mermaid_charts.clear()
   followed_into.clear()
 }

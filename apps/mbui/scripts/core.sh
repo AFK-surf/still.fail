@@ -4,7 +4,7 @@
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
 #   scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
 #                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
-#                   | chat-open | md-parse | zstd-read
+#                   | chat-open | md-parse | mermaid | zstd-read
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -77,8 +77,8 @@ shell_prebuilt() {
 }
 
 # The core for Hermes (every native host: src/host/apple_core.mm, src/host/android_core.c): out/core/core.hbc. Made as ember's
-# client/core-ts/scripts/hermes-bundle.ts makes it (esbuild to ES2020; Babel's class transform, as Hermes 0.81 has no
-# classes; then React Native 0.81.4's hermesc, the engine's Hermes, to bytecode), but from an entry of ours (ENTRY,
+# client/core-ts/scripts/hermes-bundle.ts makes it (esbuild to ES2020, async functions as generators; Babel's class
+# transform, as Hermes 0.81 has no classes nor async functions; then React Native 0.81.4's hermesc, the engine's Hermes, to bytecode), but from an entry of ours (ENTRY,
 # default core/hermes.ts: still.fail's alone; core/media-hermes.ts with the media module), `@core/` and `@ember/`
 # aliased (`@core/` is client/core-ts/src, `@ember/` this checkout). hermesc: $HERMESC, else the one kept in ~/Library/Caches/stillfail-build, else
 # fetched (npm pack react-native@0.81.4) into out/core/hermesc.
@@ -166,7 +166,7 @@ hermes() {
   rm -f $OUT/core-hermes.js $OUT/core.hbc $OUT/core.hbc.stamp
   # what an app's modules import from npm (media/core's effect) found in the core's own node_modules
   NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/hermes.ts} --bundle \
-    --format=iife --platform=neutral --main-fields=module,main --target=es2020 --minify --legal-comments=none \
+    --format=iife --platform=neutral --main-fields=module,main --target=es2020 --supported:async-await=false --supported:async-generator=false --minify --legal-comments=none \
     --alias:@core=$CORE_TS/src --alias:@ember=$EMBER --resolve-extensions=.ts,.js,.mjs \
     --outfile=$OUT/core-hermes.js --metafile=$OUT/core-hermes.meta.json --log-level=warning \
     || { echo "hermes: bundle failed"; return 1; }
@@ -339,7 +339,7 @@ md_parse() {
   mkdir -p $o
   (cd $CORE_TS && node --input-type=module -e 'import { replies } from "./bench/replies.ts"; import { writeFileSync } from "node:fs"; writeFileSync(process.argv[1], "var TEXTS = " + JSON.stringify(replies()) + ";\n");' $o/texts.js) || return 1
   NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild $CORE_TS/bench/md-parse.ts --bundle --format=iife --platform=neutral \
-    --main-fields=module,main --target=es2020 --minify --legal-comments=none --resolve-extensions=.ts,.js,.mjs --log-level=warning --outfile=$o/bench.js || return 1
+    --main-fields=module,main --target=es2020 --supported:async-await=false --supported:async-generator=false --minify --legal-comments=none --resolve-extensions=.ts,.js,.mjs --log-level=warning --outfile=$o/bench.js || return 1
   (cd $CORE_TS && node --input-type=module -e "
 import { readFileSync, writeFileSync } from 'node:fs';
 import { transformSync } from '@babel/core';
@@ -347,6 +347,26 @@ const f = process.argv[1];
 writeFileSync(f, transformSync(readFileSync(f, 'utf8'), { babelrc: false, configFile: false, compact: true, plugins: ['@babel/plugin-transform-classes'] }).code);" $o/bench.js) || return 1
   cat $o/texts.js $o/bench.js > $o/run.js
   "$(hermesc)" -emit-binary -O -block-scoping -out $o/run.hbc $o/run.js 2>&1 | grep -a "error:" && return 1
+  $OUT/hermes/bin/hermes $o/run.hbc
+}
+
+# Mermaid's charts made in Hermes as the core makes them (client/core-ts/bench/mermaid.ts: mermaid loaded for the first,
+# then each kind of chart, timed), bundled as the core is.
+mermaid_bench() {
+  have_deps
+  hermes_apple || return 1
+  local o=$OUT/mermaid
+  mkdir -p $o
+  NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild $CORE_TS/bench/mermaid.ts --bundle --format=iife --platform=neutral \
+    --main-fields=module,main --target=es2020 --supported:async-await=false --supported:async-generator=false --minify --legal-comments=none --resolve-extensions=.ts,.js,.mjs --log-level=warning --outfile=$o/bench.js || return 1
+  (cd $CORE_TS && node --input-type=module -e "
+import { readFileSync, writeFileSync } from 'node:fs';
+import { transformSync } from '@babel/core';
+const f = process.argv[1];
+writeFileSync(f, transformSync(readFileSync(f, 'utf8'), { babelrc: false, configFile: false, compact: true, plugins: ['@babel/plugin-transform-classes'] }).code);" $o/bench.js) || return 1
+  # (by its exit: its warnings quote lines of mermaid's that say "error:")
+  "$(hermesc)" -emit-binary -O -block-scoping -out $o/run.hbc $o/bench.js > $o/hermesc.log 2>&1 \
+    || { grep -a -o ": error: .\{0,200\}" $o/hermesc.log | head -20; return 1; }
   $OUT/hermes/bin/hermes $o/run.hbc
 }
 
@@ -367,7 +387,7 @@ const plain = Buffer.from(JSON.stringify({ entries }));
 const packed = [3, 9].map((level) => ({ level, plain: plain.length, b64: zstdCompressSync(plain, { params: { [constants.ZSTD_c_compressionLevel]: level } }).toString("base64") }));
 writeFileSync(process.argv[1], "var PACKED = " + JSON.stringify(packed) + ";\n");' $o/packed.js) || return 1
   NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild $CORE_TS/bench/zstd-read.ts --bundle --format=iife --platform=neutral \
-    --main-fields=module,main --target=es2020 --minify --legal-comments=none --resolve-extensions=.ts,.js,.mjs --log-level=warning --outfile=$o/bench.js || return 1
+    --main-fields=module,main --target=es2020 --supported:async-await=false --supported:async-generator=false --minify --legal-comments=none --resolve-extensions=.ts,.js,.mjs --log-level=warning --outfile=$o/bench.js || return 1
   (cd $CORE_TS && node --input-type=module -e "
 import { readFileSync, writeFileSync } from 'node:fs';
 import { transformSync } from '@babel/core';
@@ -489,6 +509,7 @@ case "${1:-all}" in
   listen) listen_test ;;
   chat-open) chat_open ;;
   md-parse) md_parse ;;
+  mermaid) mermaid_bench ;;
   zstd-read) zstd_read ;;
   exit) exit_test ;;
   collate) collate_test ;;
@@ -504,5 +525,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | zstd-read | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | mermaid | zstd-read | clean | all"; exit 2 ;;
 esac

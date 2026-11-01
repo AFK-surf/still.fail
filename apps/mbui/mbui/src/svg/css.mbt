@@ -14,6 +14,10 @@ priv enum AttrOp {
   Matches(String)
   Contains(String)
   StartsWith(String)
+  /// `^=`, `$=`, `*=` (CSS 3, which simplecss has not): the value begins with, ends with, has the string
+  Begins(String)
+  Ends(String)
+  Has(String)
 }
 
 ///|
@@ -30,6 +34,9 @@ fn AttrOp::matches(self : AttrOp, value : String) -> Bool {
       } else {
         false
       }
+    Begins(v) => v != "" && value.has_prefix(v)
+    Ends(v) => v != "" && value.has_suffix(v)
+    Has(v) => v != "" && value.contains(v)
   }
 }
 
@@ -590,14 +597,23 @@ fn parse_selector(text : String) -> (Selector?, Int) {
               None => None
             }
           }
-          0x7E | 0x7C => {
+          0x7E | 0x7C | 0x5E | 0x24 | 0x2A => {
             let kind = s.cur()
             s.pos += 1
             if !s.consume_byte(0x3D) {
               None
             } else {
               match s.consume_string() {
-                Some(v) => Some(if kind == 0x7E { Contains(v) } else { StartsWith(v) })
+                Some(v) =>
+                  Some(
+                    match kind {
+                      0x7E => Contains(v)
+                      0x7C => StartsWith(v)
+                      0x5E => Begins(v)
+                      0x24 => Ends(v)
+                      _ => Has(v)
+                    },
+                  )
                 None => None
               }
             }

@@ -1,0 +1,148 @@
+// A ```mermaid block's chart drawn by the app itself: the core makes it (`mermaid.chart`: mermaid.js lays it out
+// there, client/core-ts/src/mermaid.ts, its words measured in the faces the app sets them in) and gives an SVG in the
+// theme's colours, drawn here as a picture (mbui's SVG renderer, as an .svg file is). No page per chart: as wide as it
+// is written, or the column's where that is less, never smaller than 0.8 (wider than that it moves sideways). One the
+// core refuses (mermaid does not read it, or part of it would be HTML) is drawn by mermaid in a page as before
+// (viz_page.mbt).
+
+///|
+priv enum MermaidChart {
+  ChartComing
+  /// the picture's key, its width and height as the chart says them
+  ChartMade(String, Double, Double)
+  ChartRefused
+}
+
+///|
+// kept across runs: the core's answers, by what was asked (mermaid_ask)
+let mermaid_charts : Map[String, MermaidChart] = {}
+
+///|
+/// (a signal: a frame drawing a chart reads it, and comes again as one is made)
+let mermaid_made : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// The smallest a chart is drawn at in a message, of its size as written.
+let mermaid_readable : Double = 0.8
+
+///|
+/// `rgba` laid over `ground` (both 0xRRGGBBAA, the ground opaque), as `#rrggbb`: a colour of the theme as the chart
+/// gets it (the core takes nothing else into its styles).
+fn mermaid_hex(rgba : Int64, ground : Int64) -> String {
+  let a = (rgba & 0xFFL).to_int()
+  let mix = fn(shift : Int) {
+    let c = ((rgba >> shift) & 0xFFL).to_int()
+    let g = ((ground >> shift) & 0xFFL).to_int()
+    (c * a + g * (255 - a) + 127) / 255
+  }
+  let hex = "0123456789abcdef"
+  let out = StringBuilder::new()
+  out.write_char('#')
+  for shift in [24, 16, 8] {
+    let v = mix(shift)
+    out.write_char(hex[v / 16].unsafe_to_char())
+    out.write_char(hex[v % 16].unsafe_to_char())
+  }
+  out.to_string()
+}
+
+///|
+/// What the core is asked for chart `code` `width` wide: its colours as the theme shown has them (the web's chart
+/// page's: the page, a card, the strong line, the ink, the muted ink for lines, the quiet grounds, the brand).
+fn mermaid_ask(code : String, width : Int) -> Json {
+  let t = @sf.theme()
+  let p = t.p
+  let ground = p.canvas
+  let colours : Map[String, Json] = {
+    "background": mermaid_hex(ground, ground).to_json(),
+    "card": mermaid_hex(p.card, ground).to_json(),
+    "border": mermaid_hex(p.line_strong, ground).to_json(),
+    "text": mermaid_hex(p.text, ground).to_json(),
+    "line": mermaid_hex(p.muted, ground).to_json(),
+    "accent": mermaid_hex(p.neutral_bg, ground).to_json(),
+    "muted": mermaid_hex(p.hover, ground).to_json(),
+    "brand": mermaid_hex(p.accent, ground).to_json(),
+  }
+  { "code": code.to_json(), "dark": t.dark.to_json(), "colours": Json::object(colours), "width": width.to_json() }
+}
+
+///|
+/// A ```mermaid block: its chart drawn as a picture (`place`: the message it is in), with a way under it to open it
+/// over the whole screen (in `subtle`, the frame's grey); while the core makes it, its place as a page's while it
+/// waits; refused, drawn by mermaid in a page (viz_mermaid_page); one that will not draw at all shown as code.
+pub fn viz_mermaid_block(c : @ui.Ctx, src : Source, place : String, code : String, subtle : Int64) -> Unit {
+  if viz_unmade.contains(code) {
+    @sf.code_block(c, code, "mermaid")
+    return
+  }
+  ignore(mermaid_made.get())
+  let box = c.id("viz/mermaid/" + place + "/" + code)
+  let room = match c.laid_size(box) {
+    Some((w, _)) if w > 0.0 => w
+    _ => c.width
+  }
+  // (the width a chart that fills it fills, a gantt's: by 40s, not asked again for each width as a window is dragged)
+  let width = ((room / 40.0).floor() * 40.0).to_int()
+  let ask = mermaid_ask(code, if width < 200 { 200 } else { width })
+  let key = ask.stringify()
+  match mermaid_charts.get(key) {
+    Some(ChartRefused) => {
+      viz_mermaid_page(c, place, code, subtle)
+      return
+    }
+    Some(ChartMade(picture, w, h)) =>
+      c.box(style=viz_mermaid_box, id=box, fn() {
+        let scale = dmax(dmin(1.0, room / w), mermaid_readable)
+        let draw = fn() { c.image(picture, w=Px(w * scale), h=Px(h * scale), fit=FitContain, bg=0L, fade=false) |> ignore }
+        if w * scale > room {
+          c.sideways("viz-mermaid/" + key, fn() { draw() }) |> ignore
+        } else {
+          draw()
+        }
+        mermaid_ways(c, place, code, subtle)
+      })
+      |> ignore
+    _ => {
+      if mermaid_charts.get(key) is None {
+        mermaid_charts[key] = ChartComing
+        (src.call)("mermaid.chart", ask, fn(r) {
+          mermaid_charts[key] = match r {
+            Ok(v) =>
+              match v {
+                { "svg": String(svg), "width": Number(w, ..), "height": Number(h, ..), .. } if w > 0.0 && h > 0.0 => {
+                  let picture = "mem:mermaid/" + mermaid_charts.length().to_string()
+                  @ui.add_image(picture, @utf8.encode(svg))
+                  ChartMade(picture, w, h)
+                }
+                _ => ChartRefused
+              }
+            Err(_) => ChartRefused
+          }
+          mermaid_made.set(mermaid_made.get() + 1)
+        })
+      }
+      // its place while it is made, as a page's while it draws itself
+      c.box(style=viz_mermaid_box, id=box, fn() {
+        c.box(style=viz_wait_ground.then(@ui.style(h=Fixed(viz_first_height.to_double()))), fn() {
+          let i = c.box(style=viz_wait_fill, fn() {  })
+          @sf.breathe(c, i)
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+  }
+}
+
+///|
+/// Under a chart, out of its way, as a placed file has it: the whole screen.
+fn mermaid_ways(c : @ui.Ctx, place : String, code : String, subtle : Int64) -> Unit {
+  c.box(style=viz_ways, fn() {
+    let full = c.id("viz/full/" + place + "/mermaid/" + code)
+    if c.clicked(full) {
+      c.tell("viz/open-mermaid", fn() { viz_open_mermaid(code) })
+    }
+    viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"), subtle)
+  })
+  |> ignore
+}
