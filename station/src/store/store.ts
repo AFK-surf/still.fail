@@ -1238,6 +1238,14 @@ export class Store {
     ).map((r) => r.session);
   }
 
+  /// The person session `key` works for, as a creator reference (lowercased): whoever its chat was started for, its
+  /// createdBy (a chat an agent opened: its opener's starter, though no one has written in it yet); a session from before
+  /// that was kept, the first person who wrote in it. null: neither.
+  starter(key: string): string | null {
+    const by = this.getSession(key)?.createdBy ?? this.participants(key).get(key)?.[0];
+    return by === undefined || by === null || by === "" ? null : by.toLowerCase();
+  }
+
   /// Everyone who wrote in each session's threads (or one session's), as creator references, earliest first.
   participants(session: string | null): Map<string, string[]> {
     const sql = `SELECT ts.session, ts.connect, t.id, t.surface, t.archived_at FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${session !== null ? "WHERE ts.session = ?" : ""}`;

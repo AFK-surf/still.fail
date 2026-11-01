@@ -28,7 +28,7 @@ function world() {
   const hub = {
     store: {
       getSession: (k: string) => sessions.get(k) ?? null,
-      participants: (s: string) => new Map([[s, ["Pat@Example.com"]]]),
+      starter: () => "pat@example.com",
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any,
       insertMessage: (m: any) => {
         cards.push({ ts: m.ts, card: m.card });
