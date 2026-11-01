@@ -1,6 +1,6 @@
 // Presets (src/sessions/presets.ts, docs/presets.md): what a chat starts knowing, chosen as it is opened, kept with it.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -26,6 +26,13 @@ test("a chat opened with a preset is told its directories and instructions, and 
   const app = clone(repos, "app", "git@github.com:acme/app.git");
   const docs = join(repos, "docs");
   mkdirSync(docs);
+  // what a runtime opened in them would read: their instructions for agents, their skills (Claude Code's and Codex's)
+  writeFileSync(join(app, "AGENTS.md"), "# App\nRun pnpm test before pushing.\n");
+  mkdirSync(join(app, ".claude", "skills", "deploy"), { recursive: true });
+  writeFileSync(join(app, ".claude", "skills", "deploy", "SKILL.md"), "---\nname: deploy\n---\n");
+  mkdirSync(join(docs, ".agents", "skills", "deploy"), { recursive: true });
+  writeFileSync(join(docs, ".agents", "skills", "deploy", "SKILL.md"), "---\nname: deploy\n---\n");
+  writeFileSync(join(docs, "CLAUDE.md"), "x".repeat(20 * 1024));
   const preset = r.hub.presets.add(null, { name: "App work", dirs: [app, docs], instructions: "Screenshots before merging." }, "local");
   assert.deepEqual(preset.dirs, [{ path: app, repo: "github.com/acme/app" }, { path: docs, repo: null }]);
 
@@ -37,8 +44,17 @@ test("a chat opened with a preset is told its directories and instructions, and 
   assert.ok(opened.instructions.includes(`${app} (a clone of github.com/acme/app`), opened.instructions);
   assert.ok(opened.instructions.includes(`  - ${docs}\n`), opened.instructions);
   assert.ok(opened.instructions.includes("<preset-instructions>\nScreenshots before merging.\n</preset-instructions>"), opened.instructions);
-  assert.deepEqual(opened.dirs, [app, docs]);
   assert.equal(opened.cwd, r.session(key).workspace, "it still runs in its own workspace");
+  // their instruction files told, a long one's start; their skills linked where both runtimes find their own (one of a
+  // name taken already under its folder's name)
+  assert.ok(opened.instructions.includes(`<folder-instructions path="${join(app, "AGENTS.md")}">\n# App\nRun pnpm test before pushing.\n</folder-instructions>`), opened.instructions);
+  assert.ok(opened.instructions.includes(`<folder-instructions path="${join(docs, "CLAUDE.md")}">`) && opened.instructions.includes("(only its start: read the rest there)"));
+  const ws = r.session(key).workspace;
+  for (const home of [join(".claude", "skills"), join(".agents", "skills")]) {
+    assert.equal(realpathSync(join(ws, home, "deploy")), realpathSync(join(app, ".claude", "skills", "deploy")));
+    assert.equal(realpathSync(join(ws, home, "docs-deploy")), realpathSync(join(docs, ".agents", "skills", "deploy")));
+  }
+  assert.ok(opened.instructions.includes("linked into your workspace (.claude/skills, .agents/skills): deploy, docs-deploy"), opened.instructions);
 
   // Changed later: the chat opened before keeps what it was opened with; a new one has it as it is now.
   r.hub.presets.put(null, preset.id, { name: "App work", dirs: [docs], instructions: "" });
@@ -48,7 +64,7 @@ test("a chat opened with a preset is told its directories and instructions, and 
   sayIn(r.hub, second.id, "local", "and the docs");
   await settle();
   const now = r.claude.last().options;
-  assert.deepEqual(now.dirs, [docs]);
+  assert.ok(now.instructions.includes(`  - ${docs}\n`) && !now.instructions.includes(app), now.instructions);
   assert.ok(!now.instructions.includes("<preset-instructions>"), now.instructions);
   assert.equal(r.hub.presets.list(null).length, 1);
   assert.deepEqual(presetCopyOf(r.session(key).workspace)?.dirs.map((d) => d.path), [app, docs], "the first chat keeps what it was opened with");
@@ -61,7 +77,6 @@ test("a chat with no preset is told of none, and one naming no preset of its wor
   sayIn(r.hub, thread.id, "local", "hi");
   await settle();
   assert.ok(!r.claude.last().options.instructions.includes("preset"));
-  assert.equal(r.claude.last().options.dirs, undefined);
   const before = r.store.listSessions().length;
   assert.throws(() => newSession(r.hub, { runtime: "claude", createdBy: "local", preset: "p-none" }), /no preset p-none/);
   assert.equal(r.store.listSessions().length, before);
@@ -146,7 +161,6 @@ test("a chat opened with another station's preset is told where its folders are,
   assert.ok(opened.instructions.includes("github.com/acme/app: this station's clone of it"), opened.instructions);
   assert.ok(opened.instructions.includes("/Users/a/Design on station Studio: read it there with the station tools"), opened.instructions);
   assert.ok(opened.instructions.includes("<preset-instructions>\nBe brief.\n</preset-instructions>"));
-  assert.equal(opened.dirs, undefined, "another station's folders are not this machine's");
   await r.close();
 });
 
@@ -160,7 +174,6 @@ test("a preset names folders of several stations: those here checked and given, 
   sayIn(r.hub, thread.id, "local", "go");
   await settle();
   const opened = r.claude.last().options;
-  assert.deepEqual(opened.dirs, [here], "only this machine's to the runtime");
   assert.ok(opened.instructions.includes(`  - ${here}\n`), opened.instructions);
   assert.ok(opened.instructions.includes("/Users/b/Design on station MBA: read it there"), opened.instructions);
   assert.ok(opened.instructions.includes("github.com/acme/app: this station's clone of it"), opened.instructions);

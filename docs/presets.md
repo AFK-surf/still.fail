@@ -25,8 +25,13 @@
 
 ## agent 拿到什么
 
-- 预设的开场说明（`presetInstructions`）接在 station 自己的说明后面：预设名、各目录（是克隆的说明在自己的 worktree 里改）、先读各目录的 AGENTS.md、CLAUDE.md 和 `.claude/skills`、`.agents/skills`，人写的要求放在 `<preset-instructions>` 里（人的，不是 agent 改的）。
-- Claude 另外用 `--add-dir` 加上这些目录（`CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`：目录里的 CLAUDE.md 也读）；工作目录仍是会话工作区。
+Claude Code 和 Codex 都只在自己运行的目录里自动读说明文件和 skill（2026-11-01 对过两边文档：Claude Code `--add-dir` 的目录只加载 skill，CLAUDE.md 要另设环境变量，AGENTS.md 不读；Codex 只从当前目录往上到仓库根找 `.agents/skills` 和 AGENTS.md）。agent 的运行目录是会话工作区，所以开对话时 station 把预设里本机的目录「搬进」这个工作区（`keepCopy`）：
+
+- **skill**：每个目录 `.claude/skills/*`、`.agents/skills/*` 里有 SKILL.md 的文件夹，软链接进会话工作区的 `.claude/skills/` 和 `.agents/skills/`（两边都放，两种运行时都当成自己的项目 skill 加载；Codex 文档写明跟随软链接）。重名的加上目录名前缀。
+- **说明文件**：每个目录的 `AGENTS.md`、`CLAUDE.md`、`.claude/CLAUDE.md` 读进对话的预设副本（每个最多 16 KB，长的只留开头并注明全文在哪），放进开场说明的 `<folder-instructions>` 里。
+- 开场说明还写：预设名、各目录（是克隆的说明在自己的 worktree 里改）、人写的要求（`<preset-instructions>`，人的，不是 agent 改的）。
+- 别的 station 上的目录：仓库用这台缓存里同一个仓库；普通目录告诉 agent 去那台读，它的说明文件和 skill 也去那台读。
+- 运行目录仍是会话工作区，不给运行时传 `--add-dir`（skill 已经在工作区里，再加会重复）。
 - 从终端接过来的会话（`cwd`）不用预设。
 
 ## 客户端

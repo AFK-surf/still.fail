@@ -62,9 +62,6 @@ export type OpenOptions = {
   effort?: string;
   /// Appended to the runtime's own system prompt.
   instructions: string;
-  /// Directories it works with besides its own (a preset's, sessions/presets.ts): a runtime that can be given more
-  /// gets them (their instructions and skills loaded as its own directory's are); the instructions name them anyway.
-  dirs?: string[];
   /// Bearer token the session presents to the station's MCP endpoint.
   mcpToken: string;
   mcpUrl: string;
