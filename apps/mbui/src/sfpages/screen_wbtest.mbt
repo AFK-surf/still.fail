@@ -1000,6 +1000,40 @@ test "no 1Password tool but the system's autofill: 用密码管理器填入 asks
 }
 
 ///|
+test "the autofill service's sign-in takes the app out of sight: the login picked there filled once the view is live again" {
+  let r = screen_rig()
+  r.live(others=[])
+  @ui.fake_autofill.val = true
+  r.state("live", others=[], more={ "login": { "host": "github.com", "field": "username" } })
+  r.t.draw()
+  r.tap_label("填入")
+  r.t.draw()
+  // 1Password asks for a fingerprint in a screen of its own: the app goes out of sight, the view is let go of
+  r.t.app_state(false, false)
+  r.t.draw()
+  @ui.fake_autofill_picks("github.com", "zzj-work", "pw-zzj-work")
+  r.t.draw()
+  r.t.draw()
+  let fills = fn() { r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" }) }
+  assert_eq(fills().length(), 0)
+  // back in sight: opened again, nothing sent until it says it is live
+  r.t.app_state(true, true)
+  r.t.draw()
+  r.t.draw()
+  assert_eq(r.told("screen.view").length(), 2)
+  assert_eq(fills().length(), 0)
+  r.state("live", others=[], more={ "login": { "host": "github.com", "field": "username" } })
+  r.t.draw()
+  r.t.draw()
+  assert_eq(fills().length(), 1)
+  assert_eq(text(Some(fills()[0]), "host"), "github.com")
+  assert_eq(text(Some(fills()[0]), "username"), "zzj-work")
+  r.t.draw()
+  assert_eq(fills().length(), 1)
+  screen_done(r.t)
+}
+
+///|
 /// Live and driven, a station that carries the clipboard both ways and takes files.
 fn driven(r : ScreenRig) -> Unit {
   r.live(others=[], clipboard=["text", "png"], drop={ "folder": "/Users/alice/Downloads", "reveal": true })

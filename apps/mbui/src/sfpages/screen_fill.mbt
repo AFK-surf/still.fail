@@ -48,7 +48,12 @@ fn ScreenSess::fill_auto_took(self : ScreenSess, got : (String, String, String))
   guard self.fill_step.get() == "auto" && host == self.fill_host else { return }
   @hostapi.autofill_end()
   self.fill_step.set("")
-  self.fill_send(username, password)
+  if self.input_goes() {
+    self.fill_send(username, password)
+  } else {
+    // (the service's sign-in took the app out of sight: the view opens again, then it is sent)
+    self.fill_owed = Some((username, password))
+  }
 }
 
 ///|
@@ -97,6 +102,7 @@ fn ScreenSess::fill_stop(self : ScreenSess) -> Unit {
     None => ()
   }
   self.fill_run = None
+  self.fill_owed = None
   if self.fill_step.get() == "auto" {
     @hostapi.autofill_end()
   }
@@ -169,6 +175,17 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
       Some(got) => c.tell("screen-fill-auto/" + s.view, fn() { s.fill_auto_took(got) })
       None => ()
     }
+  }
+  if s.fill_owed is Some(_) && s.input_goes() {
+    c.tell("screen-fill-owed/" + s.view, fn() {
+      match s.fill_owed {
+        Some((username, password)) => {
+          s.fill_owed = None
+          s.fill_send(username, password)
+        }
+        None => ()
+      }
+    })
   }
   if (!op && !@hostapi.autofill()) || (host is None && step == "") {
     return

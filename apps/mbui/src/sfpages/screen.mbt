@@ -129,6 +129,11 @@ priv struct ScreenSess {
   mut fill_choices : Array[@hostapi.PasswordLogin]
   mut fill_note : String
   mut fill_host : String
+  /// the login picked in the system's autofill service while the view could take no input (its offer's sign-in took
+  /// the app out of sight, which lets the view go): its account and password, sent as the view drives again
+  mut fill_owed : (String, String)?
+  /// a state heard from the view since it was opened (again): input goes to it only then
+  mut heard : Bool
   /// signing the page's passkey sign-in on this device (screen_passkey.mbt): where it is (`asking`, `said`; "" nothing
   /// under way), the ask under way, what it said where it did not sign, and the page's ask it is for
   passkey_step : @signals.Signal[String]
@@ -208,6 +213,8 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         fill_choices: [],
         fill_note: "",
         fill_host: "",
+        fill_owed: None,
+        heard: false,
         passkey_step: @signals.signal(""),
         passkey_run: None,
         passkey_note: "",
@@ -393,6 +400,13 @@ fn ScreenSess::open_now(self : ScreenSess) -> Bool {
 /// Input goes to the station now: it is live and driven by this viewer.
 fn ScreenSess::driving(self : ScreenSess) -> Bool {
   self.phase() == "live" && flag(self.state, "control")
+}
+
+///|
+/// Input reaches the station now: the view is open (not let go of out of sight) and has said since it opened that it
+/// is live and driven by this viewer.
+fn ScreenSess::input_goes(self : ScreenSess) -> Bool {
+  self.call != 0 && self.heard && self.driving()
 }
 
 ///|
@@ -691,6 +705,8 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   self.finished.set(false)
   // (a call of its own: the part in sight told it again)
   self.looked = ""
+  // (input waits for the view opened again to say it is live: the state before is the last one's)
+  self.heard = false
   let quality = screen_quality(src)
   let fps = screen_fps(src)
   self.asked = quality
@@ -809,7 +825,7 @@ fn ScreenSess::control(self : ScreenSess, src : Source, on : Bool) -> Unit {
 ///|
 /// Input for the station (`screen.input`): only while this viewer drives it.
 fn ScreenSess::input(self : ScreenSess, src : Source, input : Json) -> Unit {
-  if !self.driving() {
+  if !self.input_goes() {
     return
   }
   screen_tell(src, "screen.input", { "view": Json::string(self.view), "input": input })
@@ -958,6 +974,7 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
       // the pointer alone moved, drawn on a picture's layer: the host told, nothing built (screen_value_quiet)
       let moved = self.pointer_layer is Some(_) && cursor_moved_only(self.state, s)
       self.state = Some(s)
+      self.heard = true
       if moved {
         self.pointer_moved()
       } else {
