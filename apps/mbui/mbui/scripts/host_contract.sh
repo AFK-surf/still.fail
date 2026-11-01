@@ -274,7 +274,13 @@ case $CMD in
         echo "host_contract: not run over it; run this again once it is done (its \`xcrun simctl shutdown $ID\`, or its app ended)"
         exit 1
       fi
-      echo "$MBUI_IOS_DEVICE ($ID): booted, no app running"
+      # (booted by another, no app of theirs running, and the lock ours: shut down and booted again by these runs, not
+      # run in as it was left: what its last user left in it came into the run (left so after still.fail's debug app's
+      # run, the controls page ran another's script, a still.fail one's `tap icon:plus` not on it, twice on main
+      # 5669427b, 41348983186; the same commit on it shut down and booted afresh passed)
+      echo "$MBUI_IOS_DEVICE ($ID): booted by another, no app running: shut down, to be booted afresh"
+      xcrun simctl shutdown "$ID" 2>/dev/null || true
+      touch $O/booted-here
     else
       echo "$MBUI_IOS_DEVICE (${ID:-made by scripts/ios.sh}): ${STATE:-none}, booted by these runs"
       touch $O/booted-here
