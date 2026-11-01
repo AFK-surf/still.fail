@@ -28,6 +28,8 @@ test "edge alignment lines up the button, text alignment lines up its label" {
 
 ///|
 test "the white panels keep their corners and padding, with only the illustrated corner exception" {
+  let edge_positions = alignment_positions(false)
+  let words_positions = alignment_positions(true)
   let started = Ref(false)
   let t = @ui.Tester::new(fn(c) {
     if !started.val {
@@ -48,23 +50,30 @@ test "the white panels keep their corners and padding, with only the illustrated
     assert_eq(card.x - panel.x, @sf.corner_inset)
     assert_true((panel.x + panel.w - card.x - card.w - @sf.corner_inset).abs() < 0.000001)
     let caption = boxes.iter().find_first(fn(b) {
-      (b.text.has_prefix("The button reaches") || b.text.has_prefix("The label sits")) &&
+      (b.text == "The button follows the card's corner." || b.text == "The label starts further in.") &&
       b.x >= panel.x && b.y >= panel.y && b.x + b.w <= panel.x + panel.w && b.y + b.h <= panel.y + panel.h
     }).unwrap()
     assert_true(panel.y + panel.h - caption.y - caption.h >= @sf.card_pad)
-  }
-  let guides = boxes.filter(fn(b) { b.w <= 6.0 && b.h <= 2.5 && (b.bg == red || b.bg == blue) })
-  assert_true(!guides.is_empty())
-  for guide in guides {
-    for label in boxes.filter(fn(b) {
-      b.text == "Quota check failed" || b.text == "Request timed out." ||
-      b.text == "Check your connection and try again." || b.text == "Try again"
-    }) {
-      assert_true(
-        guide.x + guide.w <= label.x || label.x + label.w <= guide.x ||
-        guide.y + guide.h <= label.y || label.y + label.h <= guide.y,
-        msg="alignment guide at \{guide.x},\{guide.y} size \{guide.w}×\{guide.h} crosses \{label.text} at \{label.x},\{label.y} size \{label.w}×\{label.h}",
-      )
+    let right = panel.x > 400.0
+    let positions = if right { words_positions } else { edge_positions }
+    let button_start = if right { positions.1 } else { positions.2 }
+    let guides = boxes.filter(fn(b) {
+      (b.w - 0.8).abs() < 0.001 && b.h == 2.0 && b.x >= panel.x && b.x + b.w <= panel.x + panel.w && b.y >= panel.y && b.y + b.h <= panel.y + panel.h
+    })
+    assert_true(guides.length() > 1)
+    for guide in guides {
+      assert_true((guide.x + guide.w - card.x - positions.0).abs() < 0.001)
+      assert_true((guide.x + guide.w - card.x - button_start).abs() < 0.001)
+      for label in boxes.filter(fn(b) {
+        b.text == "Quota check failed" || b.text == "Request timed out." ||
+        b.text == "Check your connection and try again." || b.text == "Try again"
+      }) {
+        assert_true(
+          guide.x + guide.w <= label.x + 0.001 || label.x + label.w <= guide.x ||
+          guide.y + guide.h <= label.y || label.y + label.h <= guide.y,
+          msg="the alignment guide covers \{label.text}",
+        )
+      }
     }
   }
   let faults = t.corner_faults()
