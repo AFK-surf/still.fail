@@ -588,6 +588,11 @@ fn fix_new_chat_of(f : Fixture) -> Json {
         }
       }),
     ),
+    "presetMarks": if n.preset == "" {
+      Json::array([])
+    } else {
+      [{ "name": "still.fail", "repo": "github.com/AFK-surf/still.fail", "icon": Json::string(fix_sf_icon) }, { "name": "still.fail 设计稿", "repo": "" }]
+    },
     "presetStation": Json::string(if n.preset == "" { "" } else { text(Some(fix_station(n.station)), "station") }),
     "presetName": Json::string(
       match n.presets.iter().find_first(fn(p) { field(Some(p), "id") == Some(Json::string(n.preset)) }) {

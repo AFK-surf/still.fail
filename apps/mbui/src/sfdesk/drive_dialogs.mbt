@@ -218,9 +218,7 @@ fn set_roots(c : @ui.Ctx, src : Source, station : String, roots : Array[String],
 /// The picker on `station` of workspace `ws`, at its home (PickerDialog): the way to where it is, a filter; the
 /// station's places beside the folders where it is (over them, narrow); entered by a click; 选这个文件夹 pins the one
 /// shown (one pinned already, or one the station may not read, is not).
-/// `choose`: a folder picked for something else (a preset's, sfpages presets.mbt): 选这个文件夹 goes on with its path,
-/// nothing pinned.
-fn picker_open(src : Source, ws : String, station : String, choose? : (String) -> Unit) -> Unit {
+fn picker_open(src : Source, ws : String, station : String) -> Unit {
   picker_close()
   dialogs.picking.set(station)
   let lent = fn() {
@@ -230,23 +228,23 @@ fn picker_open(src : Source, ws : String, station : String, choose? : (String) -
     }
   }
   @sf.panel(
-    if choose is Some(_) { @sf.t("web-main.preset.pickFolder") } else { @sf.t("web-pages.drive.pick") },
+    @sf.t("web-pages.drive.pick"),
     fn(c, _) { picker(c, src, station) },
     from=Unanchored,
-    description=if choose is Some(_) { "" } else { @sf.t("web-pages.drive.pickNote") },
+    description=@sf.t("web-pages.drive.pickNote"),
     wide=true,
     foot=fn(c, close) {
       let v = dialogs.value.get()
       let path = text(v, "path")
       let lent = lent()
-      let taken = choose is None && v is Some(_) && lent.contains(path)
+      let taken = v is Some(_) && lent.contains(path)
       if @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost) {
         close()
         picker_close()
       }
       if @sf.button(
           c,
-          if choose is Some(_) { @sf.t("web-main.preset.useFolder") } else { @sf.t(if taken { "web-pages.drive.already" } else { "web-pages.drive.pickThis" }) },
+          @sf.t(if taken { "web-pages.drive.already" } else { "web-pages.drive.pickThis" }),
           key="drive/picker/pick",
           tone=Primary,
           disabled=v is None || taken || dialogs.denied.get(),
@@ -257,10 +255,7 @@ fn picker_open(src : Source, ws : String, station : String, choose? : (String) -
         }
         close()
         picker_close()
-        match choose {
-          Some(f) => f(path)
-          None => set_roots(c, src, station, lent + [path], done=@sf.t("web-pages.drive.shared", args=[("name", name)]))
-        }
+        set_roots(c, src, station, lent + [path], done=@sf.t("web-pages.drive.shared", args=[("name", name)]))
       }
     },
     gone=picker_close,
@@ -268,10 +263,31 @@ fn picker_open(src : Source, ws : String, station : String, choose? : (String) -
 }
 
 ///|
-/// A folder of `station` of workspace `ws` picked as the files' page picks one to pin (its places, its folders entered by
-/// a click, a filter; a folder macOS guards read through still.fail Helper), `done` going on with its path.
-pub fn pick_folder(src : Source, ws : String, station : String, done : (String) -> Unit) -> Unit {
-  picker_open(src, ws, station, choose=done)
+/// The picker put inside something else (a preset's dialog: sfbase folder_browse_*): at `station`'s home.
+pub fn folder_browse_open(station : String) -> Unit {
+  picker_close()
+  dialogs.picking.set(station)
+}
+
+///|
+/// What it holds, drawn where it is shown, each frame.
+pub fn folder_browse_body(c : @ui.Ctx, src : Source, station : String) -> Unit {
+  picker(c, src, station)
+}
+
+///|
+/// The folder it shows: "" while it is read, or one the station may not read.
+pub fn folder_browse_here() -> String {
+  match dialogs.value.get() {
+    Some(v) if !dialogs.denied.get() => text(Some(v), "path")
+    _ => ""
+  }
+}
+
+///|
+/// Let go (as it closes).
+pub fn folder_browse_close() -> Unit {
+  picker_close()
 }
 
 ///|

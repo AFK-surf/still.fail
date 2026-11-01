@@ -680,6 +680,7 @@ pub(all) struct ComposerSpec {
   session : String
   placeholder : String
   toolbar : (() -> Unit)?
+  beside_plus : (() -> Unit)?
   note : Array[(String, String)]
   tail : (() -> Unit)?
   roomy : Bool

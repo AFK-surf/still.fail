@@ -316,11 +316,12 @@ export class Choose implements Owner {
     // The workspace's presets, every station's up now (each as it was read last), to pick from where the page's
     // control opens; the one picked whichever station it is of.
     const listed = this.#workspacePresets(scope, online);
-    view.presets = listed.map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", dirs: arr(get(p, "dirs")).length, station: at, stationName }));
+    view.presets = listed.map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", dirs: arr(get(p, "dirs")).length, station: at, stationName, marks: this.#marks(p, at) }));
     const picked = this.#picked(scope, listed);
     view.preset = picked === undefined ? "" : (text(get(picked.p, "id")) ?? "");
     view.presetStation = picked?.station ?? "";
     view.presetName = picked === undefined ? "" : (text(get(picked.p, "name")) ?? "");
+    view.presetMarks = picked === undefined ? [] : this.#marks(picked.p, picked.station);
     view.station = station;
     return view;
   }
@@ -346,6 +347,22 @@ export class Choose implements Owner {
       for (const p of arr(get(this.#env.store.get(topic), "presets"))) out.push({ p, station: at, stationName: typeof s.name === "string" ? s.name : "" });
     }
     return out;
+  }
+
+  /// What preset `p` of station `at` is shown by: its first folders' marks (each its name, its repository, its own
+  /// picture as its station found it), three at most.
+  #marks(p: J, at: string): J[] {
+    const offered = arr(get(this.#env.store.get({ topic: "presets", station: at }), "candidates"));
+    return arr(get(p, "dirs"))
+      .slice(0, 3)
+      .map((d) => {
+        const path = text(get(d, "path")) ?? "";
+        const repo = text(get(d, "repo"));
+        const found = offered.find((o) => get(o, "path") === path || (repo !== null && get(o, "repo") === repo));
+        const name = text(get(found, "name")) ?? path.split("/").filter((x) => x !== "").pop() ?? path;
+        const icon = text(get(found, "icon"));
+        return { name, repo: repo ?? "", ...(icon !== null ? { icon } : {}) };
+      });
   }
 
   /// The preset the scope's new chats are opened with, as last picked on this device, among those `listed`; none for

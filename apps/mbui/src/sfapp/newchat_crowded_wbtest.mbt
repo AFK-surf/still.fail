@@ -44,10 +44,10 @@ test "narrow: the station's control says its name whole beside the model's, whic
   let t = crowded("newchat-crowded", w=crowded_narrowest)
   // its name, all of it (not 「Stu…」)
   assert_true(t.text_runs().iter().any(fn(r) { r.text == "Studio" }), msg="\{t.text_runs().map(fn(r) { r.text })}")
-  // the glass controls over the composer: the preset's in a row of its own, where it runs and on what side by side under it
+  // the two glass controls over the composer, side by side in the window
   let glass = t.boxes().filter(fn(b) { b.glass && b.kind == "row" && (b.h - 30.0).abs() < 0.5 })
-  assert_eq(glass.length(), 3, msg="\{t.boxes().filter(fn(b) { b.glass }).map(fn(b) { (b.kind, b.x, b.y, b.w, b.h) })}")
-  let (station, model) = (glass[1], glass[2])
+  assert_eq(glass.length(), 2, msg="\{t.boxes().filter(fn(b) { b.glass }).map(fn(b) { (b.kind, b.x, b.y, b.w, b.h) })}")
+  let (station, model) = (glass[0], glass[1])
   assert_true(station.x + station.w <= model.x)
   assert_true(model.x + model.w <= crowded_narrowest)
   // the model's: as wide as what it keeps (its padding past the last of it, no more)
@@ -64,8 +64,8 @@ test "narrow: the station's control says its name whole beside the model's, whic
 test "narrower still: the station's name leaves its control whole after what the model's leaves, the model's name stays" {
   let t = crowded("newchat-crowded", w=crowded_cramped)
   let glass = t.boxes().filter(fn(b) { b.glass && b.kind == "row" && (b.h - 30.0).abs() < 0.5 })
-  assert_eq(glass.length(), 3)
-  let (station, model) = (glass[1], glass[2])
+  assert_eq(glass.length(), 2)
+  let (station, model) = (glass[0], glass[1])
   assert_true(model.x + model.w <= crowded_cramped)
   let station_words = runs_in(t, (station.x, station.y, station.w, station.h))
   // no part of its name (not 「Stu…」): its mark and its chevron (the page says where it starts)

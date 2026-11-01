@@ -2158,6 +2158,7 @@ export const SHAPES: Record<string, Shape> = {
     ["presetStation", "String", { default: true, doc: "The station the preset picked is of (its address): any of the workspace's, not only the one it runs on." }],
     ["presetName", "String", { default: true, said: true, doc: "Its name, as the station's presets say it (\"\" until they are read)." }],
     ["presets", vec("NewChatPreset"), { default: true, doc: "The workspace's presets, every station's up now, to pick from (a station's none until they are read)." }],
+    ["presetMarks", vec("PresetMark"), { default: true, doc: "The picked preset's first folders' marks, its control's look." }],
   ], { doc: "A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs\nthere, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has." }),
   NewChatPreset: struct([
     ["id", "String"],
@@ -2165,7 +2166,13 @@ export const SHAPES: Record<string, Shape> = {
     ["dirs", "i64", { client: "I54", doc: "How many folders it names." }],
     ["station", "String", { doc: "The station it is of (its address): its folders are there." }],
     ["stationName", "String", { said: true }],
+    ["marks", vec("PresetMark"), { default: true }],
   ], { doc: "A preset a new chat can be opened with, as its page lists them." }),
+  PresetMark: struct([
+    ["name", "String", { said: true }],
+    ["repo", "String", { doc: "Its repository's address (its colour where it has no picture); \"\" for a folder of none." }],
+    ["icon", opt("String"), { doc: "Its own picture, a data URL." }],
+  ], { doc: "A folder of a preset as its mark shows it: its picture, else its initial on its colour." }),
   ShareInView: struct([
     ["site", opt("String"), { doc: "The site of the link shared (`youtube.com`, its www./m. left out); none for text without one." }],
     ["items", vec("ChatItem"), { doc: "The chats it can go to: the workspace's own on still.fail's page, newest first, the one `kept` first; those\nthe query finds when one is given. At most 30." }],

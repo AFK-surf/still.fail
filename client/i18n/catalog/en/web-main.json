@@ -936,5 +936,6 @@
   "web-main.preset.instructionsPlaceholder": "e.g. show before-and-after screenshots for UI changes",
   "web-main.preset.browse": "Browse folders…",
   "web-main.preset.pickFolder": "Choose a folder",
-  "web-main.preset.useFolder": "Use this folder"
+  "web-main.preset.useFolder": "Use this folder",
+  "web-main.preset.search": "Search repositories and folders"
 }

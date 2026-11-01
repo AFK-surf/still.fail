@@ -2038,3 +2038,4 @@ web-main.preset.instructionsPlaceholder
 web-main.preset.browse
 web-main.preset.pickFolder
 web-main.preset.useFolder
+web-main.preset.search

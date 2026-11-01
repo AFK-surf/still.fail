@@ -19,6 +19,9 @@ pub(all) struct ComposerSpec {
   session : String
   placeholder : String
   toolbar : (() -> Unit)?
+  /// what stands beside ＋ on one line and in its row once opened alike, a round of ＋'s own (a new chat's preset,
+  /// narrow: its choices' row has the room of where it runs and what on only)
+  beside_plus : (() -> Unit)?
   /// what it says just before send (where a chat's messages are copied: each thread's mark, "slack" or "feishu", and
   /// its place), nothing to press: on one line and in its row once opened alike, in one place, going with send as it
   /// changes shape; empty nothing
@@ -343,6 +346,10 @@ pub fn composer(
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tools_row(), fn() {
           plus = attach(c, src, spec, w, no_files)
+          match spec.beside_plus {
+            Some(f) => f()
+            None => ()
+          }
           match (spec.toolbar, composing.toolbar_leaving) {
             (Some(f), _) => {
               chosen = c.box(style=choices, f)
@@ -373,6 +380,10 @@ pub fn composer(
         |> ignore
       } else {
         plus = attach(c, src, spec, w, no_files)
+        match spec.beside_plus {
+          Some(f) => f()
+          None => ()
+        }
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tail_row, fn() {
           said = composer_note(c, spec.note)
@@ -1914,6 +1925,7 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
       "web-main.composer.placeholder"
     }),
     toolbar: None,
+    beside_plus: None,
     note: match v {
       Some(v) => v.cc.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
       None => []

@@ -31,7 +31,18 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
     preset_dialog(src, w, address, "", items(v, "stations"), adding=true)
   }
   if (new_capsule(c, "new/preset", label, floating, fn() {
-      @sf.icon(c, "boxes", size=new_mark, color=if name == "" { t.p.muted } else { t.p.text }) |> ignore
+      // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
+      let marks = items(v, "presetMarks")
+      if name != "" && marks.length() > 0 {
+        c.box(style=preset_marks_row, fn() {
+          for m in marks {
+            repo_mark(c, text(Some(m), "name"), text(Some(m), "repo"), text(Some(m), "icon"), new_mark)
+          }
+        })
+        |> ignore
+      } else {
+        @sf.icon(c, "folder-plus", size=new_mark, color=t.p.muted) |> ignore
+      }
       // (its words left out first, short of room: its mark says what it is, the station's name and the model's matter more)
       c.box(style=new_station_name, drop=preset_drop_words, fn() {
         c.text(label, style=if name == "" { preset_capsule_quiet } else { new_capsule_words }) |> ignore
@@ -43,6 +54,47 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
     asked {
     preset_menu(src, w, address, v, picked, @sf.Of(c.id("new/preset")))
   }
+}
+
+///|
+/// The preset's control narrow: a round beside the composer's ＋ (as it, a finger reaching it from round it), what it
+/// holds the picked preset's folders' marks, none picked a quiet mark of what it adds; pressed, the presets' menu.
+fn preset_round(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json?) -> Unit {
+  let address = text(station, "station")
+  if address == "" || c.in_bones() {
+    return
+  }
+  let p = @sf.theme().p
+  let picked = text(v, "preset")
+  let id = c.id("new/preset-round")
+  let asked = take_asked("preset")
+  if take_asked("preset-new") {
+    preset_dialog(src, w, address, "", items(v, "stations"))
+  }
+  if take_asked("preset-edit") {
+    preset_dialog(src, w, address, text(items(v, "presets").get(0), "id"), items(v, "stations"))
+  }
+  if take_asked("preset-add") {
+    preset_dialog(src, w, address, text(items(v, "presets").get(0), "id"), items(v, "stations"), adding=true)
+  }
+  if take_asked("preset-new-add") {
+    preset_dialog(src, w, address, "", items(v, "stations"), adding=true)
+  }
+  if c.clicked(id) || asked {
+    preset_menu(src, w, address, v, picked, @sf.Of(id))
+  }
+  let marks = if picked == "" { [] } else { items(v, "presetMarks") }
+  let face = @sf.round_face().then(preset_round_apart)
+  let b = c.box(style=if c.lit(id) { face.then(round_hot) } else { face }, id~, fn() {
+    match marks.get(0) {
+      // (picked: its first folder's mark, as it is shown where it is picked)
+      Some(m) => repo_mark(c, text(Some(m), "name"), text(Some(m), "repo"), text(Some(m), "icon"), plus_icon)
+      None => @sf.icon(c, "folder-plus", size=plus_icon, color=if c.lit(id) { p.text } else { p.muted }) |> ignore
+    }
+  })
+  let said = if picked == "" { @sf.t("web-main.preset.label") } else { @sf.t("web-main.preset.label") + " · " + text(v, "presetName") }
+  c.semantics(b, Button, id~, label=said)
+  @sf.tip(c, "new/preset-round", id, said)
 }
 
 ///|
@@ -104,6 +156,9 @@ priv struct PresetEditing {
   mut error : String
   serial : Int
   mut adding : Bool
+  /// What the dialog shows, in place of the one before (no sheet over a sheet): its fields (0), the folders to add (1),
+  /// a station's folders browsed (2).
+  mut step : Int
 }
 
 ///|
@@ -119,7 +174,7 @@ let preset_serial : Ref[Int] = Ref(0)
 /// `stations`: the workspace's up now (the `newChat` view's), whose folders are offered too.
 fn preset_dialog(src : Source, w : Workspace, address : String, id : String, stations : Array[Json], adding? : Bool = false) -> Unit {
   preset_serial.val += 1
-  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding }
+  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding, step: 0 }
   let key = fn(part : String) { "preset-editor/" + e.serial.to_string() + "/" + part }
   let name = field_of(key("name"))
   let instructions = field_of(key("instructions"))
@@ -132,14 +187,27 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
       None => None
     }
   }
+  let title = if id == "" { @sf.t("web-main.preset.new") } else { @sf.t("web-main.preset.edit") }
   open_dialog(
-    if id == "" {
-      @sf.t("web-main.preset.new")
-    } else {
-      @sf.t("web-main.preset.edit")
+    title,
+    live=fn() {
+      match e.step {
+        1 => (@sf.t("web-main.preset.add"), "", "")
+        2 => (@sf.t("web-main.preset.pickFolder"), "", "")
+        _ => (title, "", "")
+      }
     },
+    on_gone=fn() { (@sfbase.folder_browse_close.val)() },
     fn(c, _) {
       let offered = offered_dirs(src, address, stations)
+      if e.step == 1 {
+        preset_add_step(c, src, address, offered, e, key)
+        return
+      }
+      if e.step == 2 {
+        (@sfbase.folder_browse_body.val)(c, src, address)
+        return
+      }
       // (one changed: what it is, once the station's presets are read)
       if !e.filled {
         match was() {
@@ -191,7 +259,8 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
           }
           if @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus") || (e.adding && e.filled) {
             e.adding = false
-            preset_add_pick(src, w, address, stations, e, @sf.Of(c.id(key("add"))))
+            field_of(key("q")).set("")
+            e.step = 1
           }
         })
         |> ignore
@@ -203,6 +272,31 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
       })
     },
     fn(c, shut) {
+      // (the folders to add, or a station's browsed: back to what was before, or this folder taken)
+      if e.step == 1 {
+        c.spacer()
+        if @sf.button(c, @sf.t("common.back"), key=key("back"), tone=Ghost) {
+          e.step = 0
+        }
+        return
+      }
+      if e.step == 2 {
+        c.spacer()
+        if @sf.button(c, @sf.t("common.back"), key=key("back2"), tone=Ghost) {
+          (@sfbase.folder_browse_close.val)()
+          e.step = 1
+        }
+        let here = (@sfbase.folder_browse_here.val)()
+        if @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "") {
+          let d = Json::object({ "path": Json::string(here) })
+          if !e.dirs.iter().any(fn(x) { dir_key(Some(x)) == dir_key(Some(d)) }) {
+            e.dirs.push(d)
+          }
+          (@sfbase.folder_browse_close.val)()
+          e.step = 0
+        }
+        return
+      }
       if id != "" {
         if @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger) {
           confirm(
@@ -271,38 +365,33 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
 }
 
 ///|
-/// 添加目录, opened at once: the folders the workspace's stations found and not in the preset yet, as they come (a pick
-/// read each frame: a station's said while it is open; those read before shown meanwhile), searched by name (those
-/// their chats worked in first, each where it is, on which station where it is not the preset's, how many chats used
-/// it); last 浏览文件夹, the files' page's picker of the preset's station's folders, whatever was found.
-fn preset_add_pick(src : Source, w : Workspace, address : String, stations : Array[Json], e : PresetEditing, from : @sf.Beside) -> Unit {
+/// 添加目录, in the dialog in place of its fields: a line to find one by name, then the folders the workspace's stations
+/// found and not in the preset yet, as they come (each station's said as it is; those read before shown meanwhile),
+/// those their chats worked in first, each where it is, on which station where it is not the preset's, how many chats
+/// used it; last 浏览文件夹, the preset's station's folders browsed there too, whatever was found. One picked, the
+/// fields again with it among the folders.
+fn preset_add_step(c : @ui.Ctx, src : Source, address : String, offered : Array[Json], e : PresetEditing, key : (String) -> String) -> Unit {
   let has = fn(k : String) { e.dirs.iter().any(fn(d) { dir_key(Some(d)) == k }) }
-  let browse = @sf.choice("+browse", @sf.t("web-main.preset.browse"), mark=fn(c, size) { @sf.icon(c, "folder", size~, color=@sf.theme().p.muted) |> ignore })
-  @sf.pick_live(@sf.t("web-main.preset.add"), fn() {
-    let choices = offered_dirs(src, address, stations)
-      .filter(fn(o) { !has(dir_key(Some(o))) })
-      .map(fn(o) {
-        let one = Some(o)
-        let (name, repo, icon) = (text(one, "name"), text(one, "repo"), text(one, "icon"))
-        @sf.choice(dir_key(one), name, note=dir_note(one, true), mark=fn(c, size) { repo_mark(c, name, repo, icon, size) })
-      })
-    choices.push(browse)
-    choices
-  }, "", fn(k) {
-    if k == "+browse" {
-      (@sfbase.folder_asked.val)(src, w.id, address, fn(path) {
-        let d = Json::object({ "path": Json::string(path) })
-        if !has(dir_key(Some(d))) {
-          e.dirs.push(d)
-        }
-      })
-    } else {
-      match offered_dirs(src, address, stations).iter().find_first(fn(o) { dir_key(Some(o)) == k }) {
-        Some(o) => if !has(k) { e.dirs.push(o) }
-        None => ()
+  let q = @sf.input(c, key("q"), placeholder=@sf.t("web-main.preset.search"), field=field_of(key("q"))).text.trim(chars=" ").to_owned().to_lower()
+  c.box(style=preset_offered, fn() {
+    for o in offered {
+      let one = Some(o)
+      let k = dir_key(one)
+      let (name, repo, icon) = (text(one, "name"), text(one, "repo"), text(one, "icon"))
+      if has(k) || (q != "" && !name.to_lower().contains(q) && !repo.to_lower().contains(q) && !text(one, "where").to_lower().contains(q)) {
+        continue
+      }
+      if @sf.menu_item(c, name, key=key("offer/" + k), mark=fn(c, size) { repo_mark(c, name, repo, icon, size) }, under=dir_note(one, true), panel=true) {
+        e.dirs.push(o)
+        e.step = 0
       }
     }
-  }, from~)
+    if @sf.menu_item(c, @sf.t("web-main.preset.browse"), key=key("browse"), mark=fn(c, size) { @sf.icon(c, "folder", size~, color=@sf.theme().p.muted) |> ignore }, panel=true) {
+      (@sfbase.folder_browse_open.val)(address)
+      e.step = 2
+    }
+  })
+  |> ignore
 }
 
 ///|
@@ -371,6 +460,21 @@ fn repo_mark(c : @ui.Ctx, name : String, repo : String, icon : String, size : Do
 ///|
 /// A folder's mark in the preset's dialog: as high as its two lines.
 let preset_dir_mark : Double = 32.0
+
+///|
+/// The narrow control as far from ＋ as leaves each a finger's room (44) between their middles.
+// kept across runs: a value (no field of it changes)
+let preset_round_apart : @ui.Style = @ui.css("ml=S3")
+
+///|
+/// The picked preset's folders' marks, side by side in its control.
+// kept across runs: a value (no field of it changes)
+let preset_marks_row : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
+
+///|
+/// The folders offered to add, a row each.
+// kept across runs: a value (no field of it changes)
+let preset_offered : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// Short of room, the preset's words go with the first of the model's parts (model_triple.mbt triple_drop_name: who

@@ -2058,4 +2058,5 @@ let zh : Map[String, String] = {
   "web-main.preset.browse": "浏览文件夹…",
   "web-main.preset.pickFolder": "选择文件夹",
   "web-main.preset.useFolder": "用这个文件夹",
+  "web-main.preset.search": "搜仓库或目录",
 }

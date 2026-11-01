@@ -2085,4 +2085,5 @@ let en : Map[String, String] = {
   "web-main.preset.browse": "Browse folders…",
   "web-main.preset.pickFolder": "Choose a folder",
   "web-main.preset.useFolder": "Use this folder",
+  "web-main.preset.search": "Search repositories and folders",
 }

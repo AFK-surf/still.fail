@@ -330,14 +330,7 @@ fn new_choosers(
         })
         |> ignore
       })
-    _ => {
-      // what it is for in a row of its own over where it runs and what on (they have all the row's room, the person's
-      // narrowest phone's: newchat_crowded_wbtest.mbt), as the composer's row has it laid out wide
-      if text(station, "station") != "" {
-        c.box(style=new_preset_row, fn() { new_preset_control(c, src, w, v, station, true, going) }) |> ignore
-      }
-      c.box(style=new_choosers_row, fn() { new_controls(c, src, w, v, station, true, going) }) |> ignore
-    }
+    _ => c.box(style=new_choosers_row, fn() { new_controls(c, src, w, v, station, true, going) }) |> ignore
   }
 }
 
@@ -376,8 +369,7 @@ fn new_controls(
   going : Bool,
 ) -> Unit {
   let address = text(station, "station")
-  // (what it is for first, then where it runs and on what; over the composer narrow, a row of its own over theirs:
-  // new_choosers)
+  // (what it is for first, then where it runs and on what, wide; narrow a round beside the composer's ＋: preset_round)
   if !floating {
     new_preset_control(c, src, w, v, station, floating, going)
   }
@@ -657,6 +649,8 @@ fn new_composer_place(
         session: "",
         placeholder: @sf.t("web-main.newChat.placeholder"),
         toolbar: if wide && !held { Some(fn() { new_tools(c, src, w, v, station) }) } else { None },
+        // (narrow, the preset's a round beside ＋: its choices' row has where it runs and what on whole)
+        beside_plus: if !wide && !held { Some(fn() { preset_round(c, src, w, v, station) }) } else { None },
         note: [],
         tail: None,
         roomy: wide,
@@ -1085,11 +1079,6 @@ let new_band : @ui.Style = @ui.css("w=Full align=ACenter radius=InnerOr(Sharp)")
 /// The choices narrow (mChoosers: 6 apart, 6 over the composer, 2 in).
 // kept across runs: a value (no field of it changes)
 let new_choosers_row : @ui.Style = @ui.css("row w=Full px=S0_5 pb=S1_5 gap=S1_5 align=ACenter")
-
-///|
-/// The preset's row over theirs: as far over them as leaves each capsule (30) a finger's room (44) between them.
-// kept across runs: a value (no field of it changes)
-let new_preset_row : @ui.Style = @ui.css("row w=Full px=S0_5 pb=S3_5 align=ACenter")
 
 ///|
 /// A glass choice (mChooser): 30 high, 12 in, 6 between its parts, a capsule; as wide as what it holds needs, never cut

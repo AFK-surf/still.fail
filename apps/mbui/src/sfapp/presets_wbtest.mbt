@@ -43,7 +43,11 @@ test "a phone's new chat shows its preset's control, the composer a capsule as t
   open_mode("newchat")
   t.draw()
   t.run_for(@ui.move_most_ms)
-  // (in a row of its own over where it runs and on what: not in the composer's row, which a capsule has not)
-  assert_true(shows(t, "预设"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  // (a round beside the composer's ＋, on its one line as when it is opened; where it runs and on what over it whole)
+  assert_true(t.query(Button, label="预设") is Some(_), msg=t.semantics_dump())
   assert_true(shows(t, "Studio"))
+  // pressed: the presets to pick, from the foot
+  t.click(Button, label="预设")
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "不用预设") && shows(t, "新预设"), msg="\{t.text_runs().map(fn(r) { r.text })}")
 }
