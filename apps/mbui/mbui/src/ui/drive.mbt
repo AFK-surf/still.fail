@@ -73,6 +73,8 @@
 //   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") or
 //                               begins with it (a prefix: a gallery's content://media/) decoded, from its address or
 //                               from bytes handed over for it (Ctx::image_bytes, add_image)
+//   image_ready SRC             the named picture is currently decoded, including before the run; wait for its current
+//                               decodes, and fail if one failed. An exact source wins; a prefix or suffix must name one
 //   ready VIEW                  a native view ready: by its kind's name (video, audio, web, site), pdf (a PDF's page
 //                               drawn), its kind's number (1 video or audio, 2 web, 3 site), #ID its id
 //   outside_done NAME           work outside the app (a wait on the host or the core, by its name: "an update
@@ -94,7 +96,7 @@
 // No step waits for the app to be settled. What a step looks for comes with a frame (an input's, a message's, the
 // host's event's, a motion's), and it is looked for at each; a tap, a hold, a hover or a drag on words goes where the
 // frame just drawn has them, that frame, never waiting for them to hold still. What comes later than a frame is waited
-// for by name (until, gone, answered, decoded, ready, outside_done, shown, done), within the timeout. Nothing waits for
+// for by name (until, gone, answered, decoded, image_ready, ready, outside_done, shown, done), within the timeout. Nothing waits for
 // the app to be at rest (settled by another name): that is asserted of a run, never waited on (a Tester's
 // assert_true(t.at_rest())). The run asks for no frame of its own: what it waits for in time (a timeout, a hold let
 // go, a `wait`, a shot another takes) is a wake at that time. `wait` stays a pause in real time, for what is outside
@@ -950,6 +952,28 @@ fn drive_steps(c : Ctx) -> Unit {
           next()
         } else if waited > d.timeout {
           drive_fail(c, d, "not so after \{d.timeout.to_int()} ms (awaiting \{runtime().awaiting()} from outside)")
+          return
+        } else {
+          return
+        }
+      }
+      "image_ready" => {
+        if arg == "" {
+          drive_fail(c, d, "a picture source is required")
+          return
+        }
+        let (state, named) = named_image_state(arg)
+        if state == 1 {
+          h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+          next()
+        } else if state == -1 {
+          drive_fail(c, d, "picture \{named[0]} could not be decoded")
+          return
+        } else if state == -2 {
+          drive_fail(c, d, "\{arg} names more than one picture: \{named.join("; ")}")
+          return
+        } else if waited > d.timeout {
+          drive_fail(c, d, "picture was not requested or is still decoding after \{d.timeout.to_int()} ms")
           return
         } else {
           return

@@ -212,6 +212,30 @@ test "a film cannot begin without its first drawing" {
 }
 
 ///|
+test "a film at 120 Hz can draw a different picture for each frame" {
+  let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
+  t.set_frame_period(1000.0 / 120.0)
+  let shown = Ref::new(0.0)
+  let pictures : Array[Double] = []
+  let film = t.film(
+    "tap go\ntap go\nexit",
+    fps=120.0,
+    draw=fn(t) {
+      shown.val = t.time()
+      true
+    },
+    put=fn(_) {
+      pictures.push(shown.val)
+      true
+    },
+  )
+  assert_eq(film.failure, None)
+  assert_true(film.logs.iter().any(fn(line) { line == "DRIVE PASS" }))
+  assert_true(pictures.length() >= 3)
+  assert_true(pictures[0] < pictures[1] && pictures[1] < pictures[2])
+}
+
+///|
 test "a run filmed: every frame of the film once, in order, from the Tester's first, each the last drawn by its moment" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
   let drawn : Array[Double] = []

@@ -9,6 +9,8 @@
 // An app's film program gives its view to `run` (still.fail's src/sffilm, scripts/film.sh), which reads:
 //   MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0]
 //   [MBUI_DARK=1] [MBUI_FILM_INSET=1: the window's buttons in the app's top row, a Mac's] [MBUI_FILM_FRAMES=3000]
+//   [MBUI_FILM_FPS=60: the rate both the app and the video are drawn at]
+//   [MBUI_FILM_PREPARE=<script>: actions and named resource requirements before filming begins]
 //   [MBUI_FILM_WINDOW_CORNER=16: how round the system draws the window's corners, a Mac's: @hostapi.window_corner]
 //   [MBUI_LOCALE=en-US: the app's language, as a device's] [MBUI_FONT_SCALE=1.3: the system's size of words, as a
 //   device's set bigger] [MBUI_FILM_LAST=<last.png>: the run's last frame as the renderer drew it]
@@ -33,9 +35,10 @@ pub let film_fps : Int = 60
 /// `script` (drive.mbt's steps) run over `view` in a Tester of this host's text and pictures, `w` × `h` points at
 /// `scale` device pixels a point, playing `platform` (@hostapi.platform's: 0 macOS, 1 iOS, 2 Android), the system
 /// `dark` or not, and filmed: every frame it draws drawn by this host's renderer offscreen and written into `out` (an
-/// MP4, `film_fps` frames a second) from the Tester's first frame to the script's end (or `max` frames of it), the
+/// MP4, `fps` frames a second) from the Tester's first frame to the script's end (or `max` frames of it), the
 /// run's text and pictures as this host answered them beside it (`out`.textrec). Whether the film was made and the
-/// script passed, what went wrong said.
+/// script passed, what went wrong said. `prepare` runs against the same view before the first filmed frame; a failed
+/// preparation leaves the previous film untouched.
 pub fn film(
   view : (@ui.Ctx) -> Unit,
   tree? : (@view.View) -> Unit,
@@ -48,12 +51,18 @@ pub fn film(
   dark? : Bool = false,
   inset? : Bool = false,
   window_corner? : Double = 0.0,
+  fps? : Int = film_fps,
+  prepare? : String = "",
   max? : Int = 3000,
   last? : String = "",
   copied? : String = "",
 ) -> Bool {
   if !supported {
     say("film: this host has no film")
+    return false
+  }
+  if fps <= 0 {
+    say("film: fps must be positive")
     return false
   }
   // (this host, asked before the Tester gives its own: what the Tester's text and pictures are, and what draws)
@@ -95,6 +104,9 @@ pub fn film(
     // (where the system has bars of its own for the app's tabs: MBUI_FILM_NAV_ABLE, an iPhone Duo's)
     nav_able=arg("MBUI_FILM_NAV_ABLE") == "1",
   )
+  // The application's clock must advance at the film's rate too. Merely giving the encoder a higher rate would
+  // duplicate frames of a run still drawn at the Tester's default 60 Hz.
+  t.set_frame_period(1000.0 / fps.to_double())
   // (the window's buttons in the app's top row, as a Mac's window has them: Tester::set_window_inset)
   if inset {
     t.set_window_inset(true)
@@ -108,9 +120,21 @@ pub fn film(
     "" => ()
     ls => t.set_local_station(ls)
   }
+  if prepare != "" {
+    let setup = t.drive(prepare, max~)
+    if !drive_passed(setup) {
+      for l in setup {
+        if l.has_prefix("DRIVE") {
+          say(l)
+        }
+      }
+      say("film: preparation did not pass")
+      return false
+    }
+  }
   let pw = (w * scale).round().to_int()
   let ph = (h * scale).round().to_int()
-  if !open(out, pw, ph, film_fps) {
+  if !open(out, pw, ph, fps) {
     say("film: \{out}: not made")
     return false
   }
@@ -119,7 +143,7 @@ pub fn film(
   let put = Ref::new(0)
   let run = t.film(
     script,
-    fps=film_fps.to_double(),
+    fps=fps.to_double(),
     max~,
     draw=fn(t) {
       if draw_frame(t, buf) {
@@ -139,7 +163,7 @@ pub fn film(
     },
   )
   let logs = run.logs
-  let passed = logs.iter().any(fn(l) { l == "DRIVE PASS" })
+  let passed = drive_passed(logs)
   let drawn_ok = run.failure is None && passed
   // (the last frame as drawn, before the film is closed: what was drawn last is still the renderer's)
   let shot = last == "" || drawn_ok && drawn.val > 0 && snapshot(last)
@@ -161,7 +185,7 @@ pub fn film(
   }
   let ok = drawn_ok && closed && shot && copy && kept
   let published = finish(ok)
-  let secs = put.val.to_double() / film_fps.to_double()
+  let secs = put.val.to_double() / fps.to_double()
   say(
     "film: \{out}: \{put.val} frames (\{secs} s), \{drawn.val} drawn" +
     (match run.failure {
@@ -177,6 +201,20 @@ pub fn film(
     (if published { "" } else { ", could not publish" }),
   )
   ok && published
+}
+
+///|
+/// The preparation's log may precede the film's. Only the most recent run can pass.
+fn drive_passed(logs : Array[String]) -> Bool {
+  let mut passed = false
+  for l in logs {
+    if l.has_prefix("DRIVE start:") || l.has_prefix("DRIVE FAIL") || l == "DRIVE END 1" {
+      passed = false
+    } else if l == "DRIVE PASS" {
+      passed = true
+    }
+  }
+  passed
 }
 
 ///|
@@ -225,7 +263,7 @@ pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
   let drive = arg("MBUI_FILM_DRIVE")
   if out == "" || drive == "" {
     say(
-      "film: MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0] [MBUI_KEYBOARD=1] [MBUI_DARK=1] [MBUI_FILM_INSET=1] [MBUI_FILM_FRAMES=3000] [MBUI_LOCAL_STATION=<json>]",
+      "film: MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_FILM_PREPARE=<script>] [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0] [MBUI_FILM_FPS=60] [MBUI_KEYBOARD=1] [MBUI_DARK=1] [MBUI_FILM_INSET=1] [MBUI_FILM_FRAMES=3000] [MBUI_LOCAL_STATION=<json>]",
     )
     exit(2)
     return
@@ -236,11 +274,35 @@ pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
     exit(2)
     return
   }
+  let prepare = match arg("MBUI_FILM_PREPARE") {
+    "" => ""
+    path => {
+      let text = read_text(path)
+      if text == "" {
+        say("film: \{path}: no preparation script there")
+        exit(2)
+        return
+      }
+      text
+    }
+  }
   let (w, h) = match arg("MBUI_WIN").split("x").map(fn(p) { number(p.to_owned()) }).to_array() {
     [Some(w), Some(h)] if w > 0.0 && h > 0.0 => (w, h)
     _ => (390.0, 844.0)
   }
   let scale = number(arg("MBUI_FILM_SCALE")).unwrap_or(2.0)
+  let fps = match arg("MBUI_FILM_FPS") {
+    "" => film_fps
+    s =>
+      match number(s) {
+        Some(n) if n >= 1.0 && n <= 2147483647.0 && n == n.floor() => n.to_int()
+        _ => {
+          say("film: MBUI_FILM_FPS must be a positive whole number")
+          exit(2)
+          return
+        }
+      }
+  }
   let platform = number(arg("MBUI_FILM_PLATFORM")).unwrap_or(0.0).to_int()
   let max = number(arg("MBUI_FILM_FRAMES")).unwrap_or(3000.0).to_int()
   let window_corner = number(arg("MBUI_FILM_WINDOW_CORNER")).unwrap_or(0.0)
@@ -256,6 +318,8 @@ pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
     dark=arg("MBUI_DARK") == "1",
     inset=arg("MBUI_FILM_INSET") == "1",
     window_corner~,
+    fps~,
+    prepare~,
     max~,
     last=arg("MBUI_FILM_LAST"),
     copied=arg("MBUI_FILM_COPIED"),

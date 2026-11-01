@@ -15,7 +15,7 @@ pub fn bench_log(String, String) -> Bool
 
 pub fn exit(Int32) -> Unit
 
-pub fn film((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit, script~ : String, out~ : String, w? : Double, h? : Double, scale? : Double, platform? : Int32, dark? : Bool, inset? : Bool, window_corner? : Double, max? : Int32, last? : String, copied? : String) -> Bool
+pub fn film((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit, script~ : String, out~ : String, w? : Double, h? : Double, scale? : Double, platform? : Int32, dark? : Bool, inset? : Bool, window_corner? : Double, fps? : Int32, prepare? : String, max? : Int32, last? : String, copied? : String) -> Bool
 
 pub let film_fps : Int32
 
