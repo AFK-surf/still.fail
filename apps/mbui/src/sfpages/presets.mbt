@@ -30,6 +30,9 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
   if take_asked("preset-new-add") {
     preset_dialog(src, w, address, "", items(v, "stations"), adding=true)
   }
+  if take_asked("preset-new-browse") {
+    preset_dialog(src, w, address, "", items(v, "stations"), browsing=true)
+  }
   if (new_capsule(c, "new/preset", label, floating, fn() {
       // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
       let marks = items(v, "presetMarks")
@@ -116,6 +119,7 @@ priv struct PresetEditing {
   mut error : String
   serial : Int
   mut adding : Bool
+  mut browsing : Bool
   /// What the dialog shows, in place of the one before (no sheet over a sheet): its fields (0), the folders to add (1),
   /// a station's folders browsed (2).
   mut step : Int
@@ -130,11 +134,11 @@ let preset_serial : Ref[Int] = Ref(0)
 /// folder's until one is typed), its folders (a row each: its mark, its name, where it is from, its ×; 添加目录 under
 /// them), what people want of its chats; at its foot 删除 for one there, 取消, 创建 or 保存. Made, it is the one picked
 /// for the station's new chats.
-/// `adding`: 添加目录 asked open as it is first drawn (a fixture's screen of it).
+/// `adding`: 添加目录 asked open as it is first drawn, `browsing` its 浏览文件夹 too (a fixture's screen of each).
 /// `stations`: the workspace's up now (the `newChat` view's), whose folders are offered too.
-fn preset_dialog(src : Source, w : Workspace, address : String, id : String, stations : Array[Json], adding? : Bool = false) -> Unit {
+fn preset_dialog(src : Source, w : Workspace, address : String, id : String, stations : Array[Json], adding? : Bool = false, browsing? : Bool = false) -> Unit {
   preset_serial.val += 1
-  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding, step: 0 }
+  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding: adding || browsing, browsing, step: 0 }
   let key = fn(part : String) { "preset-editor/" + e.serial.to_string() + "/" + part }
   let name = field_of(key("name"))
   let instructions = field_of(key("instructions"))
@@ -367,7 +371,8 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, offered : Array[
       c.text(@sf.t("web-main.preset.browse"), style=preset_dir_name) |> ignore
     })
     c.semantics(b, Button, id~, label=@sf.t("web-main.preset.browse"))
-    if c.clicked(id) {
+    if c.clicked(id) || e.browsing {
+      e.browsing = false
       (@sfbase.folder_browse_open.val)(address)
       e.step = 2
     }
