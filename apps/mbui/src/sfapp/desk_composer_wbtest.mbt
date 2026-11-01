@@ -473,10 +473,11 @@ test "desk composer: an image or a video sent while it goes up is among its mess
     None => fail("nothing flies")
   }
   assert_eq(flying.map(fn(ff) { ff.key }), ["upload:" + id, "upload:" + clip])
-  assert_true(flying[0].picture != "")
+  let picture = flying[0].picture.unwrap()
+  assert_true(picture != "")
   let face = @ui.Tester::new(fn(_) { (flying[0].face)() }, w=200.0, h=200.0)
   // (its bytes again: a tester of its own starts with none)
-  @ui.add_image(flying[0].picture, png_head())
+  @ui.add_image(picture, png_head())
   face.draw()
   assert_true(face.find("照片.png") is None)
   assert_eq(loaded_sources(face), 1)
@@ -534,7 +535,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   let tile = lines.iter().any(fn(l) { l.0 >= x && l.0 <= x + fw && l.1 >= y && l.1 <= y + fh })
   let face = @ui.Tester::new(fn(_) { (flying[0].face)() }, w=200.0, h=200.0)
   // (its bytes again: a tester of its own starts with none)
-  @ui.add_image(flying[0].picture, png_head())
+  @ui.add_image(flying[0].picture.unwrap(), png_head())
   face.draw()
   assert_eq(loaded_sources(face), 1)
   let spun = face.drawn_lines().length() > 0
@@ -567,7 +568,7 @@ test "desk composer: a restored picture sent while uploading keeps the picture s
   assert_eq(row.attachments.length(), 1)
   assert_eq(sent_picture("ws1/st1", row.attachments[0]), Some("mem:test/kept"))
   let flying = send_flight.get().unwrap().files
-  assert_eq(flying.map(fn(f) { (f.key, f.picture) }), [("upload:kept-1", "mem:test/kept")])
+  assert_eq(flying.map(fn(f) { (f.key, f.picture) }), [("upload:kept-1", Some("mem:test/kept"))])
 }
 
 ///|
@@ -595,7 +596,7 @@ test "desk composer: a restored picture already uploaded stays visible when sent
   assert_eq(row.attachments.length(), 1)
   assert_eq(sent_picture("ws1/st1", row.attachments[0]), Some("mem:test/kept"))
   let flying = send_flight.get().unwrap().files
-  assert_eq(flying.map(fn(f) { (f.key, f.picture) }), [("/w/uploads/照片.png", "mem:test/kept")])
+  assert_eq(flying.map(fn(f) { (f.key, f.picture) }), [("/w/uploads/照片.png", Some("mem:test/kept"))])
 }
 
 ///|
@@ -625,7 +626,7 @@ test "desk composer: a restored quote's picture stays with it when sent" {
   let row = sending_of("ws1/st1\u{1}s-c1")[0].row
   assert_eq(row.attachments.length(), 1)
   assert_eq(sent_picture("ws1/st1", row.attachments[0]), Some("mem:test/kept"))
-  assert_true(send_flight.get().unwrap().files.iter().any(fn(f) { f.key == "/w/uploads/照片.png" && f.picture == "mem:test/kept" }))
+  assert_true(send_flight.get().unwrap().files.iter().any(fn(f) { f.key == @sfbase.quote_picture_key(0) && f.picture == Some("mem:test/kept") }))
 }
 
 ///|

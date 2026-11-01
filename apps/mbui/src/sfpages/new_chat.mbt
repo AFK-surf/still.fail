@@ -879,7 +879,7 @@ fn new_send(
     c,
     d.key,
     words,
-    flying_quotes(c, d) + flying_files(c, src, d),
+    flying_quotes(c, src, d, station) + flying_files(c, src, d),
     field=composer_field_key,
     hold=fn(ms) { composer_hold(d.key, 0.0, box, ms) },
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)

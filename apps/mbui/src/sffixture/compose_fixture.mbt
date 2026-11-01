@@ -203,7 +203,45 @@ pub fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Jso
       let files = fix_composers.get(key).unwrap_or([])
       w.taken = Some((w.text, w.quotes, files))
       let taken = w.text.trim(chars=" \n\t").to_string()
-      let quotes = w.quotes
+      // As the core does (composer.ts sentQuote and upOnce): each quote names its own file, and a file quoted more
+      // than once goes with the message only once. The draft's quote ids do not go with the message.
+      let sent = files.filter(fn(f) { field(Some(f), "link") is None && text(field(Some(f), "ref"), "mode") != "path" })
+      let quotes = w.quotes.map(fn(q) {
+        match q {
+          Object(m) => {
+            let out = m.copy()
+            out.remove("id") |> ignore
+            out["comment"] = Json::string(text(Some(q), "comment").trim(chars=" \n\t").to_string())
+            match sent.iter().find_first(fn(f) { text(Some(f), "quote") == text(Some(q), "id") }) {
+              Some(f) => {
+                let name = match field(field(Some(f), "done"), "name") {
+                  Some(String(name)) => name
+                  _ => text(Some(f), "name")
+                }
+                out["file"] = Json::string(name)
+              }
+              None => ()
+            }
+            Json::object(out)
+          }
+          _ => q
+        }
+      })
+      let paths : Set[String] = Set([])
+      let attachments = sent.filter_map(fn(f) {
+        match field(Some(f), "done") {
+          Some(a) => {
+            let path = text(Some(a), "path")
+            if paths.contains(path) {
+              None
+            } else {
+              paths.add(path)
+              Some(a)
+            }
+          }
+          None => None
+        }
+      })
       w.text = ""
       w.rev += 1
       w.quotes = []
@@ -215,7 +253,7 @@ pub fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Jso
       Some(
         Ok({
           "text": Json::string(taken),
-          "attachments": Json::array(files.filter_map(fn(x) { field(Some(x), "done") })),
+          "attachments": Json::array(attachments),
           "quotes": Json::array(quotes),
           // those still going up, as they are now (none: the fixture's are up as they are added)
           "uploads": Json::array(

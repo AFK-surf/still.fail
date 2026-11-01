@@ -93,13 +93,15 @@ pub(all) struct SendFlight {
 ///|
 /// A file sent with the words (ChatHost.kt FlyingFile): the file it is in its message (file_key: one put up from here
 /// its upload, from before it is up on; any other the station's path), its tile in the composer (x, y, w, h in the
-/// window), a picture's key ("" a card), and the tile as the composer drew it (what is drawn where it was while the row
-/// is not in the list). A quote sent with them (quote_key: its place among the message's quotes) flies from its card in
-/// the composer, `ground` that card's colour (0 a file's).
+/// window), a picture's key (None a card, Some("") a picture still coming), and the tile as the composer drew it (what
+/// is drawn where it was while the row is not in the list). Its landing supplies the same picture painter its message
+/// uses, so the flying picture and the one at rest always follow the same display path. A quote sent with them
+/// (quote_key: its place among the message's quotes) flies from its card in the composer, `ground` that card's colour.
 pub(all) struct FlyingFile {
   key : String
   from : (Double, Double, Double, Double)
-  picture : String
+  picture : String?
+  mut paint : ((Double, Double, @ui.Fit, Double) -> Unit)?
   face : () -> Unit
   ground : Int64
 }
@@ -111,6 +113,12 @@ pub let send_flight : @signals.Signal[SendFlight?] = @signals.signal(None)
 /// What flies to the `i`th quote of the message words are sent to (as file_key says a file: "upload:<id>").
 pub fn quote_key(i : Int) -> String {
   quote_prefix + i.to_string()
+}
+
+///|
+/// What flies to the picture in the `i`th quote: each quote has its own picture even when several name one file.
+pub fn quote_picture_key(i : Int) -> String {
+  "quote-picture:" + i.to_string()
 }
 
 ///|
@@ -895,8 +903,8 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
       }
       let to = "flight/to/" + ff.key
       let (sw, sh, top_crop) = landing_shares.get(to).unwrap_or((1.0, 1.0, false))
-      match landing {
-        Some((_, _, bw, bh)) if ff.picture != "" => {
+      match (landing, ff.picture, ff.paint) {
+        (Some((_, _, bw, bh)), Some(_), Some(paint)) => {
           let across = flight_across_of(c, f)
           let up = flight_up_of(c, f)
           let (ew, eh) = (bw * sw, bh * sh)
@@ -905,9 +913,9 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
           // (on no ground, its corner its tile's in the composer as it leaves, a file's in its message as it lands,
           // in the one change of shape: sfpages composer.mbt, message_files.mbt)
           let corner = @sf.composer_inner() + (@sf.message_file_corner - @sf.composer_inner()) * up
-          let pic = c.box(style=@ui.style(w=Fixed(w), h=Fixed(h)), fn() {
+          let pic = c.box(style=@ui.style(w=Fixed(w), h=Fixed(h), radius=@sf.radius_between(corner), clip=true), fn() {
             let fit : @ui.Fit = if top_crop { FitCoverAt(0.5 * (1.0 - up)) } else { FitCover }
-            c.image(ff.picture, w=Px(w), h=Px(h), fit~, radius=corner, bg=0L) |> ignore
+            paint(w, h, fit, corner)
           })
           // between its tile and its place as this frame lays it out (not a frame behind), on the words' way: a new
           // chat's list comes up with them on the same (flight_carry_shift), so the picture goes from its tile to its
@@ -926,8 +934,8 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
           })
         }
         // a card on its way is the message's own, carried (flight_landing)
-        Some(_) => ()
-        None => {
+        (Some(_), None, _) => ()
+        _ => {
           let tile = c.box(fn() { (ff.face)() })
           @motion.placed(c, tile, fn() {
             let (tx, ty, _, _) = c.node_rect(tile)
@@ -937,6 +945,8 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
       }
     }
   })
+  // The quote cards also fly: draw their pictures later in that same stratum, over the cards' grounds.
+  c.stratum(l, Flying)
   // drawn only (ChatHost.kt FlightLayer draws them): not the files, which are the message's
   c.draw_only(l)
   // a quote's ✕, hung on its card's corner as the composer hung it: it goes with the card as it sets out, leaving as
@@ -990,15 +1000,21 @@ pub fn flight_landing(
   key : String,
   share? : (Double, Double) = (1.0, 1.0),
   top_crop? : Bool = false,
+  paint? : ((Double, Double, @ui.Fit, Double) -> Unit)? = None,
 ) -> Unit {
   let ff = match flight_file_of(f, key) {
     Some(ff) => ff
     None => return
   }
+  // A picture is drawn on its flight by the same painter as the message's, including its loading state.
+  if ff.picture is Some(_) {
+    ff.paint = paint
+    if paint is None { return }
+  }
   @motion.measure(c, i, "flight/to/" + key)
   landing_shares["flight/to/" + key] = (share.0, share.1, top_crop)
   let (fx, fy, fw, fh) = ff.from
-  if ff.picture != "" || !f.placed || f.placed_frame == c.frame_number() {
+  if ff.picture is Some(_) || !f.placed || f.placed_frame == c.frame_number() {
     // its first frame (and a picture all the way): not seen here
     c.look(i, @ui.look(alpha=0.0))
     return
