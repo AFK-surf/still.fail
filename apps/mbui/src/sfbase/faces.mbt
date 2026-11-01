@@ -58,6 +58,7 @@ fn faces_reset() -> Unit {
   }
   previews.clear()
   share_face_asked.val = false
+  vector_cjk.set(CjkUnwanted)
 }
 
 ///|
@@ -82,6 +83,7 @@ let local_face : String = "local:"
 pub fn faces(src : Source, wide : Bool) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   guard prefs is Some(_) else { return }
+  vector_cjk_had(src, prefs)
   let shown = field(prefs, "faces")
   let chosen = field(prefs, "fonts")
   let wanted : Array[String] = []
@@ -172,7 +174,7 @@ pub fn faces(src : Source, wide : Bool) -> Unit {
           if !read {
             @ui.face_clear(host_face)
             faces_had[now] = Asking
-            face_files(src, now, files, 0, [], false)
+            face_files(src, now, files, 0, [], false, fn(h) { faces_had[now] = h })
             faces_in[host_face] = ""
             continue
           }
@@ -215,7 +217,7 @@ fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(FaceFile, 
     }
     None => {
       faces_had[id] = Asking
-      face_files(src, id, files, 0, [], false)
+      face_files(src, id, files, 0, [], false, fn(h) { faces_had[id] = h })
       // (all here at once where the core had them so)
       match faces_had.get(id) {
         Some(Whole(b)) => Some(b)
@@ -227,10 +229,18 @@ fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(FaceFile, 
 
 ///|
 /// Face `id`'s files from the `at`th on, each from the core: unzipped and checked where it is as fetched; where the
-/// core has one not, the face fetched first (once).
-fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Array[(FaceFile, Int)], fetched : Bool) -> Unit {
+/// core has one not, the face fetched first (once). How far it got is told to `had`.
+fn face_files(
+  src : Source,
+  id : String,
+  files : Array[Json],
+  at : Int,
+  got : Array[(FaceFile, Int)],
+  fetched : Bool,
+  had : (FaceHad) -> Unit,
+) -> Unit {
   if at >= files.length() {
-    faces_had[id] = Whole(got)
+    had(Whole(got))
     return
   }
   let f = Some(files[at])
@@ -247,21 +257,21 @@ fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Ar
               (src.call_bytes)("fonts.keep", Json::object({ "sha256": sha.to_json() }), b, fn(_) {  })
             }
             got.push((Held(b), weight))
-            face_files(src, id, files, at + 1, got, fetched)
+            face_files(src, id, files, at + 1, got, fetched, had)
           }
-          _ => faces_had[id] = NotHad(@sf.t("android-settings.fonts.damaged"))
+          _ => had(NotHad(@sf.t("android-settings.fonts.damaged")))
         }
       }
       Err(e) if text(Some(e), "code") == "not_found" && !fetched => {
-        faces_had[id] = Fetching
+        had(Fetching)
         (src.call)("fonts.fetch", Json::object({ "id": id.to_json() }), fn(r) {
           match r {
-            Ok(_) => face_files(src, id, files, 0, [], true)
-            Err(e) => faces_had[id] = NotHad(text(Some(e), "message"))
+            Ok(_) => face_files(src, id, files, 0, [], true, had)
+            Err(e) => had(NotHad(text(Some(e), "message")))
           }
         })
       }
-      Err(e) => faces_had[id] = NotHad(text(Some(e), "message"))
+      Err(e) => had(NotHad(text(Some(e), "message")))
     }
   })
 }

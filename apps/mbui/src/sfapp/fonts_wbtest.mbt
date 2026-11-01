@@ -146,6 +146,36 @@ test "a face's file the host cannot read where it is: had through the core inste
 }
 
 ///|
+test "an SVG picture with Chinese in its text: 思源黑体 had from the core for it, once" {
+  new_run()
+  let base = fixture("home")
+  let fetched = Ref(0)
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "fonts.fetch" {
+        fetched.val += 1
+      }
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.draw()
+  let own = @sfbase.vector_faces(b"<svg xmlns='http://www.w3.org/2000/svg'><text>Hello</text></svg>").length()
+  t.draw()
+  assert_eq(fetched.val, 0)
+  // 流程
+  let zh = b"<svg xmlns='http://www.w3.org/2000/svg'><text>\xe6\xb5\x81\xe7\xa8\x8b</text></svg>"
+  assert_eq(@sfbase.vector_faces(zh).length(), own)
+  // (asked by the frame that wanting it brings, nothing else happening)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(fetched.val, 1)
+  assert_eq(@sfbase.vector_faces(zh).length(), own + 1)
+  t.draw()
+  assert_eq(fetched.val, 1)
+}
+
+///|
 /// The places' choice's `place` tapped (its words drawn after what the page is for, which names them too).
 fn tap_place(t : @ui.Tester, place : String) -> Unit {
   // Match the whole label: 正文's 跟随界面 also contains 界面, but is not the places' choice.

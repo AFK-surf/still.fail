@@ -416,6 +416,8 @@ pub let press_slop : Double
 
 pub let press_space : Int32
 
+pub fn redraw_vector_pictures() -> Unit
+
 pub fn reduced_motion() -> Bool
 
 pub fn request_frame() -> Unit

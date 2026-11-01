@@ -1621,6 +1621,8 @@ pub fn use_core_markdown(Source) -> Unit
 
 pub fn utf8_whole(Bytes) -> Int32
 
+pub fn vector_faces(Bytes) -> Array[Bytes]
+
 pub fn vf_bar(Viewer, @ui.Ctx, Source, Double, keys? : Bool) -> Unit
 
 pub fn vf_coming(Viewer, @ui.Ctx) -> Unit
