@@ -5,7 +5,8 @@
 // for another device, nothing; a new device that dialled someone else (its idea of the other end not the trusted one's)
 // cannot prove even the right code. The code is good for PAIR_WAIT_MS from when it is shown, wrong ones not putting it
 // off; the new device hears its trusted devices end it while nothing is typed (turned away, too old, gone, silent past
-// its time) and says why at once. On the test clock, the trusted core's lock at a cloud that keeps chains.
+// its time) and says why at once; on a clock with fractions of a millisecond (an app's), both ends' pages still go out.
+// On the test clock, the trusted core's lock at a cloud that keeps chains.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
@@ -19,7 +20,7 @@ import { t } from "../src/i18n.ts";
 import { pairs } from "../src/views/lock.ts";
 import { type Duplex, keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
-import { ME, PHONE, genesis, rig } from "./lock-rig.ts";
+import { ME, PHONE, elsewhere, genesis, rig } from "./lock-rig.ts";
 
 const random = (b: Uint8Array) => {
   for (let i = 0; i < b.length; i++) b[i] = (Math.random() * 256) | 0;
@@ -183,6 +184,30 @@ test("the code is good until a set time, said where it is shown; wrong codes typ
   assert.deepEqual((await m.prompts()).pairing, [], "too old, a wrong code typed a minute before or not");
   assert.equal("err" in (await m.prove(shown.code)) ? "ended" : "approved", "ended");
   assert.deepEqual(m.cloud.posted, []);
+});
+
+test("on an app's clock, which says fractions of a millisecond, the code's time goes out in whole ones: shown on the trusted device, waited on by the new one", async () => {
+  // The trusted device: its prompt (LockPairing.until, an i64), and the code typed there still signs the new one in.
+  const m = await met();
+  m.host.advance(0.387);
+  await m.hello();
+  const shown = (await m.prompts()).pairing;
+  assert.equal(shown.length, 1, "shown: the prompt went through its shape");
+  assert.ok(Number.isSafeInteger(shown[0].until), String(shown[0].until));
+  const done = await m.prove(shown[0].code);
+  assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
+
+  // The new device, waiting in the lock its owner's other app signs: its page while the code is typed (LockPair.until).
+  const owner = elsewhere();
+  const n = await rig((_me) => ({ ws: genesis("ws", owner, true, [], {}, "ef".repeat(32)) }));
+  n.host.advance(0.387);
+  const lock = await n.watch({ topic: "lock", workspace: "ws" });
+  const [, here] = await pipe();
+  keep(n.core.inner, trying(n.core.inner, ["ws"]), "ef".repeat(32), here, ["ws"]);
+  const pair = (await lock()).me.pair;
+  assert.equal(pair?.state, "code", "the page went through its shape");
+  assert.ok(Number.isSafeInteger(pair.until), String(pair.until));
+  assert.match(pair.untilText, /\d\d:\d\d/);
 });
 
 test("the new device hears its trusted device end it while nothing is typed, and says why at once", async () => {
