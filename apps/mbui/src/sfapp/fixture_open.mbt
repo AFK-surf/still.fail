@@ -4,7 +4,8 @@
 
 ///|
 /// What the modes of the cards and words set going as the chat opens: chat-answering's option under way, chat-pick's
-/// word picked, chat-link-menu's link held, chat-ask's and chat-ask-long's question asked.
+/// word picked, chat-link-menu's link held, chat-ask's and chat-ask-long's question asked, chat-menu's and
+/// chat-menu-choice's menu presented.
 pub fn open_cards_fixture(mode : String) -> Unit {
   match mode {
     "chat-answering" => acting.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
@@ -31,6 +32,30 @@ pub fn open_cards_fixture(mode : String) -> Unit {
       pk.sel.b = 6
       @sfbase.pick_told_given()
     }
+    // a menu of the presenters' at a point over the chat: a heading, items with icons, a line, one in red, one not to
+    // be chosen now; or a menu of choices, one chosen
+    "chat-menu" =>
+      @sf.menu(
+        [
+          Some(@sf.menu_item_of("这个对话", fn() {  }, heading=true)),
+          Some(@sf.menu_item_of("复制链接", fn() {  }, icon="copy")),
+          Some(@sf.menu_item_of("重命名", fn() {  }, icon="edit")),
+          Some(@sf.menu_item_of("下载记录", fn() {  }, icon="download", disabled=true)),
+          None,
+          Some(@sf.menu_item_of("删除", fn() {  }, icon="trash", danger=true)),
+        ],
+        from=@sf.at_point(700.0, 300.0),
+      )
+    "chat-menu-choice" =>
+      @sf.menu(
+        [
+          Some(@sf.menu_item_of("按时间", fn() {  }, chosen=true)),
+          Some(@sf.menu_item_of("按名称", fn() {  }, chosen=false)),
+          Some(@sf.menu_item_of("按大小", fn() {  }, chosen=false)),
+        ],
+        title="排序",
+        from=@sf.at_point(700.0, 300.0),
+      )
     // the bare address in the long answer held: its menu (link_menu.mbt)
     "chat-link-menu" => {
       link_menu_at("https://example.com/bench/list", 220.0, 360.0, 383.0)

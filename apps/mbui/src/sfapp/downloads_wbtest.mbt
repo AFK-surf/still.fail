@@ -86,7 +86,9 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   video()
   assert_eq(t.words().filter(fn(w) { w.0 == tr("web-main.file.stopLoading") }).length(), 0)
   let first = @sf.last_presented()
-  t.tap_text(tr("web-main.file.load"))
+  // (the menu's 加载, its row: not the chat's words that hold the same, under it)
+  let (lx, ly, lw, lh) = t.get(MenuItem, label=tr("web-main.file.load")).rect
+  t.tap(lx + lw / 2.0, ly + lh / 2.0)
   t.frame()
   assert_false(@sf.presented_open_of(first))
   // (gone as it closes)

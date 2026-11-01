@@ -606,6 +606,8 @@ pub let first_most : @ui.Len
 
 pub fn first_one(@ui.Ctx, String, () -> Unit, art? : () -> Unit, lead? : String) -> Unit
 
+pub fn fixed_anchor(@view.View, (Double, Double, Double, Double)) -> @view.View
+
 pub let floating : Raised
 
 pub fn foot_across(Double) -> @ui.Style
@@ -1053,6 +1055,8 @@ pub fn menu_is_open(String) -> Bool
 pub fn menu_item(@ui.Ctx, String, key? : String, icon? : String, mark? : (@ui.Ctx, Double) -> Unit, danger? : Bool, on? : Bool, note? : String, under? : String, panel? : Bool, end? : String, at_top? : Bool, at_foot? : Bool) -> Bool
 
 pub fn menu_item_of(String, () -> Unit, icon? : String, danger? : Bool, disabled? : Bool, chosen? : Bool, heading? : Bool) -> MenuItem
+
+pub fn menu_node(@view.View, () -> Bool, (@view.View) -> @view.View, () -> Array[MenuItem?], String, @view.Along, Double, Bool, Bool, (MenuItem) -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit) -> Unit
 
 pub fn menu_of(@ui.Ctx, String, Array[MenuItem?], label~ : String, size? : Double) -> Bool
 

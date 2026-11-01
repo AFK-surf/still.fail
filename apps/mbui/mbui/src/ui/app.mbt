@@ -547,6 +547,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.check_press_owners()
   // (its targets published whole: what nodes yield to of them told, view_host.mbt)
   yields_published(c)
+  // (and where what of the tree follows of them is: old_anchor, view_host.mbt)
+  anchors_published(c)
   // (what the build made for the next frames, the layers it opened and what takes the focus, said by it: painted again
   // alone, it stands)
   if !alone {
@@ -1878,8 +1880,9 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
   took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
   hand_event()
   let c = g()
-  // (words for a focus a modal layer of the window's tree keeps from input: none's, island_allows)
-  if c.focus != 0 && c.focus_allowed() == 0 {
+  // (words for a focus a modal layer of the window's tree keeps from input: none's, island_allows; but a field it
+  // leaves what is typed to, its: Ctx::typing_allowed)
+  if c.focus != 0 && c.typing_allowed() == 0 {
     return
   }
   // the keyboard put away by the person: what has the focus lets go of it (what is composed stays, as words)

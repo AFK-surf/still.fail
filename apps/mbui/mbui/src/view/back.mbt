@@ -159,3 +159,14 @@ fn Tree::back_lost_in(self : Tree, at : Int) -> Unit {
     back_told(self.nodes[id.at], CalledOff)
   }
 }
+
+///|
+/// A modal layer that leaves what is typed to the field of an old view under it that has the focus (a menu a finger
+/// opens beside a field, its input method left in place: kit's dropdown_menu's): the text typed that field's still;
+/// every key, the wheel and every press the layer's and what it holds, as a modal layer's are, none of them the
+/// field's or anything else's under it.
+pub fn View::leaves_typing(self : View) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.leaves_typing = true
+  self
+}
