@@ -105,6 +105,21 @@ test "an image quoted: its picture in its card in the composer; sent, it grows f
 }
 
 ///|
+test "a quoted image sent while reading above the end does not jump the chat to its newest message" {
+  let (t, x, y) = image_in_chat("compare.png")
+  hold_quote(t, x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_false(t.at_end(), msg="the quoted image must be above the chat's end")
+  let before = t.visible()
+  tap_send(t)
+  let first = t.visible()
+  assert_eq(first.0, before.0, msg="the chat jumped from \{before} to \{first} on sending")
+  assert_false(t.at_end(), msg="the chat jumped to its end on sending")
+  t.run_for(@sfbase.flight_wait_ms + @sfbase.flight_most_ms)
+  assert_true(t.at_end(), msg="the chat did not reach its newest message")
+}
+
+///|
 test "a quoted picture remains visible over its card as they fly to the message" {
   let calls : Array[Made] = []
   let made : Ref[Source?] = Ref(None)

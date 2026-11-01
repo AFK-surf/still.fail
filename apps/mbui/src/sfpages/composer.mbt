@@ -818,6 +818,23 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
 }
 
 ///|
+/// A quote's comment, laid out and drawn the same in the composer and as its card sets out.
+fn quote_comment_field(c : @ui.Ctx, key : String, f : @ui.Field, hint? : Bool = true) -> @ui.EditorResult {
+  c.editor(
+    key,
+    placeholder=@sf.t("web-main.quote.commentPlaceholder"),
+    font_size=@sf.theme().t.ui,
+    line=@sf.theme().t.ui_line,
+    max_lines=1,
+    plain=true,
+    color=@sf.theme().p.text,
+    placeholder_color=if hint { @sf.theme().p.subtle } else { 0L },
+    caret_color=@sf.theme().p.accent,
+    field=f,
+  )
+}
+
+///|
 /// What waits to go with the message (ComposerExtras): the quotes, each with a line for what is said about it (the one
 /// just added takes the focus; Enter in it goes back to the text), then the files: a picture as its picture, pasted
 /// words as their card, a station's file as its card, a link as its card, any other file as its card.
@@ -849,6 +866,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
           role=text(v, "role"),
           composer=true,
           remove=true,
+          words_key=quote_words_key(id),
           // its own picture (an image of a message quoted, a mark's screenshot) in its card as a picture waiting is,
           // where it flies from to its place in the message (flying_quotes)
           picture?=quote_picture(c, src, w, spec.station, v).map(fn(own) {
@@ -860,18 +878,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
             }
           }),
           comment_field=fn() {
-            let res = c.editor(
-              key,
-              placeholder=@sf.t("web-main.quote.commentPlaceholder"),
-              font_size=@sf.theme().t.ui,
-              line=@sf.theme().t.ui_line,
-              max_lines=1,
-              plain=true,
-              color=@sf.theme().p.text,
-              placeholder_color=@sf.theme().p.subtle,
-              caret_color=@sf.theme().p.accent,
-              field=f,
-            )
+            let res = quote_comment_field(c, key, f)
             if res.text != text(v, "comment") {
               writing_comment(src, w, id, res.text)
             }
@@ -1573,6 +1580,9 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
             }
           },
           ground: 0L,
+          leaving: None,
+          quote_words: None,
+          quote_to: None,
         })
       }
       _ => None
@@ -1612,6 +1622,12 @@ fn quote_card_key(id : String) -> String {
 /// Where quote `id`'s own picture is in its card in the composer (composer_extras).
 fn quote_picture_key(id : String) -> String {
   "composer/quote-picture/" + id
+}
+
+///|
+/// The quote's words as laid out in its card, before it is sent.
+fn quote_words_key(id : String) -> String {
+  "composer/quote-words/" + id
 }
 
 ///|
@@ -1680,6 +1696,27 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
     match @motion.measured_rect(c, quote_card_key(id)) {
       Some((x, y, wide, high)) => {
         let s = @sfbase.quote_of(q)
+        let written = text(v, "comment")
+        let copy = @ui.Field::new(text=written)
+        let words_width = match c.words_shape_of(quote_words_key(id)) {
+          Some(words) if words.pieces.length() == 1 => Some(words.pieces[0].w)
+          _ => None
+        }
+        let quote_words = words_width.map(fn(width) { ("flight/quote-words/" + id, width) })
+        // An empty field's hint belongs to the composer alone: carry it from where it was and let it leave with the ✕.
+        let leaving = if written == "" {
+          match c.field_words("composer/quote/" + id) {
+            Some((_, (lx, ly, lw, lh))) if lw > 0.0 && lh > 0.0 => {
+              let hint_field = @ui.Field::new()
+              Some(((lx, ly, lw, lh), fn() {
+                quote_comment_field(@ui.current(), "flying/quote-hint/" + id, hint_field) |> ignore
+              }))
+            }
+            _ => None
+          }
+        } else {
+          None
+        }
         flying.push({
           key: @sfbase.quote_key(i),
           from: (x, y, wide, high),
@@ -1694,19 +1731,25 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
                 s.author,
                 s.text,
                 role=s.role,
-                comment=s.comment,
                 composer=true,
+                words_width?=words_width,
                 // (its picture's room: the picture is drawn there flying, over the card)
                 picture?=picture.map(fn(p) {
                   let (_, _, pw, ph) = p.2
                   fn() { c.box(style=@ui.style(w=Fixed(pw), h=Fixed(ph)), fn() {  }) |> ignore }
                 }),
+                comment_field=fn() {
+                  quote_comment_field(c, "flying/quote-comment/" + id, copy, hint=leaving is None) |> ignore
+                },
               )
               |> ignore
             })
             |> ignore
           },
           ground: composing.grounds.get(id).unwrap_or(0L),
+          leaving,
+          quote_words,
+          quote_to: None,
         })
       }
       None => ()
@@ -1727,6 +1770,9 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
             picture_tile(c, shown, going_now(Some(f)), gone_up(Some(f)), text(Some(f), "error")) |> ignore
           },
           ground: 0L,
+          leaving: None,
+          quote_words: None,
+          quote_to: None,
         })
       _ => ()
     }
@@ -1773,9 +1819,11 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     desk=true,
     marks~,
   )
-  // the chat's list to its end, where the row is (gliding there while nothing flies to it); shown short of the chat's
-  // end, its latest page in place of what was read, the row at its end
-  c.list_to_end("chat/" + r.station + "/" + r.session, glide=@sfbase.flight_of(w.key) is None)
+  // At the end, the new row and its neighbours move together with the flight. When reading above it, glide there
+  // instead of putting the list at the end in a single frame.
+  let list = "chat/" + r.station + "/" + r.session
+  let above = c.list_info_as(list, fn(i) { i.map(fn(v) { v.at_end }) }).map(fn(i) { !i.at_end }).unwrap_or(false)
+  c.list_to_end(list, glide=@sfbase.flight_of(w.key) is None || above)
   @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
   writing_take(src, w, fn(taken) {
     guard taken is Some(_) else {

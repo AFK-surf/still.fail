@@ -1,0 +1,17 @@
+# A picture quoted while reading above the chat's end, then sent without a comment: the list glides to the new row,
+# and the card and its picture leave the composer continuously. MBUI_FIXTURE=home MBUI_WIN=390x844 MBUI_FILM_PLATFORM=2.
+timeout 20000
+until 整理发布清单
+wait 600
+tap 整理发布清单
+wait 1000
+wheel -900
+wait 1800
+until img:compare.png
+hold 1100 img:compare.png
+wait 400
+tap 引用
+wait 900
+tap icon:arrow-up
+wait 1500
+exit

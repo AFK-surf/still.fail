@@ -1266,6 +1266,9 @@ fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[Flyi
           paint: None,
           face: draft_face(c, src, r, d, f),
           ground: 0L,
+          leaving: None,
+          quote_words: None,
+          quote_to: None,
         })
       _ => ()
     }
@@ -1306,7 +1309,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   for x in taken_refs {
     match (x.up, @motion.measured_rect(c, "composer/tile/ref/\{x.order}")) {
       (Some(up), Some(from)) if up.done.get() is Some(a) && x.mode == "file" && text(Some(a), "path") != "" =>
-        flying.push({ key: text(Some(a), "path"), from, picture: None, paint: None, face: fn() { ref_card(c, d.key, x) }, ground: 0L })
+        flying.push({ key: text(Some(a), "path"), from, picture: None, paint: None, face: fn() { ref_card(c, d.key, x) }, ground: 0L, leaving: None, quote_words: None, quote_to: None })
       _ => ()
     }
   }
@@ -1381,10 +1384,10 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
       _ => ()
     }
   })
-  // the reader goes to the chat's end with what was sent (Chat.kt: by the composer as it sends); with words flying
-  // there at once, the rows above going up with them (flight.mbt); shown short of the chat's end, its latest page in
-  // place of what was read
-  c.list_to_end(list_key(r), glide=flight_of(d.key) is None)
+  // At the end the new row moves with the flight; from above, glide there rather than jumping in one frame.
+  let list = list_key(r)
+  let above = c.list_info_as(list, fn(i) { i.map(fn(v) { v.at_end }) }).map(fn(i) { !i.at_end }).unwrap_or(false)
+  c.list_to_end(list, glide=flight_of(d.key) is None || above)
   @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
 }
 
