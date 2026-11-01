@@ -1371,6 +1371,25 @@ export class Store {
     return m ? [toMessage(m), card] : null;
   }
 
+  /// The card whose wait ended with this person's message. This follows the same entry-order rules as pendingCard and
+  /// answersSince, so a message written before a new card cannot be mistaken for its answer. A card already withdrawn
+  /// or closed is not attributed to a later message.
+  cardEndedByMessage(thread: number, n: number): [MessageRow, Json] | null {
+    const person = this.#one("SELECT 1 FROM entries WHERE thread = ? AND n = ? AND kind = 'message' AND author_kind = 'person'", thread, n);
+    if (!person) return null;
+    const cardN: number | null = this.#one(CARD_BEFORE, thread, n).n;
+    const optionsN: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
+    const asked = cardN === null ? optionsN : optionsN === null ? cardN : Math.max(cardN, optionsN);
+    if (asked === null) return null;
+    const earlier = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n);
+    const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked);
+    if (earlier || closed) return null;
+    const row = this.#one("SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, asked);
+    const card = row ? cardOf(row.card, row.options) : undefined;
+    const message = this.#one("SELECT * FROM merged WHERE thread = ? AND n = ?", thread, asked);
+    return card === undefined || !message ? null : [toMessage(message), card];
+  }
+
   /// The message an agent's need without a card asks with, while no person has written after it: the one its turn is
   /// about (`about`, an entry n), else the agent's latest message during the turn (`during`: from, to, ms); with the two
   /// messages before it. Null in an archived chat, or when that message has a card.

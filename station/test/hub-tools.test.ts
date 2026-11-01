@@ -252,6 +252,107 @@ test("answering a clarification cannot silently restore need_human", async () =>
   await r.close();
 });
 
+test("a clarification tells the agent its card stopped waiting, and it cannot reuse that card as the wait", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, web());
+    const to = `EMBER/${thread.threadTs}`;
+    sayIn(r.hub, thread.id, "ada@x.com", "做这个");
+    await settle();
+    const posted = await r.call(key, "chat_post", { to, text: "可以合并吗？", kind: "need_human", need: "确认合并", card: { type: "options", options: [{ label: "合并" }] } });
+    const card = r.said(thread.id).at(-1)!;
+    assert.ok(posted.includes(card.ts), "the agent can identify and withdraw the card it posted");
+    assert.ok((await r.call(key, "chat_history", { to })).includes("Answer card: pending"));
+    r.claude.last().complete();
+    await settle();
+    sayIn(r.hub, thread.id, "ada@x.com", "测试过了吗？");
+    await settle();
+    const prompt = r.claude.last().prompts.at(-1)!;
+    assert.ok(prompt.includes(card.ts) && prompt.includes("no longer pending"), prompt);
+    assert.ok(prompt.includes("not necessarily") && prompt.includes("new card"), prompt);
+    assert.equal(r.store.pendingCard(thread.id), null);
+    const history = await r.call(key, "chat_history", { to });
+    assert.ok(history.includes("Answer card: no longer pending") && history.includes("合并"), history);
+    await r.call(key, "chat_post", { to, text: "测试通过了。" });
+    assert.ok((await r.refused(key, "chat_state", { kind: "need_human", need: "确认合并", about: card.ts })).includes("no longer pending"));
+    assert.ok((await r.refused(key, "chat_post", { to, text: "等你确认。", kind: "need_human", need: "确认合并", about: card.ts })).includes("no longer pending"));
+    await r.call(key, "chat_post", { to, text: "测试通过了，可以合并吗？", card: { type: "options", options: [{ label: "合并" }] } });
+    assert.ok(r.store.pendingCard(thread.id) !== null, "a fresh question is actionable");
+  } finally {
+    await r.close();
+  }
+});
+
+test("a newer card remains pending when an unread clarification ended the earlier card", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, web());
+    const to = `EMBER/${thread.threadTs}`;
+    sayIn(r.hub, thread.id, "ada@x.com", "做这个");
+    await settle();
+    const agent = r.claude.last();
+    agent.unsteerable = true;
+    await r.call(key, "chat_post", { to, text: "第一版可以合并吗？", card: { type: "options", options: [{ label: "合并" }] } });
+    const old = r.said(thread.id).at(-1)!;
+    sayIn(r.hub, thread.id, "ada@x.com", "测试过了吗？");
+    await r.call(key, "chat_post", { to, text: "第二版可以合并吗？", card: { type: "options", options: [{ label: "合并第二版" }] } });
+    const current = r.said(thread.id).at(-1)!;
+    agent.complete();
+    await settle();
+    const prompt = agent.prompts.at(-1)!;
+    assert.ok(prompt.includes(old.ts) && prompt.includes("no longer pending"), prompt);
+    assert.ok(prompt.includes(current.ts) && prompt.includes("newer card") && prompt.includes("pending"), prompt);
+    assert.equal(r.store.pendingCard(thread.id)?.[0].n, current.n);
+    const history = await r.call(key, "chat_history", { to });
+    assert.ok(history.includes("Answer card: no longer pending") && history.includes("Answer card: pending"), history);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a card withdrawn before a message is not attributed to that message", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, web());
+    const to = `EMBER/${thread.threadTs}`;
+    sayIn(r.hub, thread.id, "ada@x.com", "做这个");
+    await settle();
+    await r.call(key, "chat_post", { to, text: "可以合并吗？", card: { type: "options", options: [{ label: "合并" }] } });
+    const card = r.said(thread.id).at(-1)!;
+    await r.call(key, "chat_post", { to, withdraw: card.ts });
+    sayIn(r.hub, thread.id, "ada@x.com", "测试过了吗？");
+    await settle();
+    const prompt = r.claude.last().steers.at(-1)!;
+    assert.ok(!prompt.includes("<card-state"), prompt);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a message sent before a card was posted does not cancel that card", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, web());
+    const to = `EMBER/${thread.threadTs}`;
+    sayIn(r.hub, thread.id, "ada@x.com", "做这个");
+    await settle();
+    const agent = r.claude.last();
+    agent.unsteerable = true;
+    sayIn(r.hub, thread.id, "ada@x.com", "先告诉我测试结果");
+    await r.call(key, "chat_post", { to, text: "可以合并吗？", card: { type: "options", options: [{ label: "合并" }] } });
+    const card = r.said(thread.id).at(-1)!;
+    assert.ok(r.store.pendingCard(thread.id) !== null);
+    agent.complete();
+    await settle();
+    const prompt = agent.prompts.at(-1)!;
+    assert.ok(prompt.includes(`before=\"${card.ts}\"`), prompt);
+    assert.ok(!prompt.includes("no longer pending"), prompt);
+    assert.ok(r.store.pendingCard(thread.id) !== null);
+  } finally {
+    await r.close();
+  }
+});
+
 test("a state says which message it is about, the pending card by default", async () => {
   const r = new Rig();
   const [key, thread] = newSession(r.hub, web());

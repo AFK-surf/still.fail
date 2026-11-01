@@ -224,7 +224,7 @@ export function optionsSaid(options: Json): string {
     const label = `${i + 1}. ${typeof o?.label === "string" ? o.label : ""}`;
     return o?.recommended !== undefined ? `${label} (recommended)` : label;
   });
-  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently), and anything they write instead is their answer too.`;
+  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently). A message in the chat also closes the card, but may be a clarification rather than an answer.`;
 }
 
 /// What chat_post says of the card it posted.
@@ -233,7 +233,7 @@ export const cardSaid = (card: Json): string =>
     ? optionsSaid(card.options)
     : card?.type === "login"
       ? " People finish the login from the card (or its link) in their own browser; when it ends you get a station notice and the card closes."
-      : " People can write their answer in the card's field; it reaches you as their message quoting this one, and anything they write in the chat instead is their answer too.";
+      : " People can write their answer in the card's field; it reaches you as their message quoting this one. A message in the chat also closes the card, but may be a clarification rather than an answer.";
 
 const isHtml = (f: Attachment) => {
   const name = f.name.toLowerCase();
