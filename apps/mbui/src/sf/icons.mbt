@@ -111,6 +111,110 @@ pub fn play_mark(c : @ui.Ctx, side : Double, shade : @ui.Color) -> Int {
 }
 
 ///|
+/// A video's capsule over its picture, in its foot's start corner concentric with a message's file's corner (the
+/// chat's media tiles' and a message's video's): a small play mark and how long it is (`duration`, none where that is
+/// not known) on the video's shade. `coming`: how far the core has brought it here, a ring of that share and the share
+/// in words in their place, the one going out before the other comes in (words never over words) as the capsule
+/// changes its width with them over dur_ms. `key` names
+/// its motion. Nothing else over the picture: what it shows is the picture (the user, 2026-11-01: a band with its name
+/// and a play mark in its middle left little of a wide one to see).
+pub fn video_capsule(c : @ui.Ctx, key : String, duration : Double, coming? : Double? = None) -> Unit {
+  let part = match coming {
+    Some(p) => {
+      video_capsule_last[key] = p
+      p
+    }
+    None => video_capsule_last.get(key).unwrap_or(0.0)
+  }
+  let k = @motion.animate(c, key, if coming is Some(_) { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  let length = if duration > 0.0 { clock(duration) } else { "" }
+  let share = "\{(dmin(1.0, dmax(0.0, part)) * 100.0).floor().to_int()}%"
+  let gap = @ui.Space::px(S1)
+  let length_w = video_capsule_mark + (if length != "" { gap + c.words_across(length, video_capsule_words) } else { 0.0 })
+  let share_w = video_capsule_ring + gap + c.words_across(share, video_capsule_words)
+  // (its words and its ends' room, 6 each side)
+  let across = length_w + (share_w - length_w) * k + 2.0 * @ui.Space::px(S1_5)
+  c.layer(fn() {
+    c.box(style=video_capsule_foot, fn() {
+      c.box(style=video_capsule_box.then(@ui.style(w=Fixed(across))), fn() {
+        if k < 0.5 {
+          let l = c.box(style=video_capsule_row, fn() {
+            icon(c, "play", size=video_capsule_mark, color=white) |> ignore
+            if length != "" {
+              c.text(length, style=video_capsule_words) |> ignore
+            }
+          })
+          c.look(l, @ui.look(alpha=1.0 - 2.0 * k))
+        }
+        if k > 0.5 {
+          c.layer(fn() {
+            c.box(style=video_capsule_over, fn() {
+              let r = c.box(style=video_capsule_row, fn() {
+                progress_ring(c, video_capsule_ring, part, white) |> ignore
+                c.text(share, style=video_capsule_words) |> ignore
+              })
+              c.look(r, @ui.look(alpha=2.0 * k - 1.0))
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// How far each video's capsule last said it had come: what it fades out with once it is here.
+let video_capsule_last : Map[String, Double] = {}
+
+///|
+/// The capsule's height, its play mark's and its ring's.
+pub let video_capsule_h : Double = 18.0
+
+///|
+let video_capsule_mark : Double = 10.0
+
+///|
+let video_capsule_ring : Double = 14.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let video_capsule_foot : @ui.Style = @ui.style(
+  w=Full,
+  h=Full,
+  justify=JEnd,
+  align=AStart,
+  p=room_of(capsule_in(message_file_corner, video_capsule_h)),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let video_capsule_box : @ui.Style = @ui.style(
+  row=true,
+  h=Fixed(video_capsule_h),
+  px=S1_5,
+  radius=Full,
+  bg=video_shade,
+  align=ACenter,
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let video_capsule_over : @ui.Style = @ui.css("w=Full h=Full px=S1_5 align=AStart justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let video_capsule_row : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let video_capsule_words : @ui.TextStyle = @ui.text_style(size=Caption, color=white_ink, wrap=false)
+
+///|
 /// Of icon `name`, only its parts `parts` (their places among what it is drawn of, from 0: a line, a closed line, a
 /// fill with its holes), as `icon` draws it whole: what of it moves drawn apart from what stays (ChatMark.css.ts
 /// leadSlot's copies, each showing one part of the icon).

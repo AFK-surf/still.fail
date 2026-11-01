@@ -510,14 +510,16 @@ pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
 pub let file_card_w : Double = 236.0
 
 ///|
-/// A file's card's width in a message (card_box: as wide as what it says): its sheet and its name or its size, the
-/// wider, with its room round them; file_card_w at most.
-pub fn file_card_across(c : @ui.Ctx, name : String, size : Double) -> Double {
+/// A file's card's width in a message (card_box: as wide as what it says): its sheet and its name or what is said
+/// under it (its size; `meta` in its place: how far its download has come, why it failed), the wider, with its room
+/// round them, and `ends` buttons at its end (its ✕, its ↻, each in a room 24 past the gap); file_card_w at most.
+pub fn file_card_across(c : @ui.Ctx, name : String, size : Double, meta? : String = "", ends? : Int = 0) -> Double {
   let words = dmax(
-    @ui.text_advance(name, size=c.text_size(Ui).0),
-    @ui.text_advance(file_size(size), size=c.text_size(Caption).0),
+    c.words_across(name, card_name),
+    c.words_across(if meta != "" { meta } else { file_size(size) }, card_meta),
   )
-  let room = @ui.Space::px(S3_5) + card_mark_size + @ui.Space::px(S2) + @ui.Space::px(S3_5)
+  let room = @ui.Space::px(S3_5) + card_mark_size + @ui.Space::px(S2) + @ui.Space::px(S3_5) +
+    ends.to_double() * (@ui.Space::px(S2) + @ui.Space::px(S6))
   dmin(file_card_w, room + words)
 }
 

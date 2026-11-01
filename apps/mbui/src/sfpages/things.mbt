@@ -339,19 +339,7 @@ fn media_tile(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, t : Json?
       |> ignore
     }
     if video {
-      c.layer(fn() {
-        c.box(style=things_tile_foot, fn() {
-          c.box(style=things_length, fn() {
-            @sf.icon(c, "play", size=things_length_mark, color=0xFFFFFFFFL) |> ignore
-            if a.duration > 0.0 {
-              c.text(@sf.clock(a.duration), style=things_length_words) |> ignore
-            }
-          })
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
+      @sf.video_capsule(c, "things/length/" + text(t, "key"), a.duration)
     }
   })
   c.semantics(b, Button, id~, label=@sf.t(if video { "web-main.file.play" } else { "web-main.file.view" }, args=[("name", a.name)]))
@@ -526,25 +514,6 @@ let things_tile : @ui.Style = @ui.style(radius=@sf.message_file_radius, clip=tru
 ///|
 // kept across runs: a value (no field of it changes)
 let things_tile_none : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
-
-///|
-/// A video's length in its tile's foot corner, a capsule concentric with it.
-// kept across runs: a value (no field of it changes)
-let things_tile_foot : @ui.Style = @ui.style(w=Full, h=Full, justify=JEnd, align=AStart, p=@sf.room_of(@sf.capsule_in(@sf.message_file_corner, things_length_high)))
-
-///|
-let things_length_high : Double = 18.0
-
-///|
-let things_length_mark : Double = 10.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let things_length : @ui.Style = @ui.style(row=true, h=Fixed(things_length_high), gap=S1, px=S1_5, radius=Full, bg=@sf.video_shade, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let things_length_words : @ui.TextStyle = @ui.text_style(size=Caption, color=@sf.white_ink, wrap=false)
 
 ///|
 /// A row's room in the list: 2 under it.

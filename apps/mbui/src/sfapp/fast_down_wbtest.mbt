@@ -36,7 +36,7 @@ test "a video taken down fast (its finger's events 20 ms apart) and let go past 
   )
   t.draw()
   t.run_for(@ui.image_fade_ms)
-  t.tap_text("演示录屏.mp4")
+  tap_video(t, "演示录屏.mp4")
   t.run_for(@ui.move_most_ms)
   t.set_player(1, position=4000.0)
   t.draw()
