@@ -22,6 +22,7 @@ import { log } from "../ops/log.ts";
 import { type Json, STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
+import { stateOf } from "../browser/signins.ts";
 import { type BoxCert, type Deny, type Grant, type Kind, type Listing, type Mode, type Request, type Save, type Scope, type Sealed, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
 import { type Carried, type Held, Keeper, accountOf, hostAllowed, valueOf } from "./keeper.ts";
 import { FILE_MOST, KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
@@ -157,6 +158,8 @@ export type SignIns = {
   /// The cookies of `sites` (each with its subdomains) in `session`'s chat's browser, or in the station's own
   /// (`station`: where sign-ins were made before chats had browsers of their own), as JSON; the browser started if need be.
   cookies(session: string, sites: string[], station: boolean): Promise<string>;
+  /// The passkeys of a sign-in still granted put into `session`'s chat's browser again (passkeysAgain).
+  passkeysIn?(session: string, d: { sites: string[]; cookies: string }): Promise<void>;
   /// Grant `request`'s sign-in put into `session`'s chat's browser until `until` (unix seconds): its cookies of `sites`
   /// set now, taken out again then.
   signIn(session: string, d: { request: string; sites: string[]; cookies: string; until: number }): Promise<void>;
@@ -599,8 +602,8 @@ export class Secrets {
     }
     if (kind === "browser") {
       value = await this.#d.browsers!.cookies(session, hosts, a.browser === "station");
-      const found = JSON.parse(value) as unknown[];
-      if (found.length === 0) throw new Refused(`${a.browser === "station" ? "The station's browser" : "This chat's browser"} holds no cookies of ${hosts.join(", ")}: sign in there first (a person, in the tab you give them with the \`screen\` tool); nothing was kept.`);
+      const found = stateOf(value);
+      if (found.cookies.length === 0 && found.passkeys.length === 0) throw new Refused(`${a.browser === "station" ? "The station's browser" : "This chat's browser"} holds no cookies or passkeys of ${hosts.join(", ")}: sign in there first (a person, in the tab you give them with the \`screen\` tool; a passkey: added on the site's account page there); nothing was kept.`);
       if (value.length > TYPED_MOST) throw new Refused(`The cookies of ${hosts.join(", ")} are more than ${TYPED_MOST / 1024} KB: name the sites the sign-in is for, not more; nothing was kept.`);
     }
     if (kind === "file" && Buffer.byteLength(value, "base64") > FILE_MOST) throw new Refused(`The file is more than ${FILE_MOST / 1024} KB; nothing was kept.`);
@@ -799,6 +802,17 @@ export class Secrets {
       if (cookies === null || this.#d.browsers === undefined) continue;
       void this.#d.browsers.signIn(session, { request: h.request.id, sites: h.grant.hosts, cookies, until: h.grant.exp }).catch((e) =>
         log.warn("vault", "a sign-in could not be put into its chat's browser again", { request: h.request.id, error: (e as Error).message }));
+    }
+  }
+
+  /// `session`'s chat's context taken up from the station process before: the passkeys of its sign-ins still granted put
+  /// in again (they went with that process's connection to the browser; its cookies are there still).
+  passkeysAgain(session: string) {
+    for (const h of this.keeper.held(session)) {
+      const cookies = h.grant.mode === "browser" ? valueOf(h.secret) : null;
+      if (cookies === null || this.#d.browsers?.passkeysIn === undefined) continue;
+      void this.#d.browsers.passkeysIn(session, { sites: h.grant.hosts, cookies }).catch((e) =>
+        log.warn("vault", "a sign-in's passkeys could not be put into its chat's browser again", { request: h.request.id, error: (e as Error).message }));
     }
   }
 

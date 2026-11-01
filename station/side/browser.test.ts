@@ -418,6 +418,98 @@ const hasPlaywright = (() => {
   }
 })();
 
+test("a passkey added in a chat's browser is kept with its sign-in, signs in another chat granted it (its tabs, a view's hook letting the browser sign), and goes out with the grant", { skip: binary === undefined ? "no Chrome here" : !hasPlaywright && "no Playwright here (install the repository's root)" }, async () => {
+  const { chromium } = (await import(PLAYWRIGHT)) as any;
+  const { Browsers } = await import("../src/browser/browsers.ts");
+  const { browserDoor, sessionPath } = await import("../src/browser/proxy.ts");
+  const { openAgentsDoor } = await import("../src/tools/http.ts");
+  const { McpEndpoint } = await import("../src/tools/mcp.ts");
+  const { stateOf } = await import("../src/browser/signins.ts");
+  const dir = mkdtempSync(join(tmpdir(), "side-passkeys-"));
+  const screens = makeScreens();
+  const browsers = new Browsers({ dir, chrome: chromeHost({ dir }), screens });
+  const takenOut: string[] = [];
+  browsers.onTakenOut((_s, _r, kept) => takenOut.push(kept));
+  // A site that makes a passkey and signs in with one, as sites ask: what came back (or why not) said.
+  const page = `<title>passkeys</title><script>
+const b64 = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
+window.make = () => navigator.credentials.create({ signal: AbortSignal.timeout(5000), publicKey: { rp: { id: "localhost", name: "site" }, user: { id: new Uint8Array([1, 2, 3]), name: "alice", displayName: "Alice" },
+  challenge: new Uint8Array([1, 2, 3, 4]), pubKeyCredParams: [{ type: "public-key", alg: -7 }], authenticatorSelection: { residentKey: "required", userVerification: "required" } } })
+  .then((c) => b64(c.rawId), (e) => e.name);
+window.sign = () => navigator.credentials.get({ signal: AbortSignal.timeout(5000), publicKey: { challenge: new Uint8Array([5, 6, 7]), rpId: "localhost", userVerification: "required" } })
+  .then((c) => b64(c.rawId), (e) => e.name);
+</script>`;
+  const server = createServer((_, res) => res.writeHead(200, { "content-type": "text/html" }).end(page));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  // (a relying party is a domain, not an address: the site as localhost, which is a secure context too)
+  const site = `http://localhost:${(server.address() as AddressInfo).port}/`;
+  const door = await openAgentsDoor({ port: 0 }, new McpEndpoint(() => undefined, []), () => ({ status: 404, body: {} }), () => null, () => [browserDoor(browsers)]);
+  const connect = (session: string) => chromium.connectOverCDP(`ws://127.0.0.1:${door.port}${sessionPath(session)}`);
+  try {
+    const one = await connect("chat-1");
+    const two = await connect("chat-2");
+    // Made in chat-1's tab with no prompt (its authenticator), and kept with the sign-in, its private key with it.
+    const p1 = await one.contexts()[0]!.newPage();
+    await p1.goto(site);
+    const made = await until(async () => {
+      const r = await p1.evaluate("make()");
+      return r === "NotAllowedError" ? null : r;
+    }, "a passkey made in chat-1's tab");
+    assert.match(made, /^[A-Za-z0-9_-]{16,}$/);
+    assert.equal(await p1.evaluate("sign()"), made, "it signs there");
+    const kept = stateOf(await browsers.cookies("chat-1", ["localhost"], false));
+    assert.equal(kept.passkeys.length, 1);
+    assert.equal(kept.passkeys[0]!.rpId, "localhost");
+    assert.ok(kept.passkeys[0]!.privateKey.length > 40, "its private key kept");
+    assert.equal((await browsers.cookies("chat-1", ["example.org"], false)), "[]", "none of another site's: the cookies alone, as before");
+    // chat-2 has none of its own; granted the sign-in, its tab signs with it, and a tab opened after too.
+    const p2 = await two.contexts()[0]!.newPage();
+    await p2.goto(site);
+    // (its tab's authenticator given as its page comes: until then, nothing answers)
+    assert.equal(await until(async () => {
+      const r = await p2.evaluate("sign()");
+      return r === "TimeoutError" ? null : r;
+    }, "chat-2's tab has its authenticator"), "NotAllowedError");
+    await browsers.signIn("chat-2", { request: "r_1", sites: ["localhost"], cookies: JSON.stringify(kept), until: Math.floor(Date.now() / 1000) + 8 });
+    assert.equal(await p2.evaluate("sign()"), made);
+    const p3 = await two.contexts()[0]!.newPage();
+    await p3.goto(site);
+    assert.equal(await until(async () => {
+      const r = await p3.evaluate("sign()");
+      return r === "NotAllowedError" ? null : r;
+    }, "a tab opened after has it"), made);
+    // A person driving the tab: the view's hook leaves a sign-in the context can sign to the browser, no device asked.
+    const [tab] = browsers.tabs("chat-2").filter((t) => t.url === site);
+    const view = await screens.get(`browser:${tab!.id}`)!.open({ maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] });
+    await view.next();
+    const heard: (PasskeyAsk | null)[] = [];
+    const unwatch = view.watchPasskey!((a) => heard.push(a));
+    const page2 = two.contexts()[0]!.pages().find((p: { url(): string }) => p.url() === site)!;
+    await until(async () => (await page2.evaluate(`typeof window.${PASSKEY_BINDING}`)) === "function", "the hook is there");
+    assert.equal(await page2.evaluate("sign()"), made);
+    assert.deepEqual(heard.filter((a) => a !== null), [], "not asked of the person's device");
+    unwatch();
+    view.close();
+    // The grant ends: taken out (no tab of chat-2 signs), and given back as it was then, its count gone up.
+    const afterwards = await until(async () => {
+      const r = await p2.evaluate("sign()");
+      return r === made ? null : r;
+    }, "taken out as its grant ends", 20_000);
+    assert.equal(afterwards, "NotAllowedError");
+    const back = stateOf(await until(() => takenOut.at(-1), "given back"));
+    assert.equal(back.passkeys.length, 1);
+    assert.ok(back.passkeys[0]!.signCount > kept.passkeys[0]!.signCount, "its count as it was then");
+    await one.close();
+    await two.close();
+  } finally {
+    await door.close(0);
+    server.close();
+    await browsers.station.stop();
+    await browsers.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("each chat's own context in the one real Chrome, through its gate: Playwright works in it, sees nothing of another chat's, and a sign-in goes in and out", { skip: binary === undefined ? "no Chrome here" : !hasPlaywright && "no Playwright here (install the repository's root)" }, async () => {
   const { chromium } = (await import(PLAYWRIGHT)) as any;
   const { Browsers } = await import("../src/browser/browsers.ts");

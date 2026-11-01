@@ -31,8 +31,8 @@ Rules:
 
 ## Sign-ins: kept in the vault, given by grant
 
-What this chat is signed in to comes from the vault, the person's, as a sign-in (kind `browser`: the cookies of the
-sites it is for):
+What this chat is signed in to comes from the vault, the person's, as a sign-in (kind `browser`: the cookies, and the
+passkeys, of the sites it is for):
 
 - `secret_list` lists the sign-ins you may ask for; `secret_use {item, reason}` (its mode `browser`) asks for one. Once
   granted, its cookies are in this chat's environment for as long as the grant lasts, then taken out again (the
@@ -42,6 +42,13 @@ sites it is for):
   shown to you), and its card asks them to keep it. Other chats then ask for it instead of signing in again.
 - A sign-in made before each chat had its own environment is still in the station's own profile: `secret_save {…,
   kind: "browser", browser: "station"}` reads it from there.
+- Passkeys: each tab of this chat's environment has an authenticator of the browser's own, so a site's "add a passkey"
+  (on its account or security page) makes one here with no prompt, and a site asking for one it has signs with it.
+  A sign-in kept after a passkey was added carries it (`secret_save` reads the sites' passkeys with their cookies), and
+  a sign-in granted puts it in again: the site's sign-in with a passkey then works in any chat granted it, whichever
+  device the person watches from. Offer it when a person wants to sign in with a passkey here: have them add one on
+  the site's page in this chat's tab (a second passkey beside their own; most sites take several), then keep the
+  sign-in.
 
 ## Its tabs as screens (the `computer` tool)
 
