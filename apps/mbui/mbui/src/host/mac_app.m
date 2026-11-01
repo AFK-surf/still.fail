@@ -1940,7 +1940,15 @@ void mb_host_wake_after(double ms) {
   });
 }
 
+// Whether the window can be seen now (tell_state's `shown`: not hidden, minimized or covered).
+static int window_seen = 1;
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
+  // (a window nobody can see draws nothing: what drawing holds was given back as it went (mb_render_trim), and a
+  // frame drawn now would take it again, the GPU drawing it for nobody, a frame for each answer the core gives; shown
+  // again, tell_state asks a frame, which draws what it shows then, whole)
+  // (a scripted or recorded run stands for someone looking at it, wherever its window is: drawn all the same)
+  if (!window_seen && !script && !settle && !record_dir && !getenv("MBUI_DRIVE") && !getenv("MBUI_DRIVE_B64")) return;
   mb_render_present(buf, count, r, g, b);
 }
 
@@ -2076,6 +2084,7 @@ static void tell_state(void) {
   NSWindow *w = the_view.window;
   if (!state_cb || !w) return;
   int shown = w.isVisible && !w.isMiniaturized && (w.occlusionState & NSWindowOcclusionStateVisible) != 0;
+  window_seen = shown;
   int front = shown && NSApp.isActive && w.isKeyWindow;
   // (not in front: what drawing holds given back, the frame shown kept; a frame after makes what it needs again)
   if (!front) mb_render_trim();
