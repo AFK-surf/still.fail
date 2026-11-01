@@ -26,6 +26,8 @@
 # and ember, stillfail-beta), MBUI_OWN; the beta's core a beta's.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+# Every app build, including release variants, picks the same compiler before mbc looks up its objects.
+if [ "${1:-build}" = build ]; then . "$D/win-compiler.sh"; fi
 export APP=${APP:-stillfail}
 if [ "$APP" = stillfail ]; then
   engine=$(cd "$EMBER" && node scripts/native.ts path engine win32-x64) || exit 1

@@ -1,6 +1,15 @@
 #!/bin/bash
-# Source after the MSVC action: the app and its release variants must use the same compiler to share mbc's objects.
-[ -n "${llvmX64:-}" ] || { echo "win-compiler: Visual Studio's LLVM directory is not set" >&2; return 1; }
-export MBC_REAL_CC="$llvmX64\\clang-cl.exe"
-# MoonBit's runtime passes an int32_t * for a DWORD *; clang, like cl, should report that as a warning.
-export CL="/clang:-Wno-error=incompatible-pointer-types ${CL:-}"
+# The app and its release variants share mbc's objects only when built by the same compiler. Use Visual Studio's
+# clang-cl when installed (faster than cl on the runner), but leave an explicit MBC_REAL_CC and machines without it alone.
+if [ -z "${MBC_REAL_CC:-}" ] && [ -n "${llvmX64:-}" ] && [ -f "$(cygpath -u "$llvmX64")/clang-cl.exe" ]; then
+  export MBC_REAL_CC="$llvmX64\\clang-cl.exe"
+fi
+case "${MBC_REAL_CC:-}" in
+  *clang-cl|*clang-cl.exe)
+    # MoonBit's runtime passes an int32_t * for a DWORD *; clang, like cl, should report that as a warning. This may
+    # be sourced by the release workflow as well as win.sh when it builds an older, reviewed revision.
+    case " ${CL:-} " in
+      *" /clang:-Wno-error=incompatible-pointer-types "*) ;;
+      *) export CL="/clang:-Wno-error=incompatible-pointer-types ${CL:-}" ;;
+    esac ;;
+esac

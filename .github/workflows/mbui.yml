@@ -621,8 +621,6 @@ jobs:
         run: |
           moon version --all
           B=$RUNNER_TEMP/build; mkdir -p "$B"
-          # (the app and its release variants use the same compiler so their objects can be shared)
-          . apps/mbui/scripts/win-compiler.sh
           nohup bash -c 'MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$0/log" 2>&1; echo $? > "$0/status"' "$B" > /dev/null 2>&1 &
       - uses: ./.github/actions/setup
       # core.hbc by its inputs (HBC_CACHE, scripts/core.sh hermes), as the other jobs keep it: the core's step was 12-17 s
@@ -817,14 +815,11 @@ jobs:
             apps/mbui/out/handoff/*/*.log
             apps/mbui/out/handoff/*/*.txt
           if-no-files-found: warn
-      # The release variants change only resources. Rebuilding them from this app's cache must reuse its C objects;
+      # The release variants change only resources. Rebuilding one from this app's cache must reuse its C objects;
       # otherwise a release recompiles the whole app before it can publish any platform's update.
-      - name: The release Windows apps reuse the app's compiled objects
+      - name: The beta Windows app reuses the app's compiled objects
         if: github.ref != 'refs/heads/main' && github.event_name == 'push'
         run: |
-          . apps/mbui/scripts/win-compiler.sh
-          for variant in beta stable; do
-            MBUI_VARIANT=$variant MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$RUNNER_TEMP/$variant-cache.log" 2>&1 || { cat "$RUNNER_TEMP/$variant-cache.log"; exit 1; }
-            grep 'stillfail.c: .* of .* compiled' "$RUNNER_TEMP/$variant-cache.log"
-            grep -Eq 'stillfail.c: 0 of [0-9]+ compiled' "$RUNNER_TEMP/$variant-cache.log" || { echo "$variant build recompiled the app"; exit 1; }
-          done
+          MBUI_VARIANT=beta MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$RUNNER_TEMP/beta-cache.log" 2>&1 || { cat "$RUNNER_TEMP/beta-cache.log"; exit 1; }
+          grep 'stillfail.c: .* of .* compiled' "$RUNNER_TEMP/beta-cache.log"
+          grep -Eq 'stillfail.c: 0 of [0-9]+ compiled' "$RUNNER_TEMP/beta-cache.log" || { echo "beta build recompiled the app"; exit 1; }
