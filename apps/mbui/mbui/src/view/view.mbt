@@ -3584,10 +3584,13 @@ fn View::let_go(self : View) -> Unit {
   if self.tree.pointed_within_at(self.at) {
     self.tree.pointed_to(None)
   }
-  for k in n.kids {
-    self.tree.handle(k).let_go()
-  }
+  // (what it holds as this begins, each by its handle: one's going may take another out of it (View::lives_with, the
+  // tip of a row held beside it in one layer), which is then let go already, its handle on nothing)
+  let kids = n.kids.map(fn(k) { self.tree.handle(k) })
   n.kids.clear()
+  for k in kids {
+    k.let_go()
+  }
   n.live = false
   match self.tree.modals.search(self.at) {
     Some(i) => self.tree.modals.remove(i) |> ignore

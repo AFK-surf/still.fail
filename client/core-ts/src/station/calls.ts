@@ -126,7 +126,8 @@ export function keptFirst<H extends { type: string; total: number }, G extends H
     return read(at, length, at - c.offset, (piece) => {
       pieces.push(piece);
       out.push(piece);
-      sink?.(piece);
+      // (what goes to the UI is the UI's, moved away on the web (its worker's toPage): a copy, this one kept here)
+      sink?.(piece.slice());
     }, (h) => {
       head = h;
     }).pipe(
