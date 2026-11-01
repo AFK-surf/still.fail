@@ -10,3 +10,15 @@ test "an allowance failure's action starts on the card's words" {
     assert_true((action_x - title_x).abs() < 0.01, msg="width \{width}, platform \{platform}: title \{title_x}, action \{action_x}")
   }
 }
+
+///|
+test "a missing local station's action starts on the card's words" {
+  for width in [390.0, 1280.0] {
+    let t = setting_tester(LocalStation, width, platform=0)
+    t.set_local_station("")
+    t.draw()
+    let (note_x, _, _, _) = t.rect_of("本机没有单独安装的 station").unwrap()
+    let (action_x, _, _, _) = t.rect_of("添加这台 Mac").unwrap()
+    assert_true((action_x - note_x).abs() < 0.01, msg="width \{width}: note \{note_x}, action \{action_x}")
+  }
+}

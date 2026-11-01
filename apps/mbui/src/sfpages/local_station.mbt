@@ -29,9 +29,11 @@ pub fn local_station_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
         local_failed(c, s)
         if adds {
           c.box(style=vt_actions.then(@sf.foot_across(@sf.button_height())), fn() {
-            if @sf.button(c, @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }), key="local/install", tone=Primary) {
-              (core.local_install)(true)
-            }
+            @sf.card_foot_words(fn() {
+              if @sf.button(c, @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }), key="local/install", tone=Primary) {
+                (core.local_install)(true)
+              }
+            })
           })
           |> ignore
         }
