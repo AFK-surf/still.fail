@@ -142,17 +142,44 @@ for (const [label, size, path, colorScheme] of [
     await page.evaluate((f) => { const s = document.querySelector('[data-idea="1"] section[style]'); window.scrollTo(0, s.offsetTop + (s.offsetHeight - innerHeight) * f); }, at);
     await page.waitForTimeout(700);
     await shot(page, `${label}-3-scrolled-${at}`);
-    if (label === 'wide-en-dark' && at === 0.35) {
-      const overlap = await page.evaluate(() => {
-        const cards = [...document.querySelector('[data-drawn]').lastElementChild.children];
-        const studio = cards.find((e) => e.textContent.includes('Studio') && getComputedStyle(e).display !== 'none');
-        const mini = cards.find((e) => e.textContent.includes('Mini') && getComputedStyle(e).display !== 'none');
-        if (!studio || !mini) return null;
-        const a = studio.getBoundingClientRect(), b = mini.getBoundingClientRect();
-        return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-      });
-      assert.equal(overlap, false, `${label}: the flying Studio and Mini cards overlap`);
+  }
+  if (label === 'wide-en-dark') {
+    await page.evaluate(() => { document.documentElement.style.scrollBehavior = 'auto'; });
+    // Mini starts clear of the phone; it should stay clear as it begins to move into the window.
+    const miniOverPhone = await page.evaluate(async () => {
+      const scene = document.querySelector('[data-idea="1"] section[style]');
+      window.scrollTo(0, scene.offsetTop + (scene.offsetHeight - innerHeight) * 0.25);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const room = document.querySelector('[data-drawn]');
+      const mini = [...room.lastElementChild.children].find((e) => e.innerText?.split('\n')[0] === 'Mini');
+      const a = mini.getBoundingClientRect(), b = room.querySelector('iframe').parentElement.getBoundingClientRect();
+      return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    });
+    assert.equal(miniOverPhone, false, `${label}: the Mini covers the phone as it moves`);
+  }
+  if (!label.startsWith('narrow')) {
+    await page.evaluate(() => { document.documentElement.style.scrollBehavior = 'auto'; });
+    // Cards begin apart and land one below another: check their paths, not just a single frame of them.
+    const overlaps = [];
+    for (let step = 0; step <= 100; step++) {
+      const at = step / 200;
+      const pairs = await page.evaluate(async (f) => {
+        const scene = document.querySelector('[data-idea="1"] section[style]');
+        window.scrollTo(0, scene.offsetTop + (scene.offsetHeight - innerHeight) * f);
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const cards = [...document.querySelector('[data-drawn]').lastElementChild.children]
+          .filter((e) => e.tagName !== 'STYLE' && getComputedStyle(e).display !== 'none');
+        const found = [];
+        for (let i = 0; i < cards.length; i++) for (let j = i + 1; j < cards.length; j++) {
+          const a = cards[i].getBoundingClientRect(), b = cards[j].getBoundingClientRect();
+          if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom)
+            found.push(`${cards[i].innerText.split('\n')[0]} / ${cards[j].innerText.split('\n')[0]}`);
+        }
+        return found;
+      }, at);
+      if (pairs.length) overlaps.push({ at, pairs });
     }
+    assert.deepEqual(overlaps, [], `${label}: flying cards overlap`);
   }
   if (label.startsWith('narrow')) {
     // The row taken over from the opening frame must respond to input, not just retain its appearance.

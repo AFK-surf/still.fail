@@ -64,7 +64,7 @@ function windowAt(room: { w: number; h: number }, narrow: boolean): Box & { k: n
  */
 function apart(room: { w: number; h: number }, narrow: boolean, cards: readonly { box: Box }[], phoneWidth: number) {
   const design = narrow ? { w: 360, h: 560 } : { w: 1000, h: 540 };
-  // In NAMES' order, placed so that none crosses another on its way into the list (Studio, Mini, 笔记本, 服务器 down it).
+  // In NAMES' order; on a wide screen the cards land in the list from the bottom up.
   const machines = narrow ? [[150, 340], [150, 70], [210, 205], [210, 475]] : [[560, 300], [360, 100], [790, 90], [850, 430]];
   const s = Math.min(room.w / design.w, room.h / design.h, 1);
   const ox = (room.w - design.w * s) / 2, oy = Math.min((room.h - design.h * s) / 2, 24);
@@ -282,10 +282,8 @@ export function OneComputer(props: DemoProps) {
       const i = Math.min(Math.floor(x), steps.length - 2);
       const t = clamp(x - i);
       // 0 → 1: the device comes up from below, its screen's list with its rows' places empty (rise), and they fly into
-      // them one after another, the lowest first (landing: of the `k`-th to go; all of them home with the last): each
-      // goes down out of the way of those still standing above it, so that none crosses another in the air. 1 → 2: the
-      // computer steps back as the phone comes to the front (front). Everything only moves: nothing is cut out, shown
-      // or faded.
+      // them one after another (landing: of the `k`-th to go; all of them home with the last). 1 → 2: the computer
+      // steps back as the phone comes to the front (front). Everything only moves: nothing is cut out, shown or faded.
       const rise = i === 0 ? ease(clamp(t / 0.7)) : 1;
       const landingOf = (k: number) => i === 0 ? ease(clamp((t - k * LAG) / (1 - (names.length - 1) * LAG))) : 1;
       const landing = landingOf(names.length - 1);
@@ -321,11 +319,16 @@ export function OneComputer(props: DemoProps) {
       // The opening is centred as one group. Move that shared origin back before the first card lands, so cards
       // keep their spacing on the way into the list even though they land at different times.
       const shift = parts.shift * (1 - landingOf(0));
-      const order = parts.machines.map((_, k) => k).sort((a, b) => parts.machines[b]!.y - parts.machines[a]!.y);
+      const order = rows.map((_, k) => k).sort((a, b) => narrow
+        ? parts.machines[b]!.y - parts.machines[a]!.y
+        : rows[b]!.box.y - rows[a]!.box.y);
       const placed = rows.map((r, k) => {
         const from = parts.machines[k]!, home = inRoom(r.box), landed = landingOf(order.indexOf(k));
         const scale = lerp(parts.scale, s, landed);
-        const x = lerp(from.x - (r.box.w * parts.scale) / 2, home.x, landed) + shift, y = lerp(from.y - (r.box.h * parts.scale) / 2, home.y, landed);
+        // On a wide screen, reach the row's vertical lane during the first half of the flight. Rows that start side
+        // by side finish one above the other; reaching those lanes early leaves room as they move into the column.
+        const down = narrow ? landed : ease(clamp(landed * 2));
+        const x = lerp(from.x - (r.box.w * parts.scale) / 2, home.x, landed) + shift, y = lerp(from.y - (r.box.h * parts.scale) / 2, home.y, down);
         if (landing < 1) {
           const up = 1 - landed;
           r.flying.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
