@@ -617,7 +617,7 @@ describe("slack", { concurrency: true }, () => {
     return [
       async (method, params) => {
         calls.push([method, Object.fromEntries(params)]);
-        if (fail !== null && method === "assistant.threads.setStatus") throw new Error(`slack assistant.threads.setStatus: ${fail}`);
+        if (fail !== null && (method === "agents.sessions.setStatus" || method === "assistant.threads.setStatus")) throw new Error(`slack ${method}: ${fail}`);
       },
       calls,
     ];
@@ -645,11 +645,11 @@ describe("slack", { concurrency: true }, () => {
     assert.deepEqual(
       calls.map(([m, p]) => [m, p.status]),
       [
-        ["assistant.threads.setStatus", "正在思考…"],
-        ["assistant.threads.setStatus", ""],
+        ["agents.sessions.setStatus", "processing"],
+        ["agents.sessions.setStatus", "active"],
       ],
     );
-    assert.deepEqual([calls[0]![1].channel_id, calls[0]![1].thread_ts, calls[0]![1].loading_messages], ["C1", "1.1", "正在思考…"]);
+    assert.deepEqual([calls[0]![1].channel_id, calls[0]![1].thread_ts], ["C1", "1.1"]);
     // Changed at most every couple of seconds: what is said meanwhile waits, and only the latest goes.
     const [paced, sent] = recording(null);
     const busy = new ThreadStatus(paced, run, "C1", "1.1");
@@ -660,10 +660,36 @@ describe("slack", { concurrency: true }, () => {
     busy.say("c", null);
     await adjust(1_000);
     await settle();
-    assert.deepEqual(sent.map(([, p]) => p.status), ["a"]);
+    assert.deepEqual(sent.map(([, p]) => p.status), ["processing"]);
     await adjust(980);
     await settle();
-    assert.deepEqual(sent.map(([, p]) => p.status), ["a", "c"]);
+    assert.deepEqual(sent.map(([, p]) => p.status), ["processing", "processing"]);
+  });
+
+  test("an app without the agent feature keeps its old status and tries agent sessions again next turn", async (t) => {
+    const { run, adjust, close } = fibers();
+    t.after(close);
+    const calls: Calls = [];
+    let enabled = false;
+    const call = async (method: string, params: [string, string][]) => {
+      calls.push([method, Object.fromEntries(params)]);
+      if (!enabled && method === "agents.sessions.setStatus") throw new Error("slack agents.sessions.setStatus: not_authorized");
+    };
+    const line = new ThreadStatus(call, run, "C1", "1.1");
+    line.say("thinking", "1.2");
+    await settle();
+    line.say("");
+    await settle();
+    assert.deepEqual(calls.map(([m, p]) => [m, p.status]), [
+      ["agents.sessions.setStatus", "processing"],
+      ["assistant.threads.setStatus", "thinking"],
+      ["assistant.threads.setStatus", ""],
+    ]);
+    enabled = true;
+    line.say("working again");
+    await adjust(2_000);
+    await settle();
+    assert.deepEqual(calls.at(-1), ["agents.sessions.setStatus", { channel_id: "C1", thread_ts: "1.1", status: "processing" }]);
   });
 
   test("where Slack will not show a status, an eyes reaction stands in", async (t) => {
@@ -678,6 +704,7 @@ describe("slack", { concurrency: true }, () => {
     assert.deepEqual(
       calls.map(([m, p]) => [m, p.timestamp ?? null, p.name ?? null]),
       [
+        ["agents.sessions.setStatus", null, null],
         ["assistant.threads.setStatus", null, null],
         ["reactions.add", "1.2", "eyes"],
         ["reactions.remove", "1.2", "eyes"],
@@ -690,15 +717,18 @@ describe("slack", { concurrency: true }, () => {
     assert.deepEqual(words, ["正在查看文件…", "正在运行命令…", "正在运行命令…", "正在修改文件…", "正在搜索网页…", "正在读取对话…", "正在读取 Slack…", "正在处理…"]);
   });
 
-  test("a surface's status line goes to Slack as the bot", async () => {
+  test("a surface shows its status without waiting for app setup", async () => {
     const fake = await FakeSlack.start();
-    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base) });
+    let releaseSetup!: () => void;
+    const setupHeld = new Promise<void>((resolve) => (releaseSetup = resolve));
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), onWorking: () => setupHeld });
     try {
       surface.working({ channel: "C1", threadTs: "1.1" }, "1.2", "正在思考…");
-      await fake.until("a status", () => fake.calls("assistant.threads.setStatus").length === 1);
-      assert.deepEqual(fake.calls("assistant.threads.setStatus")[0]!.params, { channel_id: "C1", thread_ts: "1.1", status: "正在思考…", loading_messages: "正在思考…" });
-      assert.equal(fake.calls("assistant.threads.setStatus")[0]!.auth, "xoxb-1");
+      await fake.until("a status", () => fake.calls("agents.sessions.setStatus").length === 1);
+      assert.deepEqual(fake.calls("agents.sessions.setStatus")[0]!.params, { channel_id: "C1", thread_ts: "1.1", status: "processing" });
+      assert.equal(fake.calls("agents.sessions.setStatus")[0]!.auth, "xoxb-1");
     } finally {
+      releaseSetup();
       await surface.stop();
       await fake.close();
     }

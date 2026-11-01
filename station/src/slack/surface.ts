@@ -231,7 +231,7 @@ export type SlackSurfaceOptions = {
   clock?: Clock.Clock;
   onHeard?: () => void;
   /// A new turn began showing its status, an opportunity to retry an app setup that previously failed.
-  onWorking?: () => void;
+  onWorking?: () => boolean | void | Promise<boolean | void>;
 };
 /// The most of a question's words its card carries (Slack takes 12,000 characters of Markdown in a message, and long
 /// options are listed with them).
@@ -254,7 +254,7 @@ export class SlackSurface extends ConnectedSurface {
   private stands = new Map<string, { ts: string; mine: Said | null; block: Json }>();
   /// One change at a time in each thread, in order.
   private standing = new Map<string, Promise<void>>();
-  private onWorking: () => void;
+  private onWorking: () => boolean | void | Promise<boolean | void>;
 
   constructor(options: SlackSurfaceOptions) {
     if (!options.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
@@ -808,11 +808,28 @@ export class SlackSurface extends ConnectedSurface {
   protected statusLine(thread: ThreadRef) {
     let working = false;
     const call = async (method: string, params: Params) => {
-      await this.client.api(method, params, this.botToken);
-      if (method !== "assistant.threads.setStatus") return;
       const status = params.find(([key]) => key === "status")?.[1] ?? "";
-      if (status !== "" && !working) this.onWorking();
-      working = status !== "";
+      const agentStatus = method === "agents.sessions.setStatus";
+      const legacyStatus = method === "assistant.threads.setStatus";
+      const starts = (agentStatus && status === "processing") || (legacyStatus && status !== "");
+      const ends = (agentStatus && status === "active") || (legacyStatus && status === "");
+      let setup: Promise<boolean | void> | null = null;
+      if (starts && !working) {
+        working = true;
+        setup = Promise.resolve().then(() => this.onWorking()).catch(() => false);
+      }
+      try {
+        try {
+          await this.client.api(method, params, this.botToken);
+        } catch (error) {
+          // The first call can race with setup. Only wait if the session API actually failed, so an app that is
+          // already enabled shows its status immediately even when a manifest request is slow.
+          if (!(agentStatus && starts && setup && (error as Error).message.includes("not_authorized") && await setup)) throw error;
+          await this.client.api(method, params, this.botToken);
+        }
+      } finally {
+        if (ends) working = false;
+      }
     };
     return new ThreadStatus(call, this.run, thread.channel, thread.threadTs);
   }

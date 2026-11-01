@@ -1,5 +1,5 @@
 // What an agent is doing, said in the Slack thread it works for while it works (chat/status.rs; when and how often:
-// connects/status.ts): Slack's own status line under the thread (assistant.threads.setStatus). Where Slack will not
+// connects/status.ts): an agent session under the thread (agents.sessions.setStatus). Where Slack will not
 // show one (the app lacks the scope, the conversation does not take it), an 👀 on the message that started the work says
 // the same, and goes when it is done.
 import { type Run, StatusLine } from "../connects/status.ts";
@@ -26,6 +26,8 @@ export class ThreadStatus extends StatusLine {
   readonly threadTs: string;
   /// Slack will not show a status line here: the reaction stands in.
   private reactionOnly = false;
+  /// An app that cannot yet use agent sessions can still show the older status for this turn.
+  private legacy = false;
   private reacted: string | null = null;
 
   constructor(call: Call, run: Run, channel: string, threadTs: string) {
@@ -37,14 +39,28 @@ export class ThreadStatus extends StatusLine {
 
   protected async show(status: string): Promise<boolean> {
     if (!this.reactionOnly) {
-      const params: Params = [
+      const address: Params = [
         ["channel_id", this.channel],
         ["thread_ts", this.threadTs],
-        ["status", status],
       ];
+      if (!this.legacy) {
+        try {
+          await this.call("agents.sessions.setStatus", [...address, ["status", status === "" ? "active" : "processing"]]);
+          return true;
+        } catch (error) {
+          const said = (error as Error).message;
+          if (!noStatus(said) && !["not_authorized", "feature_disabled"].some((code) => said.includes(code))) {
+            log.warn("slack", "could not say the agent's status in Slack", { channel: this.channel, thread: this.threadTs, error: said });
+            return false;
+          }
+          this.legacy = true;
+        }
+      }
+      const params: Params = [...address, ["status", status]];
       if (status !== "") params.push(["loading_messages", status]);
       try {
         await this.call("assistant.threads.setStatus", params);
+        if (status === "") this.legacy = false;
         return true;
       } catch (error) {
         const said = (error as Error).message;

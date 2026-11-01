@@ -29,6 +29,7 @@ test("a new app has every permission group on", () => {
   assert.equal(Object.keys(settings.groups).length, SLACK_GROUPS.length);
   assert.ok(Object.values(settings.groups).every((on) => on));
   assert.ok(manifest.settings.event_subscriptions.bot_events.includes("agent_session_stopped"));
+  assert.ok(manifest.features.agent_view.agent_description);
   const old = structuredClone(manifest);
   old.settings.event_subscriptions.bot_events = old.settings.event_subscriptions.bot_events.filter((e: string) => e !== "agent_session_stopped");
   assert.ok(applySettings(old, {}).settings.event_subscriptions.bot_events.includes("agent_session_stopped"), "an existing app gets it when saved");
@@ -55,16 +56,33 @@ test("the base group cannot be turned off", () => {
   assert.equal(settingsOf(applySettings(slackManifest("ember"), { groups: { base: false } })).groups.base, true);
 });
 
-test("the stop subscription changes only the connected app's event list", () => {
+test("an existing plain bot gets the agent feature and stop subscription without losing its settings", () => {
   const old = slackManifest("ember");
+  delete old.features.agent_view;
   old.settings.event_subscriptions.bot_events = ["app_mention", "an_unknown_event"];
   const next = withStopEvent(old);
   assert.ok(next);
   assert.deepEqual(next.settings.event_subscriptions.bot_events, ["app_mention", "an_unknown_event", "agent_session_stopped"]);
   assert.deepEqual(next.oauth_config, old.oauth_config);
+  assert.deepEqual(next.features.agent_view, { agent_description: old.display_information.description });
+  assert.equal(old.features.agent_view, undefined);
   assert.deepEqual(old.settings.event_subscriptions.bot_events, ["app_mention", "an_unknown_event"]);
   assert.equal(withStopEvent(next), null);
   assert.equal(withStopEvent(withSocketMode(old, false)), null);
+});
+
+test("an already subscribed plain bot still gets an agent view; an existing assistant view is kept", () => {
+  const old = slackManifest("ember");
+  delete old.features.agent_view;
+  const next = withStopEvent(old);
+  assert.ok(next?.features.agent_view);
+  assert.deepEqual(next.settings.event_subscriptions, old.settings.event_subscriptions);
+  old.features.assistant_view = { assistant_description: "Existing assistant" };
+  assert.equal(withStopEvent(old), null);
+  old.settings.event_subscriptions.bot_events = ["app_mention"];
+  const assistant = withStopEvent(old);
+  assert.deepEqual(assistant.features.assistant_view, old.features.assistant_view);
+  assert.equal(assistant.features.agent_view, undefined);
 });
 
 test("automatic and manual edits of the same app keep both changes", async () => {
