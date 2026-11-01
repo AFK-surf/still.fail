@@ -50,17 +50,21 @@ fn usage_full_bars(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
 }
 
 ///|
-/// The days' bars faded (the white thinned on the night), 16 wide.
+/// The days' bars faded in the theme's line, 16 wide.
 fn usage_faded_bars(t : @ui.Tester) -> Array[(Double, Double, Double, Double, Int64)] {
-  t.drawn_rects().filter(fn(r) { r.2 == 16.0 && r.4 == @sf.share_bar })
+  t.drawn_rects().filter(fn(r) { r.2 == 16.0 && r.4 == @sf.theme().p.line })
 }
 
 ///|
 /// usage_chart over `v` in a card's width (282: a phone's 346 less the page's 12 and the card's 20 each side).
 fn days_tester(v : Json) -> @ui.Tester {
   usage_reset()
+  @sf.set_dark(Some(false))
   let t = @ui.Tester::new(fn(c) {
-    c.box(align=AStart, fn() { c.box(w=Px(282.0), fn() { usage_chart(c, Some(v)) |> ignore }) |> ignore }) |> ignore
+    @sf.begin(c) |> ignore
+    c.with_theme(@sf.ui_theme(), fn() {
+      c.box(align=AStart, fn() { c.box(w=Px(282.0), fn() { usage_chart(c, Some(v)) |> ignore }) |> ignore }) |> ignore
+    })
   }, platform=2)
   t.draw()
   t
@@ -161,6 +165,34 @@ test "用量, at each width and with either hand: the cost and its change, what 
     // 30 days: a date a week under the bars (the core's `tick`), today's among them
     assert_true(t.find("10/23") is Some(_), msg=at)
     assert_true(t.find("10/24") is None, msg=at)
+  }
+}
+
+///|
+test "用量: the overview follows the page's theme, including after a day is picked" {
+  let t = setting_tester(Usage, 390.0, platform=2)
+  let check = fn(words : String) raise {
+    let (x, y, w, h) = t.rect_of(words).unwrap()
+    let palette = @sf.theme().p
+    // The cost and the selected-day chip both stand on the page's card, with the theme's readable ink.
+    assert_true(t.drawn_rects().iter().any(fn(r) {
+      r.0 <= x && r.1 <= y && r.0 + r.2 >= x + w && r.1 + r.3 >= y + h && r.3 > 100.0 && r.4 == palette.card
+    }), msg="overview ground for \{words}")
+    assert_true(t.drawn_glyphs().iter().any(fn(g) {
+      g.0 >= x && g.0 < x + w && g.1 >= y && g.1 < y + h && g.2 == palette.text
+    }), msg="overview ink for \{words}")
+  }
+  for dark in [false, true, false] {
+    @sf.set_dark(Some(dark))
+    t.draw()
+    check("$118")
+  }
+  t.tap_text("10/3")
+  t.draw()
+  for dark in [false, true, false] {
+    @sf.set_dark(Some(dark))
+    t.draw()
+    check("只看 10/3")
   }
 }
 
