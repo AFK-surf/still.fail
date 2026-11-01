@@ -180,7 +180,7 @@ export function OneComputer(props: DemoProps) {
   const screen = useRef<HTMLDivElement>(null);
   const phone = useRef<HTMLDivElement>(null);
   const phoneScreen = useRef<HTMLIFrameElement>(null);
-  const lines = useRef<SVGGElement>(null);
+  const lines = useRef<HTMLDivElement>(null);
   const air = useRef<HTMLDivElement>(null);
   const demo = useRef<MountedDemo>(null);
 
@@ -202,6 +202,8 @@ export function OneComputer(props: DemoProps) {
     // How large the window is drawn just now; whether the rows are in the air just now.
     let drawn = 1, out = false;
     const sky = air.current!;
+    const links = [...wires.children] as HTMLElement[];
+    let wireWidth = 0;
     // A scroll outside the scene holds its first or last frame. Do not redraw it on every scroll down the rest of the
     // page. A resize or restyle can still change that frame, so remember its room and forget it when its rows change.
     let last: { x: number; w: number; h: number; viewportWidth: number } | undefined;
@@ -328,10 +330,19 @@ export function OneComputer(props: DemoProps) {
       // Every device joined to every other, under the window: as the devices come together the lines shorten, and the
       // window, grown, covers them; those to the phone stay, the phone joined to it.
       const ends = [...placed, ...(phoneAt ? [phoneAt] : [])].map(centre);
-      const paths = wires.querySelectorAll("path");
+      // The line's clipping box is wider than any pair of points in the room. Its width only changes when the room
+      // changes, not on scroll; the two inverse scales keep the dashes the same length as the clip follows its ends.
+      const maxWire = 2 * Math.max(size.w, size.h) + 128;
+      if (wireWidth !== maxWire) {
+        wireWidth = maxWire;
+        for (const link of links) link.style.width = `${wireWidth}px`;
+      }
       let n = 0;
       for (let p = 0; p < ends.length; p++) for (let q = p + 1; q < ends.length; q++) {
-        paths[n++]?.setAttribute("d", `M${ends[p]!.x} ${ends[p]!.y} L${ends[q]!.x} ${ends[q]!.y}`);
+        const a = ends[p]!, b = ends[q]!, link = links[n++]!;
+        const dx = b.x - a.x, dy = b.y - a.y, k = Math.hypot(dx, dy) / wireWidth;
+        link.style.transform = `translate(${a.x}px, ${a.y - 0.75}px) rotate(${Math.atan2(dy, dx)}rad) scaleX(${k})`;
+        if (k) (link.firstElementChild as HTMLElement).style.transform = `scaleX(${1 / k})`;
       }
       // All of it placed: seen from now on (site.css.ts).
       if (space.dataset.drawn === undefined) space.dataset.drawn = "";
@@ -344,6 +355,9 @@ export function OneComputer(props: DemoProps) {
     // words are cut short in them).
     const restyled = () => requestAnimationFrame(() => requestAnimationFrame(() => { leave(); ask(); }));
     const themes = new MutationObserver(restyled), dark = matchMedia("(prefers-color-scheme: dark)");
+    // Nothing in the scene can be seen once its section is out of view. Pause the connections until it returns.
+    const visible = new IntersectionObserver(([entry]) => { wires.toggleAttribute("data-offscreen", !entry?.isIntersecting); });
+    visible.observe(el);
     themes.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     dark.addEventListener("change", restyled);
     document.fonts.addEventListener("loadingdone", restyled);
@@ -351,6 +365,7 @@ export function OneComputer(props: DemoProps) {
     addEventListener("scroll", ask, { passive: true });
     addEventListener("resize", resized);
     return () => {
+      visible.disconnect();
       themes.disconnect();
       dark.removeEventListener("change", restyled);
       document.fonts.removeEventListener("loadingdone", restyled);
@@ -376,7 +391,9 @@ export function OneComputer(props: DemoProps) {
       <section className={css.scene} ref={scene} style={{ height: `${STEPS * 100}vh` }}>
         <div className={css.sceneStick}>
           <div className={css.oneRoom} ref={room}>
-            <svg className={css.oneWires} aria-hidden><g ref={lines}>{Array.from({ length: pairs }, (_, i) => <path key={i} />)}</g></svg>
+            <div className={css.oneWires} ref={lines} data-site-wires aria-hidden>
+              {Array.from({ length: pairs }, (_, i) => <div className={css.oneWire} key={i}><div className={css.oneWireScale}><div className={css.oneWireDashes} /></div></div>)}
+            </div>
             <div className={css.oneLift}>
               <div className={css.oneWindow} ref={win} inert>
                 {/* Its shell: a laptop's edge and base (a phone's edge on a narrow screen), under the screen. */}
