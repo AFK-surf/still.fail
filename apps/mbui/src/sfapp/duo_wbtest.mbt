@@ -168,6 +168,27 @@ test "a picture looked at on an iPhone Duo, its bars' part kept as a host keeps 
 }
 
 ///|
+test "a film played on an iPhone Duo: its close and download in the system's bars as a picture's are, the player's own bar none; closed from there, the tabs back" {
+  for size in [(951.0, 669.0, 84.0), (669.0, 951.0, 0.0), (466.0, 678.0, 84.0)] {
+    let (w, h, side) = size
+    let at = "\{w}x\{h}"
+    let t = native_chat(w, h, true, side~, mode="chat-preview-video")
+    t.run_for(@ui.move_most_ms)
+    let said = t.nav_said()
+    for id in ["\"bare\":true", "lead/over/close", "over/download"] {
+      assert_true(said.contains(id), msg="\{at}: the bars handed hold no \{id}: \{said}")
+    }
+    assert_false(said.contains("page/chat/"), msg=at)
+    // (none of the player's own bar: its back, its download)
+    assert_true(t.semantics().iter().all(fn(s) { s.hidden || (s.label != @sf.t("common.back") && s.label != @sf.t("web-main.preview.download")) }), msg=at)
+    t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
+    t.run_for(@ui.move_most_ms)
+    assert_true(viewer.get() is None, msg=at)
+    assert_true(t.nav_said().contains("\"bare\":false"), msg=at)
+  }
+}
+
+///|
 test "a picture looked at elsewhere: its own bar, as it was" {
   let t = native_chat(951.0, 669.0, false, mode="chat-preview-image")
   t.run_for(@ui.move_most_ms)

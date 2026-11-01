@@ -1524,6 +1524,9 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
       }
       if !media {
         c.layer(fn() { vf_bar(v, c, src, shown) }) |> ignore
+      } else if @sf.native_on() {
+        // (a film's or a song's actions in the system's bars, an iPhone Duo's, as a picture's: its keys the player's)
+        vf_bar(v, c, src, shown, keys=false)
       }
     })
     |> ignore

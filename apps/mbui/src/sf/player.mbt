@@ -640,7 +640,8 @@ pub fn player_room(width : Double) -> (Double, Double) {
   }
   let (top, foot) = (viewer_host().room)()
   let said = if desk_narrow(width) { desk_time_over - media_bar_top + desk_time_h } else { 0.0 }
-  (viewer_bar_h + top, media_bar_h() + said + media_bar_in + foot)
+  // (beside the system's bars, an iPhone Duo's: its bar's actions in them, none of its own over the film)
+  (if native_on() { top } else { viewer_bar_h + top }, media_bar_h() + said + media_bar_in + foot)
 }
 
 ///|
@@ -1097,23 +1098,26 @@ fn desk_player(
     })
     |> ignore
     player_cue(c, if p.subtitle().1 { f.said } else { "" }, f.shown > desk_half, panel, over=desk_cue_over(c.width))
-    // the bar along the top
-    c.layer(fn() {
-      // which of the folder's, its size; a film's own facts after them
-      let facts = if picture { film_facts(file.facts, s, fr) } else { "" }
-      let meta = joined([if many && index >= 0 { "\{index + 1} / \{list.length()}" } else { "" }, file_size(file.size), facts], " · ")
-      if viewer_bar(c, key + "/bar", back_label, name, meta, !f.on && !listing, bar_ink, title=file.title, fn() {
-          if many && viewer_tool(c, key + "/list", "list", t("web-pages.drive.player.list"), bar_ink, on=listing) {
-            v.listing = !listing
-          }
-          if viewer_download(c, key + "/download", bar_ink) {
-            (file.save)()
-          }
-        }) {
-        desk_leave(c, v, on_back)
-      }
-    })
-    |> ignore
+    // the bar along the top (beside the system's bars, an iPhone Duo's: its actions in them, the viewer's
+    // vf_native_media)
+    if !native_on() {
+      c.layer(fn() {
+        // which of the folder's, its size; a film's own facts after them
+        let facts = if picture { film_facts(file.facts, s, fr) } else { "" }
+        let meta = joined([if many && index >= 0 { "\{index + 1} / \{list.length()}" } else { "" }, file_size(file.size), facts], " · ")
+        if viewer_bar(c, key + "/bar", back_label, name, meta, !f.on && !listing, bar_ink, title=file.title, fn() {
+            if many && viewer_tool(c, key + "/list", "list", t("web-pages.drive.player.list"), bar_ink, on=listing) {
+              v.listing = !listing
+            }
+            if viewer_download(c, key + "/download", bar_ink) {
+              (file.save)()
+            }
+          }) {
+          desk_leave(c, v, on_back)
+        }
+      })
+      |> ignore
+    }
     // 选集, docked at the right under the bar
     if listing {
       c.layer(fn() { desk_play_list(c, v, p, list, index, f.phase == Playing, go, picture) }) |> ignore
@@ -1579,36 +1583,39 @@ fn phone_player(
     }
     let shown = if v.drag == DownClose || v.taken_down { desk_none } else { f.shown }
     let live = f.on && v.drag != DownClose && !v.taken_down && !flying
-    // the bar at the top: back, the name, which of the folder's it is, 选集
-    c.layer(fn() {
-      c.box(style=@ui.style(h=Fixed(room_top)), fn() {  }) |> ignore
-      let n = c.box(style=phone_head_place.then(sides_clear(@ui.Space::S2.px())), fn() {
-        c.box(style=phone_head_box.then(@ui.style(bg=Data(ink.ground))), fn() {
-          // (said 返回 to a screen reader, as a phone's way back is; where to is the name beside it)
-          if phone_key(c, key + "/back", "chevron-left", live, t("common.back"), ink) {
-            back()
-          }
-          c.box(style=phone_name_box, fn() {
-            c.text(name, style=phone_name_words.then(@ui.text_style(color=Data(ink.text)))) |> ignore
+    // the bar at the top: back, the name, which of the folder's it is, 选集 (beside the system's bars, an iPhone Duo's:
+    // its actions in them, the viewer's vf_native_media)
+    if !native_on() {
+      c.layer(fn() {
+        c.box(style=@ui.style(h=Fixed(room_top)), fn() {  }) |> ignore
+        let n = c.box(style=phone_head_place.then(sides_clear(@ui.Space::S2.px())), fn() {
+          c.box(style=phone_head_box.then(@ui.style(bg=Data(ink.ground))), fn() {
+            // (said 返回 to a screen reader, as a phone's way back is; where to is the name beside it)
+            if phone_key(c, key + "/back", "chevron-left", live, t("common.back"), ink) {
+              back()
+            }
+            c.box(style=phone_name_box, fn() {
+              c.text(name, style=phone_name_words.then(@ui.text_style(color=Data(ink.text)))) |> ignore
+            })
+            |> ignore
+            if many && index >= 0 {
+              c.text("\{index + 1} / \{list.length()}", style=phone_index_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
+            }
+            if many && phone_key(c, key + "/list", "list", live, t("web-pages.drive.player.list"), ink, lit=v.listing) {
+              v.listing = true
+              p.wake()
+            }
+            // 下载, as every file opened has it
+            if phone_key(c, key + "/download", "download", live, t("web-main.preview.download"), ink) {
+              (file.save)()
+            }
           })
           |> ignore
-          if many && index >= 0 {
-            c.text("\{index + 1} / \{list.length()}", style=phone_index_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
-          }
-          if many && phone_key(c, key + "/list", "list", live, t("web-pages.drive.player.list"), ink, lit=v.listing) {
-            v.listing = true
-            p.wake()
-          }
-          // 下载, as every file opened has it
-          if phone_key(c, key + "/download", "download", live, t("web-main.preview.download"), ink) {
-            (file.save)()
-          }
         })
-        |> ignore
+        c.look(n, @ui.look(alpha=shown))
       })
-      c.look(n, @ui.look(alpha=shown))
-    })
-    |> ignore
+      |> ignore
+    }
     // the controls at the foot
     c.layer(fn() {
       c.box(style=desk_grow_full_h, fn() {  }) |> ignore
