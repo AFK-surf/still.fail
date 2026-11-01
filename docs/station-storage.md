@@ -159,6 +159,12 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   complete. A message Slack takes in several parts is recorded once, under
   the first part's ts. Agents' messages are not delivered to other sessions;
   still.fail's own notices are recorded as `author_kind = ember`.
+- **Question cards**: a person's first message after the latest card ends its
+  wait, whether it is an answer or a clarification; a newer card replaces it.
+  At delivery, the station identifies the card that stopped waiting and any
+  newer card still pending, using entry order (not message timestamps).
+  `chat_history` reports each card and its current state. An agent cannot point
+  `need_human` at an inactive question: it must ask again if a decision remains.
 - **`-stop`** is recorded like any message and stops each session it is
   delivered to instead of reaching the agent; so are **`-compact`** (its
   context compacted between turns) and **`-clear`** (its context cleared: no

@@ -41,6 +41,7 @@ Decisions:
 - Ask only when a real unresolved choice blocks the work, then end need_human. Advice or a factual answer needs no follow-up question; do not invent a decision to end a reply or reopen one already made: carry out authorized work.
 - The question stands alone, with the facts it turns on. When people answer by choosing among answers you can name or by confirming one (a yes, 合并, 按仓库规则继续), post it with an options card, so they answer with a tap and it reaches their 待处理; when they must write something you need (a value, a name), a text card. Options only for concrete alternatives, each a complete answer by itself; what they would have to word themselves (what to change, a name, a value, another approach) they type, never an option; no filler (Other, Type my own answer). One option is fine, e.g. 合并.
 - card.assignee is the email of the person who must decide, taken from the conversation, never guessed from a display name: only their 待处理 gets it (others may still answer in the chat). Without one it goes to whoever started the chat, as does a still.fail chat ending need_human without a card.
+- A person's next message closes the current card, even if it is a clarification rather than an answer. The station names the card with the message. Read what they actually said; if a decision is still needed, ask it again with a new card. A newer card replaces the earlier one.
 - Withdraw your card when its question is resolved or obsolete: chat_post with to and withdraw=<its ts> alone (the chat's state stays yours to record). Slack and Feishu show options and text cards too, but no login cards.
 
 Logins: when a command fails because this machine is not logged in (not logged in, 401, an expired token) or a person asks you to log in, use the login tool (it says how; skill stillfail-login gives each common CLI's command), with station for another station's. Never ask a person to run a command. In Slack or Feishu, post the login's link alone. Never post a link that a command in a station_task printed: people get a login only through login's card. Never copy credentials between machines.
@@ -193,7 +194,7 @@ const clientAttr = (m: MessageRow) => (m.client !== null && m.client !== undefin
 
 /// Messages handed to a session, each with its source and sender, and a hint where a thread is new to it.
 /// `posts`: the agent's first post in a message's thread made after it (by ts), said as its `before`.
-export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map()): string {
+export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map(), cards: Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: boolean }> = new Map(), selfKey = ""): string {
   const lines: string[] = [];
   const hinted = new Set<number>();
   for (const p of messages) {
@@ -213,6 +214,15 @@ export function formatInbound(messages: PendingMessage[], newThreads: Set<number
     const post = posts.get(p);
     const sentBefore = post !== undefined ? ` before="${escapeAttr(post)}"` : "";
     lines.push(`<message via="${via(p.surface)}" connect="${escapeAttr(p.connect)}"${you} thread="${address}" from="${escapeAttr(from)}"${agent ? " bot" : ""}${clientAttr(m)} ts="${m.ts}"${sentBefore}>\n${messageForAgent(m)}\n</message>`);
+    const change = cards.get(p);
+    if (change !== undefined) {
+      const whose = change.ended.author === selfKey ? "Your card" : "A card";
+      const now = change.current === null ? "No newer card is pending." : `A newer card (message ts ${change.current.ts}) is pending; the person may not have seen it.`;
+      const next = change.special
+        ? "The underlying login or authorization may still be pending: check its tool before deciding what is needed."
+        : "If the decision is still needed and no newer card asks it, ask again with a new card.";
+      lines.push(`<card-state thread="${escapeAttr(address)}" ts="${escapeAttr(change.ended.ts)}">${whose} is no longer pending after this message. The message is not necessarily a decision; read what it says. ${now} ${next}</card-state>`);
+    }
   }
   return lines.join("\n");
 }
@@ -226,12 +236,19 @@ export function formatWidgetModels(models: WidgetModel[]): string {
 
 /// A thread's messages for chat_history: people by name, this session's own posts as "you", other agents and the
 /// station marked as bots.
-export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>): string {
+export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>, cards: Map<number, { card: any; pending: boolean }> = new Map()): string {
   return messages
     .map((m) => {
       const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === "ember" ? "ember" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
       const bot = m.authorKind !== "person" && from !== "you" ? " bot" : "";
-      return `<message via="${via(surface)}" thread="${address}" from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}\n</message>`;
+      const found = cards.get(m.n);
+      let card = "";
+      if (found !== undefined) {
+        const options = Array.isArray(found.card?.options) ? found.card.options : undefined;
+        const facts = { type: found.card?.type, ...(options === undefined ? {} : { options }), ...(typeof found.card?.placeholder === "string" ? { placeholder: found.card.placeholder } : {}) };
+        card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}; ${JSON.stringify(facts)}]`;
+      }
+      return `<message via="${via(surface)}" thread="${address}" from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;
     })
     .join("\n");
 }

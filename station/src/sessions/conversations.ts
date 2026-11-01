@@ -9,7 +9,7 @@ import { PlaceRefused } from "../ops/places.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
 import { iso } from "../read/transcript.ts";
-import { type Attachment, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
+import { type Attachment, type MessageRow, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
 import type { DeclaredState } from "./actor.ts";
 import {
   type Args,
@@ -43,6 +43,19 @@ type Json = any;
 
 /// What a tool says of the running turn, given to the session's actor (when it has one), recorded in turn order.
 const actorOf = (hub: Hub, key: string) => hub.actors.get(key);
+
+/// A need must still point at an actionable question. A person's later message can be a clarification, but it has
+/// already closed that card (or cleared the old plain-text need); it cannot be silently reinstated as if still visible.
+function checkQuestion(hub: Hub, key: string, m: MessageRow): void {
+  if (m.authorKind !== "agent" || m.author !== key || m.text.trim() === "") {
+    throw new Error("need_human about must point to your visible question, not a person's message or another agent's post");
+  }
+  const entry = hub.store.entriesBetween(m.thread, m.n, m.n)[0];
+  const carded = entry && (entry.card != null || entry.options != null);
+  if (carded ? hub.store.pendingCard(m.thread)?.[0].n !== m.n : hub.store.askingMessage(m.thread, m.n, [0, 0]) === null) {
+    throw new Error("that question is no longer pending. Read what the person said; if a decision is still needed, ask again with a new card");
+  }
+}
 
 /// A thread of this session the agent named with to=, and how the session posts there.
 export function target(hub: Hub, key: string, to: Json): SessionThread {
@@ -250,6 +263,10 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   if (ts !== null) {
     const m = store.messageAt(thread.thread.id, ts);
     if (!m) throw new Error(`about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
+    if (kind?.kind === "need_help") {
+      checkQuestion(hub, key, m);
+      if (card !== null) throw new Error("a new card is this post's question: omit about so the wait points to it");
+    }
     about = [m.thread, m.n, m.ts];
   }
   // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
@@ -286,7 +303,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     } else posted = await chat.post(here, text, files, card);
     [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card });
   }
-  const offered = card !== null ? cardSaid(card) : "";
+  const offered = card !== null ? `${cardSaid(card)} Card message ts: ${posted}.` : "";
   hub.shared(thread.thread.id, n, key, text);
   const actor = actorOf(hub, key);
   await actor?.postedNow();
@@ -347,9 +364,7 @@ function stateAbout(hub: Hub, key: string, kind: DeclaredState, args: Args): [nu
     for (const t of threads) {
       const m = hub.store.messageAt(t.thread.id, ts);
       if (!m) continue;
-      if (kind.kind === "need_help" && (m.authorKind !== "agent" || m.author !== key || m.text.trim() === "")) {
-        throw new Error("need_human about must point to your visible question, not a person's message or another agent's post");
-      }
+      if (kind.kind === "need_help") checkQuestion(hub, key, m);
       return [m.thread, m.n, m.ts];
     }
     throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
@@ -438,7 +453,14 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
     const name = (await chat?.userName?.(m.author)) ?? null;
     if (name !== null) names.set(m.author, name);
   }
-  return formatHistory(messages, thread.surface, threadAddress(thread.channel, thread.threadTs), key, names);
+  const pending = hub.store.pendingCard(thread.id)?.[0].n;
+  const cards = new Map<number, { card: Json; pending: boolean }>();
+  for (const e of hub.store.entriesBetween(thread.id, messages[0]!.n, messages.at(-1)!.n)) {
+    if (e.kind !== "message") continue;
+    const card = e.card ?? (e.options != null ? { type: "options", options: e.options } : null);
+    if (card !== null) cards.set(e.n, { card, pending: e.n === pending });
+  }
+  return formatHistory(messages, thread.surface, threadAddress(thread.channel, thread.threadTs), key, names, cards);
 }
 
 /// The Slack connect a session calls as when it names none: its own, or (a still.fail chat) the station's Slack bot in its

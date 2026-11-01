@@ -19,7 +19,7 @@ import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
-import { type Handed, type PendingMessage, handedOf } from "../store/rows.ts";
+import { type Handed, type MessageRow, type PendingMessage, handedOf } from "../store/rows.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
 export type DeclaredState = { kind: "all_done" } | { kind: "need_help" } | { kind: "waiting"; seconds: number };
@@ -66,6 +66,8 @@ export type SessionStore = {
   markWidgetModelsTold(key: string, pairs: [string, string][]): void;
   heardThreads(key: string): Set<number> | number[];
   postAfter(key: string, thread: number, n: number): string | null;
+  cardEndedByMessage(thread: number, n: number): [MessageRow, any] | null;
+  pendingCard(thread: number): [MessageRow, any] | null;
   threadSessions(thread: number): { session: string; connect: string }[];
   getSession(key: string): any | null;
   hasTurns(key: string): boolean;
@@ -942,7 +944,16 @@ export class SessionActor {
       const ts = store.postAfter(this.key, m.message.thread, m.message.n);
       if (ts !== null) posts.set(m, ts);
     }
-    const text = formatInbound(said, newThreads, names, selves, posts);
+    const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: boolean }>();
+    for (const m of said as PendingMessage[]) {
+      if (m.message.apart === true || m.message.authorKind !== "person") continue;
+      const ended = store.cardEndedByMessage(m.message.thread, m.message.n);
+      if (ended === null) continue;
+      const card = ended[1];
+      const current = store.pendingCard(m.message.thread)?.[0] ?? null;
+      cards.set(m, { ended: ended[0], current, special: card?.type === "login" || !!(card?.vault || card?.adb || card?.signin) });
+    }
+    const text = formatInbound(said, newThreads, names, selves, posts, cards, this.key);
     const models = store.untoldWidgetModels(this.key);
     const widgets = models.map((w: any): [string, string] => [w.path, w.model]);
     const told = formatWidgetModels(models);
