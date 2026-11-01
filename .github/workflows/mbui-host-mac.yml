@@ -123,8 +123,11 @@ jobs:
       - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/mac.png"
         if: (success() || failure()) && steps.f.outputs.marks != 'false'
         run: scripts/host_contract.sh mac marks
+      # (the pictures are for people, not the contract: mini1's connection to GitHub's artifact service reset once and
+      # failed a contract that had passed, main acb00686, 41356526828, 2026-11-01)
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: host-mac
           path: apps/mbui/mbui/out/host/

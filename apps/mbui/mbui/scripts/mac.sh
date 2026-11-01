@@ -18,9 +18,13 @@ case "${1:-build}" in
   build)
     # moon's build, with the C that moonc generates split and compiled in parallel (scripts/mbc: a `cc` first on
     # PATH that moon uses for every C step, all but that one passed through; MBC_SPLIT=0 compiles it whole)
-    rm -f out/mbc.log
+    # (moon's own time and how many tasks it ran said after it, beside mbc's: chk keeps only the errors, and a release's
+    # app took 35-75 s with no unit compiled, the rest not told apart, 2026-11-01)
+    mkdir -p out && rm -f out/mbc.log
+    t0=$SECONDS
     PATH="$("$D/mbc" shim "$PWD/out/mbc/bin"):$PATH" MBC_LOG=$PWD/out/mbc.log \
-      /usr/bin/time -p moon build --target native $FLAG src/$PKG 2>&1 | "$D/chk" errs
+      moon build --target native $FLAG src/$PKG 2>&1 | tee out/moon.log | "$D/chk" errs
+    echo "mac.sh: moon's build in $((SECONDS - t0)) s: $(grep -E '^Finished' out/moon.log | tail -1)"
     cat out/mbc.log 2>/dev/null || true
     ls -la $EXE ;;
   run)
