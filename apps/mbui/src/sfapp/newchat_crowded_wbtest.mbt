@@ -158,7 +158,7 @@ test "narrow: the model's panel has the models across it, every name whole, how 
   }
   // the models scrolled: the choices where they were
   let mx = model.0 + model.2 / 2.0
-  t.drag(mx, model.1 + 3.0 * model.3, mx, model.1 + model.3 / 2.0)
+  t.drag(mx, model.1 + 1.5 * model.3, mx, model.1 - model.3)
   t.run_for(@kit.presence_in_ms)
   assert_true(t.get(Button, label="DeepSeek Harness").rect == runtime, msg="the runtime moved with the models")
   assert_true(t.get(Radio, label="高").rect == effort, msg="how hard it thinks moved with the models")

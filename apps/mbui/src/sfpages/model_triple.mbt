@@ -381,7 +381,9 @@ fn triple_body(
   // chosen alone and the rest in a pick: a narrow sheet's)
   // (what is used most over all of it, out of the way of a search: 2026-11-01 用户「常用模型应该放到模型选择器里去」)
   if words == "" {
-    triple_combos(c, src, station, of, v, saved, close)
+    // (as wide as a model's row at first: the widest name, its mark, its sides and its check's room)
+    let row_w = names_w + 14.0 + 3.0 * @ui.Space::px(S1_5) + 2.0 * @ui.Space::px(S2_5) + @ui.Space::px(S3_5)
+    triple_combos(c, src, station, of, v, saved, close, row_w)
   }
   @sf.panel_column(c, "triple/models", triple_list_h, triple_rows, fn() {
     // (no head of its own: the panel's title says what they are; nor each series one, its models' names and marks
@@ -457,10 +459,14 @@ fn triple_body(
 }
 
 ///|
-/// The frequent combinations (the pick `v`'s `frequent`, none where fewer than two) under their name, a row each as the
-/// models' are: its model's maker's mark, its name, then how hard it thinks (the runtime where it says one, how fast)
-/// after a dot each, muted; the one picked checked, on no ground of its own. Pressed, all of it picked and saved at once (`pick.save` given its
-/// picks), the panel closed: nothing of it is left to pick.
+/// The frequent combinations (the pick `v`'s `frequent`, none where fewer than two) under their name, each a capsule
+/// of its own on the words' tint, side by side and on as many lines as they need: its model's maker's mark, its name,
+/// then how hard it thinks (the runtime where it says one, how fast) after a dot each, muted; the one in use lifted out
+/// of the tint as the effort picked is (triple_meter's thumb). Capsules, not rows: not taken for the models under them
+/// (2026-11-01 用户「感觉有点容易认错」, of rows as the models' are). Pressed, all of it picked and saved at once
+/// (`pick.save` given its picks), the panel closed: nothing of it is left to pick. The capsules wrap in the room the
+/// rest of the panel leaves them (`least` before it is laid out: a model's row's), never widening it: a panel as wide
+/// as what it holds (fits) would otherwise be as wide as all of them on one line.
 fn triple_combos(
   c : @ui.Ctx,
   src : Source,
@@ -469,51 +475,58 @@ fn triple_combos(
   v : Json?,
   saved : String,
   close : () -> Unit,
+  least : Double,
 ) -> Unit {
   let combos = items(v, "frequent")
   guard combos.length() > 0 else { return }
-  c.box(style=triple_combos_box, fn() {
+  let room = c.id("triple/combos")
+  let across = match c.laid_size(room) {
+    Some((w, _)) => w
+    None => least
+  }
+  c.box(style=triple_combos_box, id=room, fn() {
     triple_column_head(c, @sf.t("web-main.combos.short"))
-    for combo in combos {
-      let o = Some(combo)
-      let model = text(o, "model")
-      let key = "triple/combo/" + text(o, "runtime") + ":" + model + ":" + text(o, "effort") + ":" + text(o, "speedText")
-      let selected = flag(o, "selected")
-      // (after its name each part with the dot before it; short of room, the runtime left out, the model and how hard
-      // it thinks never)
-      let part = fn(words : String, drop : Int) {
-        if words != "" {
-          c.box(style=triple_part, drop~, fn() {
-            c.text("·", style=triple_combo_rest) |> ignore
-            c.text(words, style=triple_combo_rest) |> ignore
-          })
-          |> ignore
+    c.box(style=triple_combo_flow.then(@ui.style(w=Fixed(across))), flow=true, fn() {
+      for combo in combos {
+        let o = Some(combo)
+        let model = text(o, "model")
+        let id = c.id("triple/combo/" + text(o, "runtime") + ":" + model + ":" + text(o, "effort") + ":" + text(o, "speedText"))
+        let selected = flag(o, "selected")
+        // (after its name each part with the dot before it; short of room, the runtime left out, the model and how
+        // hard it thinks never)
+        let part = fn(words : String, drop : Int) {
+          if words != "" {
+            c.box(style=triple_part, drop~, fn() {
+              c.text("·", style=triple_combo_rest) |> ignore
+              c.text(words, style=triple_combo_rest) |> ignore
+            })
+            |> ignore
+          }
+        }
+        let chip = c.box(style=if selected { triple_combo_on } else { triple_combo }, id~, fn() {
+          @sf.maker_mark(c, text(field(o, "maker"), "id"), text(o, "runtime"), triple_pick_mark) |> ignore
+          c.text(text(o, "name"), style=triple_words) |> ignore
+          part(text(o, "runtimeText"), 1)
+          part(text(o, "effortText"), 0)
+          part(text(o, "speedText"), 0)
+        })
+        c.semantics(chip, Button, id~, label=text(o, "label"), check=if selected { On } else { Off })
+        if c.clicked(id) {
+          let p = pick_params(station, of)
+          p["model"] = Json::string(model)
+          p["runtime"] = Json::string(text(o, "runtime"))
+          p["effort"] = match text(o, "effort") {
+            "" => Json::null()
+            e => Json::string(e)
+          }
+          p["fast"] = field(o, "fast").unwrap_or(Json::null())
+          triple.open = ""
+          close()
+          act(src, text(o, "label"), "pick.save/" + station + "/" + of, "pick.save", Json::object(p), done=saved)
         }
       }
-      // (the one in use checked, its ground left to its model's row under it: one row picked on a ground, not two)
-      if triple_option(c, key, text(o, "label"), selected, ground=false, fn() {
-          @sf.maker_mark(c, text(field(o, "maker"), "id"), text(o, "runtime"), 14.0) |> ignore
-          c.box(style=triple_part, fn() {
-            c.text(text(o, "name"), style=if selected { triple_picked } else { triple_words }) |> ignore
-            part(text(o, "runtimeText"), 1)
-            part(text(o, "effortText"), 0)
-            part(text(o, "speedText"), 0)
-          })
-          |> ignore
-        }) {
-        let p = pick_params(station, of)
-        p["model"] = Json::string(model)
-        p["runtime"] = Json::string(text(o, "runtime"))
-        p["effort"] = match text(o, "effort") {
-          "" => Json::null()
-          e => Json::string(e)
-        }
-        p["fast"] = field(o, "fast").unwrap_or(Json::null())
-        triple.open = ""
-        close()
-        act(src, text(o, "label"), "pick.save/" + station + "/" + of, "pick.save", Json::object(p), done=saved)
-      }
-    }
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -799,8 +812,7 @@ fn triple_column_head(c : @ui.Ctx, words : String) -> Unit {
 ///|
 /// A row of a column (runPickerOption): as high as the screen's picker rows at least (Theme::rows pick), 4 by 10 in, its ground under the pointer and while picked,
 /// `trail` (a button of its own, the station a model comes from) at its end, a check after it while picked (its room
-/// kept while not, as the web's hidden check); `tip` over it while it is pointed at; `ground` false, picked with its
-/// check alone (the ground the list's own picked row's). True on the frame after a press.
+/// kept while not, as the web's hidden check); `tip` over it while it is pointed at. True on the frame after a press.
 fn triple_option(
   c : @ui.Ctx,
   key : String,
@@ -809,12 +821,11 @@ fn triple_option(
   body : () -> Unit,
   trail? : () -> Unit,
   tip? : String = "",
-  ground? : Bool = true,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   // (across its column, as wide as its words need at least: what the column needs, the panel's columns laid out by it)
-  let b = c.box(style=(if on && ground { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
+  let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
     body()
     // what is at its end, at the end: the room left (no spacer of its own, whose gap took a gap's room from the
     // words), never less than it needs; the check's room kept while it is not picked
@@ -1222,9 +1233,29 @@ let triple_name_column : @ui.Style = @ui.css("min_w=SPx gap=SPx")
 let triple_check_room : @ui.Style = @ui.css("w=S3_5")
 
 ///|
-/// The frequent combinations over the models: their rows 1 apart, as far over the models as the tray is under them.
+/// The frequent combinations over the models: their name over them, as far over the models as the tray is under them.
 // kept across runs: a value (no field of it changes)
-let triple_combos_box : @ui.Style = @ui.css("w=Full mb=S2 gap=SPx")
+let triple_combos_box : @ui.Style = @ui.css("w=Full mb=S2")
+
+///|
+/// Their capsules: side by side, on as many lines as they need, 6 apart.
+// kept across runs: a value (no field of it changes)
+let triple_combo_flow : @ui.Style = @ui.css("row gap=S1_5")
+
+///|
+/// A combination's capsule: as tall as the search's (@sf.menu_row_min), its words as far in as the effort's stops'
+/// are, on the words' tint as they and the effort's track are, deeper under the pointer.
+// kept across runs: a value (no field of it changes)
+let triple_combo : @ui.Style = @ui.css("row px=S2_5 gap=S1_5 align=ACenter radius=Full bg=Tint hovered{bg=TintStrong}").then(
+  @ui.style(h=Fixed(@sf.menu_row_min)),
+)
+
+///|
+/// The one in use: lifted out of the tint as the effort picked is (triple_meter_thumb's ground, line and shadow).
+// kept across runs: a value (no field of it changes)
+let triple_combo_on : @ui.Style = @ui.css("row px=S2_5 gap=S1_5 align=ACenter radius=Full bg=Raised border=B0_5 border_color=Line shadow=Sm").then(
+  @ui.style(h=Fixed(@sf.menu_row_min)),
+)
 
 ///|
 /// What a frequent combination says after its model: Ui as its name, muted.
