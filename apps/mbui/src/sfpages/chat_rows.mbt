@@ -427,7 +427,9 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
       }
       let cut = tail < 1.0 && natural > 0.0
       let tb = c.box(style=if cut { activity_tail_cut.then(@ui.style(max_w=Fixed(natural * tail))) } else { activity_tail }, fn() {
-        let inner = c.box(style=activity_tail, fn() {
+        // Keep the measured content at its whole width inside the clipping room. If it stops being measured while
+        // folded, the next build loses that width and opens it again, alternating between the two on every frame.
+        let inner = c.box(style=activity_tail, keep=cut, fn() {
           steady_words(c, row_key, said, c.hovered(id), came, clock)
           if clock != "" {
             let time = c.text(clock, style=activity_clock)
@@ -443,9 +445,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
             })
           }
         })
-        if !cut {
-          @motion.measure(c, inner, "emit-tail/" + rk + "/" + a.key)
-        }
+        @motion.measure(c, inner, "emit-tail/" + rk + "/" + a.key)
       })
       if tail < 1.0 {
         c.look(tb, @ui.look(alpha=tail))

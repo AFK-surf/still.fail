@@ -462,17 +462,18 @@ fn emit_flyer(c : @ui.Ctx, rk : String, em : Emits, v : ChatView, src : Source, 
       agent_avatar(c, src, here, "flyer", maker, runtime, "", "")
       c.layer(fn() { work_ring(c, waiting) }) |> ignore
     })
-    // where it is between its activity and where the message goes as this frame lays them out (emit_flight, in the
-    // window), not where the frame before had them: it goes with the list as that glides. Moved from where it is laid
-    // out, at its layer's corner: wherever the chat is in the window (beside the sidebar), not from the window's
+    // Where it is between its activity and the message as this frame draws them (emit_flight, in the window): it goes
+    // with the list as that glides. Read their places and its clock as painted, so its movement alone does not lay out
+    // the chat again. Its layer's corner is wherever the chat is in the window (beside the sidebar).
     let agents = v.agents.map(fn(a) { a.key })
-    @motion.placed(c, b, fn() {
-      match emit_flight(c, rk, em, agents) {
-        Some((x, y, sx, sy)) => {
-          let (bx, by, _, _) = c.node_rect(b)
+    let flyer = "emit-flyer/" + rk
+    @motion.measure(c, b, flyer)
+    c.look_by(b, fn() {
+      match (emit_flight(c, rk, em, agents), @motion.measured_rect(c, flyer)) {
+        (Some((x, y, sx, sy)), Some((bx, by, _, _))) => {
           @ui.look(dx=x - ring_room - bx, dy=y - ring_room - by, sx~, sy~)
         }
-        None => @ui.look(alpha=0.0)
+        _ => @ui.look(alpha=0.0)
       }
     })
     c.draw_only(b)

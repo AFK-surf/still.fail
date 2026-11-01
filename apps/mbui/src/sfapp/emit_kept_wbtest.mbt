@@ -167,6 +167,34 @@ test "kept, host frames: a Large screen, the field let go" {
 }
 
 ///|
+test "the avatar going home draws its movement without laying out the chat again" {
+  let clock = Ref(0.0)
+  let t = emit_core(clock)
+  t.keep_parts(true)
+  // A focused editor keeps its page live for its caret. Put the keyboard away to test the avatar's work alone.
+  t.keyboard_gone()
+  t.frames_owed()
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  let em = emits_of(emit_chat)
+  let until = t.time() + Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() / 4.0
+  ignore(host_frames_till(t, until))
+  guard em.current is Some(turn) && turn.pose == Return else {
+    fail("the avatar is not on its way home: \{em.current.map(fn(c) { c.pose })}")
+  }
+  // Compare whole and retained frames above; inspect the next frame itself, without the comparison's rebuild.
+  t.check_looks(false)
+  for _ in 0..<3 {
+    let before = em.trace.0
+    t.frame_at(t.next_frame_time())
+    let perf = t.frame_perf()
+    assert_true(em.trace.0 > before, msg="the avatar did not move")
+    assert_true(perf.painted, msg="its move laid out the chat again: \{t.built_why()}; \{perf}")
+  }
+  emit_restore()
+}
+
+///|
 test "kept, host frames: the chat left before its answer is shown no more, and asks for no frame" {
   let t = emit_window(390.0)
   assert_eq(emit_typed(t, "看一下列表"), "")
