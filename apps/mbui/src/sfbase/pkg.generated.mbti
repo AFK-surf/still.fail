@@ -115,8 +115,6 @@ pub fn by_of(Json?) -> By
 
 pub fn bytes_first_frame(@ui.Ctx, String, String, Bytes) -> String
 
-pub let card_head : @ui.Style
-
 pub fn chat_item(Json) -> ChatItem
 
 pub let chat_jobs_asked : @ref.Ref[(@ui.Ctx, Source, ChatRef) -> Unit]
@@ -839,10 +837,6 @@ pub fn made_source(topic? : (String, Map[String, Json]) -> Json?, call? : (Strin
 
 pub let mark_colors : Array[(Int64, Int64)]
 
-pub fn mark_gap(@ui.Ctx) -> Unit
-
-pub let mark_gap_room : @ui.Style
-
 pub let mark_line : Double
 
 pub fn mark_notes() -> Array[(Int32, Int32, String, Int64)]
@@ -850,8 +844,6 @@ pub fn mark_notes() -> Array[(Int32, Int32, String, Int64)]
 pub fn mark_numbers(Array[Mark]) -> Map[Int32, Int32]
 
 pub let mark_reach : Double
-
-pub fn mark_swatch(@ui.Ctx, Int64) -> Unit
 
 pub let mark_text : Double
 
@@ -871,15 +863,11 @@ pub fn marks_changed() -> Unit
 
 pub fn marks_commit(Array[Mark], before? : Array[Mark]) -> Unit
 
-pub fn marks_draw(@ui.Ctx, (Double, Double, Double, Double), Double, Double, shapes? : Bool, pins? : Bool, writing? : Bool) -> Unit
-
 pub fn marks_drawn() -> Array[Mark]
 
 pub fn marks_finger(@ui.Ctx, Int32, Double, Double, (Double, Double, Double, Double), Double) -> Unit
 
 pub fn marks_finger_off() -> Unit
-
-pub fn marks_foot(@ui.Ctx, tools? : Bool, note? : Bool) -> Unit
 
 pub fn marks_json(Double, Double) -> String
 
@@ -914,10 +902,6 @@ pub fn marks_shown_color() -> Int64
 pub fn marks_start() -> Unit
 
 pub fn marks_undo() -> Unit
-
-pub fn marks_writing(@ui.Ctx, (Double, Double, Double, Double), Double) -> Unit
-
-pub fn marks_writing_bottom(@kit.Zoom) -> Double?
 
 pub fn marks_writing_bottom_in(@kit.Zoom, (Double, Double, Double, Double)?) -> Double?
 
@@ -977,17 +961,11 @@ pub let note_accent : Int64
 
 pub let note_bg : Int64
 
-pub fn note_box(@ui.Ctx, (Int32, Int32, String, Int64)) -> Unit
-
 pub let note_box_corner : Double
 
 pub let note_box_room : Double
 
-pub fn note_card(@ui.Ctx, (Int32, Int32, String, Int64), Int32) -> Unit
-
 pub let note_ground : Int64
-
-pub let note_head : @ui.Style
 
 pub let note_ink : Int64
 
@@ -996,8 +974,6 @@ pub fn note_list(@ui.Ctx, Int32, String, Double, Double) -> Unit
 pub let note_muted : Int64
 
 pub let note_pop_ms : Double
-
-pub let note_row : @ui.Style
 
 pub let note_subtle : Int64
 
@@ -1200,8 +1176,6 @@ pub fn picture_button(@ui.Ctx, String, String, Int64, Bool, enabled? : Bool, hel
 pub let picture_key : Double
 
 pub let picture_pick : @ref.Ref[(@ui.Pick, (Bytes?) -> Unit)?]
-
-pub fn picture_pin(@ui.Ctx, Int32, Int64, Double, id? : Int32) -> Int32
 
 pub let pin_open_scale : Double
 
@@ -3430,10 +3404,8 @@ pub fn Viewer::flowing(Self) -> Bool
 pub fn Viewer::flows(Self) -> Bool
 pub fn Viewer::fly_home(Self, String) -> Unit
 pub fn Viewer::flying(Self) -> Double
-pub fn Viewer::gestures(Self, @ui.Ctx, Source, Int32, @kit.Zoom, Bool, Bool) -> Unit
 pub fn Viewer::go(Self, @ui.Ctx, Source, Int32, Double) -> Unit
 pub fn Viewer::id(Self) -> String
-pub fn Viewer::image_stage(Self, @ui.Ctx, Source, Int32) -> Unit
 pub fn Viewer::kept_whole(Self) -> Bool
 pub fn Viewer::left_with_frame(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::let_go(Self) -> Unit
@@ -3467,6 +3439,7 @@ pub fn Viewer::still(Self, Source) -> String
 pub fn Viewer::text_stage(Self, @ui.Ctx, PKind, Bytes, Int32) -> Unit
 pub fn Viewer::toggle(Self) -> Unit
 pub fn Viewer::told_of(Self) -> Bool
+pub fn Viewer::tree_draws(Self) -> Bool
 pub fn Viewer::up_still(Self) -> Bool
 pub fn Viewer::view(Self) -> @ui.NativeView?
 pub fn Viewer::wake(Self) -> Unit

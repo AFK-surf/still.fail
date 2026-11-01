@@ -49,32 +49,44 @@ fn photo_sent(
       }
     },
   }
-  let t = @ui.Tester::new(
-    fn(c) {
-      // (in a card `cut` tall, its foot cutting the picture, where one is)
-      let card = if cut > 0.0 { @ui.style(w=Full, h=Fixed(cut), clip=true) } else { @ui.style(w=Full, h=Full) }
-      // (in a chat's list, the composer's room at its foot, where it is one)
-      let list = c.box(style=card, fn() {
-        c.box(style=@ui.style(h=Fixed(shift.val)), fn() {  }) |> ignore
-        chat_file(c, src, a, list=if listed { "test-list" } else { "" })
+  // (the chat an old view the window's tree hosts, the viewer beside it as the shells have it: sfbase's viewer_node,
+  // its stage the window; what the viewer shows of any other kind the old frame's, in the old view, as the shells have
+  // it)
+  let chat = fn(c : @ui.Ctx) {
+    // (in a card `cut` tall, its foot cutting the picture, where one is)
+    let card = if cut > 0.0 { @ui.style(w=Full, h=Fixed(cut), clip=true) } else { @ui.style(w=Full, h=Full) }
+    // (in a chat's list, the composer's room at its foot, where it is one)
+    let list = c.box(style=card, fn() {
+      c.box(style=@ui.style(h=Fixed(shift.val)), fn() {  }) |> ignore
+      chat_file(c, src, a, list=if listed { "test-list" } else { "" })
+    })
+    if listed {
+      note_list(c, list, "test-list", if head { flight_bar_h } else { 0.0 }, if bar { flight_bar_h } else { 0.0 })
+    }
+    // (a chat's bar over its top, as a chat's page has it)
+    if head {
+      let top = c.layer(fn() { c.box(style=flight_bar, fn() {  }) |> ignore })
+      over_flight(c, top)
+    }
+    // (a composer over the chat's foot, as a chat's page has it)
+    if bar {
+      let foot = c.layer(fn() {
+        c.spacer()
+        c.box(style=flight_bar, fn() {  }) |> ignore
       })
-      if listed {
-        note_list(c, list, "test-list", if head { flight_bar_h } else { 0.0 }, if bar { flight_bar_h } else { 0.0 })
-      }
-      // (a chat's bar over its top, as a chat's page has it)
-      if head {
-        let top = c.layer(fn() { c.box(style=flight_bar, fn() {  }) |> ignore })
-        over_flight(c, top)
-      }
-      // (a composer over the chat's foot, as a chat's page has it)
-      if bar {
-        let foot = c.layer(fn() {
-          c.spacer()
-          c.box(style=flight_bar, fn() {  }) |> ignore
-        })
-        over_flight(c, foot)
-      }
-      preview(c, src)
+      over_flight(c, foot)
+    }
+    preview(c, src)
+  }
+  let t = @ui.Tester::new(
+    fn(c) { @ui.old_views_here(c) },
+    tree=fn(root) {
+      root.box(fn(v) {
+        v.grow(Is(1.0)) |> ignore
+        @ui.old(v, chat).over(Is(true)) |> ignore
+        @sfbase.viewer_node(v, src, fn() { v.window() })
+      })
+      |> ignore
     },
     w=390.0,
     h=844.0,
@@ -259,13 +271,18 @@ test "a picture's whole come once it is in takes its stand-in's place once decod
   }
   t.frame()
   assert_true(drawn_at(t, to), msg="\{t.drawn_images()}")
-  // (the message's under the viewer, and the one standing in for its whole)
-  assert_eq(t.locate("img:sent-key").length(), 2)
+  // (the message's under the viewer, and the one standing in for its whole: drawn, the viewer's its node's, which the
+  // old views' images (Tester::locate) do not hold)
+  let stood = drawn_of(t, "sent-key")
+  assert_eq(stood.length(), 2, msg="\{stood}")
+  assert_true(stood.iter().any(fn(r) { at_rect(r, to.0, to.1, to.2, to.3) }), msg="what stands in, at \{to}: \{stood}")
   // decoded: the whole there in its place
   t.frame()
   assert_true(drawn_at(t, to))
-  assert_eq(t.locate("img:mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg").length(), 1)
-  assert_eq(t.locate("img:sent-key").length(), 1)
+  let whole = drawn_of(t, "mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg")
+  assert_eq(whole.length(), 1, msg="\{whole}")
+  assert_true(at_rect(whole[0], to.0, to.1, to.2, to.3), msg="the whole, at \{to}: \{whole}")
+  assert_eq(drawn_of(t, "sent-key").length(), 1, msg="\{drawn_of(t, "sent-key")}")
 }
 
 ///|

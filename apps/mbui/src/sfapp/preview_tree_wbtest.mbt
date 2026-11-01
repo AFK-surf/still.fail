@@ -2756,7 +2756,7 @@ test "viewer on the tree, marking: more notes than the foot holds cards for: the
   let left = 8 - shown.length()
   assert_true(left > 0 && shown.length() > 0, msg="1000 wide: some left out: \{shown}")
   assert_eq(more, "+\{left}", msg="+N says how many, the first frame so laid out")
-  // (+N as tall as its one line, at the row's top as the cards are: marks_notes_row's)
+  // (+N as tall as its one line, at the row's top as the cards are)
   let (_, my, _, mh) = t.get(Button, label=more).rect
   let (_, cy, _, ch) = t.get(Button, label=shown[0]).rect
   assert_true(my == cy && mh < ch, msg="+N at the cards' top, as tall as its one line: \{(my, mh)} \{(cy, ch)}")

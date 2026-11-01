@@ -1,5 +1,5 @@
 // What the viewer's two fields do, whatever draws them (an old view's editor or the window's tree): the words being
-// written on the picture as it marks (marks_writing, "marks/write") and a box's note (marks_foot_node, "marks/note").
+// written on the picture as it marks ("marks/write") and a box's note (marks_foot_node, "marks/note").
 // Each by what a person sees and what the system is told: the words typed drawn, the keyboard told the words and
 // where the caret is drawn, a press in them putting the caret there, Enter, the keyboard put away.
 

@@ -1397,8 +1397,8 @@ pub fn viewer_set_out(c : @ui.Ctx, src : Source) -> Unit {
         None => return
       }
   }
-  // (one a node of the window's tree draws is set out as that node is made: viewer_tree.mbt)
-  if !v.in_tree {
+  // (one the window's tree draws is set out as its node is made, whether or not that node is made yet: viewer_tree.mbt)
+  if !v.tree_draws() {
     v.set_out(c, src, c.moment())
   }
 }
@@ -1457,13 +1457,13 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
         None => return
       }
   }
-  // (drawn by a node of the window's tree, as what takes the hand there: viewer_tree.mbt)
-  if v.in_tree {
+  // (one the window's tree draws drawn by its node, as what takes the hand there, whether or not that node is made yet:
+  // viewer_tree.mbt)
+  if v.tree_draws() {
     return
   }
   viewer_set_out(c, src)
   src_now.val = src.now
-  v.marks_frame(c)
   let p = v.flying()
   // (the motions ask for their frames, said once as they set out: the flight, the fade)
   let landed = v.flies && v.fly_back && !v.fly.goes_at(c.moment())
@@ -1528,20 +1528,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
         v.content(c, src, stage)
       })
       |> ignore
-      if !marking.on {
-        c.layer(fn() { vf_steps(v, c, src, shown) }) |> ignore
-      } else {
-        c.layer(fn() {
-          c.spacer()
-          // over the navigation bar (FilePreview.kt MarksFoot)
-          marks_foot(c)
-          let nav = (@sf.viewer_host().room)().1
-          if nav > 0.0 {
-            c.box(style=@ui.style(w=Full, h=Fixed(nav)), fn() {  }) |> ignore
-          }
-        })
-        |> ignore
-      }
+      c.layer(fn() { vf_steps(v, c, src, shown) }) |> ignore
       if !media {
         c.layer(fn() { vf_bar(v, c, src, shown) }) |> ignore
       } else if @sf.native_on() {
@@ -1578,7 +1565,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   }
   // (one going takes back no more: it is the page's)
   if !v.closing {
-    c.take_back(fn() { if marking.on { marks_back(c) } else { v.shut(c) } })
+    c.take_back(fn() { v.shut(c) })
   }
 }
 
@@ -1829,7 +1816,6 @@ pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
   let v = self
   let kind = v.shown_kind()
   match kind {
-    Some(KImage) if v.file.size <= big_file => v.image_stage(c, src, stage)
     Some(KVideo) | Some(KAudio) => v.player_stage(c, src, stage)
     _ =>
       if v.flowing() {
@@ -2242,23 +2228,7 @@ pub fn Viewer::draw_flight(
 }
 
 ///|
-/// The picture's own menu, right clicked or held by a finger on it (where it is now: `at`), once the whole of it is
-/// here: 复制图片, as the bar's 复制 (a browser's on an image); on a phone, where nothing is pasted, 保存到相册
-/// (@sf.picture_out_way, as a picture made here). Round it, none. What is under the viewer (the chat's
-/// picture it was opened from, with its 引用) is never asked: the viewer is over it.
-fn Viewer::picture_menu(self : Viewer, c : @ui.Ctx, stage : Int, at : (Double, Double, Double, Double)?) -> Unit {
-  match (c.menu_asked(stage), at, self.bytes.get()) {
-    (Some((x, y)), Some((rx, ry, rw, rh)), Some(b)) if x >= rx && x < rx + rw && y >= ry && y < ry + rh => {
-      // held by a finger: the press is the menu's, felt
-      @sf.menu_held(c, "preview") |> ignore
-      self.picture_menu_at(c, x, y, b)
-    }
-    _ => ()
-  }
-}
-
-///|
-/// The picture's own menu (Viewer::picture_menu) at (`x`, `y`), its whole `b` here.
+/// The picture's own menu at (`x`, `y`), its whole `b` here.
 fn Viewer::picture_menu_at(self : Viewer, c : @ui.Ctx, x : Double, y : Double, b : Bytes) -> Unit {
   let (label, glyph) = @sf.picture_out_way()
   let out = fn() {
@@ -2270,154 +2240,6 @@ fn Viewer::picture_menu_at(self : Viewer, c : @ui.Ctx, x : Double, y : Double, b
     }
   }
   @sf.menu([Some(@sf.menu_item_of(label, out, icon=glyph))], from=@sf.at_point(x, y))
-}
-
-///|
-/// An image fitted to the stage, to double-tap, pan and zoom (the wheel, the bar's − and +); until the whole of it
-/// comes, the chat's thumbnail (or its likeness) stands in its place.
-/// (The old view's way, what it takes of the hand and tells its zoom as it is built; where the window's tree draws the
-/// viewer, its nodes draw all of it and take the hand at their own moments: viewer_tree.mbt.)
-pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
-  let v = self
-  let picture = v.picture(src)
-  if v.picture_failed() {
-    tap_stage(c, v, stage)
-    v.note(c, fn() {
-      c.text(pv("android-chat.file.image.failed"), size=@sf.theme().t.body, color=@sf.theme().p.muted) |> ignore
-    })
-    return
-  }
-  // its size: as sent, else as decoded, else its stand-in's
-  let z = v.zoom
-  let ime = c.ime_inset()
-  let (nw, nh) = v.natural_size(src)
-  // the keyboard over the stage, not the stage made shorter for it (FilePreview.kt: the zoom's box is the window's)
-  z.boxed(c.width, c.height + ime)
-  z.natural(nw, nh)
-  z.step()
-  // lifted while the keyboard is up, as far as keeps what is being written (or the open note's pin, its box under it)
-  // 24 clear of it (FilePreview.kt lift: animateFloatAsState's spring)
-  let below = match marks_writing_bottom(z) {
-    Some(b) => b + marks_keyboard_gap - c.height
-    None => 0.0
-  }
-  let lift = @motion.animate(c, "preview/lift", if ime > 0.0 && below > 0.0 { below } else { 0.0 })
-  let rect = fn() { z.rect().map(fn(r) { (r.0, r.1 - lift, r.2, r.3) }) }
-  let (before, after) = v.near(src)
-  // (once the frame's builds are over: a step taken further on in this one reads beside the image it comes to)
-  c.after_build("pv-near", fn() { v.read_near(src, before, after) })
-  if marking.on {
-    // marking: one finger draws, two pinch as ever (no stepping meanwhile)
-    if c.second_pointer() is Some(_) || v.pinched {
-      v.gestures(c, src, stage, z, false, false)
-    } else {
-      let (px, py, _) = c.pointer()
-      match rect() {
-        Some(r) => {
-          // down where the finger went down, then each place it has been seen at, the last where it was let go: a
-          // slow frame (down, moved and up in one or two) loses none of it
-          let moved_to = fn() {
-            if px != v.last_x || py != v.last_y {
-              marks_finger(c, 1, px, py, r, z.nw)
-              v.last_x = px
-              v.last_y = py
-            }
-          }
-          let down = fn() {
-            marks_finger(c, 0, c.press_x, c.press_y, r, z.nw)
-            v.last_x = c.press_x
-            v.last_y = c.press_y
-          }
-          if c.pressed(stage) {
-            if !v.held {
-              down()
-              v.held = true
-            }
-            moved_to()
-          } else if v.held || c.clicked(stage) {
-            if !v.held {
-              down()
-            }
-            v.held = false
-            moved_to()
-            marks_finger(c, 2, px, py, r, z.nw)
-          }
-        }
-        None => ()
-      }
-    }
-  } else {
-    v.gestures(c, src, stage, z, before is Some(_), after is Some(_))
-    // (a finger still while another pinches holds nothing)
-    if c.second_pointer() is None && !v.pinched {
-      v.picture_menu(c, stage, rect())
-    }
-  }
-  // the strip: the one shown and those beside it, the stage's width and the gap apart (FilePreview.kt strip)
-  let strip = pv_strip.way
-  match pv_strip.pinned {
-    Some(x) => strip.put(x)
-    None => ()
-  }
-  let sx = strip.get()
-  // (the one going shown while the strip's way goes, as it was said at its cause: read only, whatever frames were
-  // drawn, or drawn ahead, before)
-  let sliding = strip.goes_at(c.moment())
-  let width = c.width + slide_gap
-  let flying = v.flies
-  match rect() {
-    // (the whole picture decoded for where it lands, asked for as it sets out: it takes its stand-in's place there)
-    Some(r) if picture != "" && flying =>
-      v.draw_flight(c, v.shown_picture(c, src, r), r, v.flying())
-    Some(r) if picture != "" => {
-      let (x, y, w, h) = r
-      // flat on the canvas, as a photo viewer's (FilePreview.css.ts fpImage)
-      c.picture(v.shown_picture(c, src, r), x=x + sx, y~, w~, h~, max_px=stage_px) |> ignore
-    }
-    _ => ()
-  }
-  // its size not sent with it nor known yet: a small decode, out of sight, says it (meanwhile its stand-in's)
-  if v.size_unknown(src) {
-    c.box(w=Px(1.0), h=Px(1.0), opacity=0.01, fn() {
-      c.image(picture, w=Px(1.0), h=Px(1.0), bg=0L, fade=false) |> ignore
-    })
-    |> ignore
-  }
-  if marking.on {
-    match rect() {
-      Some(r) => marks_draw(c, r, z.nw, z.nh)
-      None => ()
-    }
-  }
-  match pv_strip.leaving {
-    // the one going, drawn from where it was (it has no place of its own any more)
-    Some(l) if sliding => {
-      let lx = l.x + sx - l.dir.to_double() * l.width
-      c.layer(fn() { c.picture(l.picture, x=lx, y=l.y, w=l.w, h=l.h, max_px=stage_px) |> ignore }) |> ignore
-    }
-    // those beside it, out of sight until a swipe brings them in
-    _ =>
-      if sx != 0.0 {
-        for side in [(before, -1.0), (after, 1.0)] {
-          match side.0 {
-            Some(n) => {
-              let p = n.picture(src)
-              let (w0, h0) = n.natural_size(src)
-              match fitted_rect(w0, h0, c.width, c.height) {
-                Some(r) if p != "" => {
-                  let (x, y, w, h) = r
-                  let shown = n.shown_picture(c, src, r)
-                  let x = x + sx + side.1 * width
-                  c.layer(fn() { c.picture(shown, x~, y~, w~, h~, max_px=stage_px) |> ignore }) |> ignore
-                }
-                _ => ()
-              }
-            }
-            None => ()
-          }
-        }
-      }
-  }
 }
 
 ///|
@@ -2653,187 +2475,6 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
       @ui.log("preview: stepped to \{n.file.name}")
     }
   }
-}
-
-///|
-/// The stage's gestures over a picture: a tap shows or hides the bars, a double tap zooms in (or back), a finger
-/// moves it when it is larger than the stage (let go moving, it goes on, slowing; at its edge, on to the one beside
-/// it), the wheel (or a trackpad's two fingers with ⌘… any wheel) zooms round the pointer.
-pub fn Viewer::gestures(
-  self : Viewer,
-  c : @ui.Ctx,
-  src : Source,
-  stage : Int,
-  z : @kit.Zoom,
-  has_before : Bool,
-  has_after : Bool,
-) -> Unit {
-  let v = self
-  // what the finger did, by its events' own times (how fast, how far apart), not the frames'
-  let at = c.pointer_at()
-  let (px, py, _) = c.pointer()
-  let strip = pv_strip.way
-  // two fingers: a pinch, round the point between them, which moves the picture as it moves
-  match c.second_pointer() {
-    Some((x2, y2)) if c.pressed(stage) && z.nw > 0.0 => {
-      let cx = (px + x2) / 2.0
-      let cy = (py + y2) / 2.0
-      let d = ((px - x2) * (px - x2) + (py - y2) * (py - y2)).sqrt()
-      if v.pinch_d > 0.0 && d > 0.0 {
-        z.transform(cx, cy, d / v.pinch_d, cx - v.pinch_x, cy - v.pinch_y)
-      }
-      v.pinch_d = d
-      v.pinch_x = cx
-      v.pinch_y = cy
-      v.pinched = true
-      // a second finger as one swipes: the strip goes back (FilePreview.kt), not left between two pictures
-      if v.swiping {
-        v.swiping = false
-        strip.go(0.0, @motion.sheet_spring, at=c.moment())
-      }
-      // one finger again after it: followed from where it is then
-      v.held = false
-      return
-    }
-    _ => v.pinch_d = 0.0
-  }
-  if c.pressed(stage) {
-    if v.held {
-      let dx = px - v.last_x
-      let dy = py - v.last_y
-      v.moved = v.moved + dx.abs() + dy.abs()
-      if z.zoomed() {
-        // zoomed in: it goes with the finger (at once after a pinch, the press moved already)
-        if (v.moved > 8.0 || v.pinched) && (dx != 0.0 || dy != 0.0) {
-          v.drag_zoomed(z, strip, dx, dy, has_before, has_after, c.moment())
-        }
-      } else {
-        // fitted, one finger sideways moves the strip (FilePreview.kt swipe), under the finger from where it went
-        // down (the way to the slop too): past the first or the last it gives only a third as much
-        let mut dx = dx
-        if !v.swiping && v.moved > 8.0 && (px - v.down_x).abs() > (py - v.down_y).abs() &&
-          (has_before || has_after) && !v.pinched {
-          v.swiping = true
-          pv_strip.leaving = None
-          dx = px - v.down_x
-        }
-        if v.swiping {
-          let next = strip.get() + dx
-          let none = if next > 0.0 { !has_before } else { !has_after }
-          strip.put(if none { strip.get() + dx / 3.0 } else { next })
-        } else if v.moved > 8.0 && (dx != 0.0 || dy != 0.0) {
-          z.pan(dx, dy)
-        }
-      }
-    } else {
-      v.held = true
-      v.down_x = c.press_x
-      v.down_y = c.press_y
-      if !v.pinched {
-        v.moved = 0.0
-        // flinging, or sliding to the one beside it, it stops where it is, and the press taps nothing (as a list
-        // moving on its own)
-        v.caught = z.stop_fling()
-        let s = strip.get()
-        if s != 0.0 {
-          strip.put(s)
-          v.caught = true
-        }
-        v.strip_down = s
-      }
-      let (x, _, w, _) = z.rect().unwrap_or((0.0, 0.0, 0.0, 0.0))
-      v.at_left = x >= -0.5
-      v.at_right = x + w <= z.bw + 0.5
-    }
-    v.last_x = px
-    v.last_y = py
-  } else {
-    // how fast it was let go sideways (px/ms): the press's own events by their times, as a list's fling (held still
-    // a while first, none)
-    let vx = c.pointer_velocity().0
-    // let go further sideways than its frames showed (a slow frame took the whole swipe, down and up in one or two
-    // frames): from where it went down to where it was let go, as a swipe
-    if (v.held || c.clicked(stage)) && !v.swiping && !z.zoomed() && !v.pinched && (has_before || has_after) {
-      let tx = px - c.press_x
-      let ty = py - c.press_y
-      if tx.abs() > 8.0 && tx.abs() > ty.abs() {
-        if !v.held {
-          v.strip_down = strip.get()
-        }
-        let none = if tx > 0.0 { !has_before } else { !has_after }
-        strip.put(strip.get() + (if none { tx / 3.0 } else { tx }))
-        v.moved = tx.abs() + ty.abs()
-        v.swiping = true
-        v.held = true
-        pv_strip.leaving = None
-      }
-    }
-    if !v.held && c.clicked(stage) {
-      // (down and up between two frames, never seen held)
-      v.caught = z.stop_fling()
-    }
-    let s = strip.get()
-    if v.held && (v.swiping || s != 0.0) && (!z.zoomed() || s != 0.0) {
-      // let go: from the picture nearest as the finger went down (a slide it caught may have had the one before or
-      // after mostly in), this press's way far enough (80, or a fifth of the stage) or flung that way, the one beside
-      // it; else that one (zoomed in, flung only from an edge it was at as the finger went down)
-      let width = c.width + slide_gap
-      let base = if v.strip_down > width / 2.0 { -1 } else if v.strip_down < -width / 2.0 { 1 } else { 0 }
-      let dx = s - v.strip_down
-      let far = dx.abs() > dmin(80.0, c.width / 5.0)
-      let from_edge = !z.zoomed() || (if dx > 0.0 { v.at_left } else { v.at_right })
-      let flung = from_edge && vx.abs() > 0.3 && (vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
-      let step = if dx != 0.0 && (far || flung) { if dx > 0.0 { -1 } else { 1 } } else { 0 }
-      let to = base + step
-      if to < 0 {
-        v.go(c, src, -1, vx * 1000.0)
-      } else if to > 0 {
-        v.go(c, src, 1, vx * 1000.0)
-      } else {
-        strip.go(0.0, @motion.sheet_spring, at=c.moment(), velocity=vx * 1000.0)
-      }
-    } else if v.held && z.zoomed() && (v.moved > 8.0 || v.pinched) {
-      // zoomed in, let go moving: on at the finger's speed, slowing, to a stop or its edge
-      let (fx, fy) = c.pointer_velocity()
-      z.fling(fx, fy)
-    }
-    v.swiping = false
-    v.held = false
-  }
-  let pinched = v.pinched
-  if !c.pressed(stage) {
-    // pinched smaller than fitted and let go: back to fitted (as a photo app's)
-    if pinched && z.scale < z.fit() {
-      z.reset()
-    }
-    v.pinched = false
-  }
-  // a desktop's mouse: a click round an image (not on it) closes it, one on it does nothing until a second makes it a
-  // double click (FilePreview.tsx ImageViewer onClick, useZoom onDoubleClick); a click on it, as a finger's tap, shows
-  // or hides the bars
-  let desk = @sf.pointer_rests()
-  let on_picture = match z.rect() {
-    Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
-    None => false
-  }
-  if c.clicked(stage) && v.moved <= 8.0 && !pinched && !v.caught {
-    // (on an iPhone Duo a finger's tap round it, fitted, closes it too: @hostapi.nav_bar_able, the user 2026-10-27;
-    // elsewhere a finger's tap shows or hides the bars, as it was)
-    if (desk || (!z.zoomed() && @sf.native_able())) && !on_picture && !marking.on && v.shown_kind() == Some(KImage) {
-      v.shut(c)
-    } else if at - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
-      // the second of two: zoom (and the first's toggle undone)
-      v.tap_at = -1.0e9
-      v.toggle()
-      z.double_tap(px, py)
-    } else {
-      v.tap_at = at
-      v.tap_x = px
-      v.tap_y = py
-      v.toggle()
-    }
-  }
-  v.wheel(c, stage, z)
 }
 
 ///|

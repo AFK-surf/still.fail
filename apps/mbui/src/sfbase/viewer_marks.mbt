@@ -617,103 +617,6 @@ pub fn marks_finger_off() -> Unit {
 }
 
 ///|
-/// The marks drawn over the picture at `r` (x, y, w, h on the stage), of `nw` × `nh` natural pixels (ImageMarks.kt
-/// drawMarks, drawPicked, Pins, WritingField): the lines (a box's rounded edge, an arrow and its barbs, a line drawn by
-/// hand smoothed through its midpoints) in one drawing over the stage; words with their halo; the picked mark's
-/// dashed frame and its handles (`shapes`: else nodes of the window's tree's, marks_shapes_node); the numbered marks'
-/// pins (`pins`: else nodes of the window's tree's, marks_pins_node); the words being written (`writing`: else on
-/// their own, marks_writing). Each placed where it is on the stage, a layer of its own (nothing in it flows after what
-/// came before).
-pub fn marks_draw(
-  c : @ui.Ctx,
-  r : (Double, Double, Double, Double),
-  nw : Double,
-  nh : Double,
-  shapes? : Bool = true,
-  pins? : Bool = true,
-  writing? : Bool = true,
-) -> Unit {
-  marks_said()
-  let (rx, ry, rw, _) = r
-  let k = rw / dmax(1.0, nw)
-  let numbers = mark_numbers(marking.shapes)
-  // what is put at (x, y) on the stage, over what came before
-  let at_place = fn(x : Double, y : Double, body : () -> Unit) {
-    c.layer(fn() { c.box(tx=x, ty=y, body) |> ignore }) |> ignore
-  }
-  let drawn = if shapes { marks_drawn() } else { [] }
-  let (lines, handles) = if shapes { marks_lines(r, nw) } else { ([], []) }
-  if shapes {
-    c.layer(fn() { c.lines(lines, w=Fill(1.0), h=Fill(1.0)) |> ignore }) |> ignore
-  }
-  // words, edged in their halo
-  for m in drawn {
-    if m.kind == "words" {
-      let x = rx + m.pts[0] * k
-      let y = ry + m.pts[1] * k
-      let size = m.w * k
-      let halo = halo_of(m.color)
-      let e = size * 0.08
-      for o in [(-e, 0.0), (e, 0.0), (0.0, -e), (0.0, e), (-e, -e), (e, e), (-e, e), (e, -e)] {
-        at_place(x + o.0, y + o.1, fn() {
-          c.text(m.text, size~, weight=600, color=halo, wrap=false, line=size * 1.3) |> ignore
-        })
-      }
-      at_place(x, y, fn() { c.text(m.text, size~, weight=600, color=m.color, wrap=false, line=size * 1.3) |> ignore })
-    }
-  }
-  for h in handles {
-    at_place(h.0 - 6.0, h.1 - 6.0, fn() {
-      c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=0xFFFFFFFFL, border=1.5, border_color=0xE5704AFFL, fn() {  })
-      |> ignore
-    })
-  }
-  // the numbered marks' pins, each at its own size whatever the zoom, up and to the right of their point; tapped, its
-  // note; a little bigger while it is open
-  for s in marking.shapes {
-    guard pins else { break }
-    match numbers.get(s.id) {
-      Some(n) => {
-        let (px0, py0) = if s.kind == "box" {
-          let (bx, by, _, _) = s.bounds()
-          (bx, by)
-        } else {
-          (s.pts[0], s.pts[1])
-        }
-        let px = dmax(2.0 / k, dmin(dmax(2.0 / k, nw - 22.0 / k), px0))
-        let py = dmax(22.0 / k, dmin(dmax(22.0 / k, nh - 2.0 / k), py0))
-        let id = c.id("marks/pin/\{s.id}")
-        if c.clicked(id) {
-          marks_put_down(c)
-          marking.picked = -1
-          marking.note = if marking.note == s.id { -1 } else { s.id }
-          if marking.note >= 0 {
-            marking.note_field.set(marking.comments.get(s.id).unwrap_or(""))
-          }
-          marks_changed()
-          if marking.note >= 0 {
-            c.focus_field(marking.note_field)
-          }
-        }
-        at_place(rx + px * k - 2.0, ry + py * k - 22.0, fn() {
-          let pin = picture_pin(c, n, s.color, 24.0, id~)
-          // what a screen reader says of it (ImageMarks.kt Pins: 标注 n)
-          c.semantics(pin, Button, id~, label=pv_fill("android-chat.marks.pin", [("n", n.to_string())]))
-          if marking.note == s.id {
-            c.look(pin, @ui.look(scale=pin_open_scale, ox=2.0 / 24.0, oy=22.0 / 24.0))
-          }
-        })
-      }
-      None => ()
-    }
-  }
-  // the words being written, where they go, in their size and colour
-  if writing {
-    marks_writing(c, r, nw)
-  }
-}
-
-///|
 /// The marks' lines over the picture at `r` (x, y, w, h on the stage), of `nw` natural pixels wide (ImageMarks.kt
 /// drawMarks, drawPicked): a box's rounded edge, an arrow and its barbs, a line drawn by hand smoothed through its
 /// midpoints, each in its colour and its width at this zoom; the picked mark's dashed frame (white at 85%, 1 wide, 4 on
@@ -762,84 +665,6 @@ pub fn marks_lines(r : (Double, Double, Double, Double), nw : Double) -> (Array[
     None => ()
   }
   (lines, handles)
-}
-
-///|
-/// The words being written over the picture at `r` (x, y, w, h on the stage), of `nw` natural pixels wide
-/// (ImageMarks.kt WritingField): where they go, in their size and colour, a layer of their own; done, put down.
-pub fn marks_writing(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double) -> Unit {
-  marks_said()
-  let (rx, ry, rw, _) = r
-  let k = rw / dmax(1.0, nw)
-  let at_place = fn(x : Double, y : Double, body : () -> Unit) {
-    c.layer(fn() { c.box(tx=x, ty=y, body) |> ignore }) |> ignore
-  }
-  match marking.writing {
-    Some((_, x, y, w, color)) => {
-      let size = w * k
-      at_place(rx + x * k, ry + y * k, fn() {
-        c.box(w=Px(dmax(size * 6.0, 120.0)), fn() {
-          let e = c.editor(
-            "marks/write",
-            placeholder=pv("android-chat.marks.write"),
-            font_size=size,
-            max_lines=1,
-            plain=true,
-            color~,
-            placeholder_color=@sf.alpha(color, 0.55),
-            caret_color=color,
-            field=marking.write_field,
-          )
-          match e.submitted {
-            Some(_) => marks_put_down(c)
-            None => ()
-          }
-        })
-        |> ignore
-      })
-    }
-    None => ()
-  }
-}
-
-///|
-/// A pin's number (ImageMarks.kt Pins; Notes.kt Pin): the mark's colour edged 2 in its halo (`size` 24), or no edge
-/// (`size` 16, a note's), round but for its corner at the foot towards the mark (3; 2 the small one), the number in
-/// the halo. Its node.
-pub fn picture_pin(c : @ui.Ctx, n : Int, color : Int64, size : Double, id? : Int = 0) -> Int {
-  let halo = halo_of(color)
-  let small = size < 20.0
-  let edge = if small { 0.0 } else { 2.0 }
-  let point = if small { 2.0 } else { 3.0 }
-  c.box(w=Px(size), h=Px(size), id~, shadow=if small { 0.0 } else { @sf.pin_raised.sigma }, shadow_y=@sf.pin_raised.dy, shadow_color=@sf.pin_raised.color, radius=size / 2.0, bg=if small { color } else { halo }, fn() {
-    // its pointed corner: a square over the round one at the foot towards the mark
-    c.layer(fn() {
-      c.box(w=Px(size / 2.0), h=Px(size / 2.0), ty=size / 2.0, radius=point, bg=if small { color } else { halo }, fn() {  })
-      |> ignore
-    })
-    |> ignore
-    if !small {
-      c.layer(fn() {
-        c.box(w=Px(size - 2.0 * edge), h=Px(size - 2.0 * edge), tx=edge, ty=edge, radius=size / 2.0 - edge, bg=color, fn() {
-          c.layer(fn() {
-            c.box(w=Px(size / 2.0 - edge), h=Px(size / 2.0 - edge), ty=size / 2.0 - edge, radius=point / 2.0, bg=color, fn() {  })
-            |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    }
-    c.layer(align=ACenter, fn() {
-      c.box(h=Px(size), justify=JCenter, fn() {
-        c.text("\{n}", size=if small { 10.0 } else { 11.0 }, weight=if small { 650 } else { 700 }, color=if small { 0xFFFFFFFFL } else { halo }, wrap=false)
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
 }
 
 ///|
@@ -1092,133 +917,6 @@ pub let marks_put_room : @ui.Style = @ui.css("pl=S1")
 let marks_notes_over_tools : Double = 10.0
 
 ///|
-/// The foot while marking (ImageMarks.kt MarksFoot, in the viewer's dark): the note being written in its box over the
-/// keyboard (Notes.kt NoteBox), else the notes as cards (a tap opens one again; Notes.kt Card) over the tools
-/// (ImageMarks.kt MarksTools: 选择, 框, 箭头, 画笔, 文字 · the colour · 删除 the picked · 撤销, 重做), the colours in a row
-/// over them when asked for. `tools` false: none of them, the tools nodes of the window's tree's under it
-/// (marks_tools_node).
-pub fn marks_foot(c : @ui.Ctx, tools? : Bool = true, note? : Bool = true) -> Unit {
-  // (the note being written elsewhere, `note` false: nothing here while it is, note_box_node)
-  if !note && marking.note >= 0 && mark_notes().iter().any(fn(x) { x.0 == marking.note }) {
-    return
-  }
-  if marking.note >= 0 {
-    match mark_notes().iter().find_first(fn(x) { x.0 == marking.note }) {
-      Some(note) => {
-        // (8 over the keyboard, or the navigation bar: FilePreview.kt MarksFoot's place)
-        c.box(w=Fill(1.0), padx=12.0, pb=8.0, fn() { note_box(c, note) }) |> ignore
-        return
-      }
-      None => ()
-    }
-  }
-  marking.popped = -1
-  // (over the picture: FilePreview.kt's darkGlass, as MarksTools has it)
-  let glass = dark_glass()
-  // (its tools elsewhere, `tools` false: the notes as far over them as they are from the tools here)
-  c.box(w=Fill(1.0), pb=if tools { 8.0 } else { marks_notes_over_tools }, gap=10.0, align=ACenter, fn() {
-    // the notes said so far, a card each; where they do not all fit, the last leave the row first, a +N card at its
-    // end standing for them (a menu of them, in their order): nothing scrolled, nothing wrapped
-    let notes = mark_notes()
-    if notes.length() > 0 {
-      let n = notes.length()
-      let slot = fn(mid : Int) { c.id("marks/card-slot/\{mid}") }
-      // (those the row left out as last laid out: read back, the frame built again where that changes)
-      let gone : Array[@sf.MenuItem?] = []
-      for x in notes {
-        if c.left_out(slot(x.0)) {
-          gone.push(Some(@sf.menu_item_of("\{x.1}  " + note_said(x.0), fn() { marks_open_note(c, x.0) })))
-        }
-      }
-      c.box(style=marks_notes_row, fn() {
-        for i, x in notes {
-          let id = c.id("marks/card/\{x.0}")
-          if c.clicked(id) {
-            marks_open_note(c, x.0)
-          }
-          c.box(id=slot(x.0), taps=false, drop=n - i, fn() { note_card(c, x, id) }) |> ignore
-        }
-        c.box(more=true, fn() {
-          let id = c.id("marks/notes-more")
-          if c.clicked(id) {
-            @sf.menu(gone, from=Of(id), along=End)
-          }
-          note_tray_card(c, id, note_more_w, fn() { note_first(c, "+\{gone.length()}", false) })
-        })
-        |> ignore
-      })
-      |> ignore
-    }
-    // (the tools nodes of the window's tree's, under what this draws: marks_tools_node)
-    if !tools {
-      return
-    }
-    c.box(gap=12.0, align=ACenter, fn() {
-      if marking.palette {
-        c.box(dir=Row, pad=4.0, gap=2.0, radius=20.0, glass~, fn() {
-          for col in mark_colors {
-            let id = c.id("marks/color/\{col.0}")
-            if c.clicked(id) {
-              marks_pick_color(col.0)
-            }
-            c.box(
-              w=Px(32.0),
-              h=Px(32.0),
-              radius=16.0,
-              bg=if col.0 == marks_shown_color() { 0xFFFFFF29L } else { 0L },
-              align=ACenter,
-              justify=JCenter,
-              id~,
-              fn() { mark_swatch(c, col.0) },
-            )
-            |> ignore
-          }
-        })
-        |> ignore
-      }
-      c.box(dir=Row, h=Px(44.0), padx=6.0, gap=2.0, radius=picture_bar_corner, glass~, align=ACenter, fn() {
-        for x in [(Select, "cursor", "select"), (Rect, "square", "rect"), (Arrow, "arrow-up-right", "arrow"), (Pen, "scribble", "pen"), (Words, "text", "text")] {
-          let (tool, icon, name) = x
-          if picture_button(c, "marks/tool/" + icon, icon, dark_muted, true, held=marking.tool == tool, said=pv("android-chat.marks.tool." + name)) {
-            marks_put_down(c)
-            marking.note = -1
-            marking.tool = tool
-            if tool != Select {
-              marking.picked = -1
-            }
-            marks_changed()
-          }
-        }
-        mark_gap(c)
-        let swatch = c.id("marks/palette")
-        if c.clicked(swatch) {
-          marking.palette = !marking.palette
-          marks_changed()
-        }
-        let swatch_box = c.box(w=Px(32.0), h=Px(32.0), radius=picture_key, align=ACenter, justify=JCenter, id=swatch, fn() {
-          mark_swatch(c, marks_shown_color())
-        })
-        c.semantics(swatch_box, Button, id=swatch, label=pv("android-chat.marks.color"))
-        @sf.tip(c, "marks/palette/tip", swatch, pv("android-chat.marks.color"))
-        if marking.picked >= 0 && picture_button(c, "marks/remove", "trash", dark_muted, true, said=pv("common.delete")) {
-          marks_remove(marking.picked)
-        }
-        mark_gap(c)
-        if picture_button(c, "marks/undo", "retry", dark_muted, true, enabled=marking.past.length() > 0, said=pv("android-chat.marks.undo")) {
-          marks_undo()
-        }
-        if picture_button(c, "marks/redo", "redo", dark_muted, true, enabled=marking.future.length() > 0, said=pv("android-chat.marks.redo")) {
-          marks_redo()
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
 /// The numbered marks' notes in their numbers' order (ImageMarks.kt notes): the mark's id, its number, what it is (框,
 /// 箭头), its colour.
 pub fn mark_notes() -> Array[(Int, Int, String, Int64)] {
@@ -1249,88 +947,6 @@ pub fn marks_open_note(c : @ui.Ctx, id : Int) -> Unit {
 pub let note_pop_ms : Double = 140.0
 
 ///|
-/// The note being written (Notes.kt NoteBox, in the dark): a frosted card floating over the keyboard (26 round, 8 in at
-/// its sides, 10 over, 8 under, 6 between): its pin and what it is, muted; then 删除批注 (a bin, 36 round), the field
-/// (16 on 21, 添加批注（可选） till something is written, 8 lines at most), 完成 (a tick on the ink, 36 round).
-pub fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
-  let (id, n, what, color) = note
-  let pop = @motion.anim(c, "marks/note-pop", 1.0, global=true)
-  if marking.popped != id {
-    marking.popped = id
-    pop.snap(0.0)
-    pop.animate(1.0, @motion.tween(note_pop_ms, ease=Out))
-  }
-  let p = pop.get()
-  let remove = c.id("marks/note-remove")
-  if c.clicked(remove) {
-    marking.note = -1
-    marks_remove(id)
-    c.blur()
-  }
-  let done = c.id("marks/note-done")
-  if c.clicked(done) {
-    marks_note_done(c)
-  }
-  // (its round buttons, 36, in its foot corners as far in as makes them concentric with it: @sf.capsule_in)
-  let keys_in = @sf.capsule_in(note_box_corner, 36.0)
-  let box = c.box(w=Fill(1.0), pl=keys_in, pr=keys_in, pt=10.0, pb=keys_in, gap=6.0, radius=note_box_corner, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, fn() {
-    c.box(style=note_head, fn() {
-      picture_pin(c, n, color, 16.0) |> ignore
-      c.text(what, size=@sf.theme().t.meta, line=18.0, color=note_muted, wrap=false) |> ignore
-    })
-    |> ignore
-    c.box(style=note_row, fn() {
-      c.box(w=Px(36.0), h=Px(36.0), radius=18.0, align=ACenter, justify=JCenter, label=pv("android-chat.annotate.remove"), id=remove, fn() {
-        @sf.icon(c, "trash", size=17.0, color=note_muted) |> ignore
-      })
-      |> ignore
-      c.box(w=Fill(1.0), min_h=36.0, padx=8.0, pady=7.0, justify=JCenter, fn() {
-        c.editor(
-          "marks/note",
-          placeholder=pv("android-chat.annotate.write"),
-          font_size=16.0,
-          line=21.0,
-          max_lines=8,
-          plain=true,
-          color=note_ink,
-          placeholder_color=note_subtle,
-          caret_color=note_accent,
-          enter_sends=false,
-          field=marking.note_field,
-        )
-        |> ignore
-      })
-      |> ignore
-      c.box(w=Px(36.0), h=Px(36.0), radius=18.0, bg=note_ink, align=ACenter, justify=JCenter, label=pv("android-chat.annotate.done"), id=done, fn() {
-        @sf.icon(c, "check", size=18.0, color=note_bg) |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  if p < 1.0 {
-    c.look(box, @ui.look(alpha=p, scale=0.97 + 0.03 * p))
-  }
-}
-
-///|
-/// A note's card in the tray (Notes.kt Card, in the dark): 160 wide, frosted, round by the ladder's row step: its pin
-/// and what is said of it (只引用, muted, while nothing is), over what it is, muted. Its pin (16 round) in its top left
-/// corner as far from both edges as makes it concentric with it (@sf.capsule_in), level with the first line (20).
-pub fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Unit {
-  let (mid, n, what, color) = note
-  let said = marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string()
-  note_tray_card(c, id, note_card_w, fn() {
-    c.box(style=card_head, fn() {
-      picture_pin(c, n, color, note_pin) |> ignore
-      note_first(c, note_said(mid), said == "")
-    })
-    |> ignore
-    c.text(what, size=@sf.theme().t.caption, line=17.0, color=note_muted, wrap=false) |> ignore
-  })
-}
-
-///|
 /// What is said of note `mid`, else 只引用.
 fn note_said(mid : Int) -> String {
   match marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string() {
@@ -1340,34 +956,11 @@ fn note_said(mid : Int) -> String {
 }
 
 ///|
-/// A card in the notes' tray, `w` wide (frosted, round by the ladder's row step, its first line level with a pin
-/// concentric in its corner): `body` in it.
-fn note_tray_card(c : @ui.Ctx, id : Int, w : Double, body : () -> Unit) -> Unit {
-  let pin_in = @sf.capsule_in(note_card_corner, note_pin)
-  c.box(w=Px(w), pl=pin_in, pr=note_card_end, pt=pin_in - (note_first_line - note_pin) / 2.0, pb=note_card_foot, gap=3.0, radius=note_card_corner, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, id~, body)
-  |> ignore
-}
-
-///|
-/// A tray card's first line: `words`, muted where `quiet` (only quoting), cut by its card where long.
-fn note_first(c : @ui.Ctx, words : String, quiet : Bool) -> Unit {
-  c.box(w=Fill(1.0), clip=true, fn() {
-    c.text(words, size=@sf.theme().t.meta, line=20.0, color=if quiet { note_muted } else { note_ink }, wrap=false) |> ignore
-  })
-  |> ignore
-}
-
-///|
 /// A note's card's width, and the +N card's standing for those that left the tray (a picture's tile's).
 let note_card_w : Double = 160.0
 
 ///|
 let note_more_w : Double = 56.0
-
-///|
-/// The notes' tray: 16 in from the sides, 8 between.
-// kept across runs: a value (no field of it changes)
-let marks_notes_row : @ui.Style = @ui.css("row w=Full px=S4 gap=S2")
 
 ///|
 /// A note's card's corner in the tray: the ladder's row step (Notes.kt Card's 16 before it), its pin concentric in it;
@@ -1385,24 +978,6 @@ let note_card_end : Double = 12.0
 
 ///|
 let note_card_foot : Double = 9.0
-
-///|
-/// A note's box's head (its pin and what it is: 8 in, 6 apart), the row under it (the bin, the field, the tick: 2
-/// apart, at its foot), a card's head (6 apart); the room either side of a tools' gap (4).
-// kept across runs: a value (no field of it changes)
-pub let note_head : @ui.Style = @ui.css("row px=S2 gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let note_row : @ui.Style = @ui.css("row w=Full gap=S0_5 align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let card_head : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let mark_gap_room : @ui.Style = @ui.css("px=S1")
 
 ///|
 /// The dark theme's colours the notes take (Theme.kt Dark): the page, its words, muted, subtle, the accent; their
@@ -1438,18 +1013,6 @@ pub let picture_bar_corner : Double = picture_bar_in + picture_key
 let picture_bar_in : Double = 6.0
 
 ///|
-/// Between the tools' groups (ImageMarks.kt Gap): a line 1 by 18, white at 10%, 4 either side.
-pub fn mark_gap(c : @ui.Ctx) -> Unit {
-  c.box(style=mark_gap_room, fn() { c.box(w=Px(1.0), h=Px(18.0), bg=0xFFFFFF1AL, fn() {  }) |> ignore }) |> ignore
-}
-
-///|
-/// A colour's swatch (ImageMarks.kt Swatch): a disc of it 16 across, ringed 1.5 inside its edge in white at 50%.
-pub fn mark_swatch(c : @ui.Ctx, color : Int64) -> Unit {
-  c.box(w=Px(16.0), h=Px(16.0), radius=8.0, bg=color, border=1.5, border_color=0xFFFFFF80L, fn() {  }) |> ignore
-}
-
-///|
 /// The colour shown: the words being written's, the picked mark's, else the one to draw in.
 pub fn marks_shown_color() -> Int64 {
   match marking.writing {
@@ -1479,15 +1042,8 @@ pub fn marks_pick_color(col : Int64) -> Unit {
 }
 
 ///|
-/// Where what is being written ends on the stage (ImageMarks.kt writingBottom): the words being written's foot; the
-/// open note's pin's point and the note's box under it (NOTE_BOX, 140); None while neither is.
-pub fn marks_writing_bottom(z : @kit.Zoom) -> Double? {
-  marks_writing_bottom_in(z, z.rect())
-}
-
-///|
-/// Where what is being written (or the open note's box) ends on the stage, the picture at `r` (marks_writing_bottom's,
-/// the picture where it is at a moment of the caller's).
+/// Where what is being written (or the open note's box) ends on the stage, the picture at `r` (where it is at a moment
+/// of the caller's).
 pub fn marks_writing_bottom_in(z : @kit.Zoom, r : (Double, Double, Double, Double)?) -> Double? {
   marks_said()
   if !marking.on {
