@@ -1,5 +1,6 @@
 // Files the station keeps: where its data directory is, and writing them whole (a reader never sees half a file).
 import { closeSync, fsyncSync, mkdirSync, openSync, opendirSync, readFileSync, renameSync, writeSync } from "node:fs";
+import { opendir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { tr, type Lang } from "./i18n.ts";
@@ -72,6 +73,18 @@ export const nowSecs = () => Math.floor(wall.now() / 1000);
 export function unreadableDir(dir: string): boolean {
   try {
     opendirSync(dir).closeSync();
+    return false;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "EPERM" || code === "EACCES";
+  }
+}
+
+/// `unreadableDir` off the main thread: opening a folder can wait for as long as what it is on does not answer (a
+/// network file system whose server is gone: OrbStack's when its machine is stopped), and the station's thread with it.
+export async function unreadableDirAsync(dir: string): Promise<boolean> {
+  try {
+    await (await opendir(dir)).close();
     return false;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
