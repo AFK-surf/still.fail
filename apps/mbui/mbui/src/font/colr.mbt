@@ -229,8 +229,8 @@ fn Face::paint_transform(self : Face, p : Int) -> (Matrix, Int)? {
   let ident = Matrix::identity()
   let rotate = fn(angle : Float, center : (Float, Float)?) {
     let r = (angle * 180.0 * rads_per_deg).to_double()
-    let sin_v = Float::from_double(@math.sin(r))
-    let cos_v = Float::from_double(@math.cos(r))
+    let sin_v = Float::from_double(@dmath.sin(r))
+    let cos_v = Float::from_double(@dmath.cos(r))
     let mut m = { ..ident, xx: cos_v, xy: -sin_v, yx: sin_v, yy: cos_v }
     match center {
       Some((cx, cy)) => m = { ..m, dx: sin_v * cy + (1.0 - cos_v) * cx, dy: -sin_v * cx + (1.0 - cos_v) * cy }
@@ -245,8 +245,8 @@ fn Face::paint_transform(self : Face, p : Int) -> (Matrix, Int)? {
     }
   }
   let skew = fn(ax : Float, ay : Float, center : (Float, Float)?) {
-    let tan_x = Float::from_double(@math.tan((ax * 180.0 * rads_per_deg).to_double()))
-    let tan_y = Float::from_double(@math.tan((ay * 180.0 * rads_per_deg).to_double()))
+    let tan_x = Float::from_double(@dmath.tan((ax * 180.0 * rads_per_deg).to_double()))
+    let tan_y = Float::from_double(@dmath.tan((ay * 180.0 * rads_per_deg).to_double()))
     match center {
       Some((cx, cy)) => { ..ident, xy: -tan_x, yx: tan_y, dx: tan_x * cy, dy: -tan_y * cx }
       None => { ..ident, xy: -tan_x, yx: tan_y }
