@@ -2136,5 +2136,10 @@
   "web-pages.vault.timeout.title": "Access duration",
   "web-pages.vault.timeout.done": "Done",
   "web-pages.vault.timeout.button.idle": "Expires after {time} idle",
-  "web-pages.vault.timeout.button.fixed": "Expires after {time}"
+  "web-pages.vault.timeout.button.fixed": "Expires after {time}",
+  "web-pages.vault.timeout.custom": "Custom",
+  "web-pages.vault.timeout.method": "Expiration",
+  "web-pages.vault.timeout.duration": "Duration",
+  "web-pages.vault.timeout.detail.idle": "The timer restarts whenever it is used",
+  "web-pages.vault.timeout.detail.fixed": "The timer starts on approval and does not renew"
 }

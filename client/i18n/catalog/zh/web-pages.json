@@ -2061,5 +2061,10 @@
   "web-pages.vault.timeout.title": "授权时限",
   "web-pages.vault.timeout.done": "完成",
   "web-pages.vault.timeout.button.idle": "闲置 {time}后失效",
-  "web-pages.vault.timeout.button.fixed": "{time}后失效"
+  "web-pages.vault.timeout.button.fixed": "{time}后失效",
+  "web-pages.vault.timeout.custom": "自定义",
+  "web-pages.vault.timeout.method": "失效方式",
+  "web-pages.vault.timeout.duration": "时长",
+  "web-pages.vault.timeout.detail.idle": "每次使用后重新计时",
+  "web-pages.vault.timeout.detail.fixed": "从批准时开始计时，使用不续期"
 }

@@ -14,8 +14,9 @@ import { scopeOf } from "./station.tsx";
 import { useDoingList, doingMatches, failed } from "./doing.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { type Scope, fileSize, pickFile, scopesUpTo, useVaultCall, useVaultRequest } from "./vault.ts";
-import { Button, Chooser, ChooserItem, Dialog } from "./ui.tsx";
+import { Button, Chooser, ChooserItem, Dialog, Select, Choices, Field } from "./ui.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
+import { ChevronDown } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./VaultAsk.css.ts";
 import { t } from "./i18n.ts";
@@ -36,6 +37,9 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
   const [timeoutKind, setTimeoutKind] = useState<"once" | "idle" | "fixed" | null>(null);
   const [timeoutMinutes, setTimeoutMinutes] = useState<number | null>(null);
   const [timeoutOpen, setTimeoutOpen] = useState(false);
+  const [draftKind, setDraftKind] = useState<"idle" | "fixed">("idle");
+  const [draftDuration, setDraftDuration] = useState("60");
+  const [draftCustom, setDraftCustom] = useState("60");
   // What the person typed in, for a secret theirs to type: kept only here, till it goes.
   const [secret, setSecret] = useState("");
   const [username, setUsername] = useState("");
@@ -108,15 +112,33 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
   if (save && view.plain !== true && !view.setUp) {
     return <div className={pagesCss.cardFoot}><Button variant="primary" onClick={() => go(`/w/${workspace}/settings/vault`)}>{t("web-pages.vault.setUp")}</Button>{no}{extra}</div>;
   }
+  const draftMinutes = draftDuration === "custom" ? Number(draftCustom) : Number(draftDuration);
+  const draftValid = draftDuration === "once" || (Number.isSafeInteger(draftMinutes) && draftMinutes > 0 && draftMinutes <= maxMinutes);
+  const openTimeout = () => {
+    setDraftKind(kindPicked === "fixed" ? "fixed" : "idle");
+    setDraftDuration(kindPicked === "once" ? "once" : String(minutes));
+    setDraftCustom(String(minutes));
+    setTimeoutOpen(true);
+  };
   return (
-    <>{fields}<Dialog open={timeoutOpen} onClose={() => setTimeoutOpen(false)} title={t("web-pages.vault.timeout.title")}>
-      <Chooser label={t(`web-pages.vault.timeout.${kindPicked}`)}>{(["once", "idle", "fixed"] as const).map((k) => <ChooserItem key={k} checked={k === kindPicked} onSelect={() => setTimeoutKind(k)}>{t(`web-pages.vault.timeout.${k}`)}</ChooserItem>)}</Chooser>
-      {kindPicked !== "once" && <Chooser label={durationLabel(minutes)}>{durationChoices.map((n) => <ChooserItem key={n} checked={n === minutes} onSelect={() => setTimeoutMinutes(n)}>{durationLabel(n)}</ChooserItem>)}</Chooser>}
-      <Button variant="primary" onClick={() => setTimeoutOpen(false)}>{t("web-pages.vault.timeout.done")}</Button>
+    <>{fields}<Dialog open={timeoutOpen} onClose={() => setTimeoutOpen(false)} title={t("web-pages.vault.timeout.title")} footer={<Button variant="primary" disabled={!draftValid} onClick={() => {
+      setTimeoutKind(draftDuration === "once" ? "once" : draftKind);
+      if (draftDuration !== "once") setTimeoutMinutes(draftMinutes);
+      setTimeoutOpen(false);
+    }}>{t("web-pages.vault.timeout.done")}</Button>}>
+      <Field label={t("web-pages.vault.timeout.duration")}>
+        <Select value={draftDuration} onChange={setDraftDuration} label={t("web-pages.vault.timeout.duration")} options={[
+          { value: "once", label: t("web-pages.vault.scope.once") },
+          ...[...new Set([...durationChoices, ...(draftDuration !== "once" && draftDuration !== "custom" ? [Number(draftDuration)] : [])])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: durationLabel(n) })),
+          { value: "custom", label: t("web-pages.vault.timeout.custom") },
+        ]} />
+      </Field>
+      {draftDuration === "custom" && <Field label={t("web-pages.vault.timeout.minutes")}><input className={`${controlsCss.input} ${controlsCss.inputSolid}`} type="number" min={1} max={maxMinutes} step={1} value={draftCustom} onChange={(e) => setDraftCustom(e.target.value)} /></Field>}
+      {draftDuration !== "once" && <Field label={t("web-pages.vault.timeout.method")}><Choices<"idle" | "fixed"> value={draftKind} onChange={setDraftKind} label={t("web-pages.vault.timeout.method")} options={(["idle", "fixed"] as const).map((k) => ({ value: k, title: t(`web-pages.vault.timeout.${k}`), description: t(`web-pages.vault.timeout.detail.${k}`) }))} /></Field>}
     </Dialog><div className={pagesCss.cardFoot}>
       <Button variant="primary" busy={busy(true)} disabled={under || empty || !validTime} onClick={() => answer(true)}>{t(save ? "web-pages.vault.act.save" : "web-pages.vault.act.allow")}</Button>
       {no}
-      {timed && maxMinutes > 0 ? <Button variant="ghost" onClick={() => setTimeoutOpen(true)}>{kindPicked === "once" ? t("web-pages.vault.scope.once") : t(`web-pages.vault.timeout.button.${kindPicked}`, { time: durationLabel(minutes) })}</Button> : !save && scopes.length > 1 && (
+      {timed && maxMinutes > 0 ? <button type="button" className={controlsCss.chooser} onClick={openTimeout}>{kindPicked === "once" ? t("web-pages.vault.scope.once") : t(`web-pages.vault.timeout.button.${kindPicked}`, { time: durationLabel(minutes) })}<ChevronDown size={12} className={controlsCss.chooserChevron} /></button> : !save && scopes.length > 1 && (
         <Chooser label={scopeName(scope)}>
           {scopes.map((s) => <ChooserItem key={s} checked={s === scope} onSelect={() => setPicked(s)}>{scopeName(s)}</ChooserItem>)}
         </Chooser>
