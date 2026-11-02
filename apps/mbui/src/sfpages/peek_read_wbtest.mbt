@@ -62,27 +62,6 @@ test "a link's card is read as the pointer comes onto it and let go of once it h
 }
 
 ///|
-<<<<<<< HEAD
-test "a file is read on every entry, including while its card is still open" {
-  @sfbase.reset()
-  hovered_file.val = None
-  let reads = Ref(0)
-  let active = Ref(false)
-  let made = @sfbase.made_source()
-  let src : Source = {
-    ..made,
-    topic: fn(name, params) {
-      if name == "filePeek" && !active.val {
-        active.val = true
-        reads.val += 1
-      }
-      (made.topic)(name, params)
-    },
-    leave: fn(name, _) { if name == "filePeek" { active.val = false } },
-  }
-  let build = Ref(0)
-  let t = @ui.Tester::new(
-=======
 /// A chat's link's card alone, with the core's reading of links, for what `said` says of a message.
 fn chat_card_tester(href : String, linked : LinkedChat?, said : (Map[String, Json]) -> Json?) -> @ui.Tester {
   @sfbase.reset()
@@ -102,40 +81,17 @@ fn chat_card_tester(href : String, linked : LinkedChat?, said : (Map[String, Jso
     },
   }
   @ui.Tester::new(
->>>>>>> ae77ba1914c90a952228af0e1d3b233351239721
     fn(c) {
       build.val += 1
       @sfbase.held_build(build.val)
       @sf.begin(c) |> ignore
-<<<<<<< HEAD
-      c.with_theme(@sf.ui_theme(), fn() {
-        c.column(pad=40.0, fn() {
-          let link = @kit.button(c, "src/a.ts", key="file", variant=Ghost)
-          file_peek(c, src, "st", "session", "src/a.ts", None, link.id)
-        }) |> ignore
-      })
-=======
       c.with_theme(@sf.ui_theme(), fn() { c.column(pad=40.0, fn() { chat_card(c, src, "card", "ws1/st1", href, linked) }) |> ignore })
->>>>>>> ae77ba1914c90a952228af0e1d3b233351239721
     },
     w=800.0,
     h=800.0,
     native=Mouse,
     pointing=Mouse,
   )
-<<<<<<< HEAD
-  t.draw()
-  let (x, y, w, h) = t.get(@ui.Role::Button, label="src/a.ts").rect
-  t.move(x + w / 2.0, y + h / 2.0)
-  t.run_for(hover_open_ms * 2.0)
-  assert_eq(reads.val, 1)
-  // Leave and return before the card closes; it still must re-read the file.
-  t.move(700.0, 700.0)
-  t.frame()
-  t.move(x + w / 2.0, y + h / 2.0)
-  t.frame()
-  assert_eq(reads.val, 2)
-=======
 }
 
 ///|
@@ -180,5 +136,53 @@ test "a link to a chat alone reads no message; one archived or gone says so" {
   t.draw()
   t.draw()
   assert_true(t.find(@sf.t("web-main.chatRef.previewMessageGone")) is Some(_))
->>>>>>> ae77ba1914c90a952228af0e1d3b233351239721
+}
+
+///|
+test "a file is read on every entry, including while its card is still open" {
+  @sfbase.reset()
+  hovered_file.val = None
+  let reads = Ref(0)
+  let active = Ref(false)
+  let made = @sfbase.made_source()
+  let src : Source = {
+    ..made,
+    topic: fn(name, params) {
+      if name == "filePeek" && !active.val {
+        active.val = true
+        reads.val += 1
+      }
+      (made.topic)(name, params)
+    },
+    leave: fn(name, _) { if name == "filePeek" { active.val = false } },
+  }
+  let build = Ref(0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      build.val += 1
+      @sfbase.held_build(build.val)
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        c.column(pad=40.0, fn() {
+          let link = @kit.button(c, "src/a.ts", key="file", variant=Ghost)
+          file_peek(c, src, "st", "session", "src/a.ts", None, link.id)
+        }) |> ignore
+      })
+    },
+    w=800.0,
+    h=800.0,
+    native=Mouse,
+    pointing=Mouse,
+  )
+  t.draw()
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="src/a.ts").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(hover_open_ms * 2.0)
+  assert_eq(reads.val, 1)
+  // Leave and return before the card closes; it still must re-read the file.
+  t.move(700.0, 700.0)
+  t.frame()
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  assert_eq(reads.val, 2)
 }
