@@ -107,10 +107,15 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
       return n / (a.length / 3);
     };
     await opens(0.12, 0.13, "cover");
+    // Each pose waited for by its picture, not a fixed time: the first unfolding on mini1 had not shown in 5 s (side run
+    // 41517988497); how long each took is said, and one not shown in a minute fails with the shape it was left at.
     for (const [name, want] of [["open", inner], ["closed", cover], ["book", inner], ["open", inner], ["closed", cover]] as const) {
+      const asked = Date.now();
       await v.input({ t: "pose", name });
-      await sleep(5000);
-      near(await look(`${name}-${want === cover ? "cover" : "inner"}`), want, name);
+      let s = 0;
+      while (Math.abs((s = await look(`${name}-${want === cover ? "cover" : "inner"}`)) - want) >= 0.006 && Date.now() - asked < 60_000) await sleep(1000);
+      console.log(name, "shown in", Date.now() - asked, "ms");
+      near(s, want, name);
       if (name === "open" && want === inner) await opens(0.525, 0.125, "inner");
     }
 
