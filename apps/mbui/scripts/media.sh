@@ -2,10 +2,21 @@
 # Render a scripted mbui scene and keep the inputs and fingerprints needed to identify the result.
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
-. "$D/env.sh"
-cd "$A"
+portable=0
+if [ -n "${MBUI_MEDIA_RUNTIME:-}" ]; then
+  exe=$MBUI_MEDIA_RUNTIME
+  case "$exe" in /*) ;; *) exe="$PWD/$exe" ;; esac
+  portable=1
+elif [ -x "$D/sffilm" ]; then
+  exe="$D/sffilm"
+  portable=1
+else
+  . "$D/env.sh"
+  cd "$A"
+fi
 
 if [ "${1:-}" = preview ]; then
+  [ "$portable" = 0 ] || { echo 'media: preview requires the application source checkout' >&2; exit 2; }
   shift
   exec bash "$D/media-preview.sh" "$@"
 fi
@@ -26,6 +37,7 @@ if [ -n "$prepare" ] && [ ! -s "$prepare" ]; then
 fi
 app=${MBUI_MEDIA_APP:-sffilm}
 case "$app" in ''|*[!a-zA-Z0-9_-]*) echo 'media: invalid app name' >&2; exit 2 ;; esac
+[ "$portable" = 0 ] || [ "$app" = sffilm ] || { echo 'media: a prebuilt runtime only supports sffilm' >&2; exit 2; }
 command -v jq >/dev/null || { echo 'media: jq is required' >&2; exit 2; }
 command -v shasum >/dev/null || { echo 'media: shasum is required' >&2; exit 2; }
 jq -n --argjson extra "${MBUI_MEDIA_RECORD:-null}" '$extra' >/dev/null || { echo 'media: MBUI_MEDIA_RECORD must be JSON' >&2; exit 2; }
@@ -35,10 +47,20 @@ if [ -e "$out" ] && { [ "$drive" -ef "$out" ] || { [ -n "$prepare" ] && [ "$prep
   exit 2
 fi
 # Read the source state before creating any output beside the requested path.
-revision=$(git rev-parse HEAD 2>/dev/null || true)
+revision=''
 dirty=unknown
-if [ -n "$revision" ]; then
-  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then dirty=yes; else dirty=no; fi
+runtime_key=''
+if [ "$portable" = 1 ]; then
+  manifest="$(dirname "$exe")/manifest.json"
+  if [ -f "$manifest" ]; then
+    revision=$(jq -r '.commit // ""' "$manifest")
+    runtime_key=$(jq -r '.key // ""' "$manifest")
+  fi
+else
+  revision=$(git rev-parse HEAD 2>/dev/null || true)
+  if [ -n "$revision" ]; then
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then dirty=yes; else dirty=no; fi
+  fi
 fi
 mkdir -p "$(dirname "$out")"
 
@@ -48,8 +70,10 @@ trap 'rm -rf "$work"' EXIT
 cp "$drive" "$work/drive"
 if [ -n "$prepare" ]; then cp "$prepare" "$work/prepare"; else : > "$work/prepare"; fi
 
-APP="$app" MODE=release bash "$D/mac.sh" build
-exe="./_build/native/release/build/stillfail/$app/$app.exe"
+if [ "$portable" = 0 ]; then
+  APP="$app" MODE=release bash "$D/mac.sh" build
+  exe="./_build/native/release/build/stillfail/$app/$app.exe"
+fi
 [ -x "$exe" ] || { echo "media: no executable for $app" >&2; exit 1; }
 if [ "$kind" = picture ]; then
   env MBUI_FILM= MBUI_PICTURE="$work/result.png" MBUI_FILM_DRIVE="$work/drive" \
@@ -76,7 +100,7 @@ if [ -n "${MBUI_LOCAL_STATION:-}" ]; then
   local_station_hash=$(printf %s "$MBUI_LOCAL_STATION" | shasum -a 256 | awk '{print $1}')
 fi
 jq -n --rawfile drive "$work/drive" --rawfile prepare "$work/prepare" \
-  --arg kind "$kind" --arg app "$app" --arg revision "$revision" --arg dirty "$dirty" \
+  --arg kind "$kind" --arg app "$app" --arg revision "$revision" --arg dirty "$dirty" --arg runtime_key "$runtime_key" \
   --arg exe_sha "$(sha "$exe")" --arg output_sha "$(sha "$result")" --arg last_sha "$last_sha" --arg text_sha "$text_sha" \
   --arg drive_path "$drive" --arg drive_sha "$(sha "$work/drive")" \
   --arg prepare_path "$prepare" --arg prepare_sha "$(sha "$work/prepare")" \
@@ -94,7 +118,7 @@ jq -n --rawfile drive "$work/drive" --rawfile prepare "$work/prepare" \
   --arg failed_why "${MBUI_FAILED_WHY:-}" --arg window "${MBUI_WINDOW:-}" --arg said "${MBUI_SAID:-}" \
   --arg core_ms "${MBUI_CORE_MS:-}" --arg update "${MBUI_UPDATE:-}" --arg updates_ms "${MBUI_UPDATES_MS:-}" \
   --arg autofill "${MBUI_FILM_AUTOFILL:-}" --argjson extra "${MBUI_MEDIA_RECORD:-null}" \
-  '{version: 1, kind: $kind, made_utc: $made, source: {app: $app, revision: $revision, dirty: $dirty, executable_sha256: $exe_sha},
+  '{version: 1, kind: $kind, made_utc: $made, source: {app: $app, revision: $revision, dirty: $dirty, runtime_key: $runtime_key, executable_sha256: $exe_sha},
     host: {os: $os, architecture: $arch}, output_sha256: $output_sha,
     last_frame_sha256: $last_sha, text_record_sha256: $text_sha,
     drive: {path: $drive_path, sha256: $drive_sha, text: $drive},

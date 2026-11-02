@@ -12,6 +12,7 @@
 //
 //   node scripts/native.ts path <part> [target]        where it is (a directory), getting or building it first
 //   node scripts/native.ts file <part> [target]        its main file (mesh.node, stillfail-runner, …)
+//   node scripts/native.ts file-key <part> <target> <key>  a prebuilt part by its already computed key (never builds)
 //   node scripts/native.ts key <part> [target]         its key
 //   node scripts/native.ts fetch <part> [target]       into the cache, never building (fails when not prebuilt)
 //   node scripts/native.ts build <part> [target]       built here, into the cache, whatever is there
@@ -229,7 +230,37 @@ function withHidden(part: Part): Part {
 
 const MESH_LIB = (t: Target) => (t === "darwin-arm64" ? "libstillfail_mesh.dylib" : t === "win32-x64" ? "stillfail_mesh.dll" : "libstillfail_mesh.so");
 
+/// An mbui offscreen program and its portable launcher. The sources are conservative: a change to an app component or
+/// the framework selects a new binary. A separate scene or drive file is never part of the key.
+function mbuiRenderer(app: string, launcher: string): Part {
+  return {
+    files: () => [app, launcher],
+    targets: ["darwin-arm64"],
+    // Their own workflow tests and publishes them without holding up unrelated native parts.
+    publish: [],
+    rust: false,
+    inputs: ["apps/mbui/src", "apps/mbui/mbui/src", "apps/mbui/mbui/tools", "apps/mbui/mbui/scripts",
+      "apps/mbui/moon.mod", "apps/mbui/moon.work", "apps/mbui/mbui/moon.mod",
+      "apps/mbui/scripts/env.sh", "apps/mbui/scripts/mbui.sh", "apps/mbui/scripts/mac.sh", `apps/mbui/scripts/${launcher}`,
+      ":(exclude,glob)apps/mbui/**/*_test.mbt", ":(exclude,glob)apps/mbui/**/*_wbtest.mbt"],
+    recipe: () => ({ app, target: "native", mode: "release", host: "macOS", scene: 1 }),
+    build(t, out) {
+      if (t !== "darwin-arm64" || osPlatform() !== "darwin" || osArch() !== "arm64") {
+        throw new Error(`${app} is built on an Apple Silicon Mac`);
+      }
+      const module = join(ROOT, "apps/mbui");
+      run("bash", [join(module, "scripts/mac.sh"), "build"], {
+        cwd: module, env: { ...process.env, APP: app, MODE: "release" },
+      });
+      copyFileSync(join(module, `_build/native/release/build/stillfail/${app}/${app}.exe`), join(out, app));
+      copyFileSync(join(module, "scripts", launcher), join(out, launcher));
+    },
+  };
+}
+
 const PARTS: Record<string, Part> = {
+  "mbui-figure": mbuiRenderer("sffigure", "figure-run.sh"),
+  "mbui-film": mbuiRenderer("sffilm", "media.sh"),
   // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the core on Node (its tests,
   // apps/mbui's e2e peer) uses it too.
   mesh: {
@@ -860,12 +891,22 @@ const complete = (dir: string, part: string, target: Target) =>
 
 function unpack(tgz: string, part: string, target: Target, k: string, from: string): string {
   const tmp = fresh(part);
-  run(TAR, ["-xzf", tgz, "-C", tmp]);
-  if (!P(part).files(target).every((f) => existsSync(join(tmp, f)))) throw new Error(`${basename(tgz)} lacks ${P(part).files(target).join(", ")}`);
-  const manifest = existsSync(join(tmp, "manifest.json")) ? JSON.parse(readFileSync(join(tmp, "manifest.json"), "utf8")) : {};
-  const final = cached(part, target, k);
-  install(tmp, final, { ...manifest, part, target, key: k, from });
-  return final;
+  try {
+    run(TAR, ["-xzf", tgz, "-C", tmp]);
+    if (!P(part).files(target).every((f) => existsSync(join(tmp, f)))) throw new Error(`${basename(tgz)} lacks ${P(part).files(target).join(", ")}`);
+    const manifest = existsSync(join(tmp, "manifest.json")) ? JSON.parse(readFileSync(join(tmp, "manifest.json"), "utf8")) : {};
+    for (const [field, expected] of Object.entries({ part, target, key: k })) {
+      if (manifest[field] !== undefined && manifest[field] !== expected) {
+        throw new Error(`${basename(tgz)} has a different ${field} in its manifest`);
+      }
+    }
+    const final = cached(part, target, k);
+    install(tmp, final, { ...manifest, part, target, key: k, from });
+    return final;
+  } catch (error) {
+    rmSync(tmp, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 async function download(part: string, target: Target, k: string): Promise<string | null> {
@@ -928,8 +969,7 @@ function buildHere(part: string, target: Target, k: string): string {
 
 /// The part's directory in the cache: there already, downloaded, or built ("prebuild": the prebuild command's, the one
 /// that builds a prebuilt part on CI).
-async function get(part: string, target: Target, mode: "any" | "fetch" | "build" | "prebuild" = "any"): Promise<string> {
-  const k = key(part, target);
+async function getKey(part: string, target: Target, k: string, mode: "any" | "fetch" | "build" | "prebuild" = "any"): Promise<string> {
   const dir = cached(part, target, k);
   const budget = cacheBudget();
   if (!budget && mode !== "build" && complete(dir, part, target)) { noteUse(dir); return dir; }
@@ -952,6 +992,10 @@ async function get(part: string, target: Target, mode: "any" | "fetch" | "build"
   });
   if (budget) try { trimCache(budget); } catch (e) { log(`could not trim the cache: ${(e as Error).message}`); }
   return result;
+}
+
+async function get(part: string, target: Target, mode: "any" | "fetch" | "build" | "prebuild" = "any"): Promise<string> {
+  return getKey(part, target, key(part, target), mode);
 }
 async function lockedAsync<T>(dir: string, f: () => Promise<T>): Promise<T> {
   const release = acquire(dir);
@@ -1100,6 +1144,20 @@ async function main(argv: string[]) {
     case "key": { const [p, t] = pair(args); console.log(key(p, t)); return; }
     case "path": { const [p, t] = pair(args); console.log(await get(p, t)); return; }
     case "file": { const [p, t] = pair(args); console.log(mainFile(p, t, await get(p, t))); return; }
+    case "file-key": {
+      const [p, target, k] = args;
+      if (!p || !target || !k || args.length !== 3 || !/^[0-9a-f]{24}$/.test(k) || !P(p).targets.includes(target as Target)) {
+        throw new Error("usage: native.ts file-key <part> <target> <24-digit key>");
+      }
+      const t = target as Target;
+      const dir = await getKey(p, t, k, "fetch");
+      const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
+      if (manifest.part !== p || manifest.target !== t || manifest.key !== k) {
+        throw new Error(`${p} ${t} ${k}: cached manifest does not match the requested version`);
+      }
+      console.log(mainFile(p, t, dir));
+      return;
+    }
     case "fetch": { const [p, t] = pair(args); console.log(await get(p, t, "fetch")); return; }
     case "build": { const [p, t] = pair(args); console.log(await get(p, t, "build")); return; }
     case "run": {

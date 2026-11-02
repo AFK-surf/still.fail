@@ -31,6 +31,48 @@ The script writes a temporary file alongside the destination and replaces it onl
 Batch output is named `OUTPUT_DIR/NAME.png`. The renderer starts once for the whole batch. All images are rendered before any are published, so a failed scene
 keeps the existing pictures. Set `MBUI_FIGURE_FONT` to use the same font for the whole batch.
 
+## A scene without rebuilding the renderer
+
+A prebuilt `sffigure` can read a graphic as data. The canvas, panel and words are mbui views; `sign-in-card` invokes
+the actual app component used by the coded examples. For example, this scene draws the same image as `wrap-normal`:
+
+```json
+{
+  "version": 1, "width": 480, "height": 270, "scale": 5,
+  "background": "#EDEDF0FF",
+  "children": [
+    {"type": "center", "children": [
+      {"type": "sign-in-card", "width": 398, "reverse": false, "key": "clean-wrap"}
+    ]}
+  ]
+}
+```
+
+`center` centers its children in its parent. `panel` takes `x`, `y`, `width`, `height`, `background`, optional
+`radius`, and `children`; `words` takes `x`, `y`, `text`, `size`, `color`, and optional `weight`, `width` and `line`.
+Colors are `#RRGGBBAA`. An unknown node or property, or an invalid required field, fails the render and preserves the existing output.
+This initial scene vocabulary is deliberately smaller than the MoonBit view API: a view or component it does not yet
+name still needs a coded figure. In particular, it is not an interpreter for arbitrary app code.
+
+On an Apple Silicon Mac, a checkout can obtain the exact renderer built for its own framework and app sources:
+
+```sh
+renderer=$(node ../../scripts/native.ts file mbui-figure darwin-arm64)
+MBUI_FIGURE_RUNTIME="$renderer" bash scripts/figure.sh --scene out/scene.json out/scene.png
+```
+
+To prepare a remote task from the checkout, without copying the source tree to that task, run:
+
+```sh
+bash scripts/media-job.sh figure out/scene.json /absolute/path/to/a-new-job
+```
+
+Pass that job directory to `station_task` as `dir`, with command `bash run.sh` and `back: ["result.png"]`.
+The task contains the scene and the small native-part client. It obtains the renderer by the source key, uses the
+station's shared prebuilt-part cache, and never builds it. A different scene uses the same renderer; an app or
+framework source change selects another key. If that exact version has not been published, the task fails instead of
+silently substituting main's old component. Use the source checkout's normal `figure.sh` build for unpublished code.
+
 ## Make another graphic
 
 Add a view function in `src/sfgraphic` and give it a name in `src/sffigure/main.mbt`. `@figure.canvas`,

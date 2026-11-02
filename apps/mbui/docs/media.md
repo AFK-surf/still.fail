@@ -85,3 +85,19 @@ simulated native input, keyboard, font scale, local station, window inset, windo
 are not supplied by a native window; the command rejects their explicit overrides rather than ignoring them. Drive
 steps only supported under a Tester, such as `system` and `ime`, cannot be replayed in this window. Use the exported
 PNG or film to inspect those settings and frame-accurate timing.
+
+## Prebuilt scene renderer
+
+The macOS Apple Silicon offscreen application renderer is also available as the `mbui-film` native part. To prepare a
+small remote job from a source checkout, without synchronizing the checkout or building it on the remote station:
+
+```sh
+bash scripts/media-job.sh film out/scene.drive /absolute/path/to/a-new-job [out/prepare.drive]
+```
+
+Use that directory as `station_task`'s `dir`. Run `MBUI_FIXTURE=home MBUI_WIN=320x560 bash run.sh` and return
+`result.png` and `result.png.scene.json`; set `MBUI_MEDIA_KIND=film` to return `result.mp4`,
+`result.mp4.last.png`, `result.mp4.textrec` and `result.mp4.scene.json`. The ordinary `MBUI_*` scene settings still
+apply. The job obtains its exact prebuilt renderer by the source key, with the station's shared native-part cache;
+it does not build one. If the component sources have changed and that version has not been published, it fails rather
+than showing an old component. Build that changed checkout with `scripts/media.sh` instead.
