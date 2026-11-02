@@ -4,6 +4,7 @@
 // other stations are told); packing an archived session's files is the hub's ColdStorage.
 import { type PresetCopy, keepCopy } from "./presets.ts";
 import { copyFileSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { DISK_LOW_BYTES } from "../ops/disk.ts";
@@ -116,6 +117,17 @@ export function say(hub: Hub, thread: number, user: string, text: string, attach
 /// the profiles allowed in its workspace (docs/multi-workspace.md).
 export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang()): [string, ThreadRow] {
   const config = hub.config();
+  const client = trimmed(options.clientKey);
+  // A reply can be lost when the station restarts. The same request must find the rows already made, including when
+  // the process stopped between inserting the session, the thread and its membership.
+  const key = client === null ? newChatKey() : `${INTERNAL_CONNECT}:c-${createHash("sha256").update(JSON.stringify([options.ws ?? null, options.createdBy, client])).digest("hex").slice(0, 32)}`;
+  const existing = hub.store.getSession(key);
+  if (existing !== null) {
+    if (client !== null) hub.clientKeysMade.set(key, [client, hub.now()]);
+    const thread = hub.store.homeChat(key) ?? openChat(hub, key, options.createdBy, existing.title);
+    hub.store.joinThread(thread.id, key, INTERNAL_CONNECT);
+    return [key, thread];
+  }
   const runtime = options.runtime;
   const all = config.profiles.filter((p) => p.runtimes.includes(runtime));
   if (all.length === 0) throw new Error(`no ${runtime} profile configured`);
@@ -138,7 +150,6 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     const allowed = hub.accounts.modelEfforts(runtime, model, pinned, (p) => here.has(p.id));
     if (!allowed.includes(effort)) throw new Error(`effort must be one of ${allowed.join(", ")}`);
   }
-  const key = newChatKey();
   const workspace = join(config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
   mkdirSync(workspace, { recursive: true });
   // (before its rows: one that names no preset of its workspace makes no chat)
@@ -148,7 +159,6 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   mkdirSync(join(config.dataDir, "repos"), { recursive: true });
   const now = hub.now();
   // Known before its rows are (their events can reach the client before this answers), and for a while after.
-  const client = trimmed(options.clientKey);
   if (client !== null) {
     for (const [k, [, at]] of hub.clientKeysMade) if (now - at >= CLIENT_KEY_KEPT_MS) hub.clientKeysMade.delete(k);
     hub.clientKeysMade.set(key, [Array.from(client).slice(0, 120).join(""), now]);
