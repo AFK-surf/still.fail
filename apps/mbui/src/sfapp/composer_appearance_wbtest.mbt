@@ -108,8 +108,8 @@ test "a newly added picture comes in whole, never cut or faded across as the com
   let mut seen = 0
   let mut ms = 0.0
   while ms < @ui.move_most_ms {
-    t.run_for(16.0)
-    ms = ms + 16.0
+    t.run_for(@ui.frame_period_default)
+    ms = ms + @ui.frame_period_default
     let (_, ground_y, _, _) = composer_glass(t)
     for a in t.drawn_instances() {
       if a[5] != 4.0 || t.image_src(a[20].to_int()) != picture || a[11] <= 0.0 {
