@@ -283,6 +283,21 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   // (where a node said it yields to the list's thumb of an old view under it: that view's there, yield_thumbs)
   t.on_target(fn(picked, found, x, y) { view_retarget(t, picked, found, x, y) })
   t.on_through(view_through)
+  // (a column of the tree's gliding on by itself, let go: said to move till its end, as an old view's list's fling is)
+  t.on_glides(
+    fn(column, ends) {
+      let who = match tree_glide_movers.get(column) {
+        Some(m) => m
+        None => {
+          let m = Mover::new()
+          tree_glide_movers[column] = m
+          m
+        }
+      }
+      g().moving(who, ({ ends, } : TreeGlide) as &Moving, what="a list's fling, the tree's")
+    },
+    fn(column) { tree_glide_movers.remove(column) },
+  )
   // (the focus on one of its nodes let go of at a cause: none's from then, on either side)
   t.on_focus_lost(view_focus_lost)
   // (a node asking for the focus (View::ask_focus): the old frame's focus moved there, the tree told back as of any
@@ -399,7 +414,16 @@ fn view_forget() -> Unit {
 /// system's size of words, as an old view's are (Ctx::sp: the look's size and line said at 1).
 fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
   let c = g()
-  let tl = layout_text(words, c.sp(look.size), look.weight, if width < 0.0 { 1.0e9 } else { width }, look.wrap, line=c.sp(look.line), style=view_words_style())
+  let tl = layout_text(
+    words,
+    c.sp(look.size),
+    look.weight,
+    if width < 0.0 { 1.0e9 } else { width },
+    look.wrap,
+    line=view_line(c, look),
+    spacing=view_spacing(c, look),
+    style=view_words_style(),
+  )
   // (broken onto more lines than their own where the width ran out: as wide as it, as an old view's words are, leaf_size)
   (if width >= 0.0 && look.wrap && soft_wrapped(tl.line_end, tl.shaped.cu) { width } else { tl.w }, tl.h)
 }
@@ -426,7 +450,7 @@ fn view_rich(runs : Array[@view.WordsRun], look : @view.WordsLook) -> Rich {
     size: c.sp(look.size),
     weight: look.weight,
     color: 0L,
-    line: c.sp(look.line),
+    line: view_line(c, look),
     trim: false,
     wrap: look.wrap,
     link_color: 0L,
@@ -434,7 +458,7 @@ fn view_rich(runs : Array[@view.WordsRun], look : @view.WordsLook) -> Rich {
     code_color: 0L,
     code_bg: 0L,
     code_scale: 1.0,
-    spacing: 0.0,
+    spacing: view_spacing(c, look),
     base: 0,
     select: false,
     max_lines: 0,
@@ -982,7 +1006,13 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
               _ => ()
             }
           }
-          None => self.draw_image(shown, x, y, w, h, FitFill, c.radius * s, a, fade=false, max_px=most)
+          // (covering it where it says so, as an old view's picture does: View::image_covers; fading in where it says so,
+          // View::image_fades; a GIF that moves going through its frames, each woken for, as an old view's: moving_key)
+          None => {
+            let fit = if c.image_cover { FitCover } else { FitFill }
+            let shown = self.moving_key(shown, w, h, fit)
+            self.draw_image(shown, x, y, w, h, fit, c.radius * s, a, fade=c.image_fade, max_px=most)
+          }
         }
         inst_owners.painting = was
         inst_owners.tree_painting = was_tree
@@ -1262,11 +1292,11 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     let k = c.words_look
     // (one line given less than it is wide: cut to it, ending in an ellipsis, as an old view's words on one line are)
     // (at the system's size of words, in the theme's digits, as measured: view_words_measure)
-    let (size, line, style) = (self.sp(k.size), self.sp(k.line), view_words_style())
+    let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
     // (wrapped in its width as laid out, as an old view's words are where they are placed: Node::text_layout's)
-    let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~)
+    let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
     let tl = if !k.wrap && tl.w > c.w + 0.5 {
-      ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~) })
+      ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
     } else {
       tl
     }
@@ -3032,7 +3062,9 @@ fn Ctx::back_taker(self : Ctx, brought? : Bool = true) -> BackHeld? {
       }
       Some({
         // (each step its, as one event at its moment, to it as it said it as the gesture began: Tree::back_step)
-        f: fn(kind, x, _w, t, _p) {
+        f: fn(kind, x, _w, t, p) {
+          // (the system's progress with it, where it is the system's: a stack following it reads it, Nav::made)
+          back_progress.val = p
           let step : BackStep = match kind {
             0 => Began(x, t)
             1 => Moved(x, t)
@@ -3041,6 +3073,7 @@ fn Ctx::back_taker(self : Ctx, brought? : Bool = true) -> BackHeld? {
             _ => Back
           }
           tree.back_step(id, step, t) |> ignore
+          back_progress.val = -1.0
         },
         left,
         w,
@@ -4366,3 +4399,48 @@ fn tree_layer_focused(c : Ctx, t : @view.Tree, layer : @view.NodeId) -> Bool {
       }
   }
 }
+
+///|
+/// The system's progress of the step of back a node of the tree's is told now (Ctx::back_taker's: Android's, as it
+/// goes), -1 where it is no system's or none is told: what follows it as a stack does reads it (Nav::made).
+// kept across runs: set round one step told, -1 between them
+let back_progress : Ref[Double] = Ref(-1.0)
+
+///|
+/// The height of a line of a node's words as they are drawn (WordsLook's `line`: its points at the system's size of
+/// words; 0 the font's own; a share of their size as it is drawn), as Ctx::text sets an old view's.
+fn view_line(c : Ctx, look : @view.WordsLook) -> Double {
+  if look.line < 0.0 {
+    -look.line * c.sp(look.size)
+  } else {
+    c.sp(look.line)
+  }
+}
+
+///|
+/// How far apart a node's letters are set besides their own as they are drawn (WordsLook's `tracking`: a share of their
+/// size as drawn, or points), as Ctx::text sets an old view's (Tracking::px of its size as drawn).
+fn view_spacing(c : Ctx, look : @view.WordsLook) -> Double {
+  match look.tracking {
+    Ems(e) => e * c.sp(look.size)
+    Points(p) => p
+  }
+}
+
+///|
+/// A column of the window's tree gliding on by itself (Tree::on_glides): at rest as it says it is now, the end of the
+/// glide it is on (none: at rest, held again, stopped, let go of).
+priv struct TreeGlide {
+  ends : () -> Double?
+}
+
+///|
+impl Moving for TreeGlide with rest_at(self, _now, _frame) {
+  (self.ends)().unwrap_or(-1.0)
+}
+
+///|
+/// Who tells each of the tree's columns' glides, by its number (view_host's on_glides): one each, as an old view's list
+/// is its own; let go with it.
+// kept across runs: put back as each column is let go
+let tree_glide_movers : Map[Int, Mover] = {}

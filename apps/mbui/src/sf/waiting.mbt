@@ -452,7 +452,7 @@ pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
         .words_look(By(fn() {
           let th = @ui.tree_theme()
           let (size, own) = th.text_size(Ui)
-          { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: false }
+          { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: false, tracking: @view.letters_own }
         }))
         .ink(By(fn() { theme().p.muted }))
         |> ignore

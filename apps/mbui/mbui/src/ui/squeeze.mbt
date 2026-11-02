@@ -304,10 +304,10 @@ fn Ctx::view_squeeze_faults(self : Ctx) -> Array[String] {
     }
     let k = c.words_look
     if c.runs.is_empty() {
-      let (size, line, style) = (self.sp(k.size), self.sp(k.line), view_words_style())
-      let whole = layout_text(c.words, size, k.weight, 1.0e9, false, line~, style~)
+      let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
+      let whole = layout_text(c.words, size, k.weight, 1.0e9, false, line~, style~, spacing~)
       if whole.w > c.w + 0.5 {
-        let shown = ellipsized(c.words, whole, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~) })
+        let shown = ellipsized(c.words, whole, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
         say(shown.shaped.starts.length() - 1, whole.w)
       }
     } else {

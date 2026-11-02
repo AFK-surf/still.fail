@@ -40,7 +40,14 @@ pub struct Scroll {
   priv mut claimed : Bool
   /// what is told as it scrolls (its bar), at the moment
   priv mut on_scrolled : (Double) -> Unit
+  /// which column it is, of all made (what hosts the tree tells its glides by: Tree::on_glides)
+  priv serial : Int
 }
+
+///|
+/// Columns' scrolls made: each one's own number (Scroll's `serial`).
+// kept across runs: it goes on counting
+let scrolls_made : Ref[Int] = Ref(0)
 
 ///|
 /// A column's scroll, at its top.
@@ -56,7 +63,18 @@ pub fn Scroll::new() -> Scroll {
     hand_v: 0.0,
     claimed: false,
     on_scrolled: fn(_) {  },
+    serial: {
+      scrolls_made.val += 1
+      scrolls_made.val
+    },
   }
+}
+
+///|
+/// When the glide it is on now ends, on the tree's timeline (let go at a speed: View::scrolls' fling), as it is now:
+/// none at rest, held, or stopped (pressed again, the wheel, what it holds shorter, let go of).
+pub fn Scroll::glides_till(self : Scroll) -> Double? {
+  @signals.untracked(fn() { self.fling.get() }).map(fn(f) { f.end_t })
 }
 
 ///|
@@ -220,6 +238,8 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
   let end_t = t + t_end.ceil()
   self.fling.set(Some({ x0, v0, t0: t, end_t, end_x }))
   (self.on_scrolled)(t)
+  // (what hosts the tree told it glides, which column it is and how to ask it when it ends now: Tree::on_glides)
+  (v.tree.glides)(self.serial, fn() { self.glides_till() })
   // (at rest at its end, said on the timeline: then nothing reads the time for it)
   self.settle_off = v.at_moment(end_t, fn() {
     self.settle_off = fn() {  }
@@ -324,6 +344,8 @@ pub fn View::scrolls(
     s.settle_off = fn() {  }
     s.room = fn() { None }
     s.on_scrolled = fn(_) {  }
+    // (no glide of it told any more: Tree::on_glides)
+    (self.tree.glides_gone)(s.serial)
   })
   |> ignore
   self

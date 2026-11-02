@@ -106,6 +106,8 @@ pub fn avatar(@ui.Ctx, String, String, String, Double) -> Unit
 
 pub fn avatar_color(String) -> Int64
 
+pub fn avatar_node(@view.View, () -> String, () -> String, () -> String, Double) -> Unit
+
 pub fn avatars_base() -> String
 
 pub let back : @ui.TextStyle
@@ -694,6 +696,8 @@ pub fn group(@ui.Ctx, () -> Unit, card? : Bool) -> Unit
 
 pub let group_corner : Double
 
+pub fn group_node(@view.View, (@view.View) -> Unit) -> Unit
+
 pub fn group_row(@ui.Ctx, Bool, Bool, () -> Unit, id? : Int32) -> Unit
 
 pub let group_row_end_radius : @ui.Radius
@@ -733,6 +737,8 @@ pub fn head_end(@ui.Ctx, () -> Unit) -> Unit
 pub fn head_reach(Double) -> @ui.Style
 
 pub fn heading(@ui.Ctx, String, note? : String, actions? : () -> Unit) -> Unit
+
+pub fn heading_node(@view.View, () -> String) -> Unit
 
 pub fn held_in() -> @ui.Style
 
@@ -891,6 +897,8 @@ pub let link_mark_w : @ui.Len
 pub fn link_menu(String, from~ : Beside, () -> Unit, () -> Unit) -> Unit
 
 pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, value_bad? : Bool, value_dot? : Bool, strong? : Bool, danger? : Bool, out? : Bool, chevron? : Bool, folds? : Bool, note? : String, lacks? : Bool, trouble? : String, lead? : () -> Unit, tail? : () -> Unit, below? : () -> Unit, below_open? : Double, goes? : Bool, acts? : Bool, adds? : Bool, title_after? : () -> Unit, control? : () -> Unit, note_cut? : Bool, face? : Bool, title_style? : @ui.TextStyle, title_cut? : Bool, value_cut? : Bool) -> Bool
+
+pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, note? : () -> String, strong? : Bool, lead? : RowLead, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double) -> Unit
 
 pub fn list_apart(@ui.Ctx) -> Unit
 
@@ -1270,6 +1278,8 @@ pub fn page_bar(@ui.Ctx, () -> Unit, corners? : (Double, Double)?) -> Unit
 
 pub fn page_bleed() -> @ui.Style
 
+pub fn page_block(@view.View, (@view.View) -> Unit) -> Unit
+
 pub fn page_card(@ui.Ctx, () -> Unit, footed? : Bool) -> Unit
 
 pub fn page_choice(@ui.Ctx, String, Array[String], Int32, item_w? : Double) -> Int32
@@ -1279,6 +1289,8 @@ pub fn page_head(@ui.Ctx, String, meta? : String, actions? : () -> Unit) -> Unit
 pub let page_list_opened : @ref.Ref[(@ui.Ctx, String, Int32) -> Unit]
 
 pub let page_narrow_most : Double
+
+pub fn page_node(@view.View, () -> String, (@view.View) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String) -> Unit
 
 pub fn page_note(@ui.Ctx, String, bad? : Bool) -> Unit
 
@@ -1946,6 +1958,8 @@ pub fn station_icon(@ui.Ctx, String, String, Double, Int64, here? : Bool) -> Uni
 
 pub fn station_mark(@ui.Ctx, String, String, Double, Int64, none? : String, still? : Bool) -> Unit
 
+pub fn station_mark_node(@view.View, () -> String, () -> String, Double, () -> Int64, () -> Int32) -> Unit
+
 pub fn status_dot(@ui.Ctx, String) -> Unit
 
 pub let status_ring : Double
@@ -1982,7 +1996,11 @@ pub let switch_in : Double
 
 pub fn switch_look(@ui.Ctx, String, Bool, small? : Bool, pressed? : Bool) -> Unit
 
+pub fn switch_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String) -> Unit
+
 pub fn switch_row(@ui.Ctx, String, String, Bool, note? : String, disabled? : Bool, busy? : Bool, lead? : (@ui.Ctx) -> Unit) -> Bool
+
+pub fn switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String) -> Unit
 
 pub let switch_small_h : Double
 
@@ -2896,6 +2914,12 @@ pub(all) enum Resized {
 pub(all) struct Round {
   side : Double
   glyph : Double
+}
+
+pub(all) enum RowLead {
+  NoLead
+  LeadIcon(String)
+  LeadMade((@view.View) -> Unit)
 }
 
 pub(all) struct Rows {

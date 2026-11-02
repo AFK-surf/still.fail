@@ -13,6 +13,8 @@ import {
 }
 
 // Values
+pub fn about_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
+
 pub fn about_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub let acc_delete_words : @ui.TextStyle
@@ -565,7 +567,9 @@ pub fn set_filter(@sfbase.Source, @sfbase.Workspace, String) -> Unit
 
 pub fn settings_blocks(@ui.Ctx, @settings.Core, @settings.Here, (@settings.Route) -> Unit) -> Array[() -> Unit]
 
-pub fn settings_parts(@ui.Ctx, @settings.Core, @settings.Here) -> Array[SettingsPart]
+pub fn settings_home_node(@view.View, @settings.Core, () -> @settings.Here, (@settings.Route) -> Unit, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, bars~ : () -> Bool, stint~ : () -> Int32) -> Unit
+
+pub fn settings_parts(@ui.Ctx, @settings.Core, @settings.Here, bars? : Bool, asks? : Bool) -> Array[SettingsPart]
 
 pub fn settings_row_of(@settings.Route) -> @settings.Route
 
@@ -786,6 +790,7 @@ pub(all) enum SettingsLead {
 }
 
 pub(all) struct SettingsPart {
+  key : String
   heading : String
   rows : Array[SettingsRow]
 }

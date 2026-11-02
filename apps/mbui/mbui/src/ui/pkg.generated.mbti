@@ -344,7 +344,7 @@ pub let nav_late_most : Double
 
 pub fn nav_rest() -> Double
 
-pub fn[P] nav_view(@view.View, Nav[P], (Ctx, P) -> Unit, bg? : () -> Int64, edge? : Double, ready? : (P) -> Bool, most? : Double, page_key? : (P) -> String) -> @view.View
+pub fn[P] nav_view(@view.View, Nav[P], (Ctx, P) -> Unit, bg? : () -> Int64, edge? : Double, ready? : (P) -> Bool, most? : Double, page_key? : (P) -> String, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32) -> Unit)?) -> @view.View
 
 pub fn notice_answer() -> Bool?
 
@@ -559,6 +559,12 @@ pub fn stream_layers_here() -> Bool
 pub fn strike(String) -> Run
 
 pub fn style(row? : Bool, w? : Len, h? : Len, min_w? : Len, max_w? : Len, min_h? : Len, max_h? : Len, p? : Space, px? : Space, py? : Space, pl? : Space, pr? : Space, pt? : Space, pb? : Space, m? : Space, mx? : Space, my? : Space, ml? : Space, mr? : Space, mt? : Space, mb? : Space, gap? : Space, align? : Align, justify? : Justify, bg? : Color, radius? : Radius, border? : Stroke, border_color? : Color, dashed? : Bool, shadow? : Shadow, clip? : Bool, opacity? : Opacity, narrow? : Patch, dark? : Patch, selected? : Patch, hovered? : Patch, focused? : Patch, pressed? : Patch, disabled? : Patch) -> Style
+
+pub fn style_cut(TextStyle) -> Bool
+
+pub fn style_ink(TextStyle) -> Int64
+
+pub fn style_words(TextStyle) -> @view.WordsLook
 
 pub fn system_bars() -> SystemBars
 

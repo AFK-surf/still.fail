@@ -556,9 +556,21 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
 /// it is shown, so each is decoded before its turn; one not yet is stood in for by the last one before it that is
 /// (never a frame of nothing between them).
 fn Ctx::moving_src(self : Ctx, n : Node) -> String {
-  match moving_images.get(n.text) {
-    Some(m) if !n.still => {
-      let px = self.image_px(m.keys[0], n.fw, n.fh, n.fit)
+  if n.still {
+    return n.text
+  }
+  self.moving_key(n.text, n.fw, n.fh, n.fit)
+}
+
+///|
+/// What picture `src` shows now drawn `bw` by `bh` as `fit` fits it (Ctx::moving_src's, an old view's or a node's): a
+/// GIF that moves the frame of its loop at this frame's time, the frame woken for as its turn comes (Ctx::loop_at),
+/// each frame asked for at the size it is shown and one not decoded yet stood in for by the last before it that is;
+/// any other `src`.
+fn Ctx::moving_key(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) -> String {
+  match moving_images.get(src) {
+    Some(m) => {
+      let px = self.image_px(m.keys[0], bw, bh, fit)
       let px = if px <= 0.0 { 256.0 } else { px }
       let ready = m.keys.map(fn(k) { self.image_ready(k, px) })
       let length = m.ends[m.ends.length() - 1]
@@ -570,10 +582,10 @@ fn Ctx::moving_src(self : Ctx, n : Node) -> String {
       if ready[k] {
         m.keys[k]
       } else {
-        n.text
+        src
       }
     }
-    _ => n.text
+    None => src
   }
 }
 
