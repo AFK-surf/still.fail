@@ -86,7 +86,7 @@ export class FontFiles implements Owner {
   }
 
   #save(): Effect.Effect<void, CoreError> {
-    return Effect.mapError(this.#host.storageSet(INDEX, toJsonBytes(this.#kept ?? {})), (e) => new CoreError("fonts", e.message));
+    return Effect.mapError(this.#host.storageSet(INDEX, toJsonBytes(this.#kept ?? {})), (e) => CoreError.plainly("fonts", e));
   }
 
   /// Face `id`'s files fetched, those not kept yet, each whole; null once all are here (gzipped, or as the app kept
@@ -112,10 +112,10 @@ export class FontFiles implements Owner {
             let size = 0;
             yield* Effect.scoped(
               Effect.gen({ self: this }, function* () {
-                const r = yield* Effect.mapError(this.#host.fetchStream({ method: "GET", url: f.url, headers: [], body: null }), (e) => new CoreError("fonts", e.message));
+                const r = yield* Effect.mapError(this.#host.fetchStream({ method: "GET", url: f.url, headers: [], body: null }), (e) => CoreError.plainly("fonts", e));
                 if (r.status !== 200) return yield* Effect.fail(new CoreError("fonts", t("android-misc.updates.httpStatus", { status: r.status })));
                 while (true) {
-                  const part = yield* Effect.mapError(r.body.take, (e) => new CoreError("fonts", e.message));
+                  const part = yield* Effect.mapError(r.body.take, (e) => CoreError.plainly("fonts", e));
                   if (part === null) break;
                   parts.push(part);
                   size += part.length;
@@ -134,7 +134,7 @@ export class FontFiles implements Owner {
               whole.set(part, at);
               at += part.length;
             }
-            yield* Effect.mapError(this.#host.storageSet(fileKey(f.sha256), whole), (e) => new CoreError("fonts", e.message));
+            yield* Effect.mapError(this.#host.storageSet(fileKey(f.sha256), whole), (e) => CoreError.plainly("fonts", e));
             kept[f.sha256] = "gz";
             yield* this.#save();
             done += f.bytes;
@@ -169,7 +169,7 @@ export class FontFiles implements Owner {
     return Effect.gen({ self: this }, function* () {
       const kept = yield* this.#index();
       if (kept[sha256] === undefined) return yield* Effect.fail(new CoreError("not_found", t("core-misc.params.invalid", { error: `sha256 ${sha256}` })));
-      yield* Effect.mapError(this.#host.storageSet(fileKey(sha256), bytes), (e) => new CoreError("fonts", e.message));
+      yield* Effect.mapError(this.#host.storageSet(fileKey(sha256), bytes), (e) => CoreError.plainly("fonts", e));
       kept[sha256] = "ttf";
       yield* this.#save();
       return null;
@@ -184,7 +184,7 @@ export class FontFiles implements Owner {
       const key = previewKey(id, face.preview);
       const kept = yield* Effect.orElseSucceed(this.#host.storageGet(key), () => null);
       if (kept !== null) return new Beside({}, kept);
-      const r = yield* Effect.mapError(this.#host.fetch({ method: "GET", url: face.preview, headers: [], body: null }), (e) => new CoreError("fonts", e.message));
+      const r = yield* Effect.mapError(this.#host.fetch({ method: "GET", url: face.preview, headers: [], body: null }), (e) => CoreError.plainly("fonts", e));
       if (r.status !== 200) return yield* Effect.fail(new CoreError("fonts", t("android-misc.updates.httpStatus", { status: r.status })));
       yield* Effect.ignore(this.#host.storageSet(key, r.body), { log: "Unhandled", message: "font kept" });
       return new Beside({}, r.body);

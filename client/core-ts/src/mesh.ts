@@ -372,7 +372,7 @@ class Control {
       try {
         answer = JSON.parse(line);
       } catch (e) {
-        return yield* Effect.fail(meshError(t("core-logic.mesh.credential_unreadable", { error: String(e) })));
+        return yield* Effect.fail(CoreError.plainly("mesh", e, t("core-logic.mesh.credential_unreadable")));
       }
       if (answer !== null && typeof answer === "object" && "error" in answer) {
         const reason = typeof answer.error === "string" ? answer.error : JSON.stringify(answer.error);
@@ -479,7 +479,7 @@ export class Link {
       try {
         reply = JSON.parse(line);
       } catch (e) {
-        return yield* Effect.fail(meshError(t("core-logic.mesh.reply_unreadable", { error: String(e) })));
+        return yield* Effect.fail(CoreError.plainly("mesh", e, t("core-logic.mesh.reply_unreadable")));
       }
       const status = reply?.status;
       if (typeof status !== "number" || !Number.isInteger(status) || status < 0 || status > 65535) return yield* Effect.fail(meshError(t("core-logic.mesh.reply_no_status")));
@@ -775,7 +775,7 @@ export class Mesh {
   }
 
   static #bind(iroh: Iroh, secret: Uint8Array, relays: string[], relayOnly = false, alpns: Uint8Array[] = [], relayEntries: { entry: string; relay: string }[] = []): Effect.Effect<IrohEndpoint, CoreError> {
-    return Effect.mapError(iroh.bind({ secretKey: secret, relayUrls: relays, lookup: !relayOnly && relays.length > 0, relayOnly, ...(alpns.length > 0 ? { alpns } : {}), ...(relayEntries.length > 0 ? { relayEntries } : {}) }), (e) => meshError(t("core-logic.mesh.bind_failed", { error: e.message })));
+    return Effect.mapError(iroh.bind({ secretKey: secret, relayUrls: relays, lookup: !relayOnly && relays.length > 0, relayOnly, ...(alpns.length > 0 ? { alpns } : {}), ...(relayEntries.length > 0 ? { relayEntries } : {}) }), (e) => CoreError.plainly("mesh", e, t("core-logic.mesh.bind_failed")));
   }
 
   /// The connections the main endpoint takes (`MeshEnv.takes`), each handed on, until it is closed (bound anew).
@@ -2465,7 +2465,7 @@ export function meshWire(inner: Inner): StationWire {
   const get = (): Effect.Effect<Mesh, CoreError> =>
     Effect.suspend(() => {
       const iroh = inner.iroh;
-      if (iroh === null) return Effect.fail(new CoreError("mesh", t("core-logic.mesh.bind_failed", { error: "no iroh on this host" })));
+      if (iroh === null) return Effect.fail(CoreError.plainly("mesh", "no iroh on this host", t("core-logic.mesh.bind_failed")));
       if (mesh !== null) return Deferred.await(mesh);
       const d = Deferred.makeUnsafe<Mesh, CoreError>();
       mesh = d;

@@ -861,7 +861,7 @@ export class Lock {
       const p = part(inner, self.ws);
       if (p.devices === null || arr(get(v, "stations")).some((s) => !p.probes.has(s.id))) yield* draft(inner, self.ws);
       const origin = inner.host.cloudOrigin();
-      const keysAnswer = yield* Effect.mapError(inner.host.fetch({ method: "GET", url: `${origin}/.well-known/stillfail-grant-keys`, headers: [], body: null }), (e) => new CoreError("network", e.message));
+      const keysAnswer = yield* Effect.mapError(inner.host.fetch({ method: "GET", url: `${origin}/.well-known/stillfail-grant-keys`, headers: [], body: null }), (e) => CoreError.plainly("network", e));
       const cloudKeys = JSON.parse(new TextDecoder().decode(keysAnswer.body));
       const members = arr(get(v, "members")).map((m) => ({ sub: m.sub, email: m.email, role: m.role }));
       const devices: J[] = [];
