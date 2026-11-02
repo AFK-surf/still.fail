@@ -47,7 +47,7 @@ export type DecisionRule = { enabled: boolean; model: string | null };
 
 export type HubConfig = {
   dataDir: string;
-  /// Shared MEMORY.md and skills/ linked into every profile home.
+  /// The home workspace's MEMORY.md and skills/, a joined workspace's in workspaces/<ws> (sessions/agent-home.ts).
   agentHome: string;
   connects: Connect[];
   profiles: Profile[];

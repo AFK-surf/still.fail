@@ -55,14 +55,16 @@ function options(extra: Partial<OpenOptions> = {}, signedIn = true): OpenOptions
   const home = join(data, `h${i}`);
   mkdirSync(cursorHome(home), { recursive: true });
   if (signedIn) writeFileSync(join(cursorHome(home), "auth.json"), JSON.stringify({ apiKey: "crsr_k1", email: "a@b.c", keyName: "still.fail", createdAt: 1 }));
-  writeFileSync(join(home, "AGENTS.md"), "# still.fail memory\n");
-  mkdirSync(join(home, "skills", "s1"), { recursive: true });
+  // A workspace's skills (not the profile home's: agent-home.ts).
+  const skills = join(data, `skills${i}`);
+  mkdirSync(join(skills, "s1"), { recursive: true });
   const dump = join(data, `dump${i}`);
   return {
     key: `slack:T1:C${i}:1700000000.000${i}`,
     profile: { id: "cu", runtime: "cursor", home, access: { kind: "subscription" }, env: { FAKE_DUMP: dump } },
     cwd: data,
     instructions: "be brief",
+    skills,
     mcpToken: "tok",
     mcpUrl: "http://127.0.0.1:4750/mcp",
     route: `route${i}`,
@@ -111,8 +113,8 @@ describe("the Cursor driver", { concurrency: true }, () => {
     const rules = created.create.local.dirs[0];
     assert.deepEqual(created.create.local, { cwd: o.cwd, dirs: [rules], settingSources: ["project"] });
     assert.match(readFileSync(join(rules, ".cursor", "rules", "stillfail.mdc"), "utf8"), /^---\ndescription: still\.fail station\nalwaysApply: true\n---\nbe brief\n$/);
-    assert.equal(readFileSync(join(rules, "AGENTS.md"), "utf8"), "# still.fail memory\n", "the shared memory linked in");
-    assert.ok(existsSync(join(rules, ".cursor", "skills", "s1")), "the shared skills linked in");
+    assert.ok(!existsSync(join(rules, "AGENTS.md")), "no memory but the one with the instructions");
+    assert.ok(existsSync(join(rules, ".cursor", "skills", "s1")), "the workspace's skills linked in");
     // The SDK's home in the profile's (its agents kept there), while HOME stays the station's for what the agent runs.
     assert.equal(created.home, join(cursorHome(o.profile.home), "sessions", "home"));
     assert.equal(created.env.HOME, process.env.HOME);

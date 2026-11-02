@@ -62,6 +62,9 @@ export type OpenOptions = {
   effort?: string;
   /// Appended to the runtime's own system prompt.
   instructions: string;
+  /// The skills of the session's workspace (its agent home's skills/, sessions/agent-home.ts), for a runtime that
+  /// loads skills from a folder of the session's own (Cursor, Devin); not a session continued from a terminal's.
+  skills?: string;
   /// Bearer token the session presents to the station's MCP endpoint.
   mcpToken: string;
   mcpUrl: string;

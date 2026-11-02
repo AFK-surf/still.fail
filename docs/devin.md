@@ -14,7 +14,7 @@ A station runs six runtimes: Claude Code, Codex, DeepSeek Harness (docs/dsh.md),
 
 ## The station's instructions, memory and skills
 
-A folder of the session's own, `<profile home>/devin/station/<hash of the key>/`, given to Devin as another workspace directory, which it reads as a project's root: the instructions as an always-on rule (`.devin/rules/stillfail.md`, `trigger: always_on`), the shared memory linked in as its `AGENTS.md` and the shared skills as `.devin/skills`. Nothing is written into the person's project. Devin still reads the machine's `~/.devin/rules`, `~/.config/devin/AGENTS.md` and `~/.agents/skills` (its HOME is the machine's, for the commands it runs).
+A folder of the session's own, `<profile home>/devin/station/<hash of the key>/`, given to Devin as another workspace directory, which it reads as a project's root: the instructions as an always-on rule (`.devin/rules/stillfail.md`, `trigger: always_on`), the skills of the session's workspace linked in as `.devin/skills` (its memory is in the instructions, docs/multi-workspace.md). Nothing is written into the person's project. Devin still reads the machine's `~/.devin/rules`, `~/.config/devin/AGENTS.md` and `~/.agents/skills` (its HOME is the machine's, for the commands it runs).
 
 ## Which profiles run it
 

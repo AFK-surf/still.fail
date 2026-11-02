@@ -190,7 +190,7 @@ export class DshDriver extends OwnProcessDriver<DshSession> {
 
     const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "dsh"), options.route) };
     env.DSH_HOME = home;
-    // Its shared skills and AGENTS.md are the profile home's (agent-home.ts), not the person's ~/.agents.
+    // Not the person's ~/.agents: the session's workspace's skills are where it runs (agent-home.ts `sessionSkills`).
     env.DSH_AGENTS_HOME = join(home, "agents");
     // No sandbox and no approvals, as the other runtimes run here; nothing of a session goes to DeepSeek's telemetry.
     env.DSH_PERMISSION_MODE = "danger-full-access";

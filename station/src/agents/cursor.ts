@@ -6,7 +6,7 @@
 //
 // Behaviour pinned against @cursor/sdk 1.0 (docs/cursor.md):
 // - `open` creates the SDK's agent (it names it) or resumes one it keeps; the station's tools an HTTP MCP server, its
-//   instructions, memory and skills a folder of project rules beside the session's working directory;
+//   instructions (with its workspace's memory) and skills a folder of project rules beside the session's working directory;
 // - `prompt` starts a run (a turn), whose messages stream (status, thinking, assistant text, tool calls, usage) and which
 //   ends finished, cancelled or in error; `steer` puts a message in the running turn (said delivered or not); `cancel`
 //   stops it;
@@ -85,9 +85,9 @@ export function cursorKey(home: string): string | null {
 }
 
 /// The station's instructions as a project rule that always applies, in a folder of the session's own beside its working
-/// directory, with the shared memory (AGENTS.md) and skills (.cursor/skills) linked in: the SDK reads a folder it is given
+/// directory, with the skills of its workspace (`skills`) linked in as .cursor/skills: the SDK reads a folder it is given
 /// as a project's (rules, AGENTS.md, skills) without them being written into the person's project.
-export function rulesFolder(home: string, key: string, instructions: string): string {
+export function rulesFolder(home: string, key: string, instructions: string, skills?: string): string {
   const dir = join(cursorHome(home), "station", createHash("sha256").update(key).digest("hex").slice(0, 16));
   mkdirSync(join(dir, ".cursor", "rules"), { recursive: true });
   writeFileSync(join(dir, ".cursor", "rules", "stillfail.mdc"), `---\ndescription: still.fail station\nalwaysApply: true\n---\n${instructions}\n`);
@@ -95,15 +95,16 @@ export function rulesFolder(home: string, key: string, instructions: string): st
     if (!existsSync(target)) return;
     rmSync(path, { recursive: true, force: true });
     try {
-      // Where links are refused (Windows without Developer Mode), the skills' a junction and the memory a copy.
+      // Where links are refused (Windows without Developer Mode), a junction.
       linkSync(target, path, { junction: true, copy: true });
     } catch (e) {
-      log.warn("agents::cursor", "the shared memory or skills not linked for Cursor", { path, error: (e as Error).message });
+      log.warn("agents::cursor", "the workspace's skills not linked for Cursor", { path, error: (e as Error).message });
     }
   };
-  // The profile home's AGENTS.md and skills/ are the station's shared memory and skills (agent-home.ts).
-  linked(join(home, "AGENTS.md"), join(dir, "AGENTS.md"));
-  linked(join(home, "skills"), join(dir, ".cursor", "skills"));
+  // The skills of the session's workspace (agent-home.ts); its memory is told with the instructions. (An AGENTS.md
+  // linked here before was the profile home's, the home workspace's memory whatever the session's workspace: gone.)
+  rmSync(join(dir, "AGENTS.md"), { force: true });
+  if (skills !== undefined) linked(skills, join(dir, ".cursor", "skills"));
   return dir;
 }
 
@@ -171,7 +172,7 @@ export class CursorDriver extends OwnProcessDriver<CursorSession> {
       throw new Error(`no Cursor session ${options.resume}`);
     }
     const model = options.model ?? profileModel(options.profile) ?? null;
-    const rules = rulesFolder(home, options.key, options.instructions);
+    const rules = rulesFolder(home, options.key, options.instructions, options.skills);
     const session = new CursorSession(this, "", { busy: false, aborting: false, closed: false }, new LiveFromCursor(), events, model);
     session.toolsUrl = options.mcpUrl;
     await this.start(session, options, this.node, [this.bridge], this.env(options, sdk));
