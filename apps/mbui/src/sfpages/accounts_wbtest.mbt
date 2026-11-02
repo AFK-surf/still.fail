@@ -240,6 +240,17 @@ test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, th
 }
 
 ///|
+test "reset credits show their separate expiry times at every page width" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Profile("ws1/st1", "cx"), w, platform~, mode="settings-profile-quota-expiry")
+    let note = "剩余 2 次 · 6 小时 35 分钟后、3 天 19 小时后到期"
+    scrolled_to(t, w, note)
+    assert_true(t.find(note) is Some(_), msg="reset expiries at width \{w}")
+    assert_true(t.find("重置额度") is Some(_), msg="reset action at width \{w}")
+  }
+}
+
+///|
 test "a profile's models, a narrow page with a mouse: how many in a row; all of them in a panel, each a box to star; one named by hand added there, then taken off by its ×" {
   let t = setting_tester(Profile("ws1/st1", "cx"), 390.0)
   scrolled_to(t, 390.0, "全部模型")

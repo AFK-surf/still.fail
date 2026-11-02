@@ -49,6 +49,8 @@ priv struct SettingsFixture {
   skills_shared : Map[String, Bool]
   /// the quota's resets used on ChatGPT 团队 (`profile.resetQuota`)
   mut resets_used : Int
+  /// Two reset credits with distinct expiry times (settings-profile-quota-expiry).
+  mut reset_expiry : Bool
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
@@ -100,6 +102,7 @@ let fx : SettingsFixture = {
   plain_left: 0,
   skills_shared: {},
   resets_used: 0,
+  reset_expiry: false,
   models_added: [],
   pairing: false,
   pair_ended: "",
@@ -169,6 +172,7 @@ fn fixture_reset() -> Unit {
   fx.drive_kept = fx_drive_kept
   fx.kept_cleared.clear()
   fx.resets_used = 0
+  fx.reset_expiry = false
   fx.models_added.clear()
   fx.version = 0
   fx.marks.clear()
@@ -398,6 +402,7 @@ pub fn fixture_page(mode : String) -> String {
     }
     "settings-profile-quota-failed" => fx.trouble = "quota"
     "settings-profile-quota-login" => fx.trouble = "quota-login"
+    "settings-profile-quota-expiry" => fx.reset_expiry = true
     "settings-profile-blocked" => fx.trouble = "blocked"
     "settings-profile-signin" => fx.trouble = "login"
     // a connect's page; its way of making sessions asked (src/sfpages connect.mbt's dialog)
@@ -488,7 +493,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
-    "settings-profile-quota" | "settings-profile-quota-login" => "profile:ws1/st1#cx"
+    "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
     "settings-me-reading" => "me"
     "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
     "settings-connect" => "connect:ws1/st1#k1"
@@ -772,7 +777,9 @@ fn fx_cx_more() -> Array[(String, Json)] {
           ],
         ),
         ("resetCount", Json::number(left.to_double())),
-        ("resetText", str("还可重置 \{left} 次")),
+        ("resetText", str(if fx.reset_expiry {
+          if left == 2 { "剩余 2 次 · 6 小时 35 分钟后、3 天 19 小时后到期" } else if left == 1 { "剩余 1 次 · 3 天 19 小时后到期" } else { "剩余 0 次" }
+        } else { "还可重置 \{left} 次" })),
         ("checkedAt", Json::number(0.0)),
         ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
       ]),

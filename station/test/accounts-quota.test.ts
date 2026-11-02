@@ -96,6 +96,43 @@ describe("allowances and renewing", { concurrency: true }, () => {
     assert.equal(zero.credits!.balance, "0");
   });
 
+  test("available Codex reset credits retain each known expiry", () => {
+    const q = codexQuota({ rateLimits: {}, rateLimitResetCredits: { availableCount: 4, credits: [
+      { status: "available", expiresAt: 1_900_200_000 },
+      { status: "redeemed", expiresAt: 1_800_000_000 },
+      { status: "available", expiresAt: null },
+      { status: "available", expiresAt: 1_900_000_000 },
+      { status: "available", expiresAt: "bad" },
+    ] } });
+    assert.equal(q.resetCount, 4);
+    assert.deepEqual(q.resetExpiries, [1_900_000_000_000, 1_900_200_000_000]);
+    assert.equal(codexQuota({ rateLimitResetCredits: { availableCount: 2, credits: null } }).resetExpiries, undefined);
+    assert.equal(codexQuota({ rateLimitResetCredits: { availableCount: 0, credits: [{ status: "available", expiresAt: 1_900_000_000 }] } }).resetExpiries, undefined);
+  });
+
+  test("a machine or borrowed Codex login reads reset details without losing usage when they fail", async () => {
+    const dir = temp("codex-reset-details");
+    const file = join(dir, "auth.json");
+    writeFileSync(file, JSON.stringify({ tokens: { access_token: "at", account_id: "acc" } }));
+    let detailsOk = true;
+    const p = await provider((request) => request.url.endsWith("/usage")
+      ? { status: 200, body: { rate_limit_reset_credits: { available_count: 2 }, rate_limit: { primary_window: { used_percent: 30 } } } }
+      : detailsOk
+        ? { status: 200, body: { credits: [{ status: "available", expires_at: "2030-03-17T00:00:00Z" }] } }
+        : { status: 503, body: {} });
+    const urls = { ...URLS, chatgpt: p.base };
+    const got = await codexUsage(file, urls);
+    assert.equal(got!.resetCount, 2);
+    assert.deepEqual(got!.resetExpiries, [Date.parse("2030-03-17T00:00:00Z")]);
+    assert.equal(p.asked[1]!.url, "/backend-api/wham/rate-limit-reset-credits");
+    assert.equal(p.asked[1]!.headers.authorization, "Bearer at");
+    assert.equal(p.asked[1]!.headers["chatgpt-account-id"], "acc");
+    detailsOk = false;
+    const fallback = await codexUsage(file, urls);
+    assert.deepEqual([fallback!.state, fallback!.resetCount, fallback!.resetExpiries], ["ok", 2, undefined]);
+    await p.close();
+  });
+
   test("codex app-server limits and window names", () => {
     const limits = { rateLimits: { primary: { usedPercent: 12.4, windowDurationMins: 300, resetsAt: 1_900_000_000 }, secondary: null } };
     assert.deepEqual(codexWindows(limits), [{ label: "5 小时", usedPercent: 12, resetsAt: 1_900_000_000_000, minutes: 300 }]);
