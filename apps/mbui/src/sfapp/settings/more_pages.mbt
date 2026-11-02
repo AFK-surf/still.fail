@@ -141,10 +141,30 @@ fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
 /// until then).
 pub fn kept_said(c : @ui.Ctx, core : Core) -> String {
   kept_read(c, core)
+  kept_told()
+}
+
+///|
+/// What 本机缓存's row says as the core last said it (kept_said's, nothing asked of it: kept_ask asks as kept_asked
+/// changes).
+pub fn kept_told() -> String {
   match kept.chats.get() {
     Some(chats) => size_words(kept_total(chats))
     None => ""
   }
+}
+
+///|
+/// How many times what is kept was asked to be read again (a page of it changed it): what a node asking for it follows.
+pub fn kept_asked() -> Int {
+  kept.asked.get()
+}
+
+///|
+/// What is kept asked of the core where it is not read as last asked (kept_said's ask, at the moment of what reads it:
+/// a node's reaction to kept_asked).
+pub fn kept_ask(c : @ui.Ctx, core : Core) -> Unit {
+  kept_read(c, core)
 }
 
 ///|

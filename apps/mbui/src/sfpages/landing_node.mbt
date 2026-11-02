@@ -58,7 +58,7 @@ fn landing_error_node(body : @view.View, words : () -> String) -> Unit {
 /// The landing's words, `size` as the window's theme has it and on its own line, `weight`, wrapping.
 fn landing_words(size : @ui.TextSize, weight : Int) -> @view.WordsLook {
   let (px, line) = @ui.tree_theme().text_size(size)
-  { size: px, weight, line, wrap: true }
+  { size: px, weight, line, wrap: true, tracking: @view.letters_own }
 }
 
 ///|

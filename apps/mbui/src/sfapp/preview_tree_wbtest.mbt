@@ -3502,8 +3502,8 @@ test "viewer on the tree: the strip put aside and still (no way going): the pict
 ///|
 /// Stepped from `from` (a picture of the chat's, InChat) to the one after it by a swipe, the strip going: in a frame on
 /// the way, the one before it ends, and the one it ends in, the one going drawn by a node from where it lay, the stage's
-/// width and the gap out to its side, the one come in by its own node, each from its own decode, once; at the end, the
-/// one come in alone.
+/// width and the gap out to its side (drawn while any of it shows in the window), the one come in by its own node, each
+/// from its own decode, once; at the end, the one come in alone.
 fn stepped_through(from : String) -> Unit raise {
   let t = preview_tester("step")
   if from != "界面草图.png" {
@@ -3534,7 +3534,12 @@ fn stepped_through(from : String) -> Unit raise {
     let going = nodes_of(l.picture)
     assert_true(going.length() == 1 && at_rect(going[0], lx, l.y, l.w, l.h), msg="\{from} \{at}: the one going a node's: \{going}")
     let drawn = drawn_of(t, gone)
-    assert_true(drawn.length() == 1 && at_rect(drawn[0], lx, l.y, l.w, l.h), msg="\{from} \{at}: the one going drawn once: \{drawn}")
+    // (drawn once where any of it shows in the window; wholly out of it, not at all: what is drawn is what is seen)
+    if lx + l.w > 0.0 && lx < t.w {
+      assert_true(drawn.length() == 1 && at_rect(drawn[0], lx, l.y, l.w, l.h), msg="\{from} \{at}: the one going drawn once: \{drawn}")
+    } else {
+      assert_eq(drawn.length(), 0, msg="\{from} \{at}: the one going, out of the window, drawn: \{drawn}")
+    }
     let (x, y, w, h) = w2.zoom.rect().unwrap()
     assert_true(picture_node() == Some(come), msg="\{from} \{at}: the one come in its node's")
     let shown = drawn_of(t, come)

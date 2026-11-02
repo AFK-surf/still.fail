@@ -156,11 +156,37 @@ test "style" {
         #|    Exact(v) => v
         #|  }
         #|}
+        #|fn Space::said(self : Space?) -> Double {
+        #|  match self {
+        #|    Some(Exact(v)) => v
+        #|    Some(Exact(v)) if v > 0.0 => v
+        #|    Some(S4) | Some(Exact(_)) => 1.0
+        #|    _ => 0.0
+        #|  }
+        #|}
         #|
       ),
     ),
   ]
   found(decl, "style-exact", 0) |> ignore
+  // (one made in an arm, its guard or what it gives, made all the same, however it is wrapped)
+  let made = [
+    (
+      "src/ui/style_made.mbt",
+      (
+        #|
+        #|fn Space::again(self : Space?) -> Space? {
+        #|  match self {
+        #|    Some(S4) => Some(Exact(16.0))
+        #|    Some(v) if v == Exact(2.0) => None
+        #|    _ => Some(Exact(0.0))
+        #|  }
+        #|}
+        #|
+      ),
+    ),
+  ]
+  assert_eq(lines(lint_of(made, rule="style-exact")), [4, 5, 6])
 }
 
 ///|

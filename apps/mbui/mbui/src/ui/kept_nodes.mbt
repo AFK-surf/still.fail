@@ -37,7 +37,7 @@ priv struct RowNodes {
   mut said_base : Int
   /// how tall its slot is
   mut h : Double
-  /// what it was built from: its list's width, rows, scope, theme's direction, layer, picking; the layout's epoch and
+  /// what it was built from: its list's width, rows, scope, theme's direction, layer, picking, the page's time on top; the layout's epoch and
   /// scale; whether it was read out
   mut iw : Double
   mut count : Int
@@ -47,6 +47,8 @@ priv struct RowNodes {
   mut sel : Bool
   mut layer : Int
   mut direction : Direction
+  /// the page's time on top it was built on (what it asks of what it shows on it: Ctx::page_stint)
+  mut stint : Int
   mut epoch : Int
   mut scale : Double
   mut reads_out : Bool
@@ -547,6 +549,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     sel: false,
     layer: 0,
     direction: Ltr,
+    stint: 0,
     epoch: 0,
     scale: 0.0,
     reads_out: false,
@@ -674,6 +677,7 @@ fn Ctx::row_laid(
     rn.sel == st.sel &&
     rn.layer == st.layer &&
     rn.direction == st.direction &&
+    rn.stint == st.stint &&
     rn.epoch == self.epoch &&
     rn.scale == self.scale &&
     rn.reads_out == self.reads_out &&
@@ -703,6 +707,7 @@ fn Ctx::row_laid(
   rn.sel = st.sel
   rn.layer = st.layer
   rn.direction = st.direction
+  rn.stint = st.stint
   self.nodes_end(rn, r, b, part=false)
   (r, h)
 }

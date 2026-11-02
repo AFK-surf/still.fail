@@ -494,6 +494,7 @@ pub fn Ctx::list(
         sel: false,
         theme: self.theme,
         direction: self.direction,
+        stint: self.stint,
         layer: self.layer_cur,
         causes: None,
         sizes: {},
@@ -532,6 +533,7 @@ pub fn Ctx::list(
   st.sel = desk.selecting
   st.theme = self.theme
   st.direction = self.direction
+  st.stint = self.stint
   st.layer = self.layer_cur
   // (rows that show only what they read are kept however what builds them was built: their own watches say when
   // they change; only a build keeping none builds them anew)
@@ -575,9 +577,11 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let (saved_w, saved_h) = (self.width, self.height)
   let saved_sel = desk.selecting
   let (saved_theme, saved_dir, saved_layer) = (self.theme, self.direction, self.layer_cur)
+  let saved_stint = self.stint
   desk.selecting = st.sel
   self.theme = st.theme
   self.direction = st.direction
+  self.stint = st.stint
   self.layer_cur = st.layer
   self.cur = li
   self.id_seed = st.seed
@@ -607,6 +611,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   self.theme = saved_theme
   self.direction = saved_dir
   self.layer_cur = saved_layer
+  self.stint = saved_stint
   r
 }
 

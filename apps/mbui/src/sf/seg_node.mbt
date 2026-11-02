@@ -192,7 +192,7 @@ pub fn seg_node(
               .words(By(label))
               .words_look(By(fn() {
                 let size = theme().t.ui * smaller()
-                { size, weight: if on() { 500 } else { 400 }, line: @ui.tree_theme().text_line * size, wrap: false }
+                { size, weight: if on() { 500 } else { 400 }, line: @ui.tree_theme().text_line * size, wrap: false, tracking: @view.letters_own }
               }))
               .ink(By(fn() {
                 if on() || o.pointed() {
@@ -258,7 +258,7 @@ pub fn seg_node(
           .words(By(words))
           .words_look(By(fn() {
             let size = theme().t.ui
-            { size, weight: 500, line: @ui.tree_theme().text_line * size, wrap: false }
+            { size, weight: 500, line: @ui.tree_theme().text_line * size, wrap: false, tracking: @view.letters_own }
           }))
           .ink(By(ink))
           |> ignore

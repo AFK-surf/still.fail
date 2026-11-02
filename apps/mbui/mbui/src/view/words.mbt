@@ -4,7 +4,9 @@
 // with (Tree::new's `measure`).
 
 ///|
-/// How a node's words are set: their size (points), weight (100 … 900), the height of a line, whether they wrap within
+/// How a node's words are set: their size (points), weight (100 … 900), the height of a line (points, at the system's
+/// size of words 1 and scaled with it; 0, the font's own; less than 0, that share of their size as it is drawn, the
+/// system's size of words applied: -1.4, 1.4 times it), whether they wrap within
 /// the width they are given (else one line, as wide as they are, cut to what it is given ending in an ellipsis where it
 /// is given less: View::shrink; what is read out of them all of them).
 pub(all) struct WordsLook {
@@ -12,11 +14,25 @@ pub(all) struct WordsLook {
   weight : Int
   line : Double
   wrap : Bool
+  /// how far apart its letters are set besides their own spacing (a large title's tighter)
+  tracking : Spacing
 } derive(Eq, Debug)
 
 ///|
+/// How far apart a node's letters are set besides their own spacing (ui's Tracking as it is resolved): a share of
+/// their size as it is drawn (the system's size of words applied), or so many points whatever their size.
+pub(all) enum Spacing {
+  Ems(Double)
+  Points(Double)
+} derive(Eq, Debug)
+
+///|
+/// Letters as their font sets them, nothing added.
+pub let letters_own : Spacing = Ems(0.0)
+
+///|
 /// Words as a node set them till they were said to be otherwise: 15 points, regular, 22 a line, wrapped.
-pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true }
+pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: letters_own }
 
 ///|
 /// A piece of a node's words set its own way (View::words_runs): its weight (0: the words' own, WordsLook's), its ink
@@ -211,6 +227,20 @@ pub fn View::lines_up(self : View, along : Live[Along?]) -> View {
       Some(Start) => FlexStart
       Some(Middle) => Center
       Some(End) => FlexEnd
+    }
+  })
+  self
+}
+
+///|
+/// Where what it holds lies along it, as it changes (its start, by default; their middle; its end): what is left of its
+/// room on its main way before it, round it or after it. Layout's.
+pub fn View::lies_along(self : View, along : Live[Along]) -> View {
+  self.bind(LiesAlong, along, Layout, fn(a) {
+    self.tree.nodes[self.at].flex.style.justify = match a {
+      Start => FlexStart
+      Middle => Center
+      End => FlexEnd
     }
   })
   self

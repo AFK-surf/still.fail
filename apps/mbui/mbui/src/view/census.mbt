@@ -9,6 +9,8 @@ pub(all) struct Styled {
   words : Bool
   size : Double
   line : Double
+  /// how far apart its letters are set besides their own (WordsLook's)
+  tracking : Spacing
   weights : Array[Int]
   inks : Array[Int64]
   spaces : Array[Double]
@@ -58,6 +60,7 @@ pub fn Tree::styled(self : Tree) -> Array[Styled] {
       words,
       size: if words { l.words_look.size } else { 0.0 },
       line: if words { l.words_look.line } else { 0.0 },
+      tracking: l.words_look.tracking,
       weights,
       inks,
       spaces: if n.slot {

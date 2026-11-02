@@ -71,6 +71,10 @@ pub(all) struct Look {
   /// that room; (0, 0): where it is drawn), as what a picture on its way somewhere is judged by where it goes:
   /// View::image_for
   mut image_for : (Double, Double)
+  /// its picture covering it, cut where it is not as wide for as tall (View::image_covers); else filling it
+  mut image_cover : Bool
+  /// its picture fading in as it is decoded (View::image_fades); else there at once
+  mut image_fade : Bool
   /// where in it its picture lies (x, y, w, h, in its own terms) and the matte filling the rest of it, drawn with the
   /// picture in one (its edge cut once, its corners its own): View::image_in; None, the picture fills it
   mut image_in : ((Double, Double, Double, Double), Int64)?
@@ -141,6 +145,10 @@ pub(all) struct Content {
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
   image_for : (Double, Double)
+  /// its picture covering it, not stretched to it (View::image_covers)
+  image_cover : Bool
+  /// its picture fading in as it is decoded (View::image_fades)
+  image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
   image_in : ((Double, Double, Double, Double), Int64)?
   glass : @paint.Glass?
@@ -199,6 +207,10 @@ pub(all) struct Drawn {
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
   image_for : (Double, Double)
+  /// its picture covering it, not stretched to it (View::image_covers)
+  image_cover : Bool
+  /// its picture fading in as it is decoded (View::image_fades)
+  image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
   image_in : ((Double, Double, Double, Double), Int64)?
   glass : @paint.Glass?
@@ -332,6 +344,8 @@ struct Node {
   mut shows : ((Double, Double) -> Double)?
   /// whether it takes over a hold that began on what it holds, moved so far from where it went down (View::claims)
   mut claims : ((Double, Double) -> Bool)?
+  /// where a hold it takes over may have gone down, in its own terms (View::claims' `from`): none, anywhere
+  mut claims_from : ((Double, Double) -> Bool)?
   /// how many times it was said to take over holds (View::claims): a hold asks it as it was said as it went down
   mut claims_said : Int
   /// a hold on it is one what holds it may take over as it moves (View::claims), the hold not its own yet: a gesture
@@ -801,6 +815,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.edge = (0.0, 0L)
       n.look.image = None
       n.look.image_for = (0.0, 0.0)
+      n.look.image_cover = false
+      n.look.image_fade = false
       n.look.image_in = None
       n.look.glass = None
       n.look.words_look = words_plain
@@ -862,6 +878,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.bar_near_cell = None
       n.shows = None
       n.claims = None
+      n.claims_from = None
       n.claims_said = 0
       n.yields = false
       n.claims_scroll = false
@@ -897,7 +914,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), stretch: 0.0, drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -939,6 +956,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         bar_near_cell: None,
         shows: None,
         claims: None,
+        claims_from: None,
         claims_said: 0,
         yields: false,
         claims_scroll: false,
@@ -1557,6 +1575,7 @@ priv enum Prop {
   Gap
   MinWidth
   LinesUp
+  LiesAlong
   Scale
   DrawnAs
   OverAll
@@ -1584,6 +1603,8 @@ priv enum Prop {
   Edge
   Image
   ImageFor
+  ImageCover
+  ImageFade
   ImageIn
   Corners
 } derive(Eq, Hash)
@@ -1834,10 +1855,18 @@ pub fn View::bounds_input(self : View, on : Live[Bool]) -> View {
 /// went down (dx, dy, in the window's points), the innermost that holds what it went down on first (Tree::claimer_of);
 /// taken over, what had it is called off and the rest of it is this one's (View::on_drag: down where it is then).
 /// One that does takes none at its own down. `scrolls`: what it takes them over for is scrolling what it holds (what
-/// hosts the tree lets go of the keyboard for that, as a finger scrolling a list does: Tree::claims_scroll).
-pub fn View::claims(self : View, f : (Double, Double) -> Bool, scrolls? : Bool = false) -> View {
+/// hosts the tree lets go of the keyboard for that, as a finger scrolling a list does: Tree::claims_scroll). `from`:
+/// whether it may take over a hold that went down there (in its own terms, as it was drawn then): one that went down
+/// elsewhere it is not asked of (a stack's page taking a swipe back from its edge alone); none, from anywhere.
+pub fn View::claims(
+  self : View,
+  f : (Double, Double) -> Bool,
+  scrolls? : Bool = false,
+  from? : (Double, Double) -> Bool,
+) -> View {
   guard self.live() is Some(n) else { return self }
   n.claims = Some(f)
+  n.claims_from = from
   n.claims_scroll = scrolls
   n.claims_said = n.claims_said + 1
   self.tree.hits = self.tree.hits + 1
@@ -1891,7 +1920,15 @@ pub fn Tree::claimers_at(
   let mut i = id.at
   while i >= 0 {
     let n = self.nodes[i]
-    if n.claims is Some(_) {
+    // (one taking over only holds that went down where it says: asked where this one went down, in its terms)
+    let there = match n.claims_from {
+      Some(f) => {
+        let (nx, ny, _, s) = self.projected(i)
+        @signals.untracked(fn() { f((x - nx) / dmax(s, 1.0e-6), (y - ny) / dmax(s, 1.0e-6)) })
+      }
+      None => true
+    }
+    if n.claims is Some(_) && there {
       out.push(({ at: i, gen: n.gen }, n.claims_said))
     }
     i = n.parent
@@ -2045,6 +2082,22 @@ pub fn View::edge(self : View, e : Live[(Double, Int64)]) -> View {
 /// done draws the frame again), which of the two decided then: paint's.
 pub fn View::image(self : View, image : Live[(String, String, Int)?]) -> View {
   self.bind(Image, image, Paint, fn(i) { self.tree.nodes[self.at].look.image = i })
+  self
+}
+
+///|
+/// Its picture (View::image) covering it as it changes, its middle shown and what is past it cut where it is not as wide
+/// for as tall (an old view's FitCover: a face, a mark put up); else, as said none, filling it; paint's.
+pub fn View::image_covers(self : View, on : Live[Bool]) -> View {
+  self.bind(ImageCover, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_cover = on })
+  self
+}
+
+///|
+/// Its picture (View::image) fading in over image_fade_ms as it is decoded (an old view's picture's way by default:
+/// Ctx::image's `fade`), as it changes; else, as said none, there at once once it is; paint's.
+pub fn View::image_fades(self : View, on : Live[Bool]) -> View {
+  self.bind(ImageFade, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_fade = on })
   self
 }
 
@@ -4274,6 +4327,7 @@ fn View::let_go(self : View) -> Unit {
   n.went_cell = None
   n.shows = None
   n.claims = None
+  n.claims_from = None
   n.bounds_input = false
   n.drawn_clear = None
   n.bar_near = 0.0
@@ -5377,6 +5431,12 @@ fn Tree::sizes_told(self : Tree) -> Bool {
     guard n.live && (n.size_cell is Some(_) || n.went_cell is Some(_)) else { continue }
     if !keep.contains(at) {
       keep.push(at)
+      // (laid out nowhere, it or what holds it (View::laid_nowhere, left out of its row): no size of its own to tell
+      // this time, the one it had kept, still followed, till it is laid out somewhere again, as what reads it (how far a
+      // column scrolls) keeps its own)
+      if self.out_at(at) {
+        continue
+      }
       match n.size_cell {
         Some(cell) => {
           let size = Some((n.flex.width, n.flex.height))
@@ -5398,9 +5458,14 @@ fn Tree::sizes_told(self : Tree) -> Bool {
       }
     }
   }
+  // (what was first asked as what was told was read: a node made as it was, its size followed from then on, told the
+  // next time all is laid out, not forgotten)
+  let n = self.sized.length()
   @signals.end_batch()
+  let asked = self.sized[n:].to_array()
   self.sized.clear()
   self.sized.append(keep)
+  self.sized.append(asked)
   told.val
 }
 
@@ -5590,6 +5655,8 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     edge: n.look.edge,
     image: n.look.image,
     image_for: n.look.image_for,
+    image_cover: n.look.image_cover,
+    image_fade: n.look.image_fade,
     image_in: n.look.image_in,
     glass: n.look.glass,
     words_look: n.look.words_look,
@@ -5822,6 +5889,8 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     edge: c.edge,
     image: c.image,
     image_for: c.image_for,
+    image_cover: c.image_cover,
+    image_fade: c.image_fade,
     image_in: c.image_in,
     glass: c.glass,
     words_look: c.words_look,
