@@ -53,37 +53,37 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 28263:34ca2309
+    #|waiting narrow 28261:7c9a5819
     #|waiting wide 58401:7892ac5e
-    #|waiting-dark narrow 28179:9d49003f
+    #|waiting-dark narrow 28177:bb5c99a7
     #|waiting-dark wide 58224:de7ec378
-    #|finding narrow 33122:ff167a65
+    #|finding narrow 33120:3f27ffed
     #|finding wide 63930:9f4f7c0a
-    #|finding-dark narrow 33235:7a599ea0
+    #|finding-dark narrow 33233:e8fc15f4
     #|finding-dark wide 63950:d3000bbf
-    #|code narrow 26966:c852a07b
+    #|code narrow 26964:d2c5e5f
     #|code wide 57233:ac19855e
-    #|code-dark narrow 26858:3bf26d40
+    #|code-dark narrow 26856:8e2a7494
     #|code-dark wide 57032:e8dda263
-    #|wrong narrow 28175:3e56b7a7
+    #|wrong narrow 28173:b382eec3
     #|wrong wide 58462:785dc777
-    #|wrong-dark narrow 28277:93c950e2
+    #|wrong-dark narrow 28275:5a0abdba
     #|wrong-dark wide 58471:9f4e9514
-    #|checking narrow 35249:e095cb5d
+    #|checking narrow 35247:bdc55f15
     #|checking wide 66177:4541c7d2
-    #|checking-dark narrow 35341:f140d3e8
+    #|checking-dark narrow 35339:262e25cc
     #|checking-dark wide 66176:8bf911b9
-    #|none narrow 27731:6e22b3d6
+    #|none narrow 27729:15fcd916
     #|none wide 57877:947de3f4
-    #|none-dark narrow 27651:9b4f0f4
+    #|none-dark narrow 27649:8f4cc1a0
     #|none-dark wide 57704:834ec27c
-    #|failed narrow 23490:e9bf9a36
+    #|failed narrow 23488:671c3cf6
     #|failed wide 53629:375fb30
-    #|failed-dark narrow 23490:92ef640
+    #|failed-dark narrow 23488:ed579594
     #|failed-dark wide 53536:49a572b4
-    #|nocode narrow 28263:34ca2309
+    #|nocode narrow 28261:7c9a5819
     #|nocode wide 58401:7892ac5e
-    #|nocode-dark narrow 28179:9d49003f
+    #|nocode-dark narrow 28177:bb5c99a7
     #|nocode-dark wide 58224:de7ec378
     #|
 

@@ -108,7 +108,7 @@ fn[P] Nav::shift_of(self : Nav[P], serial : Int, now : () -> Double) -> (Double,
   }
   let (top, beside) = self.top_beside()
   let rising = top.rise
-  let way = if (self.from_left)(top.page) { -1.0 } else { 1.0 }
+  let way = if (self.from_left)(top.page, top.under) { -1.0 } else { 1.0 }
   if top.serial == serial {
     if rising {
       (0.0, p)
