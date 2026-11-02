@@ -80,6 +80,8 @@ priv struct ListWay {
   h : Double
   px : Double
   hit : Past?
+  /// what showed past the end it goes to as it set out (Android's, its heights)
+  same : Double
 }
 
 ///|
@@ -298,7 +300,7 @@ fn Scroll::let_go(self : Scroll, v : View, t : Double) -> Unit {
   let (feel, density) = (v.tree.list_feel)()
   let h = dmax((self.tall)(), 1.0)
   let past = @signals.untracked(fn() { self.past.get() })
-  let way : ListWay = { feel, dist: 0.0, dur: 0.0, eats: 0.0, over: 0.0, edge: 0, h, px: h * density, hit: None }
+  let way : ListWay = { feel, dist: 0.0, dur: 0.0, eats: 0.0, over: 0.0, edge: 0, h, px: h * density, hit: None, same: 0.0 }
   match feel {
     Android => {
       let mut way = way
@@ -350,9 +352,31 @@ fn Scroll::list_fling(
   same : Double,
   density : Double,
 ) -> Unit {
+  let bound = if speed > 0.0 { self.most() } else { 0.0 }
+  guard list_planned(t, x0, speed, way, same, density, bound) is Some(f) else { return }
+  self.past.set(None)
+  self.fling.set(Some(f))
+  (self.on_scrolled)(t)
+  self.list_settles(v, t)
+}
+
+///|
+/// A fling on `way` from `x0` at `speed` set out at `t`, toward the end it goes to at `bound` (its top, or its foot as
+/// far as it can go then): where it meets it, worked out now, it stops there and what it brings goes past it and back
+/// from then (Android's EdgeEffect.onAbsorb at its speed then, from what showed there already, `same`; iOS's rubber
+/// band; the desktop's, nothing). None: it goes nowhere.
+fn list_planned(
+  t : Double,
+  x0 : Double,
+  speed : Double,
+  way : ListWay,
+  same : Double,
+  density : Double,
+  bound : Double,
+) -> Fling? {
+  let way = { ..way, hit: None }
   let len = way.length(speed)
   let sign = if speed < 0.0 { -1.0 } else { 1.0 }
-  let bound = if speed > 0.0 { self.most() } else { 0.0 }
   let hit_t = way.reaches(speed, (bound - x0).abs() + way.eats, len)
   let f : Fling = if hit_t < @double.infinity {
     let end_t = t + hit_t
@@ -375,18 +399,45 @@ fn Scroll::list_fling(
         Some({ feel, edge, over: same, back: Some(p), h: way.h, px: way.px })
       }
     }
-    { x0, v0: speed, t0: t, end_t, end_x: bound, way: Some({ ..way, hit, }) }
+    { x0, v0: speed, t0: t, end_t, end_x: bound, till: bound, way: Some({ ..way, hit, same }) }
   } else {
     let end_x = x0 + sign * dmax(0.0, way.gone(speed, len) - way.eats)
-    { x0, v0: speed, t0: t, end_t: t + len, end_x, way: Some(way) }
+    { x0, v0: speed, t0: t, end_t: t + len, end_x, till: bound, way: Some({ ..way, same }) }
   }
   if f.end_t <= t && f.way.unwrap().hit is None {
+    return None
+  }
+  Some(f)
+}
+
+///|
+/// What it holds above where it is grew by `d` as of `t`, a fling of `f` under way (Scroll::grew_above): the fling the
+/// same from where it set out moved by as much, toward its top where that is, or its foot where it is laid out (again
+/// as that is laid out anew: Scroll::foot_moved), where it meets it worked out again, at rest then; met its end already, at rest there moved as much, what it brought going on back.
+fn Scroll::fling_grew(self : Scroll, f : Fling, w : ListWay, t : Double, d : Double) -> Unit {
+  if t >= f.end_t {
+    self.fling.set(None)
+    self.x.set(f.end_x + d)
+    self.past.set(w.hit)
     return
   }
-  self.past.set(None)
-  self.fling.set(Some(f))
-  (self.on_scrolled)(t)
-  self.list_settles(v, t)
+  // (its foot where it is as laid out now, that layout not done yet: met by then, not a meeting but where it was
+  // before what grew; then none yet, its foot where the layout puts it worked out then, Scroll::foot_moved)
+  let bound = if f.v0 < 0.0 {
+    0.0
+  } else if w.at({ ..f, x0: f.x0 + d }, t) < self.most() {
+    self.most()
+  } else {
+    @double.infinity
+  }
+  let density = w.px / dmax(w.h, 1.0)
+  match list_planned(f.t0, f.x0 + d, f.v0, w, w.same, density, bound) {
+    Some(g) => self.fling.set(Some(g))
+    None => {
+      self.fling.set(None)
+      self.x.set(f.x0 + d)
+    }
+  }
 }
 
 ///|
@@ -484,4 +535,26 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
       _ => ()
     }
   })
+}
+
+///|
+/// How far it can go laid out anew as `most` at `t`: a fling under way down toward its foot, short of it still, meets it
+/// where it is now, worked out again from where it set out (rows below measured anew, come or gone; what grew above,
+/// Scroll::grew_above), at rest then.
+fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double) -> Unit {
+  guard @signals.untracked(fn() { self.fling.get() }) is Some({ way: Some(w), .. } as f) &&
+    f.v0 > 0.0 &&
+    t < f.end_t &&
+    f.till != most else {
+    return
+  }
+  let density = w.px / dmax(w.h, 1.0)
+  match list_planned(f.t0, f.x0, f.v0, w, w.same, density, most) {
+    Some(g) => self.fling.set(Some(g))
+    None => {
+      self.fling.set(None)
+      self.x.set(f.x0)
+    }
+  }
+  self.list_settles(v, t)
 }
