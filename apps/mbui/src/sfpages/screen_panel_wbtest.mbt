@@ -487,6 +487,15 @@ test "a device's body has the corners of the panel its picture is of" {
   // on its side, the smallest all round; none said, square
   assert_eq(panel_corners(duo, 582.0, 400.0), (8.0, 8.0, 8.0, 8.0))
   assert_eq(panel_corners(None, 400.0, 582.0), (0.0, 0.0, 0.0, 0.0))
+  // what is cut off a corner: from the picture's corner along one edge round to the other, nothing inside the curve
+  let cut = corner_cut(400.0, 0.0, -1.0, 1.0, 64.0)
+  assert_eq((cut[0], cut[1]), (400.0, 0.0))
+  assert_eq((cut[2], cut[3]), (336.0, 0.0))
+  assert_true((cut[cut.length() - 2] - 400.0).abs() < 0.001 && (cut[cut.length() - 1] - 64.0).abs() < 0.001)
+  for i in 1..<(cut.length() / 2) {
+    let (px, py) = (cut[2 * i] - 336.0, cut[2 * i + 1] - 64.0)
+    assert_true(((px * px + py * py).sqrt() - 64.0).abs() < 0.001)
+  }
 }
 
 ///|

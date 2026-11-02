@@ -363,6 +363,8 @@ public actor HIDInjector {
     private static let scrollDragGain: Double = 1.0
     private static let scrollEdgeMargin: Double = 0.08   // re-anchor inside this margin
     private static let scrollGestureIdle: TimeInterval = 0.1
+    /// How far a wheel's drag first goes, in shares of the screen (some 13 points on a phone of 2000 pixels at 3×).
+    private static let scrollSlop: Double = 0.02
 
     private var scrollDragActive = false
     private var scrollFingerX = 0.5
@@ -407,6 +409,13 @@ public actor HIDInjector {
             scrollFingerY = aY
             beginDrag(x: scrollFingerX, y: scrollFingerY)
             scrollDragActive = true
+            // Past the distance that tells a drag from a tap at once (a scroll view takes none of it): a wheel's one notch,
+            // a drag too short for that, was a tap on whatever row lay under the pointer.
+            let length = (stepX * stepX + stepY * stepY).squareRoot()
+            scrollFingerX = clampFinger(aX + stepX / length * HIDInjector.scrollSlop)
+            scrollFingerY = clampFinger(aY + stepY / length * HIDInjector.scrollSlop)
+            rawSendTouch(type: "move", x: scrollFingerX, y: scrollFingerY)
+            usleep(8000)
         }
 
         var nextX = scrollFingerX + stepX
