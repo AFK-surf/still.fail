@@ -5,7 +5,8 @@
 // are coalesced over COALESCE_MS, one window for all topics, so topics changed together go out together, in the order
 // they changed; a topic's first value goes out on the next turn instead. A subscriber's first message is the whole
 // value, the next ones only what changed (delta.ts), and an unchanged value sends nothing. Code inside the core can
-// `watch` a topic; a derived topic is `invalidate`d and computed by its source when its emission goes out.
+// `watch` a topic; a derived topic is `invalidate`d and computed by its source when its emission goes out. While no page
+// is in view (`inView`), what changed is kept from the subscribers and goes out as one difference per topic once one is.
 import { Effect } from "effect";
 import { computed, observe, signal, tracking, untracked, type Derived, type Source as ReactiveSource } from "./reactive.ts";
 import { type AnyOp, diffKeyed, heavier, specOf } from "./collections.ts";
@@ -33,6 +34,8 @@ const OPENED = new Set(["chat"]);
 /// sent in two hours, more than anything else it sent (2026-10-31).
 const FLUSH_HELD_MS = 50;
 const FLUSH_TOLD_EVERY_MS = 60_000;
+/// What an app acts on while none of its pages is in view (its notices, its icon's badge): these go out then too.
+const UNSEEN = new Set(["notify", "workspaceMarks"]);
 
 /// A value or the error a topic shows.
 export type Value = { ok: unknown } | { err: CoreError };
@@ -89,6 +92,8 @@ type Entry = {
   sent?: Value;
   /// Its value changed without a subscriber; it needs output when a page next asks for it.
   outputDirty?: boolean;
+  /// Its value changed while no page was in view: what changed goes out once one is (`inView`).
+  unseen?: boolean;
   /// Who subscribes, and whether it takes keyed ops (collections.ts).
   subscribers: [ClientId, RequestId, boolean][];
   watchers: [number, () => void][];
@@ -135,6 +140,7 @@ export class Store {
   #clock = false;
   #clockOn = false;
   #shaped = false;
+  #inView = true;
   /// The rounds that held the core since `core.flush` last went out: how many, for how long, and the worst.
   #heldRounds: { from: number; rounds: number; ms: number; worst: { ms: number; topics: number; slowest: string; slowestMs: number; parts: [string, number][] } | null } | null = null;
 
@@ -237,6 +243,24 @@ export class Store {
       this.#scheduleEmit(topic);
     }
     this.#tick();
+  }
+
+  /// Whether any page is in view (Attend.shown). While none is, what changes is not sent: an app behind draws nothing,
+  /// and a phone's keeps every message for its first frame back, all of them handed on in it (a few minutes behind was
+  /// a hundred differences of the same few topics; hours behind, a first frame the system gave up waiting for,
+  /// 2026-11-02). In view
+  /// again, each topic changed meanwhile sends one difference, to its value now.
+  inView(on: boolean): void {
+    if (on === this.#inView) return;
+    this.#inView = on;
+    if (!on) return;
+    for (const entry of this.#topics.values()) {
+      if (!entry.unseen) continue;
+      entry.unseen = false;
+      if (entry.emitScheduled) continue;
+      entry.emitScheduled = true;
+      this.#scheduleEmit(entry.topic);
+    }
   }
 
   /// Sends every value through its shape.
@@ -619,6 +643,12 @@ export class Store {
       // Internal readers use the value above, not its client representation. Keep the last output for a reopening
       // page, and make the new one only when there is a subscriber to receive it.
       now.outputDirty = true;
+      for (const w of changed) w();
+      return;
+    }
+    if (!this.#inView && now.sent !== undefined && !UNSEEN.has(topic.topic)) {
+      // No page in view: what changed goes out once one is (inView), not shaped till then.
+      now.unseen = true;
       for (const w of changed) w();
       return;
     }
