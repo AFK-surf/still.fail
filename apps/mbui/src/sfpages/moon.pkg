@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/core/cmp",
+  "moonbitlang/core/double",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "mbui/ui",

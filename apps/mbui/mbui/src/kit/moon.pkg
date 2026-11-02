@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/double",
   "mbui/ui",
   "mbui/motion",
   "mbui/signals",
