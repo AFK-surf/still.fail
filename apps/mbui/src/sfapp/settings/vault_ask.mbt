@@ -96,6 +96,7 @@ let vault_picked : Map[String, String] = {}
 let vault_timeout_minutes : Map[String, Int] = {}
 
 ///|
+// kept across runs: an immutable style
 let vault_timeout_panel : @ui.Style = @ui.css("w=Full gap=S4")
 
 ///|
