@@ -637,7 +637,7 @@ fn composer_text(
   // (what moves with the box is the words' own room, not the room round them: their margins in it are other on one
   // line than opened, and moved from where that room showed, the words jumped by the difference as it set out)
   let mut words = -1
-  c.box(style=if multiline { text_open } else { text_shut }, fn() {
+  c.box(style=if multiline { text_open } else { text_shut(c) }, fn() {
     words = c.box(style=text_own, fn() {
       // (what is typed set as its message will set it: the theme's words)
       let (size, line) = c.style_size(@sf.theme().t.words)
@@ -1358,7 +1358,18 @@ let capsule_pad_alone : Double = 8.0
 /// would, its ends not on the page's corners).
 fn capsule_h() -> Double {
   let side = @sf.theme().round.side
-  @sf.foot_capsule_h(side + 2.0 * capsule_pad_alone, side)
+  @sf.foot_capsule_h(side + 2.0 * (capsule_pad_alone + capsule_extra()), side)
+}
+
+///|
+/// How much further in its round buttons stand than its padding says (ComposerPlace's capsule_pad), every way: half
+/// what its text's line is taller than they are, the system's size of words as the user's (text_shut: as high as
+/// they are, else as its line), so that they stand as far in at their ends as over and under them, concentric with it;
+/// none while its line is no taller than they are.
+fn capsule_extra() -> Double {
+  let c = @ui.current()
+  let (_, line) = c.style_size(@sf.theme().t.words)
+  dmax(0.0, (c.sp(line) - @sf.theme().round.side) / 2.0)
 }
 
 ///|
@@ -1366,7 +1377,16 @@ fn capsule_h() -> Double {
 /// round buttons its capsule_pad in.
 fn capsule_place(place : ComposerPlace) -> @ui.Style {
   let (l, r, b) = place.capsule_in
-  @ui.style(ml=@sf.room_of(l), mr=@sf.room_of(r), mb=@sf.room_of(b), p=@sf.room_of(place.capsule_pad))
+  // (over and under, its padding: its text's room, as high as its line, stands its buttons in its middle that much
+  // further in, capsule_extra; at its ends that much more, so they stand as far in every way)
+  let pad = place.capsule_pad
+  @ui.style(
+    ml=@sf.room_of(l),
+    mr=@sf.room_of(r),
+    mb=@sf.room_of(b),
+    px=@sf.room_of(pad + capsule_extra()),
+    py=@sf.room_of(pad),
+  )
 }
 
 ///|
@@ -1403,7 +1423,7 @@ pub fn composer_place(pane : Double) -> ComposerPlace {
   let (l, r, b) = @sf.foot_capsule(h, @sf.corner_inset, @sf.corner_inset)
   {
     capsule_in: (l - d, r - d, b - d),
-    capsule_pad: (h - @sf.theme().round.side) / 2.0,
+    capsule_pad: (h - @sf.theme().round.side) / 2.0 - capsule_extra(),
     corner: @sf.pane_composer_corner(),
   }
 }
@@ -1423,9 +1443,14 @@ fn composer_box_open() -> @ui.Style {
 let composer_box_open_base : @ui.Style = @ui.style(w=Full, p=@sf.composer_pad_room, gap=S2_5)
 
 ///|
-/// The text's room (composerText): 5 over and under, 8 at its end on one line; opened, 8 in and 8 over.
-// kept across runs: a value (no field of it changes)
-let text_shut : @ui.Style = @ui.style(w=@sf.grow, pr=S2, py=S1_25)
+/// The text's room (composerText) on one line: 8 at its end, as high as the capsule's round buttons, its line in its
+/// middle (5 over and under at the theme's line; less as the system's size of words grows it, so that the buttons stand
+/// as far in over and under as at their ends, concentric with the capsule, not pushed in by a taller line; a line
+/// taller than they are, as tall as it); opened, 8 in and 8 over (text_open).
+fn text_shut(c : @ui.Ctx) -> @ui.Style {
+  let (_, line) = c.style_size(@sf.theme().t.words)
+  @ui.style(w=@sf.grow, h=Fixed(dmax(@sf.theme().round.side, c.sp(line))), pr=S2, justify=JCenter)
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2377,7 +2402,7 @@ fn composer_notice(
   let text_line = if choices.is_empty() { t.t.meta_line } else { c.sp(t.t.meta_line) }
   let inline_high = dmax(text_line, @ui.Space::S7.px())
   let inline_side = inline_high + 2.0 * composer_notice_pad
-  let inline_inset = capsule_pad_alone + (t.round.side + 1.0) / 2.0 - inline_side / 2.0
+  let inline_inset = capsule_pad_alone + capsule_extra() + (t.round.side + 1.0) / 2.0 - inline_side / 2.0
   // The 28-high chooser's capsule is concentric with the notice when its end is this far from the edge.
   let inline_end = (inline_side - @ui.Space::S7.px()) / 2.0
   let beside = if choices.is_empty() {
@@ -2396,7 +2421,7 @@ fn composer_notice(
   let side = line_high + 2.0 * composer_notice_pad
   // (the ＋'s middle as the composer draws it: its round control's, a point wider for the capsule's edge line, its
   // capsule_pad_alone in; measured, 24.5 in from the composer's edge)
-  let inset = capsule_pad_alone + (t.round.side + 1.0) / 2.0 - side / 2.0
+  let inset = capsule_pad_alone + capsule_extra() + (t.round.side + 1.0) / 2.0 - side / 2.0
   let drawn_in = width - 2.0 * inset
   // round as a line of it is high: a capsule while its words fit one line; wrapped, its corners still that round start,
   // its mark in it on its first line (round all its height, 3 lines made it a blob, its mark halfway down)

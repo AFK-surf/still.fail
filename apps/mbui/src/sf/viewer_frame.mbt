@@ -232,113 +232,11 @@ pub fn viewer_page_glass() -> @ui.Glass {
 }
 
 ///|
-/// The ways to the image before and after (FilePreview.css.ts fpStep), where there is one: 40 discs of the canvas at
-/// 80% over a 12 blur, 16 in from the sides (36 and 8 under 640), in the middle; there while `awake` (or the pointer
-/// on one). Which was pressed, the frame after: -1 the one before, 1 the one after, 0 none.
-pub fn viewer_steps(c : @ui.Ctx, key : String, before : Bool, after : Bool, awake : Bool, shown : Double) -> Int {
-  if !before && !after {
-    return 0
-  }
-  let p = theme().p
-  let glass = @ui.Glass::frosted(blur=viewer_step_blur, tint=alpha(p.canvas, viewer_step_share), solid=p.canvas)
-  let small = c.width <= viewer_small_w
-  let mut went = 0
-  c.box(style=if small { vfr_steps_row_small } else { vfr_steps_row }, fn() {
-    for side in [(before, -1, "chevron-left", "web-main.preview.prevKey"), (after, 1, "chevron-right", "web-main.preview.nextKey")] {
-      if side.1 > 0 {
-        c.box(style=vfr_steps_gap, fn() {  }) |> ignore
-      }
-      let id = c.id(key + "/go/\{side.1}")
-      if side.0 {
-        let hot = c.lit(id) || c.pressed(id)
-        let seen = @motion.animate(c, key + "/go-seen/\{side.1}", if awake || hot { 1.0 } else { 0.0 }, spec=@motion.tween(
-            if awake || hot {
-              wake_ms
-            } else {
-              sleep_ms
-            },
-            ease=Out,
-          ))
-        if seen > 0.0 && c.clicked(id) {
-          went = side.1
-        }
-        let b = c.box(style=if small { vfr_step_small } else { vfr_step }, glass~, id=if seen > 0.0 { id } else { 0 }, fn() {
-          icon(c, side.2, size=viewer_step_icon, color=p.text) |> ignore
-        })
-        c.semantics(b, Button, id~, label=t(side.3))
-        c.look(b, @ui.look(alpha=seen * shown))
-        // (named with its key on hover: FilePreview.tsx's Tip)
-        if seen > 0.0 {
-          tip(c, key + "/go-tip/\{side.1}", id, t(side.3))
-        }
-      } else {
-        c.box(style=if small { vfr_step_none_small } else { vfr_step_none }, fn() {  }) |> ignore
-      }
-    }
-  })
-  |> ignore
-  went
-}
-
-///|
-/// How much of a file opened has come, in the bar beside its tools (FilePreview.tsx FileComing inBar, fpHeadProgress):
-/// "正在读取 **1.2 MB** / 3.4 MB" in the meta's size, then a bar 120 wide; before the core has said how much,
-/// 正在打开 over a bar that sweeps. `got`: what has come and its whole size, else the size it was sent with.
-pub fn viewer_coming(c : @ui.Ctx, key : String, got : (Double, Double?)?, size : Double, ink : ViewerInk) -> Unit {
-  let total = match got {
-    Some((_, Some(n))) if n > 0.0 => Some(n)
-    _ => if size > 0.0 { Some(size) } else { None }
-  }
-  c.box(style=vfr_coming_row, fn() {
-    match (got, total) {
-      (Some((loaded, _)), Some(n)) => {
-        c.rich(
-          [
-            @ui.span(t("web-main.preview.loadingLabel") + " "),
-            @ui.span(file_size(loaded), weight=600, color=ink.ink),
-            @ui.span(" / " + file_size(n)),
-          ],
-          style=vfr_coming_words.then(@ui.text_style(color=Data(ink.muted))),
-        )
-        |> ignore
-        progress(c, key + "/coming", Some(if loaded >= n { 1.0 } else { loaded / n }), w=Px(vfr_coming_track))
-      }
-      _ => {
-        c.text(t("common.opening"), style=vfr_coming_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
-        progress(c, key + "/coming", None, w=Px(vfr_coming_track))
-      }
-    }
-  })
-  |> ignore
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_coming_row : @ui.Style = @ui.css("row gap=S2_5 px=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_coming_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
-
-///|
+/// How much of a file opened has come, beside the bar's tools (viewer_coming_node): its bar 120 wide.
 let vfr_coming_track : Double = 120.0
 
 ///|
-/// An image's zoom by the keys (useZoom's): + in, − out, 0 fitted, 1 as it is (+ is ⇧= on most keyboards).
-pub fn viewer_zoom_keys(c : @ui.Ctx, z : @kit.Zoom) -> Unit {
-  // (a key taken at the frame's moment: on from how big it shows then)
-  let at = c.moment()
-  for ch in ['+', '=', '-', '_', '0', '1'] {
-    for mods in [0, @ui.mod_shift_key] {
-      if c.key_pressed(@ui.key_of_char(ch), mods~) && viewer_zoom_key(z, @ui.key_of_char(ch), mods, at) {
-        return
-      }
-    }
-  }
-}
-
-///|
-/// Key `code` (`mods` held) as an image's zoom takes it at `at` (viewer_zoom_keys'): + (⇧=, =) in, − (_) out, 0 fitted,
+/// Key `code` (`mods` held) as an image's zoom takes it at `at` (the viewer's node's keys): + (⇧=, =) in, − (_) out, 0 fitted,
 /// 1 as it is, on from how big it shows then; true where it is one of them (and the image has a size to zoom).
 pub fn viewer_zoom_key(z : @kit.Zoom, code : Int, mods : Int, at : Double) -> Bool {
   if z.nw <= 0.0 || (mods & (@ui.mod_cmd | @ui.mod_ctrl | @ui.mod_alt)) != 0 {
@@ -357,33 +255,6 @@ pub fn viewer_zoom_key(z : @kit.Zoom, code : Int, mods : Int, at : Double) -> Bo
     return false
   }
   true
-}
-
-///|
-/// A file told of, not shown (FilePreview.tsx fpNote): its mark, its name, its size and extension (up to 12 letters),
-/// what is said of it; what is done about it drawn after (the caller's).
-pub fn viewer_facts(c : @ui.Ctx, name : String, size : Double, said : String) -> Unit {
-  let p = theme().p
-  icon(c, "file", size=viewer_facts_icon, color=p.muted) |> ignore
-  c.box(style=vfr_facts_name_box, fn() { c.text(name, style=vfr_facts_name) |> ignore }) |> ignore
-  let ext = match lower(name).rev_find(".") {
-    Some(i) if i > 0 && name.length() - i - 1 <= viewer_ext_most => {
-      let b = StringBuilder::new()
-      for ch in name.view(start_offset=i + 1) {
-        b.write_char(if ch >= 'a' && ch <= 'z' { (ch.to_int() - 32).unsafe_to_char() } else { ch })
-      }
-      b.to_string()
-    }
-    _ => ""
-  }
-  c.text(if ext == "" { file_size(size) } else { file_size(size) + " · " + ext }, style=vfr_facts_words) |> ignore
-  c.text(said, style=vfr_facts_words) |> ignore
-}
-
-///|
-/// What failed, said under a file told of (fpFactsFailed).
-pub fn viewer_failed(c : @ui.Ctx, words : String) -> Unit {
-  c.text(words, style=vfr_facts_failed) |> ignore
 }
 
 ///|
@@ -408,7 +279,7 @@ let viewer_step_share : Double = 0.8
 
 ///|
 /// A file told of: its mark (44), an extension said up to 12 letters.
-let viewer_facts_icon : Double = 44.0
+pub let viewer_facts_icon : Double = 44.0
 
 ///|
 let viewer_ext_most : Int = 12
@@ -464,47 +335,21 @@ let vfr_head_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, c
 let vfr_head_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// The ways beside, 16 in from the window's sides (8 under 640), in the middle of its height.
-// kept across runs: a value (no field of it changes)
-let vfr_steps_row : @ui.Style = @ui.css("row w=Full h=Full px=S4 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_steps_row_small : @ui.Style = @ui.css("row w=Full h=Full px=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_steps_gap : @ui.Style = @ui.style(w=grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_step : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Hover}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_step_small : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Hover}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_step_none : @ui.Style = @ui.css("w=S10")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_step_none_small : @ui.Style = @ui.css("w=S9")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_facts_name_box : @ui.Style = @ui.css("max_w=S96")
-
-///|
-/// A file told of (fpNote): its name 14 in 600, what is said of it 13 and quiet, 14 between them (the note's gap).
-// kept across runs: a value (no field of it changes)
-let vfr_facts_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, center=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_facts_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_facts_failed : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, center=true)
+/// A file told of's size and extension (up to 12 letters, as capitals), as a file told of says them under its name (the viewer's facts' node).
+pub fn facts_size(name : String, size : Double) -> String {
+  let ext = match lower(name).rev_find(".") {
+    Some(i) if i > 0 && name.length() - i - 1 <= viewer_ext_most => {
+      let b = StringBuilder::new()
+      for ch in name.view(start_offset=i + 1) {
+        b.write_char(if ch >= 'a' && ch <= 'z' { (ch.to_int() - 32).unsafe_to_char() } else { ch })
+      }
+      b.to_string()
+    }
+    _ => ""
+  }
+  if ext == "" {
+    file_size(size)
+  } else {
+    file_size(size) + " · " + ext
+  }
+}

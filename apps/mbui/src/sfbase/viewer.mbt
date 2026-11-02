@@ -192,6 +192,8 @@ pub(all) struct Viewer {
   vzoom : @kit.Zoom
   /// 源码 rather than 预览
   mut source : Bool
+  /// told as `source` changes (Viewer::set_source): what shows it and what says it follow it
+  source_told : @signals.Signal[Int]
   mut page : @ui.NativeView?
   mut pdf : @ui.Pdf?
   mut text : String?
@@ -201,6 +203,8 @@ pub(all) struct Viewer {
   mut colored_dark : Bool
   /// code and text shown as they come, a part at a time (viewer_flow.mbt), once its first part is asked
   mut flow : Flow?
+  /// told as its flow is begun (Viewer::read_on): what follows what it shows as it comes (its parts) follows it from then
+  flow_told : @signals.Signal[Int]
   /// the image's key once its bytes are given
   mut image : String
   /// drawn once (its way in set going), closed (only drawn going), how far it has faded in (0 … 1, a motion)
@@ -711,6 +715,8 @@ pub fn new_viewer(
     // (a film edge to edge, enlarged, as the player puts it: what it flies to and from)
     vzoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true),
     source: false,
+    source_told: @signals.signal(0),
+    flow_told: @signals.signal(0),
     page: None,
     pdf: None,
     text: None,
@@ -1501,39 +1507,23 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
     v.install_after = false
     v.ask_install(c)
   }
-  let t = @sf.theme()
-  let kind = v.shown_kind()
-  let dark = v.dark()
-  let ground = if dark {
-    0x000000FFL
-  } else if kind == Some(KPdf) {
-    @sf.mix(t.p.text, 0.05, t.p.bg)
-  } else {
-    t.p.canvas
-  }
-  // a film or a song: the player's own page (its bars, its controls, what a finger does on it)
-  let media = kind == Some(KVideo) || kind == Some(KAudio)
+  // (the old frame draws a film or a song alone, the player's own page: its bars, its controls, what a finger does on
+  // it; all else is the window's tree's, viewer_tree.mbt)
+  let ground = if v.dark() { 0x000000FFL } else { @sf.theme().p.canvas }
   // over the window, a modal layer (the web's preview is a dialog): the keys its, what is under it reads none (the
   // chat's Space taking its composer, its Esc closing its panel); its own Esc and back, what it shows closed first;
   // going, inert (the page's again as it fades)
   let body = fn() {
     c.layer(fn() {
       let stage = c.id("preview/stage")
-      // (a ground: a click round the picture closes it, the bars come and go on a tap)
       c.cursor(stage, Arrow)
-      if !media {
-        @ui.capture(c, stage)
-      }
       c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(ground, shown), opacity=faded, id=stage, fn() {
-        v.content(c, src, stage)
+        v.player_stage(c, src, stage)
       })
       |> ignore
-      c.layer(fn() { vf_steps(v, c, src, shown) }) |> ignore
-      if !media {
-        c.layer(fn() { vf_bar(v, c, src, shown) }) |> ignore
-      } else if @sf.native_on() {
-        // (a film's or a song's actions in the system's bars, an iPhone Duo's, as a picture's: its keys the player's)
-        vf_bar(v, c, src, shown, keys=false)
+      // (its actions in the system's bars, an iPhone Duo's, as a picture's: its keys the player's)
+      if @sf.native_on() {
+        vf_bar(v, c, src)
       }
     })
     |> ignore
@@ -1541,7 +1531,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   // (beside the column of the system's bars down the window's side, an iPhone Duo's on its side: the file laid out
   // clear of it, its ground on under it, the user 2026-10-27)
   // (a film filling the window beside them: the bars put away, edge to edge: @sf.player_full_native)
-  let clear = if media && @sf.player_fills_native(c.width) { 0.0 } else { @sf.native_clear() }
+  let clear = if @sf.player_fills_native(c.width) { 0.0 } else { @sf.native_clear() }
   c.overlay("preview-layer", modal=true, escape=false, outside=false, initial_focus=0, inert=v.closing, fn() {
     if clear > 0.0 {
       c.layer(fn() {
@@ -1725,6 +1715,7 @@ fn Viewer::awake_said(self : Viewer) -> Unit {
 /// comes, or over a page whose taps are its own, or while it marks. As each is told (marking: marks_said).
 pub fn Viewer::bars_shown(self : Viewer) -> Bool {
   self.awake_told.get() |> ignore
+  self.source_told.get() |> ignore
   marks_said()
   self.awake || self.near_bar || self.coming() || (self.shown_kind() == Some(KHtml) && !self.source) || marking.on
 }
@@ -1811,47 +1802,27 @@ pub fn Viewer::coming(self : Viewer) -> Bool {
 }
 
 ///|
-/// The stage: what the file shows as.
+/// The stage: what the file shows as, as the window's tree hosts it (viewer_tree.mbt's viewer_hosted, its outer stage
+/// Hosted: read whole, not told of, nothing failed): words read as they come, words in the reader, a PDF, a page, a
+/// table, code. (A film or a song is the player's: viewer_layer.)
 pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
   let v = self
+  // (预览 or 源码, as it is told: Viewer::set_source)
+  v.source_told.get() |> ignore
   let kind = v.shown_kind()
-  match kind {
-    Some(KVideo) | Some(KAudio) => v.player_stage(c, src, stage)
-    _ =>
-      if v.flowing() {
-        match (v.flow, kind) {
-          (Some(f), Some(k)) => v.flow_stage(c, src, f, k, stage)
-          _ => ()
-        }
-      } else if vf_reads(v) {
-        // a text and Markdown read in the reader, as a drive's are (FilePreview.tsx hands them to the same Reader)
-        match v.bytes.get() {
-          Some(b) => vf_read(v, c, src, b)
-          None => ()
-        }
-      } else if v.told_of() {
-        let dl = v.download(src)
-        v.note(c, fn() { vf_facts(v, c, src, dl) })
-      } else if (v.kind is None && v.sniffed.get() is None) || (v.bytes.get() is None && v.error.get() is None) {
-        tap_stage(c, v, stage)
-        v.note(c, fn() { vf_coming(v, c) })
-      } else {
-        match v.error.get() {
-          Some(e) => {
-            tap_stage(c, v, stage)
-            v.note(c, fn() {
-              c.text(pv_fill("android-chat.file.loadFailed", [("error", e)]), size=@sf.theme().t.body, color=@sf.theme().p.muted)
-              |> ignore
-            })
-          }
-          None =>
-            match (kind, v.bytes.get()) {
-              (Some(KPdf), Some(b)) => v.pdf_stage(c, b, stage)
-              (Some(k), Some(b)) => v.text_stage(c, k, b, stage)
-              _ => ()
-            }
-        }
-      }
+  if v.flowing() {
+    match (v.flow, kind) {
+      (Some(f), Some(k)) => v.flow_stage(c, src, f, k, stage)
+      _ => ()
+    }
+  } else {
+    match (kind, v.bytes.get()) {
+      // a text and Markdown read in the reader, as a drive's are (FilePreview.tsx hands them to the same Reader)
+      (_, Some(b)) if vf_reads(v) => vf_read(v, c, src, b)
+      (Some(KPdf), Some(b)) => v.pdf_stage(c, b, stage)
+      (Some(k), Some(b)) => v.text_stage(c, k, b, stage)
+      _ => ()
+    }
   }
 }
 
@@ -1893,49 +1864,6 @@ pub let reading_pill_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Mut
 pub let reading_spinner : Double = 12.0
 
 ///|
-/// How much of a file has come, out of its size, the station's else the one sent with it (FilePreview.kt
-/// FileProgress): "正在读取 **4 MB** / 12 MB" over a bar, on the surface (surface2 dark), 14 round, 14 and 12 in, 220
-/// wide; its size not known, 正在读取 over a bar that sweeps. `said`: other words in its words' place (the core's of a
-/// download: 正在下载 42% · 18.3 MB, FilePreview.tsx DownloadComing).
-pub fn file_progress(c : @ui.Ctx, got : (Double, Double?), sent : Double, said? : String) -> Unit {
-  let t = @sf.theme()
-  let total = match got.1 {
-    Some(n) => Some(n)
-    None => if sent > 0.0 { Some(sent) } else { None }
-  }
-  let part = match total {
-    Some(n) if n > 0.0 => Some(dmin(1.0, got.0 / n))
-    _ => None
-  }
-  c.box(style=file_progress_card, radius=file_progress_corner, bg=if t.dark { surface2_dark } else { t.p.card }, fn() {
-    match (said, total) {
-      (Some(words), _) => c.text(words, style=file_progress_words) |> ignore
-      (None, Some(n)) => {
-        // the size so far in bold, where the sentence has it
-        let words = pv("android-chat.file.loading.size")
-        let (before, after) = match words.find("{size}") {
-          Some(i) => (words.view(end_offset=i).to_owned(), words.view(start_offset=i + 6).to_owned())
-          None => (words, "")
-        }
-        c.rich(
-          [
-            @ui.span(before),
-            @ui.span(@sf.file_size(got.0), weight=600, color=t.p.text),
-            @ui.span(" / " + @sf.file_size(n) + after),
-          ],
-          style=file_progress_words,
-        )
-        |> ignore
-      }
-      (None, None) => c.text(pv("common.reading"), style=file_progress_words) |> ignore
-    }
-    // (one file a viewer has coming at a time)
-    @sf.progress(c, "viewer/file", part)
-  })
-  |> ignore
-}
-
-///|
 // kept across runs: a value (no field of it changes)
 pub let file_progress_card : @ui.Style = @ui.style(w=@sf.file_progress_w, px=S3_5, py=S3, gap=S2, align=ACenter)
 
@@ -1966,6 +1894,7 @@ pub fn Viewer::ask_install(self : Viewer, c : @ui.Ctx) -> Unit {
       self.error.set(None)
       self.asked = true
       self.install_after = true
+      self.asked_told.set(@signals.untracked(fn() { self.asked_told.get() }) + 1)
     }
   }
 }
@@ -2608,7 +2537,7 @@ fn Viewer::video_rect(self : Viewer, c : @ui.Ctx) -> (Double, Double, Double, Do
 
 ///|
 /// Esc closes the viewer, while nothing in it reads Esc of its own first (the player's menus and its list, once it is
-/// up; marking's marks: vf_bar).
+/// up; marking's marks).
 fn Viewer::shut_on_escape(self : Viewer, c : @ui.Ctx) -> Unit {
   if !self.closing && c.key_pressed(@ui.key_escape) {
     self.shut(c)
@@ -3196,4 +3125,22 @@ pub fn video_still(c : @ui.Ctx, src : Source, station : String, owner : String, 
           }
       }
   }
+}
+
+///|
+/// 源码 (`on`) or 预览 shown, told at once to what shows it and what says it (Viewer::content, its bars,
+/// Viewer::bars_shown): the page under the canvas let go while its source shows (and made again as it comes back).
+pub fn Viewer::set_source(self : Viewer, on : Bool) -> Unit {
+  if on == self.source {
+    return
+  }
+  self.source = on
+  if on {
+    match self.page {
+      Some(p) => p.close()
+      None => ()
+    }
+    self.page = None
+  }
+  self.source_told.set(@signals.untracked(fn() { self.source_told.get() }) + 1)
 }

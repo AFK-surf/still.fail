@@ -429,3 +429,28 @@ let bones_box : @ui.Style = @ui.css("")
 /// The pills over the bones: 14 under the top, 20 in, 4 over the bones, 8 apart, in the middle.
 // kept across runs: a value (no field of it changes)
 let wait_pills : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1 gap=S2 align=ACenter")
+
+///|
+/// A wait as nodes of the window's tree (wait_line's): nothing for a moment (later_ms from as it is made: a wait that
+/// ends sooner shows none), then a spinner and `words` in the muted ink, 8 apart, 18 high.
+pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
+  let long = @signals.signal(false)
+  parent.box(fn(l) {
+    l.row(Is(true)).gap(Is(8.0)).lines_up(Is(Some(Middle))).height(Is(Some(18.0))) |> ignore
+    l.at_moment(l.cause_at() + later_ms, fn() { long.set(true) }) |> ignore
+    l.show(fn() { long.get() }, fn(s) { spinner_node(s, size=12.0) |> ignore })
+    l.show(fn() { long.get() }, fn(s) {
+      s.box(fn(w) {
+        w
+        .words(By(words))
+        .words_look(By(fn() {
+          let (size, line) = @ui.tree_theme().text_size(Ui)
+          { size, weight: 400, line, wrap: false }
+        }))
+        .ink(By(fn() { theme().p.muted }))
+        |> ignore
+      })
+      |> ignore
+    })
+  })
+}

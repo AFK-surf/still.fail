@@ -455,13 +455,11 @@ pub fn file_key(Attachment) -> String
 
 pub fn file_params(Viewer) -> Map[String, Json]
 
-pub fn file_progress(@ui.Ctx, (Double, Double?), Double, said? : String) -> Unit
-
 pub let file_progress_card : @ui.Style
 
 pub let file_progress_corner : Double
 
-pub fn file_progress_node(@view.View, () -> (Double, Double?), () -> Double) -> @view.View
+pub fn file_progress_node(@view.View, () -> (Double, Double?), () -> Double, said? : () -> String?) -> @view.View
 
 pub let file_progress_words : @ui.TextStyle
 
@@ -1633,11 +1631,7 @@ pub fn utf8_whole(Bytes) -> Int32
 
 pub fn vector_faces(Bytes) -> Array[Bytes]
 
-pub fn vf_bar(Viewer, @ui.Ctx, Source, Double, keys? : Bool) -> Unit
-
-pub fn vf_coming(Viewer, @ui.Ctx) -> Unit
-
-pub fn vf_facts(Viewer, @ui.Ctx, Source, Json?) -> Unit
+pub fn vf_bar(Viewer, @ui.Ctx, Source) -> Unit
 
 pub fn vf_kind_label(PKind?) -> String
 
@@ -1646,10 +1640,6 @@ pub fn vf_meta(Viewer, Source) -> String
 pub fn vf_read(Viewer, @ui.Ctx, Source, Bytes) -> Unit
 
 pub fn vf_reads(Viewer) -> Bool
-
-pub fn vf_steps(Viewer, @ui.Ctx, Source, Double) -> Unit
-
-pub fn vf_tools(Viewer, @ui.Ctx, @sf.ViewerInk, Json?) -> Unit
 
 pub fn video_still(@ui.Ctx, Source, String, String, Attachment, String) -> String
 
@@ -3338,12 +3328,14 @@ pub(all) struct Viewer {
   zoom : @kit.Zoom
   vzoom : @kit.Zoom
   mut source : Bool
+  source_told : @signals.Signal[Int32]
   mut page : @ui.NativeView?
   mut pdf : @ui.Pdf?
   mut text : String?
   mut colored : Array[Array[@ui.Run]]?
   mut colored_dark : Bool
   mut flow : Flow?
+  flow_told : @signals.Signal[Int32]
   mut image : String
   mut started : Bool
   mut closing : Bool
@@ -3422,6 +3414,7 @@ pub fn Viewer::let_go(Self) -> Unit
 pub fn Viewer::lifted(Self) -> Double
 pub fn Viewer::lines_stage(Self, @ui.Ctx, PKind, Int32, (Int32) -> String, (Int32) -> Array[@ui.Run]?, String?, markdown? : String?) -> Bool
 pub fn Viewer::listed_size(Self) -> Double
+pub fn Viewer::markable(Self) -> Bool
 pub fn Viewer::marks_frame(Self, @ui.Ctx) -> Unit
 pub fn Viewer::marks_rect(Self, Double) -> (Double, Double, Double, Double)?
 pub fn Viewer::natural_size(Self, Source) -> (Double, Double)
@@ -3441,6 +3434,7 @@ pub fn Viewer::read_on(Self, Source) -> Unit
 pub fn Viewer::read_part(Self, Source, Double, Int32, String, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
 pub fn Viewer::read_whole(Self, Source, (Result[Bytes, Json]) -> Unit) -> Unit
 pub fn Viewer::set_out(Self, @ui.Ctx, Source, Double) -> Unit
+pub fn Viewer::set_source(Self, Bool) -> Unit
 pub fn Viewer::shown_kind(Self) -> PKind?
 pub fn Viewer::shown_picture(Self, @ui.Ctx, Source, (Double, Double, Double, Double)) -> String
 pub fn Viewer::shut(Self, @ui.Ctx) -> Unit

@@ -320,8 +320,6 @@ pub fn feel_hold(@ui.Ctx, String) -> Unit
 
 pub fn field(Json?, String) -> Json?
 
-pub fn file_progress(@ui.Ctx, (Double, Double?), Double, said? : String) -> Unit
-
 pub fn file_said(@sfbase.Source, @sfbase.FilePage, String) -> Unit
 
 pub fn file_seed(String, String, Bytes) -> String

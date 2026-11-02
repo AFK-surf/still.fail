@@ -1410,8 +1410,11 @@ fn Ctx::paint_field(
 /// Tells the host where the caret is, so the input method's candidate
 /// window follows it, and what text surrounds it.
 fn Ctx::sync_ime(self : Ctx) -> Unit {
+  // (the focus where what is typed may go into it now: one a modal layer of the window's tree keeps from input, none's,
+  // its input method put away while the layer is over it, its focus kept for it (Ctx::typing_allowed))
+  let focus = self.typing_allowed()
   // a key catcher's focus (device.mbt): the host told so before its input method is, with no text
-  let catching = self.dev.catchers.contains(self.focus)
+  let catching = self.dev.catchers.contains(focus)
   if catching != self.ime_sig.has_prefix("catch ") {
     h_key_catch(catching)
     if !catching {
@@ -1419,14 +1422,14 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
     }
   }
   if catching {
-    let sig = "catch \{self.focus}"
+    let sig = "catch \{focus}"
     if sig != self.ime_sig {
       self.ime_sig = sig
       h_set_ime(true, 0.0, self.height, 1.0, 1.0, "", 0, 0)
     }
     return
   }
-  match self.editors.get(self.focus) {
+  match self.editors.get(focus) {
     Some(st) =>
       match st.tl {
         Some(tl) => {

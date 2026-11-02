@@ -98,7 +98,8 @@ test "a table read as it comes: 正在打开 on its stage, then how much has com
   let v = viewer.get().unwrap()
   assert_true(v.bytes.get() is None && t.find("正在打开") is Some(_), msg="coming: \{t.words().map(fn(w) { w.0 })}")
   let coming = outer_buttons(t)
-  assert_true(coming.contains("数据.csv") && coming.contains("下载") && coming.contains("关闭（Esc）"), msg="its bar as it comes: \{coming}")
+  // (its bar: its name in it, 下载 and close its buttons)
+  assert_true(t.find("数据.csv") is Some(_) && coming.contains("下载") && coming.contains("关闭（Esc）"), msg="its bar as it comes: \{coming}")
   match held.val {
     Some((on_value, _)) => on_value({ "loaded": 100.0, "total": 200.0 })
     None => fail("its whole not asked for")
@@ -108,7 +109,9 @@ test "a table read as it comes: 正在打开 on its stage, then how much has com
   assert_eq(outer_buttons(t).filter(fn(b) { b.contains("100 B") }), [], msg="nothing of it in the bar")
   outer_give(t, held, "数据.csv")
   assert_true(v.bytes.get() is Some(_) && t.find("帧时间（毫秒）") is Some(_), msg="read: the table")
-  assert_true(outer_buttons(t).contains("数据.csv 预览 源码"), msg="its bar's 预览 and 源码: \{outer_buttons(t)}")
+  // (预览 and 源码 read out as a choice's options, 预览 the one chosen)
+  let options = t.semantics().filter(fn(s) { s.role == @ui.Role::Radio }).map(fn(s) { (s.label, s.check) })
+  assert_true(options.contains(("预览", Some(@ui.Check::On))) && options.contains(("源码", Some(@ui.Check::Off))), msg="its bar's 预览 and 源码: \{options}")
 }
 
 ///|
@@ -141,7 +144,7 @@ test "a PDF whose read failed: why on its stage, its bar's name, 下载 and clos
   assert_eq(viewer.get().unwrap().error.get(), Some("连接已断开"))
   assert_true(t.find("无法读取：连接已断开") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
   let bar = outer_buttons(t)
-  assert_true(bar.contains("设计说明.pdf") && bar.contains("下载") && bar.contains("关闭（Esc）"), msg="\{bar}")
+  assert_true(t.find("设计说明.pdf") is Some(_) && bar.contains("下载") && bar.contains("关闭（Esc）"), msg="\{bar}")
 }
 
 ///|
@@ -216,6 +219,8 @@ fn outer_closed(how : String) -> Unit raise {
   let held = Ref(None)
   let t = outer_viewer("csv", held)
   outer_give(t, held, "数据.csv")
+  // (the keyboard's focus none of the page's while it shows: not its composer's)
+  assert_true(!t.ime().0, msg="\{how}: the composer's keyboard away under the viewer: \{t.ime()}")
   match how {
     "esc" => t.key(@ui.key_escape)
     "back" => t.back()
@@ -225,7 +230,8 @@ fn outer_closed(how : String) -> Unit raise {
   assert_true(viewer.get() is None && pv_leaving.get() is Some(_), msg="\{how}: going")
   if how == "esc" {
     // (while it goes, the page's: its composer tapped and typed into, the viewer going still)
-    t.tap_text("按空格输入")
+    guard t.locate("按空格输入") is [(x, y), ..] else { fail("esc: no composer on the screen as it goes") }
+    t.tap(x, y)
     t.draw()
     t.type_text("ab")
     t.draw()
@@ -235,7 +241,10 @@ fn outer_closed(how : String) -> Unit raise {
   }
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None && pv_leaving.get() is None, msg="\{how}: gone")
-  t.tap_text("按空格输入")
+  // (the composer the page's again, none of it given the focus under the viewer: as it was)
+  assert_true(!t.ime().0, msg="\{how}: no focus given the composer under it: \{t.ime()}")
+  guard t.locate("按空格输入") is [(x, y), ..] else { fail("\{how}: no composer on the screen") }
+  t.tap(x, y)
   t.draw()
   t.type_text("ab")
   t.draw()
@@ -298,6 +307,36 @@ test "beside an iPhone Duo's own bars: a PDF, a file of no kind and a table hand
     let said = t.nav_said()
     for id in ["over/mark", "over/copy", "over/fit", "over/actual"] {
       assert_true(!said.contains("\"" + id + "\""), msg="\{at.0}: no \{id}: \{said}")
+    }
+  }
+}
+
+///|
+/// How opaque the words `words` are drawn (the first of them; -1 none).
+fn outer_alpha(t : @ui.Tester, words : String) -> Double {
+  match t.words().iter().find_first(fn(w) { w.0 == words }) {
+    Some(w) => w.5
+    None => -1.0
+  }
+}
+
+///|
+test "a table coming, a tap on its stage: on a phone's screen its floating bar goes, another brings it back; on a wide window its bar across the top stays" {
+  for w in [390.0, 1280.0] {
+    let held = Ref(None)
+    let t = outer_viewer("csv", held, w~, h=844.0)
+    t.run_for(@ui.move_most_ms)
+    assert_true(outer_alpha(t, "数据.csv") > 0.99, msg="\{w}: its bar there: \{outer_alpha(t, "数据.csv")}")
+    t.tap(w / 2.0, 500.0)
+    t.run_for(@ui.move_most_ms)
+    let gone = outer_alpha(t, "数据.csv")
+    t.tap(w / 2.0, 500.0)
+    t.run_for(@ui.move_most_ms)
+    let back = outer_alpha(t, "数据.csv")
+    if w < 600.0 {
+      assert_true(gone < 0.01 && back > 0.99, msg="\{w}: its floating bar gone \{gone}, back \{back}")
+    } else {
+      assert_true(gone > 0.99 && back > 0.99, msg="\{w}: its bar across the top stays \{gone}, \{back}")
     }
   }
 }

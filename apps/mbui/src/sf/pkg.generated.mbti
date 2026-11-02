@@ -176,7 +176,7 @@ pub let button_h : Double
 
 pub fn button_height() -> Double
 
-pub fn button_node(@view.View, () -> String, () -> Unit, tone? : Tone, busy? : () -> Bool, disabled? : () -> Bool, across? : Bool, words_in? : () -> Double) -> @view.View
+pub fn button_node(@view.View, () -> String, () -> Unit, tone? : Tone, busy? : () -> Bool, disabled? : () -> Bool, across? : Bool, words_in? : () -> Double, icon? : String) -> @view.View
 
 pub let button_raised : Raised
 
@@ -545,6 +545,8 @@ pub fn extension_of(String) -> String
 pub let face_ink : Int64
 
 pub let face_status_most : @ui.Len
+
+pub fn facts_size(String, Double) -> String
 
 pub let faint_ground : @ui.Color
 
@@ -1744,6 +1746,8 @@ pub let section_note_most : @ui.Len
 
 pub let seg_card_radius : @ui.Radius
 
+pub fn seg_node(@view.View, () -> Array[String], () -> Int32, (Int32) -> Unit, item_w? : Double, said? : String) -> @view.View
+
 pub let seg_pill_min : @ui.Len
 
 pub fn segmented(@ui.Ctx, String, Array[String], Int32, item_w? : Double, ink? : Int64, thumb? : Int64, icons? : Array[String], bar? : Bool, said? : String, tips? : Array[String], fill? : Bool) -> Int32
@@ -2192,15 +2196,11 @@ pub fn viewer_bar_start_in(Double, @paint.CornerRoots) -> Double
 
 pub fn viewer_bar_under() -> Double
 
-pub fn viewer_coming(@ui.Ctx, String, (Double, Double?)?, Double, ViewerInk) -> Unit
-
 pub fn viewer_coming_node(@view.View, () -> (Double, Double?)?, () -> Double, () -> ViewerInk) -> @view.View
 
 pub fn viewer_download(@ui.Ctx, String, ViewerInk, disabled? : Bool, coming? : Double) -> Bool
 
-pub fn viewer_facts(@ui.Ctx, String, Double, String) -> Unit
-
-pub fn viewer_failed(@ui.Ctx, String) -> Unit
+pub let viewer_facts_icon : Double
 
 pub fn viewer_frame_act(@ui.Ctx, String, String, String, String, ViewerInk, String, busy? : Bool, disabled? : Bool) -> (Bool, Bool)
 
@@ -2218,8 +2218,6 @@ pub fn viewer_reset() -> Unit
 
 pub let viewer_small_w : Double
 
-pub fn viewer_steps(@ui.Ctx, String, Bool, Bool, Bool, Double) -> Int32
-
 pub fn viewer_steps_node(@view.View, () -> Bool, () -> Bool, () -> Bool, (@view.View) -> Double, () -> Bool, (Int32) -> Unit, TipLayer) -> @view.View
 
 pub fn viewer_tool(@ui.Ctx, String, String, String, ViewerInk, on? : Bool, disabled? : Bool) -> Bool
@@ -2229,8 +2227,6 @@ pub fn viewer_tool_corner() -> @ui.Style
 pub let viewer_tool_icon : Double
 
 pub fn viewer_zoom_key(@kit.Zoom, Int32, Int32, Double) -> Bool
-
-pub fn viewer_zoom_keys(@ui.Ctx, @kit.Zoom) -> Unit
 
 pub let viewer_zoom_step : Double
 
@@ -2249,6 +2245,8 @@ pub let viz_way_side : @ui.Len
 pub let wait_bar_h : @ui.Len
 
 pub fn wait_line(@ui.Ctx, String, key? : String, error? : Bool) -> Unit
+
+pub fn wait_line_node(@view.View, () -> String) -> @view.View
 
 pub fn wait_more(@ui.Ctx, WaitNote?, () -> Unit) -> Unit
 
