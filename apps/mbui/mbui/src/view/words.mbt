@@ -375,3 +375,38 @@ pub fn View::height_share(self : View, share : Live[Double]) -> View {
   self.bind(Height, share, Layout, fn(s) { self.tree.nodes[self.at].flex.style.set_height(Pct(s * 100.0)) })
   self
 }
+
+///|
+/// Whether it is pointed at as the pointer is over it or over what it holds that takes the pointer not, as it changes
+/// (an old view's box `points=true, taps=false`): View::pointed and View::pointed_in say so of it there, what holds it
+/// as of what it holds; never pressed nor held for it (what takes a press or a hold under it takes it as ever), not
+/// where something over it takes the pointer. Hit's.
+pub fn View::points(self : View, on : Live[Bool]) -> View {
+  // (what takes the pointer where, as whether it takes presses is (View::presses): said at the moment it changes, its
+  // hits found anew, nothing laid out for it; said anew, what was said before let go of)
+  guard self.live() is Some(n) else { return self }
+  match n.props.get(Points) {
+    Some(stop) => {
+      n.props.remove(Points)
+      stop()
+    }
+    None => ()
+  }
+  let set = fn(on : Bool) {
+    guard self.live() is Some(n) else { return }
+    if n.points != on {
+      n.points = on
+      self.tree.hits = self.tree.hits + 1
+      self.tree.marked()
+    }
+  }
+  match on {
+    Is(v) => set(v)
+    By(f) =>
+      self.owning(fn() {
+        let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
+        n.props[Points] = stop
+      })
+  }
+  self
+}

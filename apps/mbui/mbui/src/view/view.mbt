@@ -358,6 +358,9 @@ struct Node {
   mut drawn_clear : NodeId?
   /// how far in from its right edge the pointer brings its bar out (View::bar_near; 0 none), and whether it does now
   mut bar_near : Double
+  /// whether the pointer over it, or over what it holds that takes it not, is over it (View::points): pointed at,
+  /// never pressed nor held
+  mut points : Bool
   mut bar_near_cell : @signals.Signal[Bool]?
   /// what brings a part of what it holds into its sight (View::shows): given where that is in its own terms (its top,
   /// its foot), how far it moved what it holds to
@@ -598,6 +601,9 @@ pub struct Tree {
   // where the pointer is in the window, as it is said (Tree::point_at; (-1, -1) none): what goes beside it is placed
   // by (View::beside's `at_pointer`)
   mut pointer_xy : (Double, Double)
+  /// what the pointer is over of what says it is pointed at alone (View::points), where that is over all that takes
+  /// it there (Tree::points_over)
+  mut points_hover : NodeId?
   /// the columns that scroll whose bars come out where the pointer is along their edge (View::bar_near), and which
   /// the pointer is along now (told as withins are: Tree::bars_near_told)
   bar_cols : Array[(Int, Int)]
@@ -775,6 +781,7 @@ pub fn Tree::new(
     pointed: None,
     lit_every: false,
     pointer_xy: (-1.0, -1.0),
+    points_hover: None,
     bar_cols: [],
     drawn_marks: [],
     bars_due: false,
@@ -938,6 +945,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.bounds_input = false
       n.drawn_clear = None
       n.bar_near = 0.0
+      n.points = false
       n.bar_near_cell = None
       n.shows = None
       n.claims = None
@@ -1017,6 +1025,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         bounds_input: false,
         drawn_clear: None,
         bar_near: 0.0,
+        points: false,
         bar_near_cell: None,
         shows: None,
         claims: None,
@@ -1662,6 +1671,7 @@ priv enum Prop {
   Measured
   WordsCentered
   EllipsisPast
+  Points
   Picture
   Drop
   Fits
@@ -4475,6 +4485,7 @@ fn View::let_go(self : View) -> Unit {
   n.bounds_input = false
   n.drawn_clear = None
   n.bar_near = 0.0
+  n.points = false
   n.bar_near_cell = None
   self.drag_ended()
   n.on_drag = None
@@ -6577,6 +6588,48 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
 }
 
 ///|
+/// What is pointed at (View::pointed) where the pointer followed (Tree::follow_point) is over `t`, the one way the tree
+/// and what hosts it say it: what says it is pointed at alone over all that takes it there (View::points); else what
+/// takes a press or a hold there; else nothing.
+pub fn Tree::pointed_of(self : Tree, t : Target) -> NodeId? {
+  match self.points_hover {
+    Some(id) => Some(id)
+    None =>
+      match t {
+        Pressed(id) | Dragged(id) => Some(id)
+        _ => None
+      }
+  }
+}
+
+///|
+/// What says it is pointed at alone (View::points) the pointer followed (Tree::follow_point) is over, where that is over
+/// all that takes the pointer there: what is lit there and shapes the pointer (View::cursor), whatever is under it; none,
+/// what takes it there does (Tree::pointed_of).
+pub fn Tree::points_now(self : Tree) -> NodeId? {
+  self.points_hover
+}
+
+///|
+/// What says it is pointed at alone (View::points) the pointer at (x, y) is over, where that is drawn over all that
+/// takes it there (what target_in finds: what presses, what is held, an old view, a top row): followed, as target_in.
+fn Tree::points_over(self : Tree, x : Double, y : Double) -> NodeId? {
+  let at = self.logic_at()
+  let found : Ref[NodeId?] = Ref(None)
+  self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+    if self.finger_on(c, cx, cy, s, x, y, at, tracked=true) {
+      let n = self.nodes[c.id.at]
+      if n.points {
+        found.val = Some(c.id)
+      } else if (n.on_drag is Some(_) && n.claims is None) || n.on_press is Some(_) || n.hosted || n.top_row {
+        found.val = None
+      }
+    }
+  })
+  found.val
+}
+
+///|
 /// What takes a finger at (x, y) of `found` (all that takes it there, in the order they are drawn): the topmost, unless
 /// the host says another of them does (Tree::on_target); none, nothing. Only one of `found`, whatever the host says.
 fn Tree::chosen(self : Tree, found : Array[Target], x : Double, y : Double) -> Target {
@@ -6891,14 +6944,7 @@ pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
     self.pointed_to(None)
     return
   }
-  self.follow_point(x, y, fn(t) {
-    self.pointed_to(
-      match t {
-        Pressed(id) | Dragged(id) => Some(id)
-        _ => None
-      },
-    )
-  })
+  self.follow_point(x, y, fn(t) { self.pointed_to(self.pointed_of(t)) })
 }
 
 ///|
@@ -6924,8 +6970,10 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
     then(t)
     if moved.val {
       moved.val = false
-      match t {
-        Pressed(id) | Dragged(id) if self.alive_id(id) =>
+      // (to what is pointed at there, the one way it is said: what is pointed at alone over all else there, else what
+      // takes a press or a hold there, Tree::pointed_of)
+      match self.pointed_of(t) {
+        Some(id) if self.alive_id(id) =>
           match self.nodes[id.at].on_pointer_moved {
             Some(f) => @signals.untracked(f)
             None => ()
@@ -6936,13 +6984,18 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   }
   self.pointer_now(x, y)
   self.point_stopped()
+  // (what it was over, said anew as it is found)
+  self.points_hover = None
   if x < 0.0 || y < 0.0 {
     return
   }
   // (this one the one followed from now: what it is first told may let it go (another point, none, the tree let go),
   // which this one's number then no longer is)
   let mine = self.point_said
-  let stop = self.queued(fn() { self.target_in(x, y, tracked=true) }, then)
+  let stop = self.queued(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }, fn(found) {
+    self.points_hover = found.1
+    then(found.0)
+  })
   if self.gone || self.point_said != mine {
     stop()
   } else {
