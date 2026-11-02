@@ -744,6 +744,7 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
       if open && m.notice_detail != "" {
         c.box(style=notice_detail_room, fn() {
           c.rich([@ui.span(m.notice_detail, mono=true)], key="notice-detail/" + m.ts, style=notice_detail.then(@ui.text_style(color=ink))) |> ignore
+          notice_copy(c, m, ink)
         })
         |> ignore
       }
@@ -789,6 +790,38 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
   })
   |> ignore
 }
+
+///|
+/// What failed said of a notice, copied (复制, 已复制 a moment once copied, as a link's address is: link_copy).
+fn notice_copy(c : @ui.Ctx, m : Message, ink : @ui.Color) -> Unit {
+  let key = "notice-copy/" + m.ts
+  let said = notices_copied.contains(m.ts) &&
+    (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
+      notices_copied.remove(m.ts)
+      false
+    } else {
+      true
+    })
+  let id = c.id(key)
+  if c.clicked(id) {
+    c.copy_text(m.notice_detail)
+    @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
+    notices_copied.add(m.ts)
+  }
+  c.box(style=notice_copy_room, id~, fn() {
+    c.rich([@ui.span(@sf.t(if said { "common.copied" } else { "common.copy" }), underline=true)], style=if ink == Danger {
+      notice_act_failed
+    } else {
+      notice_act
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Notices whose detail was copied a moment ago, by message.
+let notices_copied : Set[String] = Set::new()
 
 ///|
 /// Notices opened (all their words and their time), by message.
@@ -1307,7 +1340,11 @@ let notice_detail : @ui.TextStyle = @ui.text_style(size=Caption)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let notice_detail_room : @ui.Style = @ui.css("w=Full pt=S1_5")
+let notice_detail_room : @ui.Style = @ui.css("w=Full pt=S1_5 gap=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let notice_copy_room : @ui.Style = @ui.css("row")
 
 ///|
 /// The dot before its word (blockedDot in a notice): 6 each side, the pill's ink at 60%; the word (blockedAction),
