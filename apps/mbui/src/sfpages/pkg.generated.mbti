@@ -135,7 +135,7 @@ pub fn context_tile_id(@ui.Ctx) -> Int32
 
 pub fn decision_options(@ui.Ctx, @sfbase.Source, MessageHere, @sfbase.Message, Double, Array[@sfbase.Choice], Bool, on_pick? : (Int32) -> Unit) -> Unit
 
-pub fn decisions_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
+pub fn decisions_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit) -> Unit
 
 pub fn decisions_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 

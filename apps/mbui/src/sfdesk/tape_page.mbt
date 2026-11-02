@@ -230,7 +230,7 @@ fn tape_bar_collected(c : @ui.Ctx, build : () -> Unit) -> Unit {
 
 ///|
 /// The pages of the library's made once as nodes in the page's panel, in the place of their old view (nav_flat_view's
-/// `made`), by what each is: 关于, 记忆 and 归档, as the settings' list opens them; a station's own archiving, as 归档
+/// `made`), by what each is: 关于, 记忆, 归档 and 自动决策, as the settings' list opens them; a station's own archiving, as 归档
 /// opens it. Made only where the page is narrow (look_for the
 /// stack's width in the panel at rest, as the tape lays it out now; none while that is not known): a gate between the
 /// page's two makings for now, the library's pages made once being narrow ones (@sf.page_node), no arrangement of the
@@ -277,6 +277,10 @@ fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
     Setting(Archiving) =>
       made("archiving", fn(p, core, here, stint, told) {
         @sfpages.archiving_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told)
+      })
+    Setting(AutoDecisions) =>
+      made("auto-decisions", fn(p, core, here, _stint, told) {
+        @sfpages.decisions_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told)
       })
     // (by its station: another station's another page, not this one become it)
     Setting(StationArchiving(st)) =>

@@ -529,8 +529,8 @@ test "on the tape a station's own archiving become another station's in its plac
 }
 
 ///|
-test "on the tape 记忆 and 归档 made once under the tape's bar where their page is narrow: their title the bar's alone, what they hold the tree's" {
-  for page in [("settings-memories", "记忆"), ("settings-archiving", "归档")] {
+test "on the tape 记忆, 归档 and 自动决策 made once under the tape's bar where their page is narrow: their title the bar's alone, what they hold the tree's" {
+  for page in [("settings-memories", "记忆"), ("settings-archiving", "归档"), ("settings-decisions", "自动决策")] {
     let t = tape_bar_in(page.0, Ref(""), w=600.0, h=900.0)
     assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg="\{page.0}")
     assert_eq(bar_words_drawn(t, page.1).length(), 1, msg="\{page.0}: the bar's title")
@@ -538,5 +538,8 @@ test "on the tape 记忆 and 归档 made once under the tape's bar where their p
     guard tape_page_panel(t) is Some(p) else { fail("no page") }
     let held = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words != "" && d.x >= p.x && d.y >= p.y + 56.0 && d.alpha > 0.5 })
     assert_true(held.length() > 0, msg="\{page.0}: what it holds the tree's")
+    // (what it is for by a mark in the bar where the page says so: 自动决策's, as its old bar has it)
+    let marks = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "说明" && !s.hidden }).length()
+    assert_eq(marks, if page.0 == "settings-decisions" { 1 } else { 0 }, msg="\{page.0}: its mark")
   }
 }

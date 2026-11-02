@@ -84,7 +84,7 @@ priv enum PageItem {
 /// (page_block), and 30 under the last, then the frame's room at its foot; all of it scrolling in the page, each part
 /// made only while it shows (View::scrolls_window, as narrow_list's old list builds only the rows in view). What the
 /// frame says is followed as it changes. What it says of itself told `said` as that changes (a frame's bar that names
-/// it: its title; no mark of what it is for, none being given here).
+/// it: its title, and what it is for by a mark beside it, `about`: said there alone, nothing of it drawn here).
 pub fn page_node(
   v : @view.View,
   title : () -> String,
@@ -93,11 +93,12 @@ pub fn page_node(
   on_back~ : () -> Unit,
   frame? : () -> PageFrame = fn() { no_frame },
   lead? : () -> String = fn() { "" },
+  about? : () -> String = fn() { "" },
   said? : (PageSaid) -> Unit,
 ) -> Unit {
   // (what it says of itself to the frame's bar that names it, as that changes, whole: the frame's own to keep)
   match said {
-    Some(f) => v.reacts(fn() { { title: title(), about: "" } }, f)
+    Some(f) => v.reacts(fn() { { title: title(), about: about() } }, f)
     None => ()
   }
   // (a page's list: it moves as the platform's lists do, its slop the host's)
