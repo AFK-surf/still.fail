@@ -217,13 +217,12 @@ function threadView(
 
 /// The threads of the viewer's workspace (of one session).
 function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
-  const shares = store.chatShares(s);
-  const published = store.publishedByThread(s);
-  const seen = store.seenBy(s, viewer);
-  return store
-    .listThreads(s, viewer.email, session, null)
-    .filter((t) => t.sessions.some((m) => seen(m.session)))
-    .map((t) => threadView(s, t, shares, published));
+  const summaries = store.listThreads(s, viewer.email, session, null);
+  const seen = store.seenBy(s, viewer, summaries.flatMap((t) => t.sessions.map((m) => m.session)));
+  const visible = summaries.filter((t) => t.sessions.some((m) => seen(m.session)));
+  const shares = store.chatShares(s, visible.map((t) => t.thread.home ?? t.sessions[0]?.session ?? ""));
+  const published = store.publishedByThread(s, visible.map((t) => t.thread.id));
+  return visible.map((t) => threadView(s, t, shares, published));
 }
 
 /// GET /threads?session= (views.rs `threads`): the threads (of one session).

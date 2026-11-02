@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ops } from "../src/read/ops.ts";
-import { answersSince, dismissed, keptChats, makeStore, openStore } from "../src/read/store.ts";
+import { answersSince, dismissed, keptChats, makeStore, openStore, PUBLISHED_OF, SEEN_OF, SHARES_OF } from "../src/read/store.ts";
 import { MANUAL, Store, newMessage } from "../src/store/store.ts";
 
 test("a scoped chat update reads marks and answers only for those chats", () => {
@@ -65,6 +65,7 @@ test("a change's sidebar items and a chat's view read their own shares, openers 
     open.run("k", "p", "o");
     publish.run("mine", chat.id);
     for (let i = 0; i < 500; i++) {
+      store.insertSession({ key: `s${i}`, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${i}`, token: `t${i}`, createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
       share.run(`s${i}`, shared, Date.now());
       open.run(`c${i}`, `p${i}`, `o${i}`);
       open.run(`d${i}`, "k2", `q${i}`);
@@ -81,7 +82,8 @@ test("a change's sidebar items and a chat's view read their own shares, openers 
         }
         return (sql: string) => {
           const statement = target.prepare(sql);
-          const table = /\bFROM (chat_shares|opened_chats|published)\b/i.exec(sql)?.[1];
+          const table = /\bFROM (chat_shares|opened_chats|published)\b/i.exec(sql)?.[1]
+            ?? (/\bFROM sessions INDEXED BY sessions_ws\b/i.test(sql) ? "visibility_sessions" : undefined);
           return new Proxy(statement, {
             get: (s, p) => {
               const v = Reflect.get(s, p, s);
@@ -102,7 +104,18 @@ test("a change's sidebar items and a chat's view read their own shares, openers 
       assert.deepEqual(rows.map((r: any) => [r.id, r.opener?.session, r.xshare?.to]), [["k", "p", ["w2"]]]);
       const view = ops.thread!(reader, { viewer, id: String(chat.id), lang: "zh" }) as any;
       assert.deepEqual([view.xshare?.to.map((t: any) => t.workspace), view.published?.map((p: any) => p.id)], [["w2"], ["mine"]]);
+      delete counts.visibility_sessions;
       assert.deepEqual(counts, { chat_shares: 2, opened_chats: 1, published: 1 });
+      for (const key of Object.keys(counts)) delete (counts as Record<string, number>)[key];
+      const list = ops.threads!(reader, { viewer, session: "k", lang: "zh" }) as any[];
+      assert.deepEqual(list.map((t) => [t.id, t.xshare?.to.map((x: any) => x.workspace), t.published?.map((p: any) => p.id)]),
+        [[chat.id, ["w2"], ["mine"]]]);
+      assert.deepEqual(counts, { visibility_sessions: 1, chat_shares: 1, published: 1 },
+        "one session's threads do not fetch other sessions, shares or snapshots");
+      const plan = (sql: string, keys: string) => (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(keys) as { detail: string }[]).map((row) => row.detail).join(" | ");
+      assert.match(plan(`${SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, '["k"]'), /SEARCH sessions USING COVERING INDEX sessions_ws \(key=\?\)/);
+      assert.match(plan(SHARES_OF, '["k"]'), /SEARCH chat_shares USING INDEX .*\(session=\?\)/);
+      assert.match(plan(PUBLISHED_OF, `[${chat.id}]`), /SEARCH published USING INDEX published_by_thread \(thread=\?\)/);
     } finally {
       db.close();
     }
