@@ -225,14 +225,15 @@ fn tape_bar_collected(c : @ui.Ctx, build : () -> Unit) -> Unit {
 
 ///|
 /// The pages of the library's made once as nodes in the page's panel, in the place of their old view (nav_flat_view's
-/// `made`), by what each is: 关于, as the settings' list opens it. Made only where the page is narrow (the stack's
-/// width in the panel at rest, as the tape lays it out now, under @sf.narrow_most as look_for has it: the library's
-/// pages made once are narrow ones, @sf.page_node); wider, its old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
+/// `made`), by what each is: 关于, as the settings' list opens it. Made only where the page is narrow (look_for the
+/// stack's width in the panel at rest, as the tape lays it out now; none while that is not known): a gate between the
+/// page's two makings for now, the library's pages made once being narrow ones (@sf.page_node), no arrangement of the
+/// page's own; wider, its old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
 /// its own, nothing over it in its room.
 fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int) -> Unit)? {
   let r = tape_room_now()
   let width = r.main_to - (if tape_shown_side() is None { r.under } else { 0.0 })
-  guard width > 0.0 && width < @sf.narrow_most else { return None }
+  guard width > 0.0 && @sf.look_for(width) is Narrow else { return None }
   match page {
     Setting(About) =>
       Some(
