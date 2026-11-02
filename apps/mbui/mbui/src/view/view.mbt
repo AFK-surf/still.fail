@@ -334,6 +334,9 @@ struct Node {
   mut claims : ((Double, Double) -> Bool)?
   /// how many times it was said to take over holds (View::claims): a hold asks it as it was said as it went down
   mut claims_said : Int
+  /// a hold on it is one what holds it may take over as it moves (View::claims), the hold not its own yet: a gesture
+  /// waiting on a tap, a hold of the finger or its own slop (View::gesture)
+  mut yields : Bool
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
@@ -857,6 +860,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.shows = None
       n.claims = None
       n.claims_said = 0
+      n.yields = false
       n.claims_scroll = false
       n.scroll_held = -1
       n.focus_shown_cell = None
@@ -933,6 +937,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         shows: None,
         claims: None,
         claims_said: 0,
+        yields: false,
         claims_scroll: false,
         scroll_held: -1,
         focus_shown_cell: None,
@@ -1843,6 +1848,14 @@ pub fn View::claims(self : View, f : (Double, Double) -> Bool, scrolls? : Bool =
 /// there (an old view a press goes on to under an empty one over it); `there`: whether one hosting an old view has
 /// something of its own there (one with nothing there passed, as though it were not there: Tree::wheel_at's). Asked
 /// again as the hold moves (Tree::claimer_of).
+/// Whether the hold on node `id` may be taken over by what holds it as it moves (a gesture of its waiting on a tap, a
+/// hold or its own slop: View::gesture), as a press of a node's may (Tree::claimer_of); one of its own (its drag begun,
+/// a hold come; a node's raw on_drag: a slider, a picture zoomed, words picked), not.
+pub fn Tree::yields(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].yields
+}
+
+///|
 pub fn Tree::claimers_at(
   self : Tree,
   x : Double,
@@ -3633,9 +3646,10 @@ fn Tree::takes_off(self : Tree, n : Node) -> Unit {
 }
 
 ///|
-/// What its on_drag set going ended (said anew, let go).
+/// What its on_drag set going ended (said anew, let go): a hold on it its own again (Tree::yields), whatever said it.
 fn View::drag_ended(self : View) -> Unit {
   let n = self.tree.nodes[self.at]
+  n.yields = false
   match n.drag_end {
     Some(end) => {
       n.drag_end = None
@@ -3994,6 +4008,12 @@ pub fn View::gesture(
           Some(f) => hold_ms is Some(_) && f(d)
           None => false
         }
+        // (waiting on a tap, a hold or its own slop: the hold what holds it may take over as it moves, as a press's:
+        // Tree::yields; its own once it is a drag or a hold)
+        match self.live() {
+          Some(n) => n.yields = true
+          None => ()
+        }
         match press {
           Some(f) => word(f, d, d)
           None => ()
@@ -4025,6 +4045,11 @@ pub fn View::gesture(
                 match hold {
                   Some((_, f)) => {
                     held.val = true
+                    // (held: the hold its own from now)
+                    match self.live() {
+                      Some(n) => n.yields = false
+                      None => ()
+                    }
                     word(f, { ..o, at: due }, o)
                   }
                   // (handed through: its own hold ended by it, Off, the finger what lies under it's; nothing there to take
@@ -4043,6 +4068,10 @@ pub fn View::gesture(
             // (past the slop by how far the finger itself went: the drag begins where it is now)
             if !moved.val && ((d.wx - o.wx).abs() > slop || (d.wy - o.wy).abs() > slop) {
               moved.val = true
+              match self.live() {
+                Some(n) => n.yields = false
+                None => ()
+              }
               (cancel_hold.val)()
               cancel_hold.val = fn() {  }
               // (dragging it only once held, moved before: its press called off, once (Off), then what lies under it's,
@@ -4072,6 +4101,10 @@ pub fn View::gesture(
           None => ()
         }
       Up | Off => {
+        match self.live() {
+          Some(n) => n.yields = false
+          None => ()
+        }
         let was = down.val
         let went = moved.val
         let was_held = held.val

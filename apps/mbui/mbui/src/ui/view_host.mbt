@@ -1647,9 +1647,10 @@ fn old_wheel_there(id : @view.NodeId, x : Double, y : Double) -> Bool {
 let view_down_most : Int = 20
 
 ///|
-/// The hold now (a press of a node's, an old view's, nobody's) taken over at (x, y) at `at` by what holds what it went
-/// down on, where one says it takes it as it has moved so far (Tree::claimer_of): what had it called off (a node's press
-/// let go unpressed; the old view's told the press is called off, as the host calls one off), the rest of it that one's,
+/// The hold now (a press of a node's, a gesture's not its own yet, an old view's, nobody's) taken over at
+/// (x, y) at `at` by what holds what it went down on, where one says it takes it as it has moved so far
+/// (Tree::claimer_of): what had it called off (a node's press let go unpressed; a gesture's told Off; the old view's told
+/// the press is called off, as the host calls one off), the rest of it that one's,
 /// down where it went down, moved to where it is now. Whether it was.
 fn view_claimed(tree : @view.Tree, x : Double, y : Double, at : Double) -> Bool {
   guard view_down.val is Some((x0, y0, chain, events)) else { return false }
@@ -1670,6 +1671,8 @@ fn view_claimed(tree : @view.Tree, x : Double, y : Double, at : Double) -> Bool 
       view_input_went(part)
       old_pointer_now(3, x, y, 0, 0, h_event_time())
     }
+    // (a gesture's hold waiting on a tap, a hold or its slop (Tree::yields): called off, no tap of it nor hold)
+    Some(Dragging(n)) => tree.drag_at(n, Off, x, y, at, finger=view_fingers[0]) |> ignore
     _ => ()
   }
   view_held.val = Some(Dragging(id))
@@ -1858,6 +1861,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     // a finger went, where it waits for a tap: tree_field_moved)
     (1, Some(Node(id))) if tree_field_moved(id, x, y, at) => true
     (1, Some(Node(_) | Nowhere)) if view_claimed(tree, x, y, at) => true
+    // (held by a gesture waiting on a tap, a hold or its own slop: taken over as a press is, Tree::yields; what holds it
+    // asked first, at the same move)
+    (1, Some(Dragging(id))) if tree.yields(id) && view_claimed(tree, x, y, at) => true
     (1, Some(Old(part, _))) => {
       view_input_went(part)
       false
