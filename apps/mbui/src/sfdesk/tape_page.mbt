@@ -45,6 +45,8 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
       bg=fn() { tape_page_ground(panel) },
       // (a page's bar on the tape the tree's, over its own view: what the page says of it, collected as it is built)
       head=fn(b, k) { tape_bar_head(b, k, tips) },
+      // (a page of the library's made once in its place, where it is: its bar the tape's, from what the page is)
+      made=fn(p) { tape_made(src, p) },
       // (what its bar said kept till its entry leaves the stack: shown again (beside the one over it as that goes back),
       // its bar there with it before its page is built again)
       gone=fn(k) { tape_bars.remove(k) },
@@ -137,15 +139,38 @@ fn tape_bar_of(k : Int) -> TapeBar {
 
 ///|
 /// Over entry `k`'s page in the page's panel (node `b`): its bar, the tree's (pane_bar_node), as its page said it as it
-/// was built; none where it said none or keeps its own (one with actions, built the old way with them); the panel's
-/// corners its ends', its ground the panel's.
+/// was built; one made once (tape_made) as what it is says (tape_made_bar); none where it said none or keeps its own
+/// (one with actions, built the old way with them); the panel's corners its ends', its ground the panel's.
 fn tape_bar_head(b : @view.View, k : Int, tips : @sf.TipLayer) -> Unit {
   let tb = tape_bar_of(k)
-  b.show(fn() { tb.said.get() is Some(_) }, fn(h) {
+  // (a page made once: its bar as what it is says, its back where it was put on from; else as its old view said it.
+  // The last said kept while the stack is told of a change before it is whole (an entry put in place and kept shown
+  // by its owner, told in either order): what the page is changed to another kind remakes this node, nothing else)
+  let last : Ref[PaneBarSaid?] = Ref(None)
+  let made = fn() {
+    match app.nav.page_of(k) {
+      Some((page, under)) => last.val = tape_made_bar(page, under)
+      None => ()
+    }
+    last.val
+  }
+  let said = fn() {
+    match made() {
+      Some(s) => Some(s)
+      None => tb.said.get()
+    }
+  }
+  b.show(fn() { said() is Some(_) }, fn(h) {
     pane_bar_node(
       h,
-      fn() { tb.said.get() },
-      fn() { (tb.back)() },
+      said,
+      fn() {
+        if @signals.untracked(made) is Some(_) {
+          app.nav.pop() |> ignore
+        } else {
+          (tb.back)()
+        }
+      },
       fn() {
         let side = tape_shown_side()
         let under = if side is None { tape_room_now().under } else { 0.0 }
@@ -196,4 +221,58 @@ fn tape_bar_collected(c : @ui.Ctx, build : () -> Unit) -> Unit {
   build()
   @sf.pane_bar.val = wire
   tb.said.set(said.val)
+}
+
+///|
+/// The pages of the library's made once as nodes in the page's panel, in the place of their old view (nav_flat_view's
+/// `made`), by what each is: 关于, as the settings' list opens it. Made only where the page is narrow (the stack's
+/// width in the panel at rest, as the tape lays it out now, under @sf.narrow_most as look_for has it: the library's
+/// pages made once are narrow ones, @sf.page_node); wider, its old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
+/// its own, nothing over it in its room.
+fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int) -> Unit)? {
+  let r = tape_room_now()
+  let width = r.main_to - (if tape_shown_side() is None { r.under } else { 0.0 })
+  guard width > 0.0 && width < @sf.narrow_most else { return None }
+  match page {
+    Setting(About) =>
+      Some(
+        (
+          "about",
+          fn(v, _page, _under, _stint) {
+            v.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
+              match @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) {
+                Some(w) => {
+                  let core = settings_core(src, w)
+                  @settings.frame(core, @settings.here_of(core, w.id, w.name))
+                  @sfpages.about_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame })
+                }
+                None => ()
+              }
+            })
+          },
+        ),
+      )
+    _ => None
+  }
+}
+
+///|
+/// What the tape gives a page made once in its panel (tape_made): the bar over it names it and has back (named, no
+/// back), nothing over it in its room, the settings' room at its foot (setting_page's).
+// kept across runs: a value
+let tape_made_frame : @sf.PageFrame = { back: None, top: 0.0, foot: 0.0, named: true }
+
+///|
+/// The bar over a page made once in the page's panel (tape_made), as what it is says: its title, what it is for, back
+/// where the page it was put on from is one of the settings' or a place of the rail's (setting_page's); none for one
+/// not made so.
+fn tape_made_bar(page : Page, under : Page?) -> PaneBarSaid? {
+  let back = match under {
+    Some(u) if u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
+    _ => None
+  }
+  match page {
+    Setting(About) => Some({ back, title: @sf.t("web-pages.settings.nav.about"), small: "", about: "" })
+    _ => None
+  }
 }

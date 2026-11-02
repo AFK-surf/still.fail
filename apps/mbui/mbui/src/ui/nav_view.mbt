@@ -470,7 +470,8 @@ let nav_page_whole : Style = css("w=Full h=Full")
 ///|
 /// Page `serial` of the stack (`e`) made once as nodes of the tree's in node `m` (nav_view's `made`): on a ground of
 /// `bg`, its nodes `f` makes in it, once (as it is put on, the stack's `under` as of it: Nav::under), given what the
-/// page is as that changes; back the stack's as Nav::backs_over has it, the whole of `m`.
+/// page is as that changes; back the stack's as Nav::backs_over has it (from `floor`, where `when` says), the whole of
+/// `m`. With `head`: what the frame puts over it made first in its flow, the page in the room left under it, cut to it.
 fn[P] Nav::made(
   self : Nav[P],
   m : @view.View,
@@ -479,6 +480,9 @@ fn[P] Nav::made(
   f : (@view.View, () -> P, P?, () -> Int) -> Unit,
   bg : () -> Int64,
   edge : Double,
+  floor? : () -> Int,
+  when? : () -> Bool = fn() { true },
+  head? : (@view.View) -> Unit,
 ) -> Unit {
   let nav = self
   m
@@ -499,7 +503,21 @@ fn[P] Nav::made(
     nav.said.get() |> ignore
     e.stint
   }
-  nav.backs_over(m, serial, edge, fn() { nav.built_by(e, fn() { f(m, page, e.under, stint) }) })
+  nav.backs_over(m, serial, edge, floor?, when~, fn() {
+    match head {
+      None => nav.built_by(e, fn() { f(m, page, e.under, stint) })
+      // (what the frame puts over the page first (a panel's bar), in its flow; the page in what is left under it, cut
+      // to it: what it scrolls never under the bar)
+      Some(h) => {
+        m.box(h) |> ignore
+        m.box(fn(rest) {
+          rest.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))).clips(Is(true)) |> ignore
+          nav.built_by(e, fn() { f(rest, page, e.under, stint) })
+        })
+        |> ignore
+      }
+    }
+  })
 }
 
 ///|

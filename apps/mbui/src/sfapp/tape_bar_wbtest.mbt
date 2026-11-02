@@ -330,3 +330,79 @@ test "on the tape a page's bar with a long title in words twice as large: the ti
   }
 }
 
+
+///|
+/// The tree's own nodes in the page's panel under its bar drawing `words` (a page made once's), not an old view's.
+fn page_words_made(t : @ui.Tester, words : String) -> Int {
+  guard tape_page_panel(t) is Some(p) else { return 0 }
+  match @ui.view_tree() {
+    Some(tree) =>
+      tree.drawn().filter(fn(d) { !d.hosted && d.words == words && d.x >= p.x && d.y >= p.y + 50.0 && d.alpha > 0.5 }).length()
+    None => 0
+  }
+}
+
+///|
+test "on the tape 关于 made once under the tape's bar where its page is narrow: its rows the tree's, its title the bar's alone; where its page is wider, its old view" {
+  // (600 across: its page 530, narrow; 839: wider than a narrow page is, its old view till the library's are made wide)
+  for win in [(600.0, true), (839.0, false)] {
+    let t = tape_bar_in("settings-about", Ref(""), w=win.0, h=900.0)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+    assert_eq(page_words_made(t, "更新日志"), if win.1 { 1 } else { 0 }, msg="\{win.0}: its rows the tree's")
+    assert_true(t.find("更新日志") is Some(_), msg="\{win.0}: its rows")
+    assert_eq(bar_words_drawn(t, "关于").length(), 1, msg="\{win.0}: the bar's title")
+    assert_eq(bar_words_old(t, "关于").length(), 0, msg="\{win.0}: no old bar")
+  }
+}
+
+///|
+test "on the tape 关于 as the window is made wider and narrower, its page told nothing: its old view where its page is wide, made again where it is narrow, kept while it stays so" {
+  let t = tape_bar_in("settings-about", Ref(""), w=600.0, h=900.0)
+  assert_eq(page_words_made(t, "更新日志"), 1)
+  let rows = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == "更新日志" }).map(fn(d) { d.id })
+  // (wider, its page still narrow: the same nodes; 590 would be no tape at all, a small screen's)
+  t.resize(620.0, 900.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == "更新日志" }).map(fn(d) { d.id }), rows)
+  // (wide: its old view)
+  t.resize(839.0, 900.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(page_words_made(t, "更新日志"), 0)
+  assert_true(t.find("更新日志") is Some(_))
+  // (narrow again: made anew)
+  t.resize(600.0, 900.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(page_words_made(t, "更新日志"), 1)
+}
+
+///|
+test "on the tape 关于 made once scrolled: what it holds goes under nothing of the bar, cut at the bar's foot" {
+  // (a window too short for all it holds, its words twice as large: it scrolls)
+  let t = tape_bar_in("settings-about", Ref(""), w=600.0, h=420.0)
+  t.set_font_scale(2.0)
+  t.run_for(@ui.move_most_ms)
+  guard tape_page_panel(t) is Some(p) else { fail("no page") }
+  let foot = p.y + @sf.wide_bar_h + @sf.tape_bar_over()
+  let under_bar = fn() {
+    // (what of a glyph is seen (its left, top, right, foot) in the bar's lowest 10, where the bar's own words are not:
+    // the page's, come under it)
+    t.glyphs_seen().filter(fn(g) { g.0 >= p.x && g.0 < p.x + p.w && g.3 > foot - 10.0 && g.1 < foot - 0.5 })
+  }
+  assert_eq(under_bar(), [])
+  let row = fn() {
+    match @ui.view_tree() {
+      Some(tree) =>
+        match tree.drawn().search_by(fn(d) { !d.hosted && d.words == "更新日志" }) {
+          Some(i) => tree.drawn()[i].y
+          None => -1.0e9
+        }
+      None => -1.0e9
+    }
+  }
+  let y0 = row()
+  t.drag(p.x + p.w / 2.0, 360.0, p.x + p.w / 2.0, 100.0, steps=8)
+  t.run_for(@ui.move_most_ms)
+  // (scrolled: its rows gone up, those above the bar's foot cut there)
+  assert_true(row() < y0 - 50.0, msg="its row at \{y0}, then \{row()}")
+  assert_eq(under_bar(), [])
+}
