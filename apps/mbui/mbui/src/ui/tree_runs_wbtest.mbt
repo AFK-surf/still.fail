@@ -777,3 +777,125 @@ test "a node that clips drawn half as big (View::scale): what it holds cut where
     assert_eq(cut, [[d.x, d.y, d.x + d.w, d.y + d.h, 10.0 * k]], msg="\{k} as big: cut where it is drawn, as big, as round")
   }
 }
+
+///|
+/// `runs` drawn by an old view (Ctx::rich, as it sets them where it says nothing) at (0, 0) and by a node 200 down
+/// (View::words_runs, runs_plain), each `w` wide at most: every instance each draws, the node's moved up by 200, rounded
+/// to a hundredth (a glyph's place in its atlas left out), in one order.
+fn runs_whole_pair(runs : Array[Run], w : Double) -> (Array[String], Array[String]) {
+  let (_, drawn) = runs_whole_tester(runs, w, @signals.signal(@view.runs_plain.code_ground))
+  drawn()
+}
+
+///|
+/// runs_whole_pair's two, code's ground (`ground`: 0 none) as it says, told both as it changes: the tester and what
+/// each draws as of its last frame.
+fn runs_whole_tester(
+  runs : Array[Run],
+  w : Double,
+  ground : @signals.Signal[Int64],
+) -> (Tester, () -> (Array[String], Array[String])) {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=400.0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.width(Is(Some(w))).height(Is(Some(200.0))) |> ignore
+      old(h, fn(c) {
+        c.box(w=Px(w), fn() { c.rich(runs, size=15.0, line=22.0, color=0x333333FFL, code_bg=ground.get()) |> ignore })
+        |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(b) {
+      b.width(Is(Some(w))).lines_up(Is(Some(Start))) |> ignore
+      b.box(fn(n) {
+        n
+        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own })
+        .runs_look(By(fn() { { ..@view.runs_plain, code_ground: ground.get() } }))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  (t, fn() {
+    let all = t.drawn_instances()
+    // (what is drawn, where and in what: its place, size, corner, kind and ink, a glyph's cell; not where a glyph or a
+    // shape's outline is kept (a glyph's place in its atlas, a shape's in the frame's outlines), nor what cuts it: the
+    // old view's cut to its box over the node's)
+    let shown = fn(a : Array[Double], dy : Double) {
+      a
+      .mapi(fn(j, x) {
+        if (a[5] == 1.0 || a[5] == 11.0) && (j == 12 || j == 13) {
+          "-"
+        } else {
+          let x = if j == 1 { x - dy } else { x }
+          ((x * 100.0).round() / 100.0).to_string()
+        }
+      })
+      .iter()
+      .take(16)
+      .collect()
+      .join(",")
+    }
+    // (a shape's outline as instances of its own, kind 12, where the old view keeps it: what it is drawn as is its shape's)
+    let drawn = all.filter(fn(a) { a[5] != 12.0 })
+    let old_drawn = drawn.filter(fn(a) { a[1] < 200.0 }).map(fn(a) { shown(a, 0.0) })
+    let new_drawn = drawn.filter(fn(a) { a[1] >= 200.0 }).map(fn(a) { shown(a, 200.0) })
+    old_drawn.sort()
+    new_drawn.sort()
+    (old_drawn, new_drawn)
+  })
+}
+
+///|
+test "words in pieces on a node each set as it says (bold, slanted, code on its ground, a link in its ink, struck through, underlined, a label's ground), wrapped: every instance drawn as an old view's paragraph of the same pieces" {
+  let runs = [
+    plain("先 "),
+    bold("粗体"),
+    plain(" 和 "),
+    italic("slanted"),
+    plain(" "),
+    code("code()"),
+    plain(" 去 "),
+    link("still.fail", "https://still.fail"),
+    plain(" "),
+    strike("划掉的"),
+    plain(" "),
+    span("下划线", underline=true),
+    plain(" "),
+    span("标签", bg=0x30A46C33L, ground=Some(({ room: 0.4, height: 1.3, corner: 0.3, after: 0.3 } : Ground))),
+    plain(" 一段很长的话，长到要换行，让代码 "),
+    code("跨行的一段代码也被撕开"),
+    plain(" 才结束。"),
+  ]
+  for w in [400.0, 160.0] {
+    let (old, new) = runs_whole_pair(runs, w)
+    assert_true(old.length() > 20, msg="the old one drawn: \{old.length()}")
+    if new != old {
+      let only_old = old.filter(fn(x) { !new.contains(x) })
+      let only_new = new.filter(fn(x) { !old.contains(x) })
+      fail("at \{w}: \{new.length()} drawn, the old \{old.length()}\nthe old's alone:\n\{only_old.join("\n")}\nthe node's alone:\n\{only_new.join("\n")}")
+    }
+  }
+}
+
+///|
+test "words in pieces on a node, code's ground coming, changing colour and going as it says: each drawn as an old view's paragraph saying the same, the same node" {
+  let runs = [plain("先 "), code("a_long_name()"), plain(" 然后一段话，长到在代码前后换行 "), code("x"), plain(" 完。")]
+  let ground = @signals.signal(0L)
+  let (t, drawn) = runs_whole_tester(runs, 200.0, ground)
+  for g in [0L, 0x7676801FL, 0x30A46C33L, 0L] {
+    ground.set(g)
+    t.draw()
+    let (old, new) = drawn()
+    assert_true(old.length() > 10, msg="the old one drawn: \{old.length()}")
+    if new != old {
+      let only_old = old.filter(fn(x) { !new.contains(x) })
+      let only_new = new.filter(fn(x) { !old.contains(x) })
+      fail("at \{g}: the old's alone:\n\{only_old.join("\n")}\nthe node's alone:\n\{only_new.join("\n")}")
+    }
+  }
+}

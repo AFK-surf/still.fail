@@ -38,7 +38,7 @@ pub fn Tree::styled(self : Tree) -> Array[Styled] {
     let weights : Array[Int] = []
     let inks : Array[Int64] = []
     if words {
-      // (each piece that says something in its own weight and ink, the node's where it says none: WordsRun's; the
+      // (each piece that says something in its own weight and ink, the node's where it says none: @text.Run's; the
       // whole of it as the node sets it where it is in no pieces)
       let pieces = if l.runs.is_empty() { [words_run(l.words)] } else { l.runs }
       for r in pieces {
@@ -49,7 +49,7 @@ pub fn Tree::styled(self : Tree) -> Array[Styled] {
         if !weights.contains(w) {
           weights.push(w)
         }
-        let k = if r.ink == 0L { l.ink } else { r.ink }
+        let k = if r.color == 0L { l.ink } else { r.color }
         if !inks.contains(k) {
           inks.push(k)
         }

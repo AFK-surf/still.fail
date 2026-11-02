@@ -484,10 +484,12 @@ fn view_words_style() -> Int {
 }
 
 ///|
-/// A node's words in pieces (@view.WordsRun) as the paragraph the frame lays out and draws (rich.mbt, as Ctx::rich's):
-/// each piece in its weight and ink (0: the words' own, the node's), at the system's size of words, in the theme's
-/// digits (view_words_style).
-fn view_rich(runs : Array[@view.WordsRun], look : @view.WordsLook) -> Rich {
+/// A node's words in pieces (@text.Run) as the paragraph the frame lays out and draws (rich.mbt, as Ctx::rich's):
+/// each piece as it says itself (its weight, slant, face, size, ink, ground, lines, link, drawing: 0 or none the
+/// words' own, the node's), the rest as `set` says (a link's ink, code's: RunsLook), at the system's size of words, in
+/// the theme's digits where they are the app's own words (view_words_style), in the face chosen for a person's words
+/// where they are those (faces_style, as Ctx::rich's `words`).
+fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLook) -> Rich {
   let c = g()
   // (on one line where they do not wrap: what breaks them run on with a space across all of them at once, a break and
   // what blanks follow it perhaps in two of them, as Ctx::rich's; each as weighty and inked as it was)
@@ -500,31 +502,36 @@ fn view_rich(runs : Array[@view.WordsRun], look : @view.WordsLook) -> Rich {
     }
   }
   {
-    runs: runs.mapi(fn(k, r) { span(texts[k], weight=r.weight, color=r.ink) }),
+    runs: runs.mapi(fn(k, r) { { ..r, text: texts[k] } }),
     size: c.sp(look.size),
     weight: look.weight,
     color: 0L,
     line: view_line(c, look),
     trim: false,
     wrap: look.wrap,
-    link_color: 0L,
-    pressed_bg: 0L,
-    code_color: 0L,
-    code_bg: 0L,
-    code_scale: 1.0,
+    link_color: set.link,
+    pressed_bg: set.pressed,
+    code_color: set.code_ink,
+    code_bg: set.code_ground,
+    code_scale: set.code_scale,
     spacing: view_spacing(c, look),
     base: 0,
     select: false,
     max_lines: 0,
-    faces: view_words_style(),
+    faces: if set.words { faces_style(true, 0) } else { view_words_style() },
     shaped_in: words_shaped_in.val,
   }
 }
 
 ///|
 /// A node's words in pieces measured as they are drawn (view_rich), in `width` (< 0: as wide as they are).
-fn view_runs_measure(runs : Array[@view.WordsRun], look : @view.WordsLook, width : Double) -> (Double, Double) {
-  let lay = layout_rich(view_rich(runs, look), if width < 0.0 || !look.wrap { 1.0e9 } else { width })
+fn view_runs_measure(
+  runs : Array[@text.Run],
+  look : @view.WordsLook,
+  set : @view.RunsLook,
+  width : Double,
+) -> (Double, Double) {
+  let lay = layout_rich(view_rich(runs, look, set), if width < 0.0 || !look.wrap { 1.0e9 } else { width })
   // (broken where the width ran out: as wide as it, as leaf_size has an old view's)
   (if width >= 0.0 && look.wrap && soft_wrapped(lay.line_end, lay.cu) { width } else { lay.w }, lay.h)
 }
@@ -1337,7 +1344,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     // (as their words are laid out to be drawn, below: one line given less than it is wide cut to it, its ellipsis's
     // bar with it)
     if c.words != "" && !c.runs.is_empty() {
-      let r = view_rich(c.runs, c.words_look)
+      let r = view_rich(c.runs, c.words_look, c.runs_look)
       let lay = layout_rich(r, if r.wrap { c.w } else { 1.0e9 })
       let lay = if !r.wrap && lay.w > c.w + 0.5 {
         layout_rich(cut_rich({ ..r, max_lines: 1 }, lay, c.w), 1.0e9)
@@ -1370,7 +1377,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   if bones == 0L && c.words != "" && !c.runs.is_empty() {
     // (in pieces each set its own way: one paragraph, as Ctx::rich's; one line given less than it is wide cut to it,
     // ending in an ellipsis, as its plain words are)
-    let r = view_rich(c.runs, c.words_look)
+    let r = view_rich(c.runs, c.words_look, c.runs_look)
     // (wrapped in its width as laid out, as an old view's paragraph is where it is placed: Node::rich_layout's)
     let lay = layout_rich(r, if r.wrap { c.w } else { 1.0e9 })
     let over = !r.wrap && lay.w > c.w + 0.5
@@ -1380,9 +1387,14 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     } else {
       (r, lay)
     }
-    let colors = r.runs.map(fn(run) { if run.color != 0L { run.color } else { c.ink } })
+    // (each run's ink its own, else a link's, code's, else the node's: as an old view's paragraph's, Rich::run_colors)
+    let colors = r.run_colors(c.ink)
     let k = clip_top()
     let from = self.ninst - start
+    let center_in = if c.words_center { c.w } else { -1.0 }
+    // (its grounds under its words (code's, a label's), the lines through or under them over them: as an old view's
+    // paragraph's, Ctx::paint_rich's)
+    self.paint_run_grounds(r, lay, 0.0, 0.0, 1.0, fn(_) { false }, fn(_, _, _, _, _) {  }, center_in~)
     self.emit_rich_glyphs(
       r,
       lay,
@@ -1393,8 +1405,9 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
       clip_stack[k + 1],
       clip_stack[k + 3],
       unplaced=glyphs,
-      center_in=if c.words_center { c.w } else { -1.0 },
+      center_in~,
     )
+    self.paint_run_lines(r, lay, 0.0, 0.0, colors, 1.0, center_in~)
     // (past its box where it says so, View::ellipsis_past: as its plain words, below)
     if over && lay.w > c.w + 0.5 && !c.ellipsis_past {
       cut = (from, self.ninst - start)

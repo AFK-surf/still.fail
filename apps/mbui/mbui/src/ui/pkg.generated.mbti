@@ -7,6 +7,7 @@ import {
   "mbui/paint",
   "mbui/pixels",
   "mbui/signals",
+  "mbui/text",
   "mbui/view",
   "moonbitlang/core/debug",
   "moonbitlang/core/ref",
@@ -34,7 +35,7 @@ pub fn badge_shown() -> Bool
 
 pub let bench_app : Int32
 
-pub fn bold(String) -> Run
+pub fn bold(String) -> @text.Run
 
 pub let bone_share : Double
 
@@ -60,7 +61,7 @@ pub fn clipboard_set(String, label? : String) -> Unit
 
 pub fn clipboard_set_png(Bytes, label? : String) -> Unit
 
-pub fn code(String) -> Run
+pub fn code(String) -> @text.Run
 
 pub fn concentric(Double, Double) -> Double
 
@@ -204,7 +205,7 @@ pub fn install_package(String, Bytes) -> Unit
 
 pub fn is_gif(Bytes) -> Bool
 
-pub fn italic(String) -> Run
+pub fn italic(String) -> @text.Run
 
 pub fn keep(String, String, Bytes, way? : @hostapi.KeepWay) -> Keep?
 
@@ -298,7 +299,7 @@ pub fn line(Array[(Double, Double)], width~ : Double, color~ : Int64, upto? : Do
 
 pub fn line_baseline(Double, size? : Double, weight? : Int32, em? : (Double, Double)) -> Double
 
-pub fn link(String, String) -> Run
+pub fn link(String, String) -> @text.Run
 
 pub let list_glide_ms : Double
 
@@ -432,7 +433,7 @@ pub fn pick(@hostapi.PickKind, hold? : Bool) -> Pick?
 
 pub fn pick_photos(Array[String]) -> Pick?
 
-pub fn plain(String) -> Run
+pub fn plain(String) -> @text.Run
 
 pub fn platform() -> Int32
 
@@ -560,7 +561,7 @@ pub fn sp_from(Double, Double) -> Double
 
 pub fn space_scale() -> Array[Space]
 
-pub fn span(String, weight? : Int32, bold? : Bool, italic? : Bool, code? : Bool, mono? : Bool, serif? : Bool, face? : Int32?, scale? : Double, color? : Int64, bg? : Int64, ground? : Ground?, strike? : Bool, underline? : Bool, link? : String, drawing? : InlineDrawing?) -> Run
+pub fn span(String, weight? : Int32, bold? : Bool, italic? : Bool, code? : Bool, mono? : Bool, serif? : Bool, face? : Int32?, scale? : Double, color? : Int64, bg? : Int64, ground? : @text.Ground?, strike? : Bool, underline? : Bool, link? : String, drawing? : @text.InlineDrawing?) -> @text.Run
 
 pub fn stable_hash(String) -> Int64
 
@@ -574,7 +575,7 @@ pub fn stream_audio_here() -> Bool
 
 pub fn stream_layers_here() -> Bool
 
-pub fn strike(String) -> Run
+pub fn strike(String) -> @text.Run
 
 pub fn style(row? : Bool, w? : Len, h? : Len, min_w? : Len, max_w? : Len, min_h? : Len, max_h? : Len, p? : Space, px? : Space, py? : Space, pl? : Space, pr? : Space, pt? : Space, pb? : Space, m? : Space, mx? : Space, my? : Space, ml? : Space, mr? : Space, mt? : Space, mb? : Space, gap? : Space, align? : Align, justify? : Justify, bg? : Color, radius? : Radius, border? : Stroke, border_color? : Color, dashed? : Bool, shadow? : Shadow, clip? : Bool, opacity? : Opacity, narrow? : Patch, dark? : Patch, selected? : Patch, hovered? : Patch, focused? : Patch, pressed? : Patch, disabled? : Patch) -> Style
 
@@ -1299,7 +1300,7 @@ pub fn Ctx::reduced_motion(Self) -> Bool
 #callsite(autofill(loc))
 pub fn Ctx::request_frame(Self, loc~ : SourceLoc) -> Unit
 pub fn Ctx::reveal_from(Self, Double, Double, dark? : () -> Bool) -> Unit
-pub fn Ctx::rich(Self, Array[Run], key? : String, style? : TextStyle, size? : Double, weight? : Int32, color? : Int64, line? : Double, trim? : Bool, wrap? : Bool, w? : Size, link_color? : Int64, pressed_bg? : Int64, code_color? : Int64, code_bg? : Int64, code_scale? : Double, tracking? : Double, max_lines? : Int32, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, words? : Bool, face? : Int32, tabular? : Bool, breaks? : Bool, allow_ellipsis? : Bool) -> Int32
+pub fn Ctx::rich(Self, Array[@text.Run], key? : String, style? : TextStyle, size? : Double, weight? : Int32, color? : Int64, line? : Double, trim? : Bool, wrap? : Bool, w? : Size, link_color? : Int64, pressed_bg? : Int64, code_color? : Int64, code_bg? : Int64, code_scale? : Double, tracking? : Double, max_lines? : Int32, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, words? : Bool, face? : Int32, tabular? : Bool, breaks? : Bool, allow_ellipsis? : Bool) -> Int32
 pub fn Ctx::right_clicked(Self, Int32) -> (Double, Double)?
 pub fn Ctx::roving(Self, String, orientation? : Orientation, wrap? : Bool, current? : Int32, () -> Unit) -> Unit
 pub fn Ctx::roving_prefer(Self, Int32) -> Unit
@@ -1583,13 +1584,6 @@ pub(all) struct GlyphLook {
   sx : Double
 } derive(Eq, Show)
 
-pub(all) struct Ground {
-  room : Double
-  height : Double
-  corner : Double
-  after : Double
-} derive(Eq, @debug.Debug)
-
 type Group
 
 pub(all) enum Haptic {
@@ -1608,14 +1602,6 @@ pub(all) enum ImagePixels {
   PixelsRead(Int32, Int32, FixedArray[Byte])
   PixelsFailed
 } derive(Eq)
-
-pub(all) struct InlineDrawing {
-  width : Double
-  height : Double
-  baseline : Double
-  paths : Array[Array[(Array[Double], Bool)]]
-  words : Array[(String, Double, Double, Double)]
-} derive(Eq, @debug.Debug)
 
 pub(all) enum Justify {
   JStart
@@ -2128,7 +2114,7 @@ pub struct RichLayout {
   run_d : Array[Double]
   run_lasc : Array[Double]
   run_ldesc : Array[Double]
-  drawings : Array[InlineDrawing?]
+  drawings : Array[@text.InlineDrawing?]
   starts : Array[Int32]
   lens : Array[Int32]
   adv : Array[Double]
@@ -2169,24 +2155,6 @@ pub(all) enum RowSize {
   Goes(Double)
   Changed(Double)
 } derive(Eq)
-
-pub(all) struct Run {
-  text : String
-  weight : Int32
-  italic : Bool
-  code : Bool
-  mono : Bool
-  serif : Bool
-  face : Int32?
-  scale : Double
-  color : Int64
-  bg : Int64
-  ground : Ground?
-  strike : Bool
-  underline : Bool
-  link : String
-  drawing : InlineDrawing?
-} derive(Eq, @debug.Debug)
 
 type Sem
 
@@ -2960,9 +2928,15 @@ pub using @view {type Cursor}
 
 pub using @paint {type Glass}
 
+pub using @text {type Ground}
+
+pub using @text {type InlineDrawing}
+
 pub using @paint {type Line}
 
 pub using @view {type Role}
+
+pub using @text {type Run}
 
 pub using @paint {type Shape}
 

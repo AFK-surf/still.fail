@@ -38,7 +38,7 @@ fn runs_high(wrap : Bool) -> (Tester, Double) {
     root.box(fn(w) {
       node.val = Some(w)
       w.words_runs(
-        Is([{ text: "粗体\n", weight: 700, ink: 0xC03020FFL }, { text: "  细体", weight: 400, ink: 0x2050C0FFL }]),
+        Is([@view.words_run("粗体\n", weight=700, ink=0xC03020FFL), @view.words_run("  细体", weight=400, ink=0x2050C0FFL)]),
         look={ ..@view.words_plain, wrap: wrap },
       )
       |> ignore
