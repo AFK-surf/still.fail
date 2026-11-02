@@ -775,6 +775,12 @@ const toJob = (r: Json): JobRow => {
   return job;
 };
 
+/// The jobs up (running, or a service stopped on its own that holds its port), newest first: by the index of their
+/// states, not every job the station ever ran.
+export function upJobs(s: Store): JobRow[] {
+  return all(s, rows.JOBS_UP).map(toJob);
+}
+
 /// A session's jobs (all sessions' with null), newest first.
 export function listJobs(s: Store, session: string | null): JobRow[] {
   return (session === null ? all(s, "SELECT * FROM jobs ORDER BY started_at DESC") : all(s, SESSION_JOBS, session)).map(toJob);
