@@ -788,6 +788,12 @@ jobs:
           bash apps/mbui/scripts/win.sh setup-bare
           t0=$SECONDS
           while [ ! -s "$B/status" ]; do
+            if [ $((SECONDS - t0)) -ge 60 ] && [ ! -f "$B/diagnosed" ]; then
+              touch "$B/diagnosed"
+              echo 'Windows build diagnostic: recent build log and compiler processes'
+              tail -80 "$B/log" || true
+              powershell.exe -NoProfile -Command 'Get-CimInstance Win32_Process | Where-Object { $_.Name -match "^(moon|moonc|clang|clang-cl|link|mbc)(\.exe)?$" } | Select-Object -First 20 Name,ProcessId,ParentProcessId,CommandLine | Format-List' || true
+            fi
             [ $((SECONDS - t0)) -lt 420 ] || { echo "the build took over 7 minutes"; cat "$B/log"; exit 1; }
             sleep 1
           done
