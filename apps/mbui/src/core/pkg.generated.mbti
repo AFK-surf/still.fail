@@ -135,6 +135,7 @@ pub fn Replay::frame_period(Self) -> Double?
 pub fn Replay::fuzzy(Self) -> Array[String]
 pub fn Replay::given_at(Self, String) -> Double?
 pub fn Replay::given_at_where(Self, (Json) -> Bool) -> Double?
+pub fn Replay::has_jobs_summary(Self) -> Bool
 pub fn Replay::host(Self, (String) -> Unit) -> Unit
 pub fn Replay::host_frames(Self) -> Array[Double]
 pub fn Replay::host_given(Self) -> (Double, Double)?

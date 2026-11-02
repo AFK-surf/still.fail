@@ -85,15 +85,35 @@ fn with_rail_view(v : Json?) -> Json? {
 }
 
 ///|
+/// Older runs used one full jobs subscription for both the bar and the sheet. New runs keep each separately.
+// kept across runs: Flow::start says which the next recording has before its first frame
+let legacy_chat_jobs : Ref[Bool] = Ref(false)
+
+///|
+/// Match the jobs read by the replay to what this recording's core could say.
+pub fn use_recorded_jobs(r : @core.Replay) -> Unit {
+  legacy_chat_jobs.val = !r.has_jobs_summary()
+}
+
+///|
+fn replay_topic_params(name : String, params : Map[String, Json]) -> Map[String, Json] {
+  let out = @sfbase.core_topic_params(name, params)
+  if name == "chatJobs" && legacy_chat_jobs.val {
+    out.remove("summary")
+  }
+  out
+}
+
+///|
 /// The app's source over @core, as src/stillfail's (without its logs and its read-only runs).
 pub fn source() -> @sfapp.Source {
   {
     topic: fn(name, params) {
-      let s = @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed()
+      let s = @core.subscribe(name, params=replay_topic_params(name, params)).followed()
       let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
       { value, error: s.error, version: s.version }
     },
-    waits: fn(name, params) { @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed().waiting },
+    waits: fn(name, params) { @core.subscribe(name, params=replay_topic_params(name, params)).followed().waiting },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
     // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
@@ -183,7 +203,7 @@ pub fn source() -> @sfapp.Source {
     },
     images,
     now: fn() { @ui.wall_ms() },
-    leave: fn(name, params) { @core.unsubscribe_topic(name, params=@sfbase.core_topic_params(name, params)) },
+    leave: fn(name, params) { @core.unsubscribe_topic(name, params=replay_topic_params(name, params)) },
     read_only: false,
   }
 }

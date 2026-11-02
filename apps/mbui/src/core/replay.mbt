@@ -877,6 +877,26 @@ pub fn Replay::fuzzy(self : Replay) -> Array[String] {
 }
 
 ///|
+/// Whether this recording has the separate jobs summary that newer chat pages ask for.
+pub fn Replay::has_jobs_summary(self : Replay) -> Bool {
+  for e in self.evs {
+    if !e.out {
+      continue
+    }
+    match e.msg {
+      Object(m) =>
+        match m.get("subscribe") {
+          Some(Object(t)) if t.get("topic") == Some(Json::string("chatJobs")) &&
+            t.get("summary") == Some(Json::boolean(true)) => return true
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
 /// One message the app sends, matched to the run's.
 fn Replay::out(self : Replay, text : String) -> Unit {
   let msg = @json.parse(text) catch {
