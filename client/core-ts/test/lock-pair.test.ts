@@ -185,6 +185,29 @@ test("the code is good until a set time, said where it is shown; wrong codes typ
   assert.deepEqual(m.cloud.posted, []);
 });
 
+test("a trusted device can show a pairing code when its clock has fractional milliseconds", async () => {
+  const m = await met();
+  const now = m.host.nowMs.bind(m.host);
+  m.host.nowMs = () => now() + 0.439;
+  await m.hello();
+  const shown = (await m.prompts()).pairing[0];
+  assert.match(shown.code, /^[0-9]{6}$/);
+  assert.ok(Number.isInteger(shown.until), "the prompt's expiry can be read by the app");
+});
+
+test("a new device can show the pairing prompt when its clock has fractional milliseconds", async () => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, false) }));
+  const lock = await r.watch({ topic: "lock", workspace: "ws" });
+  const now = r.host.nowMs.bind(r.host);
+  r.host.nowMs = () => now() + 0.439;
+  const [, phone] = await pipe();
+  keep(r.core.inner, trying(r.core.inner, ["ws"]), PHONE, phone, ["ws"]);
+  const shown = await lock();
+  assert.equal(shown.me.waiting, true);
+  assert.equal(shown.me.pair.state, "code");
+  assert.ok(Number.isInteger(shown.me.pair.until), "the waiting page's expiry can be read by the app");
+});
+
 test("the new device hears its trusted device end it while nothing is typed, and says why at once", async () => {
   const mine = (m: { core: { inner: any } }) => pairs.mine(m.core.inner, "ws");
   // turned away there

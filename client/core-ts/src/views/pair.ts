@@ -168,7 +168,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     const asking: Asking = {
       device: peer, name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
       signKey: kind === "app" ? str(get(hello.value, "sign_key")) : null, code: pairCode((b) => inner.host.randomBytes(b)),
-      at: Math.floor(inner.host.nowMs() / 1000), until: inner.host.nowMs() + PAIR_WAIT_MS, places, hidden: false, away: Deferred.makeUnsafe<void>(),
+      at: Math.floor(inner.host.nowMs() / 1000), until: Math.floor(inner.host.nowMs()) + PAIR_WAIT_MS, places, hidden: false, away: Deferred.makeUnsafe<void>(),
     };
     all.set(peer, asking);
     told(inner);
@@ -386,7 +386,7 @@ export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspace
       raw.close();
     },
   };
-  const m: Met = { id, d, workspaces, until: inner.host.nowMs() + PAIR_WAIT_MS };
+  const m: Met = { id, d, workspaces, until: Math.floor(inner.host.nowMs()) + PAIR_WAIT_MS };
   // Whether it is still one of this try's, nothing being checked with it now: what it says then is said to nobody.
   const idle = () => tryings.get(inner) === y && y.met.get(id) === m && y.state !== "checking";
   const end = (why: CoreError) => {
