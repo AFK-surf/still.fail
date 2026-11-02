@@ -14,7 +14,7 @@ A station runs four runtimes: Claude Code, Codex, DeepSeek Harness and Grok Buil
 
 ## Its home and configuration
 
-`GROK_HOME` is `<profile home>/grok`: apart from the other runtimes a profile runs (Codex keeps its own `sessions/` in the profile home). Its `AGENTS.md` and `skills/` are the station's shared memory and skills, its `sessions/` the shared transcripts (agent-home.ts). `GROK_DISABLE_AUTOUPDATER=1`, telemetry off, and every Claude Code and Cursor compatibility cell off (`GROK_CLAUDE_*_ENABLED`, `GROK_CURSOR_*_ENABLED`: not the person's hooks, MCP servers, rules or skills). `~/.agents/skills` is always read by Grok Build (as by Codex).
+`GROK_HOME` is `<profile home>/grok`: apart from the other runtimes a profile runs (Codex keeps its own `sessions/` in the profile home). Its `sessions/` are the shared transcripts (agent-home.ts); the workspace's memory comes with the instructions, its skills are linked where the session runs (docs/multi-workspace.md). `GROK_DISABLE_AUTOUPDATER=1`, telemetry off, and every Claude Code and Cursor compatibility cell off (`GROK_CLAUDE_*_ENABLED`, `GROK_CURSOR_*_ENABLED`: not the person's hooks, MCP servers, rules or skills). `~/.agents/skills` is always read by Grok Build (as by Codex).
 
 ## Which profiles run it
 

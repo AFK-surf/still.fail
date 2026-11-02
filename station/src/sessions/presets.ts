@@ -9,6 +9,7 @@ import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { protectedPlace } from "../drive/fs.ts";
+import { SKILL_HOMES } from "./agent-home.ts";
 
 /// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`
 /// (its address) and `stationName`: another station of the workspace's it is on; none: the station the preset is on.
@@ -240,8 +241,6 @@ export class NoPreset extends Error {
 const GUIDES = ["AGENTS.md", "CLAUDE.md", join(".claude", "CLAUDE.md")];
 /// What of a folder's instruction file the chat is told at most (the rest is read there).
 const GUIDE_MOST = 16 * 1024;
-/// Where the runtimes find skills in the directory they run in: Claude Code's project skills, Codex's repository ones.
-const SKILL_HOMES = [join(".claude", "skills"), join(".agents", "skills")];
 
 /// Keeps `copy` as what a chat in `workspace` is opened with. Its folders on this machine are made the chat's as a
 /// runtime opened in them would have them (neither reads them where it does not run): their instruction files kept

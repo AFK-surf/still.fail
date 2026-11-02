@@ -19,7 +19,7 @@ dsh's configuration is a stack of patches over its shipped `acp` profile (`dsh -
 - the station's instructions as the system prompt's `personaSuffix`, with no prompt variables (the ACP server's `{{model}}` has no value without it; `{{` in the instructions is broken with a zero-width space: dsh's variables are strict),
 - transcripts uncompressed under `<profile home>/dsh-sessions` (not dsh's own `sessions/`: a profile home's is Codex's too).
 
-A profile of custom variables keeps dsh's own configuration (DeepSeek, `DEEPSEEK_API_KEY` from its variables). `DSH_HOME` is the profile home (its `AGENTS.md` and `skills/` are the station's shared memory and skills, agent-home.ts), `DSH_AGENTS_HOME` a directory in it (not the person's `~/.agents`), `DSH_TELEMETRY_MODE=DISABLED`.
+A profile of custom variables keeps dsh's own configuration (DeepSeek, `DEEPSEEK_API_KEY` from its variables). `DSH_HOME` is the profile home (the workspace's memory comes with the instructions, its skills are linked where the session runs, docs/multi-workspace.md), `DSH_AGENTS_HOME` a directory in it (not the person's `~/.agents`), `DSH_TELEMETRY_MODE=DISABLED`.
 
 ## Which profiles run it
 

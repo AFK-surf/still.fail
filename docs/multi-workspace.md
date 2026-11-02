@@ -101,7 +101,7 @@
 - `archive_policy` 加 `ws` 列，一个 workspace 一份策略。
 - Slack connect：config 的 connect 多一个可选的 `workspace`（缺省主 workspace）。在哪个 workspace 里加的就归哪个，列表只给那个 workspace 的人看。
 - 文件：各 workspace pin 自己的文件夹列表：主 workspace 仍是 `drive.roots`，加入的 workspace 是 `drive.workspaces[<ws>]`。能写的成员不论哪个 workspace 都能浏览整台机器（能用 agent 就能让它读，拦文件浏览没有意义，2026-10-17 用户定），只读成员只看自己 workspace pin 的。
-- agent 的记忆和 skills：主 workspace 仍是 `<data>/agent/`，加入的 workspace 用 `<data>/agent/workspaces/<ws>/`（`MEMORY.md`、`skills/`）。会话按自己的 `ws` 拿对应的那份。
+- agent 的记忆和 skills：主 workspace 仍是 `<data>/agent/`，加入的 workspace 用 `<data>/agent/workspaces/<ws>/`（`MEMORY.md`、`skills/`）。会话按自己的 `ws` 拿对应的那份：记忆随开场说明给（`<memory>`），skills 链进会话工作区的 `.claude/skills`、`.agents/skills`（Cursor、Devin 链进它们各自的规则目录），station 自己的 skill 在加入的 workspace 那份里也写一份。profile 的目录是各 workspace 共用的，里面不放任何一个 workspace 的记忆和 skills：2026-11-02 之前 station 把主 workspace 的链进每个 profile 目录（`CLAUDE.md`/`AGENTS.md`、`skills/`），运行时自己加载，加入的 workspace 的会话因此也读到主 workspace 的；现在启动时把这些旧链接去掉（`agent-home.ts` `unlinkAgentHome`）。
 - profile：`profiles[].withheld?: string[]`，不给用的加入的 workspace，缺省都给用（之后新加入的 workspace 也是）。旧版写的 `profiles[].workspaces` 不再读。选 profile、自动挑 profile 时只看会话所在 workspace 能用的。
 - agent 的工具：`chat_list`、`chat_read`、`session_send`、`station_list`、`chat_create`、`station_task` 等都只看会话所在 workspace 的 chat 和 station；chat 链接里的 workspace 不是会话自己的，就按 xshare 的规则走（没被分享就拒绝）。
 - xshare：host 一方按 chat 所在的 workspace 记；借用一方按会话所在的 workspace 记。

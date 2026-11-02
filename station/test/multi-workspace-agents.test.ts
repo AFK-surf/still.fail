@@ -3,7 +3,7 @@
 // reaches that workspace's chats only, sessions run on the profiles allowed there, and each workspace has its own
 // memory and skills. The transport is a direct call that checks what mesh/peer.ts checks (`member`).
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -16,6 +16,7 @@ import { workspaceAgentHome } from "../src/sessions/agent-home.ts";
 import { profilesFor } from "../src/sessions/config.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { newSession } from "../src/sessions/lifecycle.ts";
+import { openOptions } from "../src/sessions/actor.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
 import { createForPeer } from "../src/sessions/opened.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
@@ -202,8 +203,35 @@ test("each workspace has its own memory and skills: a session gets its workspace
   writeFileSync(join(home, "workspaces", W2, "skills", "two-project", "SKILL.md"), "---\ndescription: 项目记忆：two\n---\n");
   writeFileSync(memoryTwo, "# two's lessons\n");
   const ofTwo = memory(rig.dir, W2);
-  assert.deepEqual([ofTwo.global.path, ofTwo.global.text, ofTwo.skills.map((s: any) => [s.name, s.share])], [memoryTwo, "# two's lessons\n", [["two-project", null]]]);
+  assert.deepEqual([ofTwo.global.path, ofTwo.global.text, ofTwo.skills.filter((s: any) => !s.builtin).map((s: any) => [s.name, s.share])], [memoryTwo, "# two's lessons\n", [["two-project", null]]]);
   assert.deepEqual(memory(rig.dir).skills.map((s: any) => s.name), ["one-project"]);
   // A workspace with none yet: empty.
   assert.deepEqual(memory(mkdtempSync(join(tmpdir(), "mws-memory-")), "W3").skills, []);
+}));
+
+test("a session's runtime is given its workspace's memory and skills, never another workspace's", () => withTwo(async (t) => {
+  const { rig, one, two } = t;
+  const home = rig.config.agentHome;
+  writeFileSync(join(home, "MEMORY.md"), "# one's lessons\n");
+  mkdirSync(join(home, "skills", "one-project"), { recursive: true });
+  writeFileSync(join(home, "skills", "one-project", "SKILL.md"), "---\ndescription: 项目记忆：one\n---\n");
+  writeFileSync(rig.hub.deps.memoryPath(two), "# two's lessons\n");
+  mkdirSync(join(home, "workspaces", W2, "skills", "two-project"), { recursive: true });
+  writeFileSync(join(home, "workspaces", W2, "skills", "two-project", "SKILL.md"), "---\ndescription: 项目记忆：two\n---\n");
+  // The same profile runs both: what its home holds reaches both, so a workspace's are given with the session.
+  const opened = (key: string) => {
+    const row = rig.store.getSession(key)!;
+    return { row, options: openOptions(row, rig.hub.accounts.runOn(key), rig.hub.deps) };
+  };
+  const ofTwo = opened(two);
+  assert.ok(ofTwo.options.instructions.includes("# two's lessons") && !ofTwo.options.instructions.includes("# one's lessons"));
+  assert.equal(ofTwo.options.skills, join(home, "workspaces", W2, "skills"));
+  for (const at of [join(".claude", "skills"), join(".agents", "skills")]) {
+    // (with the station's own, written into a joined workspace's as it is made)
+    assert.deepEqual(readdirSync(join(ofTwo.row.workspace, at)).filter((n) => !n.startsWith("stillfail-")), ["two-project"], at);
+    assert.ok(existsSync(join(ofTwo.row.workspace, at, "stillfail-jobs", "SKILL.md")), at);
+  }
+  const ofOne = opened(one);
+  assert.ok(ofOne.options.instructions.includes("# one's lessons") && !ofOne.options.instructions.includes("# two's lessons"));
+  assert.deepEqual(readdirSync(join(ofOne.row.workspace, ".claude", "skills")), ["one-project"]);
 }));

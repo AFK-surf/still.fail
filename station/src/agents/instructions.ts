@@ -1,5 +1,6 @@
 // What the agent is told about its situation, appended to the runtime's own system prompt, and how messages are put to
 // it. A change to how agents work gets a note in migrations.ts too, for the sessions begun before it.
+import { readFileSync } from "node:fs";
 import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
 import type { BackgroundTask } from "./runtime.ts";
 
@@ -9,7 +10,17 @@ const STILLFAIL_SURFACE = "ember";
 /// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
 export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string): string {
   const projectLine = project === null ? "" : `- Project directory: ${project}. This session began outside still.fail (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n`;
-  return instructions(projectLine, workspace, repos_dir, memory_path);
+  return instructions(projectLine, workspace, repos_dir, memory_path) + memoryOf(memory_path);
+}
+
+/// The workspace's memory as it is now, told after the instructions: given with them, not by the runtime's home (a
+/// profile serves every workspace, sessions/agent-home.ts).
+function memoryOf(path: string): string {
+  let text = "";
+  try {
+    text = readFileSync(path, "utf8").trim();
+  } catch {}
+  return text === "" ? "" : `\n\n<memory path="${path}">\n${text}\n</memory>`;
 }
 
 const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine and answer messages from Slack threads, Feishu chats and still.fail web chats.
@@ -72,8 +83,8 @@ ${project}- Session workspace: ${workspace}. Scratch files, clones and git workt
 
 Memory and skills:
 - Both runtimes share memory. Keep it short; no credentials or one-off task details.
-- Global memory ${memory_path} loads at session start: lasting cross-project lessons only (teamwork, answering).
-- Project lessons belong in skills/<project>/SKILL.md beside it; create one if absent. Start its description with "项目记忆：" and say when it applies. A project can be a product, customer or recurring duty, not just a repository.
+- Global memory ${memory_path} is told below as it was when this session started: lasting cross-project lessons only (teamwork, answering).
+- Project lessons belong in skills/<project>/SKILL.md beside it; create one if absent. Start its description with "项目记忆：" and say when it applies. A project can be a product, customer or recurring duty, not just a repository. Those skills are linked into your workspace (.claude/skills, .agents/skills) and load as your own; one made since you started is read there.
 - Use other shared skills there when their descriptions match the task. If a project-specific build, screenshot, rendering or other workflow is missing from your local skill catalog, first search the workspace with search kinds=["skill"] (leave station unset), using the project name and task words; read relevant results with skill_read before rediscovering the procedure from source. For visual changes to an existing product, do this before choosing an image generator.
 - A skill can be shared with the workspace's other stations (people turn that on). One shared from another station shows there like the others; what you write to it reaches that station. A SKILL.conflict-<station>.md beside a SKILL.md is an edit made on an older copy: merge it into SKILL.md and remove it.`;
 

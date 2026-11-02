@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { brief, claudeProject, readTimeline, sessionPlaces, transcriptPaths } from "../src/read/transcript.ts";
-import { linkAgentHome, linkTranscripts, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
+import { linkTranscripts, sessionSkills, unlinkAgentHome, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, isStopCommand, slackWithFiles, threadCommand } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
 import { hubConfig } from "../src/sessions/config.ts";
@@ -597,58 +597,63 @@ test("a call's step carries what says what it runs, whole, however long the comm
   hub.close();
 });
 
-test("profile homes link to the shared memory and skills under their runtimes' names; a hand-written file is left", () => {
+test("what stations before linked into the profile homes (the home workspace's memory and skills) is taken away; anything else is left", () => {
   const root = temp();
   const agent = join(root, "agent");
-  const [cc, cx, both] = [join(root, "cc"), join(root, "cx"), join(root, "both")];
-  const profiles = [
-    { id: "cc", runtimes: ["claude" as const], home: cc },
-    { id: "cx", runtimes: ["codex" as const], home: cx },
-    { id: "both", runtimes: ["claude" as const, "codex" as const], home: both },
-  ];
-  linkAgentHome(agent, profiles);
-  linkAgentHome(agent, profiles); // idempotent
-  assert.equal(readlinkSync(join(cc, "CLAUDE.md")), join(agent, "MEMORY.md"));
-  assert.equal(readlinkSync(join(cc, "skills")), join(agent, "skills"));
-  assert.equal(readlinkSync(join(cx, "AGENTS.md")), join(agent, "MEMORY.md"));
-  assert.equal(readlinkSync(join(both, "CLAUDE.md")), join(agent, "MEMORY.md"));
-  assert.equal(readlinkSync(join(both, "AGENTS.md")), join(agent, "MEMORY.md"));
-  const own = join(root, "own");
-  mkdirSync(own);
-  writeFileSync(join(own, "CLAUDE.md"), "mine");
-  linkAgentHome(join(root, "agent2"), [{ id: "own", runtimes: ["claude"], home: own }]);
-  assert.equal(readFileSync(join(own, "CLAUDE.md"), "utf8"), "mine");
-  // What a runtime made before the link (Claude Code's empty skills/synced/) gives way to it; a skill of its own does not.
-  const [made, kept] = [join(root, "made"), join(root, "kept")];
-  mkdirSync(join(made, "skills", "synced"), { recursive: true });
-  mkdirSync(join(kept, "skills", "mine"), { recursive: true });
-  writeFileSync(join(kept, "skills", "mine", "SKILL.md"), "mine");
-  linkAgentHome(agent, [{ id: "made", runtimes: ["claude"], home: made }, { id: "kept", runtimes: ["claude"], home: kept }]);
-  assert.equal(readlinkSync(join(made, "skills")), join(agent, "skills"));
-  assert.equal(readFileSync(join(kept, "skills", "mine", "SKILL.md"), "utf8"), "mine");
-  // A home whose runtime keeps skills of its own there (Claude Code's synced ones, Codex's .system) takes the shared
-  // ones one by one, and lets go of one gone from the shared.
-  const synced = join(root, "synced");
-  mkdirSync(join(synced, "skills", "synced", "bucket", "pdf"), { recursive: true });
-  writeFileSync(join(synced, "skills", "synced", "bucket", "pdf", "SKILL.md"), "account's");
   mkdirSync(join(agent, "skills", "team"), { recursive: true });
-  mkdirSync(join(agent, "skills", "gone"), { recursive: true });
-  const syncedProfile = [{ id: "synced", runtimes: ["claude" as const], home: synced }];
-  linkAgentHome(agent, syncedProfile);
-  assert.equal(readlinkSync(join(synced, "skills", "team")), join(agent, "skills", "team"));
-  assert.equal(readFileSync(join(synced, "skills", "synced", "bucket", "pdf", "SKILL.md"), "utf8"), "account's");
-  rmSync(join(agent, "skills", "gone"), { recursive: true });
-  linkAgentHome(agent, syncedProfile);
-  assert.ok(!lstatSync(join(synced, "skills")).isSymbolicLink());
-  assert.deepEqual(readdirSync(join(synced, "skills")).sort(), ["synced", "team"]);
-  // The same place under another name (~/.ember is ~/.stillfail) is the link it should be: left, and said nothing of.
-  const alias = join(root, "alias");
-  symlinkSync(agent, alias);
-  const named = join(root, "named");
-  mkdirSync(named);
-  symlinkSync(join(alias, "skills"), join(named, "skills"));
-  linkAgentHome(agent, [{ id: "named", runtimes: ["claude"], home: named }]);
-  assert.equal(readlinkSync(join(named, "skills")), join(alias, "skills"));
+  writeFileSync(join(agent, "MEMORY.md"), "# one's\n");
+  const [cc, both, synced, own] = [join(root, "cc"), join(root, "both"), join(root, "synced"), join(root, "own")];
+  mkdirSync(join(cc, "grok"), { recursive: true });
+  symlinkSync(join(agent, "MEMORY.md"), join(cc, "CLAUDE.md"));
+  symlinkSync(join(agent, "skills"), join(cc, "skills"));
+  symlinkSync(join(agent, "MEMORY.md"), join(cc, "grok", "AGENTS.md"));
+  // Under another name (~/.ember is ~/.stillfail): the same.
+  symlinkSync(agent, join(root, "alias"));
+  mkdirSync(both);
+  symlinkSync(join(root, "alias", "MEMORY.md"), join(both, "AGENTS.md"));
+  symlinkSync(join(root, "alias", "skills"), join(both, "skills"));
+  // A runtime's own skills/ (Claude Code's synced ones) took the shared ones one by one, one of them gone since.
+  mkdirSync(join(synced, "skills", "synced", "pdf"), { recursive: true });
+  symlinkSync(join(agent, "skills", "team"), join(synced, "skills", "team"));
+  symlinkSync(join(agent, "skills", "gone"), join(synced, "skills", "gone"));
+  mkdirSync(join(own, "skills", "mine"), { recursive: true });
+  writeFileSync(join(own, "CLAUDE.md"), "mine");
+  const profiles = [
+    { id: "cc", runtimes: ["claude" as const, "grok" as const], home: cc },
+    { id: "both", runtimes: ["claude" as const, "codex" as const], home: both },
+    { id: "synced", runtimes: ["claude" as const], home: synced },
+    { id: "own", runtimes: ["claude" as const], home: own },
+  ];
+  unlinkAgentHome(agent, profiles);
+  unlinkAgentHome(agent, profiles); // idempotent
+  assert.deepEqual(readdirSync(cc), ["grok"]);
+  assert.deepEqual(readdirSync(join(cc, "grok")), []);
+  assert.deepEqual(readdirSync(both), []);
+  assert.deepEqual(readdirSync(join(synced, "skills")), ["synced"]);
+  assert.equal(readFileSync(join(own, "CLAUDE.md"), "utf8"), "mine");
+  assert.deepEqual(readdirSync(join(own, "skills")), ["mine"]);
+  // What they linked to stays.
+  assert.equal(readFileSync(join(agent, "MEMORY.md"), "utf8"), "# one's\n");
+  assert.deepEqual(readdirSync(join(agent, "skills")), ["team"]);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("a session's workspace has its workspace's skills where it runs: one gone is taken away, a preset's of the same name left", () => {
+  const root = temp();
+  const [skills, workspace] = [join(root, "agent", "skills"), join(root, "workspace")];
+  for (const name of ["team", "gone", "both"]) {
+    mkdirSync(join(skills, name), { recursive: true });
+    writeFileSync(join(skills, name, "SKILL.md"), name);
+  }
+  mkdirSync(join(skills, "notes"));
+  mkdirSync(join(workspace, ".claude", "skills", "both"), { recursive: true });
+  sessionSkills(workspace, skills);
+  rmSync(join(skills, "gone"), { recursive: true });
+  sessionSkills(workspace, skills);
+  assert.deepEqual(readdirSync(join(workspace, ".claude", "skills")).sort(), ["both", "team"]);
+  assert.ok(!lstatSync(join(workspace, ".claude", "skills", "both")).isSymbolicLink());
+  assert.deepEqual(readdirSync(join(workspace, ".agents", "skills")).sort(), ["both", "team"]);
+  assert.equal(readFileSync(join(workspace, ".agents", "skills", "team", "SKILL.md"), "utf8"), "team");
   rmSync(root, { recursive: true, force: true });
 });
 

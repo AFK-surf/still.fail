@@ -6,7 +6,8 @@
 // Its process is a runner's (src/agents/runner.ts): this actor can go (a station stopping or handing over) and the
 // next take it up (`snapshot` / `adopt`), its turn going on all along.
 import { presetCopyOf, presetInstructions } from "./presets.ts";
-import { join } from "node:path";
+import { sessionSkills } from "./agent-home.ts";
+import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
 import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
@@ -1569,6 +1570,16 @@ export class SessionActor {
 /// How a session's runtime session is opened (or taken up) on `profile`: its directory, model as the profile spells it,
 /// effort, instructions and MCP token.
 export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath">): OpenOptions {
+  // Its workspace's skills where it runs (agent-home.ts), kept up with each time it is opened or retuned; a session
+  // continued from a terminal runs in the person's own project, given none.
+  const skills = row.cwd ? undefined : join(dirname(deps.memoryPath(row.key)), "skills");
+  if (skills !== undefined) {
+    try {
+      sessionSkills(row.workspace, skills);
+    } catch (error) {
+      log.warn("session", "its workspace's skills not linked where it runs", { session: row.key, error: (error as Error).message });
+    }
+  }
   // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
   const model = row.model ? (profile.spelling?.(row.model) ?? row.model) : undefined;
   // What its chat was opened with (presets.ts): told after the station's own instructions (its folders' skills are in
@@ -1582,6 +1593,7 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     effort: row.effort ?? undefined,
     // A session continued from a terminal keeps the system prompt it began with (its cache holds).
     instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key)) + (preset ? presetInstructions(preset) : ""),
+    ...(skills !== undefined ? { skills } : {}),
     mcpToken: row.token,
     mcpUrl: deps.mcpUrl(),
     route: row.key,

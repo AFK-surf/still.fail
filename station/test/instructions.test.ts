@@ -1,5 +1,8 @@
 // The agent's instructions and the migration notes (src/agents/instructions.ts, migrations.ts: their source).
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import * as ts from "../src/agents/instructions.ts";
 import { NOTES, latest, untold } from "../src/agents/migrations.ts";
@@ -11,6 +14,15 @@ test("the session instructions name the session's places, and a project only whe
   const project = ts.sessionInstructions("/w/s/workspace", "/p", "/w/repos", "/w/agent/MEMORY.md");
   assert.ok(project.includes("- Project directory: /p. This session began outside still.fail"));
   assert.equal(project.replace(/- Project directory: [^\n]*\n/, ""), plain);
+  assert.ok(!plain.includes("<memory"), "no memory where there is none");
+});
+
+test("the session instructions tell the memory they name, as it is now", () => {
+  const dir = mkdtempSync(join(tmpdir(), "instructions-"));
+  const path = join(dir, "MEMORY.md");
+  writeFileSync(path, "# lessons\n- one\n");
+  assert.ok(ts.sessionInstructions("/w/s/workspace", null, "/w/repos", path).endsWith(`\n\n<memory path="${path}">\n# lessons\n- one\n</memory>`));
+  rmSync(dir, { recursive: true, force: true });
 });
 
 test("the fixed prompts", () => {

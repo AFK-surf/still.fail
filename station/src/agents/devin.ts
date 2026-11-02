@@ -67,9 +67,9 @@ export const devinRules = (instructions: string) =>
   `${instructions}${instructions === "" ? "" : "\n\n"}The station's tools (chat_post, chat_state and the others named in these instructions) are the stillfail MCP server's: call one by its name (mcp__stillfail__chat_post and so on) without listing the server's tools first.`;
 
 /// The station's instructions as the rules of a folder of the session's own, beside its working directory, with the
-/// shared memory (AGENTS.md) and skills (.devin/skills) linked in: Devin reads a workspace directory it is given as a
+/// skills of its workspace (`skills`) linked in as .devin/skills: Devin reads a workspace directory it is given as a
 /// project's, without them being written into the person's project.
-export function rulesFolder(home: string, key: string, instructions: string): string {
+export function rulesFolder(home: string, key: string, instructions: string, skills?: string): string {
   const dir = join(devinHome(home), "station", createHash("sha256").update(key).digest("hex").slice(0, 16));
   mkdirSync(join(dir, ".devin", "rules"), { recursive: true });
   writeFileSync(join(dir, ".devin", "rules", "stillfail.md"), `---\ndescription: still.fail station\ntrigger: always_on\n---\n${devinRules(instructions)}\n`);
@@ -77,15 +77,16 @@ export function rulesFolder(home: string, key: string, instructions: string): st
     if (!existsSync(target)) return;
     rmSync(path, { recursive: true, force: true });
     try {
-      // Where links are refused (Windows without Developer Mode), the skills' a junction and the memory a copy.
+      // Where links are refused (Windows without Developer Mode), a junction.
       linkSync(target, path, { junction: true, copy: true });
     } catch (e) {
-      log.warn("agents::devin", "the shared memory or skills not linked for Devin", { path, error: (e as Error).message });
+      log.warn("agents::devin", "the workspace's skills not linked for Devin", { path, error: (e as Error).message });
     }
   };
-  // The profile home's AGENTS.md and skills/ are the station's shared memory and skills (agent-home.ts).
-  linked(join(home, "AGENTS.md"), join(dir, "AGENTS.md"));
-  linked(join(home, "skills"), join(dir, ".devin", "skills"));
+  // The skills of the session's workspace (agent-home.ts); its memory is told with the instructions. (An AGENTS.md
+  // linked here before was the profile home's, the home workspace's memory whatever the session's workspace: gone.)
+  rmSync(join(dir, "AGENTS.md"), { force: true });
+  if (skills !== undefined) linked(skills, join(dir, ".devin", "skills"));
   return dir;
 }
 
@@ -183,7 +184,7 @@ export class DevinDriver extends AcpDriver<DevinSession> {
     if (options.resume !== undefined && !existsSync(join(sessions, `${options.resume}.jsonl`))) throw new Error(`no Devin session ${options.resume}`);
     const config = join(devinHome(home), "config.json");
     writeFileSync(config, `${JSON.stringify(CONFIG, null, 2)}\n`);
-    const rules = rulesFolder(home, options.key, options.instructions);
+    const rules = rulesFolder(home, options.key, options.instructions, options.skills);
     const model = options.model ?? profileModel(options.profile);
     return { command: this.command, args: devinArgs(config, model, options.effort), env: devinEnv(options), opening: { additionalDirectories: [rules] } };
   }
