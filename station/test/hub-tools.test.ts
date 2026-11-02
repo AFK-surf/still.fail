@@ -1485,6 +1485,28 @@ test("station_* reach the transport, pretty-printed; adb_devices and feedback_se
   await r.close();
 });
 
+test("a sender's first line does not construct a summary or count the chat's growing history", async () => {
+  const r = new Rig({ link: true });
+  try {
+    const a = say("<@UBOT> ship it\nand tell me");
+    await r.accept(a);
+    await settle();
+    const key = sessionKey("cl", "C1", a.threadTs);
+    const thread = r.store.latestThread(key)!.thread.id;
+    const insert = r.store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, ?, 'message', 'agent', ?, 'later', ?)");
+    r.store.db.exec("BEGIN");
+    for (let n = 100; n < 2_100; n++) insert.run(thread, n, key, n);
+    r.store.db.exec("COMMIT");
+    const listThreads = r.store.listThreads.bind(r.store);
+    let lists = 0;
+    r.store.listThreads = (...args) => { lists++; return listThreads(...args); };
+    assert.equal(sender(r.hub, key)[0], "ship it");
+    assert.equal(lists, 0, "the title lookup does not count unread messages or build a thread summary");
+  } finally {
+    await r.close();
+  }
+});
+
 test("a chat is headed as the chat list calls it: its name, the agent's, else 新对话; never its first message", async () => {
   const r = new Rig({ link: true });
   const a = say("<@UBOT> ship it\nand tell me");

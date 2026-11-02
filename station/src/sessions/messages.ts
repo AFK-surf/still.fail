@@ -51,7 +51,7 @@ export function sender(hub: Hub, key: string): [string, string | null] {
   // As the chat list calls it (read/views.ts titleOf): a session's own title only where its chat was never named.
   const named = thread === null ? null : given(thread);
   const own = row.title?.trim() || null;
-  const first = thread === null || named !== null || own !== null || thread.surface === STILLFAIL_SURFACE ? null : (hub.store.listThreads("", null, thread.id)[0]?.firstText ?? null);
+  const first = thread === null || named !== null || own !== null || thread.surface === STILLFAIL_SURFACE ? null : hub.store.firstText(thread.id);
   const shown = named ?? own ?? (thread !== null ? titleOf(thread, first, null) : key);
   return [shown, hub.link(key) ?? null];
 }

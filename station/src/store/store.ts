@@ -60,6 +60,8 @@ export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
 export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
+export const PEOPLE_SAID_AFTER =
+  "SELECT COUNT(*) AS c FROM (SELECT n FROM entries INDEXED BY entries_people_by_n WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person' ORDER BY n LIMIT ?)";
 
 export * from "./rows.ts";
 export { SCHEMA_VERSION } from "./schema.ts";
@@ -663,9 +665,9 @@ export class Store {
     });
   }
 
-  /// How many messages people have written in a thread after entry `n`.
-  peopleSaidAfter(thread: number, n: number): number {
-    return this.#one("SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person'", thread, n).c;
+  /// How many messages people have written after `n`, up to the number the caller needs.
+  peopleSaidAfter(thread: number, n: number, limit: number): number {
+    return this.#one(PEOPLE_SAID_AFTER, thread, n, Math.max(0, Math.trunc(limit))).c;
   }
 
   /// The session's first post in a thread after entry `n`: its ts, null when it has posted none since.
@@ -878,7 +880,7 @@ export class Store {
     );
     if (!r) return null;
     const thread = toThread(r);
-    return { thread, firstText: thread.surface === STILLFAIL_SURFACE ? null : this.#firstText(thread.id) };
+    return { thread, firstText: thread.surface === STILLFAIL_SURFACE ? null : this.firstText(thread.id) };
   }
 
   listThreads(viewer: string, session: string | null, thread: number | null): ThreadSummary[] {
@@ -899,7 +901,7 @@ export class Store {
         read,
         unread: this.#unreadCount(viewer, t.id, read),
         people: this.#threadPeople(t.id, t.surface),
-        firstText: this.#firstText(t.id),
+        firstText: this.firstText(t.id),
         letters: this.#letterCount(t.id),
         lettersLast: this.lastLetter(t.id),
         thread: t,
@@ -2014,7 +2016,7 @@ export class Store {
       let first: string | null = null;
       if (thread.title === null && thread.autoTitle === null) {
         try {
-          first = this.#firstText(id);
+          first = this.firstText(id);
         } catch {
           // `.ok().flatten()`: an archive that does not read gives none.
         }
@@ -2065,7 +2067,7 @@ export class Store {
   }
 
   /// The first thing a person said in it (up to 300 characters).
-  #firstText(thread: number): string | null {
+  firstText(thread: number): string | null {
     if (this.#isArchived(thread)) {
       const m = mergeEntries(this.#archivedEntries(thread)).find((m) => m.authorKind === "person");
       return m ? takeChars(m.text, 300) : null;
