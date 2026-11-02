@@ -1971,6 +1971,18 @@ export class Views implements Owner {
     const waits = peopleSeqs.slice(Math.max(peopleSeqs.length - waiting, 0));
     const written = said.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [[m.seq as number, str(m.text) ?? ""] as [number, string]] : []));
     let messages = timed("chat.shown", () => this.#shown(station, thread, agents, said, waits));
+    // The station binds a capacity retry to the notice that announced it. Only that notice offers cancellation, and
+    // only while that agent is still waiting: an old notice must never stop later work in the same chat.
+    for (const agent of agents) {
+      const session = get(agent, "session");
+      const turn = get(session, "lastTurn");
+      const about = get(turn, "about");
+      const key = str(get(session, "key"));
+      const detail = str(get(turn, "detail")) ?? "";
+      if (key === undefined || get(turn, "outcome") !== "failed" || !detail.startsWith("overloaded:") || present.waiting(session) === null || get(about, "thread") !== id) continue;
+      const notice = messages.find((m) => m.system === true && m.seq === get(about, "seq") && m.ts === get(about, "ts"));
+      if (notice && isObject(notice.notice)) notice.notice = { ...notice.notice, retrySession: key };
+    }
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
     // with its seq, it is the viewer's first message since it was sent with the same words.
     const newest = u64(page.last);

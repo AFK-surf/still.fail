@@ -345,6 +345,26 @@ test("archiving a session and a chat, and deleting a session", async () => {
   }
 });
 
+test("cancel retry addresses the notice and leaves a different retry alone", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    const thread = made.thread.id;
+    const [seq] = r.store.insertMessage(newMessage(thread, "2.0", "ember", "ember", "⚠️ capacity"));
+    r.store.startTurn("retry", made.key, "input");
+    r.store.setAbout("retry", [thread, seq, "2.0"]);
+    r.store.endTurn("retry", "failed", "overloaded: at capacity", "waiting", 30);
+    const path = `/sessions/${made.key}/cancel-retry`;
+    assert.equal((await r.ask("POST", path, { thread, seq: 0 }))[0], 400);
+    assert.deepEqual(await r.ask("POST", path, { thread, seq: seq + 1 }), [200, { ok: true }]);
+    assert.equal(r.store.lastTurn(made.key)!.declared, "waiting");
+    assert.deepEqual(await r.ask("POST", path, { thread, seq }), [200, { ok: true }]);
+    assert.equal(r.store.lastTurn(made.key)!.outcome, "aborted");
+  } finally {
+    await r.close();
+  }
+});
+
 test("stopping, evicting, warming and changing a session", async () => {
   const r = rig();
   try {

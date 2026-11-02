@@ -2174,6 +2174,8 @@ export interface NoticeShown {
 	failed: boolean;
 	/** What it says, ⚠️ and a closing 。 left out. */
 	words: string;
+	/** The session waiting to retry at capacity, while this exact notice can cancel its retry. */
+	retrySession?: string;
 	/**
 	 * One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that
 	 * profile's page. Absent otherwise.

@@ -220,6 +220,39 @@ const header = (r: { headers: [string, string][] }, name: string) => r.headers.f
 const exports = (host: FakeHost) => host.requests.filter((r) => r.url.endsWith("/v1/telemetry/traces"));
 const spansOf = (r: { body?: Uint8Array | null }) => JSON.parse(new TextDecoder().decode(r.body!)).resourceSpans[0].scopeSpans[0].spans as J[];
 
+test("a capacity notice and its cancel action pass through the real core", async () => {
+  const retry = {
+    id: "turn-1", kind: "input", outcome: "failed", declared: "waiting", detail: "overloaded: at capacity",
+    about: { thread: 7, seq: 1, ts: "1.0" }, waitSeconds: 30, waitWatch: false, startedAt: 1, endedAt: 2,
+  };
+  const agent = { ...session("k1", 1), lastTurn: retry };
+  const notice = { ...entry(1, "⚠️ 模型满载，自动重试，与额度无关"), authorKind: "ember", author: "ember" };
+  const { host, core } = await started({
+    ...base(),
+    "GET /sessions": [agent],
+    "GET /sessions/k1": { session: agent, threads: [], turns: [], jobs: [] },
+    "GET /threads": [threadView(7, 1)],
+    "GET /threads/7/entries?limit=50": { last: 1, entries: [notice] },
+  });
+  try {
+    stationReplies(host, (req) => req.method === "POST" && req.url.endsWith("/sessions/k1/cancel-retry") ? { ok: true } : undefined);
+    const ui = core.connect();
+    const values = new Map();
+    subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7, session: null });
+    await host.settle();
+    await host.settle();
+    apply(host, values);
+    assert.equal(v(values, 1).messages[0].notice.retrySession, "k1");
+    call(core, ui, 2, "session.cancelRetry", { station: "ws/st", key: "k1", thread: 7, seq: 1 });
+    await host.settle();
+    const sent = host.requests.find((req) => req.method === "POST" && req.url.endsWith("/sessions/k1/cancel-retry"));
+    assert.ok(sent);
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(sent.body!)), { thread: 7, seq: 1 });
+  } finally {
+    core.close();
+  }
+});
+
 test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", async () => {
   // Deliberately otherwise (docs/core-ts.md, rule 6): a chat opening reads only what is held, so it asks the station
   // nothing; what the Rust core's chat.open traced is the station's own reading, one trace from its connecting on.

@@ -1211,6 +1211,13 @@ pub fn fixture(mode : String) -> Source {
         None => ()
       }
       match name {
+        "session.cancelRetry" => {
+          if f.mode == "chat-overload-after" {
+            f.step += 1
+            f.changed()
+          }
+          done(Ok(Json::object({})))
+        }
         "chat.archive" => {
           let session = text(Some(params), "session")
           f.archived[session.view(start_offset=2).to_owned()] = true
