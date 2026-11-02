@@ -1309,7 +1309,8 @@ export class AccountDb {
   setJobs(station: string, list: J[], confirmed: number | null): void {
     this.#write(() => {
       const was = new Map<string, SqlRow>();
-      for (const r of this.sql.all("SELECT id, ord, json, chat, open FROM job WHERE station = ?", [station])) was.set(String(r[0]), r);
+      // Only open jobs can be retained or need closing. An incoming closed job is written anew either way.
+      for (const r of this.sql.all("SELECT id, ord, json, chat, open FROM job WHERE station = ? AND open = 1", [station])) was.set(String(r[0]), r);
       const items: [string, J][] = [];
       const seen = new Set<string>();
       for (const j of list) {
@@ -1423,9 +1424,23 @@ export class AccountDb {
   /// The agents' transcripts held, least recently used first: by when their history was last opened here or their agent
   /// last active, whichever is later. (A chat's messages are never let go: they are the chat, and small.)
   transcriptsByUse(limit: number): { station: string; id: string }[] {
+    // Seek to each next session in the transcript primary key; DISTINCT would scan every item of every transcript.
     return this.sql
       .all(
-        `SELECT x.station, x.session FROM (SELECT DISTINCT station, session FROM transcript) x
+        `WITH RECURSIVE x(station, session) AS (
+           SELECT station, session FROM (SELECT station, session FROM transcript ORDER BY station, session LIMIT 1)
+           UNION ALL
+           SELECT t.station, t.session FROM x JOIN transcript t ON (t.station, t.session, t.i) = (
+             SELECT z.station, z.session, z.i FROM transcript z WHERE z.station = x.station AND z.session > x.session
+             ORDER BY z.station, z.session, z.i LIMIT 1
+           )
+           UNION ALL
+           SELECT t.station, t.session FROM x JOIN transcript t ON (t.station, t.session, t.i) = (
+             SELECT z.station, z.session, z.i FROM transcript z WHERE z.station > x.station
+             ORDER BY z.station, z.session, z.i LIMIT 1
+           ) WHERE NOT EXISTS (SELECT 1 FROM transcript z WHERE z.station = x.station AND z.session > x.session)
+         )
+         SELECT x.station, x.session FROM x
          LEFT JOIN log_use u ON u.kind = 'transcript' AND u.station = x.station AND u.id = x.session
          LEFT JOIN session s ON s.station = x.station AND s.key = x.session
          ORDER BY max(coalesce(u.opened, 0), coalesce(s.last_active, 0)), x.station, x.session LIMIT ?`,
