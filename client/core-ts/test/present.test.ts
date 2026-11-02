@@ -616,6 +616,29 @@ test("a_meter_is_drawn_as_an_allowance_to_what_is_left", () => {
   assert.equal(h.meters[1].remaining, "剩 0.0 G");
 });
 
+test("a station's GPUs are shown separately with only measurements that are known", () => {
+  const one = p.host({ gpus: [{ name: "Apple M2 Max", cores: 30, busy: 0.21 }] });
+  assert.deepEqual(one.gpus, [{ big: "79", unit: "%", left: 79, level: "ok", title: "GPU 空闲", total: "30 核", model: "Apple M2 Max" }]);
+  const several = p.host({ gpus: [
+    { name: "NVIDIA RTX 4090", busy: 0.37, memoryUsedBytes: 4 * GIB, memoryTotalBytes: 24 * GIB },
+    { name: "Tesla T4", busy: 0, memoryTotalBytes: 16 * GIB },
+    { name: "GPU without metrics" },
+  ] });
+  assert.deepEqual(several.gpus, [
+    { big: "63", unit: "%", left: 63, level: "ok", title: "GPU 1 空闲", total: "显存剩 20/24G", model: "NVIDIA RTX 4090" },
+    { big: "100", unit: "%", left: 100, level: "ok", title: "GPU 2 空闲", total: "显存 16G", model: "Tesla T4" },
+    { big: "—", unit: "", left: 100, level: "ok", title: "GPU 3 空闲", total: "", model: "GPU without metrics" },
+  ]);
+  assert.deepEqual(p.host({}).gpus, [], "older stations do not say GPUs");
+  assert.deepEqual(p.host({ gpus: null }).gpus, [], "none detected");
+  assert.deepEqual(p.host({ gpus: [{ name: "GPU", busy: -1, memoryUsedBytes: 2 * GIB }] }).gpus,
+    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲", total: "显存已用 2G", model: "" }]);
+  assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 4 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
+    [{ big: "12.0", unit: "GB", left: 75, level: "ok", title: "GPU 显存剩", total: "共 16 GB", model: "AMD Radeon" }]);
+  assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 17 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
+    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲", total: "显存 16G", model: "AMD Radeon" }]);
+});
+
 test("loss_is_counted_on_the_way_in_use_and_not_across_a_change_of_it", () => {
   const way = (path: string, sent: number, lost: number) => ({ path, sent, lost });
   assert.deepEqual(packetsSince(way("1", 100, 2), way("1", 160, 3)), { sent: 60, lost: 1 });

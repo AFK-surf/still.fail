@@ -28,6 +28,10 @@ priv struct SettingsFixture {
   /// a Windows station's running as administrator, as the core shows it (its overview's `elevation`), as a test sets
   /// it; none: not a Windows station
   mut elevation : Json?
+  /// The station with two GPUs, for the resource overview's fixture.
+  mut gpus : Bool
+  /// Four GPUs, to exercise another row of resource dials.
+  mut more_gpus : Bool
   /// the mode's page has no station (settings-first-station)
   mut none : Bool
   /// the subscription's sign-in: "" none, "needs_code" under way (settings-profile-login), "failed"
@@ -93,6 +97,8 @@ let fx : SettingsFixture = {
   outflow: false,
   outflow_answer: None,
   elevation: None,
+  gpus: false,
+  more_gpus: false,
   none: false,
   login: "",
   login_station: false,
@@ -188,6 +194,8 @@ fn fixture_reset() -> Unit {
   fx.outflow = false
   fx.outflow_answer = None
   fx.elevation = None
+  fx.gpus = false
+  fx.more_gpus = false
   fx.congestion = "cubic"
   fx.none = false
   fx_adb.val = ""
@@ -353,6 +361,11 @@ pub fn fixture_page(mode : String) -> String {
     "settings-adb-chats-long" => up("", "settings/adb/", 4)
     "settings-station-mark" => up("mark", "", 0)
     "settings-station-many-profiles" => fx_station_many_profiles.val = true
+    "settings-station-gpu" => fx.gpus = true
+    "settings-station-gpu-many" => {
+      fx.gpus = true
+      fx.more_gpus = true
+    }
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
     // its 设置 with 高级网络设置 opened: its congestion control, a section of the page after it
@@ -454,7 +467,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -1074,9 +1087,9 @@ fn fx_station(address : String) -> Json {
       ("id", str(id)),
       ("name", str(renamed.unwrap_or("Studio"))),
       ("icon", str(fx.marks.get(id).unwrap_or("glyph:desktop"))),
-      ("summary", str("Apple M2 Max · 2 个 agent 在工作")),
+      ("summary", str(if fx.gpus { "AMD EPYC · 2 个 agent 在工作" } else { "Apple M2 Max · 2 个 agent 在工作" })),
       ("face", str("working")),
-      ("line", str("Apple M2 Max · 64 GB · macOS 26")),
+      ("line", str(if fx.gpus { "AMD EPYC · 64 GB · Linux" } else { "Apple M2 Max · 64 GB · macOS 26" })),
       ("online", Json::boolean(true)),
       ("profileGroups", Json::array(fx_station_profile_groups(profiles))),
       ("profileStates", fx_station_profile_states(profiles)),
@@ -1093,7 +1106,18 @@ fn fx_station(address : String) -> Json {
       (
         "host",
         obj([
-          ("identity", str("Apple M2 Max · 64 GB · macOS 26")),
+          ("identity", str(if fx.gpus { "AMD EPYC · 64 GB · Linux" } else { "Apple M2 Max · 64 GB · macOS 26" })),
+          ("gpus", if fx.gpus {
+            let cards : Array[Json] = [
+              obj([("big", str("63")), ("unit", str("%")), ("left", Json::number(63.0)), ("level", str("ok")), ("title", str("GPU 1 空闲")), ("total", str("显存剩 20/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]),
+              obj([("big", str("100")), ("unit", str("%")), ("left", Json::number(100.0)), ("level", str("ok")), ("title", str("GPU 2 空闲")), ("total", str("显存剩 23/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]),
+            ]
+            if fx.more_gpus {
+              cards.push(obj([("big", str("50")), ("unit", str("%")), ("left", Json::number(50.0)), ("level", str("ok")), ("title", str("GPU 3 空闲")), ("total", str("显存剩 12/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]))
+              cards.push(obj([("big", str("20")), ("unit", str("%")), ("left", Json::number(20.0)), ("level", str("amber")), ("title", str("GPU 4 空闲")), ("total", str("显存剩 5/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]))
+            }
+            Json::array(cards)
+          } else { [] }),
           (
             "meters",
             [

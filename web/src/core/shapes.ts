@@ -4393,6 +4393,17 @@ export interface Meter {
 	note?: string;
 }
 
+/** One GPU's resource dial and model on the station's overview. */
+export interface HostGpu {
+	big: string;
+	unit: string;
+	left: number;
+	level: Level;
+	title: string;
+	total: string;
+	model: string;
+}
+
 /** A fact of a machine, a row of its details: 主机名 studio. */
 export interface HostDetail {
 	label: string;
@@ -4419,6 +4430,8 @@ export interface Host {
 	line: string;
 	facts: string[];
 	meters: Meter[];
+	/** The machine's GPUs, each with the figures it can report. */
+	gpus?: HostGpu[];
 	/** What the machine is, the same line wherever it is named: Apple M2 Max · 64 GB · macOS 26. */
 	identity: string;
 	/** The rest, a row each, where the machine is looked at closely: its hostname, chip, uptime, the process. */

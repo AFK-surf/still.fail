@@ -377,7 +377,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
       st_section(c, @sf.t("web-pages.stations.page.resources"), fn() {
         @sf.group(c, fn() {
           @sf.block(c, fn() {
-            meter_dials(c, items(host, "meters"))
+            station_resource_dials(c, items(host, "meters"), items(host, "gpus"))
             match (core.topic)("stationNet", { "station": str(address) }).value {
               Some(Object(_)) as net => station_net(c, net)
               _ => ()

@@ -945,6 +945,36 @@ export function host(h: J): J {
   const disk = meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null, {
     remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.out_of", { size: format.gb(diskTotal) }),
   });
+  // Each GPU is an ordinary resource dial: free capacity in its figure, used capacity in its cells.
+  const gpus = (arr(src.gpus) ?? []).filter(isObject);
+  o.gpus = gpus.map((gpu: J, i: number) => {
+    const label = gpus.length === 1 ? "GPU" : `GPU ${i + 1}`;
+    const name = str(gpu.name)?.trim() || "GPU";
+    const busy = typeof gpu.busy === "number" && Number.isFinite(gpu.busy) && gpu.busy >= 0 && gpu.busy <= 1 ? gpu.busy : null;
+    const total = typeof gpu.memoryTotalBytes === "number" && Number.isFinite(gpu.memoryTotalBytes) && gpu.memoryTotalBytes > 0 ? gpu.memoryTotalBytes : null;
+    const used = typeof gpu.memoryUsedBytes === "number" && Number.isFinite(gpu.memoryUsedBytes) && gpu.memoryUsedBytes >= 0 && (total === null || gpu.memoryUsedBytes <= total) ? gpu.memoryUsedBytes : null;
+    const size = (bytes: number) => {
+      const g = Math.max(bytes, 0) / GIB;
+      return Number.isInteger(g) ? String(g) : format.fixed1(g);
+    };
+    const cores = typeof gpu.cores === "number" && Number.isFinite(gpu.cores) && gpu.cores > 0 ? t("core-views.present.host.cores", { n: gpu.cores }) : "";
+    const memoryNote = used !== null && total !== null ? t("core-views.present.host.gpu_memory_free", { free: size(total - used), total: size(total) })
+      : used !== null ? t("core-views.present.host.gpu_memory_used", { used: size(used) })
+      : total !== null ? t("core-views.present.host.gpu_memory_total", { total: size(total) }) : cores;
+    const title = t("core-views.present.host.gpu_idle", { gpu: label });
+    if (busy !== null) {
+      const m = meter(label, label, busy * 100, "", null, { remaining: "", big: String(format.round(100 - busy * 100)), unit: "%", title, total: memoryNote });
+      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, total: m.total, model: name === "GPU" ? "" : name };
+    }
+    if (total !== null && used !== null) {
+      const m = meter(label, label, used / total * 100, "", null, {
+        remaining: "", big: big(total - used), unit: "GB", title: t("core-views.present.host.gpu_memory_left", { gpu: label }),
+        total: t("core-views.present.host.out_of", { size: format.gb(total) }),
+      });
+      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, total: m.total, model: name === "GPU" ? "" : name };
+    }
+    return { big: "—", unit: "", left: 100, level: "ok", title, total: memoryNote, model: name === "GPU" ? "" : name };
+  });
   // What the machine is, the same line wherever it is named: its chip, its memory, its system.
   o.identity = [cpuModel, memTotal > 0 ? format.gb(memTotal) : null, os || null].filter((x) => x !== null).join(" · ");
   // The rest, a row each, only where the machine is looked at closely.

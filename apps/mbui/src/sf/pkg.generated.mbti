@@ -475,7 +475,7 @@ pub let dialog_w : Double
 
 pub let dialog_wide_w : Double
 
-pub fn dials(@ui.Ctx, Array[Dial]) -> Unit
+pub fn dials(@ui.Ctx, Array[Dial], details? : Array[String], columns? : Int32) -> Unit
 
 pub let diff_line_in : @ui.Space
 

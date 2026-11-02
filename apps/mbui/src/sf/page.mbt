@@ -2006,11 +2006,11 @@ pub(all) struct Dial {
 /// the words' ink until it runs low. Wide, the web's: each 96 wide at least, 36 apart, on as many lines as they take
 /// (12 between). Narrow: sharing the line's width, 16 apart, their cells narrower (6, 2 apart), so three stand in a
 /// line on a phone's card.
-pub fn dials(c : @ui.Ctx, dials : Array[Dial]) -> Unit {
+pub fn dials(c : @ui.Ctx, dials : Array[Dial], details? : Array[String] = [], columns? : Int = 0) -> Unit {
   let narrow = look() == Narrow
   let t = theme()
-  c.box(style=if narrow { dl_row_narrow } else { dl_row_wide }, flow=!narrow, line_gap=dl_lines, fn() {
-    for d in dials {
+  let draw = fn(i : Int) {
+      let d = dials[i]
       let ink = match d.level {
         "amber" | "warn" => t.p.warn_ink
         "red" => t.p.red
@@ -2020,7 +2020,7 @@ pub fn dials(c : @ui.Ctx, dials : Array[Dial]) -> Unit {
       let fill = if d.fill < 0 { 0 } else if d.fill > 100 { 100 } else { d.fill }
       let lit = (fill.to_double() / 10.0).round().to_int()
       let cell = if narrow { dl_cell_narrow } else { dl_cell_wide }
-      c.box(style=if narrow { dl_dial_narrow } else { dl_dial_wide }, fn() {
+      c.box(style=if narrow { dl_dial_narrow } else if columns > 0 { dl_dial_wide_fixed } else { dl_dial_wide }, fn() {
         c.rich(
           [@ui.span(d.number), @ui.span(d.unit, weight=500, scale=t.t.meta / dl_number_size, color=t.p.muted)],
           style=if low { dl_number.then(@ui.text_style(color=Data(ink))) } else { dl_number },
@@ -2033,13 +2033,44 @@ pub fn dials(c : @ui.Ctx, dials : Array[Dial]) -> Unit {
         })
         |> ignore
         c.text(d.label, style=dl_label) |> ignore
-        c.text(if d.note == "" { " " } else { d.note }, style=dl_reset) |> ignore
+        c.text(if d.note == "" { " " } else { d.note }, style=if details.is_empty() { dl_reset } else { dl_detail }) |> ignore
+        match details.get(i) {
+          Some(detail) if detail != "" => c.text(detail, style=dl_detail) |> ignore
+          _ => ()
+        }
       })
       |> ignore
-    }
-  })
-  |> ignore
+  }
+  if narrow && columns > 0 {
+    c.box(style=dl_rows, fn() {
+      for k in 0..<((dials.length() + columns - 1) / columns) {
+        let start = k * columns
+        let end = @cmp.minimum(start + columns, dials.length())
+        c.box(style=dl_row_narrow, fn() {
+          for i in start..<end {
+            draw(i)
+          }
+          for _ in (end - start)..<columns {
+            c.box(style=dl_dial_narrow, fn() {  }) |> ignore
+          }
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+  } else {
+    c.box(style=if narrow { dl_row_narrow } else { dl_row_wide }, flow=!narrow, line_gap=dl_lines, fn() {
+      for i in 0..<dials.length() {
+        draw(i)
+      }
+    })
+    |> ignore
+  }
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let dl_rows : @ui.Style = @ui.css("w=Full gap=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2056,6 +2087,10 @@ let dl_lines : Double = 12.0
 ///|
 // kept across runs: a value (no field of it changes)
 let dl_dial_wide : @ui.Style = @ui.css("min_w=S24 gap=S0_5 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let dl_dial_wide_fixed : @ui.Style = @ui.css("w=S24 gap=S0_5 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2097,6 +2132,10 @@ let dl_label : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium
 ///|
 // kept across runs: a value (no field of it changes)
 let dl_reset : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dl_detail : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 /// A page's own head (an account's, a station's, a connect's: who it is), in place of its title: its `mark` in its box

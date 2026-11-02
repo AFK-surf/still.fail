@@ -144,6 +144,36 @@ test "a station's page, its parts chosen by its choice: 设置 pressed shows it"
 }
 
 ///|
+test "the station's GPUs are each visible on narrow and wide pages with either input" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-gpu", h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    assert_eq(t.squeeze_faults(), [])
+    assert_true(t.find("GPU 1 空闲") is Some(_))
+    assert_true(t.find("显存剩 20/24G") is Some(_))
+    assert_true(t.find("GPU 2 空闲") is Some(_))
+    assert_true(t.find("显存剩 23/24G") is Some(_))
+    assert_true(t.words().filter(fn(word) { word.0 == "NVIDIA GeForce RTX 4090" }).length() == 2)
+  }
+}
+
+///|
+test "more than three GPUs continue on another row" {
+  for (w, platform) in [(390.0, 2), (1280.0, 0)] {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-gpu-many", h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    assert_eq(t.squeeze_faults(), [])
+    let cpu = drawn(t, "CPU 空闲")
+    let first = drawn(t, "GPU 1 空闲")
+    let fourth = drawn(t, "GPU 4 空闲")
+    if w > 1000.0 {
+      assert_true((first.1 - cpu.1).abs() < 0.5, msg="GPU and the other resources share the first wide row")
+    }
+    assert_true(fourth.1 > first.1 + first.3, msg="the fourth GPU starts a new row")
+  }
+}
+
+///|
 test "a station's 设置 switches going on afresh once a session's cache is over" {
   let asked : Array[Json] = []
   let t = setting_tester(
