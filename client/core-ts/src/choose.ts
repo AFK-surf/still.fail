@@ -197,7 +197,8 @@ export class Choose implements Owner {
       if (topic.topic === "newChat") return { ok: this.#newChat(topic.scope as string) };
       return this.#pick(topic, topic.station as string, topic.of as string);
     } catch (e) {
-      return { err: e as CoreError };
+      if (!(e instanceof CoreError)) throw e;
+      return { err: e };
     }
   }
 
