@@ -73,6 +73,7 @@ fn default_spec(f : ComposerFor) -> @sfpages.ComposerSpec {
     roomy: false,
     locked: false,
     offline: false,
+    warm_agent: true,
   }
 }
 

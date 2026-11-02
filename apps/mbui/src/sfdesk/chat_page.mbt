@@ -138,7 +138,7 @@ fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   if @settings.action_pressed(c, prefs, "chat.stop", in_field=true) {
     stop_agents(src, r, v)
   }
-  if @settings.action_pressed(c, prefs, "composer.file", in_field=true) && !v.archived && !v.offline {
+  if @settings.action_pressed(c, prefs, "composer.file", in_field=true) && !v.offline {
     @sfpages.pick_files(writing(src, r.station + ":" + r.session))
   }
 }

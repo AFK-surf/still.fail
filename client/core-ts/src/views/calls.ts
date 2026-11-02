@@ -68,6 +68,29 @@ export class ViewCalls {
     return this.#views.local;
   }
 
+  /// The chat as its open view knows it; keep the session for older stations' restore route too.
+  #restoreTarget(station: string, thread: number | null, session: string | null = null): string | null {
+    const raw = thread === null ? null : (this.#views.threadOf(station, thread) ?? get(this.#views.ok({ topic: "thread", station, thread }), "thread"));
+    const view = session === null ? undefined : this.#views.ok({ topic: "chat", station, session });
+    // An optimistic restore is not the station's confirmation. A second message sent during it still needs a restore
+    // if the first one fails, including when the restore button started the operation.
+    const changing = this.#local.archivedChanging(station, thread, session);
+    const archived = changing === true || (raw != null ? get(raw, "hiddenAt") != null : get(view, "archived") === true);
+    if (!archived) return null;
+    return session ?? arr(get(raw, "sessions")).map((m) => get(m, "session")).find((s) => typeof s === "string") ?? "";
+  }
+
+  /// Restore through the same operation as the explicit button, including its old-station fallback and local overlay.
+  #restore(station: string, thread: number, session: string, ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const op = yield* request("chat.archive", { station, thread, session, archived: false });
+      const change = this.#local.changing(station, thread, session, {}, false);
+      const result = yield* Effect.result(this.#inner.stations.perform(op, ctx));
+      this.#local.changed(change, result._tag === "Success", this.#inner.data.rowsRev(station));
+      return yield* settle(result);
+    });
+  }
+
   /// The chat a side panel's tabs are kept by (`<station>:<session>`, or its thread's id), as its view has it now, and
   /// its session; none for one not shown (a workspace's new chat's, `new:<workspace>`).
   #chatOf(key: string): [J, string | null] {
@@ -108,6 +131,7 @@ export class ViewCalls {
     return Effect.gen({ self: this }, function* () {
       let entry = this.#local.outboxGet(station, thread, id);
       if (entry === undefined) return yield* Effect.fail(CoreError.invalid(t("core-misc.call.no_outbox")));
+      let restoring = false;
       const result = yield* Effect.result(Effect.gen({ self: this }, function* () {
         if (entry.uploads?.length) {
           const files = yield* this.#inner.composers.uploaded(station, entry.uploads, retry);
@@ -121,6 +145,15 @@ export class ViewCalls {
         // Its station down: not tried (each try waits for a station that is not there), sent once it is reached.
         if (!this.#inner.stations.reachable(station)) return yield* Effect.fail(new CoreError("mesh", t("core-misc.call.waitingStation")));
         yield* parse(station);
+        if (typeof entry.restore === "string") {
+          restoring = true;
+          yield* this.#restore(station, thread, entry.restore, ctx);
+          restoring = false;
+          this.#local.outboxRestored(station, thread);
+          // The user may have discarded it while restoration was in progress.
+          if (!this.#local.outboxGet(station, thread, id)) return null;
+          entry = this.#local.outboxGet(station, thread, id)!;
+        }
         this.#local.outboxDelivering(station, thread, id);
         return yield* this.#inner.stations.post(station, thread, sentAs(entry), ctx, typeof entry.idem === "string" ? entry.idem : undefined);
       }));
@@ -132,7 +165,7 @@ export class ViewCalls {
       // A 400 is the station refusing the message as it is (a file it does not have: one that went up to another
       // station): sent again, it would be refused again.
       // Not reached (no answer at all): sent again once its station is (`stationBack`).
-      this.#local.outboxState(station, thread, id, result.failure.message, result.failure.status === 400, result.failure.status === undefined && unreachedCode(result.failure));
+      this.#local.outboxState(station, thread, id, result.failure.message, !restoring && result.failure.status === 400, result.failure.status === undefined && unreachedCode(result.failure));
       return yield* Effect.fail(result.failure);
     });
   }
@@ -243,6 +276,8 @@ export class ViewCalls {
       // Copied to the chat's Slack and Feishu threads ticked (`chat.cc`).
       const ccTo = views.ccTo(station, thread);
       if (ccTo.length > 0) message.cc = ccTo;
+      const restore = this.#restoreTarget(station, thread);
+      if (restore !== null) message.restore = restore;
       const id = views.outboxAdd(station, thread, message);
       return this.deliver(station, thread, id, ctx);
     };
@@ -272,6 +307,8 @@ export class ViewCalls {
       const c = call as Of<"chatSendTo">;
       return Effect.suspend((): Effect.Effect<unknown, CoreError> => {
         const message = outgoing(inner, c.station, c.text, c.attachments, c.quotes, c.client, c.uploads);
+        const restore = this.#restoreTarget(c.station, null, c.session);
+        if (restore !== null) message.restore = restore;
         const pending = local.pendingThread(c.station, c.session);
         if (typeof pending === "number") return send(c.station, pending, message, ctx);
         if (pending === null) {
@@ -295,6 +332,8 @@ export class ViewCalls {
         const entry = local.outboxGet(c.station, c.thread, c.id);
         if (entry === undefined) return Effect.fail(CoreError.invalid(t("core-misc.call.no_outbox")));
         if (entry.final === true) return Effect.fail(CoreError.invalid(t("core-misc.call.refused_for_good")));
+        const restore = this.#restoreTarget(c.station, c.thread);
+        if (typeof entry.restore !== "string" && restore !== null) local.outboxRestore(c.station, c.thread, c.id, restore);
         local.outboxState(c.station, c.thread, c.id, null);
         return this.deliver(c.station, c.thread, c.id, ctx, true);
       });

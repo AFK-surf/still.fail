@@ -17,7 +17,7 @@ const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, threadView } from "./station-fixture.ts";
+import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
@@ -578,6 +578,166 @@ test("an_iphone_app_is_a_phone_named_by_its_model_and_its_messages_say_it", asyn
   call(core, ui, 4, "chat.send", { station: "ws/st", thread: 7, text: "hi" });
   await host.settle();
   assert.equal(posted(host)[0].client, "ios 0.1.3700");
+  core.close();
+});
+
+test("sending_to_an_archived_chat_restores_it_before_delivery_and_keeps_a_failed_restore_retryable", async () => {
+  const thread = { ...threadView(7, 0), hiddenAt: 42 };
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [thread],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [], thread },
+  });
+  let restored = false;
+  let fail = true;
+  const steps: string[] = [];
+  stationReplies(host, (req) => {
+    if (req.method === "DELETE" && req.url.endsWith("/threads/7/archive")) {
+      steps.push("restore");
+      if (fail) return status(400, { error: "restore failed" });
+      restored = true;
+      return { ok: true };
+    }
+    if (req.method === "POST" && req.url.endsWith("/threads/7/messages")) {
+      assert.ok(restored, "the message cannot go before the chat is restored");
+      steps.push("send");
+      return { n: 1 };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).archived, true);
+  call(core, ui, 2, "chat.send", { station: "ws/st", thread: 7, text: "继续" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(steps, ["restore"]);
+  const pending = v(values, 1).outbox[0];
+  assert.equal(pending.text, "继续");
+  assert.equal(pending.state, "failed");
+  assert.notEqual(pending.final, true, "restoring can be retried even when the station refused it");
+  fail = false;
+  call(core, ui, 3, "chat.retry", { station: "ws/st", thread: 7, id: pending.id });
+  await host.settle();
+  assert.deepEqual(steps, ["restore", "restore", "send"]);
+  core.close();
+});
+
+test("two_messages_sent_during_a_restore_do_not_lose_the_second_if_the_first_restore_fails", async () => {
+  const thread: J = { ...threadView(7, 0), hiddenAt: 42 };
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [thread],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [], thread },
+  });
+  let attempts = 0;
+  const sent: string[] = [];
+  stationReplies(host, (req) => {
+    if (req.method === "DELETE" && req.url.endsWith("/threads/7/archive")) {
+      if (++attempts === 1) return status(400, { error: "restore failed" });
+      thread.hiddenAt = null;
+      return thread;
+    }
+    if (req.method === "POST" && req.url.endsWith("/threads/7/messages")) {
+      assert.equal(thread.hiddenAt, null);
+      sent.push(JSON.parse(new TextDecoder().decode(req.body!)).text);
+      return { n: sent.length };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  const release = host.hold("/threads/7/archive");
+  call(core, ui, 2, "chat.send", { station: "ws/st", thread: 7, text: "第一条" });
+  await host.settle();
+  call(core, ui, 3, "chat.send", { station: "ws/st", thread: 7, text: "第二条" });
+  await host.settle();
+  release();
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(sent, ["第二条"]);
+  const first = v(values, 1).outbox.find((m: J) => m.text === "第一条");
+  assert.equal(first.state, "failed");
+  assert.notEqual(first.final, true);
+  call(core, ui, 4, "chat.retry", { station: "ws/st", thread: 7, id: first.id });
+  await host.settle();
+  assert.deepEqual(sent, ["第二条", "第一条"]);
+  core.close();
+});
+
+test("sending_to_an_archived_session_without_a_thread_restores_it_after_making_its_chat", async () => {
+  const archived = { ...session("k1"), archivedAt: 42 };
+  const { host, core } = await started({
+    ...base(),
+    "GET /sessions": [archived],
+    "GET /sessions/k1": { session: archived, threads: [], turns: [], jobs: [] },
+    "GET /threads": [],
+    "GET /chats": [],
+  });
+  const steps: string[] = [];
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "POST" && path === "/threads") {
+      steps.push("make chat");
+      return threadView(7, 0);
+    }
+    if (req.method === "DELETE" && path === "/threads/7/archive") {
+      steps.push("restore");
+      return { ok: true };
+    }
+    if (req.method === "POST" && path === "/threads/7/messages") {
+      steps.push("send");
+      return { n: 1 };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).archived, true);
+  call(core, ui, 2, "chat.send", { station: "ws/st", session: "k1", text: "继续" });
+  await host.settle();
+  await host.settle();
+  assert.deepEqual(steps, ["make chat", "restore", "send"]);
+  core.close();
+});
+
+test("sending_to_an_archived_chat_uses_an_older_stations_session_restore_route", async () => {
+  const thread = { ...threadView(7, 0), hiddenAt: 42 };
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [thread],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [], thread },
+  });
+  const steps: string[] = [];
+  stationReplies(host, (req) => {
+    if (req.method === "DELETE" && req.url.endsWith("/threads/7/archive")) {
+      steps.push("thread route");
+      return status(404, { error: "no route" });
+    }
+    if (req.method === "DELETE" && req.url.endsWith("/sessions/k1/archive")) {
+      steps.push("session route");
+      return { ok: true };
+    }
+    if (req.method === "POST" && req.url.endsWith("/threads/7/messages")) {
+      steps.push("send");
+      return { n: 1 };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  call(core, ui, 2, "chat.send", { station: "ws/st", session: "k1", text: "继续" });
+  await host.settle();
+  assert.deepEqual(steps, ["thread route", "session route", "send"]);
   core.close();
 });
 

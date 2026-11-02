@@ -807,6 +807,7 @@ let en : Map[String, String] = {
   "web-main.archived.notice": "This chat is archived",
   "web-main.archived.restore": "Restore",
   "web-main.archived.restoring": "Restoring",
+  "web-main.archived.sendRestores": "Archived · Sending restores chat",
   "web-main.attention.alertOne": "Went wrong",
   "web-main.attention.dismiss": "Dismiss",
   "web-main.attention.dismissFailNote": "Dismiss: remove from your to-do list until it fails again",

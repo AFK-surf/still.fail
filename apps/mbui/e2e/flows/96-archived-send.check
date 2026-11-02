@@ -1,0 +1,1 @@
+check "the message arrived and its chat is restored" '[ "$(sql "select count(*) from entries e join thread_sessions ts on ts.thread = e.thread join sessions s on s.key = ts.session where e.author_kind = \"person\" and e.text = \"继续处理 $TAG\" and s.archived_at is null")" = 1 ]'

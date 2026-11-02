@@ -469,6 +469,24 @@ export class Local {
     this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => m.id === id ? { ...m, queued: false } : m));
   }
 
+  /// A message sent while its chat is archived must restore it before delivery. Keep that intention with the outbox
+  /// through a restart; once restored, a retry of the message must not restore it a second time.
+  outboxRestore(station: string, thread: number, id: string, session: string | null): void {
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => {
+      if (m.id !== id) return m;
+      const { restore: _, ...rest } = m;
+      return session === null ? rest : { ...rest, restore: session };
+    }));
+  }
+
+  /// Every message already waiting behind a successful restore can go without restoring the same chat again.
+  outboxRestored(station: string, thread: number): void {
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => {
+      const { restore: _, ...rest } = m;
+      return rest;
+    }));
+  }
+
   /// Persist resolved attachments before delivery, so a retry/restart never needs their source Blobs again.
   outboxUploaded(station: string, thread: number, id: string, files: J[]): void {
     const uploads = this.outboxGet(station, thread, id)?.uploads;

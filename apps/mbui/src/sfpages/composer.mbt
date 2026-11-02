@@ -28,6 +28,7 @@ pub(all) struct ComposerSpec {
   roomy : Bool
   locked : Bool
   offline : Bool
+  warm_agent : Bool
 }
 
 ///|
@@ -753,7 +754,7 @@ fn space_hint(c : @ui.Ctx, prefs : Json?, locked : Bool) -> String {
 ///|
 /// Typing starts the agent's runtime, so a cold start overlaps the writing: the first time, then a minute after the last.
 fn warm(c : @ui.Ctx, src : Source, spec : ComposerSpec) -> Unit {
-  if spec.session == "" || spec.locked || spec.offline || src.read_only {
+  if spec.session == "" || spec.locked || spec.offline || !spec.warm_agent || src.read_only {
     return
   }
   let n = composing.warmed.get(spec.session).unwrap_or(0)
@@ -2069,19 +2070,15 @@ pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false) -> Do
 ///|
 /// A chat's composer at its pane's foot (dock.tsx's chat place; cloud.css.ts composerWrap: 12 over it, 16 under it;
 /// dock.css.ts: 12 clear of the pane's sides, the column and its curve wide at most, in the middle): the chat's draft
-/// (ChatPage.tsx chatKey), what it sends going into the chat (send_in_chat), locked while the chat is archived, no
-/// file taken in while its station is down. Its place measured (composer_room). `apart`: the page a panel of its own (the
+/// (ChatPage.tsx chatKey), what it sends going into the chat (send_in_chat), no file taken in while its station is down.
+/// Its place measured (composer_room). `apart`: the page a panel of its own (the
 /// frame's tape), the composer as far from its foot as from its sides.
 pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v : ChatView?, apart? : Bool = false) -> Unit {
   let spec : ComposerSpec = {
     station: r.station,
     draft: r.station + ":" + r.session,
     session: r.session,
-    placeholder: @sf.t(if v.map(fn(v) { v.archived }).unwrap_or(false) {
-      "web-main.chat.archivedPlaceholder"
-    } else {
-      "web-main.composer.placeholder"
-    }),
+    placeholder: @sf.t("web-main.composer.placeholder"),
     toolbar: None,
     note: match v {
       Some(v) => v.cc.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
@@ -2092,14 +2089,12 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
       _ => None
     },
     roomy: false,
-    locked: match v {
-      Some(v) => v.archived
-      None => false
-    },
+    locked: false,
     offline: match v {
       Some(v) => v.offline
       None => false
     },
+    warm_agent: !v.map(fn(v) { v.archived }).unwrap_or(false),
   }
   let width = composer_width(c.width)
   let place = if apart { composer_place(c.width) } else { composer_alone }
@@ -2307,7 +2302,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
       c,
       width,
       "archive",
-      @sf.t("web-main.archived.notice"),
+      @sf.t("web-main.archived.sendRestores"),
       Some((restore, if busy { "web-main.archived.restoring" } else { "web-main.archived.restore" }, "web-main.archived.restore", busy || v.offline)),
       failed=composing.restore_errors.get(key),
       chat=key,

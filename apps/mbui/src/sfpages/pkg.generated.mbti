@@ -709,6 +709,7 @@ pub(all) struct ComposerSpec {
   roomy : Bool
   locked : Bool
   offline : Bool
+  warm_agent : Bool
 }
 
 pub(all) struct ContextEntry {
