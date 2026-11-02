@@ -15,7 +15,7 @@ test "48-share" {
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("发到")
     f.see("列表视频105609")
-    f.see("新 chat")
+    f.see("新建对话")
     f.tap("端到端测试")
     // the sheet going down as the chat comes up: the sheet's the later
     f.run_to(@kit.sheet_rest("sf-present"))

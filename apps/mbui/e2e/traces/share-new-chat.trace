@@ -52,8 +52,8 @@
 {"step":"wait 336","w":1793404743171.636}
 {"step":"now answered notify.permission","w":1793404743521.177}
 {"step":"until e2e-photo.jpg","w":1793404743537.566}
-{"step":"tap 新 chat","w":1793404743537.575}
-{"step":"tap 新 chat","acted":true,"w":1793404743537.605}
+{"step":"tap 新建对话","w":1793404743537.575}
+{"step":"tap 新建对话","acted":true,"w":1793404743537.605}
 {"out":{"id":21,"call":"newChat.pick","params":{"station":"6edf3a7241694236f3f810a4e633a2bf79635dc707b2277f4ed9031fefaabe96","scope":"01M67M179ZDTBWNYQM022CSKDR"}},"w":1793404743554.125}
 {"out":{"id":22,"subscribe":{"topic":"newChat","scope":"01M67M179ZDTBWNYQM022CSKDR"},"keyed":true},"w":1793404743554.419}
 {"out":{"id":23,"call":"client.focus","params":{"visible":true,"focused":true,"workspace":"01M67M179ZDTBWNYQM022CSKDR","newChat":"01M67M179ZDTBWNYQM022CSKDR"}},"w":1793404743556.87}

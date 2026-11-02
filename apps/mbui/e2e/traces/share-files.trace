@@ -50,7 +50,7 @@
 {"step":"wait 1385","w":1792882815171.864}
 {"step":"now answered notify.permission","w":1792882816588.478}
 {"step":"until e2e-photo.jpg","w":1792882816605.161}
-{"step":"until 新 chat","w":1792882816605.17}
+{"step":"until 新建对话","w":1792882816605.17}
 {"step":"untiln 2 端到端测试","w":1792882816605.177}
 {"step":"tap 端到端测试","w":1792882816605.185}
 {"step":"tap 端到端测试","acted":true,"w":1792882816605.248}
