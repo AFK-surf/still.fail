@@ -9,17 +9,19 @@
 
 ///|
 /// What the control keeps of its own (the pick is the core's): the one whose panel is open (its station and pick, ""
-/// none) and that panel (@sf.last_presented), the one asked open (a screen's fixture, a page's), and the borrowing it
-/// asks to confirm ("" none). Each panel keeps its own contents and filter while it is shown.
+/// none) and that panel (@sf.last_presented), the one asked open (a screen's fixture, a page's) and whether its accounts
+/// are asked open in it too (a screen's fixture), and the borrowing it asks to confirm ("" none). Each panel keeps its
+/// own contents and filter while it is shown.
 priv struct Triple {
   mut open : String
   mut shown : Int
   mut asked : String
+  mut accounts_asked : Bool
   mut borrow_asking : String
 }
 
 ///|
-let triple : Triple = { open: "", shown: 0, asked: "", borrow_asking: "" }
+let triple : Triple = { open: "", shown: 0, asked: "", accounts_asked: false, borrow_asking: "" }
 
 ///|
 /// One panel's filter, what it shows and its pick: whether all the models are shown (past those used most and
@@ -50,6 +52,7 @@ fn triple_reset() -> Unit {
   triple.open = ""
   triple.shown = 0
   triple.asked = ""
+  triple.accounts_asked = false
   triple.borrow_asking = ""
 }
 
@@ -781,7 +784,8 @@ fn triple_find_input(c : @ui.Ctx, t : @sf.Theme, contents : TriplePanel) -> Unit
 fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
   let draft = field(v, "draft")
   let who = c.id("triple/who")
-  if c.clicked(who) {
+  if c.clicked(who) || triple.accounts_asked {
+    triple.accounts_asked = false
     @sf.panel(
       @sf.t("web-main.model.account"),
       fn(c, close) { triple_accounts(c, src, station, of, close) },
@@ -1127,6 +1131,8 @@ fn triple_column_head(c : @ui.Ctx, words : String) -> Unit {
 /// A row of a column (runPickerOption): as high as the screen's picker rows at least (Theme::rows pick), 4 by 10 in, its ground under the pointer and while picked,
 /// `trail` (a button of its own, the station a model comes from) at its end, a check after it while picked (its room
 /// kept while not, as the web's hidden check; none at all with `checks` false); `tip` over it while it is pointed at.
+/// `corner`: one line high in its panel's corners (the accounts' panel, not scrolled), a capsule standing concentric
+/// with them as a menu's row does (pick_reach), past the padding at its sides and, the last (`at_foot`), its foot.
 /// True on the frame after a press.
 fn triple_option(
   c : @ui.Ctx,
@@ -1137,11 +1143,17 @@ fn triple_option(
   trail? : () -> Unit,
   tip? : String = "",
   checks? : Bool = true,
+  corner? : Bool = false,
+  at_foot? : Bool = false,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
+  let reach = if corner { @sf.menu_row_reach(t.rows.pick) } else { 0.0 }
+  let (_, under_by) = @sf.ends_reach(reach, false, at_foot)
   // (across its column, as wide as its words need at least: what the column needs, the panel's columns laid out by it)
-  let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
+  let look = (if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick)))
+  let look = if reach > 0.0 { look.then(@sf.pick_reach()).then(@ui.style(mb=@sf.room_of(under_by))) } else { look }
+  let b = c.box(style=look, id~, keep=true, fn() {
     body()
     // what is at its end, at the end: the room left (no spacer of its own, whose gap took a gap's room from the
     // words), never less than it needs; the check's room kept while it is not picked
@@ -1214,9 +1226,12 @@ fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, clo
       pick_save(src, station, of, { "profile": Json::null() })
       close()
     }
-    for a in items(v, "accounts") {
+    let accounts = items(v, "accounts")
+    for i, a in accounts {
       let a = Some(a)
       let id = text(a, "id")
+      // (one line where nothing is said of what is left of it: a capsule, standing so in the panel's foot corners)
+      let one_line = text(field(a, "quotaLine"), "text") == ""
       if triple_option(c, "triple/account/" + id, text(a, "name"), mine == id, fn() {
           c.box(style=triple_option_text, fn() {
             c.text(text(a, "name"), style=if mine == id { triple_picked } else { triple_words }) |> ignore
@@ -1236,7 +1251,7 @@ fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, clo
             }
           })
           |> ignore
-        }) {
+        }, corner=one_line, at_foot=i == accounts.length() - 1) {
         pick_save(src, station, of, { "profile": Json::string(id) })
         close()
       }
@@ -1475,16 +1490,18 @@ let triple_select_box : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 let triple_rows : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
+/// A row's ground, concentric with its small panel as a menu's row is (panel_in): a capsule 34 high, a taller row (an
+/// account with what is left of it under its name) the ladder's 18, not a capsule as round as half its height.
 // kept across runs: a value (no field of it changes)
 let triple_option_style : @ui.Style = @ui.css(
-  #|row w=Full px=S2_5 py=S1 gap=S1_5 align=ACenter radius=Full hovered{bg=Hover}
-)
+  #|row w=Full px=S2_5 py=S1 gap=S1_5 align=ACenter hovered{bg=Hover}
+).then(@ui.style(radius=@sf.panel_in))
 
 ///|
 // kept across runs: a value (no field of it changes)
 let triple_option_on : @ui.Style = @ui.css(
-  #|row w=Full px=S2_5 py=S1 gap=S1_5 align=ACenter radius=Full bg=Hover
-)
+  #|row w=Full px=S2_5 py=S1 gap=S1_5 align=ACenter bg=Hover
+).then(@ui.style(radius=@sf.panel_in))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1721,4 +1738,11 @@ pub let triple_muted_xs : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted,
 /// The control of the pick `of` on `station` with its panel open (a screen's fixture).
 pub fn open_triple(station : String, of : String) -> Unit {
   triple.asked = station + "\u{1}" + of
+}
+
+///|
+/// The same with its accounts open over it (a screen's fixture).
+pub fn open_triple_accounts(station : String, of : String) -> Unit {
+  open_triple(station, of)
+  triple.accounts_asked = true
 }

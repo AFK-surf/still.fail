@@ -10,7 +10,7 @@
 // "chat-jobs-side", "chat-history-side", "chat-service-side" (what is opened beside it: its web service's page, its bar
 // at the panel's width), "chat-tabs-side" (two of them: the history behind
 // 任务), "chat-model-pop" (its agent's model control's panel
-// open), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
+// open), "chat-model-accounts" (its accounts open over it), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
 // what its card over its picture says); "home-jobs"
 // (Home with the jobs left up a long while at its top); "home-attention" (the wide frame's 待处理 open: a decision to let
 // go, a failure looked at, a station offline); "home-syncing" (Home catching up on what changed while away: the line
@@ -25,7 +25,7 @@ pub fn decide_mode(mode : String) -> Bool {
     "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-things", "chat-things-side", "chat-info-pulls",
-    "chat-jobs-side", "chat-history-side", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
+    "chat-jobs-side", "chat-history-side", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-model-accounts", "chat-find", "chat-agent-card",
     "chat-station-tag", "home-attention", "home-syncing",
   ].contains(mode)
 }
