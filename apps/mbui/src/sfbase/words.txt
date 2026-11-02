@@ -789,6 +789,7 @@ web-main.appearance.system
 web-main.archived.notice
 web-main.archived.restore
 web-main.archived.restoring
+web-main.archived.sendRestores
 web-main.attention.alertOne
 web-main.attention.dismiss
 web-main.attention.dismissFailNote

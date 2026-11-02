@@ -230,7 +230,7 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
 /// done (the core's doing), a red mark there a few seconds if it failed.
 fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Unit {
   let p = @sf.theme().p
-  let locked = here.view.offline || here.view.archived
+  let locked = here.view.offline
   let on = [("station", here.station), ("id", o.id)]
   let retrying = core_doing(src, ["chat.retry"], on)
   let dropping = core_doing(src, ["chat.discard"], on)

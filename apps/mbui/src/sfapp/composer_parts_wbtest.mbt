@@ -253,6 +253,34 @@ test "a waiting file's card stands off the composer's frosted ground by its own 
 }
 
 ///|
+test "an archived chat says sending restores it and accepts a message without first pressing restore" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["archived"] = Json::boolean(true)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  assert_true(t.find("已归档，发送消息将还原") is Some(_))
+  assert_true(t.find("还原对话") is Some(_))
+  t.tap_text("发消息")
+  t.type_text("再看一下")
+  assert_eq(named(calls, "session.warm").length(), 0)
+  tap_send(t)
+  let sent = named(calls, "chat.send")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "text"), "再看一下")
+  assert_eq(named(calls, "chat.archive").length(), 0)
+}
+
+///|
 test "an archived chat's restore failing says why under it, in red; tapped again it is tried again" {
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {

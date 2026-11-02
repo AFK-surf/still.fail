@@ -797,6 +797,7 @@ let zh : Map[String, String] = {
   "web-main.archived.notice": "此对话已归档",
   "web-main.archived.restore": "还原对话",
   "web-main.archived.restoring": "正在还原",
+  "web-main.archived.sendRestores": "已归档，发送消息将还原",
   "web-main.attention.alertOne": "出错",
   "web-main.attention.dismiss": "忽略",
   "web-main.attention.dismissFailNote": "忽略：从待处理中移除，再出错时会重新出现",

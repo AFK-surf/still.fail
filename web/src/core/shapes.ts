@@ -2844,7 +2844,7 @@ export interface OpenedChat {
 
 /** An item's page: its chat (with the viewer's read position), or its agent before it has one. */
 export interface ChatView {
-	/** Archived chats must be restored before composing another message. */
+	/** The chat is archived; sending a message restores it. */
 	archived?: boolean;
 	/** Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned). */
 	pinned?: boolean;

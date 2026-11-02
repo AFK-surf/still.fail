@@ -652,6 +652,7 @@ fn new_composer_place(
         roomy: wide,
         locked: held || text(v, "runtime") == "" || field(v, "model") is None,
         offline: false,
+        warm_agent: false,
       }
       let name = text(station, "name")
       // (at the page's foot, laid out narrow: in a panel's foot corners as a chat's is; roomy, in the page's middle)
