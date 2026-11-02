@@ -99,18 +99,13 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
 let settings_deep : Ref[Bool] = Ref(false)
 
 ///|
-/// A dialog a fixture's mode puts up over its page (MBUI_FIXTURE=settings-policy-text, settings-security-confirm, …:
+/// A dialog a fixture's mode puts up over its page (MBUI_FIXTURE=settings-policy-text, settings-security-join, …:
 /// @settings.fixture_desk), once the page is drawn with what it needs.
 fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
     "policy-text" => @sfpages.fx_policy_up.val = "text"
     "profile-spread" => @sfpages.fx_spread_up.val = true
     "policy-option" => @sfpages.fx_policy_up.val = "option"
-    "lock-confirm" =>
-      match items((core.topic)("lock", { "workspace": Json::string("ws1") }).value, "requests") {
-        [r, ..] => confirm_dialog(core, "ws1", r)
-        _ => ()
-      }
     "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "local-fonts" => @sfpages.local_open.val = true

@@ -4739,20 +4739,13 @@ export interface LockMe {
 	kind: string;
 	confirmed: boolean;
 	daysLeft?: number;
-	/** Not in the lock, it asked or a station refused it: it waits to be confirmed. */
+	/** Not in the lock: it waits to be approved face to face (`lock.pair`). */
 	waiting: boolean;
 	/**
 	 * In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since
 	 * lost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`).
 	 */
 	unsigned?: boolean;
-	/** Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down. */
-	asked?: boolean;
-	/**
-	 * Why its request to be confirmed did not reach the cloud (its key could not be kept, the cloud refused it):
-	 * said on its waiting page, asked again by hand (`lock.request`).
-	 */
-	failed?: string;
 	/** Its try to be approved face to face (or made one that signs), once it began (`lock.pair`). */
 	pair?: LockPair;
 }
@@ -4809,26 +4802,6 @@ export interface LockPromptsView {
 	pairing: LockPairing[];
 }
 
-/** A device waiting to be confirmed. */
-export interface LockRequest {
-	device: string;
-	sub: string;
-	email: string;
-	name: string;
-	kind: string;
-	label: string;
-	/** The code the device shows: compared before it is confirmed. */
-	code: string;
-	created_at: number;
-	yours: boolean;
-	/** Whose it is: their name, or their email. */
-	whoText: string;
-	/** Its name as people know it (LockDevice `fullText`). */
-	deviceText: string;
-	/** Its times in words (`created_at`). */
-	time?: Record<string, Stamp>;
-}
-
 /** A station of the workspace and whether the lock protects it. */
 export interface LockStation {
 	id: string;
@@ -4858,8 +4831,6 @@ export interface LockView {
 	members: LockPerson[];
 	stations: LockStation[];
 	protected: number;
-	/** Devices waiting on the viewer: their own, anyone's for owners and admins. */
-	requests: LockRequest[];
 	/** The viewer's own web devices running out soon. */
 	renew: LockDevice[];
 	attention: number;

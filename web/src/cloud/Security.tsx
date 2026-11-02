@@ -16,8 +16,8 @@ import { WorkspaceBadge } from "../WorkspaceMark.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Security.css.ts";
 
-export type { LockDevice, LockPairing, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
-import type { LockDevice, LockPairing, LockPromptsView, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
+export type { LockDevice, LockPairing, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
+import type { LockDevice, LockPairing, LockPromptsView, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
 import { sampleLock, sampleLockDraft } from "../samples.ts";
 
 // A function, not a table made as the module loads: words are the page's language when shown (and the site's
@@ -84,7 +84,6 @@ function Off({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
 function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
   const call = useCall();
   const act = useAct();
-  const [checking, setChecking] = useState<LockRequest | null>(null);
   const [off, setOff] = useState(false);
   const [joining, setJoining] = useState<LockStation | null>(null);
   const [removing, setRemoving] = useState<LockDevice | null>(null);
@@ -104,22 +103,6 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
           <div className={css.state}>{t(lock.me.unsigned ? "web-pages.security.upgradeTitle" : "web-pages.security.waitingTitle")}</div>
           <PairSteps entry={entry} lock={lock} />
         </div>
-      )}
-      {lock.requests.length > 0 && (
-        <Section title={<>{t("web-pages.security.waiting")} <span className={css.count}>{lock.requests.length}</span></>}>
-          <div className={pagesCss.card}><div className={css.rows}>
-            {lock.requests.map((r) => (
-              <div key={r.device} className={css.row}>
-                <div className={css.rowText}>
-                  <span className={css.rowName}>{t("web-pages.security.newDeviceOf", { name: r.whoText })}</span>
-                  <span className={css.rowMeta}>{r.deviceText} · <Time stamp={stamp(r, "created_at")} /></span>
-                </div>
-                <span className={css.code}>{r.code}</span>
-                {lock.signs && <Button variant="primary" onClick={() => setChecking(r)}>{t("web-pages.security.check")}</Button>}
-              </div>
-            ))}
-          </div></div>
-        </Section>
       )}
       <Section title={t("web-pages.security.people")}>
         <div className={pagesCss.card}><div className={css.rows}>
@@ -154,7 +137,6 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} title={removing ? t("web-pages.security.removeTitle", { name: removing.fullText }) : ""}
         description={t("web-pages.security.removeBody")} action={t("web-pages.security.remove")}
         onConfirm={() => { const d = removing; setRemoving(null); if (d) act(call("lock.removeDevice", { workspace: entry.id, device: d.id }), t("web-pages.security.remove"), t("web-pages.security.removed")); }} />
-      <ConfirmDevice entry={entry} request={checking} onClose={() => setChecking(null)} />
       {off && <TurnOff entry={entry} onClose={() => setOff(false)} />}
     </>
   );
@@ -220,26 +202,6 @@ function DeviceRow({ entry, d, canRenew, onRemove }: { entry: WorkspaceEntry; d:
       {d.daysLeft != null && canRenew && <Button variant="ghost" busy={renewing} onClick={() => act(call("lock.renew", { workspace: entry.id, device: d.id }), t("web-pages.security.renew"), t("web-pages.security.renewed"))}>{t("web-pages.security.renew")}</Button>}
       {d.removable && <Button variant="ghost" busy={removing} onClick={onRemove}>{t("web-pages.security.remove")}</Button>}
     </div>
-  );
-}
-
-/** A waiting device, confirmed once its code is the one on its screen. */
-function ConfirmDevice({ entry, request, onClose }: { entry: WorkspaceEntry; request: LockRequest | null; onClose(): void }) {
-  const call = useCall();
-  const act = useAct();
-  const r = request;
-  return (
-    <Dialog open={r !== null} onClose={onClose} title={r ? t("web-pages.security.confirmTitle", { name: r.whoText }) : ""}
-      description={r ? t("web-pages.security.confirmBody", { device: r.deviceText, name: r.whoText }) : ""}
-      footer={r && <>
-        <Button variant="ghost" onClick={() => { onClose(); act(call("lock.deny", { workspace: entry.id, device: r.device }), t("web-pages.security.denyDevice")); }}>{t("web-pages.security.deny")}</Button>
-        <Button variant="primary" onClick={() => { onClose(); act(call("lock.confirm", { workspace: entry.id, device: r.device, code: r.code }), t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed")); }}>{t("web-pages.security.confirm")}</Button>
-      </>}>
-      {r && <>
-        <div className={css.bigCode}>{r.code}</div>
-        <p className={css.note} style={{ textAlign: "center" }}>{r.kind === "web" ? t("web-pages.security.confirmWeb") : t("web-pages.security.confirmApp")}</p>
-      </>}
-    </Dialog>
   );
 }
 
@@ -424,8 +386,8 @@ function PairSteps({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
       </>}
   </> : pair?.state === "finding" || asking ? <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairFinding")}</div>
     : <>
-      <div className={pair?.state === "failed" || lock.me?.failed ? css.waitingFailed : css.waitingNote}>
-        {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t(lock.me?.unsigned ? "web-pages.security.upgradeNotAsked" : "web-pages.security.notAsked")}
+      <div className={pair?.state === "failed" ? css.waitingFailed : css.waitingNote}>
+        {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : t(lock.me?.unsigned ? "web-pages.security.upgradeNotAsked" : "web-pages.security.notAsked")}
       </div>
       <div className={css.actions}><Button variant="primary" onClick={() => ask()}>{t("web-pages.security.request")}</Button></div>
     </>;

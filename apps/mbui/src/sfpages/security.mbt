@@ -243,13 +243,11 @@ fn sec_end_words(c : @ui.Ctx, look : Look, words : String, warn? : Bool = false)
 
 ///|
 /// On (On): its state with how many sign and what it protects, what that means; this device's own pairing where it
-/// waits or was let in without signing; the devices waiting (each with its code, 核对 where this device signs); its
-/// people and their devices; its stations; what a web page may do; 关闭安全模式.
+/// waits or was let in without signing; its people and their devices; its stations; what a web page may do; 关闭安全模式.
 fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> Array[() -> Unit] {
   let ws = here.workspace
   let signs = flag(lock, "signs")
   let me = field(lock, "me")
-  let requests = items(lock, "requests")
   let blocks : Array[() -> Unit] = [
     fn() {
       sec_lead_card(c, look, fn() {
@@ -288,30 +286,6 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
         )
         |> ignore
         pair_steps(c, core, ws, in_card=true)
-      })
-    })
-  }
-  if requests.length() > 0 {
-    blocks.push(fn() {
-      sec_section(c, look, @sf.t("web-pages.security.waiting"), count=requests.length(), fn() {
-        sec_group(c, look, fn() {
-          for r in requests {
-            let rv = Some(r)
-            sec_line(
-              c,
-              look,
-              @sf.t("web-pages.security.newDeviceOf", args=[("name", text(rv, "whoText"))]),
-              note=text(rv, "deviceText") + " · " + stamp(rv, "created_at", "ago"),
-              drops=true,
-              end=fn() {
-                c.box(style=sec_code, fn() { @settings.mono(c, text(rv, "code"), style=sec_code_words) }) |> ignore
-                if signs && sec_do(c, look, "request/" + text(rv, "device"), @sf.t("web-pages.security.check"), primary=true) {
-                  confirm_dialog(core, ws, r)
-                }
-              },
-            )
-          }
-        })
       })
     })
   }
@@ -688,53 +662,6 @@ fn sec_check_line(c : @ui.Ctx, look : Look, key : String, title : String, note :
 }
 
 ///|
-/// A waiting device, confirmed once its code is the one on its screen (Security.tsx ConfirmDevice): who and what it
-/// is, its code large, 拒绝 and 确认; gone once answered on another device.
-pub fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
-  let rv = Some(r)
-  let device = text(rv, "device")
-  let code = text(rv, "code")
-  let who = text(rv, "whoText")
-  open_dialog(
-    @sf.t("web-pages.security.confirmTitle", args=[("name", who)]),
-    description=@sf.t("web-pages.security.confirmBody", args=[
-      ("device", text(rv, "deviceText")),
-      ("name", who),
-    ]),
-    fn(c, shut) {
-      let lock = (core.topic)("lock", { "workspace": str(ws) }).value
-      if lock is Some(_) && !items(lock, "requests").iter().any(fn(x) { text(Some(x), "device") == device }) {
-        shut()
-      }
-      c.box(style=sec_big_code_box, fn() { @settings.mono(c, code, style=sec_big_code, center=true) }) |> ignore
-      let says = if text(rv, "kind") == "web" {
-        "web-pages.security.confirmWeb"
-      } else {
-        "web-pages.security.confirmApp"
-      }
-      c.text(@sf.t(says), style=sec_note_centred) |> ignore
-    },
-    fn(c, shut) {
-      if @sf.button(c, @sf.t("web-pages.security.deny"), key="lock-deny", tone=Ghost) {
-        shut()
-        lock_call(core, ws, "deny", @sf.t("web-pages.security.denyDevice"), [("device", device)])
-      }
-      if @sf.button(c, @sf.t("web-pages.security.confirm"), key="lock-confirm", tone=Primary) {
-        shut()
-        lock_call(
-          core,
-          ws,
-          "confirm",
-          @sf.t("web-pages.security.confirmDevice"),
-          [("device", device), ("code", code)],
-          done=@sf.t("web-pages.security.confirmed"),
-        )
-      }
-    },
-  )
-}
-
-///|
 /// A station of the workspace not in the lock, taken in once its owner says it is theirs (Security.tsx's join dialog).
 pub fn join_dialog(core : Core, ws : String, station : String, name : String) -> Unit {
   @sf.confirm(
@@ -808,26 +735,6 @@ fn sec_off_point(c : @ui.Ctx, icon : String, words : String) -> Unit {
   })
   |> ignore
 }
-
-///|
-/// A device's code large (Security.css.ts bigCode: the display size, a line 1.3 of it, 6 apart, 600, 6 over and under).
-// kept across runs: a value (no field of it changes)
-let sec_big_code_box : @ui.Style = @ui.css("w=Full my=S1_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let sec_big_code : @ui.TextStyle = @ui.text_style(
-  size=@sf.code_big_size,
-  weight=Semibold,
-  color=Fg,
-  tracking=@sf.code_big_tracking,
-  wrap=false,
-)
-
-///|
-/// A note under it, in the middle (Security.css.ts note, centred).
-// kept across runs: a value (no field of it changes)
-let sec_note_centred : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full, center=true)
 
 ///|
 /// The sizes: what it changes, its marks 18 in a column of 20; a device's mark 16.
@@ -990,19 +897,7 @@ let sec_over_apart : @ui.Style = @ui.css("w=Full pt=S1_5")
 let sec_over_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// A short code as the device shows it (code: the code face 14 in 600, 9 in, as tall as a row (so at a card's first or
-/// last row's end, in its corner, as far from its top or foot as from its side), the ladder's small corner (10), the words at 6%); the count of
-/// those waiting (count: the meta's 12 in 500 on the accent's ground, 7 in, round).
-// kept across runs: a value (no field of it changes)
-let sec_code : @ui.Style = @ui.css("px=S2 bg=Tint justify=JCenter").then(
-  @ui.style(h=Fixed(sec_row_least), radius=@sf.small_radius),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let sec_code_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, wrap=false)
-
-///|
+/// The count of those waiting (count: the meta's 12 in 500 on the accent's ground, 7 in, round).
 // kept across runs: a value (no field of it changes)
 let sec_count : @ui.Style = @ui.css("px=S1_5 radius=Full bg=AccentBg")
 

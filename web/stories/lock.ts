@@ -57,7 +57,7 @@ function view(story: LockStory): LockView {
       sub: "demo-you", email: "you@acme.dev", name: "你", role: "owner", you: true, nameText: "你", roleText: "Owner",
       groups: GROUPS.map((g) => ({ ...g, devices: g.devices.map((d) => ({ ...d, mine: d.id === "d_demo", removable: !waits && d.id !== "d_demo" })) })),
     }],
-    stations, protected: stations.filter((s) => s.protected).length, requests: [], renew: [], attention: 0,
+    stations, protected: stations.filter((s) => s.protected).length, renew: [], attention: 0,
   };
 }
 

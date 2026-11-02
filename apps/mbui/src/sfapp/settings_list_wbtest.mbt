@@ -120,8 +120,8 @@ test "the settings' list: how things stand at each row's end, what is wrong in r
     platform=2,
   )
   t.run_for(@ui.move_most_ms)
-  // (the settings' fixture: a device waiting in security mode, a secret's use asked, a station off, a connect failing)
-  for said in ["1 件待处理", "1 个待批准", "1/2 在线", "1 个出错", "浅色"] {
+  // (the settings' fixture: security mode on, a secret's use asked, a station off, a connect failing)
+  for said in ["已开启", "1 个待批准", "1/2 在线", "1 个出错", "浅色"] {
     assert_true(t.find(said) is Some(_), msg=said)
   }
   // a phone's: its bottom bar, no keys, no station of its own
