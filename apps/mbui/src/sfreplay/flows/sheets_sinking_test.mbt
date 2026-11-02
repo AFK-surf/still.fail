@@ -1,5 +1,5 @@
 // 51-sheets-sinking (e2e/traces/sheets-sinking.trace): what leaves is only drawn: the workspaces' sheet let go of (its
-// scrim tapped), the bar's 文件 tapped under it as it sinks opens 文件; then the chat's own sheet ("…") let go of, and
+// scrim tapped), the bar's 文件 tapped under it as it sinks opens 文件; then the chat's own sheet (ⓘ) let go of, and
 // the composer tapped through it as it goes down takes the words, sent; nothing of the sheet was tapped on the way (no
 // chat.pin asked).
 
@@ -21,9 +21,8 @@ test "51-sheets-sinking" {
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
     f.see("发消息")
-    f.tap("icon:more")
+    f.tap("icon:info")
     f.run_to(@kit.sheet_rest("sf-present"))
-    f.see("=固定到列表顶部")
     // its scrim tapped, and the composer tapped through it as it goes down: the words typed there, sent
     f.tap_at(195.0, 60.0)
     f.tap_at(120.0, -36.0)

@@ -314,22 +314,25 @@ test "a Slack user's name in a history: 这是我 binds them to the viewer (slac
 }
 
 ///|
-test "the chat's sheet: one from Slack or Feishu opens there" {
-  let calls : Array[Made] = []
-  let t = edited_core(calls, "chat-info", fn(name, v) {
-    if name == "chat" {
-      with_fields(v, [
-        ("slackUrl", "https://example.slack.com/archives/C1/p1"),
-        ("feishuUrl", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
-      ])
-    } else {
-      v
-    }
-  })
-  t.tap_text("在飞书中打开")
-  assert_true(t.opened().contains("https://example.feishu.cn/client/chat/open?openChatId=oc_1"))
-  t.tap_text("在 Slack 中打开")
-  assert_true(t.opened().contains("https://example.slack.com/archives/C1/p1"))
+test "the chat's menu: one from Slack or Feishu opens there" {
+  for (words, url) in [
+    ("在飞书中打开", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
+    ("在 Slack 中打开", "https://example.slack.com/archives/C1/p1"),
+  ] {
+    let calls : Array[Made] = []
+    let t = edited_core(calls, "chat-actions", fn(name, v) {
+      if name == "chat" {
+        with_fields(v, [
+          ("slackUrl", "https://example.slack.com/archives/C1/p1"),
+          ("feishuUrl", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
+        ])
+      } else {
+        v
+      }
+    })
+    t.tap_text(words)
+    assert_true(t.opened().contains(url), msg=words)
+  }
 }
 
 ///|

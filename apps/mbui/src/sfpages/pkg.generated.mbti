@@ -65,6 +65,8 @@ pub fn changelog_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn chat_composer(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, apart? : Bool) -> Unit
 
+pub fn chat_extra_items(@sfbase.Source, @sfbase.ChatRef, Json?) -> Array[@sf.MenuItem?]
+
 pub fn chat_find_list(@sfbase.ChatRef) -> FindList
 
 pub fn chat_key(@sfbase.ChatRef) -> String
@@ -365,6 +367,8 @@ pub fn notify_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Un
 
 pub fn offered_image() -> String
 
+pub fn open_chat_menu(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?], from~ : @sf.Beside) -> Unit
+
 pub fn open_context_actions(@sfbase.Source, String, String, Json?, @sf.Beside) -> Unit
 
 pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) -> Unit, description? : String, wide? : Bool, live? : () -> (String, String, String), on_gone? : () -> Unit, steps? : Bool, back? : () -> Unit) -> Unit
@@ -508,6 +512,8 @@ pub let row_last : @ui.Style
 pub fn row_mark(@ui.Ctx, String, String) -> Unit
 
 pub let row_more : @ui.Style
+
+pub fn rows_frame(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
 

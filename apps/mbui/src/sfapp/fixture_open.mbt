@@ -137,6 +137,18 @@ fn open_decide_panels(mode : String, src : Source) -> Unit {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   match mode {
     "chat-info" | "chat-letters-info" | "chat-info-pulls" | "chat-opener-info" | "chat-opened-info" => open_info(src, r)
+    // what is done with it, from its "…": the menu a row of the list has, the page's own among it
+    "chat-actions" => {
+      // (before the app says its words as it starts: the menu's are said here)
+      @sf.set_words(fill)
+      @sfpages.open_chat_menu(
+        src,
+        "ws1",
+        r,
+        @sfpages.chat_extra_items(src, r, (src.topic)("chat", chat_params(r)).value),
+        from=@sf.at_point(195.0, 800.0),
+      )
+    }
     "chat-letters" | "chat-letters-many" => open_letters(src, r, 7.0)
     // what was said in it besides words (sfpages things.mbt), from its info
     "chat-things" => open_things(src, r, 7.0)

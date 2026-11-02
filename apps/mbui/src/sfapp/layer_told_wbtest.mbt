@@ -88,11 +88,11 @@ test "⌘K in one kind's list, Escape: back to all of them, still open, as the k
 }
 
 ///|
-/// The fixture's chat on a phone, its picture's page open (分享图片 on the chat's sheet), at rest; `preview` and
+/// The fixture's chat on a phone, its picture's page open (opened as 分享图片 in the chat's "…" does), at rest; `preview` and
 /// `finish` as publish_core's.
 fn publish_shown(preview? : () -> Json = fix_preview, finish? : Bool = true) -> @ui.Tester {
-  let t = publish_core([], preview~, finish~)
-  t.tap_text("分享图片")
+  let t = publish_core([], preview~, finish~, menu=true)
+  open_publish_page()
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   t.run_for(@ui.move_most_ms)
@@ -108,10 +108,8 @@ test "分享图片's page dismissed by back: closed as back is taken; the frame 
   t.draw()
   seen.push(@sfpages.publish_open())
   t.run_for(@kit.pop_out_ms)
-  // (opened again as it was: the chat's sheet from its bar, 分享图片 on it)
-  t.click(Button, label="对话信息")
-  t.run_for(@ui.move_most_ms)
-  t.tap_text("分享图片")
+  // (opened again as it was)
+  open_publish_page()
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   seen.push(@sfpages.publish_open())

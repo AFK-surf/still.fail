@@ -142,10 +142,10 @@ fn bar_action(id : String, title : String, icon : String, act : () -> Unit, raw?
     Some(i) => nav_page.remove(i) |> ignore
     None => ()
   }
-  // Even the short system column needs one entry to the chat's complete menu. (Read as the page is built: the column
+  // Even the short system column needs its entries to the chat's info and menu. (Read as the page is built: the column
   // come to be short or no longer, what built it builds again and hands as it is now, what it handed before not left
   // in the bars.)
-  if !@sf.native_on() || (column_short.get() && id != "chat/info") {
+  if !@sf.native_on() || (column_short.get() && id != "chat/info" && id != "chat/more") {
     return false
   }
   let data = match raw {
@@ -161,7 +161,14 @@ fn bar_action(id : String, title : String, icon : String, act : () -> Unit, raw?
 /// side panel's switch (opening the first agent's history, or closing all its tabs), archiving it where it may be.
 /// In place of its buttons (who is in it and where it runs stay by its
 /// title, as the desktop's); false where there are no system's bars (the page draws its own).
-fn bar_chat(src : Source, r : ChatRef, agents : Array[Agent], info : () -> Unit, archive : (() -> Unit)?) -> Bool {
+fn bar_chat(
+  src : Source,
+  r : ChatRef,
+  agents : Array[Agent],
+  info : () -> Unit,
+  more : () -> Unit,
+  archive : (() -> Unit)?,
+) -> Bool {
   if !@sf.native_on() {
     return false
   }
@@ -171,6 +178,7 @@ fn bar_chat(src : Source, r : ChatRef, agents : Array[Agent], info : () -> Unit,
     nav_page.retain(fn(p) { !bar_chat_carried.contains(p.0.id) })
     bar_chat_carried.clear()
   }
+  bar_action("chat/more", @sf.t("common.more"), "more", more) |> ignore
   bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
   let (tabs, _) = side_now(src, r)
   let icon = if tabs.length() > 0 { "panel-close" } else { "panel-open" }
@@ -207,7 +215,7 @@ fn bar_chat_waiting() -> Bool {
   }
   for item in bar_chat_last {
     // (as bar_action hands them: the short column the info alone)
-    if column_short.get() && item.id != "page/chat/info" {
+    if column_short.get() && item.id != "page/chat/info" && item.id != "page/chat/more" {
       continue
     }
     if !nav_page.iter().any(fn(p) { p.0.id == item.id }) {
