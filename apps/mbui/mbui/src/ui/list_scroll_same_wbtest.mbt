@@ -43,13 +43,14 @@ fn same_old(n : Int, platform : Int) -> Tester {
 
 ///|
 /// A column of the window's tree scrolling as a page's list, the window's whole, holding `n` rows 50 high as same_old's,
-/// with its bar where `bar` says, there while `shown` says: its scroll.
+/// under as much as `above` says of nothing, with its bar where `bar` says, there while `shown` says: its scroll.
 fn same_tree(
   n : Int,
   platform : Int,
   pointing? : Pointing,
   bar? : Bool = false,
   shown? : @signals.Signal[Bool] = @signals.signal(true),
+  above? : @signals.Signal[Double] = @signals.signal(0.0),
 ) -> (Tester, @view.Scroll) {
   let s = @view.Scroll::list()
   let t = Tester::new(fn(_c) {  }, platform~, pointing?)
@@ -59,6 +60,7 @@ fn same_tree(
       .width(Is(Some(390.0)))
       .height(Is(Some(844.0)))
       .scrolls(s, bar?=if bar { Some(tree_scroll_bar()) } else { None }, fn(body) {
+        body.box(fn(gap) { gap.height(By(fn() { Some(above.get()) })) |> ignore }) |> ignore
         for i in 0..<n {
           body.box(fn(row) {
             row.height(Is(Some(50.0))).ground(Is(0xEEEEEEFFL)).radius(Is(12.0)).clips(Is(true)).row(Is(true)) |> ignore

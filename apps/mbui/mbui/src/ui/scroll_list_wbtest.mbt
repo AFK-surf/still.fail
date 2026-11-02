@@ -1,7 +1,9 @@
 // A page's list on the window's tree (Scroll::list) by itself: flung into its end, where it is, how far it shows past
 // it and what is drawn of it at each moment the same at 60 Hz, at 120 Hz or in one jump to each (where it meets its end
 // worked out as it is let go, not found at a frame); what goes back past an end gone with it as it goes; its bar on its
-// own track while what it holds is stretched (list_scroll_same_wbtest.mbt holds it to an old view's list).
+// own track while what it holds is stretched; grown above what is in sight as it moves by itself, what is in sight
+// staying where it is drawn and what moves it going on to its end moved as much (list_scroll_same_wbtest.mbt holds it
+// to an old view's list).
 
 ///|
 /// How far apart the moments it is looked at are (met_at): on the grid of the display's frames at 60 and at 120 Hz.
@@ -126,4 +128,77 @@ test "Android: a page's list pulled past its foot, its rows stretched: its bar o
   assert_true(at_foot.length() > 0, msg="no bar drawn")
   assert_true(rows != stretched, msg="its rows not stretched")
   assert_eq(past, at_foot)
+}
+
+///|
+/// How long a page's list is left to move by itself before what it holds grows above what is in sight, and by how much.
+let grown_after_ms : Double = 100.0
+
+///|
+let grown_by : Double = 120.0
+
+///|
+/// Long enough for what it moves by to be over.
+let grown_rest_ms : Double = 3000.0
+
+///|
+/// A page's list on `platform` set moving by `hand`, grown `by` above what is in sight `grown_after_ms` on (0: not): what
+/// is drawn of its rows and where it is drawn then, as it was just before, when it is at rest as said then and where it
+/// comes to rest.
+fn grown(
+  platform : Int,
+  hand : (Tester) -> Unit,
+  by : Double,
+) -> (Array[Array[Double]], Array[Array[Double]], Double, Double, Double?, Double?, Double) {
+  let above = @signals.signal(0.0)
+  let (t, s) = same_tree(100, platform, above~)
+  hand(t)
+  t.draw()
+  let tree = view_tree().unwrap()
+  t.run_for(grown_after_ms)
+  let was = same_drawn(t)
+  let x = s.drawn(tree)
+  let rest = s.glides_till()
+  if by != 0.0 {
+    above.set(by)
+    s.grew_above(by)
+  }
+  t.draw()
+  let now = same_drawn(t)
+  let y = s.drawn(tree)
+  let rest_now = s.glides_till()
+  t.run_for(grown_rest_ms)
+  (was, now, x, y, rest, rest_now, s.at(tree))
+}
+
+///|
+test "a page's list grown above what is in sight as it moves by itself: what is in sight stays where it is drawn, what moves it goes on, moved as much" {
+  let hands : Array[(String, (Tester) -> Unit)] = [
+    ("flung", fn(t) { swipe(t, 700.0, -10.0, 6) }),
+    (
+      "the wheel's notches",
+      fn(t) {
+        t.wheel_phase(200.0, 400.0, 40.0, 4)
+        t.advance(same_notch_ms)
+        t.wheel_phase(200.0, 400.0, 40.0, 4)
+      },
+    ),
+  ]
+  for platform in [0, 1, 2] {
+    for h in hands {
+      let (name, hand) = h
+      let (was, now, x, y, rest, rest_now, end) = grown(platform, hand, grown_by)
+      let (_, _, _, _, _, _, end_alone) = grown(platform, hand, 0.0)
+      assert_true(rest is Some(_), msg="\{platform} \{name}: not moving by itself")
+      let alike = was.length() > 0 &&
+        was.length() == now.length() &&
+        (0).until(was.length()).iter().all(fn(i) {
+          (0).until(was[i].length()).iter().all(fn(j) { (was[i][j] - now[i][j]).abs() <= 1.0e-6 })
+        })
+      assert_true(alike, msg="\{platform} \{name}: drawn \{was[:imin(2, was.length())]}, grown \{now[:imin(2, now.length())]}")
+      assert_true((y - (x + grown_by)).abs() < 1.0e-6, msg="\{platform} \{name}: at \{y}, was \{x}")
+      assert_eq(rest_now, rest, msg="\{platform} \{name}")
+      assert_true((end - (end_alone + grown_by)).abs() < 1.0e-6, msg="\{platform} \{name}: at rest at \{end}, not grown \{end_alone}")
+    }
+  }
 }
