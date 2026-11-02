@@ -95,11 +95,12 @@ hermesc() {
   echo "$OUT/hermesc/package/$bin"
 }
 
-# core.hbc's stamp: the bundle's inputs (esbuild's metafile), the entry and hermesc, by mtime and size
+# core.hbc's stamp: its source checkout, the bundle's inputs (esbuild's metafile), the entry and hermesc.
+# A shared build directory may be used by several checkouts: the old metafile still points into the first one.
 hbc_stamp() {
-  "$PY" - "$OUT/core-hermes.meta.json" "${ENTRY:-$ROOT/core/hermes.ts}" "$1" <<'PY'
+  "$PY" - "$OUT/core-hermes.meta.json" "${ENTRY:-$ROOT/core/hermes.ts}" "$1" "$EMBER" <<'PY'
 import json, os, sys
-meta, entry, hermesc = sys.argv[1:4]
+meta, entry, hermesc, checkout = sys.argv[1:5]
 try:
     inputs = sorted(json.load(open(meta))['inputs'])
 except (OSError, ValueError, KeyError):
@@ -110,7 +111,7 @@ def st(p):
         return [s.st_mtime_ns, s.st_size]
     except OSError:
         return None
-print(json.dumps({'entry': entry, 'hermesc': [hermesc, st(hermesc)], 'inputs': {p: st(p) for p in inputs}}))
+print(json.dumps({'checkout': os.path.realpath(checkout), 'entry': entry, 'hermesc': [hermesc, st(hermesc)], 'inputs': {p: st(p) for p in inputs}}))
 PY
 }
 
@@ -157,8 +158,9 @@ hermes() {
     return 0
   fi
   have_deps
-  # the same inputs as the last build's: that build's core.hbc
-  if [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null)" = "$(cat $OUT/core.hbc.stamp)" ]; then
+  # With a clean Git tree the content key decides reuse; a missing key cannot fall back to an older timestamp stamp.
+  # Without a content key, use the last build only when its checkout and inputs still match.
+  if [ -z "$key" ] && [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null)" = "$(cat $OUT/core.hbc.stamp)" ]; then
     echo "hermes: core.hbc as it was (its inputs unchanged)"
     return 0
   fi
