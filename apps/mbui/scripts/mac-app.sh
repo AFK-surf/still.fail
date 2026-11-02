@@ -20,6 +20,9 @@
 # apple's: the shell as still.fail's natives have it for its sources (shell-apple), the engine and core.hbc made when
 # stale.
 set -eo pipefail
+# (a command that fails with nothing said, said by where it was: main 199e1d03's desktop stopped between the build and
+# the signing with no word, 41399442984, 2026-11-02)
+trap 'echo "mac-app.sh: line $LINENO failed ($?): $BASH_COMMAND" >&2' ERR
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
