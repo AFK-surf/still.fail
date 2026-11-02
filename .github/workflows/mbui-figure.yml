@@ -1,0 +1,71 @@
+# Ready-to-run mbui renderers: source changes select a new version, scene and drive data do not.
+name: mbui-media-runtime
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/mbui/src/**"
+      - "apps/mbui/mbui/src/**"
+      - "apps/mbui/mbui/tools/**"
+      - "apps/mbui/mbui/scripts/**"
+      - "apps/mbui/moon.mod"
+      - "apps/mbui/moon.work"
+      - "apps/mbui/mbui/moon.mod"
+      - "apps/mbui/scripts/env.sh"
+      - "apps/mbui/scripts/mbui.sh"
+      - "apps/mbui/scripts/mac.sh"
+      - "apps/mbui/scripts/figure*.sh"
+      - "apps/mbui/scripts/media*.sh"
+      - "scripts/native.ts"
+      - ".github/workflows/mbui-figure.yml"
+      - ".github/actions/mbui-moonbit/**"
+  workflow_dispatch:
+concurrency:
+  group: mbui-figure-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
+jobs:
+  renderer:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 5
+    permissions:
+      contents: write # On main only, publish the tested part to the existing native-artifacts release.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Build and check the renderer
+        run: |
+          renderer=$(node scripts/native.ts file mbui-figure darwin-arm64)
+          cd apps/mbui
+          MBUI_FIGURE_RUNTIME="$renderer" bash scripts/figure-scene-test.sh
+          MBUI_FIGURE_RUNTIME="$renderer" bash scripts/figure-prebuilt-test.sh
+          bash scripts/media-job-test.sh
+      - name: Publish the tested renderer
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/native.ts ensure --publish mbui-figure:darwin-arm64
+  film:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Build and check the scene renderer
+        run: |
+          renderer=$(node scripts/native.ts file mbui-film darwin-arm64)
+          cd apps/mbui
+          MBUI_MEDIA_RUNTIME="$renderer" bash scripts/media-test.sh
+          MBUI_MEDIA_RUNTIME="$renderer" bash scripts/media-prebuilt-test.sh
+      - name: Publish the tested renderer
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/native.ts ensure --publish mbui-film:darwin-arm64

@@ -8,7 +8,24 @@ fn figure_valid(name : String, path : String) -> Bool {
 
 ///|
 fn figure_usage() -> Unit {
-  @film.say("figure: MBUI_FIGURE=wrap|align|wrap-normal|wrap-reverse|align-edge|align-text MBUI_FIGURE_OUT=<out.png> [MBUI_FIGURE_FONT=<font.ttf>]")
+  @film.say("figure: MBUI_FIGURE=wrap|align|wrap-normal|wrap-reverse|align-edge|align-text or MBUI_FIGURE_SCENE=<scene.json>; MBUI_FIGURE_OUT=<out.png> [MBUI_FIGURE_FONT=<font.ttf>]")
+}
+
+///|
+fn figure_initialize(font : String) -> Unit {
+  let font_ok = if font == "" {
+    match @sfbase.bundled_ui_face() {
+      Some(bytes) => @ui.face_add_bytes(@hostapi.face_ui, bytes)
+      None => false
+    }
+  } else {
+    @ui.face_add(@hostapi.face_ui, font)
+  }
+  if !font_ok {
+    @film.say(if font == "" { "figure: could not load the bundled UI face" } else { "figure: could not load font \{font}" })
+    @film.exit(1)
+  }
+  @sf.set_dark(Some(true))
 }
 
 ///|
@@ -19,19 +36,7 @@ fn figure(name : String, path : String, font : String) -> Bool {
   let initialized = Ref(false)
   let view = fn(c : @ui.Ctx) {
     if !initialized.val {
-      let font_ok = if font == "" {
-        match @sfbase.bundled_ui_face() {
-          Some(bytes) => @ui.face_add_bytes(@hostapi.face_ui, bytes)
-          None => false
-        }
-      } else {
-        @ui.face_add(@hostapi.face_ui, font)
-      }
-      if !font_ok {
-        @film.say(if font == "" { "figure: could not load the bundled UI face" } else { "figure: could not load font \{font}" })
-        @film.exit(1)
-      }
-      @sf.set_dark(Some(true))
+      figure_initialize(font)
       initialized.val = true
     }
     match name {
@@ -49,9 +54,38 @@ fn figure(name : String, path : String, font : String) -> Bool {
 }
 
 ///|
+fn figure_scene(scene : @sfgraphic.GraphicScene, path : String, font : String) -> Bool {
+  let initialized = Ref(false)
+  @film.picture(fn(c) {
+    if !initialized.val {
+      figure_initialize(font)
+      initialized.val = true
+    }
+    @sfgraphic.draw_graphic_scene(c, scene)
+  }, path~, w=scene.width, h=scene.height, scale=scene.scale)
+}
+
+///|
 fn main {
   let font = @film.arg("MBUI_FIGURE_FONT")
   let batch = @film.arg("MBUI_FIGURE_BATCH")
+  let scene_path = @film.arg("MBUI_FIGURE_SCENE")
+  if scene_path != "" {
+    let path = @film.arg("MBUI_FIGURE_OUT")
+    if batch != "" || path == "" {
+      figure_usage()
+      @film.exit(2)
+      return
+    }
+    match @sfgraphic.graphic_scene(@film.read_text(scene_path)) {
+      Some(scene) => @film.exit(if figure_scene(scene, path, font) { 0 } else { 1 })
+      None => {
+        @film.say("figure: scene is invalid or could not be read: \{scene_path}")
+        @film.exit(2)
+      }
+    }
+    return
+  }
   if batch != "" {
     let dir = @film.arg("MBUI_FIGURE_DIR")
     if dir == "" {
