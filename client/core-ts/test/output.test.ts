@@ -17,3 +17,21 @@ test("output_an_agents_markdown_goes_out_as_the_tree_kept_for_its_words_not_copi
   const again = out.shape(topic, { messages: [{ ...message, text: "…!" }], outbox: [] }, clock, false) as { ok: { messages: { md: unknown }[] } };
   assert.equal(again.ok.messages[0]!.md, md);
 });
+
+test("a_compact_chat_sends_its_page_without_the_agents_unshown_histories", () => {
+  const raw = {
+    title: "Chat", messages: [], outbox: [],
+    agents: [{ session: { key: "k" }, turns: [{ id: "t1" }], threads: [{ id: 1 }], jobs: [{ id: "j1", state: "exited", startedAt: 1 }] }],
+  };
+  const clock = { now: Date.UTC(2026, 9, 31, 12), offsetMin: 480 };
+  const topic = { topic: "chat", station: "w/s", thread: 1, session: null };
+  const full = new Output().shape(topic, raw, clock, false) as { ok: typeof raw };
+  const compact = new Output().shape({ ...topic, compact: true }, raw, clock, false) as { ok: typeof raw & { agents: ({ hasJobs?: boolean } & typeof raw.agents[number])[] } };
+  assert.equal(full.ok.agents[0]!.turns[0]!.id, "t1");
+  assert.equal(full.ok.agents[0]!.jobs[0]!.id, "j1");
+  assert.deepEqual(compact.ok.messages, full.ok.messages);
+  assert.equal(compact.ok.agents[0]!.session.key, "k");
+  assert.deepEqual([compact.ok.agents[0]!.turns, compact.ok.agents[0]!.threads, compact.ok.agents[0]!.jobs], [[], [], []]);
+  assert.equal(compact.ok.agents[0]!.hasJobs, true);
+  assert.equal(raw.agents[0]!.turns.length, 1, "the full value stays available to other readers");
+});

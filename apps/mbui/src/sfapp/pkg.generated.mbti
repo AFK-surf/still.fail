@@ -94,6 +94,8 @@ pub fn by_of(Json?) -> @sfbase.By
 
 pub fn chat_item(Json) -> @sfbase.ChatItem
 
+pub fn chat_jobs_summary_params(@sfbase.ChatRef) -> Map[String, Json]
+
 pub fn chat_kept(@sfbase.ChatRef) -> @sfbase.ChatView?
 
 pub fn chat_link(String, String) -> String

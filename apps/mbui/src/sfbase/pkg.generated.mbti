@@ -121,6 +121,8 @@ pub fn chat_item(Json) -> ChatItem
 
 pub let chat_jobs_asked : @ref.Ref[(@ui.Ctx, Source, ChatRef) -> Unit]
 
+pub fn chat_jobs_summary_params(ChatRef) -> Map[String, Json]
+
 pub fn chat_keep(Map[String, Json], Double) -> Unit
 
 pub fn chat_kept(ChatRef) -> ChatView?
@@ -188,6 +190,8 @@ pub fn copy_chat_link(@ui.Ctx, String, String) -> Unit
 pub fn core_doing(Source, Array[String], Array[(String, String)]) -> Bool
 
 pub fn core_failed(Source, Array[String], Array[(String, String)]) -> String?
+
+pub fn core_topic_params(String, Map[String, Json]) -> Map[String, Json]
 
 pub fn count(Json?, String) -> Int32
 

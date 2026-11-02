@@ -450,6 +450,13 @@ the views.
 | `driveBrowse` | `owner` (`page`, `tab`), `place` (the client's own name for one place: two sides of the files' page are two), `view` (`columns`, `tree`, `list`), `station`, `root`, `path`, `write?` (names changed and things deleted there) | a folder of a station's drive as a place on this device shows it (`DriveBrowseView`, views/browse.ts; what follows from what, drive-browse.ts; docs/drive.md "Clients"): `arrangement` (the prefs' `driveViews` `sort` and `hidden`), `folders` (each folder shown, by its path, its entries' names in the order shown, hidden ones left out unless asked: the folder; in columns, those before it; in a tree, those open under it; one not read yet is not there), `countText` (the current folder's visible entries in words; absent while it is read), `chosen` (`{ folder, names, anchor?, lead? }`), `open` (the tree's folders open), `widths` (columns dragged, by folder), `keys` (the keys that act now, as `drive.browse`'s `key` names them; the rest are the page's). What is chosen is the place's own, let go with its topic; the trees, the widths and what was last opened in each folder are the owner's, in memory while the core runs. Computed again as a folder it shows is read again and as the prefs change |
 | `shareIn` | `scope`, `source`, `query?` | where something another app shares goes (`ShareInView`, share-in.ts; docs/share-in.md): the scope's chats on still.fail's page newest first, the one a thing from the same site went to last first (`kept`, with why), and the stations up now for a new chat (`newOn` the one it starts on) |
 
+With `compact: true`, `chat` sends the same page and agent identities, but each agent's `turns`, `threads` and `jobs`
+are empty and `hasJobs` says whether it has jobs. A client reads details through `history`, `session`, or `chatJobs`
+when it shows them. Without `compact`, the original full value is unchanged; an older core ignores the parameter and
+returns that full value. `chatJobs` accepts the same parameter to reuse that chat internally; its own result is full.
+With `summary: true`, `chatJobs` instead says `hasJobs` and `alarm` for the chat bar, without preparing the jobs list;
+the other fields are empty. Older cores return the full list, from which the client can tell whether jobs exist.
+
 `live` (above) stays its own topic: its steps change many times a second,
 while `chat` changes with messages.
 

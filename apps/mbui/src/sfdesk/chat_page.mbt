@@ -613,8 +613,8 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
 /// The chat's services and jobs' button (JobsPanel): none, nothing in the bar; a dot on it red while one died lately,
 /// amber while a service restarts.
 fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
-  let view = (src.topic)("chatJobs", chat_params(r)).value
-  if items(view, "jobs").length() == 0 {
+  let view = (src.topic)("chatJobs", chat_jobs_summary_params(r)).value
+  if !flag(view, "hasJobs") && items(view, "jobs").length() == 0 {
     return
   }
   @sf.icon_button(c, "web", key="chat-jobs", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.services"), shortcut="chat.jobs")

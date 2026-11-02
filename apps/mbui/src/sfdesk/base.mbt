@@ -102,6 +102,7 @@ using @sfbase {
   type Person,
   agent_json,
   chat_params,
+  chat_jobs_summary_params,
   chat_view_made,
   type ChatView,
   type ChatScreen,

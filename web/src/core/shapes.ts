@@ -1636,6 +1636,8 @@ export interface ChatAgent {
 	threads: ChatThread[];
 	/** Its background jobs, newest first; those with a port are web services, shown by their names. */
 	jobs: Job[];
+	/** On a compact chat, whether it has jobs; their details are in chatJobs. */
+	hasJobs?: boolean;
 }
 
 /** A decision waiting in a chat (`ChatView.asks`). */
@@ -2116,6 +2118,8 @@ export interface ChatDay {
  */
 export interface ChatJobsView {
 	jobs: Job[];
+	/** On a summary, whether there are jobs; their details are read separately. */
+	hasJobs?: boolean;
 	/** fail: one died lately; restart: a service is being started again. */
 	alarm?: string;
 	/** 2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say). */

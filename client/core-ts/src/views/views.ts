@@ -62,6 +62,9 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const str = (v: J): string | null => (typeof v === "string" ? v : null);
 const u64 = (v: J): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
+/// Database values are frozen all through and can be shared; copy an unfrozen value before a view keeps it.
+const sharedOrCopied = (v: J): J => v !== null && typeof v === "object" && Object.isFrozen(v) ? v : structuredClone(v);
+
 const DAY_MS = 86_400_000;
 /// How many rows a list shows before its stations' rows are loaded: more than a screen holds. Done whenever the
 /// stations hold more (2026-10-29: on a phone's Hermes, 300 rows made at once kept the first page 150 ms; 80, 60).
@@ -868,7 +871,7 @@ export class Views implements Owner {
         perStation = (s) => [{ topic: "overview", station: s }, { topic: "sessions", station: s }, { topic: "threads", station: s }];
         break;
       case "chatJobs":
-        return [{ topic: "chat", station, thread: view.thread ?? null, session: view.session ?? null }];
+        return [{ topic: "chat", station, thread: view.thread ?? null, session: view.session ?? null, ...(view.compact === true ? { compact: true } : {}) }];
       // (an image of a chat steps through all of its, as far as it is on the device: its `letters`, all its entries)
       case "imageNear":
         return [
@@ -1279,9 +1282,9 @@ export class Views implements Owner {
       case "workspaceMarks":
         return marks.marks(this, this.local, typeof view.workspace === "string" ? view.workspace : null);
       case "chatJobs": {
-        const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null });
+        const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null, ...(view.compact === true ? { compact: true } : {}) });
         if (chat === undefined || !("ok" in chat)) return chat;
-        const [value, next] = jobs.chatJobs(chat.ok, this.#clock());
+        const [value, next] = jobs.chatJobs(chat.ok, this.#clock(), view.summary === true);
         this.#againIn(view, next);
         return { ok: value };
       }
@@ -2439,9 +2442,9 @@ export class Views implements Owner {
       attention: attention(overview, session, now),
       since,
       wait: present.watching(session) ? null : present.waiting(session),
-      turns: structuredClone(get(detail, "turns") ?? []),
-      threads: structuredClone(get(detail, "threads") ?? []),
-      jobs: structuredClone(get(detail, "jobs") ?? []),
+      turns: sharedOrCopied(get(detail, "turns") ?? []),
+      threads: sharedOrCopied(get(detail, "threads") ?? []),
+      jobs: sharedOrCopied(get(detail, "jobs") ?? []),
     };
   }
 
