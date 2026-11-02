@@ -367,7 +367,7 @@ jobs:
         if: needs.plan.outputs.station == 'true'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg xdotool xvfb xauth x11-utils x11-xkb-utils
+          sudo apt-get install -y ffmpeg xdotool xvfb xauth x11-utils x11-xkb-utils x11-xserver-utils
           pnpm --dir station install --frozen-lockfile
           export STILLFAIL_TEST_X11=1 STILLFAIL_TEST_X11_REAL_MESH=1 XDG_SESSION_TYPE=x11
           unset WAYLAND_DISPLAY
