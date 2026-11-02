@@ -2290,7 +2290,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,\nuntil `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the\nstation's pick, said so (`dropped`, `force`)." }),
   ContextLevel: struct([
     ["id", "String", { doc: "Its tokens in digits; \"\" the model's whole window." }],
-    ["text", "String", { said: true, doc: "In words: 完整 · 1M, 500K." }],
+    ["text", "String", { doc: "In words: 完整 · 1M, 500K." }],
   ], { doc: "How much context a model control offers to keep a chat to." }),
   NotifyView: struct([
     ["on", "bool"],
