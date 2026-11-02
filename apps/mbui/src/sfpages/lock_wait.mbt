@@ -89,16 +89,14 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
   } else if state == "finding" || asking {
     note(@sf.t("web-pages.security.pairFinding"), true)
   } else {
-    match (state, text(me, "failed")) {
-      ("none", _) => note(@sf.t("web-pages.security.pairNone"), false)
-      ("failed", _) => c.text(text(pair, "error"), style=lock_failed) |> ignore
-      (_, "") =>
+    match state {
+      "none" => note(@sf.t("web-pages.security.pairNone"), false)
+      "failed" => c.text(text(pair, "error"), style=lock_failed) |> ignore
+      _ =>
         note(
           @sf.t(if flag(me, "unsigned") { "web-pages.security.upgradeNotAsked" } else { "web-pages.security.notAsked" }),
           false,
         )
-      (_, failed) =>
-        c.text(@sf.t("web-pages.security.requestFailed", args=[("error", failed)]), style=lock_failed) |> ignore
     }
     // (actions: its row, the button as wide as its words)
     c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {

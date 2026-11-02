@@ -421,10 +421,9 @@ pub fn fixture_page(mode : String) -> String {
     // 外观's 本机字体 open (src/sfpages font_setting.mbt local_tile: the families the host lists)
     "settings-local-fonts" => fixture_open.desk = "local-fonts"
     // the archive policy with a dialog up (src/sfpages automatic_decisions.mbt): its words, an option of the
-    // station's; its 安全 with one (security.mbt): a device's code to confirm, MBA to take in, turning it off
+    // station's; its 安全 with one (security.mbt): MBA to take in, turning it off
     "settings-policy-text" => fixture_open.desk = "policy-text"
     "settings-policy-option" => fixture_open.desk = "policy-option"
-    "settings-security-confirm" => fixture_open.desk = "lock-confirm"
     "settings-security-join" => fixture_open.desk = "lock-join"
     "settings-security-off" => fixture_open.desk = "lock-off"
     // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
@@ -484,7 +483,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connects-motion" => "connects"
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
-    "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
+    "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
@@ -1966,26 +1965,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("signs", Json::boolean(true)),
           ("signers", Json::number(5.0)),
           ("protected", Json::number(1.0)),
-          ("attention", Json::number(1.0)),
-          (
-            "requests",
-            [
-              obj([
-                ("device", str("d9")),
-                ("sub", str("u2")),
-                ("email", str("ana@example.com")),
-                ("name", str("Ana")),
-                ("kind", str("app")),
-                ("label", str("Pixel 9")),
-                ("code", str("482 917")),
-                ("created_at", Json::number(0.0)),
-                ("yours", Json::boolean(false)),
-                ("whoText", str("Ana")),
-                ("deviceText", str("Pixel 9")),
-                ("time", obj([("created_at", stamp_of("2 分钟前"))])),
-              ]),
-            ],
-          ),
+          ("attention", Json::number(0.0)),
           (
             "members",
             [
@@ -2489,10 +2469,9 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 
 ///|
 /// The lock as a device not confirmed in it has it (MBUI_FIXTURE=lock-waiting, lock-finding, lock-code, lock-wrong,
-/// lock-checking, lock-none, lock-failed, lock-refused, lock-nocode, lock-security, each also -dark: its waiting page
-/// asking, finding, the code being typed, typed wrong, being checked, no device found, the pairing failed, the request
-/// refused, this device without its code yet; its security page): this device waiting (its own request among the
-/// workspace's), not a signer. lock-upgrade: in the lock but not signing (its key lost), the code being typed on its
+/// lock-checking, lock-none, lock-failed, lock-nocode, lock-security, each also -dark: its waiting page asking,
+/// finding, the code being typed, typed wrong, being checked, no device found, the pairing failed, this device without
+/// its code yet; its security page): this device waiting, not a signer. lock-upgrade: in the lock but not signing (its key lost), the code being typed on its
 /// security page.
 fn waiting_lock(mode : String) -> Json {
   let mode = if mode.has_suffix("-dark") { mode.unsafe_substring(start=0, end=mode.length() - 5) } else { mode }
@@ -2506,7 +2485,6 @@ fn waiting_lock(mode : String) -> Json {
     "lock-failed" => obj([("state", str("failed")), ("error", str("配对超时"))])
     _ => Json::null()
   }
-  let failed = if mode == "lock-refused" { "station 不在线" } else { "" }
   // in the lock, its key since lost (a phone moved to a new one): made one that signs on its security page
   let upgrade = mode == "lock-upgrade"
   let code = if mode == "lock-nocode" { "" } else { "Q4K-7PM" }
@@ -2521,7 +2499,7 @@ fn waiting_lock(mode : String) -> Json {
     ("signs", Json::boolean(false)),
     ("signers", Json::number(5.0)),
     ("protected", Json::number(4.0)),
-    ("attention", Json::number(2.0)),
+    ("attention", Json::number(0.0)),
     (
       "me",
       obj([
@@ -2529,19 +2507,10 @@ fn waiting_lock(mode : String) -> Json {
         ("code", str(code)),
         ("kind", str("app")),
         ("confirmed", Json::boolean(upgrade)),
-        ("asked", Json::boolean(!upgrade)),
         ("waiting", Json::boolean(!upgrade)),
         ("unsigned", Json::boolean(upgrade)),
-        ("failed", str(failed)),
         ("pair", pair),
       ]),
-    ),
-    (
-      "requests",
-      [
-        obj([("device", str("d-me")), ("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("kind", str("app")), ("label", str("still.fail mbui Android · OPPO PLP110")), ("code", str("Q4K-7PM")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(true)), ("whoText", str("林")), ("deviceText", str("OPPO PLP110 · still.fail mbui Android")), ("time", obj([("created_at", stamp_of("1 分钟前"))]))]),
-        obj([("device", str("d9")), ("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("kind", str("app")), ("label", str("Pixel 9")), ("code", str("482 917")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(false)), ("whoText", str("Ana")), ("deviceText", str("Pixel 9")), ("time", obj([("created_at", stamp_of("2 分钟前"))]))]),
-      ],
     ),
     (
       "members",

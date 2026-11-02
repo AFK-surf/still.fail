@@ -1,7 +1,8 @@
-// The workspace lock on a device (src/views/lock.ts): a device not in it waits and asks by hand, and one whose key cannot
-// be kept says its request did not go; a station's refusal names the workspace and where to approve; approving does not
-// wait on the stations, nor on the cloud's "too many requests"; what a hello brings. Against a cloud that keeps chains
-// and requests (the station fixture's host), on the test clock.
+// The workspace lock on a device (src/views/lock.ts): a device not in it waits and asks nothing by itself; one is
+// approved only face to face (views/pair.ts), never with a press on a request kept at the cloud; a station's refusal
+// names the workspace and where to approve; a change does not wait on the stations, nor on the cloud's "too many
+// requests"; what a hello brings. Against a cloud that keeps chains and requests (the station fixture's host), on the
+// test clock.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
@@ -9,18 +10,18 @@ import { hooks } from "../src/core/execute.ts";
 import { HostError } from "../src/error.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import { utf8 } from "../src/util.ts";
-import { BEHIND_MS, BEHIND_TRIES, read } from "../src/views/lock.ts";
+import { BEHIND_MS, BEHIND_TRIES, read, signerKnown } from "../src/views/lock.ts";
 import { ME, PHONE, elsewhere, genesis, rig, unhex } from "./lock-rig.ts";
 import { stationLater, stationReplies, status } from "./station-fixture.ts";
 
 const phoneRequest = { base: PHONE, sub: "s2", email: "b@x.com", kind: "app", label: "Pixel 8", sign_key: null, code: shortCode(PHONE), created_at: 1500 };
+/// Another member's phone in the lock: one a trusted device may take out.
+const phone = { id: PHONE, sub: "s2", kind: "app", label: "Pixel 8" };
 
-test("a device not in the lock waits and asks only by hand; one that cannot keep its key says its request did not go", async () => {
-  let broken = true;
+test("a device not in the lock waits and asks nothing by itself", async () => {
   const r = await rig((_me) => ({ ws: genesis("ws", elsewhere(), false) }), (host) => {
     // No key kept yet, and the keychain refusing to keep one (a host whose `secure.*` does not work).
-    const set = host.secureSet!;
-    host.secureSet = (key: string, value: Uint8Array, opts: { user: boolean }) => (broken ? Effect.fail(new HostError("secure.set is not supported")) : set(key, value, opts));
+    host.secureSet = () => Effect.fail(new HostError("secure.set is not supported"));
     const get = host.secureGet!;
     host.secureGet = (key: string, opts: { user: boolean }) => (key === Signer.KEY ? Effect.succeed(null) : get(key, opts));
   });
@@ -29,22 +30,24 @@ test("a device not in the lock waits and asks only by hand; one that cannot keep
   const v = await lock();
   assert.deepEqual(r.cloud.asked, [], "nothing asked by itself");
   assert.equal(v.me.waiting, true, "its page shows instead of the workspace's");
-  assert.equal(v.me.asked, false);
   // A station refusing it asks nothing either.
   hooks.lockRefused!(r.core.inner, "ws", "st", null);
   await r.host.time.pass(5_000);
   assert.deepEqual(r.cloud.asked, []);
-  // Asked by hand: the key cannot be kept, said; nothing reached the cloud.
-  await assert.rejects(r.ask("lock.request", { workspace: "ws" }), (e: { code: string }) => e.code === "lock_key");
+});
+
+test("a device is approved only by the code typed on it: a request kept at the cloud (an older client's) is not shown, and no press approves it", async () => {
+  // This app signs; an older client's phone asked through the cloud, as clients did before approving face to face.
+  const r = await rig((me) => ({ ws: genesis("ws", me, true) }));
+  r.cloud.requests.set("ws", [phoneRequest]);
+  const v = await (await r.watch({ topic: "lock", workspace: "ws" }))();
+  assert.equal(v.requests, undefined, "no list of devices to approve with a press");
+  assert.equal(v.attention, 0);
+  for (const name of ["lock.confirm", "lock.deny", "lock.request"]) {
+    await assert.rejects(r.ask(name, { workspace: "ws", device: PHONE, code: shortCode(PHONE) }), Error, name);
+  }
+  assert.deepEqual(r.cloud.posted, [], "nothing signed");
   assert.deepEqual(r.cloud.asked, []);
-  assert.match((await lock()).me.failed, /secure\.set is not supported/);
-  // Again once the keychain keeps it: sent, and what kept it is past.
-  broken = false;
-  await r.ask("lock.request", { workspace: "ws" });
-  assert.deepEqual(r.cloud.asked, ["ws"]);
-  const after = await lock();
-  assert.equal(after.me.failed ?? null, null);
-  assert.equal(after.me.asked, true);
 });
 
 test("a device that made its signing key after it started, then was confirmed: its vault sees it confirmed without a restart", async () => {
@@ -59,13 +62,12 @@ test("a device that made its signing key after it started, then was confirmed: i
   const lock = await r.watch({ topic: "lock", workspace: "ws" });
   assert.equal((await lock()).me.waiting, true);
   assert.deepEqual([(await vaults()).locked, (await vaults()).canSign], [true, false]);
-  // Asked by hand: its key made now; the owner's other device confirms it.
-  await r.ask("lock.request", { workspace: "ws" });
+  // Asked by hand (`lock.pair`): its key made now; the owner's other device approves it.
+  signerKnown(r.core.inner, (await Effect.runPromise(Signer.make(r.host))).id);
   const mine = Effect.runSync(Signer.load(r.host))!;
   const chain = r.cloud.chains.get("ws")!;
   const e = next("ws", r.cloud.head("ws"), 2000, "device", { id: ME, sub: "s1", kind: "app", label: "this", sign_key: mine.id });
   chain.push({ ...e, sig: { key: owner.id, alg: "Ed25519", sig: owner.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e))])) } });
-  r.cloud.requests.set("ws", []);
   r.core.inner.runner.fork(Effect.ignore(read(r.core.inner, "ws")));
   const l = await lock();
   assert.deepEqual([l.me.waiting, l.signs], [false, true]);
@@ -97,15 +99,13 @@ test("a station's refusal names the workspace and the code to approve, where the
 });
 
 
-test("an approval is done once the cloud keeps it, not once every station of the lock has heard (one offline held it up)", async () => {
+test("a change to the lock is done once the cloud keeps it, not once every station of the lock has heard (one offline held it up)", async () => {
   // `st` is protected, and never answers what it is brought: offline.
-  const r = await rig((me) => ({ ws: genesis("ws", me, true, [{ key: "st", name: "studio" }]) }), (host) => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [{ key: "st", name: "studio" }], {}, ME, [phone]) }), (host) => {
     stationLater(host, (req) => (req.method === "POST" && req.url.endsWith("/admin/api/lock") ? new Promise(() => {}) : undefined));
   });
-  r.cloud.requests.set("ws", [phoneRequest]);
-  await r.ask("lock.confirm", { workspace: "ws", device: PHONE, code: shortCode(PHONE) });
-  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
-  assert.deepEqual(r.cloud.requests.get("ws"), [], "its request gone with it");
+  await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
+  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device.remove", PHONE]]);
 });
 
 test("a station that refuses this device though the lock names it has not heard yet: tried again shortly, not held", async () => {
@@ -129,12 +129,11 @@ test("a station that refuses this device though the lock names it has not heard 
 });
 
 test("a device the lock names without its signing key signs nothing: the cloud gets no entry the stations would refuse", async () => {
-  // This app is in the lock without its key (put in before it kept one), and keeps one now; an older device approved a
-  // request so, the cloud kept it, and every station refused it and all after it (2026-10-24).
+  // This app is in the lock without its key (put in before it kept one), and keeps one now; an older device signed so,
+  // the cloud kept it, and every station refused it and all after it (2026-10-24).
   const owner = elsewhere();
-  const r = await rig(() => ({ ws: genesis("ws", owner, false, [], {}, ME, [{ id: "ef".repeat(32), sub: "s1", kind: "app", label: "owner's", sign_key: owner.id }, { id: ME, sub: "s1", kind: "app", label: "this" }]) }));
-  r.cloud.requests.set("ws", [phoneRequest]);
-  await assert.rejects(r.ask("lock.confirm", { workspace: "ws", device: PHONE, code: shortCode(PHONE) }), (e: { code: string }) => e.code === "lock_no_signer");
+  const r = await rig(() => ({ ws: genesis("ws", owner, false, [], {}, ME, [{ id: "ef".repeat(32), sub: "s1", kind: "app", label: "owner's", sign_key: owner.id }, { id: ME, sub: "s1", kind: "app", label: "this" }, phone]) }));
+  await assert.rejects(r.ask("lock.removeDevice", { workspace: "ws", device: PHONE }), (e: { code: string }) => e.code === "lock_no_signer");
   assert.deepEqual(r.cloud.posted, []);
 });
 
@@ -168,30 +167,28 @@ test("a hello brings what put this device in the lock lately, for a station that
   const approval = sign(next("ws", head(g), r.host.nowMs() / 1000, "device", { id: ME, sub: "s1", kind: "app", label: "this" }));
   const another = sign(next("ws", head(approval), r.host.nowMs() / 1000, "device", { id: PHONE, sub: "s2", kind: "app", label: "phone" }));
   r.cloud.chains.set("ws", [g, approval, another]);
-  r.core.inner.data.put("lock", "ws", { head: head(another), entries: [g, approval, another], requests: [] });
+  r.core.inner.data.put("lock", "ws", { head: head(another), entries: [g, approval, another] });
   assert.deepEqual(r.core.inner.cloudSync.carry!("ws"), [approval, another], "from the one that put it in on");
   // Put in long since: every station has heard by now.
   const old = sign(next("ws", head(g), r.host.nowMs() / 1000 - 8 * 86400, "device", { id: ME, sub: "s1", kind: "app", label: "this" }));
   r.cloud.chains.set("ws", [g, old]);
-  r.core.inner.data.put("lock", "ws", { head: head(old), entries: [g, old], requests: [] });
+  r.core.inner.data.put("lock", "ws", { head: head(old), entries: [g, old] });
   assert.equal(r.core.inner.cloudSync.carry!("ws"), null);
 });
 
-test("an approval the cloud answers too many requests for is asked again a while later, not failed at once", async () => {
-  const r = await rig((me) => ({ ws: genesis("ws", me, true) }));
-  r.cloud.requests.set("ws", [phoneRequest]);
+test("a change the cloud answers too many requests for is asked again a while later, not failed at once", async () => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], {}, ME, [phone]) }));
   // The account's budget for this minute spent (by its other devices): the next two asks are turned away.
   let limited = 2;
   stationReplies(r.host, (req) => (req.url.includes("/lock") && limited-- > 0 ? status(429, { error: "rate_limited" }) : r.cloud.reply(req)));
-  await r.ask("lock.confirm", { workspace: "ws", device: PHONE, code: shortCode(PHONE) });
-  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
+  await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
+  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device.remove", PHONE]]);
 });
 
-test("the lock says its devices, people and waiting devices in words, as every page shows them", async () => {
-  // This app signs; the other member's older web page is in it too; their phone waits to be confirmed.
+test("the lock says its devices and people in words, as every page shows them", async () => {
+  // This app signs; the other member's older web page is in it too.
   const older = { id: "ed25519:" + "cd".repeat(32), sub: "s2", kind: "web", label: "", endpoints: ["e1"] };
   const r = await rig((me) => ({ ws: genesis("ws", me, true, [], {}, ME, [older]) }));
-  r.cloud.requests.set("ws", [phoneRequest]);
   const v = await (await r.watch({ topic: "lock", workspace: "ws" }))();
   const owner = v.members.find((m: { sub: string }) => m.sub === "s1");
   const other = v.members.find((m: { sub: string }) => m.sub === "s2");
@@ -203,8 +200,6 @@ test("the lock says its devices, people and waiting devices in words, as every p
   // (whether it is a web page its mark says; when it was last used, nothing where the cloud would not say)
   assert.deepEqual(groups(other), [["其他", [["旧版客户端", ""]]]]);
   assert.equal(other.nameText, other.name || "b@x.com");
-  assert.deepEqual(v.requests.map((x: { whoText: string; deviceText: string }) => [x.deviceText]), [["Pixel 8"]]);
-  assert.equal(v.requests[0].whoText, v.requests[0].name || "b@x.com");
 });
 
 test("the people's devices by app say which machine each is and when it was last used, the most lately used first; what this device may take out", async () => {

@@ -145,7 +145,7 @@ export const sampleVaultUses = (): VaultUse[] => [9, 6, 11].map((n) => ({ at: sa
 /** The workspace's security mode made up: off, its owner here, able to turn it on. */
 export const sampleLock = (): LockView => ({
   available: true, locked: false, notice: false, role: "owner", manages: true, owner: true, canSign: true, signs: false, signers: 0, members: [], stations: [],
-  protected: 0, requests: [], renew: [], attention: 0,
+  protected: 0, renew: [], attention: 0,
 });
 
 /** Turning security mode on made up: three people, three devices, two stations. */

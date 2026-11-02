@@ -43,7 +43,7 @@ let style_ref_sizes : Array[(String, Double, Double)] = [("narrow", 390.0, 844.0
 ///|
 test "styles: the lock's waiting page, every state, drawn as before" {
   let out = StringBuilder()
-  for state in ["waiting", "finding", "code", "wrong", "checking", "none", "failed", "refused", "nocode"] {
+  for state in ["waiting", "finding", "code", "wrong", "checking", "none", "failed", "nocode"] {
     for dark in ["", "-dark"] {
       for size in style_ref_sizes {
         let (name, w, h) = size
@@ -81,10 +81,6 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|failed wide 53629:375fb30
     #|failed-dark narrow 23489:5c5d6373
     #|failed-dark wide 53536:49a572b4
-    #|refused narrow 25594:d1d4411f
-    #|refused wide 55735:330f4d51
-    #|refused-dark narrow 25792:e91492cd
-    #|refused-dark wide 55840:3163e1a9
     #|nocode narrow 28262:c3271574
     #|nocode wide 58401:7892ac5e
     #|nocode-dark narrow 28178:febce866
@@ -144,19 +140,20 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     }
   }
   inspect(out.to_string(), content=(
-    #|settings narrow 84810:b665b714
+    #|settings narrow 84592:569f8b9c
     #|station narrow 91346:e14365f7
     #|me-reading narrow 15718:bc76477a
-    #|settings wide 158140:1c02860e
-    #|station wide 205037:85096382
-    #|me-reading wide 152853:4dbd9d8d
-    #|settings-dark narrow 85171:a814463c
+    #|settings wide 157948:8b48dd8a
+    #|station wide 204845:313d78a6
+    #|me-reading wide 152661:a4f17765
+    #|settings-dark narrow 84895:e7029b89
     #|station-dark narrow 91134:5e376f20
     #|me-reading-dark narrow 15808:e5c51641
-    #|settings-dark wide 158076:ae7c4850
-    #|station-dark wide 204727:7022eb39
-    #|me-reading-dark wide 152865:1c58097c
+    #|settings-dark wide 157826:c287b253
+    #|station-dark wide 204477:b808f61c
+    #|me-reading-dark wide 152615:778c3fcd
     #|
+
 
 
 

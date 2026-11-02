@@ -309,7 +309,6 @@ using @sfpages {
   open_dialog,
   desk_dialogs,
   sec_section,
-  confirm_dialog,
   join_dialog,
   turn_off_dialog,
   chat_mark,

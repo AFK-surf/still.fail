@@ -4,11 +4,10 @@
 import { useEffect, useState } from "react";
 import { useCall, useTopic } from "../core/react.ts";
 import { useDoing } from "../doing.ts";
-import { stamp } from "../api.ts";
 import { ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { t } from "../i18n.ts";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
-import { CodeEntry, spacedCode, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
+import { CodeEntry, spacedCode, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockView } from "../cloud/Security.tsx";
 import { WorkspaceBadge } from "../WorkspaceMark.tsx";
 import { useApp } from "./app.tsx";
 import { Button, LargeTitle, LinkButton, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
@@ -74,7 +73,6 @@ function On({ lock }: { lock: LockView }) {
   const app = useApp();
   const run = useRun();
   const ws = app.entry.id;
-  const check = (r: LockRequest) => app.sheet({ height: 0.5, content: () => <ConfirmSheet r={r} workspace={app.entry.id} /> });
   return (
     <>
       <ListCard><div className={css.mBody}>
@@ -87,20 +85,6 @@ function On({ lock }: { lock: LockView }) {
       {(lock.me?.waiting || lock.me?.unsigned) && <>
         <SectionHeader title={t(lock.me.unsigned ? "web-pages.security.upgradeTitle" : "web-pages.security.waitingTitle")} start={24} />
         <ListCard><div className={css.mBody}><PairSteps lock={lock} /></div></ListCard>
-      </>}
-      {lock.requests.length > 0 && <>
-        <SectionHeader title={`${t("web-pages.security.waiting")} · ${lock.requests.length}`} start={24} />
-        <ListCard>
-          {lock.requests.map((r) => (
-            <ListRow key={r.device} onClick={lock.signs ? () => check(r) : undefined}>
-              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}>{t("web-pages.security.newDeviceOf", { name: r.whoText })}</span>
-                <span className={listsCss.mRowNote}>{r.deviceText} · {stamp(r, "created_at")?.ago ?? ""}</span>
-              </span>
-              <span className={css.mCode}>{r.code}</span>
-            </ListRow>
-          ))}
-        </ListCard>
       </>}
       <SectionHeader title={t("web-pages.security.people")} start={24} />
       <ListCard>
@@ -231,30 +215,6 @@ function PairSheet({ r }: { r: LockPairing }) {
   );
 }
 
-/** A waiting device from a workspace's 设置 › 安全 (a client from before asking through the cloud): confirmed once its
- * code is the one on its screen. */
-function ConfirmSheet({ r, workspace }: { r: LockRequest; workspace: string }) {
-  const app = useApp();
-  const run = useRun();
-  const close = (then: () => void) => () => { app.sheet(null); then(); };
-  // Answered on another device: gone here too.
-  const lock = useTopic<LockView>({ topic: "lock", workspace }).value;
-  const gone = lock !== undefined && !lock.requests.some((x) => x.device === r.device);
-  useEffect(() => { if (gone) app.sheet(null); }, [gone]); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <div className={css.mSheet}>
-      <b className={css.mSheetTitle}>{t("web-pages.security.confirmTitle", { name: r.whoText })}</b>
-      <span className={partsCss.mSubtle}>{t("web-pages.security.confirmBody", { device: r.deviceText, name: r.whoText })}</span>
-      <div className={css.mBigCode}>{r.code}</div>
-      <span className={css.mNote}>{r.kind === "web" ? t("web-pages.security.confirmWeb") : t("web-pages.security.confirmApp")}</span>
-      <div className={`${css.mPair} ${css.mStack}`}>
-        <Button primary label={t("web-pages.security.confirm")} onClick={close(() => void run("lock.confirm", { workspace, device: r.device, code: r.code }, t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed")))} />
-        <Button primary={false} label={t("web-pages.security.deny")} onClick={close(() => void run("lock.deny", { workspace, device: r.device }, t("web-pages.security.denyDevice")))} />
-      </div>
-    </div>
-  );
-}
-
 /** 开启安全模式, on a phone. */
 export function SecurityOpenScreen() {
   const app = useApp();
@@ -342,8 +302,8 @@ function PairSteps({ lock }: { lock: LockView }) {
       </>}
   </> : pair?.state === "finding" || asking ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairFinding")}</span>
     : <>
-      <span className={pair?.state === "failed" || lock.me?.failed ? css.mFailed : css.mNote}>
-        {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t(lock.me?.unsigned ? "web-pages.security.upgradeNotAsked" : "web-pages.security.notAsked")}
+      <span className={pair?.state === "failed" ? css.mFailed : css.mNote}>
+        {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : t(lock.me?.unsigned ? "web-pages.security.upgradeNotAsked" : "web-pages.security.notAsked")}
       </span>
       <Button primary label={t("web-pages.security.request")} onClick={() => void run("lock.pair", { workspace: ws }, t("web-pages.security.request"))} />
     </>;

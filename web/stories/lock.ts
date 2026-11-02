@@ -17,6 +17,7 @@ const PAIR: Partial<Record<LockStory, LockPair>> = {
   code: { state: "code", devices: 1, untilText: "14:05 前有效" },
   wrong: { state: "wrong", devices: 1, left: 2, untilText: "14:05 前有效" },
   none: { state: "none", devices: 0 },
+  failed: { state: "failed", devices: 0, error: "配对超时" },
 };
 
 type Device = LockView["members"][number]["groups"][number]["devices"][number];
@@ -48,8 +49,7 @@ function view(story: LockStory): LockView {
   return {
     available: true, locked: true, notice: false, role: "owner", manages: true, owner: true, canSign: true, signs: !waits,
     me: {
-      device: "d_demo", code: "4BU-L2G", kind: "app", confirmed: !waits, waiting: waits, asked: false,
-      ...(story === "failed" ? { failed: "无法在系统钥匙串中保存此设备的密钥：secure.set is not supported on this host" } : {}),
+      device: "d_demo", code: "4BU-L2G", kind: "app", confirmed: !waits, waiting: waits,
       ...(PAIR[story] ? { pair: PAIR[story] } : {}),
     },
     signers: waits ? 1 : GROUPS.flatMap((g) => g.devices).filter((d) => d.signs).length,
@@ -57,7 +57,7 @@ function view(story: LockStory): LockView {
       sub: "demo-you", email: "you@acme.dev", name: "你", role: "owner", you: true, nameText: "你", roleText: "Owner",
       groups: GROUPS.map((g) => ({ ...g, devices: g.devices.map((d) => ({ ...d, mine: d.id === "d_demo", removable: !waits && d.id !== "d_demo" })) })),
     }],
-    stations, protected: stations.filter((s) => s.protected).length, requests: [], renew: [], attention: 0,
+    stations, protected: stations.filter((s) => s.protected).length, renew: [], attention: 0,
   };
 }
 
