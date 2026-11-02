@@ -669,7 +669,7 @@ fn is_viz(name : String) -> Bool {
 
 ///|
 /// What still.fail itself says (SystemNotice): a pill across the chat in one line, a failure in red (the core's
-/// `notice`); pressed, all its words and its time under it. One about a profile: what went wrong links to that
+/// `notice`); pressed, all its words, what failed said of it (`detail`, as it said it), and its time under it. One about a profile: what went wrong links to that
 /// profile's page; one saying the station lacks the chat's runtime ends in installing it; a failure the station takes
 /// reports of, in reporting it.
 fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
@@ -740,6 +740,13 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
         }
       })
       |> ignore
+      // what failed said of it, as it said it: opened only
+      if open && m.notice_detail != "" {
+        c.box(style=notice_detail_room, fn() {
+          c.rich([@ui.span(m.notice_detail, mono=true)], key="notice-detail/" + m.ts, style=notice_detail.then(@ui.text_style(color=ink))) |> ignore
+        })
+        |> ignore
+      }
     })
     |> ignore
   }
@@ -1292,6 +1299,15 @@ let notice_words : @ui.TextStyle = @ui.text_style(size=notice_size, leading=noti
 ///|
 // kept across runs: a value (no field of it changes)
 let notice_words_open : @ui.TextStyle = @ui.text_style(size=notice_size, leading=notice_leading)
+
+///|
+/// What failed said of it, under its words when opened: smaller, in the code face, wrapping.
+// kept across runs: a value (no field of it changes)
+let notice_detail : @ui.TextStyle = @ui.text_style(size=Caption)
+
+///|
+// kept across runs: a value (no field of it changes)
+let notice_detail_room : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 /// The dot before its word (blockedDot in a notice): 6 each side, the pill's ink at 60%; the word (blockedAction),

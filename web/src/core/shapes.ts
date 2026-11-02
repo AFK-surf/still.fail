@@ -2186,6 +2186,11 @@ export interface NoticeShown {
 	 */
 	linkAt?: number;
 	/**
+	 * A failure's own words, as what failed said them (a provider's, a process's): shown when the notice is
+	 * opened, under `words`. Absent otherwise.
+	 */
+	detail?: string;
+	/**
 	 * `words` read as Markdown (markdown.ts), its runs of words in `words`: what the clients draw (a chat it opened is
 	 * a link to it). Absent where a view reads none of its messages' words (a decision's).
 	 */

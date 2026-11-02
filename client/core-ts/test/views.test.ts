@@ -2638,6 +2638,9 @@ test("still.fail's notice is shown as a line: a failure's mark taken off, no clo
   assert.deepEqual(noticeOf("已切换模型", false), { failed: false, words: "已切换模型" });
   assert.deepEqual(noticeOf("⚠️ 登录 Work 失败：令牌过期。 ", true), { failed: true, words: "登录 Work 失败：令牌过期", linkAt: 11 });
   assert.deepEqual(noticeOf("登录失败", true), { failed: false, words: "登录失败" });
+  // What failed said, under what it means: apart, shown when opened.
+  assert.deepEqual(noticeOf("⚠️ 模型服务拒绝了请求（403），未说明原因\n\n```\nunexpected status 403 Forbidden: Unknown error\n```", false), { failed: true, words: "模型服务拒绝了请求（403），未说明原因", detail: "unexpected status 403 Forbidden: Unknown error" });
+  assert.deepEqual(noticeOf("⚠️ 账号认证失败：在 Profile 中重新登录\n\n```\n401 Missing API key\n```", true), { failed: true, words: "账号认证失败：在 Profile 中重新登录", linkAt: 7, detail: "401 Missing API key" });
   const m = shownMessage({ authorKind: "stillfail", author: "stillfail", text: "⚠️ 出错了。", seq: 3 }, [], {}, [], [], [], null);
   assert.deepEqual(m.notice, { failed: true, words: "出错了" });
 });
