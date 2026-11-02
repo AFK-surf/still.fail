@@ -264,7 +264,34 @@ priv struct ShareLook {
   row_gap : Double
   /// a chat's model mark
   model : Double
+  /// the whole width, its words `side` in
+  inset : @ui.Style
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_whole : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_cut : @ui.Style = @ui.css("w=Full clip")
+
+///|
+/// 找 chat under 发到; 正在读取 where the rows will be; 新 chat 开在 (as 发到 is on the wide panel); what went wrong.
+// kept across runs: a value (no field of it changes)
+let share_find_room : @ui.Style = @ui.css("pt=S1_5 pb=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_wait_room : @ui.Style = @ui.css("pt=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_label_room : @ui.Style = @ui.css("pt=S2_5 pb=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_error_room : @ui.Style = @ui.css("pb=S4")
 
 ///|
 /// (the sheet's own 20 in is where its words and its rows' marks stand: the web's 20, its PickRows 12 + 8)
@@ -292,6 +319,7 @@ let share_narrow : ShareLook = {
   row_line: 21.0,
   row_gap: 0.0,
   model: 36.0,
+  inset: @ui.css("w=Full"),
 }
 
 ///|
@@ -320,6 +348,7 @@ let share_wide_look : ShareLook = {
   row_line: 20.0,
   row_gap: 2.0,
   model: 18.0,
+  inset: @ui.css("w=Full px=S3"),
 }
 
 ///|
@@ -334,7 +363,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// What is shared, 发到 (搜索 from six), the chats it can go to, 新 chat (then the stations, with several), in `look`.
 fn share_body(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Unit {
   // (one column, its parts as close as they are drawn: not the panel's own gap between them)
-  c.box(w=Fill(1.0), fn() { share_parts(c, src, w, look) }) |> ignore
+  c.box(style=share_whole, fn() { share_parts(c, src, w, look) }) |> ignore
 }
 
 ///|
@@ -360,7 +389,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
   }
   // 发到, and at its end 搜索 (取消 while searching)
   c.box(dir=Row, w=Fill(1.0), padx=look.side, pt=look.label_pt, pb=look.label_pb, align=ACenter, fn() {
-    c.box(w=Fill(1.0), fn() { c.text(sh("android-misc.shareIn.to"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore }) |> ignore
+    c.box(style=share_whole, fn() { c.text(sh("android-misc.shareIn.to"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore }) |> ignore
     if share_in.searching.get() || rows.length() >= searched_from {
       let id = c.id("share-in/search")
       if c.clicked(id) {
@@ -384,7 +413,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
   })
   |> ignore
   if share_in.searching.get() {
-    c.box(w=Fill(1.0), padx=look.side, pt=6.0, pb=4.0, fn() {
+    c.box(style=look.inset.then(share_find_room), fn() {
       c.box(style=invite_field, h=Px(40.0), justify=JCenter, fn() {
         let r = c.editor(
           "share-in/find",
@@ -408,7 +437,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
   c.box(w=Fill(1.0), pb=look.list_pb, gap=look.list_gap, fn() {
     match v {
       None =>
-        c.box(w=Fill(1.0), padx=look.side, pt=8.0, fn() {
+        c.box(style=look.inset.then(share_wait_room), fn() {
           @sf.wait_line(
             c,
             if topic.error is Some(_) { sh("android-misc.shareIn.update") } else { sh("common.reading") },
@@ -488,7 +517,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
             }
             // with several stations, each to start one on (新 chat 开在)
             if stations.length() > 1 {
-              c.box(w=Fill(1.0), padx=look.side, pt=share_wide_look.label_pt, pb=share_wide_look.label_pb, fn() {
+              c.box(style=look.inset.then(share_label_room), fn() {
                 c.text(sh("web-main.shareIn.startOn"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
               })
               |> ignore
@@ -517,7 +546,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
   })
   |> ignore
   if share_in.error.get() != "" {
-    c.box(w=Fill(1.0), padx=look.side, pb=16.0, fn() {
+    c.box(style=look.inset.then(share_error_room), fn() {
       c.text(share_in.error.get(), size=t.t.meta, color=t.p.red) |> ignore
     })
     |> ignore
@@ -547,7 +576,7 @@ fn shared_head(c : @ui.Ctx, source : String, head : String?, look : ShareLook) -
       c.box(w=Fill(1.0), gap=share_wide_look.row_gap, pt=look.head_words_pt, fn() {
         match head {
           Some(h) =>
-            c.box(w=Fill(1.0), clip=true, fn() {
+            c.box(style=share_cut, fn() {
               c.text(h, size=if look.wide { t.t.ui } else { t.t.body }, weight=600, color=t.p.text, line=look.title_line, wrap=false, allow_ellipsis=true) |> ignore
             })
             |> ignore
