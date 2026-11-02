@@ -37,6 +37,7 @@ import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
 import { dayOf, holdsWhole, withPart } from "./usage-part.ts";
+import { threadAfter, threadAfterLetters } from "./thread-after.ts";
 import { timed } from "../spent.ts";
 
 export { HOST_KEY, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
@@ -1202,8 +1203,19 @@ export class StationsSync {
         // was told left is read. A chat let go for room (and not opened since) is not kept current: what it said is
         // read when it is opened. History older than what is held comes with the station's (#history).
         this.channels.told(entriesOf(address, id), items);
-        // Its summary for the viewer: told by the station (`thread-view`) when it tells it, else read.
-        const viewed = this.#links.get(address)?.viewed.get(id);
+        // Its summary for the viewer, brought on by what was said (thread-after.ts): the station leaves it to the device
+        // (`views=1`); one from before tells it after (`thread-view`), in place of this. Where it cannot be made here,
+        // read.
+        const link = this.#links.get(address);
+        const me = this.#me(address);
+        const next = me === null ? null : threadAfter(this.#core.data.of(address)?.thread(address, id), entries, me);
+        if (next !== null && link) {
+          this.putThread(address, next);
+          link.viewed.set(id, Math.max(link.viewed.get(id) ?? 0, u64(get(next, "last")) ?? 0));
+          link.dirty.delete(id);
+          return;
+        }
+        const viewed = link?.viewed.get(id);
         if (viewed === undefined || viewed < newest) this.#markDirty(address, id);
         return;
       }
@@ -1213,6 +1225,12 @@ export class StationsSync {
         const id = u64(get(data, "id"));
         if (id === null) return;
         this.channels.told(lettersOf(address, id), LETTERS.items(data, { latest: true }));
+        // How many it has and how far its log goes, in its summary (thread-after.ts); read where that cannot be said.
+        const held = this.#core.data.of(address)?.thread(address, id);
+        if (held === undefined) return;
+        const next = threadAfterLetters(held, (get(data, "letters") as unknown[] | undefined) ?? []);
+        if (next === null) this.#markDirty(address, id);
+        else if (next !== held) this.putThread(address, next);
         return;
       }
       case "live": {
@@ -1408,6 +1426,18 @@ export class StationsSync {
   /// entry (otherwise the count is read again).
   putRead(address: string, thread: number, n: number): void {
     if (this.#core.data.setRead(address, thread, n)) this.#markDirty(address, thread);
+  }
+
+  /// The email the viewer reaches `address`'s workspace with: whose messages there are their own.
+  #me(address: string): string | null {
+    let workspace: string;
+    try {
+      workspace = StationAddr.parse(address).workspace;
+    } catch {
+      return null;
+    }
+    const sub = this.#core.workspaces.of(workspace).owner;
+    return sub === null ? null : (this.#core.accounts.list().find((a) => a.sub === sub)?.email ?? null);
   }
 
   /// A thread's summary read again once the burst of events is over.

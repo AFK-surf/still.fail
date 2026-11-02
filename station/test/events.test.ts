@@ -568,6 +568,28 @@ test("one person's streams in two languages are read for together: once a change
   await en.close();
 });
 
+test("a thread's summary is left to clients that make it from what is said (views=1): none read for a viewer all of whose streams do", async () => {
+  // Read for each viewer after every message, it was read from the disk while memory was short (ccvm, 2026-11-02).
+  const { events, change, reads } = setup(testClock().clock);
+  const theirs = reader((await events.open(viewer("a@x"), "zh", false, [], [], null, false, [], false, true)).body as AsyncIterable<Buffer>);
+  await settle();
+  reads.length = 0;
+  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
+  await settle();
+  assert.deepEqual(reads.filter((r) => r === "threadViews" || r === "thread"), [], "none read");
+  assert.deepEqual(theirs.got.filter((e) => e.event === "thread").map((e) => e.data.id), [4], "what was said, told");
+  // One of theirs from before (no `views=1`) as well: read and told, for it.
+  const before = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  reads.length = 0;
+  change({ type: "thread", id: 4, entries: [{ n: 2 } as any] });
+  await settle();
+  assert.deepEqual(reads.filter((r) => r === "threadViews"), ["threadViews"]);
+  assert.deepEqual(before.got.filter((e) => e.event === "thread-view").map((e) => e.data.id), [4]);
+  await theirs.close();
+  await before.close();
+});
+
 test("a change of a session or a thread reads again only the sidebar items it can touch, an item gone told so", async () => {
   const { events, rows, change, reads } = setup(testClock().clock);
   const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
