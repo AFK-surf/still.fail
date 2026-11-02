@@ -263,6 +263,7 @@ jobs:
       # last step of some runs (the rest 2-9 s), the release's job at 282 of its 300 (main 08c83003, 41537791777).
       - name: What it left running
         if: always()
+        continue-on-error: true
         shell: pwsh
         run: |
           $since = (Get-Process -Id $PID).StartTime.AddMinutes(-10)
