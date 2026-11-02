@@ -2600,6 +2600,7 @@ export const SHAPES: Record<string, Shape> = {
     ["turns", vec("TurnRecord")],
     ["threads", vec("ChatThread")],
     ["jobs", vec("Job"), { doc: "Its background jobs, newest first; those with a port are web services, shown by their names." }],
+    ["hasJobs", opt("bool"), { skipNone: true, doc: "On a compact chat, whether it has jobs; their details are in chatJobs." }],
   ], { doc: "An agent of a chat: its session, the connect that started it, its profile, and what it can move to." }),
   AgentCardView: struct([
     ["work", opt("String"), { doc: "Its turns, and how long the finished ones took: 8 轮 · 共干了 1 小时 12 分." }],
@@ -2747,6 +2748,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A thing of a chat's (`chatThings`)." }),
   ChatJobsView: struct([
     ["jobs", vec("Job")],
+    ["hasJobs", opt("bool"), { skipNone: true, doc: "On a summary, whether there are jobs; their details are read separately." }],
     ["alarm", opt("String"), { doc: "fail: one died lately; restart: a service is being started again." }],
     ["servicesNote", "String", { doc: "2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say)." }],
     ["jobsNote", "String"],

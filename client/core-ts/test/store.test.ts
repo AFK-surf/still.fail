@@ -1,8 +1,10 @@
 // The Rust core's store.rs tests, ported (same names, same checks): time on a TestClock.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { apply as applyOps, type Op } from "../src/delta.ts";
 import { CoreError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
+import { Output } from "../src/output.ts";
 import type { Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
 import { COALESCE_MS, EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
@@ -234,6 +236,117 @@ test("a_watch_keeps_a_topic_live_and_hears_its_changes", async () => {
   assert.deepEqual(source.take(), [`stop ${topicDebug(overview())}`]);
   assert.deepEqual(store.liveTopics(), []);
   assert.equal(heard.length, 2);
+});
+
+test("a_topic_only_watched_inside_the_core_is_formatted_when_a_page_asks_for_it", async () => {
+  const { host, store, pass } = setup();
+  const stations: Topic = { topic: "stations", scope: "ws" };
+  const heard: unknown[] = [];
+  const shape = Output.prototype.shape;
+  let formatted = 0;
+  Output.prototype.shape = function (topic, ...args) {
+    if (topic.topic === "stations") formatted++;
+    return shape.call(this, topic, ...args);
+  };
+  const watch = store.watch(stations, () => heard.push(store.get(stations)));
+  try {
+    store.set(stations, { ok: [{ id: "a", name: "first" }] });
+    await pass(COALESCE_MS * 2);
+    assert.deepEqual(heard, [[{ id: "a", name: "first" }]]);
+    assert.equal(formatted, 0, "a value read only by another page needs no client output");
+    assert.deepEqual(host.takeEmitted(), []);
+
+    store.subscribe(1, 1, stations);
+    await pass(COALESCE_MS * 2);
+    assert.deepEqual(host.takeEmitted(), [[1, value(1, [{ id: "a", name: "first" }])]]);
+    assert.equal(formatted, 1);
+
+    store.unsubscribe(1, 1);
+    store.set(stations, { ok: [{ id: "a", name: "second" }] });
+    await pass(COALESCE_MS * 2);
+    assert.deepEqual(heard.at(-1), [{ id: "a", name: "second" }]);
+    assert.equal(formatted, 1, "a closed page is not formatted while its cache is kept");
+
+    store.subscribe(1, 2, stations);
+    const messages = host.takeEmitted();
+    await pass(COALESCE_MS * 2);
+    messages.push(...host.takeEmitted());
+    let shown: unknown;
+    for (const [, message] of messages) {
+      const m = message as { value?: unknown; delta?: Op[] };
+      if ("value" in m) shown = m.value;
+      else if (m.delta) shown = applyOps(shown, m.delta);
+    }
+    assert.deepEqual(shown, [{ id: "a", name: "second" }]);
+  } finally {
+    watch.drop();
+    Output.prototype.shape = shape;
+  }
+});
+
+test("a_closed_page_is_not_formatted_until_it_is_opened_again", async () => {
+  const { host, store, pass } = setup();
+  const page: Topic = { topic: "page" };
+  const shape = Output.prototype.shape;
+  let formatted = 0;
+  Output.prototype.shape = function (topic, ...args) {
+    if (topic.topic === "page") formatted++;
+    return shape.call(this, topic, ...args);
+  };
+  try {
+    store.subscribe(1, 1, page);
+    store.set(page, { ok: { name: "first" } });
+    await pass(COALESCE_MS * 2);
+    assert.deepEqual(host.takeEmitted(), [[1, value(1, { name: "first" })]]);
+    assert.equal(formatted, 1);
+
+    store.unsubscribe(1, 1);
+    store.set(page, { ok: { name: "second" } });
+    await pass(COALESCE_MS * 2);
+    assert.equal(formatted, 1, "nothing is formatting a page that nobody is viewing");
+    assert.deepEqual(host.takeEmitted(), []);
+
+    store.subscribe(1, 2, page);
+    let shown: unknown;
+    const messages = host.takeEmitted();
+    assert.equal(messages.length, 0, "a reopened page is not sent a stale value while its current one is prepared");
+    await pass(COALESCE_MS * 2);
+    messages.push(...host.takeEmitted());
+    for (const [, message] of messages) {
+      const m = message as { value?: unknown; delta?: Op[] };
+      if ("value" in m) shown = m.value;
+      else if (m.delta) shown = applyOps(shown, m.delta);
+    }
+    assert.deepEqual(shown, { name: "second" }, "reopening shows the latest value");
+  } finally {
+    Output.prototype.shape = shape;
+  }
+});
+
+test("a_reopened_held_page_catches_up_with_changes_while_closed", async () => {
+  const { host, store, pass } = setup();
+  let held: unknown = { name: "first" };
+  store.setHeld((topic) => topic.topic === "overview" ? held : undefined);
+  store.subscribe(1, 1, overview());
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, value(1, { name: "first" })]]);
+  store.unsubscribe(1, 1);
+
+  held = { name: "second" };
+  store.changed(overview());
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 2, overview());
+  const messages = host.takeEmitted();
+  assert.equal(messages.length, 0, "a reopened held value is not sent an outdated snapshot");
+  await pass(COALESCE_MS * 2);
+  messages.push(...host.takeEmitted());
+  let shown: unknown;
+  for (const [, message] of messages) {
+    const m = message as { value?: unknown; delta?: Op[] };
+    if ("value" in m) shown = m.value;
+    else if (m.delta) shown = applyOps(shown, m.delta);
+  }
+  assert.deepEqual(shown, { name: "second" }, "a held value changed while the page was closed");
 });
 
 test("an_invalidated_topic_is_computed_once_as_it_goes_out", async () => {

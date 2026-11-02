@@ -6,6 +6,39 @@
 let work_line : String = "后台 4 · 清单 2/6：core 的 agentCard 加上后台和清单"
 
 ///|
+test "an agent's card offers its jobs when a compact chat says it has them" {
+  for has_jobs in [true, false] {
+    new_run()
+    let base = fixture("chat-agent")
+    let src : Source = {
+      ..base,
+      topic: fn(name, params) {
+        let got = (base.topic)(name, params)
+        guard name == "chat" && got.value is Some(Object(chat)) else { return got }
+        let out = chat.copy()
+        out["agents"] = Json::array(items(got.value, "agents").map(fn(a) {
+          match a {
+            Object(agent) => {
+              let shown = agent.copy()
+              shown["jobs"] = Json::array([])
+              shown["hasJobs"] = Json::boolean(has_jobs)
+              Json::object(shown)
+            }
+            _ => a
+          }
+        }))
+        { ..got, value: Some(Json::object(out)) }
+      },
+    }
+    open_fixture_over("chat-agent", src)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+    t.run_for(@ui.move_most_ms)
+    sheet_rested(t, "sf-present")
+    assert_eq(t.find("后台") is Some(_), has_jobs)
+  }
+}
+
+///|
 /// The made-up core of `mode` whose agents' cards say four tasks in the background and a checklist of six, two done
 /// (views/brief.ts workOf), the tasks begun `ago` before the core's now.
 fn work_source(mode : String, on? : Ref[Bool] = Ref(true), running? : Bool = true) -> Source {

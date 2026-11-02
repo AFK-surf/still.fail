@@ -189,6 +189,7 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
   // where it was first opened, not where it was left (views.ts: chatJobs and imageNear are of the chat's topic)
   (src.leave)("chat", chat_params(r))
   (src.leave)("chatJobs", chat_params(r))
+  (src.leave)("chatJobs", chat_jobs_summary_params(r))
   // what its agents' lines and its jobs' sheets read: their work as it goes, their logs as they grow
   @sfbase.let_go(src, @sfbase.chat_scope(r.station, r.session))
   @sfbase.let_go(src, @sfbase.jobs_scope(r.station))
@@ -276,8 +277,8 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   let t = @sf.theme()
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
-  let jobs = (src.topic)("chatJobs", chat_params(r))
-  let has_jobs = items(jobs.value, "jobs").length() > 0
+  let jobs = (src.topic)("chatJobs", chat_jobs_summary_params(r))
+  let has_jobs = flag(jobs.value, "hasJobs") || items(jobs.value, "jobs").length() > 0
   let archive = v.archivable && !v.archived
   // 归档 comes and goes as nothing is left in the chat or something is again (Chat.kt ChatBar: 280 ms, ArchiveEase;
   // fading, from or to 85%, its width from its end)

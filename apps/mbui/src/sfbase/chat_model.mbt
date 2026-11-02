@@ -807,6 +807,14 @@ pub fn chat_params(r : ChatRef) -> Map[String, Json] {
 }
 
 ///|
+/// The bar needs only whether there are jobs and whether its button has an alarm; the jobs sheet reads the whole list.
+pub fn chat_jobs_summary_params(r : ChatRef) -> Map[String, Json] {
+  let params = chat_params(r)
+  params["summary"] = Json::boolean(true)
+  params
+}
+
+///|
 /// The last part of a path.
 pub fn base_name(path : String) -> String {
   match path.rev_find("/") {

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { frequentCombos, recordCombo, resolve } from "../src/choose.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { machineMeta, models, quotaLine } from "../src/views/models.ts";
+import { choices, machineMeta, models, quotaLine } from "../src/views/models.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -106,6 +106,25 @@ test("the_runtimes_a_chat_starts_on_are_offered_claude_codex_then_deepseek_harne
   assert.deepEqual([kept.where, kept.folder, kept.day, kept.when, kept.own], ["~/Documents/GitHub/still.fail", "still.fail", "今天", "3 小时前", false]);
   const old = machineMeta({ runtime: "codex", cwd: "/Users/me/.stillfail/sessions/ember/c-1/workspace", updatedAt: 9 * day + 13 * 3_600_000 + 5 * 60_000 }, 10 * day + 3_600_000);
   assert.deepEqual([old.folder, old.day, old.when, old.own], ["workspace", "昨天", "13:05", true]);
+});
+
+test("model_options_read_each_accounts_model_list_once_even_when_it_offers_many_models", () => {
+  let reads = 0;
+  const names = Array.from({ length: 48 }, (_, i) => `gpt-6-sol-${i}`);
+  const first = { id: "one", runtimes: ["codex", "codex"], get models() { reads++; return [...names, `openai/${names[0]}`, names[0]]; } };
+  const second = { id: "two", runtimes: ["codex", "claude"], get models() { reads++; return [`openai/${names[0]}`, names[1]]; } };
+  const overview = { profiles: [first, second] };
+  const all = models(overview, 1_000);
+  assert.equal(reads, 2, "a station's model lists are not rescanned for each model and runtime");
+  assert.equal(all.length, names.length);
+  const one = all.find((m: J) => m.model === names[0]);
+  assert.deepEqual(one.ids, [names[0], `openai/${names[0]}`]);
+  assert.deepEqual(one.accounts.codex.map((p: J) => p.id), ["one", "two"]);
+  assert.deepEqual(one.accounts.claude.map((p: J) => p.id), ["two"]);
+  reads = 0;
+  const own = choices(overview, { runtime: "codex", profile: "one" }, 1_000);
+  assert.equal(reads, 2, "an agent's choices do not rescan every account's model list for each option");
+  assert.deepEqual(own.find((m: J) => m.model === names[0]).accounts.codex.map((p: J) => [p.id, p.current]), [["one", true], ["two", false]]);
 });
 
 test("grok_build_is_offered_after_deepseek_harness_with_its_own_efforts_and_no_fast_mode", () => {

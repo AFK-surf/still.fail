@@ -59,6 +59,24 @@ test("a_chats_jobs_put_what_matters_first_and_say_how_many", () => {
   assert.deepEqual([none.alarm, none.jobs, next2], [null, [], Infinity]);
 });
 
+test("a_chat_jobs_summary_keeps_the_button_and_alarm_without_preparing_the_jobs_page", () => {
+  const chat = { agents: [{ jobs: [
+    job("failed", { state: "failed", endedAt: NOW - NEWS + 5_000 }),
+    job("restarting", { state: "exited", port: 1 }),
+    job("old", { state: "stopped" }),
+  ] }] };
+  const [full] = chatJobs(chat, c());
+  const [brief, next] = chatJobs(chat, c(), true);
+  assert.equal(brief.hasJobs, full.jobs.length > 0);
+  assert.equal(brief.alarm, full.alarm);
+  assert.deepEqual(brief.jobs, [], "the unopened jobs page is not formatted");
+  assert.equal(next, 5_000, "the alarm is checked again when the failure is no longer recent");
+  const [later] = chatJobs(chat, { ...c(), now: NOW + 5_000 }, true);
+  assert.equal(later.alarm, "restart");
+  const [empty, never] = chatJobs({ agents: [] }, c(), true);
+  assert.deepEqual([empty.hasJobs, empty.alarm, never], [false, null, Infinity]);
+});
+
 test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
   const st = (name: string | null, jobs: J[]): [string, string | null, J[]] => ["w/s1", name, jobs];
   const v = longJobs(

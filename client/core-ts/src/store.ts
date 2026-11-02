@@ -87,6 +87,8 @@ type Entry = {
   job?: () => void;
   /// The value last sent to the subscribers; the next emission is the difference to it.
   sent?: Value;
+  /// Its value changed without a subscriber; it needs output when a page next asks for it.
+  outputDirty?: boolean;
   /// Who subscribes, and whether it takes keyed ops (collections.ts).
   subscribers: [ClientId, RequestId, boolean][];
   watchers: [number, () => void][];
@@ -199,6 +201,9 @@ export class Store {
       this.#topics.set(key, entry);
     }
     const resumed = entry.idle !== null;
+    // Its last client output predates changes made while the page was closed. A new subscriber must receive the
+    // current value whole, rather than that old value followed by a delta.
+    if (entry.outputDirty && entry.subscribers.length === 0) entry.sent = undefined;
     entry.subscribers.push([client, id, keyed]);
     entry.idle = null;
     const cached = entry.sent;
@@ -223,6 +228,13 @@ export class Store {
       // A held topic only watched in the core so far (by a view) has never gone out: it does now, not when it next
       // changes (#flush sends nothing of one that has no subscriber).
       if (cached === undefined && this.#held !== null && holds(topic)) this.invalidate(topic);
+    }
+    if (entry.outputDirty && this.#held !== null && holds(topic)) {
+      // Held values are read from Data, not kept in the entry while only watched.
+      this.invalidate(topic);
+    } else if (entry.outputDirty && !entry.emitScheduled) {
+      entry.emitScheduled = true;
+      this.#scheduleEmit(topic);
     }
     this.#tick();
   }
@@ -554,6 +566,7 @@ export class Store {
       if (isHeld && entry.subscribers.length === 0) {
         // Only watched: who watches it reads what is held (and heard of its changes as they were made); what is read
         // here is only what its source says when nothing is held (an error), so nothing is loaded for it.
+        entry.outputDirty = true;
         const said = this.#compute(topic);
         const was = entry.value;
         if (said === undefined ? was === undefined || !("err" in was) : sameValue(was, said)) return;
@@ -602,6 +615,14 @@ export class Store {
       return;
     }
     now.waiting = false;
+    if (now.subscribers.length === 0) {
+      // Internal readers use the value above, not its client representation. Keep the last output for a reopening
+      // page, and make the new one only when there is a subscriber to receive it.
+      now.outputDirty = true;
+      for (const w of changed) w();
+      return;
+    }
+    now.outputDirty = false;
     const c: present.Clock = { now: this.host.nowMs(), offsetMin: this.host.utcOffsetMin(this.host.nowMs()) };
     let value: Value = now.value;
     if ("ok" in value) {
