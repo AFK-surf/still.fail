@@ -306,6 +306,16 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
     Chat(r) => assert_eq(r.session, "s-a1")
     _ => fail("the newest not open")
   }
+  // The menu and keys step through the archive's own rows, and stop at either end.
+  @settings.ask_action("chat.next")
+  t.frame()
+  assert_eq(open_title(), "试一下新的图标尺寸")
+  t.key(@ui.key_code_down, mods=@ui.mod_alt)
+  assert_eq(open_title(), "试一下新的图标尺寸")
+  t.key(@ui.key_code_up, mods=@ui.mod_alt)
+  assert_eq(open_title(), "整理上个月的发票")
+  t.key(@ui.key_code_up, mods=@ui.mod_alt)
+  assert_eq(open_title(), "整理上个月的发票")
   // pointed at, 恢复
   let (x, y) = t.find("试一下新的图标尺寸").unwrap()
   t.move(x, y)

@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { feedback, list, overview, user, workspace } from "../src/views/admin.ts";
+import { admin, feedback, list, overview, user, workspace } from "../src/views/admin.ts";
+import { CoreError } from "../src/error.ts";
 import { relays } from "../src/views/admin-relays.ts";
 
 holdLanguage();
@@ -204,4 +205,14 @@ test("the_relays_page_says_each_relays_load_now_and_over_the_range", () => {
   assert.equal(w.range, "week");
   assert.equal(w.relays[0].charts[0].series[0].values.length, 168);
   assert.ok(w.relays[0].ticks.every((tick: J) => /^\d+\/\d+$/.test(tick.label)));
+});
+
+test("a_bug_making_a_view_is_thrown_for_the_store_to_report_and_a_core_error_is_the_views", () => {
+  const view = (list: string, id?: string) => ({ topic: "adminItem", account: "a", list, ...(id ? { id } : {}) });
+  // The page's own error (no such user) is the view's value.
+  const missing = admin(view("users", "nobody"), (_, l) => ({ ok: l === "users" ? users() : workspaces() }), NOW * 1000, 0);
+  assert.ok(missing && "err" in missing && missing.err instanceof CoreError && missing.err.code === "http_404");
+  // A bug is not passed off as a CoreError (the web host sends one by its toJSON: a TypeError has none, and took the
+  // whole core down as "t.error.toJSON is not a function"): it is thrown, for the store to fail this topic with.
+  assert.throws(() => admin(view("feedback", "F1"), () => ({ ok: { get feedback(): J { throw new TypeError("a bug"); } } }), NOW * 1000, 0), TypeError);
 });

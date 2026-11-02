@@ -183,26 +183,38 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
       })
       @sf.field(c, @sf.t("web-main.preset.dirs"), hint=if e.dirs.length() == 0 { @sf.t("web-main.preset.dirsHint") } else { "" }, fn() {
         c.box(style=preset_dirs, fn() {
+          let seen : Map[String, Bool] = {}
           for d in e.dirs {
-            let at = dir_key(Some(d))
-            // (what it shows as: as the station offers it, where it does)
-            let one = match offered.iter().find_first(fn(o) { dir_key(Some(o)) == at }) {
-              Some(x) => Some(x)
-              None => Some(d)
+            let station = dir_station(Some(d), address)
+            if seen.contains(station) {
+              continue
             }
-            let path = text(one, "path")
-            c.box(style=preset_dir_row, fn() {
-              repo_mark(c, dir_label(path), text(one, "repo"), text(one, "icon"), preset_dir_mark)
-              c.box(style=preset_dir_words, fn() {
-                c.text(if text(one, "name") != "" { text(one, "name") } else { dir_label(path) }, style=preset_dir_name) |> ignore
-                c.text(dir_note(one, false), style=preset_dir_note) |> ignore
+            seen[station] = true
+            preset_station_heading(c, preset_station_name(station, text(Some(d), "stationName"), stations))
+            for folder in e.dirs {
+              if dir_station(Some(folder), address) != station {
+                continue
+              }
+              let at = dir_key(Some(folder))
+              // (what it shows as: as that station offers it, where it does)
+              let one = match offered.iter().find_first(fn(o) { dir_key(Some(o)) == at }) {
+                Some(x) => Some(x)
+                None => Some(folder)
+              }
+              let path = text(one, "path")
+              c.box(style=preset_dir_row, fn() {
+                repo_mark(c, dir_label(path), text(one, "repo"), text(one, "icon"), preset_dir_mark)
+                c.box(style=preset_dir_words, fn() {
+                  c.text(if text(one, "name") != "" { text(one, "name") } else { dir_label(path) }, style=preset_dir_name) |> ignore
+                  c.text(dir_note(one, false), style=preset_dir_note) |> ignore
+                })
+                |> ignore
+                if @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove")) {
+                  e.dirs.retain(fn(x) { dir_key(Some(x)) != at })
+                }
               })
               |> ignore
-              if @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove")) {
-                e.dirs.retain(fn(x) { dir_key(Some(x)) != at })
-              }
-            })
-            |> ignore
+            }
           }
           if @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus") || (e.adding && e.filled) {
             e.adding = false
@@ -299,12 +311,19 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, stations : Array
   let has = fn(k : String) { e.dirs.iter().any(fn(d) { dir_key(Some(d)) == k }) }
   let q = @sf.input(c, key("q"), placeholder=@sf.t("web-main.preset.search"), field=field_of(key("q"))).text.trim(chars=" ").to_owned().to_lower()
   c.box(style=preset_offered, fn() {
+    let mut shown_station = ""
     for o in offered {
       let one = Some(o)
       let k = dir_key(one)
+      let station = dir_station(one, address)
+      let station_name = preset_station_name(station, text(one, "stationName"), stations)
       let (name, repo, icon) = (text(one, "name"), text(one, "repo"), text(one, "icon"))
-      if has(k) || (q != "" && !name.to_lower().contains(q) && !repo.to_lower().contains(q) && !text(one, "where").to_lower().contains(q)) {
+      if has(k) || (q != "" && !name.to_lower().contains(q) && !repo.to_lower().contains(q) && !text(one, "where").to_lower().contains(q) && !station_name.to_lower().contains(q)) {
         continue
+      }
+      if shown_station != station {
+        preset_station_heading(c, station_name)
+        shown_station = station
       }
       // (as it will stand among the preset's folders once taken: its mark, its name over where it is)
       let id = c.id(key("offer/" + k))
@@ -408,21 +427,34 @@ fn dir_key(d : Json?) -> String {
 }
 
 ///|
+/// The station a folder is on (an absent station means the preset's own).
+fn dir_station(d : Json?, address : String) -> String {
+  let at = text(d, "station")
+  if at == "" { address } else { at }
+}
+
+///|
+/// The workspace's current name for a station, or its saved name when it is offline.
+fn preset_station_name(address : String, saved : String, stations : Array[Json]) -> String {
+  match stations.iter().find_first(fn(s) { text(Some(s), "station") == address }) {
+    Some(s) if text(Some(s), "name") != "" => text(Some(s), "name")
+    _ => if saved != "" { saved } else { address }
+  }
+}
+
+///|
+fn preset_station_heading(c : @ui.Ctx, name : String) -> Unit {
+  c.box(style=preset_station_heading_box, fn() { c.text(name, style=preset_station_heading_words) |> ignore }) |> ignore
+}
+
+///|
 /// The folders the workspace's stations offer (each one's `presets` topic, read as it is shown): the preset's
-/// station's first, then the others', each marked with its station; a repository once (where it is on the preset's
-/// station, else on the first that has it), as its chats find it by its address on whichever station they run.
+/// station's first, then the others', each marked with its station. The same repository on two stations is offered
+/// on both: their paths and the instructions in them can differ.
 fn offered_dirs(src : Source, address : String, stations : Array[Json]) -> Array[Json] {
   let out : Array[Json] = []
-  let repos : Map[String, Bool] = {}
   let take = fn(at : String, station_name : String) {
     for o in items(presets_of(src, at), "candidates") {
-      let repo = text(Some(o), "repo")
-      if repo != "" && repos.contains(repo) {
-        continue
-      }
-      if repo != "" {
-        repos[repo] = true
-      }
       match o {
         Object(m) if at != address => {
           let marked = m.copy()
@@ -445,14 +477,12 @@ fn offered_dirs(src : Source, address : String, stations : Array[Json]) -> Array
 }
 
 ///|
-/// What a folder says under its name: where it is (and on which station, where it is not the preset's), how many chats
-/// worked in it (`chats`: where it is offered).
+/// What a folder says under its name: where it is, and how many chats worked in it (`chats`: where it is offered).
 fn dir_note(o : Json?, chats : Bool) -> String {
   let n = count(o, "chats")
   let at = if text(o, "where") != "" { text(o, "where") } else if text(o, "repo") != "" { text(o, "repo") } else { text(o, "path") }
   let parts = [
     at,
-    text(o, "stationName"),
     if chats && n > 0 { @sf.t("web-main.preset.chats", args=[("n", n.to_string())]) } else { "" },
   ]
   join(parts.filter(fn(x) { x != "" }), " · ")
@@ -479,6 +509,14 @@ let preset_marks_row : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 /// The folders offered to add, a row each.
 // kept across runs: a value (no field of it changes)
 let preset_offered : @ui.Style = @ui.css("w=Full gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let preset_station_heading_box : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2 pb=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let preset_station_heading_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// Short of room, the preset's words go with the first of the model's parts (model_triple.mbt triple_drop_name: who

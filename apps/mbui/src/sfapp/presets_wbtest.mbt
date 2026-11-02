@@ -52,6 +52,19 @@ test "wide, 添加目录 shows the other stations' folders while its own says no
 }
 
 ///|
+test "adding directories groups them by station, including the same repository on both" {
+  let t = preset_add(false, wide=true)
+  // Filter to the same repository on both machines. Both paths and both station headings remain visible.
+  t.tap_text("搜仓库或目录")
+  t.type_text("still.fail")
+  t.frame()
+  assert_true(shows(t, "Studio") && shows(t, "MBA"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_eq(t.all(Button, label="still.fail").length(), 2, msg=t.semantics_dump())
+  assert_true(shows(t, "~/WebstormProjects/still.fail · 41 个对话用过"))
+  assert_true(shows(t, "~/code/still.fail · 2 个对话用过"))
+}
+
+///|
 test "a phone's new chat shows its preset's control, the composer a capsule as touch has it" {
   new_run()
   let src = fixture("newchat")

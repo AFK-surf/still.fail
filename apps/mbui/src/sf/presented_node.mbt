@@ -24,7 +24,7 @@ fn tree_draws(p : Presented, sheet : Bool) -> Bool {
   presented_in_tree.val &&
   !sheet &&
   (
-    p.shows is (Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _)) ||
+    p.shows is (Confirm(_, _, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _)) ||
     p.shows is Pick(_, _, _, _, _, _) ||
     (p.shows is Panel(x) && (panel_popover_of(x, p.from) || panel_centred_of(x, p.from)))
   )
@@ -105,7 +105,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
         f()
       }
       match p.shows {
-        Confirm(title, words, action, danger, run) =>
+        Confirm(title, words, warning, action, danger, run) =>
           confirm_node(
             row,
             open,
@@ -115,6 +115,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             danger,
             fn() { dismissed_now(serial) },
             fn() { done(run) },
+            warning~,
             shown~,
             gone~,
             dims~,
