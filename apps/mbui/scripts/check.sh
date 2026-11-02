@@ -1,9 +1,10 @@
 #!/bin/bash
-# Type-check every target of this module (and mbui with it); print errors only. First the determinism lint (the pinned
-# mbui's tools/detlint, its docs/detlint.md, with apps/mbui/detlint.json: every global put back by its package's
-# reset is its `globals` rule): its report, and a failure stops here.
+# Check the native core's build cache, then type-check every target of this module (and mbui with it). The determinism
+# lint (mbui's tools/detlint, docs/detlint.md, with apps/mbui/detlint.json) reports errors before type-checking.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+# A warm native build must use the current checkout's core, including when several release runners share its outputs.
+bash "$D/core-cache-test.sh" || exit 1
 "$MBUI_DIR/scripts/detlint" "$A" || exit 1
 # the web's files the app carries, as they are now (scripts/webassets.py)
 python3 "$D/webassets.py" --check || exit 1
