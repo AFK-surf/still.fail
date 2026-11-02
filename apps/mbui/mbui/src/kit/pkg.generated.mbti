@@ -59,7 +59,7 @@ pub let collapsible_open_ms : Double
 
 pub fn context_menu(@ui.Ctx, String, Int32, Array[Entry], label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit) -> Menu
 
-pub fn dialog(@ui.Ctx, String, Bool, String, description? : String, w? : Double, modal? : Bool, outside? : Bool, close_label? : String, look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit, scrim? : Int64, () -> Unit) -> @ui.Changed[Bool]
+pub fn dialog(@ui.Ctx, String, Bool, String, description? : String, w? : Double, modal? : Bool, outside? : Bool, close_label? : String, look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit, scrim? : Int64, on_escape? : () -> Bool, () -> Unit) -> @ui.Changed[Bool]
 
 pub fn dialog_drawn(@ui.Ctx, String, Bool) -> Bool
 
@@ -249,7 +249,7 @@ pub fn select_look(@ui.Ctx, SelectState) -> Unit
 
 pub fn separator(@ui.Ctx, vertical? : Bool, decorative? : Bool, thickness? : Double, color? : Int64) -> Unit
 
-pub fn sheet(@ui.Ctx, String, Bool, () -> Unit, h? : Double, share? : Double, detents? : Array[Double], close_below? : Double, drag_h? : Double, scrim? : Int64, label? : String, look? : (@ui.Ctx, SheetState, () -> Unit) -> Unit) -> Sheet
+pub fn sheet(@ui.Ctx, String, Bool, () -> Unit, h? : Double, share? : Double, detents? : Array[Double], close_below? : Double, drag_h? : Double, scrim? : Int64, label? : String, look? : (@ui.Ctx, SheetState, () -> Unit) -> Unit, on_escape? : () -> Bool) -> Sheet
 
 pub fn sheet_grabber(@ui.Ctx) -> Unit
 

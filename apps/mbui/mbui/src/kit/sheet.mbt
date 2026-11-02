@@ -77,7 +77,8 @@ priv struct SheetKept {
 ///|
 /// `key`'s sheet (see the file's head), `open` or not, what `body` builds in it: `h` high (or, when it is not given,
 /// `share` of the window), its top `drag_h` high dragging it, its scrim `scrim` (the theme's) at its fullest, named
-/// `label` for the semantics tree. Whether it is open now, whether it is drawn, what a drag came to.
+/// `label` for the semantics tree; an Escape `on_escape` says it took a step back within it (Ctx::overlay's), not
+/// closing it. Whether it is open now, whether it is drawn, what a drag came to.
 pub fn sheet(
   c : @ui.Ctx,
   key : String,
@@ -91,6 +92,7 @@ pub fn sheet(
   scrim? : Int64,
   label? : String = "",
   look? : (@ui.Ctx, SheetState, () -> Unit) -> Unit = sheet_look,
+  on_escape? : () -> Bool,
 ) -> Sheet {
   install()
   let th = c.theme()
@@ -227,7 +229,7 @@ pub fn sheet(
   }
   // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
   // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself)
-  let o = c.overlay(key, modal=true, initial_focus=0, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
+  let o = c.overlay(key, modal=true, initial_focus=0, on_escape?, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
     let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx, fn() {
       look(c, { t: scrim_t, h: hx, below: bx }, fn() {
         // behind what it shows (its buttons take their taps), over the sheet (it takes the drags): what lies on it

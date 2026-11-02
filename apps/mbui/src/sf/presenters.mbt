@@ -114,6 +114,21 @@ priv struct PanelOf {
   side : @ui.Side
   along : @ui.Along
   offset : Double
+  /// what it holds goes in steps in it (panel's `steps`: panel_go, panel_back)
+  steps : Bool
+}
+
+///|
+/// A step of a panel that goes in steps (panel_go): its title, what it is about ("" nothing), what it holds and what is
+/// at its foot (each given what closes the panel), what is let go of as it is left for good (gone back from, or the
+/// panel closed: what it holds with it); `n` its count in the panel (0 the panel's own, the first).
+priv struct PanelStep {
+  n : Int
+  title : String
+  description : String
+  body : (@ui.Ctx, () -> Unit) -> Unit
+  foot : ((@ui.Ctx, () -> Unit) -> Unit)?
+  left : () -> Unit
 }
 
 ///|
@@ -135,6 +150,14 @@ priv struct Presented {
   /// beside what opened it as wide as what it holds (`fits`): the widest it has been laid out, never narrower from then
   /// on
   mut widest : Double
+  /// a panel that goes in steps (`steps`): its steps, the first its own (a stack's: each slides in over the one before,
+  /// and back, its back key, Escape and the system's back take it off), how many it has gone to, how tall what shows
+  /// is (as the step on top is laid out, going there with the slide as it comes or goes: `step_h_of` the step it is
+  /// that tall for; -1 none yet)
+  steps : @ui.Nav[PanelStep]?
+  mut steps_made : Int
+  step_h : @motion.Anim
+  mut step_h_of : Int
 }
 
 ///|
@@ -200,6 +223,17 @@ pub fn presenters_reset() -> Unit {
 ///|
 fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit = fn() {  }) -> Unit {
   presented_count.val += 1
+  // (a panel that goes in steps: its own the first of them)
+  let steps = match shows {
+    Panel(x) if x.steps =>
+      Some(
+        @ui.Nav::new(
+          { n: 0, title: x.title, description: x.description, body: x.body, foot: x.foot, left: fn() {  } },
+          on_leave=fn(s) { (s.left)() },
+        ),
+      )
+    _ => None
+  }
   // (what is presented written whole, then told as one change: what reads it as it is told finds it there)
   presented_now.push({
     serial: presented_count.val,
@@ -212,6 +246,10 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     ended: false,
     over: false,
     widest: 0.0,
+    steps,
+    steps_made: 0,
+    step_h: @motion.Anim::new(0.0),
+    step_h_of: -1,
   })
   @signals.start_batch()
   presented_told()
@@ -316,6 +354,7 @@ pub fn panel(
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   offset? : Double = panel_offset,
+  steps? : Bool = false,
 ) -> Unit {
   present(
     Panel({
@@ -340,11 +379,83 @@ pub fn panel(
       side,
       along,
       offset,
+      steps,
     }),
     from,
     gone~,
   )
 }
+
+///|
+/// In a panel that goes in steps (panel's `steps`), as what it shows is drawn or pressed: a step in, in the same panel,
+/// titled `title` (`description` under it), what it holds `body` and what is at its foot `foot` (each given what closes
+/// the panel): it slides in over the step it is in, the panel as tall as it from then on, going there as it comes; its
+/// head a back key at its start. Back (that key, Escape, the system's back, its left edge swiped) takes it off, back to
+/// the step before; from the first, back closes the panel. A press outside, the sheet dragged down, its close button:
+/// the panel closes, all its steps with it. `left`: what is let go of as it is left for good (gone back from, or the
+/// panel closed), once.
+pub fn panel_go(
+  title : String,
+  body : (@ui.Ctx, () -> Unit) -> Unit,
+  description? : String = "",
+  foot? : (@ui.Ctx, () -> Unit) -> Unit,
+  left? : () -> Unit = fn() {  },
+) -> Unit {
+  match stepping() {
+    Some(p) =>
+      match p.steps {
+        Some(nav) => {
+          p.steps_made += 1
+          nav.push({ n: p.steps_made, title, description, body, foot, left })
+        }
+        None => ()
+      }
+    None => ()
+  }
+}
+
+///|
+/// In a panel that goes in steps, as what it shows is drawn or pressed: back to the step before (its back key's), or to
+/// the step `to` deep (1 the first: a step's work done, back where it began), the one on top sliding away over it.
+/// Whether there was one to go back to.
+pub fn panel_back(to? : Int) -> Bool {
+  match stepping() {
+    Some({ steps: Some(nav), .. }) =>
+      match to {
+        Some(d) => nav.pop_to(d)
+        None => nav.pop()
+      }
+    _ => false
+  }
+}
+
+///|
+/// How many steps in the panel that goes in steps being drawn is (1: its own, the first); 0 in none.
+pub fn panel_depth() -> Int {
+  match stepping() {
+    Some({ steps: Some(nav), .. }) => nav.depth()
+    _ => 0
+  }
+}
+
+///|
+/// The panel that goes in steps a step is told to (panel_go, panel_back): the one whose step is being drawn, or the
+/// topmost open one that goes in steps (what was pressed in it told between frames).
+fn stepping() -> Presented? {
+  let serial = steps_drawn_now.val
+  for i = presented_now.length() - 1; i >= 0; i = i - 1 {
+    let p = presented_now[i]
+    if p.steps is Some(_) && (p.serial == serial || (serial == 0 && p.open)) {
+      return Some(p)
+    }
+  }
+  None
+}
+
+///|
+/// The serial of the panel whose step is being drawn (0 none).
+// kept across runs: said round each step drawn, 0 between
+let steps_drawn_now : Ref[Int] = Ref(0)
 
 ///|
 /// What reaches a panel's sides on purpose (a strip that scrolls under them, attach's photos): out across the room
@@ -936,6 +1047,13 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     }
   }
   if !gone.is_empty() {
+    // (a panel that goes in steps gone: the steps it was in let go of, the last first)
+    for p in presented_now {
+      match p.steps {
+        Some(nav) if gone.contains(p.serial) => for st in nav.pages().rev() { (st.left)() }
+        _ => ()
+      }
+    }
     let left = presented_now.filter(fn(p) { !gone.contains(p.serial) })
     presented_now.clear()
     presented_now.append(left)
@@ -1302,6 +1420,10 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
 /// A panel opened by nothing, in the middle of the window (parts.tsx Dialog: @sf.dialog, its close button).
 fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
   let close = fn() { done_with(c, p, fn() {  }) }
+  match p.steps {
+    Some(nav) => return steps_centred(c, key, p, x, nav, close)
+    None => ()
+  }
   let (title, step, description) = match x.live {
     Some(f) => f()
     None => (x.title, "", x.description)
@@ -1369,6 +1491,96 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
 }
+
+///|
+/// A panel that goes in steps opened by nothing, in the middle of the window (panel_centred's): the dialog bare, its
+/// close button in its corner, each step whole in it (its head, what it is about, what it holds, its foot), sliding in
+/// over the one before out to the dialog's edges. Escape and back go back a step before they close it.
+fn steps_centred(
+  c : @ui.Ctx,
+  key : String,
+  p : Presented,
+  x : PanelOf,
+  nav : @ui.Nav[PanelStep],
+  close : () -> Unit,
+) -> (Bool, Bool) {
+  let words_were = words_in_now.val
+  let column = card_pad - corner_inset
+  words_in_now.val = column
+  let still = dialog(
+    c,
+    key,
+    p.open,
+    "",
+    fn() {
+      // (out past its padding and its column to its edges, where a step sliding is cut off)
+      steps_shown(c, p, nav, false, dialog_pad + column, fn(s, back) {
+        dialog_page(c, key, p, { ..x, body: s.body, foot: s.foot }, s, close, back)
+      })
+    },
+    wide=x.wide,
+    close_label=t("common.close"),
+    column_in=column,
+    bare=true,
+    on_escape=fn() { steps_escape(p) },
+  )
+  words_in_now.val = words_were
+  (still && p.open, dialog_built(c, key, p.open))
+}
+
+///|
+/// A step `s` of panel `x` in a dialog (steps_centred): its head (its back key, `back`, at its start past the first; its
+/// title), what it is about, what it holds (its fields' focus given as it opens), its buttons at its foot in its corner;
+/// as a titled dialog's are, on its words' line.
+fn dialog_page(
+  c : @ui.Ctx,
+  key : String,
+  p : Presented,
+  x : PanelOf,
+  s : PanelStep,
+  close : () -> Unit,
+  back : (() -> Unit)?,
+) -> Unit {
+  let line = c.text_size(Heading).1
+  match back {
+    Some(f) => step_head(c, key, s.title, f, dialog_step_head.then(untitled_clear()), dialog_title, line)
+    None =>
+      c.box(style=dialog_step_head.then(untitled_clear()), fn() { c.text(s.title, style=dialog_title) |> ignore })
+      |> ignore
+  }
+  if s.description != "" {
+    c.box(style=dialog_lead_at, fn() { c.text(s.description, style=dialog_lead) |> ignore }) |> ignore
+  }
+  c.box(style=if s.foot is None { dialog_body_end } else { dialog_body }, gone_empty=true, fn() {
+    let (was, rows_were, given_was, in_was) = (panel_sides_in.val, rows_out.val, column_given.val, column_in_now.val)
+    let words = words_in_now.val
+    panel_sides_in.val = dialog_pad + words
+    rows_out.val = words
+    words_in_now.val = 0.0
+    column_given.val = true
+    column_in_now.val = words
+    panel_whole_now.val += 1
+    draw_panel_body(x, c, close, keyed=p)
+    panel_whole_now.val -= 1
+    panel_sides_in.val = was
+    rows_out.val = rows_were
+    words_in_now.val = words
+    column_given.val = given_was
+    column_in_now.val = in_was
+  })
+  |> ignore
+  match s.foot {
+    // (in its foot corner as a titled dialog's are, from the step's column: its padding and the words' line in)
+    Some(f) =>
+      c.box(style=dialog_foot.then(dialog_corner_foot(dialog_pad + words_in_now.val)), fn() { f(c, close) }) |> ignore
+    None => ()
+  }
+}
+
+///|
+/// A step's head in a dialog: as high as a titled dialog's head (dialog_head's, its close button over its corner now).
+// kept across runs: a value (no field of it changes)
+let dialog_step_head : @ui.Style = @ui.style(row=true, w=Full, align=ACenter, min_h=Fixed(dialog_close), pt=room(dialog_head_over))
 
 ///|
 /// A panel's `stage` (panel), the same on every screen: no panel round what it holds; the window under it the night
@@ -1684,7 +1896,9 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
       Some(w) => w >= wh * sheet_cap(p.shows) - sheet_cap_slack
       None => true
     })
-  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim=sheet_scrim, look~, fn() {
+  // (Escape in one that goes in steps: back a step first)
+  let on_escape = if p.steps is Some(_) { Some(fn() { steps_escape(p) }) } else { None }
+  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim=sheet_scrim, look~, on_escape?, fn() {
     match share {
       Some(_) =>
         c.box(style=sheet_whole, id=whole_id, fn() {
@@ -1804,100 +2018,19 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
     }
     Panel(x) => {
       let close = fn() { done_with(c, p, fn() {  }) }
-      let (title, _, description) = match x.live {
-        Some(f) => f()
-        None => (x.title, "", x.description)
-      }
-      if title != "" {
-        sheet_title(c, title)
-      }
-      if description != "" {
-        c.box(style=sheet_words_at, fn() { c.text(description, style=sheet_lead) |> ignore }) |> ignore
-      }
-      // what it holds in from the sheet's sides as its words are, opened by nothing (a form, a question); one opened
-      // by a press as far in as a pick's rows are, as small_panel's pad has it beside what opened it (what reaches
-      // the sides on purpose says so: panel_bleed); one filling a share lays out its own; the sheet's foot under it
-      // unless its buttons are (sheet_foot_at): the sheet's, as a panel's padding beside what opened it is the
-      // panel's, not what it holds
-      let pressed = p.from != Unanchored
-      // (one a share of the window caps fills it, as tall as what it holds where its lists say so: measured_body; a form
-      // lays out its own sides as it does, and is as tall as it is)
-      let capped = x.tall > 0.0 && !x.form
-      let room = if capped {
-        // (the sheet's foot under what it holds, as a panel's in a sheet: sheet_panel_foot)
-        sheet_capped_room
-      } else if x.tall > 0.0 {
-        full_width
-      } else if pressed {
-        if x.foot is None {
-          sheet_held
-        } else {
-          sheet_held_sides
-        }
-      } else {
-        sheet_panel
-      }
-      let body = fn() {
-        // (filling its share, it lays out its own sides: its words as far in as a sheet's, panel_words_in)
-        panel_sides_in.val = if x.tall > 0.0 { 0.0 } else if pressed { sheet_row_sides } else { sheet_panel_sides }
-        rows_out.val = panel_sides_in.val
-        words_in_now.val = if x.tall > 0.0 {
-          sheet_panel_sides
-        } else if pressed {
-          sheet_panel_sides - sheet_row_sides
-        } else {
-          0.0
-        }
-        rule_over_now.val = if x.ruled && x.foot is Some(_) { sheet_rule_over } else { 0.0 }
-        // (as tall as what it holds, what would scroll in itself laid out whole, as a dialog's body: panel_whole)
-        if capped {
-          draw_panel_body(x, c, close)
-        } else {
-          panel_whole_now.val += 1
-          draw_panel_body(x, c, close)
-          panel_whole_now.val -= 1
-        }
-        panel_sides_in.val = 0.0
-        rows_out.val = 0.0
-        words_in_now.val = 0.0
-        rule_over_now.val = 0.0
-      }
-      if scrolls && !capped && x.lists {
-        // (its own lists scroll in the room the sheet has: what it holds fills it)
-        c.box(style=sheet_grows, fn() { c.box(style=room.then(sheet_fills), body) |> ignore }) |> ignore
-      } else if scrolls && !capped {
-        c.box(style=sheet_grows, fn() {
-          c.capped(key + "/panel", wh_of(c), shrinks=true, fn() {
-            panel_held_now.val = true
-            c.box(style=room, body) |> ignore
-            panel_held_now.val = false
+      match p.steps {
+        // (one that goes in steps: each its own title, what it holds and its foot, sliding in over the one before)
+        Some(nav) =>
+          steps_shown(c, p, nav, scrolls, 0.0, fn(s, back) {
+            sheet_step(c, key, p, { ..x, body: s.body, foot: s.foot }, s.title, s.description, close, scrolls, back?)
           })
-          |> ignore
-        })
-        |> ignore
-      } else {
-        // (holding nothing this time, none of its room: its title and what it says straight over its foot; one a share
-        // caps measured, its lists saying what they hold: measured_body)
-        if capped {
-          measured_body(c, p.serial, sheet_capped.val, room, body)
-        } else {
-          c.box(style=room, gone_empty=true, body) |> ignore
-        }
-      }
-      match x.foot {
-        Some(f) => {
-          if x.ruled {
-            c.box(style=sheet_foot_rule, fn() {  }) |> ignore
+        None => {
+          let (title, _, description) = match x.live {
+            Some(f) => f()
+            None => (x.title, "", x.description)
           }
-          c.box(style=sheet_foot_at, flow=true, line_gap=ask_foot_lines(), fn() {
-            // its buttons across it, each its share (in a thumb's reach)
-            foot_fills.val = true
-            f(c, close)
-            foot_fills.val = false
-          })
-          |> ignore
+          sheet_step(c, key, p, x, title, description, close, scrolls)
         }
-        None => ()
       }
     }
     Confirm(title, words, action, danger, run) => {
@@ -1949,6 +2082,223 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
     }
   }
 }
+
+///|
+/// A panel `x` in a sheet: its title (with `back`, a back key at its start: a step's of one that goes in steps), what it
+/// is about, what it holds and its foot (sheet_body's).
+fn sheet_step(
+  c : @ui.Ctx,
+  key : String,
+  p : Presented,
+  x : PanelOf,
+  title : String,
+  description : String,
+  close : () -> Unit,
+  scrolls : Bool,
+  back? : () -> Unit,
+) -> Unit {
+  match back {
+    Some(f) => step_head(c, key, title, f, sheet_title_row, sheet_title_words, c.text_size(Title).1)
+    None =>
+      if title != "" {
+        sheet_title(c, title)
+      }
+  }
+  if description != "" {
+    c.box(style=sheet_words_at, fn() { c.text(description, style=sheet_lead) |> ignore }) |> ignore
+  }
+  // what it holds in from the sheet's sides as its words are, opened by nothing (a form, a question); one opened
+  // by a press as far in as a pick's rows are, as small_panel's pad has it beside what opened it (what reaches
+  // the sides on purpose says so: panel_bleed); one filling a share lays out its own; the sheet's foot under it
+  // unless its buttons are (sheet_foot_at): the sheet's, as a panel's padding beside what opened it is the
+  // panel's, not what it holds
+  let pressed = p.from != Unanchored
+  // (one a share of the window caps fills it, as tall as what it holds where its lists say so: measured_body; a form
+  // lays out its own sides as it does, and is as tall as it is)
+  let capped = x.tall > 0.0 && !x.form
+  let room = if capped {
+    // (the sheet's foot under what it holds, as a panel's in a sheet: sheet_panel_foot)
+    sheet_capped_room
+  } else if x.tall > 0.0 {
+    full_width
+  } else if pressed {
+    if x.foot is None {
+      sheet_held
+    } else {
+      sheet_held_sides
+    }
+  } else {
+    sheet_panel
+  }
+  let body = fn() {
+    // (filling its share, it lays out its own sides: its words as far in as a sheet's, panel_words_in)
+    panel_sides_in.val = if x.tall > 0.0 { 0.0 } else if pressed { sheet_row_sides } else { sheet_panel_sides }
+    rows_out.val = panel_sides_in.val
+    words_in_now.val = if x.tall > 0.0 {
+      sheet_panel_sides
+    } else if pressed {
+      sheet_panel_sides - sheet_row_sides
+    } else {
+      0.0
+    }
+    rule_over_now.val = if x.ruled && x.foot is Some(_) { sheet_rule_over } else { 0.0 }
+    // (as tall as what it holds, what would scroll in itself laid out whole, as a dialog's body: panel_whole)
+    if capped {
+      draw_panel_body(x, c, close)
+    } else {
+      panel_whole_now.val += 1
+      draw_panel_body(x, c, close)
+      panel_whole_now.val -= 1
+    }
+    panel_sides_in.val = 0.0
+    rows_out.val = 0.0
+    words_in_now.val = 0.0
+    rule_over_now.val = 0.0
+  }
+  if scrolls && !capped && x.lists {
+    // (its own lists scroll in the room the sheet has: what it holds fills it)
+    c.box(style=sheet_grows, fn() { c.box(style=room.then(sheet_fills), body) |> ignore }) |> ignore
+  } else if scrolls && !capped {
+    c.box(style=sheet_grows, fn() {
+      c.capped(key + "/panel", wh_of(c), shrinks=true, fn() {
+        panel_held_now.val = true
+        c.box(style=room, body) |> ignore
+        panel_held_now.val = false
+      })
+      |> ignore
+    })
+    |> ignore
+  } else {
+    // (holding nothing this time, none of its room: its title and what it says straight over its foot; one a share
+    // caps measured, its lists saying what they hold: measured_body)
+    if capped {
+      measured_body(c, p.serial, sheet_capped.val, room, body)
+    } else {
+      c.box(style=room, gone_empty=true, body) |> ignore
+    }
+  }
+  match x.foot {
+    Some(f) => {
+      if x.ruled {
+        c.box(style=sheet_foot_rule, fn() {  }) |> ignore
+      }
+      c.box(style=sheet_foot_at, flow=true, line_gap=ask_foot_lines(), fn() {
+        // its buttons across it, each its share (in a thumb's reach)
+        foot_fills.val = true
+        f(c, close)
+        foot_fills.val = false
+      })
+      |> ignore
+    }
+    None => ()
+  }
+}
+
+///|
+/// What a panel that goes in steps shows: its steps a stack (Ctx::nav: the one on top, and the one beside it as one
+/// slides in or away, its left edge swiped back), each drawn by `draw` given its back key's (none on the first), as tall
+/// as the step on top is laid out: going there with the slide as another comes or goes, there at once as what one
+/// holds changes; filling what holds it where it `fills` (a sheet held to its most). It reaches `out` past its column on
+/// each side (where a step sliding is cut off: the panel's edge), each step back on the column by that.
+fn steps_shown(
+  c : @ui.Ctx,
+  p : Presented,
+  nav : @ui.Nav[PanelStep],
+  fills : Bool,
+  out : Double,
+  draw : (PanelStep, (() -> Unit)?) -> Unit,
+) -> Unit {
+  // (each step's box measured by its count, as it is laid out: @motion.measure)
+  let key_of = fn(s : PanelStep) { "sf-present/step/\{p.serial}/\{s.n}" }
+  let top = nav.top()
+  // (its height on its way with the slide: as long as the slide's way across the panel is far)
+  let slide = @motion.move(over=c.width)
+  match @motion.measured(c, key_of(top)) {
+    Some(h) =>
+      if p.step_h_of < 0 {
+        p.step_h.snap(h)
+        p.step_h_of = top.n
+      } else if p.step_h_of != top.n {
+        // (another step come or gone back to: its height reached with its slide)
+        p.step_h.animate(h, slide)
+        p.step_h_of = top.n
+      } else if p.step_h.target() != h {
+        // (what the step holds changed: that height at once, or, before its slide's declared end, where it goes on its
+        // way there)
+        if p.step_h.over() {
+          p.step_h.snap(h)
+        } else {
+          p.step_h.animate(h, slide)
+        }
+      }
+    None => ()
+  }
+  let tall = if fills {
+    sheet_grows
+  } else if p.step_h_of < 0 {
+    full_width
+  } else {
+    @ui.style(w=Full, h=Fixed(p.step_h.get()))
+  }
+  c.box(style=tall.then(@ui.style(mx=room(-out))), fn() {
+    c.nav(nav, fn(s) {
+      let was = steps_drawn_now.val
+      steps_drawn_now.val = p.serial
+      let i = c.box(style=@ui.style(w=Full, px=room(out)), fn() {
+        draw(s, if s.n > 0 { Some(fn() { nav.pop() |> ignore }) } else { None })
+      })
+      @motion.measure(c, i, key_of(s))
+      steps_drawn_now.val = was
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Escape in a panel that goes in steps: back a step, where it is past its first (taken so, the panel open still).
+fn steps_escape(p : Presented) -> Bool {
+  match p.steps {
+    Some(nav) if nav.depth() > 1 => nav.pop()
+    _ => false
+  }
+}
+
+///|
+/// A step's head: its back key at its start (its chevron on the words' line, the line no taller for it) and its title
+/// (`words`, `line` high) beside it, in `row`.
+fn step_head(
+  c : @ui.Ctx,
+  key : String,
+  title : String,
+  back : () -> Unit,
+  row : @ui.Style,
+  words : @ui.TextStyle,
+  line : Double,
+) -> Unit {
+  c.box(style=row.then(step_head_gap), fn() {
+    c.box(style=in_line(step_back_side - line).then(@ui.style(ml=room(-step_back_in))), fn() {
+      if icon_button(c, "chevron-left", key=key + "/back", size=step_back_side, round=true, label=t("common.back")) {
+        back()
+      }
+    })
+    |> ignore
+    c.text(title, style=words) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A step's back key (a dialog's close button's size), and how far its chevron (16) stands in from its edge: so far out
+/// of the words' line it stands, its chevron on it.
+let step_back_side : Double = dialog_close
+
+///|
+let step_back_in : Double = (dialog_close - 16.0) / 2.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_head_gap : @ui.Style = @ui.css("gap=S1")
 
 ///|
 /// The window's height (what a long pick's list is capped by before the sheet's room shrinks it).
