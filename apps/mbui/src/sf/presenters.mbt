@@ -152,6 +152,9 @@ priv struct Presented {
   mut open : Bool
   line : @ui.Field
   mut focused : Bool
+  /// the field given the keyboard's focus as it opened (focus_once's; its id, 0 none): let go of as what it holds
+  /// closes it (field_let_go)
+  mut field_id : Int
   /// what is let go of as it closes unsaid (back, Escape, a press outside, its close button), and whether it closed
   /// so or was said
   gone : () -> Unit
@@ -271,6 +274,7 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     open: true,
     line: @ui.Field::new(text=line),
     focused: false,
+    field_id: 0,
     gone,
     ended: false,
     over: false,
@@ -1949,15 +1953,18 @@ fn ask_centred(
 
 ///|
 /// `p`'s field (`key`'s editor) given the keyboard's focus as it opens, until it has it once (what it opened over
-/// letting go of the focus as it goes, a frame later, does not take it away); after that the person's. Closed, the
-/// field lets go of it (the keyboard goes down as `p` goes).
+/// letting go of the focus as it goes, a frame later, does not take it away); after that the person's. Closed by
+/// what it holds, the field lets go of it (field_let_go).
 fn focus_once(c : @ui.Ctx, p : Presented, key : String) -> Unit {
-  if let_go(c, p, key) {
+  // (closed, as the old frame builds it closed: its field let go of, field_let_go)
+  if !p.open {
+    field_let_go(p)
     return
   }
   if p.focused {
     return
   }
+  p.field_id = c.id(key)
   if c.has_focus(c.id(key)) {
     p.focused = true
   } else {
@@ -1966,15 +1973,17 @@ fn focus_once(c : @ui.Ctx, p : Presented, key : String) -> Unit {
 }
 
 ///|
-/// `p` closed: its field (`key`'s editor) lets go of the keyboard's focus if it has it. Whether it is closed.
-fn let_go(c : @ui.Ctx, p : Presented, key : String) -> Bool {
-  if p.open {
-    return false
-  }
-  if c.has_focus(c.id(key)) {
+/// `p` closed: its field (focus_once's, a sheet's search) lets go of the keyboard's focus if it still has it, the
+/// keyboard going down, and none gives it back (Ctx::blur). Asked as it closes, where each way of drawing it closes it:
+/// as the old frame builds it closed (focus_once, a sheet's search: after a close that gave the focus back already,
+/// Escape's, nothing to let go), and, drawn by the window's tree, as what it holds says it (its `done`: before its
+/// layer gives the focus back and before what it says goes on, what that does with the focus its own) or its close
+/// button closes it (built before what it holds, which the old frame builds closed in that build: panel_centred_node).
+fn field_let_go(p : Presented) -> Unit {
+  let c = @ui.current()
+  if p.field_id != 0 && c.has_focus(p.field_id) {
     c.blur()
   }
-  true
 }
 
 ///|
@@ -2186,7 +2195,11 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
             look=field_look,
             field=p.line,
           )
-          let_go(c, p, key + "/search") |> ignore
+          // (its field, let go of as it closes: field_let_go)
+          p.field_id = c.id(key + "/search")
+          if !p.open {
+            field_let_go(p)
+          }
           text = f.text
         })
         |> ignore

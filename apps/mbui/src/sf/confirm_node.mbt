@@ -44,7 +44,9 @@ pub fn confirm_node(
 /// press outside its panel where `outside` (a dialog's; an alert's not). `shown` as its layer is made, `gone` once its
 /// way out is over. Escape and back offered to `within` first (a step back within it: true where it took them so). What
 /// is under it dimmed only while `dims` (read as it changes: one presented under it that dims
-/// already, presenters' scrim_owner, and its ground clear).
+/// already, presenters' scrim_owner, and its ground clear). `first_stop`: the focus given as it opens to the first of
+/// what it holds that takes it, where the panel names no node of its own for it (Ctx::overlay's initial_focus by
+/// default: a panel's, with its fields; a confirm's ground is its own).
 fn dialog_layer_node(
   parent : @view.View,
   open : () -> Bool,
@@ -56,6 +58,7 @@ fn dialog_layer_node(
   dims? : () -> Bool = fn() { true },
   covered? : () -> Bool = fn() { false },
   within? : () -> Bool = fn() { false },
+  first_stop? : Bool = false,
 ) -> Unit {
   parent.show(
     open,
@@ -130,8 +133,13 @@ fn dialog_layer_node(
         across.row(Is(true)) |> ignore
         across.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
         let first = panel(across, layer, look, veil)
-        // (the focus given as it opens; back to what had it as it goes)
-        layer.focus_opens(first) |> ignore
+        // (the focus given as it opens; back to what had it as it goes: where `first_stop` and the panel gives it to the
+        // layer's own ground, to the first of what it holds that takes it instead, as an old trapping overlay's does)
+        if first_stop && physical_equal(first, layer) {
+          layer.focus_opens_first() |> ignore
+        } else {
+          layer.focus_opens(first) |> ignore
+        }
         across.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
       })
       |> ignore
