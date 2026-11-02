@@ -1154,7 +1154,7 @@ pub fn native_foot() -> Double
 
 pub fn native_foot_corner() -> Double?
 
-pub fn native_foot_set(Double) -> Bool
+pub fn native_foot_set(Double, keyboard? : Double) -> Bool
 
 pub let native_in : Double
 
@@ -1309,6 +1309,8 @@ pub fn pane_foot_card() -> @ui.Style
 pub fn pane_foot_corner(holds? : Double) -> Double
 
 pub fn pane_foot_in(holds? : Double) -> Double
+
+pub fn pane_foot_rest(holds? : Double) -> Double
 
 pub fn pane_radii() -> FixedArray[Double]?
 
@@ -2136,6 +2138,8 @@ pub let updating_rise_ms : Double
 
 pub let usage_bar_max : @ui.Len
 
+pub let usage_level_side : @ui.Len
+
 pub let usage_part_r : Double
 
 pub let usage_part_r_many : Double
@@ -2145,6 +2149,8 @@ pub let usage_plot : Double
 pub let usage_plot_h : @ui.Len
 
 pub fn usage_series(Int32) -> Int64
+
+pub let usage_summary_w : @ui.Len
 
 pub let usage_tick_rise : Double
 

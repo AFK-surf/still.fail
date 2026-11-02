@@ -33,6 +33,7 @@ pub fn native_bars_reset() -> Unit {
   native_bars.side.set(0.0)
   native_bars.corners.fill(0.0)
   native_foot_made.val = None
+  native_foot_rest.val = None
   native_over_clear()
 }
 
@@ -98,7 +99,8 @@ pub fn native_capsule_h() -> Double? {
 /// run even (the user, 2026-10-28: 左边圆角也对齐); none where there is no action, or it is not over their feet (the
 /// keyboard up: under it). Said by the frame once a frame, before its cards; tape_corners reads it (native_foot_corner).
 /// Whether it is another than the last frame's (what was kept of the cards, drawn cut by their corners, is drawn anew).
-pub fn native_foot_set(foot : Double) -> Bool {
+/// `keyboard`: how far it is up; the corner it left, kept for what stays as it was under it (pane_foot_rest).
+pub fn native_foot_set(foot : Double, keyboard? : Double = 0.0) -> Bool {
   let was = native_foot_made.val
   native_foot_made.val = match (native_capsule_h(), @ui.system_nav_action()) {
     (Some(h), Some((_, y, _, _))) => {
@@ -110,6 +112,9 @@ pub fn native_foot_set(foot : Double) -> Bool {
       }
     }
     _ => None
+  }
+  if keyboard <= 0.0 {
+    native_foot_rest.val = native_foot_made.val
   }
   native_foot_made.val != was
 }
@@ -129,6 +134,24 @@ fn native_foot_corner_now(r : Double) -> Bool {
 ///|
 // kept across runs: said by native_foot_set as the frame lays out the cards, None as the app begins anew
 let native_foot_made : Ref[Double?] = Ref(None)
+
+///|
+// kept across runs: said by native_foot_set while no keyboard is up, None as the app begins anew
+let native_foot_rest : Ref[Double?] = Ref(None)
+
+///|
+/// How far pane_foot_in has a box stand with the cards' foot corners as they are with no keyboard up: its going up
+/// takes them from beside the system's action, so that a composer widens, and what only lines up with the composer
+/// (a chat's rows) stays as it was (the user, 2026-11-01: composer 激活时 chat 内容也变宽，这个不对).
+pub fn pane_foot_rest(holds? : Double = 0.0) -> Double {
+  match (pane_radii(), native_foot_rest.val) {
+    (Some(k), Some(rest)) => {
+      let at = fn(r : Double) { if r == tape_corner || native_foot_corner_now(r) { rest } else { r } }
+      foot_fit(at(k[3]), at(k[2]), foot_inset(dmax(at(k[3]), at(k[2]))), least=holds_least(holds))
+    }
+    _ => pane_foot_in(holds~)
+  }
+}
 
 ///|
 /// How far the cards stand from the window's edges and from each other beside the system's tabs (the user,

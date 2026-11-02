@@ -537,7 +537,7 @@ fn list_reset() -> Unit {
 /// How far the rows stand in from the pane's sides: the column 760 wide at most in its middle, 40 in at least
 /// (session.css.ts chatList).
 fn native_row_inset() -> Double {
-  composer_side() + @sf.composer_pad + 8.0
+  @sf.pane_foot_rest(holds=@sf.theme().round.side) + @sf.composer_pad + 8.0
 }
 
 ///|
