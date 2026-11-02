@@ -28,6 +28,9 @@ test("reset credits show the expiries known for each available card", () => {
   assert.equal((p.times({ ...raw, resetExpiries: [now + 3_600_000] }, c) as J).resetText, "剩余 3 次 · 1 小时后到期");
   assert.equal((p.times({ ...raw, resetExpiries: [now + 5 * 60_000] }, c) as J).resetText, "剩余 3 次 · 5 分钟后到期");
   assert.equal((p.times({ ...raw, resetExpiries: [now + 1] }, c) as J).resetText, "剩余 3 次 · 1 分钟内到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 60_000 - 1] }, c) as J).resetText, "剩余 3 次 · 1 分钟内到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 60_000] }, c) as J).resetText, "剩余 3 次 · 1 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 90_000] }, c) as J).resetText, "剩余 3 次 · 1 分钟后到期");
   assert.equal((p.times({ ...raw, resetExpiries: [now - 1] }, c) as J).resetText, "剩余 3 次 · 已到期");
   assert.equal((p.times({ ...raw, resetExpiries: [now - 1, now + day] }, c) as J).resetText, "剩余 3 次 · 已到期 · 1 天后到期");
   assert.equal((p.times({ ...raw, resetExpiries: undefined }, c) as J).resetText, "剩余 3 次");

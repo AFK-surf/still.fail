@@ -168,8 +168,9 @@ export function timeUntilIn(lang: Lang, ms: number, now: number): string {
 /// 1 小时后, 25 分钟后, 1 分钟内.
 export function preciseTimeUntil(ms: number, now: number): string {
   const lang = current();
-  const minutes = Math.floor(Math.max(ms - now, 0) / MINUTE);
-  if (minutes <= 1) return tr(lang, "core-logic.format.until.minute");
+  const remaining = Math.max(ms - now, 0);
+  const minutes = Math.floor(remaining / MINUTE);
+  if (remaining < MINUTE) return tr(lang, "core-logic.format.until.minute");
   if (minutes < 60) return tr(lang, "core-logic.format.until.minutes", { n: minutes });
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return minutes % 60 === 0 ? tr(lang, "core-logic.format.until.hours", { n: hours }) : tr(lang, "core-logic.format.until.hours_minutes", { h: hours, m: minutes % 60 });
