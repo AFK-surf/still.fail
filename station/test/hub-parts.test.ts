@@ -521,6 +521,11 @@ test("a Claude transcript is looked for in the project of its session's working 
     // No places said: every project's looked in, as before.
     assert.deepEqual(transcriptPaths("claude", dir, [], ["since"]).paths, [join(shared, there, "since.jsonl")]);
     assert.equal(listed.length, 2);
+    // Asked by the live view (the station's main thread): in its places alone, nothing listed (on ccvm each new chat's
+    // look through every project held every device 22 s and 45 s, 2026-11-02); one that ran elsewhere is not found so.
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["fresh"], places, { anywhere: false }), { paths: [], current: false });
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["gone-before"], places, { anywhere: false }).paths, []);
+    assert.equal(listed.length, 2, "nothing listed");
     // A new session's, not written yet: the projects listed once, not at each read; once written, where it works.
     assert.deepEqual(transcriptPaths("claude", dir, [], ["fresh"], places), { paths: [], current: false });
     assert.equal(listed.length, 3);

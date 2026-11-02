@@ -20,6 +20,7 @@ import { chats } from "../src/read/views.ts";
 import { FETCHED, fileForPeer, putForPeer } from "../src/sessions/peer-files.ts";
 import { packWorkspaceIf } from "../src/sessions/archive.ts";
 import { roomOf } from "../src/sessions/footprint.ts";
+import { claudeProject } from "../src/read/transcript.ts";
 import { Refused } from "../src/sessions/neighbours.ts";
 import { archive, newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
@@ -128,7 +129,8 @@ test("session_history reads a session's transcript, numbered as the pages number
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
   const row = r.session(key);
-  const dir = join(r.config.profiles[0]!.home, "projects", "x");
+  // Where Claude Code writes the session it runs: the project of its working directory.
+  const dir = join(r.config.profiles[0]!.home, "projects", claudeProject(row.cwd ?? row.workspace)!);
   const { mkdirSync } = await import("node:fs");
   mkdirSync(dir, { recursive: true });
   const line = (text: string, id: string) => JSON.stringify({ type: "assistant", timestamp: "2026-09-26T00:00:00Z", message: { id, content: [{ type: "text", text }] } });

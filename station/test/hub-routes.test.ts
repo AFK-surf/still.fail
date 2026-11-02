@@ -633,7 +633,8 @@ test("a session at work: the station follows it, its summary says how long its t
   try {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
     const key = made.key;
-    const dir = join(r.data, "homes", "cc", "projects", "p");
+    // Where Claude Code writes a session it runs: the project of its working directory (the live view looks there alone).
+    const dir = join(r.data, "homes", "cc", "projects", claudeProject(r.store.getSession(key)!.workspace));
     mkdirSync(dir, { recursive: true });
     const said = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-24T00:00:00Z", message: { id, content: [{ type: "text", text }] } })}\n`;
     writeFileSync(join(dir, "rs1.jsonl"), ["one", "two", "three", "four", "five"].map((t, i) => said(t, `m${i}`)).join(""));

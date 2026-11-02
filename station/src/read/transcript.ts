@@ -191,8 +191,9 @@ function placedIn(runtime: RuntimeKind, dir: string, id: string, places: readonl
 const elsewhere = new Map<string, string | null>();
 
 /// Where a session's transcript is in a directory of the runtime's transcripts (a home's, `transcriptDir`, or the shared
-/// place), if it is there. `placed`: a Claude one was looked for in its session's places first.
-function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = false): string | null {
+/// place), if it is there. `placed`: a Claude one was looked for in its session's places first. `anywhere`: one not
+/// found there yet is looked for in every project of the directory (`transcriptPaths`).
+function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = false, anywhere = true): string | null {
   if (runtime === "dsh") return dshTranscript(dir, id);
   if (runtime === "grok") return grokTranscript(dir, id);
   if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") {
@@ -204,6 +205,7 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = fa
     const kept = elsewhere.get(at);
     if (kept === null && placed) return null;
     if (kept != null && isFile(storage(kept))) return kept;
+    if (!anywhere) return null;
     for (const project of entriesOf(dir) ?? []) {
       const path = join(dir, project, `${id}.jsonl`);
       if (isFile(storage(path))) return (elsewhere.set(at, path), path);
@@ -281,8 +283,13 @@ export const homesFirst = (profiles: readonly { id: string; home: string }[], fi
 /// `homes` (its profile's first) for a home that keeps its own (one outside the data directory that had transcripts in
 /// it before it was a profile's, agent-home.ts `linkTranscripts`). `current` is whether the current one's is there: a
 /// runtime writes it only once its conversation has begun. `places`: where the session works and worked (`sessionPlaces`),
-/// where a Claude transcript is looked for first, in every directory, before anywhere else in them.
-export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: string[], ids: string[], places: readonly string[] = []): { paths: string[]; current: boolean } {
+/// where a Claude transcript is looked for first, in every directory, before anywhere else in them. `anywhere` false: a
+/// Claude transcript is looked for in its places alone, never through every project (one that ran before the data
+/// directory moved, or in a terminal's directory): what the live view of the sessions at work asks, on the station's
+/// main thread (sessions/hub.ts). There each new chat, its transcript not written yet, had every project looked in (923
+/// on ccvm), every device held 22 s and 45 s while memory was short and all their connections lost (2026-11-02). A
+/// session at work writes in its places.
+export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: string[], ids: string[], places: readonly string[] = [], { anywhere = true }: { anywhere?: boolean } = {}): { paths: string[]; current: boolean } {
   // Each directory once, however it is reached (a home's that links to the shared place is that place), the homes' made
   // out only once one is to be looked in: nearly every transcript is in the shared place, the first.
   const shared = sharedTranscripts(dataDir, runtime);
@@ -313,7 +320,7 @@ export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: st
     return null;
   };
   const placed = places.length > 0;
-  const found = ids.map((id) => inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id, placed)));
+  const found = ids.map((id) => inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id, placed, anywhere)));
   return { paths: found.filter((p) => p !== null), current: found.at(-1) != null };
 }
 

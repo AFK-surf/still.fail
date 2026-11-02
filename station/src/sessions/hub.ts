@@ -206,7 +206,8 @@ export class Hub {
         const runtime = row && runtimeNamed(row.runtime);
         if (!row || !runtime || this.store.runtimeSessions(key).length === 0) return null;
         const { dataDir, profiles } = this.config();
-        const { paths, current } = transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), this.store.runtimeSessions(key), sessionPlaces(row));
+        // In its places alone: this is the main thread (read/transcript.ts `anywhere`).
+        const { paths, current } = transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), this.store.runtimeSessions(key), sessionPlaces(row), { anywhere: false });
         return paths.length === 0 ? null : { runtime, paths, current };
       },
       this.clock,
