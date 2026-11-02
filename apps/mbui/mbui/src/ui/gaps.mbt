@@ -262,7 +262,7 @@ fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
           b.x + b.fw <= a.x + a.fw + gap_slack &&
           b.y + b.fh <= a.y + a.fh + gap_slack
         )
-      whole[i] = whole[p] && b.opacity > 0.01 && inside && !moved && cut_in && !a.sideways
+      whole[i] = whole[p] && b.opacity > 0.01 && inside && !moved && cut_in && !a.sideways && !self.island_scrolls(i)
       layer[i] = if aside { i } else { layer[p] }
     }
   }
@@ -939,3 +939,14 @@ fn Ctx::gap_steps(self : Ctx, whole : Array[Bool], layer : Array[Int], out : Arr
 /// How far apart two edges of a column are on purpose at least (an indent, a step of the scale): nearer, they were
 /// meant to be one.
 let gap_align_step : Double = 16.0
+
+///|
+/// Whether node `i` is the box of an old view hosted in a node of the window's tree held by one that scrolls what it
+/// holds (Tree::in_scroller): what it holds moves with that, as what a box of the old frame's that scrolls holds does
+/// (a sideways one, shown_whole's).
+fn Ctx::island_scrolls(self : Ctx, i : Int) -> Bool {
+  match (old_box_owners.get(i), view_app.val) {
+    (Some((_, id)), Some(tree)) => tree.in_scroller(id)
+    _ => false
+  }
+}
