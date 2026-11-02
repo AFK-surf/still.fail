@@ -93,3 +93,26 @@ test "a chat whose agent made others has how many in its own sheet (…), each i
     _ => fail("no chat open")
   }
 }
+
+///|
+test "a chat whose agent made others: in its sheet (…) the card of 创建了 N 个对话 stands as far from the card under it as its agents' from it" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-opened")
+  t.click(Button, label="对话信息")
+  t.run_for(@ui.move_most_ms)
+  // (the user's phone, 2026-11-02: its card and the pull requests' under it touching, 0 between them)
+  let rows = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.rect.2 > 200.0 })
+  let labels = rows.map(fn(s) { s.label }).join(" / ")
+  let mut i = -1
+  for k, s in rows {
+    if s.label.contains("创建了 3 个对话") {
+      i = k
+    }
+  }
+  assert_true(i > 0 && i + 1 < rows.length(), msg="a row over it and under it: \{labels}")
+  let gap = fn(a : @ui.SemNode, b : @ui.SemNode) { b.rect.1 - (a.rect.1 + a.rect.3) }
+  let over = gap(rows[i - 1], rows[i])
+  let under = gap(rows[i], rows[i + 1])
+  assert_true(over >= 10.0, msg="\{over} over it")
+  assert_eq(under, over)
+}
