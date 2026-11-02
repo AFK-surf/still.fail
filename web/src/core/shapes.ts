@@ -2016,7 +2016,7 @@ export interface ChatItem {
 	/**
 	 * Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,
 	 * nothing unread; where its station's archive review is on, only once the review recommended archiving it; and the
-	 * viewer's `archiveHint` offers it. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise.
+	 * viewer's `archiveHint` offers it. Drawn faded. Absent otherwise.
 	 */
 	settled?: boolean;
 	/**
@@ -5882,7 +5882,7 @@ export interface PrefsView {
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
 	/**
-	 * When a done chat is offered to archive (drawn faded, below the rest of its day): `off`, never;
+	 * When a done chat is offered to archive (drawn faded): `off`, never;
 	 * `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
 	 * (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.
 	 */
@@ -6981,6 +6981,35 @@ export interface UsageAccount {
 	costText: string;
 }
 
+export interface UsageMonth {
+	week: number;
+	label: string;
+}
+
+export interface UsageActivity {
+	title: string;
+	sub: string;
+	/** 按天, 按周, 累计: what the year can be drawn as. */
+	views: string[];
+	/** The rows' names, Sunday first. */
+	weekdays: string[];
+	/** Each month's name over the week its first days are in. */
+	months: UsageMonth[];
+	/**
+	 * The year's 364 days, a week of seven a column, Sunday first, the last week today's: each its level of the
+	 * most of a day, 0 none to 4 (Codex's graded levels); -1 a day after today.
+	 */
+	cells: number[];
+	/** Each of the 52 weeks' tokens as how many of seven rows its bar fills, of the tallest. */
+	weekly: number[];
+	/** The weeks' running total as the same. */
+	cumulative: number[];
+	less: string;
+	more: string;
+	/** Under each view: none under the days (their legend instead), what a column is under the others. */
+	captions: string[];
+}
+
 /**
  * A day (`day` 2026-10-01, `label` 10/1): what it cost, split as `series` (`parts`, in dollars, and in words), and its
  * calls.
@@ -7006,6 +7035,23 @@ export interface UsageDay {
 	shares?: number[];
 	/** Each of `parts` as a share of the day's cost in words: 60%, <1%. */
 	sharesText?: string[];
+}
+
+export interface UsageFigure {
+	label: string;
+	value: string;
+}
+
+export interface UsageNamed {
+	label?: string;
+	/** A station's name, or where chats came from. */
+	name?: string;
+	value: string;
+}
+
+export interface UsageFigures {
+	title: string;
+	items: UsageNamed[];
 }
 
 /**
@@ -7085,6 +7131,23 @@ export interface UsageSeries {
 	name: string;
 }
 
+/** What a workspace's agents used since each station began counting (the usage page's summary). */
+export interface UsageSummary {
+	/** Whose it is: the workspace's name. */
+	title: string;
+	/** 累计 token, 归档的对话, 跨设备任务, 决策点击率, 一起干活的设备. */
+	figures: UsageFigure[];
+	activity: UsageActivity;
+	/** Each station's tokens and their share, the most first. */
+	stations: UsageFigures;
+	/** How many chats came from each place (still.fail, Slack, Feishu); absent with one place. */
+	places?: UsageFigures;
+	/** 统计截至 11月2日. */
+	asOf: string;
+	/** Some stations told no history (from before, or not read): said under it. */
+	partial?: string;
+}
+
 /** A line of the scale the bars stand in, at `value` dollars. */
 export interface UsageTick {
 	value: number;
@@ -7145,6 +7208,11 @@ export interface UsageView {
 	basis: string;
 	/** Each station's own calculation table; absent with older cores. */
 	prices?: UsagePriceTable[];
+	/**
+	 * Everything since counting began, as Codex's usage summary (views/usage-summary.ts); absent where no station
+	 * has told its history (stations from before).
+	 */
+	summary?: UsageSummary;
 }
 
 /** A field of an item as its page shows it (vault-words.ts shownFields): `vault.open` answers `shown`, a row says `shut`. */

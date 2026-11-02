@@ -86,7 +86,8 @@ export const routes = (tools: Tools): Route[] => {
 /// GET /usage, the usage part's (usage/module.ts): `reading`, whether the counter is still reading what was spent.
 export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] => [
   // What the agents spent from `from` until `to` (ms), by day as the asker's clock has them (`tz`: minutes east of
-  // UTC), with whom, where and on what.
+  // UTC), with whom, where and on what; `history=1`, everything since counting began by day as well (a station from
+  // before answers without it).
   {
     method: "GET",
     pattern: /^\/usage$/,
@@ -95,7 +96,7 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] =>
       const from = number(r, "from") ?? 0n;
       const tz = number(r, "tz") ?? 0n;
       const clamped = tz < -1440n ? -1440n : tz > 1440n ? 1440n : tz;
-      return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer });
+      return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history: param(r, "history") === "1" });
     },
   },
 ];

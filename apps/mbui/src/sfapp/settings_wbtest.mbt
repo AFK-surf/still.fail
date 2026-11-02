@@ -287,31 +287,31 @@ test "memory: a station's global memory, its projects, a skill's page" {
 test "usage: the totals, the days, 30 天 picked" {
   let t = settings_tester("usage")
   assert_true(t.find("$118") is Some(_))
-  // the lists, the people's first (the web's)
-  assert_true(t.find("68%") is Some(_))
+  // the chats that cost the most, each its share
+  assert_true(t.find("26%") is Some(_))
   t.tap_text("30 天")
   assert_true(t.find("$486") is Some(_))
   // (not idle yet: a Ctx::spring still moves, till mbui#25 declares its end)
 }
 
 ///|
-test "usage: a model of the makeup pressed seen alone till 只看 is" {
+test "usage: the days split by model, a model named there pressed seen alone" {
   let t = settings_tester("usage")
   assert_true(t.find("↑18%") is Some(_) && t.find("比前 7 天") is Some(_))
-  // a model pressed: everything of it alone, said under the cost
+  // split by model: each named over the days; GPT-6 pressed there (its name over the bars, above the chats that say
+  // it too): everything of it alone, said under the cost
   t.scroll_to_end()
   t.draw()
-  t.tap_text("Haiku 5")
+  t.tap_text("按模型")
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = t.find("GPT-6").unwrap()
+  t.tap(x, y)
   t.run_for(@ui.move_most_ms)
   t.scroll_to(0)
   t.draw()
   assert_true(t.find("$50") is Some(_))
-  assert_true(t.find("只看 Haiku 5") is Some(_))
-  // taken off there: all of it again
-  t.tap_text("只看 Haiku 5")
-  t.run_for(@ui.move_most_ms)
-  assert_true(t.find("$118") is Some(_))
-  assert_true(t.find("只看 Haiku 5") is None)
+  assert_true(t.find("只看 GPT-6") is Some(_))
+  assert_true(t.find("$118") is None)
 }
 
 ///|

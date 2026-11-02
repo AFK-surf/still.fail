@@ -1091,7 +1091,7 @@ let zh : Map[String, String] = {
   "web-pages.about.privacy": "隐私",
   "web-pages.addProfile.editAction": "更新添加页面",
   "web-pages.addProfile.openAction": "打开添加页面",
-  "web-pages.appearance.archive.description": "做完的 chat 要不要提示你归档：侧栏里变淡、排到当天最后。只对这台设备生效；顶栏的归档按钮、快捷键和右键菜单都不受影响。",
+  "web-pages.appearance.archive.description": "做完的 chat 要不要提示你归档：侧栏里变淡。只对这台设备生效；顶栏的归档按钮、快捷键和右键菜单都不受影响。",
   "web-pages.appearance.archive.done": "做完就提示",
   "web-pages.appearance.archive.doneHint": "所有 agent 都说做完了、没有待你决定的事、你也读过了，就提示。只看状态，不读内容；station 开了归档建议时，按模型的判断提示。",
   "web-pages.appearance.archive.off": "不提示",

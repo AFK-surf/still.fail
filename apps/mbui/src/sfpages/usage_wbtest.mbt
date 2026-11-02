@@ -44,15 +44,15 @@ fn usage_week(parts : Array[Array[Double]]) -> Json {
 }
 
 ///|
-/// The days' bars drawn in full (the orange's gradient, a picture 16 wide), from the first day: x, y, w, h.
+/// The days' bars drawn in full (one person's: the first part's colour, 24 wide), from the first day: x, y, w, h.
 fn usage_full_bars(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
-  t.drawn_images().filter(fn(r) { r[2] == 16.0 }).map(fn(r) { (r[0], r[1], r[2], r[3]) })
+  t.drawn_rects().filter(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(0) }).map(fn(r) { (r.0, r.1, r.2, r.3) })
 }
 
 ///|
-/// The days' bars faded in the theme's line, 16 wide.
+/// The days' bars faded in the theme's line, 24 wide.
 fn usage_faded_bars(t : @ui.Tester) -> Array[(Double, Double, Double, Double, Int64)] {
-  t.drawn_rects().filter(fn(r) { r.2 == 16.0 && r.4 == @sf.theme().p.line })
+  t.drawn_rects().filter(fn(r) { r.2 == 24.0 && r.4 == @sf.theme().p.line })
 }
 
 ///|
@@ -71,10 +71,10 @@ fn days_tester(v : Json) -> @ui.Tester {
 }
 
 ///|
-test "usage: each day's bar 16 wide in the middle of its day, over its date, on the days' foot, as high as its share of the top" {
+test "usage: each day's bar 24 wide in the middle of its day, over its date, on the days' foot, as high as its share of the top" {
   let costs = [20.0, 16.0, 48.0, 80.0, 32.0, 24.0, 8.0]
   let t = days_tester(usage_week(costs.map(fn(c) { [c] })))
-  // (each bar in full the orange's gradient, a picture)
+  // (each bar in full its one part's colour)
   let bars = usage_full_bars(t)
   assert_eq(bars.length(), 7)
   // the most spent 120 high (80 of 100), its foot the days'
@@ -83,7 +83,7 @@ test "usage: each day's bar 16 wide in the middle of its day, over its date, on 
   for i, b in bars {
     let (x, y, w, h) = b
     let high = 150.0 * costs[i] / 100.0
-    assert_eq(w, 16.0)
+    assert_eq(w, 24.0)
     assert_true((y - (foot - high)).abs() < 0.01)
     assert_true((h - high).abs() < 0.01)
     if i < 6 {
@@ -93,14 +93,14 @@ test "usage: each day's bar 16 wide in the middle of its day, over its date, on 
       }
     }
   }
-  // none picked at first: every day's bar in full, the most spent's cost said over it; the scale's lines said
+  // none picked at first: every day's bar in full, the most spent's cost said over it, no scale's lines
   assert_eq(usage_faded_bars(t).length(), 0)
   assert_eq(usage_pick.day.get(), "")
   match t.rect_of("$80") {
     Some((_, y, _, h)) => assert_true(y + h <= top3 + 0.01)
     None => fail("the most spent day's cost not said")
   }
-  assert_true(t.rect_of("50") is Some(_) && t.rect_of("100") is Some(_))
+  assert_true(t.rect_of("50") is None && t.rect_of("100") is None)
 }
 
 ///|
@@ -135,23 +135,36 @@ test "usage: a finger slid across the days lets go on a day: it stays, the other
 }
 
 ///|
-test "用量, at each width and with either hand: the cost and its change, what it is made of, the allowance, the chats, the makeup, the days, the calls; a day picked, then let go; 30 天 picked" {
+test "用量, at each width and with either hand: the cost and its change, the days split by person or by model, the chats; a day picked, then let go; 30 天 picked" {
   for case in page_cases {
     let (w, platform) = case
-    let t = setting_tester(Usage, w, platform~)
+    // (tall enough for the whole page: what is tapped is on the screen)
+    let t = setting_tester(Usage, w, platform~, h=2400.0)
     let at = "\{w} platform \{platform}"
-    // the cost, its change, and who spent it under it
+    // first, what was done since counting began: the figures, the year, each device's work, where the chats came from
+    assert_true(t.find("累计 token") is Some(_) && t.find("18.3 亿") is Some(_) && t.find("Token 活跃度") is Some(_), msg=at)
+    assert_true(t.find("跨设备任务") is Some(_) && t.find("决策点击率") is Some(_) && t.find("各设备的工作量") is Some(_), msg=at)
+    assert_true(t.find("对话来自") is Some(_) && t.find("统计截至 10月2日") is Some(_), msg=at)
+    t.tap_text("按周")
+    t.draw()
+    assert_eq(usage_pick.year.get(), 1, msg=at)
+    assert_true(t.find("每列一周 · 最高 1.1 亿") is Some(_), msg=at)
+    t.tap_text("按天")
+    t.draw()
+    // the cost, its change, and the days split by who spent it, each named
     assert_true(t.find("$118") is Some(_) && t.find("↑18%") is Some(_) && t.find("比前 7 天") is Some(_), msg=at)
-    assert_true(t.find("$80") is Some(_), msg=at)
-    // the subscription's allowance beside what it spent
-    assert_true(t.find("lin@example.com") is Some(_) && t.find("折合 $84") is Some(_), msg=at)
+    assert_true(t.find("Ana") is Some(_) && t.find("按人") is Some(_) && t.find("按模型") is Some(_), msg=at)
     // the chats that cost the most, each with who and which model
     assert_true(t.find("整理发布清单") is Some(_) && t.find("林 · Opus 5.5 · Studio") is Some(_), msg=at)
-    // the people, the models and the accounts at once
-    assert_true(t.find("按人") is Some(_) && t.find("按模型") is Some(_) && t.find("按账号") is Some(_), msg=at)
-    assert_true(t.find("GPT-6") is Some(_) && t.find("Codex 团队") is Some(_), msg=at)
-    // the calls and tokens, under the rest
-    assert_true(t.find("1,416 次") is Some(_), msg=at)
+    // not here: the allowances (the profiles' page), the calls and tokens, the accounts
+    assert_true(t.find("lin@example.com") is None && t.find("1,416 次") is None && t.find("按账号") is None, msg=at)
+    // split by model instead: each model named
+    t.tap_text("按模型")
+    t.draw()
+    assert_eq(usage_pick.split.get(), "models", msg=at)
+    assert_true(t.find("GPT-6") is Some(_), msg=at)
+    t.tap_text("按人")
+    t.draw()
     // a day picked (its bars on the overview): everything of it, said over it, its chip back to all the days
     t.tap_text("10/3")
     t.draw()
@@ -170,7 +183,8 @@ test "用量, at each width and with either hand: the cost and its change, what 
 
 ///|
 test "用量: the overview follows the page's theme, including after a day is picked" {
-  let t = setting_tester(Usage, 390.0, platform=2)
+  // (tall enough for the overview under the summary)
+  let t = setting_tester(Usage, 390.0, platform=2, h=2400.0)
   let check = fn(words : String) raise {
     let (x, y, w, h) = t.rect_of(words).unwrap()
     let palette = @sf.theme().p

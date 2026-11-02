@@ -40,6 +40,7 @@ import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
+import { usageSummary } from "./usage-summary.ts";
 import { fleetView } from "./fleet.ts";
 import { chatsCard, usageCard } from "./rail-cards.ts";
 import { resourcesView } from "./resources.ts";
@@ -1314,7 +1315,9 @@ export class Views implements Owner {
         const now = this.#core.host.nowMs();
         const listed = this.#profilesView(scope);
         const accounts = listed !== undefined && "ok" in listed ? arr(get(listed.ok, "items")) : [];
-        return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_, { split: view.split, only: view.only, day: view.day }, accounts) };
+        const offset = this.#core.host.utcOffsetMin(now);
+        const summary = usageSummary(sources, now, offset, String(get(this.ok({ topic: "workspace", workspace: scope }), "name") ?? ""));
+        return { ok: { ...usageView(sources, typeof view.days === "number" ? view.days : 7, now, offset, this.me(scope), members_, { split: view.split, only: view.only, day: view.day }, accounts), ...(summary !== null ? { summary } : {}) } };
       }
       case "fleet": {
         const scope = view.scope as string;
@@ -1661,7 +1664,7 @@ export class Views implements Owner {
       by.maker = present.maker(str(by.model));
     }
     row = decisions.presentRow(row);
-    // Archived with one tap whenever nothing is left in it; offered to archive (faded, below the rest of its day) as the
+    // Archived with one tap whenever nothing is left in it; offered to archive (faded) as the
     // viewer's `archiveHint` says.
     if (row.archiveReminderDismissed === true) row.kept = true;
     if (present.archivable(row)) {
@@ -1768,12 +1771,11 @@ export class Views implements Owner {
     const when = (row: J) => pinnedAt.get(row) ?? 0;
     pinned.sort((a, b) => when(b) - when(a) || at(b) - at(a));
     const day = (ms: number) => Math.floor((ms + host.utcOffsetMin(ms) * 60_000) / DAY_MS);
-    const settled = (row: J) => (row.settled === true ? 1 : 0);
     const rest = rows.filter((row) => !pinnedAt.has(row)).map((row) => {
       const time = at(row);
       return { row, time, day: day(time) };
     });
-    rest.sort((a, b) => b.day - a.day || settled(a.row) - settled(b.row) || b.time - a.time);
+    rest.sort((a, b) => b.day - a.day || b.time - a.time);
     const now = host.nowMs();
     const offset = host.utcOffsetMin(now);
     const today = Math.floor((now + offset * 60_000) / DAY_MS);
