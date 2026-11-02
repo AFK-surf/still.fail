@@ -36,6 +36,7 @@ import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
+import { dayOf, holdsWhole, withPart } from "./usage-part.ts";
 import { timed } from "../spent.ts";
 
 export { HOST_KEY, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
@@ -744,10 +745,14 @@ export class StationsSync {
 
   /// The station's usage changed (or may have: read again): read while a page shows it, else only marked to be read once
   /// one does. It is some 200 KB and changes with every model call an agent makes: read on each whatever was shown, it
-  /// was most of what a slow link carried. The read asked for, if any.
-  #usageChanged(address: string, ctx: SpanContext | null = null): Deferred.Deferred<void, CoreError>[] {
+  /// was most of what a slow link carried. `from`: when the earliest call recorded since was made, as the station said
+  /// (only the days from then on are read again); null: all of it. The read asked for, if any.
+  #usageChanged(address: string, ctx: SpanContext | null = null, from: number | null = null): Deferred.Deferred<void, CoreError>[] {
     const link = this.#links.get(address);
-    if (link) link.usageCurrent = false;
+    if (link) {
+      link.usageCurrent = false;
+      link.usageFrom = from === null || link.usageFrom === null ? null : Math.min(link.usageFrom ?? Infinity, from);
+    }
     if (!this.#core.store.inUse({ topic: "stationUsage", station: address })) return [];
     return [this.#enqueue(address, "usage", Priority.background, this.#usage(address, ctx))];
   }
@@ -897,17 +902,35 @@ export class StationsSync {
   /// What the station's agents spent over the last 60 days, days as this device's clock has them: the usage page's 30 at
   /// most and as many before, to say its totals against (views/usage.ts); and everything since it began counting by
   /// day (`history`: the page's summary, views/usage-summary.ts). Current from when it is asked: a change said
-  /// meanwhile has it read again.
+  /// meanwhile has it read again. Held whole for these same days, only the days a change since touched are read again
+  /// (usage-part.ts), from the earliest call the station said it recorded.
   #usage(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const link = this.#links.get(address);
-      if (link) link.usageCurrent = true;
+      const changed = link?.usageFrom;
+      if (link) {
+        link.usageCurrent = true;
+        link.usageFrom = undefined;
+      }
       const now = this.#core.host.nowMs();
       const offset = this.#core.host.utcOffsetMin(now);
-      const day = 86_400_000;
-      const local = Math.trunc(now) + offset * 60_000;
-      const from = local - (((local % day) + day) % day) - 59 * day - offset * 60_000;
-      return this.#read(address, { topic: "stationUsage", station: address }, `/usage?from=${from}&tz=${offset}&history=1`, undefined, ctx);
+      const from = dayOf(now, offset).from - 59 * 86_400_000;
+      const topic: Topic = { topic: "stationUsage", station: address };
+      if (typeof changed === "number" && changed >= from && holdsWhole(this.#core.data.shared(topic), from)) {
+        const part = dayOf(changed, offset);
+        const put = (answer: unknown) => {
+          const held = this.#core.data.shared(topic);
+          if (holdsWhole(held, from)) return withPart(held, answer, part.day, part.from);
+          // What is held was let go meanwhile: read whole as it is shown next.
+          if (link) {
+            link.usageCurrent = false;
+            link.usageFrom = null;
+          }
+          return held;
+        };
+        return this.#read(address, topic, `/usage?from=${part.from}&tz=${offset}`, put, ctx);
+      }
+      return this.#read(address, topic, `/usage?from=${from}&tz=${offset}&history=1`, undefined, ctx);
     });
   }
 
@@ -1218,9 +1241,11 @@ export class StationsSync {
         }
         return;
       }
-      case "usage":
-        this.#usageChanged(address);
+      case "usage": {
+        const from = get(data, "from");
+        this.#usageChanged(address, null, typeof from === "number" && Number.isFinite(from) ? from : null);
         return;
+      }
       // Its screens came or went, or who is on them changed (docs/remote-screens.md).
       case "screens":
         this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });

@@ -102,17 +102,25 @@ export function getSession(s: Store, key: string): SessionRow | null {
   return r ? toSession(r) : null;
 }
 
+/// Each session's workspace, by the index of them (store/schema.ts sessions_ws, named: by key, SQLite took the sessions'
+/// own), not from the sessions themselves.
+export const SEEN_OF = "SELECT key, ws FROM sessions INDEXED BY sessions_ws";
+
 /// Which sessions `viewer` sees (docs/multi-workspace.md): those whose chat is in their workspace (one not there: the
 /// home one's). A read made for no one (null) sees every one. For a viewer, `keys` limits the work and the predicate
 /// to those keys, including missing sessions (which still count as the home workspace's).
 export function seenBy(s: Store, viewer: InWorkspace | null | undefined, keys?: readonly string[]): (key: string) => boolean {
   if (!viewer) return () => true;
-  // `*`: a database from before has no `ws` (every chat its home workspace's).
   const wanted = keys === undefined ? null : new Set(keys);
   if (wanted?.size === 0) return () => false;
-  const rows = wanted === null
-    ? all(s, "SELECT * FROM sessions")
-    : all(s, "SELECT * FROM sessions WHERE key IN (SELECT value FROM json_each(?))", JSON.stringify([...wanted]));
+  const read = (sql: string) => (wanted === null ? all(s, sql) : all(s, `${sql} WHERE key IN (SELECT value FROM json_each(?))`, JSON.stringify([...wanted])));
+  let rows: Json[];
+  try {
+    rows = read(SEEN_OF);
+  } catch {
+    // A database from before has no `ws` (every chat its home workspace's).
+    rows = read("SELECT * FROM sessions");
+  }
   const ws = new Map<string, string | null>(rows.map((r) => [r.key, r.ws ?? null]));
   return (key) => (wanted === null || wanted.has(key)) && sees(viewer, ws.get(key) ?? null);
 }
@@ -609,6 +617,13 @@ export function askingMessage(s: Store, thread: number, about: number | null, du
   return m && m.n === n && m.authorKind === "agent" ? [m, messages] : null;
 }
 
+/// A turn of a session that ended blocked between two times (ms), in any of the words a turn's end is kept in (today's,
+/// need_help and need_decision, and block from before: store/rows.ts `saidBefore`), by the index of its turns by their
+/// end. Asked as `block` alone, none of today's matched (each blocked ask was told again at every turn that ended on
+/// it), and by the session's turns from its first, every turn it had was read: 1,891 for one on ccvm (2026-11-02).
+export const TOLD_BLOCKED =
+  "SELECT 1 FROM turns WHERE session_key = ? AND ended_at >= ? AND ended_at < ? AND declared IN ('block', 'need_help', 'need_human', 'need_decision') LIMIT 1";
+
 /// What a turn of `key` that ended blocked asks the thread's people, as the sidebar and 待处理 show it, and whether it is
 /// new: its card still pending, else the message its need asks with (`askingMessage`); null when nothing there waits
 /// for them (answered since, or never asked in it). Not new when an earlier turn of `key` ended blocked after it was
@@ -620,7 +635,7 @@ export function blockedAsk(s: Store, thread: number, key: string, turn: TurnSumm
   const ended: number | bigint = Number.isInteger(turn.endedAt) ? (turn.endedAt as number) : I64_MAX;
   const asked = pendingCard(s, thread)?.[0] ?? askingMessage(s, thread, seq, [started, ended])?.[0] ?? null;
   if (asked === null) return null;
-  const told = one(s, "SELECT 1 FROM turns WHERE session_key = ? AND declared = 'block' AND ended_at >= ? AND ended_at < ? LIMIT 1", key, asked.createdAt, started) !== undefined;
+  const told = one(s, TOLD_BLOCKED, key, asked.createdAt, started) !== undefined;
   return { asked, fresh: !told };
 }
 

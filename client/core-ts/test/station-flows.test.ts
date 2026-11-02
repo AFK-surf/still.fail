@@ -17,6 +17,7 @@ import { Raw, base, entries, entry, overview, session, started, status, stationR
 import { merge } from "../src/entries.ts";
 import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { COALESCE_MS, EVICT_AFTER_MS } from "../src/store.ts";
+import { dayOf } from "../src/station/usage-part.ts";
 import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
@@ -1609,6 +1610,43 @@ test("what_the_agents_spent_is_read_only_while_a_page_shows_it", async () => {
   push("usage", {});
   await host.settle();
   assert.equal(usage(), 4, "changed while the page shows it: read");
+  core.close();
+});
+
+test("what_the_agents_spent_is_read_again_from_the_day_a_change_touched", async () => {
+  // Read whole at every change while a page showed it: some 200 KB a minute while agents worked, 2 to 23 s of the
+  // station's time a read on ccvm (2026-11-02).
+  const { host, core, push } = await started();
+  const now = host.nowMs();
+  const offset = host.utcOffsetMin(now);
+  const today = dayOf(now, offset);
+  const yesterday = dayOf(now - 86_400_000, offset);
+  const from = today.from - 59 * 86_400_000;
+  const row = (day: string, calls: number) => ({ day, session: "k", thread: 1, person: "a@x", profile: "cc", runtime: "claude", model: "m", calls, input: calls, cacheRead: 0, cacheWrite: 0, output: calls, cost: null });
+  const answer = (at: number, rows: unknown[], history?: unknown) => ({ from: at, to: 9223372036854775807, since: from, reading: false, prices: { note: "", rows: [] }, rows, threads: {}, people: {}, profiles: {}, remoteRuns: [], ...(history ? { history } : {}) });
+  const days = (rows: { day: string; calls: number }[]) => rows.map((r) => ({ day: r.day, runtime: "claude", model: "m", tokens: 2 * r.calls, calls: r.calls }));
+  stationReplies(host, (req) => {
+    if (!req.url.includes("/admin/api/usage?")) return undefined;
+    if (req.url.includes("history=1")) return answer(from, [row(yesterday.day, 1), row(today.day, 1)], { days: days([row(yesterday.day, 1), row(today.day, 1)]), cards: 2, picked: 1, places: {}, archived: 0, remoteRuns: 0 });
+    return answer(today.from, [row(today.day, 5)]);
+  });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "stationUsage", station: ST });
+  await host.settle();
+  const asked = () => host.requests.filter((r) => r.url.includes("/admin/api/usage?")).map((r) => r.url.slice(r.url.indexOf("?") + 1));
+  assert.deepEqual(asked(), [`from=${from}&tz=${offset}&history=1`], "shown: read whole");
+  // A call recorded today: today alone read again, in place of what is held of it.
+  push("usage", { from: now - 1000 });
+  await host.settle();
+  assert.deepEqual(asked().slice(1), [`from=${today.from}&tz=${offset}`]);
+  const held: any = core.inner.data.shared({ topic: "stationUsage", station: ST });
+  assert.deepEqual(held.rows.map((r: any) => [r.day, r.calls]), [[yesterday.day, 1], [today.day, 5]]);
+  assert.deepEqual(held.history, { days: days([row(yesterday.day, 1), row(today.day, 5)]), cards: 2, picked: 1, places: {}, archived: 0, remoteRuns: 0 });
+  assert.equal(held.from, from);
+  // A change that does not say when (a station from before): all of it again.
+  push("usage", {});
+  await host.settle();
+  assert.deepEqual(asked().slice(2), [`from=${from}&tz=${offset}&history=1`]);
   core.close();
 });
 

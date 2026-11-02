@@ -157,6 +157,9 @@ export class Link {
   readonly memory: Memory;
   /// Whether the usage held is as the station has it: read since it last said its usage changed.
   usageCurrent = false;
+  /// Since the usage held was read: when the earliest call the station recorded since was made, as it said (what is
+  /// read again of it, from that day on); null where it said a change without when (all of it), none where it said none.
+  usageFrom: number | null | undefined = undefined;
   /// Whether the archived chats held are as the station has them: read since anything could have changed them.
   archivedCurrent = false;
   /// When the station said it has no POST /changed/<list> (one from before): its lists are read whole a while.

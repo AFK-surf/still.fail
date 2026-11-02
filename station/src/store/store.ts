@@ -1977,9 +1977,9 @@ export class Store {
     return usage.compactionPoints(this.db, since);
   }
 
-  /// Tells whoever follows the store that calls of `sessions` were recorded.
-  usageChanged(sessions: string[]): void {
-    this.#send([{ type: "usage", sessions }]);
+  /// Tells whoever follows the store that calls of `sessions` were recorded, the earliest made at `from` (ms).
+  usageChanged(sessions: string[], from?: number): void {
+    this.#send([{ type: "usage", sessions, ...(from !== undefined ? { from } : {}) }]);
   }
 
   /// Sessions whose transcripts may have grown since `since`: a turn running, or ended since then.

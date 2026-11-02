@@ -385,6 +385,39 @@ test("what the agents spent is told at most once a minute: the first change at o
   await s.close();
 });
 
+test("usage is told with when the earliest call recorded since was made, each telling kept for one who comes back", async () => {
+  // A page holding the usage reads again only the days from then on (client/core-ts/src/station/usage-part.ts); read
+  // whole at each telling, it was 2 to 23 s of the station's time a read on ccvm (2026-11-02).
+  const time = testClock();
+  const { events, change } = setup(time.clock);
+  const s = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  const told = (got: typeof s.got) => got.filter((e) => e.event === "usage").map((e) => e.data);
+  change({ type: "usage", sessions: ["k"], from: 5_000 });
+  await settle();
+  // In the while, the earliest of the calls said: one made before those told already.
+  await time.adjust(15_000);
+  change({ type: "usage", sessions: ["k"], from: 9_000 });
+  change({ type: "usage", sessions: ["j"], from: 2_000 });
+  await settle();
+  await time.adjust(45_000);
+  await settle();
+  // A change that does not say when: all of it.
+  await time.adjust(60_000);
+  change({ type: "usage", sessions: ["k"] });
+  await settle();
+  assert.deepEqual(told(s.got), [{ from: 5_000 }, { from: 2_000 }, {}]);
+  // One that comes back from before them is told each, not the last alone; from after the first, the others.
+  const ids = s.got.filter((e) => e.event === "usage").map((e) => e.id!);
+  const run = ids[0]!.split(".")[0];
+  for (const [since, want] of [[`${run}.0`, [{ from: 5_000 }, { from: 2_000 }, {}]], [ids[0]!, [{ from: 2_000 }, {}]]] as const) {
+    const back = reader((await events.open(viewer("a@x"), "zh", false, [], [], since)).body as AsyncIterable<Buffer>);
+    await settle();
+    assert.deepEqual(told(back.got), want, since);
+    await back.close();
+  }
+  await s.close();
+});
+
 test("after something is said in a thread, each viewer is told it as GET /threads/:id has it for them", async () => {
   const { events, change } = setup(testClock().clock);
   const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);

@@ -486,8 +486,9 @@ export class UsageCounter {
   #unsubscribe: (() => void) | null = null;
   #abort = new AbortController();
   #clock: Clock.Clock;
-  /// The sessions the read under way recorded new calls of.
+  /// The sessions the read under way recorded new calls of, and when the earliest of the calls it recorded was made.
   #counted = new Set<string>();
+  #from = Infinity;
   /// What was read of each transcript (usage_files): the store's at the first read, and what this counter wrote since.
   #files: Map<string, UsageFile> | null = null;
 
@@ -607,6 +608,7 @@ export class UsageCounter {
     const homes = config.profiles.map((p) => p.home);
     let added = 0;
     this.#counted.clear();
+    this.#from = Infinity;
     // Claude Code: each session's project directory (named after where it runs), in the shared transcripts and in any
     // profile's own.
     const distinct = async (roots: string[]) => {
@@ -732,7 +734,7 @@ export class UsageCounter {
     }
     if (added > 0) {
       if (last === 0 && only === null) log.info("usage", "usage read from every transcript", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
-      store.usageChanged([...this.#counted]);
+      store.usageChanged([...this.#counted], Number.isFinite(this.#from) ? this.#from : undefined);
     }
     return added;
   }
@@ -774,7 +776,10 @@ export class UsageCounter {
       });
       const recorded = this.#store.recordUsage(path, { session: session.key, offset: part.offset, model: state.model }, runtime, withFor);
       this.#files?.set(path, { session: session.key, offset: part.offset, model: state.model });
-      if (recorded > 0) this.#counted.add(session.key);
+      if (recorded > 0) {
+        this.#counted.add(session.key);
+        this.#from = calls.reduce((m, c) => Math.min(m, c.at), this.#from);
+      }
       added += recorded;
       await breathe();
     }

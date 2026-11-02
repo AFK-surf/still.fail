@@ -53,8 +53,8 @@ import { EventLog, KEPT_MS, type Kept } from "./event-log.ts";
 const PING_MS = 25_000;
 const HOST_MS = 10_000;
 /// What the agents spent is told at most this often (the first change at once, the last at the end of the while): it
-/// changes with every model call, some seconds apart while agents work, and each telling has a page showing usage, and every
-/// client from before it is read only so, read all of it again (some 200 KB).
+/// changes with every model call, some seconds apart while agents work, and each telling has a page showing usage read
+/// again what changed (every client from before it, all of it: some 200 KB).
 const USAGE_EVERY_MS = 60_000;
 /// The most sidebar items a viewer away is remembered to read as they come back (`remember`): past it, all of it.
 const AWAY_MOST = 200;
@@ -227,9 +227,11 @@ export class Events {
   private time: Fibers;
   private timers: (() => void)[] = [];
   private lastHost = "";
-  /// When usage was last told, and the telling waiting for the end of the while (USAGE_EVERY_MS).
+  /// When usage was last told, the telling waiting for the end of the while (USAGE_EVERY_MS), and when the earliest of
+  /// the calls recorded since it was told was made (null: one was recorded without saying when).
   private usageTold = -Infinity;
   private usageLater: (() => void) | null = null;
+  private usageFrom: number | null | undefined = undefined;
   /// What is read to be told once read (a thread's entries, a job): waited for before what is told goes over.
   private reading = new Set<Promise<void>>();
   /// Until what the process before this one handed over is taken up (`takeUp`): no stream is answered before, and what
@@ -306,7 +308,7 @@ export class Events {
     if (this.usageLater !== null) {
       this.usageLater();
       this.usageLater = null;
-      this.emit("usage", {}, {}, "usage");
+      this.tellUsage();
     }
     for (;;) {
       const telling = [...this.reading, ...(this.flushing ? [this.flushing] : [])];
@@ -743,7 +745,9 @@ export class Events {
         this.emit("job-removed", { id: change.id, session: change.session }, { sees: { session: change.session } }, `job\0${change.id}`);
         break;
       case "usage":
-        // Model calls were recorded: a page showing usage reads it again (it is too big to send to everyone).
+        // Model calls were recorded: a page showing usage reads again what they changed, from the day of the earliest
+        // (it is too big to send to everyone).
+        this.usageFrom = this.usageFrom === null || change.from === undefined ? null : Math.min(this.usageFrom ?? Infinity, change.from);
         this.usageChanged();
         break;
       case "processes":
@@ -779,12 +783,21 @@ export class Events {
     if (this.usageLater !== null) return;
     const tell = () => {
       this.usageLater = null;
-      this.usageTold = this.time.now();
-      this.emit("usage", {}, {}, "usage");
+      this.tellUsage();
     };
     const wait = this.usageTold + USAGE_EVERY_MS - this.time.now();
     if (wait <= 0) tell();
     else this.usageLater = this.time.after(wait, tell);
+  }
+
+  /// That usage changed, with when the earliest of the calls recorded since it was told last was made (`from`: what a
+  /// page holding it reads again, from that day on; none: all of it). Each telling is kept on its own, not as the
+  /// latest of them alone: one who comes back is told each it missed, and reads again from the earliest.
+  private tellUsage() {
+    const from = this.usageFrom;
+    this.usageFrom = undefined;
+    this.usageTold = this.time.now();
+    this.emit("usage", typeof from === "number" ? { from } : {});
   }
 
   /// Each viewer and language streams are followed in (who followed last, while none is), once.

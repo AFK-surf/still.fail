@@ -37,7 +37,9 @@ test("a turn is told by how it ended", () => {
   assert.equal(turnNotice(turn("block", "completed", "要 Stripe 的测试 key"), old, "k", "file", false), null);
 });
 
-test("a blocked turn's ask is told once, while it waits", () => {
+// A turn's end is kept in today's words (need_help, from the agent's chat_state) or, from before, in the station's own
+// (block): asked as `block` alone, today's ask was told again at every turn that ended on it.
+for (const blocked of ["need_help", "block"]) test(`a blocked turn's ask is told once, while it waits (${blocked})`, () => {
   const dir = mkdtempSync(join(tmpdir(), "notify-"));
   // A clock moving on a millisecond a step: each of the turns and messages below after the one before.
   let now = 1000;
@@ -56,25 +58,25 @@ test("a blocked turn's ask is told once, while it waits", () => {
   // It asks, and the turn ends blocked on that: new.
   store.startTurn("t1", "k", "input");
   store.insertMessage(newMessage(chat.id, "1.2", "agent", "k", "要不要改 Surge？"));
-  store.endTurn("t1", "completed", null, "block", null);
+  store.endTurn("t1", "completed", null, blocked, null);
   assert.equal(kinds("t1")?.fresh, true);
   // Woken by a job, it says how things go and ends blocked on the same ask: told already.
   store.startTurn("t2", "k", "notice");
   store.endTurn("t2", "completed", null, "waiting", 60);
   store.startTurn("t3", "k", "notice");
   store.insertMessage(newMessage(chat.id, "1.3", "agent", "k", "CI 过了"));
-  store.endTurn("t3", "completed", null, "block", null);
+  store.endTurn("t3", "completed", null, blocked, null);
   assert.equal(kinds("t3", "1.2")?.fresh, false);
   // Without saying what it is about, what it said last is what it asks: new.
   assert.equal(kinds("t3")?.fresh, true);
   // Once a person has written, nothing waits for them, until it asks again.
   store.insertMessage(newMessage(chat.id, "1.4", "person", "ada@x.com", "先做别的"));
   store.startTurn("t4", "k", "input");
-  store.endTurn("t4", "completed", null, "block", null);
+  store.endTurn("t4", "completed", null, blocked, null);
   assert.equal(kinds("t4"), null);
   store.startTurn("t5", "k", "input");
   store.insertMessage(newMessage(chat.id, "1.5", "agent", "k", "那 Surge 呢？"));
-  store.endTurn("t5", "completed", null, "block", null);
+  store.endTurn("t5", "completed", null, blocked, null);
   assert.equal(kinds("t5")?.fresh, true);
 });
 
