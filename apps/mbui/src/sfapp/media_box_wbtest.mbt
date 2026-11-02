@@ -30,10 +30,10 @@ test "a strip too thin for its box takes its own share of it, centred; any other
 }
 
 ///|
-test "tall chat images have a wider cropped preview while short and wide images keep their size" {
+test "tall chat images have a wider cropped preview while short ones keep their size" {
   let tall = { ..strip("tall.png"), width: 400.0, height: 2000.0 }
   let box = fn(a : Attachment) {
-    @sfpages.image_box(a, @sfpages.image_least, min_tall_width=@sfpages.image_tall_min_w)
+    @sfpages.image_box(a, @sfpages.image_least, min_side=@sfpages.image_min_side)
   }
   assert_eq(box(tall), (160.0, 300.0, false))
   assert_eq(box({ ..tall, width: 1170.0, height: 2532.0 }), (160.0, 300.0, false))
@@ -42,10 +42,57 @@ test "tall chat images have a wider cropped preview while short and wide images 
   // Old attachments can have only a ThumbHash. Its header here says a 1:7 portrait.
   assert_eq(box({ ..tall, width: 0.0, height: 0.0, thumbhash: "AAAAAQA=" }), (160.0, 300.0, false))
   assert_eq(box({ ..tall, width: 0.0, height: 0.0 }), (240.0, 160.0, false))
-  assert_eq(box(strip("line.png")), (360.0, 16.0, true))
   // Video boxes have their own sizing and keep the whole still.
   assert_eq(@sfpages.image_box(tall, @sfpages.video_least), (96.0, 300.0, true))
-  assert_eq(@sfpages.picture_share(tall, @sfpages.image_least, min_tall_width=@sfpages.image_tall_min_w), (1.0, 1.0))
+  assert_eq(@sfpages.picture_share(tall, @sfpages.image_least, min_side=@sfpages.image_min_side), (1.0, 1.0))
+}
+
+///|
+test "wide chat images have a taller cropped preview while narrow ones keep their size" {
+  let wide = { ..strip("wide.png"), width: 2000.0, height: 400.0 }
+  let box = fn(a : Attachment) {
+    @sfpages.image_box(a, @sfpages.image_least, min_side=@sfpages.image_min_side)
+  }
+  assert_eq(box(wide), (360.0, 160.0, false))
+  assert_eq(box(strip("line.png")), (360.0, 160.0, false))
+  assert_eq(box({ ..wide, width: 1600.0, height: 900.0 }), (360.0, 203.0, false))
+  assert_eq(box({ ..wide, width: 200.0, height: 4.0 }), (200.0, 16.0, true))
+  // Its ThumbHash's header here says a 7:1 landscape.
+  assert_eq(box({ ..wide, width: 0.0, height: 0.0, thumbhash: "AAAAAYA=" }), (360.0, 160.0, false))
+  assert_eq(@sfpages.picture_share(wide, @sfpages.image_least, min_side=@sfpages.image_min_side), (1.0, 1.0))
+}
+
+///|
+test "a wide picture fills its taller chat preview without stretching, its middle shown" {
+  new_run()
+  let a = { ..strip("wide.png"), width: 2000.0, height: 400.0 }
+  let src : Source = { ..fixture("chat"), file: fn(_, _, _) { "wide" } }
+  let here : @sfpages.MessageHere = {
+    station: "ws1/st1",
+    session: "s-c1",
+    view: chat_view_made(Json::object({})),
+    go: None,
+    inline: true,
+    gutter: 0.0,
+    list: None,
+    core: None,
+  }
+  let t = @ui.Tester::new(
+    fn(c) { @sfpages.message_files(c, src, here, [a], false) },
+    w=390.0,
+    h=600.0,
+    images=[("wide", 2000, 400)],
+  )
+  t.draw()
+  t.run_for(@sfpages.reveal_ms)
+  let images = t.drawn_images()
+  // At 360 × 160, the middle 360 points of the 800-point-wide picture are shown.
+  assert_true(images.iter().any(fn(i) {
+    (i[2] - 360.0).abs() < 0.5 && (i[3] - 160.0).abs() < 0.5 &&
+    (i[4] - 0.275).abs() < 0.001 && (i[5] - 0.0).abs() < 0.001 &&
+    (i[6] - 0.45).abs() < 0.001 && (i[7] - 1.0).abs() < 0.001
+  }), msg="\{images}")
+  assert_false(thumb_of(t.ctx(), "ws1/st1/s-c1/uploads/fx/wide.png").unwrap().top_crop)
 }
 
 ///|
@@ -97,7 +144,7 @@ test "a letterboxed strip waiting to load: what it waits on is its share of its 
     "authorKind": "person",
     "author": "Mia",
     "text": "",
-    "attachments": [attachment_json(strip("line.png"), "s-c1")],
+    "attachments": [attachment_json({ ..strip("line.png"), width: 200.0, height: 4.0 }, "s-c1")],
   })
   let t = @ui.Tester::new(
     fn(c) {
@@ -117,9 +164,9 @@ test "a letterboxed strip waiting to load: what it waits on is its share of its 
     h=600.0,
   )
   t.draw()
-  let ground = t.drawn_rects().filter(fn(r) { (r.2 - 360.0).abs() < 0.5 })
-  // its own proportions (2000 : 40), 360 × 7.2 in the middle of its 360 × 16
-  assert_true(ground.iter().any(fn(r) { (r.3 - 7.2).abs() < 0.5 }), msg="\{ground}")
+  let ground = t.drawn_rects().filter(fn(r) { (r.2 - 200.0).abs() < 0.5 })
+  // its own proportions (200 : 4), 200 × 4 in the middle of its 200 × 16
+  assert_true(ground.iter().any(fn(r) { (r.3 - 4.0).abs() < 0.5 }), msg="\{ground}")
   assert_false(ground.iter().any(fn(r) { (r.3 - 16.0).abs() < 0.5 }), msg="\{ground}")
 }
 

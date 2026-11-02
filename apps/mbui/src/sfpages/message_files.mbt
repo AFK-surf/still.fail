@@ -112,7 +112,7 @@ pub fn message_files(
   // each one's width as the row lays it (an image's and a video's box at most the column's)
   let widths = list.map(fn(a) {
     match file_kind(a.name) {
-      "image" => dmin(image_box(a, image_least, min_tall_width=image_tall_min_w).0, room)
+      "image" => dmin(image_box(a, image_least, min_side=image_min_side).0, room)
       "video" => dmin(image_box(a, video_least).0, room)
       _ => dmin(card_across(c, src, here, a), room)
     }
@@ -221,20 +221,24 @@ pub fn file_kind(name : String) -> String {
 ///|
 /// The box an image takes in the chat, known before it loads (imageBox.ts): its own proportions (sent with it, or its
 /// ThumbHash's) within 360×300, a tiny one drawn to 40 on its longer side; a strip thinner than `least` letterboxed in
-/// a box that thick; 240×160 for one sent before sizes were kept. A tall image at the height limit is cropped to at
-/// least `min_tall_width` across. (width, height, letterboxed)
-pub fn image_box(a : Attachment, least : Double, min_tall_width? : Double = 0.0) -> (Double, Double, Bool) {
+/// a box that thick; 240×160 for one sent before sizes were kept. An image at the height limit is cropped to at least
+/// `min_side` across, one at the width limit to at least `min_side` high. (width, height, letterboxed)
+pub fn image_box(a : Attachment, least : Double, min_side? : Double = 0.0) -> (Double, Double, Bool) {
   let (w, h) = match own_size(a) {
     Some(s) => s
     None => return (box_unknown_w, box_unknown_h, false)
   }
+  let width_scale = box_most_w / w
   let height_scale = box_most_h / h
-  let scale = dmin(dmin(dmax(1.0, box_tiny / dmax(w, h)), box_most_w / w), height_scale)
+  let scale = dmin(dmin(dmax(1.0, box_tiny / dmax(w, h)), width_scale), height_scale)
   let width = w * scale
   let height = h * scale
   let hash_only = a.width <= 0.0 || a.height <= 0.0
-  if (scale == height_scale || hash_only) && w * box_most_h / h < min_tall_width {
-    return (min_tall_width.round(), box_most_h, false)
+  if (scale == height_scale || hash_only) && w * box_most_h / h < min_side {
+    return (min_side.round(), box_most_h, false)
+  }
+  if (scale == width_scale || hash_only) && h * box_most_w / w < min_side {
+    return (box_most_w, min_side.round(), false)
   }
   if width >= least && height >= least {
     return (width.round(), height.round(), false)
@@ -247,7 +251,7 @@ pub fn image_box(a : Attachment, least : Double, min_tall_width? : Double = 0.0)
 /// `image`); None for any other file.
 fn image_ratio(a : Attachment) -> Double? {
   guard file_kind(a.name) == "image" else { return None }
-  let (w, h, _) = image_box(a, image_least, min_tall_width=image_tall_min_w)
+  let (w, h, _) = image_box(a, image_least, min_side=image_min_side)
   Some(w / h)
 }
 
@@ -265,9 +269,9 @@ fn own_size(a : Attachment) -> (Double, Double)? {
 ///|
 /// Whether the chat's minimum width crops a tall image: show its beginning, at the top of the box.
 fn tall_image_cropped(a : Attachment) -> Bool {
-  let (bw, bh, _) = image_box(a, image_least, min_tall_width=image_tall_min_w)
+  let (bw, bh, _) = image_box(a, image_least, min_side=image_min_side)
   match own_size(a) {
-    Some((w, h)) => bw == image_tall_min_w && bh == box_most_h && w * bh / h < bw
+    Some((w, h)) => bw == image_min_side && bh == box_most_h && w * bh / h < bw
     None => false
   }
 }
@@ -275,8 +279,8 @@ fn tall_image_cropped(a : Attachment) -> Bool {
 ///|
 /// The share of its box's width and height a picture takes in it (image_box's, `least` thick): all of it, or a
 /// letterboxed one's, its own proportions fitted inside, centred (imageBox.ts letterbox).
-pub fn picture_share(a : Attachment, least : Double, min_tall_width? : Double = 0.0) -> (Double, Double) {
-  let (bw, bh, letterbox) = image_box(a, least, min_tall_width~)
+pub fn picture_share(a : Attachment, least : Double, min_side? : Double = 0.0) -> (Double, Double) {
+  let (bw, bh, letterbox) = image_box(a, least, min_side~)
   match own_size(a) {
     Some((w, h)) if letterbox => {
       let k = dmin(bw / w, bh / h)
@@ -290,7 +294,7 @@ pub fn picture_share(a : Attachment, least : Double, min_tall_width? : Double = 
 /// Where in its box a file sent from here lands (flight.mbt): an image's or a video's picture, its share of it.
 fn landing_share(a : Attachment) -> (Double, Double) {
   match file_kind(a.name) {
-    "image" => picture_share(a, image_least, min_tall_width=image_tall_min_w)
+    "image" => picture_share(a, image_least, min_side=image_min_side)
     "video" => picture_share(a, video_least)
     _ => (1.0, 1.0)
   }
@@ -353,7 +357,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
-  let (bw, bh, letterbox) = image_box(a, image_least, min_tall_width=image_tall_min_w)
+  let (bw, bh, letterbox) = image_box(a, image_least, min_side=image_min_side)
   let h = bh * w / bw
   // (still going up, its picture not here: no station has it to ask yet)
   let going_up = !p.sent && a.upload != "" && a.path == @sfbase.upload_path(a.upload)
@@ -373,7 +377,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // the picture covering the whole box; a letterboxed one's covering its own proportions centred in it, all it and
   // what it waits on take, the box's corners cutting it (imageBox.ts letterbox; any: its frame's, concentric with
   // what holds it where it is in a corner of that, a quote's card)
-  let (sw, sh) = picture_share(a, image_least, min_tall_width=image_tall_min_w)
+  let (sw, sh) = picture_share(a, image_least, min_side=image_min_side)
   let (pw, ph) = (w * sw, h * sh)
   let top_crop = tall_image_cropped(a)
   let fit : @ui.Fit = if top_crop { FitCoverAt(0.0) } else { FitCover }
@@ -860,8 +864,9 @@ let image_px_most : Double = 8192.0
 pub let image_least : Double = 16.0
 
 ///|
-/// A tall image at the height limit is at least this wide, cropped without changing its proportions.
-pub let image_tall_min_w : Double = 160.0
+/// An image at the height limit is at least this wide, one at the width limit at least this high: cropped without
+/// changing its proportions.
+pub let image_min_side : Double = 160.0
 
 ///|
 pub let video_least : Double = 96.0
