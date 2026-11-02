@@ -44,7 +44,7 @@ let lift : Double = 4.0
 let fillet : Double = 8.0
 
 ///|
-/// How far the bar and its panel are drawn up while a finger draws the panel up (BarModel::up), clear of the finger: a
+/// How far the bar and its panel are drawn up while a finger has the bar (BarModel::up), clear of the finger: a
 /// fingertip's width. Only drawn so: where a finger is taken stays where the bar is laid out.
 let bar_raise : Double = 44.0
 
@@ -681,7 +681,7 @@ priv struct BarModel {
   o : Spr
   k : Spr
   held : Spr
-  /// drawn up out from under the finger drawing the panel up (1), back as it lets go (bar_raise)
+  /// drawn up out from under a finger that has the bar (1), back as it lets go (bar_raise)
   up : Spr
   /// the bar shown, the ball shown and its size
   vis : Glide
@@ -1462,8 +1462,9 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
   }
   // held: the ball a lens
   m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0, at~)
-  // the panel drawn up by a finger: all of it drawn up out from under the finger, back down as it lets go
-  m.up.go(if m.holds { 1.0 } else { 0.0 }, ball_down, raise_damping, at~)
+  // a finger that has the bar (sliding the ball, held, drawing the panel up, back down again): all of it drawn up out
+  // from under the finger as long as it has it, back down as it lets go
+  m.up.go(if m.holds || sliding { 1.0 } else { 0.0 }, ball_down, raise_damping, at~)
   // each place lit as it is the one under the finger, else the one shown, in the bar and in the panel's rows (300 ms,
   // CSS's ease); one come anew as it is; a bar chosen landing, its places as they will be as it lands
   let finger = if w > 0.0 {
@@ -1939,7 +1940,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   |> ignore
   // going down out of the way and back up: drawn so, laid out where it rests; going, it takes nothing
   // (worked out as each frame is painted, on its way: a frame of its looks alone draws it where it is then)
-  // drawn up out from under a finger drawing the panel up: drawn so, a finger taken where it is laid out
+  // drawn up out from under a finger that has the bar: drawn so, a finger taken where it is laid out
   let raised = bar_raise * m.up.x
   if m.vis.value < 1.0 || m.vis.target < 1.0 {
     let vis = m.vis

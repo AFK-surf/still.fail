@@ -375,3 +375,45 @@ test "the bar chosen and landed, the panel drawn up again: no bar landing then; 
   let want = ((true, true), (true, true, true), (true, true, Some(0)))
   assert_eq((seen(true), seen(false)), (want, want))
 }
+
+///|
+test "the bar drawn up clear of a finger as long as it has it: drawn up, further up and back down onto the bar; sliding along the bar; let go, back down" {
+  let t = tester("home")
+  let (xs, y) = bar_places_at()
+  let foot = fn() {
+    t.drawn_glass_corners().fold(init=0.0, fn(a, g) { if g.2 > 300.0 { dmax(a, g.1 + g.3) } else { a } })
+  }
+  let rest = foot()
+  let raised = fn() {
+    t.run_for(@ui.move_most_ms)
+    (rest - foot()).round()
+  }
+  t.press_at(xs[0], y)
+  for i in 1..=20 {
+    t.move(xs[0], y - 64.0 * i.to_double() / 20.0)
+  }
+  let up = raised()
+  for i in 1..=30 {
+    t.move(xs[0], y - 64.0 - 400.0 * i.to_double() / 30.0)
+  }
+  let further = raised()
+  for i in 1..=30 {
+    t.move(xs[0], y - 464.0 + 464.0 * i.to_double() / 30.0)
+  }
+  let back = raised()
+  for i in 1..=20 {
+    t.move(xs[0] + (xs[2] - xs[0]) * i.to_double() / 20.0, y)
+  }
+  let along = raised()
+  t.release(xs[2], y)
+  t.run_for(bar.rest() - t.time())
+  // a finger sliding along the bar alone, never drawing the panel up
+  t.press_at(xs[0], y)
+  for i in 1..=20 {
+    t.move(xs[0] + (xs[1] - xs[0]) * i.to_double() / 20.0, y)
+  }
+  let sliding = raised()
+  t.release(xs[1], y)
+  t.run_for(bar.rest() - t.time())
+  assert_eq((up, further, back, along, sliding, (rest - foot()).round()), (bar_raise, bar_raise, bar_raise, bar_raise, bar_raise, 0.0))
+}
