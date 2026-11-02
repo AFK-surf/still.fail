@@ -19,6 +19,7 @@ pub fn button_node(
   disabled? : () -> Bool = fn() { false },
   across? : Bool = false,
   words_in? : () -> Double = fn() { 1.0 },
+  icon? : String = "",
 ) -> @view.View {
   let live = fn() { !disabled() && !busy() }
   let solid = tone == Primary || tone == DangerSolid
@@ -117,6 +118,11 @@ pub fn button_node(
       )
       s.alpha(By(fn() { turning.shown(v) })).scale(By(fn() { dmax(open.shown(v), 0.0) }), about=At(0.0, 0.5)) |> ignore
     })
+    // (its icon before its words where it has one: button's `icon`)
+    if icon != "" {
+      icon_node(v, icon, button_icon, By(fn() { looks().2 })) |> ignore
+      v.box(fn(g) { g.width(By(fn() { Some(gap()) })) |> ignore }) |> ignore
+    }
     let words = v.box(fn(w) {
       w
       .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false })

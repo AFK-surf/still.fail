@@ -509,7 +509,7 @@ fn hint_now() -> TextLayout {
     let n = c.nodes[i]
     if n.kind == kind_editor {
       match c.editors.get(n.id) {
-        Some(st) => return n.hint_shown(st.line)
+        Some(_) => return n.hint_shown()
         None => ()
       }
     }

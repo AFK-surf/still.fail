@@ -78,3 +78,110 @@ test "a picture too big to show, from a drive, wide: told of with 下载; read w
 test "a picture too big to show, from a drive, beside an iPhone Duo's own bars: told of with 下载 on it; read whole once that is pressed, told of still, 下载 handed them then; 标注图片 handed them neither before nor after" {
   big_picture_told_of(951.0, 669.0, true)
 }
+
+///|
+test "a picture too big to show, from a drive, 下载 pressed: the same viewer reading it (正在打开 in 下载's place) till its whole comes, then 下载 again" {
+  new_run()
+  let base = fixture("drive")
+  let held : Array[(Result[(Json, Bytes), Json]) -> Unit] = []
+  let src : Source = {
+    ..base,
+    read_bytes: fn(name, params, done) {
+      if name == "drive.read" && text(Some(params), "path").has_suffix("全景.png") {
+        held.push(done)
+      } else {
+        (base.read_bytes)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
+  t.draw()
+  let big : @sfbase.DriveFile = {
+    station: "ws1/st1",
+    root: "~",
+    path: "照片/全景.png",
+    name: "全景.png",
+    size: big_file * 2.0,
+    mtime: 1792300000000.0,
+    kind: "image",
+    mime: "image/png",
+  }
+  open_drive_file(big, [])
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let v = viewer.get().unwrap()
+  assert_true(buttons_said(t).contains("下载") && t.find("正在打开") is None, msg="told of, 下载: \{buttons_said(t)}")
+  t.click(@ui.Role::Button, label="下载")
+  t.run_for(@ui.move_most_ms)
+  assert_true(physical_equal(viewer.get().unwrap(), v) && v.asked && v.bytes.get() is None, msg="asked, reading")
+  assert_true(t.find("正在打开") is Some(_) && !buttons_said(t).contains("下载"), msg="reading in 下载's place: \{buttons_said(t)}")
+  assert_true(!held.is_empty(), msg="its whole asked for")
+  for done in held {
+    done(Ok(({ "total": Json::number(1024.0) }, Bytes::make(1024, b'\x00'))))
+  }
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(v.bytes.get() is Some(_) && t.find("正在打开") is None, msg="read whole: no longer reading")
+}
+
+///|
+test "a table too big to show, from a drive, 下载 pressed on it: its bar's 下载 held off while it is read, given back once its whole is here" {
+  new_run()
+  let base = fixture("drive")
+  let held : Array[(Result[(Json, Bytes), Json]) -> Unit] = []
+  let src : Source = {
+    ..base,
+    read_bytes: fn(name, params, done) {
+      if name == "drive.read" && text(Some(params), "path").has_suffix("大表.csv") {
+        held.push(done)
+      } else {
+        (base.read_bytes)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0)
+  t.draw()
+  let big : @sfbase.DriveFile = {
+    station: "ws1/st1",
+    root: "~",
+    path: "数据/大表.csv",
+    name: "大表.csv",
+    size: big_file * 2.0,
+    mtime: 1792300000000.0,
+    kind: "csv",
+    mime: "text/csv",
+  }
+  open_drive_file(big, [])
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let v = viewer.get().unwrap()
+  // (下载 shown twice: its bar's tool, a square, and its facts' button, wider; hidden ones not counted)
+  let shown = t.all(@ui.Role::Button, label="下载")
+  assert_eq(shown.length(), 2)
+  let (bar, facts) = if shown[0].rect.2 < shown[1].rect.2 {
+    (shown[0], shown[1])
+  } else {
+    (shown[1], shown[0])
+  }
+  assert_true(v.told_of() && !bar.disabled && !facts.disabled, msg="told of, both 下载 to press: \{shown}")
+  // (the bar's, as it is now: the same node, shown)
+  let bar_now = fn() { t.all(@ui.Role::Button, label="下载").filter(fn(s) { s.id == bar.id }) }
+  let (x, y, w, h) = facts.rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(v.asked && v.bytes.get() is None, msg="asked, reading")
+  let reading = bar_now()
+  assert_true(reading.length() == 1 && reading[0].disabled, msg="its bar's 下载 there, held off: \{reading}")
+  assert_true(
+    t.find("正在打开") is Some(_) && t.all(@ui.Role::Button, label="下载").length() == 1,
+    msg="its facts reading in 下载's place: \{t.all(@ui.Role::Button, label="下载")}",
+  )
+  for done in held {
+    done(Ok(({ "total": Json::number(1024.0) }, Bytes::make(1024, b'a'))))
+  }
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let after = bar_now()
+  assert_true(v.bytes.get() is Some(_), msg="read whole")
+  assert_true(after.length() == 1 && !after[0].disabled, msg="its bar's 下载 given back: \{after}")
+}

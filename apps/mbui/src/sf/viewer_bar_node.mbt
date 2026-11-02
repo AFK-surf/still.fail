@@ -255,8 +255,8 @@ fn back_shapes() -> Array[@ui.Shape] {
 }
 
 ///|
-/// How much of a file opened has come, in the bar across the top beside its tools, as nodes (viewer_coming's,
-/// FilePreview.tsx FileComing inBar): "正在读取 **1.2 MB** / 3.4 MB" in the meta's size in the ink's quieter colour, the
+/// How much of a file opened has come, in the bar across the top beside its tools, as nodes
+/// (FilePreview.tsx FileComing inBar): "正在读取 **1.2 MB** / 3.4 MB" in the meta's size in the ink's quieter colour, the
 /// size so far in bold in its own, then a progress bar 120 wide (progress_node); before the core has said how much and
 /// with no size it was sent with, 正在打开 over a bar that sweeps. `got`: what has come and its whole size; `size`: the
 /// size it was sent with. Each as it changes. The row's node.

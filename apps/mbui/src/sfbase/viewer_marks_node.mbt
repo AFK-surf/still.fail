@@ -246,7 +246,7 @@ fn swatch_node(b : @view.View, color : () -> Int64) -> Unit {
 }
 
 ///|
-/// Marking's actions in the bar across the top of viewer `vw` (marks_actions_node, as vf_tools has marks_actions there):
+/// Marking's actions in the bar across the top of viewer `vw` (marks_actions_node):
 /// as marking says as it changes; 取消 leaves marking, 下载 makes the marked picture to keep, 添加到对话 (where there is
 /// a chat's draft) to put in it, each at the moment its press is let go (Viewer::finish_marks).
 fn marks_actions_node_of(row : @view.View, vw : Viewer, ink : () -> @sf.ViewerInk, tips : @sf.TipLayer) -> Unit {

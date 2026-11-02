@@ -29,7 +29,6 @@ using @sfbase {
   type Viewer,
   desk_whole,
   downloading,
-  file_progress,
   marking,
   marks_actions,
   marks_back,

@@ -2038,6 +2038,12 @@ pub fn Ctx::focus_editor(self : Ctx, key : String) -> Unit {
   if view_focus_kept_for(self, id) {
     return
   }
+  // (asked for in an old view a modal layer of the tree's that gives no focus keeps from input (a viewer opened before
+  // the chat under it is drawn): not taken, nothing of it kept; where it takes input, as a Field's asked focus is given
+  // as its editor is built, Ctx::editor)
+  if !island_allows(self.island_said()) {
+    return
+  }
   self.focus_moved(id)
 }
 

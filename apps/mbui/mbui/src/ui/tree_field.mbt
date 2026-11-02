@@ -107,7 +107,6 @@ pub fn field(
       _ => ()
     }
     st.tree_node = Some(id)
-    st.line = line
     st.color = color
     st.ph_color = placeholder_color
     st.caret_color = caret_color

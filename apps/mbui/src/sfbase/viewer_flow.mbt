@@ -99,6 +99,7 @@ pub fn Viewer::read_on(self : Viewer, src : Source) -> Unit {
     None => {
       let f = Flow::new()
       v.flow = Some(f)
+      v.flow_told.set(@signals.untracked(fn() { v.flow_told.get() }) + 1)
       f
     }
   }

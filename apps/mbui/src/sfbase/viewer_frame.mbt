@@ -96,114 +96,32 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
 }
 
 ///|
-/// The bar across the window's top, in its place in the preview's layer: gone with the rest of the preview as it
-/// fades (`shown`), and hidden by a tap (a click) on the stage till another; its tools by what it shows. A mouse's
-/// pointer along the top, where it is, shows it while it is there. `keys`: Esc, ← and → and the zoom's read here (an
-/// old view's: the wide frame's viewer); the window's tree's viewer takes them as its node (Viewer::key_on).
-pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bool = true) -> Unit {
+/// A film's or a song's bar where the system has bars of its own (an iPhone Duo's), in its place in the preview's
+/// layer: its title and actions in them (vf_native_media), none while a film fills the window; handed back as it goes.
+/// Elsewhere the player draws its own; what the window's tree draws (a picture, a page, words read) has its bars there
+/// (viewer_tree.mbt: image_head, image_bar, vf_native).
+pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   let v = vw
-  // (a pointer resting along the top where the bar is: where none rests (a finger's), where one is read not at all)
-  let near = if @sf.pointer_rests() {
-    let (_, py, _) = c.pointer()
-    py >= 0.0 && py < @sf.viewer_bar_h
-  } else {
-    false
-  }
-  // (told as it changes: the floating bar's nodes follow it, Viewer::bars_shown; the window's tree's viewer follows the
-  // pointer along the top itself, as it moves: viewer_tree.mbt's image_layer)
-  if near != v.near_bar {
-    v.near_bar = near
-  }
-  // going, beside the system's bars (an iPhone Duo's): the page's tabs handed back to them as it goes, not once it is
-  // gone, so that the system's change of them is under way as the picture flies back (the page's own bars coming back
-  // over it the while: @sfbase.over_flight), not a column bare till it lands and filled at once after
-  if v.closing && @sf.native_on() {
+  // going: the page's tabs handed back to them as it goes, not once it is gone, so that the system's change of them is
+  // under way as it goes (the page's own bars coming back over it the while: @sfbase.over_flight)
+  if v.closing {
     return
   }
-  // (beside the system's bars, an iPhone Duo's: its tabs put away while a file is looked at, the user 2026-10-27;
-  // while this one is open and not closing, its bars' part kept or built again)
-  let media = v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo)
+  // (its tabs put away while a file is looked at, the user 2026-10-27; while this one is open and not closing, its
+  // bars' part kept or built again)
   // (a film filling the window: the bars put away, no title, no actions: @sf.player_full_native)
-  let full = media && @sf.player_fills_native(c.width)
+  let full = @sf.player_fills_native(c.width)
   let native = @sf.native_over_up(if full { "" } else { v.file.name }, alive=fn() { v.up_still() }, owner="viewer", over=2)
-  // played in the player beside the system's bars: its close and download in them, as a picture's (the player draws
-  // no bar of its own there: @sf.player_room)
-  if native && media {
-    if !full {
-      vf_native_media(v, c, src)
-    }
-    return
-  }
-  // read in the reader, played in the player: their own bars
-  if vf_reads(v) || v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo) {
-    return
-  }
-  let ink = @sf.page_viewer_ink()
-  let kind = v.shown_kind()
-  // Esc closes it, ← and → step
-  if keys {
-    v.shut_on_escape(c)
-  }
-  if keys && !v.closing && kind == Some(KImage) {
-    if c.key_pressed(@ui.key_code_left) {
-      v.go(c, src, -1, 0.0)
-    } else if c.key_pressed(@ui.key_code_right) {
-      v.go(c, src, 1, 0.0)
-    }
-    @sf.viewer_zoom_keys(c, v.zoom)
-  }
-  // Pictures and HTML use the system bars on Duo.
-  if native && (kind == Some(KImage) || kind == Some(KHtml)) {
-    vf_native(v, c, src)
-    return
-  }
-  // (the floating bar over a picture its nodes: viewer_tree.mbt's image_head; the bar across the top over one whole,
-  // its image_bar)
-  if head_as_nodes(v, c.width) || bar_as_nodes(v, c.width) {
-    return
-  }
-  // a picture's bar goes as the pointer rests (not while it comes); what is read stays
-  let hidden = kind == Some(KImage) && !v.bars_shown()
-  let awake = v.bars_shown() || v.coming()
-  let (closed, wide) = @sf.viewer_frame_bar(
-    c,
-    "preview",
-    v.desk_back(src),
-    v.file.name,
-    vf_meta(v, src),
-    hidden,
-    awake,
-    v.head_w,
-    shown,
-    ink,
-    fn() {
-      // while a picture comes, how much of it has (FilePreview.tsx: FileComing in the bar): in the floating head its
-      // card once the core has said; in the bar along the top, beside the tools, from the start
-      if v.coming() {
-        match (@sf.layout(c.width), v.got.get()) {
-          (Small, Some(got)) => file_progress(c, got, v.file.size)
-          (Small, None) => ()
-          (_, got) => @sf.viewer_coming(c, "preview", got, v.file.size, ink)
-        }
-      }
-      vf_tools(v, c, ink, v.download(src))
-    },
-    // (where it is: FilePreview.tsx's file.path; not a draft's, kept on this device alone)
-    title=if v.file.path.has_prefix("draft:") { "" } else { v.file.path },
-  )
-  // (the floating bar, once open, only grows)
-  if wide > v.head_w {
-    v.head_w = wide
-  }
-  if closed && !v.closing {
-    v.shut(c)
+  // (the player draws no bar of its own there: @sf.player_room)
+  if native && !full {
+    vf_native_media(v, c, src)
   }
 }
 
 ///|
 /// A picture's bar where the system has bars of its own (an iPhone Duo's): its actions in them, the system's glass
 /// (the user, 2026-10-27: as Slack's), gone with the rest as a tap hides them: close at their lead; fitted again or as
-/// it is (the zoom between by the fingers); marked, copied, downloaded as the bar's tools are (vf_tools).
+/// it is (the zoom between by the fingers); marked, copied, downloaded as the bar's tools are (viewer_tree.mbt's image_tools).
 fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   if v.closing || !(v.bars_shown() || v.coming()) {
     return
@@ -215,14 +133,7 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   if v.shown_kind() == Some(KHtml) {
     if v.bytes.get() is Some(_) {
       @sf.native_over_act("source", @sf.t(if v.source { "web-main.preview.rendered" } else { "web-main.preview.source" }), "code", fn() {
-        v.source = !v.source
-        if v.source {
-          match v.page {
-            Some(p) => p.close()
-            None => ()
-          }
-          v.page = None
-        }
+        v.set_source(!v.source)
       })
       if !downloading(v.download(src)) {
         @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() { v.ask_save(c) })
@@ -241,7 +152,7 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   match v.bytes.get() {
     Some(b) => {
       // (marked where its picture is shown, the window's tree's: one too big to show, told of, none)
-      if v.tree_draws() {
+      if v.markable() {
         @sf.native_over_act("mark", @sf.t("web-main.annotate.image"), "edit", fn() { marks_start() })
       }
       @sf.native_over_act("copy", @sf.t("common.copy"), "copy", fn() {
@@ -296,130 +207,6 @@ fn vf_native_download(v : Viewer, c : @ui.Ctx, src : Source, there : Bool) -> Un
     @sf.t("android-chat.file.download")
   }
   @sf.native_over_act("download", label, "download", fn() { v.ask_save(c) })
-}
-
-///|
-/// The bar's tools by what it shows (FilePreview.tsx: its `controls`, then copy and download): an image's marks (its
-/// zoom by the hand and the keys alone, no tools of its own: the user, 2026-11-01), a page's or a table's 预览 / 源码,
-/// download last.
-pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Unit {
-  let v = vw
-  match v.shown_kind() {
-    // (an image the old frame shows is one too big to show, told of: no marks, its picture not shown to mark on;
-    // one shown, the window's tree's, viewer_tree.mbt)
-    Some(KImage) if !v.coming() => {
-      // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
-      match v.bytes.get() {
-        Some(b) => {
-          let shown = v.copied > 0 && !@kit.after(c, "preview/copied/\{v.copied}", true, @sf.copied_ms)
-          if @sf.viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, @sf.t(if shown { "common.copied" } else { "common.copy" }), ink) {
-            c.copy_image(b)
-            v.copied += 1
-          }
-        }
-        None => ()
-      }
-    }
-    Some(KCsv) | Some(KHtml) | Some(KMarkdown) if v.bytes.get() is Some(_) => {
-      let chosen = @sf.segmented(
-        c,
-        "preview/tabs",
-        [@sf.t("web-main.preview.rendered"), @sf.t("web-main.preview.source")],
-        if v.source { 1 } else { 0 },
-        item_w=vf_tabs_item,
-      )
-      if (chosen == 1) != v.source {
-        v.source = chosen == 1
-        // the page under the canvas goes while its source shows (and comes again)
-        if v.source {
-          match v.page {
-            Some(p) => p.close()
-            None => ()
-          }
-          v.page = None
-        }
-      }
-    }
-    _ => ()
-  }
-  if !v.coming() {
-    // what is here saved at once; one told of, or played as it comes, read whole first
-    let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
-    // (while the core downloads it, how far it has come in its place: once it is all here it is kept by itself)
-    let saving = v.bytes.get() is Some(_) || ((v.told_of() || streamed) && !v.asked)
-    let coming = if downloading(dl) { Some(number(dl, "progress")) } else { None }
-    if @sf.viewer_download(c, "preview/download", ink, disabled=!saving, coming?=coming) {
-      v.ask_save(c)
-    }
-  }
-}
-
-///|
-/// The ways to the image before and after (@sf.viewer_steps), while an image steps through others.
-pub fn vf_steps(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
-  if vw.shown_kind() != Some(KImage) {
-    return
-  }
-  let (before, after) = vw.near(src)
-  let went = @sf.viewer_steps(c, "preview", before is Some(_), after is Some(_), vw.bars_shown(), shown)
-  if went != 0 {
-    vw.go(c, src, went, 0.0)
-  }
-}
-
-///|
-/// A file told of, not shown (FilePreview.tsx fpNote, toldOf): its kind's mark, its name, its size and extension,
-/// that it cannot be shown here; 下载 as the page's primary button, or how far it has come once asked for (`dl`: the
-/// core's download of it, downloads.mbt).
-pub fn vf_facts(vw : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
-  let v = vw
-  @sf.viewer_facts(
-    c,
-    v.file.name,
-    v.file.size,
-    if v.shown_kind() is None {
-      @sf.t("web-main.preview.unsupported")
-    } else {
-      pv("android-chat.file.tooBigToShow")
-    },
-  )
-  if v.asked && v.bytes.get() is None && v.error.get() is None {
-    vf_coming(v, c)
-    return
-  }
-  // downloaded by the core: how far it has come (on by itself as this closes; called off here), why it failed
-  if downloading(dl) {
-    file_progress(c, (number(dl, "loaded"), Some(number(dl, "size"))), v.file.size, said=text(dl, "statusText"))
-    if @sf.button(c, @sf.t("web-main.file.cancelDownload"), key="preview/note-cancel", tone=Ghost) {
-      v.cancel_download(c, src, dl)
-    }
-    return
-  }
-  if text(dl, "state") == "failed" {
-    @sf.viewer_failed(c, text(dl, "statusText"))
-  }
-  match v.error.get() {
-    Some(e) => @sf.viewer_failed(c, @sf.t("web-main.preview.loadFailed", args=[("error", e)]))
-    None => ()
-  }
-  // an APK: 安装 first, handed to the system's installer (FilePreview.kt: install, strong); 下载 then the quieter
-  let apk = @sf.lower(v.file.name).has_suffix(".apk")
-  if apk && @sf.button(c, pv("android-chat.file.install"), key="preview/note-install", tone=Primary) {
-    v.ask_install(c)
-  }
-  if @sf.button(c, @sf.t("web-main.preview.download"), key="preview/note-download", tone=if apk { Ghost } else { Primary }, icon="download") {
-    v.ask_save(c)
-  }
-}
-
-///|
-/// What shows while it comes (FilePreview.tsx FileComing, WaitLine): how much has come out of its size once the core
-/// has said, else 正在打开.
-pub fn vf_coming(vw : Viewer, c : @ui.Ctx) -> Unit {
-  match vw.got.get() {
-    Some(got) => file_progress(c, got, vw.file.size)
-    None => @sf.wait_line(c, @sf.t("common.opening"), key="preview")
-  }
 }
 
 ///|

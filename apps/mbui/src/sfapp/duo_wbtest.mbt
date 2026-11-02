@@ -693,12 +693,18 @@ test "Duo HTML preview exposes close source and download in native bars" {
   for id in ["lead/over/close", "over/source", "over/download"] {
     assert_true(t.nav_said().contains(id), msg=t.nav_said())
   }
+  // (what its action there says: the other of 源码 and 预览, said again as each is chosen; its page let go while its
+  // source shows, opened again after)
+  let says = fn(words : String) { t.nav_said().contains("\"id\":\"over/source\",\"title\":\"" + words + "\"") }
+  assert_true(says("源码"), msg=t.nav_said())
   t.post(@hostapi.system_channel, "{\"nav\":\"over/source\"}")
   t.draw()
   assert_true(viewer.get().unwrap().source)
+  assert_true(says("预览") && viewer.get().unwrap().page is None, msg=t.nav_said())
   t.post(@hostapi.system_channel, "{\"nav\":\"over/source\"}")
   t.draw()
   assert_false(viewer.get().unwrap().source)
+  assert_true(says("源码") && viewer.get().unwrap().page is Some(_), msg=t.nav_said())
   t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None)

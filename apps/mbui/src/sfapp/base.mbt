@@ -55,7 +55,6 @@ pub using @sfbase {
   dark_text,
   double_tap_ms,
   downloading,
-  file_progress,
   first_frame,
   keep_read,
   mark_numbers,
