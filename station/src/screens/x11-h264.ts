@@ -128,8 +128,12 @@ export class X11H264 {
   #submit() {
     const pending = this.#pending;
     if (this.#ended || !pending || pending.submitted || !this.#latest) return;
-    const changed = this.#requested < this.#encoding * 0.7 || this.#requested > this.#encoding * 1.45;
-    if (!this.#encoder || this.#force || (changed && wall.now() - this.#restarted >= RESTART_MS)) this.#startEncoder();
+    // Lower the rate promptly when the link worsens. Increase it more cautiously: an optimistic estimate on a
+    // narrow link otherwise repeatedly restarts the encoder, disrupting the picture just as it begins to sharpen.
+    const elapsed = wall.now() - this.#restarted;
+    const down = this.#requested < this.#encoding * 0.7 && elapsed >= RESTART_MS;
+    const up = this.#requested > this.#encoding * 1.8 && elapsed >= RESTART_MS * 3;
+    if (!this.#encoder || this.#force || down || up) this.#startEncoder();
     const picture = this.#latest;
     this.#latest = null;
     pending.ts = picture.ts;

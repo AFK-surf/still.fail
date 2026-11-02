@@ -170,6 +170,17 @@ test("H.264 bitrate changes restart cleanly; missing encoder falls back to JPEG"
     const changed = await view.next();
     assert.equal(changed?.config?.codec, "h264");
     assert.equal(changed?.key, true);
+    // A temporary increase should not immediately restart the encoder. A sustained increase should eventually
+    // raise the rate, and an explicit recovery request must still bypass the cooldown.
+    view.rate!(1_500_000);
+    await sleep(1_600);
+    const steady = await view.next();
+    assert.equal(steady?.config, undefined);
+    assert.equal(steady?.key, false);
+    await sleep(3_100);
+    const faster = await view.next();
+    assert.equal(faster?.config?.codec, "h264");
+    assert.equal(faster?.key, true);
     view.keyframe();
     const key = await view.next();
     assert.equal(key?.config?.codec, "h264");
