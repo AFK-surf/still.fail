@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { promisify } from "node:util";
 import { answerScreen, frame, FrameIn, KIND, SCREEN_TYPE } from "../src/mesh/screens.ts";
-import type { Stream } from "../src/mesh/native.ts";
+import { loadMesh, type Connection, type Endpoint, type Stream } from "../src/mesh/native.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { accessShown, ScreenHub } from "../src/screens/hub.ts";
 import { X11Desktop } from "../src/screens/x11-desktop.ts";
@@ -41,6 +41,7 @@ test("an X11 desktop over the screen wire carries a decodable frame and drives p
   hub.add(desktop);
   let served: Promise<void> | undefined;
   let stream: Stream | undefined;
+  let station: Endpoint | undefined, device: Endpoint | undefined, conn: Connection | undefined;
   try {
     let window = "";
     for (let n = 0; n < 50 && !window; n++) {
@@ -53,11 +54,14 @@ test("an X11 desktop over the screen wire carries a decodable frame and drives p
     assert.deepEqual(desktop.size(), { width: 1280, height: 800 });
     assert.equal(desktop.access().capture, true);
 
-    const mesh = memoryMesh();
-    const station = await mesh.bind({ secretKey: randomBytes(32), alpns: [ALPN], relayUrls: [] });
-    const device = await mesh.bind({ secretKey: randomBytes(32), alpns: [ALPN], relayUrls: [] });
+    const real = process.env.STILLFAIL_TEST_X11_REAL_MESH === "1";
+    const mesh = real ? loadMesh() : memoryMesh();
+    const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+    station = await bind();
+    device = await bind();
     const accepting = station.accept();
-    const conn = await device.connect({ id: station.id() }, ALPN);
+    const ips = real ? [`127.0.0.1:${station.sockets()[0]!.split(":").at(-1)}`] : undefined;
+    conn = await device.connect({ id: station.id(), ...(ips ? { ips } : {}) }, ALPN);
     const theirs = (await accepting)!;
     stream = await conn.openBi();
     await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "en" }, screen: { maxWidth: 640, maxHeight: 400, codecs: ["h264", "jpeg"], control: true } });
@@ -106,6 +110,8 @@ test("an X11 desktop over the screen wire carries a decodable frame and drives p
     served = undefined;
   } finally {
     if (served) { await stream?.finish(); await served; }
+    conn?.close(0, "test done");
+    await Promise.all([station?.close(), device?.close()]);
     await desktop.close();
     observer.kill();
   }

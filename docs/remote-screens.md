@@ -278,8 +278,9 @@ client, so any client that acknowledges what it drew is paced.
 
 `station/side/screen-net.ts` measures it: a view over iroh through a proxy on this machine that delays, drops and
 limits the packets (a LAN, 40 ms, 150 ms, with loss, with a narrow link), the frames from a source of an encoder's
-sizes or (`SOURCE=helper`) still.fail Helper's made-up pictures encoded on the Mac's hardware; it says the frames a
-second drawn, how late (capture to drawn), the stalls over 200 ms and the bit rate that came.
+sizes, (`SOURCE=helper`) still.fail Helper's made-up pictures encoded on the Mac's hardware, or (`SOURCE=x11
+CODECS=jpeg`) the station's X11 session; it says the frames a second drawn, how late (capture to drawn), the stalls
+over 200 ms and the bit rate that came.
 
 ### The desktop (station/src/screens/desktop.ts, station/native/helper; Windows: win-desktop.ts; Linux: x11-desktop.ts)
 
@@ -330,9 +331,11 @@ tools are missing.
 
 Each view starts ffmpeg, captures the X11 root display (including its cursor) and sends JPEG frames at at most 15 fps,
 scaled to the viewer's bounds. It keeps only the latest frame while the viewer or link is slow. `xdotool` sends pointer,
-wheel and keyboard events to the same session; keys or buttons held by a view are released as it closes. The first
-version does not carry system audio or the clipboard, select individual monitors, or resize an open view. It is a
-software-encoded X11 implementation; Wayland needs a portal-backed source of its own.
+wheel and keyboard events to the same session; keys or buttons held by a view are released as it closes. Keyboard
+positions use Xorg's evdev keycodes; X servers with a different physical keycode map have not been tested. The first
+version does not carry system audio or the clipboard, select individual monitors, or resize an open view. The JPEG
+stream has no adaptive bitrate: fast-changing screens can be slow on narrow or lossy links. It is a software-encoded
+X11 implementation; Wayland needs a portal-backed source of its own.
 
 The display's scale (Settings › Display › Scale) is a person's to change from the view, as UU Remote has it: on a phone
 the desktop's windows and text are made larger, readable at the phone's size. `stillfail-screen scale [percent]` reads

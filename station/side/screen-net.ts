@@ -6,6 +6,7 @@
 //
 //   node scripts/native.ts run mesh -- node station/side/screen-net.ts
 //   SOURCE=helper node scripts/native.ts run mesh helper -- node station/side/screen-net.ts
+//   SOURCE=x11 CODECS=jpeg node scripts/native.ts run mesh -- node station/side/screen-net.ts  (an X11 session)
 //   RELAY=https://… node scripts/native.ts run mesh -- node station/side/screen-net.ts   (through that relay alone)
 //
 // LINK_SECONDS (default 8) a link; LINKS to pick some by name (comma separated); BITRATE (default 6000000) the source's.
@@ -21,6 +22,7 @@ import { FrameIn, KIND, answerScreen, frame } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { HelperApp } from "../src/helper/app.ts";
 import { Desktop } from "../src/screens/desktop.ts";
+import { X11Desktop } from "../src/screens/x11-desktop.ts";
 import { ScreenHub } from "../src/screens/hub.ts";
 import type { Frame, ScreenSource, ScreenView } from "../src/screens/source.ts";
 
@@ -242,7 +244,8 @@ async function main() {
   const station = await bind(process.env.STATION_AT ?? (relay ? "" : `${tunnel()}:0`));
   if (relay) await station.online();
   const hub = new ScreenHub();
-  const source: ScreenSource = SOURCE === "helper" ? new Desktop({ supported: true, helper: new HelperApp({ app: helperApp(), dir: mkdtempSync(join(tmpdir(), "screen-net-")) }), changed: () => {}, synthetic: "moving" }) : movingSource();
+  const source: ScreenSource = SOURCE === "helper" ? new Desktop({ supported: true, helper: new HelperApp({ app: helperApp(), dir: mkdtempSync(join(tmpdir(), "screen-net-")) }), changed: () => {}, synthetic: "moving" })
+    : SOURCE === "x11" ? new X11Desktop({ changed: () => {} }) : movingSource();
   // FIXED_RATE: the source never asked for another bit rate (as before the pace asked it).
   hub.add(process.env.FIXED_RATE ? { id: source.id, kind: source.kind, title: () => source.title(), size: () => source.size(), open: async (o) => Object.assign(await source.open(o), { rate: undefined }) } : source);
   const viewer = { sub: "u", email: "bench@still.fail", name: "bench", role: "member", workspace: "w", device: "d" };

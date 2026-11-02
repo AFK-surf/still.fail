@@ -109,30 +109,38 @@ function fitted(size: Size, maxWidth: number, maxHeight: number): Size {
   return { width: Math.max(2, Math.floor(size.width * scale / 2) * 2), height: Math.max(2, Math.floor(size.height * scale / 2) * 2) };
 }
 
-const SPECIAL: Record<string, string> = {
-  Enter: "Return", NumpadEnter: "KP_Enter", Tab: "Tab", Escape: "Escape", Backspace: "BackSpace", Space: "space",
-  Delete: "Delete", Insert: "Insert", Home: "Home", End: "End", PageUp: "Page_Up", PageDown: "Page_Down",
-  ArrowLeft: "Left", ArrowRight: "Right", ArrowUp: "Up", ArrowDown: "Down",
-  ShiftLeft: "Shift_L", ShiftRight: "Shift_R", ControlLeft: "Control_L", ControlRight: "Control_R",
-  AltLeft: "Alt_L", AltRight: "Alt_R", MetaLeft: "Super_L", MetaRight: "Super_R", OSLeft: "Super_L", OSRight: "Super_R",
-  CapsLock: "Caps_Lock", NumLock: "Num_Lock", ScrollLock: "Scroll_Lock", PrintScreen: "Print", Pause: "Pause",
-  Minus: "minus", Equal: "equal", BracketLeft: "bracketleft", BracketRight: "bracketright", Backslash: "backslash",
-  Semicolon: "semicolon", Quote: "apostrophe", Backquote: "grave", Comma: "comma", Period: "period", Slash: "slash",
-  NumpadAdd: "KP_Add", NumpadSubtract: "KP_Subtract", NumpadMultiply: "KP_Multiply", NumpadDivide: "KP_Divide", NumpadDecimal: "KP_Decimal",
+// DOM KeyboardEvent.code is a physical position. Xorg's evdev keycodes are Linux input codes plus 8: sending
+// keysyms instead would move the key on a different layout (KeyQ, for example, is 'a' on French AZERTY).
+const EVDEV: Record<string, number> = {
+  Escape: 1, Digit1: 2, Digit2: 3, Digit3: 4, Digit4: 5, Digit5: 6, Digit6: 7, Digit7: 8, Digit8: 9, Digit9: 10, Digit0: 11,
+  Minus: 12, Equal: 13, Backspace: 14, Tab: 15,
+  KeyQ: 16, KeyW: 17, KeyE: 18, KeyR: 19, KeyT: 20, KeyY: 21, KeyU: 22, KeyI: 23, KeyO: 24, KeyP: 25,
+  BracketLeft: 26, BracketRight: 27, Enter: 28, ControlLeft: 29,
+  KeyA: 30, KeyS: 31, KeyD: 32, KeyF: 33, KeyG: 34, KeyH: 35, KeyJ: 36, KeyK: 37, KeyL: 38,
+  Semicolon: 39, Quote: 40, Backquote: 41, ShiftLeft: 42, Backslash: 43,
+  KeyZ: 44, KeyX: 45, KeyC: 46, KeyV: 47, KeyB: 48, KeyN: 49, KeyM: 50, Comma: 51, Period: 52, Slash: 53,
+  ShiftRight: 54, NumpadMultiply: 55, AltLeft: 56, Space: 57, CapsLock: 58,
+  F1: 59, F2: 60, F3: 61, F4: 62, F5: 63, F6: 64, F7: 65, F8: 66, F9: 67, F10: 68,
+  NumLock: 69, ScrollLock: 70, Numpad7: 71, Numpad8: 72, Numpad9: 73, NumpadSubtract: 74,
+  Numpad4: 75, Numpad5: 76, Numpad6: 77, NumpadAdd: 78, Numpad1: 79, Numpad2: 80, Numpad3: 81, Numpad0: 82,
+  NumpadDecimal: 83, IntlBackslash: 86, F11: 87, F12: 88, IntlRo: 89, Convert: 92, KanaMode: 93, NonConvert: 94,
+  NumpadComma: 95, NumpadEnter: 96, ControlRight: 97, NumpadDivide: 98, PrintScreen: 99, AltRight: 100,
+  Home: 102, ArrowUp: 103, PageUp: 104, ArrowLeft: 105, ArrowRight: 106, End: 107, ArrowDown: 108, PageDown: 109,
+  Insert: 110, Delete: 111, AudioVolumeMute: 113, AudioVolumeDown: 114, AudioVolumeUp: 115, NumpadEqual: 117,
+  Pause: 119, Lang1: 122, Lang2: 123, IntlYen: 124, MetaLeft: 125, MetaRight: 126, OSLeft: 125, OSRight: 126,
+  ContextMenu: 127, MediaTrackNext: 163, MediaPlayPause: 164, MediaTrackPrevious: 165, MediaStop: 166,
+  F13: 183, F14: 184, F15: 185, F16: 186, F17: 187, F18: 188, F19: 189, F20: 190, F21: 191, F22: 192, F23: 193, F24: 194,
 };
 
+/// xdotool accepts a decimal string as a literal X keycode.
 function keyOf(code: string): string | null {
-  if (SPECIAL[code]) return SPECIAL[code]!;
-  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
-  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
-  if (/^Numpad[0-9]$/.test(code)) return `KP_${code.slice(6)}`;
-  if (/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
-  return null;
+  const evdev = EVDEV[code];
+  return evdev === undefined ? null : String(evdev + 8);
 }
 
 const MODS = [
-  { bit: 1, keys: ["Alt_L", "Alt_R"] }, { bit: 2, keys: ["Control_L", "Control_R"] },
-  { bit: 4, keys: ["Super_L", "Super_R"] }, { bit: 8, keys: ["Shift_L", "Shift_R"] },
+  { bit: 1, keys: [keyOf("AltLeft")!, keyOf("AltRight")!] }, { bit: 2, keys: [keyOf("ControlLeft")!, keyOf("ControlRight")!] },
+  { bit: 4, keys: [keyOf("MetaLeft")!, keyOf("MetaRight")!] }, { bit: 8, keys: [keyOf("ShiftLeft")!, keyOf("ShiftRight")!] },
 ];
 const BUTTONS = [{ bit: 1, button: 1 }, { bit: 2, button: 3 }, { bit: 4, button: 2 }];
 
