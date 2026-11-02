@@ -105,6 +105,24 @@ const unb64 = (v: Json) => Buffer.from(v.data, "base64").toString();
 
 // Each test has stations of its own (directories, stores, clocks): they run at once.
 describe("remote", { concurrency: true }, () => {
+  test("a remote workspace's size is measured for its owning chat, never another station's chat", async () => {
+    const target = station();
+    const prep = (peer: string) => target.remote.handle("ws", peer, {
+      method: "task.prepare", session: "same-chat", key: "one", spec: { command: "true" },
+    });
+    await prep("peer-a");
+    const work = join(target.remote.room("ws", "peer-a", "same-chat"), "work");
+    writeFileSync(join(work, "output"), Buffer.alloc(1024 * 1024, 1));
+    let size = await target.remote.handle("ws", "peer-a", { method: "session.size", session: "same-chat" });
+    while (size.pending === true) {
+      await turn();
+      size = await target.remote.handle("ws", "peer-a", { method: "session.size", session: "same-chat" });
+    }
+    assert.ok(size.bytes >= 1024 * 1024, "the written output counts toward this workspace");
+    const other = await target.remote.handle("ws", "peer-b", { method: "session.size", session: "same-chat" });
+    assert.equal(other.present, false, "a different station cannot measure that workspace by naming the same chat");
+  });
+
   test("a request asked before the mesh is up waits for it; one it never comes up for is refused after the wait", async () => {
     // As a chat taken up as the station starts, on a subscription borrowed from another station.
     const s = station({ meshWaitMs: 2000 });
@@ -448,6 +466,25 @@ describe("remote", { concurrency: true }, () => {
     const use = async (name: string, args: Json) => JSON.parse(await tools.find((t) => t.name === name)!.run("s1", args));
     return { a, b, home, clock, use, asked, back };
   }
+
+  test("the source can read its remote workspace size and address that station by name", async () => {
+    const { a, b, use } = pair([{ id: "A", name: "Home" }, { id: "B", name: "Studio" }]);
+    await use("station_task", { station: "B", key: "k", action: "prepare", command: "true" });
+    const work = join(b.remote.room("ws", "A", "s1"), "work");
+    writeFileSync(join(work, "data"), Buffer.alloc(1024 * 1024, 1));
+    assert.deepEqual(a.remote.workspaceTargets("s1"), { workspace: "ws", stations: ["B"] });
+    assert.equal(await a.remote.workspaceStation("s1", "Studio"), "B");
+    assert.equal(await a.remote.workspaceStation("s1", "Home"), "");
+    let size = await a.remote.workspaceSize("s1", "B");
+    while (size === null) {
+      await turn();
+      size = await a.remote.workspaceSize("s1", "B");
+    }
+    assert.equal(size.path, work);
+    assert.ok(size.bytes >= 1024 * 1024);
+    assert.equal(a.remote.workspaceTargets("missing"), null);
+    await assert.rejects(a.remote.workspaceStation("s1", "another"), /no remote workspace/);
+  });
 
   test("a session runs a task on another station: inputs up, its notices and end told here, its artifact down", async () => {
     const { a, b, home, clock, use } = pair();

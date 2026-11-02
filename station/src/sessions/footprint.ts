@@ -95,23 +95,37 @@ export const rebuildBytes = (room: Room) => room.rebuild.reduce((sum, [, b]) => 
 /// Counts files once each however many links they have.
 class Seen {
   private seen = new Set<string>();
+  private total = 0;
+  private readonly stopAfter: number | undefined;
+  constructor(stopAfter?: number) { this.stopAfter = stopAfter; }
   bytes(meta: import("node:fs").BigIntStats): number {
     if (meta.nlink > 1n) {
       const id = `${meta.dev}:${meta.ino}`;
       if (this.seen.has(id)) return 0;
       this.seen.add(id);
     }
-    return Number(meta.blocks) * 512;
+    const bytes = Number(meta.blocks) * 512;
+    this.total += bytes;
+    if (this.stopAfter !== undefined && this.total > this.stopAfter) throw new Enough(this.total);
+    return bytes;
   }
+}
+
+/// Enough of a workspace was counted to know it exceeds its limit; more work is not needed for a warning.
+class Enough {
+  readonly bytes: number;
+  constructor(bytes: number) { this.bytes = bytes; }
 }
 
 /// The size of `path` and everything under it; links are not followed. With `found`, directories that can be made
 /// again are listed there (each counted whole, not looked into further).
-async function measure(path: string, seen: Seen, found: [string, number][] | null): Promise<number> {
+async function measure(path: string, seen: Seen, found: [string, number][] | null, signal?: AbortSignal, strict = false): Promise<number> {
+  signal?.throwIfAborted();
   let meta;
   try {
     meta = await lstat(path, { bigint: true });
-  } catch {
+  } catch (error) {
+    if (strict && (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return 0;
   }
   let bytes = seen.bytes(meta);
@@ -119,21 +133,22 @@ async function measure(path: string, seen: Seen, found: [string, number][] | nul
   let entries;
   try {
     entries = await readdir(path, { withFileTypes: true });
-  } catch {
+  } catch (error) {
+    if (strict && (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return bytes;
   }
   for (const entry of entries) {
     const child = join(path, entry.name);
     // Never discover cleanup candidates in repository metadata or historical attachments.
     if (found !== null && (entry.name === ".git" || entry.name === "uploads")) {
-      bytes += await measure(child, seen, null);
+      bytes += await measure(child, seen, null, signal, strict);
       continue;
     }
     if (found !== null && entry.isDirectory() && rebuildable(child)) {
-      const size = await measure(child, seen, null);
+      const size = await measure(child, seen, null, signal, strict);
       found.push([child, size]);
       bytes += size;
-    } else bytes += await measure(child, seen, found);
+    } else bytes += await measure(child, seen, found, signal, strict);
   }
   return bytes;
 }
@@ -146,4 +161,14 @@ export async function measureRoom(dir: string): Promise<Room> {
 }
 
 /// The size of a path, each file once (for the tests: footprint.rs `measure` without `found`).
-export const measured = (path: string) => measure(path, new Seen(), null);
+export const measured = (path: string, signal?: AbortSignal) => measure(path, new Seen(), null, signal);
+
+/// Count the whole path when it fits; once it exceeds `limit`, return a lower bound without traversing the rest.
+export async function measuredUpTo(path: string, limit: number, signal?: AbortSignal): Promise<{ bytes: number; complete: boolean }> {
+  try {
+    return { bytes: await measure(path, new Seen(limit), null, signal, true), complete: true };
+  } catch (error) {
+    if (error instanceof Enough) return { bytes: error.bytes, complete: false };
+    throw error;
+  }
+}

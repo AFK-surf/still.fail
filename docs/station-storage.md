@@ -350,6 +350,16 @@ are those at the moment it opened.
 
 ### Housekeeping
 
+- A working chat's own workspace is measured on this station and, where it has run tasks, on each target station.
+  The soft limit is 10 GiB per chat per station. Above it the agent is told the path, size and limit, and is asked to
+  clean what it may or set a new whole-GiB limit with `workspace_limit {station?, limit_gib}`. It is reminded hourly
+  while still over; a completed or archived chat is not woken for this. The limit and last notice survive a station
+  restart. No files or work are stopped by this watch. A scan is queued off the station thread, one at a time; it counts
+  allocated blocks, not following symbolic links and counting hard links once. Once it has counted more than the limit it
+  stops and reports a lower bound. Measurements are refreshed every five minutes, so changes to files or limits are
+  reflected after another scan completes. APFS clones can share blocks and are not deduplicated. A custom project outside
+  the station's own session directories is not traversed. Older or offline target stations are skipped until they can
+  answer; the next scan tries again.
 - `POST /sessions/:key/archive` / `DELETE /sessions/:key/archive`: hide and
   show (and archive its threads, below); the answer is the session summary.
   `POST|DELETE /threads/:id/archive` does the same for a chat (with its
