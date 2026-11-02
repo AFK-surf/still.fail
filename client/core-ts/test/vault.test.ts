@@ -465,6 +465,24 @@ test("vault calls: another device keyed in by the owner, a device keyed back in 
   r.core.close();
 });
 
+test("a requested timeout is shown and signed exactly as approved", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  const request: Request = { id: "r_timed", ws: "ws", vault: id, item: put.id, session: "k1", chat: "7", mode: "proxy", reason: "daily", hosts: ["api.github.com"], box: boxPublic(fill(5)), at: 1, status: "pending", timeout: { kind: "idle", seconds: 129600 } };
+  r.st.requests.push(request);
+  r.push("vault-request", request);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  assert.deepEqual([vaults().requests[0].timeoutKind, vaults().requests[0].timeoutSeconds], ["idle", 129600]);
+  await fails(r.ask("vault.approve", { request: request.id, scope: "chat" }), "invalid_params");
+  await r.ask("vault.approve", { request: request.id, scope: "chat", timeout: { kind: "fixed", seconds: 86400 } });
+  const grant = r.st.grants[0] as any;
+  assert.ok(signedOk(grant, TAG.grant));
+  assert.deepEqual([grant.timeout, grant.exp - grant.at], [{ kind: "fixed", seconds: 86400 }, 86400]);
+  r.core.close();
+});
+
 test("vault calls: an agent's request approved (sealed to its keeper, signed) or turned down", async () => {
   const r = await rig();
   r.putLock();
@@ -683,9 +701,9 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   assert.ok(signedOk(written, TAG.item));
   assert.deepEqual([written.vault, written.version, written.listing], [made.id, 0, { name: "UniFi UX7", kind: "login", modes: ["env"], hosts: [], env: "UX7_PASSWORD" }]);
   assert.deepEqual((await r.ask("vault.open", { item })).plain.fields, fields);
-  // With the grant that lets the asking chat use it: for the chat, sealed to the request's box.
+  // With the grant that lets the asking chat use it: an hour's idle timeout, sealed to the request's box.
   const saved = r.st.saves[0] as any;
-  assert.deepEqual([saved.request, saved.vault, saved.grant.scope, saved.grant.mode, saved.grant.item], ["r_s", made.id, "chat", "env", item]);
+  assert.deepEqual([saved.request, saved.vault, saved.grant.scope, saved.grant.mode, saved.grant.item, saved.grant.timeout], ["r_s", made.id, "hour", "env", item, { kind: "idle", seconds: 3600 }]);
   assert.ok(signedOk(saved.grant, TAG.grant));
   assert.deepEqual(JSON.parse(new TextDecoder().decode(openSeal(keeper, saved.grant.secret, grantContext("ws", "r_s")))).fields, fields);
   assert.deepEqual(vaults().requests, []);

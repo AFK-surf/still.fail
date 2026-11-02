@@ -52,12 +52,13 @@ export const VaultLive = Layer.effectDiscard(
       coming: () => coming,
       // Sign-ins (kind browser) go into each chat's own context in the station's browser (docs/vault.md 登录态).
       browsers: {
-        cookies: (session, sites, station) => browsers.cookies(session, sites, station), signIn: (session, d) => browsers.signIn(session, d),
+        cookies: (session, sites, station) => browsers.cookies(session, sites, station), signIn: (session, d) => browsers.signIn(session, d), extendSignIn: (session, request, until) => browsers.extendSignIn(session, request, until),
         passkeysIn: (session, d) => browsers.passkeysIn(session, d),
       },
     });
     browsers.onTakenOut((session, request, cookies) => secrets.renewed(session, request, cookies));
     browsers.onFresh((session) => secrets.signInAgain(session));
+    browsers.onUsed((session, host) => secrets.browserUsed(session, host));
     browsers.onResumed((session) => secrets.passkeysAgain(session));
     // A site signed in to from a card (signin.ts): the vault's sign-in for it asked for, else the person's own
     // password manager filling the chat's tab.

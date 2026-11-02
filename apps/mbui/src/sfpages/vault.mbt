@@ -421,6 +421,10 @@ fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
       None => text(rv, "item")
     },
     reason: text(rv, "reason"),
+    timeout_kind: text(rv, "timeoutKind"),
+    timeout_seconds: count(rv, "timeoutSeconds"),
+    approved_timeout_kind: "",
+    approved_timeout_seconds: 0,
     mode: text(rv, "mode"),
     command: text(rv, "command"),
     how_text: text(rv, "howText"),

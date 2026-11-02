@@ -42,6 +42,7 @@ export type Item = {
 export type Plain = { kind: Kind; name: string; fields: Record<string, string>; domains: string[]; notes: string };
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
+  timeout?: Timeout;
   command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
   /// The plain library's item's owner, or whom a secret to keep is for (their email).
   owner?: string;
@@ -57,7 +58,8 @@ export type Request = {
 };
 /// `typed`: its secret is what the person types in on its card (nothing sealed: the app writes what was typed).
 export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true };
-export type Grant = { v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; secret: string; at: number; sig: Sig };
+export type Timeout = { kind: "idle" | "fixed"; seconds: number };
+export type Grant = { v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; timeout?: Timeout; secret: string; at: number; sig: Sig };
 export type Deny = { v: 1; ws: string; request: string; at: number; sig: Sig };
 
 export const TAG = {

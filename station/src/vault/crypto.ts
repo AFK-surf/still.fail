@@ -29,12 +29,14 @@ export type Kind = "token" | "ssh_key" | "login" | "file" | "browser";
 export type Mode = "proxy" | "ssh" | "env" | "file" | "browser";
 /// How long a grant lasts: one use, an hour, or the chat until it is archived.
 export type Scope = "once" | "hour" | "chat";
+export type Timeout = { kind: "idle" | "fixed"; seconds: number };
 /// The scopes, shortest first.
 export const SCOPES: Scope[] = ["once", "hour", "chat"];
 /// Whether a grant may last as long as `scope` for an item that allows `lasts` at most (none: any).
 export const allows = (lasts: Scope | null | undefined, scope: Scope): boolean => SCOPES.indexOf(scope) >= 0 && SCOPES.indexOf(scope) <= SCOPES.indexOf(lasts ?? "chat");
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
+  timeout?: Timeout;
   command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
   /// A request for an item of the plain library (`vault` is `plain`, no box): its owner's email, who decides it. A
   /// request to keep a secret (`save`): whose it is to be (whoever started the chat), who decides it.
@@ -60,7 +62,7 @@ export type Request = {
 export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true };
 export type Sealed = { device: string; box: string; secret: string };
 export type Grant = {
-  v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number;
+  v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; timeout?: Timeout;
   secret: string; at: number; sig: Sig;
 };
 export type Deny = { v: 1; ws: string; request: string; at: number; sig: Sig };

@@ -105,7 +105,7 @@ sequenceDiagram
 
 - **keeper**：station 里管授权、做代理、做 ssh-agent 的那一块（`station/src/vault/`）。值只在 station 进程的内存里，不写盘，不进日志；加锁库的授权 station 重启就忘（agent 重新申请）；还在等批准的申请不忘：临时私钥随旧进程没了，新进程在确定不会有交接带过来之后给它换一把新的（`Secrets.reboxed`），申请连同新 `box` 重新推送给库成员，人照样能批准、agent 照样收到结果（箱子里没有秘密，只有批准后封进来的那份）；app 手上还是旧 `box` 时批准被拒，core 重读申请、封给新 `box` 再发一次。更新时的交接（launcher 在旧进程旁起新进程）不算重启：旧进程把 keeper 手上的授权、还在等批准的申请的临时私钥、等存入的值经 launcher 的控制管道交给新进程（`StationParts.carry`，内存到内存，不写盘、不进日志），agent 不用重新申请。旧 launcher（更新只换 Node，launcher 要等机器或服务重启才换）不认这一行、会把它写进日志，所以只有带 `--launcher-carries` 起的 Node 才交。不加锁库的授权把除值以外的部分写进 `vault_grants` 表，重启后从明文库重新读值、照旧可用（值本来就在 station 盘上，多写的只是哪个 chat、哪个条目、什么时候到期）。chat 归档或删除时，它的授权一起作废。没有拆成单独的进程：agent 和 station 是同一个系统用户，拆出去的进程和 station 进程对 agent 来说一样读不到（都要调试权限），多一个进程只多一份打包和交接的麻烦。
 - **工具**：`secret_list`（agent 能看到的条目名和允许的方式，不含值）和 `secret_use`。申请卡片用现有的卡片和待处理，申请发给条目所在库的成员；`card.assignee` 是库的 owner，或者是这个 chat 的发起人，只要他是库成员。
-- **批准的范围**：「仅本次」「本对话 1 小时内」「本对话直到归档」三档（`once`/`hour`/`chat`）。每个人在「密钥」页设一个「默认最长授权」（加锁库是库本身的 `lasts`，owner 签名、随库复制到各 station；明文库是 station 上每人一条，`PUT vault/plain/lasts {lasts, at}` 发给每个存着明文库的 station，以最晚的 `at` 为准），默认 `chat`；条目可以「跟随默认」（listing 不带 `lasts`，新条目都是这样）或设自己的一档（listing 的 `lasts`）。卡片只列到生效的那一档，推荐其中最长的一档；station 和 core 都拒绝超出的批准。（2026-10-22 pengxiao 定：一小时不够用，chat EMBER/1792660346.250000。）
+- **批准的范围**：仅本次，或按下面「授权时限」选择闲置、固定时限。每个人在「密钥」页设「默认最长授权」（加锁库是库本身的 `lasts`，owner 签名、随库复制到各 station；明文库是 station 上每人一条，`PUT vault/plain/lasts {lasts, at}` 发给每个存着明文库的 station，以最晚的 `at` 为准）；条目可跟随默认或设自己的一档。station 和 core 都拒绝超出的批准。旧申请沿用原来的 `once`/`hour`/`chat`。
 
 ### 三种用法
 
@@ -172,6 +172,14 @@ chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）
 - **人来填**（2026-10-26，chat EMBER/1792983584.391000：「agent 应该要能够主动发一张卡片来要求用户把一些东西填进去，然后会存到密钥库」）：agent 要的凭据只有人拿得到（只能登录控制台才能建的 API key），`secret_save` 不给 `value` 也不给 `command`，`save` 多 `typed: true`，station 手上没有值、什么都不封（`sealed` 为空，`#unsaved` 不记，重启后申请照样有效）。卡片标题照旧（存入 Token「…」），按钮上面多一个输入框：Token「粘贴 Token」、密码「密码」（agent 没给 `username` 时上面再加「用户名」）、SSH 私钥多行「粘贴私钥」；框里没字时「存入」按不了，回车等于「存入」。批准走 `vault.approve {request, typed: {secret, username?}}`（对象，不会被 `doing` 记下）：core 按条目编辑器的写法变成字段（Token 去首尾空白，私钥末尾补换行，密码原样）。加锁：这台设备自己写进库（读一次箱钥匙解开库钥匙，没有库就建「个人」），其余和上面一样（`POST vault/saves` 带给这个对话的授权）；明文从头到尾只在这台设备上。不加锁：`POST vault/plain/saves {request, fields}`，station 照条目规则查字段、秘密那一项不能空、合起来不超过 64 KB。旧 app 批准这种申请会报错（加锁「没封给这台设备」，不加锁要求更新 app），不会存进空值。在 Slack/飞书里卡片是字，说「请在 still.fail 客户端的「密钥」中填写并存入」，到「密钥」页的待批准里填。
 - **之后**：存进去的条目和人自己加的一样，agent 用时照样 `secret_use` → 卡片 → `secret_run`。存入的申请不算条目的使用记录（`uses` 里不列）。
 - **主动提**：内置 skill `stillfail-vault`，agent 的指令里也有一句：要读密码管理器、人贴了凭据、自己建了 key、写的脚本要登录某处时，先提议存进库再用；他的库没开启时照样调 `secret_save`，卡片会请他开启。`secret_list` 会说他的库开没开。
+
+## 授权时限（2026-11-02）
+
+申请时 agent 按任务的实际使用间隔提出 `timeout: {kind, seconds}`：`idle` 是闲置超时，每次使用后从使用时刻重新计时；`fixed` 从批准时开始计时，使用不延长。默认闲置 1 小时，最长 30 天，按整分钟设置。每天使用的任务可按需要申请 24～36 小时并说明理由。批准的人能修改时限，不能超过库或条目的最长授权；也可选择仅一次。对话归档或删除时授权结束。
+
+时限由批准设备签进授权，station 校验类型和范围；旧客户端不认识新申请的时限时，station 拒绝其非一次性批准，避免把申请批成另一种时限。旧申请及已存在授权继续按原规则处理。未加锁库的续期截止时间随授权保存、重启后恢复；加锁库的授权只在内存，完整重启后需重新申请，更新交接时仍保留。到期会移除进程持有的授权；这不撤销已被复制的密码。
+
+浏览器登录态只在对获准网站的主动操作时续期，后台自动请求不续期。代理和 SSH 方式按实际使用凭据计，环境变量和文件方式按命令获得凭据计。远程命令由目标 station 在使用凭据时告知发起站续期；代理和 SSH 在每次使用前检查截止时间。
 
 ## 在另一台 station 上用（2026-10-24）
 
@@ -280,13 +288,13 @@ Item = {v: 1, ws, vault, id: "i_<ULID>", version, epoch, deleted?: true,
 
 ```
 Request（station 生成，存 vault_requests）= {id: "r_<ULID>", ws, vault, item, session, chat, mode, reason,
-         command?, hosts?, box: "x25519:<hex>"(keeper 这次的临时公钥), at, status: "pending"|"granted"|"denied"|"expired"}
+         command?, hosts?, timeout?: {kind: "idle"|"fixed", seconds}, box: "x25519:<hex>"(keeper 这次的临时公钥), at, status: "pending"|"granted"|"denied"|"expired"}
 Grant（批准的设备生成）= {v: 1, ws, request, vault, item, mode, hosts, scope: "once"|"hour"|"chat",
-         exp(unix 秒), secret: seal(request.box, 明文 JSON, "stillfail-vault-grant/1\0<ws>\0<request>"), at, sig}
+         exp(unix 秒), timeout?: {kind: "idle"|"fixed", seconds}, secret: seal(request.box, 明文 JSON, "stillfail-vault-grant/1\0<ws>\0<request>"), at, sig}
 Deny = {v: 1, ws, request, at, sig}
 ```
 
-- 批准的人必须是库的成员，`sig.key` 是他锁里设备的 `sign_key`。`scope`：`once` 只能用一次（一次 `secret_run`）、`hour` 一小时内、`chat` 这个 chat 归档之前（`exp` 最长 30 天，兜底）。
+- 批准的人必须是库的成员，`sig.key` 是他锁里设备的 `sign_key`。`once` 只能用一次；新授权的 `hour`/`chat` 作为最长时限档位，实际时限由签名的 `timeout` 确定，`exp = at + seconds`。无 `timeout` 的旧授权沿用旧规则。
 - 授权号就是 `request` 的 id。只有发起申请的那个 session 能用（MCP 调用本来就按 session 认人，Claude 和 Codex 一样）。
 
 ### station 的接口
@@ -305,20 +313,20 @@ core → station（走现有的 admin/工作区路由，按锁认出设备和成
 - 推送（事件流，和其他数据一样，断线续传）：`vault`（一版库，发给它的成员）、`vault-gone` `{id}`（被移出库的人）、`vault-item`（一版条目，发给库的成员）、`vault-box`（证书，发给 workspace 的人）、`vault-request`（申请，状态变了也发，发给库的成员）。
 - 旧 station 回 404，core 记成这台不能放库（`vaults` topic 的 `refused`）。
 
-core 的调用（`vault.<名字> {workspace, …}`，`client/core-ts/src/views/vault.ts`）：`setup`（建箱钥匙、发证书；第一次回 24 个词，只回这一次；这个人还没有自己的库就建「个人」库，回 `made`）、`create {name, station?}`、`delete {vault}`（owner 删除自己的库）、`addDevice {vault, device?}`（owner 把库钥匙封给成员新设置的设备；owner 的设备手上有库钥匙时也会自己做）、`putItem {vault, id?, plain, listing?}`、`deleteItem {vault, item}`、`open {item}`、`recover {words}`（用恢复码把这台设备加回自己的库）、`approve {request, scope}`（`once`/`hour` 授权一小时，`chat` 到对话归档、最长 30 天；超出生效 `lasts` 的回 `vault_scope`）、`setLasts {vault, lasts}`（默认最长授权：加锁库由 owner 签一个新版本，明文库发给存着它的 station）、`deny {request}`、`lock`。网页 host 没有 `secure*`，这些调用都回 `vault_unavailable`。这一期只有个人库：加人（`members` 变多）的调用还没做，格式和 station 已经支持。
+core 的调用（`vault.<名字> {workspace, …}`，`client/core-ts/src/views/vault.ts`）：`setup`（建箱钥匙、发证书；第一次回 24 个词，只回这一次；这个人还没有自己的库就建「个人」库，回 `made`）、`create {name, station?}`、`delete {vault}`（owner 删除自己的库）、`addDevice {vault, device?}`（owner 把库钥匙封给成员新设置的设备；owner 的设备手上有库钥匙时也会自己做）、`putItem {vault, id?, plain, listing?}`、`deleteItem {vault, item}`、`open {item}`、`recover {words}`（用恢复码把这台设备加回自己的库）、`approve {request, scope, timeout?}`（仅本次，或签入批准的闲置/固定时限；超出生效 `lasts` 的回 `vault_scope`）、`setLasts {vault, lasts}`（默认最长授权：加锁库由 owner 签一个新版本，明文库发给存着它的 station）、`deny {request}`、`lock`。网页 host 没有 `secure*`，这些调用都回 `vault_unavailable`。这一期只有个人库：加人（`members` 变多）的调用还没做，格式和 station 已经支持。
 
 agent → station（MCP 工具，在 `stillfail` 服务器里）：
 
 | 工具 | 做什么 |
 |---|---|
 | `secret_list` | 有 `listing` 的条目：id、名字、方式、域名，加上这个 session 手上还能用的授权 |
-| `secret_use {item, mode, reason, command?, hosts?}` | 建申请，往这个 chat 发一张申请卡片（库 owner 是 assignee），推送。不等决定，当场回「等批准」（2026-10-30 用户：「密钥存储申请不是异步的，没法在 agent 申请的时候询问其它事项」：工具调用挂着，agent 这一轮就停在那，chat 里别的话都得等它），批准或拒绝时往 session 里发一条消息（正在跑的轮次里直接收到），批准的带授权号和用法；`secret_save`、`phone_use` 同样 |
+| `secret_use {item, mode, reason, command?, hosts?, timeout?}` | 建申请，提出闲置或固定时限，往这个 chat 发一张申请卡片（库 owner 是 assignee），推送。不等决定，当场回「等批准」，批准或拒绝时往 session 里发一条消息（正在跑的轮次里直接收到），批准的带授权号和用法；`secret_save`、`phone_use` 同样 |
 | `secret_reask {request}` | 人说话后卡片不再等待、原申请仍需批准时，为原申请重发卡片；不重新读取密钥，不替换另一张正在等待的卡片，过期或已决定的申请不能重发 |
 | `secret_run {grant, command, env?, cwd?, timeout_seconds?}` | station 在 session 的工作目录里 `sh -c` 跑这个命令，按授权的方式给它密钥，返回退出码和遮过的输出（太长时留头 4KB、尾 28KB）。默认 10 分钟超时 |
 
 先不做命令行（`stillfail-secret run`）：要往 agent 的 PATH 里放东西、还要让 Codex 的进程也能证明自己是哪个 session，MCP 工具这两件都现成。以后需要在管道里用再加。
 
-申请卡片就是普通的 options 卡片（「仅本次 / 本对话 1 小时内 / 本对话直到归档 / 拒绝」，只列到条目的 `lasts`，assignee 是库 owner），多一个字段 `vault: {request, name, reason, command?, mode, hosts}`。新客户端看到这个字段就换成批准界面（选项 → 指纹 → `vault.approve`/`vault.deny`），网页和桌面把这条消息画成一张申请卡（web/src/VaultAsk.tsx：条目名、方式、理由、命令，下面是批准行）；老客户端照普通卡片显示，点了只是发一句话，agent 不会因此拿到授权（工具说明里写了只认授权）。批准、拒绝或过期后 station 收回这张卡片，并往这条消息追加一条文字不变的 edit，卡片里加上 `vault.outcome: {status, scope?}`，申请卡底部就换成「已批准 · 仅本次」「已拒绝」「已过期」。卡片底部怎么答由 core 随这条消息一起给（`vaultAsk.answer`：`approve` / `setUp` / `elsewhere`，用的话还有 `lasts`），按它手里常驻的库算，客户端只画消息、不为卡片另订 `vaults`（2026-10-25 用户：「状态常驻在 core 里，ui 只应该找 core 要个状态」）；在这台设备上批了或拒了，core 当场把这张卡片的 `status`/`scope` 改成结果，不等 station 收回卡片。
+申请卡片带 agent 提议的时限，批准时可选仅本次、按使用续期或固定时限，不能超过条目的 `lasts` 和 30 天；assignee 是库 owner，多一个字段 `vault: {request, name, reason, command?, mode, hosts}`。新客户端看到这个字段就换成批准界面（选项 → 指纹 → `vault.approve`/`vault.deny`），网页和桌面把这条消息画成一张申请卡（web/src/VaultAsk.tsx：条目名、方式、理由、命令，下面是批准行）；老客户端照普通卡片显示，点了只是发一句话，agent 不会因此拿到授权（工具说明里写了只认授权）。批准、拒绝或过期后 station 收回这张卡片，并往这条消息追加一条文字不变的 edit，卡片里加上 `vault.outcome: {status, scope?, timeout?}`，申请卡底部就换成「已批准 · 仅本次」「已拒绝」「已过期」。卡片底部怎么答由 core 随这条消息一起给（`vaultAsk.answer`：`approve` / `setUp` / `elsewhere`，用的话还有 `lasts`），按它手里常驻的库算，客户端只画消息、不为卡片另订 `vaults`（2026-10-25 用户：「状态常驻在 core 里，ui 只应该找 core 要个状态」）；在这台设备上批了或拒了，core 当场把这张卡片的 `status`/`scope` 改成结果，不等 station 收回卡片。
 
 ### keeper
 

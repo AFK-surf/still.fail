@@ -1827,6 +1827,10 @@ export interface VaultAsk {
 	/** The item's name. */
 	name: string;
 	reason: string;
+	timeoutKind?: string;
+	timeoutSeconds?: number;
+	approvedTimeoutKind?: string;
+	approvedTimeoutSeconds?: number;
 	command?: string;
 	/** proxy | env | ssh | file */
 	mode: string;
@@ -7341,6 +7345,8 @@ export interface VaultRequest {
 	/** `proxy`, `ssh` or `env`. */
 	mode: string;
 	reason: string;
+	timeoutKind?: string;
+	timeoutSeconds?: number;
 	command?: string;
 	hosts: string[];
 	at: number;

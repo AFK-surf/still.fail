@@ -50,6 +50,7 @@ export type BrowserOptions = {
   later?: (ms: number, f: () => void) => () => void;
   /// The session whose chat's context a browser context is (browsers.ts): a tab in it is that session's.
   contextOwner?: (browserContextId: string | undefined) => string | undefined;
+  usedTab?: (session: string, targetId: string) => void;
 };
 
 type Up = { running: Running; cdp: Cdp; tabs: Tabs; keys: Authenticators; since: number };
@@ -271,6 +272,7 @@ export class StationBrowser {
         const ctx = tabs.contextOf(targetId);
         return ctx !== undefined && keys.has(ctx, rpId);
       },
+      usedTab: (session, targetId) => this.#o.usedTab?.(session, targetId),
     });
     try {
       await keys.start();

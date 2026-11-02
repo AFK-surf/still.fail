@@ -954,6 +954,19 @@ function gate(known: Record<string, string> = {}) {
   return { g, opened, client: (m: object) => json(client(m)), chrome: (m: object) => json(chrome(m)) };
 }
 
+test("browser activity is attributed to its own tab, without treating passive traffic as use", () => {
+  const used: [string, string | undefined][] = [];
+  const g = new Gate({ context: "C1", contextOf: (id) => id === "A" ? "C1" : "C2", used: (id, url) => used.push([id, url]) });
+  g.fromChrome(JSON.stringify({ method: "Target.attachedToTarget", params: { sessionId: "SA", targetInfo: { targetId: "A", browserContextId: "C1" } } }));
+  g.fromClient(JSON.stringify({ id: 1, sessionId: "SA", method: "Page.navigate", params: { url: "https://github.com/" } }));
+  g.fromChrome(JSON.stringify({ id: 1, sessionId: "SA", result: {} }));
+  g.fromClient(JSON.stringify({ id: 2, sessionId: "SA", method: "Input.dispatchMouseEvent", params: { type: "mouseMoved" } }));
+  g.fromClient(JSON.stringify({ id: 3, sessionId: "SA", method: "Input.dispatchMouseEvent", params: { type: "mousePressed" } }));
+  g.fromChrome(JSON.stringify({ id: 3, sessionId: "SA", result: {} }));
+  g.fromClient(JSON.stringify({ id: 4, sessionId: "SX", method: "Page.navigate", params: { url: "https://other/" } }));
+  assert.deepEqual(used, [["A", "https://github.com/"], ["A", undefined]]);
+});
+
 test("the gate: a new tab, the cookies, the permissions are the chat's context; another context, another chat's target, the browser itself are refused", () => {
   const { client } = gate({ X: "C2", A: "C1" });
   const refused = (id: number, sessionId?: string) => (r: any) => r.up.length === 0 && r.down[0].id === id && r.down[0].error && (sessionId === undefined || r.down[0].sessionId === sessionId);

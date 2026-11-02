@@ -228,6 +228,10 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
   let asked : Asked = {
     name: ask.name,
     reason: ask.reason,
+    timeout_kind: ask.timeout_kind,
+    timeout_seconds: ask.timeout_seconds,
+    approved_timeout_kind: ask.approved_timeout_kind,
+    approved_timeout_seconds: ask.approved_timeout_seconds,
     mode: ask.mode,
     command: ask.command,
     how_text: ask.how_text,

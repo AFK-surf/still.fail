@@ -37,6 +37,7 @@ pub(all) struct SignIn {
   mut waiting : Bool
   mut failed : String
   mut auto : Bool
+  mut web_auto : Bool
   mut login : Bool
   mut by_hand : String
   mut account : String
