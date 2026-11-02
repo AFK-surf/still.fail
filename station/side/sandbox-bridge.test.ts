@@ -48,10 +48,13 @@ far.on("exit", (code) => process.exit(code ?? 1));
   let err = "";
   child.stdout.on("data", (b) => (out += b));
   child.stderr.on("data", (b) => (err += b));
-  const ended = new Promise<number | null>((r) => child.on("close", (code) => r(code)));
+  let closed = false;
+  const ended = new Promise<number | null>((r) => child.on("close", (code) => ((closed = true), r(code))));
   // Held once its output has come here, not once it wrote its pid there: that it started comes before its output, and
   // held before it came, the side here never knew it started and said the sandbox was not reached (255, 41444453924).
-  await until(() => out.includes("ready"));
+  // The bridge ended before it came: said, not waited for.
+  await until(() => out.includes("ready") || closed);
+  if (!out.includes("ready")) assert.fail(`the bridge ended (${await ended}) before the program's output came: ${err}`);
   const pid = Number(readFileSync(pidFile, "utf8"));
   process.kill(Number(readFileSync(join(dir, "ssh.pid"), "utf8")), "SIGSTOP");
   await until(() => !alive(pid));
