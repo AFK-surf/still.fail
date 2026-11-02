@@ -315,8 +315,12 @@ linux() {
 # (and a connection not made in 15 s given up and tried again, as scripts/release-put.sh's: curl's own wait for one is
 # 300 s, and the Windows installer's check said nothing for the 150 s its step waits after the put, main d2791c4f,
 # 41379568722, 2026-11-02)
+md5_of() { if command -v md5sum > /dev/null; then md5sum "$1" | cut -d' ' -f1; else md5 -q "$1"; fi; }
 check_put() {
   local name=$1 file=$2 want got= account back limits="--connect-timeout 15 --speed-limit 1024 --speed-time 30"
+  # (R2 said it wrote these very bytes: scripts/release-put.sh's receipt)
+  local receipt="$C/put-receipts/$(printf %s "$name" | tr / _)"
+  if [ -f "$receipt" ] && [ "$(cat "$receipt")" = "$(md5_of "$file")" ]; then echo "beta: $name as made, by R2's own answer"; return 0; fi
   want=$(shasum -a 256 "$file" | cut -d' ' -f1)
   back=$(mktemp)
   if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
@@ -342,7 +346,8 @@ publish() {
   cp "$dir/$name" "$C/last-$part"
   # (wrangler's, when Cloudflare's API cannot be used: without the token)
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || (cd "$REPO/cloud" && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-  sh "$REPO/scripts/release-put.sh" --files "$dir"
+  rm -rf "$C/put-receipts"
+  STILLFAIL_PUT_RECEIPTS="$C/put-receipts" sh "$REPO/scripts/release-put.sh" --files "$dir"
   local tp=$(secs $t0)
   check_put "$name" "$C/last-$part" || { echo "beta: $name did not come back as made: the feed stays as it was" >&2; exit 1; }
   local tc=$(secs $t0)

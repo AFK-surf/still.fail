@@ -39,12 +39,23 @@ if [ -z "$account_id" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
 fi
 # The object put straight through Cloudflare's API, as wrangler does it, without its start-up and at the speed the line
 # has (a 148 MB zip took wrangler ~45 s from mini1, whose upload is ~5.5 MB/s): wrangler when that cannot be done.
+# R2's answer names the object's MD5 as it was written (its etag, one request's upload): the same as the file's, it is
+# in the bucket as made, said where STILLFAIL_PUT_RECEIPTS names a directory (apps/mbui/scripts/beta.sh: then not
+# fetched back whole to be compared, 20-105 s of GitHub's runners now and then, main ae77ba19, 2a233edf, 2026-11-02).
 api_put() {
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ] || return 1
+  answer=$(mktemp)
   # shellcheck disable=SC2086 # direct is words
   curl $direct $limits -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: $3" -T "$2" \
-    "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1" > /dev/null
+    "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1" > "$answer" || { rm -f "$answer"; return 1; }
+  etag=$(grep -o '"etag":"[0-9a-f]\{32\}"' "$answer" | head -1 | cut -d'"' -f4) || etag=""
+  rm -f "$answer"
+  if [ -n "${STILLFAIL_PUT_RECEIPTS:-}" ] && [ -n "$etag" ] && [ "$etag" = "$(md5_of "$2")" ]; then
+    mkdir -p "$STILLFAIL_PUT_RECEIPTS" && printf '%s\n' "$etag" > "$STILLFAIL_PUT_RECEIPTS/$(printf %s "$1" | tr / _)"
+  fi
+  return 0
 }
+md5_of() { if command -v md5sum > /dev/null; then md5sum "$1" | cut -d' ' -f1; else md5 -q "$1"; fi; }
 # put <name in the bucket> <file> <content type>, tried again twice when Cloudflare's API fails on the way.
 put() {
   for try in 1 2 3; do
