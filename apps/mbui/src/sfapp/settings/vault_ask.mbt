@@ -96,6 +96,9 @@ let vault_picked : Map[String, String] = {}
 let vault_timeout_minutes : Map[String, Int] = {}
 
 ///|
+let vault_timeout_panel : @ui.Style = @ui.css("w=Full gap=S4")
+
+///|
 /// What was tapped on each request while the core has it (`true`: the yes, `false`: the no), till it answers
 /// (VaultActions' pending: the core's doing comes a frame later); put back by `reset`.
 let vault_pending : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
@@ -629,10 +632,11 @@ pub fn vault_foot(
         let field = @ui.Field::new(text=(if unit.val == "hours" { minutes / 60 } else { minutes }).to_string())
         let chosen : Ref[String] = Ref(scope)
         @sf.panel(tr("android-settings.vault.timeout.title"), from=Unanchored, form=true, fn(pc, close) {
-          pc.box(style=@sf.panel_words_in(), w=Fill(1.0), gap=16.0, fn() {
-            let selected = if chosen.val == "once" { 0 } else if chosen.val == "fixed" { 2 } else { 1 }
-            let picked = @sf.segmented(pc, "vault-timeout-kind", [tr("android-settings.vault.scope.once"), tr("android-settings.vault.timeout.idle"), tr("android-settings.vault.timeout.fixed")], selected)
-            chosen.val = if picked == 0 { "once" } else if picked == 2 { "fixed" } else { "idle" }
+          pc.box(style=@sf.panel_words_in().then(vault_timeout_panel), fn() {
+            for k in ["once", "idle", "fixed"] {
+              let label = if k == "once" { tr("android-settings.vault.scope.once") } else { tr("android-settings.vault.timeout." + k) }
+              if @sf.choice_row(pc, "vault-timeout-kind/" + k, chosen.val == k, label) { chosen.val = k }
+            }
             if chosen.val != "once" {
               @sf.field(pc, tr("android-settings.vault.timeout.duration"), aside=fn() {
                 let id = "vault/" + request + "/panel-unit"
