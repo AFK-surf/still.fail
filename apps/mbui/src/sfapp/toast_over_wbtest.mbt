@@ -73,14 +73,15 @@ test "a toast with its action said while the old frame's modal sheet is up: draw
     Some(r) => drawn_over(t, r)
     None => -2
   }
-  // (beside it, at its height: the sheet's, the toast neither pressed nor gone)
-  let beside = match toast {
-    Some((x, y, _, h)) => {
-      t.tap(x / 2.0, y + h / 2.0)
+  // (beside it, on the sheet (its 发到, which presses nothing; the sheet as tall as what it holds, its rows reach
+  // under the toast): the sheet's, the toast neither pressed nor gone)
+  let beside = match (toast, t.rect_of("发到")) {
+    (Some(_), Some((x, y, w, h))) => {
+      t.tap(x + w / 2.0, y + h / 2.0)
       t.frame()
       (t.find(over_words) is Some(_), runs.val, t.find("发到") is Some(_))
     }
-    None => (false, -1, false)
+    _ => (false, -1, false)
   }
   // (its action pressed where it is drawn: done once, the toast gone; its time after, nothing more)
   let acted = match button {
