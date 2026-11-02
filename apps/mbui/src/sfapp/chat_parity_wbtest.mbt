@@ -148,6 +148,48 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
 }
 
 ///|
+test "an overload notice offers to cancel its retry at the notice" {
+  let calls : Array[Made] = []
+  let retrying = Ref::new(true)
+  let epoch = Ref::new(0)
+  let t = edited_core(
+    calls,
+    "chat",
+    fn(name, v) {
+      if name == "chat" {
+        let notice : Json = if retrying.val {
+          { "failed": true, "words": "模型满载，自动重试，与额度无关", "retrySession": "agent-a" }
+        } else {
+          { "failed": true, "words": "模型满载，自动重试，与额度无关" }
+        }
+        with_chat_message(v, 9.0, [("notice", notice), ("reportable", false)])
+      } else {
+        v
+      }
+    },
+    epoch~,
+  )
+  for _ in 0..<6 {
+    if t.find("模型满载") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  t.tap_text("取消")
+  let sent = named(calls, "session.cancelRetry")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "station"), "ws1/st1")
+  assert_eq(text(Some(sent[0].params), "key"), "agent-a")
+  assert_eq(number(Some(sent[0].params), "thread"), 7.0)
+  assert_eq(number(Some(sent[0].params), "seq"), 9.0)
+  retrying.val = false
+  epoch.val += 1
+  t.frame()
+  t.run_for(@ui.row_size_ms)
+  assert_true(t.find("取消") is None, msg="the action leaves once the retry is over")
+}
+
+///|
 test "a notice that a runtime is missing: its word installs it (software.update)" {
   let calls : Array[Made] = []
   let t = edited_core(calls, "chat", fn(name, v) {

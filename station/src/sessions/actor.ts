@@ -92,7 +92,7 @@ export type SessionStore = {
   listJobs(session: string | null): any[];
   latestThread(key: string): any | null;
   entriesBefore(thread: number, n: number | null, limit: number): any[];
-  insertMessage(message: any): unknown;
+  insertMessage(message: any): [number, boolean];
   notify(key: string): void;
 };
 
@@ -470,6 +470,18 @@ export class SessionActor {
       if (this.turn) return;
       await this.stopWaiting();
       // Nothing runs: whatever is still said to be under way (a start that failed) is not.
+      this.deps.live?.turnEnded(this.key);
+    });
+  }
+
+  /// Cancels only the overload retry identified by the notice the person pressed. A delayed press must never stop a
+  /// different turn or a later wait, and the background jobs belonging to the session continue.
+  cancelRetry(thread: number, seq: number): Promise<void> {
+    return this.enqueue(async () => {
+      const last = this.deps.store.lastTurn(this.key);
+      if (this.turn || this.agent?.session.busy() || !last || !retrying(last) || last.about?.thread !== thread || last.about?.seq !== seq) return;
+      await this.stopWaiting(false);
+      await this.notice(t("station.notice.retryCanceled"));
       this.deps.live?.turnEnded(this.key);
     });
   }
@@ -984,6 +996,8 @@ export class SessionActor {
   /// messages pending for the next attempt.
   private async startTurn(kind: string, text: string, by: TurnFor = nobody): Promise<void> {
     const store = this.deps.store;
+    // An automatic retry is still the one described by the original notice, even if it meets capacity again.
+    const retryAbout = text === GO_ON_AFTER_OVERLOADED ? store.lastTurn(this.key)?.about ?? null : null;
     // Archived: only a new message starts a turn (and has brought it back by then).
     if (kind !== "input" && this.archived()) {
       log.info("session", "archived: no turn of its own", { session: this.key, kind });
@@ -1034,6 +1048,7 @@ export class SessionActor {
       this.steeredFor = [];
       this.unread = [];
       this.beginTurn(kind, by);
+      if (retryAbout && this.turn) store.setAbout((this.turn as Turn).id, [retryAbout.thread, retryAbout.seq, retryAbout.ts]);
       try {
         await agent.prompt(prompt);
       } catch (error) {
@@ -1339,8 +1354,15 @@ export class SessionActor {
       this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
     } else if (overloaded) {
       this.nudges = 0;
-      // Said once: tried again and turned away again, nothing new to tell.
-      if (!this.saidLast(OVERLOADED_NOTICE())) await this.notice(OVERLOADED_NOTICE());
+      // Reuse only this retry's own notice. A different agent can have said the same thing in this thread.
+      const about = store.lastTurn(this.key)?.about;
+      const latest = store.latestThread(this.key);
+      const last = latest ? store.entriesBefore(latest.thread.id, null, 1).at(-1) : undefined;
+      const same = about && last && about.thread === latest.thread.id && about.seq === last.n && about.ts === last.ts && last.text === OVERLOADED_NOTICE();
+      if (!same) {
+        await this.notice(OVERLOADED_NOTICE(), null, null, (where) => store.setAbout(turn!.id, where));
+      }
+      store.notify(this.key);
     } else if (outcome.kind === "failed") {
       this.nudges = 0;
       // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
@@ -1553,7 +1575,7 @@ export class SessionActor {
   /// The station's own words (not the agent's) go to the thread people spoke in last, and are recorded there; one about
   /// a profile (`profile`, its id) is linked to that profile's page, one about a runtime not installed (`runtime`)
   /// offers to install it.
-  private async notice(text: string, profile: string | null = null, runtime: RuntimeKind | null = null) {
+  private async notice(text: string, profile: string | null = null, runtime: RuntimeKind | null = null, recorded?: (where: [number, number, string]) => void) {
     const store = this.deps.store;
     const latest = store.latestThread(this.key);
     const chat = latest ? this.deps.chat(latest.connect) : undefined;
@@ -1563,7 +1585,8 @@ export class SessionActor {
     }
     try {
       const ts = await chat.post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-      store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
+      const [n] = store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
+      recorded?.([latest.thread.id, n, ts]);
     } catch (error) {
       log.warn("session", "notice failed", { session: this.key, error: (error as Error).message });
     }

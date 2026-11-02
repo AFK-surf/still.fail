@@ -1711,6 +1711,37 @@ test("a_compact_chat_keeps_the_page_and_its_jobs_available_separately", async ()
   assert.equal(summary.value.hasJobs, false);
 });
 
+test("only the overload notice belonging to a waiting retry offers its cancellation", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const chat = thread(7, ["k", "j"], t.host.nowMs());
+  t.set(threads("ws/a"), [chat]);
+  const entries = [1, 2].map((n) => ({
+    ...entry(n, "⚠️ 模型满载，自动重试，与额度无关"), authorKind: "ember", author: "ember",
+  }));
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries, end: false, thread: chat });
+  const waiting = {
+    kind: "resume", outcome: "failed", declared: "waiting", detail: "overloaded: at capacity",
+    about: { thread: 7, seq: 2, ts: "2.0" }, startedAt: 10, endedAt: 11,
+  };
+  t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { lastTurn: waiting }), threads: [chat], turns: [] });
+  t.set(sessionOf("ws/a", "j"), { session: fullSession("j"), threads: [chat], turns: [] });
+  await t.read(u, 1);
+  assert.equal(u.value.messages[0].notice.retrySession, undefined);
+  assert.equal(u.value.messages[1].notice.retrySession, "k");
+  // A new turn, or an unrelated wait, cannot be cancelled through that old notice.
+  for (const lastTurn of [
+    { ...waiting, outcome: "aborted", declared: null },
+    { ...waiting, outcome: "completed", detail: null },
+    { ...waiting, about: { ...waiting.about, thread: 8 } },
+  ]) {
+    t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { lastTurn }), threads: [chat], turns: [] });
+    await t.read(u, 1);
+    assert.equal(u.value.messages[1].notice.retrySession, undefined);
+  }
+});
+
 test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   const t = setup();
   const u = ui();

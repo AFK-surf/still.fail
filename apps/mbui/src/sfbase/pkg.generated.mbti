@@ -2583,6 +2583,7 @@ pub(all) struct Message {
   notice_words : String
   notice_link : Int32
   notice_md : Json?
+  notice_retry_session : String
   chats : Array[LinkedChat]
 }
 pub fn Message::linked(Self, String) -> LinkedChat?

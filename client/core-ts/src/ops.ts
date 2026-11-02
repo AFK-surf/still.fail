@@ -66,6 +66,7 @@ const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "admin"];
 /// params (test/ops.test.ts checks it), besides `station` and `account`.
 export const PARAMS: Record<string, string> = {
   "session.stop": "key:string",
+  "session.cancelRetry": "key:string thread:number seq:number",
   "tools.access": "",
   "tools.setAccess": "access:string",
   "station.modules": "",
@@ -337,6 +338,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => "/elevation", p.pick(["on"]), OVERVIEW);
     case "session.stop":
       return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
+    case "session.cancelRetry":
+      return op("POST", () => `/sessions/${p.at("key")}/cancel-retry`, p.pick(["thread", "seq"]), process("key"));
     case "session.warm":
       // As a person types in its chat (once a minute), nobody waiting on it: its station tells its session's new state.
       // It read the detail each time, a third of a phone's reads of details.

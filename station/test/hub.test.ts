@@ -2268,13 +2268,60 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   await r.close();
 });
 
+test("an overload notice identifies the retry it can cancel, even after another attempt", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const agent = r.claude.last();
+  const key = agent.options.route;
+  const thread = r.thread("C1", m.threadTs);
+  const full = { kind: "failed" as const, reason: "overloaded" as const, message: "at capacity" };
+  agent.end(full);
+  await settle();
+  const notice = r.said(thread.id).find((entry) => entry.text.includes("模型满载"))!;
+  assert.ok(notice);
+  assert.deepEqual(r.store.lastTurn(key)!.about, { thread: thread.id, seq: notice.n, ts: notice.ts });
+  assert.ok(!notice.text.includes("点停止"));
+  await time.adjust(30_000);
+  await settle();
+  agent.end(full);
+  await settle();
+  assert.deepEqual(r.store.lastTurn(key)!.about, { thread: thread.id, seq: notice.n, ts: notice.ts });
+  assert.equal(r.said(thread.id).filter((entry) => entry.text.includes("模型满载")).length, 1);
+  r.store.insertJob({ ...watchJob(key), id: "build", token: "tbuild", port: null, watch: false });
+  await r.hub.cancelRetry(key, thread.id, notice.n);
+  assert.equal(r.store.lastTurn(key)!.outcome, "aborted");
+  assert.equal(r.store.getJob("build")!.state, "running");
+  await time.adjust(3_600_000);
+  await settle();
+  assert.equal(agent.prompts.length, 2);
+  // An old button must not interrupt a later task.
+  await r.accept(reply(m, "9999.3", "<@UBOT> 继续", { addressed: true }));
+  await settle();
+  const next = r.claude.last();
+  await r.hub.cancelRetry(key, thread.id, notice.n);
+  assert.equal(next.aborts, 0);
+  assert.equal(next.busy(), true);
+  next.end(full);
+  await settle();
+  const nextNotice = r.said(thread.id).filter((entry) => entry.text.includes("模型满载")).at(-1)!;
+  assert.notEqual(nextNotice.n, notice.n);
+  await r.hub.cancelRetry(key, thread.id, notice.n);
+  assert.equal(r.store.lastTurn(key)!.declared, "waiting", "an old notice cannot cancel a later retry either");
+  await r.hub.cancelRetry(key, thread.id, nextNotice.n);
+  assert.equal(r.store.lastTurn(key)!.outcome, "aborted");
+  await r.close();
+});
+
 test("a model at capacity is no account's limit: said once, tried again after longer each time, and stop cancels it", async () => {
   const time = testClock();
   const r = new Rig({ clock: time.clock });
   r.edit((raw) => raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" }));
   const text = "Selected model is at capacity. Please try a different model.";
   const full = { kind: "failed" as const, reason: classifyResult(text), message: text };
-  const said = () => r.chat.texts().filter((t) => t.includes("模型暂时满载"));
+  const said = () => r.chat.texts().filter((t) => t.includes("模型满载"));
   const m = message();
   await r.accept(m);
   await settle();

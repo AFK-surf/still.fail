@@ -431,8 +431,10 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
       } else if f.mode == "chat-long" {
         Some(kept_chat("long", fn() { long_chat(3000) }))
       } else if session == "s-c1" {
-        let base = kept_chat("rich/\{f.older}/\{f.mode}", fn() {
-          let v = if f.mode == "chat-md" {
+        let base = kept_chat("rich/\{f.older}/\{f.mode}/\{f.step}", fn() {
+          let v = if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
+            with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
+          } else if f.mode == "chat-md" {
             with_md_message(rich_chat(f.older))
           } else if f.mode == "chat-viz" {
             with_viz_message(rich_chat(f.older))
@@ -1733,6 +1735,40 @@ pub fn with_message(v : Json, words : String) -> Json {
         }),
       )
       o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The same capacity notice before and after its retry can be cancelled from the chat.
+fn with_overload_notice(v : Json, after : Bool, canceled : Bool) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let words = if @sf.language() == "en" {
+        if after {
+          "Model busy; retrying (not quota)"
+        } else {
+          "The model is at capacity right now; this is not your account's limit. Retrying automatically after a while. Stop to cancel"
+        }
+      } else if after {
+        "模型满载，自动重试，与额度无关"
+      } else {
+        "模型暂时满载，与账号额度无关；稍后自动重试，点停止可取消"
+      }
+      let notice : Map[String, Json] = { "failed": true, "words": Json::string(words) }
+      if after && !canceled {
+        notice["retrySession"] = "s-c1"
+      }
+      o["messages"] = [
+        msg(1, "person", by_person("林"), "请继续处理这个任务", "刚刚", { "mine": true }),
+        msg(2, "ember", { "name": "still.fail" }, "⚠️ " + words, "刚刚", { "notice": Json::object(notice) }),
+      ]
+      o["asks"] = []
+      o["askClear"] = false
+      o["more"] = false
       Json::object(o)
     }
     _ => v

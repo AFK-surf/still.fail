@@ -108,7 +108,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
   }
   // what still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message
   if m.system {
-    system_notice(c, src, here.station, m)
+    system_notice(c, src, here, m)
     return
   }
   let agent = if m.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == m.by.agent }) {
@@ -663,7 +663,8 @@ fn is_viz(name : String) -> Bool {
 /// `notice`); pressed, all its words and its time under it. One about a profile: what went wrong links to that
 /// profile's page; one saying the station lacks the chat's runtime ends in installing it; a failure the station takes
 /// reports of, in reporting it.
-fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Unit {
+fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
+  let station = here.station
   let id = c.id("notice/" + m.ts)
   if c.clicked(id) {
     notices_open[m.ts] = !notices_open.get(m.ts).unwrap_or(false)
@@ -677,7 +678,10 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
     _ => None
   }
   let linked = m.profile != "" && m.notice_link >= 0 && m.notice_link <= said.length()
-  c.box(style=notice_across, fn() {
+  let retry = m.notice_retry_session != "" && here.list is Some(_)
+  let retry_key = "notice-retry/" + station + "/" + m.ts
+  let retry_share = @motion.animate(c, retry_key, if retry { 1.0 } else { 0.0 }, spec=@motion.tween(@ui.row_size_ms, ease=Out))
+  let pill = fn() {
     c.box(style=notice_pill_of(failed, open), id~, fn() {
       c.box(style=notice_line, fn() {
         c.box(style=notice_words_room, fn() {
@@ -729,6 +733,40 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
       |> ignore
     })
     |> ignore
+  }
+  c.box(style=notice_across, fn() {
+    if retry || retry_share > 0.0 {
+      c.box(style=notice_with_action, fn() {
+        pill()
+        let session = m.notice_retry_session
+        let busy = core_doing(src, ["session.cancelRetry"], [("station", station), ("key", session)])
+        let natural = match @motion.measured_size(c, retry_key) {
+          Some((w, _)) => w
+          None => 0.0
+        }
+        let cut = retry_share < 1.0
+        let action = c.box(style=if cut { notice_action_cut.then(@ui.style(max_w=Fixed(natural * retry_share))) } else { notice_action_room }, fn() {
+          let inner = c.box(style=notice_action_in, keep=cut, fn() {
+            if @sf.button(c, @sf.t("common.cancel"), key="notice-cancel/" + m.ts, busy~, disabled=!retry || src.read_only || here.view.offline) {
+              c.tell("notice-cancel/" + m.ts, fn() {
+                act(src, @sf.t("common.cancel"), "", "session.cancelRetry", {
+                  "station": Json::string(station),
+                  "key": Json::string(session),
+                  "thread": Json::number(m.thread),
+                  "seq": Json::number(m.seq),
+                })
+              })
+            }
+          })
+          @motion.measure(c, inner, retry_key)
+        })
+        if cut {
+          c.look(action, @ui.look(alpha=retry_share))
+        }
+      }) |> ignore
+    } else {
+      pill()
+    }
     if open {
       message_time(c, "m:" + m.ts, m.time)
     }
@@ -1167,6 +1205,23 @@ let place_corner_mark : @ui.Style = @ui.css(
 /// A notice (msgSystem): across the chat, in its middle, its time 4 under it once opened.
 // kept across runs: a value (no field of it changes)
 let notice_across : @ui.Style = @ui.css("w=Full gap=S1 align=ACenter")
+
+///|
+/// A retry's own action follows the notice; its text gives way before the button.
+// kept across runs: a value (no field of it changes)
+let notice_with_action : @ui.Style = @ui.css("row max_w=Full align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let notice_action_room : @ui.Style = @ui.css("row")
+
+///|
+// kept across runs: a value (no field of it changes)
+let notice_action_cut : @ui.Style = @ui.css("row clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let notice_action_in : @ui.Style = @ui.css("row pl=S1_5")
 
 ///|
 /// Its pill (msgSystemBox): as wide as its words, 6 by 14 in, round at its ends (16 once opened); the hover ground, a

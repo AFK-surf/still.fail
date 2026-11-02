@@ -517,7 +517,7 @@ export const routes = (tools: Tools): Route[] => {
     ),
     {
       method: "POST",
-      pattern: /^\/*sessions\/+([^/]+)\/+(stop|evict|warm|compact|clear|settings)(?:\/.*)?$/,
+      pattern: /^\/*sessions\/+([^/]+)\/+(stop|cancel-retry|evict|warm|compact|clear|settings)(?:\/.*)?$/,
       handle: (r, [k, action]) =>
         write(async (s, a) => {
           const key = segment(k!);
@@ -525,6 +525,13 @@ export const routes = (tools: Tools): Route[] => {
             case "stop":
               await a.hub.stop(key);
               return ok({ ok: true });
+            case "cancel-retry": {
+              session(s, key, r);
+              const { thread, seq } = input(r);
+              if (!Number.isSafeInteger(thread) || !Number.isSafeInteger(seq) || (thread as number) <= 0 || (seq as number) <= 0) throw new Refused(400, "invalid retry notice");
+              await a.hub.cancelRetry(key, thread as number, seq as number);
+              return ok({ ok: true });
+            }
             case "evict":
               await a.hub.evict(key);
               return ok({ ok: true });
