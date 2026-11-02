@@ -550,9 +550,14 @@ fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
 }
 
 ///|
+/// What the page was given to share (its /share, web/src/mbui/share.ts `__mbshare`), taken once: "" for none.
 fn shared_in() -> String {
-  ""
+  js_shared_in()
 }
+
+///|
+extern "js" fn js_shared_in() -> String =
+  #|() => { const s = globalThis.__mbshare; return (s && s.take && s.take()) || "" }
 
 ///|
 fn shared_in_file(i : Int) -> Bytes {
@@ -1314,10 +1319,15 @@ fn open_url(url : String) -> Bool {
 }
 
 ///|
-/// The app over another app done (see host_native.mbt): a page never is.
+/// The app over another app done (see host_native.mbt): a page is over another only as the browser extension's
+/// window it shares from (web/src/mbui/share.ts), which goes once its sheet is let go of.
 fn over_done(open_app~ : Bool) -> Unit {
-  ignore(open_app)
+  js_over_done(open_app)
 }
+
+///|
+extern "js" fn js_over_done(open_app : Bool) -> Unit =
+  #|(o) => { const s = globalThis.__mbshare; if (s && s.done) s.done(o) }
 
 ///|
 /// A page in a browser's tab (see host_native.mbt): a tab of its own, as open_url.

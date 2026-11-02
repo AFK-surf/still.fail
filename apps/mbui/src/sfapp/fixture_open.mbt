@@ -657,7 +657,9 @@ fn open_service_fixture(mode : String) -> Unit {
 /// MBUI_FIXTURE=share-in…: the sheet raised over Home.
 fn open_share_fixture(mode : String) -> Unit {
   match mode {
-    "share-in" | "share-in-stations" => {
+    // (`-over`: over another app, as the browser extension's window and Android's share sheet show it)
+    "share-in" | "share-in-stations" | "share-in-over" => {
+      share_over.set(mode == "share-in-over")
       share_in.shared.set(Some(@sffixture.fix_shared))
       share_in.env_taken.set(true)
       raise_sheet(ShareSheet)

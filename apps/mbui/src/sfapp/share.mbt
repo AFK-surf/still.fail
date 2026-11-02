@@ -623,8 +623,15 @@ fn share_opened(
   lower_sheet()
   @hostapi.log("share in: into \{key}, \{files.length()} files")
   @sfbase.history_push()
-  // over another app: the app opens at the chat (ShareActivity openApp: MainActivity's openItem, over Home)
+  // over another app: the app opens at the chat (ShareActivity openApp: MainActivity's openItem, over Home); a
+  // browser's window the extension shares from has the chat open in the browser's still.fail tab, and goes
+  // (web/src/mbui/share.ts)
   if share_over.get() {
+    if @ui.platform() == 4 {
+      let link = if session == "" { "" } else { chat_link(station, session) }
+      @ui.open_url(if link == "" { cloud_origin() } else { link }) |> ignore
+      return
+    }
     home()
     @ui.over_done(open_app=true)
   }
