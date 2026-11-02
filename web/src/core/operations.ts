@@ -91,6 +91,12 @@ export interface OperationParams {
   "job.log": { id: string; lines: number };
   "job.stop": { id: string };
   "screen.close": { screen: string };
+  "screen.logs": { screen: string; after: number };
+  "screen.apps": { screen: string };
+  "screen.relaunch": { screen: string; app: string };
+  "screen.settings": { screen: string };
+  "screen.setSetting": { screen: string; name: string; value: string };
+  "screen.screenshot": { screen: string };
   "signin.fill": { id: string; login: unknown; keep?: boolean | null | undefined };
   "signin.self": { id: string; done?: boolean | null | undefined };
   "signin.deny": { id: string };
@@ -152,7 +158,7 @@ export interface OperationParams {
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "screen.apps", "screen.logs", "screen.settings", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -249,6 +255,12 @@ export function bindStationOperations(call: Call) {
     jobLog: <T = unknown>(params: OperationParams["job.log"]) => call("job.log", params) as Promise<T>,
     jobStop: <T = unknown>(params: OperationParams["job.stop"]) => call("job.stop", params) as Promise<T>,
     screenClose: <T = unknown>(params: OperationParams["screen.close"]) => call("screen.close", params) as Promise<T>,
+    screenLogs: <T = unknown>(params: OperationParams["screen.logs"]) => call("screen.logs", params) as Promise<T>,
+    screenApps: <T = unknown>(params: OperationParams["screen.apps"]) => call("screen.apps", params) as Promise<T>,
+    screenRelaunch: <T = unknown>(params: OperationParams["screen.relaunch"]) => call("screen.relaunch", params) as Promise<T>,
+    screenSettings: <T = unknown>(params: OperationParams["screen.settings"]) => call("screen.settings", params) as Promise<T>,
+    screenSetSetting: <T = unknown>(params: OperationParams["screen.setSetting"]) => call("screen.setSetting", params) as Promise<T>,
+    screenScreenshot: <T = unknown>(params: OperationParams["screen.screenshot"]) => call("screen.screenshot", params) as Promise<T>,
     signinFill: <T = unknown>(params: OperationParams["signin.fill"]) => call("signin.fill", params) as Promise<T>,
     signinSelf: <T = unknown>(params: OperationParams["signin.self"]) => call("signin.self", params) as Promise<T>,
     signinDeny: <T = unknown>(params: OperationParams["signin.deny"]) => call("signin.deny", params) as Promise<T>,

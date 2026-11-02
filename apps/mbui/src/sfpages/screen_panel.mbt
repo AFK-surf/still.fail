@@ -346,16 +346,31 @@ let diag_said_ms : Double = 1500.0
 /// 控制中心 as a round button (the bar's, the rail's, the folded tools'): pressed, its panel.
 fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
-  if round_button(c, key, "sliders", @sf.t("web-pages.screen.panel")) || u.asked_panel == "center" {
+  if round_button(c, key, "sliders", @sf.t("web-pages.screen.panel")) || center_asked(u) {
     center_open(c, s, u, key, close)
   }
 }
 
 ///|
+/// A fixture's: 控制中心 or a simulator's panel opened as if pressed.
+fn center_asked(u : ScreenUi) -> Bool {
+  u.asked_panel == "center" || u.asked_panel == "logs" || u.asked_panel == "apps"
+}
+
+///|
 /// 控制中心's panel, beside what opened it (`key`).
 fn center_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, close : () -> Unit) -> Unit {
+  let asked = u.asked_panel
   u.asked_panel = ""
   let from : @sf.Anchor = Of(c.id(key))
+  if asked == "logs" {
+    debug_logs_open(s, u, from)
+    return
+  }
+  if asked == "apps" {
+    debug_apps_open(s, u, from)
+    return
+  }
   @sf.panel(@sf.t("web-pages.screen.panel"), fn(c, done) { center_panel(c, s, u, from, close, done) }, from~, focus=false)
 }
 
@@ -364,7 +379,7 @@ fn center_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, close : 
 fn center_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
   if @sf.viewer_tool(c, key, "sliders", @sf.t("web-pages.screen.panel"), @sf.page_viewer_ink()) ||
-    u.asked_panel == "center" {
+    center_asked(u) {
     center_open(c, s, u, key, close)
   }
 }
@@ -417,7 +432,8 @@ fn center_panel(
   done : () -> Unit,
 ) -> Unit {
   let src = s.src
-  if s.driving() {
+  // (a simulator's page has its device's buttons beside the picture: screen_debug.mbt)
+  if s.driving() && !s.simulator() {
     @sf.panel_group(c, label=@sf.t("web-pages.screen.combos"), fn() {
       combo_tiles(c, s, combos_for(screen_os(src, s.station)), done)
     })

@@ -27,7 +27,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -65,6 +65,8 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
           }
         : null),
     resetQuota: o.resetQuota ?? null,
+    codex: o.codex,
+    hub: o.hub,
     hermes: o.hermes,
     discover: o.discover ?? (async (profile) => ({ state: "unsupported", detail: "", model: null, provider: null, models: [], fingerprint: fingerprint(profile) })),
     clock: o.clock,
@@ -216,7 +218,9 @@ describe("the accounts routes", { concurrency: true }, () => {
   test("a subscription sign-in runs on the station's machine and relays the link, the code and the result", async () => {
     const dir = temp("routes");
     const approved = approval(dir);
-    const t = await rig({ data: dir, approval: approved.path });
+    const reloaded: string[] = [];
+    const codex = () => ({ rateLimits: async () => ({}), resetQuota: async () => ({}), models: async () => ({ models: [], efforts: new Map() }), loginChanged: async (id: string) => { reloaded.push(id); } });
+    const t = await rig({ data: dir, approval: approved.path, codex });
     const wait = (id: string, state: string) => waitFor(t, id, state);
     await t.call("PUT", "/profiles/sub", { runtime: "claude", access: { kind: "subscription" } });
     assert.equal((await t.call("POST", "/profiles/cc/login"))[0], 400, "keyed profiles do not sign in");
@@ -239,6 +243,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     await approved.approve();
     await wait("cxs", "done");
     assert.equal(t.view("cxs")!.login.state, "done");
+    await until(() => reloaded.includes("cxs"), "Codex told that the login changed");
     // Cancelled from the page.
     await t.call("POST", "/profiles/sub/login");
     await wait("sub", "needs_code");
@@ -366,6 +371,83 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(again.view("cc")!.quota.windows[0].usedPercent, 12);
     assert.deepEqual(again.accounts.health("cc").quota.windows[0].usedPercent, 12);
     await again.close();
+  });
+
+  test("a revoked Codex login stays in the account check until the provider accepts it again", async () => {
+    const data = temp("codex-revoked");
+    const db = join(data, "stillfail.db");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "cx", runtime: "codex", home: "homes/cx", access: { kind: "subscription" } }], connects: [] }));
+    let outcome: "ok" | "revoked" | "offline" = "ok";
+    const readQuota = async () => outcome === "ok"
+      ? { state: "ok", windows: [{ label: "5h", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: 0 }
+      : { state: "unavailable", windows: [], detail: outcome, checkedAt: 0, ...(outcome === "revoked" ? { signedOut: true } : {}) };
+    const check = async () => ({ state: "ok", detail: "Logged in using ChatGPT", models: ["gpt-x"], checkedAt: 0 });
+    const first = await rig({ data, store: Store.open(db, null), readQuota, check });
+    await first.call("POST", "/profiles/cx/quota");
+    await first.call("POST", "/profiles/cx/check");
+    outcome = "revoked";
+    const quota = (await first.call("POST", "/profiles/cx/quota"))[1];
+    assert.equal(quota.state, "unavailable");
+    assert.equal(quota.signedOut, undefined, "the internal signal is not kept on quota");
+    assert.deepEqual([first.accounts.health("cx").check.state, first.accounts.health("cx").check.models], ["login", ["gpt-x"]]);
+    assert.equal((await first.call("POST", "/profiles/cx/check"))[1].state, "login", "the CLI's local status is insufficient");
+    await first.close();
+    first.store.close();
+
+    const again = await rig({ data, store: Store.open(db, null), readQuota, check });
+    assert.equal((await again.call("POST", "/profiles/cx/check"))[1].state, "login", "the refusal survives a station restart");
+    outcome = "offline";
+    await again.call("POST", "/profiles/cx/quota");
+    assert.equal(again.accounts.health("cx").check.state, "login", "a network failure does not clear the refusal");
+    outcome = "ok";
+    await again.call("POST", "/profiles/cx/quota");
+    assert.equal(again.accounts.health("cx").check.state, "ok");
+    assert.equal(again.accounts.health("cx").check.codexRevoked, undefined);
+    await again.close();
+    again.store.close();
+  });
+
+  test("a completed Codex sign-in clears the old refusal even when the allowance is offline", async () => {
+    const data = temp("codex-relogin-offline");
+    const approved = approval(data);
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "cx", runtime: "codex", home: "homes/cx", access: { kind: "subscription" } }], connects: [] }));
+    let phase: "revoked" | "pending" | "offline" = "revoked";
+    let startedOld!: () => void;
+    let releaseOld!: () => void;
+    const oldStarted = new Promise<void>((resolve) => { startedOld = resolve; });
+    const oldFinished = new Promise<void>((resolve) => { releaseOld = resolve; });
+    const readQuota = async () => {
+      const started = phase;
+      if (started === "pending") { startedOld(); await oldFinished; }
+      return { state: "unavailable", windows: [], detail: started === "offline" ? "offline" : "revoked", checkedAt: 0, ...(started !== "offline" ? { signedOut: true } : {}) };
+    };
+    const t = await rig({ data, approval: approved.path, readQuota });
+    await t.call("POST", "/profiles/cx/quota");
+    assert.equal(t.accounts.health("cx").check.state, "login");
+    await settle();
+    phase = "pending";
+    const old = t.call("POST", "/profiles/cx/quota");
+    await oldStarted;
+    await t.call("POST", "/profiles/cx/login");
+    await waitFor(t, "cx", "needs_approval");
+    await t.call("DELETE", "/profiles/cx/login");
+    assert.equal(t.accounts.health("cx").check.state, "login", "a cancelled sign-in does not clear the refusal");
+    await t.call("POST", "/profiles/cx/login");
+    await waitFor(t, "cx", "needs_approval");
+    phase = "offline";
+    await approved.approve();
+    await waitFor(t, "cx", "done");
+    assert.equal(t.accounts.health("cx").check.state, "ok");
+    releaseOld();
+    await old;
+    await until(() => t.accounts.health("cx").quota?.detail === "offline", "the post-login allowance read");
+    assert.equal(t.accounts.health("cx").check.state, "ok");
+    assert.equal(t.accounts.health("cx").check.codexRevoked, undefined);
+    await settle();
+    phase = "revoked";
+    await t.call("POST", "/profiles/cx/quota");
+    assert.equal(t.accounts.health("cx").check.state, "login", "a later refusal is still recorded");
+    await t.close();
   });
 
   test("a profile on the machine's own login: made from a login kept in a file, its models chosen, never renamed or signed in, stopped", async () => {
@@ -550,6 +632,124 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(hosts.n, 3);
     assert.equal(chatgpt.asked.length, 1);
     await chatgpt.close();
+    await t.close();
+  });
+
+  test("a revoked borrowed login is replaced from its host, or remains unusable if the host cannot lend", async () => {
+    const data = temp("borrowed-revoked");
+    const home = join(data, "homes", "bx");
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+    const jwt = (name: string) => ["{}", JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400, name }), "s"].map((x) => Buffer.from(x).toString("base64url")).join(".");
+    const old = jwt("old");
+    const fresh = jwt("fresh");
+    const write = (token: string) => writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: token } }));
+    write(old);
+    const chatgpt = await provider((asked) => asked.headers.authorization === `Bearer ${fresh}`
+      ? { status: 200, body: { rate_limit: { primary_window: { used_percent: 20 } } } }
+      : { status: 401, body: { error: { code: "token_revoked" } } });
+    let online = false;
+    let hostUp = true;
+    let replaced = 0;
+    const shared = {
+      status: async () => {
+        if (!hostUp) throw new Error("offline");
+        return { check: { state: "ok", detail: "host", models: null, checkedAt: 9 }, quota: { state: "ok", windows: [], detail: null, checkedAt: Date.now() + 1000 } };
+      },
+      lendCodex: async (_profile: any, rejected: boolean) => { assert.equal(rejected, true); if (!online) throw new Error("offline"); write(fresh); return Date.now() + 86400_000; },
+      view: () => null,
+    };
+    const codex = () => ({ rateLimits: async () => ({}), resetQuota: async () => ({}), models: async () => ({ models: [], efforts: new Map() }), loginChanged: async () => { replaced++; } });
+    const t = await rig({ data, shared, codex, urls: { ...URLS, chatgpt: chatgpt.base } });
+    assert.equal((await t.call("POST", "/profiles/bx/quota"))[1].state, "unavailable");
+    assert.equal(t.accounts.health("bx").check.state, "login");
+    await t.call("POST", "/profiles/bx/check");
+    assert.equal(t.accounts.health("bx").check.state, "login", "a host's success cannot hide this station's refusal");
+    hostUp = false;
+    await t.call("POST", "/profiles/bx/check");
+    assert.equal(t.accounts.health("bx").check.state, "failed");
+    hostUp = true;
+    await t.call("POST", "/profiles/bx/check");
+    assert.equal(t.accounts.health("bx").check.state, "login", "the refusal survives the host going away and coming back");
+    online = true;
+    const recovered = (await t.call("POST", "/profiles/bx/quota"))[1];
+    assert.equal(recovered.state, "ok");
+    assert.equal(recovered.windows[0].usedPercent, 20);
+    assert.equal(t.accounts.health("bx").check.state, "ok");
+    assert.equal(replaced, 1, "the running app-server loads the new login");
+    await chatgpt.close();
+    await t.close();
+  });
+
+  test("a valid new local login replaces an app-server still using the revoked one", async () => {
+    const data = temp("local-revoked");
+    const home = join(data, "homes", "cx");
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "cx", runtime: "codex", home: "homes/cx", access: { kind: "subscription" } }], connects: [] }));
+    writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "fresh" } }));
+    const chatgpt = await provider(() => ({ status: 200, body: { rate_limit: { primary_window: { used_percent: 25 } } } }));
+    let replaced = 0;
+    const codex = () => ({ rateLimits: async () => ({}), resetQuota: async () => ({}), models: async () => ({ models: [], efforts: new Map() }), loginChanged: async () => { replaced++; } });
+    const t = await rig({ data, codex, urls: { ...URLS, chatgpt: chatgpt.base }, readQuota: async () => ({ state: "unavailable", signedOut: true, windows: [], detail: "revoked", checkedAt: 0 }) });
+    const recovered = (await t.call("POST", "/profiles/cx/quota"))[1];
+    assert.equal(recovered.state, "ok");
+    assert.equal(recovered.windows[0].usedPercent, 25);
+    assert.equal(replaced, 1);
+    await chatgpt.close();
+    await t.close();
+  });
+
+  test("a turn's authentication refusal marks the check even if the allowance endpoint is unreachable", async () => {
+    const data = temp("codex-turn-refused");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "cx", runtime: "codex", home: "homes/cx", access: { kind: "subscription" } }], connects: [] }));
+    const signals: { recheck?: (id: string) => Promise<unknown> } = {};
+    const hub: NonNullable<AccountsDeps["hub"]> = { accounts: { setHealth: () => {}, healthOf: () => ({}), setRecheck: (f) => { signals.recheck = f; } } };
+    let online = false;
+    const t = await rig({ data, hub, readQuota: async () => online
+      ? { state: "ok", windows: [], detail: null, checkedAt: 0 }
+      : { state: "unavailable", windows: [], detail: "network", checkedAt: 0 } });
+    assert.ok(signals.recheck);
+    await signals.recheck("cx");
+    assert.equal(t.accounts.health("cx").check.state, "login");
+    assert.equal(t.accounts.health("cx").quota.detail, "network", "the real allowance error is preserved");
+    online = true;
+    await t.call("POST", "/profiles/cx/quota");
+    assert.equal(t.accounts.health("cx").check.state, "ok");
+    await t.close();
+  });
+
+  test("an authentication recheck started before sign-in cannot reject the new login", async () => {
+    const data = temp("codex-recheck-relogin");
+    const approved = approval(data);
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "cx", runtime: "codex", home: "homes/cx", access: { kind: "subscription" } }], connects: [] }));
+    const signals: { recheck?: (id: string) => Promise<unknown> } = {};
+    const hub: NonNullable<AccountsDeps["hub"]> = { accounts: { setHealth: () => {}, healthOf: () => ({}), setRecheck: (f) => { signals.recheck = f; } } };
+    let phase: "revoked" | "pending" | "offline" = "revoked";
+    let startedOld!: () => void;
+    let releaseOld!: () => void;
+    const oldStarted = new Promise<void>((resolve) => { startedOld = resolve; });
+    const oldFinished = new Promise<void>((resolve) => { releaseOld = resolve; });
+    const readQuota = async () => {
+      const started = phase;
+      if (started === "pending") { startedOld(); await oldFinished; }
+      return { state: "unavailable", windows: [], detail: started === "offline" ? "offline" : "revoked", checkedAt: 0, ...(started !== "offline" ? { signedOut: true } : {}) };
+    };
+    const t = await rig({ data, hub, approval: approved.path, readQuota });
+    await t.call("POST", "/profiles/cx/quota");
+    await settle();
+    assert.ok(signals.recheck);
+    phase = "pending";
+    const old = signals.recheck("cx");
+    await oldStarted;
+    await t.call("POST", "/profiles/cx/login");
+    await waitFor(t, "cx", "needs_approval");
+    phase = "offline";
+    await approved.approve();
+    await waitFor(t, "cx", "done");
+    releaseOld();
+    await old;
+    await until(() => t.accounts.health("cx").quota?.detail === "offline", "the new login's allowance read");
+    assert.equal(t.accounts.health("cx").check.state, "ok");
     await t.close();
   });
 

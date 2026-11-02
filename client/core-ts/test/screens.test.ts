@@ -294,6 +294,33 @@ test("a_tab_says_the_chat_that_opened_it_and_is_closed_by_a_member_not_a_reader"
   reader.core.close();
 });
 
+test("a_simulators_apps_are_debugged_by_a_member_not_a_reader", async () => {
+  const sim = { id: "simulator:U", kind: "simulator", title: "iPhone 17 · iOS 27.1", width: 1206, height: 2622, viewers: [], controlledBy: [], debug: true };
+  const answers = { ...base(), "GET /screens": { screens: [sim] } };
+  const { host, core, ui } = await viewing(1, answers);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  await host.settle();
+  apply(host, values);
+  assert.equal((values.get(1) as J).screens[0].debug, true);
+  call(core, ui, 2, "screen.logs", { station: "ws/st", screen: "simulator:U", after: 7 });
+  call(core, ui, 3, "screen.apps", { station: "ws/st", screen: "simulator:U" });
+  call(core, ui, 4, "screen.relaunch", { station: "ws/st", screen: "simulator:U", app: "fail.still.a" });
+  await host.settle();
+  assert.ok(host.requests.some((r: J) => r.method === "GET" && String(r.url).endsWith("/screens/simulator%3AU/logs?after=7")));
+  assert.ok(host.requests.some((r: J) => r.method === "GET" && String(r.url).endsWith("/screens/simulator%3AU/apps")));
+  assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith("/screens/simulator%3AU/relaunch")));
+  core.close();
+
+  const reader = await viewing(1, answers, "viewer");
+  const seen = new Map<number, unknown>();
+  subscribe(reader.core, reader.ui, 1, { topic: "screens", station: "ws/st" });
+  await reader.host.settle();
+  apply(reader.host, seen);
+  assert.equal((seen.get(1) as J).screens[0].debug, false);
+  reader.core.close();
+});
+
 each("a_link_to_a_screen_shows_it_as_its_list_has_it_and_as_gone_once_the_list_has_it_no_more", async (seed) => {
   const { host, core, ui, push } = await viewing(seed);
   const values = new Map<number, unknown>();

@@ -33,6 +33,8 @@ export type ProfileCheck = {
   modelEffortDefaults?: Record<string, Record<string, string>>;
   /// ok: usable; login: needs a subscription sign-in; failed: the key or login was rejected; unknown.
   state: string;
+  /// A Codex token was refused by the provider; a local login-status check alone cannot clear it.
+  codexRevoked?: boolean;
   detail: string;
   /// Models the account can use, when the provider lists them.
   models: string[] | null;
@@ -55,7 +57,7 @@ export type ProfileQuota = {
   plan?: string;
   detail: string | null;
   checkedAt: number;
-  /// Asked with a login that turned out to be over (oauth.ts RenewRefused): its profile is checked again. Not kept.
+  /// Asked with a login that turned out to be over: its profile's check is updated. Not kept in the allowance.
   signedOut?: boolean;
 };
 

@@ -41,6 +41,7 @@ Claude Code 和 Codex 都只在自己运行的目录里自动读说明文件和 
 
 - core：station topic `presets`（页面显示时读一次，建、改、删后再读：`preset.add`、`preset.put`、`preset.delete`）；`newChat` 视图的 `preset`、`presetName`（新对话页自己不订 `presets`，名字由 core 跟着新对话的数据一起给，选预设的面板打开时才订）是这台设备上这个 workspace 在这台 station 新开对话用的预设（`newChat.pick {preset}`，`""` 不用），`newChat.create` 把它带进 `POST /sessions`。station 已经没有的预设不再算选中。
 - App 新对话页：station、模型旁边一个「预设」胶囊，点开是这台 station 的预设（不用预设、各预设和它的目录、编辑），最后是「新预设…」。新建/编辑的对话框以目录为主：上面是选中的目录（点 × 去掉），一行搜索（也能直接粘贴路径），下面是这台 station 上的仓库，按对话用过多少排，点一下加上；名字默认取第一个目录的名字；指令可选。建好就选中它。
+- 浏览文件夹时可选择 workspace 中的 station，默认是新对话 composer 选中的 station，即使正在编辑另一台 station 的预设。切换后从新 station 的主目录开始；选中的目录连同所属 station 保存。
 
 ## 还没做
 

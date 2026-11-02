@@ -1079,6 +1079,7 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
           @sf.t("web-pages.profiles.share.copied")
         },
         busy=sharing,
+        strong=true,
       )
       if now != shared {
         let change = fn() {
@@ -1112,6 +1113,7 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
       if !shared {
         return
       }
+      @sf.group_rule(c)
       let targets = stations.filter(fn(x) { text(Some(x), "id") != sid })
       if subscription && !flag(p, "machine") &&
         @sf.link_row(
@@ -1119,6 +1121,7 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
           "profile-move/" + address + "/" + id,
           @sf.t("web-pages.profiles.share.signedIn"),
           value=text(s, "name"),
+          value_primary=true,
           goes=!moving && targets.length() > 0,
           tail=fn() { doing_mark(c, moving, failed_of(core, ["profile.move"], on)) },
         ) {
@@ -1147,6 +1150,7 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
             ""
           },
           value=names,
+          value_primary=true,
           goes=!sharing,
         ) {
         pick_stations(core, address, id, stations, sid, allowed)

@@ -1036,7 +1036,7 @@ export class Sharing {
 
   /// A borrowed Codex subscription: its home's auth.json written with the host's current tokens (no refresh token, so
   /// Codex never renews it here); when they run out.
-  async lendCodex(profile: Json): Promise<number> {
+  async lendCodex(profile: Json, rejected = false): Promise<number> {
     const host = this.hostOf(profile);
     const home = this.home(profile);
     if (keptCodexExpiry(join(home, "auth.json")) - this.time.now() < KEEP_LENT_MS) await this.rosterSaid();
@@ -1048,7 +1048,7 @@ export class Sharing {
       this.unreachable.set(host, this.time.now());
       this.deps.changed();
       const kept = keptCodexExpiry(join(home, "auth.json"));
-      if (kept - this.time.now() >= KEEP_LENT_MS) {
+      if (!rejected && kept - this.time.now() >= KEEP_LENT_MS) {
         log.warn("share", "the host did not lend a new login; the one lent before is used", { profile: profile.id, error: (e as Error).message });
         return kept;
       }

@@ -44,6 +44,9 @@ public actor HIDInjector {
     private var sendSel: Selector?
     private var simDevice: NSObject?
     private var deviceHubKeyboardBridge: DeviceHubKeyboardBridge?
+    private var dtuhidKeys: DTUHIDKeys?
+    /// This Mac's simulators take keys through `dtuhidd`, and no longer Indigo's.
+    public static var usesDTUHID: Bool { DTUHIDKeys.supported() }
 
     // IndigoHIDMessageForMouseNSEvent(CGPoint*, CGPoint*, IndigoHIDTarget, NSEventType, NSSize, IndigoHIDEdge)
     // arm64 ABI: pointer/int params → x0-x4, float params → d0-d1 (independent numbering).
@@ -89,6 +92,7 @@ public actor HIDInjector {
                           userInfo: [NSLocalizedDescriptionKey: "Device \(deviceUDID) not found"])
         }
         self.simDevice = device
+        self.dtuhidKeys = DTUHIDKeys(device: device)
         if let type = device.value(forKey: "deviceType") as? NSObject,
            let identifier = type.value(forKey: "identifier") as? String,
            identifier == "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" {
@@ -284,6 +288,11 @@ public actor HIDInjector {
         default: return
         }
 
+        if dtuhidKeys?.sendKey(usage: usage, down: type == "down") == true {
+            hidLog("[hid] Posted dtuhidd key \(type) usage=0x\(String(usage, radix: 16))")
+            return
+        }
+
         if deviceHubKeyboardBridge?.send(type: type, usage: usage) == true {
             hidLog("[hid] Posted Device Hub key \(type) usage=0x\(String(usage, radix: 16))")
             return
@@ -465,6 +474,14 @@ public actor HIDInjector {
 
     public func sendButton(button: String, deviceUDID: String) async {
         hidLog("[hid] Sending button: \(button)")
+
+        // (HID's Consumer page: Menu, Power)
+        if let dtuhidKeys, let usage: UInt32 = ["home": 0x40, "lock": 0x30, "side_button": 0x30][button],
+           dtuhidKeys.sendButton(page: 0x0C, usage: usage, down: true) {
+            try? await Task.sleep(for: .seconds(0.05))
+            _ = dtuhidKeys.sendButton(page: 0x0C, usage: usage, down: false)
+            return
+        }
 
         switch button {
         case "home":

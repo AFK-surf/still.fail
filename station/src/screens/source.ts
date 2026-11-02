@@ -3,6 +3,8 @@
 // slow link lowers the frame rate instead of queueing frames. The mesh layer carries views (`/admin/api/screens`);
 // sources know nothing of it.
 
+import type { SimDebug } from "./sim-debug.ts";
+
 export type Codec = "h265" | "h264" | "jpeg";
 
 /// A frame's format: sent before the first frame and whenever it changes; the next frame is then a key frame.
@@ -189,6 +191,8 @@ export interface ScreenSource {
   /// Its apps' accessibility trees (screens/ui.ts): one agent-desktop command run with `args` where its apps are (the
   /// desktop's: still.fail Helper on macOS, the station on Windows), its JSON envelope; none: no trees.
   ui?(args: string[]): Promise<unknown>;
+  /// Its apps' logs and their restart (screens/sim-debug.ts): a simulator's; none: nothing to debug on it.
+  readonly debug?: SimDebug;
 }
 
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.

@@ -369,6 +369,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
+    // The sharing section of the made-up subscription, for reviewing its on-screen layout.
+    "settings-profile-share" => up("", "settings/profile/ws1/st1/cc", 6)
     "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" => {
       fx.profile_hosts = true
       fx.profile_one_owner = m == "settings-profile-hosts-one"
@@ -395,6 +397,7 @@ pub fn fixture_page(mode : String) -> String {
       up("", "settings/profile/ws1/st1/cc", 0)
     }
     "settings-profile-quota-failed" => fx.trouble = "quota"
+    "settings-profile-quota-login" => fx.trouble = "quota-login"
     "settings-profile-blocked" => fx.trouble = "blocked"
     "settings-profile-signin" => fx.trouble = "login"
     // a connect's page; its way of making sessions asked (src/sfpages connect.mbt's dialog)
@@ -449,7 +452,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-idle" => "adb:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
-    "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
+    "settings-profile-menu" | "settings-profile-lower" | "settings-profile-share" | "settings-profile-login" | "settings-profile-login-station" =>
       "profile:ws1/st1#cc"
     "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
@@ -485,7 +488,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
-    "settings-profile-quota" => "profile:ws1/st1#cx"
+    "settings-profile-quota" | "settings-profile-quota-login" => "profile:ws1/st1#cx"
     "settings-me-reading" => "me"
     "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
     "settings-connect" => "connect:ws1/st1#k1"
@@ -774,7 +777,18 @@ fn fx_cx_more() -> Array[(String, Json)] {
         ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
       ]),
     ),
-  ]
+  ]..append(if fx.trouble == "quota-login" {
+    [
+      ("trouble", obj([("title", str("需要登录")), ("detail", str("ChatGPT 登录已失效，请重新登录")), ("next", str("重新登录此账号")), ("action", str("login")), ("label", str("重新登录"))])),
+      ("quota", obj([("state", str("unavailable")), ("detail", str("ChatGPT 登录已失效，请重新登录")), ("windows", []), ("checkedAt", Json::number(0.0))])),
+      ("check", obj([("state", str("login")), ("detail", str("ChatGPT 登录已失效，请重新登录")), ("checkedAt", Json::number(0.0)), ("time", obj([("checkedAt", stamp_of("3 分钟前"))]))])),
+      ("checkText", str("需要登录")),
+      ("checkTone", str("amber")),
+      ("login", if fx.login == "" { Json::null() } else { fx_login_job("cx", fx.login) }),
+    ]
+  } else {
+    []
+  })
 }
 
 ///|
@@ -2210,7 +2224,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("usable", Json::boolean(true)),
           ("state", state),
           ("look", Json::boolean(look)),
-          ("where", str("Studio 可用")),
+          ("where", str(if fx.trouble == "quota-login" && text(pv, "id") == "cx" { "Studio" } else { "Studio 可用" })),
           (
             "stations",
             [
@@ -2698,7 +2712,7 @@ fn fx_words() -> Array[String] {
 fn fx_login_job(profile : String, state : String) -> Json {
   let o = [
     ("profile", str(profile)),
-    ("runtime", str("claude")),
+    ("runtime", str(if profile == "cx" { "codex" } else { "claude" })),
     ("state", str(state)),
     ("url", str("https://claude.example/oauth/authorize")),
     ("startedAt", Json::number(0.0)),

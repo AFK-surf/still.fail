@@ -21,6 +21,40 @@ test "a profile's page, wide: who it is and whether it works, then its allowance
 }
 
 ///|
+test "a shared subscription's main switch and its station details remain usable at each width" {
+  for case in page_cases {
+    let (w, platform) = case
+    let calls : Array[(String, Json)] = []
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, h=2400.0, over=fn(s) {
+      { ..s, call: fn(name, params, done) {
+          calls.push((name, params))
+          if name == "profile.share" { done(Ok(obj([]))) } else { (s.call)(name, params, done) }
+        } }
+    })
+    let at = "\{w} platform \{platform}"
+    scrolled_to(t, w, "分享给其他 station")
+    assert_eq(t.get(Switch, label="分享给其他 station").check, Some(On), msg=at)
+    assert_true(t.find("登录在") is Some(_) && t.find("可用的 station") is Some(_), msg=at)
+    assert_true(t.find("使用中：MBA") is Some(_), msg=at)
+    t.tap_text("登录在")
+    t.run_for(@kit.presence_in_ms)
+    assert_true(t.find("选择登录的 station") is Some(_), msg=at)
+    @sf.presenters_reset()
+    t.frame()
+    t.tap_text("可用的 station")
+    t.run_for(@kit.presence_in_ms)
+    assert_true(t.find("以后新加的 station 也能用") is Some(_), msg=at)
+    @sf.presenters_reset()
+    t.frame()
+    t.click(Switch, label="分享给其他 station")
+    t.frame()
+    let asked = calls.filter(fn(c) { c.0 == "profile.share" })
+    assert_eq(asked.length(), 1, msg=at)
+    assert_false(flag(Some(asked[0].1), "on"), msg=at)
+  }
+}
+
+///|
 /// The fixture's Claude subscription before it is shared.
 fn unshared_claude(s : Source) -> Source {
   fn without_share(v : Json) -> Json {
@@ -173,6 +207,20 @@ test "a profile's page, wide: a profile one of the station's lists no more says 
 
 // A profile's quota reset and its models (Accounts.tsx QuotaSection) over ChatGPT 团队: a reset used once asked, its
 // models all listed, one named by hand and taken off again.
+
+///|
+test "a revoked Codex sign-in offers sign-in from the account check" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Profile("ws1/st1", "cx"), w, platform~, mode="settings-profile-quota-login")
+    assert_true(t.find("需要登录") is Some(_))
+    assert_true(t.find("ChatGPT 登录已失效，请重新登录") is Some(_))
+    assert_true(t.find("订阅有效") is None, msg="the earlier account check must not contradict the expired login")
+    assert_true(t.find("Studio 可用") is None, msg="this station must not be called usable after its login was refused")
+    t.click(Button, label="登录")
+    t.frame()
+    assert_true(t.find("正在登录 ChatGPT") is Some(_), msg="the sign-in was started at width \{w}")
+  }
+}
 
 ///|
 test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, then uses one of the resets left" {

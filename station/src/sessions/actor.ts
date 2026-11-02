@@ -1306,16 +1306,20 @@ export class SessionActor {
       store.notify(this.key);
     }
     if (turn?.declared) this.toolsRestarts = 0;
-    // Reopen Claude once so it reads the current credentials (and refreshes an expiring machine token). Resume its
+    // Every Codex authentication refusal updates account health, including the retry's refusal.
+    if (this.runtime === "codex" && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && this.profile !== null) {
+      await this.deps.recheck?.(this.profile);
+    }
+    // Reopen once so it reads the current credentials (and refreshes an expiring machine token). Resume its
     // transcript with a continuation, never replay the original request: it may already have run tools.
-    if (this.runtime === "claude" && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && !this.deps.held(this.key) && turn && !turn.authRetried && !turn.declared) {
+    if ((this.runtime === "claude" || this.runtime === "codex") && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && !this.deps.held(this.key) && turn && !turn.authRetried && !turn.declared) {
       this.nudges = 0;
       const agent = this.agent;
       this.agent = null;
       await this.endProcess(agent);
       // Its account checked first: one whose login is over is left, and the turn goes on on another (`runOn`).
-      if (this.profile !== null) await this.deps.recheck?.(this.profile);
-      log.info("session", "Claude authentication failed; reopening and continuing once", { session: this.key });
+      if (this.runtime === "claude" && this.profile !== null) await this.deps.recheck?.(this.profile);
+      log.info("session", "authentication failed; reopening and continuing once", { session: this.key, runtime: this.runtime });
       return this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
     }
     // Its process ran in a sandbox and the connection to it was lost (not the program ending): started again there once,

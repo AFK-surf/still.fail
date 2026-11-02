@@ -52,6 +52,25 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
   });
 
+  test("Codex's wrapped usage errors say what to do without exposing its RPC response", async () => {
+    const profile = hubConfig({ profiles: [{ id: "cx", home: "homes/cx", runtime: "codex", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
+    const ask = (said: string, lang: "zh" | "en" = "zh") => checkQuota(profile, {}, async () => {
+      throw new Error(`codex ${JSON.stringify({ code: -32603, message: said })}`);
+    }, URLS, lang);
+    const revoked = 'failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; content-type=text/plain; body={"error":{"message":"Encountered invalidated oauth token for user, failing request","code":"token_revoked"},"status":401}';
+    const q = await ask(revoked);
+    assert.deepEqual([q.state, q.signedOut, q.detail], ["unavailable", true, "ChatGPT 登录已失效，请重新登录"]);
+    assert.equal((await ask(revoked, "en")).detail, "ChatGPT sign-in is no longer valid. Sign in again.");
+    const network = await ask("failed to fetch codex rate limits: error sending request: connection refused");
+    assert.deepEqual([network.state, network.signedOut, network.detail], ["unavailable", undefined, "无法连接服务商，请检查此 station 的网络或代理"]);
+    const busy = await ask("failed to fetch codex rate limits: GET /usage failed: 503 Service Unavailable; body=private");
+    assert.deepEqual([busy.state, busy.signedOut, busy.detail], ["unavailable", undefined, "ChatGPT 暂时无法提供额度信息（HTTP 503）"]);
+    const blocked = await ask("failed to fetch codex rate limits: GET /usage failed: 403 Forbidden; account has been suspended");
+    assert.deepEqual([blocked.state, blocked.detail], ["blocked", "ChatGPT 账号已被停用"]);
+    const other = await ask("internal error: private diagnostics 401");
+    assert.deepEqual([other.state, other.signedOut, other.detail], ["unavailable", undefined, "暂时无法查询 ChatGPT 额度，请稍后重试"]);
+  });
+
   test("a provider the station cannot reach is said so, not as Node says it", async () => {
     const dir = temp("codex-unreached");
     writeFileSync(join(dir, "auth.json"), JSON.stringify({ tokens: { access_token: "at" } }));
