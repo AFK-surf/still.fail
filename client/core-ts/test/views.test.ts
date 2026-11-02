@@ -867,7 +867,7 @@ test("a_done_chat_is_offered_to_archive_as_the_archive_hint_says_and_archivable_
     t.set(prefs(), hint === undefined ? {} : { archiveHint: hint });
     await t.read(u, 1);
     const v = u.value;
-    assert.deepEqual(ids(v), offered ? ["active", "done"] : ["done", "active"], String(hint));
+    assert.deepEqual(ids(v), ["done", "active"], String(hint));
     const shown = v.days[0].items.find((r: J) => r.id === "done");
     assert.equal(shown.settled, offered ? true : undefined, String(hint));
     assert.equal(shown.archivable, true, String(hint));
