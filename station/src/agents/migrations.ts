@@ -110,6 +110,7 @@ export const NOTES: [number, string][] = [
   [103, "station_task {station, action: \"mirrors\"} lists this chat's synced directories there. After preserving any outputs and confirming a mirror is no longer needed, station_task {station, action: \"clean\", mirror: <name>} asks that station to remove it. It refuses a running or syncing mirror; every other file in that mirror is deleted and a later task syncs it anew. If it answers pending, repeat that same clean request for its result."],
   [104, "Your memory and skills are your chat's workspace's, no longer the profile's: your memory (the MEMORY.md your instructions name) is told with your instructions, and its skills are linked into your workspace (.claude/skills, .agents/skills). A chat in a workspace the station joined no longer sees the home workspace's."],
   [105, "station_task prepare takes small: true for a brief offscreen task such as one picture made with a prebuilt renderer. One such task may run alongside busy builds without the CPU sampling wait; it is told to use one CPU and still waits for memory pressure or another small task. Do not use it for builds, test suites, video or screen work. An older target says it cannot run small tasks."],
+  [106, "phone_use {done: true} hands a granted phone back (or withdraws a request not yet decided): call it once you are done with the phone, so it is no longer lent for your chat and its comings and goings no longer wake you."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
