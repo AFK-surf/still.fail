@@ -1,0 +1,381 @@
+//! Example: shell on an ADB device via shell_v2 protocol.
+//!
+//! ```text
+//! # Wireless debugging (Android 11+), which speaks only TLS. The port
+//! # changes every time the setting is switched on; read it off the
+//! # device's "Wireless debugging" pane.
+//! cargo run --example shell_v2 --features tokio,host-keys,tls -- tcp://192.168.1.5:41234
+//!
+//! # Interactive shell over TCP (persistent connection, raw terminal, resize support):
+//! cargo run --example shell_v2 --features tokio,host-keys -- 127.0.0.1:5555
+//! cargo run --example shell_v2 --features tokio,host-keys -- tcp://127.0.0.1:5555
+//! cargo run --example shell_v2 --no-default-features --features smol,host-keys -- 127.0.0.1:5555
+//!
+//! # Interactive shell over USB (first available device / by VID:PID / by serial):
+//! cargo run --example shell_v2 --features tokio,usb,host-keys -- usb://
+//! cargo run --example shell_v2 --features tokio,usb,host-keys -- usb://18d1:4ee7
+//! cargo run --example shell_v2 --features tokio,usb,host-keys -- usb://serial/ABC123XYZ
+//!
+//! # Run a single command (works with any of the targets above):
+//! cargo run --example shell_v2 --features tokio,host-keys -- 127.0.0.1:5555 "ls -la /sdcard"
+//! cargo run --example shell_v2 --features tokio,usb,host-keys -- usb:// "getprop ro.product.model"
+//! ```
+//!
+//! A bare `HOST:PORT` argument is treated as `tcp://HOST:PORT`.
+//!
+//! Reuses `~/.android/adbkey`; if there is none, a key is generated
+//! and saved on first run — confirm it on the device when asked.
+//!
+//! Built with `--features tls`, the example also handles a device that
+//! answers the handshake with `STLS`, which is what wireless debugging
+//! does. The same key serves there: the device looks for it in the very
+//! store the USB prompt fills, so a key it already knows needs no
+//! `adb pair`.
+
+#[cfg(not(any(feature = "tokio", feature = "smol")))]
+compile_error!("this example requires --features tokio,host-keys or --features smol,host-keys");
+
+use std::io::Write as _;
+use std::mem::MaybeUninit;
+use std::{env, process};
+
+use libadb::channel::SelectResult;
+use libadb::shell::v2::{self as shell_v2, Frame};
+#[cfg(not(feature = "tls"))]
+use libadb::transport::any::AnyTransport;
+use libadb::transport::any::{self};
+
+// The example picks one runtime at build time; the library itself no
+// longer cares which features are on.
+#[cfg(feature = "tokio")]
+type Rt = libadb::transport::runtime::Tokio;
+#[cfg(all(feature = "smol", not(feature = "tokio")))]
+type Rt = libadb::transport::runtime::Smol;
+// The example picks one USB backend at build time; the library itself
+// no longer cares which features are on.
+#[cfg(feature = "nusb")]
+type Usb = libadb::transport::nusb::Nusb;
+#[cfg(all(feature = "rusb", not(feature = "nusb")))]
+type Usb = libadb::transport::rusb::Rusb;
+#[cfg(not(any(feature = "nusb", feature = "rusb")))]
+type Usb = libadb::transport::common::NoUsb;
+
+// With `tls` the TCP half can start a TLS session on itself.
+#[cfg(not(feature = "tls"))]
+type ExampleTransport = AnyTransport<Rt, <Usb as libadb::UsbBackend<Rt>>::Transport>;
+#[cfg(feature = "tls")]
+type ExampleTransport = libadb::transport::common::Transport<
+    libadb::transport::tls::MaybeTls<<Rt as libadb::transport::runtime::Runtime>::Tcp>,
+    <Usb as libadb::UsbBackend<Rt>>::Transport,
+>;
+use libadb::{Connection, Feature};
+
+#[cfg(feature = "tokio")]
+use tokio::signal::unix::{signal, SignalKind};
+#[cfg(feature = "tokio")]
+use tokio::sync::mpsc;
+
+#[path = "common/adb_key_auth.rs"]
+mod adb_key_auth;
+
+struct RawMode {
+    original: libc::termios,
+}
+
+impl RawMode {
+    fn enable() -> Self {
+        unsafe {
+            let mut original = MaybeUninit::<libc::termios>::uninit();
+            libc::tcgetattr(libc::STDIN_FILENO, original.as_mut_ptr());
+            let original = original.assume_init();
+            let mut raw = original;
+            libc::cfmakeraw(&mut raw);
+            libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &raw);
+            Self { original }
+        }
+    }
+}
+
+impl Drop for RawMode {
+    fn drop(&mut self) {
+        unsafe {
+            libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &self.original);
+        }
+    }
+}
+
+fn get_terminal_size() -> (u16, u16) {
+    unsafe {
+        let mut ws = MaybeUninit::<libc::winsize>::uninit();
+        if libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, ws.as_mut_ptr()) == 0 {
+            let ws = ws.assume_init();
+            (ws.ws_row, ws.ws_col)
+        } else {
+            (24, 80)
+        }
+    }
+}
+
+#[cfg(all(feature = "smol", not(feature = "tokio")))]
+fn spawn_sigwinch_thread() -> smol::channel::Receiver<()> {
+    unsafe {
+        let mut set: libc::sigset_t = core::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, libc::SIGWINCH);
+        libc::pthread_sigmask(libc::SIG_BLOCK, &set, core::ptr::null_mut());
+    }
+
+    let (tx, rx) = smol::channel::bounded(1);
+    std::thread::spawn(move || {
+        let mut set: libc::sigset_t = unsafe { core::mem::zeroed() };
+        unsafe {
+            libc::sigemptyset(&mut set);
+            libc::sigaddset(&mut set, libc::SIGWINCH);
+        }
+        loop {
+            let mut sig = 0;
+            if unsafe { libc::sigwait(&set, &mut sig) } == 0 && tx.send_blocking(()).is_err() {
+                break;
+            }
+        }
+    });
+    rx
+}
+
+fn to_uri(target: &str) -> String {
+    if target.contains("://") {
+        target.to_string()
+    } else {
+        format!("tcp://{target}")
+    }
+}
+
+async fn open_connection(
+    target: &str,
+) -> Result<Connection<ExampleTransport>, Box<dyn std::error::Error>> {
+    let auth = adb_key_auth::load_or_generate()?;
+    let uri = to_uri(target);
+
+    eprintln!("[*] connecting to {uri} ...");
+    let transport = any::connect::<Rt, Usb>(&uri)
+        .await
+        .map_err(|e| format!("transport: {e}"))?;
+
+    #[cfg(not(feature = "tls"))]
+    let conn = Connection::<_>::connect(transport, auth, &[Feature::ShellV2])
+        .await
+        .map_err(|e| format!("connect: {e}"))?;
+
+    #[cfg(feature = "tls")]
+    let conn = {
+        use libadb::keys::rsa::rand_core::OsRng;
+        use libadb::tls::{TlsClientConfig, TlsIdentity};
+
+        // Signing the certificate is the slow part: a program that
+        // connects more than once builds this once and shares it.
+        let identity = TlsIdentity::from_key(&auth, &mut OsRng).map_err(|e| format!("tls: {e}"))?;
+        let tls = TlsClientConfig::adb(&identity).map_err(|e| format!("tls: {e}"))?;
+
+        Connection::<_>::connect_tls(transport.tls_ready(), auth, &[Feature::ShellV2], &tls)
+            .await
+            .map_err(|e| format!("connect: {e}"))?
+    };
+
+    eprintln!(
+        "[*] connected, device: {}",
+        conn.device_banner()
+            .map(String::from_utf8_lossy)
+            .unwrap_or_default()
+            .escape_debug()
+    );
+    Ok(conn)
+}
+
+enum Event {
+    Stdin(Option<Vec<u8>>),
+    Resize,
+}
+
+async fn run_interactive(target: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut conn = open_connection(target).await?;
+
+    let term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".into());
+
+    let _raw = RawMode::enable();
+
+    let window_size = get_terminal_size();
+
+    let mut rx = [0u8; 64 * 1024];
+    let mut shell = shell_v2::open_interactive(&mut conn, "", &term, Some(window_size), &mut rx)
+        .await
+        .map_err(|e| format!("open: {e}"))?;
+
+    #[cfg(feature = "tokio")]
+    let (stdin_tx, mut stdin_rx) = mpsc::channel::<Vec<u8>>(16);
+    #[cfg(all(feature = "smol", not(feature = "tokio")))]
+    let (stdin_tx, stdin_rx) = smol::channel::bounded::<Vec<u8>>(16);
+
+    std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = [0u8; 4096];
+        let stdin = std::io::stdin();
+        let mut handle = stdin.lock();
+        loop {
+            match handle.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    #[cfg(feature = "tokio")]
+                    let result = stdin_tx.blocking_send(buf[..n].to_vec());
+                    #[cfg(all(feature = "smol", not(feature = "tokio")))]
+                    let result = stdin_tx.send_blocking(buf[..n].to_vec());
+                    if result.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    #[cfg(feature = "tokio")]
+    let mut sigwinch = signal(SignalKind::window_change())?;
+    #[cfg(all(feature = "smol", not(feature = "tokio")))]
+    let sigwinch_rx = spawn_sigwinch_thread();
+
+    let exit_code: u8;
+
+    'outer: loop {
+        while let Some(frame) = shell.try_next_frame().map_err(|e| format!("{e}"))? {
+            match frame {
+                Frame::Stdout(payload) => {
+                    std::io::stdout().write_all(&payload)?;
+                    std::io::stdout().flush()?;
+                }
+                Frame::Stderr(payload) => {
+                    std::io::stderr().write_all(&payload)?;
+                    std::io::stderr().flush()?;
+                }
+                Frame::Exit(code) => {
+                    exit_code = code;
+                    break 'outer;
+                }
+                Frame::Other { .. } => {}
+            }
+        }
+
+        #[cfg(feature = "tokio")]
+        let interrupt = async {
+            tokio::select! {
+                data = stdin_rx.recv() => Event::Stdin(data),
+                _ = sigwinch.recv() => Event::Resize,
+            }
+        };
+
+        #[cfg(all(feature = "smol", not(feature = "tokio")))]
+        let interrupt = smol::future::race(
+            async {
+                match stdin_rx.recv().await {
+                    Ok(data) => Event::Stdin(Some(data)),
+                    Err(_) => Event::Stdin(None),
+                }
+            },
+            async {
+                let _ = sigwinch_rx.recv().await;
+                Event::Resize
+            },
+        );
+
+        match shell.pump(interrupt).await.map_err(|e| format!("{e}"))? {
+            SelectResult::Data(_) => {}
+            SelectResult::Interrupted(event) => match event {
+                Event::Stdin(Some(data)) => {
+                    shell.write_stdin(&data).await.map_err(|e| format!("{e}"))?;
+                }
+                Event::Stdin(None) => {
+                    shell.close_stdin().await.map_err(|e| format!("{e}"))?;
+                }
+                Event::Resize => {
+                    let (rows, cols) = get_terminal_size();
+                    shell
+                        .set_window_size(rows, cols)
+                        .await
+                        .map_err(|e| format!("{e}"))?;
+                }
+            },
+        }
+    }
+
+    shell.close().await.map_err(|e| format!("close: {e}"))?;
+
+    drop(_raw);
+    eprintln!("[*] exit code: {exit_code}");
+    process::exit(exit_code as i32);
+}
+
+async fn run_command(target: &str, command: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut conn = open_connection(target).await?;
+
+    let mut rx = [0u8; 64 * 1024];
+    let output = shell_v2::exec(&mut conn, command, &mut rx)
+        .await
+        .map_err(|e| format!("exec: {e}"))?;
+
+    std::io::stdout().write_all(&output.stdout)?;
+    std::io::stdout().flush()?;
+    std::io::stderr().write_all(&output.stderr)?;
+    std::io::stderr().flush()?;
+
+    eprintln!("[*] exit code: {}", output.exit_code);
+    process::exit(output.exit_code as i32);
+}
+
+async fn async_main() {
+    let args: Vec<String> = env::args().collect();
+
+    match args.len() {
+        2 => {
+            if let Err(e) = run_interactive(&args[1]).await {
+                eprintln!("error: {e}");
+                process::exit(1);
+            }
+        }
+        3 => {
+            if let Err(e) = run_command(&args[1], &args[2]).await {
+                eprintln!("error: {e}");
+                process::exit(1);
+            }
+        }
+        _ => {
+            eprintln!("Usage: {} <target> [command]", args[0]);
+            eprintln!();
+            eprintln!("  <target> is one of:");
+            eprintln!("    HOST:PORT                  (shorthand for tcp://HOST:PORT)");
+            eprintln!("    tcp://HOST:PORT");
+            eprintln!("    usb://                     (first available ADB device)");
+            eprintln!("    usb://VID:PID              (4 hex digits each)");
+            eprintln!("    usb://serial/SERIAL");
+            eprintln!();
+            eprintln!("  Interactive shell:");
+            eprintln!("    {} 127.0.0.1:5555", args[0]);
+            eprintln!("    {} usb://", args[0]);
+            eprintln!();
+            eprintln!("  Run a command:");
+            eprintln!("    {} 127.0.0.1:5555 \"ls /sdcard\"", args[0]);
+            eprintln!(
+                "    {} usb://18d1:4ee7 \"getprop ro.product.model\"",
+                args[0]
+            );
+            process::exit(2);
+        }
+    }
+}
+
+#[cfg(feature = "tokio")]
+#[tokio::main]
+async fn main() {
+    async_main().await;
+}
+
+#[cfg(all(feature = "smol", not(feature = "tokio")))]
+fn main() {
+    smol::block_on(async_main());
+}

@@ -1859,8 +1859,6 @@ dependencies = [
 [[package]]
 name = "libadb"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff3e21b286bee2b60b09e5cc868db4ed1c15b433fe98b767fb5086edb0128c7b"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -1874,6 +1872,7 @@ dependencies = [
  "event-listener",
  "heapless",
  "hkdf",
+ "libc",
  "log",
  "rand_chacha 0.3.1",
  "rsa",
