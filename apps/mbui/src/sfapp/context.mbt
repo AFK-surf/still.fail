@@ -82,6 +82,7 @@ fn open_context(src : Source, r : ChatRef, key : String) -> Unit {
       close()
       // asked first (PageParts.kt confirm): the row shows it under way, a failure said by a toast
       @sf.confirm(tr("web-pages.chat.clearConfirm"), tr("web-pages.chat.clearBody"), tr("web-pages.chat.clear"), danger=true, fn() {
+        @ui.haptic(Confirm)
         act(
           src,
           tr("web-pages.chat.clear"),

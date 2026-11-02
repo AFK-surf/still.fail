@@ -781,6 +781,7 @@ fn report_action(c : @ui.Ctx, src : Source, station : String, m : Message, ink :
           "chat.report",
           { "station": Json::string(station), "thread": Json::number(m.thread), "seq": Json::number(m.seq) },
           ok=fn(v) {
+            @ui.haptic(Confirm)
             let number = match field(Some(v), "number") {
               Some(Number(n, ..)) => n.to_int().to_string()
               _ => "?"
