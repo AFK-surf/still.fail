@@ -12,7 +12,7 @@ export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
 D="$(cd "$(dirname "$0")" && pwd)"
 SETUP=$1
 w() { cygpath -w "$1"; }
-NAME=${SETUP_NAME:-still.fail mbui}
+NAME=${SETUP_NAME:-still.fail preview}
 EXE=${SETUP_EXE:-stillfail}
 ID=${SETUP_ID:-fail.still.mbui}
 INTO=$RUNNER_TEMP/setup-into
@@ -40,9 +40,38 @@ check "the start menu's shortcut" '[ -f "$(cygpath -u "$menu")/$NAME.lnk" ]'
 
 # again over it, a file of the old one's that the new one does not carry gone with it
 echo old > "$INTO/left-from-before.dll"
+# A shortcut made by an older preview installer has the old name. Preserve its target and make it findable by the new
+# name on update; do not overwrite a pre-existing shortcut or touch another application's link.
+if [ "$ID" = fail.still.mbui ] && [ "$NAME" = 'still.fail preview' ]; then
+  legacy="$(cygpath -u "$menu")/still.fail mbui.lnk"
+  [ ! -e "$legacy" ] || { echo "setup: a legacy shortcut already exists, leaving it alone"; exit 1; }
+  mv "$(cygpath -u "$menu")/$NAME.lnk" "$legacy"
+  legacy_hash=$(sha256sum "$legacy" | cut -d' ' -f1)
+fi
 "$SETUP" /S --updated "/D=$(w "$INTO")" > "$OUT/update.log" 2>&1
 check "put in again over what was there (it exited 0)" '[ $? = 0 ] && [ -f "$INTO/$EXE.exe" ]'
 check "what the one before had and this does not, gone" '[ ! -f "$INTO/left-from-before.dll" ]'
+if [ "$ID" = fail.still.mbui ] && [ "$NAME" = 'still.fail preview' ]; then
+  current="$(cygpath -u "$menu")/$NAME.lnk"
+  check "the older shortcut is moved intact to the current app name" \
+    '[ ! -e "$legacy" ] && [ -f "$current" ] && [ "$(sha256sum "$current" | cut -d" " -f1)" = "$legacy_hash" ]'
+
+  # A link with the new name already exists: neither link should be changed.
+  cp "$current" "$legacy"
+  "$SETUP" /S --updated "/D=$(w "$INTO")" > "$OUT/collision-update.log" 2>&1
+  check "an existing shortcut at the new name is left alone" \
+    '[ $? = 0 ] && [ "$(sha256sum "$current" | cut -d" " -f1)" = "$legacy_hash" ] && [ "$(sha256sum "$legacy" | cut -d" " -f1)" = "$legacy_hash" ]'
+  rm "$legacy"
+
+  # An unrelated shortcut happens to have the old name: leave it untouched and create this app's current shortcut.
+  mv "$current" "$legacy"
+  powershell.exe -NoProfile -Command "\$s = (New-Object -ComObject WScript.Shell).CreateShortcut('$(w "$legacy")'); \$s.TargetPath = [Environment]::SystemDirectory + '\notepad.exe'; \$s.Save()"
+  unrelated_hash=$(sha256sum "$legacy" | cut -d' ' -f1)
+  "$SETUP" /S --updated "/D=$(w "$INTO")" > "$OUT/unrelated-update.log" 2>&1
+  check "an unrelated shortcut with the older name is left alone" \
+    '[ $? = 0 ] && [ -f "$current" ] && [ "$(sha256sum "$legacy" | cut -d" " -f1)" = "$unrelated_hash" ]'
+  rm "$legacy"
+fi
 
 # again, a file of the one there held open by another process (sharing nothing, as one of the old app's not yet gone
 # or a scanner reading it holds it) till the installer says it waits on it: it waits for it to be let go, then puts

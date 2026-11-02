@@ -218,7 +218,7 @@ life_do() {
 }
 driven life 1100x760 life_do MBUI_SCHEMES=stillfail-e2e
 check "a window's program: no console window of its own (its subsystem)" gui_program
-check "its identity in its resources (its name)" '[ "$(product_name)" = "still.fail mbui" ]'
+check "its identity in its resources (its name)" '[ "$(product_name)" = "still.fail preview" ]'
 check "started again with a link of its schemes, it handed the link to the one that ran, which took it" \
   'grep -q "opened with a link (stillfail-e2e://)" "$OUT/life.log"'
 check "its window closed, it went on, put away ($(cat "$OUT/life-away.txt" 2>/dev/null))" 'grep -q "^win: put away" "$OUT/life.log"'
@@ -309,8 +309,8 @@ check "its installer downloaded from the cloud, checked and run as the desktop a
 up_entry() { reg.exe query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\fail.still.mbui" //v "$1" 2>/dev/null | tr -d '\r' | sed -n "s/^ *$1 *REG_[A-Z_]* *//p"; }
 check "put in %LOCALAPPDATA%\\Programs (its uninstall entry 0.1.$NEXT) and opened from there (${opened:-none})" \
   '[ -f "$PROGRAMS/stillfail.exe" ] && [ "$(up_entry DisplayVersion)" = "0.1.$NEXT" ] && grep -q "stillfail.exe opened" "$OUT/update-setup.log" && case "$opened" in *Programs\\stillfail-mbui\\stillfail.exe*) true ;; *) false ;; esac'
-if [ -f "$PROGRAMS/Uninstall still.fail mbui.exe" ]; then
-  cp "$PROGRAMS/Uninstall still.fail mbui.exe" "$UPD/uninstall.exe"
+if [ -f "$PROGRAMS/Uninstall still.fail preview.exe" ]; then
+  cp "$PROGRAMS/Uninstall still.fail preview.exe" "$UPD/uninstall.exe"
   MSYS_NO_PATHCONV=1 "$UPD/uninstall.exe" --uninstall-from "$(w "$PROGRAMS")" /S > "$OUT/update-uninstall.log" 2>&1
 fi
 

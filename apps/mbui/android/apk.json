@@ -20,7 +20,7 @@
   "variants": {
     "release": {
       "minify": true,
-      "placeholders": {"appLabel": "still.fail mbui", "mbuiEnv": "MBUI_UPDATE_FEED=android/mbui;MBUI_BETA=1"}
+      "placeholders": {"appLabel": "still.fail preview", "mbuiEnv": "MBUI_UPDATE_FEED=android/mbui;MBUI_BETA=1"}
     },
     "stable": {
       "applicationId": "fail.still.android",
