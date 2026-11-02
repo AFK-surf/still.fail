@@ -22,6 +22,10 @@ priv struct NcFlow {
   mut look_sent : String
   mut icon_sent : String
   mut gone : Bool
+  /// the steps the dialog shows, as the wizard has gone through them (the dialog's steps follow the core's: nc_follow)
+  pages : Array[String]
+  /// what each step said as it was last on top (its title, count and what it is about): nc_words_at
+  words : Map[Int, (String, String, String)]
 }
 
 ///|
@@ -58,28 +62,20 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
     look_sent: "",
     icon_sent: "",
     gone: false,
+    pages: [],
+    words: {},
   }
   let opened = Ref(false)
   let view = fn() { (core.topic)("connectFlow", { "station": str(station), "form": str(f.form) }).value }
+  // (back on any step the wizard's: told to the core, which goes back or says it is closed; the dialog's steps follow)
+  let shut = fn() { @sf.close_presented() }
+  let back = fn() { nc_go(core, f, "back", fn() { nc_close(core, f, shut) }) }
   open_dialog(
     @sf.t("web-pages.connects.add"),
     wide=true,
-    live=fn() {
-      let v = view()
-      match v {
-        Some(_) =>
-          (
-            text(v, "title"),
-            text_number(v, "number").to_string() + " / " + text_number(v, "total").to_string(),
-            if text(v, "step") == "team" && !flag(v, "gettingToken") {
-              @sf.t("web-pages.connect.teamLead")
-            } else {
-              ""
-            },
-          )
-        None => (@sf.t("web-pages.connects.add"), "", "")
-      }
-    },
+    steps=true,
+    back~,
+    live=fn() { nc_words_at(f, view, 0) },
     fn(c, shut) {
       if !opened.val {
         opened.val = true
@@ -102,11 +98,97 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
           )
         })
       }
-      nc_body(c, src, core, here, f, view(), fn() { nc_close(core, f, shut) })
+      nc_step(c, src, core, here, f, view, 0, f.pages.get(0).unwrap_or(""), shut, back)
     },
-    fn(c, shut) { nc_foot(c, core, here, f, view(), fn() { nc_close(core, f, shut) }) },
+    fn(c, shut) { nc_foot(c, core, here, f, view(), fn() { nc_close(core, f, shut) }, step=f.pages.get(0).unwrap_or("")) },
     on_gone=fn() { nc_drop(core, f) },
   )
+}
+
+///|
+/// The wizard's title, which of its steps it is on and what that is about, as the core says now (CoreNewConnectDialog's
+/// head), or the dialog's before it has said.
+fn nc_words(v : Json?) -> (String, String, String) {
+  match v {
+    Some(_) =>
+      (
+        text(v, "title"),
+        text_number(v, "number").to_string() + " / " + text_number(v, "total").to_string(),
+        if text(v, "step") == "team" && !flag(v, "gettingToken") {
+          @sf.t("web-pages.connect.teamLead")
+        } else {
+          ""
+        },
+      )
+    None => (@sf.t("web-pages.connects.add"), "", "")
+  }
+}
+
+///|
+/// The words of the dialog's step `at`: the core's as it says them now while the wizard is on that step, those it had
+/// then once it has gone on or back (the core says the wizard's step now, not the one the dialog's step was for).
+fn nc_words_at(f : NcFlow, view : () -> Json?, at : Int) -> (String, String, String) {
+  let v = view()
+  // (the core on this step still: gone on, the words are the next step's before the dialog has it on top)
+  if f.pages.is_empty() || f.pages.get(at) == Some(text(v, "step")) {
+    let w = nc_words(v)
+    f.words[at] = w
+    w
+  } else {
+    f.words.get(at).unwrap_or(nc_words(view()))
+  }
+}
+
+///|
+/// The dialog's step `at` (0 its first): what it holds for the wizard's step `own` it was for ("" the wizard's now,
+/// before it has said its first); on the step on top, the dialog's steps brought to the wizard's (nc_follow) first.
+/// Gone back from, as it slides away, it still holds its own.
+fn nc_step(
+  c : @ui.Ctx,
+  src : Source,
+  core : Core,
+  here : Here,
+  f : NcFlow,
+  view : () -> Json?,
+  at : Int,
+  own : String,
+  shut : () -> Unit,
+  back : () -> Unit,
+) -> Unit {
+  let v = view()
+  if at == f.pages.length() - 1 || f.pages.is_empty() {
+    nc_follow(src, core, here, f, view, v, back)
+  }
+  let own = if own == "" { f.pages.get(0).unwrap_or(text(v, "step")) } else { own }
+  nc_body(c, src, core, here, f, v, fn() { nc_close(core, f, shut) }, step=own)
+}
+
+///|
+/// The dialog's steps brought to the wizard's as the core has it now: its first as it is first said; gone on to
+/// another, that one slides in (its words as the core says them while it shows, back on it the wizard's); gone back to
+/// the one under the top, the top slides away.
+fn nc_follow(src : Source, core : Core, here : Here, f : NcFlow, view : () -> Json?, v : Json?, back : () -> Unit) -> Unit {
+  guard v is Some(Object(_)) else { return }
+  let step = text(v, "step")
+  let n = f.pages.length()
+  if n == 0 {
+    f.pages.push(step)
+  } else if f.pages[n - 1] == step {
+    ()
+  } else if n >= 2 && f.pages[n - 2] == step {
+    f.pages.pop() |> ignore
+    @sf.panel_back() |> ignore
+  } else {
+    f.pages.push(step)
+    let at = n
+    @sf.panel_go(
+      text(v, "title"),
+      fn(c, shut) { nc_step(c, src, core, here, f, view, at, step, shut, back) },
+      foot=fn(c, shut) { nc_foot(c, core, here, f, view(), fn() { nc_close(core, f, shut) }, step~) },
+      back~,
+      live=fn() { nc_words_at(f, view, at) },
+    )
+  }
 }
 
 ///|
@@ -195,9 +277,19 @@ fn nc_tokens(c : @ui.Ctx, core : Core, f : NcFlow, install : String) -> SlackTok
 
 ///|
 /// The step shown (CoreNewConnectDialog's body; useFeishuStep's).
-fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : Json?, close : () -> Unit) -> Unit {
+fn nc_body(
+  c : @ui.Ctx,
+  src : Source,
+  core : Core,
+  here : Here,
+  f : NcFlow,
+  v : Json?,
+  close : () -> Unit,
+  step? : String = "",
+) -> Unit {
   guard v is Some(Object(_)) else { @settings.wait_line(c, @sf.t("common.reading")) }
-  let step = text(v, "step")
+  // (the dialog's step's own: one sliding away as another comes still shows what it was)
+  let step = if step == "" { text(v, "step") } else { step }
   let fe = field(v, "feishu")
   let error = nc_error(core, f)
   // added on its own (a bot made by scanning): its page, once the frame is built
@@ -592,41 +684,49 @@ fn nc_feishu_app(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, error : Strin
 }
 
 ///|
-/// The dialog's buttons for the step shown (CoreNewConnectDialog's footer; useFeishuStep's): back (or 取消) and the
-/// way on, each as the core says the step stands.
-fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close : () -> Unit) -> Unit {
+/// The dialog's buttons for its step `step` (CoreNewConnectDialog's footer; useFeishuStep's): 取消 where the wizard's
+/// back closes it (back a step is the step's head's, the dialog's steps following the wizard's), and the way on, each
+/// as the core says the step stands.
+fn nc_foot(
+  c : @ui.Ctx,
+  core : Core,
+  here : Here,
+  f : NcFlow,
+  v : Json?,
+  close : () -> Unit,
+  step? : String = "",
+) -> Unit {
   ignore(here)
   guard v is Some(Object(_)) else {
-    if @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form, tone=Ghost) {
+    if @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form + "/" + step, tone=Ghost) {
       close()
     }
   }
-  let step = text(v, "step")
+  let step = if step == "" { text(v, "step") } else { step }
   let fe = field(v, "feishu")
   let busy = nc_busy(core, f)
-  let back = fn(label : String) {
-    if @sf.button(c, label, key="nc-back/" + f.form, tone=Ghost) {
-      nc_go(core, f, "back", close)
+  let cancel = fn() {
+    if text(v, "back") == "close" && @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form + "/" + step, tone=Ghost) {
+      close()
     }
   }
   let next = fn(label : String, disabled : Bool, busy : Bool, run : () -> Unit) {
-    if @sf.button(c, label, key="nc-next/" + f.form, tone=Primary, disabled~, busy~) {
+    if @sf.button(c, label, key="nc-next/" + f.form + "/" + step, tone=Primary, disabled~, busy~) {
       run()
     }
   }
-  let feishu_back = fn() { back(@sf.t(if text(v, "back") == "close" { "common.cancel" } else { "web-pages.connect.previous" })) }
   match step {
     "platform" => {
-      feishu_back()
+      cancel()
       let feishu = opt_text(v, "platform") == Some("feishu") && strings(v, "platforms").contains("feishu")
       next(@sf.t("web-pages.connect.next"), false, false, fn() { nc_go(core, f, if feishu { "feishuBind" } else { "team" }, close) })
     }
     "feishuBind" => {
-      feishu_back()
+      cancel()
       next(@sf.t("web-pages.connect.next"), !flag(v, "canCreate"), false, fn() { nc_go(core, f, "feishuWay", close) })
     }
     "feishuWay" => {
-      feishu_back()
+      cancel()
       next(@sf.t("web-pages.connect.next"), false, busy, fn() {
         if text(fe, "way") == "app" {
           nc_go(core, f, "feishuApp", close)
@@ -635,10 +735,10 @@ fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close :
         }
       })
     }
-    "feishuScan" => nc_scan_foot(c, core, f, fe, feishu_back, busy, close)
-    "done" if field(fe, "registration") is Some(Object(_)) => nc_scan_foot(c, core, f, fe, feishu_back, busy, close)
+    "feishuScan" => nc_scan_foot(c, core, f, fe, cancel, busy, close)
+    "done" if field(fe, "registration") is Some(Object(_)) => nc_scan_foot(c, core, f, fe, cancel, busy, close)
     "feishuApp" | "done" => {
-      feishu_back()
+      cancel()
       if flag(fe, "verified") {
         next(@sf.t("web-pages.connect.addConnect"), false, busy || flag(fe, "creating"), fn() {
           nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, true) })
@@ -651,40 +751,26 @@ fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close :
       let adding = flag(v, "adding")
       let teams = items(v, "teams")
       if adding && teams.length() > 0 {
-        if @sf.button(c, @sf.t("common.back"), key="nc-back/" + f.form, tone=Ghost) {
+        if @sf.button(c, @sf.t("common.back"), key="nc-back/" + f.form + "/" + step, tone=Ghost) {
           nc_edit(core, f, obj([("adding", Json::boolean(false))]))
         }
-      } else if text(v, "back") == "platform" {
-        back(@sf.t("web-pages.connect.previous"))
-      } else if @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form, tone=Ghost) {
-        close()
+      } else {
+        cancel()
       }
       if !flag(v, "gettingToken") {
         next(@sf.t("web-pages.connect.next"), !(field(v, "chosen") is Some(Object(_))), false, fn() { nc_go(core, f, "app", close) })
       }
     }
     "app" => {
-      if @sf.button(c, @sf.t("web-pages.connect.previous"), key="nc-back/" + f.form, tone=Ghost) {
-        nc_go(core, f, "team", close)
-      }
       next(@sf.t("web-pages.connect.createApp"), !flag(v, "canMake"), busy, fn() { nc_act(core, f, "make") })
     }
     "install" | "manual" => {
-      if step == "manual" {
-        if @sf.button(c, @sf.t("web-pages.connect.previous"), key="nc-back/" + f.form, tone=Ghost) {
-          nc_go(core, f, "team", close)
-        }
-      } else if @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form, tone=Ghost) {
-        close()
-      }
+      cancel()
       let install = text(field(v, "made"), "state")
       let tk = nc_tokens(c, core, f, if step == "install" { install } else { "" })
       next(@sf.t("web-pages.connect.next"), !tokens_ready(core, tk), busy || tokens_busy(core, tk), fn() { nc_act(core, f, "verify") })
     }
     _ => {
-      if @sf.button(c, @sf.t("web-pages.connect.previous"), key="nc-back/" + f.form, tone=Ghost) {
-        nc_go(core, f, if opt_text(v, "madeId") is Some(_) { "install" } else { "manual" }, close)
-      }
       next(@sf.t("web-pages.connect.addConnect"), items(field(v, "pick"), "options").length() == 0, busy, fn() {
         nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, false) })
       })
@@ -693,17 +779,17 @@ fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close :
 }
 
 ///|
-/// The scan step's buttons: back, and a new QR code where it ended without an app, or trying again where adding the
+/// The scan step's buttons: 取消 where it closes the wizard, and a new QR code where it ended without an app, or trying again where adding the
 /// connect failed.
-fn nc_scan_foot(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, back : () -> Unit, busy : Bool, close : () -> Unit) -> Unit {
+fn nc_scan_foot(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, cancel : () -> Unit, busy : Bool, close : () -> Unit) -> Unit {
   ignore(close)
-  back()
+  cancel()
   if flag(fe, "failed") {
-    if @sf.button(c, @sf.t("web-pages.connect.feishu.newQr"), key="nc-qr/" + f.form, tone=Primary, icon="refresh", busy~) {
+    if @sf.button(c, @sf.t("web-pages.connect.feishu.newQr"), key="nc-qr/" + f.form + "/scan", tone=Primary, icon="refresh", busy~) {
       nc_act(core, f, "register")
     }
   } else if opt_text(fe, "error") is Some(_) {
-    if @sf.button(c, @sf.t("web-pages.connect.feishu.retry"), key="nc-retry/" + f.form, tone=Primary, busy=busy || flag(fe, "creating")) {
+    if @sf.button(c, @sf.t("web-pages.connect.feishu.retry"), key="nc-retry/" + f.form + "/scan", tone=Primary, busy=busy || flag(fe, "creating")) {
       nc_act(core, f, "create")
     }
   }

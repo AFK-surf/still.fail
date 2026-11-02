@@ -370,7 +370,7 @@ pub fn offered_image() -> String
 
 pub fn open_context_actions(@sfbase.Source, String, String, Json?, @sf.Beside) -> Unit
 
-pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) -> Unit, description? : String, wide? : Bool, live? : () -> (String, String, String), on_gone? : () -> Unit, steps? : Bool) -> Unit
+pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) -> Unit, description? : String, wide? : Bool, live? : () -> (String, String, String), on_gone? : () -> Unit, steps? : Bool, back? : () -> Unit) -> Unit
 
 pub fn open_new_workspace(@sfbase.Source) -> Unit
 
