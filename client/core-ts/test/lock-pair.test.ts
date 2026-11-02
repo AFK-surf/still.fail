@@ -15,6 +15,7 @@ import { HostError } from "../src/error.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { base64url as toB64url, utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
+import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { pairs } from "../src/views/lock.ts";
 import { type Duplex, keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
@@ -183,6 +184,34 @@ test("the code is good until a set time, said where it is shown; wrong codes typ
   assert.deepEqual((await m.prompts()).pairing, [], "too old, a wrong code typed a minute before or not");
   assert.equal("err" in (await m.prove(shown.code)) ? "ended" : "approved", "ended");
   assert.deepEqual(m.cloud.posted, []);
+});
+
+/// Feed the app bridge a native wall clock with sub-millisecond precision.
+function useFractionalAppClock(host: { nowMs(): number }) {
+  const now = host.nowMs.bind(host);
+  const bridge = new BridgeHost(new Bridge({ now: () => now() + 0.439 } as never), "", false);
+  host.nowMs = () => bridge.nowMs();
+}
+
+test("a trusted device can show a pairing code when its clock has fractional milliseconds", async () => {
+  const m = await met();
+  useFractionalAppClock(m.host);
+  await m.hello();
+  const shown = (await m.prompts()).pairing[0];
+  assert.match(shown.code, /^[0-9]{6}$/);
+  assert.ok(Number.isInteger(shown.until), "the prompt's expiry can be read by the app");
+});
+
+test("a new device can show the pairing prompt when its clock has fractional milliseconds", async () => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, false) }));
+  const lock = await r.watch({ topic: "lock", workspace: "ws" });
+  useFractionalAppClock(r.host);
+  const [, phone] = await pipe();
+  keep(r.core.inner, trying(r.core.inner, ["ws"]), PHONE, phone, ["ws"]);
+  const shown = await lock();
+  assert.equal(shown.me.waiting, true);
+  assert.equal(shown.me.pair.state, "code");
+  assert.ok(Number.isInteger(shown.me.pair.until), "the waiting page's expiry can be read by the app");
 });
 
 test("the new device hears its trusted device end it while nothing is typed, and says why at once", async () => {

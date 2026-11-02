@@ -370,7 +370,8 @@ export class BridgeHost implements Host {
   }
 
   nowMs(): number {
-    return this.#bridge.native.now();
+    // Match Date.now() on web and Node: persisted and transmitted wall times use whole milliseconds.
+    return Math.floor(this.#bridge.native.now());
   }
   monotonicMs(): number {
     return this.#bridge.native.monotonic();
