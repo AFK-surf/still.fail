@@ -556,5 +556,7 @@
   "station.failure.model": "The model provider returned an error",
   "station.failure.exited": "The agent process exited unexpectedly",
   "station.failure.other": "Unknown error",
-  "station.context.tooShort": "there isn't enough in the conversation yet"
+  "station.context.tooShort": "there isn't enough in the conversation yet",
+  "station.share.notLent": "The station this subscription is signed in on couldn't lend it; it may be offline",
+  "station.claudeAuth.machineRunsOut": "This station's Claude sign-in is about to expire; sign in again"
 }

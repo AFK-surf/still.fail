@@ -318,7 +318,7 @@ test("a turn that fails after it said it would wait ends failed, not waiting: no
   await settle();
   const last = () => r.store.lastTurn(key)!;
   assert.deepEqual([last().outcome, last().declared, last().waitSeconds], ["failed", null, null], "shown failed, not waiting");
-  assert.ok(matches(r.chat.lastText(), ["ECONNRESET"]), r.chat.lastText());
+  assert.equal(r.chat.lastText(), "⚠️ 模型服务返回错误，回复即可重试");
   // As a station from before recorded it: waiting. The next station, started without a handover, puts it right.
   r.store.endTurn(r.store.listTurns(key).at(-1)!.id, "failed", "model: API Error: Connection dropped (ECONNRESET)", "waiting", 60);
   await r.hub.shutdown();
@@ -505,7 +505,8 @@ test("a turn that cannot start is not left starting, and stop clears what is sti
   };
   assert.equal(phase(), null, "the failed start ended what was said to be starting");
   assert.equal(r.hub.processState(key), "cold");
-  assert.match(r.chat.lastText(), /did not lend it/);
+  // What the station said of it is its own, in English: not said; that it could not start is.
+  assert.equal(r.chat.lastText(), "⚠️ 无法启动 agent");
   // Said to be under way some other way: stop, with nothing running, clears it.
   r.hub.live.event(key, { kind: "phase", phase: "starting" });
   assert.notEqual(phase(), null);
@@ -2262,7 +2263,7 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   agent.end(spent);
   await settle();
   assert.equal(said().length, 1);
-  assert.ok(matches(said()[0]!, ["没有其他可用账号", "You've hit your limit"]), said()[0]);
+  assert.ok(matches(said()[0]!, ["没有其他可用账号"]), said()[0]);
   // Jobs' notices meanwhile: no turn for them (it would run into the allowance again), nothing said again.
   r.hub.notify(key, "a job ended");
   r.hub.notify(key, "another job ended");

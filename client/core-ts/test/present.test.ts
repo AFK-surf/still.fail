@@ -314,7 +314,7 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ declared: "block", outcome: "completed" }), "需要你处理");
   assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "需要你处理");
   assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出错：额度已用完");
-  assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：登录失效");
+  assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：账号认证失败");
   assert.equal(words({ outcome: "aborted" }), "出错：被停止");
   assert.equal(words({ outcome: "completed" }), "出错：意外停止");
   // Without its lead (the 待处理 list's line, its dot says that much): what it needs, why it stopped.
@@ -410,7 +410,7 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   asked.agents = [helped];
   assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null, "要 key", { kind: "need", rest: "要 key" }]);
   asked.agents = [agent({ outcome: "failed", detail: "auth: 401" }, "warm")];
-  assert.equal(p.rowStateText(asked), "出错：登录失效");
+  assert.equal(p.rowStateText(asked), "出错：账号认证失败");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
   assert.equal(p.rowStateText(asked), "待处理 · 域名用哪个？");
   // Let go by the viewer: the row says nothing of it, its agent asking still.
@@ -438,7 +438,7 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.deepEqual([waits.statusText, waits.statusLead, waits.statusRest], ["等待：CI 跑完", "wait", "CI 跑完"]);
   assert.deepEqual([works.statusLead, works.statusRest], [undefined, undefined]);
   const failed = agent({ outcome: "failed", detail: "auth: 401" }, "warm");
-  assert.deepEqual([failed.statusText, failed.statusLead], ["出错：登录失效", undefined]);
+  assert.deepEqual([failed.statusText, failed.statusLead], ["出错：账号认证失败", undefined]);
   const watching = p.session({ key: "w", process: "warm", pending: 0, lastTurn: { declared: "waiting", ending: "waiting", outcome: "completed", endedAt: 5 }, watch: { every: 60 } });
   assert.deepEqual([watching.statusText, watching.statusLead, watching.statusRest], ["监控中", "watch", "监控中"]);
 });

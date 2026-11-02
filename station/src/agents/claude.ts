@@ -27,6 +27,7 @@ import type { RunnerInfo } from "./runner.ts";
 import { OVERLOADED, TOOL_SERVERS, cleanEnv, failureRest, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
 import { peerHttpBase } from "../tools/http.ts";
+import { Said, stationLang, tr } from "../ops/i18n.ts";
 
 type Json = any;
 
@@ -449,7 +450,7 @@ export class ClaudeSession extends OwnProcessSession<Turn> {
     this.startable();
     // Taken up without knowing whether it renews its token (RENEWED): about to run out, it is started again (resuming)
     // with a current one.
-    if (this.machineExpires !== null && this.machineExpires - wall.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Error("the machine login's token runs out");
+    if (this.machineExpires !== null && this.machineExpires - wall.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Said(tr(stationLang(), "station.claudeAuth.machineRunsOut"));
     this.turn.renewed = false;
     this.turn.busy = true;
   }

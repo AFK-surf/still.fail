@@ -550,5 +550,7 @@
   "station.failure.model": "模型服务返回错误",
   "station.failure.exited": "agent 进程意外退出",
   "station.failure.other": "未知错误",
-  "station.context.tooShort": "对话内容太少"
+  "station.context.tooShort": "对话内容太少",
+  "station.share.notLent": "登录此订阅的 station 未能借出它，可能已离线",
+  "station.claudeAuth.machineRunsOut": "此 station 的 Claude 登录即将过期，需要重新登录"
 }
