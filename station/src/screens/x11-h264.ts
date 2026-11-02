@@ -110,8 +110,11 @@ export class X11H264 {
     this.#encoding = Math.round(this.#requested);
     this.#restarted = wall.now();
     const args = ["-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-video_size", `${this.#size.width}x${this.#size.height}`,
-      "-framerate", String(this.#fps), "-i", "pipe:0", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-profile:v", "baseline",
-      "-pix_fmt", "yuv420p", "-g", String(this.#fps * 2), "-b:v", String(this.#encoding), "-maxrate", String(this.#encoding), "-bufsize", String(this.#encoding),
+      "-framerate", String(this.#fps), "-i", "pipe:0", "-an", "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-profile:v", "baseline",
+      // Limit key-frame bursts to keep a narrow link from queueing seconds of old pictures. A still screen sharpens
+      // over following frames; veryfast retains small text better than ultrafast at the same constrained rate.
+      "-pix_fmt", "yuv420p", "-g", String(this.#fps * 2), "-b:v", String(this.#encoding), "-maxrate", String(this.#encoding),
+      "-bufsize", String(Math.max(100_000, Math.round(this.#encoding * 0.25))), "-x264-params", "vbv-init=0.5",
       "-threads", "1", "-flvflags", "no_duration_filesize", "-flush_packets", "1", "-f", "flv", "pipe:1"];
     const encoder = spawn(this.#ffmpeg, args, { env: this.#env, stdio: ["pipe", "pipe", "pipe"] });
     this.#encoder = encoder;

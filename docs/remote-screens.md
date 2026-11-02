@@ -332,7 +332,9 @@ tools are missing.
 Each view captures the X11 root display (including its cursor) at at most 15 fps. For a client taking H.264, an ffmpeg
 with libx264 captures raw pictures up to 3840×2160, keeps the latest, and sends it to a second ffmpeg for encoding only
 when the pace asks for a frame. That way an encoded delta frame is never silently dropped. The encoder restarts with a
-new key frame and configuration when the requested bit rate changes substantially or a client asks for a key frame.
+new key frame and configuration when the requested bit rate changes substantially or a client asks for a key frame;
+its short rate-control buffer limits bursts on narrow links. Small text can be soft initially and becomes clearer as
+a still screen is encoded again.
 When H.264 is unavailable or the client asks only for JPEG, one ffmpeg sends JPEG frames at the viewer's bounds and
 keeps its latest frame. The JPEG stream has no adaptive bitrate and can be slow on a narrow or lossy link.
 
