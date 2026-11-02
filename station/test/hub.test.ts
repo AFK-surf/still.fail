@@ -318,7 +318,7 @@ test("a turn that fails after it said it would wait ends failed, not waiting: no
   await settle();
   const last = () => r.store.lastTurn(key)!;
   assert.deepEqual([last().outcome, last().declared, last().waitSeconds], ["failed", null, null], "shown failed, not waiting");
-  assert.equal(r.chat.lastText(), "⚠️ 模型服务返回错误，回复即可重试");
+  assert.equal(r.chat.lastText(), "⚠️ 模型服务出错，回复即可重试");
   // As a station from before recorded it: waiting. The next station, started without a handover, puts it right.
   r.store.endTurn(r.store.listTurns(key).at(-1)!.id, "failed", "model: API Error: Connection dropped (ECONNRESET)", "waiting", 60);
   await r.hub.shutdown();
@@ -556,7 +556,7 @@ test("claude auth retries once, then reports the profile and does not loop", asy
   await settle();
   assert.equal(r.claude.count(), 2, "a persistent auth failure must stop, not loop");
   // Said as what it means and what to do, not in the runtime's words (those go with the turn, for a report).
-  assert.equal(r.chat.lastText(), "⚠️ 账号认证失败：在 Profile 中检查或重新登录");
+  assert.equal(r.chat.lastText(), "⚠️ 账号认证失败：在 Profile 中重新登录");
   assert.equal(r.claude.last().prompts.length, 1);
   // The notice says whose sign-in failed, for the clients to link that profile's page; another failure is no profile's.
   const thread = r.thread("C1", m.threadTs);
@@ -2228,7 +2228,7 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   second.end(spent("usage limit reached"));
   await settle();
   assert.equal(r.claude.count(), 2, "no account left to go on with");
-  assert.equal(r.chat.lastText(), "⚠️ 已达到额度或速率限制，且没有其他可用账号；额度恢复后自动继续，也可回复重试");
+  assert.equal(r.chat.lastText(), "⚠️ 额度已用完，恢复后自动继续");
   // Changed by hand (here: kept to the first again): it goes on by itself.
   await configure(r.hub, key, { profile: on });
   await settle();
@@ -2254,7 +2254,7 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   const now = time.clock.currentTimeMillisUnsafe();
   r.hub.accounts.setHealth(() => ({ quota: { state: "ok", windows: [{ label: "5h", usedPercent: 100, resetsAt: now + 2 * HOUR, minutes: 300 }], detail: null, checkedAt: now } }));
   const spent = { kind: "failed" as const, reason: classifyResult("usage limit reached"), message: "You've hit your limit · resets 5pm" };
-  const said = () => r.chat.texts().filter((t) => t.includes("已达到额度或速率限制"));
+  const said = () => r.chat.texts().filter((t) => t.includes("额度已用完"));
   const m = message();
   await r.accept(m);
   await settle();
@@ -2263,7 +2263,7 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   agent.end(spent);
   await settle();
   assert.equal(said().length, 1);
-  assert.ok(matches(said()[0]!, ["没有其他可用账号"]), said()[0]);
+  assert.equal(said()[0], "⚠️ 额度已用完，恢复后自动继续");
   // Jobs' notices meanwhile: no turn for them (it would run into the allowance again), nothing said again.
   r.hub.notify(key, "a job ended");
   r.hub.notify(key, "another job ended");
@@ -2365,7 +2365,7 @@ test("a model at capacity is no account's limit: said once, tried again after lo
   // Not moved off its account, nor told it is spent; told once, without the provider's words.
   assert.equal(r.claude.count(), 1);
   assert.equal(r.session(key).profile, on);
-  assert.ok(r.chat.texts().every((t) => !t.includes("额度或速率限制") && !t.includes("Selected model")), r.chat.texts().join("\n"));
+  assert.ok(r.chat.texts().every((t) => !t.includes("额度已用完") && !t.includes("Selected model")), r.chat.texts().join("\n"));
   assert.equal(said().length, 1);
   const last = r.store.lastTurn(key)!;
   assert.deepEqual([last.declared, last.waitSeconds, last.waitFor], ["waiting", 30, "模型恢复可用"]);

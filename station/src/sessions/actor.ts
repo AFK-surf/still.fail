@@ -1359,7 +1359,7 @@ export class SessionActor {
         return this.startTurn("resume", GO_ON_AFTER_SPENT);
       }
       // Said once: what wakes it meanwhile (a job's notice, a wait over) would only run into it again.
-      if (!this.saidLast((said) => said.startsWith(SPENT_NOTICE()))) await this.notice(failureNotice(outcome), this.profile);
+      if (!this.saidLast((said) => [SPENT_NOTICE(), ...SPENT_BEFORE].some((s) => said.startsWith(s)))) await this.notice(failureNotice(outcome), this.profile);
       this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
     } else if (overloaded) {
       this.nudges = 0;
@@ -1638,9 +1638,10 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
 /// How long a spent account is waited on when it refills is not known.
 const REFILL_FALLBACK_MS = 60 * 60 * 1000;
 
-/// The start of the notice that its account is spent, whatever the runtime said (before 2026-11-02 it went on with
-/// that, after a ：).
+/// The notice that its account is spent; and how stations before 2026-11-03 began it (going on with what the runtime
+/// said), in a thread from then.
 const SPENT_NOTICE = () => `⚠️ ${t("station.notice.rateLimit")}`;
+const SPENT_BEFORE = ["⚠️ 已达到额度或速率限制", "⚠️ Hit a usage or rate limit"];
 
 /// That the provider had no room for it: its words, about no account, are of no use to people.
 const OVERLOADED_NOTICE = () => `⚠️ ${t("station.notice.overloaded")}`;

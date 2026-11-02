@@ -284,7 +284,7 @@
   "core-logic.format.duration.s": "{s}s",
   "core-logic.format.failure.auth": "Account authentication failed",
   "core-logic.format.failure.exited": "Agent process exited",
-  "core-logic.format.failure.model": "Model provider returned an error",
+  "core-logic.format.failure.model": "Model failed",
   "core-logic.format.failure.other": "Unknown error",
   "core-logic.format.failure.refused": "Model provider refused the request",
   "core-logic.format.failure.overloaded": "Model busy",

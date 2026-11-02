@@ -224,7 +224,7 @@
   "core-logic.format.duration.s": "{s} 秒",
   "core-logic.format.failure.auth": "账号认证失败",
   "core-logic.format.failure.exited": "agent 进程意外退出",
-  "core-logic.format.failure.model": "模型服务返回错误",
+  "core-logic.format.failure.model": "模型服务出错",
   "core-logic.format.failure.other": "未知错误",
   "core-logic.format.failure.refused": "模型服务拒绝了请求",
   "core-logic.format.failure.overloaded": "模型繁忙",
