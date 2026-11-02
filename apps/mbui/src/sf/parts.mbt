@@ -723,7 +723,7 @@ pub fn small_panel(
   body : () -> Unit,
 ) -> Int {
   let t = theme()
-  c.box(
+  let panel = c.box(
     w~,
     h~,
     min_w?,
@@ -739,6 +739,9 @@ pub fn small_panel(
     clip=true,
     body,
   )
+  // (the panel: the surface of the look it comes in by, coming first, all on it after: Ctx::surface)
+  c.surface(panel)
+  panel
 }
 
 ///|
@@ -1049,7 +1052,8 @@ pub fn tip(
 /// A tip as the web draws it (parts.css.ts tooltip): small words on the primary ink, 5 by 10 in, 8 round, a soft
 /// shadow; the keys 8 after the words at 60% (tipKeys).
 pub fn tip_look(c : @ui.Ctx, words : String, keys : String) -> Unit {
-  c.box(style=tip_box, fn() {
+  // (the tip: the surface of the look it comes in by: Ctx::surface)
+  let tip = c.box(style=tip_box, fn() {
     c.box(style=tip_line, fn() {
       c.text(words, style=tip_words) |> ignore
       if keys != "" {
@@ -1058,7 +1062,7 @@ pub fn tip_look(c : @ui.Ctx, words : String, keys : String) -> Unit {
     })
     |> ignore
   })
-  |> ignore
+  c.surface(tip)
 }
 
 ///|
@@ -2297,7 +2301,8 @@ pub fn dialog(
     on_escape?,
     scrim?,
     look=fn(c, s, inner) {
-      c.box(
+      // (the dialog: the surface of the look it comes in by, coming first, all on it after: Ctx::surface)
+      let panel = c.box(
         style=dialog_box,
         id=c.id(key + "/frame"),
         w=Px(s.w),
@@ -2385,7 +2390,7 @@ pub fn dialog(
         dialog_veil(c, veil)
         },
       )
-      |> ignore
+      c.surface(panel)
     },
     body,
   )
@@ -3148,7 +3153,8 @@ pub fn confirm_dialog(
     close_label="",
     scrim?,
     look=fn(c, s, inner) {
-      c.box(
+      // (the dialog: the surface of the look it comes in by, coming first, all on it after: Ctx::surface)
+      let panel = c.box(
         style=confirm_box,
         w=Px(s.w),
         radius=dialog_r,
@@ -3166,7 +3172,7 @@ pub fn confirm_dialog(
           dialog_veil(c, veil)
         },
       )
-      |> ignore
+      c.surface(panel)
     },
     fn() {
       if error != "" {
