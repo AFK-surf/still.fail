@@ -1082,13 +1082,33 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
         strong=true,
       )
       if now != shared {
-        @settings.act(
-          core,
-          @sf.t("web-pages.profiles.share.switch"),
-          "profile.share",
-          obj([("station", str(address)), ("id", str(id)), ("on", Json::boolean(now))]),
-          done=if now { @sf.t("web-pages.profiles.share.shared") } else { @sf.t("web-pages.profiles.share.unshared") },
-        )
+        let change = fn() {
+          @settings.act(
+            core,
+            @sf.t("web-pages.profiles.share.switch"),
+            "profile.share",
+            obj([("station", str(address)), ("id", str(id)), ("on", Json::boolean(now))]),
+            done=if now { @sf.t("web-pages.profiles.share.shared") } else { @sf.t("web-pages.profiles.share.unshared") },
+          )
+        }
+        if now {
+          let claude = subscription && text(p, "runtime") == "claude"
+          @sf.confirm(
+            if claude { @sf.t("web-pages.profiles.share.confirmClaudeTitle") } else { @sf.t("web-pages.profiles.share.confirmTitle") },
+            if claude {
+              @sf.t("web-pages.profiles.share.confirmClaudeBody")
+            } else if subscription {
+              @sf.t("web-pages.profiles.share.confirmSubscriptionBody")
+            } else {
+              @sf.t("web-pages.profiles.share.confirmCopyBody")
+            },
+            if claude { @sf.t("web-pages.profiles.share.confirmUnderstood") } else { @sf.t("web-pages.profiles.share.confirmAction") },
+            change,
+            warning=if claude { @sf.t("web-pages.profiles.share.confirmClaudeWarning") } else { "" },
+          )
+        } else {
+          change()
+        }
       }
       if !shared {
         return

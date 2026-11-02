@@ -323,26 +323,35 @@ static int mods_now(void) {
 // the app keeping itself current: a newer build's installer downloaded, checked, run
 #include "win_update.h"
 
+// A paste by key (`mods` the app's Ctrl with what else is held): files on it (Explorer's copied ones) or a picture (PNG,
+// or a bitmap): the app's Ctrl+V (1000 + v), which reads the clipboard for them (@hostapi.clip_read), as a page's paste
+// takes them as files; else its words
+static void paste_key(int mods) {
+  if (IsClipboardFormatAvailable(CF_HDROP) ||
+      IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG")) || IsClipboardFormatAvailable(CF_DIB) ||
+      IsClipboardFormatAvailable(CF_DIBV5) || IsClipboardFormatAvailable(CF_BITMAP)) {
+    mb_cb.key(1000 + 'v', mods);
+  } else {
+    paste();
+  }
+}
+
 static void key_down(WPARAM vk) {
   // a key catcher's focus (win_device.h): its keys (a composition under way keeps them)
   if (key_catching && ime_active && marked_len == 0 && catch_vk(vk)) return;
   int mods = mods_now(), code = 0;
+  // Shift+Insert: the system's other key for a paste, what a clipboard manager may press for one (Raycast does): as
+  // Ctrl+V
+  if (vk == VK_INSERT && mods == 1) {
+    paste_key(2);
+    return;
+  }
   if (mods & 2) {
     switch (vk) {
       case 'A': code = 12; break;
       case 'C': code = 13; break;
       case 'X': code = 14; break;
-      case 'V':
-        // files on it (Explorer's copied ones) or a picture (PNG, or a bitmap): the app's Ctrl+V (1000 + v), which
-        // reads the clipboard for them (@hostapi.clip_read), as a page's paste takes them as files; else its words
-        if (IsClipboardFormatAvailable(CF_HDROP) ||
-            IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG")) || IsClipboardFormatAvailable(CF_DIB) ||
-            IsClipboardFormatAvailable(CF_DIBV5) || IsClipboardFormatAvailable(CF_BITMAP)) {
-          mb_cb.key(1000 + 'v', mods);
-        } else {
-          paste();
-        }
-        return;
+      case 'V': paste_key(mods); return;
     }
     // any other Ctrl key with a character: the app's shortcut (1000 + the character, lower case)
     if (!code) {

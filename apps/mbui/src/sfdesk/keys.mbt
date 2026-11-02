@@ -50,7 +50,9 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     0
   }
   if way != 0 && framed {
-    neighbour(src, w, way)
+    // A menu action remains asked through the frame's builds. Opening a chat can cause another build, so doing this
+    // here would handle the same action again and skip rows. Tell it once after the builds, as for an input.
+    c.tell("chat/neighbour", fn() { neighbour(src, w, way) })
   }
   let escape = c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true)
   let left = escape && !frame_escape(c)
@@ -81,36 +83,44 @@ fn frame_escape(c : @ui.Ctx) -> Bool {
 }
 
 ///|
-/// The chat before (-1) or after (1) the one open, in the list as it shows (Sidebar.tsx goToNeighbour); the first when
-/// none is open.
+/// The chat before (-1) or after (1) the one open, in the list as it shows (Sidebar.tsx goToNeighbour). A list can
+/// hold its rows in place while its core view changes, so use the order last drawn, not the core's current order.
 pub fn neighbour(src : Source, w : Workspace, way : Int) -> Unit {
+  let open = match app.nav.top() {
+    Chat(r) => r
+    _ => return
+  }
+  if side_place() == "archive" {
+    let rows : Array[Json] = []
+    for day in items(archive_side.last, "days") {
+      rows.append(items(Some(day), "items"))
+    }
+    let at = rows.search_by(fn(item) {
+      let row = Some(item)
+      text(row, "station") == open.station &&
+      (text(row, "session") == open.session || text(row, "id") == open.session)
+    })
+    match at {
+      Some(i) if i + way >= 0 && i + way < rows.length() => archive_open(rows[i + way])
+      _ => ()
+    }
+    return
+  }
+  if side_place() != "chats" {
+    return
+  }
   let rows : Array[ChatItem] = []
-  match chats_of(src, w.id, filter_of(src, w.id)) {
-    (Some(v), _) =>
-      for d in v.days {
-        for item in d.items {
-          rows.push(item)
-        }
-      }
+  let key = "chats/" + w.id + "/" + filter_of(src, w.id)
+  for d in shown_days.get(key).unwrap_or([]) {
+    rows.append(d.items)
+  }
+  match rows.search_by(fn(item) { @sfbase.row_is(item, open) }) {
+    Some(i) if i + way >= 0 && i + way < rows.length() => {
+      let item = rows[i + way]
+      open_page(Chat({ station: item.station, session: item.session, title: item.title, station_name: item.station_name }))
+    }
     _ => ()
   }
-  if rows.length() == 0 {
-    return
-  }
-  let at = match app.nav.top() {
-    Chat(r) =>
-      rows.search_by(fn(i) { i.station == r.station && (i.session == r.session || i.id == r.session) })
-    _ => None
-  }
-  let next = match at {
-    Some(i) => i + way
-    None => if way > 0 { 0 } else { rows.length() - 1 }
-  }
-  if next < 0 || next >= rows.length() {
-    return
-  }
-  let item = rows[next]
-  open_page(Chat({ station: item.station, session: item.session, title: item.title, station_name: item.station_name }))
 }
 
 ///|

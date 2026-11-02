@@ -55,6 +55,130 @@ test "a shared subscription's main switch and its station details remain usable 
 }
 
 ///|
+/// The fixture's Claude subscription before it is shared.
+fn unshared_claude(s : Source) -> Source {
+  fn without_share(v : Json) -> Json {
+    match v {
+      Object(o) => {
+        let p = o.copy()
+        for k, x in o {
+          p[k] = without_share(x)
+        }
+        if o.get("id") == Some(Json::string("cc")) && o.contains("available") {
+          p.remove("share")
+        }
+        Json::object(p)
+      }
+      Array(a) => Json::array(a.map(without_share))
+      _ => v
+    }
+  }
+  {
+    ..s,
+    topic: fn(name, params) {
+      let v = (s.topic)(name, params)
+      match v.value {
+        Some(x) => { ..v, value: Some(without_share(x)) }
+        None => v
+      }
+    },
+  }
+}
+
+///|
+test "sharing a Claude subscription asks about requests on the target stations before enabling it" {
+  for case in page_cases {
+    let (w, platform) = case
+    let asked : Array[Json] = []
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, over=fn(base) {
+      let s = unshared_claude(base)
+      { ..s, call: fn(name, params, done) {
+        if name == "profile.share" { asked.push(params) }
+        (s.call)(name, params, done)
+      } }
+    })
+    let at = "\{w} platform \{platform}"
+    scrolled_to(t, w, "分享给其他 station")
+    assert_eq(t.get(Switch, label="分享给其他 station").check, Some(Off), msg=at)
+    t.click(Switch, label="分享给其他 station")
+    t.frame()
+    assert_true(@sf.presenting(), msg=at)
+    assert_eq(asked.length(), 0, msg="\{at}: not shared before confirmation")
+    presented_in(t)
+    assert_true(t.find("其他 station 会借用此账号的登录凭证，在各自的机器上直接向 Claude 发送请求") is Some(_), msg=at)
+    assert_true(t.find("请自行确保目标 station 能安全访问 Claude") is Some(_), msg=at)
+    t.click(Button, label="取消")
+    t.run_for(@kit.presence_out_ms)
+    assert_eq(asked.length(), 0, msg="\{at}: cancellation does not share")
+    assert_eq(t.get(Switch, label="分享给其他 station").check, Some(Off), msg=at)
+    t.click(Switch, label="分享给其他 station")
+    presented_in(t)
+    t.click(Button, label="已了解，分享账号")
+    t.frame()
+    assert_eq(asked.length(), 1, msg="\{at}: shared after confirmation")
+    assert_eq(text(Some(asked[0]), "station"), "ws1/st1", msg=at)
+    assert_eq(text(Some(asked[0]), "id"), "cc", msg=at)
+    assert_eq(field(Some(asked[0]), "on"), Some(Json::boolean(true)), msg=at)
+  }
+}
+
+///|
+test "sharing other accounts explains how they are used on target stations" {
+  for profile in ["cx", "k2"] {
+    for case in page_cases {
+      let (w, platform) = case
+      let asked : Array[Json] = []
+      let t = setting_tester(Profile("ws1/st1", profile), w, platform~, over=fn(s) {
+        { ..s, call: fn(name, params, done) {
+          if name == "profile.share" { asked.push(params) }
+          (s.call)(name, params, done)
+        } }
+      })
+      let at = "\{profile} \{w} platform \{platform}"
+      scrolled_to(t, w, "分享给其他 station")
+      assert_eq(t.get(Switch, label="分享给其他 station").check, Some(Off), msg=at)
+      t.click(Switch, label="分享给其他 station")
+      t.frame()
+      assert_true(@sf.presenting(), msg=at)
+      assert_eq(asked.length(), 0, msg=at)
+      presented_in(t)
+      let body = if profile == "cx" { "借用此账号的登录凭证" } else { "账号配置及其中的密钥会同步" }
+      assert_true(t.find(body) is Some(_), msg=at)
+      assert_true(t.find("在各自的机器上发送请求") is Some(_), msg=at)
+      assert_true(t.find("安全访问 Claude") is None, msg=at)
+      t.click(Button, label="取消")
+      t.run_for(@kit.presence_out_ms)
+      assert_eq(asked.length(), 0, msg=at)
+      assert_eq(t.get(Switch, label="分享给其他 station").check, Some(Off), msg=at)
+      t.click(Switch, label="分享给其他 station")
+      presented_in(t)
+      t.click(Button, label="分享账号")
+      t.frame()
+      assert_eq(asked.length(), 1, msg=at)
+      assert_eq(text(Some(asked[0]), "id"), profile, msg=at)
+      assert_eq(field(Some(asked[0]), "on"), Some(Json::boolean(true)), msg=at)
+    }
+  }
+}
+
+///|
+test "stopping a share does not ask for confirmation" {
+  let asked : Array[Json] = []
+  let t = setting_tester(Profile("ws1/st1", "cc"), 1280.0, over=fn(s) {
+    { ..s, call: fn(name, params, done) {
+      if name == "profile.share" { asked.push(params) }
+      (s.call)(name, params, done)
+    } }
+  })
+  scrolled_to(t, 1280.0, "分享给其他 station")
+  t.click(Switch, label="分享给其他 station")
+  t.frame()
+  assert_false(@sf.presenting())
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0]), "on"), Some(Json::boolean(false)))
+}
+
+///|
 test "a subscription's tier is shown on its page at every width" {
   for case in page_cases {
     let (w, platform) = case
