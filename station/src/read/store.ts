@@ -791,12 +791,17 @@ export function jobNotices(s: Store, id: string, limit: number): { at: number; t
   return all(s, "SELECT at, text FROM job_notices WHERE job_id = ? ORDER BY at DESC, rowid DESC LIMIT ?", id, limit).map((r) => ({ at: r.at, text: r.text }));
 }
 
+/// The jobs running of some sessions (`?`: a JSON list of their keys), the latest first, by an index (of the jobs running).
+export const RUNNING_OF = "SELECT * FROM jobs WHERE session_key IN (SELECT value FROM json_each(?)) AND state = 'running' ORDER BY started_at DESC";
+
 /// jobs.rs `watching`: the sessions keeping watch (a watch job running), each with its watches' names, since when, and
-/// when one last said something.
-export function watching(s: Store): Map<string, Json> {
+/// when one last said something: of `sessions` alone (a session's summary, the sidebar items a change touched), or of
+/// all. Of all, each summary and sidebar change read every job running and the notices of every watch.
+export function watching(s: Store, sessions: string[] | null = null): Map<string, Json> {
   const by = new Map<string, JobRow[]>();
   // (The jobs running, by their state's index: every summary and list asks this, not every job ever.)
-  for (const job of all(s, JOBS_RUNNING).map(toJob).filter((j) => j.watch)) {
+  const running = sessions === null ? all(s, JOBS_RUNNING) : all(s, RUNNING_OF, JSON.stringify(sessions));
+  for (const job of running.map(toJob).filter((j) => j.watch)) {
     by.set(job.sessionKey, [...(by.get(job.sessionKey) ?? []), job]);
   }
   const out = new Map<string, Json>();

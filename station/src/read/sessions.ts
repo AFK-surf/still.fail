@@ -136,7 +136,7 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
 
 /// views.rs `summary`: one session's.
 export function summary(s: Store, key: string): Json {
-  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
+  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s, [key]), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
 }
 
 /// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect;
