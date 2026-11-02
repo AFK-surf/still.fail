@@ -9,8 +9,6 @@
 priv struct Decide {
   /// asks let go here, before the core says so (Chat.kt AskDismiss `gone`), by station, thread and post
   gone : Map[String, Bool]
-  /// the jobs' sheet shows all of them, not only those that matter now
-  mut jobs_all : Bool
   /// the letters' sheet: the chat opened in it, by its key ("" the list of them)
   mut letters_open : String
   /// the chats whose letters were read for their sheet (the core's `chatLetters`), by station and session: their
@@ -27,7 +25,6 @@ priv struct Decide {
 ///|
 let dui : Decide = {
   gone: {},
-  jobs_all: false,
   letters_open: "",
   letters_held: {},
   job_tab: 0,
@@ -39,7 +36,6 @@ let dui : Decide = {
 /// As at the start (tests).
 fn decide_reset() -> Unit {
   dui.gone.clear()
-  dui.jobs_all = false
   dui.letters_open = ""
   dui.letters_held.clear()
   dui.job_tab = 0

@@ -359,7 +359,6 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           let alarm = text(jobs.value, "alarm")
           c.box(style=bar_key_apart(), fn() {
             if nav_button(c, "web", 20.0, key="chat-jobs") {
-              dui.jobs_all = false
               open_chat_jobs(src, r)
             }
             if alarm == "fail" || alarm == "restart" {

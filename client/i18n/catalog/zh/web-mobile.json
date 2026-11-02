@@ -26,8 +26,6 @@
   "web-mobile.chat.job": "任务",
   "web-mobile.chat.jobGone": "此任务已不存在",
   "web-mobile.chat.jobs": "服务和后台任务",
-  "web-mobile.chat.jobsCurrent": "仅看当前",
-  "web-mobile.chat.jobsIdle": "当前没有运行中的服务或任务",
   "web-mobile.chat.jobsNone": "暂无服务或后台任务",
   "web-mobile.chat.jobsNoneNote": "agent 启动的网页和长期监控的任务会列在这里",
   "web-mobile.chat.newMessages": "{n} 条新消息",
