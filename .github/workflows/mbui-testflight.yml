@@ -42,15 +42,24 @@ jobs:
   tests:
     needs: guard
     uses: ./.github/workflows/mbui-check.yml
+  # Built and signed beside the tests (needs the guard alone), uploaded only once every tests job passed
+  # (scripts/testflight-tests.sh, at the root: it waits on GitHub, which has no event to wait for, and mbui's detlint keeps fixed waits out of its scripts): waiting for them before building made a release ~10.5 min (build 25, 2026-11-02).
   release:
-    needs: [guard, tests]
+    needs: guard
     runs-on: xcode-27
     timeout-minutes: 10
     # Configure required reviewers, prevent self-review, and main-only deployment rules.
     # No production/Cloudflare credentials are used by this job.
     environment: ios-testflight
+    permissions:
+      contents: read
+      actions: read
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      # mbc's units and the core's bytecode as main's newest iOS build (mbui.yml) kept them: without, all ~510 units were
+      # compiled again each release, 70 s on its 3 cores
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
       RELEASE_SHA: ${{ inputs.sha }}
       RELEASE_VERSION: ${{ inputs.version }}
       RELEASE_BUILD: ${{ inputs.build }}
@@ -59,6 +68,21 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - run: bash apps/mbui/scripts/testflight-guard.sh checkout
+      # (restored only: mbui.yml's ios job, on main, saves them)
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-ios-${{ github.sha }}
+          restore-keys: mbui-ios-
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            apps/mbui/out/ios-device/_build
+            !apps/mbui/out/ios-device/_build/**/*.mbc
+          key: mbui-ios-moon-${{ github.sha }}
+          restore-keys: mbui-ios-moon-
       - name: iOS's SDK 27.1 or later
         shell: bash
         run: |
@@ -67,6 +91,7 @@ jobs:
           case "$v" in 2[0-6].*|27.0*) echo "::error::iOS SDK $v: an iPhone Duo letterboxes an app built before 27.1"; exit 1 ;; esac
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit
+      - run: bash apps/mbui/scripts/moon-mtimes.sh
       - name: Device build dependencies
         run: |
           rustup target add aarch64-apple-ios
@@ -84,6 +109,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY_B64: ${{ secrets.ASC_PRIVATE_KEY_B64 }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           bash apps/mbui/scripts/testflight.sh
           [ "$(cat "$RUNNER_TEMP/mbui-testflight-uploaded")" = "$RELEASE_SHA" ] || { echo 'Missing upload completion receipt' >&2; exit 1; }
