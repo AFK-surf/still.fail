@@ -149,7 +149,7 @@ fn tap_home_filter(t : @ui.Tester) -> Unit {
 }
 
 ///|
-test "small screen home: filter on the left, settings and workspace together at the right" {
+test "small screen home: filter on the left, workspace and settings on the right" {
   for platform in [0, 2] {
     for width in [320.0, 390.0, 599.0] {
       new_run()
@@ -158,8 +158,11 @@ test "small screen home: filter on the left, settings and workspace together at 
       let (fx, _, fw, _) = t.query(Button, label="筛选会话：全部").unwrap().rect
       let (sx, sy, sw, sh) = t.query(Button, label="设置").unwrap().rect
       let (wx, _, ww, _) = t.rect_of("星火工作室").unwrap()
-      assert_true(fx + fw <= sx && sx + sw <= wx, msg="filter, settings and workspace: \{fx}, \{sx}, \{wx}")
-      assert_true(fx >= 0.0 && wx + ww <= width, msg="bar controls fit in \{width}")
+      let arrows = t.locate("icon:chevron-down")
+      assert_eq(arrows.length(), 1)
+      assert_true(arrows[0].0 < wx, msg="the workspace arrow is before its name")
+      assert_true(fx + fw <= wx && wx + ww <= sx, msg="filter, workspace and settings: \{fx}, \{wx}, \{sx}")
+      assert_true(fx >= 0.0 && sx + sw <= width, msg="bar controls fit in \{width}")
       t.tap(sx + sw / 2.0, sy + sh / 2.0)
       t.run_for(@ui.move_most_ms)
       assert_true(t.find("设置") is Some(_))
@@ -199,8 +202,8 @@ test "small screen home: a long workspace name gives way to syncing and transfer
   let (tx, _, tw, _) = t.query(Button, label="1 个传输 · 2%").unwrap().rect
   let (sx, _, sw, _) = t.query(Button, label="设置").unwrap().rect
   let (wx, wy, ww, wh) = t.rect_of(long_name).unwrap()
-  assert_true(fx + fw <= sync_x && sync_x + sync_w <= tx && tx + tw <= sx && sx + sw <= wx)
-  assert_true(ww > 0.0 && wx + ww <= 320.0, msg="workspace name stays in the bar: \{wx}, \{ww}")
+  assert_true(fx + fw <= sync_x && sync_x + sync_w <= tx && tx + tw <= wx && wx + ww <= sx && sx + sw <= 320.0)
+  assert_true(ww > 0.0, msg="workspace name stays in the bar: \{wx}, \{ww}")
   t.tap(wx + ww / 2.0, wy + wh / 2.0)
   assert_true(@sf.presenting())
   assert_true(t.find("切换 workspace") is Some(_))

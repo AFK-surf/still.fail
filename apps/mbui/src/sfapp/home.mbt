@@ -1,5 +1,5 @@
 // Home (ember apps/android chat/screens/Home.kt, web/src/mobile/Home.tsx): the workspace's chats' lists (sfpages'
-// sidebar.mbt, every tier's) under a top bar (the filter · settings and the workspace's switcher).
+// sidebar.mbt, every tier's) under a top bar (the filter · the workspace's switcher and settings).
 
 ///|
 /// The top bars' height under the status bar (a place's, TopGlassBar, and a chat's, BarFrame: TopBarHeight), what is in
@@ -72,7 +72,7 @@ fn home_page(
 }
 
 ///|
-/// The top bar over the list: the filter at the left, settings and the workspace's switcher at the right. The
+/// The top bar over the list: the filter at the left, the workspace's switcher and settings at the right. The
 /// switcher has a dot when another workspace has something waiting.
 fn top_bar(
   c : @ui.Ctx,
@@ -122,10 +122,6 @@ fn top_bar(
       @sf.sync_key(c, "home-syncing", 34.0, 20.0, syncing, said)
       @sfdesk.transfers_key(c, src, w.id, 34.0, 20.0)
       c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, justify=JEnd, fn() {
-        if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
-          @sfbase.history_push()
-          app.nav.push(Settings)
-        }
         let wid = c.id("home-workspace")
         // (the fixture's home-sheet: opened by it, as the app starts)
         if c.clicked(wid) || home_sheet_at_start.val {
@@ -133,6 +129,7 @@ fn top_bar(
           @sfpages.open_workspaces(src, Of(wid))
         }
         c.box(dir=Row, h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
+          @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
           // its mark before its name (the one in use: a GIF of it moves); none where it has none, its letter only the
           // name's first again beside it
           if @sf.has_station_mark(w.emoji, w.icon) {
@@ -149,9 +146,12 @@ fn top_bar(
               |> ignore
             _ => if invited { @sfpages.invite_dot(c, tr("android-chat.home.invited")) }
           }
-          @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
         })
         |> ignore
+        if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
+          @sfbase.history_push()
+          app.nav.push(Settings)
+        }
       })
       |> ignore
     })
