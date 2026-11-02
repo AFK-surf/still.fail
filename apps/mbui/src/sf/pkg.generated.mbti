@@ -580,6 +580,8 @@ pub fn file_name_of(String) -> String
 
 pub let file_progress_w : @ui.Len
 
+pub fn file_radius(Double) -> @ui.Radius
+
 pub let file_sheet_h : @ui.Len
 
 pub let file_sheet_w : @ui.Len
@@ -1580,6 +1582,8 @@ pub fn quota_said(Json?) -> String
 
 pub fn quote_card(@ui.Ctx, String, String, String, role? : String, comment? : String, composer? : Bool, jump? : Bool, remove? : Bool, picture? : () -> Unit, comment_field? : () -> Unit, words_width? : Double, words_key? : String) -> QuoteCardDone
 
+pub let quote_picture_corner : Double
+
 pub let quote_pop_h : @ui.Len
 
 pub fn quote_sent_shift(String, String) -> (Double, Double)
@@ -2146,7 +2150,7 @@ pub fn vector(@ui.Ctx, String, @pixels.Vector, Double) -> Int32
 
 pub fn verify_ok(@ui.Ctx, String) -> Unit
 
-pub fn video_capsule(@ui.Ctx, String, Double, coming? : Double?) -> Unit
+pub fn video_capsule(@ui.Ctx, String, Double, coming? : Double?, corner? : Double) -> Unit
 
 pub let video_capsule_h : Double
 
