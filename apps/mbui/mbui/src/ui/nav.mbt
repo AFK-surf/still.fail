@@ -953,6 +953,7 @@ pub fn[P] Ctx::nav(
     island: self.island_said(),
     layer: 0,
     stack: self.back_stack_said(),
+    stack_in: None,
     within: self.back_within,
   }
   if self.back_next is Some(_) && !leaving && takes_back {

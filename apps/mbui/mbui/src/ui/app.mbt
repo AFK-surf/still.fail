@@ -521,10 +521,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_island = c.back_island_next
   c.back_edge = c.back_edge_next
   c.back_chain = c.back_chain_next
-  c.back_stack = match c.back_chain {
-    Said(e, _) => e.stack
-    Unsaid => -3
-  }
   // (a layer's that took back already, said again as it was kept: what it was said over, in its place)
   c.back_layer_spent()
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)

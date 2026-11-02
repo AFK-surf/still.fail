@@ -538,8 +538,6 @@ pub struct Ctx {
   /// the layer's opening whose body is being built (Ctx::overlay; 0 none): what is said in it is its, for where its back
   /// stands (raise_layers)
   mut back_within : Int
-  /// where what takes back as published is in the window's stack of layers (Ctx::stacked; -3 none said)
-  mut back_stack : Int
   mut back_node_next : Int
   mut back_edge_next : Double
   /// the old view what takes back was said in by Ctx::on_back (its back_node none), none in a layer of its own
@@ -835,7 +833,6 @@ fn Ctx::new() -> Ctx {
     back_next: None,
     back_layer_next: 0,
     back_within: 0,
-    back_stack: -3,
     back_island: None,
     back_island_next: None,
     back_chain: Unsaid,

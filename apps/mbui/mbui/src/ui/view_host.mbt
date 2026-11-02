@@ -3030,7 +3030,7 @@ fn Ctx::back_taker(self : Ctx, brought? : Bool = true) -> BackHeld? {
     // of layers, after what of it is over it there)
     (Some(o), Some(n)) if o.owner is None =>
       match n.owner {
-        Some(id) if tree.stack_of(id) > self.back_stack => node
+        Some(id) if tree.stack_of(id) > self.back_stack() => node
         _ => old
       }
     (Some(o), None) if o.owner is None => old
@@ -4146,6 +4146,42 @@ let layer_hits : Array[(Int, Int, Int)] = []
 let next_layer_hits : Array[(Int, Int, Int)] = []
 
 ///|
+/// Where the layer whose own node is `i` is in the window's stack of layers as said of it: its place (Ctx::stacked); else,
+/// opened by an old view of the window's tree, that view's node's as the tree has it now (Tree::stack_of: as its place
+/// is said, live); else -1.
+fn Ctx::node_stack(self : Ctx, i : Int) -> Int {
+  let n = self.nodes[i]
+  if n.stack >= 0 {
+    return n.stack
+  }
+  match (n.stack_in, view_app.val) {
+    (Some(id), Some(tree)) => {
+      // (what orders the layers by it, as the frame is built, built again as it changes: its layers, the keys, back and
+      // presses as they are ordered, from that one order)
+      tree.places_read()
+      tree.stack_of(id)
+    }
+    _ => -1
+  }
+}
+
+///|
+/// Where what takes back as published is in the window's stack of layers (its entry's place: Ctx::stacked; one opened by
+/// an old view of the window's tree at none said, that view's node's as the tree has it now, as Ctx::node_stack); -3
+/// none said.
+fn Ctx::back_stack(self : Ctx) -> Int {
+  match self.back_chain {
+    Said({ stack_in: Some(id), .. }, _) =>
+      match view_app.val {
+        Some(tree) => tree.stack_of(id)
+        None => -1
+      }
+    Said(e, _) => e.stack
+    Unsaid => -3
+  }
+}
+
+///|
 /// Where old layer `ch` (of what root `root` holds) is in the window's stack of layers: where it was built at
 /// (Ctx::stacked), else where the one built before it among them was, else -1 (over what is in none, under all that is
 /// in it): an old view's menu stays where the old frame put it among its own.
@@ -4154,11 +4190,12 @@ fn Ctx::old_layer_stack(self : Ctx, root : Int, ch : Int) -> Int {
   let mut k = self.nodes[root].first
   while k >= 0 {
     let n = self.nodes[k]
-    if (n.layer || n.portal) && n.stack >= 0 {
-      at = n.stack
+    let s = self.node_stack(k)
+    if (n.layer || n.portal) && s >= 0 {
+      at = s
     }
     if k == ch {
-      return if n.stack >= 0 { n.stack } else { at }
+      return if s >= 0 { s } else { at }
     }
     k = n.next
   }
