@@ -44,8 +44,10 @@
 /// headings each have a press's least height with either native input: 15 fewer, 227. The model panel in two levels
 /// and a profile's models without their list to tick (2026-11-02): 12 fewer, 215. A chart narrower than its column no
 /// taller than it is drawn (flex's aspect from the width its max leaves): the list under chat-viz's page shorter, the
-/// page's two keys, which the other windows already count, come into the wide windows' views: 4 more, 219.)
-let rooms_known : Map[String, Int] = { "room": 219, "apart": 0, "hover": 0 }
+/// page's two keys, which the other windows already count, come into the wide windows' views: 4 more, 219. The model
+/// panel's accounts open over it a screen of its own (chat-model-accounts), what chat-model-pop has under it: its bar's
+/// agent key in the wide windows, 4 more, 223.)
+let rooms_known : Map[String, Int] = { "room": 223, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.
