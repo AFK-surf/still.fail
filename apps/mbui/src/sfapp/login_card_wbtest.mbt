@@ -241,3 +241,37 @@ test "a tap in a login card's code field that has the keyboard keeps it" {
   t.frame()
   assert_true(t.ctx().field_focused())
 }
+
+///|
+/// How long a step of the keyboard takes in keyboard_rises: a display's frame.
+let keyboard_step_ms : Double = 16.0
+
+///|
+/// The keyboard coming up over a phone's window a step at a time, as a host says it, the app laid out above it.
+fn keyboard_rises(t : @ui.Tester, h : Double) -> Unit {
+  for i in 1..=10 {
+    let up = h * i.to_double() / 10.0
+    t.set_ime_inset(up)
+    t.resize_next(390.0, 844.0 - up)
+    t.run_for(keyboard_step_ms)
+  }
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+test "a login card's field keeps in view as the keyboard comes up: under the bar, over the composer, not gone with the list" {
+  let calls : Array[Made] = []
+  let t = with_logins(login_core(calls, login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")])))
+  t.tap_text("粘贴登录码")
+  t.frame()
+  assert_true(t.ctx().field_focused())
+  keyboard_rises(t, 560.0)
+  guard t.rect_of("粘贴登录码") is Some((_, y, _, h)) else { fail("the field is gone from view") }
+  guard t.rect_of(@sf.t("web-main.composer.placeholder")) is Some((_, composer, _, _)) else { fail("no composer") }
+  assert_true(y >= @sfpages.bar_foot && y + h <= composer, msg="field at \{y}..\{y + h}, composer at \{composer}")
+  // (and with words typed in it)
+  t.type_text("ABC-123")
+  t.frame()
+  guard t.focused() is Some({ rect: (_, y2, _, h2), .. }) else { fail("the field let go of the focus") }
+  assert_true(y2 >= @sfpages.bar_foot && y2 + h2 <= composer, msg="field at \{y2}..\{y2 + h2}")
+}

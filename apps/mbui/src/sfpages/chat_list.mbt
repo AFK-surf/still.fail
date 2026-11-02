@@ -188,6 +188,9 @@ pub fn chat_list(
       // (short of the pane, its rows at its end by the composer: what comes pushes what is over it up from the first
       // message, never down till the pane is full and up from then: rows_steady.mbt)
       from_end=true,
+      // (a card's field kept in view with the keyboard up: out from under the bar and the composer)
+      clear_top=bar,
+      clear_foot=foot_room + ask_clear,
     )
     |> ignore
     let la = list_after(

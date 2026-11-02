@@ -56,6 +56,17 @@ struct ListState {
   // Follow.kt's anchor), `follow_margin` under the view's top; -1 none. The reader's scroll lets it go
   mut follow_item : Int
   mut follow_margin : Double
+  /// what covers its view's top and its foot where its rows go under them (a bar, a composer): a field kept in view
+  /// with the keyboard up is kept out from under them (Ctx::list_holds_field)
+  mut clear_top : Double
+  mut clear_foot : Double
+  /// the field with the focus, in a row of it as it was last laid out: its id, its row (-1 none), where that row stood
+  /// under the view's top, and where the field is in the row
+  mut field_id : Int
+  mut field_row : Int
+  mut field_row_y : Double
+  mut field_in : Double
+  mut field_h : Double
   // the frame it was last built in (one not built is shown by nothing: at rest), and the frame its own motions were
   // last stepped to (Ctx::list_step)
   mut built : Int

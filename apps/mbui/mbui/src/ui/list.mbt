@@ -435,6 +435,8 @@ fn Ctx::list_key(self : Ctx, id : Int, code : Int) -> Bool {
 /// its way to its new height has it now (list_size.mbt). `from_end`: rows short of
 /// its view stand at its end, the room left over them (a chat's: what comes pushes
 /// what is over it up from the first, as once it is full, never down then up).
+/// `clear_top`, `clear_foot`: what covers its view's ends, its rows going under it (a bar, a composer): a field in a
+/// row is kept out from under it while the keyboard is up (Ctx::list_holds_field).
 #callsite(autofill(loc))
 pub fn Ctx::list(
   self : Ctx,
@@ -450,6 +452,8 @@ pub fn Ctx::list(
   rows_read? : Bool = false,
   sized? : RowCauses,
   from_end? : Bool = false,
+  clear_top? : Double = 0.0,
+  clear_foot? : Double = 0.0,
   loc~ : SourceLoc,
 ) -> Int {
   let id = self.id(key)
@@ -484,6 +488,13 @@ pub fn Ctx::list(
         glide_meant: -1.0,
         follow_item: -1,
         follow_margin: 0.0,
+        clear_top,
+        clear_foot,
+        field_id: -1,
+        field_row: -1,
+        field_row_y: 0.0,
+        field_in: 0.0,
+        field_h: 0.0,
         built: -1,
         stepped: -1,
         fresh: true,
@@ -557,6 +568,8 @@ pub fn Ctx::list(
   st.from_end = from_end
   st.seed = self.id_seed
   st.bones = self.bones
+  st.clear_top = clear_top
+  st.clear_foot = clear_foot
   st.owner = self.owner
   st.vw = self.width
   st.vh = self.height
@@ -702,6 +715,7 @@ fn Ctx::place_list(
     st.began = now
     st.glide_began = (st.glide_t0, st.glide_l0, st.glide_rest, st.glide_left, st.glide_meant)
   }
+  self.list_holds_field(st, iy, iy + ih)
   st.laid = self.frame_no
   // rows built in the build phase (none, normally) are not shown
   n.first = -1
@@ -1012,8 +1026,81 @@ fn Ctx::place_list(
   // set on the device's pixels (where the list stands said above, as they are laid)
   self.rows_on_pixels(order)
   self.stick_in(li, order, iy)
+  self.list_finds_field(st, order, iy)
   // (whether it moves, as laid out: what is built from it told as that changes, Ctx::list_moving)
   st.moving_said.set(st.held || st.moving() || st.glide)
+}
+
+///|
+/// How far from what covers a list's view a field in it is kept with the keyboard up.
+let field_held_room : Double = 16.0
+
+///|
+/// The field with the focus in a row of list `st` stays in view while the keyboard is up (UIScrollView's, Compose's
+/// bringIntoView; a card's field in a chat: the list at its end would go up with the keyboard, the field with it, under
+/// the bar). The row is laid where it stood, moved only as far as it takes to clear what covers the view, its foot
+/// giving way to its top where the field does not fit between them. A finger scrolling lets go of the keyboard
+/// (Ctx::scroll_lets_go), so nothing here holds against the hand.
+fn Ctx::list_holds_field(self : Ctx, st : ListState, iy : Double, foot : Double) -> Unit {
+  guard st.field_row >= 0 &&
+    st.field_id == self.focus &&
+    st.field_row < st.count &&
+    self.dev.ime_inset > 0.0 &&
+    !st.held &&
+    !st.glide &&
+    st.pending == 0.0 else {
+    return
+  }
+  let y = iy + st.field_row_y + st.field_in
+  let d = dmin(foot - st.clear_foot - field_held_room - (y + st.field_h), 0.0)
+  let d = dmax(iy + st.clear_top + field_held_room - y, d)
+  st.anchor = st.field_row
+  st.anchor_off = -(st.field_row_y + d)
+  st.at_end = false
+}
+
+///|
+/// Node `i` or the one under it that is `id`, or -1.
+fn Ctx::node_under(self : Ctx, i : Int, id : Int) -> Int {
+  let n = self.nodes[i]
+  if n.id == id {
+    return i
+  }
+  let mut ch = n.first
+  while ch >= 0 {
+    let found = self.node_under(ch, id)
+    if found >= 0 {
+      return found
+    }
+    ch = self.nodes[ch].next
+  }
+  -1
+}
+
+///|
+/// Where the field with the focus stands in the rows of list `st` just laid out, for Ctx::list_holds_field: with touch,
+/// where the keyboard comes up on asking.
+fn Ctx::list_finds_field(self : Ctx, st : ListState, order : Array[Int], iy : Double) -> Unit {
+  if !self.editors.contains(self.focus) || !(pointing() is Finger) {
+    st.field_row = -1
+    return
+  }
+  for r in order {
+    let f = self.node_under(r, self.focus)
+    if f >= 0 {
+      let rn = self.nodes[r]
+      st.field_id = self.focus
+      st.field_row = rn.item
+      st.field_row_y = rn.y - iy
+      st.field_in = self.nodes[f].y - rn.y
+      st.field_h = self.nodes[f].fh
+      return
+    }
+  }
+  // (in no row laid: another field's, or its row's come out of view by another's doing, where it is still kept)
+  if st.field_id != self.focus {
+    st.field_row = -1
+  }
 }
 
 ///|
@@ -1460,6 +1547,9 @@ fn ListState::moved(self : ListState, at : Int, n : Int) -> Unit {
     self.heights.push(was[i])
   }
   self.resum()
+  if self.field_row >= at {
+    self.field_row = imax(at, self.field_row + n)
+  }
   if self.stick_end && self.at_end {
     return
   }

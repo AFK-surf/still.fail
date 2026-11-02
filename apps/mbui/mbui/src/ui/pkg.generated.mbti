@@ -1177,7 +1177,7 @@ pub fn Ctx::left_out(Self, Int32, loc~ : SourceLoc) -> Bool
 pub fn Ctx::lifetime(Self, String) -> @effect.Scope
 pub fn Ctx::lines(Self, Array[@paint.Line], w~ : Size, h~ : Size) -> Int32
 #callsite(autofill(loc))
-pub fn Ctx::list(Self, String, Int32, Double, (Int32) -> Unit, w? : Size, h? : Size, stick_end? : Bool, bg? : Int64, glide_on_growth? : Bool, rows_read? : Bool, sized? : RowCauses, from_end? : Bool, loc~ : SourceLoc) -> Int32
+pub fn Ctx::list(Self, String, Int32, Double, (Int32) -> Unit, w? : Size, h? : Size, stick_end? : Bool, bg? : Int64, glide_on_growth? : Bool, rows_read? : Bool, sized? : RowCauses, from_end? : Bool, clear_top? : Double, clear_foot? : Double, loc~ : SourceLoc) -> Int32
 pub fn Ctx::list_above(Self, Int32) -> Int32
 pub fn Ctx::list_follow_from(Self, String, Int32, margin? : Double) -> Unit
 pub fn Ctx::list_info(Self, String) -> ListInfo?
