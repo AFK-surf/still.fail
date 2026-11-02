@@ -27,7 +27,7 @@ pub(all) struct PopState {
 /// (its padding, its lines, what stands over and under this) is taken off, each read back as it is laid out. `style`:
 /// what it holds laid out in (its room in from the sides, its gaps; across the panel); `reach`: the box it scrolls in
 /// (out across the panel's padding, so that what it holds scrolls to the panel's sides). `key`: its scroll's (by default
-/// the panel's). Whether it scrolls so.
+/// the panel's); `for_field`: the field its choices are for, whose keyboard stays as they scroll. Whether it scrolls so.
 pub fn in_room(
   c : @ui.Ctx,
   s : PopState,
@@ -36,12 +36,13 @@ pub fn in_room(
   most? : Double = 1.0e9,
   style? : @ui.Style = room_across,
   reach? : @ui.Style = room_across,
+  for_field? : Int = 0,
 ) -> Bool {
   let (key, view, whole, tall, held) = room_of(c, s, key, most)
   let what = fn() { c.box(style~, id=whole, taps=false, body) |> ignore }
   c.box(style=reach, id=view, taps=false, fn() {
     if held {
-      c.capped(key, tall, what) |> ignore
+      c.capped(key, tall, for_field~, what) |> ignore
     } else {
       what()
     }

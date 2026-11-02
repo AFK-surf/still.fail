@@ -3,6 +3,28 @@
 // takes presses, counted), a field, rows taller than it can show, and a button "最后的按钮" last.
 
 ///|
+test "a finger scrolling a field's choices keeps that field's keyboard, but lets another field's go" {
+  for own in [true, false] {
+    let t = Tester::new(fn(c) {
+      let field = c.id("choice-field")
+      c.editor("choice-field", placeholder="查找") |> ignore
+      c.editor("other-field", placeholder="其他") |> ignore
+      c.capped("body", 150.0, for_field=field, fn() {
+        for i in 0..<8 {
+          c.box(w=Px(160.0), h=Px(40.0), fn() { c.text("选项 \{i}") |> ignore }) |> ignore
+        }
+      })
+      |> ignore
+    }, w=400.0, h=400.0, platform=2, pointing=Finger)
+    t.tap_text(if own { "查找" } else { "其他" })
+    assert_true(t.ime().0, msg="the chosen field starts with the keyboard")
+    let (x, y) = t.find("选项 2").unwrap()
+    t.drag(x + 5.0, y + 5.0, x + 5.0, y - 70.0)
+    assert_eq((capped_at() > 0.0, t.ime().0), (true, own))
+  }
+}
+
+///|
 /// The case, and how many times 上面的按钮 was pressed.
 fn capped_case() -> (Tester, Ref[Int]) {
   let pressed = Ref(0)
