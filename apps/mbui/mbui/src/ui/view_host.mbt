@@ -3926,10 +3926,8 @@ fn view_focus_lost(n : @view.NodeId) -> Unit {
   match tree_said_of.get(n) {
     Some(k) if c.focus == k => {
       c.focus = 0
-      // (what of the old views reads it told in the same change)
-      if !building.val {
-        hand_focus_said(c)
-      }
+      // (what of the old views reads it told in the same change, in a build too: Ctx::focus_moved's)
+      hand_focus_said(c)
       h_frame_owed()
     }
     _ => ()

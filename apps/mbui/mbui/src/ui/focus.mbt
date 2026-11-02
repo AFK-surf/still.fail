@@ -583,10 +583,11 @@ fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool) -> Unit {
   // (both sides told as one change)
   @signals.start_batch()
   focus_told_tree(self)
-  // (between builds, what of the old views reads it told now, with the tree's, the host owing a frame: what read it
-  // built again, nothing else; in a build, what the frame does with it, as before: hand_focus_said)
+  // (what of the old views reads it told now, with the tree's, in a build too: what read it as it was before (a field
+  // read without it, given it back in the same build) built again from it, nothing else; between builds, the host owing
+  // a frame for it)
+  hand_focus_said(self)
   if !building.val {
-    hand_focus_said(self)
     h_frame_owed()
   }
   @signals.end_batch()
