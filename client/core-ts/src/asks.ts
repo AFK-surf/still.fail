@@ -20,7 +20,9 @@ type J = any;
 
 /// still.fail cloud under its names: the released app's, the test channel's (youdid.wtf), ember's from before the rename.
 const CLOUD_HOSTS = ["app.still.fail", "app.youdid.wtf", "ember.3720.org"];
-const UPDATE_EVERY_MS = 60 * 60 * 1000;
+/// A newer build asked for again as the app is back on screen at most this often (2026-11-02 user: each time the phone
+/// comes back to it, five minutes apart at least); the person's own check is asked at once.
+const UPDATE_EVERY_MS = 5 * 60 * 1000;
 const PICTURES = 256;
 /// A picture that could not be fetched is not asked for again for this long: a Google account's, where Google cannot be
 /// reached, waited 15 s each time it was drawn, about half of a phone's.
