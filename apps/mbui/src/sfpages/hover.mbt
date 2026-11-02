@@ -230,8 +230,8 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
       |> ignore
     })
     c.semantics(w, Button, id=who, label=text(s, "agentText"))
-    // where it stands, after a dot in its tone, and for how long (three lines at most); a stop at its end while it
-    // works, what stopping is of (its working said short then: 进行中, 排队中)
+    // where it stands, after a dot in its tone, and for how long (three lines at most); a stop at its first line's end
+    // while it works, an icon as every stop of something running is (chat_rows' activity stop, a job's)
     c.box(style=agent_card_stands, fn() {
       c.box(style=agent_card_status, fn() {
         c.box(style=agent_card_dot_room, fn() {
@@ -538,7 +538,8 @@ fn tone_token(tone : String) -> @ui.Color {
 }
 
 ///|
-/// Stopping its turn, for it alone (AgentCard.css.ts stop): a pill 24 high, 10 in, the red's ground, its words 12.
+/// Stopping its turn, for it alone: its icon in the red on the red's ground, a circle, what it does in its tip; a
+/// spinner in its place while asked.
 fn agent_card_stop(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
   let skey = "stop/" + station + "/" + key
   let busy = doing(skey)
@@ -553,15 +554,16 @@ fn agent_card_stop(c : @ui.Ctx, src : Source, station : String, key : String) ->
       done=@sf.t("web-pages.chat.stopAsked"),
     )
   }
-  c.box(style=agent_card_stop_pill, id~, fn() {
+  let label = @sf.t("web-pages.chat.stopTurn")
+  @sf.tip(c, "agent-card/stop", id, label)
+  let b = c.box(style=agent_card_stop_box, id~, fn() {
     if busy {
-      @sf.spinner(c, size=11.0) |> ignore
+      @sf.spinner(c, size=agent_card_stop_icon) |> ignore
     } else {
-      @sf.icon(c, "stop", size=11.0, color=@sf.theme().p.red) |> ignore
+      @sf.icon(c, "stop", size=agent_card_stop_icon, color=@sf.theme().p.red) |> ignore
     }
-    c.text(@sf.t("web-pages.chat.stopTurn"), style=agent_card_stop_words) |> ignore
   })
-  |> ignore
+  c.semantics(b, Button, id~, label~)
 }
 
 ///|
@@ -788,14 +790,15 @@ let agent_card_name_room : @ui.Style = @ui.style(w=@sf.grow)
 let agent_card_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
-/// Where it stands and its stop, on one line: its words what the stop leaves.
+/// Where it stands and its stop, side by side: its words what the stop leaves, the stop by their first line.
 // kept across runs: a value (no field of it changes)
-let agent_card_stands : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+let agent_card_stands : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 
 ///|
-/// Where it stands: 14 in, its dot (6, in its tone) at the first line's middle.
+/// Where it stands: 14 in, its dot (6, in its tone) at the first line's middle; that line's middle (its words 20 high)
+/// the stop's (24), 2 down.
 // kept across runs: a value (no field of it changes)
-let agent_card_status : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=AStart, pl=S0_5)
+let agent_card_status : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=AStart, pl=S0_5, pt=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -915,12 +918,11 @@ let agent_card_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=
 let agent_card_notes : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
-/// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground.
+/// Its stop: a circle 24 on the red's ground (as its pill with words was), its icon 12.
 // kept across runs: a value (no field of it changes)
-let agent_card_stop_pill : @ui.Style = @ui.css(
-  #|row h=S6 px=S2_5 gap=S1_25 radius=Full align=ACenter bg=DangerBg hovered{bg=Hover}
+let agent_card_stop_box : @ui.Style = @ui.css(
+  #|w=S6 h=S6 radius=Full align=ACenter justify=JCenter bg=DangerBg hovered{bg=Hover}
 )
 
 ///|
-// kept across runs: a value (no field of it changes)
-let agent_card_stop_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Danger, wrap=false)
+let agent_card_stop_icon : Double = 12.0
