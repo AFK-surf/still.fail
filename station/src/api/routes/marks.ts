@@ -1,39 +1,18 @@
 // What a viewer marks on chats and sessions, written straight to the store (admin/mod.rs): read positions, names,
 // pins, keeping, dismissing, closing a card, widget states. What needs a running session (messages, archiving, stopping)
 // is the hub's (routes/hub.ts).
-import { type Request, type Answer, error, json, percentDecode } from "../request.ts";
+import { type Request, type Answer, error, segment, ok, Refused, input } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
 import { STILLFAIL_SURFACE, cardOfEntry } from "../../store/rows.ts";
 import type { Store } from "../../store/store.ts";
 
-const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
-const ok = (value: unknown) => json(200, JSON.stringify(value));
-class Refused extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 
 /// The most a widget's state takes, as JSON (web/src/Viz.tsx keeps no more); the most of its modelContent the agent
 /// is told, in characters.
 const WIDGET_STATE_MAX = 16384;
 const WIDGET_MODEL_MAX = 4000;
 
-/// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
-function input(r: Request): Record<string, unknown> {
-  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refused(400, "invalid JSON");
-  }
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
 
 /// A name given by hand (`title`): trimmed, at most 80 characters; none or empty is null.
 function title(i: Record<string, unknown>): string | null {

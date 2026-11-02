@@ -6,7 +6,7 @@
 // itself to the station while one is live.
 import type { DatabaseSync } from "node:sqlite";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
-import { CARD_OCCUPIED, cardPlace } from "../sessions/card-place.ts";
+import { CARD_OCCUPIED, cardPlace, postCard } from "../sessions/card-place.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 
 export type Scope = "hour" | "chat";
@@ -279,12 +279,7 @@ export class PhoneGrants {
           adb: { request: r.id, reason: r.reason, lasts },
         }
       : null;
-    const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
-    const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
-    if (requireEmpty && this.#d.hub.store.pendingCard(thread.thread.id) !== null) throw new Refused(CARD_OCCUPIED);
-    const [n] = this.#d.hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
-    this.#d.hub.shared(thread.thread.id, n!, session, text);
-    return card !== null ? posted : null;
+    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null);
   }
 
   /// How the station's adb holds `owner`'s phone changed (null: offered here no longer): said on the cards of their

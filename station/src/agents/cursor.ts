@@ -12,13 +12,13 @@
 //   stops it;
 // - the model is the SDK's selection, `id` or `id[param=value,…]`, set per prompt;
 // - the bridge keeps the transcript itself (<sessions>/<agent id>.jsonl), the turn's usage in it.
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { linkSync } from "../ops/links.ts";
 import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
+import { rulesFolder as folderOf } from "./rules-folder.ts";
 import { LiveFromCursor, chars, type CursorLiveState } from "./live.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, type TurnState, parseLine } from "./own-process.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
@@ -88,24 +88,8 @@ export function cursorKey(home: string): string | null {
 /// directory, with the skills of its workspace (`skills`) linked in as .cursor/skills: the SDK reads a folder it is given
 /// as a project's (rules, AGENTS.md, skills) without them being written into the person's project.
 export function rulesFolder(home: string, key: string, instructions: string, skills?: string): string {
-  const dir = join(cursorHome(home), "station", createHash("sha256").update(key).digest("hex").slice(0, 16));
-  mkdirSync(join(dir, ".cursor", "rules"), { recursive: true });
-  writeFileSync(join(dir, ".cursor", "rules", "stillfail.mdc"), `---\ndescription: still.fail station\nalwaysApply: true\n---\n${instructions}\n`);
-  const linked = (target: string, path: string) => {
-    if (!existsSync(target)) return;
-    rmSync(path, { recursive: true, force: true });
-    try {
-      // Where links are refused (Windows without Developer Mode), a junction.
-      linkSync(target, path, { junction: true, copy: true });
-    } catch (e) {
-      log.warn("agents::cursor", "the workspace's skills not linked for Cursor", { path, error: (e as Error).message });
-    }
-  };
-  // The skills of the session's workspace (agent-home.ts); its memory is told with the instructions. (An AGENTS.md
-  // linked here before was the profile home's, the home workspace's memory whatever the session's workspace: gone.)
-  rmSync(join(dir, "AGENTS.md"), { force: true });
-  if (skills !== undefined) linked(skills, join(dir, ".cursor", "skills"));
-  return dir;
+  const rule = `---\ndescription: still.fail station\nalwaysApply: true\n---\n${instructions}\n`;
+  return folderOf(cursorHome(home), key, ".cursor", { file: "stillfail.mdc", text: rule }, "Cursor", skills);
 }
 
 /// What failed a turn, from the SDK's error (its code first).

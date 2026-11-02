@@ -7,7 +7,7 @@ import { createHash, randomBytes, type Hash } from "node:crypto";
 import { appendFileSync, constants as fsConstants, copyFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { clean, fileName as nameOf, inside } from "../../ops/paths.ts";
-import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
+import { type Answer, type Request, error, json, param, segment, ok, Refused, input } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
@@ -39,15 +39,6 @@ import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";
 import { runtimeKind } from "../../agents/runtime.ts";
 
-const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
-const ok = (value: unknown, status = 200) => json(status, JSON.stringify(value));
-class Refused extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 /// A hub error the Rust maps to a status (`map_err(|e| http_error(status, e.to_string()))`).
 async function as<T>(status: number, f: () => T | Promise<T>): Promise<T> {
   try {
@@ -69,18 +60,6 @@ const DISK_SPARE = 1024 * 1024 * 1024;
 const PART_PREFIX = ".part-";
 const STAGED_FOR_MS = 24 * 3600 * 1000;
 
-/// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
-function input(r: Request): Record<string, unknown> {
-  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refused(400, "invalid JSON");
-  }
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
 
 /// `Input::text`: JavaScript's String(x ?? "") as serde writes it.
 const text = (v: unknown): string => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));

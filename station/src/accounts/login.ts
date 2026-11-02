@@ -34,6 +34,7 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { platform } from "../platform/index.ts";
+import { started } from "../platform/processes.ts";
 import { loopbackOf, urlsIn, webPage } from "../ops/command-output.ts";
 import type { LoginPages } from "../logins/pages.ts";
 
@@ -216,10 +217,7 @@ export class LoginManager {
     const id = profile.id;
     const r = platform.runnable(command, args, env);
     const child = spawn(r.file, r.args, { cwd: profile.home, env, stdio: ["pipe", "pipe", "pipe"], windowsVerbatimArguments: r.windowsVerbatimArguments, windowsHide: true });
-    const spawned = await new Promise<Error | null>((resolve) => {
-      child.once("spawn", () => resolve(null));
-      child.once("error", (e) => resolve(e));
-    });
+    const spawned = await started(child);
     if (spawned) {
       // Recorded like any other failure, so the page shows why.
       const failed: LoginJob = { ...job, state: "failed", error: tr(lang, "station.login.cannotRun", { error: spawned.message }) };

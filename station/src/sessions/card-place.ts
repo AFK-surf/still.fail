@@ -17,3 +17,22 @@ export function cardPlace(store: CardStore, session: string, thread: number | nu
 }
 
 export const CARD_OCCUPIED = "Another card is pending in that conversation. Resolve or withdraw it before asking this again.";
+
+/// What a long-lived operation posts its card through: the session's chat's surface, and the store it keeps it in.
+export type CardHub = {
+  store: CardStore & { insertMessage(m: Record<string, unknown>): readonly unknown[] };
+  chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: never[]): Promise<string> };
+  shared(thread: number, n: number, session: string, text: string): void;
+};
+
+/// Says `text` in `thread` as `session`'s agent, with `card` (null on a surface without cards): posted, then kept as
+/// the agent's message; when another card came meanwhile, `occupied`'s refusal (where given). The card's ts, or null
+/// with none.
+export async function postCard(hub: CardHub, session: string, thread: SessionThread, text: string, card: unknown | null, occupied: ((why: string) => Error) | null): Promise<string | null> {
+  const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
+  const posted = await hub.chat(thread.connect).post(here, text, []);
+  if (occupied !== null && hub.store.pendingCard(thread.thread.id) !== null) throw occupied(CARD_OCCUPIED);
+  const [n] = hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
+  hub.shared(thread.thread.id, n as number, session, text);
+  return card !== null ? posted : null;
+}

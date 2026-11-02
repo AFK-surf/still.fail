@@ -64,3 +64,32 @@ const JSON_HEADERS = { "content-type": "application/json", "cache-control": "no-
 
 export const json = (status: number, text: string): Answer => ({ status, headers: { ...JSON_HEADERS }, body: Buffer.from(text) });
 export const error = (status: number, message: string): Answer => json(status, JSON.stringify({ error: message }));
+
+/// A path segment as the pages send it (a + is a +).
+export const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
+
+/// A value answered as JSON.
+export const ok = (value: unknown, status = 200) => json(status, JSON.stringify(value));
+
+/// What a request is refused, and with which status (admin/mod.rs `http_error`): every route's, and the stores'
+/// readers' (read/views.ts HttpError).
+export class Refused extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
+export function input(r: Request): Record<string, any> {
+  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
+  if (r.body.length === 0) return {};
+  let value: unknown;
+  try {
+    value = JSON.parse(r.body.toString("utf8"));
+  } catch {
+    throw new Refused(400, "invalid JSON");
+  }
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : {};
+}

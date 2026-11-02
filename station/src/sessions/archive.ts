@@ -44,6 +44,7 @@ import { constants, createZstdCompress, createZstdDecompress, zstdCompress } fro
 import { createHash } from "node:crypto";
 import { platform } from "../platform/index.ts";
 import { SEGMENT, seekTable, segmented, segmentsFrom } from "../read/packed.ts";
+import { readAt } from "../drive/fs.ts";
 
 // ── paths ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -405,14 +406,8 @@ async function sameBytes(copy: AsyncIterable<Buffer>, path: string) {
   try {
     let at = 0;
     for await (const chunk of copy) {
-      const mine = Buffer.allocUnsafe(chunk.length);
-      let got = 0;
-      while (got < chunk.length) {
-        const { bytesRead } = await file.read(mine, got, chunk.length - got, at + got);
-        if (bytesRead === 0) break;
-        got += bytesRead;
-      }
-      if (got < chunk.length) throw new Error("transcript shortened while archiving");
+      const mine = await readAt(file, at, chunk.length);
+      if (mine.length < chunk.length) throw new Error("transcript shortened while archiving");
       if (!mine.equals(chunk)) throw new Error(`transcript changed while archiving ${path}`);
       at += chunk.length;
     }

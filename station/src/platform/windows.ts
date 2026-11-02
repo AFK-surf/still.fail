@@ -8,7 +8,7 @@ import { delimiter, dirname, join, win32 } from "node:path";
 import { createConnection } from "node:net";
 import { stat } from "node:fs/promises";
 import { promisify } from "node:util";
-import { holder, pidAlive, runnerBinary } from "./processes.ts";
+import { holder, osCpuTicks, pidAlive, runnerBinary } from "./processes.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { pressureOfAvailable, trim } from "./text.ts";
 
@@ -260,16 +260,7 @@ const sameFile = (a: string, b: string) => {
 
 /// What Node's os says (the same counters Task Manager reads): Windows has neither /proc nor sysctl.
 const host: Host = {
-  cpuTicks() {
-    const all = cpuList();
-    if (all.length === 0) return null;
-    let [busy, total] = [0, 0];
-    for (const { times: t } of all) {
-      busy += t.user + t.sys + t.nice;
-      total += t.user + t.sys + t.idle + t.nice;
-    }
-    return [busy, total];
-  },
+  cpuTicks: osCpuTicks,
   memory: () => ({ totalBytes: totalmem(), usedBytes: Math.max(totalmem() - freemem(), 0), swapUsedBytes: null }),
   cpuModel: () => trim(cpuList()[0]?.model ?? ""),
   uptimeSec: () => Math.round(osUptime()),

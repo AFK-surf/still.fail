@@ -9,7 +9,7 @@ import { readOnly } from "../../mesh/credential.ts";
 import { type Drive, DriveError } from "../../drive/drive.ts";
 import { type Conflict, type Transfers, shown } from "../../drive/transfers.ts";
 import { GRANT_MS, type Granted, sign } from "../../drive/grants.ts";
-import { driveOf, refused } from "./drive.ts";
+import { body, driveOf, refused } from "./drive.ts";
 
 export type TransferRouteDeps = {
   drive: Drive;
@@ -24,14 +24,6 @@ export type TransferRouteDeps = {
 };
 
 const anywhere = (r: Request) => !readOnly(r.viewer);
-
-function body(r: Request): Record<string, any> {
-  try {
-    const v = JSON.parse(r.body.toString("utf8") || "{}");
-    if (v !== null && typeof v === "object" && !Array.isArray(v)) return v;
-  } catch {}
-  throw new DriveError("invalid_request", "a JSON object");
-}
 
 const text = (v: unknown, name: string): string => {
   if (typeof v !== "string") throw new DriveError("invalid_request", `${name} is required`);

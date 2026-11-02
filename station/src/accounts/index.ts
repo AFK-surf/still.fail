@@ -52,6 +52,7 @@ import { OUTDATED, uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, codexUsage, lentCodexUsage, machineUsage } from "./quota.ts";
+import { Refused as Refusal } from "../api/request.ts";
 
 export { checkConfig } from "./check.ts";
 export type { LoginJob, MachineLogin, ProfileCheck, ProfileQuota };
@@ -77,14 +78,8 @@ const PENDING_KEPT_MS = 15 * 60_000;
 const POLICY_DAYS = 7;
 const POLICY_CHATS = 20;
 
-/// What the pages are refused, and with which status (admin/mod.rs `http_error`).
-export class Refusal extends Error {
-  readonly status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+/// What the pages are refused, and with which status (admin/mod.rs `http_error`): the routes' own.
+export { Refusal };
 
 /// What a check is asked: the account and where it signs in (its home, or a trial one for a key being tried).
 export type CheckRequest = { runtime: Runtime; kind: AccessKind; key: string; via: Via; home: string; machine: boolean; login?: boolean };

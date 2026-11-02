@@ -15,7 +15,7 @@
 import { basename } from "node:path";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
-import type { ProcessInfo } from "../platform/index.ts";
+import { type ProcessInfo, treeOf } from "../platform/index.ts";
 
 export const LOOK_MS = 5000;
 /// A page asked this recently: looked at every LOOK_MS.
@@ -68,12 +68,7 @@ export type ResourceOptions = {
 /// Each process's whose: the jobs' groups first, then the runners, the app, the station, each with all under it; then
 /// what is left that names a chat's directory.
 export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, "jobs" | "isApp" | "self">, runners: readonly Runner[], args?: Map<number, string> | null, places: readonly Place[] = []): Map<number, Whose> {
-  const children = new Map<number, number[]>();
-  const byPid = new Map<number, ProcessInfo>();
-  for (const p of table) {
-    byPid.set(p.pid, p);
-    if (p.pid !== p.ppid) children.set(p.ppid, [...(children.get(p.ppid) ?? []), p.pid]);
-  }
+  const { byPid, children } = treeOf(table);
   const out = new Map<number, Whose>();
   const give = (roots: number[], whose: Whose) => {
     for (const queue = [...roots]; queue.length > 0; ) {
