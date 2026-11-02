@@ -1160,3 +1160,14 @@ test "a picture looked at on an iPhone Duo over a page of its own actions there 
   let people = nav_icon_of(t, "over/screen-people", field="title").unwrap_or("")
   assert_true(people.contains("韩梅梅"), msg="the screen's as it said it last: \{people}")
 }
+
+///|
+test "an iPhone Duo on its side: a finger's swipe across the page, wherever on it, brings the sidebar over, the hand not going to the window's edge" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  @sfdesk.bring_page()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  t.drag(500.0, 400.0, 700.0, 400.0, steps=8)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+}

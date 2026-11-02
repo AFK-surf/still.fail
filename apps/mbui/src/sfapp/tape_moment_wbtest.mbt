@@ -753,3 +753,88 @@ test "中屏: back from another place's sidebar chosen as its gesture begins (to
   }
   assert_eq(back_once(false, true), back_once(true, true))
 }
+
+///|
+/// On the tape with touch (`platform`) the chat's page in use (brought over; the side panel too, in use back on the page,
+/// where `side`), a finger dragged from the middle of the page by (dx, dy) and let go: the panel in use at rest.
+fn tape_swiped_on_page(dx : Double, dy : Double, side? : Bool = false, platform? : Int = 2) -> @sfdesk.TapePane raise {
+  let t = tape_chat(platform, 720.0, 840.0, width="medium", height="medium")
+  page_over(t, 720.0)
+  if side {
+    tap_said(t, "打开侧栏")
+    t.leave()
+    t.run_for(@ui.move_most_ms)
+    @sfdesk.bring_page()
+    t.run_for(@ui.move_most_ms)
+  }
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  t.drag(360.0, 400.0, 360.0 + dx, 400.0 + dy, steps=8)
+  t.run_for(@ui.move_most_ms)
+  @sfdesk.wide.tape_at.get()
+}
+
+///|
+test "on the tape a finger's swipe across the page in use brings what is beside it over, from wherever on the page; not up or down, nor at a slant, nor a pointer's" {
+  // (to the right, the sidebar; to the left, the side panel where it is open)
+  assert_eq(tape_swiped_on_page(200.0, 0.0), @sfdesk.TapePane::Side)
+  assert_eq(tape_swiped_on_page(-200.0, 0.0, side=true), @sfdesk.TapePane::Panel)
+  // (none open: nothing that way)
+  assert_eq(tape_swiped_on_page(-200.0, 0.0), @sfdesk.TapePane::Page)
+  // (a chat scrolled, straight or at a slant)
+  assert_eq(tape_swiped_on_page(0.0, -200.0), @sfdesk.TapePane::Page)
+  assert_eq(tape_swiped_on_page(150.0, -200.0), @sfdesk.TapePane::Page)
+  // (a pointer's drag on the page picks words: platform 0 keyboard and mouse)
+  assert_eq(tape_swiped_on_page(200.0, 0.0, platform=0), @sfdesk.TapePane::Page)
+}
+
+///|
+test "on the tape a finger's short swipe let go slowly goes back; quick, it is flung over" {
+  let t = tape_chat(2, 720.0, 840.0, width="medium", height="medium")
+  page_over(t, 720.0)
+  t.press_at(360.0, 400.0)
+  t.advance(@ui.input_step_ms * 40.0)
+  t.move(380.0, 400.0)
+  t.advance(@ui.input_step_ms * 40.0)
+  t.move(390.0, 400.0)
+  assert_eq(@sfdesk.wide.tape_pull.get(), Some(@sfdesk.TapePane::Side))
+  t.advance(@ui.input_step_ms * 40.0)
+  t.release(390.0, 400.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_pull.get(), None)
+  t.drag(360.0, 400.0, 420.0, 400.0, steps=3)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+}
+
+///|
+test "on the tape a table with further to go takes a finger's swipe across it first; at its start, going right, the sidebar comes" {
+  new_run()
+  let src = fixture("chat-md")
+  // (a window narrow enough for the table to go past the page's words, the side panel open beside it)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=600.0, h=840.0, platform=2)
+  say_room(t, "medium", "medium")
+  t.run_for(@ui.move_most_ms)
+  page_over(t, 600.0)
+  tap_said(t, "打开侧栏")
+  t.leave()
+  t.run_for(@ui.move_most_ms)
+  @sfdesk.bring_page()
+  t.run_for(@ui.move_most_ms)
+  let cell = "只排可见的行"
+  let (x, y) = t.drawn_of(cell).unwrap()
+  // (to the left: the table's, the side panel staying where it is)
+  t.drag(x + 200.0, y, x + 50.0, y, steps=8)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  let (moved, _) = t.drawn_of(cell).unwrap()
+  assert_true(moved < x, msg="\{(moved, x)}")
+  // (back to its start, then on: the sidebar's from a swipe begun there)
+  t.drag(x + 50.0, y, x + 350.0, y, steps=8)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  t.drag(x + 50.0, y, x + 350.0, y, steps=8)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+}
