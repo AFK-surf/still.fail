@@ -59,14 +59,18 @@ test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, th
 }
 
 ///|
-test "a profile's models, a narrow page with a mouse: all it runs listed, none to tick; one named by hand added, then taken off by its ×" {
+test "a profile's models, a narrow page with a mouse: how many in a row; all of them in a panel, each a box to star; one named by hand added there, then taken off by its ×" {
   let t = setting_tester(Profile("ws1/st1", "cx"), 390.0)
-  scrolled_to(t, 390.0, "O9-MINI")
-  assert_true(t.find("GPT-6-MINI") is Some(_) && t.find("O9-MINI") is Some(_), msg="every one it runs")
-  assert_true(t.find("全部 12 个") is None, msg="as few as shown whole")
+  scrolled_to(t, 390.0, "全部模型")
+  assert_true(t.find("12 个模型") is Some(_), msg="how many")
+  assert_true(t.find("GPT-6-MINI") is None, msg="not laid out on the page")
+  t.tap_text("全部模型")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(@sf.presenting(), msg="a panel")
+  assert_true(t.find("GPT-6-MINI") is Some(_), msg="every one it runs")
+  assert_true(t.query(Checkbox, label="喜欢 GPT-6-MINI") is Some(_), msg="its box")
   assert_true(t.query(Button, label="移除 GPT-6-MINI") is None, msg="one its provider lists: not taken off")
   // a name typed, then 添加
-  scrolled_to(t, 390.0, "按名称添加模型")
   t.tap_text("按名称添加模型")
   t.type_text("my-model")
   t.frame()
@@ -74,13 +78,12 @@ test "a profile's models, a narrow page with a mouse: all it runs listed, none t
   tap_words(t, "添加")
   t.frame()
   t.frame()
-  scrolled_to(t, 390.0, "MY-MODEL")
-  assert_true(t.find("MY-MODEL") is Some(_), msg="the model named, among the rest")
+  assert_true(t.query(Button, label="移除 MY-MODEL") is Some(_), msg="the model named, among the rest")
   // its × takes it off again
   t.click(Button, label="移除 MY-MODEL")
   t.frame()
   t.frame()
-  assert_true(t.find("MY-MODEL") is None, msg="taken off")
+  assert_true(t.query(Button, label="移除 MY-MODEL") is None, msg="taken off")
 }
 
 ///|
@@ -94,6 +97,7 @@ fn long_profile(s : Source) -> Source {
         let ms : Array[Json] = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5", "claude-haiku-5"]
         p["name"] = "claude5@jimmfly.example.com"
         p["models"] = Json::array(ms)
+        p["modelsText"] = "4 个模型"
         p["available"] = Json::array(ms)
         p["names"] = { "claude-fable-5-1": "Fable 5.1", "claude-opus-5-5": "Opus 5.5", "claude-sonnet-5": "Sonnet 5", "claude-haiku-5": "Haiku 5" }
         p["series"] = [{ "name": "Claude", "models": Json::array(ms) }]
@@ -134,7 +138,7 @@ fn long_profile(s : Source) -> Source {
 }
 
 ///|
-test "a profile's page on a phone: its long name, its figures on one line and its models' names whole, nothing squeezed" {
+test "a profile's page on a phone: its long name, its figures on one line and how many models it runs, nothing squeezed" {
   // (326, the page android 0.1.6389 cut its name, its Tokens figure and its models' names on, 2026-10-31)
   for w in [326.0, 390.0] {
     let t = setting_tester(Profile("ws1/st1", "cc"), w, platform=2, over=long_profile, h=2400.0)
@@ -142,7 +146,7 @@ test "a profile's page on a phone: its long name, its figures on one line and it
     let faults = t.squeeze_faults().filter(fn(f) { !f.contains("for what shares their row") })
     assert_eq(faults, [], msg=w.to_string() + faults.join("; "))
     assert_true(t.find("模型请求次数") is None && t.find("输入、缓存和输出") is None, msg="\{w}: no calls, nor what tokens are")
-    for f in ["$1,735", "49.7 亿", "最多 Opus 5.5", "Fable 5.1", "Opus 5.5", "Sonnet 5", "Haiku 5"] {
+    for f in ["$1,735", "49.7 亿", "最多 Opus 5.5", "4 个模型"] {
       assert_true(t.find(f) is Some(_), msg="\{w}: \{f}")
     }
     // its figures side by side

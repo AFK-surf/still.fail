@@ -679,7 +679,7 @@ export class Choose implements Owner {
     // panel (`near`): a chat's or a new chat's, of the station's own models.
     const scope = ofAddress(station);
     const history = arr(this.#record(`ws:${scope}:frequent`));
-    const likedKeys = this.#liked(scope);
+    const likedKeys = this.#liked(scope, station);
     const uses = new Map<string, number>();
     for (const h of history) {
       const found = optionOf(options, text(get(h, "model")));
@@ -763,9 +763,23 @@ export class Choose implements Owner {
     return [...out.values()].sort((a, b) => Number(a.id === "") - Number(b.id === ""));
   }
 
-  /// The models starred in `scope` (`ws:<scope>:liked`, kept on this device), by key, the first starred first.
-  #liked(scope: string): string[] {
-    return arr(this.#record(`ws:${scope}:liked`)).filter((k): k is string => typeof k === "string");
+  /// The models starred in `scope` (`ws:<scope>:liked`, kept on this device), by key, the first starred first. None ever
+  /// starred here: those the workspace's profiles name in config.json, ticked on before every model a profile's check
+  /// found ran (2026-11-02 用户「以前的模型选择变成已经点过的勾」), kept once one is starred or unstarred.
+  #liked(scope: string, station: string | null = null): string[] {
+    const kept = this.#record(`ws:${scope}:liked`);
+    if (kept !== undefined) return arr(kept).filter((k): k is string => typeof k === "string");
+    const out: string[] = [];
+    // (the control's own station's overview first, then the workspace's others as `stations` has them)
+    const overviews = [station !== null ? this.#env.store.get({ topic: "overview", station }) : undefined, ...arr(this.#env.store.get({ topic: "stations", scope })).map((s) => get(s, "overview"))];
+    for (const ov of overviews) {
+      for (const p of arr(get(ov, "profiles"))) {
+        // (a station of before `named`: what it ran was what was ticked on)
+        const named = Array.isArray(get(p, "named")) ? p.named : arr(get(p, "models"));
+        for (const m of named) if (typeof m === "string" && !out.includes(model.key(m))) out.push(model.key(m));
+      }
+    }
+    return out;
   }
 
   /// `pick.like`: model `model` starred (`liked`) or not in the workspace of the control's station: listed in every
@@ -774,7 +788,7 @@ export class Choose implements Owner {
     if (m === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "model" }));
     const scope = ofAddress(station);
     const key = model.key(m);
-    const now = this.#liked(scope).filter((k) => k !== key);
+    const now = this.#liked(scope, station).filter((k) => k !== key);
     if (liked) now.push(key);
     this.#env.data.put(TABLE, `ws:${scope}:liked`, now, false);
     this.#changed();

@@ -1719,7 +1719,6 @@ web-pages.profiles.background
 web-pages.profiles.backgroundOff
 web-pages.profiles.backgroundOn
 web-pages.profiles.checkedAt
-web-pages.profiles.allModels
 web-pages.profiles.collapse
 web-pages.profiles.removeModel
 web-pages.profiles.copiedReopen
