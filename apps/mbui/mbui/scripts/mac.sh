@@ -20,11 +20,15 @@ case "${1:-build}" in
     # PATH that moon uses for every C step, all but that one passed through; MBC_SPLIT=0 compiles it whole)
     # (moon's own time and how many tasks it ran said after it, beside mbc's: chk keeps only the errors, and a release's
     # app took 35-75 s with no unit compiled, the rest not told apart, 2026-11-01)
-    mkdir -p out && rm -f out/mbc.log
+    # (and the packages it compiled again, by their .core made: a release's 51 tasks where one page had changed, main
+    # 85827dca, 2026-11-02, the rest not told apart)
+    mkdir -p out && rm -f out/mbc.log && touch out/moon.start
     t0=$SECONDS
     PATH="$("$D/mbc" shim "$PWD/out/mbc/bin"):$PATH" MBC_LOG=$PWD/out/mbc.log \
       moon build --target native $FLAG src/$PKG 2>&1 | tee out/moon.log | "$D/chk" errs
     echo "mac.sh: moon's build in $((SECONDS - t0)) s: $(grep -E '^Finished' out/moon.log | tail -1)"
+    echo "mac.sh: compiled again: $(find _build/native/$MODE/build -name '*.core' -newer out/moon.start 2>/dev/null |
+      sed -E 's#.*/build/##; s#/[^/]+[.]core$##' | sort | tr '\n' ' ')"
     cat out/mbc.log 2>/dev/null || true
     ls -la $EXE ;;
   run)
