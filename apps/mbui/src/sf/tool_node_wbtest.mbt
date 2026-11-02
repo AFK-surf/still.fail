@@ -337,6 +337,55 @@ test "a tool as a node's tip: shown at once as the keyboard's focus shows on it;
 }
 
 ///|
+test "a node's tip and an old view's tip share the window: each new cause replaces the other" {
+  let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
+  let t = tools_tester(said, @signals.signal(page_viewer_ink()), {})
+  let visible = fn() { t.semantics().filter(fn(s) { s.role == Tooltip && !s.hidden }).map(fn(s) { s.label }) }
+  let old = t.get(Button, label="复制 old")
+  let node = t.get(Button, label="复制 new")
+  t.tab()
+  assert_eq(visible(), ["复制 new"], msg="the keyboard's focused node")
+  t.run_for(tip_settled_ms)
+  let node_tip = t.get(Tooltip, label="复制 new").rect
+  assert_true(!drawn_within(t, node_tip).is_empty(), msg="the focused node's tip is painted")
+  t.move(old.rect.0 + 16.0, old.rect.1 + 16.0)
+  t.run_for(tip_delay_ms)
+  assert_eq(visible(), ["复制 old"], msg="the old view took the slot")
+  assert_true(drawn_within(t, node_tip).is_empty(), msg="the displaced node's tip stops painting at the switch")
+  t.run_for(tip_settled_ms)
+  assert_eq(visible(), ["复制 old"], msg="the focused node does not take the slot back")
+  let old_tip = t.get(Tooltip, label="复制 old").rect
+  assert_true(!drawn_within(t, old_tip).is_empty(), msg="the old view's tip is painted")
+  t.move(node.rect.0 + 16.0, node.rect.1 + 16.0)
+  t.draw()
+  assert_eq(visible(), ["复制 new"], msg="a new cause on the still-focused node took it back")
+  assert_true(drawn_within(t, old_tip).is_empty(), msg="the displaced old view's tip stops painting at the switch")
+  t.move(old.rect.0 + 16.0, old.rect.1 + 16.0)
+  t.run_for(tip_delay_ms + tip_settled_ms)
+  assert_eq(visible(), ["复制 old"], msg="the slot can pass back again")
+}
+
+///|
+test "tips in different layers, even on the same anchor, share the window's slot" {
+  let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    let a = root.box(fn(v) {
+      v.width(Is(Some(80.0))).height(Is(Some(40.0))).focusable(Is(true)).says(Is(Some(@view.said(Button, label="A")))) |> ignore
+    })
+    let first = TipLayer::new(fn() { Some(root) })
+    let second = TipLayer::new(fn() { Some(root) })
+    tip_node(first, a, fn() { "First tip" }) |> ignore
+    tip_node(second, a, fn() { "Second tip" }) |> ignore
+  })
+  t.draw()
+  t.tab()
+  t.draw()
+  let visible = t.semantics().filter(fn(s) { s.role == Tooltip && !s.hidden })
+  assert_eq(visible.length(), 1, msg="one tip for the window, even with separate layers and the same anchor")
+}
+
+///|
 /// A while past a tip's coming or going (its fade over), and a moment short of its time.
 let tip_settled_ms : Double = 200.0
 
