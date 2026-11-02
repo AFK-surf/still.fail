@@ -1076,18 +1076,17 @@ test("thread_events_append_entries_and_refresh_summaries", async () => {
   core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
   await read();
   assert.deepEqual(texts(values), ["a", "b"]);
-  // New entries (an edit among them), in one burst: appended at once, one known already skipped; the summary is
-  // read once after it.
+  // New entries (an edit among them), in one burst: appended at once, one known already skipped; the summary made
+  // from them here (station/thread-after.ts), not read.
   push("thread", { id: 7, entries: [entry(13, "c")] });
   push("thread", { id: 7, entries: [entry(13, "c"), entry(14, "d"), edit(15, 12, "b 改了")] });
   await read();
   assert.deepEqual(nums(values), [11, 12, 13, 14, 15]);
   assert.deepEqual(texts(values), ["a", "b 改了", "c", "d"]);
   assert.equal(page(values).last, 15);
-  assert.equal(gets(host, "/admin/api/threads/7"), 0, "waits for the burst to end");
   await coalesce(host);
-  assert.equal(gets(host, "/admin/api/threads/7"), 1);
-  assert.equal(threadsOf(core)[0].unread, 2);
+  assert.equal(gets(host, "/admin/api/threads/7"), 0);
+  assert.deepEqual([threadsOf(core)[0].last, threadsOf(core)[0].unread, threadsOf(core)[0].lastMessage.text], [15, 0, "d"], "the viewer's own messages: none unread");
   // A thread not listed yet comes in, first (its last message is the newest).
   push("thread", { id: 8, entries: [{ ...entry(20, "x"), thread: 8 }] });
   await coalesce(host);
