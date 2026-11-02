@@ -96,6 +96,7 @@ int main(void) {
         id hinge = service(0xff61, 0x5b, NO), buttons = service(0x0b, 1, YES);
         if (!vendor || !keyboard || !hinge || !buttons) { fprintf(stderr, "Duo HID service unavailable\n"); return 1; }
         usleep(300000); // Allow backboardd to enumerate the new services.
+        puts("READY"); fflush(stdout); // (DuoHIDBridge waits for this before its first command)
         char *line = NULL; size_t capacity = 0;
         while (getline(&line, &capacity, stdin) > 0) {
             @autoreleasepool {
