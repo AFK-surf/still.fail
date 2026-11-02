@@ -158,7 +158,9 @@ cp out/core/core.hbc "$APPDIR/Contents/Resources/core.hbc"
 cp "$ICON.icns" "$APPDIR/Contents/Resources/AppIcon.icns"
 cp "$ICON.assets/Assets.car" "$APPDIR/Contents/Resources/Assets.car"
 # the oldest macOS the program runs on, as it was linked: the one asked for
-MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" { print $2; exit }')
+# (awk reads otool's output to its end: one that stopped at the first minos left otool writing into a closed pipe,
+# which pipefail took for a failure now and then: main 199e1d03 and 40c02d09's desktop, 41408771483, 2026-11-02)
+MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" && m == "" { m = $2 } END { print m }')
 [ "$MINOS" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "mac-app.sh: linked for macOS $MINOS, not $MACOSX_DEPLOYMENT_TARGET" >&2; exit 1; }
 PLIST=$APPDIR/Contents/Info.plist
 plutil -create xml1 "$PLIST"
