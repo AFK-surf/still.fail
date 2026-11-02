@@ -22,7 +22,6 @@ import {
   "stillfail/sfdesk",
   "stillfail/sfpages",
   "stillfail/sffixture",
-  "moonbitlang/core/double",
 }
 
-import { "stillfail/sfkept", "stillfail/sfscreens", "moonbitlang/core/cmp" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"
