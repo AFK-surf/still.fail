@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use windows_sys::Win32::Foundation::{
-    CloseHandle, DUPLICATE_SAME_ACCESS, DuplicateHandle, ERROR_BROKEN_PIPE, ERROR_IO_PENDING, ERROR_NO_DATA, ERROR_PIPE_CONNECTED,
+    CloseHandle, DUPLICATE_SAME_ACCESS, DuplicateHandle, ERROR_BROKEN_PIPE, ERROR_IO_PENDING, ERROR_NO_DATA, ERROR_PIPE_CONNECTED, FILETIME,
     ERROR_PIPE_NOT_CONNECTED, GetHandleInformation, GetLastError, HANDLE, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, LocalFree, STATUS_INFO_LENGTH_MISMATCH,
     STILL_ACTIVE, SetHandleInformation,
 };
@@ -39,7 +39,7 @@ use windows_sys::Win32::System::Pipes::{
 };
 use windows_sys::Win32::System::Threading::{
     CREATE_BREAKAWAY_FROM_JOB, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, CreateEventW, GetCurrentProcess,
-    GetExitCodeProcess, OpenProcess, OpenProcessToken, OpenThread, PROCESS_QUERY_LIMITED_INFORMATION, ResumeThread, THREAD_SUSPEND_RESUME,
+    GetExitCodeProcess, GetProcessTimes, OpenProcess, OpenProcessToken, OpenThread, PROCESS_QUERY_LIMITED_INFORMATION, ResumeThread, THREAD_SUSPEND_RESUME,
     INFINITE, TerminateProcess,
 };
 
@@ -170,14 +170,32 @@ pub fn alive(pid: i32) -> bool {
     // SAFETY: a handle of ours, closed after.
     unsafe {
         let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid as u32);
+        // Gone, or not ours to look at (a system service given its pid): no runner of this user's.
         if process.is_null() {
-            // There, but not ours to look at: alive.
-            return GetLastError() == windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED;
+            return false;
         }
         let mut code = 0;
         let ok = GetExitCodeProcess(process, &mut code) != 0;
         CloseHandle(process);
         ok && code == STILL_ACTIVE as u32
+    }
+}
+
+/// When a process started, in ms since the epoch, if that can be told.
+pub fn started_ms(pid: i32) -> Option<u64> {
+    /// A FILETIME's 1601 to the epoch's 1970.
+    const EPOCH_MS: u64 = 11_644_473_600_000;
+    // SAFETY: a handle of ours, closed after; the times are written to these locals.
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid as u32);
+        if process.is_null() {
+            return None;
+        }
+        let [mut created, mut exited, mut kernel, mut user] = [FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 }; 4];
+        let ok = GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) != 0;
+        CloseHandle(process);
+        let hundred_ns = (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime);
+        ok.then(|| (hundred_ns / 10_000).saturating_sub(EPOCH_MS))
     }
 }
 

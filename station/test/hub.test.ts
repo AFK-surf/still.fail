@@ -515,6 +515,28 @@ test("a turn that cannot start is not left starting, and stop clears what is sti
   await r.close();
 });
 
+test("a turn that cannot start is said once until a person speaks, whatever the reason each time", async () => {
+  const r = new Rig();
+  r.claude.refuses = "the runner did not start: one";
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const said = () => r.chat.posts.filter((p: any) => String(p[1]).startsWith("⚠️")).length;
+  assert.equal(said(), 1);
+  r.claude.refuses = "the runner did not start: another";
+  r.hub.notify(key, "a job ended");
+  await settle();
+  r.claude.refuses = "the runner did not start: one";
+  r.hub.notify(key, "a job ended");
+  await settle();
+  assert.equal(said(), 1);
+  await r.accept(message({ ts: "1700000099.000000", threadTs: m.threadTs }));
+  await settle();
+  assert.equal(said(), 2);
+  await r.close();
+});
+
 test("claude auth retries once, then reports the profile and does not loop", async () => {
   const r = new Rig();
   const m = message();
