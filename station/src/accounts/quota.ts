@@ -19,6 +19,7 @@ import { claudeOAuthToken } from "./oauth.ts";
 import { RenewRefused } from "./console.ts";
 import { type ProfileQuota, type QuotaWindow, URLS, type Urls } from "./profiles.ts";
 import { profileFetch } from "../ops/agent-env.ts";
+import { codexQuotaFailure } from "../../../client/core-ts/src/codex-quota.ts";
 
 type Json = any;
 
@@ -215,6 +216,17 @@ function failed(error: unknown, lang: Lang): ProfileQuota {
   return quota(blocked(detail) ? "blocked" : "unavailable", [], detail);
 }
 
+/// Codex's app-server wraps the provider response in RPC JSON. Do not show that response as the reason.
+function codexFailed(error: unknown, lang: Lang): ProfileQuota {
+  if (unanswered(error)) return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  const failure = codexQuotaFailure(error instanceof Error ? error.message : String(error));
+  if (failure.kind === "login") return { ...quota("unavailable", [], tr(lang, "station.quota.codexLogin")), signedOut: true };
+  if (failure.kind === "network") return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  if (failure.kind === "blocked") return quota("blocked", [], tr(lang, "station.quota.codexBlocked"));
+  if (failure.kind === "status") return quota("unavailable", [], tr(lang, "station.quota.codexStatus", { status: failure.status }));
+  return quota("unavailable", [], tr(lang, "station.quota.codexFailed"));
+}
+
 /// Asks the provider. `codexRateLimits` reaches the profile's codex app-server; `env` is the station's (for a machine
 /// profile's login). Never throws: what went wrong is an unavailable (or blocked) allowance.
 export async function checkQuota(profile: Profile, env: Env, codexRateLimits: CodexRateLimits | undefined, urls: Urls = URLS, lang: Lang = stationLang()): Promise<ProfileQuota> {
@@ -233,8 +245,12 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
     // Nor does the Devin CLI say its account's quota to a program (only its own /usage shows it).
     if (profile.runtime === "devin") return quota("unsupported", [], tr(lang, "station.quota.devinUnsupported"));
     if (profile.runtime === "claude") return await claudeWithRefresh(env, profile.machine === true ? null : profile.home, urls, lang);
-    if (!codexRateLimits) throw new Error("no codex app-server to ask");
-    return codexQuota(await codexRateLimits(profile), lang);
+    try {
+      if (!codexRateLimits) throw new Error("no codex app-server to ask");
+      return codexQuota(await codexRateLimits(profile), lang);
+    } catch (e) {
+      return codexFailed(e, lang);
+    }
   } catch (e) {
     return failed(e, lang);
   }

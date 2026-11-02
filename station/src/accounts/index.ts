@@ -192,6 +192,8 @@ export class Accounts {
   private checks = new Map<string, ProfileCheck>();
   private quotas = new Map<string, ProfileQuota>();
   private quotaBusy = new Map<string, Promise<void>>();
+  /// A quota read started before a Codex sign-in must not replace the new login's status.
+  private loginGeneration = new Map<string, number>();
   /// OpenCode Console and Kimi tokens being renewed, by profile (a refresh token is spent once).
   private renewing = new Map<string, Promise<void>>();
   private pending = new Map<string, Pending>();
@@ -839,13 +841,21 @@ export class Accounts {
   /// A profile just signed in: checked (which lists its models, all of them run) and its allowance read, so its page
   /// shows them at once.
   private afterSignIn(id: string) {
+    const profile = this.profile(id);
+    // A completed Codex sign-in replaces the login which the provider refused. If the allowance service happens to be
+    // unreachable now, keep the new sign-in's status; a new refusal will mark it again.
+    if (profile?.runtime === "codex" && accessKind(profile) === "subscription") {
+      this.loginGeneration.set(id, (this.loginGeneration.get(id) ?? 0) + 1);
+      this.codexLogin(id, false);
+    }
     this.background.spawn(async () => {
       try {
         await this.check(id);
       } catch (e) {
         log.warn("accounts", "check after sign-in failed", { profile: id, error: (e as Error).message });
       }
-      await this.refreshQuota(id);
+      // A reading started before the new sign-in must finish before its own is asked.
+      await this.readQuota(id, true);
     });
   }
 
@@ -881,6 +891,18 @@ export class Accounts {
     this.checks.set(id, check);
     this.deps.store.setProfileCheck(id, check);
     this.changed();
+  }
+
+  /// A Codex provider refusal outlives `codex login status`, which only sees that a local token exists. A successful
+  /// provider allowance read clears it. Keep the last known models and capabilities for the account pool.
+  private codexLogin(id: string, revoked: boolean, lang: Lang = stationLang()) {
+    const before = this.checks.get(id);
+    if (revoked) {
+      this.keepCheck(id, { ...(before ?? { models: null, checkedAt: 0 }), state: "login", detail: tr(lang, "station.quota.codexLogin"), codexRevoked: true });
+    } else if (before?.codexRevoked) {
+      const { codexRevoked: _, ...kept } = before;
+      this.keepCheck(id, { ...kept, state: "ok", detail: tr(lang, "station.profile.signedIn") });
+    }
   }
 
   /// POST /profiles/:id/check: asks the provider or runtime whether the profile works, its models, its reasoning levels
@@ -941,6 +963,12 @@ export class Accounts {
       const login = this.machineLogins().find((l) => l.runtime === profile.runtime && l.loggedIn);
       if (typeof login?.plan === "string" && login.plan.trim() !== "") check.plan = login.plan.trim();
     }
+    const previous = this.checks.get(id);
+    if (codexSubscription && previous?.codexRevoked) {
+      check.state = "login";
+      check.detail = previous.detail;
+      check.codexRevoked = true;
+    }
     this.keepCheck(id, check);
     // One never asked yet (just made, however): its allowance now, not at the next round.
     if (check.state === "ok" && !this.quotas.has(id)) this.background.spawn(() => this.refreshQuota(id));
@@ -995,6 +1023,7 @@ export class Accounts {
   private async askQuota(id: string): Promise<ProfileQuota | null> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    const generation = this.loginGeneration.get(id) ?? 0;
     // Another station's subscription: a Codex one's is read with the login its host lent while that is good; otherwise
     // (none lent yet, run out, refused) it comes with its host's check.
     if (borrowed(profile) && accessKind(profile) === "subscription" && this.deps.shared) {
@@ -1012,12 +1041,16 @@ export class Accounts {
     }
     if (!this.quotaFn) return this.quotas.get(id) ?? null;
     const { signedOut, ...asked } = await this.quotaFn(profile);
+    if ((this.loginGeneration.get(id) ?? 0) !== generation) return this.quotas.get(id) ?? null;
     const read = { ...asked, checkedAt: this.background.now() };
     this.quotas.set(id, read);
     this.deps.store.setProfileQuota(id, read);
     this.changed();
     // Its login found over: its check says so, and the pool passes it over (as a Console or Kimi sign-in refused).
-    if (signedOut && this.checks.get(id)?.state !== "login") this.background.spawn(() => this.check(id).catch(() => undefined));
+    if (profile.runtime === "codex" && accessKind(profile) === "subscription") {
+      if (signedOut) this.codexLogin(id, true);
+      else if (read.state === "ok") this.codexLogin(id, false);
+    } else if (signedOut && this.checks.get(id)?.state !== "login") this.background.spawn(() => this.check(id).catch(() => undefined));
     return read;
   }
 
