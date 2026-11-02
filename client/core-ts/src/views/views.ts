@@ -564,7 +564,7 @@ export class Views implements Owner {
   /// seconds from each, made every station's anew, the list and the new chat's view after it (50-80 ms a time on a
   /// phone, 2026-10-31).
   readonly #stationShown = new Map<string, { overview: unknown; minute: number; shown: J; host: unknown; presented: J }>();
-  /// The live views that show agents' requests about vault items (a chat's cards, the 奏 page's), by the view: the
+  /// The live views that show agents' requests about vault items (a chat's cards), by the view: the
   /// requests, each in its workspace, and how they were answered here when it was made (`#vaultCard`), so that a change
   /// of the vault shows it again only where it changes what the cards say (`vaultChanged`).
   readonly #vaultShown = new Map<string, { topic: Topic; asks: { ws: string; ask: VaultAskOf }[]; said: string }>();

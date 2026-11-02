@@ -521,7 +521,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
           : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark kind={item.originKind} size={14} /></span></Tip>}</span>}
       </span>
       <span className={css.mChatLine2}>
-        {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
+        {/* Where it stands, when the core has words for it (待处理 · …, 要你帮忙：…, 做完了), instead. */}
         <span className={css.mChatLast}>{stateLine(item)
           ? <span className={css.mLast}><WaitingText slot alert={item.unsent === true} text={stateLine(item)!} lead={rowLead(item)} leadText={item.stateLeadText} rest={item.stateRest} className={css.mLastText} /></span>
           : item.last && <LastMessage item={item} />}</span>

@@ -469,7 +469,7 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   const v = chats.value;
   const all = v.days.flatMap((d: J) => d.items);
   const of = (id: string) => all.find((r: J) => r.id === id);
-  assert.deepEqual([of("k1").tone, of("k1").decision.text], ["wait", "奏 · k1 要合吗？"]);
+  assert.deepEqual([of("k1").tone, of("k1").decision.text], ["wait", "待处理 · k1 要合吗？"]);
   assert.deepEqual([of("k2").tone, of("k2").decision.dismissed, of("k2").decision.text], [undefined, true, undefined]);
   const m = marks.value;
   assert.deepEqual([m.workspaces.ws.wait, m.workspaces.ws.alert, m.workspaces.ws.label], [2, 0, "2 个待你处理"]);
@@ -479,7 +479,7 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   // says it).
   assert.deepEqual([m.badge, m.workspaces.ws.badge], [1, 1]);
   assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName]), [["wait", "k1", 5, "studio"]]);
-  assert.equal(m.workspaces.ws.items[0].text, "奏 · k1 要合吗？", "its row's line");
+  assert.equal(m.workspaces.ws.items[0].text, "待处理 · k1 要合吗？", "its row's line");
   assert.equal(m.workspaces.ws.items[0].what, "k1 要合吗？", "the same without its lead");
 });
 
@@ -616,7 +616,7 @@ test("a_text_card_is_on_its_row_whatever_its_agent_does", async () => {
   const of = (id: string) => all.find((r: J) => r.id === id);
   const k1 = of("k1");
   // A line that asks for a decision only says so: the chat leads to its post, not the row.
-  assert.deepEqual([k1.stateText, k1.stateAbout, k1.tone], ["奏 · Stripe 的测试 key 是多少？", undefined, "wait"]);
+  assert.deepEqual([k1.stateText, k1.stateAbout, k1.tone], ["待处理 · Stripe 的测试 key 是多少？", undefined, "wait"]);
   assert.deepEqual([k1.decision.card.type, k1.card], ["text", undefined]);
   const k2 = of("k2");
   assert.deepEqual([k2.stateText, k2.stateAbout, k2.tone], ["需要你处理：要 key", undefined, "wait"]);
@@ -1585,7 +1585,7 @@ test("a_chats_decisions_show_their_options_and_where_they_stand", async () => {
   assert.deepEqual(m[3].decision, { resolved: false });
   assert.deepEqual([m[1].card.type, m[3].card], ["options", { type: "options", options: [{ label: "C" }], assigneeText: "尚未指定决策人" }]);
   assert.equal(m[0].decision, undefined);
-  assert.equal(v.decision.text, "奏 · 那 C 呢？");
+  assert.equal(v.decision.text, "待处理 · 那 C 呢？");
   assert.equal(v.archivable, undefined);
   // The card is in the chat: its line is not said at the end of the messages.
   assert.equal(v.stateText, undefined);
