@@ -43,7 +43,7 @@ import { promisify } from "node:util";
 import { constants, createZstdCompress, createZstdDecompress, zstdCompress } from "node:zlib";
 import { createHash } from "node:crypto";
 import { platform } from "../platform/index.ts";
-import { SEGMENT, seekTable, segmented, segmentsFrom, storedFrame } from "../read/packed.ts";
+import { SEGMENT, seekTable, segmented, segmentsFrom } from "../read/packed.ts";
 
 // ── paths ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -245,8 +245,7 @@ async function compressInto(path: string, source: AsyncIterable<Buffer>): Promis
 const zstd = promisify(zstdCompress);
 
 /// `source` put away into `path` as a transcript is (read/packed.ts): a frame for each SEGMENT of it (up to the end of
-/// its last line), compressed as `compressor` does, the rest as it is, then the frames' table; on disk before this
-/// returns.
+/// its last line), each compressed as `compressor` does, then the frames' table; on disk before this returns.
 async function segmentInto(path: string, source: AsyncIterable<Buffer>): Promise<void> {
   const file = await open(path, "w", 0o600);
   try {
@@ -255,15 +254,14 @@ async function segmentInto(path: string, source: AsyncIterable<Buffer>): Promise
     let held: Buffer[] = [];
     let n = 0;
     // A segment ends at the end of its last line within SEGMENT (as zork's at a snapshot): what comes after goes on in
-    // the next. One is made only once more than SEGMENT came, so the last, however long the transcript, is never empty
-    // and is the one stored as it is.
+    // the next. One is made only once more than SEGMENT came, so the last, however long the transcript, is never empty.
     const frame = async (last: boolean) => {
       const all = Buffer.concat(held, n);
       const cut = last ? all.length : all.lastIndexOf(0x0a, SEGMENT - 1) + 1 || SEGMENT;
       const raw = all.subarray(0, cut);
       held = cut < all.length ? [all.subarray(cut)] : [];
       n = all.length - cut;
-      const bytes = last ? storedFrame(raw) : await zstd(raw, { params: { [constants.ZSTD_c_compressionLevel]: 3, [constants.ZSTD_c_checksumFlag]: 1 } });
+      const bytes = await zstd(raw, { params: { [constants.ZSTD_c_compressionLevel]: 3, [constants.ZSTD_c_checksumFlag]: 1 } });
       await writeAll(file, bytes);
       frames.push({ packed: bytes.length, size: raw.length });
     };
@@ -372,8 +370,8 @@ export async function packFileIf(path: string, ready: () => boolean): Promise<vo
   }
 }
 
-/// A transcript put away before it was in segments (read/packed.ts) put away again in them, as `packFile` puts one away
-/// now: whether it was.
+/// A transcript put away before it was in segments, or with its last segment stored as it is (read/packed.ts), put away
+/// again as `packFile` puts one away now: whether it was.
 export async function segmentFile(path: string): Promise<boolean> {
   const release = await fileLock(withExtension(path, "jsonl.archive-lock"));
   try {

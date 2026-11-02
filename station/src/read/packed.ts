@@ -1,12 +1,14 @@
-// A transcript put away (sessions/archive.ts `packFile`) is in segments as zork keeps a session's events (HOOLC/zork
+// A transcript put away (sessions/archive.ts `packFile`) is in segments as zork keeps a session's sealed events (HOOLC/zork
 // docs/design/agent-runtime.md, SEGMENT-01): each about SEGMENT bytes of it, ending at the end of a line, compressed
-// once; the last, what is read most, stored as it is. Here they are zstd frames of the one file the runtime's
-// transcript is put away as (every reader finds it as `<file>.zst`), then a table of the frames' sizes (zstd's seekable
-// format: a skippable frame, which zstd readers pass over). A page of a history, read from the mark before it,
-// decompresses the segment or two it is in, and the latest pages none: not the whole transcript (one is 150 MB) each
-// time. Read whole, it is read a segment at a time too: Node 24.15's zstd (Studio's) gives the first of several frames
-// and stops. One put away before the table (2026-11) has none and is read whole, until it is put away again in segments
-// (sessions/cold.ts `segmentHistories`).
+// once. Put away, a transcript is no longer written in, so every segment is sealed and compressed (the raw segment
+// zork keeps is the one still being written: here that is the runtime's own .jsonl, before it is put away). They are
+// zstd frames of the one file the transcript is put away as (every reader finds it as `<file>.zst`), then a table of
+// the frames' sizes (zstd's seekable format: a skippable frame, which zstd readers pass over). A page of a history, read
+// from the mark before it, decompresses the segment or two it is in: not the whole transcript (one is 150 MB) each time.
+// Read whole, it is read a segment at a time too: Node 24.15's zstd (Studio's) gives the first of several frames and
+// stops. One put away before the table (2026-11), or with its last segment stored as it is (0.1.6800 to 0.1.6802: most
+// transcripts are one segment, so they were not compressed at all), is put away again (sessions/cold.ts
+// `segmentHistories`).
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import { type FileHandle, open } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -18,36 +20,15 @@ const unzstd = promisify(zstdDecompress);
 export const SEGMENT = 16 << 20;
 
 const FRAME_MAGIC = 0xfd2fb528;
+/// The frame header descriptor of a segment stored as it is (0.1.6800–0.1.6802): content size in 8 bytes, one segment.
+const STORED = 0xe0;
 const SKIPPABLE = 0x184d2a5e;
 const SEEKABLE = 0x8f92eab1;
 const FOOTER = 9;
-/// The most a raw block holds (zstd's Block_Maximum_Size).
-const BLOCK = 128 << 10;
 
 /// A frame of a put-away transcript: where it is in the file (`at`, `packed` bytes) and what it holds of the transcript
 /// (`size` bytes from `from`).
 export type Frame = { at: number; packed: number; from: number; size: number };
-
-/// A zstd frame holding `bytes` as they are (raw blocks): what is read most is not decompressed.
-export function storedFrame(bytes: Buffer): Buffer {
-  const blocks = Math.max(1, Math.ceil(bytes.length / BLOCK));
-  const out = Buffer.alloc(4 + 1 + 8 + blocks * 3 + bytes.length);
-  out.writeUInt32LE(FRAME_MAGIC, 0);
-  // Its content size in 8 bytes, one segment (no window descriptor), no checksum, no dictionary.
-  out[4] = 0xe0;
-  out.writeBigUInt64LE(BigInt(bytes.length), 5);
-  let at = 13;
-  for (let i = 0; i < blocks; i++) {
-    const piece = bytes.subarray(i * BLOCK, Math.min(bytes.length, (i + 1) * BLOCK));
-    const head = (piece.length << 3) | (i === blocks - 1 ? 1 : 0);
-    out[at] = head & 0xff;
-    out[at + 1] = (head >> 8) & 0xff;
-    out[at + 2] = (head >> 16) & 0xff;
-    piece.copy(out, at + 3);
-    at += 3 + piece.length;
-  }
-  return out;
-}
 
 /// The table that ends a put-away transcript: each frame's size in the file and of the transcript.
 export function seekTable(frames: { packed: number; size: number }[]): Buffer {
@@ -188,12 +169,19 @@ export function unpackedWhole(path: string): Buffer {
   }
 }
 
-/// Whether a put-away transcript has its table (else it is read whole).
+/// Whether a put-away transcript is in segments as it is put away now: with its table, and every segment compressed (a
+/// frame stored as it is says, in its header, one segment with its content size and nothing else).
 export function segmented(path: string): boolean {
   try {
     const file = openSync(path, "r");
     try {
-      return framesOf(file) !== null;
+      const frames = framesOf(file);
+      const stored = (f: Frame) => {
+        if (f.packed < 5) return false;
+        const head = bytesAt(file, f.at, 5);
+        return head.readUInt32LE(0) === FRAME_MAGIC && head[4] === STORED;
+      };
+      return frames !== null && !frames.some(stored);
     } finally {
       closeSync(file);
     }

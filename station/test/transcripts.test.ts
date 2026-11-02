@@ -2,12 +2,12 @@
 // (src/read/transcripts.ts).
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { appendFileSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, rmSync, writeFileSync, writeSync, closeSync } from "node:fs";
+import { appendFileSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync, closeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { zstdCompressSync } from "node:zlib";
-import { SEGMENT, framesOf, segmented, unpackedWhole } from "../src/read/packed.ts";
+import { SEGMENT, framesOf, seekTable, segmented, unpackedWhole } from "../src/read/packed.ts";
 import { ChainTail, MARK_EVERY, PIECE, TranscriptTail } from "../src/read/tail.ts";
 import { READING, brief, readTimeline } from "../src/read/transcript.ts";
 import { chainOf, entriesOf, forgetKept, lengthOf } from "../src/read/transcripts.ts";
@@ -177,7 +177,7 @@ test("a transcript put away is in segments: a page decompresses the segments it 
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("however long a transcript put away is, its last segment is not empty and is stored as it is", async () => {
+test("however long a transcript put away is, every segment of it is compressed and the last is not empty", async () => {
   const dir = temp();
   const line = `${"z".repeat(1023)}\n`;
   for (const size of [0, 1024, SEGMENT - 1024, SEGMENT, SEGMENT + 1024, SEGMENT * 2]) {
@@ -186,17 +186,40 @@ test("however long a transcript put away is, its last segment is not empty and i
     await packFile(path);
     const file = openSync(`${path}.zst`, "r");
     const frames = framesOf(file)!;
-    const last = frames.at(-1)!;
-    const head = Buffer.alloc(5);
-    readSync(file, head, 0, 5, last.at);
     closeSync(file);
     assert.equal(frames.reduce((n, f) => n + f.size, 0), size);
-    assert.ok(size === 0 || last.size > 0, `${size}: the last segment holds something`);
-    assert.equal(head[4], 0xe0, `${size}: the last segment is stored as it is`);
+    assert.ok(size === 0 || frames.at(-1)!.size > 0, `${size}: the last segment holds something`);
+    // Put away, none is kept as it is: one line over and over compresses to well under a hundredth.
+    assert.ok(frames.every((f) => f.packed < Math.max(512, f.size / 100)), `${size}: every segment compressed`);
+    assert.ok(segmented(`${path}.zst`));
     assert.ok(frames.slice(0, -1).every((f) => f.size <= SEGMENT && f.size % 1024 === 0), `${size}: segments end at lines`);
     assert.equal(frames.length, Math.max(1, Math.ceil(size / SEGMENT)));
     assert.deepEqual(unpackedWhole(`${path}.zst`), Buffer.from(line.repeat(size / 1024)));
   }
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a transcript put away with its last segment stored as it is (0.1.6800 to 0.1.6802) is put away again compressed", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const text = Buffer.from(`${"z".repeat(1023)}\n`.repeat(64));
+  // As those versions wrote it: one frame of raw blocks with its content size, then the table.
+  const head = Buffer.alloc(13);
+  head.writeUInt32LE(0xfd2fb528, 0);
+  head[4] = 0xe0;
+  head.writeBigUInt64LE(BigInt(text.length), 5);
+  const block = Buffer.alloc(3);
+  const word = (text.length << 3) | 1;
+  [block[0], block[1], block[2]] = [word & 0xff, (word >> 8) & 0xff, (word >> 16) & 0xff];
+  const frame = Buffer.concat([head, block, text]);
+  writeFileSync(`${path}.zst`, Buffer.concat([frame, seekTable([{ packed: frame.length, size: text.length }])]));
+  assert.ok(!segmented(`${path}.zst`));
+  assert.deepEqual(unpackedWhole(`${path}.zst`), text);
+  assert.equal(await segmentFile(path), true);
+  assert.ok(segmented(`${path}.zst`));
+  assert.ok(statSync(`${path}.zst`).size < 1024);
+  assert.deepEqual(unpackedWhole(`${path}.zst`), text);
+  assert.equal(await segmentFile(path), false);
   rmSync(dir, { recursive: true, force: true });
 });
 
