@@ -344,6 +344,8 @@ pub(all) struct Message {
   author : String
   text : String
   md : Json?
+  /// a person's words in runs, as the core reads them (refLinks.ts personWords: message_words.mbt words_runs)
+  words : Json?
   attachments : Array[Attachment]
   quotes : Array[Quote]
   created_at : Double
@@ -395,6 +397,7 @@ pub fn message_of(m : Json) -> Message {
     author: text(s, "author"),
     text: text(s, "text"),
     md: field(s, "md"),
+    words: field(s, "words"),
     attachments: items(s, "attachments").map(attachment_of),
     quotes: items(s, "quotes").map(quote_of),
     created_at: number(s, "createdAt"),
