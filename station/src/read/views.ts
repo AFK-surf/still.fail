@@ -121,7 +121,7 @@ export function slackConnectOf(t: ThreadSummary): string | null {
 }
 
 /// The name a chat has been given: by people, else by its agent.
-function given(thread: ThreadRow): string | null {
+export function given(thread: ThreadRow): string | null {
   return [thread.title, thread.autoTitle].filter((s): s is string => s !== null).map(trim).find((s) => s !== "") ?? null;
 }
 

@@ -16,7 +16,7 @@ import { CREATE, MAX_OPEN, NOTICE, createForPeer, noticeForPeer } from "../src/s
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { forPeer } from "../src/sessions/others.ts";
 import { makeStore } from "../src/read/store.ts";
-import { chats } from "../src/read/views.ts";
+import { chats, untitled } from "../src/read/views.ts";
 import { FETCHED, fileForPeer, putForPeer } from "../src/sessions/peer-files.ts";
 import { packWorkspaceIf } from "../src/sessions/archive.ts";
 import { roomOf } from "../src/sessions/footprint.ts";
@@ -1482,5 +1482,26 @@ test("station_* reach the transport, pretty-printed; adb_devices and feedback_se
   assert.equal(await feedback.run(key, { to: "EMBER/1.1", title: "chat_post fails", body: "it said 500", area: "station", reporter: "Ada" }), "Sent to the still.fail team as FB-7.");
   assert.deepEqual([sent[0].area, sent[0].context.session, sent[0].context.thread, sent[0].context.link], ["station", key, "EMBER/1.1", "https://x/o/1"]);
   await assert.rejects(feedbackTools(r.store, () => null, () => null)[0]!.run(key, { title: "a", body: "b" }), /not connected to still.fail cloud/);
+  await r.close();
+});
+
+test("a chat is headed as the chat list calls it: its name, the agent's, else 新对话; never its first message", async () => {
+  const r = new Rig({ link: true });
+  const a = say("<@UBOT> ship it\nand tell me");
+  await r.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  // A Slack thread: by the first line said in it.
+  assert.equal(sender(r.hub, keyA)[0], "ship it");
+  await r.call(keyA, "chat_create", { key: "android", text: "看 [一起排查](https://x/o/1) 要排队", title: "安卓构建" });
+  const child = r.store.openedBy(keyA)[0]!.child;
+  const thread = r.store.homeChat(child)!;
+  assert.equal(sender(r.hub, child)[0], "安卓构建");
+  // (chat_create names its session too)
+  r.store.setThreadTitle(thread.id, null);
+  r.store.setTitle(child, null);
+  assert.equal(sender(r.hub, child)[0], untitled());
+  r.store.setAutoTitle(thread.id, "安卓发版", true);
+  assert.equal(sender(r.hub, child)[0], "安卓发版");
   await r.close();
 });

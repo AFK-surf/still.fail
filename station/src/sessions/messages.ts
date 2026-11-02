@@ -4,6 +4,7 @@
 // message; they answer the same way. Nothing limits how long two agents talk: that is theirs to judge.
 import { threadAddress } from "../agents/instructions.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
+import { given, titleOf } from "../read/views.ts";
 import { type Attachment, STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import { type Args, jsString, slackWithFiles } from "./args.ts";
 import { attach } from "./conversations.ts";
@@ -47,8 +48,11 @@ export function sender(hub: Hub, key: string): [string, string | null] {
   try {
     thread = sessionThreadOf(hub, key).thread;
   } catch {}
-  const title = [thread?.title ?? thread?.autoTitle ?? null, row.title].find((t) => t !== null && t !== undefined);
-  const shown = title !== undefined && title !== null && title.trim() !== "" ? title : key;
+  // As the chat list calls it (read/views.ts titleOf): a session's own title only where its chat was never named.
+  const named = thread === null ? null : given(thread);
+  const own = row.title?.trim() || null;
+  const first = thread === null || named !== null || own !== null || thread.surface === STILLFAIL_SURFACE ? null : (hub.store.listThreads("", null, thread.id)[0]?.firstText ?? null);
+  const shown = named ?? own ?? (thread !== null ? titleOf(thread, first, null) : key);
   return [shown, hub.link(key) ?? null];
 }
 

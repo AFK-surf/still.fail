@@ -6,6 +6,7 @@
 import { tr, stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { ThreadRow } from "../store/rows.ts";
+import { titleOf } from "../read/views.ts";
 import { threadAddress } from "../agents/instructions.ts";
 import type { ChatSurface, Member, Place, ThreadRef } from "./chat.ts";
 import type { Connect } from "./config.ts";
@@ -176,7 +177,7 @@ export async function relay(hub: Hub, thread: ThreadRow, relayer: Relayer, targe
     if (members.length > 0) throw new Error("another chat's agent is in that thread: it cannot be relayed there");
   }
   const lang = stationLang();
-  const title = thread.title ?? thread.autoTitle ?? tr(lang, "station.relay.untitled");
+  const title = titleOf(thread, null, null);
   const page = hub.link(session) ?? null;
   const from = page !== null ? `[${title.replace(/[[\]]/g, "")}](${page})` : title;
   // Those @-mentioned in it by name, as the platform mentions them (asked of it only then).
