@@ -85,6 +85,28 @@ test "文件 and 用量 at the bar's top, their gear tapped: as 设置 comes in 
 }
 
 ///|
+test "the panel drawn up by a finger: the bar and the panel drawn up clear of the finger, a finger taken where they are laid out; let go, back down" {
+  let t = tester("home")
+  let (xs, y) = bar_places_at()
+  // the bar's glass (as wide as the bar: not the ball's, nor the lens'): where its foot is drawn
+  let foot = fn() {
+    t.drawn_glass_corners().fold(init=0.0, fn(a, g) { if g.2 > 300.0 { dmax(a, g.1 + g.3) } else { a } })
+  }
+  let rest = foot()
+  t.press_at(xs[0], y)
+  for i in 1..=20 {
+    t.move(xs[0], y - 64.0 * i.to_double() / 20.0)
+  }
+  t.run_for(@ui.move_most_ms)
+  let held = foot()
+  // a finger's place is where the rows are laid out: let go over the other bar's row, that bar
+  t.release(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(((rest - held).round(), (rest - foot()).round()), (bar_raise, 0.0))
+  assert_true(app.nav.top() == Place("archive"))
+}
+
+///|
 test "the bar: drawn up, the panel of the other bar; let go on its first place, that bar and 已归档" {
   let t = tester("home")
   let (xs, y) = bar_places_at()

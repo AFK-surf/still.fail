@@ -44,6 +44,11 @@ let lift : Double = 4.0
 let fillet : Double = 8.0
 
 ///|
+/// How far the bar and its panel are drawn up while a finger draws the panel up (BarModel::up), clear of the finger: a
+/// fingertip's width. Only drawn so: where a finger is taken stays where the bar is laid out.
+let bar_raise : Double = 44.0
+
+///|
 let bar_row : Double = 56.0
 
 ///|
@@ -676,6 +681,8 @@ priv struct BarModel {
   o : Spr
   k : Spr
   held : Spr
+  /// drawn up out from under the finger drawing the panel up (1), back as it lets go (bar_raise)
+  up : Spr
   /// the bar shown, the ball shown and its size
   vis : Glide
   ball_alpha : Glide
@@ -731,6 +738,7 @@ let bar : BarModel = {
   o: spr(0.0, 260.0, 17.0, "bar/o"),
   k: spr(1.0, 300.0, 30.0, "bar/k"),
   held: spr(0.0, 420.0, 16.0, "bar/held"),
+  up: spr(0.0, 260.0, 17.0, "bar/up"),
   vis: glide("vis", 0.0),
   ball_alpha: glide("ball-alpha", 1.0),
   ball_scale: glide("ball-scale", 1.0),
@@ -768,6 +776,7 @@ fn bar_reset() -> Unit {
   bar.o.back(0.0, 260.0, 17.0)
   bar.k.back(1.0, 300.0, 30.0)
   bar.held.back(0.0, 420.0, 16.0)
+  bar.up.back(0.0, 260.0, 17.0)
   back_glide(bar.vis, 0.0)
   back_glide(bar.ball_alpha, 1.0)
   back_glide(bar.ball_scale, 1.0)
@@ -818,7 +827,7 @@ fn BarModel::k_now(self : BarModel) -> Double {
 /// Where everything is this frame, by what it was told before (Bar.kt: told as it is composed, it moves from there).
 fn BarModel::sample(self : BarModel) -> Unit {
   let now = bar_clock.now
-  for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
+  for s in [self.o, self.k, self.held, self.up, self.ball_x, self.ball_y] {
     s.sample(now)
   }
   for g in [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap] {
@@ -835,7 +844,7 @@ fn BarModel::sample(self : BarModel) -> Unit {
 /// waits for midway: there a test asks the end of the one path it looks at, not of the whole bar.
 fn BarModel::rest(self : BarModel) -> Double {
   let mut e = -1.0
-  for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
+  for s in [self.o, self.k, self.held, self.up, self.ball_x, self.ball_y] {
     e = dmax(e, s.end())
   }
   let gs = [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap]
@@ -869,7 +878,7 @@ pub fn bar_landed() -> Double {
 ///|
 /// Everything where it is going, at once (the first frame; reduced motion).
 fn BarModel::jump(self : BarModel) -> Unit {
-  for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
+  for s in [self.o, self.k, self.held, self.up, self.ball_x, self.ball_y] {
     s.put(s.to)
   }
   for g in [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap] {
@@ -1448,6 +1457,8 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
   }
   // held: the ball a lens
   m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0, at~)
+  // the panel drawn up by a finger: all of it drawn up out from under the finger, back down as it lets go
+  m.up.go(if m.holds { 1.0 } else { 0.0 }, 260.0, 17.0, at~)
   // each place lit as it is the one under the finger, else the one shown, in the bar and in the panel's rows (300 ms,
   // CSS's ease); one come anew as it is; a bar chosen landing, its places as they will be as it lands
   let finger = if w > 0.0 {
@@ -1626,7 +1637,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     dmax(
       m.o.end(),
       dmax(
-        m.held.end(),
+        dmax(m.held.end(), m.up.end()),
         dmax(
           dmax(m.ball_x.end(), m.ball_y.end()),
           dmax(dmax(m.ball_alpha.end(), m.ball_scale.end()), m.icon_swap.end()),
@@ -1923,6 +1934,8 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   |> ignore
   // going down out of the way and back up: drawn so, laid out where it rests; going, it takes nothing
   // (worked out as each frame is painted, on its way: a frame of its looks alone draws it where it is then)
+  // drawn up out from under a finger drawing the panel up: drawn so, a finger taken where it is laid out
+  let raised = bar_raise * m.up.x
   if m.vis.value < 1.0 || m.vis.target < 1.0 {
     let vis = m.vis
     c.look_by(holder, fn() {
@@ -1930,8 +1943,10 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       if v != vis.target {
         @motion.log_frame(@ui.current(), "bar/vis", "value=\{v} to=\{vis.target}")
       }
-      @ui.look(alpha=v, dy=(1.0 - v) * bar_drop)
+      @ui.look(alpha=v, dy=(1.0 - v) * bar_drop - raised)
     })
+  } else if raised != 0.0 {
+    c.look(holder, @ui.look(dy=-raised))
   }
   @motion.leaving(c, holder, shown)
 }
