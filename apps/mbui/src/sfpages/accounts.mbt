@@ -6,10 +6,9 @@
 // Everything said is the core's (its overview's profile, the workspace's profiles, the usage view).
 
 ///|
-/// What a profile's page keeps of its own while it is open: all its models shown, what is typed to name one more,
+/// What a profile's page keeps of its own while it is open: what is typed to name one more model,
 /// a sign-in's code, the command shown, the account's key being replaced (what is typed), the variables' rows.
 priv struct ProfileEdit {
-  mut choosing : String
   mut command : String
   mut replacing : String
   mut env_open : String
@@ -31,7 +30,7 @@ priv struct EnvRow {
 
 ///|
 // kept across runs: said by the page's presses; profile_page_reset puts it back
-let profile_edit : ProfileEdit = { choosing: "", command: "", replacing: "", env_open: "", env_rows: [], env_of: "", env_made: 0 }
+let profile_edit : ProfileEdit = { command: "", replacing: "", env_open: "", env_rows: [], env_of: "", env_made: 0 }
 
 ///|
 /// The fields of a profile's page, by their key (made as first drawn).
@@ -40,7 +39,6 @@ let profile_fields : Map[String, @ui.Field] = {}
 
 ///|
 fn profile_page_reset() -> Unit {
-  profile_edit.choosing = ""
   profile_edit.command = ""
   profile_edit.replacing = ""
   profile_edit.env_open = ""
@@ -129,7 +127,7 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Js
     blocks.push(fn() { profile_stations(c, core, address, entry) })
   }
   if !copy {
-    blocks.push(fn() { profile_models(c, core, address, p) })
+    blocks.push(fn() { profile_models(c, core, here, address, p) })
     // how it runs, in one section (the web's two of the same title: fast mode, and the background on a message)
     let fast = has(p, "fast") && !(field(p, "fast") is Some(Null))
     let background = items(p, "runtimes").iter().any(fn(r) { r == "claude" }) && has(p, "backgroundOnMessage")
@@ -835,12 +833,10 @@ fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Jso
 // ── how it runs ─────────────────────────────────────────────────────────
 
 ///|
-/// Its models: every one it runs (all its check found, and those named by hand), as chips by the core's series, the
-/// first few of many till all are asked for; one named by hand where the provider lists none, taken off again by its ×
-/// where the provider does not list it (2026-11-02 用户「直接取消 profile 里的模型过滤」: none is ticked on or off
-/// here, the model control keeps those used most and those starred). A provider that answers the automatic decisions
-/// alone: the models its probe found.
-fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
+/// Its models: how many it runs, one row (2026-11-02 用户「既然这样就不要平铺展示了」), all of them a press away in a panel
+/// of their own (profile_models_panel). A provider that answers the automatic decisions alone: the models its probe
+/// found.
+fn profile_models(c : @ui.Ctx, core : Core, here : Here, address : String, p : Json?) -> Unit {
   let id = text(p, "id")
   let key = address + "/" + id
   if flag(p, "decisionOnly") {
@@ -863,87 +859,109 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit
     return
   }
   let all = strings(p, "available")
-  let added = strings(p, "added")
-  let named = strings(p, "named")
-  let names = field(p, "names")
-  let name = fn(m : String) { match text(names, m) { "" => m; n => n } }
-  let whole = profile_edit.choosing == key || all.length() <= pf_models_first
-  let busy = has(p, "modelsSaving") && !(field(p, "modelsSaving") is Some(Null))
   @sf.section(
     c,
     @sf.t("web-pages.profiles.models"),
     note=if all.length() > 0 { @sf.t("web-pages.profiles.modelsAbout") } else { @sf.t("web-pages.profiles.modelsAboutNone") },
-    actions=fn() {
-      if all.length() > pf_models_first &&
-        @sf.action(
-          c,
-          "profile-models-all/" + key,
-          if whole {
-            @sf.t("web-pages.profiles.collapse")
-          } else {
-            @sf.t("web-pages.profiles.allModels", args=[("n", all.length().to_string())])
-          },
-        ) {
-        profile_edit.choosing = if whole { "" } else { key }
-      }
-    },
     fn() {
-      @sf.loose(c, fn() {
-        if all.length() == 0 {
-          c.text(@sf.t("web-pages.profiles.noModels"), style=pf_muted) |> ignore
-        } else {
-          // by the core's series' order, the first few of many till all are asked for
-          let shown : Array[String] = []
-          for s in items(p, "series") {
-            for m in strings(Some(s), "models") {
-              if whole || shown.length() < pf_models_first {
-                shown.push(m)
+      @sf.group(c, fn() {
+        let row = "profile-models/" + key
+        if @sf.link_row(
+            c,
+            row,
+            @sf.t("web-main.model.allModels"),
+            value=if all.length() == 0 { @sf.t("web-pages.profiles.noModels") } else { text(p, "modelsText") },
+          ) {
+          @sf.panel(
+            @sf.t("web-pages.profiles.models"),
+            fn(c, _) {
+              // (the profile as its station says it now, as its page reads it: a model added or taken off shown)
+              let now = match items(field(@settings.station_of(core, here, address), "overview"), "profiles").search_by(fn(x) { text(Some(x), "id") == id }) {
+                Some(i) => Some(items(field(@settings.station_of(core, here, address), "overview"), "profiles")[i])
+                None => p
               }
-            }
-          }
-          // (each's maker's mark where they are of more than one: one maker's are the head's)
-          let makers = shown.map(fn(m) { text(field(field(p, "makers"), m), "id") })
-          let marked = makers.iter().any(fn(k) { k != makers[0] })
-          c.box(style=pf_chips, flow=true, fn() {
-            for m in shown {
-              // (its id over it while it is pointed at: Accounts.tsx's tip)
-              let chip = c.id("profile-model-chip/" + key + "/" + m)
-              c.box(style=pf_chip, id=chip, taps=false, points=true, fn() {
-                if marked {
-                  @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
-                }
-                c.text(name(m), style=pf_chip_words) |> ignore
-                if added.contains(m) &&
-                  @sf.icon_button(
-                    c,
-                    "close",
-                    key="profile-model-off/" + key + "/" + m,
-                    size=pf_chip_off,
-                    icon_size=pf_chip_glyph,
-                    round=true,
-                    disabled=busy,
-                    label=@sf.t("web-pages.profiles.removeModel", args=[("model", name(m))]),
-                  ) {
-                  @settings.act(
-                    core,
-                    @sf.t("web-pages.profiles.removeModel", args=[("model", name(m))]),
-                    "profile.put",
-                    obj([("station", str(address)), ("id", str(id)), ("input", obj([("models", Json::array(named.filter(fn(x) { x != m }).map(str)))]))]),
-                  )
-                }
-              })
-              |> ignore
-              @sf.tip(c, "profile-model-chip/" + key + "/" + m + "/tip", chip, m, repeats=name(m) == m)
-            }
-          })
-          |> ignore
-        }
-        if flag(p, "canAddModel") {
-          add_model(c, core, address, id)
+              profile_models_panel(c, core, address, now)
+            },
+            from=Of(c.id(row)),
+            lists=true,
+          )
         }
       })
     },
   )
+}
+
+///|
+/// All of a profile's models (by the core's series, each under its name where there are more than one), each with
+/// a box before it, ticked while it is starred (`pick.like`, as the model control's are: 2026-11-02 用户「这里改成也能
+/// 点勾」), its id under the pointer; one named by hand that its provider does not list taken off by its ×; one more
+/// named by hand under them, where it can be.
+fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
+  let id = text(p, "id")
+  let key = address + "/" + id
+  let added = strings(p, "added")
+  let named = strings(p, "named")
+  let names = field(p, "names")
+  let name = fn(m : String) { match text(names, m) { "" => m; n => n } }
+  let busy = has(p, "modelsSaving") && !(field(p, "modelsSaving") is Some(Null))
+  // what is starred, as the new chat's model control of this station has it (its options, each `liked`, by spelling)
+  let options = items((core.topic)("pick", { "station": Json::string(address), "of": Json::string("new") }).value, "options")
+  let liked = fn(m : String) {
+    options.iter().any(fn(o) { flag(Some(o), "liked") && (text(Some(o), "model") == m || strings(Some(o), "ids").contains(m)) })
+  }
+  let series = items(p, "series")
+  @sf.panel_column(c, "profile-models/" + key, pf_models_most, pf_model_rows, fn() {
+    for s in series {
+      let sv = Some(s)
+      if series.length() > 1 {
+        c.box(style=pf_series_room, fn() { c.text(text(sv, "name"), style=pf_series_words) |> ignore }) |> ignore
+      }
+      for m in strings(sv, "models") {
+        let on = liked(m)
+        let item = c.id("profile-model-item/" + key + "/" + m)
+        c.box(style=pf_model_row.then(@sf.row_least_h()), id=item, taps=false, points=true, fn() {
+          let now = @kit.checkbox(
+              c,
+              "profile-model-like/" + key + "/" + m,
+              if on { On } else { Off },
+              label=@sf.t("web-main.model.likeModel", args=[("model", name(m))]),
+            ).value
+          if (now == On) != on {
+            (core.call)(
+              "pick.like",
+              obj([("station", str(address)), ("of", str("new")), ("model", str(m)), ("liked", Json::boolean(now == On))]),
+              fn(_) {  },
+            )
+          }
+          @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
+          c.text(name(m), style=pf_model_words) |> ignore
+          if added.contains(m) &&
+            @sf.icon_button(
+              c,
+              "close",
+              key="profile-model-off/" + key + "/" + m,
+              size=pf_chip_off,
+              icon_size=pf_chip_glyph,
+              round=true,
+              disabled=busy,
+              label=@sf.t("web-pages.profiles.removeModel", args=[("model", name(m))]),
+            ) {
+            @settings.act(
+              core,
+              @sf.t("web-pages.profiles.removeModel", args=[("model", name(m))]),
+              "profile.put",
+              obj([("station", str(address)), ("id", str(id)), ("input", obj([("models", Json::array(named.filter(fn(x) { x != m }).map(str)))]))]),
+            )
+          }
+        })
+        |> ignore
+        @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m, repeats=name(m) == m)
+      }
+    }
+  })
+  if flag(p, "canAddModel") {
+    c.box(style=pf_models_add, fn() { add_model(c, core, address, id) }) |> ignore
+  }
 }
 
 ///|
@@ -1650,12 +1668,37 @@ let pf_chips : @ui.Style = @ui.css("row w=Full gap=S1_5")
 let pf_chip : @ui.Style = @ui.css("row px=S2_5 py=S1 gap=S1_5 align=ACenter radius=Full bg=Hover")
 
 ///|
-/// The × of a model named by hand on its chip (a round button as high as its words' line).
-let pf_chip_off : Double = 18.0
+/// A profile's models in their panel: a row each (a box, its maker's mark, its name, its ×), 1 apart, scrolling past
+/// this; a series' name over its models; one more named by hand under them.
+let pf_models_most : Double = 420.0
 
 ///|
-/// How many models its page shows of many till all are asked for.
-let pf_models_first : Int = 24
+// kept across runs: a value (no field of it changes)
+let pf_model_rows : @ui.Style = @ui.css("w=Full gap=SPx")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_model_row : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_model_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_series_room : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2 pb=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_series_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_models_add : @ui.Style = @ui.css("w=Full pt=S2")
+
+///|
+/// The × of a model named by hand on its chip (a round button as high as its words' line).
+let pf_chip_off : Double = 18.0
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -763,9 +763,21 @@ export class Choose implements Owner {
     return [...out.values()].sort((a, b) => Number(a.id === "") - Number(b.id === ""));
   }
 
-  /// The models starred in `scope` (`ws:<scope>:liked`, kept on this device), by key, the first starred first.
+  /// The models starred in `scope` (`ws:<scope>:liked`, kept on this device), by key, the first starred first. None ever
+  /// starred here: those the workspace's profiles name in config.json, ticked on before every model a profile's check
+  /// found ran (2026-11-02 用户「以前的模型选择变成已经点过的勾」), kept once one is starred or unstarred.
   #liked(scope: string): string[] {
-    return arr(this.#record(`ws:${scope}:liked`)).filter((k): k is string => typeof k === "string");
+    const kept = this.#record(`ws:${scope}:liked`);
+    if (kept !== undefined) return arr(kept).filter((k): k is string => typeof k === "string");
+    const out: string[] = [];
+    for (const s of arr(this.#env.store.get({ topic: "stations", scope }))) {
+      for (const p of arr(get(get(s, "overview"), "profiles"))) {
+        // (a station of before `named`: what it ran was what was ticked on)
+        const named = Array.isArray(get(p, "named")) ? p.named : arr(get(p, "models"));
+        for (const m of named) if (typeof m === "string" && !out.includes(model.key(m))) out.push(model.key(m));
+      }
+    }
+    return out;
   }
 
   /// `pick.like`: model `model` starred (`liked`) or not in the workspace of the control's station: listed in every
