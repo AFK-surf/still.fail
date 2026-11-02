@@ -14,7 +14,7 @@ import { USAGE_GROUPS } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import { QUARTER_MS } from "../store/rows.ts";
 import {
-  CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LETTER_SQL, type Membership, type MessageRow, OPTIONS_BEFORE,
+  CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LETTER_SQL, type Membership, type MessageRow, OPTIONS_BEFORE,
   PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, attachment, authorKind, cardOf, isLetter, liveShare, mergeEntries,
   ending, parsed, quote, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread, withLetter,
 } from "../store/rows.ts";
@@ -551,8 +551,11 @@ export function pins(s: Store, viewer: string): Map<string, number> {
 }
 
 /// Chats kept instead of offered for archiving. Null selects every viewer.
-export function keptChats(s: Store, viewer: string | null): Set<number> {
-  return new Set(all(s, "SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1", viewer).map((r) => r.thread));
+export function keptChats(s: Store, viewer: string | null, threads: number[] | null = null): Set<number> {
+  const rows = threads === null || viewer === null
+    ? all(s, "SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1", viewer)
+    : [...new Set(threads)].flatMap((thread) => all(s, "SELECT thread FROM kept_chats WHERE viewer = ? AND thread = ?", viewer, thread));
+  return new Set(rows.map((r) => r.thread));
 }
 
 // ── cards ──
@@ -647,7 +650,11 @@ export function answersSince(s: Store, since: number, threads: number[] | null =
     const a = toMessage(answer);
     out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
   }
-  for (const { thread, n, viewer: by, at } of all(s, CLOSED_SINCE, since)) {
+  const closedRows = threads === null
+    ? all(s, CLOSED_SINCE, since)
+    : [...new Set(threads)].flatMap((thread) => all(s, CLOSED_THREAD_SINCE, thread, since))
+      .sort((a, b) => a.at - b.at || a.ordering - b.ordering);
+  for (const { thread, n, viewer: by, at } of closedRows) {
     if (of !== null && !of.has(thread)) continue;
     const found = cardAt(thread, n);
     if (!found) continue;
@@ -659,8 +666,11 @@ export function answersSince(s: Store, since: number, threads: number[] | null =
 }
 
 /// The cards a viewer dismissed, as "thread:n".
-export function dismissed(s: Store, viewer: string): Set<string> {
-  return new Set(all(s, "SELECT thread, n FROM dismissed WHERE viewer = ?", viewer).map((r) => `${r.thread}:${r.n}`));
+export function dismissed(s: Store, viewer: string, threads: number[] | null = null): Set<string> {
+  const rows = threads === null
+    ? all(s, "SELECT thread, n FROM dismissed WHERE viewer = ?", viewer)
+    : [...new Set(threads)].flatMap((thread) => all(s, "SELECT thread, n FROM dismissed WHERE viewer = ? AND thread = ?", viewer, thread));
+  return new Set(rows.map((r) => `${r.thread}:${r.n}`));
 }
 
 // ── identities ──
