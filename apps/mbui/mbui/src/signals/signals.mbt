@@ -169,7 +169,7 @@ fn notify(first : ReactiveNode) -> Unit {
 fn unwatched(node : ReactiveNode) -> Unit {
   match node.kind {
     ComputedNode =>
-      if node.deps_tail is Some(_) {
+      if node.deps is Some(_) {
         node.flags = MUTABLE | DIRTY
         dispose_all_deps_in_reverse(node)
       }
@@ -654,17 +654,20 @@ fn effect_scope_oper(e : ReactiveNode) -> Unit {
 }
 
 ///|
+/// All `sub` read let go, the last first: all of it, past how far a read under way has got (`deps_tail` is only that,
+/// what it read before still after it: a watch let go as it reads anew), from where the list ends as each goes (what
+/// one let go lets go in turn may take another of them with it).
 fn dispose_all_deps_in_reverse(sub : ReactiveNode) -> Unit {
-  let mut link = sub.deps_tail
-  while true {
-    match link {
-      Some(l) => {
-        let prev = l.prev_dep
-        unlink(l, sub) |> ignore
-        link = prev
-      }
-      None => break
-    }
+  let mut last = match sub.deps_tail {
+    Some(t) => Some(t)
+    None => sub.deps
+  }
+  while last is Some(l) && l.next_dep is Some(n) {
+    last = Some(n)
+  }
+  sub.deps_tail = last
+  while sub.deps_tail is Some(l) {
+    unlink(l, sub) |> ignore
   }
 }
 
@@ -852,6 +855,14 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   watch_reading.depth -= 1
   e.flags = e.flags & RECURSED_CHECK.lnot()
   purge_deps(e)
+  // (let go as it read (what owned it let go meanwhile): what it read after that let go too, none of it kept as read)
+  let own : WatchOwn = coerce(e.own)
+  if own.gone.val {
+    e.flags = NONE
+    dispose_all_deps_in_reverse(e)
+    self.stale.val = true
+    return v
+  }
   // (what it read set again as it ran, after it was read: told then as what reads it is, the run still going)
   if (e.flags & (DIRTY | PENDING)) != 0 {
     let dirty = (e.flags & DIRTY) != 0 ||
@@ -978,3 +989,4 @@ pub fn Watch::on_marked(self : Watch, f : () -> Unit) -> Unit {
   let o : WatchOwn = coerce(self.node.own)
   o.marked.val = Some(f)
 }
+
