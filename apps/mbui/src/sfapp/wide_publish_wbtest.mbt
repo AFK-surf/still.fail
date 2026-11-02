@@ -78,6 +78,46 @@ test "wide: a vault request's outcome line has its dot in the middle of its word
 }
 
 ///|
+test "wide: right click copies the whole message for its author and the viewer, including Markdown and newlines" {
+  let words = @sffixture.fixture_md
+  for mine in [false, true] {
+    new_run()
+    let base = fixture("chat")
+    let src : Source = {
+      ..base,
+      topic: fn(name, params) {
+        let got = (base.topic)(name, params)
+        guard name == "chat" && got.value is Some(Object(chat)) else { return got }
+        let out = chat.copy()
+        let messages = items(got.value, "messages").copy()
+        match messages[messages.length() - 1] {
+          Object(last) => {
+            let m = last.copy()
+            m["text"] = Json::string(words)
+            m["mine"] = Json::boolean(mine)
+            messages[messages.length() - 1] = Json::object(m)
+          }
+          _ => ()
+        }
+        out["messages"] = Json::array(messages)
+        { ..got, value: Some(Json::object(out)) }
+      },
+    }
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+    t.run_for(@ui.move_most_ms)
+    let (x, y, _, _) = t.rect_of("截图换成").unwrap()
+    t.right_click(x + 8.0, y + 8.0)
+    t.frame()
+    t.frame()
+    t.tap_text("复制消息")
+    t.frame()
+    assert_eq(t.clipboard(), words)
+    assert_true(toast_said(t, "已复制"))
+  }
+}
+
+///|
 test "wide: a message right clicked offers 分享这一轮, which shares its turn as a picture (chat.publishPreview by its seq)" {
   new_run()
   let calls : Array[Made] = []
@@ -128,6 +168,7 @@ test "wide: a link in a message right clicked opens its own menu alone, not the 
   assert_true(t.find("复制链接") is Some(_))
   assert_true(t.find("分享这一轮") is None)
   assert_true(t.find("复制消息链接") is None)
+  assert_true(t.find("复制消息") is None)
   // chosen, nothing comes after it
   t.tap_text("复制链接")
   t.run_for(@ui.move_most_ms)
@@ -136,7 +177,7 @@ test "wide: a link in a message right clicked opens its own menu alone, not the 
 }
 
 ///|
-test "wide: the message header's ⋯ offers 复制消息链接 and 分享这一轮, the two a right click offers" {
+test "wide: the message header's ⋯ offers the same message actions as a right click" {
   new_run()
   let calls : Array[Made] = []
   let base = fixture("chat")
@@ -163,6 +204,13 @@ test "wide: the message header's ⋯ offers 复制消息链接 and 分享这一�
   assert_true(more.1 + more.3 <= before.1)
   assert_true(t.query(Button, label="分享图片") is None)
   assert_true(t.query(Button, label="复制链接") is None)
+  t.click(Button, label="更多操作")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("复制消息")
+  t.frame()
+  assert_eq(t.clipboard(), "做完了：列表、跳到最新的按钮、加载更早的消息都好了，截图也换了。")
+  t.move(x + 24.0, y + 8.0)
+  t.frame()
   t.click(Button, label="更多操作")
   t.run_for(@ui.move_most_ms)
   t.tap_text("复制消息链接")
