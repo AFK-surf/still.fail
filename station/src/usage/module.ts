@@ -3,6 +3,7 @@
 // way it is shown is added up from that record: a chat's execution details and agent card (told as more is recorded,
 // on its live stream and in its session's summary, `usage`) and the usage page (GET /usage).
 import { Effect, Layer } from "effect";
+import { join } from "node:path";
 import { usageRoutes } from "../api/routes/usage.ts";
 import { usageNow } from "../read/usage.ts";
 import { Agents } from "../sessions/agents.ts";
@@ -11,6 +12,7 @@ import type { LiveHub } from "../sessions/live.ts";
 import { Parts, Paths, StationConfig, Store } from "../services.ts";
 import type { Store as StationStore } from "../store/store.ts";
 import { UsageCounter } from "./counter.ts";
+import { CompactionBackfill } from "./compaction-backfill.ts";
 
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
 /// None before a call. `quiet`: not told as a change of the session.
@@ -44,6 +46,11 @@ export const UsageLive = Layer.effectDiscard(
     const store = yield* Store;
     const config = yield* StationConfig;
     const { hub } = yield* Agents;
+    const backfill = yield* Effect.acquireRelease(
+      Effect.sync(() => new CompactionBackfill(join(data, "stillfail.db"))),
+      (index) => Effect.promise(() => index.stop()),
+    );
+    if (!store.compactionsReady()) backfill.start();
     const usage = yield* Effect.acquireRelease(
       Effect.sync(() => new UsageCounter({ store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock })),
       (u) => Effect.promise(() => u.stop()),

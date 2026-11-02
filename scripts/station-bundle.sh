@@ -85,6 +85,7 @@ cp "$root/station/dist/read/worker.js" "$app/station/read/"
 cp "$root/station/dist/search/worker.js" "$app/station/search/"
 cp "$root/station/dist/vault/use-index-worker.js" "$app/station/vault/"
 cp "$root/station/dist/usage/minute-worker.js" "$app/station/usage/"
+cp "$root/station/dist/usage/compaction-worker.js" "$app/station/usage/"
 cp -R "$root/station/dist/skills" "$app/station/skills"
 # DeepSeek Harness loads the station's driver from here (agents/dsh.ts); Cursor's runs from here (agents/cursor.ts).
 cp "$root/station/dist/dsh-bridge.mjs" "$root/station/dist/cursor-bridge.mjs" "$root/station/dist/sandbox-bridge.mjs" "$app/station/"

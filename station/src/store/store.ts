@@ -27,6 +27,7 @@ import {
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addSessionTurns, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
+import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 import { installUsageMinutes } from "./usage-minutes.ts";
@@ -168,6 +169,7 @@ export class Store {
       addUsageColumns(db);
       addUsageTotals(db);
       addUsageCompactions(db);
+      installUsageCompactions(db);
       addUsageQuarters(db);
       installUsageMinutes(db);
       addListState(db);
@@ -1994,6 +1996,11 @@ export class Store {
   /// Where each model's context was compacted on this station since `since` (store/usage.ts).
   compactionPoints(since: number): Map<string, number> {
     return usage.compactionPoints(this.db, since);
+  }
+
+  /// Whether the old main-thread calls have all been indexed.
+  compactionsReady(): boolean {
+    return usageCompactionsReady(this.db);
   }
 
   /// Tells whoever follows the store that calls of `sessions` were recorded, the earliest made at `from` (ms).

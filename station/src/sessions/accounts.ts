@@ -191,6 +191,7 @@ export class Accounts {
   private cheapToLeave(key: string): boolean {
     const now = this.deps.clock.currentTimeMillisUnsafe();
     const { store } = this.deps;
+    if (!store.compactionsReady()) return cheapToLeave(store.lastContexts(key, CALLS_LOOKED_AT), new Map());
     if (this.compactions === null || now - this.compactions[0] > COMPACTIONS_EVERY_MS) this.compactions = [now, store.compactionPoints(now - COMPACTIONS_OVER_MS)];
     return cheapToLeave(store.lastContexts(key, CALLS_LOOKED_AT), this.compactions[1]);
   }
