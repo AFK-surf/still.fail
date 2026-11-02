@@ -497,6 +497,8 @@ fn ask_dismiss(
   if live && c.clicked(id) {
     dismissed[k] = true
     c.tell("ask-dismiss/" + k, fn() {
+      // let go, felt as an answer picked is
+      @ui.haptic(Confirm)
       act(
         src,
         @sf.t("web-main.decisions.dismissWhat"),

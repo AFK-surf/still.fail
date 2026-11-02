@@ -180,6 +180,7 @@
   "build_effect": {
     "later": [
       "@sf.menu",
+      "@sf.menu_item_of",
       "@sf.pick",
       "@sf.panel",
       "@sf.confirm",
