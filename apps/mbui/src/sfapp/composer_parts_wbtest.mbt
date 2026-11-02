@@ -506,6 +506,38 @@ test "its agent's cache over, in the wide frame: said over the composer, 换新�
 }
 
 ///|
+test "an empty focused composer and its cache choice stay in place while the menu has focus" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  assert_true(t.ctx().field_focused(), msg="the composer's field has focus before the choice opens")
+  let (_, before_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  t.click(Button, label="接着聊")
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_))
+  // Beyond the empty composer's focus-loss delay and its shape's transition, the choice is still under the pointer.
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms)
+  let (_, after_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  assert_true((after_y - before_y).abs() < 1.0, msg="the open choice moved from \{before_y} to \{after_y}")
+  t.click(MenuItemRadio, label="换新上下文")
+  t.draw()
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
+}
+
+///|
+test "a cache choice opened over a collapsed composer leaves it collapsed" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  t.ctx().blur()
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms)
+  let (_, before_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  t.click(Button, label="接着聊")
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms)
+  let (_, after_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  assert_true((after_y - before_y).abs() < 1.0, msg="the collapsed composer moved from \{before_y} to \{after_y}")
+}
+
+///|
 test "a notice over the composer wrapped to lines: round as one line is, its mark on its first line" {
   let calls : Array[Made] = []
   let said = "「ccvm」正在更新：当前显示的是之前读取的内容，更新完成后会自动重新连接，发出的消息届时送达"

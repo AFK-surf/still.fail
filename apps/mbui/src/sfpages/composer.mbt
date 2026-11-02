@@ -162,6 +162,12 @@ fn composing_reset() -> Unit {
 pub let composer_field_key : String = "composer/field"
 
 ///|
+/// The menu belonging to a notice's choice, keyed by the chat and notice that showed it.
+fn notice_choice_key(chat : String, mark : String) -> String {
+  "composer/notice/" + chat + "/" + mark + "/choice"
+}
+
+///|
 /// The composer (ComposerView) for `spec`, `send` what pressing send (or Enter) does with what is written once it is
 /// ready. Drawn where its place is; a page lays it out (its width: composer_width). `place`: where it stands at a
 /// panel's foot (composer_place: each shape where it stands concentric with the corners it is in, the morph between
@@ -217,11 +223,14 @@ pub fn composer(
     }
   }
   let focused = c.editor_focused(composer_field_key)
+  // The cache choice takes focus into its menu. Keep an already open composer in place while that menu is open, so
+  // the notice and its menu do not move under the pointer. A composer that was a capsule stays one.
+  let choosing_cache = composing.cold_open.get() == notice_choice_key(spec.draft, "wait")
   // a box while it has the cursor; lost, a capsule a moment later (LET_GO_MS)
   if focused {
     composing.let_go.set(true)
   }
-  let lost_long = @kit.after(c, "composer/let-go", !focused, let_go_ms)
+  let lost_long = @kit.after(c, "composer/let-go", !focused && !choosing_cache, let_go_ms)
   let held = composing.let_go.get() && !focused && !lost_long
   if lost_long {
     composing.let_go.set(false)
@@ -2457,7 +2466,7 @@ fn composer_notice(
     let entries = choices.map(fn(choice) {
       @kit.menu_radio(choice.0.to_string(), choice.2, label=@sf.t(choice.1), disabled=held)
     })
-    let choice_key = key + "/choice"
+    let choice_key = notice_choice_key(chat, mark)
     let menu = @sf.chooser(
       c, choice_key, current, entries,
       fn() { composing.cold_open.get() == choice_key },
