@@ -11,7 +11,7 @@ let bar_places : Array[String] = [
 ///|
 /// The bars before the core has said (BARS_DEFAULT).
 fn default_bars() -> (Array[Array[String]], Int) {
-  ([["chats", "files", "profiles", "stations"], ["usage", "connects", "archive", "vault"]], 0)
+  ([["chats", "files", "profiles", "stations"], ["archive", "usage", "connects", "vault"]], 0)
 }
 
 ///|
