@@ -1,7 +1,7 @@
 // Workspace file helpers for automatic cleanup of archived sessions (the Rust station's footprint.rs).
 import { execFile } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
-import { lstat, readdir } from "node:fs/promises";
+import { lstat, readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileName, samePath, segments, within } from "../ops/paths.ts";
 
@@ -21,14 +21,23 @@ const canonical = (path: string): string | null => {
 export function roomOf(dataDir: string, workspace: string): string | null {
   const sessions = canonical(join(dataDir, "sessions"));
   if (sessions === null) return null;
-  let path = canonical(workspace);
-  if (path === null) {
-    if (fileName(workspace) !== "workspace") return null;
-    const parent = canonical(dirname(workspace));
-    if (parent === null) return null;
-    path = join(parent, "workspace");
-  }
-  if (!within(path, sessions) || samePath(path, sessions)) return null;
+  return roomIn(sessions, canonical(workspace) ?? (fileName(workspace) === "workspace" ? beside(canonical(dirname(workspace))) : null));
+}
+
+/// `roomOf`, its paths followed off this thread.
+export async function roomOfSoon(dataDir: string, workspace: string): Promise<string | null> {
+  const real = (path: string) => realpath(path).catch(() => null);
+  const sessions = await real(join(dataDir, "sessions"));
+  if (sessions === null) return null;
+  return roomIn(sessions, (await real(workspace)) ?? (fileName(workspace) === "workspace" ? beside(await real(dirname(workspace))) : null));
+}
+
+/// A workspace not there (yet, or any more) as it would be in its directory `parent` (followed), if that is there.
+const beside = (parent: string | null) => (parent === null ? null : join(parent, "workspace"));
+
+/// The room of the workspace at `path` (followed) under the station's sessions directory (followed).
+function roomIn(sessions: string, path: string | null): string | null {
+  if (path === null || !within(path, sessions) || samePath(path, sessions)) return null;
   // Only the station layout sessions/<connect>/<session>/workspace, never an arbitrary nested project.
   const relative = segments(path.slice(sessions.length)).filter((p) => p !== "");
   if (relative.length !== 3 || fileName(path) !== "workspace") return null;

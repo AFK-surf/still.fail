@@ -21,9 +21,9 @@ import { readArchive, threadFile } from "./archive.ts";
 import {
   type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type Published, type ProcessRow, type ProfileStatus,
-  type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
+  type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
-  byBytes, cardOf, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
+  byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addLetters, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
@@ -2084,7 +2084,8 @@ export class Store {
       entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
       this.#insertEntry(entry);
     });
-    changes.push({ type: "thread", id: entry.thread, entries: [{ ...entry }] });
+    // As a read of it gives it: what is told of it is made from this (api/events.ts), not read back.
+    changes.push({ type: "thread", id: entry.thread, entries: [stored(entry)] });
     this.#bringBack(entry, changes);
     return entry;
   }
@@ -2223,16 +2224,11 @@ export class Store {
   }
 
   #insertEntry(e: EntryRow): void {
+    const c = entryColumns(e);
     this.#run(
       "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      e.thread, e.n, e.kind, e.target, e.ts, e.authorKind, e.author, e.text,
-      jsonList<Attachment>(e.attachments, attachment), jsonList<Quote>(e.quotes, quote),
-      e.declared, e.client, e.profile, e.runtime,
-      e.options === undefined ? null : JSON.stringify(e.options),
-      e.card === undefined ? null : JSON.stringify(e.card),
-      e.at,
-      e.agentIdentity === undefined ? null : JSON.stringify(e.agentIdentity),
-      e.letter === undefined ? null : JSON.stringify(e.letter),
+      c.thread, c.n, c.kind, c.target, c.ts, c.author_kind, c.author, c.text, c.attachments, c.quotes, c.declared, c.client, c.profile, c.runtime,
+      c.options, c.card, c.at, c.agent_identity, c.letter,
     );
   }
 }

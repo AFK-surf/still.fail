@@ -1,82 +1,70 @@
-// The readers' one line (read/pool.ts): what the event streams tell goes before the pages asked, so a message just said
-// is not held up behind them.
+// The readers' two lines (read/pool.ts): what the station tells is read by its own reader, whatever devices ask; among
+// what devices ask, bulk reads leave room for a chat's.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Readers } from "../src/read/pool.ts";
-import { Store } from "../src/store/store.ts";
 
-test("a read the streams tell is answered before the pages asked before it", async () => {
+/// Readers answering by reader-line-worker.mjs, and its state: how many reads started, which kinds, and the gate.
+function gated(size: number) {
   const data = mkdtempSync(join(tmpdir(), "reader-line-"));
-  const store = Store.open(join(data, "stillfail.db"), join(data, "archive"));
-  const readers = new Readers(data, 1);
-  try {
-    const answered: string[] = [];
-    // Reads no reader knows: each is answered (refused) in turn, in the order the one reader took them.
-    const ask = (name: string, told = false) => readers.read(name, {}, "en", { told }).catch(() => void answered.push(name));
-    await Promise.all([ask("taken"), ask("page 1"), ask("page 2"), ask("told", true), ask("page 3")]);
-    assert.deepEqual(answered, ["taken", "told", "page 1", "page 2", "page 3"]);
-  } finally {
-    readers.close();
-    store.close();
-    rmSync(data, { recursive: true, force: true });
-  }
-});
-
-for (const bulk of ["usage", "chats", "openJobs", "changed"]) test(`messages and chats can be read while ${bulk} reads are held`, async () => {
-  const data = mkdtempSync(join(tmpdir(), "reader-line-"));
-  const readers = new Readers(data, 2, new URL("./reader-line-worker.mjs", import.meta.url));
-  // The worker counts the reads it starts, says which interactive reads started, and holds bulk reads at the gate.
+  const readers = new Readers(data, size, new URL("./reader-line-worker.mjs", import.meta.url));
   const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
-  const args = { state: state.buffer };
-  const asked = [readers.read(bulk, args, "en"), readers.read(bulk, args, "en"), readers.read("thread", args, "en"), readers.read("told", args, "en", { told: true })];
-  let finished: PromiseSettledResult<string>[] = [];
-  try {
-    const started = async (wanted: number) => {
-      while (Atomics.load(state, 0) < wanted) {
-        const count = Atomics.load(state, 0);
-        if (count < wanted) await Atomics.waitAsync(state, 0, count).value;
-      }
-    };
-    await Promise.race([started(2), Promise.all(asked)]);
-    assert.notEqual(Atomics.load(state, 1), 0, "interactive reads are not held behind two bulk reads");
-    await Promise.race([started(3), Promise.all(asked)]);
-    assert.equal(Atomics.load(state, 1), 3, "both the chat and stream can be read before bulk reads finish");
-  } finally {
+  const args = (hold: boolean) => ({ state: state.buffer, hold });
+  const started = async (wanted: number) => {
+    for (let count = Atomics.load(state, 0); count < wanted; count = Atomics.load(state, 0)) await Atomics.waitAsync(state, 0, count).value;
+  };
+  const open = async (asked: Promise<string>[]) => {
     Atomics.store(state, 2, 1);
     Atomics.notify(state, 2);
-    finished = await Promise.allSettled(asked);
+    const settled = await Promise.allSettled(asked);
     readers.close();
     rmSync(data, { recursive: true, force: true });
-  }
-  assert.equal(Atomics.load(state, 0), 4, "the waiting bulk read is also taken");
-  assert.ok(finished.every((result) => result.status === "fulfilled"));
-});
+    return settled;
+  };
+  return { readers, state, args, started, open };
+}
 
-for (const background of ["timeline", "resourceChats", "aNewRead"]) test(`a stalled ${background} and usage cannot occupy both readers ahead of a file and a message`, async () => {
-  const data = mkdtempSync(join(tmpdir(), "reader-line-"));
-  const readers = new Readers(data, 2, new URL("./reader-line-worker.mjs", import.meta.url));
-  const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
-  const args = { state: state.buffer };
-  const asked = [readers.read("usage", args, "en"), readers.read(background, args, "en"), readers.read("sessionFile", args, "en"), readers.read("told", args, "en", { told: true })];
+// On ccvm (2026-11-02 15:41 UTC) a usage read held one reader for 97 s and sidebar updates the other: what was told of
+// two messages just said waited 50 s and 31 s, a push notice 55 s.
+test("what the station tells is read while every reader of what devices ask is held", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(2);
+  const asked = [readers.read("thread", args(true), "en"), readers.read("thread", args(true), "en"), readers.read("usage", args(true), "en")];
   try {
-    const started = async (wanted: number) => {
-      while (Atomics.load(state, 0) < wanted) {
-        const count = Atomics.load(state, 0);
-        if (count < wanted) await Atomics.waitAsync(state, 0, count).value;
-      }
-    };
     await started(2);
-    assert.notEqual(Atomics.load(state, 1) & 4, 0, "the file starts without waiting for both background reads");
-    await started(3);
-    assert.equal(Atomics.load(state, 1) & 6, 6, "the message starts too");
+    const told = await readers.read("told", args(false), "en", { told: true });
+    assert.equal(told, "{}");
+    assert.equal(Atomics.load(state, 0), 3, "the device reads still held, the third still waiting");
   } finally {
-    Atomics.store(state, 2, 1);
-    Atomics.notify(state, 2);
-    await Promise.allSettled(asked);
-    readers.close();
-    rmSync(data, { recursive: true, force: true });
+    const settled = await open(asked);
+    assert.ok(settled.every((s) => s.status === "fulfilled"));
   }
+});
+
+test("what devices ask is read while the station's own reader is held", { timeout: 30_000 }, async () => {
+  const { readers, args, started, open } = gated(2);
+  const asked = [readers.read("chatRows", args(true), "en", { told: true })];
+  try {
+    await started(1);
+    assert.equal(await readers.read("thread", args(false), "en"), "{}");
+  } finally {
+    await open(asked);
+  }
+});
+
+for (const bulk of ["usage", "chats", "openJobs", "changed", "timeline", "aNewRead"]) test(`a chat can be read while ${bulk} reads are held`, { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(2);
+  // Two bulk reads: one takes a reader, the other waits, leaving the second reader to the chat.
+  const asked = [readers.read(bulk, args(true), "en"), readers.read(bulk, args(true), "en")];
+  try {
+    await started(1);
+    assert.equal(await readers.read("thread", args(false), "en"), "{}");
+    assert.equal(Atomics.load(state, 1) & 1, 1);
+  } finally {
+    const settled = await open(asked);
+    assert.ok(settled.every((s) => s.status === "fulfilled"), "the waiting bulk read is taken once a reader is free");
+  }
+  assert.equal(Atomics.load(state, 0), 3);
 });

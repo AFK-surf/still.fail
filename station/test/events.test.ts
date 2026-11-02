@@ -28,7 +28,6 @@ function setup(clock?: Clock.Clock, handover?: EventsDeps["handover"], db?: { ro
       // The items a change can touch (read/views.ts chatRows): here every one, each a session's.
       if (op === "chatRows") return JSON.stringify({ rows: rows[args.viewer.email] ?? [], scope: [...(args.sessions as string[]), ...(rows[args.viewer.email] ?? []).map((r) => r.id)] });
       if (op === "summary") return JSON.stringify({ key: args.key });
-      if (op === "entries") return JSON.stringify({ entries: [{ n: 1, text: "hi" }] });
       if (op === "thread") return JSON.stringify({ id: args.id, last: 1, unread: 1, for: args.viewer.email });
       throw new Error(op);
     },
@@ -36,6 +35,8 @@ function setup(clock?: Clock.Clock, handover?: EventsDeps["handover"], db?: { ro
   const dir = mkdtempSync(join(tmpdir(), "events-"));
   const events = new Events({
     readers,
+    // What is said is told as the store wrote it, never read first (no `entries` read here).
+    said: (_thread, entries) => entries.map((e) => ({ n: e.n, text: "hi" })),
     subscribe: (l) => ((listener = l), () => {}),
     host: async () => ({ cpu: 1 }),
     jobLog: (id) => (id === "j" ? join(dir, "j.log") : null),
@@ -46,7 +47,7 @@ function setup(clock?: Clock.Clock, handover?: EventsDeps["handover"], db?: { ro
     handover,
   });
   events.follow({ overview: async () => ({ ...overview }) });
-  return { events, rows, reads, overview, change: (c: StoreChange) => listener(c), dir };
+  return { events, rows, reads, readers, overview, change: (c: StoreChange) => listener(c), dir };
 }
 
 /// Reads a stream's events as they come.
@@ -356,6 +357,22 @@ test("after something is said in a thread, each viewer is told it as GET /thread
   assert.ok(a.got.some((e) => e.event === "thread"));
   await a.close();
   await b.close();
+});
+
+// On ccvm (2026-11-02 15:41 UTC) what was told of two messages just said waited 50 s and 31 s: each was read back first,
+// in line behind other reads. What is said is told as the store wrote it.
+test("what is said in a thread is told at once, though no read is ever answered", async () => {
+  const { events, change, readers } = setup(testClock().clock);
+  const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  readers.read = () => new Promise(() => {});
+  change({ type: "thread", id: 4, entries: [{ n: 7 } as any] });
+  change({ type: "letters", id: 4, letters: [{ n: 2 } as any] });
+  await settle();
+  assert.deepEqual(a.got.filter((e) => e.event === "thread" || e.event === "letters").map((e) => [e.event, e.data]), [
+    ["thread", { id: 4, entries: [{ n: 7, text: "hi" }] }],
+    ["letters", { id: 4, letters: [{ n: 2, text: "hi" }] }],
+  ]);
+  await a.close();
 });
 
 test("only what is told again has an id: a stream's ids are the log from where it was asked, in order", async () => {

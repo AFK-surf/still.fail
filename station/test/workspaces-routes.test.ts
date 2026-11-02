@@ -212,7 +212,6 @@ test("a viewer's event streams carry only their workspace's changes", async () =
       read: async (op: string, args: any) => {
         if (op === "chats") return "[]";
         if (op === "summary") return JSON.stringify({ key: args.key });
-        if (op === "entries") return JSON.stringify({ entries: [{ n: 1 }] });
         if (op === "thread") return JSON.stringify({ id: args.id });
         if (op === "job") return JSON.stringify({ id: args.id });
         throw new Error(op);
@@ -221,6 +220,7 @@ test("a viewer's event streams carry only their workspace's changes", async () =
     let listener: (c: any) => void = () => {};
     const events = new Events({
       readers,
+      said: (_thread, entries) => entries.map((e) => ({ n: e.n })),
       subscribe: (l) => ((listener = l), () => {}),
       host: async () => ({}),
       jobLog: () => null,

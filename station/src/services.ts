@@ -16,6 +16,8 @@ import { type ControlPlaneShape, makeControlPlane } from "./cloud/plane.ts";
 import type { Provider } from "./cloud/provider.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
+import { makeStore } from "./read/store.ts";
+import { apiOf, entryViews, spokenIn } from "./read/views.ts";
 import type { AgentsParts } from "./sessions/agents.ts";
 import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
@@ -211,8 +213,12 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
       const screens = yield* ScreenRegistry;
       const { data } = yield* Paths;
       const previous = yield* Previous;
+      // What was just said, made as the pages show it on this thread: over the store's own connection (what it just
+      // wrote is in its memory), with the names the readers are given.
+      const view = Object.assign(makeStore(store.db, data), { names: readers.names });
       const events = new EventStreams({
         readers,
+        said: (thread, entries, lang) => spokenIn(lang, () => entryViews(apiOf(view), thread, entries)),
         subscribe: (listener) => store.subscribe(listener),
         host: () => admin.sample(),
         jobLog: (id) => store.getJob(id)?.log ?? null,

@@ -4,26 +4,45 @@
 // itself), and parts after the third do not count.
 import { createReadStream } from "node:fs";
 import { access, mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { changed } from "./changed.ts";
-import { ioMessage } from "../../read/sessions.ts";
+import { ioMessage, mime } from "../../read/sessions.ts";
 import { dir as thumbsDir, thumbnail, wanted as wantedThumb } from "../../drive/thumbs.ts";
 import { poster, wanted as wantedPoster } from "../../drive/posters.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
+import { roomOfSoon } from "../../sessions/footprint.ts";
+import { tr } from "../../ops/i18n.ts";
+import { clean, samePath, within } from "../../ops/paths.ts";
 
 /// admin/mod.rs `segment_decode`.
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 /// What the Rust answers a path it has no route for.
 const noRoute = (r: Request) => error(404, `no route ${r.method} ${r.path}`);
 
-/// What a file read (`sessionFile`) found: one on the disk (its path), an image whose thumbnail is to be made, or one
-/// packed with its archived workspace.
-type Found =
-  | { contentType: string; file: string }
-  | { contentType: string; image: string; thumbs: string }
-  | { contentType: string; archived: { room: string; path: string; relative: string }; notFound: string };
+/// A file sent in a session's chat (files.rs `session_file`): in its workspace's uploads (its path), or packed with its
+/// archived workspace.
+type Found = { contentType: string; file: string } | { contentType: string; archived: { room: string; path: string; relative: string } };
+
+/// The file `name` of session `key`'s chat, as `Found`; else the answer to give. Found here, as it is asked, with no
+/// read in line before it: its session's workspace is the store's (this thread's own connection, the row in its
+/// memory), the rest is the disk's, asked off this thread. Asked of the readers, on ccvm (2026-11-02) an image waited
+/// 26 s in line for a lookup of 5 ms.
+async function uploaded(tools: Tools, r: Request, key: string, name: string): Promise<Found | Answer> {
+  const row = tools.store?.getSession(key) ?? null;
+  if (row === null) return error(404, `unknown session ${key}`);
+  const notFound = () => error(404, tr(r.lang, "station.files.notFound"));
+  const uploads = clean(join(row.workspace, "uploads"));
+  const base = name.split(/[/\\]/).at(-1) ?? "";
+  const path = clean(`${uploads}/${base}`);
+  if (base === "" || !within(path, uploads) || samePath(path, uploads)) return notFound();
+  if ((await stat(path).catch(() => null))?.isFile()) return { contentType: mime(path), file: path };
+  // Packed with its archived workspace: the route reads it out of the archive (sessions/archive.ts), under its lock.
+  const room = tools.data === undefined ? null : await roomOfSoon(tools.data, row.workspace);
+  if (room === null || !(await stat(join(room, "workspace.tar.zst")).then(() => true, () => false))) return notFound();
+  return { contentType: mime(path), archived: { room, path, relative: `uploads/${base}` } };
+}
 
 const answered = (contentType: string, body: Answer["body"], extra: Record<string, string> = {}): Answer => ({
   status: 200,
@@ -45,46 +64,40 @@ async function fromDisk(contentType: string, path: string): Promise<Answer> {
 /// Over this a file is sent as it is read.
 const STREAMED = 8 * 1024 * 1024;
 
-/// The bytes of a file read (`sessionFile`), answered as files.rs does; an error as it came. An image whose thumbnail is
-/// not made yet (`thumb=1`) has it made here, by the image codecs off this thread (drive/thumbs.ts), and is answered
-/// with it, or with the image itself when it gets none. One packed with its archived workspace is read out of the archive
-/// here, under the room's lock (files.rs `session_file`; sessions/archive.ts).
-async function file(read: Tools["read"], r: Request, args: unknown): Promise<Answer> {
-  const answer = await read(r, "sessionFile", args);
-  if (answer.status !== 200 || !Buffer.isBuffer(answer.body)) return answer;
-  const found = JSON.parse(answer.body.toString("utf8")) as Found;
-  if ("file" in found) return fromDisk(found.contentType, found.file);
+/// The bytes of a file sent in a chat, answered as files.rs does; an error as it came. With `thumb`, an image's thumbnail
+/// (made by the image codecs off this thread when it is not yet: drive/thumbs.ts), or the image itself when it gets none
+/// (small already, not an image). One packed with its archived workspace is read out of the archive here, under the
+/// room's lock (files.rs `session_file`; sessions/archive.ts).
+async function file(tools: Tools, r: Request, key: string, name: string, thumb: boolean): Promise<Answer> {
+  const found = await uploaded(tools, r, key, name);
+  if ("status" in found) return found;
   if ("archived" in found) {
     const { room, path, relative } = found.archived;
     // Restored meanwhile: it is back in its upload directory.
     const bytes = await withLock(room, async () => (await readFile(path).catch(() => null)) ?? workspaceFile(room, relative));
-    return bytes === null ? error(404, found.notFound) : answered(found.contentType, bytes);
+    return bytes === null ? error(404, tr(r.lang, "station.files.notFound")) : answered(found.contentType, bytes);
   }
-  const made = await thumbnail(found.image, found.thumbs);
-  return made !== null ? fromDisk(made.type, made.path) : fromDisk(found.contentType, found.image);
+  const small = thumb && tools.data !== undefined ? await thumbnail(found.file, thumbsDir(tools.data)) : null;
+  return small !== null ? fromDisk(small.type, small.path) : fromDisk(found.contentType, found.file);
 }
 
 /// A file of a session on the disk, for a part of it or its poster: one packed with its archived workspace is put back
 /// in its upload directory first (as sending it again does), so its parts are read from there. Its path and type, or the
 /// answer to give instead.
-async function onDisk(read: Tools["read"], r: Request, key: string, name: string): Promise<{ path: string; type: string } | Answer> {
-  const answer = await read(r, "sessionFile", { key, name, thumb: false, lang: r.lang });
-  if (answer.status !== 200 || !Buffer.isBuffer(answer.body)) return answer;
-  const found = JSON.parse(answer.body.toString("utf8")) as Found;
+async function onDisk(tools: Tools, r: Request, key: string, name: string): Promise<{ path: string; type: string } | Answer> {
+  const found = await uploaded(tools, r, key, name);
+  if ("status" in found) return found;
   if ("file" in found) return { path: found.file, type: found.contentType };
-  if ("archived" in found) {
-    const { room, path, relative } = found.archived;
-    const back = await withLock(room, async () => {
-      if (await access(path).then(() => true, () => false)) return true;
-      const bytes = await workspaceFile(room, relative);
-      if (bytes === null) return false;
-      await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, bytes);
-      return true;
-    });
-    return back ? { path, type: found.contentType } : error(404, found.notFound);
-  }
-  return { path: found.image, type: found.contentType };
+  const { room, path, relative } = found.archived;
+  const back = await withLock(room, async () => {
+    if (await access(path).then(() => true, () => false)) return true;
+    const bytes = await workspaceFile(room, relative);
+    if (bytes === null) return false;
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, bytes);
+    return true;
+  });
+  return back ? { path, type: found.contentType } : error(404, tr(r.lang, "station.files.notFound"));
 }
 
 /// The most a part (GET /sessions/:key/parts) takes.
@@ -127,19 +140,19 @@ async function rangeAnswer(path: string, type: string, offset: number, length: n
 
 /// GET /sessions/:key/parts?name=&offset=&length=: `length` bytes of a file from `offset` (fewer at its end), with its
 /// whole size (`stillfail-total`): a big file is fetched a part at a time, onto the disk, never all in memory.
-async function part(read: Tools["read"], r: Request, key: string): Promise<Answer> {
+async function part(tools: Tools, r: Request, key: string): Promise<Answer> {
   const range = rangeOf(r);
   if (range === null) return error(400, "invalid offset or length");
-  const found = await onDisk(read, r, key, param(r, "name") ?? "");
+  const found = await onDisk(tools, r, key, param(r, "name") ?? "");
   if ("status" in found) return found;
   return rangeAnswer(found.path, found.type, range.offset, range.length);
 }
 
 /// GET /sessions/:key/poster?name=: a video's poster (drive/posters.ts), a JPEG; 404 when none can be made.
-async function posterOf(read: Tools["read"], r: Request, key: string, dataDir: string | undefined): Promise<Answer> {
+async function posterOf(tools: Tools, r: Request, key: string, dataDir: string | undefined): Promise<Answer> {
   const name = param(r, "name") ?? "";
   if (dataDir === undefined || !wantedPoster(name)) return error(404, "no poster");
-  const found = await onDisk(read, r, key, name);
+  const found = await onDisk(tools, r, key, name);
   if ("status" in found) return found;
   const made = await poster(found.path, thumbsDir(dataDir));
   return made === null ? error(404, "no poster") : fromDisk("image/jpeg", made);
@@ -255,9 +268,9 @@ export const routes = (tools: Tools): Route[] => {
         if (action === undefined) return read(r, "session", { key, viewer: r.viewer, lang: r.lang });
         // `brief=1`: in brief (what a history shows unopened); `from`, `to`: those entries whole, as one is opened.
         if (action === "timeline") return read(r, "timeline", { key, before: param(r, "before"), limit: param(r, "limit"), lang: r.lang, from: param(r, "from"), to: param(r, "to"), brief: param(r, "brief"), after: param(r, "after") });
-        if (action === "files") return file(read, r, { key, name: param(r, "name") ?? "", thumb: param(r, "thumb") === "1", lang: r.lang });
-        if (action === "parts") return part(read, r, key);
-        if (action === "poster") return posterOf(tools.read, r, key, tools.agents?.hub.config().dataDir);
+        if (action === "files") return file(tools, r, key, param(r, "name") ?? "", param(r, "thumb") === "1");
+        if (action === "parts") return part(tools, r, key);
+        if (action === "poster") return posterOf(tools, r, key, tools.agents?.hub.config().dataDir);
         if (action === "transcript") return read(r, "transcriptFile", { key, lang: r.lang });
         if (action === "widget-state") return read(r, "widgetState", { key, path: param(r, "path"), lang: r.lang });
         if (action === "peek") return peek(tools.read, r, key, tools.agents?.hub.config().dataDir);

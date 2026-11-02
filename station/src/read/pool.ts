@@ -1,6 +1,8 @@
-// The readers: worker threads, each with its own read-only connection. Reads wait in one line and each goes to the first
-// reader free, one at a time. Bulk reads leave room for chat reads; what the event streams tell (a message just said,
-// a session's turn ending) goes before the pages asked. None of these reads holds up writes.
+// The readers: worker threads, each with its own read-only connection, in two lines that share none of them. What the
+// station tells as things change (the event streams, its notices: `told`) is read by a reader of its own; what devices
+// ask, by the others. Neither waits on the other: on ccvm (2026-11-02) one line served both, and what was told of a
+// message just said waited 50 s behind a usage read and sidebar updates, a push notice 55 s. Among what devices ask,
+// bulk reads leave room for chat reads. None of these reads holds up writes.
 // A reader is a V8 of its own (tens of MB), so they are started when reads come and let go once none has come for a
 // while: an idle station keeps none. One that dies (its heap is bounded) fails what it held and is replaced by the next
 // read.
@@ -23,7 +25,6 @@ type Slot = { worker: Worker; held: Asked | null; idle?: () => void };
 /// session's history, where its reading stands in memory).
 type Asked = {
   ask: Ask;
-  told: boolean;
   session: string | null;
   home: Slot | null;
   at: number;
@@ -32,18 +33,22 @@ type Asked = {
   reject: (error: Error) => void;
 };
 
+/// A line of reads and the readers that answer it, at most `size` of them, the first read first. `room`: bulk reads leave
+/// one of them for a chat read (what devices ask).
+type Line = { told: boolean; size: number; room: boolean; slots: Slot[]; waiting: Asked[] };
+
 /// How many sessions' readers are remembered (the most recently read).
 const HOMES = 4096;
 /// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
 const CHECKPOINT_MS = 2_000;
-/// The scoped reads on the path to showing a message or a file. Other page reads, including new kinds not yet
-/// classified, leave room for these: a slow transcript or resource snapshot can block just as a slow aggregate can.
-const INTERACTIVE = new Set(["thread", "sessionFile"]);
+/// The scoped reads on the path to showing a chat. Other page reads, including new kinds not yet classified, leave room
+/// for these: a slow transcript or resource snapshot can block just as a slow aggregate can.
+const INTERACTIVE = new Set(["thread"]);
 
-/// Stream updates and one thread's current or older page are interactive. An `after` or explicit range can ask for an
-/// unbounded amount on older clients, so it remains in the background until that request is paged end to end.
+/// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
+/// older clients, so it remains in the background until that request is paged end to end.
 function interactive(a: Asked): boolean {
-  if (a.told || INTERACTIVE.has(a.ask.op)) return true;
+  if (INTERACTIVE.has(a.ask.op)) return true;
   if (a.ask.op !== "entries" && a.ask.op !== "letters") return false;
   const params = a.ask.args?.params;
   const keys = Array.isArray(params) ? params.map((p: unknown) => Array.isArray(p) ? p[0] : null) : Object.keys(params ?? {});
@@ -51,9 +56,9 @@ function interactive(a: Asked): boolean {
 }
 
 export class Readers {
-  private slots: Slot[] = [];
-  /// The reads no reader has taken yet: those told first, each in the order asked.
-  private line: Asked[] = [];
+  /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
+  private asked: Line;
+  private told: Line;
   /// The reader each session's history was last read in (`timeline`).
   private homes = new Map<string, Slot>();
   private next = 0;
@@ -61,8 +66,8 @@ export class Readers {
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
-  private readonly data: string;
-  private readonly size: number;
+  /// The station's data directory, whose database they read.
+  readonly data: string;
   private readonly workerFile: URL | undefined;
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
   readonly names = new Map<string, string>();
@@ -70,14 +75,15 @@ export class Readers {
   processes: () => Map<string, string> = () => new Map();
   clientKeys: () => Map<string, string> = () => new Map();
 
-  /// At most two by default (STILLFAIL_READERS says otherwise).
-  constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1)), workerFile?: URL) {
+  /// For what devices ask, at most two by default (STILLFAIL_READERS says otherwise); for what is told, `tellers`.
+  constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1)), workerFile?: URL, tellers = 1) {
     this.data = data;
-    this.size = size;
     this.workerFile = workerFile;
+    this.asked = { told: false, size, room: true, slots: [], waiting: [] };
+    this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
   }
 
-  private start(): Slot {
+  private start(line: Line): Slot {
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
     const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
@@ -88,21 +94,21 @@ export class Readers {
       slot.held = null;
       if (asked !== null && asked.ask.id === answer.id) {
         const now = wall.now();
-        if (now - asked.at > SLOW_MS) log.warn("readers", "a read went slowly", { op: asked.ask.op, told: asked.told, waitedMs: asked.took - asked.at, ms: now - asked.took });
+        if (now - asked.at > SLOW_MS) log.warn("readers", "a read went slowly", { op: asked.ask.op, told: line.told, waitedMs: asked.took - asked.at, ms: now - asked.took });
         if (answer.text !== undefined) asked.resolve(answer.text);
         else asked.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
       }
-      this.pump();
+      this.pump(line);
     });
     worker.on("error", (error) => log.error("readers", "a reader failed", { error: error.message, reading: slot.held?.ask.op ?? null }));
     worker.on("exit", (code) => {
       slot.idle?.();
-      this.slots = this.slots.filter((s) => s !== slot);
+      line.slots = line.slots.filter((s) => s !== slot);
       slot.held?.reject(new HttpError(500, `the reader stopped (exit ${code})`));
       slot.held = null;
-      this.pump();
+      this.pump(line);
     });
-    this.slots.push(slot);
+    line.slots.push(slot);
     return slot;
   }
 
@@ -115,42 +121,39 @@ export class Readers {
     });
   }
 
-  /// The answer, as JSON text. `told`: what an event stream tells, read before the pages asked.
+  /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
   read(op: string, args: unknown, lang: Ask["lang"], { told = false }: { told?: boolean } = {}): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    const line = told ? this.told : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
     const home = session !== null ? this.homes.get(session) : undefined;
     const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
-      const asked: Asked = { ask, told, session, home: home !== undefined && this.slots.includes(home) ? home : null, at: wall.now(), took: 0, resolve, reject };
-      const behind = told ? this.line.findIndex((a) => !a.told) : -1;
-      if (behind < 0) this.line.push(asked);
-      else this.line.splice(behind, 0, asked);
-      this.pump();
+      line.waiting.push({ ask, session, home: home !== undefined && line.slots.includes(home) ? home : null, at: wall.now(), took: 0, resolve, reject });
+      this.pump(line);
     });
   }
 
-  /// Reads in line go to readers free, the first first (a session's history to its home reader when that one is free).
-  /// When there are at least two readers, non-interactive reads leave one free for a message or file. Stream updates
-  /// remain interactive; a later interactive read passes a waiting non-interactive read.
-  private pump() {
+  /// Reads in line go to its readers free, the first first (a session's history to its home reader when that one is
+  /// free). Where bulk reads leave room (`room`, two readers or more), they hold one less than all: a later interactive
+  /// read passes a waiting bulk read to the one left.
+  private pump(line: Line) {
     if (this.closed) return;
-    while (this.line.length > 0) {
-      const background = (a: Asked) => !interactive(a);
-      const backgroundHeld = this.slots.filter((s) => s.held !== null && background(s.held)).length;
-      const limited = this.size > 1 && backgroundHeld >= this.size - 1;
-      const at = limited ? this.line.findIndex((a) => !background(a)) : 0;
+    while (line.waiting.length > 0) {
+      const bulkHeld = line.slots.filter((s) => s.held !== null && !interactive(s.held)).length;
+      const limited = line.room && line.size > 1 && bulkHeld >= line.size - 1;
+      const at = limited ? line.waiting.findIndex(interactive) : 0;
       if (at < 0) break;
-      const asked = this.line[at]!;
-      const home = asked.home !== null && asked.home.held === null && this.slots.includes(asked.home) ? asked.home : null;
-      const slot = home ?? this.slots.find((s) => s.held === null) ?? (this.slots.length < this.size ? this.start() : null);
+      const asked = line.waiting[at]!;
+      const home = asked.home !== null && asked.home.held === null && line.slots.includes(asked.home) ? asked.home : null;
+      const slot = home ?? line.slots.find((s) => s.held === null) ?? (line.slots.length < line.size ? this.start(line) : null);
       if (slot === null) break;
-      this.line.splice(at, 1);
+      line.waiting.splice(at, 1);
       this.give(slot, asked);
     }
-    for (const slot of this.slots) if (slot.held === null) this.letGoLater(slot);
+    for (const slot of line.slots) if (slot.held === null) this.letGoLater(slot);
   }
 
   private give(slot: Slot, asked: Asked) {
@@ -191,12 +194,14 @@ export class Readers {
 
   /// Each running reader's JS heap in use, in bytes (for the memory log).
   heaps(): Promise<number[]> {
-    return Promise.all(this.slots.map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
+    return Promise.all([...this.asked.slots, ...this.told.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
   }
 
   close() {
     this.closed = true;
-    for (const asked of this.line.splice(0)) asked.reject(new HttpError(502, "station stopping"));
-    for (const { worker } of this.slots) void worker.terminate();
+    for (const line of [this.asked, this.told]) {
+      for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
+      for (const { worker } of line.slots) void worker.terminate();
+    }
   }
 }
