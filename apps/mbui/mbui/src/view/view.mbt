@@ -360,6 +360,8 @@ struct Node {
   /// a hold on it is one what holds it may take over as it moves (View::claims), the hold not its own yet: a gesture
   /// waiting on a tap, a hold of the finger or its own slop (View::gesture)
   mut yields : Bool
+  /// how far apart the lines of a row that wraps are laid out (View::wraps; None: as its gap says, or none wraps)
+  mut line_gap : Double?
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
@@ -899,6 +901,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.claims_from = None
       n.claims_said = 0
       n.yields = false
+      n.line_gap = None
       n.claims_scroll = false
       n.scroll_held = -1
       n.focus_shown_cell = None
@@ -977,6 +980,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         claims_from: None,
         claims_said: 0,
         yields: false,
+        line_gap: None,
         claims_scroll: false,
         scroll_held: -1,
         focus_shown_cell: None,
@@ -1594,6 +1598,7 @@ priv enum Prop {
   AllowEllipsis
   Shrink
   Gap
+  Wraps
   MinWidth
   LinesUp
   LiesAlong

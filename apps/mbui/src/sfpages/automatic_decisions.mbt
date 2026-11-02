@@ -28,6 +28,31 @@ pub fn decisions_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
 }
 
 ///|
+/// 自动决定 as nodes (decisions_page's, narrow: what it is for is a wide page's mark beside its title, none here): its one
+/// decision on a card: whether a chat is done, how it is decided now (the core's), short; pressed, that decision's page.
+pub fn decisions_node(v : @view.View, core : Core, here : () -> Here, on_back~ : () -> Unit, frame~ : () -> PageFrame) -> Unit {
+  let said = fn() { (core.topic)("settings", { "scope": Json::string(here().workspace) }).value }
+  @sf.page_node(
+    v,
+    fn() { @sf.t("web-pages.automaticDecisions.title") },
+    fn() { ["decisions"] },
+    fn(b, _) {
+      @sf.group_node(b, fn(g) {
+        @sf.link_row_node(
+          g,
+          fn() { @sf.t("web-pages.automaticDecisions.completion") },
+          fn() { (core.push)(AutoCompletion) },
+          note=fn() { @sf.t("web-pages.automaticDecisions.completionShort") },
+          value=fn() { text(said(), "decisionsText") },
+        )
+      })
+    },
+    on_back~,
+    frame~,
+  )
+}
+
+///|
 /// The completion rule's page (AutomaticDecisionCompletion, the narrow app's AutomaticDecisionCompletionScreen): a
 /// section a station, its rule where it can be set (completion_station), else why not (offline, older, connecting); a
 /// wait while the stations are read; 重新发现模型 at its title's end.
