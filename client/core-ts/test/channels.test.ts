@@ -139,7 +139,7 @@ function world(boundedAfter = false) {
   // The lane: a task a name (asked for again while it waits, it is the same task), the most urgent first.
   type Task = { name: string; priority: number; work: Effect.Effect<void, CoreError>; done: Deferred.Deferred<void, CoreError> };
   const waiting: Task[] = [];
-  const later: (() => void)[] = [];
+  const later: Effect.Effect<void>[] = [];
   const answers: [string, string | null, boolean][] = [];
   const reach: Reach = {
     read: (_station, path) =>
@@ -159,6 +159,8 @@ function world(boundedAfter = false) {
       return task.done;
     },
     later: (_station, work) => void later.push(work),
+    now: () => 0,
+    firstWaiting: () => false,
     answered: (c, error, nothing) => void answers.push([c.id, error?.code ?? null, nothing]),
   };
   const channels = new Channels(held, reach);
@@ -176,8 +178,8 @@ function world(boundedAfter = false) {
     assert.ok(over && waiting.length === 0, "the lane came to rest");
   };
   /// The burst of what the station is saying is over.
-  const burstOver = () => {
-    for (const w of later.splice(0)) w();
+  const burstOver = async () => {
+    for (const w of later.splice(0)) await Effect.runPromise(w);
   };
   /// The station says items of a channel as they are added (the push).
   const tell = (c: Channel, ...ns: number[]) => channels.told(c, ns.map((n) => [n, item(c.id, n)]));
@@ -193,7 +195,7 @@ test("what_is_told_in_order_is_held_and_nothing_is_read", async () => {
     // Its summary says so too, before or after: by the time the burst is over the item is held.
     w.channels.goesTo(c, n);
   }
-  w.burstOver();
+  await w.burstOver();
   await w.work();
   assert.deepEqual(w.numbers(c), run(1, 12));
   assert.equal(w.of(c).get(7), "c:7");
@@ -225,7 +227,7 @@ test("behind_by_several_holes_it_is_read_until_it_is_not_and_no_further_back", a
   // Held from 8 on, with three holes and short of its end: what came after first, then each hole from the highest down.
   w.tell(c, 8, 9, 12, 15, 16, 18);
   w.channels.goesTo(c, 20);
-  w.burstOver();
+  await w.burstOver();
   await w.work();
   assert.deepEqual(w.asked, ["c?after=18", "c?from=17&to=17", "c?from=13&to=14", "c?from=10&to=11"]);
   assert.deepEqual(w.numbers(c), run(8, 20));
@@ -251,7 +253,7 @@ test("said_to_go_further_it_is_read_once_the_burst_is_over_whoever_said_so", asy
   w.channels.goesTo(c, 5);
   await w.work();
   assert.deepEqual(w.asked, []);
-  w.burstOver();
+  await w.burstOver();
   await w.work();
   assert.deepEqual(w.asked, ["c?after=3"]);
   assert.deepEqual(w.numbers(c), run(1, 5));
@@ -262,15 +264,72 @@ test("said_to_go_further_it_is_read_once_the_burst_is_over_whoever_said_so", asy
   await w.work();
   assert.deepEqual(w.asked, ["c?after=3", "c?from=6&to=6", "c?after=7"]);
   assert.deepEqual(w.numbers(c), run(1, 8));
-  w.burstOver();
+  await w.burstOver();
   await w.work();
   assert.equal(w.asked.length, 3);
   // Said to go no further than what is held: nothing.
   w.channels.goesTo(c, 6);
-  w.burstOver();
+  await w.burstOver();
   await w.work();
   assert.equal(w.asked.length, 3);
   assert.equal(w.held.head(c), 8, "how far it goes is never lowered");
+});
+
+test("a_further_summary_arriving_while_other_channels_are_checked_is_not_lost", async () => {
+  const w = world();
+  for (let id = 1; id <= 60; id++) {
+    w.there.set(String(id), 3);
+    w.tell(log(String(id)), 1, 2, 3);
+    w.channels.goesTo(log(String(id)), 3);
+  }
+  const numbers = w.held.numbers;
+  let checked = 0;
+  let checkedAtChange: number | null = null;
+  w.held.numbers = (c) => {
+    const held = numbers(c);
+    checked++;
+    if (checked === 1) setImmediate(() => {
+      checkedAtChange = checked;
+      w.there.set("1", 5);
+      w.channels.goesTo(log("1"), 5);
+    });
+    return held;
+  };
+  await w.burstOver();
+  await w.burstOver();
+  await w.work();
+  assert.ok(checkedAtChange !== null && checkedAtChange < 60, "the new summary arrived before the burst was finished");
+  assert.deepEqual(w.asked, ["1?after=3"]);
+  assert.deepEqual(w.numbers(log("1")), [1, 2, 3, 4, 5]);
+});
+
+test("forgetting_a_station_during_a_burst_stops_the_old_checks_but_keeps_new_ones", async () => {
+  const w = world();
+  for (let id = 1; id <= 60; id++) {
+    w.tell(log(String(id)), 1);
+    w.channels.goesTo(log(String(id)), 1);
+  }
+  w.there.set("new", 2);
+  w.tell(log("new"), 1);
+  const numbers = w.held.numbers;
+  const checked: string[] = [];
+  let forgotten = false;
+  w.held.numbers = (c) => {
+    const held = numbers(c);
+    checked.push(c.id);
+    if (checked.length === 1) setImmediate(() => {
+      forgotten = true;
+      w.channels.forget(ST);
+      w.channels.goesTo(log("new"), 2);
+    });
+    return held;
+  };
+  await w.burstOver();
+  assert.ok(forgotten && checked.length < 60, "the old checks stopped when the station was let go");
+  await w.burstOver();
+  await w.work();
+  assert.deepEqual(w.asked, ["new?after=1"]);
+  assert.deepEqual(w.numbers(log("new")), [1, 2]);
 });
 
 test("none_of_it_held_it_is_not_behind_and_is_brought_from_its_latest_page_back_to_its_first", async () => {
@@ -279,7 +338,7 @@ test("none_of_it_held_it_is_not_behind_and_is_brought_from_its_latest_page_back_
   w.there.set("c", 12);
   // Said to go to 12 with nothing held: that is no hole, and nothing is read for it.
   w.channels.goesTo(c, 12);
-  w.burstOver();
+  await w.burstOver();
   await w.work();
   assert.deepEqual(w.asked, []);
   assert.equal(w.channels.latestMissing(c), true);
@@ -431,7 +490,7 @@ test("one_let_go_for_room_is_left_as_it_is", async () => {
   w.channels.goesTo(c, 9);
   w.channels.bring(c, Priority.shown);
   w.channels.catchUp(c, Priority.shown);
-  w.burstOver();
+  await w.burstOver();
   await w.work();
   assert.equal(w.held.head(c), 9);
   assert.deepEqual(w.numbers(c), [1, 2, 3]);
@@ -530,7 +589,7 @@ test("whatever_the_push_drops_doubles_or_delays_a_channel_ends_whole_once_anythi
         w.channels.goesTo(c, n);
       } else if (between < 0.4) {
         did.push("burst over");
-        w.burstOver();
+        await w.burstOver();
       } else if (between < 0.45) {
         did.push("stream back");
         w.channels.catchUp(c, Priority.shown);
@@ -539,9 +598,9 @@ test("whatever_the_push_drops_doubles_or_delays_a_channel_ends_whole_once_anythi
     const told = `seed ${seed}: ${did.join(", ")}`;
     // The last word: its summary says how far it goes. No push after it, nothing else.
     w.channels.goesTo(c, LAST);
-    w.burstOver();
+    await w.burstOver();
     await w.work();
-    w.burstOver();
+    await w.burstOver();
     await w.work();
     const numbers = w.numbers(c);
     assert.ok(numbers.length > 0, told);

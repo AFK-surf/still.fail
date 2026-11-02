@@ -55,6 +55,11 @@ export const CHANGES_RETRY_MS = 3_600_000;
 /// How much of a station's history one batch asks (POST /batch, #history): a page of entries or a session's detail is
 /// one, a page of a transcript (200 steps in brief) five (each channel's kind says, channel-kinds.ts).
 export const HISTORY_BATCH = 40;
+/// Background history work shares the engine with page input. Give other work a turn after a small slice, and sooner
+/// when a few large answers already took time. The count also bounds work when a test's clock is stopped.
+const HISTORY_SLICE_ITEMS = 64;
+const HISTORY_SLICE_MS = 8;
+const HISTORY_SESSION_GROUP = 32;
 
 export const RECHECKING = "等它回来确认";
 /// The station's events that change what a search of it finds.
@@ -163,9 +168,11 @@ export class StationsSync {
       enqueue: (station, task, priority, work) => this.#enqueue(station, task, priority, work),
       later: (station, work) => {
         const link = this.#links.get(station);
-        if (link) core.runner.fork(Effect.sleep(EVENTS_COALESCE_MS).pipe(Effect.andThen(Effect.sync(work))), link.scoped);
-        else work();
+        if (link) core.runner.fork(Effect.sleep(EVENTS_COALESCE_MS).pipe(Effect.andThen(work)), link.scoped);
+        else core.runner.fork(work);
       },
+      now: () => core.host.monotonicMs(),
+      firstWaiting: () => core.store.firstValuesPending(),
       answered: (channel, error, nothing) => this.#channelAnswered(channel, error, nothing),
     });
   }
@@ -913,16 +920,21 @@ export class StationsSync {
   #historyStart(address: string): void {
     const link = this.#links.get(address);
     if (!link) return;
-    link.historyAsked.clear();
-    link.history = this.#historyReads(address);
-    this.#enqueue(address, "history", Priority.background, this.#history(address, 0));
+    const sweep = ++link.historySweep;
+    this.#enqueue(address, `history/prepare/${sweep}`, Priority.background, Effect.gen({ self: this }, function* () {
+      const reads = yield* this.#historyReads(address, link, sweep);
+      if (reads === null || this.#links.get(address) !== link || link.historySweep !== sweep) return;
+      link.historyAsked.clear();
+      link.history = reads;
+      this.#enqueue(address, "history", Priority.background, this.#history(address, 0));
+    }));
   }
 
   #history(address: string, attempt: number): Effect.Effect<void, CoreError> {
     return this.#asked((asked) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link || !this.reachable(address)) return;
-      if (link.batchRefused !== null && this.#core.host.nowMs() - link.batchRefused < CHANGES_RETRY_MS) return this.#historyEach(address);
+      if (link.batchRefused !== null && this.#core.host.nowMs() - link.batchRefused < CHANGES_RETRY_MS) return yield* this.#historyEach(address);
       const batch: HistoryRead[] = [];
       let cost = 0;
       while (link.history.length > 0 && (batch.length === 0 || cost + link.history[0]!.cost <= HISTORY_BATCH)) {
@@ -940,7 +952,7 @@ export class StationsSync {
         link.history.unshift(...batch);
         if (e.status === 404 && e.message.startsWith("no route ")) {
           link.batchRefused = this.#core.host.nowMs();
-          return this.#historyEach(address);
+          return yield* this.#historyEach(address);
         }
         // Not answered (its link went, say): asked again a little later, a few times.
         if ((e.status === undefined || e.status >= 500) && attempt < READ_RETRIES) {
@@ -949,10 +961,24 @@ export class StationsSync {
         }
         return;
       }
-      batch.forEach((read, i) => {
+      let sliceAt = this.#core.host.monotonicMs();
+      let sliced = 0;
+      for (let i = 0; i < batch.length; i++) {
+        // A link may have been let go while another task ran between answers.
+        if (this.#links.get(address) !== link) return;
+        const read = batch[i]!;
         const after = read.apply(answered.success[i]!);
         if (after !== null && !link.historyAsked.has(after.path)) link.history.push(after);
-      });
+        sliced++;
+        if (i + 1 < batch.length && (i === 1 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS)) {
+          // A stream may have said something newer while the batch was away or between slices. Put it back before a
+          // view can see this slice; later answers may overlap it too. A slice runs without anything else seeing it.
+          this.#retell(address, asked);
+          yield* Effect.yieldNow;
+          sliceAt = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
       this.#retell(address, asked);
       // More to bring: asked again, behind what is more urgent.
       if (link.history.length > 0) this.#enqueue(address, "history", Priority.background, this.#history(address, 0));
@@ -962,20 +988,54 @@ export class StationsSync {
   /// What a station's history has yet to bring onto the device, in the order it is brought: each listed session's
   /// detail where its turns changed, each thread's next page of entries (the latest threads first), each listed
   /// session's latest page of its transcript where none is held.
-  #historyReads(address: string): HistoryRead[] {
-    const data = this.#core.data;
-    const sessions = data.sessionsToRead(address);
-    const reads: HistoryRead[] = [];
-    for (const [key, again] of sessions) {
-      if (!again) continue;
-      const topic = { topic: "session", station: address, key };
-      reads.push({ path: `/sessions/${encode(key)}`, cost: 1, apply: (a) => (this.#took(address, topic, a), null) });
-    }
-    for (const channel of [...data.threadIds(address).map((id) => entriesOf(address, id)), ...sessions.map(([key]) => transcriptOf(address, key))]) {
-      const read = this.#channelRead(channel);
-      if (read !== null) reads.push(read);
-    }
-    return reads;
+  #historyReads(address: string, link: Link, sweep: number): Effect.Effect<HistoryRead[] | null> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.#links.get(address) !== link || link.historySweep !== sweep) return null;
+      const data = this.#core.data;
+      const keys = data.sessionKeys(address);
+      const sessions: [string, boolean][] = [];
+      let sliceAt = this.#core.host.monotonicMs();
+      let sliced = 0;
+      for (let at = 0; at < keys.length; at += HISTORY_SESSION_GROUP) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return null;
+        const group = keys.slice(at, at + HISTORY_SESSION_GROUP);
+        sessions.push(...data.sessionsToRead(address, group));
+        sliced += group.length;
+        if (at === 0 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          sliceAt = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+      const reads: HistoryRead[] = [];
+      for (const [key, again] of sessions) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return null;
+        if (again) {
+          const topic = { topic: "session", station: address, key };
+          reads.push({ path: `/sessions/${encode(key)}`, cost: 1, apply: (a) => (this.#took(address, topic, a), null) });
+        }
+        if (this.#core.store.firstValuesPending() || ++sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          sliceAt = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+      const channels = [...data.threadIds(address).map((id) => entriesOf(address, id)), ...sessions.map(([key]) => transcriptOf(address, key))];
+      let visited = 0;
+      for (const channel of channels) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return null;
+        const read = this.#channelRead(channel);
+        if (read !== null) reads.push(read);
+        // Finding the next page can read a chat's index from the database. Do not make a page being opened wait for
+        // every other chat's index to be read first.
+        if (visited++ === 0 || this.#core.store.firstValuesPending() || ++sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          sliceAt = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+      return reads;
+    });
   }
 
   /// A channel's next read (channels/channels.ts `next`) as a read of its station's history, the read after it while
@@ -1029,14 +1089,41 @@ export class StationsSync {
   }
 
   /// A station from before batches: its history a read a task, each its own request.
-  #historyEach(address: string): void {
-    const link = this.#links.get(address);
-    if (link) link.history = [];
-    for (const [key, again] of this.#core.data.sessionsToRead(address)) {
-      if (again) this.#enqueue(address, `session/${key}`, Priority.background, this.#session(address, key));
-      this.channels.bring(transcriptOf(address, key), Priority.background - 1);
-    }
-    for (const id of this.#core.data.threadIds(address)) this.channels.bring(entriesOf(address, id), Priority.background);
+  #historyEach(address: string): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link) return;
+      const sweep = link.historySweep;
+      link.history = [];
+      const data = this.#core.data;
+      const keys = data.sessionKeys(address);
+      let at = this.#core.host.monotonicMs();
+      let sliced = 0;
+      for (let start = 0; start < keys.length; start += HISTORY_SESSION_GROUP) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return;
+        for (const [key, again] of data.sessionsToRead(address, keys.slice(start, start + HISTORY_SESSION_GROUP))) {
+          if (again) this.#enqueue(address, `session/${key}`, Priority.background, this.#session(address, key));
+          this.channels.bring(transcriptOf(address, key), Priority.background - 1);
+          sliced++;
+        }
+        if (start === 0 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - at >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          at = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+      let visited = 0;
+      for (const id of data.threadIds(address)) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return;
+        this.channels.bring(entriesOf(address, id), Priority.background);
+        sliced++;
+        if (visited++ === 0 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - at >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          at = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+    });
   }
 
   #session(address: string, key: string): Effect.Effect<void, CoreError> {

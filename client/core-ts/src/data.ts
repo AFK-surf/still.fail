@@ -1221,8 +1221,12 @@ export class Data {
     this.of(station)?.patchDetail(station, key, change);
   }
 
-  sessionsToRead(station: string): [string, boolean][] {
-    return this.of(station)?.sessionsToRead(station) ?? [];
+  sessionKeys(station: string): string[] {
+    return this.of(station)?.sessionKeys(station) ?? [];
+  }
+
+  sessionsToRead(station: string, keys?: readonly string[]): [string, boolean][] {
+    return this.of(station)?.sessionsToRead(station, keys) ?? [];
   }
 
   listedThread(station: string, id: number): any {

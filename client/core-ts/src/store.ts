@@ -474,6 +474,11 @@ export class Store {
     return entry !== undefined && (entry.subscribers.length > 0 || entry.watchers.length > 0 || entry.usage.hasSubscribers());
   }
 
+  /// Whether a newly opened view is waiting for its first value to be made.
+  firstValuesPending(): boolean {
+    return this.#firstPending.size > 0;
+  }
+
   /// Topics with at least one subscriber (or within their eviction grace).
   liveTopics(): Topic[] {
     return [...this.#topics.values()].map((e) => e.topic);
