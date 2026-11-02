@@ -202,3 +202,197 @@ test "a page's list grown above what is in sight as it moves by itself: what is 
     }
   }
 }
+
+///|
+/// How far a page's list is down before it is flung back up to its top.
+let up_from : Double = 600.0
+
+///|
+/// A page's list on `platform` at up_from, flung up toward its top (a finger moved down), grown `by` above what is in
+/// sight grown_after_ms on, on its way there: what is drawn then and just before, each moment of the display's after
+/// it (where it is, how far past its end it shows) for grown_rest_ms, and where it comes to rest.
+fn grown_up(
+  platform : Int,
+  by : Double,
+) -> (Array[Array[Double]], Array[Array[Double]], Array[(Double, Double)], Double) {
+  let above = @signals.signal(0.0)
+  let (t, s) = same_tree(100, platform, above~)
+  t.wheel(200.0, 400.0, up_from)
+  t.draw()
+  swipe(t, 200.0, 24.0, 12)
+  t.draw()
+  let tree = view_tree().unwrap()
+  t.run_for(grown_after_ms)
+  let was = same_drawn(t)
+  above.set(by)
+  s.grew_above(by)
+  t.draw()
+  let now = same_drawn(t)
+  let after = []
+  let end = t.time() + grown_rest_ms
+  while t.time() < end {
+    t.frame()
+    after.push((s.at(tree), s.past(tree)))
+  }
+  (was, now, after, s.at(tree))
+}
+
+///|
+test "a page's list flung up toward its top, grown above what is in sight on its way: it meets its top where its top is now, and only there" {
+  for platform in [0, 1, 2] {
+    // (grown a little: it still gets there, later; grown much: it stops short of it)
+    for by in [400.0, 4000.0] {
+      let (was, now, after, end) = grown_up(platform, by)
+      let alike = was.length() > 0 &&
+        was.length() == now.length() &&
+        (0).until(was.length()).iter().all(fn(i) {
+          (0).until(was[i].length()).iter().all(fn(j) { (was[i][j] - now[i][j]).abs() <= 1.0e-6 })
+        })
+      assert_true(alike, msg="\{platform} \{by}: what is in sight moved as it grew")
+      // (past its top only at its top)
+      match after.iter().find_first(fn(f) { f.1 != 0.0 && f.0 != 0.0 }) {
+        Some(f) => fail("\{platform} \{by}: past its end \{f.1} at \{f.0}")
+        None => ()
+      }
+      let past = after.iter().any(fn(f) { f.1 != 0.0 })
+      if by < 1000.0 {
+        assert_true(end == 0.0, msg="\{platform} \{by}: at rest at \{end}")
+        assert_true(platform == 0 || past, msg="\{platform} \{by}: never past its top")
+      } else {
+        assert_true(end > 0.0 && !past, msg="\{platform} \{by}: at rest at \{end}, past its top \{past}")
+      }
+    }
+  }
+}
+
+///|
+/// A page's list on `platform` flung down toward its foot (a finger moved up, same_tree's 40 rows), what it holds grown
+/// grown_after_ms on, on its way: `above` above what is in sight (told so: Scroll::grew_above), under it from `below`'s
+/// first to its second; each
+/// moment of the display's after it (where it is, how far past its end it shows, how far it can go) for grown_rest_ms,
+/// and where it comes to rest and how far it can go then.
+fn grown_down(
+  platform : Int,
+  above : Double,
+  below : (Double, Double),
+) -> (Array[(Double, Double, Double)], Double, Double) {
+  let up = @signals.signal(0.0)
+  let down = @signals.signal(below.0)
+  let (t, s) = same_tree(40, platform, above=up, below=down)
+  swipe(t, 700.0, -32.0, 12)
+  t.draw()
+  let tree = view_tree().unwrap()
+  t.run_for(grown_after_ms)
+  up.set(above)
+  down.set(below.1)
+  s.grew_above(above)
+  t.draw()
+  let after = []
+  let end = t.time() + grown_rest_ms
+  while t.time() < end {
+    t.frame()
+    after.push((s.at(tree), s.past(tree), s.most()))
+  }
+  (after, s.at(tree), s.most())
+}
+
+///|
+test "a page's list flung down toward its foot, what it holds grown on its way: it meets its foot where it is laid out now, and only there" {
+  // (grown under what is in sight; grown above and as much less under, as far as it can go the same)
+  for grown in [(0.0, (0.0, 400.0)), (300.0, (300.0, 0.0))] {
+    for platform in [0, 1, 2] {
+      let (after, end, most) = grown_down(platform, grown.0, grown.1)
+      match after.iter().find_first(fn(f) { f.1 != 0.0 && (f.0 - f.2).abs() > 1.0e-6 }) {
+        Some(f) => fail("\{platform} \{grown}: past its end \{f.1} at \{f.0} of \{f.2}")
+        None => ()
+      }
+      assert_true((end - most).abs() < 1.0e-6, msg="\{platform} \{grown}: at rest at \{end} of \{most}")
+      assert_true(platform == 0 || after.iter().any(fn(f) { f.1 != 0.0 }), msg="\{platform} \{grown}: never past its foot")
+    }
+  }
+}
+
+///|
+test "a page's list grown above as what was pulled past its top goes back: what is in sight stays, what is past its top goes on back, none comes anew" {
+  // (as an old view's list: what is past its end drawn so till it is back, wherever it then stands, Ctx::place_list)
+  for platform in [1, 2] {
+    let above = @signals.signal(0.0)
+    let (t, s) = same_tree(100, platform, above~)
+    t.touch(0, 200.0, 300.0)
+    for k in 1..=10 {
+      t.advance(drag_step_ms)
+      t.touch(1, 200.0, 300.0 + 10.0 * k.to_double())
+      t.draw()
+    }
+    t.advance(tracker_horizon_ms)
+    t.touch(2, 200.0, 400.0)
+    t.draw()
+    t.advance(same_back_ms)
+    t.draw()
+    let tree = view_tree().unwrap()
+    let was = same_drawn(t)
+    let past = s.past(tree)
+    assert_true(past > 0.0, msg="\{platform}: nothing past its top")
+    above.set(grown_by)
+    s.grew_above(grown_by)
+    t.draw()
+    let now = same_drawn(t)
+    let alike = was.length() == now.length() &&
+      (0).until(was.length()).iter().all(fn(i) {
+        (0).until(was[i].length()).iter().all(fn(j) { (was[i][j] - now[i][j]).abs() <= 1.0e-6 })
+      })
+    assert_true(alike, msg="\{platform}: what is in sight moved as it grew")
+    // (what is past its top only going back, never more of it)
+    let mut last = s.past(tree)
+    let end = t.time() + grown_rest_ms
+    while t.time() < end {
+      t.frame()
+      let p = s.past(tree)
+      assert_true(p <= last + 1.0e-9, msg="\{platform}: past its top \{p} after \{last}")
+      last = p
+    }
+    assert_eq(s.past(tree), 0.0)
+    assert_true((s.at(tree) - grown_by).abs() < 1.0e-6, msg="\{platform}: at rest at \{s.at(tree)}")
+  }
+}
+
+///|
+/// How short of its foot a page's list flung down toward it is when what is above what is in sight grows.
+let near_foot : Double = 40.0
+
+///|
+test "a page's list flung down, short of its foot by a little as what is above grows by much: no meeting where its foot was, it meets it where it is laid out now" {
+  for platform in [0, 1, 2] {
+    let above = @signals.signal(0.0)
+    let (t, s) = same_tree(40, platform, above~)
+    swipe(t, 700.0, -32.0, 12)
+    t.draw()
+    let tree = view_tree().unwrap()
+    while s.at(tree) < s.most() - near_foot {
+      t.frame()
+    }
+    assert_true(s.at(tree) < s.most(), msg="\{platform}: at its foot already")
+    let was = same_drawn(t)
+    above.set(grown_by * 3.0)
+    s.grew_above(grown_by * 3.0)
+    t.draw()
+    let now = same_drawn(t)
+    let alike = was.length() == now.length() &&
+      (0).until(was.length()).iter().all(fn(i) {
+        (0).until(was[i].length()).iter().all(fn(j) { (was[i][j] - now[i][j]).abs() <= 1.0e-6 })
+      })
+    assert_true(alike, msg="\{platform}: what is in sight moved as it grew")
+    let end = t.time() + grown_rest_ms
+    let mut past = false
+    while t.time() < end {
+      t.frame()
+      let p = s.past(tree)
+      if p != 0.0 {
+        past = true
+        assert_true((s.at(tree) - s.most()).abs() < 1.0e-6, msg="\{platform}: past its end \{p} at \{s.at(tree)} of \{s.most()}")
+      }
+    }
+    assert_true((s.at(tree) - s.most()).abs() < 1.0e-6, msg="\{platform}: at rest at \{s.at(tree)} of \{s.most()}")
+    assert_true(platform == 0 || past, msg="\{platform}: never past its foot")
+  }
+}
