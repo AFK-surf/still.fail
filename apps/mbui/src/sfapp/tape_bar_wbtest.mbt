@@ -406,3 +406,62 @@ test "on the tape 关于 made once scrolled: what it holds goes under nothing of
   assert_true(row() < y0 - 50.0, msg="its row at \{y0}, then \{row()}")
   assert_eq(under_bar(), [])
 }
+
+///|
+/// 归档 on a tablet's tape 600 across (its page narrow), the core's prefs saying the language `lang` as it is now, a
+/// station's row pressed: its own archiving, made once, its page in use.
+fn tape_station_archiving(lang : Ref[String], platform? : Int = 2) -> @ui.Tester raise {
+  let t = tape_bar_in("settings-archiving", lang, platform~, w=600.0, h=900.0)
+  t.tap_text("Studio")
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.top() == Setting(@settings.Route::StationArchiving("ws1/st1")), msg="on top \{@sfbase.page_kind(app.nav.top())}")
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  t
+}
+
+///|
+test "on the tape a station's own archiving made once under the tape's bar: its title as the page says it, the same node as the language changes it; back to 归档 in the bar" {
+  let lang = Ref("")
+  let t = tape_station_archiving(lang)
+  assert_eq(page_words_made(t, @sf.t("web-pages.archiving.mode")), 1, msg="its rows the tree's")
+  let zh = bar_words_drawn(t, "自动归档 · Studio")
+  assert_eq(zh.length(), 1, msg="the bar's title")
+  assert_eq(bar_words_old(t, "自动归档 · Studio").length(), 0)
+  let backs = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "归档" && !s.hidden })
+  assert_eq(backs.length(), 1, msg="back to 归档")
+  lang.val = "en"
+  t.run_for(@ui.move_most_ms)
+  let en = bar_words_drawn(t, "Automatic archiving · Studio")
+  assert_eq(en.length(), 1, msg="the bar's title in English")
+  assert_eq(en[0].id, zh[0].id)
+}
+
+///|
+test "on the tape a station's own archiving made once: back in its bar pressed, or a swipe from its edge over the bar (an iPad's), 归档 again" {
+  let t = tape_station_archiving(Ref(""))
+  let depth = app.nav.depth()
+  match said_at(t, "归档") {
+    Some((x, y, w, h)) => t.tap(x + w / 2.0, y + h / 2.0)
+    None => fail("no back")
+  }
+  t.run_for(@ui.move_most_ms)
+  assert_eq(app.nav.depth(), depth - 1)
+  assert_true(app.nav.top() == Setting(@settings.Route::Archiving))
+  let t = tape_station_archiving(Ref(""), platform=1)
+  guard tape_page_panel(t) is Some(p) else { fail("no page") }
+  t.drag(p.x + 6.0, p.y + 20.0, p.x + 400.0, p.y + 20.0, steps=10)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(app.nav.depth(), depth - 1, msg="swiped from the bar")
+}
+
+///|
+test "on the tape a station's own archiving become another station's in its place: that one's page made anew, its title in the bar" {
+  let t = tape_station_archiving(Ref(""))
+  let rows = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == @sf.t("web-pages.archiving.mode") }).map(fn(d) { d.id })
+  app.nav.become(Setting(@settings.Route::StationArchiving("ws1/st2")))
+  t.run_for(@ui.move_most_ms)
+  let now = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == @sf.t("web-pages.archiving.mode") }).map(fn(d) { d.id })
+  assert_true(now.length() <= 1 && now != rows, msg="\{rows.length()} → \{now.length()}")
+  assert_eq(bar_words_drawn(t, "自动归档 · Studio").length(), 0)
+}

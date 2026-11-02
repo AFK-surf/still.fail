@@ -534,6 +534,7 @@ pub fn station_archiving_node(
   station : String,
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
 ) -> Unit {
   let s = fn() { station_of(core, here(), station) }
   let view = fn() { if flag(s(), "online") { field(field(s(), "overview"), "archiving") } else { None } }
@@ -591,7 +592,7 @@ pub fn station_archiving_node(
       _ => ["said"]
     }
   }
-  @sf.page_node(v, title, on_back~, frame~, blocks, fn(b, key) {
+  @sf.page_node(v, title, on_back~, frame~, said?, blocks, fn(b, key) {
     match key.split("/").to_array()[0].to_string() {
       "admin" => @sf.page_note_node(b, fn() { @sf.t("web-pages.archiving.adminOnly") })
       "review" => {

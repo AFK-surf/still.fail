@@ -96,7 +96,13 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
 /// the switch as the host has it, told as it is turned); still.fail's terms and privacy policy on its site; last, where
 /// the device keeps one, its performance record (its switch and its size as the host says them as it is turned here,
 /// the host telling nothing of them otherwise: perf_turned; 分享记录 while it holds anything).
-pub fn about_node(v : @view.View, core : Core, on_back~ : () -> Unit, frame~ : () -> PageFrame) -> Unit {
+pub fn about_node(
+  v : @view.View,
+  core : Core,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+) -> Unit {
   // (its blocks: the version's; the statistics' where the build sends any; the terms'; the performance record's where
   // the device keeps one)
   let blocks = fn() {
@@ -110,7 +116,7 @@ pub fn about_node(v : @view.View, core : Core, on_back~ : () -> Unit, frame~ : (
     }
     out
   }
-  @sf.page_node(v, fn() { @sf.t("web-pages.settings.nav.about") }, on_back~, frame~, blocks, fn(b, key) {
+  @sf.page_node(v, fn() { @sf.t("web-pages.settings.nav.about") }, on_back~, frame~, said?, blocks, fn(b, key) {
     match key {
       // this build, and what changed
       "version" =>
