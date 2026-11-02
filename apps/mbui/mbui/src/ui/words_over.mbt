@@ -40,6 +40,25 @@ let words_over : WordsOver = { held: true, file: "", pairs: Set::new() }
 let words_over_bars : Map[String, Int] = {}
 
 ///|
+/// Exact pairs intentionally shown during a particular test's closing overlay fade. A pair in any other motion is
+/// still checked, as are all other words in the same test.
+// kept across runs: named once as a test package starts, as words_over_bars is
+let words_over_closing_pairs : Array[(String, String, String)] = []
+
+///|
+/// A test file's exact `(file, underneath, leaving)` pairs that its chosen closing fade intentionally shows together.
+pub fn words_over_closing_expected(pairs : Array[(String, String, String)]) -> Unit {
+  for pair in pairs {
+    words_over_closing_pairs.push(pair)
+  }
+}
+
+///|
+fn words_over_expected_closing(file : String, under : String, over : String, leaving : Bool) -> Bool {
+  leaving && words_over_closing_pairs.iter().any(fn(p) { p == (file, under, over) })
+}
+
+///|
 /// The words over words known in the tests of the files `bars` names (the file a Tester is made in, as its `loc`
 /// says it without line and column: "src/sfapp/chat_wbtest.mbt"), each how many pairs a Tester made there may show.
 /// Said by a test package as it starts (`fn init`); only falls.
@@ -104,8 +123,28 @@ fn Ctx::words_over_both_seen(self : Ctx, k1 : Int, k2 : Int, px : Double, py : D
 }
 
 ///|
+/// Whether `over` belongs to a leaving layer above `under`: not a change within a layer, an entrance, or a page move.
+fn Ctx::words_over_leaving_layer(self : Ctx, under : InstBy, over : InstBy) -> Bool {
+  let tree_of = fn(by : InstBy) -> @view.NodeId? {
+    match by {
+      Node(id) => Some(id)
+      Old(i) if i >= 0 && i < self.count => self.nodes[i].island
+      _ => None
+    }
+  }
+  match (view_app.val, tree_of(over)) {
+    (Some(tree), Some(top)) => {
+      let above = tree.stack_of(top)
+      let below = tree_of(under).map_or(-1, fn(id) { tree.stack_of(id) })
+      tree.leaving(top) && above >= 0 && above > below
+    }
+    _ => false
+  }
+}
+
+///|
 /// The pairs of nodes' words the frame just drawn shows one over the other, each once: their words, where they meet.
-fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)] {
+fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double, Bool)] {
   let a = self.inst
   let ks : Array[Int] = []
   let rs : Array[(Double, Double, Double, Double)] = []
@@ -196,14 +235,21 @@ fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)]
             continue
           }
           pairs.add(os[p] * 65536 + os[q])
-          let said = fn(o : Int) { self.by_said(who.get(o).unwrap_or(Nobody)) }
-          out.push((said(os[p]), said(os[q]), px, py))
+          let under = who.get(os[p]).unwrap_or(Nobody)
+          let over = who.get(os[q]).unwrap_or(Nobody)
+          out.push((self.by_said(under), self.by_said(over), px, py, self.words_over_leaving_layer(under, over)))
         }
         here.push(q)
       }
     }
   }
   out
+}
+
+///|
+/// All visible overlaps, including intentional closing fades (for diagnostics).
+fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)] {
+  self.words_over_details().map(fn(f) { (f.0, f.1, f.2, f.3) })
 }
 
 ///|
@@ -214,8 +260,11 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
   if !words_over.held || !(c.motion_left || c.page_in_hand) {
     return
   }
-  for f in c.words_over_faults() {
-    let (under, over, x, y) = f
+  for f in c.words_over_details() {
+    let (under, over, x, y, leaving) = f
+    if words_over_expected_closing(words_over.file, under, over, leaving) {
+      continue
+    }
     let pair = "「\{under}」 under 「\{over}」"
     if words_over.pairs.contains(pair) {
       continue

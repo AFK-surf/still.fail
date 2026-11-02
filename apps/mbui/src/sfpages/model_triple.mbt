@@ -10,27 +10,41 @@
 
 ///|
 /// What the control keeps of its own (the pick is the core's): the one whose panel is open (its station and pick, ""
-/// none) and that panel (@sf.last_presented), the one asked open (a screen's fixture, a page's), its filter's field
-/// and words; the borrowing it asks to confirm ("" none).
+/// none) and that panel (@sf.last_presented), the one asked open (a screen's fixture, a page's), and the borrowing it
+/// asks to confirm ("" none). Each panel keeps its own contents and filter while it is shown.
 priv struct Triple {
   mut open : String
   mut shown : Int
   mut asked : String
-  field : @ui.Field
-  mut query : String
   mut borrow_asking : String
 }
 
 ///|
-let triple : Triple = { open: "", shown: 0, asked: "", field: @ui.Field::new(), query: "", borrow_asking: "" }
+let triple : Triple = { open: "", shown: 0, asked: "", borrow_asking: "" }
+
+///|
+/// One panel's filter and pick. Once closed, its last pick stays with it while it leaves: saving a different model may
+/// change its options and height immediately, but must not rearrange the panel that is already going away.
+priv struct TriplePanel {
+  mut serial : Int
+  field : @ui.Field
+  mut query : String
+  mut pick : Json?
+}
+
+///|
+fn TriplePanel::pick_now(self : TriplePanel, src : Source, station : String, of : String) -> Json? {
+  if @sf.presented_open_of(self.serial) {
+    self.pick = (src.topic)("pick", pick_params(station, of)).value
+  }
+  self.pick
+}
 
 ///|
 fn triple_reset() -> Unit {
   triple.open = ""
   triple.shown = 0
   triple.asked = ""
-  triple.field.set("")
-  triple.query = ""
   triple.borrow_asking = ""
 }
 
@@ -103,28 +117,29 @@ pub fn open_triple_panel(
     return
   }
   triple.open = me
-  triple.field.set("")
-  triple.query = ""
+  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", pick: None }
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   @sf.panel(
     @sf.t("android-chat.new.model"),
-    fn(c, close) { triple_panel(c, src, station, of, saved, close) },
+    fn(c, close) { triple_panel(c, src, station, of, contents, saved, close) },
     from~,
     w=triple_panel_w,
     // (as wide as its columns' words, no wider: 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」)
     fits=true,
-    foot=fn(c, close) { triple_foot(c, src, station, of, close) },
+    foot=fn(c, close) { triple_foot(c, src, station, of, contents, close) },
     // (its search beside its title, not a line of its own)
-    head_end=fn(c) { triple_find_field(c, (src.topic)("pick", pick_params(station, of)).value) },
+    head_end=fn(c) { triple_find_field(c, contents, contents.pick_now(src, station, of)) },
     gone=fn() { triple.open = "" },
     focus=false,
     // (the models scroll by themselves, what goes with the one picked beside them in view)
     lists=true,
+    fade_out_together=true,
     // (no line over its foot: 2026-10-30 用户「分割线也去掉呗」, in place of 2026-10-25's line out to its edges)
     ruled=false,
     side~,
   )
-  triple.shown = @sf.last_presented()
+  contents.serial = @sf.last_presented()
+  triple.shown = contents.serial
 }
 
 ///|
@@ -296,14 +311,14 @@ fn triple_sample() -> Json {
 /// goes with them in view. What borrowing would do under them. Beside what opened it the models scroll past 360 (the
 /// web's); in a sheet the sheet is as tall as all of it up to its most, the models scrolling in what is left then
 /// (@sf.panel_column).
-fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String, saved : String, close : () -> Unit) -> Unit {
-  let v = (src.topic)("pick", pick_params(station, of)).value
+fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String, contents : TriplePanel, saved : String, close : () -> Unit) -> Unit {
+  let v = contents.pick_now(src, station, of)
   if v is None {
     // (read the first time: the panel of made-up models, in its bones)
-    @sf.waiting(c, fn() { triple_body(c, @sfbase.sample_source, station, of, Some(triple_sample()), saved, close) })
+    @sf.waiting(c, fn() { triple_body(c, @sfbase.sample_source, station, of, contents, Some(triple_sample()), saved, close) })
     return
   }
-  triple_body(c, src, station, of, v, saved, close)
+  triple_body(c, src, station, of, contents, v, saved, close)
 }
 
 ///|
@@ -313,16 +328,17 @@ fn triple_body(
   src : Source,
   station : String,
   of : String,
+  contents : TriplePanel,
   v : Json?,
   saved : String,
   close : () -> Unit,
 ) -> Unit {
   let options = items(v, "options")
   let draft = field(v, "draft")
-  let words = triple.query.trim(chars=" ").to_string().to_lower()
+  let words = contents.query.trim(chars=" ").to_string().to_lower()
   // (the search, where the panel's head has none: a sheet's, its head its own)
   if !@sf.in_small_panel() && options.length() > 8 {
-    c.box(style=triple_search, fn() { triple_find_field(c, v) }) |> ignore
+    c.box(style=triple_search, fn() { triple_find_field(c, contents, v) }) |> ignore
   }
   let listed = options.filter(fn(o) {
     let o = Some(o)
@@ -551,23 +567,23 @@ fn triple_body(
 /// The models' search where there are more than 8 of them (the pick `v`'s): round, on the words' tint, no line round it,
 /// its glass before its words, its ground deeper pointed at or typed in (2026-10-30 用户「搜索也优化一下」「感觉它不应该
 /// 单独一行」: beside what opened it, at the end of the panel's head, beside its title).
-fn triple_find_field(c : @ui.Ctx, v : Json?) -> Unit {
+fn triple_find_field(c : @ui.Ctx, contents : TriplePanel, v : Json?) -> Unit {
   guard items(v, "options").length() > 8 else { return }
   let t = @sf.theme()
   // (in the panel's top corner, the head standing it where it is concentric with it: panel_head's `end`)
-  triple_find_input(c, t)
+  triple_find_input(c, t, contents)
 }
 
 ///|
 /// The search's field itself (triple_find_field).
-fn triple_find_input(c : @ui.Ctx, t : @sf.Theme) -> Unit {
+fn triple_find_input(c : @ui.Ctx, t : @sf.Theme, contents : TriplePanel) -> Unit {
   let res = @kit.text_field(
     c,
     "triple/filter",
     placeholder=@sf.t("web-main.model.search"),
     size=t.t.ui,
     line=t.t.ui_line,
-    field=triple.field,
+    field=contents.field,
     look=fn(c, s, editor) {
       c.box(id=s.id, style=(if s.hovered || s.focused { triple_find_hot } else { triple_find }).then(@ui.style(h=Fixed(@sf.menu_row_min))), fn() {
         @sf.icon(c, "search", size=triple_find_icon, color=t.p.muted) |> ignore
@@ -576,7 +592,7 @@ fn triple_find_input(c : @ui.Ctx, t : @sf.Theme) -> Unit {
       |> ignore
     },
   )
-  triple.query = res.text
+  contents.query = res.text
 }
 
 ///|
@@ -620,8 +636,8 @@ fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v :
 /// Its foot (the presenter's, where every panel's foot stands): who runs it, and where the model picked is another
 /// station's, borrowing it (asked first). Nothing to confirm: each pick is made what it runs on as it is picked
 /// (2026-11-01 用户「从第一性原理出发重新思考这个组件的使用场景」).
-fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, close : () -> Unit) -> Unit {
-  let v = (src.topic)("pick", pick_params(station, of)).value
+fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, contents : TriplePanel, close : () -> Unit) -> Unit {
+  let v = contents.pick_now(src, station, of)
   if v is None {
     return
   }

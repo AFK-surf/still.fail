@@ -89,6 +89,10 @@ the sidebar, a side panel) waits for its first frame's lateness as a slide does.
    last two lines); a list's rows make room for each other instead (`makes_room`). A soft cut fades by each pixel
    everywhere (scene.mbt 52-55), never a whole line by its foot.
 
+   The model picker's whole-panel fade (requested 2026-11-02: 「做个渐隐」) can show page words through its words while
+   it closes. Its test names the exact expected pair for a leaving overlay; all other overlaps, and the same pair during
+   any other motion, remain checked. The overlap itself remains visible to the diagnostic.
+
 ## Curves
 
 How a motion goes from its start to its end says what it is, so there is one way for each, and a motion uses the

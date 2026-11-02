@@ -70,3 +70,37 @@ test "words over words in the window's tree: a node's over another's found, as m
   let mixed = g().words_over_faults().map(fn(f) { (f.0, f.1) })
   assert_eq((made, kept, mixed), ([("under these", "over those")], [("under these", "over those")], [("under these", "over those")]))
 }
+
+///|
+test "a named closing fade does not exempt other pairs, other files, or an overlap before the layer leaves" {
+  let open = @signals.signal(true)
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0, words_over_held=false)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)).stacked(Is(1)) |> ignore
+      b.box(fn(w) { w.width(Is(Some(200.0))).words(Is("under these")) |> ignore }) |> ignore
+    }) |> ignore
+    root.box(fn(parent) {
+      parent.over(Is(true)).stacked(Is(2)) |> ignore
+      parent.show(fn() { open.get() }, leave=100.0, fn(layer) {
+        layer.box(fn(w) { w.width(Is(Some(200.0))).words(Is("over those")) |> ignore }) |> ignore
+      })
+    }) |> ignore
+  })
+  t.draw()
+  let before = g().words_over_details()
+  assert_eq(before.length(), 1)
+  assert_false(before[0].4, msg="the open overlay is not leaving")
+  open.set(false)
+  t.frame_at(t.time() + 16.0)
+  let closing = g().words_over_details()
+  assert_eq(closing.length(), 1)
+  assert_true(closing[0].4, msg="the upper layer is leaving")
+  // The diagnostic still sees the actual overlap; only the test's named closing pair may be expected.
+  assert_eq(g().words_over_faults().length(), 1)
+  words_over_closing_expected([("closing-probe", "under these", "over those")])
+  assert_true(words_over_expected_closing("closing-probe", closing[0].0, closing[0].1, closing[0].4))
+  assert_false(words_over_expected_closing("closing-probe", closing[0].0, closing[0].1, before[0].4))
+  assert_false(words_over_expected_closing("another-file", closing[0].0, closing[0].1, closing[0].4))
+  assert_false(words_over_expected_closing("closing-probe", closing[0].0, "other words", closing[0].4))
+}

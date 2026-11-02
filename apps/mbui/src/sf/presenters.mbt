@@ -101,6 +101,8 @@ priv struct PanelOf {
   focus : Bool
   ruled : Bool
   lists : Bool
+  /// fade the panel and its contents together as it leaves
+  fade_out_together : Bool
   form : Bool
   /// the field given the keyboard's focus as it opens where it is not a sheet ("" none: panel's `field`)
   field : String
@@ -330,6 +332,8 @@ pub fn pick(
 /// start at the start of it); what opens from a bar down the window's side (the rail) stands beside the bar, out of
 /// it, as everything opened from there does. `head_end`: beside what opened it, what stands at the end of its head's
 /// line, beside its title (the model panel's search: a sheet, its head the sheet's own, leaves it to what it holds).
+/// `fade_out_together`: its ground and contents leave as one instead of the usual staged fade; what is behind it may
+/// show through while it goes (the model picker, 2026-11-02).
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -346,6 +350,7 @@ pub fn panel(
   focus? : Bool = true,
   ruled? : Bool = false,
   lists? : Bool = false,
+  fade_out_together? : Bool = false,
   form? : Bool = false,
   field? : String = "",
   stage? : Bool = false,
@@ -371,6 +376,7 @@ pub fn panel(
       focus,
       ruled,
       lists,
+      fade_out_together,
       form,
       field,
       stage,

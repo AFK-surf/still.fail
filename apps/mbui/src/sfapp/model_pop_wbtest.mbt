@@ -35,6 +35,69 @@ test "wide, short names: the model's panel as wide as what it holds, not as wide
 }
 
 ///|
+test "choosing a frequent model fades the model words with the panel" {
+  let t = model_pop("newchat-crowded-model")
+  let (x, y, w, h) = t.get(@ui.Role::Dialog).rect
+  let heading = t.words().filter(fn(item) { item.0 == "常用" }).last().unwrap()
+  let surfaces = t.drawn_rects().filter(fn(r) {
+    (r.0 - x).abs() < 0.1 && (r.1 - y).abs() < 0.1 &&
+    (r.2 - w).abs() < 0.1 && (r.3 - h).abs() < 0.1 && (r.4 & 0xFFL) > 0L
+  })
+  assert_eq(surfaces.length(), 1, msg="the model panel's surface")
+  let original = surfaces[0]
+  let in_heading = fn(g : (Double, Double, Int64)) {
+    g.0 >= heading.1 - 2.0 && g.0 < heading.1 + heading.3 + 2.0 &&
+    g.1 >= heading.2 - 2.0 && g.1 < heading.2 + heading.4 + 2.0
+  }
+  let before = t.drawn_glyphs().filter(in_heading)
+  assert_true(!before.is_empty(), msg="the frequent-model heading is drawn")
+  let ink = before.last().unwrap().2
+  t.click(Button, label="GPT-6 Astra")
+  t.run_for(@kit.pop_out_ms / 2.0)
+  let faded = t.drawn_rects().filter(fn(r) {
+    r.4 >> 8 == original.4 >> 8 &&
+    (r.0 - original.0).abs() < 10.0 && (r.1 - original.1).abs() < 10.0 &&
+    r.2 > original.2 * 0.96 && r.3 > original.3 * 0.96
+  })
+  let words = t.drawn_glyphs().filter(fn(g) { in_heading(g) && g.2 >> 8 == ink >> 8 })
+  assert_eq(faded.length(), 1, msg="the model panel remains during its fade")
+  assert_true(!words.is_empty(), msg="the frequent-model heading remains during its fade")
+  let surface_alpha = faded[0].4 & 0xFFL
+  let word_alpha = words.last().unwrap().2 & 0xFFL
+  assert_true(surface_alpha > 0L && surface_alpha < 255L, msg="the surface is fading")
+  let difference = word_alpha * (original.4 & 0xFFL) - surface_alpha * (ink & 0xFFL)
+  assert_true(difference >= -255L && difference <= 255L, msg="the model words and surface fade together")
+}
+
+///|
+test "a frequent model with a different runtime is applied as its panel leaves without the contents jumping" {
+  let t = model_pop("newchat-crowded-model")
+  let before = t.find("常用").unwrap()
+  let words = fn(name : String) { t.words().filter(fn(w) { w.0 == name }).last().unwrap() }
+  let heading = words("常用")
+  let row = words("SWE-2")
+  let other = words("DeepSeek V4.1 Flash")
+  assert_true(t.find("DeepSeek Harness") is Some(_))
+  t.click(Button, label="GPT-6 Astra")
+  assert_eq(new_fix.model, "gpt-6-astra")
+  assert_eq(t.find("常用"), Some(before), msg="the model rows stay where they were as the panel starts to close")
+  assert_true(t.find("DeepSeek Harness") is Some(_), msg="the leaving panel keeps the runtime that was shown")
+  t.run_for(@kit.pop_out_ms / 2.0)
+  // The rows' layout stays fixed while the panel fades and shrinks.
+  let heading_out = words("常用")
+  let row_out = words("SWE-2")
+  let other_out = words("DeepSeek V4.1 Flash")
+  assert_true(((row_out.2 - heading_out.2) - (row.2 - heading.2)).abs() < 1.0, msg="the model rows keep their layout")
+  assert_true(((other_out.2 - heading_out.2) - (other.2 - heading.2)).abs() < 1.0, msg="the other model row keeps its layout")
+  assert_true(t.find("DeepSeek Harness") is Some(_), msg="the runtime stays with the leaving panel")
+  // Open it again while the first panel is still leaving: the new one has its own, current contents.
+  t.tap_text("GPT-6 Astra")
+  t.run_for(@kit.pop_ms)
+  assert_true(t.query(@ui.Role::Dialog) is Some(_), msg="the panel opens again")
+  assert_true(t.query(Button, label="DeepSeek Harness") is None, msg="the reopened panel shows the new model")
+}
+
+///|
 /// Whether `a`, `b`, `c` lie in that order along the panel, one way or the other.
 fn in_line(a : Double, b : Double, c : Double) -> Bool {
   (a < b && b < c) || (a > b && b > c)
