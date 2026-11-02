@@ -70,6 +70,37 @@ test "外观: wide setting titles have the same weight as the rows in 自动决�
 }
 
 ///|
+test "setting rows keep their title prominent at every width and with either input" {
+  for (w, platform) in page_cases {
+    let t = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.group(c, fn() {
+        @sf.link_row(c, "plain", "Plain title") |> ignore
+        @sf.link_row(c, "value", "Title with value", value="Current") |> ignore
+        @sf.link_row(c, "note", "Title with note", note="More detail") |> ignore
+        @sf.link_row(c, "summary", "Summary title", value="Selected", note="Explanation") |> ignore
+        @sf.link_row(c, "custom", "Custom title", title_style=@sf.desk_list_title.then(@ui.text_style(weight=Normal))) |> ignore
+        @sf.switch_row(c, "switch", "Switch title", false) |> ignore
+        @sf.link_row(c, "strong", "Strong title", strong=true) |> ignore
+        @sf.setting(c, "Setting title", fn() {  })
+      })
+      @sf.switch_row(c, "outside", "Standalone switch", false) |> ignore
+    }, w~, platform~)
+    t.draw()
+    let boxes = t.boxes()
+    let at = "\{w} platform \{platform}"
+    for title in ["Plain title", "Title with value", "Title with note", "Summary title", "Custom title", "Switch title", "Setting title", "Standalone switch"] {
+      let found = boxes.filter(fn(b) { b.text == title })
+      assert_eq(found.length(), 1, msg="\{at}: \{title}")
+      assert_eq(found[0].weight, 500, msg="\{at}: \{title}")
+      assert_eq(found[0].color, boxes.filter(fn(b) { b.text == "Strong title" })[0].color, msg="\{at}: \{title} ink")
+    }
+    assert_eq(boxes.filter(fn(b) { b.text == "Strong title" })[0].weight, 700, msg=at)
+    assert_eq(boxes.filter(fn(b) { b.text == "Explanation" })[0].weight, 400, msg=at)
+  }
+}
+
+///|
 test "字体, at each width on either screen: the places' choice, a chat as they set it, the faces a row each" {
   for case in page_cases {
     let (w, platform) = case

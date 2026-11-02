@@ -659,9 +659,9 @@ pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String
 let setting_in_card_control : @ui.Style = @ui.css("w=Full py=S2")
 
 ///|
-/// A wide setting's title, as strong as the titles of the page's other rows while keeping the input's text size.
+/// A wide setting's title, using the shared row-title weight at the input's text size.
 fn setting_title() -> @ui.TextStyle {
-  theme().rows.title.then(@ui.text_style(weight=Medium))
+  theme().rows.title.then(row_title_weight)
 }
 
 ///|
@@ -1135,7 +1135,7 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// every width: by its first line it stands in the row's corner, 10 from both its edges, its 14 round in the row's 18,
 /// which would want a corner of 24, on no step of the ladder (docs/ui-panels.md 圆角阶梯); a mark (an icon, a dot) is
 /// by its first line.
-/// `title_style` overrides a wide row's title (a setting's title follows the other settings' titles).
+/// `title_style` supplies a wide row's title size and other properties; its weight follows the shared row-title role.
 /// `title_after` after its title on its line (a pill: 你, 当前; a team's name), dropped before the title where
 /// the line has not the room for both; `control` at its
 /// end, last (a button, a switch, a choice: what is done here, no chevron), a button of words alone there with its
@@ -1352,7 +1352,7 @@ pub fn link_row(
           None => ()
         }
         let title_words = fn() {
-          let title_style = title_style.unwrap_or(desk_list_title)
+          let title_style = title_style.unwrap_or(desk_list_title).then(row_title_weight)
           let style = match (strong, danger) {
             (_, true) => title_style.then(bad)
             (true, false) => title_style.then(row_strong)
@@ -1471,6 +1471,10 @@ fn row_end(f : () -> Unit) -> Unit {
 pub fn at_row_end() -> Bool {
   row_ends.val > 0
 }
+
+///|
+/// A row's title, distinct from its note and value on every page width and input.
+let row_title_weight : @ui.TextStyle = @ui.text_style(weight=Medium)
 
 ///|
 /// A row's title said strongly (`strong`: who or what a row is, the account's, the workspace's).
@@ -1790,7 +1794,7 @@ pub fn switch_row(
         |> ignore
         now
       } else {
-        wide_switch_row(c, key, title, on, note~, disabled~, busy~, lead?)
+        wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=setting_title(), lead?)
       }
     Narrow => {
       // (the switch alone answers: the row is its words, not a press of its own; 2026-10-27 用户「只有开关响应」)
@@ -2412,12 +2416,12 @@ pub let pg_row_words : @ui.Style = @ui.style(w=grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let pg_row_title : @ui.TextStyle = body.then(one_line).then(full_words)
+pub let pg_row_title : @ui.TextStyle = body.then(row_title_weight).then(one_line).then(full_words)
 
 ///|
 /// A row's title where what it says follows it in the line (narrow, over its note).
 // kept across runs: a value (no field of it changes)
-let pg_row_title_in : @ui.TextStyle = body.then(one_line)
+let pg_row_title_in : @ui.TextStyle = body.then(row_title_weight).then(one_line)
 
 ///|
 /// Its title and what it says, at the line's two ends (one under the other where the line has not the room), 12 apart.
@@ -2426,7 +2430,7 @@ let pg_title_value : @ui.Style = @ui.css("row w=Full gap=S3 justify=JBetween ali
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pg_switch_title : @ui.TextStyle = body.then(full_words)
+let pg_switch_title : @ui.TextStyle = body.then(row_title_weight).then(full_words)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2653,7 +2657,7 @@ pub let desk_named : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_list_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
+pub let desk_list_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false).then(row_title_weight)
 
 ///|
 // kept across runs: a value (no field of it changes)
