@@ -7,7 +7,7 @@
 
 ///|
 /// A chat's mark `tone` (the core's: busy, done, alert, wait; anything else none), the row's ground behind it: a dot 8
-/// across, blue (done and unread, or waiting on the viewer) or red (alert), at work yellow spokes stepping round in 10.
+/// across, blue (done and unread, or waiting on the viewer) or red (alert), at work a turning disc in 10.
 /// Its node (0 for none).
 pub fn chat_mark(c : @ui.Ctx, tone : String) -> Int {
   let label = match tone {

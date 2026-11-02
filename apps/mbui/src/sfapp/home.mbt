@@ -226,7 +226,7 @@ let mark_blue : Int64 = 0x3B82F6FFL
 let mark_red : Int64 = 0xE5484DFFL
 
 ///|
-let mark_yellow : Int64 = 0xF2B01EFFL
+let mark_yellow : Int64 = 0xE09B00FFL
 
 ///|
 /// What the others have waiting, beside the name: its mark alone.

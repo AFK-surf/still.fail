@@ -2622,14 +2622,14 @@ pub let edge_tip_gap : Double = 14.0
 
 ///|
 /// An agent's and a chat's marks' colours, bright in both themes, one meaning each wherever they are (ChatMark.css.ts:
-/// #3b82f6 the viewer's turn, unread or waited on; #e5484d gone wrong; #f2b01e at work).
+/// #3b82f6 the viewer's turn, unread or waited on; #e5484d gone wrong; #e09b00 at work, white on it).
 pub let mark_blue : @ui.Color = Exact(0x3B82F6FFL)
 
 ///|
 pub let mark_red : @ui.Color = Exact(0xE5484DFFL)
 
 ///|
-pub let mark_yellow : Int64 = 0xF2B01EFFL
+pub let mark_yellow : Int64 = 0xE09B00FFL
 
 ///|
 /// The rail's places 8 from its edges open (Rail.css.ts rail: 9 under the last, its 38s 9 in; here where they stand in

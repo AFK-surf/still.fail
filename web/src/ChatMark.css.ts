@@ -23,14 +23,14 @@ export const chatMark = style({
       backgroundImage: "linear-gradient(#e5484d 0 0), linear-gradient(var(--mark-around) 0 0)",
       backgroundClip: "padding-box, border-box",
     },
-    // At work: yellow spokes stepping round (spokes.ts), with no gap of the ground round them (it showed as a dark rim,
-    // 2026-10-19): they fill the box.
+    // At work: a yellow disc, white blades turning on it (spokes.ts), no gap of the ground round it (it showed as a
+    // dark rim, 2026-10-19): it fills the box.
     '&[data-tone="busy"]': { border: 0, backgroundImage: "none", backgroundColor: "transparent" },
-    '&[data-tone="busy"]::after': { content: "\"\"", position: "absolute", inset: 2, ...spokesBox("#f2b01e") },
+    '&[data-tone="busy"]::after': { content: "\"\"", position: "absolute", inset: 2, ...spokesBox("#e09b00") },
     [`${STILL} &[data-tone="busy"]::after`]: stillLoop(),
   },
 });
-spokesTurn(`${chatMark}[data-tone="busy"]::after`);
+spokesTurn(`${chatMark}[data-tone="busy"]::after`, 22.5);
 
 /** The same state as a dot in a line, before the chat's title: no gap round it, the row's ground is behind it. */
 export const chatMarkInline = style({
@@ -38,11 +38,11 @@ export const chatMarkInline = style({
   selectors: {
     '&[data-tone="done"], &[data-tone="wait"]': { background: "#3b82f6" },
     '&[data-tone="alert"]': { background: "#e5484d" },
-    '&[data-tone="busy"]': { width: 10, height: 10, ...spokesBox("#f2b01e") },
+    '&[data-tone="busy"]': { width: 10, height: 10, ...spokesBox("#e09b00") },
     [`${STILL} &[data-tone="busy"]`]: stillLoop(),
   },
 });
-spokesTurn(`${chatMarkInline}[data-tone="busy"]`);
+spokesTurn(`${chatMarkInline}[data-tone="busy"]`, 22.5);
 
 /** A workspace's counts (ChatMark.tsx MarkCounts): each dot with its number, small and quiet beside its name. */
 export const markCounts = style({ display: "inline-flex", alignItems: "center", gap: 10, flex: "none", fontSize: vars.textMeta, lineHeight: 1, fontVariantNumeric: "tabular-nums" });
