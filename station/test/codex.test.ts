@@ -188,6 +188,15 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(stdin(p.dump).at(-1).method, "thread/unsubscribe");
   });
 
+  test("a session kept to less context starts its thread compacting at it", async () => {
+    const d = driver();
+    const p = profile();
+    const session = await d.open(options(p, { model: "gpt-x", context: 300_000 }), listen().push);
+    const start = stdin(p.dump).find((m) => m.method === "thread/start");
+    assert.equal(start.params.config.model_auto_compact_token_limit, 300_000);
+    await session.dispose();
+  });
+
   test("another model and effort go with the next turn/start; back to a default takes a new start", async () => {
     const d = driver();
     const p = profile();

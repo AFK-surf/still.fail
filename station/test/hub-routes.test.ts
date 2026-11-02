@@ -384,6 +384,18 @@ test("stopping, evicting, warming and changing a session", async () => {
     assert.deepEqual((await r.ask("GET", `/sessions/${made.key}`))[1].session.contextActions, ["compact", "clear"]);
 
     assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { fast: "yes" }), [400, { error: en("station.admin.badFast") }]);
+    // Kept to less context than its model's window, and back to all of it; none too small for its runtime.
+    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { context: 5000 }), [400, { error: en("station.session.badContext", { least: 100_000 }) }]);
+    // (its process started without it: only a new one takes it)
+    await r.ask("POST", `/sessions/${made.key}/warm`);
+    await until("it warms again", () => r.claude.count() === 2 && !r.claude.last().disposed);
+    assert.deepEqual((await r.ask("POST", `/sessions/${made.key}/settings`, { context: 300_000 }))[0], 200);
+    await until("its process ends for it", () => r.claude.last().disposed);
+    assert.equal(r.store.getSession(made.key)!.context, 300_000);
+    assert.equal((await r.ask("GET", `/sessions/${made.key}`))[1].session.context, 300_000);
+    await r.ask("POST", `/sessions/${made.key}/settings`, { context: null });
+    assert.equal(r.store.getSession(made.key)!.context, null);
+    assert.equal((await r.ask("GET", `/sessions/${made.key}`))[1].session.context, undefined);
     assert.equal((await r.ask("POST", "/sessions/nope/settings", { model: "opus" }))[0], 400);
     assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { model: "opus", profile: "cc" }), [200, { ok: true, profile: "cc" }]);
     const row = r.store.getSession(made.key)!;

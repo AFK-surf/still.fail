@@ -17,6 +17,8 @@ pub(all) struct NewFix {
   mut d_runtime : String
   mut d_effort : String
   mut d_profile : String
+  /// The most context it runs with, in tokens ("" its model's whole window)
+  mut context : String
   mut made : Int
   /// MBUI_FIXTURE=stations-slow: its stations not asked for yet (0), being read (1), read (2)
   mut reading : Int
@@ -46,6 +48,7 @@ pub let new_fix : NewFix = {
   d_runtime: "claude",
   d_effort: "high",
   d_profile: "",
+  context: "",
   made: 0,
   reading: 0,
   crowded: false,
@@ -436,6 +439,16 @@ pub fn fix_pick() -> Json {
       ["low", "medium", "high"]
     },
     "fastAvailable": n.tall,
+    // (how much context Claude Code can be kept to under the model's 1M)
+    "contexts": if n.d_runtime == "claude" {
+      [("", "完整 · 1M"), ("500000", "500K"), ("300000", "300K"), ("200000", "200K")].map(fn(c) {
+        Json::object({ "id": Json::string(c.0), "text": Json::string(c.1) })
+      })
+      |> Json::array
+    } else {
+      []
+    },
+    "contextNow": Json::string(n.context),
     "accounts": [
       {
         "id": "p1",
@@ -852,6 +865,7 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       take("runtime", fn(s) { n.d_runtime = s })
       take("effort", fn(s) { n.d_effort = s })
       take("profile", fn(s) { n.d_profile = s })
+      take("context", fn(s) { n.context = s })
       n.model = n.d_model
       n.runtime = n.d_runtime
       n.effort = n.d_effort

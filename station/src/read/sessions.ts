@@ -90,6 +90,8 @@ function sessionJson(r: SessionRow): Json {
     profilePinned: r.profilePinned, model: r.model, effort: r.effort, fast: r.fast, afresh: r.afresh, runtimeSessionId: r.runtimeSessionId, workspace: r.workspace,
   };
   if (r.cwd !== null) v.cwd = r.cwd;
+  // The most context it runs with (sessions/context-cap.ts): none, the model's whole window.
+  if (r.context !== null) v.context = r.context;
   Object.assign(v, { running: r.running, createdAt: r.createdAt, lastActiveAt: r.lastActiveAt, archivedAt: r.archivedAt, archivedBy: r.archivedBy, shownAt: r.shownAt });
   return v;
 }

@@ -337,12 +337,12 @@ export class Store {
   insertSession(s: NewSession): void {
     this.#with((changes) => {
       this.#run(
-        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast, ws)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast, ws, context)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         s.key, s.connect, s.scope ?? "thread", s.title ?? null, s.createdBy ?? null, s.runtime, s.profile, flag(s.profilePinned ?? false),
         s.model ?? null, s.effort ?? null, s.workspace, s.cwd ?? null, s.runtimeSessionId ?? null, s.token, s.createdAt, s.lastActiveAt,
         // A new session begins with today's instructions: no note is news to it.
-        latestNote(), optFlag(s.fast), s.ws ?? null,
+        latestNote(), optFlag(s.fast), s.ws ?? null, s.context ?? null,
       );
       changes.push({ type: "session", key: s.key });
     });
@@ -360,6 +360,11 @@ export class Store {
 
   setSessionFast(key: string, fast: boolean | null): void {
     this.#updateSession(key, "UPDATE sessions SET fast = ?1 WHERE key = ?2", optFlag(fast), key);
+  }
+
+  /// The most context it runs with from its next start on (null: the model's whole window).
+  setSessionContext(key: string, context: number | null): void {
+    this.#updateSession(key, "UPDATE sessions SET context = ?1 WHERE key = ?2", context, key);
   }
 
   /// Whether it goes on afresh once its prompt cache is over (null: as the station is set).

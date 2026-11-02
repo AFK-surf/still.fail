@@ -1023,6 +1023,7 @@ let zh : Map[String, String] = {
   "web-main.model.borrowed": "已借用，同步到此 station 后即可使用",
   "web-main.model.defaultEffort": "默认深度",
   "web-main.model.effort": "思考深度",
+  "web-main.model.context": "上下文",
   "web-main.model.effortLevel.high": "高",
   "web-main.model.effortLevel.low": "低",
   "web-main.model.effortLevel.max": "最高",

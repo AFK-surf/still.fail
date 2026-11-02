@@ -92,6 +92,7 @@ export const SHAPES: Record<string, Shape> = {
     ["effort", opt("String")],
     ["fast", opt("bool")],
     ["afresh", opt("bool"), { doc: "Whether it goes on afresh once its prompt cache is over, as chosen in its chat (`session.settings`);\nabsent: as its station is set (`StationContext::afreshWhenCold`)." }],
+    ["context", opt("u32"), { doc: "The most context it runs with, in tokens: its runtime compacts at it (`session.settings`); absent, the\nmodel's whole window." }],
     ["runtimeSessionId", opt("String")],
     ["contextActions", opt(vec("String")), { doc: "What its station can do to its context by hand: compact, clear (one from before says none)." }],
     ["workspace", opt("String")],
@@ -2241,6 +2242,7 @@ export const SHAPES: Record<string, Shape> = {
     ["runtime", "RuntimeKind"],
     ["effort", opt("String")],
     ["fast", opt("bool")],
+    ["context", opt("u32"), { doc: "The most context it runs with, in tokens; none its model's whole window." }],
     ["profile", opt("String")],
   ], { doc: "What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the\nstation's pick." }),
   PickAccount: struct([
@@ -2263,6 +2265,8 @@ export const SHAPES: Record<string, Shape> = {
     ["option", opt("String"), { doc: "The option picked in the panel, by its `model`." }],
     ["runtimes", vec("RuntimeKind"), { doc: "The runtimes offered for it (none: not asked), how hard it can think there, who can run it." }],
     ["efforts", vec("String")],
+    ["contexts", vec("ContextLevel"), { default: true, doc: "How much context it can be kept to (a new chat's or a chat's), its whole window first; none: not\noffered (a runtime that cannot, a model whose window is not known, a station from before)." }],
+    ["contextNow", "String", { default: true, doc: "The one of `contexts` picked, by its `id`." }],
     ["accounts", vec("RunnableProfile")],
     ["dropped", opt("String")],
     ["who", "String", { said: true, doc: "The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the\nstation's pick runs low." }],
@@ -2284,6 +2288,10 @@ export const SHAPES: Record<string, Shape> = {
     ["liked", vec("String"), { default: true, doc: "The models (their `model`) starred (`pick.like`), the first starred first, those in `near` left out:\npast them, before the rest." }],
     ["makers", vec("ModelMaker"), { default: true, doc: "The makers of its options, in the order their models come, none known last: what the list of\nthem all is grouped by." }],
   ], { doc: "A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,\nuntil `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the\nstation's pick, said so (`dropped`, `force`)." }),
+  ContextLevel: struct([
+    ["id", "String", { doc: "Its tokens in digits; \"\" the model's whole window." }],
+    ["text", "String", { doc: "In words: 完整 · 1M, 500K." }],
+  ], { doc: "How much context a model control offers to keep a chat to." }),
   NotifyView: struct([
     ["on", "bool"],
     ["asked", "bool"],
@@ -3419,6 +3427,8 @@ export const SHAPES: Record<string, Shape> = {
     ["maker", opt("Maker")],
     ["runtimes", vec("RuntimeKind")],
     ["efforts", map(vec("String"))],
+    ["contexts", map(vec("u32")), { default: true, doc: "By runtime, how much less context than its whole window it can be kept to, in tokens, the most first." }],
+    ["contextWindow", opt("u32"), { doc: "Its whole context window, as its station's model catalog says it." }],
     ["accounts", map(vec("RunnableProfile"))],
     ["spent", opt("Spent")],
     ["availability", opt("String"), { doc: "In a model control (`pick`): here (a profile of this station's own runs it), borrowed (only copies another\nstation shares with this one), borrowable (only another station of the workspace has it: `borrow`)." }],
@@ -3439,6 +3449,7 @@ export const SHAPES: Record<string, Shape> = {
     ["runtime", opt("RuntimeKind")],
     ["effort", opt("String")],
     ["fast", opt("bool")],
+    ["context", opt("u32")],
   ], { doc: "What a model runs with when it is picked in a model control's panel." }),
   ModelStation: struct([
     ["name", "String", { said: true }],

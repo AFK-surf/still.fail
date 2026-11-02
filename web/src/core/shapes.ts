@@ -671,6 +671,7 @@ export interface ModelUsual {
 	runtime?: RuntimeKind;
 	effort?: string;
 	fast?: boolean;
+	context?: number;
 }
 
 /** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
@@ -686,6 +687,10 @@ export interface ModelOption {
 	maker?: Maker;
 	runtimes: RuntimeKind[];
 	efforts: Record<string, string[]>;
+	/** By runtime, how much less context than its whole window it can be kept to, in tokens, the most first. */
+	contexts?: Record<string, number[]>;
+	/** Its whole context window, as its station's model catalog says it. */
+	contextWindow?: number;
 	accounts: Record<string, RunnableProfile[]>;
 	spent?: Spent;
 	/**
@@ -727,6 +732,8 @@ export interface Picked {
 	runtime: RuntimeKind;
 	effort?: string;
 	fast?: boolean;
+	/** The most context it runs with, in tokens; none its model's whole window. */
+	context?: number;
 	profile?: string;
 }
 
@@ -736,6 +743,14 @@ export interface PickAccount {
 	auto: boolean;
 	level?: Level;
 	profile?: RunnableProfile;
+}
+
+/** How much context a model control offers to keep a chat to. */
+export interface ContextLevel {
+	/** Its tokens in digits; "" the model's whole window. */
+	id: string;
+	/** In words: 完整 · 1M, 500K. */
+	text: string;
 }
 
 /** A model control's picked model that another station has: borrowing it, confirmed first. */
@@ -786,6 +801,13 @@ export interface PickView {
 	/** The runtimes offered for it (none: not asked), how hard it can think there, who can run it. */
 	runtimes: RuntimeKind[];
 	efforts: string[];
+	/**
+	 * How much context it can be kept to (a new chat's or a chat's), its whole window first; none: not
+	 * offered (a runtime that cannot, a model whose window is not known, a station from before).
+	 */
+	contexts?: ContextLevel[];
+	/** The one of `contexts` picked, by its `id`. */
+	contextNow?: string;
 	accounts: RunnableProfile[];
 	dropped?: string;
 	/**
@@ -1098,6 +1120,11 @@ export interface Session {
 	 * absent: as its station is set (`StationContext::afreshWhenCold`).
 	 */
 	afresh?: boolean;
+	/**
+	 * The most context it runs with, in tokens: its runtime compacts at it (`session.settings`); absent, the
+	 * model's whole window.
+	 */
+	context?: number;
 	runtimeSessionId?: string;
 	/** What its station can do to its context by hand: compact, clear (one from before says none). */
 	contextActions?: string[];

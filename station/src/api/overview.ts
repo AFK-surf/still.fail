@@ -19,6 +19,7 @@ import { policyView } from "../sessions/archive-policy.ts";
 import { agentEnvView } from "./routes/agent-env.ts";
 import { networkView } from "../mesh/settings.ts";
 import { contextView } from "./routes/context.ts";
+import { CONTEXT_LEAST, CONTEXT_RUNTIMES } from "../sessions/context-cap.ts";
 import { diagnosticsView } from "./routes/diagnostics.ts";
 import type { ConnectKind } from "../connects/connections.ts";
 
@@ -135,6 +136,9 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // Who made each model its profiles run, and its series, as the model catalog says (accounts/catalog.ts): the
     // clients group and mark models by them, and by the names alone where it says none.
     modelMakers: modelMakers(profiles),
+    // What a chat can be kept to less context on (sessions/context-cap.ts): the runtimes that take it, and each model's
+    // whole window as the model catalog says it, the most it can be. A station from before says none: none offered.
+    contextCaps: { runtimes: CONTEXT_RUNTIMES, least: CONTEXT_LEAST, windows: modelWindows(profiles) },
     footprint: null,
     processes: processes.map((p) => {
       const kb = memory.get(p.pgid);
@@ -178,6 +182,17 @@ export function modelMakers(profiles: { models?: unknown }[]): Record<string, { 
     const f = typeof m === "string" && !(m in out) ? facts(m) : null;
     if (f?.maker === undefined) continue;
     out[m] = { maker: f.maker, ...(f.makerName !== undefined ? { makerName: f.makerName } : {}), ...(f.family !== undefined ? { family: f.family } : {}) };
+  }
+  return out;
+}
+
+/// Each model its profiles run (as they spell it) with its context window, as the model catalog says it; those it does
+/// not say left out.
+export function modelWindows(profiles: { models?: unknown }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of profiles.flatMap((p) => (Array.isArray(p.models) ? p.models : []))) {
+    const window = typeof m === "string" && !(m in out) ? facts(m)?.context : undefined;
+    if (window !== undefined && window > 0) out[m as string] = window;
   }
   return out;
 }

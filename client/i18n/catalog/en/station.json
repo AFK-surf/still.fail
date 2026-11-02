@@ -329,6 +329,8 @@
   "station.place.grantClosed": "The station needs permission for {folder} ({top}) to use {cwd}. The still.fail Helper window asking for it was closed a moment ago: try again in a few minutes, or grant it on the station's page.",
   "station.place.grantNone": "The station needs permission for {folder} ({top}) to use {cwd}, and the still.fail Helper window asking for it couldn't be shown on {machine}",
   "station.place.timeout": "Couldn't check {cwd} within {seconds} seconds. macOS protects this folder and may be asking on {machine} whether the station may open it: allow it there, then try again.",
+  "station.session.badContext": "the most context is a whole number of tokens, {least} or more, or null for the model's whole window",
+  "station.session.contextRuntimes": "Only Claude Code and Codex can be kept to less context",
   "station.session.fastOpenAiOnly": "Fast is only for OpenAI subscriptions",
   "station.session.from": "From {from}:",
   "station.session.to": "To {to}:",

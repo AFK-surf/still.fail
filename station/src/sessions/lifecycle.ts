@@ -11,6 +11,7 @@ import { DISK_LOW_BYTES } from "../ops/disk.ts";
 import { PlaceRefused } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
+import { checkContext } from "./context-cap.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
 import { homesFirst, readTimeline, sessionPlaces, sharedTranscripts, transcriptPaths } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
@@ -29,6 +30,8 @@ export type NewChat = {
   model?: string | null;
   effort?: string | null;
   fast?: boolean | null;
+  /// The most context it runs with, in tokens (sessions/context-cap.ts); none: the model's whole window.
+  context?: number | null;
   title?: string | null;
   createdBy: string;
   /// The key the asking client knows it by until it is made (`clientKey`): the sidebar's rows say it for a while.
@@ -146,6 +149,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     if (model !== null && !runs(profile, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: profile.name, model }));
   } else profile = hub.accounts.pick(profiles, model, true);
   const effort = options.effort ? options.effort : null;
+  checkContext(runtime, options.context, lang);
   if (effort !== null) {
     const allowed = hub.accounts.modelEfforts(runtime, model, pinned, (p) => here.has(p.id));
     if (!allowed.includes(effort)) throw new Error(`effort must be one of ${allowed.join(", ")}`);
@@ -176,6 +180,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     model: model ?? profile.model ?? null,
     effort,
     fast: runtime === "codex" ? (options.fast ?? null) : null,
+    context: options.context ?? null,
     workspace,
     cwd: null,
     runtimeSessionId: null,
@@ -208,10 +213,14 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
   if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
   if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
   if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
+  // Another most context is what its process starts with (Claude Code's settings, a Codex thread's config): only a new
+  // one takes it.
+  const recapped = change.context !== undefined && change.context !== row.context;
+  if (recapped) hub.store.setSessionContext(key, change.context ?? null);
   if (repick) hub.accounts.repick(key);
   else if (profile === null) hub.accounts.runOn(key);
-  await hub.changed(key);
-  log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort });
+  await hub.changed(key, recapped);
+  log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort, context: hub.store.getSession(key)?.context ?? "" });
   // Its last turn stopped at the allowance, or waits to be tried again on a model at capacity: changed, it goes on by
   // itself (at once).
   const last = hub.store.lastTurn(key);

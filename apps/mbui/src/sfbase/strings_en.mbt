@@ -1039,6 +1039,7 @@ let en : Map[String, String] = {
   "web-main.model.borrowed": "Borrowed; usable here once it reaches this station",
   "web-main.model.defaultEffort": "Default effort",
   "web-main.model.effort": "Effort",
+  "web-main.model.context": "Context",
   "web-main.model.effortLevel.high": "High",
   "web-main.model.effortLevel.low": "Low",
   "web-main.model.effortLevel.max": "Max",
