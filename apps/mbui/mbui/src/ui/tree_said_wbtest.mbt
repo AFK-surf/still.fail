@@ -450,3 +450,60 @@ test "a screen reader's press asked inside an event of the tree's: nothing due a
   t.draw()
   assert_eq(clicks.val, before, msg="taking presses no more by then")
 }
+
+///|
+/// What says it is a dialog and is called nothing holds, built as the old frame builds it (`how` 0), as the tree's nodes
+/// (1), or as an old view the tree's dialog hosts (2): words ("甲"), what calls itself "乙" holding words of its own
+/// ("丙"), what is kept from what is read out holding words ("丁"). What the dialog is read out as.
+fn unnamed_said(how : Int) -> String? {
+  let old_body = fn(c : Ctx) {
+    c.text("甲") |> ignore
+    let b = c.box(fn() { c.text("丙") |> ignore })
+    c.semantics(b, Button, label="乙")
+    c.hidden_from_semantics(fn() {
+      let h = c.box(fn() { c.text("丁") |> ignore })
+      c.semantics(h, Group)
+    })
+  }
+  let t = if how == 0 {
+    Tester::new(
+      fn(c) {
+        let d = c.box(w=Px(200.0), fn() { old_body(c) })
+        c.semantics(d, Dialog)
+      },
+      w=400.0,
+      h=300.0,
+    )
+  } else {
+    let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+    set_view_app(fn(root) {
+      root.box(fn(d) {
+        d.width(Is(Some(200.0))).says(Is(Some(@view.said(Dialog)))) |> ignore
+        if how == 1 {
+          d.box(fn(w) { w.words(Is("甲")) |> ignore }) |> ignore
+          d.box(fn(b) {
+            b.says(Is(Some(@view.said(Button, label="乙")))) |> ignore
+            b.box(fn(w) { w.words(Is("丙")) |> ignore }) |> ignore
+          })
+          |> ignore
+          d.box(fn(h) {
+            h.hides(Is(true)) |> ignore
+            h.box(fn(w) { w.words(Is("丁")) |> ignore }) |> ignore
+          })
+          |> ignore
+        } else {
+          old(d, natural=true, fn(c) { old_body(c) }) |> ignore
+        }
+      })
+      |> ignore
+    })
+    t
+  }
+  t.frame()
+  t.query(Dialog).map(fn(s) { s.label })
+}
+
+///|
+test "a dialog called nothing read out by what it holds, built by the old frame, as the tree's nodes or as an old view the tree's dialog hosts: its words, what calls itself by that alone, nothing of what is kept from what is read out" {
+  assert_eq((unnamed_said(0), unnamed_said(1), unnamed_said(2)), (Some("甲 乙"), Some("甲 乙"), Some("甲 乙")))
+}

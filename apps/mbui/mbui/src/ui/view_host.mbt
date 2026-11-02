@@ -3498,13 +3498,17 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
     }
     match sn.said {
       Some(s) => {
+        // (none of its own: what it and what it holds say, an old view it hosts by what its widgets say, as an old
+        // box with none is called: Ctx::words_in)
         let label = if s.label != "" {
           s.label
         } else {
-          match tree.drawn_of(sn.id) {
-            Some(d) => d.words
-            None => ""
-          }
+          tree.words_within(sn.id, fn(h) {
+            match old_boxes.get(h) {
+              Some(b) if b >= 0 && b < self.count => self.words_in(b)
+              _ => ""
+            }
+          })
         }
         // (what can be done to it, of what it said or would: Activate where a press does something, Focus where it can take the focus)
         let actions : Array[Action] = if !sn.disabled && tree.presses_do(sn.id) { [Activate] } else { [] }
