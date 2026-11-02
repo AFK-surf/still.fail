@@ -63,6 +63,9 @@ export function answered(span: Span, reply: WireReply): void {
 const empty = new Uint8Array();
 /// How often a part on its way says how much of it has come (a part is 4 MB).
 const PART_STEP = 64 * 1024;
+/// A player's bytes go on in smaller pieces: at 32 KB/s, holding 64 KB made it wait two seconds for each piece,
+/// including the first one. Keep some batching across the app's boundary without making a slow link wait that long.
+const STREAM_STEP = 4 * 1024;
 
 /// A reply's body as the station wrote it: decompressed as it comes when it came compressed, each piece as soon as it
 /// is whole (an event stream's, event by event); by the host where it has a way of its own (a native app's shell:
@@ -180,7 +183,7 @@ export class Requests {
   /// One whole request: its status, its reply's head, its body. `quiet`: in the background, not said to be waited on.
   /// `heard`: how much of the body has come, now and then as it comes (every PART_STEP); `wrote`: how much of what is
   /// sent has gone, as it goes (a wire that sends it whole says nothing); `sink`: a 2xx answer's body handed over as it
-  /// comes, in pieces of PART_STEP (the last smaller), not kept (the body given is empty); `onHead`: the reply's status
+  /// comes, in pieces of at least STREAM_STEP (the last smaller), not kept (the body given is empty); `onHead`: the reply's status
   /// and head as they come, before its body. `json`: validate finite compression/JSON and bound each idle wait.
   exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void, onHead?: (status: number, headers: [string, string][]) => void, json = false): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array; json?: unknown }, CoreError> {
     const idleMs = json ? JSON_IDLE_MS : 0;
@@ -213,7 +216,7 @@ export class Requests {
               if (heard && loaded - told >= PART_STEP) heard((told = loaded));
               if (give) {
                 held.push(chunk);
-                if ((heldBytes += chunk.length) >= PART_STEP) hand();
+                if ((heldBytes += chunk.length) >= STREAM_STEP) hand();
               }
             }, give === undefined);
             hand();

@@ -186,6 +186,46 @@ test("hands_a_part_over_as_it_comes", async () => {
   core.close();
 });
 
+test("a slow video delivers small pieces before the part ends", async () => {
+  for (const drive of [false, true]) {
+    const chunks = Effect.runSync(Queue.unbounded<Uint8Array | null>());
+    class SlowVideo extends HostWire {
+      override request(...args: Parameters<HostWire["request"]>) {
+        const path = args[1].path;
+        if (!(drive ? path.includes("/drive/read?") : path.includes("/sessions/k/parts?"))) return super.request(...args);
+        return Effect.succeed({
+          status: 200,
+          headers: [["content-type", "video/mp4"], ["stillfail-total", "5096"], ["stillfail-mtime", "7"]] as [string, string][],
+          via: null,
+          body: { take: Queue.take(chunks) },
+        });
+      }
+    }
+    const { host, core } = await started(base(), 0, h => new SlowVideo(h));
+    try {
+      const pieces: Uint8Array[] = [];
+      const requests = core.inner.stations.requests;
+      const take = (bytes: Uint8Array) => pieces.push(bytes);
+      const reading = core.inner.runner.run(drive
+        ? requests.driveRead(remote(), "root", "/video.mp4", 0, 5096, null, undefined, take)
+        : requests.filePart(remote(), "k", "video.mp4", 0, 5096, null, undefined, take));
+      await host.settle();
+      Queue.offerUnsafe(chunks, new Uint8Array(2048).fill(1));
+      await host.settle();
+      assert.equal(pieces.length, 0, "a small network packet is batched");
+      Queue.offerUnsafe(chunks, new Uint8Array(2048).fill(2));
+      await host.settle();
+      assert.equal(pieces.length, 1, "the player has 4 KB while the request is still open");
+      assert.deepEqual(pieces[0], concat([new Uint8Array(2048).fill(1), new Uint8Array(2048).fill(2)]));
+      Queue.offerUnsafe(chunks, new Uint8Array(1000).fill(3));
+      Queue.offerUnsafe(chunks, null);
+      const result = await reading;
+      assert.equal(result.bytes.length, 0, "streamed bytes are not returned again");
+      assert.deepEqual(pieces.map(p => p.length), [4096, 1000], "the final short piece is delivered too");
+    } finally { core.close(); }
+  }
+});
+
 test("a_file_a_message_names_opens_whole_its_bytes_beside_from_a_station_new_or_old", async () => {
   const { host, core } = await started(base());
   stationReplies(host, (req) => {
