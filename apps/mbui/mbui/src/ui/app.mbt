@@ -254,7 +254,10 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.nav_rest = -1.0
   c.read_back_moved = false
   faces_from_env()
-  text_frame()
+  if text_frame() {
+    // (what the host measures changed: every layout made anew, kept rows' too)
+    c.epoch = c.epoch + 1
+  }
   if bench.mode > 0 && c.bench_list != 0 && bench.frames >= 30 {
     c.scroll_list(c.bench_list, bench.speed)
   }

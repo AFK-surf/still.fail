@@ -77,7 +77,12 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// The poster (share_picture) as box `id`: round as a card, or `flat` (handed out: its ground to its edges), in the look
 /// chosen under it (share_look: the night's here, the others' share_looks.mbt).
 fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, flat? : Bool = false) -> Int {
-  (share_look(src).draw)(c, share_fleet(src, w), id, flat)
+  let look = share_look(src)
+  // (千恋＊万花's words in a face the app does not carry: had from the site as their pictures are, share_senren.mbt)
+  if look.key.has_prefix(senren_prefix) {
+    @sfbase.share_face_whole(src, senren_drawn)
+  }
+  (look.draw)(c, share_fleet(src, w), id, flat)
 }
 
 ///|

@@ -46,6 +46,7 @@ pub fn reset() -> Unit {
   outside_reset()
   new_chat_reset()
   changelog_reset()
+  share_looks_reset()
   font_setting_reset()
   notify_page_reset()
   usage_reset()

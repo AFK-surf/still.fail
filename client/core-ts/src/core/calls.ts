@@ -857,6 +857,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return { kind: "commandsFind", query: p.query as string, offered: p.offered as unknown[] };
     }
+    case "fonts.share":
+      return { kind: "fonts", call: { kind: "share", file: read(params, [["file", S, "req"]]).file as string } };
     case "fonts.fetch":
     case "fonts.preview": {
       const id = read(params, [["id", S, "req"]]).id as string;

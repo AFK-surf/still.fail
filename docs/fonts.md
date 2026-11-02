@@ -60,4 +60,10 @@ never changed: a new version is a new folder.
 The card to share (docs/ui-panels.md) is set in a face of its own whatever a device chose: 霞鹜文楷 for Chinese, EB
 Garamond (grown 1.14 times, as tall as 文楷) for Latin and figures, made one font a weight (a host face has no fallback
 of its own) with only the characters the card says, and carried in the app (`apps/mbui/src/sfbase/share_face.mbt`,
-host face 14). `python3 scripts/fonts.py --share` makes it again; run it when the card's words change.
+host face 14). The 千恋＊万花 looks' words (`web-main.stations.shareSenren.*`, hundreds of characters more) are not in
+it: the same face with their characters too is on still.fail's site beside their pictures
+(`web/public/share-looks/<n>/face-<weight>.gz`), fetched through the core (`fonts.share {file}`, kept once fetched) as
+the card is drawn in one of them and given to the share face in place of the carried one (`@sfbase.share_face_whole`);
+until it is here, their words are in the carried face, a character not in it in the system's.
+`python3 scripts/fonts.py --share` makes both again; run it when the card's words change (a new site face goes under a
+new drawing number: a device keeps what it fetched).

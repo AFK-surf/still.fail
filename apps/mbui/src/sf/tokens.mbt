@@ -1810,6 +1810,11 @@ pub let share_terminal_palette : Array[Int64] = [
 pub let share_terminal_dot : Int64 = 0xE6E6E640L
 
 ///|
+/// Letters set apart on a share card's look, as a title, a stamp or a game's menu sets them (千恋＊万花's looks): the
+/// theme's Wide, named here so a page's look says it by this name, not by the one a page's width is said by.
+pub let share_letters_apart : @ui.Tracking = Wide
+
+///|
 /// The looks to choose under the card shared, each its picture drawn small: a portrait 72 by 96 (three to four, the
 /// picture's top as wide as it), a small block's corner, a ring round the chosen one 3 out (concentric), its name under
 /// it.

@@ -14,6 +14,7 @@ import {
   "stillfail/sfapp/settings",
   "mbui/motion",
   "mbui/codec",
+  "mbui/dmath",
   "mbui/signals",
   "mbui/view",
   "stillfail/gallery",

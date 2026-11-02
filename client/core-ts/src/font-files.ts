@@ -7,7 +7,8 @@
 // them carried through here nor checked again (the app falls back on `fonts.file` where one cannot be read: one kept
 // as fetched). A face's files stay once fetched, chosen or not (the `fonts` topic's `kept`: the faces whole here), so
 // choosing one again asks nothing of the network. A face's preview
-// (`fonts.preview {id}`: the fonts page's characters alone, tens of KB) is fetched once and kept whatever is chosen.
+// (`fonts.preview {id}`: the fonts page's characters alone, tens of KB) is fetched once and kept whatever is chosen, as is
+// a file of the share card's looks the app does not carry (`fonts.share {file}`: a look's own face, web/public/share-looks/).
 import { Effect } from "effect";
 import { CoreError } from "./error.ts";
 import * as fonts from "./fonts.ts";
@@ -22,10 +23,11 @@ import { isObject, parseJson, toJsonBytes } from "./util.ts";
 const INDEX = "fonts/kept";
 const fileKey = (sha256: string) => `fonts/file/${sha256}`;
 const previewKey = (id: string, url: string) => `fonts/preview/${id}/${url.slice(url.lastIndexOf("/") + 1)}`;
+const shareKey = (file: string) => `fonts/share/${file}`;
 
 type Kept = Record<string, "gz" | "ttf">;
 
-export type FontsCall = { kind: "fetch"; id: string } | { kind: "preview"; id: string } | { kind: "file"; sha256: string } | { kind: "keep"; sha256: string; bytes: Uint8Array };
+export type FontsCall = { kind: "fetch"; id: string } | { kind: "preview"; id: string } | { kind: "share"; file: string } | { kind: "file"; sha256: string } | { kind: "keep"; sha256: string; bytes: Uint8Array };
 
 export class FontFiles implements Owner {
   readonly #host: Host;
@@ -66,6 +68,8 @@ export class FontFiles implements Owner {
         return this.fetch(call.id);
       case "preview":
         return this.preview(call.id);
+      case "share":
+        return this.share(call.file);
       case "file":
         return this.file(call.sha256);
       case "keep":
@@ -181,10 +185,25 @@ export class FontFiles implements Owner {
     return Effect.gen({ self: this }, function* () {
       const face = fonts.faceOf(id);
       if (face === null || face.preview === undefined) return yield* Effect.fail(CoreError.invalid(t("core-misc.params.invalid", { error: `id ${id}` })));
-      const key = previewKey(id, face.preview);
+      return yield* this.#keptOrFetched(previewKey(id, face.preview), face.preview);
+    });
+  }
+
+  /// A file of the share card's looks (`<drawing>/<name>`, fonts.shareLooksFile): kept, else fetched and kept (a
+  /// drawing's files never change: one drawn anew goes under the next number).
+  share(file: string): Effect.Effect<Beside, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const url = fonts.shareLooksFile(file);
+      if (url === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.params.invalid", { error: `file ${file}` })));
+      return yield* this.#keptOrFetched(shareKey(file), url);
+    });
+  }
+
+  #keptOrFetched(key: string, url: string): Effect.Effect<Beside, CoreError> {
+    return Effect.gen({ self: this }, function* () {
       const kept = yield* Effect.orElseSucceed(this.#host.storageGet(key), () => null);
       if (kept !== null) return new Beside({}, kept);
-      const r = yield* Effect.mapError(this.#host.fetch({ method: "GET", url: face.preview, headers: [], body: null }), (e) => CoreError.plainly("fonts", e));
+      const r = yield* Effect.mapError(this.#host.fetch({ method: "GET", url, headers: [], body: null }), (e) => CoreError.plainly("fonts", e));
       if (r.status !== 200) return yield* Effect.fail(new CoreError("fonts", t("android-misc.updates.httpStatus", { status: r.status })));
       yield* Effect.ignore(this.#host.storageSet(key, r.body), { log: "Unhandled", message: "font kept" });
       return new Beside({}, r.body);

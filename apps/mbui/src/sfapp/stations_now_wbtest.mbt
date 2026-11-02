@@ -286,15 +286,32 @@ fn stage_ink(t : @ui.Tester, w : Double, h : Double) -> String {
       }
     }
   }
-  // (its words as drawn (glyphs, kind 1, seen): how many lie whole in the picture and how low the lowest reaches; and
-  // how many reach out of it down into what is under it, over the looks)
+  // (its words as drawn (glyphs, kind 1, seen, the stage's): how many lie whole in the picture and how low the lowest
+  // reaches; and how many reach out of it down into what is under it, over the looks; the names of the sets they are in
+  // not of it)
   let looks_top = t.query(Button, label="夜色").map(fn(s) { s.rect.1 }).unwrap_or(h)
-  let glyphs = drawn.filter(fn(a) { a[5] == 1.0 && a[11] > 0.0 })
+  let sets = t.all(Tab).map(fn(s) { s.rect })
+  let in_sets = fn(a : Array[Double]) {
+    sets.iter().any(fn(r) { a[0] + a[2] > r.0 && a[0] < r.0 + r.2 && a[1] + a[3] > r.1 - 0.5 && a[1] < r.1 + r.3 + 0.5 })
+  }
+  // (the stage's own: drawn after its night, not the page's under it, which the night dims and the picture covers)
+  let mut after_night = drawn.length()
+  for i, a in drawn {
+    if a[5] == 0.0 && a[0] <= 0.5 && a[1] <= 0.5 && a[2] >= w - 0.5 && a[3] >= h - 0.5 && near(a, @sf.stage_scrim) {
+      after_night = i + 1
+    }
+  }
+  let glyphs : Array[Array[Double]] = []
+  for i, a in drawn {
+    if i >= after_night && a[5] == 1.0 && a[11] > 0.0 {
+      glyphs.push(a)
+    }
+  }
   let words = match ground {
     Some((gx, gy, gw, gh)) => {
       let inside = glyphs.filter(fn(a) { a[0] >= gx - 0.5 && a[0] + a[2] <= gx + gw + 0.5 && a[1] >= gy - 0.5 && a[1] + a[3] <= gy + gh + 0.5 })
       let lowest = inside.iter().fold(init=0.0, fn(m, a) { dmax(m, a[1] + a[3]) })
-      let out = glyphs.filter(fn(a) { a[0] >= gx && a[0] < gx + gw && a[1] + a[3] > gy + gh + 0.5 && a[1] < looks_top })
+      let out = glyphs.filter(fn(a) { a[0] >= gx && a[0] < gx + gw && a[1] + a[3] > gy + gh + 0.5 && a[1] < looks_top && !in_sets(a) })
       "words in \{inside.length()} lowest \{(lowest * 10.0).round() / 10.0} out under \{out.length()}"
     }
     None => "words none"
@@ -327,12 +344,14 @@ test "stage, 大屏 keyboard and mouse in a tall and a short window, touch in a 
     out.push("\{at}: \{stage_said(t)}")
     drawn.push(stage_drawn())
   }
-  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; 34 of them since 千恋＊万花's: their
+  // strip as wide as the picture is laid out, from its start, scrolled, the stage as wide; in sets since, their names
+  // over the strip: the stage a line taller where the window has the room, 840 by 1100)
   assert_eq(out, [
-    "(1440, 1000, 0): dialog Some((分享卡片, (545, 24, 350.1, 952))) line [(560, 757.6, 320, 21)] look Some((552, 797.2, 78, 124.8)) close Some((635.8, 942, 58, 34)) copy Some((701.8, 942, 102.5, 34)) save None squeeze 0",
-    "(1280, 640, 0): dialog Some((分享卡片, (472, 24, 336, 592))) line [(480, 757.6, 320, 21)] look Some((472, 437.2, 78, 124.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
-    "(840, 1100, 1): dialog Some((分享卡片, (240, 63.3, 360, 973.4))) line [(260, 796.9, 320, 21)] look Some((252, 857.9, 78, 124.8)) close Some((321.9, 1002.7, 62, 34)) copy None save Some((391.9, 1002.7, 126.2, 34)) squeeze 0",
-    "(390, 844, 2): dialog Some((分享卡片, (27, 24, 336, 796))) line [(35, 757.6, 320, 21)] look Some((27, 641.2, 78, 124.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
+    "(1440, 1000, 0): dialog Some((分享卡片, (540, 24, 360, 952))) line [(560, 757.6, 320, 21)] look Some((540, 797.2, 78, 124.8)) close Some((635.8, 942, 58, 34)) copy Some((701.8, 942, 102.5, 34)) save None squeeze 0",
+    "(1280, 640, 0): dialog Some((分享卡片, (460, 24, 360, 592))) line [(480, 757.6, 320, 21)] look Some((460, 437.2, 78, 124.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
+    "(840, 1100, 1): dialog Some((分享卡片, (240, 46.2, 360, 1007.6))) line [(260, 779.8, 320, 21)] look Some((240, 875, 78, 124.8)) close Some((321.9, 1019.8, 62, 34)) copy None save Some((391.9, 1019.8, 126.2, 34)) squeeze 0",
+    "(390, 844, 2): dialog Some((分享卡片, (24, 24, 342, 796))) line [(35, 757.6, 320, 21)] look Some((15, 641.2, 78, 124.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
   ])
   assert_eq(drawn, [true, true, true, true])
 }
@@ -352,18 +371,21 @@ test "stage, 大屏 keyboard and mouse: the window made shorter and taller again
     out.push("\{h}: \{stage_said(t)}")
     ink.push("\{h}: \{stage_ink(t, 1280.0, h)}")
   }
-  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; 34 of them since 千恋＊万花's: their
+  // strip as wide as the picture is laid out, from its start, scrolled, the stage as wide)
   assert_eq(out, [
-    "800: dialog Some((分享卡片, (472, 24, 336, 752))) line [(480, 757.6, 320, 21)] look Some((472, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
-    "560: dialog Some((分享卡片, (472, 24, 336, 512))) line [(480, 757.6, 320, 21)] look Some((472, 357.2, 78, 124.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
-    "800: dialog Some((分享卡片, (472, 24, 336, 752))) line [(480, 757.6, 320, 21)] look Some((472, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(480, 757.6, 320, 21)] look Some((460, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "560: dialog Some((分享卡片, (460, 24, 360, 512))) line [(480, 757.6, 320, 21)] look Some((460, 357.2, 78, 124.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(480, 757.6, 320, 21)] look Some((460, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
   ])
   // (what it paints: its night over the window, the picture as large as it is drawn)
-  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; the stage's own words alone since
+  // the looks are in sets (main counted the page's under the picture too: 360 and 336, the stage's 327 both): the
+  // picture a line smaller for the sets' names, all of its words in it)
   assert_eq(ink, [
-    "800: night [0.92] picture Some((511.4, 24, 257.1, 553.2)) words in 360 lowest 558.6 out under 0",
-    "560: night [0.92] picture Some((567.2, 24, 145.6, 313.2)) words in 336 lowest 337.5 out under 0",
-    "800: night [0.92] picture Some((511.4, 24, 257.1, 553.2)) words in 360 lowest 558.6 out under 0",
+    "800: night [0.92] picture Some((519.4, 24, 241.2, 519)) words in 327 lowest 525.5 out under 0",
+    "560: night [0.92] picture Some((575.2, 24, 129.7, 279)) words in 327 lowest 293.6 out under 0",
+    "800: night [0.92] picture Some((519.4, 24, 241.2, 519)) words in 327 lowest 525.5 out under 0",
   ])
 }
 

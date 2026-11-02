@@ -103,6 +103,12 @@ function face(e: Entry): Record<string, unknown> {
   };
 }
 
+/// A file of the share card's looks that the app does not carry (`<drawing>/<name>`: web/public/share-looks/, e.g. a
+/// look's own face, 1/face-400.gz), where still.fail's site keeps it; null for anything else.
+export function shareLooksFile(file: string): string | null {
+  return /^[0-9]+\/[a-z0-9-]+\.gz$/.test(file) ? `${origin}/share-looks/${file}` : null;
+}
+
 /// A face still.fail keeps, by its id, as a device fetches it: each file's address, size and hash, and its preview's.
 export type FaceFiles = { files: { weight: number; url: string; bytes: number; sha256: string }[]; bytes: number; preview?: string };
 

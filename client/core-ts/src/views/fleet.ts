@@ -147,6 +147,7 @@ export function fleetView(stations: FleetStation[], profiles: J[], usage: J, now
     chats: chats.size,
     chatsText: t("core-logic.fleet.chats", { n: chats.size }),
     where: t("core-logic.fleet.machines", { n: used.size }),
+    devices: used.size,
     ...(days(usage, archived, runs, offset) ?? {}),
   };
 }
@@ -177,6 +178,7 @@ function days(usage: J, archived: number[], runs: { at: number; session: string 
   const ran = runs.filter((r) => shown.has(localDay(r.at, offset)));
   const by = new Set(ran.map((r) => r.session)).size;
   const tasks = ran.length === 0 ? {} : {
+    tasks: ran.length,
     tasksText: t("core-logic.fleet.tasks", { n: ran.length }),
     tasksPer: t("core-logic.fleet.tasks_per", { n: Math.round((ran.length / by) * 10) / 10 }),
   };
