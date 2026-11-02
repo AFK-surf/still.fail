@@ -1048,6 +1048,19 @@ fn scrim_owner(sheet : Bool) -> Int {
 }
 
 ///|
+/// Whether the one presented as `serial` is a dialog with another open over it (it takes nothing then: dimmed over
+/// itself, dialog_veil), read as one is presented or closed.
+fn dialog_covered(serial : Int) -> Bool {
+  presented_said.get() |> ignore
+  match presented_now.search_by(fn(q) { q.serial == serial }) {
+    Some(i) =>
+      presented_now[i].open &&
+      presented_now[i + 1:].iter().any(fn(q) { q.open && how_of(q.shows, q.from, false) == AsDialog })
+    None => false
+  }
+}
+
+///|
 /// What `p` dims what is under it with, where it is not the one that does (scrim_owner): nothing; where it is, the
 /// theme's (None).
 fn scrim_of(p : Presented, sheet : Bool) -> Int64? {
@@ -1105,9 +1118,12 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     p.sinks = sinks
     // (a sheet with another sheet open over it steps back, coming forward again as that one goes: its cause the one
     // over it opened or closed)
-    let covered = sheet &&
-      p.open &&
-      presented_now[i + 1:].iter().any(fn(q) { q.open && how_of(q.shows, q.from, true) == AsSheet })
+    let covered = if sheet {
+      p.open && presented_now[i + 1:].iter().any(fn(q) { q.open && how_of(q.shows, q.from, true) == AsSheet })
+    } else {
+      // (a dialog with another over it: dimmed over itself, nothing moving)
+      how_of(p.shows, p.from, false) == AsDialog && dialog_covered(p.serial)
+    }
     // (how far up: by the topmost sheet over it as tall as it is now; once none is, as far as it went, to come down
     // from there)
     if covered {
@@ -1125,8 +1141,14 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     }
     if p.open && covered != p.receded {
       p.receded = covered
-      let way = dmax(@signals.untracked(fn() { p.pushed.get() }), 1.0)
-      p.recede.animate(if covered { 1.0 } else { 0.0 }, @motion.move(points=way))
+      let to = if covered { 1.0 } else { 0.0 }
+      if sheet {
+        let way = dmax(@signals.untracked(fn() { p.pushed.get() }), 1.0)
+        p.recede.animate(to, @motion.move(points=way))
+      } else {
+        // (dimmed as a dialog's ground comes and goes)
+        p.recede.animate(to, @motion.tween(confirm_ground_ms, ease=if covered { Out } else { Leave }))
+      }
     }
     let was = p.open
     let mut open = false
@@ -1602,6 +1624,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     step~,
     column_in=card_pad - corner_inset,
     scrim?=scrim_of(p, false),
+    veil=p.recede.get(),
   )
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
@@ -1639,6 +1662,7 @@ fn steps_centred(
     bare=true,
     on_escape=fn() { steps_escape(p) },
     scrim?=scrim_of(p, false),
+    veil=p.recede.get(),
   )
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
@@ -1817,7 +1841,7 @@ fn confirm_centred(
   danger : Bool,
   run : () -> Unit,
 ) -> (Bool, Bool) {
-  let r = confirm_dialog(c, key, p.open, title, words, action, cancel=t("common.cancel"), danger~, scrim?=scrim_of(p, false))
+  let r = confirm_dialog(c, key, p.open, title, words, action, cancel=t("common.cancel"), danger~, scrim?=scrim_of(p, false), veil=p.recede.get())
   if r.confirmed {
     done_with(c, p, run)
   }
@@ -1867,6 +1891,7 @@ fn ask_centred(
       }
     },
     scrim?=scrim_of(p, false),
+    veil=p.recede.get(),
   )
   if said {
     let line = words.val

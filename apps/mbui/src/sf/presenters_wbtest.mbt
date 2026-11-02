@@ -499,6 +499,23 @@ fn scrims_drawn(t : @ui.Tester, at : (Int, Double, Double)) -> Int {
 }
 
 ///|
+/// Whether something less than the window is dimmed over itself in the last frame, in the colour the window is dimmed
+/// with (a dialog with another over it).
+fn veiled_drawn(t : @ui.Tester, at : (Int, Double, Double)) -> Bool {
+  veiled_in(t.drawn_rects(), at.1, at.2)
+}
+
+///|
+/// Whether of `rects` one less than the window (`w` by `h`) is drawn in the colour one over all of it dims it with.
+fn veiled_in(rects : Array[(Double, Double, Double, Double, Int64)], w : Double, h : Double) -> Bool {
+  let see_through = fn(c : Int64) { (c & 0xFFL) > 0L && (c & 0xFFL) < 0xFFL }
+  match rects.iter().find_first(fn(r) { r.0 <= 0.0 && r.1 <= 0.0 && r.2 >= w && r.3 >= h && see_through(r.4) }) {
+    Some(scrim) => rects.iter().any(fn(r) { (r.2 < w || r.3 < h) && see_through(r.4) && (r.4 >> 8) == (scrim.4 >> 8) })
+    None => false
+  }
+}
+
+///|
 /// A panel (opened by 打开, `from` it or by nothing) with 删掉 in it, which asks a confirm over it.
 fn panel_with_confirm(at : (Int, Double, Double), by_nothing? : Bool = false) -> @ui.Tester {
   presenting_tester(at, fn(from) {
@@ -561,6 +578,9 @@ test "one over another with a mouse at Large: a confirm over a dialog dims no da
   t.run_for(@kit.presence_in_ms)
   assert_eq(presented_how, [AsDialog, AsDialog])
   assert_eq(scrims_drawn(t, desk), 1)
+  // (the dialog under it taking nothing: dimmed over itself, as the window is)
+  t.run_for(confirm_ground_ms)
+  assert_true(veiled_drawn(t, desk), msg="\{t.drawn_rects()}")
   // (the confirm closed: the dialog's scrim as it was all along, none fading over it)
   assert_true(t.key_named("esc"))
   t.run_for(@kit.presence_in_ms)

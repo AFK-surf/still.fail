@@ -25,10 +25,11 @@ pub fn confirm_node(
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
   dims? : () -> Bool = fn() { true },
+  covered? : () -> Bool = fn() { false },
 ) -> Unit {
   // (a press outside an alert does not close it: confirm_dialog's outside=false)
-  dialog_layer_node(parent, open, cancel, shown~, gone~, dims~, fn(across, layer, look) {
-    confirm_panel(across, layer, look, title, words, action, danger, cancel, confirm) |> ignore
+  dialog_layer_node(parent, open, cancel, shown~, gone~, dims~, covered~, fn(across, layer, look, veil) {
+    confirm_panel(across, layer, look, veil, title, words, action, danger, cancel, confirm) |> ignore
     // (the focus on its own ground as it opens, as confirm_dialog's (an overlay that traps it, with no stop of its own:
     // the layer's own), Enter and Space doing nothing there; back to what had it as it goes)
     layer
@@ -47,11 +48,12 @@ fn dialog_layer_node(
   parent : @view.View,
   open : () -> Bool,
   cancel : () -> Unit,
-  panel : (@view.View, @view.View, () -> @ui.Look) -> @view.View,
+  panel : (@view.View, @view.View, () -> @ui.Look, () -> Int64) -> @view.View,
   outside? : Bool = false,
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
   dims? : () -> Bool = fn() { true },
+  covered? : () -> Bool = fn() { false },
 ) -> Unit {
   parent.show(
     open,
@@ -61,6 +63,11 @@ fn dialog_layer_node(
       // (how far in it is, its look's and its ground's, from the moment it opened; out from the moment it closed)
       let shown = EdgeWay::new(0.0)
       let dim = EdgeWay::new(0.0)
+      // (another dialog over it: it takes nothing then, dimmed over itself as what is under them is, coming and going
+      // as that one's ground does)
+      let veiled = EdgeWay::new(0.0)
+      layer.reacts(covered, fn(on) { veiled.go(layer, if on { 1.0 } else { 0.0 }, confirm_ground_ms) }) |> ignore
+      let veil = fn() { confirm_faded(@ui.tree_theme().scrim, veiled.shown(layer)) }
       layer.reacts(fn() { layer.leaving() }, fn(going) {
         if going {
           shown.go(layer, 0.0, @kit.pop_out_ms, ease=Leave)
@@ -117,7 +124,7 @@ fn dialog_layer_node(
       layer.box(fn(across) {
         across.row(Is(true)) |> ignore
         across.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
-        let first = panel(across, layer, look)
+        let first = panel(across, layer, look, veil)
         // (the focus given as it opens; back to what had it as it goes)
         layer.focus_opens(first) |> ignore
         across.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
@@ -136,6 +143,7 @@ fn confirm_panel(
   parent : @view.View,
   layer : @view.View,
   look : () -> @ui.Look,
+  veil : () -> Int64,
   title : () -> String,
   words : () -> String,
   action : () -> String,
@@ -194,6 +202,8 @@ fn confirm_panel(
       cancel_at.val = Some(no)
     })
     |> ignore
+    // (another dialog over it: dimmed over all of itself, its corners its own)
+    d.box(fn(v) { v.over(Is(true)).radius(Is(dialog_r)).ground(By(veil)) |> ignore }) |> ignore
   })
   |> ignore
   cancel_at.val.unwrap()

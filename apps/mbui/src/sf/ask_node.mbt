@@ -30,6 +30,7 @@ pub fn ask_node(
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
   dims? : () -> Bool = fn() { true },
+  covered? : () -> Bool = fn() { false },
 ) -> Unit {
   // (the line as it is now, trimmed: followed as it changes)
   let words = fn() { line.text().trim(chars=" \t\n").to_string() }
@@ -44,7 +45,7 @@ pub fn ask_node(
       say(@signals.untracked(words))
     }
   }
-  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, fn(across, layer, look) {
+  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, covered~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
     let first : Ref[@view.View?] = Ref(None)
     across.box(fn(d) {
@@ -136,6 +137,8 @@ pub fn ask_node(
         first.val = Some(no)
       })
       |> ignore
+      // (another dialog over it: dimmed over all of itself, its corners its own)
+      d.box(fn(v) { v.over(Is(true)).radius(Is(dialog_r)).ground(By(veil)) |> ignore }) |> ignore
     })
     |> ignore
     first.val.unwrap()
