@@ -97,15 +97,16 @@ cp -R "$APPDIR" "$T/Payload/"
 (cd "$T" && zip -qry app.ipa Payload)
 # Check again after build/sign, and after environment approval; no automatic retry of upload.
 bash "$D/testflight-guard.sh" checkout
+# Built and signed beside the tests: uploaded only once they all passed.
+bash "$D/../../../scripts/testflight-tests.sh"
 asc_preflight
 # altool changed its option spelling in newer Xcode. Select from this runner's
-# advertised help, never trial-upload/retry against Apple.
+# advertised help, never trial-upload/retry against Apple. (No --validate-app first: an upload is validated as it is
+# taken, and the two together were ~3.5 min of the release, 2026-11-02 builds 24 and 25.)
 xcrun altool --help > "$T/altool-help.txt" 2>&1
 if grep -q -- '--api-key ' "$T/altool-help.txt"; then
-  xcrun altool --validate-app "$T/app.ipa" --api-key "$ASC_KEY_ID" --api-issuer "$ASC_ISSUER_ID"
   xcrun altool --upload-app -f "$T/app.ipa" --api-key "$ASC_KEY_ID" --api-issuer "$ASC_ISSUER_ID"
 elif grep -q -- '--apiKey' "$T/altool-help.txt"; then
-  xcrun altool --validate-app --file "$T/app.ipa" --type ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
   xcrun altool --upload-app --file "$T/app.ipa" --type ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
 else
   fail 'unsupported altool authentication syntax'
