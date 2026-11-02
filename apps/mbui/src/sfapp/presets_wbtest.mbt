@@ -98,7 +98,7 @@ test "browsing starts on the station picked in the new chat composer" {
   open_mode("newchat-preset-new-browse")
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(t.query(Button, label="MBA") is Some(_), msg=t.semantics_dump())
+  assert_true(t.query(Button, label="选择文件夹所在的 station: MBA") is Some(_), msg=t.semantics_dump())
   assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st2")
 }
 
@@ -122,7 +122,7 @@ test "switching the browsing station starts at its home and saves the chosen fol
   t.click(Button, label="项目")
   t.frame()
   assert_eq(text(Some(named(calls, "drive.folders")[1].params), "path"), "/Users/lin/项目")
-  t.click(Button, label="Studio")
+  t.click(Button, label="选择文件夹所在的 station: Studio")
   t.run_for(@ui.move_most_ms)
   t.click(MenuItemRadio, label="MBA")
   t.run_for(@ui.move_most_ms)
@@ -180,6 +180,6 @@ test "editing another station's preset still starts browsing on the composer's s
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="浏览文件夹…")
   t.run_for(@ui.move_most_ms)
-  assert_true(t.query(Button, label="MBA") is Some(_), msg=t.semantics_dump())
+  assert_true(t.query(Button, label="选择文件夹所在的 station: MBA") is Some(_), msg=t.semantics_dump())
   assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st2")
 }

@@ -368,17 +368,14 @@ fn preset_browse(src : Source, address : String, stations : Array[Json], e : Pre
   @sf.panel_go(
     @sf.t("web-main.preset.pickFolder"),
     fn(c, _) {
-      let station_name = preset_browse_station_name(e.browse_station, stations)
       @sf.field(c, @sf.t("android-misc.files.lendOn"), fn() {
-        if @sf.button(c, station_name, key=key("browse-station"), icon="chevron-down") {
-          let choices = stations.map(fn(s) { @sf.choice(text(Some(s), "station"), text(Some(s), "name")) })
-          @sf.pick(@sf.t("android-misc.files.lendOn"), choices, e.browse_station, fn(at) {
-            if at != e.browse_station {
-              e.browse_station = at
-              (@sfbase.folder_browse_open.val)(at)
-            }
-          }, from=Of(c.id(key("browse-station"))), search=false)
-        }
+        let choices = stations.map(fn(s) { (text(Some(s), "station"), preset_station_name(text(Some(s), "station"), "", stations)) })
+        @sf.select(c, key("browse-station"), e.browse_station, choices, fn(at) {
+          if at != e.browse_station {
+            e.browse_station = at
+            (@sfbase.folder_browse_open.val)(at)
+          }
+        }, label=@sf.t("android-misc.files.lendOn"))
       })
       (@sfbase.folder_browse_body.val)(c, src, e.browse_station)
     },
@@ -398,7 +395,7 @@ fn preset_browse(src : Source, address : String, stations : Array[Json], e : Pre
             "path": Json::string(here),
             "repo": repo,
             "station": Json::string(e.browse_station),
-            "stationName": Json::string(preset_browse_station_name(e.browse_station, stations)),
+            "stationName": Json::string(preset_station_name(e.browse_station, "", stations)),
           })
         }
         if !e.dirs.iter().any(fn(x) { dir_key(Some(x)) == dir_key(Some(d)) }) {
@@ -409,15 +406,6 @@ fn preset_browse(src : Source, address : String, stations : Array[Json], e : Pre
     },
     left=fn() { (@sfbase.folder_browse_close.val)() },
   )
-}
-
-///|
-/// The current name of a station in the workspace's new-chat choices.
-fn preset_browse_station_name(address : String, stations : Array[Json]) -> String {
-  match stations.iter().find_first(fn(s) { text(Some(s), "station") == address }) {
-    Some(s) if text(Some(s), "name") != "" => text(Some(s), "name")
-    _ => address
-  }
 }
 
 ///|
