@@ -13,7 +13,7 @@ import {
 }
 
 // Values
-pub fn about_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
+pub fn about_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit) -> Unit
 
 pub fn about_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
@@ -37,7 +37,7 @@ pub fn answer_invitation(@sfbase.Source, Json?, String, Bool, String, () -> Unit
 
 pub fn appearance_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
-pub fn archiving_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32) -> Unit
+pub fn archiving_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit) -> Unit
 
 pub fn archiving_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
@@ -135,7 +135,7 @@ pub fn context_tile_id(@ui.Ctx) -> Int32
 
 pub fn decision_options(@ui.Ctx, @sfbase.Source, MessageHere, @sfbase.Message, Double, Array[@sfbase.Choice], Bool, on_pick? : (Int32) -> Unit) -> Unit
 
-pub fn decisions_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
+pub fn decisions_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit) -> Unit
 
 pub fn decisions_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
@@ -331,7 +331,7 @@ pub fn me_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
 pub let mem_narrow_title : @ui.TextStyle
 
-pub fn memories_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
+pub fn memories_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit) -> Unit
 
 pub fn memories_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
@@ -601,7 +601,7 @@ pub fn sign_in_page(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn state_line(@ui.Ctx, String, Int32, String, lead? : String, lead_text? : String, rest? : String, alert? : Bool) -> Unit
 
-pub fn station_archiving_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
+pub fn station_archiving_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit) -> Unit
 
 pub fn station_archiving_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
 

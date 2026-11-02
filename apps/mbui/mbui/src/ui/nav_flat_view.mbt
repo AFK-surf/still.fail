@@ -14,12 +14,14 @@
 // never the half between them, whichever of them is told first — so a page kept is never let go and made again.
 
 ///|
-/// Where a flat stack stands as a change left it (nav_flat_view): the entries it holds a node for, those that show, and
-/// whether what shows is pushed over the page in place.
+/// Where a flat stack stands as a change left it (nav_flat_view): the entries it holds a node for, those that show,
+/// whether what shows is pushed over the page in place, and what kind of page made once each is (by `keys`' order).
 priv struct FlatSeen {
   keys : Array[Int]
   shown : Array[Int]
   stacked : Bool
+  /// what kind of page made once each holds (nav_flat_view's `made`; "" its old view), as what each is then
+  kinds : Array[String]
 } derive(Eq)
 
 ///|
@@ -31,6 +33,25 @@ fn[P] Nav::flat_drawn(self : Nav[P]) -> NavPage[P] {
     Some(e) => e
     None => self.pages[self.pages.length() - 1]
   }
+}
+
+///|
+/// Entry `serial` of a flat stack: on it, going back off it, or kept shown in place though it left it (Nav::flat_keep).
+fn[P] Nav::flat_entry(self : Nav[P], serial : Int) -> NavPage[P]? {
+  match self.entry(serial) {
+    Some(e) => Some(e)
+    None => self.flat_kept_entry().filter(fn(e) { e.serial == serial })
+  }
+}
+
+///|
+/// What page entry `serial` is (as it is now: what it became in place) and the page under it as it was put on: one on
+/// the stack, going back off it, or kept shown in place though it left it (Nav::flat_keep); read as it changes. What
+/// the frame puts over a page asks of it (nav_flat_view's `head`).
+pub fn[P] Nav::page_of(self : Nav[P], serial : Int) -> (P, P?)? {
+  self.said.get() |> ignore
+  self.shown.get() |> ignore
+  self.flat_entry(serial).map(fn(e) { (e.page, e.under) })
 }
 
 ///|
@@ -57,9 +78,12 @@ fn[P] Nav::flat_entries(self : Nav[P]) -> Array[Int] {
 /// as its owner says (Nav::flat_owned, Nav::flat_keep), else at once; what is pushed over the page in place sliding in
 /// once `over_ready` says it has what it shows (`most` ms at most), taken off by back (within `edge` of its left side)
 /// while `takes_back` says back is the stack's; where `stacks` says not (a pane beside a sidebar off a tape), shown in
-/// place as any other. Over each page's own view what `head` makes of its entry (by its number), nodes of the tree's
+/// place as any other. Over each page's own view what `head` makes of its entry (by its number, and whether the page
+/// is made once there: `made`), nodes of the tree's
 /// laid over it (a panel's bar: the page leaving its room), the stack's back over the whole of both (Nav::backs_over);
-/// what was kept for it let go by `gone` as its entry is (not as it stops showing: shown again, as it was).
+/// what was kept for it let go by `gone` as its entry is (not as it stops showing: shown again, as it was). `made`: a
+/// page made once as nodes of the tree's in the place of its old view, as nav_view's (Nav::made: what `head` makes in
+/// its flow over it, the page in the room left under it).
 pub fn[P] nav_flat_view(
   v : @view.View,
   nav : Nav[P],
@@ -71,8 +95,9 @@ pub fn[P] nav_flat_view(
   takes_back? : () -> Bool = fn() { true },
   stacks? : () -> Bool = fn() { true },
   page_key? : (P) -> String = fn(_) { "" },
-  head? : (@view.View, Int) -> Unit,
+  head? : (@view.View, Int, Bool) -> Unit,
   gone? : (Int) -> Unit = fn(_) {  },
+  made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int, Int) -> Unit)? = fn(_) { None },
 ) -> @view.View {
   // (what shows pushed over the page in place, where what is pushed over is so here)
   let stacked = fn() { stacks() && nav.stacked() }
@@ -102,6 +127,19 @@ pub fn[P] nav_flat_view(
     // (what is pushed over the page in place slides as a phone's, its wait and its slide at their causes)
     nav.held_by(s, fn() { s.laid_size() }, Some(fn(p) { !nav.top_over() || over_ready(p) }), most)
     // (where it stands as a change left it, as a whole: told once each change is told whole, while it is held)
+    // (what kind of page made once each of `keys` is, as what it is and what `made` reads to say so are now)
+    let kinds_of = fn(keys : Array[Int]) {
+      keys.map(fn(k) {
+        match nav.flat_entry(k) {
+          Some(e) =>
+            match made(e.page) {
+              Some((kind, _)) => kind
+              None => ""
+            }
+          None => ""
+        }
+      })
+    }
     let seen_now = fn() -> FlatSeen {
       @signals.untracked(fn() {
         let st = stacked()
@@ -114,7 +152,8 @@ pub fn[P] nav_flat_view(
         } else {
           [nav.flat_drawn().serial]
         }
-        { keys: nav.flat_entries(), shown, stacked: st }
+        let keys = nav.flat_entries()
+        { keys, shown, stacked: st, kinds: kinds_of(keys) }
       })
     }
     let seen = @signals.signal(seen_now(), same=fn(a, b) { a == b })
@@ -137,7 +176,9 @@ pub fn[P] nav_flat_view(
     // (as it is first held: once that change is told whole, its owner's keeping told with it)
     @signals.after_flush(fn() { if s.alive() { @signals.untracked(gone_free) } })
     s.reacts(
-      fn() { (nav.said.get(), nav.shown.get(), stacks()) },
+      // (what makes it stand anew: the stack told, what may push over it, and what decides which way each is drawn, as
+      // `made` reads it: a page's width there, the stack itself told nothing)
+      fn() { (nav.said.get(), nav.shown.get(), stacks(), kinds_of(nav.flat_entries())) },
       fn(_) {
         @signals.after_flush(fn() {
           if s.alive() {
@@ -189,75 +230,115 @@ pub fn[P] nav_flat_view(
         }
       })
       |> ignore
-      pv.show(shows, fn(b) {
-        b.grow(Is(1.0)) |> ignore
-        let key = fn() {
-          match entry {
-            Some(e) => {
-              let said = Ref("")
-              nav.built_by(e, fn() { said.val = page_key(e.page) })
-              said.val
-            }
+      // (its old view while it shows; or, where `made` says so of what it is as the stack stood whole (FlatSeen's
+      // `kinds`, never the half between a change and its owner's keeping), its nodes made once, as it first shows, and
+      // kept while it is held, laid out nowhere while it does not show: as nav_view's)
+      pv.pick(
+        fn() {
+          let st = seen.get()
+          match st.keys.search(k) {
+            Some(i) => st.kinds[i]
             None => ""
           }
-        }
-        let island = fn() {
-          old(
-            b,
-            fn(c) {
-              // (back the stack's down to the page in place, where it is the stack's now)
-              nav.floor = if takes_back() && stacks() { nav.over_floor() } else { nav.pages.length() }
-              if seen.get().stacked && nav.entry(k) is Some(_) {
-                // (under what the frame puts over it, the stack's back that node's: below)
-                nav.page_built(c, k, page, if head is Some(_) { 0L } else { bg() }, edge, stack=head is None)
-              } else {
-                // (in place: built as Ctx::nav_flat builds it, all of its room, cut to it, no back of the stack's; on the
-                // stack, or kept shown though it left it)
-                nav.said.get() |> ignore
-                let e = match nav.entry(k) {
-                  Some(e) => Some(e)
-                  None => nav.flat_kept_entry().filter(fn(e) { e.serial == k })
+        },
+        fn(pb, kind) {
+          // (as tall as the stack's room, never as what it holds: what is in it scrolls in that, or is cut to it)
+          pb.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+          match @signals.untracked(fn() { nav.flat_entry(k).map(fn(e) { (e, made(e.page)) }) }) {
+            Some((e, Some((_, f)))) if kind != "" => {
+              let shown = Ref(false)
+              pb.show(
+                fn() {
+                  if shows() {
+                    shown.val = true
+                  }
+                  shown.val
+                },
+                fn(m) {
+                  m.basis(Is(Some(0.0))).min_height(Is(Some(0.0))).laid_nowhere(By(fn() { !shows() })) |> ignore
+                  // (back the stack's while it is pushed over the page in place and on the stack, down to that page)
+                  let floor = fn() { if takes_back() && stacks() { nav.over_floor() } else { nav.pages.length() } }
+                  let when = fn() { seen.get().stacked && nav.entry(k) is Some(_) }
+                  match head {
+                    Some(h) => nav.made(m, k, e, f, bg, edge, floor~, when~, head=fn(o) { h(o, k, true) })
+                    None => nav.made(m, k, e, f, bg, edge, floor~, when~)
+                  }
+                },
+              )
+            }
+            _ =>
+              pb.show(shows, fn(b) {
+                b.grow(Is(1.0)) |> ignore
+                let key = fn() {
+                  match entry {
+                    Some(e) => {
+                      let said = Ref("")
+                      nav.built_by(e, fn() { said.val = page_key(e.page) })
+                      said.val
+                    }
+                    None => ""
+                  }
                 }
-                match e {
-                  Some(e) =>
-                    c.box(style=if head is Some(_) { flat_in_place } else { flat_in_place.then(style(bg=Data(bg()))) }, fn() {
-                      let (owner, stint) = (c.owner, c.stint)
-                      c.owner = e.serial
-                      c.stint = e.stint
-                      nav.built_by(e, fn() { c.scope(e.serial, fn() { page(c, e.page) }) })
-                      c.owner = owner
-                      c.stint = stint
+                let island = fn() {
+                  old(
+                    b,
+                    fn(c) {
+                      // (back the stack's down to the page in place, where it is the stack's now)
+                      nav.floor = if takes_back() && stacks() { nav.over_floor() } else { nav.pages.length() }
+                      if seen.get().stacked && nav.entry(k) is Some(_) {
+                        // (under what the frame puts over it, the stack's back that node's: below)
+                        nav.page_built(c, k, page, if head is Some(_) { 0L } else { bg() }, edge, stack=head is None)
+                      } else {
+                        // (in place: built as Ctx::nav_flat builds it, all of its room, cut to it, no back of the stack's; on the
+                        // stack, or kept shown though it left it)
+                        nav.said.get() |> ignore
+                        let e = match nav.entry(k) {
+                          Some(e) => Some(e)
+                          None => nav.flat_kept_entry().filter(fn(e) { e.serial == k })
+                        }
+                        match e {
+                          Some(e) =>
+                            c.box(style=if head is Some(_) { flat_in_place } else { flat_in_place.then(style(bg=Data(bg()))) }, fn() {
+                              let (owner, stint) = (c.owner, c.stint)
+                              c.owner = e.serial
+                              c.stint = e.stint
+                              nav.built_by(e, fn() { c.scope(e.serial, fn() { page(c, e.page) }) })
+                              c.owner = owner
+                              c.stint = stint
+                            })
+                            |> ignore
+                          _ => ()
+                        }
+                      }
+                    },
+                    key~,
+                  )
+                  .grow(Is(1.0))
+                  |> ignore
+                }
+                match head {
+                  // (what the frame puts over the page's own, its nodes the tree's, laid over it (a panel's bar: its room the
+                  // page's own to leave as it is built, so nothing of it moves as the bar is told what it shows); the page's
+                  // ground under both, as the page's own was under what it held; the stack's back over the whole of both, as a
+                  // page made once has it, where it is the stack's: Nav::backs_over)
+                  Some(h) => {
+                    b.ground(By(bg)) |> ignore
+                    let floor = fn() { if takes_back() && stacks() { nav.over_floor() } else { nav.pages.length() } }
+                    nav.backs_over(b, k, edge, floor~, when=fn() { seen.get().stacked && nav.entry(k) is Some(_) }, fn() {
+                      island()
+                      b.box(fn(o) {
+                        o.over(Is(true)) |> ignore
+                        h(o, k, false)
+                      })
+                      |> ignore
                     })
-                    |> ignore
-                  _ => ()
+                  }
+                  None => island()
                 }
-              }
-            },
-            key~,
-          )
-          .grow(Is(1.0))
-          |> ignore
-        }
-        match head {
-          // (what the frame puts over the page's own, its nodes the tree's, laid over it (a panel's bar: its room the
-          // page's own to leave as it is built, so nothing of it moves as the bar is told what it shows); the page's
-          // ground under both, as the page's own was under what it held; the stack's back over the whole of both, as a
-          // page made once has it, where it is the stack's: Nav::backs_over)
-          Some(h) => {
-            b.ground(By(bg)) |> ignore
-            let floor = fn() { if takes_back() && stacks() { nav.over_floor() } else { nav.pages.length() } }
-            nav.backs_over(b, k, edge, floor~, when=fn() { seen.get().stacked && nav.entry(k) is Some(_) }, fn() {
-              island()
-              b.box(fn(o) {
-                o.over(Is(true)) |> ignore
-                h(o, k)
               })
-              |> ignore
-            })
           }
-          None => island()
-        }
-      })
+        },
+      )
     })
   })
 }

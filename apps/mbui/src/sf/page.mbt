@@ -101,6 +101,15 @@ pub(all) struct PageFrame {
 }
 
 ///|
+/// What a page made once says of itself to the frame that names it (its bar: `named`), as it changes: its title, what
+/// it is for said by a mark beside it ("" none; not its lead, what it holds says under its title). Compared by what it
+/// says.
+pub(all) struct PageSaid {
+  title : String
+  about : String
+} derive(Eq)
+
+///|
 /// A frame that gives a page nothing: nowhere back, no room over or under it.
 pub let no_frame : PageFrame = { back: None, top: 0.0, foot: 0.0, named: false }
 

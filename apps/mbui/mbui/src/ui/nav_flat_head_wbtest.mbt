@@ -21,7 +21,7 @@ fn flat_headed(own : @signals.Signal[Bool], took : Ref[Int]) -> (Tester, Nav[Str
       fn(_) { true },
       0.0,
       bg=fn() { 0xFFFFFFFFL },
-      head=fn(b, _) { b.box(fn(h) { h.height(Is(Some(40.0))) |> ignore }) |> ignore },
+      head=fn(b, _, _) { b.box(fn(h) { h.height(Is(Some(40.0))) |> ignore }) |> ignore },
     )
     |> ignore
   })

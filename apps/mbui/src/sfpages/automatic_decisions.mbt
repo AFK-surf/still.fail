@@ -30,7 +30,16 @@ pub fn decisions_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
 ///|
 /// 自动决定 as nodes (decisions_page's, narrow: what it is for is a wide page's mark beside its title, none here): its one
 /// decision on a card: whether a chat is done, how it is decided now (the core's), short; pressed, that decision's page.
-pub fn decisions_node(v : @view.View, core : Core, here : () -> Here, on_back~ : () -> Unit, frame~ : () -> PageFrame) -> Unit {
+pub fn decisions_node(
+  v : @view.View,
+  core : Core,
+  here : () -> Here,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+) -> Unit {
+  // (what it says of itself to a frame's bar that names it, what it is for with it: decisions_page's `about`)
+  let told = said
   let said = fn() { (core.topic)("settings", { "scope": Json::string(here().workspace) }).value }
   @sf.page_node(
     v,
@@ -49,6 +58,8 @@ pub fn decisions_node(v : @view.View, core : Core, here : () -> Here, on_back~ :
     },
     on_back~,
     frame~,
+    about=fn() { @sf.t("web-pages.automaticDecisions.choosePoint") },
+    said?=told,
   )
 }
 

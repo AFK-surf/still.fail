@@ -71,7 +71,8 @@
     ],
     "frames": [
       "src/sfdesk/settings_page.mbt",
-      "src/sfpages/settings_page.mbt"
+      "src/sfpages/settings_page.mbt",
+      "src/sfdesk/tape_page.mbt"
     ],
     "one_look": [
       "Narrow",

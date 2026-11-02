@@ -39,7 +39,7 @@ fn made_stack() -> (Tester, Nav[String], MadeLog, Array[String]) {
           Some(
             (
               "m",
-              fn(v, page, _under, stint) {
+              fn(v, page, _under, stint, _k) {
                 let first = @signals.untracked(page)
                 log.made.push(first)
                 let taps = @signals.signal(0)
