@@ -1231,9 +1231,17 @@ async function main(argv: string[]) {
       }
       // Default: all of ours that this kind of machine builds (--windows: what only Windows does).
       if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows && !onLinux(p, t)) wanted.push([p, t]);
-      const remote = (await published()) ?? new Set<string>();
-      if (publish && !gh(["release", "view", RELEASE, "-R", REPO, "--json", "name"], { allowFail: true })) {
-        throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once (docs/development.md, "Native parts")`);
+      const listed = await published();
+      const remote = listed ?? new Set<string>();
+      // Its assets listed: it is there. Else asked again, and said missing only when GitHub says so: a request that did
+      // not get through (EOF) was taken for a missing release (mbui-media-runtime 41457910309).
+      if (publish && listed === null) {
+        try {
+          gh(["release", "view", RELEASE, "-R", REPO, "--json", "name"]);
+        } catch (e) {
+          if (!/release not found/i.test(String(e))) throw e;
+          throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once (docs/development.md, "Native parts")`);
+        }
       }
       const work = join(tmpdir(), `stillfail-native-${process.pid}`);
       mkdirSync(work, { recursive: true });
