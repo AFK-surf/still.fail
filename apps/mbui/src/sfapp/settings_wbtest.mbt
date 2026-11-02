@@ -23,38 +23,70 @@ fn settings_tester(
 }
 
 ///|
-test "settings come in from the left, as the gear is at the list's top left, and go back that way" {
+test "settings from Home come in from the right and go back to the right" {
   new_run()
   let t = @ui.Tester::new(fn(c) { view(c, fixture("settings")) }, w=390.0, h=844.0)
   t.draw()
-  // the gear's (App.kt transition: Settings slide in from the left, the list out to the right), once the core has
-  // said what they show
+  // The gear is at Home's right edge. Once the core has said what the settings show, they come from that side.
   open_setting("home")
   t.draw()
   t.draw()
   let end = @ui.nav_rest()
   assert_true(end - t.time() <= @ui.move_most_ms)
-  // from a page's width to the left of where they stand, rightwards
+  // from a page's width to the right of where they stand, leftwards
   let x0 = t.find("lin@example.com").unwrap().0
   t.run_for(end - @ui.move_most_ms / 2.0 - t.time())
   let x1 = t.find("lin@example.com").unwrap().0
   t.run_for(end - t.time())
   let x = t.find("lin@example.com").unwrap().0
-  assert_eq((x - x0).round(), 390.0)
-  assert_true(x0 < x1 && x1 < x)
-  // a page under them comes from the right as any does
+  assert_eq((x0 - x).round(), 390.0)
+  assert_true(x0 > x1 && x1 > x)
+  // a page opened inside settings comes from the right as any does
   t.tap_text("lin@example.com")
   nav_rested(t)
   t.back()
   nav_rested(t)
-  // back to the list: out to the left again
+  // back to the list: out to the right again
   t.back()
   t.draw()
   let end = @ui.nav_rest()
   t.run_for(end - @ui.move_most_ms / 2.0 - t.time())
-  assert_true(t.find("lin@example.com").unwrap().0 < x - 195.0)
+  assert_true(t.find("lin@example.com").unwrap().0 > x + 195.0)
   t.run_for(end - t.time())
   assert_true(t.find("lin@example.com") is None)
+}
+
+///|
+test "settings opened by Home's gear follow the system's back gesture to the right" {
+  let t = tester("settings")
+  let (gx, gy, gw, gh) = t.query(Button, label="设置").unwrap().rect
+  t.tap(gx + gw / 2.0, gy + gh / 2.0)
+  t.run_for(@ui.move_most_ms)
+  let x = t.find("lin@example.com").unwrap().0
+  t.back_gesture(195.0, true)
+  let during = t.find("lin@example.com").unwrap().0
+  assert_true(during > x && during < x + 390.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("lin@example.com") is None)
+}
+
+///|
+test "settings from another place come from its left-hand gear and return left" {
+  let t = tester("settings")
+  assert_true(@sfbase.go_place("stations"))
+  t.run_for(switch_fade_ms)
+  let (gx, gy, gw, gh) = t.query(Button, label="设置").unwrap().rect
+  t.tap(gx + gw / 2.0, gy + gh / 2.0)
+  t.draw()
+  t.draw()
+  let x0 = t.find("lin@example.com").unwrap().0
+  t.run_for(@ui.move_most_ms)
+  let x = t.find("lin@example.com").unwrap().0
+  assert_eq((x - x0).round(), 390.0)
+  t.back()
+  t.draw()
+  t.run_for(@ui.move_ms(390.0) / 2.0)
+  assert_true(t.find("lin@example.com").unwrap().0 < x - 195.0)
 }
 
 ///|

@@ -56,8 +56,8 @@ test "a page pushed slides in from the right, the one under it out to the left" 
 
 ///|
 test "a page from the left comes in from there, the one under it out to the right; back and swiped back, that way" {
-  // page 1 is to the left of page 0 (still.fail's settings, its gear at the list's top left: App.kt transition)
-  let nav = @ui.Nav::new(0, from_left=fn(i) { i == 1 })
+  // page 1 is to the left of page 0
+  let nav = @ui.Nav::new(0, from_left=fn(i, under) { i == 1 && under is Some(0) })
   let t = @ui.Tester::new(nav_view(nav))
   t.tap_text("open 1")
   t.run_for(page_ms / 2.0)
