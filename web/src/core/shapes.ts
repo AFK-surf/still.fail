@@ -600,6 +600,8 @@ export interface QuotaWindow {
 /** An allowance: its windows shortest first. */
 export interface Quota {
 	credits?: QuotaCredits;
+	/** The subscription tier, when reported with the allowance. */
+	plan?: string;
 	resetCount?: number;
 	creditsText?: string;
 	resetText?: string;
@@ -1265,6 +1267,8 @@ export interface DecisionCapability {
 
 export interface ProfileCheck {
 	decision?: DecisionCapability;
+	/** The subscription tier reported by its login; absent when unknown or on older stations. */
+	plan?: string;
 	/** Runtime → model → supported reasoning levels; absent on older stations. */
 	modelEfforts?: Record<string, Record<string, string[]>>;
 	/** ok | login | failed | unknown */
@@ -1432,6 +1436,8 @@ export interface Profile {
 	serves?: boolean;
 	/** What it is, in a word: the machine's own login (终端里的登录), its provider, else its kind of account. */
 	kindText?: string;
+	/** The subscription tier as a name (Pro 200, Max); empty when unknown. */
+	planText?: string;
 	/** Who signing it in goes to: OpenCode, Kimi, Claude, Grok, Cursor, Devin, ChatGPT. */
 	signInProvider?: string;
 	/** Its last check in a line: its detail (without the 可用 a working one starts with), or that it has none yet. */

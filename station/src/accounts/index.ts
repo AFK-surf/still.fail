@@ -279,14 +279,24 @@ export class Accounts {
       // A profile on the machine's login is as that login is: one signed in, out or to another account in a terminal is
       // checked again, so its last check (signed out, say) does not outlive the login it was of. The first reading
       // after start is the start's checks'.
-      const said = (runtime: string) => JSON.stringify(this.machine!.get().filter((l) => l.runtime === runtime).map((l) => [l.loggedIn, l.email, l.usable]));
+      const said = (runtime: string) => JSON.stringify(this.machine!.get().filter((l) => l.runtime === runtime).map((l) => [l.loggedIn, l.email, l.plan, l.usable]));
       let last: Map<string, string> | null = null;
       this.stops.push(
         this.machine.changes(() => {
           this.changed();
           const before = last;
           last = new Map(["claude", "codex"].map((r) => [r, said(r)]));
-          if (before === null) return;
+          if (before === null) {
+            // The first reading can finish after a start-up check. If it knows a more specific tier, recheck that
+            // profile so its view and any borrowed copy get the machine login's tier.
+            for (const p of this.profiles()) {
+              if (p.machine !== true) continue;
+              const check = this.checks.get(p.id);
+              const login = this.machine!.get().find((l) => l.runtime === p.runtime && l.loggedIn);
+              if (check?.state === "ok" && login?.plan && check.plan !== login.plan) this.afterSignIn(p.id);
+            }
+            return;
+          }
           for (const p of this.profiles()) if (p.machine === true && before.get(p.runtime) !== last.get(p.runtime)) this.afterSignIn(p.id);
         }),
       );
@@ -923,6 +933,12 @@ export class Accounts {
     // A profile edited during the probe does not inherit the previous account's capabilities.
     const now = this.profile(id);
     if (!now || fingerprint(now) !== fingerprint(profile)) throw new Refusal(409, tr(lang, "station.profile.changedRecheck"));
+    // A machine profile's token-only Claude check may omit the specific tier. Read its own login at the end of the
+    // check, including when the login is held in the keychain and its first reading finished during the check.
+    if (profile.machine === true && kind === "subscription" && check.state === "ok") {
+      const login = this.machineLogins().find((l) => l.runtime === profile.runtime && l.loggedIn);
+      if (typeof login?.plan === "string" && login.plan.trim() !== "") check.plan = login.plan.trim();
+    }
     this.keepCheck(id, check);
     // One never asked yet (just made, however): its allowance now, not at the next round.
     if (check.state === "ok" && !this.quotas.has(id)) this.background.spawn(() => this.refreshQuota(id));

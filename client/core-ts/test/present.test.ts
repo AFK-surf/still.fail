@@ -404,15 +404,18 @@ test("what_a_profile_runs_what_can_be_taken_off_and_which_machine_logins_are_off
       { runtime: "claude", loggedIn: true, plan: "max" },
       { runtime: "codex", loggedIn: true, plan: "plus" },
       { runtime: "codex", loggedIn: true, plan: null },
+      { runtime: "codex", loggedIn: true, plan: "unknown" },
       { runtime: "codex", loggedIn: false, plan: "plus" },
       { runtime: "codex", loggedIn: false, plan: "prolite" },
+      { runtime: "codex", loggedIn: false, plan: "pro" },
+      { runtime: "codex", loggedIn: false, plan: "promax" },
       { runtime: "codex", loggedIn: false, plan: "free_workspace" },
     ],
   };
   o = p.decorate({ topic: "overview", station: "w/s" }, o, c);
-  assert.deepEqual(o.machineLogins.map((l: J) => l.offered === true), [false, true, false, false, false, false]);
+  assert.deepEqual(o.machineLogins.map((l: J) => l.offered === true), [false, true, false, false, false, false, false, false, false]);
   // its plan as its vendor names it, for its tag (the web's and the apps' alike)
-  assert.deepEqual(o.machineLogins.map((l: J) => l.planText), ["Max", "Plus", "", "Plus", "Pro Lite", "Free Workspace"]);
+  assert.deepEqual(o.machineLogins.map((l: J) => l.planText), ["Max", "Plus", "", "", "Plus", "Pro 100", "Pro 200", "Pro 500", "Free Workspace"]);
 });
 
 test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each", () => {
