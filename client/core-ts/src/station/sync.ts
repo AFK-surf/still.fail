@@ -1198,6 +1198,9 @@ export class StationsSync {
         const entries = (get(data, "entries") as unknown[] | undefined) ?? [];
         const items = ENTRIES.items(data, { latest: true });
         const newest = Math.max(-1, ...items.map(([n]) => n));
+        // Its summary as held before what was said goes into its channel (which takes its `last` on to it).
+        const was = this.#core.data.of(address)?.thread(address, id);
+        const before = isObject(was) ? { ...was } : undefined;
         this.onTold(address, id, entries);
         // Into its channel: the thread goes that far at once (the rest of its summary is read below), and a gap what
         // was told left is read. A chat let go for room (and not opened since) is not kept current: what it said is
@@ -1208,7 +1211,7 @@ export class StationsSync {
         // read.
         const link = this.#links.get(address);
         const me = this.#me(address);
-        const next = me === null ? null : threadAfter(this.#core.data.of(address)?.thread(address, id), entries, me);
+        const next = me === null ? null : threadAfter(before, entries, me);
         if (next !== null && link) {
           this.putThread(address, next);
           link.viewed.set(id, Math.max(link.viewed.get(id) ?? 0, u64(get(next, "last")) ?? 0));
