@@ -454,6 +454,10 @@ let github_path : String = "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.
 // ── a file's (Peeks.tsx FileRef, FileCard) ─────────────────────────────
 
 ///|
+/// The file chip under the pointer, so returning to it refreshes even while its card is still open.
+let hovered_file : Ref[(String, Double)?] = Ref(None)
+
+///|
 /// A file the session `session`'s message names by its path (its chip: @sf.path_link), on station `station`: its card
 /// over its chip while the pointer rests on it, read as the pointer comes onto it; a finger taps the chip for it.
 fn file_peek(
@@ -467,6 +471,18 @@ fn file_peek(
 ) -> Unit {
   let scope = "file-peek/" + id.to_string()
   let params = file_peek_params(station, session, path, line)
+  let hover_key = scope + "\u{1}" + Json::object(params).stringify()
+  if c.hovered(id) {
+    let visit = (hover_key, c.hover_since(id))
+    if hovered_file.val != Some(visit) {
+      hovered_file.val = Some(visit)
+      // A card can stay open as the pointer leaves its chip. Subscribe again even in that case: the file may have
+      // been written or removed since the last time the pointer was here.
+      (src.leave)("filePeek", params)
+    }
+  } else if hovered_file.val is Some((key, _)) && key == hover_key {
+    hovered_file.val = None
+  }
   // (a tap opens the file itself: message.mbt open_named)
   peek_read(c, src, scope, "filePeek", params, id, fn(read) {
     hover(c, scope, id, fn() {

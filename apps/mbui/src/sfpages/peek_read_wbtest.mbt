@@ -60,3 +60,52 @@ test "a link's card is read as the pointer comes onto it and let go of once it h
   t.run_for(hover_open_ms * 2.0)
   assert_eq(read, ["linkPreview", "left", "linkPreview"])
 }
+
+///|
+test "a file is read on every entry, including while its card is still open" {
+  @sfbase.reset()
+  hovered_file.val = None
+  let reads = Ref(0)
+  let active = Ref(false)
+  let made = @sfbase.made_source()
+  let src : Source = {
+    ..made,
+    topic: fn(name, params) {
+      if name == "filePeek" && !active.val {
+        active.val = true
+        reads.val += 1
+      }
+      (made.topic)(name, params)
+    },
+    leave: fn(name, _) { if name == "filePeek" { active.val = false } },
+  }
+  let build = Ref(0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      build.val += 1
+      @sfbase.held_build(build.val)
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        c.column(pad=40.0, fn() {
+          let link = @kit.button(c, "src/a.ts", key="file", variant=Ghost)
+          file_peek(c, src, "st", "session", "src/a.ts", None, link.id)
+        }) |> ignore
+      })
+    },
+    w=800.0,
+    h=800.0,
+    native=Mouse,
+    pointing=Mouse,
+  )
+  t.draw()
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="src/a.ts").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(hover_open_ms * 2.0)
+  assert_eq(reads.val, 1)
+  // Leave and return before the card closes; it still must re-read the file.
+  t.move(700.0, 700.0)
+  t.frame()
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  assert_eq(reads.val, 2)
+}
