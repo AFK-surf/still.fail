@@ -321,7 +321,7 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   const what = (turn: J) => p.rowStateLine({ agents: [p.session({ process: "warm", lastTurn: turn })] })?.[2];
   assert.equal(what({ declared: "block", ending: "need_help", need: "要 Stripe 的测试 key", outcome: "completed" }), "要 Stripe 的测试 key");
   assert.equal(what({ declared: "block", outcome: "completed" }), "需要你处理");
-  assert.equal(what({ outcome: "failed", detail: "auth: 401" }), "登录失效");
+  assert.equal(what({ outcome: "failed", detail: "auth: 401" }), "账号认证失败");
   assert.equal(what({ outcome: "aborted" }), "被停止");
   assert.equal(what({ outcome: "completed" }), "意外停止");
   let decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
