@@ -4,6 +4,7 @@ import {
   "mbui/hostapi",
   "mbui/signals",
   "moonbitlang/core/json",
+  "moonbitlang/core/double",
 }
 
 options(

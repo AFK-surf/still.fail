@@ -13,10 +13,11 @@ import {
   "moonbitlang/core/json",
   "mbui/dmath",
   "mbui/zip",
+  "moonbitlang/core/double",
 }
 
 import {
-  "mbui/pixels", "moonbitlang/core/env", "moonbitlang/core/encoding/utf8", "stillfail/sfkept" } for "wbtest"
+  "mbui/pixels", "moonbitlang/core/env", "moonbitlang/core/encoding/utf8", "stillfail/sfkept", "moonbitlang/core/cmp" } for "wbtest"
 
 import { "stillfail/sfkept" } for "test"
 

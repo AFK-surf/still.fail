@@ -5,6 +5,7 @@ import {
   "mbui/paint",
   "mbui/pixels",
   "mbui/signals",
+  "moonbitlang/core/double",
 }
 
 import {

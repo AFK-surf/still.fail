@@ -17,6 +17,9 @@ import {
   "stillfail/sf",
   "stillfail/gallery",
   "stillfail/sfapp/settings",
+  "moonbitlang/core/double",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/math",
 }
 
 options(

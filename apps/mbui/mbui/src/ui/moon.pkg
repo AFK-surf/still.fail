@@ -14,4 +14,5 @@ import {
   "mbui/damage",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/double",
 }
