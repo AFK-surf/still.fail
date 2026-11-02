@@ -305,12 +305,22 @@ squeeze and contrast checks; film's images before and after where a step touches
    its ways, the clock read only while one goes), its canvas taking up to two fingers, the secondary button and the
    wheel (View::on_drag, on_menu, on_wheel), each event decided at its moment by the zoom's and the strip's ways read
    there (Zoom::rect_at, scale_at; @motion.Way); it is set out as it is made, done at its ways' declared ends, reads
-   ahead what is beside it as that is said, and stops taking presses as it closes. Its drawing and its bars are
-   islands in it (the drawing taking a press only on what it has to press: a mark's pin, the words written). Still the
-   old way there: the bars' own presses, back and Esc (a press on one is taken as the bars' island builds, so what
-   draws the picture follows it at the next frame); the flight in and out (where it flies from, recorded as it is
-   drawn, and the thumbnail's place read of the old layout); the wide frame's viewer, whose zoom's `step` copies where
-   it is into its fields each frame. A row or a part kept as its nodes follows what it read by a watch owned where it is
+   ahead what is beside it as that is said, and stops taking presses as it closes. Its picture, its marks and the
+   words written on it (the tree's fields), its bars on every tier and the system's bars' actions (each press at its
+   event's moment), its keys (View::on_key: Escape, the arrows) and back (View::takes_back, a menu or a sheet over it
+   first) are the tree's; so is its flight in and out, the picture drawn and cut by the flight's nodes at the moment
+   each frame draws them. A film's and a song's viewer is the same layer (viewer_player): its ground, its fade, its
+   bars' share of the way and its flight the tree's, the still and the black under it one image cut once
+   (View::image_in), the frame it lands with taken as the host says it grabbed it (NativeView::grabs_told), its system
+   bars' 全屏 following the player's state (signals). Hosted in it as old views, and why: the player's own body
+   (Viewer::player_stage: its picture, controls, keys, 全屏 and turning sideways are the library's player, an old
+   view; it says its back after the viewer's, so its own takes it first); what a thumbnail draws over its picture in
+   flight (a film's capsule: the chat's own drawing, Viewer::thumb_over, given no place, its opacity the tree's); what
+   it shows of anything but a picture of its own (viewer_hosted: a page, a table, code, words read as they come, the
+   reader, a PDF), each its library part's old view. Still the old way there: where it flies from and back into, the
+   thumbnail's place and corners as the chat's old view was last laid out (note_thumb's @motion.measure, thumb_of),
+   and the chat's bar and composer put over the flight by the old frame's strata (over_flight): they move with the
+   chat's page. A row or a part kept as its nodes follows what it read by a watch owned where it is
    built: the old view that made it going, the watch goes with it (stale and gone: Watch::gone), and one built again
    under another with the same key follows anew there, never put back as though it still followed.
 

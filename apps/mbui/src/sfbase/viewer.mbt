@@ -1934,11 +1934,11 @@ pub fn Viewer::shown_picture(self : Viewer, c : @ui.Ctx, src : Source, r : (Doub
 }
 
 ///|
-/// Where the picture in flight is drawn (Viewer::draw_flight): `cut`, what shows of it, on the window (from what showed
-/// of the thumbnail, cut by what it is in, to the whole stage); `box`, the box it is cut to, its corners `radius` round
-/// (from the thumbnail's box and corners, each as the thumbnail resolves it, to the picture's place and none);
-/// `picture`, the picture in it (from where it lies in the box, covering it or fitted inside it, to its place), at its
-/// own proportions all the way.
+/// Where the picture in flight is drawn (viewer_tree.mbt's flight nodes, an image's and a film's): `cut`, what shows
+/// of it, on the window (from what showed of the thumbnail, cut by what it is in, to the whole stage); `box`, the box
+/// it is cut to, its corners `radius` round (from the thumbnail's box and corners, each as the thumbnail resolves it,
+/// to the picture's place and none); `picture`, the picture in it (from where it lies in the box, covering it or fitted
+/// inside it, to its place), at its own proportions all the way.
 struct FlightBox {
   cut : (Double, Double, Double, Double)
   box : (Double, Double, Double, Double)
