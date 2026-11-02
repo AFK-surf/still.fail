@@ -279,6 +279,11 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
       Some((tl, tr, br, bl)) => n.set_radii(FixedArray::from_array([tl, tr, br, bl]))
       None => ()
     }
+    // (linked each where it says so: tree_corners_linked)
+    match tree_links.get(d.id) {
+      Some(links) => n.links = @signals.untracked(links)
+      None => ()
+    }
     n.glass = d.glass
     n.clip = d.clips
     n.opacity = d.alpha

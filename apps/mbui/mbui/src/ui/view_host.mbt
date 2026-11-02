@@ -376,6 +376,8 @@ fn view_forget() -> Unit {
     Some(t) => t.dispose()
     None => ()
   }
+  // (what was said of its nodes' corners its own: tree_corners_linked)
+  tree_links.clear()
   view_app.val = None
   view_held.val = None
   view_down.val = None
@@ -934,15 +936,17 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         stretching.push((c.id, ov, y, c.h * s, c0, c1))
       }
     }
-    // (what it holds cut to it, as an old view's clipping box cuts what it holds: push_round_clip's, after its own)
+    // (what it holds cut to it, as an old view's clipping box cuts what it holds (push_round_clip's, after its own): at
+    // its edge's inside where it draws one over what it holds, its corners concentric with its own there)
     defer {
       if c.clips {
         let r = c.radius * s
         let corners = match c.corners {
-          Some((tl, tr, br, bl)) => (tl * s, tr * s, br * s, bl * s)
-          None => (r, r, r, r)
+          Some((tl, tr, br, bl)) => [tl * s, tr * s, br * s, bl * s]
+          None => [r, r, r, r]
         }
-        view_push_clip(x, y, c.w * s, c.h * s, corners)
+        let bw = if c.edge.0 > 0.0 && tree.holds_drawn(c.id) { c.edge.0 * s } else { 0.0 }
+        push_inset_clip(x, y, c.w * s, c.h * s, fn(j) { corners[j] }, bw)
         clipping.push(c.id)
       }
     }
@@ -1156,46 +1160,6 @@ fn Ctx::view_ring_put(self : Ctx, held : FixedArray[Double], by : (Int, (Double,
     inst_owners.tree[k] = tre
     inst_owners.mark[k] = mar
   }
-}
-
-///|
-/// A node's clip pushed, (`x`, `y`) `w` by `h` where it is drawn, its corners `r` round, within the clip it is in: as
-/// an old view's box's is (push_round_clip: as round, and as smooth, as its ground's corners are; where a corner is
-/// both's, the rounder).
-fn view_push_clip(
-  x : Double,
-  y : Double,
-  w : Double,
-  h : Double,
-  corners : (Double, Double, Double, Double),
-) -> Unit {
-  let k = clip_top()
-  let s = clip_stack
-  let x0 = dmax(x, s[k])
-  let y0 = dmax(y, s[k + 1])
-  let x1 = dmin(x + w, s[k + 2])
-  let y1 = dmin(y + h, s[k + 3])
-  let room = dmin(w, h) / 2.0
-  let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
-    let (pr, ps) = clip_corner_r(k, j, cx, cy)
-    let r = match j {
-      0 => corners.0
-      1 => corners.1
-      2 => corners.2
-      _ => corners.3
-    }
-    let own = dmax(dmin(r, room), 0.0)
-    if own > 0.0 && cx == ox && cy == oy && own >= pr {
-      (own, smoothness(own, room))
-    } else {
-      (pr, ps)
-    }
-  }
-  let (tl, stl) = corner(0, x0, y0, x, y)
-  let (tr, s_tr) = corner(1, x1, y0, x + w, y)
-  let (br, sbr) = corner(2, x1, y1, x + w, y + h)
-  let (bl, sbl) = corner(3, x0, y1, x, y + h)
-  push_clip_r(x0, y0, x1, y1, (tl, tr, br, bl), (stl, s_tr, sbr, sbl))
 }
 
 ///|

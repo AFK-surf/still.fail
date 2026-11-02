@@ -569,8 +569,9 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       .padding(By(fn() { (0.0, @ui.system_bars().top, 0.0, 0.0) }))
       |> ignore
       pane.box(fn(page) {
-        page.grow(Is(1.0)) |> ignore
-        @ui.old(page, fn(c) { pane_page_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
+        page.grow(Is(1.0)).over(Is(true)) |> ignore
+        // (the stack the tree's, each page its island: page_pane.mbt)
+        pane_pages(page, src)
       })
       |> ignore
     })
@@ -587,6 +588,13 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     edges.show(fn() { pane_edge_stands(src, edges) }, fn(n) { pane_edge(n, edges, src, tips, block) })
   })
   |> ignore
+}
+
+///|
+/// Who the page shown in the pane off the tape is among the old views' (its island's: pane_page_one), for a test: what it
+/// shows across is read by it (fold_peek_shift).
+pub fn pane_page_id() -> Int {
+  fold_goes.page_id
 }
 
 ///|
@@ -670,34 +678,6 @@ fn fold_peek_shift(at : FoldLook) -> Double {
     }
     None => 0.0
   }
-}
-
-///|
-/// The page's pane off the tape (its island, the room the tree leaves it beside the block's column): the page's bars'
-/// room where the block's move has got (page_bar_room), the page moved aside as the block is shown a while.
-fn pane_page_built(c : @ui.Ctx, src : Source) -> Unit {
-  let (now, _, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(w) else { return }
-  let (r, target) = fold_target(src, w, c.window_size().0)
-  let f = fold_built(c, target)
-  fold_bars(f)
-  // (said by this build: image_item, video_item)
-  @sfbase.held_pictures_waiting.val = false
-  // a page opened in the pane shows once the core has given what it shows, the one before staying till then (`most` ms
-  // at most): as pane_page_wait says, at its causes
-  let page_id = c.id("main-page")
-  fold_goes.page_id = page_id
-  // (what the page shows across as it is laid out, its bars left out: where the page moves aside to as the folded sidebar
-  // is shown a while, taken as that starts: fold_peek_shift; the old view's layout read so, while the page is one)
-  c.shown_across(page_id, but="page-bar") |> ignore
-  // a right click in it: what is picked copied (context_menu.mbt)
-  context_page(c, page_id)
-  let pane = c.box(style=frame_main.then(@ui.style(w=Fixed(c.width))), id=page_id, fn() {
-    page_in(c, src, w, r.gated, c.width, c.height, f.aside, pane_finger())
-  })
-  // (what moves in the page of its own takes its place from the page's foot: a keyboard, the block moving the page
-  // aside, move none of it)
-  @motion.scope(c, pane, bottom=true)
 }
 
 ///|

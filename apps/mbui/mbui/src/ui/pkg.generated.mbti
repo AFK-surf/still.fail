@@ -608,6 +608,8 @@ pub fn tree_cause() -> Double?
 
 pub fn tree_corner_roots_now() -> @paint.CornerRoots
 
+pub fn tree_corners_linked(@view.View, () -> FixedArray[@paint.CornerOf]?) -> Unit
+
 pub fn tree_scroll_bar() -> @view.ScrollBar
 
 pub fn tree_theme() -> Theme
@@ -2404,6 +2406,7 @@ pub fn Tester::beside_faults(Self) -> Array[String]
 pub fn Tester::between_frames(Self, () -> Unit, due? : () -> Double) -> Unit
 pub fn Tester::bold_wider(Self, Double) -> Unit
 pub fn Tester::boxes(Self) -> Array[Laid]
+pub fn Tester::boxes_held(Self) -> Array[Laid]
 pub fn Tester::built_why(Self) -> String
 pub fn Tester::census(Self) -> Census
 pub fn Tester::check_looks(Self, Bool) -> Unit

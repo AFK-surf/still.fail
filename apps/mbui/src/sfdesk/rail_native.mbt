@@ -557,15 +557,10 @@ fn native_frame(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]
   column_short.set(@sf.native_side() && c.window_size().0 < column_short_below)
   // (the host says the screen's corner only where it lays out the tabs, ios_nav.h mb_host_window_corner; said once the
   // window is on the screen, what was kept before it is drawn anew, its corners its own then)
-  let mut changed = false
-  for k in 0..<4 {
-    let r = if @sf.native_on() { @ui.window_corner_at(k) } else { 0.0 }
-    if @sf.native_bars.corners[k] != r {
-      @sf.native_bars.corners[k] = r
-      changed = true
-    }
-  }
-  if changed {
+  let now = FixedArray::makei(4, fn(k) { if @sf.native_on() { @ui.window_corner_at(k) } else { 0.0 } })
+  if @signals.untracked(fn() { @sf.native_bars.corners.get() }) != now {
+    // (told to what is drawn round by them, the window's tree's too; what was kept of the old frame's drawn anew)
+    @sf.native_bars.corners.set(now)
     c.forget_parts()
   }
   rail_native_taps(c, src, w)

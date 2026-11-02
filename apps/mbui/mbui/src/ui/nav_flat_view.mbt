@@ -74,6 +74,27 @@ pub fn[P] nav_flat_view(
   let stacked = fn() { stacks() && nav.stacked() }
   v.box(fn(s) {
     s.grow(Is(1.0)).clips(Is(true)) |> ignore
+    // (what a frame says of a stack, as nav_view's: when it rests, a page held by a finger)
+    let k = nav_views_made.val
+    nav_views_made.val = k + 1
+    nav_views.push((k, fn(c) {
+      if nav.mode == 3 {
+        c.page_in_hand = true
+      }
+      let r = nav.ends_at(c.frame_no)
+      if r > c.nav_rest {
+        c.nav_rest = r
+      }
+    }))
+    s.owns(fn() {
+      match nav_views.search_by(fn(e) { e.0 == k }) {
+        Some(i) => nav_views.remove(i) |> ignore
+        None => ()
+      }
+    })
+    |> ignore
+    // (the entries a node of it holds now: what left the stack with none, let go of as it stands, Nav::flat_gone)
+    let held : Map[Int, Bool] = Map([])
     // (what is pushed over the page in place slides as a phone's, its wait and its slide at their causes)
     nav.held_by(s, fn() { s.laid_size() }, Some(fn(p) { !nav.top_over() || over_ready(p) }), most)
     // (where it stands as a change left it, as a whole: told once each change is told whole, while it is held)
@@ -93,9 +114,33 @@ pub fn[P] nav_flat_view(
       })
     }
     let seen = @signals.signal(seen_now(), same=fn(a, b) { a == b })
+    // (what left the stack held by no node of it, not kept shown: let go of now, as the stack stands whole, once —
+    // left while no node held it: the stack not shown, or before it was)
+    let gone_free = fn() {
+      let free = nav.gone.filter(fn(e) {
+        !held.contains(e.serial) && !(nav.flat_kept_entry() is Some(kept) && kept.serial == e.serial)
+      })
+      for e in free {
+        match nav.gone.search_by(fn(g) { g.serial == e.serial }) {
+          Some(i) => nav.gone.remove(i) |> ignore
+          None => ()
+        }
+        g().forget(e.serial)
+        (nav.on_leave)(e.page)
+      }
+    }
+    // (as it is first held: once that change is told whole, its owner's keeping told with it)
+    @signals.after_flush(fn() { if s.alive() { @signals.untracked(gone_free) } })
     s.reacts(
       fn() { (nav.said.get(), nav.shown.get(), stacks()) },
-      fn(_) { @signals.after_flush(fn() { if s.alive() { seen.set(seen_now()) } }) },
+      fn(_) {
+        @signals.after_flush(fn() {
+          if s.alive() {
+            seen.set(seen_now())
+            @signals.untracked(gone_free)
+          }
+        })
+      },
     )
     // (a page put in place, or gone back to one in place, moving: put where it was going, at once, as Ctx::nav_flat)
     s.reacts(
@@ -108,6 +153,7 @@ pub fn[P] nav_flat_view(
     )
     s.each(fn() { seen.get().keys }, fn(k) { k }, fn(pv, serial) {
       let k = @signals.untracked(fn() { serial.get() })
+      held[k] = true
       let entry = match nav.entry(k) {
         Some(e) => Some(e)
         None => @signals.untracked(fn() { nav.flat_kept_entry() })
@@ -120,6 +166,7 @@ pub fn[P] nav_flat_view(
         |> ignore
       // (let go as it leaves the stack, not kept shown: what it made forgotten, the app told)
       pv.owns(fn() {
+        held.remove(k)
         let here = nav.pages.iter().any(fn(e) { e.serial == k }) ||
           (nav.leaving is Some(e) && e.serial == k) ||
           (nav.flat_kept_entry() is Some(e) && e.serial == k)
@@ -153,14 +200,19 @@ pub fn[P] nav_flat_view(
           fn(c) {
             // (back the stack's down to the page in place, where it is the stack's now)
             nav.floor = if takes_back() && stacks() { nav.over_floor() } else { nav.pages.length() }
-            if nav.entry(k) is Some(_) {
+            if seen.get().stacked && nav.entry(k) is Some(_) {
               nav.page_built(c, k, page, bg(), edge)
             } else {
-              // (kept shown in place though it left the stack: built as it was, no back of the stack's)
+              // (in place: built as Ctx::nav_flat builds it, all of its room, cut to it, no back of the stack's; on the
+              // stack, or kept shown though it left it)
               nav.said.get() |> ignore
-              match nav.flat_kept_entry() {
-                Some(e) if e.serial == k =>
-                  c.box(style=nav_page_whole.then(style(bg=Data(bg()))), fn() {
+              let e = match nav.entry(k) {
+                Some(e) => Some(e)
+                None => nav.flat_kept_entry().filter(fn(e) { e.serial == k })
+              }
+              match e {
+                Some(e) =>
+                  c.box(style=flat_in_place.then(style(bg=Data(bg()))), fn() {
                     let (owner, stint) = (c.owner, c.stint)
                     c.owner = e.serial
                     c.stint = e.stint
@@ -181,3 +233,8 @@ pub fn[P] nav_flat_view(
     })
   })
 }
+
+///|
+/// A page put in place in a flat stack (nav_flat_view): the whole of its room, cut to it, as Ctx::nav_flat builds one.
+// kept across runs: a value (no field of it changes)
+let flat_in_place : Style = css("w=Full h=Full clip")

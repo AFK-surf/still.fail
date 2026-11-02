@@ -258,7 +258,7 @@ test "an iPhone Duo on its side, the soft keyboard rising: the cards end on it f
 /// The composer's box as drawn (the glass round its field) and the page it stands in (the roundest-cornered box round
 /// it, its foot left corner its own).
 fn composer_and_page(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }

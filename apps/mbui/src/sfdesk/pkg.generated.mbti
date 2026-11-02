@@ -220,6 +220,8 @@ pub fn pane_fold_from() -> (Double, Double)?
 
 pub fn pane_node() -> @view.View?
 
+pub fn pane_page_id() -> Int32
+
 pub fn pane_parts(@sfbase.DriveAt, Array[@sfbase.DvStation]) -> (String, String)
 
 pub fn pane_reach_at(Double) -> (Double, Double, Double, Double)?
@@ -524,6 +526,8 @@ pub struct ContextMenu {
   mut copying : String
   mut share : (() -> Unit)?
   mut share_link : String
+  mut share_words : String
+  mut share_key : String
 }
 
 pub(all) struct Favorite {

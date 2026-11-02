@@ -747,7 +747,7 @@ test "on the tape what shows of the page dragged a little and let go: the tape b
 /// Where the composer's field is drawn from the left and the bottom of the panel it is in (as drawn: a panel's move
 /// and any of the field's own); None when it is drawn out of every panel.
 fn composer_in_panel(t : @ui.Tester) -> (Double, Double)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   for b in bs {
@@ -785,7 +785,7 @@ test "on the tape the composer is drawn with its page as the page moves, never a
 /// The composer's box as drawn (the glass round its field) and its send button (the last grounded round control in
 /// it, the theme's): their corners.
 fn composer_corners(t : @ui.Tester) -> (Double, Double, Double)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   let mut box : @ui.Laid? = None
@@ -854,7 +854,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
 /// The panel of the tape the composer's field is in (the smallest box round it as round as a pane), and the
 /// composer's box (the glass round the field): as laid out.
 fn composer_and_panel(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }
@@ -930,7 +930,7 @@ fn near4(a : (Double, Double, Double, Double), b : (Double, Double, Double, Doub
 /// The page's panel on the tape (the rightmost box as round as a pane, as wide as a page), and where the topmost words
 /// `words` in it stand from its left and top, and how big they are.
 fn words_in_page(t : @ui.Tester, words : String) -> (Double, Double, Double)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   // (a panel: rounded, large, from the window's top; a card as large on the page stands lower, in the page's panel)
   let mut page : @ui.Laid? = None
   for b in bs {

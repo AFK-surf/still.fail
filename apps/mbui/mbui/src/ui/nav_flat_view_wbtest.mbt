@@ -141,3 +141,84 @@ test "flat stack on the tree, where what is pushed over is not so: one pushed ov
   assert_eq(flat_drawn(t).map(fn(d) { d.0 }), ["c"])
   assert_false(t.ctx().back())
 }
+
+///|
+test "flat stack on the tree: a page left while the stack is not shown (or before it is), let go of once as it shows again" {
+  let left : Array[String] = []
+  let nav = Nav::new("a", on_leave=fn(p) { left.push(p) })
+  // (before the stack is shown at all)
+  nav.replace("z")
+  let shown = @signals.signal(true)
+  let t = Tester::new(fn(_c) {  })
+  set_view_app(fn(root) {
+    root.show(fn() { shown.get() }, fn(b) {
+      nav_flat_view(b, nav, fn(c, p) { c.text(p, size=12.0) |> ignore }, fn(_) { true }, 0.0) |> ignore
+    })
+  })
+  t.draw()
+  assert_eq(left, ["a"])
+  // (hidden: what is on the stack let go of none; one put in its place meanwhile)
+  shown.set(false)
+  t.draw()
+  assert_eq(left, ["a"])
+  nav.replace("b")
+  t.draw()
+  shown.set(true)
+  t.draw()
+  assert_eq(flat_drawn(t).map(fn(d) { d.0 }), ["b"])
+  assert_eq(left, ["a", "z"])
+  t.draw()
+  assert_eq(left, ["a", "z"])
+}
+
+///|
+test "flat stack on the tree: one pushed over it says when its slide rests, as a stack's, and rests then" {
+  let (t, nav, _) = flat_stack()
+  nav.push_over("c")
+  t.draw()
+  let end = nav_rest()
+  assert_true(end > t.time() && end < 1.0e300, msg="\{end} at \{t.time()}")
+  t.run_for(end - t.time())
+  assert_eq(flat_drawn(t).map(fn(d) { d.0 }), ["c"])
+  t.frame()
+  assert_eq(nav_rest(), -1.0)
+}
+
+///|
+test "flat stack on the tree: shown again after the one shown was put away while hidden, its owner said after it: kept, not let go first, let go once as the other shows" {
+  let left : Array[String] = []
+  let nav = Nav::new("a", on_leave=fn(p) { left.push(p) })
+  let ready = @signals.signal(true)
+  let shown = @signals.signal(true)
+  // (what its owner showed last, kept by it across the stack hidden and shown)
+  let was = Ref(nav.top_stay())
+  let t = Tester::new(fn(_c) {  })
+  set_view_app(fn(root) {
+    root.show(fn() { shown.get() }, fn(b) {
+      nav_flat_view(b, nav, fn(c, p) { c.text(p, size=12.0) |> ignore }, fn(_) { true }, 0.0) |> ignore
+      // (its owner said after the stack, as it shows: what was shown kept while the one on top has not what it shows)
+      nav.flat_owned(true)
+      b.reacts(fn() { (nav.top_stay(), ready.get()) }, fn(now) {
+        if now.1 {
+          was.val = now.0
+          nav.flat_keep(None)
+        } else if now.0 != was.val {
+          nav.flat_keep(Some(was.val))
+        }
+      })
+    })
+  })
+  t.draw()
+  shown.set(false)
+  t.draw()
+  ready.set(false)
+  nav.replace("b")
+  shown.set(true)
+  t.draw()
+  assert_eq(left, [])
+  assert_eq(flat_drawn(t).map(fn(d) { d.0 }), ["a"])
+  ready.set(true)
+  t.draw()
+  assert_eq(flat_drawn(t).map(fn(d) { d.0 }), ["b"])
+  assert_eq(left, ["a"])
+}

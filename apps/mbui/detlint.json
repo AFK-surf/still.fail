@@ -147,6 +147,7 @@
       "src/sfdesk/frame.mbt",
       "src/sfdesk/keys.mbt",
       "src/sfdesk/overlays.mbt",
+      "src/sfdesk/page_pane.mbt",
       "src/sfdesk/pane_page.mbt",
       "src/sfdesk/pane_view.mbt",
       "src/sfdesk/rail.mbt",
@@ -154,6 +155,7 @@
       "src/sfdesk/side.mbt",
       "src/sfdesk/switch.mbt",
       "src/sfdesk/switcher.mbt",
+      "src/sfdesk/tape_page.mbt",
       "src/sfdesk/tape_view.mbt"
     ],
     "reads": [
