@@ -696,6 +696,145 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
 }
 
 ///|
+test "wide: a build becoming ready between frames offers to restart without another interaction" {
+  let t = wide_tester([], mode="chat")
+  t.check_looks(false)
+  t.set_frame_period(t.period)
+  t.run_for(@ui.move_most_ms)
+  let sent = Ref(false)
+  t.between_frames(fn() {
+    if !sent.val {
+      sent.val = true
+      @sffixture.fixture_update("0.1.9999")
+      @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+    }
+  })
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="重启更新") is Some(_), msg="the ready update in the sidebar")
+}
+
+///|
+test "wide: a ready update remains available when the files sidebar is shown" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="重启更新") is Some(_))
+  t.click(Button, label="文件")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="重启更新") is Some(_), msg="the ready update in the files sidebar")
+}
+
+///|
+test "wide: the files sidebar's update stays in place as it starts to float" {
+  let t = wide_tester([], mode="chat", window_corner=16.0, window_inset=true)
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.click(Button, label="文件")
+  t.run_for(@ui.move_most_ms)
+  let update_at = fn() {
+    let (x, y, _, _) = t.query(Button, label="重启更新").unwrap().rect
+    (x, y)
+  }
+  let open = update_at()
+  let (x, y, w, h) = t.query(Button, label="文件").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_true(@sfdesk.wide.folded.get() && @sfdesk.wide.peeking.get())
+  let start = update_at()
+  assert_true((start.0 - open.0).abs() < 0.5 && (start.1 - open.1).abs() < 0.5, msg="open \{open}, floating starts \{start}")
+}
+
+///|
+test "wide: the update is also offered in the stations, profiles and settings sidebars" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  let pages : Array[Page] = [Place("stations"), Place("profiles"), Settings]
+  for page in pages {
+    app.nav.replace(page)
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.query(Button, label="重启更新") is Some(_), msg="the ready update at \{@sfbase.page_kind(page)}")
+  }
+}
+
+///|
+test "wide: the settings list stays in place as a download starts" {
+  let t = screen_in("settings-about", ("wide", 1280.0, 800.0, 0, ""), "zh")
+  @sfbase.update_reset()
+  t.run_for(@ui.move_most_ms)
+  let side_names = fn() { t.words().filter(fn(w) { w.0 == "林" && w.1 < 300.0 }) }
+  let before = side_names()
+  assert_eq(before.length(), 1)
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+  t.run_for(@ui.move_most_ms)
+  let after = side_names()
+  assert_eq(after.length(), 1)
+  assert_eq((after[0].1, after[0].2), (before[0].1, before[0].2))
+}
+
+///|
+test "an update in each sidebar keeps its corner and press room on medium and large screens" {
+  for win in [
+    ("touch", 600.0, 900.0, 2, "medium"),
+    ("desk", 600.0, 760.0, 0, ""),
+    ("desk-win", 600.0, 760.0, 3, ""),
+    ("tablet", 840.0, 900.0, 2, "expanded"),
+    ("wide", 1280.0, 800.0, 0, ""),
+  ] {
+    for mode in ["settings-about", "files", "place-stations", "place-profiles"] {
+      let t = screen_in(mode, win, "zh")
+      if mode != "settings-about" {
+        @sffixture.fixture_update("0.1.9999")
+        @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+        t.run_for(@ui.move_most_ms)
+      }
+      let corners = t.corner_faults()
+      assert_true(corners.is_empty(), msg="\{win.0} \{mode}: \{corners}")
+      let rooms = t.room_faults().filter(fn(f) { f.contains("正在下载") })
+      assert_true(rooms.is_empty(), msg="\{win.0} \{mode}: \{rooms}")
+    }
+  }
+}
+
+///|
+test "wide: a downloading update shows its progress where restart will be offered" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+  t.run_for(@ui.move_most_ms)
+  let downloading = t.query(Button, label="正在下载 0.1.9999")
+  assert_true(downloading is Some(_), msg="the update's download in the sidebar")
+  let before = downloading.unwrap().rect
+  let (x, y, w, h) = before
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  assert_true(t.find("正在下载 0.1.9999 · 40% · 22.4 MB") is Some(_), msg="the download's progress in its tip")
+  t.click(Button, label="正在下载 0.1.9999")
+  t.run_for(@kit.dialog_ms)
+  assert_true(t.find("正在下载 0.1.9999 · 40% · 22.4 MB") is Some(_), msg="the download's details")
+  // The release notes also contain 关闭; choose the button's exact words, not that substring in the notes.
+  let close = t.words().filter(fn(w) { w.0 == "关闭" })
+  assert_eq(close.length(), 1)
+  let (_, cx, cy, cw, ch, _) = close[0]
+  t.tap(cx + cw / 2.0, cy + ch / 2.0)
+  assert_false(@sfbase.update_dialog_open())
+  t.run_for(@ui.move_most_ms)
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.query(Button, label="重启更新").unwrap().rect, before)
+}
+
+///|
+test "wide: a download of unknown length is still shown" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="正在下载 0.1.9999") is Some(_))
+}
+
+///|
 test "wide: a newer build of the desktop app ready: 重启更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")

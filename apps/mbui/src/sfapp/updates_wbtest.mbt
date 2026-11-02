@@ -81,6 +81,49 @@ test "the leave to install apps wanted: a card over Home says so; pressed, the h
 }
 
 ///|
+test "a newer build found during a download is fetched when the host finishes the previous one" {
+  let t = updates_tester(release([]), [])
+  t.frame()
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  let newer : Json = {
+    "versionCode": 3,
+    "versionName": "0.1.2",
+    "file": "android/stillfail-3.apk",
+    "sha256": "cd",
+    "size": 1000,
+    "news": [],
+  }
+  set_update_source(Some({ check: fn(_, _, done) { done(Ok(newer)) }, url: fn(file) { file } }))
+  update_check(fixture("home"), false)
+  // The host is still busy: the old download stays visible until the newer one can start.
+  assert_eq(update_stands().label, "正在下载 0.1.1")
+  assert_eq(t.update_asked(), ["fetch stillfail-2.apk false"])
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.update_asked(), ["fetch stillfail-2.apk false", "fetch stillfail-3.apk false"])
+}
+
+///|
+test "several releases found during one download: fetch the newest even if an older check answers last" {
+  let t = updates_tester(release([]), [])
+  t.frame()
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  let version3 : Json = { "versionCode": 3, "versionName": "0.1.2", "file": "android/stillfail-3.apk", "sha256": "cd", "size": 1000 }
+  let version4 : Json = { "versionCode": 4, "versionName": "0.1.3", "file": "android/stillfail-4.apk", "sha256": "ef", "size": 1000 }
+  let answer = Ref(version3)
+  set_update_source(Some({ check: fn(_, _, done) { done(Ok(answer.val)) }, url: fn(file) { file } }))
+  update_check(fixture("home"), false)
+  answer.val = version4
+  update_check(fixture("home"), false)
+  answer.val = version3
+  update_check(fixture("home"), false)
+  t.tells_update("{\"phase\":\"failed\",\"percent\":-1,\"error\":\"incomplete\",\"file\":\"stillfail-2.apk\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.update_asked(), ["fetch stillfail-2.apk false", "fetch stillfail-4.apk false"])
+  assert_eq(update_stands().label, "下载 0.1.3")
+}
+
+///|
 test "a build that failed is handed to the host again as the app is shown again (its check), and at the person's word now" {
   let asked = []
   let t = updates_tester(release(["列表滑得更顺"]), asked)

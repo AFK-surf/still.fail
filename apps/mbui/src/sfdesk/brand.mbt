@@ -2,11 +2,13 @@
 // sidebarUpdate): how an update stands is both frames' (sfbase updates.mbt).
 
 ///|
-/// Whether the sidebar offers the update key: only while the update wants the person (sfbase updates.mbt
-/// update_wants_you: a build ready that is not put in place by itself, the leave to install apps, one being put in
-/// place at their word); while one comes it is the host's, said in 关于 alone.
+/// Whether the sidebar offers the update key: while the build comes, failed, or wants the person, and while a check
+/// they asked for is under way.
 fn update_shown() -> Bool {
-  update_wants_you()
+  match update_now() {
+    Coming(_, _) | Checking | Failed(_, _) => true
+    _ => update_wants_you()
+  }
 }
 
 ///|
@@ -23,15 +25,58 @@ fn update_button(c : @ui.Ctx, src : Source, inset : Bool, top : Double) -> Unit 
 }
 
 ///|
-/// 重启更新 in a row of keys (the sidebar's first, before the filter): the library's update key, the filter's size, its
-/// tip the version it goes to. Pressed, the build ready is put in place and the app starts again as it (update_go);
-/// turning while it is.
+/// The update in a row of keys: progress while it comes, then 重启更新. Pressing the progress opens its details;
+/// pressing a ready or failed update does what it says (update_go).
 fn update_in_row(c : @ui.Ctx, src : Source) -> Unit {
+  let coming = match update_now() {
+    Coming(_, part) => Some(part)
+    _ => None
+  }
   let (label, tip, busy) = update_said()
-  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, busy) {
-    update_go(src)
+  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, busy, coming~) {
+    if coming is Some(_) {
+      @sfbase.update_dialog(src)
+    } else {
+      update_go(src)
+    }
   }
 }
+
+///|
+/// The update key beside another sidebar's action, if one is shown.
+fn update_trailing(c : @ui.Ctx, src : Source) -> (() -> Unit)? {
+  if update_shown() { Some(fn() { update_in_row(c, src) }) } else { None }
+}
+
+///|
+/// A sidebar's action band with the update at its end: on the tape or in the floating pane, the same line and corner
+/// as the chats' filter. With no update, the other sidebars keep their ordinary band.
+fn update_band() -> @ui.Style {
+  if !update_shown() {
+    @sf.nav_new()
+  } else if wide.tape {
+    band_new_tape()
+  } else {
+    band_new_pane()
+  }
+}
+
+///|
+/// The settings' old back row has the list's 4 above it and at least row_least in height; the action band has 6 above
+/// it and band_row_h in height. Make up the difference below so the groups do not jump when the update appears.
+fn update_back_band() -> @ui.Style {
+  let band = update_band().then(settings_back_band)
+  if wide.in_bar || wide.tape {
+    band
+  } else {
+    let bottom = @sf.room_of(update_back_room + @sf.row_least() - @sf.band_row_h())
+    band.then(@ui.style(pb=bottom))
+  }
+}
+
+///|
+/// The back band's 10 below, plus the old list's 4 above, less the action band's 6 above.
+let update_back_room : Double = 8.0
 
 ///|
 /// The key's side and its mark's: the filter's beside it (filter_box: 32; side_icon: 16).
@@ -50,6 +95,10 @@ fn update_said() -> (String, String, Bool) {
     Checking => {
       let checking = @sf.t("android-misc.updates.checking")
       (checking, checking, true)
+    }
+    Coming(_, _) | Failed(_, _) => {
+      let stands = @sfbase.update_stands()
+      (stands.label, stands.label + (if stands.note == "" { "" } else { " · " + stands.note }), false)
     }
     Installing(v) =>
       (

@@ -1176,7 +1176,7 @@ pub fn native_over_up(String, alive~ : () -> Bool, owner? : String, over? : Int3
 
 pub fn native_side() -> Bool
 
-pub fn nav_action(@ui.Ctx, String, String, ((Beside) -> Unit)?) -> Unit
+pub fn nav_action(@ui.Ctx, String, String, ((Beside) -> Unit)?, trailing? : () -> Unit, band? : @ui.Style) -> Unit
 
 pub fn nav_apart(@ui.Ctx, Bool, () -> Unit) -> Unit
 
@@ -2132,7 +2132,7 @@ pub let under_card_words : @ui.Style
 
 pub fn untitled_clear() -> @ui.Style
 
-pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool) -> Bool
+pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool, coming? : Double??) -> Bool
 
 pub let update_raised : Raised
 
