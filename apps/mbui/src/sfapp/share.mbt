@@ -133,7 +133,7 @@ fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
   }
   let head = fn() {
     if share_in.files.get().length() > 0 {
-      shared_files_head(c, share_in.files.get(), source, title)
+      shared_files_head(c, share_in.files.get(), source, title, share_narrow)
     } else {
       shared_head(c, source, title, share_narrow)
     }
@@ -250,10 +250,6 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
         share_in.opening.set(None)
         share_in.error.set("")
         c.blur()
-        if !share_inline() {
-          raise_sheet(ShareSheet)
-        }
-        share_in.raised.set(true)
       }
       _ => ()
     }
@@ -265,6 +261,18 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
     if share_over.get() {
       share_closing.val = true
     }
+  }
+  // put up once shared: in a sheet on a Small window or over another app, the wide panel otherwise; filling the window
+  // the browser extension opened
+  if share_in.shared.get() is Some(_) && !share_in.raised.get() {
+    if share_inline() {
+      ()
+    } else if !share_over.get() && !sheet_small(c) {
+      share_wide.set(true)
+    } else {
+      raise_sheet(ShareSheet)
+    }
+    share_in.raised.set(true)
   }
   if share_closing.val && share_over.get() && !@sf.presented_drawn() {
     share_closing.val = false
@@ -308,6 +316,12 @@ priv struct ShareLook {
   model : Double
   /// the whole width, its words `side` in
   inset : @ui.Style
+  /// files shared: how far in their tiles and words stand (a tile's corner concentric in the panel's at the wide one)
+  files_in : Double
+  /// room over the pictures shared, and a picture's tile's corner: concentric in what holds it (the wide panel's, 20
+  /// in: one of the ladder's)
+  files_top : Double
+  tile_corner : Double
 }
 
 ///|
@@ -358,6 +372,9 @@ let share_narrow : ShareLook = {
   row_gap: 0.0,
   model: 36.0,
   inset: @ui.css("w=Full"),
+  files_in: 0.0,
+  files_top: 4.0,
+  tile_corner: 16.0,
 }
 
 ///|
@@ -382,11 +399,14 @@ let share_wide_look : ShareLook = {
   row_h: 38.0,
   row_padx: 12.0,
   row_pady: 8.0,
-  row_corner: @sf.pill_inner(12.0, 38.0),
+  row_corner: share_row_corner,
   row_line: 20.0,
   row_gap: 2.0,
   model: 18.0,
   inset: @ui.css("w=Full px=S3"),
+  files_in: 8.0,
+  files_top: 8.0,
+  tile_corner: @ui.concentric(@sf.pane_corner, 20.0),
 }
 
 ///|
@@ -419,7 +439,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
   let v = topic.value
   let rows = items(v, "items")
   if share_in.files.get().length() > 0 {
-    shared_files_head(c, share_in.files.get(), source, title)
+    shared_files_head(c, share_in.files.get(), source, title, look)
   } else {
     let site = text(v, "site")
     shared_head(c, source, if title is Some(_) || site == "" { title } else { Some(site) }, look)
@@ -622,7 +642,11 @@ fn shared_head(c : @ui.Ctx, source : String, head : String?, look : ShareLook) -
           })
           |> ignore
         } else {
-          c.text(source, size=if look.wide { t.t.meta } else { t.t.caption }, color=t.p.muted, line=look.source_line, w=Fill(1.0), max_lines=2) |> ignore
+          // (a link one line, cut short: it breaks nowhere)
+          c.box(style=share_cut, fn() {
+            c.text(source, size=if look.wide { t.t.meta } else { t.t.caption }, color=t.p.muted, line=look.source_line, wrap=false, allow_ellipsis=true) |> ignore
+          })
+          |> ignore
         }
       })
       |> ignore
@@ -828,14 +852,14 @@ let share_files_made : Ref[Int] = { val: 0 }
 /// What is shared when it is files (the composer's own look: shared_head's place): their pictures as 56 tiles, then
 /// a file's mark with its name bold (n 个文件 for several) and under it its size (their names), the words shared with
 /// them, when any, under that.
-fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, title : String?) -> Unit {
+fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, title : String?, look : ShareLook) -> Unit {
   let t = @sf.theme()
   let pictures = files.filter(fn(f) { f.image != "" })
   if pictures.length() > 0 {
-    c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=4.0, pb=8.0, gap=8.0, clip=true, fn() {
+    c.box(dir=Row, w=Fill(1.0), pl=look.files_in, pr=look.files_in, pt=look.files_top, pb=8.0, gap=8.0, clip=true, fn() {
       for f in pictures {
-        c.box(w=Px(56.0), h=Px(56.0), radius=16.0, bg=t.p.chip, clip=true, fn() {
-          c.image(f.image, w=Px(56.0), h=Px(56.0), radius=16.0, fit=FitCover, bg=0L) |> ignore
+        c.box(w=Px(56.0), h=Px(56.0), radius=look.tile_corner, bg=t.p.chip, clip=true, fn() {
+          c.image(f.image, w=Px(56.0), h=Px(56.0), radius=look.tile_corner, fit=FitCover, bg=0L) |> ignore
         })
         |> ignore
       }
@@ -857,7 +881,7 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
     Some(x) => x
     None => words.trim().to_owned()
   }
-  c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=4.0, pb=2.0, gap=12.0, fn() {
+  c.box(dir=Row, w=Fill(1.0), pl=look.side, pr=look.side, pt=4.0, pb=2.0, gap=12.0, fn() {
     c.box(w=Px(16.0), pt=3.0, align=ACenter, fn() {
       @sf.icon(c, if pictures.length() == files.length() { "photo" } else { "file" }, size=16.0, color=t.p.muted)
       |> ignore
@@ -865,16 +889,16 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
     |> ignore
     c.box(w=Fill(1.0), fn() {
       c.box(w=Fill(1.0), clip=true, fn() {
-        c.text(head, size=t.t.title, weight=700, color=t.p.text, line=24.0, wrap=false) |> ignore
+        c.text(head, size=t.t.title, weight=700, color=t.p.text, line=24.0, wrap=false, allow_ellipsis=true) |> ignore
       })
       |> ignore
       c.box(w=Fill(1.0), clip=true, fn() {
-        c.text(under, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+        c.text(under, size=t.t.meta, color=t.p.muted, wrap=false, allow_ellipsis=true) |> ignore
       })
       |> ignore
       if said != "" {
         c.box(w=Fill(1.0), clip=true, fn() {
-          c.text(said, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+          c.text(said, size=t.t.meta, color=t.p.muted, wrap=false, allow_ellipsis=true) |> ignore
         })
         |> ignore
       }
@@ -945,9 +969,18 @@ let share_panel_gone : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.Snap
 /// The panel (ShareIn.css.ts panel, ⌘K's switcher): 12 in, its corner from a row's (a pill 38 high 12 in), a small
 /// panel's ground and line, 520 wide at most.
 // kept across runs: a value (no field of it changes)
-let share_panel_style : @ui.Style = @sf.surface(12.0, @sf.pill_inner(12.0, 38.0))
+let share_panel_style : @ui.Style = share_panel_surface
   .style()
   .then(@ui.style(w=Full, max_w=Fixed(share_panel_w), border=B1, border_color=Line, clip=true))
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_panel_surface : @sf.Surface = @sf.surface(12.0, share_row_corner)
+
+///|
+/// A wide row's corner, and what lies in the panel's corners: concentric 12 in, the panel's own then a pane's (34, one of
+/// the ladder's).
+let share_row_corner : Double = @ui.concentric(@sf.pane_corner, 12.0)
 
 ///|
 let share_panel_top_share : Double = 0.14
