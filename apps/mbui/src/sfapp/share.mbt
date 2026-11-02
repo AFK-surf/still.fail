@@ -242,19 +242,85 @@ priv struct ShareLook {
   icon : Double
   /// between a mark and its words
   gap : Double
+  /// what is shared: room over and under it, its mark's box's height, its title's and its words' lines
+  head_pt : Double
+  head_pb : Double
+  head_mark_h : Double
+  head_words_pt : Double
+  title_line : Double
+  source_line : Double
+  /// 发到 (and 新 chat 开在): room over and under it
+  label_pt : Double
+  label_pb : Double
+  /// under the list, and between its rows
+  list_pb : Double
+  list_gap : Double
+  /// a row: its least height, how far in its words stand, its corner, its title's line, between its title and line
+  row_h : Double
+  row_padx : Double
+  row_pady : Double
+  row_corner : Double
+  row_line : Double
+  row_gap : Double
+  /// a chat's model mark
+  model : Double
 }
 
 ///|
-/// A wide row's corner: concentric in the panel's (a pill 38 high, 12 in: ⌘K's).
-let switcher_row_inner : Double = @sf.pill_inner(12.0, 38.0)
-
-///|
 /// (the sheet's own 20 in is where its words and its rows' marks stand: the web's 20, its PickRows 12 + 8)
-let share_narrow : ShareLook = { wide: false, side: 0.0, col: 36.0, icon: 20.0, gap: 12.0 }
+// kept across runs: a value (no field of it changes)
+let share_narrow : ShareLook = {
+  wide: false,
+  side: 0.0,
+  col: 36.0,
+  icon: 20.0,
+  gap: 12.0,
+  head_pt: 2.0,
+  head_pb: 10.0,
+  head_mark_h: 36.0,
+  head_words_pt: 1.0,
+  title_line: 22.0,
+  source_line: 17.0,
+  label_pt: 6.0,
+  label_pb: 2.0,
+  list_pb: 16.0,
+  list_gap: 0.0,
+  row_h: 46.0,
+  row_padx: 0.0,
+  row_pady: 12.0,
+  row_corner: 0.0,
+  row_line: 21.0,
+  row_gap: 0.0,
+  model: 36.0,
+}
 
 ///|
 /// (the panel's own 12 in, then a row's 12 more: a dialog's 24)
-let share_wide_look : ShareLook = { wide: true, side: 12.0, col: 20.0, icon: 16.0, gap: 10.0 }
+// kept across runs: a value (no field of it changes)
+let share_wide_look : ShareLook = {
+  wide: true,
+  side: 12.0,
+  col: 20.0,
+  icon: 16.0,
+  gap: 10.0,
+  head_pt: 12.0,
+  head_pb: 6.0,
+  head_mark_h: 20.0,
+  head_words_pt: 0.0,
+  title_line: 20.0,
+  source_line: 18.0,
+  label_pt: 10.0,
+  label_pb: 4.0,
+  list_pb: 0.0,
+  list_gap: 2.0,
+  row_h: 38.0,
+  row_padx: 12.0,
+  row_pady: 8.0,
+  row_corner: @sf.pill_inner(12.0, 38.0),
+  row_line: 20.0,
+  row_gap: 2.0,
+  model: 18.0,
+}
 
 ///|
 /// The sheet (mobile/ShareIn.tsx Sheet), or with a wide window the panel (ShareIn.tsx ShareInPanel): what is shared, 发到
@@ -293,7 +359,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
     shared_head(c, source, if title is Some(_) || site == "" { title } else { Some(site) }, look)
   }
   // 发到, and at its end 搜索 (取消 while searching)
-  c.box(dir=Row, w=Fill(1.0), padx=look.side, pt=if look.wide { 10.0 } else { 6.0 }, pb=if look.wide { 4.0 } else { 2.0 }, align=ACenter, fn() {
+  c.box(dir=Row, w=Fill(1.0), padx=look.side, pt=look.label_pt, pb=look.label_pb, align=ACenter, fn() {
     c.box(w=Fill(1.0), fn() { c.text(sh("android-misc.shareIn.to"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore }) |> ignore
     if share_in.searching.get() || rows.length() >= searched_from {
       let id = c.id("share-in/search")
@@ -339,7 +405,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
   }
   let opening = share_in.opening.get()
   let searching = share_in.searching.get() && query.trim() != ""
-  c.box(w=Fill(1.0), pb=if look.wide { 0.0 } else { 16.0 }, gap=if look.wide { 2.0 } else { 0.0 }, fn() {
+  c.box(w=Fill(1.0), pb=look.list_pb, gap=look.list_gap, fn() {
     match v {
       None =>
         c.box(w=Fill(1.0), padx=look.side, pt=8.0, fn() {
@@ -381,9 +447,9 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
                     let maker = text(field(Some(a), "maker"), "id")
                     let runtime = text(Some(a), "runtime")
                     if look.wide {
-                      @sf.maker_mark(c, maker, runtime, 18.0) |> ignore
+                      @sf.maker_mark(c, maker, runtime, look.model) |> ignore
                     } else {
-                      model_mark_big(c, maker, runtime, 36.0, "", t.p.bg)
+                      model_mark_big(c, maker, runtime, look.model, "", t.p.bg)
                     }
                   }
                   // (no agent yet: still.fail's mark wide, the phone's 新 chat mark)
@@ -422,7 +488,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
             }
             // with several stations, each to start one on (新 chat 开在)
             if stations.length() > 1 {
-              c.box(w=Fill(1.0), padx=look.side, pt=10.0, pb=4.0, fn() {
+              c.box(w=Fill(1.0), padx=look.side, pt=share_wide_look.label_pt, pb=share_wide_look.label_pb, fn() {
                 c.text(sh("web-main.shareIn.startOn"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
               })
               |> ignore
@@ -470,19 +536,19 @@ fn shared_head(c : @ui.Ctx, source : String, head : String?, look : ShareLook) -
     w=Fill(1.0),
     pl=look.side,
     pr=look.side,
-    pt=if look.wide { look.side } else { 2.0 },
-    pb=if look.wide { 6.0 } else { 10.0 },
+    pt=look.head_pt,
+    pb=look.head_pb,
     gap=look.gap,
     fn() {
-      c.box(w=Px(look.col), h=Px(if look.wide { 20.0 } else { 36.0 }), align=ACenter, justify=JCenter, fn() {
+      c.box(w=Px(look.col), h=Px(look.head_mark_h), align=ACenter, justify=JCenter, fn() {
         @sf.icon(c, if link { "web" } else { "text" }, size=look.icon, color=t.p.muted) |> ignore
       })
       |> ignore
-      c.box(w=Fill(1.0), gap=2.0, pt=if look.wide { 0.0 } else { 1.0 }, fn() {
+      c.box(w=Fill(1.0), gap=share_wide_look.row_gap, pt=look.head_words_pt, fn() {
         match head {
           Some(h) =>
             c.box(w=Fill(1.0), clip=true, fn() {
-              c.text(h, size=if look.wide { t.t.ui } else { t.t.body }, weight=600, color=t.p.text, line=if look.wide { 20.0 } else { 22.0 }, wrap=false, allow_ellipsis=true) |> ignore
+              c.text(h, size=if look.wide { t.t.ui } else { t.t.body }, weight=600, color=t.p.text, line=look.title_line, wrap=false, allow_ellipsis=true) |> ignore
             })
             |> ignore
           None => ()
@@ -493,7 +559,7 @@ fn shared_head(c : @ui.Ctx, source : String, head : String?, look : ShareLook) -
           })
           |> ignore
         } else {
-          c.text(source, size=if look.wide { t.t.meta } else { t.t.caption }, color=t.p.muted, line=if look.wide { 18.0 } else { 17.0 }, w=Fill(1.0), max_lines=2) |> ignore
+          c.text(source, size=if look.wide { t.t.meta } else { t.t.caption }, color=t.p.muted, line=look.source_line, w=Fill(1.0), max_lines=2) |> ignore
         }
       })
       |> ignore
@@ -534,18 +600,18 @@ fn share_row(
     c.box(
       dir=Row,
       w=Fill(1.0),
-      min_h=if look.wide { 38.0 } else { 46.0 },
-      padx=if look.wide { 12.0 } else { 0.0 },
-      pady=if look.wide { 8.0 } else { 12.0 },
+      min_h=look.row_h,
+      padx=look.row_padx,
+      pady=look.row_pady,
       gap=look.gap,
       align=ACenter,
-      radius=if look.wide { switcher_row_inner } else { 0.0 },
+      radius=look.row_corner,
       bg=if look.wide && lit { t.p.hover } else { 0L },
       id=if enabled { id } else { 0 },
       fn() {
         c.box(w=Px(look.col), align=ACenter, justify=JCenter, fn() { lead() }) |> ignore
-        c.box(w=Fill(1.0), clip=true, gap=if look.wide { 2.0 } else { 0.0 }, fn() {
-          c.text(title, size=t.t.ui, color=t.p.text, wrap=false, line=if look.wide { 20.0 } else { 21.0 }, allow_ellipsis=true) |> ignore
+        c.box(w=Fill(1.0), clip=true, gap=look.row_gap, fn() {
+          c.text(title, size=t.t.ui, color=t.p.text, wrap=false, line=look.row_line, allow_ellipsis=true) |> ignore
           if sub != "" {
             c.text(sub, size=t.t.meta, color=t.p.muted, wrap=false, line=18.0, allow_ellipsis=true) |> ignore
           }
