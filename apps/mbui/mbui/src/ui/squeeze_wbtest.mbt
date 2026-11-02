@@ -193,6 +193,54 @@ test "squeeze_faults: words wrapped narrower than a word of them (broken inside 
 }
 
 ///|
+test "beside_faults: words that go on in lines beside words that give way too, whatever their lengths; not beside what keeps" {
+  // (a station's name, then what its machine is: usa-dk broken onto two lines beside a CPU's long name, 2026-11-02)
+  let after = Ref("· Intel(R) Core(TM) i5-4570 CPU @ 3.20GHz")
+  let name_wraps = Ref(true)
+  let t = Tester::new(
+    fn(c) {
+      c.box(dir=Row, w=Px(200.0), clip=true, fn() {
+        c.text("usa-dk", size=14.0, wrap=name_wraps.val) |> ignore
+        c.text(after.val, size=14.0, wrap=false, w=Cut) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  let faults = t.beside_faults()
+  assert_eq(faults.length(), 1, msg=faults.join("\n"))
+  assert_true(faults[0].contains("may go on in lines"), msg=faults[0])
+  // (short words after it, nothing broken yet: the same row, the same fault)
+  after.val = "· i5"
+  t.frame()
+  assert_eq(t.beside_faults().length(), 1, msg=t.beside_faults().join("\n"))
+  // (the name kept on one line: what is after it gives, the name whole)
+  name_wraps.val = false
+  after.val = "· Intel(R) Core(TM) i5-4570 CPU @ 3.20GHz"
+  t.frame()
+  assert_true(t.beside_faults().is_empty(), msg=t.beside_faults().join("\n"))
+}
+
+///|
+test "beside_faults: words that go on in lines beside what keeps its width are theirs to break" {
+  let t = Tester::new(
+    fn(c) {
+      c.box(dir=Row, w=Px(120.0), fn() {
+        c.text("a few words that go on in lines", size=14.0) |> ignore
+        c.box(w=Px(40.0), h=Px(20.0), bg=0x00FF00FFL, fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  assert_true(t.beside_faults().is_empty(), msg=t.beside_faults().join("\n"))
+}
+
+///|
 test "a row leaves out what it may before words cut short in it go under four of their size; then they take its room" {
   let ids = Ref((0, 0))
   let t = Tester::new(

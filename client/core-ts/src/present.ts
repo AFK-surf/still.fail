@@ -169,7 +169,6 @@ export function conformTopic(topic: Topic, value: unknown): { ok: unknown } | { 
 // ── Sessions and rows (present.rs) ──
 
 const nonEmpty = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
-const lines = (text: string): string[] => text.split("\n").map((l) => l.replace(/\r$/, ""));
 
 /// How a session's last turn ended, in today's words (all_done, need_help, waiting).
 export function ending(s: J): string | null {
@@ -293,12 +292,12 @@ export function stateAbout(agent: J, thread: number | null): number | null {
 }
 
 /// What leads a state line, for a client to say as a mark of its own (`StateLead`): a bell for needs-the-viewer, a
-/// check for done, the waiting arc, the watch's radar; a card waiting for the viewer (奏 · …), its lead word (`text`)
+/// check for done, the waiting arc, the watch's radar; a card waiting for the viewer (待处理 · …), its lead word (`text`)
 /// in bold. `rest`: what follows the lead (for watching, the whole line: its words stay after the radar).
 export type Lead = { kind: "need" | "done" | "wait" | "watch" | "decision"; text?: string; rest: string };
 
 /// Where a chat stands, in words, and the message that is about; the line without its lead (what the dot before it does
-/// not say); what leads it, if anything does. A line that asks for a decision (奏 · …, 要你帮忙：…) is about none: the
+/// not say); what leads it, if anything does. A line that asks for a decision (待处理 · …, 要你帮忙：…) is about none: the
 /// line only says so, and the chat leads to what it asks (`ChatView.asks`). `cards` false: a card waiting is not said
 /// (the chat's page, which shows the card itself).
 export function rowStateLine(row: J, cards = true): [string, number | null, string, Lead | null] | null {
@@ -382,23 +381,6 @@ function stateWhat(a: J): string | null {
   }
   return str(get(a, "statusText")) ?? null;
 }
-
-/// What a chat's agents are doing, for the 奏 page's 正在办.
-export function workingLine(row: J): string | null {
-  const agents: J[] = arr(get(row, "agents")) ?? [];
-  const atWork = agents.some((a) => shownStatus(a) === "queued" || (shownStatus(a) === "running" && waiting(a) === null));
-  if (atWork) {
-    const text = str(get(get(row, "last"), "text")) ?? "";
-    const last = format.cleanText(lines(format.plainText(text)).map((l) => l.trim()).find((l) => l !== "") ?? "");
-    return last === "" ? t("core-views.present.working") : t("core-views.present.working.last", { last });
-  }
-  for (const a of agents) {
-    const w = waiting(a);
-    if (w !== null) return str(w.text) ?? null;
-  }
-  return null;
-}
-
 
 /// Whether a person is the viewer.
 export function isViewer(me: J, person: string, slackUsers: string[]): boolean {
@@ -1125,10 +1107,22 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
     case "filePeek":
       if (isObject(v) && typeof v.mtime === "number" && v.mtime > 0) value = { ...v, time: { mtime: stamp(v.mtime, c) } };
       break;
+    // One message's card: who said it, when, and its words as a chat's row has them. No such message: nothing.
+    case "messagePeek":
+      value = messagePeek(v, c);
+      break;
   }
   const own = DECORATORS[topic.topic];
   if (own) value = own(value, c);
   return times(value, c);
+}
+
+function messagePeek(answer: J, c: Clock): J | null {
+  const entry = arr(answer.entries)?.find((e: J) => e.kind === "message");
+  if (entry === undefined) return null;
+  const text = format.cleanText(format.plainText(str(entry.text) ?? ""));
+  const at = entry.at;
+  return { author: str(entry.authorName) ?? "", text: text === "" ? t("core-views.file") : text, ...(typeof at === "number" && at > 0 ? { time: { at: stamp(at, c) } } : {}) };
 }
 
 function overview(value: J, c: Clock, station: string | null): J {

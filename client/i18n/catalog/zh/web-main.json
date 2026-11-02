@@ -195,6 +195,7 @@
   "web-main.chatRef.update": "更新 {app} 后才能引用对话",
   "web-main.chatRef.previewGone": "此会话不在列表中（可能已归档）",
   "web-main.chatRef.previewHistory": "执行记录",
+  "web-main.chatRef.previewMessageGone": "读不到这条消息",
   "web-main.find.bringing": "仅搜索了已读取的 {held} 条，正在读取其余内容",
   "web-main.find.close": "关闭查找",
   "web-main.find.next": "下一个",

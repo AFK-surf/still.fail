@@ -56,7 +56,7 @@ export function failureOf(station: string, row: J): string {
 }
 
 /// A row's state line as its list says it (its agents presented as the chats view has them).
-/// Its row's state line, and the same without its lead (奏 · , 需要你处理：, 出错：): what the dot before it does not say.
+/// Its row's state line, and the same without its lead (待处理 · , 需要你处理：, 出错：): what the dot before it does not say.
 function stateText(row: J): [string, string] {
   const shown = isObject(row) && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : row;
   const line = present.rowStateLine(shown);

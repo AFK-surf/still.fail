@@ -452,6 +452,17 @@ fn Ctx::beside_faults(self : Ctx, seen : Array[Bool]) -> Array[String] {
         Some(f) => f.w > b.fw + squeeze_slack
         None => false
       })
+    if b.wrap {
+      match self.gives_beside(i) {
+        Some(o) => {
+          out.push(
+            "\{self.named(i)}: may go on in lines beside \{self.named(o)}, after it in their row, which gives way too: how far each gives is the other's length (a short name broken beside long words)",
+          )
+          continue
+        }
+        None => ()
+      }
+    }
     guard wrapped || cut else { continue }
     // the room taken by what else shows in the nearest row it shares (not one that goes on in lines: what does not fit
     // there has a line of its own)
@@ -498,6 +509,71 @@ fn Ctx::beside_faults(self : Ctx, seen : Array[Bool]) -> Array[String] {
     }
   }
   out
+}
+
+///|
+/// What shows after words `i` that may go on in lines, in the nearest row they share (not one that goes on in lines),
+/// and gives way there as well: a row short of room squeezes both, each by the other's length, so short words (a
+/// station's name) are broken onto lines beside long ones (what its machine is) that could have been cut instead,
+/// whatever the fixture's words. Nothing when the words, or a box on their way to that row, keep their own width
+/// (`keep`, `Px`) or are said to give way first (`w=Cut`), when they share a column with more (what is beside it is
+/// not on their line), or when what is after them in that row keeps its own.
+fn Ctx::gives_beside(self : Ctx, i : Int) -> Int? {
+  let n = self.count
+  let mut k = i
+  let mut p = self.nodes[i].parent
+  while p >= 0 && p < n {
+    let on = self.nodes[k]
+    if on.keep || on.w is Px(_) || on.w is Cut {
+      return None
+    }
+    let a = self.nodes[p]
+    // (a box that cuts what it holds still squeezes it in its row; one that scrolls has the room)
+    if a.sideways || a.kind == kind_list || a.kind == kind_scroll || a.kind == kind_page {
+      return None
+    }
+    if a.dir == Row && !a.flow {
+      let shared = on.w is Fill(_)
+      let mut ch = on.next
+      while ch >= 0 {
+        let cn = self.nodes[ch]
+        if !(shared && cn.w is Fill(_)) && cn.fw > squeeze_slack && cn.least + squeeze_slack < cn.fw &&
+          self.squeeze_gives(ch) {
+          return Some(ch)
+        }
+        ch = cn.next
+      }
+      return None
+    }
+    // (a column holding more than them: what is beside it is beside the column, not on their line)
+    if a.first != k || on.next >= 0 {
+      return None
+    }
+    k = p
+    p = a.parent
+  }
+  None
+}
+
+///|
+/// Whether node `k`, shown, gives way where its row is short of room: words in it that go on in lines or are cut
+/// short, nothing on their way keeping its width (`keep`, `Px`).
+fn Ctx::squeeze_gives(self : Ctx, k : Int) -> Bool {
+  let b = self.nodes[k]
+  if b.keep || b.w is Px(_) || b.squeeze_aside() || b.opacity <= 0.01 || b.fw <= squeeze_slack {
+    return false
+  }
+  if b.kind == kind_text {
+    return b.text != "" && (b.wrap || b.w is Cut)
+  }
+  let mut ch = b.first
+  while ch >= 0 {
+    if self.squeeze_gives(ch) {
+      return true
+    }
+    ch = self.nodes[ch].next
+  }
+  false
 }
 
 ///|

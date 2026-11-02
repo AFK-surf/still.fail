@@ -340,6 +340,8 @@ pub fn native_pointing() -> Pointing
 
 pub let native_unsupported : String
 
+pub fn[P] nav_flat_view(@view.View, Nav[P], (Ctx, P) -> Unit, (P) -> Bool, Double, bg? : () -> Int64, edge? : Double, takes_back? : () -> Bool, stacks? : () -> Bool, page_key? : (P) -> String) -> @view.View
+
 pub let nav_late_most : Double
 
 pub fn nav_rest() -> Double

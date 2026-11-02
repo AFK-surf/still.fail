@@ -1049,7 +1049,7 @@ export interface TurnSummary {
 
 /**
  * What leads a state line, for a client to say as a mark of its own in its words' place: needs the viewer (a bell),
- * done (a check), waiting (the waiting arc), watching (the watch's radar); a card waiting for the viewer (奏 · …: its
+ * done (a check), waiting (the waiting arc), watching (the watch's radar); a card waiting for the viewer (待处理 · …: its
  * lead word in bold); what an agent needed, let go by the viewer (已忽略：…, a chat's end only: quiet, no mark).
  */
 export type StateLead = "need" | "done" | "wait" | "watch" | "decision" | "dismissed";
@@ -1845,7 +1845,7 @@ export interface VaultAsk {
 	/**
 	 * How it is answered on this device, from the vault as the core holds it (views/vault.ts askAnswers): approve
 	 * (允许 / 存入), setUp (a secret to keep while this device's vault is not on: 开启密钥库 first), elsewhere (approved only in an
-	 * app that keeps keys). The chat's and the 奏 page's cards; absent on a core from before.
+	 * app that keeps keys). The chat's cards; absent on a core from before.
 	 */
 	answer?: string;
 	/** With answer approve, a use: the longest it may be given for (once | hour | chat). */
@@ -1922,7 +1922,7 @@ export interface MessageCard {
 /**
  * A chat's card still pending (a row's, a chat page's; named for when the only cards were decisions): its post's entry,
  * the card as shown, an options card's options in the order they are shown (the recommended one last; empty for a
- * text card), whether the viewer dismissed it, and its line (奏 · …) while it is the viewer's.
+ * text card), whether the viewer dismissed it, and its line (待处理 · …) while it is the viewer's.
  */
 export interface RowDecision {
 	seq: number;
@@ -1930,7 +1930,7 @@ export interface RowDecision {
 	/** The card itself. A core before cards says none: an options card. */
 	card?: MessageCard;
 	dismissed?: boolean;
-	/** 奏 · <the post's first line, cut to about 40 characters>. Absent once dismissed. */
+	/** 待处理 · <the post's first line, kept whole>. Absent once dismissed. */
 	text?: string;
 }
 
@@ -2044,17 +2044,17 @@ export interface ChatItem {
 	/** The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise. */
 	kept?: boolean;
 	/**
-	 * Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a
+	 * Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 待处理 · … (a
 	 * card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
 	 * no card waiting, or with nothing to say.
 	 */
 	stateText?: string;
 	/**
 	 * What leads `stateText`, for a client to say as a mark of its own (a bell, a check, the waiting arc, the radar;
-	 * 奏 · …'s word in bold), not read back out of its words. Absent when nothing does (an agent's failure, an unsent message).
+	 * 待处理 · …'s word in bold), not read back out of its words. Absent when nothing does (an agent's failure, an unsent message).
 	 */
 	stateLead?: StateLead;
-	/** A card's line's lead word (奏, Decision), drawn in bold before the rest of `stateText`. Absent otherwise. */
+	/** A card's line's lead word (待处理, Needs attention), drawn in bold before the rest of `stateText`. Absent otherwise. */
 	stateLeadText?: string;
 	/** What follows the lead in `stateText` (watching: the whole line). Absent with `stateLead`. */
 	stateRest?: string;
@@ -2166,6 +2166,8 @@ export interface LinkedChat {
 	archived?: boolean;
 	/** Where it stands in words, where its list's row is not there to say it: 已归档. Absent otherwise. */
 	note?: string;
+	/** Its thread, for a link to one of its messages (`messagePeek`). Absent for a chat with none. */
+	thread?: number;
 }
 
 /** still.fail's notice as a chat shows it (core views.ts noticeOf). */
@@ -5098,9 +5100,9 @@ export interface MarkItem {
 	session?: string;
 	thread?: number;
 	title: string;
-	/** Its row's state line: 奏 · …, 要你帮忙：…, 出问题：… */
+	/** Its row's state line: 待处理 · …, 要你帮忙：…, 出问题：… */
 	text: string;
-	/** The same without its lead (奏 · , 需要你处理：, 出错：): what it asks, what it needs, why it stopped. */
+	/** The same without its lead (待处理 · , 需要你处理：, 出错：): what it asks, what it needs, why it stopped. */
 	what: string;
 	/** The waiting card's post (`decision.dismiss`), for `wait`. */
 	seq?: number;
@@ -5181,6 +5183,19 @@ export interface MeshStatus {
 	workspace?: string;
 	workspaceId?: string;
 	name?: string;
+}
+
+/**
+ * One message of a chat a link names, for the link's card (the `messagePeek` topic, GET /threads/:id/entries of
+ * that entry alone): as first said, an edit made since on Slack or Feishu not in it.
+ */
+export interface MessagePeek {
+	/** Who said it. */
+	author: string;
+	/** Its words as a chat's row has them; a file's word for one without any. */
+	text: string;
+	/** When it was said, in words (`at`). */
+	time?: Record<string, Stamp>;
 }
 
 /** A figure in words, and how bad it is. */

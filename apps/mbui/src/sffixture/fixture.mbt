@@ -382,11 +382,11 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     row("c2", "首页的列表改成按天分组", "ws1/st1", "8 分钟前", {
       "unread": true,
       "tone": "wait",
-      "decision": { "seq": 3, "options": [], "text": "奏 · 分组的标题用相对日期还是具体日期？" },
+      "decision": { "seq": 3, "options": [], "text": "待处理 · 分组的标题用相对日期还是具体日期？" },
       // (its line, and what leads it, as the core says them: client/core-ts present.ts rowStateLine)
-      "stateText": "奏 · 分组的标题用相对日期还是具体日期？",
+      "stateText": "待处理 · 分组的标题用相对日期还是具体日期？",
       "stateLead": "decision",
-      "stateLeadText": "奏",
+      "stateLeadText": "待处理",
       "stateRest": " · 分组的标题用相对日期还是具体日期？",
       "people": [me, ana],
       "creator": { "id": "lin@example.com", "name": "林", "via": "cloud" },
@@ -719,6 +719,16 @@ pub fn fixture_file_peek(path : String) -> Json {
 }
 
 ///|
+/// What the made-up station says of one message of a chat a link names (GET /threads/:id/entries).
+pub fn fixture_message_peek() -> Json {
+  {
+    "author": "林小满",
+    "text": "列表按天分组做好了，今天和昨天之外的日子都写日期。",
+    "time": { "at": { "at": 0, "ago": "5 分钟前", "full": "10/26 11:00", "until": "", "past": true } },
+  }
+}
+
+///|
 /// What the made-up station says of a web link (station/src/links/preview.ts): the rich chat's benchmark page as a
 /// page, a pull request on GitHub as GitHub says it, anything else nothing to show of it.
 pub fn fixture_link_preview(url : String) -> Json {
@@ -765,6 +775,8 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "linkPreview" => Some(fixture_link_preview(text(Some(Json::object(params)), "url")))
     // what a file a message names is, as the station reads it under its agent's working directory (peeks.mbt)
     "filePeek" => Some(fixture_file_peek(text(Some(Json::object(params)), "path")))
+    // one message of a chat a link names, as its station reads it (peeks.mbt)
+    "messagePeek" => Some(fixture_message_peek())
     // what is written, as the core's composers keep it (compose_fixture.mbt): its files up at once
     "composer" => Some(fix_compose_view(f, text(Some(Json::object(params)), "key")))
     // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the

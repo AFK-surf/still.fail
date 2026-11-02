@@ -880,6 +880,7 @@ let en : Map[String, String] = {
   "web-main.chatRef.none": "No other chats on this station",
   "web-main.chatRef.previewGone": "This chat isn't in the list (it may be archived)",
   "web-main.chatRef.previewHistory": "Execution history",
+  "web-main.chatRef.previewMessageGone": "Couldn't read this message",
   "web-main.chatRef.title": "Link a chat",
   "web-main.chatRef.update": "Update {app} to link chats",
   "web-main.combos.label": "Frequent picks",

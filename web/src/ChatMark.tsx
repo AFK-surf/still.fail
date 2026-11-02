@@ -66,7 +66,7 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
 
 /**
  * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`),
- * by what the core says leads it (`lead`, `leadText`, `rest`: ChatItem's stateLead…): 奏 · … (Decision · …) in ink, its
+ * by what the core says leads it (`lead`, `leadText`, `rest`: ChatItem's stateLead…): 待处理 · … (Needs attention · …) in ink, its
  * lead word bold; needs-the-viewer in ink too; 出错：…, 在等：…, 已完成 as quiet as the last message would be. `slot` (every
  * chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check, the archive box: rowLead; watching
  * a radar before its words; the two still going, waiting and watching, move: waiting's dots breathe in turn, the radar's

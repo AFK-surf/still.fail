@@ -186,6 +186,46 @@ test("hands_a_part_over_as_it_comes", async () => {
   core.close();
 });
 
+test("a slow video delivers small pieces before the part ends", async () => {
+  for (const drive of [false, true]) {
+    const chunks = Effect.runSync(Queue.unbounded<Uint8Array | null>());
+    class SlowVideo extends HostWire {
+      override request(...args: Parameters<HostWire["request"]>) {
+        const path = args[1].path;
+        if (!(drive ? path.includes("/drive/read?") : path.includes("/sessions/k/parts?"))) return super.request(...args);
+        return Effect.succeed({
+          status: 200,
+          headers: [["content-type", "video/mp4"], ["stillfail-total", "5096"], ["stillfail-mtime", "7"]] as [string, string][],
+          via: null,
+          body: { take: Queue.take(chunks) },
+        });
+      }
+    }
+    const { host, core } = await started(base(), 0, h => new SlowVideo(h));
+    try {
+      const pieces: Uint8Array[] = [];
+      const requests = core.inner.stations.requests;
+      const take = (bytes: Uint8Array) => pieces.push(bytes);
+      const reading = core.inner.runner.run(drive
+        ? requests.driveRead(remote(), "root", "/video.mp4", 0, 5096, null, undefined, take)
+        : requests.filePart(remote(), "k", "video.mp4", 0, 5096, null, undefined, take));
+      await host.settle();
+      Queue.offerUnsafe(chunks, new Uint8Array(2048).fill(1));
+      await host.settle();
+      assert.equal(pieces.length, 0, "a small network packet is batched");
+      Queue.offerUnsafe(chunks, new Uint8Array(2048).fill(2));
+      await host.settle();
+      assert.equal(pieces.length, 1, "the player has 4 KB while the request is still open");
+      assert.deepEqual(pieces[0], concat([new Uint8Array(2048).fill(1), new Uint8Array(2048).fill(2)]));
+      Queue.offerUnsafe(chunks, new Uint8Array(1000).fill(3));
+      Queue.offerUnsafe(chunks, null);
+      const result = await reading;
+      assert.equal(result.bytes.length, 0, "streamed bytes are not returned again");
+      assert.deepEqual(pieces.map(p => p.length), [4096, 1000], "the final short piece is delivered too");
+    } finally { core.close(); }
+  }
+});
+
 test("a_file_a_message_names_opens_whole_its_bytes_beside_from_a_station_new_or_old", async () => {
   const { host, core } = await started(base());
   stationReplies(host, (req) => {
@@ -310,7 +350,7 @@ test("a_push_brings_its_chat_onto_the_device_whether_the_stream_told_it_or_not",
   assert.deepEqual(held(7), [1, 2, 3]);
   const answered = (id: number) => host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m));
   // Said while the phone slept: its stream did not tell it, its push did.
-  answers["GET /threads/7/entries?after=3"] = { last: 4, entries: [entry(4, "做完了")] };
+  answers["GET /threads/7/entries?after=3&limit=50"] = { last: 4, entries: [entry(4, "做完了")] };
   call(core, ui, 1, "notice.bring", { station: ST, session: "k1", seq: 4 });
   await host.settle();
   assert.deepEqual(answered(1)?.ok, null);
@@ -322,7 +362,7 @@ test("a_push_brings_its_chat_onto_the_device_whether_the_stream_told_it_or_not",
   assert.deepEqual(answered(2)?.ok, null);
   assert.equal(host.requests.slice(from).filter((r) => r.url.includes("/entries")).length, 0);
   // An older station's push says no message: asked what came after what is held.
-  answers["GET /threads/7/entries?after=4"] = { last: 5, entries: [entry(5, "又一条")] };
+  answers["GET /threads/7/entries?after=4&limit=50"] = { last: 5, entries: [entry(5, "又一条")] };
   call(core, ui, 3, "notice.bring", { station: ST, session: "k1" });
   await host.settle();
   assert.deepEqual(held(7), [1, 2, 3, 4, 5]);
@@ -524,7 +564,7 @@ test("lists_held_are_read_again_as_what_changed_of_them", async () => {
   assert.deepEqual(asked(from), lists.map(([, id, get]) => as(answers[get], id)));
   // One thread on, one new, the chat gone: the device has the lists as the station does.
   answers["GET /threads"] = [threadView(7, 4), threadView(8, 1)];
-  answers["GET /threads/7/entries?after=3"] = { last: 4, entries: [entry(4, "m4")] };
+  answers["GET /threads/7/entries?after=3&limit=50"] = { last: 4, entries: [entry(4, "m4")] };
   answers["GET /chats"] = [];
   again.core.inner.stations.snapshot(ST);
   await host.settle();
@@ -946,7 +986,7 @@ test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
 });
 
 test("a_thread_its_summary_says_goes_further_than_what_is_held_is_read_whoever_said_so", async () => {
-  const answers: J = { ...base(), "GET /threads/7/entries?after=3": { last: 5, entries: entries(4, 5) } };
+  const answers: J = { ...base(), "GET /threads/7/entries?after=3&limit=50": { last: 5, entries: entries(4, 5) } };
   const { host, core, push, values, read } = await ui(answers);
   core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
   await read();
@@ -957,7 +997,7 @@ test("a_thread_its_summary_says_goes_further_than_what_is_held_is_read_whoever_s
   assert.deepEqual(entryReads(host, from), [], "waits for the burst to end: the entries are mostly on their way");
   await coalesce(host);
   await read();
-  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3"]);
+  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3&limit=50"]);
   assert.deepEqual(nums(values), [1, 2, 3, 4, 5]);
   // Said with its entries, in either order: they are held by the time the burst is over, and nothing is read.
   push("thread-view", { ...threadView(7, 6, 3, 3) });
@@ -966,16 +1006,16 @@ test("a_thread_its_summary_says_goes_further_than_what_is_held_is_read_whoever_s
   push("thread-view", { ...threadView(7, 7, 3, 4) });
   await coalesce(host);
   await read();
-  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3"]);
+  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3&limit=50"]);
   assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7]);
   // A read of its summary (after something was read, say) says so as well.
   answers["GET /threads/7"] = threadView(7, 9, 7, 2);
-  answers["GET /threads/7/entries?after=7"] = { last: 9, entries: entries(8, 9) };
+  answers["GET /threads/7/entries?after=7&limit=50"] = { last: 9, entries: entries(8, 9) };
   push("read", { viewer: "a@x.com", thread: 7, n: 4 });
   await coalesce(host);
   await coalesce(host);
   await read();
-  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3", "/threads/7/entries?after=7"]);
+  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3&limit=50", "/threads/7/entries?after=7&limit=50"]);
   assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   core.close();
 });
@@ -985,7 +1025,7 @@ test("a_thread_not_open_its_summary_says_goes_further_is_read_too_and_one_none_o
     ...base(),
     "GET /threads": [threadView(7, 3), threadView(8, 2)],
     "GET /threads/8/entries?limit=50": { last: 2, entries: [{ ...entry(1, "x1"), thread: 8 }, { ...entry(2, "x2"), thread: 8 }] },
-    "GET /threads/8/entries?after=2": { last: 3, entries: [{ ...entry(3, "x3"), thread: 8 }] },
+    "GET /threads/8/entries?after=2&limit=50": { last: 3, entries: [{ ...entry(3, "x3"), thread: 8 }] },
   };
   const { host, core, push } = await started(answers);
   await host.settle();
@@ -997,7 +1037,7 @@ test("a_thread_not_open_its_summary_says_goes_further_is_read_too_and_one_none_o
   push("thread-view", { ...threadView(9, 4, 0, 4) });
   await coalesce(host);
   await host.settle();
-  assert.deepEqual(entryReads(host, from), ["/threads/8/entries?after=2"]);
+  assert.deepEqual(entryReads(host, from), ["/threads/8/entries?after=2&limit=50"]);
   assert.deepEqual(held(8), [1, 2, 3]);
   core.close();
 });
@@ -1249,14 +1289,14 @@ test("a_resumed_station_refreshes_its_phone_grants_kept_by_an_older_core", async
 });
 
 test("a_chat_open_is_asked_what_was_said_since_before_the_station_is_read_again", async () => {
-  const answers: J = { ...base(), "GET /threads/7/entries?after=3": { last: 3, entries: [] } };
+  const answers: J = { ...base(), "GET /threads/7/entries?after=3&limit=50": { last: 3, entries: [] } };
   const { host, core, end, values, read } = await ui(answers);
   core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
   await read();
   assert.deepEqual(nums(values), [1, 2, 3]);
   // The stream goes and comes back without being told what it missed (its station started anew, say): what the agent
   // said meanwhile shows without waiting on the lists and the history read behind them.
-  answers["GET /threads/7/entries?after=3"] = { last: 5, entries: entries(4, 5) };
+  answers["GET /threads/7/entries?after=3&limit=50"] = { last: 5, entries: entries(4, 5) };
   answers["GET /threads"] = [threadView(7, 5)];
   const from = host.requests.length;
   end();
@@ -1264,7 +1304,7 @@ test("a_chat_open_is_asked_what_was_said_since_before_the_station_is_read_again"
   await read();
   assert.deepEqual(nums(values), [1, 2, 3, 4, 5]);
   const asked = host.requests.slice(from).map((r) => r.url.replace("https://stillfail.test/admin/api", ""));
-  const at = asked.indexOf("/threads/7/entries?after=3");
+  const at = asked.indexOf("/threads/7/entries?after=3&limit=50");
   assert.ok(at >= 0, "asked what was said since");
   for (const list of ["/changed/threads", "/changed/chats", "/changed/sessions", "/batch"]) assert.ok(asked.indexOf(list) < 0 || at < asked.indexOf(list), `before ${list}`);
   core.close();
@@ -1286,7 +1326,7 @@ test("a_chat_open_is_asked_what_was_said_since_though_its_stream_came_back_told_
   // The stream goes and comes back saying it told all that was missed, though it did not tell what was said in the
   // chat (what the device hears of a station's events is not what says how far a chat goes): the chat shown is asked,
   // and nothing else is read, a chat not shown neither.
-  answers["GET /threads/7/entries?after=3"] = { last: 5, entries: entries(4, 5) };
+  answers["GET /threads/7/entries?after=3&limit=50"] = { last: 5, entries: entries(4, 5) };
   gate.resumes = true;
   const from = host.requests.length;
   end();
@@ -1297,7 +1337,7 @@ test("a_chat_open_is_asked_what_was_said_since_though_its_stream_came_back_told_
   // Its screens are the exception: held in memory only and changing as people come and go, they are asked again
   // whenever the stream was away (a small list; screens.ts).
   const asked = host.requests.slice(from).flatMap(readsOf).filter((url) => url.includes("/admin/api/") && !url.includes("/events") && !url.endsWith("/screens")).map((url) => url.replace("https://stillfail.test/admin/api", ""));
-  assert.deepEqual(asked, ["/threads/7/entries?after=3"]);
+  assert.deepEqual(asked, ["/threads/7/entries?after=3&limit=50"]);
   // A stream that takes over from one still heard (an agent started: the stream follows it) was not away: nothing asked.
   const again = host.requests.length;
   push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k1", process: "running" }] });
@@ -1520,7 +1560,7 @@ test("a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after", async
   // Started anew: the kept page at once, then only what came after it is asked for (and the rest of the thread, in
   // the background: here the station has no more to give).
   answers["GET /threads"] = [threadView(7, 302)];
-  answers["GET /threads/7/entries?after=301"] = { last: 302, entries: [entry(302, "m302")] };
+  answers["GET /threads/7/entries?after=301&limit=50"] = { last: 302, entries: [entry(302, "m302")] };
   const asked = s.host.requests.length;
   const again = await reopen(s);
   again.core.receive(again.ui, { kind: "subscribe", id: 1, subscribe: thread7 });
@@ -1530,8 +1570,8 @@ test("a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after", async
   // Caught up on (kept, then read): none of it was said while the chat was open.
   assert.equal(page(again.values).caught, 302);
   const read = entryReads(s.host, asked);
-  assert.ok(!read.some((p) => p.includes("limit=50") && !p.includes("before")), JSON.stringify(read));
-  assert.equal(read.filter((p) => p === "/threads/7/entries?after=301").length, 1, JSON.stringify(read));
+  assert.ok(!read.some((p) => p.endsWith("/entries?limit=50")), JSON.stringify(read));
+  assert.equal(read.filter((p) => p === "/threads/7/entries?after=301&limit=50").length, 1, JSON.stringify(read));
   // Scrolling up reads what is kept first; past it, the station (and what it answers is kept too).
   answers["GET /threads/7/entries?before=253&limit=50"] = { last: 302, entries: entries(203, 252) };
   assert.equal(await run(again.core.inner.stationTopics.older(ST, 7)), true);
@@ -1610,7 +1650,7 @@ test("a_chat_opens_from_the_device_when_what_is_kept_is_current_and_else_waits_t
   assert.ok(entryReads(s.host, asked).every((p) => !p.includes("limit=50")), JSON.stringify(entryReads(s.host, asked)));
   // Opened again with 20 new (read): what came after is read; the first value is whole.
   answers["GET /threads"] = [threadView(7, 320)];
-  answers["GET /threads/7/entries?after=300"] = { last: 320, entries: entries(301, 320) };
+  answers["GET /threads/7/entries?after=300&limit=50"] = { last: 320, entries: entries(301, 320) };
   asked = s.host.requests.length;
   again = await reopen({ host: s.host, core: again.core });
   again.core.receive(again.ui, { kind: "subscribe", id: 1, subscribe: thread7 });
@@ -1782,7 +1822,7 @@ test("a_thread_pages_back_and_catches_up", async () => {
   assert.equal(host.requests.filter((r) => r.url.includes("/entries?before=")).length, 0);
   // The stream was down: what came after the last entry is read, and the pages stay.
   answers["GET /threads"] = [threadView(7, 5)];
-  answers["GET /threads/7/entries?after=4"] = { last: 5, entries: [entry(5, "e")] };
+  answers["GET /threads/7/entries?after=4&limit=50"] = { last: 5, entries: [entry(5, "e")] };
   end();
   await read();
   assert.equal(v(values, 2).state, "reconnecting");
@@ -1801,7 +1841,7 @@ test("posts_into_a_thread_answering_as_the_station_takes_it_its_entry_coming_as_
     "GET /threads": [threadView(7, 12)],
     "GET /threads/7/entries?limit=50": { last: 12, entries: [entry(12, "d")] },
     "POST /threads/7/messages": { n: 13 },
-    "GET /threads/7/entries?after=12": { last: 13, entries: [entry(13, "你好")] },
+    "GET /threads/7/entries?after=12&limit=50": { last: 13, entries: [entry(13, "你好")] },
     "PUT /threads/7/read": { viewer: "a@x.com", thread: 7, n: 13 },
   };
   const { host, core, values, read, push } = await ui(answers);
@@ -2185,7 +2225,7 @@ test("a_stream_replaced_after_it_went_quiet_reads_again_what_it_may_have_missed"
   assert.equal(gets(host, "/admin/api/threads"), lists);
   // The app away for a minute: its stream died unnoticed, and 13 was said meanwhile (its event never came).
   answers["GET /threads"] = [threadView(7, 13, 12, 1)];
-  answers["GET /threads/7/entries?after=12"] = { last: 13, entries: [entry(13, "c")] };
+  answers["GET /threads/7/entries?after=12&limit=50"] = { last: 13, entries: [entry(13, "c")] };
   host.advance(60_000);
   // Back, a new stream opened in its place (asking for something else): what it missed is read.
   core.receive(1, { kind: "unsubscribe", id: 2, unsubscribe: true });

@@ -356,7 +356,7 @@ first, the whole app's tests would have moved with it and again as the pages lef
      what they read of the tier handed to the library or the shell as they go;
    - those of two copies merged, an area a PR, as the pages above are (what the page is for, said first; drawn and
      tested in the three tiers with both inputs; both old copies deleted): the settings and the places, the files and
-     the viewer, the history and 奏, a new chat, the chat (the page, the message list, the side panel) last. Before
+     the viewer, the history, a new chat, the chat (the page, the message list, the side panel) last. Before
      each, what each copy has is listed, so nothing is lost. One copy is one code and one data, not one arrangement:
      where both copies' arrangements are reasonable, both stay, the narrow and the wide, through the library's parts by
      `look()`; the wide one uses the width, not the narrow one stretched.

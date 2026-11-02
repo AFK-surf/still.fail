@@ -91,7 +91,7 @@ const tail = (id: string): Channel => ({ kind: TAIL, station: ST, id });
 const item = (id: string, n: number) => `${id}:${n}`;
 
 /// A station, a device and the lane between them.
-function world() {
+function world(boundedAfter = false) {
   // The station: how far each channel goes (its items are 1 to there, item n of `id` being `id:n`).
   const there = new Map<string, number>();
   const asked: string[] = [];
@@ -102,7 +102,10 @@ function world() {
     const q = new URLSearchParams(query);
     let [from, to] = [1, last];
     if (query === "latest") from = Math.max(1, last - PAGE + 1);
-    else if (q.has("after")) from = Number(q.get("after")) + 1;
+    else if (q.has("after")) {
+      from = Number(q.get("after")) + 1;
+      if (boundedAfter) to = Math.min(last, from + PAGE - 1);
+    }
     else if (q.has("before")) [from, to] = [Math.max(1, Number(q.get("before")) - PAGE), Number(q.get("before")) - 1];
     else [from, to] = [Number(q.get("from")), Math.min(last, Number(q.get("to")))];
     return { last, items: run(from, Math.min(to, last)).map((n) => [n, item(id, n)] as [number, unknown]) };
@@ -320,6 +323,18 @@ test("one_not_brought_whole_has_its_latest_page_and_what_is_before_as_asked", as
   await Effect.runPromise(w.channels.older(t, 8, { quiet: false }));
   await Effect.runPromise(w.channels.older(t, 1, { quiet: false }));
   assert.equal(w.asked.length, 2, "held, or nothing before it: not read");
+});
+
+test("catching up through bounded pages brings every item once", async () => {
+  const w = world(true);
+  const c = log("c");
+  w.tell(c, 1, 2, 3);
+  w.there.set("c", 16);
+  w.channels.catchUp(c, Priority.shown);
+  await w.work();
+  assert.deepEqual(w.asked, ["c?after=3", "c?after=8", "c?after=13"]);
+  assert.deepEqual(w.numbers(c), run(1, 16));
+  assert.equal(w.channels.behind(c), false);
 });
 
 test("a_stream_that_was_away_has_it_asked_what_came_after_what_is_held_whatever_is_said_of_it", async () => {
