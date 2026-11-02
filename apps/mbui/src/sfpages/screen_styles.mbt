@@ -270,6 +270,11 @@ let take_over_button_words : @ui.TextStyle = @ui.text_style(
 let stage_box : @ui.Style = @ui.css("w=Full h=Full clip")
 
 ///|
+/// A device's at its whole size, its body round the picture being past this box.
+// kept across runs: a value (no field of it changes)
+let stage_box_body : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
 /// The frame as it was, faded while the view is on its way back (40%).
 // kept across runs: a value (no field of it changes)
 let frame_faded : @ui.Style = @ui.css("opacity=O40")
@@ -569,6 +574,11 @@ let debug_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg)
 /// The picture's side of a simulator's page: what is left beside what debugs its app.
 // kept across runs: a value (no field of it changes)
 let debug_stage_side : @ui.Style = @ui.style(w=@sf.grow, h=@sf.grow)
+
+///|
+/// Where a device's picture is, with room round it for its body.
+// kept across runs: a value (no field of it changes)
+let debug_stage_body : @ui.Style = @ui.style(w=@sf.grow, h=@sf.grow, p=S3)
 
 ///|
 /// The device's buttons in a row over or under the picture, as near it as they can be.

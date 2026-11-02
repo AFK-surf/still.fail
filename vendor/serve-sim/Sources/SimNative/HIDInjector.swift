@@ -209,11 +209,21 @@ public actor HIDInjector {
     /// Synchronously build + send a single touch. For use inside gesture blocks
     /// already running on `inputQueue`.
     private func rawSendTouch(type: String, x: Double, y: Double, edge: UInt32 = 0) {
+        if dtuhidTouch(type: type, x: x, y: y, edge: edge) { return }
         if let msg = touchMessage(type: type, x: x, y: y, edge: edge) { rawSend(msg) }
+    }
+
+    /// Where the guest has `dtuhidd` (DTUHIDKeys), a finger goes that way as its keys do. An Indigo touch on a foldable there
+    /// reached a digitizer not connected yet took the guest's backboardd down (an assertion in SimHIDVirtualService). A panel is
+    /// by its display's number there, without Indigo's mask (an iPhone Duo's inner panel, 3; 0x40000003 is dropped, silently).
+    private func dtuhidTouch(type: String, x: Double, y: Double, edge: UInt32) -> Bool {
+        guard type == "begin" || type == "move" || type == "end", let dtuhidKeys else { return false }
+        return dtuhidKeys.sendTouch(type: type, x: x, y: y, edge: edge, target: duoBridge == nil ? 0 : touchTarget & 0xFF)
     }
 
     public func sendTouch(type: String, x: Double, y: Double, screenWidth: Int, screenHeight: Int, edge: UInt32 = 0) {
         updateTouchTarget(width: screenWidth, height: screenHeight)
+        if dtuhidTouch(type: type, x: x, y: y, edge: edge) { return }
         guard let msg = touchMessage(type: type, x: x, y: y, edge: edge) else { return }
         hidLog("[hid] Sending \(type) at (\(String(format:"%.3f",x)),\(String(format:"%.3f",y)))\(edge > 0 ? " edge=\(edge)" : "")")
         rawSend(msg)
@@ -560,7 +570,7 @@ public actor HIDInjector {
 
     // MARK: - Fold pose / hinge
 
-    func isFoldable() -> Bool { duoBridge != nil }
+    public func isFoldable() -> Bool { duoBridge != nil }
 
     public func close() { duoBridge = nil }
 
@@ -569,7 +579,7 @@ public actor HIDInjector {
         if let target = DevicePose.touchTarget(width: width, height: height) { touchTarget = target }
     }
 
-    func setPose(_ name: String, fromDegrees: Double) -> Bool {
+    public func setPose(_ name: String, fromDegrees: Double) -> Bool {
         guard let pose = DevicePose.preset(named: name), fromDegrees.isFinite,
               (0...180).contains(fromDegrees) else { return false }
         return duoBridge?.send("sweep \(fromDegrees) \(pose.hingeDegrees) 800") == true
@@ -639,8 +649,8 @@ public actor HIDInjector {
 
     private func launchSpringBoard(deviceUDID: String) {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        process.arguments = ["simctl", "launch", deviceUDID, "com.apple.springboard"]
+        process.executableURL = URL(fileURLWithPath: "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl")
+        process.arguments = ["launch", deviceUDID, "com.apple.springboard"]
         try? process.run()
     }
 

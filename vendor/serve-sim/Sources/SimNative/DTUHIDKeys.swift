@@ -59,6 +59,20 @@ final class DTUHIDKeys {
         return send("IndigoButtonEvent", payload)
     }
 
+    /// One finger's contact, "begin", "move" or "end", at x, y 0..1 of the display `target` (0: the device's main one); false
+    /// when it could not be sent.
+    func sendTouch(type: String, x: Double, y: Double, edge: UInt32, target: UInt32) -> Bool {
+        let point = xpc_dictionary_create(nil, nil, 0)
+        xpc_dictionary_set_double(point, "x", x)
+        xpc_dictionary_set_double(point, "y", y)
+        let payload = xpc_dictionary_create(nil, nil, 0)
+        xpc_dictionary_set_value(payload, "pointOne", point)
+        xpc_dictionary_set_uint64(payload, "eventType", type == "begin" ? 0 : type == "move" ? 1 : 2)
+        xpc_dictionary_set_uint64(payload, "edge", UInt64(edge))
+        xpc_dictionary_set_uint64(payload, "target", UInt64(target))
+        return send("IndigoDigitizerEvent", payload)
+    }
+
     private func send(_ type: String, _ payload: xpc_object_t) -> Bool {
         if connection == nil && Date() < retryAt { return false }
         guard let connection = connection ?? connect() else {

@@ -180,6 +180,8 @@ export function parseInput(v: any): ScreenInput | null {
     case "text":
       if (typeof v.text !== "string" || v.text.length === 0 || v.text.length > 4096) return null;
       return { t: "text", text: v.text };
+    case "pose":
+      return v.name === "closed" || v.name === "book" || v.name === "open" ? { t: "pose", name: v.name } : null;
     default:
       return null;
   }

@@ -9,7 +9,8 @@ export type SimOp =
   | { op: "scroll"; x: number; y: number; dx: number; dy: number }
   | { op: "key"; type: "down" | "up"; usage: number }
   | { op: "button"; name: "home" | "app_switcher" | "lock" | "keyboard" }
-  | { op: "paste"; text: string };
+  | { op: "paste"; text: string }
+  | { op: "pose"; name: string };
 
 /// A page's KeyboardEvent.code → the USB HID keyboard usage (page 7).
 export const USAGES: Record<string, number> = {
@@ -78,6 +79,8 @@ export class SimInput {
         return this.#key(e.kind === "down", e.code, e.mods);
       case "text":
         return this.#text(e.text);
+      case "pose":
+        return [{ op: "pose", name: e.name }];
     }
   }
 

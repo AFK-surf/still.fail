@@ -6504,6 +6504,16 @@ export interface ScreenDrop {
 	reveal: boolean;
 }
 
+/** One panel of a simulator's device, as its device type's mask draws it. */
+export interface ScreenPanel {
+	/** As wide as its mask, whose height says which panel a picture is of. */
+	width: number;
+	/** As high. */
+	height: number;
+	/** Its corners' radii as shares of its width: top left, then round it. */
+	corners: number[];
+}
+
 /** A screen of a station a person can see and drive (docs/remote-screens.md). */
 export interface ScreenItem {
 	/** The station's: `desktop`, `browser:<targetId>`. */
@@ -6531,6 +6541,10 @@ export interface ScreenItem {
 	closable?: boolean;
 	/** The viewer may read its apps' logs and restart them (`screen.logs`, `screen.apps`, `screen.relaunch`): a simulator's, for a member who may drive it. */
 	debug?: boolean;
+	/** It folds (an iPhone Duo's simulator): `screen.input` `{t: "pose", name}`, for a member who may drive it. */
+	poses?: boolean;
+	/** A simulator's panels (an iPhone Duo's two), for the device body drawn round its picture. */
+	panels?: ScreenPanel[];
 	/** The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station. */
 	chat?: ScreenChat;
 	/**
@@ -6623,6 +6637,10 @@ export interface ScreenViewState {
 	kind?: string;
 	/** May read its apps' logs and restart them (`ScreenItem.debug`). */
 	debug?: boolean;
+	/** May fold it (`ScreenItem.poses`). */
+	poses?: boolean;
+	/** Its panels (`ScreenItem.panels`). */
+	panels?: ScreenPanel[];
 	/** Driving it now: input goes to the station (else only seen). */
 	control: boolean;
 	/** May drive it (not a read-only member). */
