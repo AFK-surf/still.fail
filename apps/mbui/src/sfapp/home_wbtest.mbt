@@ -142,14 +142,78 @@ test "the workspaces' sheet: another workspace tapped is the one in view" {
 }
 
 ///|
+/// Tap the filter by its accessible name, wherever the bar puts it.
+fn tap_home_filter(t : @ui.Tester) -> Unit {
+  let (x, y, w, h) = t.query(Button, label="筛选会话：全部").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+}
+
+///|
+test "small screen home: filter on the left, settings and workspace together at the right" {
+  for platform in [0, 2] {
+    for width in [320.0, 390.0, 599.0] {
+      new_run()
+      let src = fixture("home")
+      let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0, platform~)
+      let (fx, _, fw, _) = t.query(Button, label="筛选会话：全部").unwrap().rect
+      let (sx, sy, sw, sh) = t.query(Button, label="设置").unwrap().rect
+      let (wx, _, ww, _) = t.rect_of("星火工作室").unwrap()
+      assert_true(fx + fw <= sx && sx + sw <= wx, msg="filter, settings and workspace: \{fx}, \{sx}, \{wx}")
+      assert_true(fx >= 0.0 && wx + ww <= width, msg="bar controls fit in \{width}")
+      t.tap(sx + sw / 2.0, sy + sh / 2.0)
+      t.run_for(@ui.move_most_ms)
+      assert_true(t.find("设置") is Some(_))
+    }
+  }
+}
+
+///|
+test "small screen home: a long workspace name gives way to syncing and transfers" {
+  new_run()
+  let long_name = "一个很长的 workspace 名称，需要给顶栏按钮留出足够空间"
+  let calls : Array[(String, Json)] = []
+  let base = downloads_src("home-syncing", [listed("dist.zip", "going", 1.0, 50.0, "正在下载")], calls)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "workspaces" {
+        {
+          value: Some([{
+            "account": { "email": "lin@example.com" },
+            "workspaces": [{ "id": "ws1", "name": Json::string(long_name), "emoji": "🔥", "stations": 2 }],
+            "invitations": [],
+            "loaded": true,
+          }]),
+          error: None,
+          version: 1,
+        }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=320.0, h=740.0, platform=2)
+  t.run_for(1000.0)
+  let (fx, _, fw, _) = t.query(Button, label="筛选会话：全部").unwrap().rect
+  let (sync_x, _, sync_w, _) = t.query(Status, label="正在同步 · 还剩 12 个对话").unwrap().rect
+  let (tx, _, tw, _) = t.query(Button, label="1 个传输 · 2%").unwrap().rect
+  let (sx, _, sw, _) = t.query(Button, label="设置").unwrap().rect
+  let (wx, wy, ww, wh) = t.rect_of(long_name).unwrap()
+  assert_true(fx + fw <= sync_x && sync_x + sync_w <= tx && tx + tw <= sx && sx + sw <= wx)
+  assert_true(ww > 0.0 && wx + ww <= 320.0, msg="workspace name stays in the bar: \{wx}, \{ww}")
+  t.tap(wx + ww / 2.0, wy + wh / 2.0)
+  assert_true(@sf.presenting())
+  assert_true(t.find("切换 workspace") is Some(_))
+}
+
+///|
 test "the filter: 我参与的 shows only the chats the viewer is in" {
   let t = tester("home")
   match t.rect_of("星火工作室") {
     Some(_) => ()
     None => fail("no title")
   }
-  // the filter's button, at the bar's right
-  t.tap(390.0 - 16.0 - 17.0, 25.0)
+  tap_home_filter(t)
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("监控中") is Some(_))
   t.tap_text("我参与的")
@@ -468,8 +532,7 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
   t.draw()
   let mine = fn() { read.iter().any(fn(k) { k.contains("\"mine\":true") }) }
   assert_false(mine())
-  // the filter's button, at the bar's right
-  t.tap(390.0 - 16.0 - 17.0, 25.0)
+  tap_home_filter(t)
   // (the menu open, built again from it)
   t.draw()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
@@ -520,7 +583,7 @@ test "under it all the page's own ground, dark too (the host cleared to blue the
 ///|
 test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我参与的, 监控中 and 已归档, the list shown checked" {
   let t = tester("home")
-  t.tap(390.0 - 16.0 - 17.0, 25.0)
+  tap_home_filter(t)
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   for words in ["全部会话", "我参与的", "监控中", "已归档"] {
     assert_true(t.find(words) is Some(_), msg=words)

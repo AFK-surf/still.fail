@@ -1,5 +1,5 @@
 // Home (ember apps/android chat/screens/Home.kt, web/src/mobile/Home.tsx): the workspace's chats' lists (sfpages'
-// sidebar.mbt, every tier's) under a top bar (settings · the workspace, its switcher · the filter).
+// sidebar.mbt, every tier's) under a top bar (the filter · settings and the workspace's switcher).
 
 ///|
 /// The top bars' height under the status bar (a place's, TopGlassBar, and a chat's, BarFrame: TopBarHeight), what is in
@@ -72,8 +72,8 @@ fn home_page(
 }
 
 ///|
-/// The top bar (PlacePage.kt TopGlassBar), over the list's top: settings, the workspace's name (its switcher, a
-/// dot when another has something waiting), the filter.
+/// The top bar over the list: the filter at the left, settings and the workspace's switcher at the right. The
+/// switcher has a dot when another workspace has something waiting.
 fn top_bar(
   c : @ui.Ctx,
   src : Source,
@@ -87,52 +87,6 @@ fn top_bar(
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
-      if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
-        @sfbase.history_push()
-        app.nav.push(Settings)
-      }
-      let wid = c.id("home-workspace")
-      // (the fixture's home-sheet: opened by it, as the app starts)
-      if c.clicked(wid) || home_sheet_at_start.val {
-        home_sheet_at_start.val = false
-        @sfpages.open_workspaces(src, Of(wid))
-      }
-      c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
-        // the name as long as there is room for it
-        let keys = if @sfdesk.transfers_key_shown(src, w.id) { 1 } else { 0 }
-        let marked = @sf.has_station_mark(w.emoji, w.icon)
-        let room = c.width - 16.0 * 2.0 - 34.0 * (2 + keys).to_double() - 10.0 * (2 + keys).to_double() - 6.0 * 2.0 - 16.0 - 10.0 -
-          (if marked { home_ws_mark + 6.0 } else { 0.0 })
-        // its mark before its name (the one in use: a GIF of it moves); none where it has none, its letter only the
-        // name's first again beside it
-        if marked {
-          @sf.workspace_badge(c, w.name, w.emoji, w.icon, home_ws_mark, still=false)
-        }
-        c.box(max_w=dmax(room, 40.0), fn() {
-          top_bar_title(c, w.name) |> ignore
-        })
-        |> ignore
-        let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
-        match field(marks.value, "others") {
-          // what the others have waiting, as their rows' marks (sfpages' chat_mark), said as the core says it; else an
-          // invitation waiting (sfpages' workspace_mark.mbt)
-          Some(String(tone)) =>
-            c.box(style=others_mark, label=text(marks.value, "othersLabel"), fn() { @sfpages.chat_mark(c, tone) |> ignore })
-            |> ignore
-          _ => if invited { @sfpages.invite_dot(c, tr("android-chat.home.invited")) }
-        }
-        @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
-      })
-      |> ignore
-      // catching up on what changed while away: its mark, the size of the keys beside it (transfers_key's)
-      let (syncing, said) = match view {
-        Some({ syncing: Some(y), .. }) => (true, y)
-        _ => (false, "")
-      }
-      @sf.sync_key(c, "home-syncing", 34.0, 20.0, syncing, said)
-      // what comes to this device and goes between the stations, a newer build of the app among it: its key, how far
-      // they have come (transfers.mbt)
-      @sfdesk.transfers_key(c, src, w.id, 34.0, 20.0)
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station
       match view {
         Some(v) if v.stations > 0 =>
@@ -160,6 +114,46 @@ fn top_bar(
           }
         _ => ()
       }
+      // Catching up and transfers stay beside the filter.
+      let (syncing, said) = match view {
+        Some({ syncing: Some(y), .. }) => (true, y)
+        _ => (false, "")
+      }
+      @sf.sync_key(c, "home-syncing", 34.0, 20.0, syncing, said)
+      @sfdesk.transfers_key(c, src, w.id, 34.0, 20.0)
+      c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, justify=JEnd, fn() {
+        if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
+          @sfbase.history_push()
+          app.nav.push(Settings)
+        }
+        let wid = c.id("home-workspace")
+        // (the fixture's home-sheet: opened by it, as the app starts)
+        if c.clicked(wid) || home_sheet_at_start.val {
+          home_sheet_at_start.val = false
+          @sfpages.open_workspaces(src, Of(wid))
+        }
+        c.box(dir=Row, h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
+          // its mark before its name (the one in use: a GIF of it moves); none where it has none, its letter only the
+          // name's first again beside it
+          if @sf.has_station_mark(w.emoji, w.icon) {
+            @sf.workspace_badge(c, w.name, w.emoji, w.icon, home_ws_mark, still=false)
+          }
+          // A long name gives way to the controls actually present, including the sync mark while it exits.
+          top_bar_title(c, w.name, cut=true) |> ignore
+          let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
+          match field(marks.value, "others") {
+            // what the others have waiting, as their rows' marks (sfpages' chat_mark), said as the core says it; else an
+            // invitation waiting (sfpages' workspace_mark.mbt)
+            Some(String(tone)) =>
+              c.box(style=others_mark, label=text(marks.value, "othersLabel"), fn() { @sfpages.chat_mark(c, tone) |> ignore })
+              |> ignore
+            _ => if invited { @sfpages.invite_dot(c, tr("android-chat.home.invited")) }
+          }
+          @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -169,8 +163,8 @@ fn top_bar(
 
 ///|
 /// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, its letters 0.4 closer, on one line.
-fn top_bar_title(c : @ui.Ctx, s : String) -> Int {
-  c.text(s, size=24.0, weight=700, color=@sf.theme().p.text, wrap=false, line=30.0, tracking=top_title_tracking)
+fn top_bar_title(c : @ui.Ctx, s : String, cut? : Bool = false) -> Int {
+  c.text(s, size=24.0, weight=700, color=@sf.theme().p.text, wrap=false, line=30.0, tracking=top_title_tracking, w=if cut { Cut } else { Auto })
 }
 
 ///|
