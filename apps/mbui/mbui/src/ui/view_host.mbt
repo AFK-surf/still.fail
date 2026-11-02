@@ -524,6 +524,27 @@ fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLo
 }
 
 ///|
+/// A node's words in pieces as they are drawn `w` wide (view_rich): wrapped in that width as laid out, as an old view's
+/// paragraph is where it is placed (Node::rich_layout's); on one line wider than it, cut to it, ending in an ellipsis,
+/// as its plain words are (and whether they were).
+fn view_runs_laid(
+  runs : Array[@text.Run],
+  look : @view.WordsLook,
+  set : @view.RunsLook,
+  w : Double,
+) -> (Rich, RichLayout, Bool) {
+  let r = view_rich(runs, look, set)
+  let lay = layout_rich(r, if r.wrap { w } else { 1.0e9 })
+  let over = !r.wrap && lay.w > w + 0.5
+  if over {
+    let cut_r = cut_rich({ ..r, max_lines: 1 }, lay, w)
+    (cut_r, layout_rich(cut_r, 1.0e9), true)
+  } else {
+    (r, lay, false)
+  }
+}
+
+///|
 /// A node's words in pieces measured as they are drawn (view_rich), in `width` (< 0: as wide as they are).
 fn view_runs_measure(
   runs : Array[@text.Run],
@@ -1377,16 +1398,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   if bones == 0L && c.words != "" && !c.runs.is_empty() {
     // (in pieces each set its own way: one paragraph, as Ctx::rich's; one line given less than it is wide cut to it,
     // ending in an ellipsis, as its plain words are)
-    let r = view_rich(c.runs, c.words_look, c.runs_look)
-    // (wrapped in its width as laid out, as an old view's paragraph is where it is placed: Node::rich_layout's)
-    let lay = layout_rich(r, if r.wrap { c.w } else { 1.0e9 })
-    let over = !r.wrap && lay.w > c.w + 0.5
-    let (r, lay) = if over {
-      let cut_r = cut_rich({ ..r, max_lines: 1 }, lay, c.w)
-      (cut_r, layout_rich(cut_r, 1.0e9))
-    } else {
-      (r, lay)
-    }
+    let (r, lay, over) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w)
     // (each run's ink its own, else a link's, code's, else the node's: as an old view's paragraph's, Rich::run_colors)
     let colors = r.run_colors(c.ink)
     let k = clip_top()
@@ -1394,7 +1406,18 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     let center_in = if c.words_center { c.w } else { -1.0 }
     // (its grounds under its words (code's, a label's), the lines through or under them over them: as an old view's
     // paragraph's, Ctx::paint_rich's)
-    self.paint_run_grounds(r, lay, 0.0, 0.0, 1.0, fn(_) { false }, fn(_, _, _, _, _) {  }, center_in~)
+    // (the link held, by its first run, its pressed ground under it alone: View::runs_pressed)
+    let held = c.runs_pressed
+    self.paint_run_grounds(
+      r,
+      lay,
+      0.0,
+      0.0,
+      1.0,
+      fn(k) { held >= 0 && link_first(r.runs, k) == held },
+      fn(_, _, _, _, _) {  },
+      center_in~,
+    )
     self.emit_rich_glyphs(
       r,
       lay,

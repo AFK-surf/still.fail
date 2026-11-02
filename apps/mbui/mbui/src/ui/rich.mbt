@@ -70,6 +70,45 @@ fn link_id(base : Int, runs : Array[Run], k : Int) -> Int {
 }
 
 ///|
+/// The first of the runs that lead where run `k` does one after another (its link's, as link_id has it).
+fn link_first(runs : Array[Run], k : Int) -> Int {
+  let mut h = k
+  while h > 0 && runs[h - 1].link == runs[k].link {
+    h = h - 1
+  }
+  h
+}
+
+///|
+/// The pieces of line a paragraph's links laid out in `lay` are drawn on, at (ox, oy) (each line in the middle of
+/// `center_in` where given): each by its link's first run (link_first) and where it is (x0, y0, x1, y1), as
+/// paint_run_grounds tells them: what a press on one of them presses, its words' own place on their line, not the
+/// line's room past them.
+fn rich_link_pieces(
+  r : Rich,
+  lay : RichLayout,
+  ox0 : Double,
+  oy : Double,
+  center_in? : Double = -1.0,
+) -> Array[(Int, Double, Double, Double, Double)] {
+  let out = []
+  for k, run in r.runs {
+    if run.link == "" {
+      continue
+    }
+    let first = link_first(r.runs, k)
+    for p in lay.pieces(k) {
+      let (l, c0, c1) = p
+      let ox = rich_line_x(lay, l, ox0, center_in)
+      let top = oy + lay.line_y[l]
+      let (sx0, sx1) = lay.span_x(c0, c1)
+      out.push((first, ox + sx0, top, ox + sx1, top + lay.line_h[l]))
+    }
+  }
+  out
+}
+
+///|
 /// Whether run `k` starts a link (the first of the runs that lead to the same place one after another: link_id).
 fn link_starts(runs : Array[Run], k : Int) -> Bool {
   runs[k].link != "" && (k == 0 || runs[k - 1].link != runs[k].link)

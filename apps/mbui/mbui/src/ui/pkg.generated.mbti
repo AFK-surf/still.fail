@@ -479,6 +479,8 @@ pub fn run(String, (Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit
 
 pub fn run_let_go() -> Unit
 
+pub fn runs_links(@view.View, () -> Array[@text.Run], (String) -> Unit, hold? : (String, (Double, Double, Double, Double)) -> Unit, shown? : (Array[(String, String, Int32)]) -> Unit) -> RunsLinks
+
 pub fn runtime() -> @effect.Runtime
 
 pub let same_moment_ms : Double
@@ -2155,6 +2157,10 @@ pub(all) enum RowSize {
   Goes(Double)
   Changed(Double)
 } derive(Eq)
+
+pub struct RunsLinks {
+  pointed : @signals.Signal[Int32]
+}
 
 type Sem
 
