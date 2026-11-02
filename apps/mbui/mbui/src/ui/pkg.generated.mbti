@@ -1828,6 +1828,7 @@ pub fn NativeView::grab_frame(Self, Double) -> Unit
 pub fn NativeView::grab_shown(Self, Double) -> Unit
 pub fn NativeView::grabbed(Self) -> Bytes?
 pub fn NativeView::grabbing(Self) -> Bool
+pub fn NativeView::grabs_told(Self) -> Int32
 pub fn NativeView::here(Self) -> Bool
 pub fn NativeView::host_done(Self) -> Bool
 pub fn NativeView::id(Self) -> Int32

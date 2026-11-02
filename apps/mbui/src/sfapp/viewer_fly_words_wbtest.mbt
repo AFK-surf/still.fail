@@ -36,7 +36,6 @@ test "a picture too big to show, in its chat with its picture there and words un
             }
           })
           |> ignore
-          preview(c, src)
         })
         .over(Is(true))
         |> ignore

@@ -29,7 +29,6 @@ pub using @sfbase {
   peeks_reset,
   peeks_stop_all,
   screen_links,
-  file_viewer,
   followed_into,
   viz_chat_left,
   viz_close_full,

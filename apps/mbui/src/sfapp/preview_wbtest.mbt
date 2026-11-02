@@ -376,9 +376,14 @@ fn video_in_chat(duration? : Double = 0.0) -> @ui.Tester {
     held: false,
   }
   let t = @ui.Tester::new(
-    fn(c) {
-      chat_file(c, src, a)
-      preview(c, src)
+    fn(c) { @ui.old_views_here(c) },
+    tree=fn(root) {
+      root.box(fn(v) {
+        v.grow(Is(1.0)) |> ignore
+        @ui.old(v, fn(c) { chat_file(c, src, a) }).over(Is(true)) |> ignore
+        @sfbase.viewer_node(v, src, fn() { v.window() })
+      })
+      |> ignore
     },
     w=390.0,
     h=844.0,
@@ -408,11 +413,11 @@ test "a video flies from its thumbnail in the chat, its still flying; the player
   // halfway: its still flies (the thumbnail hidden meanwhile), the player's picture not yet
   t.run_for(@ui.move_most_ms / 2.0)
   assert_eq(t.holes().length(), 0)
-  assert_eq(pv_hidden.val, "ws1/st1/s-c1/uploads/fx/演示录屏.mp4")
+  assert_eq(pv_hidden.get(), "ws1/st1/s-c1/uploads/fx/演示录屏.mp4")
   assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 300.0 && i[2] < 390.0 }))
   // in: the player's picture where the still was, edge to edge
   t.run_for(@ui.move_most_ms)
-  assert_eq(pv_hidden.val, "")
+  assert_eq(pv_hidden.get(), "")
   assert_eq(t.holes().length(), 1)
   assert_true((t.holes()[0].2 - 390.0).abs() < 0.5)
 }
@@ -439,12 +444,12 @@ test "a video closed: the frame it shows grabbed, flown back with and kept by it
     None => fail("no frame kept")
   }
   assert_eq(t.holes().length(), 0)
-  assert_eq(pv_hidden.val, id)
+  assert_eq(pv_hidden.get(), id)
   // landed: the viewer gone, its player closed, the thumbnail shown again (with the frame kept)
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None && pv_leaving.get() is None)
   assert_true(t.views().contains("close 1"))
-  assert_eq(pv_hidden.val, "")
+  assert_eq(pv_hidden.get(), "")
   // opened again: on from where it was left, played once its player says how long it is (not left at its end); the
   // video itself pressed (its name's tip shows under it now, the pointer rested on it as it landed)
   t.click(Button, label=@sf.t("web-main.file.play", args=[("name", "演示录屏.mp4")]))
@@ -992,7 +997,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   assert_true(frames > 3)
   assert_true(last < 0.5)
   assert_true(pv_leaving.get() is None)
-  assert_eq(pv_hidden.val, "")
+  assert_eq(pv_hidden.get(), "")
   // (the chat's other pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
   t.assert_idle()

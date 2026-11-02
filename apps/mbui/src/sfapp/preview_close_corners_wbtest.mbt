@@ -19,7 +19,6 @@ test "a picture returning to a rounded card keeps all four thumbnail corners thr
             let radius = @ui.Radius::Corners(corners.0, corners.1, corners.2, corners.3)
             c.box(style=@ui.style(w=Fixed(300.0), h=Fixed(225.0), radius~, clip=true), fn() { chat_file(c, src, a) })
             |> ignore
-            preview(c, src)
           })
           .over(Is(true))
           |> ignore

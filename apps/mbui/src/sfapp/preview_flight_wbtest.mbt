@@ -76,7 +76,6 @@ fn photo_sent(
       })
       over_flight(c, foot)
     }
-    preview(c, src)
   }
   let t = @ui.Tester::new(
     fn(c) { @ui.old_views_here(c) },
@@ -149,7 +148,7 @@ test "a picture sent from here flies out as its message shows it: the picture pi
   t.tap(at[0].0, at[0].1)
   let v = viewer.get().unwrap()
   assert_true(v.flies && !v.fly_back)
-  assert_eq(pv_hidden.val, id)
+  assert_eq(pv_hidden.get(), id)
   // halfway: the same picture (the message's hidden under it), on its way to its place on the stage
   t.run_for(@ui.move_most_ms / 2.0)
   let to = v.zoom.rect().unwrap()
@@ -305,7 +304,7 @@ test "the chat moved under the viewer: the picture flies back to where its thumb
   t.run_for(@ui.move_most_ms)
   assert_true(drawn_at(t, (now.x, now.y, now.w, now.h)), msg="\{t.drawn_images()}")
   assert_true(pv_leaving.get() is None)
-  assert_eq(pv_hidden.val, "")
+  assert_eq(pv_hidden.get(), "")
   t.draw()
   assert_true(drawn_at(t, (now.x, now.y, now.w, now.h)))
   assert_eq(t.locate("img:sent-key").length(), 1)
