@@ -141,6 +141,10 @@ export interface Host {
   secureGet?(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError>;
   secureSet?(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError>;
   secureDelete?(key: string): Effect.Effect<void, HostError>;
+  /// The `user: false` values this app kept under `key` where `secureGet` no longer finds them, newest first: an iOS
+  /// app's Keychain items named by its whole home, which iOS moves (…/Data/Application/<UUID>) as it updates the app.
+  /// What `secureGet` reads is one of them; the core picks another that is the one it needs (the lock's signing key).
+  securePast?(key: string): Effect.Effect<Uint8Array[], HostError>;
   /// The person asked to say yes, as reading a `user: true` value asks them, `reason` in the prompt: before what they
   /// should mean (turning the workspace lock off). Succeeds at once where nothing can ask (Windows, Linux, the
   /// Electron app on a Mac without Touch ID); fails as `secureGet` does (`user_cancelled`, `no_device_lock`, `not_in_front`).
