@@ -868,6 +868,7 @@ let zh : Map[String, String] = {
   "web-main.chatRef.none": "此 station 上没有其他对话",
   "web-main.chatRef.previewGone": "此会话不在列表中（可能已归档）",
   "web-main.chatRef.previewHistory": "执行记录",
+  "web-main.chatRef.previewMessageGone": "读不到这条消息",
   "web-main.chatRef.title": "引用对话",
   "web-main.chatRef.update": "更新 {app} 后才能引用对话",
   "web-main.combos.label": "常用搭配",

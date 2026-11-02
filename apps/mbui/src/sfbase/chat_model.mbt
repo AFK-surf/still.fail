@@ -330,6 +330,7 @@ pub(all) struct LinkedChat {
   title : String
   archived : Bool
   note : String
+  thread : Double?
 }
 
 ///|
@@ -508,7 +509,7 @@ pub fn message_of(m : Json) -> Message {
     notice_retry_session: text(field(s, "notice"), "retrySession"),
     chats: items(s, "chats").map(fn(c) -> LinkedChat {
       let c = Some(c)
-      { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note") }
+      { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note"), thread: opt_number(c, "thread") }
     }),
   }
 }

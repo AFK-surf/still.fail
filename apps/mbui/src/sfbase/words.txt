@@ -860,6 +860,7 @@ web-main.chatRef.noMatch
 web-main.chatRef.none
 web-main.chatRef.previewGone
 web-main.chatRef.previewHistory
+web-main.chatRef.previewMessageGone
 web-main.chatRef.title
 web-main.chatRef.update
 web-main.combos.label

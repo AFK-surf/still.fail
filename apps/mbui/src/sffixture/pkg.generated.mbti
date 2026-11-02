@@ -357,6 +357,8 @@ pub fn fixture_markdown() -> String
 
 pub let fixture_md : String
 
+pub fn fixture_message_peek() -> Json
+
 pub fn fixture_named(String, Json?, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
 
 pub fn fixture_new_call(Fixture, String, Json) -> Result[Json, Json]?
