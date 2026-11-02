@@ -85,7 +85,7 @@ test "文件 and 用量 at the bar's top, their gear tapped: as 设置 comes in 
 }
 
 ///|
-test "the bar: drawn up, the panel of the other bar; let go on its first place, that bar and 用量" {
+test "the bar: drawn up, the panel of the other bar; let go on its first place, that bar and 已归档" {
   let t = tester("home")
   let (xs, y) = bar_places_at()
   t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
@@ -97,8 +97,8 @@ test "the bar: drawn up, the panel of the other bar; let go on its first place, 
     // the row of the other bar: its first place
     t.tap(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
   }
-  assert_true(app.nav.top() == Place("usage"))
-  assert_true(t.find("用量") is Some(_))
+  assert_true(app.nav.top() == Place("archive"))
+  assert_true(t.find("已归档") is Some(_))
   match bars_picked.get() {
     Some((_, cur)) => assert_eq(cur, 1)
     None => fail("no bar picked")
@@ -286,7 +286,7 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
     t.tap_once(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
   }
   // chosen: the bar in view at once, the stack sliding down, a frame at a time to where it lands
-  assert_true(app.nav.top() == Place("usage"))
+  assert_true(app.nav.top() == Place("archive"))
   let mut seen = false
   let mut last = -1.0
   let lands = bar.o.end()
@@ -335,7 +335,7 @@ test "the bar chosen and landed, the panel drawn up again: no bar landing then; 
   let seen = fn(at_landing : Bool) {
     let t = tester("home")
     bar_chosen_landed(t, at_landing)
-    let first = (app.nav.top() == Place("usage"), bar.swap_at(t.time()) is None)
+    let first = (app.nav.top() == Place("archive"), bar.swap_at(t.time()) is None)
     // drawn up again: the panel the finger's, nothing landing, the ball riding nothing
     let (xs, y) = bar_places_at()
     t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
