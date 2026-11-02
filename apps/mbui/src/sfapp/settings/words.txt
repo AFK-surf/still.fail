@@ -1322,6 +1322,14 @@ web-pages.profiles.account.each
 web-pages.profiles.installThenSignIn
 web-pages.profiles.models
 web-pages.profiles.share.changeThere
+web-pages.profiles.share.confirmAction
+web-pages.profiles.share.confirmClaudeBody
+web-pages.profiles.share.confirmClaudeTitle
+web-pages.profiles.share.confirmClaudeWarning
+web-pages.profiles.share.confirmCopyBody
+web-pages.profiles.share.confirmSubscriptionBody
+web-pages.profiles.share.confirmTitle
+web-pages.profiles.share.confirmUnderstood
 web-pages.profiles.share.copied
 web-pages.profiles.share.done
 web-pages.profiles.share.everyStation

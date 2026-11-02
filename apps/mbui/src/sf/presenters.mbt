@@ -76,8 +76,8 @@ priv enum Shows {
   Pick(String, Array[Choice], String, (String) -> Unit, @ui.Along, Bool)
   /// a small panel, or with nothing that opened it a dialog (PanelOf)
   Panel(PanelOf)
-  /// a confirm: its title, what it does, its action, whether that cannot be undone, what goes on once it is said
-  Confirm(String, String, String, Bool, () -> Unit)
+  /// a confirm: its title, what it does, a warning, its action, whether that cannot be undone, what goes on once said
+  Confirm(String, String, String, String, Bool, () -> Unit)
   /// a question: its title, the line at first, its placeholder, its action, the hint under it, whether a secret,
   /// whether an empty line can be said, what goes on with the line (trimmed)
   Ask(String, String, String, String, String, Bool, Bool, (String) -> Unit)
@@ -962,16 +962,18 @@ pub fn presented_drawn_of(serial : Int) -> Bool {
 
 ///|
 /// Asks before `action` (parts.tsx Confirm; PageParts.kt confirm): `title`, what it does (`words`), the cancel and
-/// `action` (in red when `danger`: what cannot be undone). Said, it closes and `run` goes on.
+/// `action` (in red when `danger`: what cannot be undone). A `warning`, if given, is shown in red. Said, it closes and
+/// `run` goes on.
 pub fn confirm(
   title : String,
   words : String,
   action : String,
   run : () -> Unit,
   danger? : Bool = false,
+  warning? : String = "",
   from? : Anchor = Unanchored,
 ) -> Unit {
-  present(Confirm(title, words, action, danger, run), from)
+  present(Confirm(title, words, warning, action, danger, run), from)
 }
 
 ///|
@@ -1266,7 +1268,7 @@ fn how_of(shows : Shows, from : Anchor, sheet : Bool) -> How {
     (true, _) => AsSheet
     (false, Panel(x)) if from == Unanchored || x.form => AsDialog
     (false, Menu(_, _, _) | Pick(_, _, _, _, _, _) | Panel(_)) => AsPopover
-    (false, Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _)) => AsDialog
+    (false, Confirm(_, _, _, _, _, _) | Ask(_, _, _, _, _, _, _, _)) => AsDialog
   }
 }
 
@@ -1299,7 +1301,7 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
       pick_popover(c, key, p, title, choices, chosen, choose, along, search)
     Panel(x) if p.from == Unanchored || x.form => panel_centred(c, key, p, x)
     Panel(x) => panel_popover(c, key, p, x)
-    Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
+    Confirm(title, words, warning, action, danger, run) => confirm_centred(c, key, p, title, words, warning, action, danger, run)
     Ask(title, value, placeholder, action, hint, secret, empty, run) =>
       ask_centred(c, key, p, title, value, placeholder, action, hint, secret, empty, run)
   }
@@ -1894,11 +1896,12 @@ fn confirm_centred(
   p : Presented,
   title : String,
   words : String,
+  warning : String,
   action : String,
   danger : Bool,
   run : () -> Unit,
 ) -> (Bool, Bool) {
-  let r = confirm_dialog(c, key, p.open, title, words, action, cancel=t("common.cancel"), danger~, scrim?=scrim_of(p, false), veil=p.recede.get())
+  let r = confirm_dialog(c, key, p.open, title, words, action, cancel=t("common.cancel"), danger~, warning~, scrim?=scrim_of(p, false), veil=p.recede.get())
   if r.confirmed {
     done_with(c, p, run)
   }
@@ -2251,10 +2254,13 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         }
       }
     }
-    Confirm(title, words, action, danger, run) => {
+    Confirm(title, words, warning, action, danger, run) => {
       sheet_title(c, title)
       c.box(style=sheet_words_at, fn() {
         c.text(words, style=sheet_lead) |> ignore
+        if warning != "" {
+          c.text(warning, style=sheet_warning) |> ignore
+        }
         c.box(style=sheet_actions, fn() {
           if button(c, t("common.cancel"), key=key + "/cancel") {
             close_from_serial(p.serial)
@@ -2736,6 +2742,10 @@ let sheet_words_at : @ui.Style = @ui.css("w=Full px=S5 gap=S2_5")
 ///|
 // kept across runs: a value (no field of it changes)
 let sheet_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sheet_warning : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Danger)
 
 ///|
 // kept across runs: a value (no field of it changes)
