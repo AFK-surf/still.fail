@@ -3,7 +3,7 @@
 // at most, the window less dialog_margin, no taller than it less dialog_room; 24 in, a line round it, dialog_r round,
 // the panel's ground and shadow; its title's row, then what it holds 18 under it, scrolling in itself where the panel
 // is short of room (View::scrolls, as dialog's capped body), then its cancel and its action at its foot's end); its line the library's
-// field (input) in an old view hosted in it, the way there: no editor of the tree's yet; its hint under it, its words.
+// (input_node: the tree's editor in the line's look); its hint under it, its words.
 // Its action can be pressed while the line, trimmed, differs from what it was given and is not empty (unless an empty
 // one says something: `empty`), told as the line changes (its Field's words, a signal); said by its action or Enter in
 // the field, once, after it has closed. Its field the keyboard's as it opens; closed, the focus back where it was.
@@ -11,11 +11,10 @@
 ///|
 /// A question in `parent` while `open()` (going over pop_out_ms once not): `title`, its field (`line`, at first
 /// `value`; `placeholder` while empty, as dots where `secret`), `hint` under it ("" none), the library's cancel and
-/// `action`. `key`: what its old view and its field are named by (the presented's). `say` with the line, trimmed, once;
+/// `action`. `say` with the line, trimmed, once;
 /// `cancel` as it is closed unsaid. `shown`, `gone`: as dialog_layer_node's.
 pub fn ask_node(
   parent : @view.View,
-  key : String,
   open : () -> Bool,
   title : String,
   line : @ui.Field,
@@ -36,9 +35,6 @@ pub fn ask_node(
   let words = fn() { line.text().trim(chars=" \t\n").to_string() }
   let can = fn() { ask_can(words(), value, empty) }
   let said = Ref(false)
-  // (its field given the keyboard's focus as it opens, once, while it is open: then the person's; ask_centred's
-  // focus_once, this opening's own)
-  let focused = Ref(false)
   let go = fn() {
     if !said.val && @signals.untracked(can) {
       said.val = true
@@ -47,7 +43,8 @@ pub fn ask_node(
   }
   dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, covered~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
-    let first : Ref[@view.View?] = Ref(None)
+    // (its field: given the keyboard's focus as it opens, back to what had it as it goes, ask_centred's focus_once)
+    let field : Ref[@view.View?] = Ref(None)
     across.box(fn(d) {
       d
       .width(By(fn() { Some(dmin(dialog_w, layer.window().0 - dialog_margin)) }))
@@ -95,28 +92,8 @@ pub fn ask_node(
         body.alpha(By(words_in)) |> ignore
         body.scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
         b.padding(Is((dialog_pad, @ui.Space::px(S4_5), dialog_pad, 0.0))).gap(Is(@ui.Space::px(S4))) |> ignore
-        @ui.old(b, fn(c) {
-          let fid = c.id(key + "/line")
-          let submitted = Ref(false)
-          c.box(style=ask_field_at, fn() {
-            submitted.val = input(c, key + "/line", placeholder~, secret~, field=line).submitted
-          })
-          |> ignore
-          if !focused.val && @signals.untracked(open) {
-            if c.has_focus(fid) {
-              focused.val = true
-            } else {
-              c.focus_editor(key + "/line")
-            }
-          }
-          if submitted.val {
-            c.tell(key + "/said", go)
-          }
-        })
-        // (as tall as the one-line field it holds, the theme's controls' (input_height): an old view hosted says
-        // nothing of its height, its box cut to what the tree gives it)
-        .height(Is(Some(input_height())))
-        |> ignore
+        // (its field the library's line, as wide as what it holds: Enter says it, at that key's moment)
+        field.val = Some(input_node(b, line, placeholder~, secret~, submitted=fn(_) { go() }))
         if hint != "" {
           b.box(fn(t) {
             t.words(Is(hint), look=toast_words_look(Meta, L5, 400, true)).ink(By(fn() { theme().color(Muted) })) |> ignore
@@ -132,20 +109,14 @@ pub fn ask_node(
         let at = capsule_in(dialog_r, button_height())
         f.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))).padding(Is((at, @ui.Space::px(S6), at, at))).alpha(By(words_in)) |> ignore
         f.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
-        let no = button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost)
+        button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost) |> ignore
         button_node(f, fn() { action }, go, tone=Primary, disabled=fn() { !can() }) |> ignore
-        first.val = Some(no)
       })
       |> ignore
       // (another dialog over it: dimmed over all of itself, its corners its own)
       d.box(fn(v) { v.over(Is(true)).radius(Is(dialog_r)).ground(By(veil)) |> ignore }) |> ignore
     })
     |> ignore
-    first.val.unwrap()
+    field.val.unwrap()
   })
 }
-
-///|
-/// Where a question's field stands in what it holds: as wide as it.
-// kept across runs: a value (no field of it changes)
-let ask_field_at : @ui.Style = @ui.css("w=Full")

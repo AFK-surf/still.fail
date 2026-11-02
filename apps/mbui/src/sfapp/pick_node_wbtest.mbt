@@ -275,3 +275,47 @@ test "pick, long, 大屏 keyboard and mouse: a choice's value at its row's end, 
   let at = tree.drawn().filter(fn(d) { d.words == "3 条新消息" }).map(fn(d) { (d.x - dx, ((d.y - dy) * 10.0).round() / 10.0, (d.h * 10.0).round() / 10.0) })
   assert_eq(at, [(144.0, 115.4, 16.8)])
 }
+
+///|
+test "pick, long, 大屏 keyboard and mouse: words typed in its search, the language changed: its search said in the new words, the same field, its words and the focus kept" {
+  new_run()
+  let base = fixture("chat")
+  // (the core's language as `lang` says it, where it says one: large_about_tester's)
+  let lang = Ref("")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      if name != "prefs" || lang.val == "" {
+        return got
+      }
+      let o = match got.value {
+        Some(Object(m)) => m.copy()
+        _ => {}
+      }
+      o["lang"] = Json::string(lang.val)
+      { ..got, value: Some(Json::object(o)) }
+    },
+  }
+  wide_src.val = Some(src)
+  open_chat(chat_a)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  let chosen = Ref("")
+  @sf.pick("选一个", pick_choices(@sf.pick_search_from + 4), "c2", fn(k) { chosen.val = k }, from=@sf.at_point(600.0, 300.0))
+  t.run_for(@ui.move_most_ms)
+  t.type_text("第1")
+  let before = t.get(TextField, label="搜索")
+  lang.val = "en"
+  t.run_for(@ui.move_most_ms)
+  let after = t.focused()
+  let words = t.field_words()
+  lang.val = ""
+  @sf.set_language(None)
+  t.run_for(@ui.move_most_ms)
+  let back = t.focused().map(fn(s) { s.label })
+  assert_eq(
+    (after.map(fn(s) { (s.role is TextField, s.label, s.id == before.id) }), words, back),
+    (Some((true, "Search", true)), "第1", Some("搜索")),
+  )
+}

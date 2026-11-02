@@ -98,7 +98,7 @@ test "大屏, a short window: a question with a long title and a long hint, its 
 }
 
 ///|
-test "大屏, a short window, started with keyboard and mouse or touch: a question with a long title and a long hint, the wheel turned at the middle of the window (over its field, an old view's, in what it holds): what it holds scrolled, its title and buttons where they were" {
+test "大屏, a short window, started with keyboard and mouse or touch: a question with a long title and a long hint, the wheel turned at the middle of the window (over its field, in what it holds): what it holds scrolled, its title and buttons where they were" {
   let out = []
   for platform in [0, 2] {
     let t = ask_field_tester(1280.0, platform)
