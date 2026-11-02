@@ -403,3 +403,21 @@ pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
   self.nodes[n.scroll_held].live &&
   self.nodes[n.scroll_held].flex.height - n.flex.height > 0.5
 }
+
+///|
+/// Whether node `id` is in what one that scrolls moves (View::scrolls: its held), however far that can go now: where it
+/// is moves with that, as what an old view's box that scrolls (its capped, a sideways one) holds does. Not what stands
+/// beside that in the one that scrolls (its bar, what is put over it), which stays.
+pub fn Tree::in_scroller(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  let mut child = id.at
+  let mut i = self.nodes[id.at].parent
+  while i >= 0 {
+    if self.nodes[i].scroll_held == child {
+      return true
+    }
+    child = i
+    i = self.nodes[i].parent
+  }
+  false
+}

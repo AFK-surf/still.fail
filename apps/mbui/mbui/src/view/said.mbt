@@ -194,3 +194,48 @@ pub fn View::hides(self : View, hidden : Live[Bool]) -> View {
   self.bind(Hides, hidden, Said, fn(h) { self.tree.nodes[self.at].said_hidden = h })
   self
 }
+
+///|
+/// What node `id` is called where it says no label of its own (a screen reader's name from what it holds): its own words,
+/// then what it holds's in order, each one that says a label of its own by that label alone (none of what is in it), one
+/// kept from what is read out (View::hides) by nothing, one hosting an old view by what `hosted` says that old view is
+/// called the same way, the rest by the same, all one line; as ui's old frame calls a box with no label of its own
+/// (Ctx::words_in).
+pub fn Tree::words_within(self : Tree, id : NodeId, hosted : (NodeId) -> String) -> String {
+  guard self.alive_id(id) else { return "" }
+  let sb = StringBuilder()
+  let put = fn(s : String) {
+    if s != "" {
+      if sb.to_string().length() > 0 {
+        sb.write_char(' ')
+      }
+      sb.write_string(s)
+    }
+  }
+  fn walk(at : Int) -> Unit {
+    let n = self.nodes[at]
+    let me = { at, gen: n.gen }
+    match self.drawn_of(me) {
+      Some(d) => put(d.words)
+      None => ()
+    }
+    for k in self.kids_in_order(at) {
+      let kn = self.nodes[k]
+      if !kn.live || kn.out || kn.said_hidden {
+        continue
+      }
+      match kn.said {
+        Some(s) if s.label != "" => put(s.label)
+        _ =>
+          if kn.hosted {
+            put(hosted({ at: k, gen: kn.gen }))
+          } else {
+            walk(k)
+          }
+      }
+    }
+  }
+
+  walk(id.at)
+  sb.to_string()
+}
