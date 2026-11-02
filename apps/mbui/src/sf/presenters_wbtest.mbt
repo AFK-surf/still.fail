@@ -489,6 +489,85 @@ fn dialog_panel(said : Array[String]) -> (Anchor) -> Unit {
 }
 
 ///|
+/// How many grounds over the whole window dim what is under them in the last frame (`at`'s window).
+fn scrims_drawn(t : @ui.Tester, at : (Int, Double, Double)) -> Int {
+  let (_, w, h) = at
+  t
+  .drawn_rects()
+  .filter(fn(r) { r.0 <= 0.0 && r.1 <= 0.0 && r.2 >= w && r.3 >= h && (r.4 & 0xFFL) > 0L && (r.4 & 0xFFL) < 0xFFL })
+  .length()
+}
+
+///|
+/// A panel (opened by 打开, `from` it or by nothing) with 删掉 in it, which asks a confirm over it.
+fn panel_with_confirm(at : (Int, Double, Double), by_nothing? : Bool = false) -> @ui.Tester {
+  presenting_tester(at, fn(from) {
+    panel(
+      "面板",
+      from=if by_nothing { Unanchored } else { from },
+      fn(c, _) {
+        c.text("面板内容") |> ignore
+        if button(c, "删掉", key="drop") {
+          confirm("删掉这个？", "删掉后找不回来。", "确认删掉", fn() {  }, danger=true)
+        }
+      },
+    )
+  })
+}
+
+///|
+test "one over another with a finger at Small: one scrim however many sheets, the one under pushed up out of the way and down again" {
+  let t = panel_with_confirm(phone)
+  open_it(t)
+  assert_eq(scrims_drawn(t, phone), 1)
+  let (_, y0) = t.drawn_of("面板内容").unwrap()
+  t.tap_text("删掉")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@ui.move_most_ms)
+  assert_eq(presented_how, [AsSheet, AsSheet])
+  // (no darker for the second: the one under dims, the one over it not)
+  assert_eq(scrims_drawn(t, phone), 1)
+  // (the one under pushed up out of its way, whole over it, not laid under it: its words over the confirm's title)
+  let (_, y1) = t.drawn_of("面板内容").unwrap()
+  let (_, title) = t.drawn_of("删掉这个？").unwrap()
+  assert_true(y1 < y0 - pushed_gap && y1 < title, msg="\{y0} \{y1} \{title}")
+  // (the two not laid one over the other: the one under ends, foot and all, pushed_gap over the one over it)
+  let sheets = t.drawn_glass().copy()
+  sheets.sort_by_key(fn(g) { g.1 })
+  assert_eq(sheets.length(), 2, msg="\{sheets}")
+  assert_true(sheets[0].1 + sheets[0].3 + pushed_gap <= sheets[1].1 + 0.5, msg="\{sheets}")
+  // (the one under taking nothing while it is up: dimmed over itself as the window is, not the window twice)
+  assert_true(
+    t.drawn_rects().iter().any(fn(r) { r.4 == sheet_scrim && r.3 < phone.2 }),
+    msg="\{t.drawn_rects().filter(fn(r) { (r.4 & 0xFFL) < 0xFFL })}",
+  )
+  // (the one over it gone: the one under forward again, its scrim as it was all along)
+  t.back()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@ui.move_most_ms)
+  assert_eq(presented_how, [AsSheet])
+  assert_eq(scrims_drawn(t, phone), 1)
+  let (_, y2) = t.drawn_of("面板内容").unwrap()
+  assert_true((y2 - y0).abs() < 0.5, msg="\{y0} \{y2}")
+}
+
+///|
+test "one over another with a mouse at Large: a confirm over a dialog dims no darker" {
+  let t = panel_with_confirm(desk, by_nothing=true)
+  open_it(t)
+  assert_eq(presented_how, [AsDialog])
+  assert_eq(scrims_drawn(t, desk), 1)
+  t.tap_text("删掉")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(presented_how, [AsDialog, AsDialog])
+  assert_eq(scrims_drawn(t, desk), 1)
+  // (the confirm closed: the dialog's scrim as it was all along, none fading over it)
+  assert_true(t.key_named("esc"))
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(scrims_drawn(t, desk), 1)
+}
+
+///|
 test "a panel opened by nothing with a mouse at Large: a dialog in the middle; Escape lets go of it, its foot says it" {
   let said : Array[String] = []
   let t = presenting_tester(desk, dialog_panel(said))

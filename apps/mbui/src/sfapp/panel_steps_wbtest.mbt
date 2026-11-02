@@ -75,6 +75,29 @@ test "two steps in: back from 浏览文件夹 goes back to 添加目录, not out
 }
 
 ///|
+test "wide, a confirm over the preset's dialog (the window's tree's over the old frame's) dims what is under them once" {
+  new_run()
+  let src = fixture("newchat-preset-edit")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_mode("newchat-preset-edit")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let scrims = fn() {
+    // (the page's own ground is the window's too: a scrim is what lets it show through)
+    t
+    .drawn_rects()
+    .filter(fn(r) { r.0 <= 0.0 && r.1 <= 0.0 && r.2 >= 1280.0 && r.3 >= 800.0 && (r.4 & 0xFFL) > 0L && (r.4 & 0xFFL) < 0xFFL })
+    .length()
+  }
+  assert_eq(scrims(), 1)
+  t.click(Button, label="删除")
+  t.run_for(@ui.move_most_ms)
+  // (the confirm the window's tree's: found in what is read out)
+  assert_true(t.semantics_dump().contains("删除预设"), msg=t.semantics_dump())
+  assert_eq(scrims(), 1)
+}
+
+///|
 test "a folder picked in 添加目录 goes back to the fields with it among the preset's folders" {
   let t = preset_add(false)
   t.tap_text("tstst")

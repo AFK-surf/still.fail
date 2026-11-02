@@ -120,6 +120,10 @@ pub fn glass_sheet() -> @ui.Glass {
 let sheet_tint : Double = 0.9
 
 ///|
+/// How far a sheet reaches on under the window's foot (sheet_look: its foot's corners out of sight).
+let sheet_under : Double = 26.0
+
+///|
 /// still.fail's sheet (Sheet.kt) as mbui's sheet draws it (@kit.sheet's look): the sheet's glass over the page, the
 /// scrim's black as far as it shows (`s.t`) under it, its top corners 26 round (26 more of it under the window's
 /// foot), a shadow; `ground` (not 0) a solid ground in the glass's place. What it holds starts with its grabber.
@@ -128,7 +132,7 @@ pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit
     let t = theme()
     c.box(
       w=Fill(1.0),
-      h=Px(s.h + 26.0),
+      h=Px(s.h + sheet_under),
       radius=26.0,
       bg=ground,
       glass?=if ground != 0L {
@@ -140,7 +144,7 @@ pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit
       shadow_y=sheet_raised.dy,
       shadow_color=sheet_raised.color,
       clip=true,
-      pb=26.0,
+      pb=sheet_under,
       body,
     )
     |> ignore
