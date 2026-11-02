@@ -153,8 +153,10 @@ test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   const ui = core.connect();
   const values = new Map();
   subscribe(core, ui, 1, { topic: "workspaces" });
+  subscribe(core, ui, 3, { topic: "prefs" });
   await host.settle();
   apply(host, values);
+  assert.equal(v(values, 3).productName, "youdid.wtf");
   let entry = v(values, 1)[0];
   assert.deepEqual([entry.blocked, entry.error?.code, entry.workspaces.length], ["此账号尚未开通测试版", "not_beta", 0]);
   assert.ok(host.requests.filter((r) => r.url.includes("/v1/")).every((r) => r.headers.some(([k]) => k === "x-stillfail-channel")));
@@ -192,6 +194,7 @@ test("an_app_of_its_own_on_the_test_channel_reads_its_changelog_is_named_still_f
   const ui = core.connect();
   await ask(host, core, ui, 1, "client.device", { app: "android", build: "0.1.1320", client: "still.fail mbui" });
   subscribe(core, ui, 2, { topic: "changelog" });
+  subscribe(core, ui, 4, { topic: "prefs" });
   await host.settle();
   const values = new Map();
   answersOf(host, values);
@@ -200,6 +203,7 @@ test("an_app_of_its_own_on_the_test_channel_reads_its_changelog_is_named_still_f
     ["android", ["修复：安卓的"]], ["desktop", []], ["web", []], ["station", ["修复：station 的"]], ["cloud", []],
   ]);
   assert.equal(brandName(), "still.fail");
+  assert.equal(v(values, 4).productName, "still.fail");
   // Its newer builds from its own feed as it names it, not that feed's beta.
   const newer = await ask(host, core, ui, 3, "app.update", { platform: "android/mbui", versionCode: 1320 });
   assert.equal(newer.versionCode, 1330);
@@ -490,8 +494,8 @@ test("what_an_agent_needs_let_go_in_its_chat_is_said_let_go_at_once_and_back_whe
   core.close();
 });
 
-test("an_app_of_its_own_names_the_device_by_itself_not_by_still_fail", async () => {
-  // still.fail mbui (apps/mbui) runs this core too: those approving its device tell it apart from still.fail's own app
+test("the legacy app identity names newly approved devices still.fail", async () => {
+  // Older app builds still identify themselves this way; the device's name should use the product name.
   const { host, core } = await started();
   const ui = core.connect();
   call(core, ui, 1, "client.device", { app: "android", build: "0.1.3628", model: "OPPO PLP110", client: "still.fail mbui", locale: "zh-CN" });
@@ -499,7 +503,7 @@ test("an_app_of_its_own_names_the_device_by_itself_not_by_still_fail", async () 
   await host.settle();
   const emitted = host.takeEmitted().map(([, m]) => m as J);
   const url = String(emitted.find((m) => m.id === 2 && "ok" in m).ok.url);
-  assert.ok(url.includes(`name=${encode("still.fail mbui Android · OPPO PLP110")}`), url);
+  assert.ok(url.includes(`name=${encode("still.fail Android · OPPO PLP110")}`), url);
   core.close();
 });
 
@@ -512,13 +516,13 @@ test("a_device_whose_host_says_its_own_name_is_named_by_it_which_of_the_persons_
   await host.settle();
   const emitted = host.takeEmitted().map(([, m]) => m as J);
   const url = String(emitted.find((m) => m.id === 2 && "ok" in m).ok.url);
-  assert.ok(url.includes(`name=${encode("still.fail mbui Android · OPPO Find N5")}`), url);
+  assert.ok(url.includes(`name=${encode("still.fail Android · OPPO Find N5")}`), url);
   call(core, ui, 3, "client.device", { app: "desktop", build: "0.1.5600", userAgent: "Macintosh; Mac OS X", machine: "林的 MacBook Air", client: "still.fail mbui", locale: "zh-CN" });
   call(core, ui, 4, "auth.begin", { redirect_uri: "r", return_to: "/" });
   await host.settle();
   const again = host.takeEmitted().map(([, m]) => m as J);
   const named = String(again.find((m) => m.id === 4 && "ok" in m).ok.url);
-  assert.ok(named.includes(`name=${encode("still.fail mbui 桌面版 · 林的 MacBook Air")}`), named);
+  assert.ok(named.includes(`name=${encode("still.fail 桌面版 · 林的 MacBook Air")}`), named);
   core.close();
 });
 
@@ -537,7 +541,7 @@ test("an_iphone_app_is_a_phone_named_by_its_model_and_its_messages_say_it", asyn
   await host.settle();
   const emitted = host.takeEmitted().map(([, m]) => m as J);
   const url = String(emitted.find((m) => m.id === 3 && "ok" in m).ok.url);
-  assert.ok(url.includes(`name=${encode("still.fail mbui iOS · iPhone17,1")}`), url);
+  assert.ok(url.includes(`name=${encode("still.fail iOS · iPhone17,1")}`), url);
   call(core, ui, 4, "chat.send", { station: "ws/st", thread: 7, text: "hi" });
   await host.settle();
   assert.equal(posted(host)[0].client, "ios 0.1.3700");

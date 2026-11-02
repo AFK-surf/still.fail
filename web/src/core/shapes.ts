@@ -5967,6 +5967,8 @@ export interface PrefsView {
 	/** The most a file opened and let go is brought whole by itself on this device, in bytes: 0 any; none: 1 GB. */
 	fillMax?: number;
 	device?: DeviceView;
+	/** The product's name on this app's channel: still.fail or youdid.wtf. */
+	productName?: string;
 	/** How the drive's reader lays text out (always whole: the core fills in what is not kept). */
 	reader?: ReaderPrefs;
 	/**

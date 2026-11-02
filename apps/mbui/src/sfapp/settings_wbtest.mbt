@@ -155,7 +155,7 @@ test "settings: 关于 says the build, as Android's versionName (0.1.<build>), i
     assert_true(t.find(case.1) is Some(_))
     t.tap_text("关于")
     t.run_for(@ui.move_most_ms)
-    assert_true(t.find("still.fail mbui " + case.1) is Some(_))
+    assert_true(t.find("still.fail " + case.1) is Some(_))
     assert_true(t.find("更新日志") is Some(_))
   }
 }
