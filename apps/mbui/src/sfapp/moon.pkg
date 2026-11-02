@@ -23,4 +23,4 @@ import {
   "moonbitlang/core/double",
 }
 
-import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens", "moonbitlang/core/cmp" } for "wbtest"

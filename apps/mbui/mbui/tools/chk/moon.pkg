@@ -6,6 +6,7 @@ import {
   "moonbitlang/core/math",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/cmp",
 }
 
 options(

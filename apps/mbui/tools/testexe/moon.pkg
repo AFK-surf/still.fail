@@ -2,6 +2,7 @@ import {
   "mbctools/sys",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
+  "moonbitlang/core/cmp",
 }
 
 options(
