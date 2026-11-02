@@ -403,8 +403,8 @@ let invite_line_words : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, w=Fu
 let invite_line_email : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
-/// An invitation joined (its workspace the one in view, `joined` first: what showed it closed) or ignored, said so
-/// once done; why not, said so.
+/// An invitation joined (its workspace the one in view, `joined` first: what showed it closed) or ignored, said and
+/// felt so once done; why not, said so and felt as refused.
 pub fn answer_invitation(src : Source, account : Json?, id : String, join : Bool, name : String, joined : () -> Unit) -> Unit {
   if src.read_only {
     toast_later(read_only_words)
@@ -415,7 +415,8 @@ pub fn answer_invitation(src : Source, account : Json?, id : String, join : Bool
   (src.call)(if join { "invitation.accept" } else { "invitation.decline" }, params, fn(r) {
     new_ws.responding.set("")
     match r {
-      Ok(v) =>
+      Ok(v) => {
+        @ui.haptic(Confirm)
         if join {
           joined()
           switch_workspace(src, text(Some(v), "id"))
@@ -423,12 +424,15 @@ pub fn answer_invitation(src : Source, account : Json?, id : String, join : Bool
         } else {
           toast_later(@sf.t("web-pages.workspace.ignored"))
         }
-      Err(e) =>
+      }
+      Err(e) => {
+        @ui.haptic(Reject)
         toast_later(
           @sf.t(if join { "web-pages.cloud.joinFailed" } else { "web-pages.workspace.ignoreFailed" }, args=[
             ("error", error_words(e)),
           ]),
         )
+      }
     }
   })
 }
