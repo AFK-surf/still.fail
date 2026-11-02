@@ -208,7 +208,9 @@ fn take_ready(src : Source, listed : Array[Json]) -> Unit {
       continue
     }
     downloads.saving[id] = true
-    let (name, size) = (text(d, "name"), number(d, "size"))
+    // The station's stored name can have an upload timestamp; the core's title is the sender's filename.
+    let title = text(d, "title")
+    let (name, size) = (if title == "" { text(d, "name") } else { title }, number(d, "size"))
     (src.call)("download.take", { "id": Json::string(id) }, fn(r) {
       match r {
         Ok(a) if flag(Some(a), "taken") => save_download(src, id, name, size)

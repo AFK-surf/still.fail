@@ -148,7 +148,7 @@ function changeItems(inner: Inner, ws: string, vault: string, f: (items: Record<
 
 function invalidate(inner: Inner, ws: string): void {
   inner.store.invalidateAll((t) => (t.topic === "vaults" || t.topic === "vaultItems" || t.topic === "vaultUses") && t.workspace === ws);
-  // (the requests' cards in the chats and on the 奏 page: shown again where how they are answered here changed)
+  // (the requests' cards in the chats: shown again where how they are answered here changed)
   inner.views?.vaultChanged(ws);
 }
 
@@ -486,7 +486,7 @@ const unlocked = (inner: Inner, v: Vault) => (mem(inner).keys.get(keyOf(v))?.unt
 const able = (inner: Inner) => inner.host.appKeys === true && typeof inner.host.secureGet === "function" && typeof inner.host.secureSet === "function";
 
 /// How an agent's request a card names (`card.vault`; `save`: one to keep a secret) is answered on this device, from the
-/// vault as this core holds it: what a chat's card, and the 奏 page's, show at its foot with the message itself (views.ts),
+/// vault as this core holds it: what a chat's card shows at its foot with the message itself (views.ts),
 /// never asking for more. `elsewhere`: approved only in an app that keeps keys (the plain library's anywhere); `setUp`:
 /// a secret to keep while this device's vault is not on (开启密钥库 first); else `approve`, a use given for `lasts` at the
 /// longest (the item's, else its vault's; a request not held yet, as one with none said).
@@ -1501,8 +1501,8 @@ class Vaults {
     });
   }
 
-  /// A request answered here (how: `outcome`): no longer waiting (the station says so too, as it tells it), its card off
-  /// the 奏 page, how it went on its card in its chat at once.
+  /// A request answered here (how: `outcome`): no longer waiting (the station says so too, as it tells it), with how it
+  /// went shown on its card in the chat at once.
   #settled(id: string, outcome: VaultOutcome): void {
     this.#inner.views?.local.vaultDecided(id, outcome);
     change(this.#inner, this.ws, (h) => {

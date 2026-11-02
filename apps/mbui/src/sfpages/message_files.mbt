@@ -354,6 +354,25 @@ fn quote_of(here : MessageHere, a : Attachment, owner : String, by : (String, St
 }
 
 ///|
+/// Download this attachment through the core, with the chat and original attachment so the transfer leads back here.
+fn download_option(src : Source, here : MessageHere, a : Attachment, owner : String) -> @sf.MenuItem? {
+  let (station, name, size) = (here.station, stored_name(a.path), a.size)
+  let going_up = a.upload != "" && a.path == @sfbase.upload_path(a.upload)
+  let active = flag(download_of(src, station, owner, name), "active")
+  let from : Map[String, Json] = { "session": Json::string(here.session), "file": attachment_json(a, a.owner) }
+  match here.view.thread {
+    Some(n) => from["thread"] = Json::number(n)
+    None => ()
+  }
+  Some(@sf.menu_item_of(
+    @sf.t("web-main.preview.download"),
+    fn() { download_start(src, station, owner, name, size, from=Json::object(from)) },
+    icon="download",
+    disabled=going_up || name == "" || active,
+  ))
+}
+
+///|
 /// A message's file as the chat draws it, by its kind.
 fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner, at? : String = "") -> Unit {
   match file_kind(a.name) {
@@ -375,7 +394,7 @@ fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 ///|
 /// An image (FileItem's image): in its box on the neutral ground, what it waits on until it is decoded (a field of its
 /// colours), then brushed in from its top; one sent from here the picture it was picked as, there at once; one that
-/// cannot be had says so. Pressed, the preview; right-clicked, 复制图片.
+/// cannot be had says so. Pressed, the preview; held or right-clicked, 下载 and 复制图片.
 fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, by~ : (String, String, String)?, corner~ : Double, at~ : String) -> Unit {
 
   let place = @sfbase.thumb_occurrence(here.station, here.session, at)
@@ -397,7 +416,8 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     }
   }
   let thumb = @sfbase.thumb_place(here.station + "/" + owner + "/" + a.path, here.station, here.session, at)
-  file_menu(c, open, key, quote=quote_of(here, a, owner, by))
+  let downloading = download_of(src, here.station, owner, stored_name(a.path))
+  file_menu(c, open, key, quote=quote_of(here, a, owner, by), more=[download_option(src, here, a, owner)])
   // the picture covering the whole box; a letterboxed one's covering its own proportions centred in it, all it and
   // what it waits on take, the box's corners cutting it (imageBox.ts letterbox; any: its frame's, concentric with
   // what holds it where it is in a corner of that, a quote's card)
@@ -439,7 +459,10 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       @sf.breathe(c, stand_in, share=breath)
     }
     // how far it has come, at its foot's end
-    if asked {
+    if flag(downloading, "active") {
+      let total = number(downloading, "size")
+      image_coming(c, "msg-download/" + thumb, Some((number(downloading, "loaded"), if total > 0.0 { Some(total) } else { None })), corner)
+    } else if asked {
       image_coming(c, "msg-coming/" + thumb, src.images.coming(id), corner)
     }
   })
@@ -566,7 +589,7 @@ fn image_box_style(w : Double, h : Double, shown : Bool, corner : Double) -> @ui
 /// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its
 /// capsule in its foot's start corner: a play mark and how long it is; while the core downloads it, or brings it
 /// (loaded, or after everything else once opened and let go: fill.ts), how far there. Held or right clicked, its menu:
-/// 引用; 加载 (brought onto this device by the core before everything else, from what of it is here, whatever page
+/// 引用, 下载; 加载 (brought onto this device by the core before everything else, from what of it is here, whatever page
 /// shows, to play from here at once), 停止加载 while it is brought either way (what came stays).
 fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, landing_key : String, by~ : (String, String, String)?, corner~ : Double, at~ : String) -> Unit {
 
@@ -601,7 +624,9 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       ),
     ]
   }
-  file_menu(c, open, "", quote=quote_of(here, a, owner, by), more=load)
+  let more = [download_option(src, here, a, owner)]
+  more.append(load)
+  file_menu(c, open, "", quote=quote_of(here, a, owner, by), more~)
   // (its name, which nothing over its picture says)
   @sf.tip(c, "msg-file/" + place + "/" + @sfbase.file_key(a), open, a.name, repeats=true)
   let (bw, bh, letterbox) = image_box(a, video_least)
@@ -670,7 +695,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 
 ///|
 /// Any other file as a card (MessageFileCard): pressed, the preview; while the core downloads it, or brings it after
-/// everything else once opened and let go (fill.ts), how far in its size's place, ✕ at its end to call it off; failed, why, ↻ to ask it again. Held or right clicked, its menu (引用).
+/// everything else once opened and let go (fill.ts), how far in its size's place, ✕ at its end to call it off; failed, why, ↻ to ask it again. Held or right clicked, its menu (引用, 下载).
 fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ : (String, String, String)?, at~ : String) -> Unit {
   let owner = owner_of(here, a)
   let (dl, kept) = card_coming(src, here, a)
@@ -678,7 +703,7 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
   let failed = text(dl, "state") == "failed"
   let place = @sfbase.thumb_occurrence(here.station, here.session, at)
   let key = "msg-card/" + place + "/" + @sfbase.file_key(a)
-  file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by))
+  file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by), more=[download_option(src, here, a, owner)])
   let done = @sf.file_card(
     c,
     key,

@@ -1,5 +1,5 @@
 // A chat's files downloaded to this device by the core (sfbase/downloads.mbt, client/core-ts views/downloads.ts):
-// asked from the preview, on by themselves whatever page shows, how far each has come on its message's card (✕ calls
+// asked from the preview or a message's menu, on by themselves whatever page shows, how far each has come on its message's card (✕ calls
 // one off, ↻ asks a failed one again), and saved a part at a time where the system keeps downloads once all of each is
 // here, then said done.
 
@@ -65,6 +65,96 @@ fn listed(name : String, state : String, loaded : Double, size : Double, said : 
     "statusText": Json::string(said),
     "startedAt": 1.0,
   }
+}
+
+///|
+test "downloads: a message's file and video offer 下载 by right click and long press, with their chat as the source" {
+  for platform in [0, 2] {
+    for name in ["发布包.zip", "演示录屏.mp4"] {
+      new_run()
+      let calls : Array[(String, Json)] = []
+      let list : Array[Json] = []
+      let src = downloads_src("chat-download", list, calls)
+      let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=if platform == 0 { 1280.0 } else { 390.0 }, h=844.0, platform~)
+      open_fixture_mode("chat-download")
+      t.run_for(@ui.move_most_ms)
+      let (x, y) = if name == "演示录屏.mp4" {
+        t.reachable(name)[0]
+      } else {
+        let words = t.words().filter(fn(w) { w.0 == "发布包" })
+        (words[0].1 + 4.0, words[0].2 + 4.0)
+      }
+      if platform == 0 {
+        t.right_click(x, y)
+      } else {
+        t.press_at(x, y)
+        t.run_for(@ui.long_press_ms)
+        t.release(x, y)
+        t.run_for(@kit.sheet_rest("sf-present") - t.time())
+      }
+      t.draw()
+      let role : @ui.Role = if platform == 0 { MenuItem } else { Button }
+      assert_true(t.query(role, label=tr("web-main.chat.quote")) is Some(_), msg="\{platform} \{name}")
+      t.click(role, label=tr("web-main.preview.download"))
+      t.frame()
+      t.run_for(@ui.move_most_ms)
+      let starts = calls.filter(fn(m) { m.0 == "download.start" })
+      assert_eq(starts.length(), 1, msg="\{platform} \{name}")
+      let p = Some(starts[0].1)
+      assert_eq(text(p, "station"), "ws1/st1")
+      assert_eq(text(p, "key"), "s-c1")
+      assert_eq(text(p, "name"), name)
+      assert_eq(number(p, "size"), if name == "发布包.zip" { 52428800.0 } else { 5242880.0 })
+      let from = field(p, "from")
+      assert_eq(text(from, "session"), "s-c1")
+      assert_eq(text(field(from, "file"), "name"), name)
+      assert_true(viewer.get() is None)
+      if name == "发布包.zip" {
+        list.push(listed(name, "going", 22020096.0, 52428800.0, "正在下载 42% · 50 MB"))
+        t.draw()
+        assert_true(t.find("正在下载 42% · 50 MB") is Some(_))
+        t.click(Button, label=tr("web-main.file.cancelDownload"))
+        t.frame()
+        assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).length(), 1)
+      } else {
+        list.push(listed(name, "going", 1048576.0, 5242880.0, "正在下载 20% · 5 MB"))
+        t.draw()
+        t.run_for(@sf.dur_ms)
+        assert_true(t.find("20%") is Some(_))
+      }
+    }
+  }
+}
+
+///|
+test "downloads: an image's menu downloads it and its picture shows the download's progress" {
+  new_run()
+  let calls : Array[(String, Json)] = []
+  let list : Array[Json] = []
+  let src = downloads_src("chat", list, calls)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
+  nav_rested(t)
+  let mut tries = 0
+  while t.locate("img:compare.png").length() == 0 && tries < 12 {
+    let (first, _) = t.visible()
+    t.scroll_to(if first > 0 { first - 1 } else { 0 })
+    t.draw()
+    tries += 1
+  }
+  let (x, y) = t.locate("img:compare.png")[0]
+  t.right_click(x, y)
+  t.draw()
+  t.click(MenuItem, label=tr("web-main.preview.download"))
+  t.frame()
+  let starts = calls.filter(fn(m) { m.0 == "download.start" })
+  assert_eq(starts.length(), 1)
+  assert_eq(text(Some(starts[0].1), "name"), "compare.png")
+  assert_true(viewer.get() is None)
+  list.push(listed("compare.png", "going", 25.0, 100.0, "正在下载 25% · 100 B"))
+  t.draw()
+  t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
+  assert_true(t.find("25%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
 ///|
@@ -176,6 +266,28 @@ test "downloads: one the core has all here is taken once, read off the device a 
   let done = calls.filter(fn(m) { m.0 == "download.done" })
   assert_eq(done.map(fn(m) { text(Some(m.1), "id") }), ["ws1/st1|s-c1|dist.zip"])
   assert_eq(text(Some(done[0].1), "at"), "Download/dist.zip")
+}
+
+///|
+test "downloads: a file sent up is saved under its original name" {
+  new_run()
+  let calls : Array[(String, Json)] = []
+  let stored = "2026-10-24T21-59-13-dc7ed5-report.pdf"
+  let d = match listed(stored, "ready", 4.0, 4.0, "已下载 · 4 B") {
+    Object(m) => {
+      let m = m.copy()
+      m["title"] = "report.pdf"
+      Json::object(m)
+    }
+    _ => abort("not a download")
+  }
+  let src = downloads_src("home", [d], calls)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=0)
+  t.frame()
+  t.frame()
+  t.frame()
+  assert_eq(t.kept().map(fn(k) { k.0 }), ["report.pdf"])
+  assert_eq(text(Some(calls.filter(fn(m) { m.0 == "download.done" })[0].1), "at"), "Download/report.pdf")
 }
 
 ///|

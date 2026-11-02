@@ -621,11 +621,12 @@ fn todo_shown(src : Source, w : Workspace) -> Bool {
 /// when there (2 + a row + 8); a row as high as the theme's band (32; touch's the search field's 38).
 fn band_h(src : Source, w : Workspace) -> Double {
   side_top_h() +
-  band_new_top +
   band_row_h() +
-  side_new_under +
-  (if wide.tape && !wide.in_bar { band_new_tape_over() } else { 0.0 }) +
-  (if wide.in_bar { bar_band_in - side_new_under } else { 0.0 }) +
+  (if wide.tape {
+    band_new_top + side_new_under + band_new_tape_over()
+  } else {
+    band_pane_top() + band_pane_under()
+  }) +
   (if todo_shown(src, w) { side_todo_around + band_row_h() } else { 0.0 })
 }
 

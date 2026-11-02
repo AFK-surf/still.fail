@@ -992,8 +992,9 @@ fn triple_model_row(
           name()
         } else {
           c.box(style=triple_name_line, fn() {
-            // (the name as wide as its words, how it runs right after it rather than at the row's end)
-            c.box(name) |> ignore
+            // (the name as wide as its words, how it runs right after it rather than at the row's end; kept, so what
+            // is after it gives way first)
+            c.box(keep=true, name) |> ignore
             // (giving way to the name where the row is short: what the name leaves of it, cut short)
             c.box(style=triple_usual_room, fn() { c.text(usual, style=triple_usual) |> ignore }) |> ignore
           })

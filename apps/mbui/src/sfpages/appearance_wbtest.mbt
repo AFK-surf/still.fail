@@ -59,6 +59,13 @@ test "外观: wide setting titles have the same weight as the rows in 自动决�
     }, w=900.0, platform~)
     link.draw()
     assert_eq(link.census().weight, weight)
+    // a switch's row in a group (分享给其他 station over 可用的 station): its title no lighter than the rows by it
+    let switch = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.group(c, fn() { @sf.switch_row(c, "share", "分享给其他 station", true) |> ignore })
+    }, w=900.0, platform~)
+    switch.draw()
+    assert_eq(switch.census().weight, weight)
   }
 }
 

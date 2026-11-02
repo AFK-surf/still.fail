@@ -467,7 +467,7 @@ let att_link : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4
 let att_link_on : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, leading=L4_75, wrap=false)
 
 ///|
-/// A wanting chat's line without its lead (the core's `what`: 要你帮忙：, 出问题：, 奏 · taken off; the dot before it
+/// A wanting chat's line without its lead (the core's `what`: 要你帮忙：, 出问题：, 待处理 · taken off; the dot before it
 /// says that), else its station's name (Attention.tsx line).
 fn attention_line(v : Json?) -> String {
   match text(v, "what") {

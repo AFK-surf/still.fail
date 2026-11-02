@@ -3,7 +3,7 @@
 // workspaces. One meaning to a mark wherever it is (an agent's corner, agent_mark.mbt, says the same): yellow spokes
 // stepping round at work, a blue dot when it is the viewer's turn (a card or an agent waiting on them, or something
 // unread), a red one when something went wrong; nothing when nothing is for them. What kind of turn it is the row's
-// second line says (its bell, 奏, check), not a shape of its own here.
+// second line says (its bell, card label, check), not a shape of its own here.
 
 ///|
 /// A chat's mark `tone` (the core's: busy, done, alert, wait; anything else none), the row's ground behind it: a dot 8
@@ -95,7 +95,7 @@ let mark_pop_peak_at : Double = 0.6
 // as an icon (needs the viewer a bell, done a check, done and offered to archive the archive box, waiting the waiting
 // arc, watching a radar) stands in the title's mark's column, centred under it, what follows where the title starts;
 // the two still going move (waiting's dots breathe in turn, the radar's dot beats and its arcs light up after it, inner
-// then outer, then rest: every 3.1 s). 奏 · … in ink, its lead word bold; needs the viewer in ink too; anything else
+// then outer, then rest: every 3.1 s). 待处理 · … in ink, its lead word bold; needs the viewer in ink too; anything else
 // as quiet as the last message.
 
 ///|
@@ -149,7 +149,7 @@ pub fn state_line(
         // (the theme's lists' lead word: bold with touch, as the phone's Home.kt StateLine; 600 with keyboard and mouse,
         // ChatMark.css.ts)
         c.text(lead_text, style=words.then(look.state_lead)) |> ignore
-        c.text(text.view(start_offset=lead_text.length()).to_owned(), style=words) |> ignore
+        c.text(text.view(start_offset=lead_text.length()).to_owned(), style=words.then(state_rest_cut)) |> ignore
       })
       |> ignore
     _ => c.text(text, style=words) |> ignore
@@ -295,7 +295,11 @@ let state_icon_at : @ui.Style = @ui.css("w=S3_5 h=S3_5")
 let state_row : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
-/// A card's lead word (奏): a mouse's 600 (ChatMark.css.ts waitingLead), a finger's bold (Home.kt StateLine).
+// kept across runs: a value (no field of it changes)
+let state_rest_cut : @ui.TextStyle = @ui.text_style(w=Cut)
+
+///|
+/// A card's lead word: a mouse's 600 (ChatMark.css.ts waitingLead), a finger's bold (Home.kt StateLine).
 // kept across runs: a value (no field of it changes)
 let lead_word : @ui.TextStyle = @ui.text_style(weight=Semibold, w=Hug)
 

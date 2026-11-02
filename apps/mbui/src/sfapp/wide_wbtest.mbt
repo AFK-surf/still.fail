@@ -2250,7 +2250,7 @@ test "wide: a reference to a chat in a message has the chat's card while the poi
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
-  let said = "奏 · 分组的标题用相对日期还是具体日期？"
+  let said = "待处理 · 分组的标题用相对日期还是具体日期？"
   // (its @ and its title one link: from either, the same card)
   let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
   assert_eq(word(said).length(), 0)
@@ -2740,7 +2740,7 @@ fn ref_rested() -> (Int, Bool) raise {
   let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
   t.move(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
-  let shown = t.words().filter(fn(w) { w.0 == "奏 · 分组的标题用相对日期还是具体日期？" && w.5 > 0.5 }).length() == 1
+  let shown = t.words().filter(fn(w) { w.0 == "待处理 · 分组的标题用相对日期还是具体日期？" && w.5 > 0.5 }).length() == 1
   (calls.filter(fn(m) { m.name == "link.parse" }).length(), shown)
 }
 

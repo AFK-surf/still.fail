@@ -2451,6 +2451,7 @@ pub(all) struct LinkedChat {
   title : String
   archived : Bool
   note : String
+  thread : Double?
 }
 
 pub(all) struct ListAfter {

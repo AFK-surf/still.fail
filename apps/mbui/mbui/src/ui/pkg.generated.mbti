@@ -340,6 +340,8 @@ pub fn native_pointing() -> Pointing
 
 pub let native_unsupported : String
 
+pub fn[P] nav_flat_view(@view.View, Nav[P], (Ctx, P) -> Unit, (P) -> Bool, Double, bg? : () -> Int64, edge? : Double, takes_back? : () -> Bool, stacks? : () -> Bool, page_key? : (P) -> String) -> @view.View
+
 pub let nav_late_most : Double
 
 pub fn nav_rest() -> Double
@@ -1325,6 +1327,7 @@ pub fn Ctx::stop_wheel(Self, Int32) -> Unit
 pub fn Ctx::stratum(Self, Int32, Stratum) -> Unit
 pub fn Ctx::stream(Self, Stream, w? : Size, h? : Size, fit? : Fit, radius? : Double, at? : (Double, Double, Double, Double)?, layer? : Bool) -> Int32
 pub fn Ctx::style_size(Self, TextStyle) -> (Double, Double)
+pub fn Ctx::surface(Self, Int32) -> Unit
 pub fn Ctx::take_back(Self, () -> Unit) -> Unit
 pub fn Ctx::take_key(Self, Int32, mods? : Int32) -> Bool
 pub fn Ctx::take_press(Self) -> Unit
@@ -2677,6 +2680,7 @@ pub fn Tester::window_shows(Self) -> Int32
 pub fn Tester::window_snap_rect(Self) -> (Double, Double, Double, Double)
 pub fn Tester::windows_opened(Self) -> Array[String]
 pub fn Tester::words(Self) -> Array[(String, Double, Double, Double, Double, Double)]
+pub fn Tester::words_said(Self) -> Array[(String, Double, Double, Double, Double, Double)]
 
 type TextCache
 

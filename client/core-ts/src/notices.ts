@@ -177,7 +177,7 @@ function noticed(row: J, thenSeen: Seen | undefined, me: J, slackUsers: string[]
   if (text === "" && hasLast) text = t("core-misc.notice.file");
   const byName = typeof get(by, "name") === "string" ? by.name : "";
   // Blocked on what it asks that waits for them and was not told yet: not on an ask told before (woken by a job between,
-  // it ends blocked on it again), nor on one answered since (nothing waits for them, as 奏 shows nothing).
+  // it ends blocked on it again), nor on one answered since (nothing waits for them).
   if (now.state === "block" && card === null && now.told !== null && now.told !== then.told) {
     let need: string | null = null;
     for (const a of arr(get(row, "agents"))) {

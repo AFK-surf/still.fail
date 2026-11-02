@@ -225,7 +225,10 @@ fn rail(
     // way and scroll instead of pushing settings outside the window. Their marks may extend into the rail's margin.
     if top_h > 0.0 {
       let first_top = dmax(0.0, top_h - rail_gap)
-      c.box(style=rail_top.then(@ui.style(h=Fixed(first_top))), fn() {  }) |> ignore
+      // The column's gap after this box is part of top_h. When top_h is less than the gap, cancel the excess so the
+      // places keep following the move all the way to zero instead of jumping as the box disappears.
+      let over = dmin(0.0, top_h - rail_gap)
+      c.box(style=rail_top.then(@ui.style(h=Fixed(first_top), mb=@sf.room_of(over))), fn() {  }) |> ignore
     }
     let places = rail_items(src, w.id)
     let shown = rail_shown(src, w)

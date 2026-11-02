@@ -270,7 +270,7 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    menu: the web's useSidePanel `changing`), and is so at once as a page opens with its tabs as they were left or a
    chat made from the new chat opens its 文件 with it; that was already so.
    Logic that reads a motion, now its cause and the end it declared as it was told (`Anim::over`, mbui): a new chat
-   leaving, 奏's cards going off and going back (the phone's and the desktop's), the search going back, a row swiped away
+   leaving, the search going back, a row swiped away
    (archived at that end, not when it is seen at its place), the bar's panel (its spring's declared rest, `Spr::end`); a
    stroke, a picture's way in and a row's rise started once by what they are told, not by whether they move; what only
    logs a motion logs it while it is off its target. A message out of an avatar (its poses), words sent (their

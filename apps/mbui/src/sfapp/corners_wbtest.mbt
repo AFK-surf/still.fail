@@ -27,48 +27,55 @@ let corner_windows : Array[(String, Double, Double, Int, String)] = [
 ///|
 /// The screens: every mode sffix opens (fixture.mbt open_fixture_mode, settings/fixture.mbt fixture_page). The other
 /// failure reasons on the player's page are checked against player-failed separately below.
-let corner_modes : Array[String] = [
-  // (webdemo: the web's demo workspace, its chats' rows with people's faces, which chat's fixture has none)
-  "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "landing", "landing-invited", "blocked", "place",
-  "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
-  "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
-  "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-history-side", "chat-info", "chat-job",
-  "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters", "chat-letters-info", "chat-letters-open",
-  "chat-letters-pop", "chat-letters-side", "chat-things", "chat-things-side", "chat-info-pulls", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
-  "chat-model-pop", "chat-model-accounts", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk", "chat-preview-audio",
-  "chat-preview-code", "chat-preview-csv", "chat-preview-html", "chat-preview-image", "chat-preview-md",
-  "chat-preview-none", "chat-preview-pdf", "chat-preview-step", "chat-preview-swipe", "chat-preview-video",
-  "chat-publish", "chat-quote", "chat-screens", "chat-sending", "chat-service-side", "chat-station-file", "chat-station-files",
-  "chat-station-ref", "chat-station-sheet", "chat-tabs-side", "chat-update", "chat-vault-typed", "chat-viz", "chat-working", "archived",
-  "history", "history-details", "drive", "drive-roots", "drive-download", "drive-empty", "drive-loading", "drive-sub", "drive-upload",
-  "files", "files-add-folder", "files-clash", "files-columns", "files-list", "files-preview", "files-split", "files-transfers",
-  "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents", "reader-layout", "reader-md", "newchat", "newchat-files", "newchat-lend", "share-card", "share-card-dark", "share-card-poster", "share-card-receipt", "share-card-terminal",
-  "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
-  "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
-  "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
-  "lock-none", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
-  "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
-  "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
-  "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-read-only",
-  "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
-  "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
-  "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
-  "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-network", "settings-stations-add",
-  "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
-  "settings-profiles", "settings-profiles-monthly", "settings-profile", "settings-profile-quota",
-  "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",
-  "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
-  "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
-  "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan", "settings-new-connect-app",
-  "settings-slack-app", "settings-memory", "settings-memory-doc", "settings-usage", "settings-archive", "settings-kept",
-  "settings-kept-many", "settings-vault-off", "settings-vault-plain", "settings-vault-words", "settings-vault-add",
-  "settings-vault-editor", "settings-vault-recover", "settings-lock-prompt", "settings-add-people",
-  "settings-workspace-mark", "settings-local-fonts", "settings-policy", "settings-policy-text",
-  "settings-policy-option", "settings-security-join", "settings-security-off",
-  "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts", "settings-fonts-code",
-  "settings-decisions", "settings-completion", "settings-bars", "settings-about", "settings-changelog", "settings-prices",
-  "settings-notify-off", "settings-notify-denied",
-]
+let corner_modes : Array[String] = {
+  let modes = [
+    // (webdemo: the web's demo workspace, its chats' rows with people's faces, which chat's fixture has none)
+    "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "landing", "landing-invited", "blocked", "place",
+    "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
+    "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
+    "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-history-side", "chat-info", "chat-job",
+    "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters", "chat-letters-info", "chat-letters-open",
+    "chat-letters-pop", "chat-letters-side", "chat-things", "chat-things-side", "chat-info-pulls", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
+    "chat-model-pop", "chat-model-accounts", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk", "chat-preview-audio",
+    "chat-preview-code", "chat-preview-csv", "chat-preview-html", "chat-preview-image", "chat-preview-md",
+    "chat-preview-none", "chat-preview-pdf", "chat-preview-step", "chat-preview-swipe", "chat-preview-video",
+    "chat-publish", "chat-quote", "chat-screens", "chat-sending", "chat-service-side", "chat-station-file", "chat-station-files",
+    "chat-station-ref", "chat-station-sheet", "chat-tabs-side", "chat-update", "chat-vault-typed", "chat-viz", "chat-working", "archived",
+    "history", "history-details", "drive", "drive-roots", "drive-download", "drive-empty", "drive-loading", "drive-sub", "drive-upload",
+    "files", "files-add-folder", "files-clash", "files-columns", "files-list", "files-preview", "files-split", "files-transfers",
+    "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents", "reader-layout", "reader-md", "newchat", "newchat-files", "newchat-lend", "share-card", "share-card-dark",
+    "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
+    "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
+    "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
+    "lock-none", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
+    "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
+    "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
+    "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-read-only",
+    "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
+    "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
+    "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
+    "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-network", "settings-stations-add",
+    "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
+    "settings-profiles", "settings-profiles-monthly", "settings-profile", "settings-profile-quota",
+    "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",
+    "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
+    "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
+    "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan", "settings-new-connect-app",
+    "settings-slack-app", "settings-memory", "settings-memory-doc", "settings-usage", "settings-archive", "settings-kept",
+    "settings-kept-many", "settings-vault-off", "settings-vault-plain", "settings-vault-words", "settings-vault-add",
+    "settings-vault-editor", "settings-vault-recover", "settings-lock-prompt", "settings-add-people",
+    "settings-workspace-mark", "settings-local-fonts", "settings-policy", "settings-policy-text",
+    "settings-policy-option", "settings-security-join", "settings-security-off",
+    "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts", "settings-fonts-code",
+    "settings-decisions", "settings-completion", "settings-bars", "settings-about", "settings-changelog", "settings-prices",
+    "settings-notify-off", "settings-notify-denied",
+  ]
+  // (and the card to share in each of its other looks: share_looks.mbt)
+  for k in @sfpages.share_look_keys()[1:] {
+    modes.push("share-card-" + k)
+  }
+  modes
+}
 
 ///|
 /// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's; or

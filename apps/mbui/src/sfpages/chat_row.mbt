@@ -628,9 +628,9 @@ let row_icon : Double = 16.0
 ///|
 /// A row's menu (Sidebar.tsx ContextMenu, mobile/Home.tsx useRowMenu), from row `id` at (`x`, `y`): 固定 / 取消固定 (a
 /// station from before pins says nothing: none), 重命名, 保留 / 取消保留 (a chat of its own: a thread; pinned, none: a
-/// pin keeps it out of the archive already), 打开「…」 (one an agent opened: the chat it opened it from), 复制会话链接,
-/// 转到频道 (a thread with an agent), 复制 session 文件路径, 归档. Held by a finger, felt as it opens and from the row
-/// (a sheet, or under it); right clicked, at the pointer.
+/// pin keeps it out of the archive already), 归档; 打开「…」 (one an agent opened: the chat it opened it from), 复制会话链接,
+/// 转到频道 (a thread with an agent); 复制 session 文件路径: three groups, lines between. Held by a finger, felt as it
+/// opens and from the row (a sheet, or under it); right clicked, at the pointer.
 fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y : Double) -> Unit {
   // (held by a finger: the press is the menu's, felt; the menu from the row)
   let finger = @sf.menu_held(c, "row")
@@ -641,7 +641,7 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
 
 ///|
 /// What a chat's menu offers (a row's, and the "…" of the chat's page, one and the same): `extra` the page's own, before
-/// the transcript and archive that end it (sharing it, a picture of it, it in Slack: what a row has not the core's words for).
+/// the transcript that ends it (sharing it, a picture of it, it in Slack: what a row has not the core's words for).
 fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
   let r = row_ref(item)
   let items : Array[@sf.MenuItem?] = []
@@ -698,6 +698,11 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       )
     _ => ()
   }
+  // with the chat's own state (pinned, kept), not last: a sheet's last row is over the screen's foot, where a thumb
+  // going home or back lands on it
+  items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.archive"), icon="archive", fn() { archive_row(src, item) })))
+  // (a line between the groups: the chat itself; where else it is and goes; its files on its station)
+  rule_after(items)
   // the chat an agent opened it from: gone to (its own page, its row as it is)
   match item.opener {
     Some(o) =>
@@ -733,6 +738,7 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
     _ => ()
   }
   items.append(extra)
+  rule_after(items)
   items.push(
     Some(
       @sf.menu_item_of(@sf.t("web-main.chat.copyTranscript"), icon="file", fn() {
@@ -744,8 +750,15 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       }),
     ),
   )
-  items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.archive"), icon="archive", fn() { archive_row(src, item) })))
   items
+}
+
+///|
+/// A line ending a menu's group: after an item only (none first, none twice).
+fn rule_after(items : Array[@sf.MenuItem?]) -> Unit {
+  if items.last() is Some(Some(_)) {
+    items.push(None)
+  }
 }
 
 ///|

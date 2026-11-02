@@ -793,6 +793,10 @@ pub let said_paths : Map[String, Array[String]] = {
     "workspaces.*.name",
     "workspaces.*.stationName",
   ],
+  "messagePeek": [
+    "author",
+    "text",
+  ],
   "newChat": [
     "stations.*.name",
     "stations.*.summary",

@@ -248,10 +248,11 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     stages[stage] = Math.round(now - last);
     last = now;
   };
-  const seen = seenBy(s, viewer);
-  mark("visibility");
-  const rows = summary(s, from, to, utcOffsetMin).filter((r) => seen(r.session));
+  const groups = summary(s, from, to, utcOffsetMin);
   mark("summary");
+  const seen = seenBy(s, viewer, groups.map((r) => r.session));
+  const rows = groups.filter((r) => seen(r.session));
+  mark("visibility");
   const wanted = [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))];
   const threads: Record<string, Json> = {};
   for (const [t, first] of usageThreads(s, wanted)) {

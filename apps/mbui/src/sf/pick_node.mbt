@@ -104,13 +104,10 @@ pub fn pick_node(
       @ui.old(p, fn(c) {
         let fid = c.id(key + "/search")
         let submitted = Ref(false)
-        let held = c.box(style=pick_search_at, fn() {
+        c.box(style=pick_search_at, fn() {
           submitted.val = input(c, key + "/search", placeholder=t("common.search"), small=true, field=line).submitted
         })
-        // (its words as far in as the panel's, its ground and edge with the panel: the old popover's look's words, as
-        // @kit.beside put them on what it holds)
-        let l = look()
-        c.look(held, { alpha: 1.0, dx: 0.0, dy: 0.0, sx: 1.0, sy: 1.0, ox: 0.5, oy: 0.5, rot: 0.0, circle: 0.0, words: l.words })
+        |> ignore
         if !focused.val && @signals.untracked(open) {
           if c.has_focus(fid) {
             focused.val = true
@@ -126,22 +123,26 @@ pub fn pick_node(
         }
       })
       .height(Is(Some(menu_row_min)))
+      // (as far in as all else it holds, past the panel's own ground: Look's `words`)
+      .alpha(By(words_in))
       |> ignore
       // (none found: said so)
       p.show(fn() { found().is_empty() }, fn(e) {
+        e.alpha(By(words_in)) |> ignore
         e.padding(Is((@ui.Space::px(S2_5) + reach, @ui.Space::px(S2), @ui.Space::px(S2_5) + reach, @ui.Space::px(S2)))) |> ignore
         e.box(fn(w) {
           w
           .words(Is(t("common.noMatch")), look=toast_words_look(Meta, L5, 400, true))
           .ink(By(fn() { @ui.tree_theme().color(Muted) }))
-          .alpha(By(words_in))
           |> ignore
         })
         |> ignore
       })
       // (its list, scrolling past its most)
       p.box(fn(l) {
-        l.max_height(Is(Some(pick_list_most))) |> ignore
+        // (all it holds as far in as its look says, past the panel's own ground, edge and shadow: its rows, their
+        // grounds, icons and words, the same, Look's `words` as a surface's are; its search an old view's, the same)
+        l.max_height(Is(Some(pick_list_most))).alpha(By(words_in)) |> ignore
         l.scrolls(list, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
           b.each(fn() { found().map(fn(x) { x.key }) }, fn(k) { k }, fn(cell, k) {
             let k = @signals.untracked(fn() { k.get() })
@@ -149,7 +150,7 @@ pub fn pick_node(
               Some(x) => {
                 // (the last found reaching into the panel's padding at its foot, as menu_item's at_foot)
                 let last = fn() { found().last().map(fn(l) { l.key }) == Some(x.key) }
-                pick_row_node(cell, x, x.key == chosen, fn() { go(x.key) }, words_in, last, reach)
+                pick_row_node(cell, x, x.key == chosen, fn() { go(x.key) }, last, reach)
               }
               None => ()
             }
@@ -179,7 +180,6 @@ fn pick_row_node(
   x : Choice,
   on : Bool,
   go : () -> Unit,
-  words_in : () -> Double,
   last : () -> Bool,
   reach : Double,
 ) -> Unit {
@@ -205,7 +205,7 @@ fn pick_row_node(
     let first_line = fn(into : @view.View) {
       if panel {
         into.box(fn(col) {
-          col.width(Is(Some(panel_icon_col))).lines_up(Is(Some(Middle))).alpha(By(words_in)) |> ignore
+          col.width(Is(Some(panel_icon_col))).lines_up(Is(Some(Middle))) |> ignore
           match x.mark {
             Some(m) =>
               @ui.old(col, fn(c) { m(c, panel_icon) })
@@ -223,7 +223,6 @@ fn pick_row_node(
         // (20 a line, as menu_item sets its words)
         .words(Is(x.label), look={ ..toast_words_look(Ui, L5, if on { 500 } else { 400 }, false), line: pick_row_line })
         .ink(By(fn() { if on { library_theme().p.accent_text } else { library_theme().p.text } }))
-        .alpha(By(words_in))
         |> ignore
       })
       |> ignore
@@ -236,7 +235,6 @@ fn pick_row_node(
             { ..l, line: @ui.tree_theme().text_line * l.size }
           })
           .ink(By(fn() { library_theme().p.muted }))
-          .alpha(By(words_in))
           |> ignore
         })
         |> ignore
@@ -259,7 +257,6 @@ fn pick_row_node(
             w
             .words(Is(x.note), look=toast_words_look(Meta, L5, 400, true))
             .ink(By(fn() { library_theme().p.muted }))
-            .alpha(By(words_in))
             |> ignore
           })
           |> ignore

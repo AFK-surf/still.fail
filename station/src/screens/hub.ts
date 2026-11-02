@@ -29,10 +29,11 @@ export class ScreenRefused extends Error {
 
 /// The message for what is missing; none when nothing is.
 export function accessShown(access: ScreenAccess | undefined, lang: Lang): AccessShown | undefined {
-  if (access === undefined || (access.capture && access.control && access.unsupported === undefined)) return undefined;
+  if (access === undefined || (access.capture && access.control && access.unsupported === undefined && access.reason === undefined)) return undefined;
   const named = { app: access.app || "still.fail Helper" };
   const message =
-    access.unsupported === "platform" ? tr(lang, "station.screen.unsupported")
+    access.reason ? tr(lang, `station.screen.${access.reason}`)
+    : access.unsupported === "platform" ? tr(lang, "station.screen.unsupported")
     : access.unsupported === "helper" ? tr(lang, "station.screen.noHelper")
     : [
         // Neither: it cannot be viewed either, so not "viewed but not controlled".

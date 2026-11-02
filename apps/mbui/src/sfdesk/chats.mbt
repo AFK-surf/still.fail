@@ -13,7 +13,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
     let in_bar = wide.in_bar
-    c.box(style=if in_bar { band_new_bar() } else if wide.tape { band_new_tape() } else { nav_new() }, fn() {
+    c.box(style=if wide.tape { band_new_tape() } else { band_new_pane() }, fn() {
       let is_new = app.nav.top() is NewChat
       c.box(style=side_full, fn() {
         // (on one line with the search's field under it: its ground's edge, its mark and its words the band's; in the
@@ -81,18 +81,38 @@ fn sidebar_glass(c : @ui.Ctx, key : String, title : String, icon : String, menu 
 }
 
 ///|
-/// 新建对话's row and the filter beside it stand in every list's action's band (nav_new); in the closed bar the filter
-/// where its link to the bar's top right corner puts it (filter_bar_link: as far from its top and side as the link is
-/// in, the row's middle on it), 6 under.
-fn band_new_bar() -> @ui.Style {
-  let lift = (band_row_h() - filter_side) / 2.0
-  let top = dmax(0.0, filter_bar_in - lift)
-  band_new_bar_look.then(@ui.style(pr=@sf.room_of(filter_bar_in), pt=@sf.room_of(top), gap=@sf.keys_gap()))
+/// A value in the band's open and floating looks, on the block's own trajectory between them.
+fn band_between(open : Double, bar : Double) -> Double {
+  open + (bar - open) * wide.band
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let band_new_bar_look : @ui.Style = @ui.css("row w=Full pl=S2 pb=S1_5 align=ACenter")
+/// The top and bottom of the action's band. Its list uses these same values for the room over its rows.
+fn band_pane_top() -> Double {
+  let lift = (band_row_h() - filter_side) / 2.0
+  band_between(band_new_top, dmax(0.0, filter_bar_in - lift))
+}
+
+///|
+fn band_pane_under() -> Double {
+  band_between(side_new_under, bar_band_in)
+}
+
+///|
+/// The action and filter follow the block from the open band's insets to the floating bar's insets.
+fn band_new_pane() -> @ui.Style {
+  let inset = @sf.theme().chat_list.band_in
+  nav_new().then(@ui.style(
+    pl=@sf.room_of(band_between(inset, bar_band_start)),
+    pr=@sf.room_of(band_between(inset, filter_bar_in)),
+    pt=@sf.room_of(band_pane_top()),
+    pb=@sf.room_of(band_pane_under()),
+  ))
+}
+
+///|
+/// The action's inset at the start of the floating bar.
+let bar_band_start : Double = 8.0
 
 ///|
 /// The filter in the closed bar, linked to the corner it stands in, the bar's top right (@ui.CornerOf: the bar's there,

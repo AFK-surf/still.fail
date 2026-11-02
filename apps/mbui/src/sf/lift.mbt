@@ -35,8 +35,13 @@ pub fn lift_over(c : @ui.Ctx, i : Int, key : String, lift : Double, scale : Doub
   @motion.measure(c, i, at)
   @motion.placed(c, i, fn() {
     match (@kit.sheet_top(c), @motion.measured_rect(c, at)) {
-      (Some(top), Some((_, y, _, h))) if y + h + lift_clear > top =>
-        { ..@ui.still_look, dy: top - lift_clear - (y + h) }
+      (Some(top), Some((_, y, _, h))) if y + h + lift_clear > top => {
+        // no further than the sheet has come up into the window: what hangs past the window's foot is not thrown up
+        // as the sheet starts out from under it, nor dropped back as it goes
+        let (_, total) = c.window_size()
+        let dy = dmin(0.0, dmax(top - lift_clear - (y + h), top - total))
+        { ..@ui.still_look, dy }
+      }
       _ => @ui.still_look
     }
   })

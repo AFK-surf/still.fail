@@ -153,9 +153,9 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   n.reacts(fn() { (vw.sniffed.get(), vw.bytes.get() is Some(_), vw.error.get() is Some(_), vw.fetching.get(), vw.asked_told.get()) }, fn(_) {
     vw.fetch(@ui.current(), src)
   })
-  // the images beside it read ahead as what is beside it is said (the core's imageNear, its folder), at that change:
-  // what draws it reads only what came of them
-  n.reacts(fn() { vw.near_ids(src) }, fn(_) {
+  // Read the neighbours ahead once the open picture has come (or failed). Revisit both when imageNear changes and
+  // when this picture finishes, even if no frame was drawn in between.
+  n.reacts(fn() { (vw.near_ids(src), vw.bytes.get() is Some(_), vw.error.get() is Some(_)) }, fn(_) {
     let (before, after) = vw.near(src)
     vw.read_near(src, before, after)
   })

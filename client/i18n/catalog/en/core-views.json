@@ -385,8 +385,6 @@
   "core-views.present.watch_ask": "Still watching {names}. Archiving stops it.",
   "core-views.present.watching": "Watching",
   "core-views.present.watching_names": "Watching: {names}",
-  "core-views.present.working": "Working",
-  "core-views.present.working.last": "Working · {last}",
   "core-views.present.you": "You",
   "core-views.quoted": "“{text}”",
   "core-views.spent.back": "Back {when}",

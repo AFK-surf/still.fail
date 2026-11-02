@@ -1810,9 +1810,18 @@ pub let share_terminal_palette : Array[Int64] = [
 pub let share_terminal_dot : Int64 = 0xE6E6E640L
 
 ///|
-/// The looks to choose under the card shared, each a small picture of it: a portrait 36 by 48 in its own ground (a
-/// small block's corner), a ring round the chosen one 3 out (concentric), its name under it.
-pub let share_look_tile : @ui.Style = @ui.style(w=Fixed(36.0), h=Fixed(48.0), radius=small_radius, clip=true)
+/// The looks to choose under the card shared, each its picture drawn small: a portrait 72 by 96 (three to four, the
+/// picture's top as wide as it), a small block's corner, a ring round the chosen one 3 out (concentric), its name under
+/// it.
+pub let share_look_tile_w : Double = 72.0
+
+///|
+pub let share_look_tile : @ui.Style = @ui.style(
+  w=Fixed(share_look_tile_w),
+  h=Fixed(96.0),
+  radius=small_radius,
+  clip=true,
+)
 
 ///|
 pub let share_look_in : @ui.Space = room(3.0)

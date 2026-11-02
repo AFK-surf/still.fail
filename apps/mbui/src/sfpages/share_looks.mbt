@@ -6,63 +6,87 @@
 // total, a barcode) and 终端 (a fetch run in a terminal: still.fail's mark beside who it is, a line a figure, the
 // palette). Each 360 wide as it is (@sf.share_w_most), nothing cut short, the same in either theme, as a poster is. The
 // code face only for what a till or a terminal prints in it (figures, dates, keys, the command): words of Chinese in
-// it stand a cell apart (「9  个对话」), so what is said is in the face of words.
+// it stand a cell apart (「9  个对话」), so what is said is in the face of words. More are to come (2026-11-02 用户：「我们
+// 后面会有很多分享模板」): a look is one entry of share_looks, offered as itself drawn small in a strip that scrolls.
 
 ///|
-/// The looks, in the order they are offered.
-// kept across runs: a table, never written
-let share_looks : Array[String] = ["night", "poster", "receipt", "terminal"]
-
-///|
-/// The look chosen (the prefs' `shareLook`; none kept, or one this build does not know: the night).
-fn share_look(src : Source) -> String {
-  let kept = text((src.topic)("prefs", Map::new()).value, "shareLook")
-  if share_looks.contains(kept) {
-    kept
-  } else {
-    "night"
-  }
+/// A look the card to share can be drawn in: `key` what the prefs keep of it (`shareLook`), its name the app's words'
+/// `web-main.stations.shareLook.<key>`; `draw` the picture of the `fleet` view as box `id`, round as a card on the
+/// stage or `flat` (handed out: its ground to its edges). A new look is a `draw` and a line in share_looks: the picker,
+/// the fixtures (share-card-<key>) and the corners' check take it from there; the core keeps any key it is given.
+priv struct ShareLook {
+  key : String
+  draw : (@ui.Ctx, Json?, Int, Bool) -> Int
 }
 
 ///|
-/// Under the picture, over its buttons: each look a small picture of it, its name under it, the chosen one ringed; a
-/// press on another draws the card in it at once and keeps it the device's (`prefs.set`).
-fn share_looks_pick(c : @ui.Ctx, src : Source) -> Unit {
-  let now = share_look(src)
-  c.box(style=looks_row, fn() {
-    for look in share_looks {
-      let id = c.id("share-card/look/" + look)
-      let on = look == now
-      let name = @sf.t("web-main.stations.shareLook." + look)
-      let b = c.box(style=looks_item, id~, fn() {
-        c.box(style=if on { looks_ring_on } else { looks_ring }, fn() { look_tile(c, look) }) |> ignore
-        c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
-      })
-      c.semantics(b, Button, id~, label=name, selected=on)
-      if c.clicked(id) && !on {
-        (src.call)("prefs.set", { "shareLook": Json::string(look) }, fn(_) {  })
-      }
+/// The looks, in the order they are offered; the first the one drawn while none is chosen.
+// kept across runs: a table, never written
+let share_looks : Array[ShareLook] = [
+  { key: "night", draw: night_look },
+  { key: "poster", draw: poster_look },
+  { key: "receipt", draw: receipt_look },
+  { key: "terminal", draw: terminal_look },
+]
+
+///|
+/// The keys of the looks, in their order (the fixtures' share-card-<key>).
+pub fn share_look_keys() -> Array[String] {
+  share_looks.map(fn(l) { l.key })
+}
+
+///|
+/// The look chosen (the prefs' `shareLook`; none kept, or one this build does not know: the first).
+fn share_look(src : Source) -> ShareLook {
+  let kept = text((src.topic)("prefs", Map::new()).value, "shareLook")
+  for l in share_looks {
+    if l.key == kept {
+      return l
     }
+  }
+  share_looks[0]
+}
+
+///|
+/// Under the picture, over its buttons: each look the picture itself drawn small (its top, as wide as its tile), its
+/// name under it, the chosen one ringed; a strip that scrolls sideways once there are more than the stage is wide for,
+/// the chosen one brought into view. A press on another draws the card in it at once and keeps it the device's
+/// (`prefs.set`).
+fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let now = share_look(src).key
+  let fleet = share_fleet(src, w)
+  let chosen = c.id("share-card/look/" + now)
+  c.sideways("share-card/looks", fill=true, show=chosen, fn() {
+    c.box(style=looks_row, fn() {
+      for look in share_looks {
+        let id = c.id("share-card/look/" + look.key)
+        let on = look.key == now
+        let name = @sf.t("web-main.stations.shareLook." + look.key)
+        let b = c.box(style=looks_item, id~, fn() {
+          c.box(style=if on { looks_ring_on } else { looks_ring }, fn() { look_tile(c, look, fleet) }) |> ignore
+          c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
+        })
+        c.semantics(b, Button, id~, label=name, selected=on)
+        if c.clicked(id) && !on {
+          (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, fn(_) {  })
+        }
+      }
+    })
+    |> ignore
   })
   |> ignore
 }
 
 ///|
-/// A look's small picture: its ground, its dot, a line of its words and a shorter one dimmer.
-fn look_tile(c : @ui.Ctx, look : String) -> Unit {
-  let (ground, ink, dim, dot) = match look {
-    "poster" => (@sf.share_poster_ground, @sf.share_poster_ink, @sf.share_poster_dim, @sf.share_poster_ink)
-    "receipt" => (@sf.share_receipt_ground, @sf.share_receipt_ink, @sf.share_receipt_dim, @sf.share_receipt_orange)
-    "terminal" => (@sf.share_terminal_ground, @sf.share_orange, @sf.share_terminal_dim, @sf.share_terminal_dim)
-    _ => (@sf.share_ground, @sf.share_ink, @sf.share_dim, @sf.share_orange)
-  }
-  c.box(style=@sf.share_look_tile.then(@ui.style(bg=Data(ground))), fn() {
-    c.box(style=tile_inner, fn() {
-      c.box(style=tile_dot.then(@ui.style(bg=Data(dot))), fn() {  }) |> ignore
-      c.box(style=tile_line.then(@ui.style(bg=Data(ink))), fn() {  }) |> ignore
-      c.box(style=tile_short.then(@ui.style(bg=Data(dim))), fn() {  }) |> ignore
+/// A look's small picture: the picture it draws, laid out as wide as it is handed out (@sf.share_w_most) and drawn as
+/// wide as the tile, from its top (what is under the tile's foot cut); said by its name, not its words.
+fn look_tile(c : @ui.Ctx, look : ShareLook, fleet : Json?) -> Unit {
+  let k = @sf.share_look_tile_w / @sf.share_w_most
+  c.box(style=@sf.share_look_tile, fn() {
+    c.hidden_from_semantics(fn() {
+      let at = c.box(style=tile_whole, left=0.0, top=0.0, taps=false, fn() { (look.draw)(c, fleet, 0, true) |> ignore })
+      c.look(at, @ui.look(scale=k, ox=0.0, oy=0.0))
     })
-    |> ignore
   })
   |> ignore
 }
@@ -386,9 +410,10 @@ fn prompt(c : @ui.Ctx, command : String) -> Unit {
 // ── the picker's styles ──────────────────────────────────────────────────
 
 ///|
-/// The looks side by side, 12 apart, in the stage's middle.
+/// The looks side by side, 8 apart (four in a 360 phone's stage), in the stage's middle while there is room for all
+/// of them.
 // kept across runs: a value (no field of it changes)
-let looks_row : @ui.Style = @ui.css("row gap=S3 justify=JCenter")
+let looks_row : @ui.Style = @ui.css("row w=Full gap=S2 justify=JCenter")
 
 ///|
 /// A look: its small picture over its name, 6 apart, as wide as its name or its ring.
@@ -414,21 +439,9 @@ let looks_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Data(@sf.share_di
 let looks_name_on : @ui.TextStyle = looks_name.then(@ui.text_style(color=Data(@sf.share_ink)))
 
 ///|
-/// A small picture's insides: its dot, its line, its shorter line, 6 in, 4 apart.
+/// A small picture's picture: as wide as the picture handed out, drawn smaller from its top left.
 // kept across runs: a value (no field of it changes)
-let tile_inner : @ui.Style = @ui.css("w=Full p=S1_5 gap=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tile_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tile_line : @ui.Style = @ui.css("w=Full h=S1 radius=Sm")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tile_short : @ui.Style = @ui.css("w=S4 h=S1 radius=Sm")
+let tile_whole : @ui.Style = @ui.style(w=Fixed(@sf.share_w_most))
 
 
 // ── 大字报's ────────────────────────────────────────────────────────────────

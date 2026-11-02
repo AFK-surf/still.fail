@@ -54,6 +54,10 @@ test "a row's menu at each width and with either hand: held by a finger, right c
     for item in ["重命名", "复制会话链接", "复制 session 文件路径"] {
       assert_true(t.find(item) is Some(_), msg="\{at}: \{item}")
     }
+    // 归档 with the chat's own state, not last (a sheet's last row is where a thumb going home lands)
+    let (_, archive_y) = t.find("归档").unwrap()
+    let (_, link_y) = t.find("复制会话链接").unwrap()
+    assert_true(archive_y < link_y, msg="\{at}: 归档 at \{archive_y}, 复制会话链接 at \{link_y}")
     t.tap_text("复制会话链接")
     assert_true(t.clipboard().has_prefix("[夜里的构建又失败了]("), msg=at)
   }

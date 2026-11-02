@@ -2249,15 +2249,16 @@ pub fn Viewer::stand_in(self : Viewer, src : Source) -> String {
 }
 
 ///|
-/// The images beside the one shown read ahead (those not too big to show), so a step shows the next at once; those
-/// no longer beside it let go.
+/// The images beside the one shown read ahead after its bytes came or failed, so they do not compete with it on a slow
+/// link. A step can still open either at once; those no longer beside it are let go.
 pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : Viewer?) -> Unit {
   let ids = []
+  let ready = self.bytes.get() is Some(_) || self.error.get() is Some(_)
   for n in [before, after] {
     match n {
       Some(n) => {
         ids.push(n.thumb_id())
-        if n.bytes.get() is None && !n.fetching.get() && n.error.get() is None && n.file.size <= big_file {
+        if ready && n.bytes.get() is None && !n.fetching.get() && n.error.get() is None && n.file.size <= big_file {
           n.fetching.set(true)
           n.read_whole(src, fn(r) {
             n.fetching.set(false)

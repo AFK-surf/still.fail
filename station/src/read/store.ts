@@ -116,12 +116,18 @@ export function getSession(s: Store, key: string): SessionRow | null {
 }
 
 /// Which sessions `viewer` sees (docs/multi-workspace.md): those whose chat is in their workspace (one not there: the
-/// home one's). A read made for no one (null) sees every one.
-export function seenBy(s: Store, viewer: InWorkspace | null | undefined): (key: string) => boolean {
+/// home one's). A read made for no one (null) sees every one. For a viewer, `keys` limits the work and the predicate
+/// to those keys, including missing sessions (which still count as the home workspace's).
+export function seenBy(s: Store, viewer: InWorkspace | null | undefined, keys?: readonly string[]): (key: string) => boolean {
   if (!viewer) return () => true;
   // `*`: a database from before has no `ws` (every chat its home workspace's).
-  const ws = new Map<string, string | null>(all(s, "SELECT * FROM sessions").map((r) => [r.key, r.ws ?? null]));
-  return (key) => sees(viewer, ws.get(key) ?? null);
+  const wanted = keys === undefined ? null : new Set(keys);
+  if (wanted?.size === 0) return () => false;
+  const rows = wanted === null
+    ? all(s, "SELECT * FROM sessions")
+    : all(s, "SELECT * FROM sessions WHERE key IN (SELECT value FROM json_each(?))", JSON.stringify([...wanted]));
+  const ws = new Map<string, string | null>(rows.map((r) => [r.key, r.ws ?? null]));
+  return (key) => (wanted === null || wanted.has(key)) && sees(viewer, ws.get(key) ?? null);
 }
 
 /// Whether `viewer` sees a thread: one of its sessions is in their workspace (a thread with none: the home one's).
@@ -346,9 +352,10 @@ export function lastLetter(s: Store, thread: number): number {
   return one(s, "SELECT MAX(n) AS n FROM letters WHERE thread = ?", thread)?.n ?? 0;
 }
 
-/// Letters of the thread's own log from n = `from` to n = `to`, both included.
-export function lettersBetween(s: Store, thread: number, from: bigint, to: bigint): EntryRow[] {
-  return all(s, "SELECT * FROM letters WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n", thread, from, to).map(letterEntry);
+/// Letters of the thread's own log from n = `from` to n = `to`, both included, up to `limit` when given.
+export function lettersBetween(s: Store, thread: number, from: bigint, to: bigint, limit?: number): EntryRow[] {
+  const sql = "SELECT * FROM letters WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n";
+  return (limit === undefined ? all(s, sql, thread, from, to) : all(s, `${sql} LIMIT ?`, thread, from, to, limit)).map(letterEntry);
 }
 
 /// The latest `limit` letters of the thread's own log before n (the latest of all without it), oldest first.
@@ -418,9 +425,9 @@ export function lastEntry(s: Store, thread: number, at?: number | null): number 
   return one(s, "SELECT MAX(n) AS n FROM entries WHERE thread = ?", thread).n ?? 0;
 }
 
-/// Entries after n: what came since (`n + 1` wraps at i64::MAX, as a release build's does).
-export function entriesAfter(s: Store, thread: number, n: bigint): EntryRow[] {
-  return entriesBetween(s, thread, BigInt.asIntN(64, n + 1n), I64_MAX);
+/// Entries after n, up to `limit` when given (`n + 1` wraps at i64::MAX, as a release build's does).
+export function entriesAfter(s: Store, thread: number, n: bigint, limit?: number): EntryRow[] {
+  return entriesBetween(s, thread, BigInt.asIntN(64, n + 1n), I64_MAX, limit);
 }
 
 /// The latest `limit` entries before n (the latest of all without it), oldest first.
@@ -433,10 +440,14 @@ export function entriesBefore(s: Store, thread: number, n: bigint | null, limit:
   return all(s, "SELECT * FROM entries WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, before, limit).map(toEntry).reverse();
 }
 
-/// Entries from n = `from` to n = `to`, both included: a gap.
-export function entriesBetween(s: Store, thread: number, from: bigint, to: bigint): EntryRow[] {
-  if (isArchived(s, thread)) return archivedEntries(s, thread).filter((e) => e.n >= from && e.n <= to);
-  return all(s, "SELECT * FROM entries WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n", thread, from, to).map(toEntry);
+/// Entries from n = `from` to n = `to`, both included: a gap, up to `limit` when given.
+export function entriesBetween(s: Store, thread: number, from: bigint, to: bigint, limit?: number): EntryRow[] {
+  if (isArchived(s, thread)) {
+    const entries = archivedEntries(s, thread).filter((e) => e.n >= from && e.n <= to);
+    return limit === undefined ? entries : entries.slice(0, limit);
+  }
+  const sql = "SELECT * FROM entries WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n";
+  return (limit === undefined ? all(s, sql, thread, from, to) : all(s, `${sql} LIMIT ?`, thread, from, to, limit)).map(toEntry);
 }
 
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
@@ -834,7 +845,7 @@ export function usageThreads(s: Store, ids: number[]): [ThreadRow, string | null
     const thread = getThread(s, id);
     if (thread === null) continue;
     let first: string | null = null;
-    if (thread.title === null && thread.autoTitle === null) {
+    if (thread.surface !== STILLFAIL_SURFACE && thread.title === null && thread.autoTitle === null) {
       try {
         first = firstText(s, id);
       } catch {

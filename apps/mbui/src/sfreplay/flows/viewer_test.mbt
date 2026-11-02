@@ -4,9 +4,32 @@
 // phone's photo album), then 添加到对话: the marked picture and the note's quote in the composer, sent with words.
 
 ///|
+/// The recorded run requested the neighbour before the first picture came. Replay the same answers with that request
+/// after the first picture's answer, as the viewer now does. The recording itself stays intact until it is rerecorded.
+fn viewer_first_trace() -> String {
+  let lines : Array[String] = []
+  let mut neighbour = ""
+  let mut placed = false
+  for line in @sfreplay.trace("viewer").split("\n") {
+    if line.has_prefix("{\"out\":{\"id\":46,\"call\":\"station.file\"") {
+      neighbour = line.to_owned()
+      continue
+    }
+    lines.push(line.to_owned())
+    if line.has_prefix("{\"in\":{\"id\":43,\"ok\"") {
+      guard neighbour != "" else { abort("viewer trace: no neighbour request") }
+      lines.push(neighbour)
+      placed = true
+    }
+  }
+  guard placed else { abort("viewer trace: no first picture answer") }
+  lines.join("\n")
+}
+
+///|
 test "96-viewer" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace("viewer"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
+    let f = @sfreplay.Flow::start(viewer_first_trace(), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
     // (what the host drew of the marks, as the run's gave it: the PNG it sent up)
     // (handed to the core whole: composer.add; a run from before, its parts: station.upload.part)
     let handed = match f.r.sent_bytes_from("composer.add", "name", "e2e-photo-标注-") {

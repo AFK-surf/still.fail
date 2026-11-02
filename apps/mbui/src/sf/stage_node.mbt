@@ -26,7 +26,7 @@ fn stage_node(
 ) -> Unit {
   // (its night its own, whoever else dims what is under it (scrim_owner leaves a stage out): as kit's dialog draws a
   // stage's scrim)
-  dialog_layer_node(parent, open, cancel, outside=true, scrim=fn() { stage_scrim }, shown~, gone~, covered~, fn(across, layer, look, _veil) {
+  dialog_layer_node(parent, open, cancel, outside=true, scrim=fn() { stage_scrim }, ground_ms=stage_night_ms, shown~, gone~, covered~, fn(across, layer, look, _veil) {
     // (its name as it is now: `live`'s first, said, never drawn)
     let title = fn() {
       match x.live {
@@ -144,3 +144,9 @@ fn stage_node(
 ///|
 /// The most a stage's parts are laid out as wide as (old's `fits`): past any window, what each holds deciding.
 let stage_fits_most : Double = 100000.0
+
+///|
+/// How long a stage's night takes to come: its surface, the night in by the time what it holds begins to come (kit's
+/// dialog_in, its ground first: the first half of its way in), all it holds coming on it at once after (Ctx::surface;
+/// its picture's words never over the page's words seen through a night not in yet).
+let stage_night_ms : Double = @kit.dialog_ms / 2.0
