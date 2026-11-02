@@ -105,6 +105,82 @@ const unb64 = (v: Json) => Buffer.from(v.data, "base64").toString();
 
 // Each test has stations of its own (directories, stores, clocks): they run at once.
 describe("remote", { concurrency: true }, () => {
+  test("a startup sweep lets other station work run while it reads many remote sessions and tasks", async () => {
+    const r = station();
+    const incoming = join(r.remote.root, "incoming");
+    const now = Date.now();
+    for (let i = 0; i < 20; i++) {
+      const session = `s${i}`;
+      const room = r.remote.room("ws", "peer-a", session);
+      mkdirSync(room, { recursive: true });
+      writeFileSync(join(room, "session.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session, seen: now }));
+      for (let j = 0; j < 5; j++) {
+        const dir = join(incoming, hash(["ws", "peer-a", session, `k${j}`]));
+        mkdirSync(dir);
+        writeFileSync(join(dir, "task.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session, key: `k${j}`, layout: "session", spec: { command: "true" } }));
+      }
+    }
+    let swept = false;
+    const sweeping = r.remote.sweep(now).then(() => void (swept = true));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(swept, false, "the event loop is free to open the agents' door while remote records are read");
+    await sweeping;
+  });
+
+  test("the task index follows additions and removals, including a record written after its directory", async () => {
+    const r = station();
+    const prepare = (peer: string, key: string) => r.remote.handle("ws", peer, {
+      method: "task.prepare", session: "s", key, spec: { command: "true" },
+    });
+    const list = async (peer: string) => (await r.remote.handle("ws", peer, { method: "task.list", session: "s" })).tasks.map((t: Json) => t.key).sort();
+    await prepare("peer-a", "first");
+    assert.deepEqual(await list("peer-a"), ["first"]);
+    await prepare("peer-a", "second");
+    await prepare("peer-b", "private");
+    assert.deepEqual(await list("peer-a"), ["first", "second"]);
+    assert.deepEqual(await list("peer-b"), ["private"]);
+
+    // An older station could have made the directory before this station took over, writing its record afterwards.
+    const late = join(r.remote.root, "incoming", hash(["ws", "peer-a", "s", "late"]));
+    mkdirSync(late);
+    assert.deepEqual(await list("peer-a"), ["first", "second"]);
+    writeFileSync(join(late, "task.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session: "s", key: "late", spec: { command: "true" } }));
+    assert.deepEqual(await list("peer-a"), ["first", "late", "second"], "a formerly unreadable record is retried");
+    rmSync(late, { recursive: true });
+    assert.deepEqual(await list("peer-a"), ["first", "second"]);
+    await r.remote.handle("ws", "peer-a", { method: "session.close", session: "s" });
+    assert.deepEqual(await list("peer-a"), []);
+    assert.deepEqual(await list("peer-b"), ["private"], "closing one session leaves the other's records alone");
+  });
+
+  test("an idle session used again while its tasks are read is not removed", async () => {
+    const r = station();
+    const work = r.remote.work("ws", "peer-a", "s");
+    const room = r.remote.room("ws", "peer-a", "s");
+    const record = join(room, "session.json");
+    const now = Date.now();
+    writeJson(record, { ...readJson(record), seen: now - IDLE_MS - 1000 });
+    writeFileSync(join(work, "keep"), "the session's work");
+
+    const remote = r.remote as unknown as { tasksOf: (...args: [string, string, string]) => Promise<unknown[]> };
+    const tasksOf = remote.tasksOf.bind(r.remote);
+    let entered!: () => void;
+    let release!: () => void;
+    const reading = new Promise<void>((resolve) => (entered = resolve));
+    const held = new Promise<void>((resolve) => (release = resolve));
+    remote.tasksOf = async (...args) => {
+      entered();
+      await held;
+      return tasksOf(...args);
+    };
+    const sweeping = r.remote.sweep(now);
+    await reading;
+    r.remote.work("ws", "peer-a", "s");
+    release();
+    await sweeping;
+    assert.equal(readFileSync(join(work, "keep"), "utf8"), "the session's work");
+  });
+
   test("a remote workspace's size is measured for its owning chat, never another station's chat", async () => {
     const target = station();
     const prep = (peer: string) => target.remote.handle("ws", peer, {
