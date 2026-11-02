@@ -285,7 +285,8 @@ fn bar_felt(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Array[@ui.Hap
 test "bar: felt as a finger takes the ball across, a tick at each place it gets to; drawn up, a click as the panel snaps open, nothing as it is let go" {
   let (xs, y) = bar_places_at()
   assert_eq(bar_felt(xs[0], y, xs[2], y), [@ui.TextHandleMove, @ui.TextHandleMove])
-  assert_eq(bar_felt(xs[0], y, xs[0] + 10.0, y), [])
+  // (within the slop for longer than a hold: the ball taken as a held finger takes it, felt so, no tick)
+  assert_eq(bar_felt(xs[0], y, xs[0] + 10.0, y), [@ui.LongPress])
   assert_eq(bar_felt(xs[0], y, xs[0], y - 64.0), [@ui.ContextClick])
 }
 

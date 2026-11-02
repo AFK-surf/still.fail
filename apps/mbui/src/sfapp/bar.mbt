@@ -2080,8 +2080,14 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
   let py = d.y
   let o_at = m.o.value_at(t)
   let c = @ui.current()
+  // another place chosen is felt, unless the finger already felt it getting there (a drag let go on it)
   let on_tab = fn(place : String) {
     if Some(place) != told.active {
+      let at = "\{l.cur}/\{place}"
+      if at != m.felt {
+        @ui.haptic(TextHandleMove)
+        m.felt = at
+      }
       go_place(c, place, l.sets, l.cur)
     }
   }
@@ -2180,6 +2186,8 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
     }
   }
   let open_was = m.open
+  // the ball taken by a finger held still on the bar (felt as a long press is)
+  let mut took = false
   match how {
     Pressed => pressed()
     Dragging => {
@@ -2218,6 +2226,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
       if !m.holds && py >= l.row_top - 4.0 {
         m.drag = px
         m.drag_y = -1.0
+        took = l.items.length() > 0
       }
     Ended => {
       let had = m.holds
@@ -2274,8 +2283,9 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
       }
     }
   }
-  // felt as the finger goes (a switch's ticks): the panel snapping open or shut under it, a click; the ball taken to
-  // another place (a row's too), a tick, once as it gets there. Let go, nothing more: what it chose was felt already.
+  // felt as the finger goes (a switch's ticks): the ball taken by a finger held still, a long press's; the panel
+  // snapping open or shut under it, a click; the ball taken to another place (a row's too), a tick, once as it gets
+  // there. Let go, nothing more: what it chose was felt already (a tap on another place is felt as it is chosen).
   match how {
     Dragging | Held => {
       let cs = bar_centres(l.w, if told.action != "" && !m.mode.get() { 1.0 } else { 0.0 }, l.items.length())
@@ -2283,7 +2293,9 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
         Some((_, _, i, key)) => "\{i}/\{key}"
         None => m.felt
       }
-      if m.open != open_was {
+      if took {
+        @ui.haptic(LongPress)
+      } else if m.open != open_was {
         @ui.haptic(ContextClick)
       } else if under != m.felt {
         @ui.haptic(TextHandleMove)
