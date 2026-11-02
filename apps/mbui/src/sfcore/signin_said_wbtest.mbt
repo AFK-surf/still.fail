@@ -16,3 +16,13 @@ test "how signing in stands, followed: told as a sign-in ends, failed, given up 
   stop()
   assert_eq(seen, [(false, ""), (true, ""), (false, "no network"), (false, ""), (false, "")])
 }
+
+///|
+test "the browser opens sign-in once only when the initial account list is empty" {
+  state.web_auto = true
+  assert_true(web_sign_in_needed([]))
+  assert_false(web_sign_in_needed([]))
+  state.web_auto = true
+  assert_false(web_sign_in_needed([{ "sub": "one" }]))
+  assert_false(web_sign_in_needed([]))
+}

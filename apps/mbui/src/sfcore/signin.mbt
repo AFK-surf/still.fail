@@ -37,6 +37,8 @@ pub(all) struct SignIn {
   mut failed : String
   /// MBUI_CORE_SIGNIN: press 登录 once the accounts are read
   mut auto : Bool
+  /// On the web, open the sign-in page once if the initial account list is empty.
+  mut web_auto : Bool
   /// MBUI_AUTH_LOGIN: sign in as a login command
   mut login : Bool
   /// by hand: "begin", or the URL the browser was sent back to
@@ -70,6 +72,7 @@ pub let state : SignIn = {
   waiting: false,
   failed: "",
   auto: false,
+  web_auto: false,
   login: false,
   by_hand: "",
   account: "",
@@ -111,6 +114,7 @@ pub fn begin() -> Unit {
   state.account = if @ui.env("MBUI_CLOUD") != "" { env_text("MBUI_CORE_ACCOUNT") } else { "" }
   tell_device()
   state.auto = @ui.env("MBUI_CORE_SIGNIN") == "1"
+  state.web_auto = @ui.platform() == 4
   state.login = @ui.env("MBUI_AUTH_LOGIN") == "1"
   state.by_hand = if @ui.env("MBUI_AUTH_BEGIN") == "1" {
     "begin"
@@ -188,6 +192,10 @@ pub fn frame(accounts : @core.Sub) -> Unit {
     }
     if state.auto {
       state.auto = false
+      state.web_auto = false
+      sign_in()
+    }
+    if web_sign_in_needed(list) {
       sign_in()
     }
     if state.login {
@@ -201,6 +209,15 @@ pub fn frame(accounts : @core.Sub) -> Unit {
     }
   }
   login_back()
+}
+
+/// The first account answer decides the web's entry. Later sign-outs can use the normal retry page.
+fn web_sign_in_needed(list : Json) -> Bool {
+  if !state.web_auto {
+    return false
+  }
+  state.web_auto = false
+  list is Array([])
 }
 
 ///|
