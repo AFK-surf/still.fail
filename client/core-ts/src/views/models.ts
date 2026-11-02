@@ -96,18 +96,28 @@ function spellings(key: string, ids: Set<string>): [string, string[]] {
 export function choices(overview: J, session: J, now: number): J[] {
   const runtime = str(get(session, "runtime")) ?? "";
   const current = str(get(session, "profile"));
-  const byKey = new Map<string, Set<string>>();
+  const byKey = new Map<string, { ids: Set<string>; profiles: J[] }>();
   for (const p of profilesOf(overview).filter((p) => runs(p, runtime))) {
+    const seen = new Set<string>();
     for (const m of arr(get(p, "models"))) {
       if (typeof m !== "string") continue;
       const k = model.key(m);
-      if (!byKey.has(k)) byKey.set(k, new Set());
-      byKey.get(k)!.add(m);
+      let offered = byKey.get(k);
+      if (!offered) {
+        offered = { ids: new Set(), profiles: [] };
+        byKey.set(k, offered);
+      }
+      offered.ids.add(m);
+      if (!seen.has(k)) {
+        seen.add(k);
+        offered.profiles.push(p);
+      }
     }
   }
   const keys = sortedSet(new Set(byKey.keys())).sort(model.compareOrder);
   return keys.map((key) => {
-    const [m, ids] = spellings(key, byKey.get(key)!);
+    const offered = byKey.get(key)!;
+    const [m, ids] = spellings(key, offered.ids);
     return {
       model: m,
       name: model.name(m),
@@ -115,8 +125,8 @@ export function choices(overview: J, session: J, now: number): J[] {
       ids,
       maker: present.maker(m),
       runtimes: [runtime],
-      efforts: { [runtime]: modelEfforts(overview, runtime, m) },
-      accounts: { [runtime]: profilesRunning(overview, runtime, m, current, now) },
+      efforts: { [runtime]: commonEfforts(offered.profiles, runtime, m) },
+      accounts: { [runtime]: profileLines(offered.profiles, runtime, m, current, now) },
     };
   });
 }
@@ -126,35 +136,35 @@ function profileEfforts(profile: J, runtime: string, m: string | null): string[]
   return reasoning.available(runtime, m ?? str(get(profile, "model")), catalog ?? null);
 }
 
-function modelEfforts(overview: J, runtime: string, m: string | null): string[] {
-  const profiles = profilesOf(overview)
-    .filter((p) => runs(p, runtime))
-    .filter((p) => m === null || arr(get(p, "models")).some((id) => typeof id === "string" && model.same(id, m)))
-    .map((p) => profileEfforts(p, runtime, m));
-  return reasoning.common(profiles, runtime);
+function commonEfforts(profiles: J[], runtime: string, m: string | null): string[] {
+  return reasoning.common(profiles.map((p) => profileEfforts(p, runtime, m)), runtime);
 }
 
 function profilesRunning(overview: J, runtime: string, m: string | null, current: string | null, now: number): J[] {
-  return profilesOf(overview)
+  const profiles = profilesOf(overview)
     .filter((p) => runs(p, runtime))
-    .filter((p) => m === null || arr(get(p, "models")).some((x) => typeof x === "string" && model.same(x, m)))
-    .map((p) => {
-      const id = str(get(p, "id")) ?? "";
-      const spent = spentUntil(p);
-      const line: J = {
-        id,
-        name: get(p, "name") ?? id,
-        current: id === current,
-        spent: spent !== null ? spentView(spent, now) : null,
-        efforts: profileEfforts(p, runtime, m),
-        kind: get(get(p, "access"), "kind") ?? null,
-        runtime: get(p, "runtime") ?? null,
-        quota: get(p, "quota") ?? null,
-        quotaLine: quotaLine(get(p, "quota")),
-      };
-      if (typeof get(p, "providerMark") === "string") line.mark = p.providerMark;
-      return line;
-    });
+    .filter((p) => m === null || arr(get(p, "models")).some((x) => typeof x === "string" && model.same(x, m)));
+  return profileLines(profiles, runtime, m, current, now);
+}
+
+function profileLines(profiles: J[], runtime: string, m: string | null, current: string | null, now: number): J[] {
+  return profiles.map((p) => {
+    const id = str(get(p, "id")) ?? "";
+    const spent = spentUntil(p);
+    const line: J = {
+      id,
+      name: get(p, "name") ?? id,
+      current: id === current,
+      spent: spent !== null ? spentView(spent, now) : null,
+      efforts: profileEfforts(p, runtime, m),
+      kind: get(get(p, "access"), "kind") ?? null,
+      runtime: get(p, "runtime") ?? null,
+      quota: get(p, "quota") ?? null,
+      quotaLine: quotaLine(get(p, "quota")),
+    };
+    if (typeof get(p, "providerMark") === "string") line.mark = p.providerMark;
+    return line;
+  });
 }
 
 /// The overview as the chats of `workspace` run on it (docs/multi-workspace.md): with the profiles the station says
@@ -168,9 +178,9 @@ export function servingIn(overview: J, workspace: string, joined: boolean): J {
 
 /// The models the station can run, each with the runtimes it runs on.
 export function models(overview: J, now: number): J[] {
-  const on = new Map<string, { runtimes: Set<string>; backs: (number | null)[]; ids: Set<string> }>();
+  const on = new Map<string, { runtimes: Set<string>; backs: (number | null)[]; ids: Set<string>; profiles: Map<string, J[]> }>();
   for (const p of profilesOf(overview)) {
-    const rts = arr(get(p, "runtimes")).filter((r): r is string => typeof r === "string");
+    const rts = [...new Set(arr(get(p, "runtimes")).filter((r): r is string => typeof r === "string"))];
     const back = spentUntil(p);
     const keys = new Set<string>();
     for (const m of arr(get(p, "models"))) {
@@ -178,7 +188,7 @@ export function models(overview: J, now: number): J[] {
       const k = model.key(m);
       let entry = on.get(k);
       if (!entry) {
-        entry = { runtimes: new Set(), backs: [], ids: new Set() };
+        entry = { runtimes: new Set(), backs: [], ids: new Set(), profiles: new Map() };
         on.set(k, entry);
       }
       for (const r of rts) entry.runtimes.add(r);
@@ -186,6 +196,14 @@ export function models(overview: J, now: number): J[] {
       if (!keys.has(k)) {
         keys.add(k);
         entry.backs.push(back);
+        for (const r of rts) {
+          let profiles = entry.profiles.get(r);
+          if (!profiles) {
+            profiles = [];
+            entry.profiles.set(r, profiles);
+          }
+          profiles.push(p);
+        }
       }
     }
   }
@@ -195,15 +213,16 @@ export function models(overview: J, now: number): J[] {
   };
   const keys = sortedSet(new Set(on.keys())).sort(model.compareOrder);
   return keys.map((key) => {
-    const { runtimes: rs, backs, ids } = on.get(key)!;
+    const { runtimes: rs, backs, ids, profiles } = on.get(key)!;
     const [m, spelled] = spellings(key, ids);
     const rts = sortedSet(rs).sort((a, b) => order(a) - order(b));
     const spent = backs.every((b) => b !== null) ? backs.reduce<number>((min, b) => Math.min(min, b as number), Infinity) : null;
     const efforts: Record<string, J> = {};
     const accounts: Record<string, J> = {};
     for (const r of rts) {
-      efforts[r] = modelEfforts(overview, r, m);
-      accounts[r] = profilesRunning(overview, r, m, null, now);
+      const offered = profiles.get(r) ?? [];
+      efforts[r] = commonEfforts(offered, r, m);
+      accounts[r] = profileLines(offered, r, m, null, now);
     }
     return { model: m, name: model.name(m), family: model.family(m), ids: spelled, runtimes: rts, maker: present.maker(m), efforts, accounts, spent: spent !== null ? spentView(spent, now) : null };
   });
