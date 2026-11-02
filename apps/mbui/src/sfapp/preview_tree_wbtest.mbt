@@ -711,6 +711,53 @@ test "viewer on the tree: the one beside it read ahead, stepped to before its an
 }
 
 ///|
+/// A slow first picture has the connection to itself. Its neighbours become eligible after it succeeds or fails.
+fn neighbours_after_picture(fails : Bool) -> Unit raise {
+  new_run()
+  let base = fixture("chat-preview-step")
+  let opened = viewer.get().unwrap()
+  let (steps, a) = (opened.steps, opened.file)
+  @sfbase.close_now()
+  let asked : Array[String] = []
+  let answer : Ref[(() -> Unit)?] = Ref(None)
+  let src : Source = {
+    ..base,
+    read_going: fn(name, params, on_value, done) {
+      let file = text(Some(params), "name")
+      if name == "station.file" {
+        asked.push(file)
+      }
+      if name == "station.file" && file == a.name {
+        answer.val = Some(fn() {
+          if fails {
+            done(Err({ "code": "gone", "message": "没了" }))
+          } else {
+            (base.read_going)(name, params, on_value, done)
+          }
+        })
+      } else {
+        (base.read_going)(name, params, on_value, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  open_preview("ws1/st1", "s-c1", a, steps~)
+  t.draw()
+  assert_eq(asked, [a.name], msg="neighbours must not take bandwidth while the open picture is coming")
+  (answer.val.unwrap())()
+  t.draw()
+  assert_eq(asked, [a.name, "第二版.png"], msg="the neighbour should be read after the open picture finishes")
+}
+
+///|
+test "viewer on the tree: read the picture in front before its neighbours, whether it comes or fails" {
+  neighbours_after_picture(false)
+  neighbours_after_picture(true)
+}
+
+///|
 /// The image open, held still on its picture by what the host says each press comes from, `hands` in turn (true a
 /// finger, false a mouse): for each, whether its menu opened.
 fn held_by(hands : Array[Bool]) -> Array[Bool] {
