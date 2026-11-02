@@ -28,6 +28,7 @@ export type TabsParts = {
   owners?: Owners;
   /// The session whose chat's context a browser context is (browsers.ts).
   contextOwner?: (browserContextId: string | undefined) => string | undefined;
+  usedTab?: (session: string, targetId: string) => void;
   /// Whether tab `targetId`'s context has a passkey of relying party `rpId` its authenticator signs (passkeys.ts).
   ownPasskey?: (targetId: string, rpId: string) => boolean;
 };
@@ -197,6 +198,7 @@ export class Tabs {
         cdp, session: sessionId, targetId: tab.info.targetId, now: () => this.#p.now(),
         ...(this.#p.ownPasskey ? { ownPasskey: (rpId: string) => this.#p.ownPasskey!(tab.info.targetId, rpId) } : {}),
         sized: (size) => tab.sized(size),
+        used: () => { const owner = this.ownerOf(tab.info.targetId); if (owner) this.#p.usedTab?.(owner, tab.info.targetId); },
         ended: () => {
           this.#views.delete(view);
           this.#p.activity();

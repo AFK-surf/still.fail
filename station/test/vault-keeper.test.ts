@@ -75,6 +75,35 @@ function grantOf(r: Request, by: Person, secret: unknown, o: Partial<Grant> = {}
   return signed(g, TAG.grant, by.signer);
 }
 
+test("idle grants renew on use while fixed grants expire at the approved deadline", () => {
+  const w = world();
+  let now = 1000;
+  const keeper = new Keeper(() => now);
+  const idle = requestOf("r_idle", keeper.open("r_idle"));
+  const fixed = requestOf("r_fixed", keeper.open("r_fixed"));
+  const policy = (kind: string) => ({ scope: "hour", exp: 4600, timeout: { kind, seconds: 3600 } }) as unknown as Partial<Grant>;
+  assert.equal(keeper.accept(w.state, w.vault, w.item, idle, grantOf(idle, w.alice, w.plain, policy("idle"))), null);
+  assert.equal(keeper.accept(w.state, w.vault, w.item, fixed, grantOf(fixed, w.alice, w.plain, policy("fixed"))), null);
+  now = 4000;
+  keeper.spend(idle.id);
+  keeper.spend(fixed.id);
+  keeper.renew("s1", idle.id);
+  keeper.renew("s1", fixed.id);
+  now = 4600;
+  assert.equal(typeof keeper.usable("s1", idle.id), "object");
+  assert.match(keeper.usable("s1", fixed.id) as string, /ran out/);
+  now = 7600;
+  assert.match(keeper.usable("s1", idle.id) as string, /ran out/);
+  keeper.renew("s1", idle.id);
+  assert.match(keeper.usable("s1", idle.id) as string, /no such grant/);
+  const tooLong = requestOf("r_long", keeper.open("r_long"));
+  assert.match(keeper.accept(w.state, w.vault, w.item, tooLong, grantOf(tooLong, w.alice, w.plain, {
+    scope: "chat", at: now, exp: now + 30 * 86400 + 1, timeout: { kind: "idle", seconds: 30 * 86400 + 1 },
+  }))!, /invalid grant timeout/);
+  const asked = requestOf("r_old_app", keeper.open("r_old_app"), { timeout: { kind: "idle", seconds: 3600 } });
+  assert.match(keeper.accept(w.state, w.vault, w.item, asked, grantOf(asked, w.alice, w.plain, { scope: "chat", at: now, exp: now + 3600 }))!, /update the app/);
+});
+
 test("hidden output: the value and its usual encodings, however the output is cut into chunks", () => {
   const forms = [TOKEN, Buffer.from(TOKEN).toString("base64"), encodeURIComponent(TOKEN), Buffer.from(`x-access-token:${TOKEN}`).toString("base64"), Buffer.from(`ab:${TOKEN}`).toString("base64url")];
   for (const form of forms) {
@@ -216,13 +245,17 @@ test("the proxy: the value goes in only on HTTPS to a granted host; elsewhere th
   try {
     await proxy.start();
     const used: string[] = [];
-    const granted = proxy.admit({ hosts: ["localhost"], placeholder: placeholder("r_9"), value: TOKEN, used: (h) => used.push(h) });
+    let allowed = true;
+    const granted = proxy.admit({ hosts: ["localhost"], placeholder: placeholder("r_9"), value: TOKEN, used: (h) => used.push(h), allowed: () => allowed });
     const trustProxy = readFileSync(proxy.bundle, "utf8");
     // A granted host: the proxy's own certificate for it, the value in the header.
     assert.equal(await viaProxy(granted.url, "localhost", host.port, trustProxy, `Bearer ${placeholder("r_9")}`), `auth=Bearer ${TOKEN};host=localhost:${host.port}`);
     const basic = await viaProxy(granted.url, "localhost", host.port, trustProxy, `Basic ${Buffer.from(`x-access-token:${placeholder("r_9")}`).toString("base64")}`);
     assert.equal(Buffer.from(basic.slice("auth=Basic ".length).split(";")[0]!, "base64").toString(), `x-access-token:${TOKEN}`);
     assert.deepEqual(used, ["localhost", "localhost"]);
+    allowed = false;
+    assert.match(await viaProxy(granted.url, "localhost", host.port, trustProxy, `Bearer ${placeholder("r_9")}`), /grant expired/);
+    assert.equal(used.length, 2, "an expired command cannot use its already opened proxy");
     // Without the run's credentials: nothing.
     assert.equal(await viaProxy(`http://127.0.0.1:${new URL(granted.url).port}`, "localhost", host.port, trustProxy, "x"), "status 407");
     // A run whose grant is for other hosts: carried through unopened (the host's own certificate), placeholder as sent.
@@ -431,7 +464,7 @@ test("at a handover a vault's grants and the requests still waiting go over to t
     const asked = before.ask("s1", { item: "github", reason: "rerun CI" });
     await new Promise((r) => setImmediate(r));
     const [first] = before.pending(w.state.ws, w.state, alice);
-    assert.equal(before.grant(w.state, "alice", grantOf(first!, w.alice, w.plain, { scope: "chat", exp: 1000 + 3600 })), null);
+    assert.equal(before.grant(w.state, "alice", grantOf(first!, w.alice, w.plain, { scope: "chat", exp: 1000 + 3600, timeout: { kind: "idle", seconds: 3600 } })), null);
     await asked;
     // Asked again, not decided yet as the process hands over.
     void before.ask("s1", { item: "github", reason: "and again" });
@@ -560,7 +593,7 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
     const asked = secrets.ask(session, { item: "Slack", reason: "backfill" });
     await new Promise((r) => setImmediate(r));
     const [request] = secrets.pending(ws, null, { sub: "bob", email: "bob@x.com" });
-    const why = secrets.grantPlain(ws, null, "bob@x.com", { request: request!.id, scope });
+    const why = secrets.grantPlain(ws, null, "bob@x.com", { request: request!.id, scope, ...(scope === "once" ? {} : { timeout: { kind: "fixed", seconds: scope === "hour" ? 3600 : 30 * 86400 } }) });
     // Refused: turned down, so nothing is left waiting.
     if (why !== null) secrets.denyPlain(ws, "bob@x.com", { request: request!.id });
     await asked;
@@ -609,6 +642,19 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
     const [, second] = await grant(secrets, "s1", "chat");
     now += 30 * 86400_000;
     assert.match(make().keeper.usable("s1", second) as string, /no such grant/);
+
+    const waiting = secrets.ask("s2", { item: "Slack", reason: "daily check", timeout: { kind: "idle", seconds: 3600 } });
+    await new Promise((r) => setImmediate(r));
+    const [idleRequest] = secrets.pending(ws, null, { sub: "bob", email: "bob@x.com" });
+    assert.equal(secrets.grantPlain(ws, null, "bob@x.com", { request: idleRequest!.id, scope: "hour", timeout: { kind: "idle", seconds: 3600 } }), null);
+    await waiting;
+    now += 3500_000;
+    secrets.keeper.renew("s2", idleRequest!.id);
+    now += 200_000;
+    const restored = make();
+    assert.equal(typeof restored.keeper.usable("s2", idleRequest!.id), "object", "renewed deadline survives a restart");
+    now += 3400_000;
+    assert.match(restored.keeper.usable("s2", idleRequest!.id) as string, /ran out/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

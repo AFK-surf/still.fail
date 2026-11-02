@@ -164,6 +164,7 @@ export type SignIns = {
   /// Grant `request`'s sign-in put into `session`'s chat's browser until `until` (unix seconds): its cookies of `sites`
   /// set now, taken out again then.
   signIn(session: string, d: { request: string; sites: string[]; cookies: string; until: number }): Promise<void>;
+  extendSignIn?(session: string, request: string, until: number): void;
 };
 
 /// What goes over to the next station process at a handover, from memory to memory (never written down): the keeper's
@@ -171,7 +172,7 @@ export type SignIns = {
 export type SecretsCarried = { keeper: Carried; unsaved: [string, Record<string, string>][] };
 
 /// A command sent to another station to run, or one it sent here, waiting for how it ended.
-type Away = { station: string; done(result: Json): void };
+type Away = { station: string; session?: string; workspace?: string; done(result: Json): void; used?(): number | null };
 
 /// A request as the station keeps it: the contract's, and where its card is.
 type Kept = { request: Request; thread: number | null; cardTs: string | null };
@@ -199,6 +200,7 @@ export class Secrets {
   readonly #unsaved = new Map<string, Record<string, string>>();
   /// Commands sent to other stations, by the id they say how they ended under (`vault.done`).
   readonly #away = new Map<string, Away>();
+  readonly #incoming = new Map<string, { peer: string; revoked: boolean }>();
 
   constructor(d: SecretsDeps) {
     this.#d = d;
@@ -215,7 +217,7 @@ export class Secrets {
           if (h.request.vault !== PLAIN) return;
           const { secret: _, ...grant } = h.grant;
           d.db.prepare("INSERT INTO vault_grants (ws, id, session, body) VALUES (?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET body = excluded.body")
-            .run(h.request.ws, h.request.id, h.request.session, JSON.stringify({ request: h.request, grant, uses: h.uses }));
+            .run(h.request.ws, h.request.id, h.request.session, JSON.stringify({ request: h.request, grant, uses: h.uses, ...(h.until === undefined ? {} : { until: h.until }) }));
         },
         forget: (id) => d.db.prepare("DELETE FROM vault_grants WHERE id = ?").run(id),
       },
@@ -224,7 +226,10 @@ export class Secrets {
     this.proxy = d.proxy ?? new Proxy(`${d.data}/vault`, d.now);
     this.#restore(ended);
     d.hub.store.subscribe((c) => {
-      if ((c.type === "sessionRemoved" || c.type === "session") && this.keeper.holds(c.key) && ended(c.key)) this.keeper.end(c.key);
+      if ((c.type === "sessionRemoved" || c.type === "session") && ended(c.key)) {
+        for (const [id, away] of this.#away) if (away.session === c.key && away.workspace) void this.#d.ask?.(away.station, { method: "vault.revoke", workspace: away.workspace, id }).catch(() => {});
+        if (this.keeper.holds(c.key)) this.keeper.end(c.key);
+      }
     });
   }
 
@@ -234,14 +239,14 @@ export class Secrets {
     const now = Math.floor(this.#d.now() / 1000);
     const rows = this.#d.db.prepare("SELECT ws, id, body FROM vault_grants").all() as { ws: string; id: string; body: string }[];
     for (const row of rows) {
-      const { request, grant, uses } = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; uses: number };
+      const { request, grant, uses, until } = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; uses: number; until?: number };
       const item = this.#d.plain.item(row.ws, request.item);
       const l = item?.listing;
       const secret = item ? { kind: item.kind, name: item.name, fields: item.fields } : null;
-      const still = grant.exp > now && !ended(request.session) && this.#d.lock(row.ws) === null && l !== undefined && !item!.deleted && l.modes.includes(grant.mode)
+      const still = (until ?? grant.exp) > now && !ended(request.session) && this.#d.lock(row.ws) === null && l !== undefined && !item!.deleted && l.modes.includes(grant.mode)
         && allows(l.lasts ?? this.#d.plain.lasts(row.ws, item!.owner)?.lasts, grant.scope)
         && grant.hosts.every((h) => l.hosts.includes(h) || (!h.startsWith("*.") && hostAllowed(h, l.hosts))) && secret !== null && valueOf(secret) !== null;
-      if (still) this.keeper.restore({ request, grant: { ...grant, secret: "" } as Grant, secret: secret!, uses });
+      if (still) this.keeper.restore({ request, grant: { ...grant, secret: "" } as Grant, secret: secret!, uses, ...(until === undefined ? {} : { until }) });
       else this.#d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ?").run(row.ws, row.id);
     }
   }
@@ -412,7 +417,7 @@ export class Secrets {
 
   /// secret_use: a request for `itemName` (its id or listed name) from `session`, its card posted; decided, the session
   /// is told (#settle).
-  async ask(session: string, a: { item: string; mode?: string; reason: string; command?: string; hosts?: string[]; station?: string }): Promise<string> {
+  async ask(session: string, a: { item: string; mode?: string; reason: string; command?: string; hosts?: string[]; station?: string; timeout?: { kind: "idle" | "fixed"; seconds: number } }): Promise<string> {
     const { ws } = this.#placeOf(session);
     const runOn = a.station ? this.#peer(a.station) : null;
     const wanted = a.item.trim().toLowerCase();
@@ -423,13 +428,14 @@ export class Secrets {
     const mode = (a.mode ?? listing.modes[0]) as Mode;
     if (!listing.modes.includes(mode)) throw new Refused(`「${listing.name}」 is given only by ${listing.modes.join(", ")}.`);
     if (a.reason.trim() === "") throw new Refused("reason is required: why you need it, for the person deciding");
+    if (a.timeout && (!["idle", "fixed"].includes(a.timeout.kind) || !Number.isSafeInteger(a.timeout.seconds) || a.timeout.seconds < 60 || a.timeout.seconds > 30 * 86400 || a.timeout.seconds % 60 !== 0)) throw new Refused("timeout must be idle or fixed, in whole minutes from 1 minute to 30 days");
     const hosts = a.hosts?.length ? a.hosts : hosted(mode) ? listing.hosts : [];
     if (mode === "browser" && this.#d.browsers === undefined) throw new Refused("This station has no browser for a sign-in to go into.");
     const now = this.#d.now();
     const id = `r_${ulid(now)}`;
     const request: Request = {
       id, ws, vault: found.vault, item: found.item, session, chat: "", mode, reason: a.reason.trim(),
-      ...(a.command ? { command: a.command } : {}), ...(hosts.length ? { hosts } : {}), ...(runOn ? { runOn } : {}),
+      ...(a.command ? { command: a.command } : {}), ...(hosts.length ? { hosts } : {}), ...(runOn ? { runOn } : {}), timeout: a.timeout ?? { kind: "idle", seconds: 3600 },
       // The plain library's needs no box: its owner decides, and the station reads the value itself.
       box: plain ? "" : this.keeper.open(id), at: Math.floor(now / 1000), status: "pending", ...(plain && found.owner ? { owner: found.owner } : {}),
       ...(mode === "browser" && !plain ? this.#renewalOf(ws, found.item) : {}),
@@ -461,11 +467,12 @@ export class Secrets {
           : held.grant.mode === "file"
             ? `The file is written out for each command alone (removed when it ends) and its path is in ${l.env ?? "the variable you name in env"} and ${SECRET_VAR} (e.g. kubectl --kubeconfig "$${SECRET_VAR}"); its output comes back with the file's content hidden.`
             : `The command gets the value in ${l.env ?? "the variable you name in env"} and ${SECRET_VAR}; its output comes back with the value hidden.`;
-    const until = new Date(held.grant.exp * 1000).toISOString();
+    const until = new Date((held.until ?? held.grant.exp) * 1000).toISOString();
     if (held.grant.mode === "browser") {
-      return `Granted: the sign-in 「${l.name}」 (grant ${r.id}) goes into this chat's browser (the \`browser\` tool): its cookies of ${held.grant.hosts.join(", ")}, until ${until}, when they are taken out again. Open the site there; nothing is run with secret_run, and you never get the cookies themselves.`;
+      const renewal = held.grant.timeout?.kind === "idle" ? `, extended by ${held.grant.timeout.seconds} seconds when the site is used` : "";
+      return `Granted: the sign-in 「${l.name}」 (grant ${r.id}) goes into this chat's browser (the \`browser\` tool): its cookies of ${held.grant.hosts.join(", ")}, until ${until}${renewal}, when they are taken out again. Open the site there; nothing is run with secret_run, and you never get the cookies themselves.`;
     }
-    const lasts = held.grant.scope === "once" ? "for one command" : held.grant.scope === "chat" ? `until this chat is archived (${until} at the latest)` : `until ${until}`;
+    const lasts = held.grant.scope === "once" ? "for one command" : held.grant.timeout ? `${held.grant.timeout.kind === "idle" ? "until idle for" : "for"} ${held.grant.timeout.seconds} seconds (currently until ${until})` : held.grant.scope === "chat" ? `until this chat is archived (${until} at the latest)` : `until ${until}`;
     const where = r.runOn ? ` Its commands run on ${r.runOn.name}, in this chat's directory there (where station_task runs); the value is sent there only for each command.` : "";
     return `Granted: 「${l.name}」, grant ${r.id}, ${lasts}. Run with secret_run {grant: "${r.id}", command: "…"${l.env ? "" : ', env: "NAME"'}}. ${how}${accountSaid(held)}${where} You never get the value itself.`;
   }
@@ -478,7 +485,7 @@ export class Secrets {
     const where = stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"];
     const text = [
       `申请使用「${l.name}」：${r.reason}`, ...(r.command ? [`命令：\`${r.command.replace(/`/g, "'")}\``] : []), `方式：${how}`,
-      ...(r.runOn ? [`运行在：${r.runOn.name}`] : []), ...where,
+      ...(r.runOn ? [`运行在：${r.runOn.name}`] : []), ...(r.timeout ? [`申请时限：${r.timeout.kind === "idle" ? "闲置" : "固定"} ${r.timeout.seconds / 60} 分钟`] : []), ...where,
     ].join("\n\n");
     // The scopes the item allows, the longest recommended.
     const lasts = this.#lastsOf(r, l);
@@ -492,7 +499,7 @@ export class Secrets {
           ],
           ...(owner ? { assignee: owner.toLowerCase() } : {}),
           // The request as the app draws it (VaultAsk.tsx); its outcome added once decided (#settle).
-          vault: { request: r.id, name: l.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: r.mode, hosts: hosted(r.mode) ? (r.hosts ?? l.hosts) : [], ...(r.runOn ? { station: r.runOn.name } : {}) },
+          vault: { request: r.id, name: l.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: r.mode, hosts: hosted(r.mode) ? (r.hosts ?? l.hosts) : [], ...(r.runOn ? { station: r.runOn.name } : {}), ...(r.timeout ? { timeout: r.timeout } : {}) },
         }
       : null;
     return this.#postCard(session, thread, text, card, requireEmpty);
@@ -788,8 +795,8 @@ export class Secrets {
     this.#d.plain.put(next);
     // Keeping it lets the chat that asked use it, for as long as the person's items are given.
     const lasts = this.#d.plain.lasts(ws, next.owner)?.lasts ?? null;
-    const scope = SCOPES.filter((x) => allows(lasts, x)).at(-1)!;
-    const held = this.keeper.hold(k.request, { scope, hosts: hosted(s.modes[0]!) ? s.hosts : [], listing: next.listing!, lasts }, { kind: s.kind, name: s.name, fields });
+    const scope: Scope = allows(lasts, "hour") ? "hour" : "once";
+    const held = this.keeper.hold(k.request, { scope, hosts: hosted(s.modes[0]!) ? s.hosts : [], listing: next.listing!, lasts, ...(scope === "hour" ? { timeout: { kind: "idle" as const, seconds: 3600 } } : {}) }, { kind: s.kind, name: s.name, fields });
     if (held !== null) log.warn("vault", "a kept secret's grant to its chat not held", { why: held });
     this.#settle(k.request, "granted");
     return this.#d.plain.item(ws, next.id)!;
@@ -808,7 +815,9 @@ export class Secrets {
     if (k.thread !== null && k.cardTs !== null) {
       this.#d.hub.store.withdrawCard(r.session, k.thread, k.cardTs);
       // The post says how it ended: 已批准 · 仅本次, 已拒绝, 已过期.
-      const outcome = { status, ...(status === "granted" && scope ? { scope } : {}) };
+      const kept = status === "granted" ? this.keeper.usable(r.session, r.id) : null;
+      const timeout = typeof kept === "object" && kept !== null ? kept.grant.timeout : undefined;
+      const outcome = { status, ...(status === "granted" && scope ? { scope } : {}), ...(timeout ? { timeout } : {}) };
       this.#d.hub.store.restateCard(r.session, k.thread, k.cardTs, (card) => ({ ...card, vault: { ...card?.vault, outcome } }));
     }
     this.#audit(k.request, status, "");
@@ -844,8 +853,17 @@ export class Secrets {
     for (const h of this.keeper.held(session)) {
       const cookies = h.grant.mode === "browser" ? valueOf(h.secret) : null;
       if (cookies === null || this.#d.browsers === undefined) continue;
-      void this.#d.browsers.signIn(session, { request: h.request.id, sites: h.grant.hosts, cookies, until: h.grant.exp }).catch((e) =>
+      void this.#d.browsers.signIn(session, { request: h.request.id, sites: h.grant.hosts, cookies, until: h.until ?? h.grant.exp }).catch((e) =>
         log.warn("vault", "a sign-in could not be put into its chat's browser again", { request: h.request.id, error: (e as Error).message }));
+    }
+  }
+
+  /// A deliberate browser action on a granted site extends that sign-in's idle time.
+  browserUsed(session: string, host: string) {
+    for (const h of this.keeper.held(session)) {
+      if (h.grant.mode !== "browser" || h.grant.timeout?.kind !== "idle" || !h.grant.hosts.some((site) => host === site || host.endsWith(`.${site}`))) continue;
+      this.keeper.renew(session, h.request.id);
+      if (h.until !== undefined) this.#d.browsers?.extendSignIn?.(session, h.request.id, h.until);
     }
   }
 
@@ -930,7 +948,7 @@ export class Secrets {
 
   /// POST vault/plain/grants: the plain library's request `request` granted by `email` (its item's owner) for `scope`;
   /// why it is refused, or null. Security mode on, nothing of the plain library is given out (it is moved into a vault).
-  grantPlain(ws: string, lock: LockState | null, email: string, d: { request?: unknown; scope?: unknown }): string | null {
+  grantPlain(ws: string, lock: LockState | null, email: string, d: { request?: unknown; scope?: unknown; timeout?: unknown }): string | null {
     const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
     if (k === null || k.request.vault !== PLAIN) return "no such request of the plain library";
     if (k.request.save) return "a secret to keep is approved by POST vault/plain/saves";
@@ -939,7 +957,8 @@ export class Secrets {
     const item = this.#d.plain.item(ws, k.request.item);
     if (item === null || item.deleted || item.listing === undefined) return "the item is gone, or not one agents may ask for";
     const hosts = hosted(k.request.mode) ? (k.request.hosts ?? item.listing.hosts) : [];
-    const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing, lasts: this.#lastsOf(k.request, item.listing) }, { kind: item.kind, name: item.name, fields: item.fields });
+    const timeout = d.timeout as { kind: "idle" | "fixed"; seconds: number } | undefined;
+    const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing, lasts: this.#lastsOf(k.request, item.listing), ...(timeout === undefined ? {} : { timeout }) }, { kind: item.kind, name: item.name, fields: item.fields });
     if (why !== null) return why;
     this.#settle(k.request, "granted", d.scope as Scope);
     return null;
@@ -1003,9 +1022,10 @@ export class Secrets {
     }
     // The station does not update itself meanwhile: the proxy or ssh-agent the command uses is this process's.
     const letGo = hold();
-    const ran = await runWith(held, { command: a.command, cwd: a.cwd, ...(env ? { env } : {}), timeoutMs }, this.proxy, baseEnv(), (detail) =>
-      this.#audit(held.request, "use", detail),
-    ).finally(letGo);
+    const ran = await runWith(held, { command: a.command, cwd: a.cwd, ...(env ? { env } : {}), timeoutMs }, this.proxy, baseEnv(), (detail) => {
+      this.keeper.renew(session, held.request.id);
+      this.#audit(held.request, "use", detail);
+    }, () => this.keeper.active(session, held.request.id)).finally(letGo);
     this.#audit(held.request, "run", a.command.slice(0, 500));
     return said(ran);
   }
@@ -1024,7 +1044,7 @@ export class Secrets {
 
   /// `request` sent to station `on`, which answers at once that it started and says how it ended later (`vault.done`):
   /// that, or a refusal when it would not start or said nothing within `ms` and a while.
-  #elsewhere(on: { id: string; name: string }, request: Record<string, Json>, ms: number): Promise<Json> {
+  #elsewhere(on: { id: string; name: string }, request: Record<string, Json>, ms: number, used?: () => number | null): Promise<Json> {
     const ask = this.#d.ask;
     if (!ask) return Promise.reject(new Refused("this station does not reach the workspace's other stations"));
     const id = `x_${ulid(this.#d.now())}`;
@@ -1033,7 +1053,7 @@ export class Secrets {
       const stop = wall.after(ms + 120_000, () => {
         if (this.#away.delete(id)) reject(new Refused(`${on.name} did not say how the command ended; it may still have run`));
       });
-      this.#away.set(id, { station: on.id, done: (result) => (stop(), resolve(result)) });
+      this.#away.set(id, { station: on.id, done: (result) => (stop(), resolve(result)), ...(used ? { used } : {}), ...(typeof request.session === "string" ? { session: request.session } : {}), ...(typeof request.workspace === "string" ? { workspace: request.workspace } : {}) });
       ask(on.id, { ...request, id }).then(
         (answer) => {
           if ((answer as { started?: unknown } | null)?.started === true || !this.#away.delete(id)) return;
@@ -1055,12 +1075,21 @@ export class Secrets {
   /// A command run with grant `held` on station `on`, in the session's directory there (`under` it).
   async #runOn(on: { id: string; name: string }, session: string, held: Held, a: { command: string; under: string; timeoutMs: number; env?: string }): Promise<Ran> {
     const { ws } = this.#placeOf(session);
+    if (held.grant.timeout) {
+      const answer = await this.#d.ask?.(on.id, { method: "vault.capabilities", workspace: ws }).catch(() => null) as { timeouts?: unknown } | null | undefined;
+      if (answer?.timeouts !== true) throw new Refused(`${on.name} needs an update before a timed grant can run there`);
+    }
     const result = (await this.#elsewhere(on, {
       method: "vault.run", workspace: ws, session, grant: held.request.id, command: a.command, under: a.under, timeoutMs: a.timeoutMs,
       ...(a.env ? { env: a.env } : {}), mode: held.grant.mode, hosts: held.grant.hosts, secret: held.secret as unknown as Json,
-    }, a.timeoutMs)) as Partial<Ran> | null;
+      expires: held.until ?? held.grant.exp, ...(held.grant.timeout ? { grantTimeout: held.grant.timeout } : {}),
+    }, a.timeoutMs, () => {
+      if (!this.keeper.active(session, held.request.id)) return null;
+      this.keeper.renew(session, held.request.id);
+      return held.until ?? held.grant.exp;
+    })) as Partial<Ran> | null;
     if (result === null || typeof result.output !== "string") throw new Refused(`${on.name} said nothing of how the command ended`);
-    return { code: typeof result.code === "number" ? result.code : null, signal: typeof result.signal === "string" ? result.signal : null, output: result.output, cut: result.cut === true, timedOut: result.timedOut === true };
+    return { code: typeof result.code === "number" ? result.code : null, signal: typeof result.signal === "string" ? result.signal : null, output: result.output, cut: result.cut === true, timedOut: result.timedOut === true, used: result.used === true };
   }
 
   /// What a command printed on station `on`, run in the session's directory there, taken as a secret to keep.
@@ -1080,6 +1109,18 @@ export class Secrets {
     const r = (request ?? {}) as Record<string, unknown>;
     const method = typeof r.method === "string" ? r.method : "";
     const id = typeof r.id === "string" ? r.id : "";
+    if (method === "vault.capabilities") return { timeouts: true };
+    if (method === "vault.revoke") {
+      const incoming = this.#incoming.get(id);
+      if (!incoming || incoming.peer !== peer) throw new Error("no such command from that station");
+      incoming.revoked = true;
+      return { ok: true };
+    }
+    if (method === "vault.used") {
+      const away = this.#away.get(id);
+      if (away === undefined || away.station !== peer || away.used === undefined) throw new Error("no such command sent to that station");
+      return { until: away.used() };
+    }
     if (method === "vault.done") {
       const away = this.#away.get(id);
       if (away === undefined || away.station !== peer) throw new Error("no such command sent to that station");
@@ -1122,9 +1163,22 @@ export class Secrets {
       letGo();
       throw new Error("the secret holds no value");
     }
-    void runWith(held, { command, cwd, timeoutMs, ...(env ? { env } : {}) }, this.proxy, baseEnv(), () => {})
-      .then((ran) => tell(ran as unknown as Json), (e) => tell({ code: null, signal: null, output: `could not run it: ${(e as Error).message}`, cut: false, timedOut: false }))
-      .finally(letGo);
+    let used = false;
+    const incoming = { peer, revoked: false };
+    this.#incoming.set(id, incoming);
+    let expires = typeof r.expires === "number" && Number.isSafeInteger(r.expires) ? r.expires : Infinity;
+    let reports: Promise<void> = Promise.resolve();
+    const grantTimeout = r.grantTimeout as { kind?: unknown; seconds?: unknown } | undefined;
+    const idle = grantTimeout?.kind === "idle" && typeof grantTimeout.seconds === "number" && Number.isSafeInteger(grantTimeout.seconds) && grantTimeout.seconds > 0 && grantTimeout.seconds <= 30 * 86400 ? grantTimeout.seconds : 0;
+    void runWith(held, { command, cwd, timeoutMs, ...(env ? { env } : {}) }, this.proxy, baseEnv(), () => {
+      used = true;
+      reports = reports.then(async () => {
+        const answer = await ask(peer, { method: "vault.used", workspace: ws, id }) as { until?: unknown };
+        if (idle && typeof answer?.until === "number" && Number.isSafeInteger(answer.until)) expires = answer.until;
+      }).catch(() => {});
+    }, () => !incoming.revoked && expires > Math.floor(this.#d.now() / 1000))
+      .then((ran) => reports.then(() => tell({ ...ran, used } as unknown as Json)), (e) => tell({ code: null, signal: null, output: `could not run it: ${(e as Error).message}`, cut: false, timedOut: false }))
+      .finally(() => { this.#incoming.delete(id); letGo(); });
     return { started: true };
   }
 

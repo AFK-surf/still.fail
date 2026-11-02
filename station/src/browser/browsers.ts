@@ -46,11 +46,12 @@ export class Browsers {
   /// A chat's context taken up from the station process before (its passkeys went with that process's connection):
   /// the passkeys of its sign-ins still granted are to be put in again.
   #resumed: (session: string) => void = () => {};
+  #used: (session: string, host: string) => void = () => {};
 
   constructor(o: BrowserOptions) {
     this.#dir = o.dir;
     this.#fibers = new Fibers("browsers", o.clock);
-    this.station = new StationBrowser({ ...o, contextOwner: (ctx) => this.#ownerOf(ctx) });
+    this.station = new StationBrowser({ ...o, contextOwner: (ctx) => this.#ownerOf(ctx), usedTab: (session, target) => this.used(session, target) });
     const kept = this.#read();
     if (kept !== null) {
       this.#ws = kept.ws;
@@ -84,6 +85,24 @@ export class Browsers {
   /// Hears each chat whose context was taken up from the station process before, to put its passkeys in again.
   onResumed(f: (session: string) => void) {
     this.#resumed = f;
+  }
+
+  /// A person or agent deliberately used a site in this chat's browser.
+  onUsed(f: (session: string, host: string) => void) { this.#used = f; }
+
+  used(session: string, target: string, url?: string) {
+    const address = url ?? this.tabs(session).find((t) => t.id === target)?.url;
+    if (!address) return;
+    try { this.#used(session, new URL(address).hostname.toLowerCase()); } catch { /* not a site */ }
+  }
+
+  /// Extend the browser's removal timer without putting old cookies back over the current ones.
+  extendSignIn(session: string, request: string, until: number) {
+    const x = this.#signedIn.get(session)?.find((y) => y.request === request);
+    if (!x || x.until <= this.#fibers.now() / 1000) return;
+    x.until = until;
+    this.#write();
+    this.#arm(session, x);
   }
 
   /// Takes up the Chrome an earlier station process left running, with the chats' contexts in it.
@@ -150,7 +169,7 @@ export class Browsers {
     await this.#due(session);
     const ws = this.station.status().ws;
     if (ws === undefined) throw new Error("the browser has no DevTools address");
-    return { ws, gate: { context, contextOf: (id) => this.station.contextOf(id) } };
+    return { ws, gate: { context, contextOf: (id) => this.station.contextOf(id), used: (id, url) => this.used(session, id, url) } };
   }
 
   /// What `session`'s agent is told of the browser (its tool): it runs, its chat's context made.

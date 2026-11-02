@@ -1296,7 +1296,7 @@ pub let fix_vault : Ref[String] = Ref("")
 ///|
 /// chat-vault's last post: an agent asking to keep a password (`typed`: a token the person types in; `file`: a file
 /// they pick), or `use_secret` for an already answered request to use a token; its card as the core says it.
-pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false) -> Json {
+pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false, timed? : Bool = false) -> Json {
   let ask : Map[String, Json] = if use_secret {
     { "name": "Axiom 查询 token", "reason": "查询中继连接日志，定位拨号失败的原因", "mode": "proxy", "hosts": ["api.axiom.co"], "howText": "代理 · 限 api.axiom.co", "command": "curl -s https://api.axiom.co/v1/datasets/_apl", "answer": "approve", "scope": "chat" }
   } else if file {
@@ -1305,6 +1305,10 @@ pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false
     { "name": "OpenCode Go", "mode": "proxy", "hosts": ["opencode.ai"], "save": { "kind": "token", "typed": true }, "answer": "approve" }
   } else {
     { "name": "UniFi UX7", "reason": "把路由器密码安全保存，方便以后排查网络", "mode": "env", "save": { "kind": "login", "username": "zzj" }, "answer": "approve" }
+  }
+  if timed {
+    ask["timeoutKind"] = "idle"
+    ask["timeoutSeconds"] = 129600
   }
   if fix_vault.val != "" {
     ask["status"] = Json::string(fix_vault.val)
@@ -1398,7 +1402,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let ask_end = f.mode == "chat-ask-end"
   // (chat-locked: its card's first option closes it, and its agent is in a turn till fix_turn_over)
   let locked = f.mode == "chat-locked"
-  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use"
+  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before"
   let linked = f.mode.has_prefix("chat-phone-linked-")
   let signin = f.mode.has_prefix("chat-signin")
   let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
@@ -1474,7 +1478,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       }
       // chat-vault's request to keep a password, last
       if vault {
-        all.push(vault_post(f.mode == "chat-vault-typed", file=f.mode == "chat-vault-file", use_secret=f.mode == "chat-vault-use"))
+        all.push(vault_post(f.mode == "chat-vault-typed", file=f.mode == "chat-vault-file", use_secret=f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before", timed=f.mode == "chat-vault-timeout"))
       }
       // chat-phone's request for the person's phone, last
       if phone {

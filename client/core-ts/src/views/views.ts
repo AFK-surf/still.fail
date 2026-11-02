@@ -654,6 +654,7 @@ export class Views implements Owner {
     if (done !== undefined && shown.status === undefined) {
       shown.status = done.status;
       if (done.scope !== undefined) shown.scope = done.scope;
+      if (done.timeout !== undefined) { shown.approvedTimeoutKind = done.timeout.kind; shown.approvedTimeoutSeconds = done.timeout.seconds; }
     }
     return { ...card, vaultAsk: shown };
   }

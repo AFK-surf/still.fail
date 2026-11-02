@@ -529,7 +529,7 @@ pub let table_images_md : Json
 
 pub fn text_of(Json, String) -> String
 
-pub fn vault_post(Bool, file? : Bool, use_secret? : Bool) -> Json
+pub fn vault_post(Bool, file? : Bool, use_secret? : Bool, timed? : Bool) -> Json
 
 pub let viz_answer : String
 

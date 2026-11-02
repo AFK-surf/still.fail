@@ -326,6 +326,7 @@ export type ViewParts = {
   now: () => number;
   /// The tab's viewport (CSS pixels), as the frames say it.
   sized?: (size: { width: number; height: number }) => void;
+  used?: () => void;
   /// When the view ends.
   ended?: () => void;
   /// Whether the tab's context has a passkey of relying party `rpId` its own authenticator signs (passkeys.ts): a
@@ -420,6 +421,7 @@ export class TabView implements ScreenView {
 
   async input(event: ScreenInput) {
     if (this.#ended) return;
+    if (event.t !== "pointer" || event.kind !== "move") this.#p.used?.();
     const { cdp, session } = this.#p;
     switch (event.t) {
       case "pointer": {
