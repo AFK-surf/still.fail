@@ -20,6 +20,16 @@ export const sessionOps: Record<string, ReadOp> = {
   sessionPlace: (s, a) => sessionPlace(s, a.key, a.path ?? "", a.lang),
   threads: (s, a) => threads(s, a.viewer, a.session ?? null, a.lang),
   thread: (s, a) => thread(s, a.viewer, a.id, a.lang),
+  /// A thread as each of several viewers has it (`thread`), in one read: what is told to every one after each message.
+  /// None for one it is not for.
+  threadViews: (s, a) =>
+    a.viewers.map((v: { viewer: any; lang: any }) => {
+      try {
+        return thread(s, v.viewer, String(a.id), v.lang);
+      } catch {
+        return null;
+      }
+    }),
   openJobs: (s, a) => openJobs(s, a.viewer, a.lang),
   job: (s, a) => job(s, a.id),
   jobLog: (s, a) => jobLog(s, a.id, a.lines),

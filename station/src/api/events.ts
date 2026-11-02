@@ -770,12 +770,26 @@ export class Events {
   }
 
   /// The thread as GET /threads/:id has it for each viewer (their read position, their unread count): a client puts it in
-  /// place rather than read it again after every message (a phone did some two a minute).
+  /// place rather than read it again after every message (a phone did some two a minute). Every viewer's in one read
+  /// (read/ops-sessions.ts `threadViews`): one a viewer, one person's devices in two languages or workspaces read the
+  /// same thread again each, after every message.
   private tellThreadViews(id: number, who: { viewer: Viewer; lang: Lang }) {
-    for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: id }) ?? true)) {
-      const k = viewerKey(viewer, lang);
-      this.whenRead(this.deps.readers.read("thread", { viewer, id, lang }, lang, TOLD).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${id}\0${k}`), () => {}));
-    }
+    const viewers = this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: id }) ?? true);
+    if (viewers.length === 0) return;
+    const asked = { id, viewers: viewers.map(({ viewer, lang }) => ({ viewer, lang })) };
+    this.whenRead(
+      this.deps.readers.read("threadViews", asked, viewers[0]!.lang, TOLD).then(
+        (text) => {
+          const views = JSON.parse(text) as unknown[];
+          viewers.forEach(({ viewer, lang }, i) => {
+            if (views[i] === null || views[i] === undefined) return;
+            const k = viewerKey(viewer, lang);
+            this.emit("thread-view", views[i], { viewer: k }, `thread-view\0${id}\0${k}`);
+          });
+        },
+        () => {},
+      ),
+    );
   }
 
   /// Usage told, at most once a USAGE_EVERY_MS.
@@ -872,21 +886,29 @@ export class Events {
     const sessionsOf = (v: { viewer: Viewer; lang: Lang }) => new Set([...dirty.items.sessions, ...(back(v)?.sessions ?? [])]);
     const touched = (v: { viewer: Viewer; lang: Lang }) => sessionsOf(v).size > 0 || itemsOf(v).size > 0;
     const whole = (v: { viewer: Viewer; lang: Lang }) => dirty.rowsAll || dirty.rows.has(v.viewer.email) || (touched(v) && !this.rowsTold.has(viewerKey(v.viewer, v.lang)));
+    // The viewers the same changes touch alike are read together (read/ops.ts `chatRowsOf`): one read, what the first
+    // read in serving the others. One a viewer, one person's devices in two languages or workspaces read the same chats
+    // again each (four of them on ccvm, 2026-11-02), each from the disk while memory was short.
+    const alike = new Map<string, { sessions: string[]; threads: number[]; viewers: { viewer: Viewer; lang: Lang }[] }>();
+    for (const v of everyone.filter((v) => !whole(v) && touched(v))) {
+      const sessions = [...sessionsOf(v)].sort();
+      const threads = [...itemsOf(v)].sort((a, b) => a - b);
+      const of = JSON.stringify([sessions, threads]);
+      const group = alike.get(of) ?? { sessions, threads, viewers: [] };
+      group.viewers.push(v);
+      alike.set(of, group);
+    }
     await Promise.all(
-      everyone
-        .filter((v) => !whole(v))
-        .map(async (v) => {
-          const { viewer, lang } = v;
-          if (!touched(v)) return;
-          let read: { rows: any[]; scope: string[] };
-          try {
-            read = JSON.parse(await this.deps.readers.read("chatRows", { viewer, sessions: [...sessionsOf(v)], threads: [...itemsOf(v)] }, lang, TOLD));
-          } catch (error) {
-            log.warn("events", "sidebar rows not read", { error: (error as Error).message });
-            return;
-          }
-          this.tellSomeRows(viewer, lang, read.rows, read.scope);
-        }),
+      [...alike.values()].map(async ({ sessions, threads, viewers }) => {
+        let read: { rows: any[]; scope: string[] }[];
+        try {
+          read = JSON.parse(await this.deps.readers.read("chatRowsOf", { viewers: viewers.map(({ viewer, lang }) => ({ viewer, lang })), sessions, threads }, viewers[0]!.lang, TOLD));
+        } catch (error) {
+          log.warn("events", "sidebar rows not read", { error: (error as Error).message });
+          return;
+        }
+        viewers.forEach(({ viewer, lang }, i) => this.tellSomeRows(viewer, lang, read[i]!.rows, read[i]!.scope));
+      }),
     );
     const viewers = everyone.filter(whole);
     if (viewers.length === 0) return;

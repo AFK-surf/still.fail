@@ -996,7 +996,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   const planned: [string, unknown[]][] = [
     [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [CC_THREADS_SQL, [1]],
     [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]],
-    [`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, ['["a"]']], [read.TOLD_BLOCKED, ["a", 0, 9]],
+    [`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, ['["a"]']], [read.TOLD_BLOCKED, ["a", 0, 9]], [read.RUNNING_OF, ['["a"]']],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
   const plans = new Map<string, string[]>();
@@ -1022,6 +1022,8 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(read.OPENED_OF, "o USING INDEX opened_chats_by_key (parent_station=? AND parent=?)");
   has(read.PUBLISHED_OF, "published USING INDEX published_by_thread (thread=?)");
   has(read.TOLD_BLOCKED, "turns_by_end (session_key=? AND ended_at>? AND ended_at<?)");
+  // The jobs running of some sessions: by an index (of those running, or of their sessions' jobs), never every job.
+  has(read.RUNNING_OF, "SEARCH jobs USING INDEX");
   // Which workspace each session is in (each usage read's, for every session it names, and for every one there is):
   // from the index of them alone, not the sessions themselves.
   has(`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, "SEARCH sessions USING COVERING INDEX sessions_ws (key=?)");

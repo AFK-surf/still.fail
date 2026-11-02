@@ -369,7 +369,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     return t.sessions.filter((m) => (alone ? all.has(m.session) : shown.has(m.session))).map((m) => m.session);
   };
   const archivedOf = (x: store.SessionRow) => ({ at: x.archivedAt ?? 0, by: x.archivedBy ?? store.MANUAL, alone: false });
-  const watches = store.watching(s);
+  const watches = store.watching(s, scope === null ? null : [...scope.sessions]);
   const agent = (key: string): Json => {
     const x = all.get(key)!;
     const stat = stats.get(key);
