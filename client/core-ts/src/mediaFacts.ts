@@ -71,7 +71,7 @@ export async function readAsync<T>(reading: Reading<T>, read: (start: number, en
 /// was read for `rest`).
 function chunks() {
   let at = 0;
-  let bytes = new Uint8Array(0);
+  let bytes: Uint8Array = new Uint8Array(0);
   return {
     held(w: Want): Uint8Array | undefined {
       if (w.rest || w.at < at || w.at + w.n > at + bytes.length) return undefined;
