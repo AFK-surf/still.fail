@@ -18,6 +18,7 @@
 //!
 //! One thread: signals come in through a pipe (written by their handlers), and everything waits in one poll().
 
+use std::cell::RefCell;
 use std::ffi::{CString, OsString, c_int};
 use std::fs::File;
 use std::hash::{DefaultHasher, Hasher};
@@ -43,6 +44,8 @@ struct Node {
     control: OwnedFd,
     /// What came in on the control socket after the last whole line; `open` until it closes.
     pending: Vec<u8>,
+    /// What it was told and has not read yet, written on as its socket takes more (`flush`, serve()'s poll).
+    outgoing: RefCell<Vec<u8>>,
     open: bool,
 }
 
@@ -51,37 +54,44 @@ impl Process for Node {
         self.pid as u32
     }
 
+    /// The line goes after what is not written yet. A line longer than the socket takes (what is carried over, some
+    /// 8 KB) waits there for Node to read: given up on halfway, as before, its start stayed in the socket, and the
+    /// next line was read on from it as one that does not read. ccvm (2026-11-02): a Node starting up read nothing for
+    /// 5 s, the next update's handover came after half a line, and the Node serving never heard it (killed 30 s on).
     fn send(&self, line: &Value) {
-        let line = format!("{line}\n");
-        let mut rest = line.as_bytes();
-        while !rest.is_empty() {
-            // SAFETY: a write from a live buffer to a descriptor this Node owns.
-            let n = unsafe { libc::write(self.control.as_raw_fd(), rest.as_ptr().cast(), rest.len()) };
-            if n < 0 {
-                let error = Error::last_os_error();
-                match error.kind() {
-                    std::io::ErrorKind::Interrupted => continue,
-                    // Non-blocking: a long line (what is carried over) waits for Node to read.
-                    std::io::ErrorKind::WouldBlock => {
-                        let mut fd = libc::pollfd { fd: self.control.as_raw_fd(), events: libc::POLLOUT, revents: 0 };
-                        // SAFETY: poll over one live pollfd.
-                        if unsafe { libc::poll(&mut fd, 1, 5_000) } <= 0 {
-                            log::warn(&format!("Node {} did not read what it was told", self.pid));
-                            return;
-                        }
-                        continue;
-                    }
-                    _ => {}
-                }
-                log::warn(&format!("could not tell Node {}: {error}", self.pid));
-                return;
-            }
-            rest = &rest[n as usize..];
-        }
+        self.outgoing.borrow_mut().extend_from_slice(format!("{line}\n").as_bytes());
+        self.flush();
     }
 }
 
 impl Node {
+    /// Writes what it was told as far as its socket takes it now.
+    fn flush(&self) {
+        let mut outgoing = self.outgoing.borrow_mut();
+        while !outgoing.is_empty() {
+            // SAFETY: a write from a live buffer to a descriptor this Node owns.
+            let n = unsafe { libc::write(self.control.as_raw_fd(), outgoing.as_ptr().cast(), outgoing.len()) };
+            if n < 0 {
+                let error = Error::last_os_error();
+                match error.kind() {
+                    std::io::ErrorKind::Interrupted => continue,
+                    // Non-blocking: the rest when Node has read (serve() waits for the socket to take more).
+                    std::io::ErrorKind::WouldBlock => return,
+                    _ => {}
+                }
+                log::warn(&format!("could not tell Node {}: {error}", self.pid));
+                outgoing.clear();
+                return;
+            }
+            outgoing.drain(..n as usize);
+        }
+    }
+
+    /// Whether some of what it was told is still to be written.
+    fn telling(&self) -> bool {
+        !self.outgoing.borrow().is_empty()
+    }
+
     /// Whole lines come in on the control socket since the last read.
     fn read(&mut self) -> Vec<Value> {
         let mut buf = [0u8; 4096];
@@ -212,7 +222,7 @@ impl Os for System {
         let pid = child.id() as i32;
         // Reaped by waitpid in serve(), not by std.
         drop(child);
-        Ok(Node { pid, control: ours, pending: vec![], open: true })
+        Ok(Node { pid, control: ours, pending: vec![], outgoing: RefCell::new(vec![]), open: true })
     }
 
     fn kill(&mut self, node: &mut Node) {
@@ -247,7 +257,7 @@ impl Os for System {
             "mcp": self.mcp.as_raw_fd(),
             "admin": self.admin.as_raw_fd(),
             "parent": self.parent,
-            "node": {"pid": serving.pid, "control": serving.control.as_raw_fd(), "pending": serving.pending, "version": version, "served": served},
+            "node": {"pid": serving.pid, "control": serving.control.as_raw_fd(), "pending": serving.pending, "outgoing": *serving.outgoing.borrow(), "version": version, "served": served},
         });
         let mut args = vec![release.as_os_str().to_owned()];
         args.extend(resumed_args(std::env::args_os().skip(1)));
@@ -300,13 +310,19 @@ impl Resumed {
         let node = &state["node"];
         let (pid, control) = (node["pid"].as_i64().and_then(|n| i32::try_from(n).ok())?, fd(&node["control"])?);
         let pending: Vec<u8> = serde_json::from_value(node["pending"].clone()).ok()?;
+        // What it was told and has not read. A launcher from before kept none of that: what it gave up on halfway was
+        // left in the socket, and a newline ends it, so the next line is read as itself.
+        let outgoing: Vec<u8> = match node.get("outgoing") {
+            Some(bytes) => serde_json::from_value(bytes.clone()).ok()?,
+            None => b"\n".to_vec(),
+        };
         let served: Vec<(String, u16)> = serde_json::from_value(node["served"].clone()).ok()?;
         let version = node["version"].as_str()?.to_string();
         let parent = state["parent"].as_i64().and_then(|n| i32::try_from(n).ok())?;
         inheritable(&[lock, mcp, admin, control], false);
         // SAFETY: the descriptors the launcher before handed on, owned by this one from here.
         let (lock, mcp, admin, control) = unsafe { (File::from_raw_fd(lock), OwnedFd::from_raw_fd(mcp), OwnedFd::from_raw_fd(admin), OwnedFd::from_raw_fd(control)) };
-        Some(Resumed { lock, mcp, admin, parent, node: Node { pid, control, pending, open: true }, version, served })
+        Some(Resumed { lock, mcp, admin, parent, node: Node { pid, control, pending, outgoing: RefCell::new(outgoing), open: true }, version, served })
     }
 }
 
@@ -531,7 +547,9 @@ fn serve(station: &mut Lifecycle<System>, signals: OwnedFd) -> i32 {
         let mut pids = vec![];
         for (_, node) in station.processes_mut() {
             if node.open {
-                fds.push(libc::pollfd { fd: node.control.as_raw_fd(), events: libc::POLLIN, revents: 0 });
+                // And, while some of what it was told waits, for its socket to take more.
+                let events = if node.telling() { libc::POLLIN | libc::POLLOUT } else { libc::POLLIN };
+                fds.push(libc::pollfd { fd: node.control.as_raw_fd(), events, revents: 0 });
                 pids.push(node.pid);
             }
         }
@@ -545,6 +563,14 @@ fn serve(station: &mut Lifecycle<System>, signals: OwnedFd) -> i32 {
         if n > 0 {
             for (pid, fd) in pids.iter().zip(&fds[1..]) {
                 if fd.revents == 0 {
+                    continue;
+                }
+                if fd.revents & libc::POLLOUT != 0
+                    && let Some((_, node)) = station.processes_mut().into_iter().find(|(_, node)| node.pid == *pid)
+                {
+                    node.flush();
+                }
+                if fd.revents & !libc::POLLOUT == 0 {
                     continue;
                 }
                 let Some(said) = station.processes_mut().into_iter().find(|(_, node)| node.pid == *pid).map(|(_, node)| node.read()) else {
@@ -610,5 +636,66 @@ fn describe(status: c_int) -> String {
         format!("was ended by signal {}", libc::WTERMSIG(status))
     } else {
         format!("ended ({status})")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What there is to read at `fd` now.
+    fn read_now(fd: &OwnedFd, into: &mut Vec<u8>) {
+        let mut buf = [0u8; 1024];
+        loop {
+            // SAFETY: a read into a live buffer from a descriptor the test owns.
+            let n = unsafe { libc::read(fd.as_raw_fd(), buf.as_mut_ptr().cast(), buf.len()) };
+            if n <= 0 {
+                return;
+            }
+            into.extend_from_slice(&buf[..n as usize]);
+        }
+    }
+
+    /// What a launcher hands on as it becomes the release's (`renew`), over descriptors of the test's own: with what its
+    /// Node has not read (`outgoing`), or from a launcher that did not say.
+    fn resumed(outgoing: Option<Vec<u8>>) -> Resumed {
+        let fd = || socketpair().unwrap().0.into_raw_fd();
+        let mut node = json!({ "pid": 1, "control": fd(), "pending": [], "version": "0.1.1", "served": [] });
+        if let Some(bytes) = outgoing {
+            node["outgoing"] = json!(bytes);
+        }
+        let state = json!({ "lock": fd(), "mcp": fd(), "admin": fd(), "parent": 1, "node": node });
+        Resumed::read(&state.to_string()).unwrap()
+    }
+
+    #[test]
+    fn a_node_taken_over_from_a_launcher_from_before_has_what_that_one_left_halfway_ended() {
+        let before = resumed(None);
+        assert_eq!(*before.node.outgoing.borrow(), b"\n");
+        let kept = resumed(Some(b"er\"}\n".to_vec()));
+        assert_eq!(*kept.node.outgoing.borrow(), b"er\"}\n", "the rest of a line, written on as it was");
+    }
+
+    // ccvm (2026-11-02): what was carried over to a Node starting up did not all fit in the socket, the rest was given
+    // up on after 5 s, and the next update's handover came after its start, as one line that does not read.
+    #[test]
+    fn what_a_node_is_told_reaches_it_whole_however_long_it_takes_to_read() {
+        let (ours, theirs) = socketpair().unwrap();
+        nonblocking(ours.as_raw_fd()).unwrap();
+        nonblocking(theirs.as_raw_fd()).unwrap();
+        let node = Node { pid: 0, control: ours, pending: vec![], outgoing: RefCell::new(vec![]), open: true };
+        let carried = json!({ "op": "carried", "carried": { "grants": "g".repeat(200_000) } });
+        node.send(&carried);
+        assert!(node.telling(), "more than the socket takes at once");
+        node.tell("handover");
+        // The Node reads now and then; what waits is written on as the socket takes more (serve(): POLLOUT).
+        let mut got = vec![];
+        while node.telling() {
+            read_now(&theirs, &mut got);
+            node.flush();
+        }
+        read_now(&theirs, &mut got);
+        let lines: Vec<Value> = got.split(|b| *b == b'\n').filter(|l| !l.is_empty()).map(|l| serde_json::from_slice(l).unwrap()).collect();
+        assert_eq!(lines, vec![carried, json!({ "op": "handover" })]);
     }
 }
