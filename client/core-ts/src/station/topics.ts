@@ -248,7 +248,8 @@ export class StationTopics implements Owner {
     try {
       StationAddr.parse(station);
     } catch (e) {
-      return { err: e as CoreError };
+      if (!(e instanceof CoreError)) throw e;
+      return { err: e };
     }
     const link = this.#sync.link(station);
     const error = link?.errors.get(topicKey(topic));
