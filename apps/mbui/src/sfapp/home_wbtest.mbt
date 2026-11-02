@@ -193,7 +193,7 @@ test "small screen home: a long workspace name gives way to syncing and transfer
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=320.0, h=740.0, platform=2)
-  t.run_for(1000.0)
+  t.run_for(@sf.later_ms + @kit.presence_in_ms)
   let (fx, _, fw, _) = t.query(Button, label="筛选会话：全部").unwrap().rect
   let (sync_x, _, sync_w, _) = t.query(Status, label="正在同步 · 还剩 12 个对话").unwrap().rect
   let (tx, _, tw, _) = t.query(Button, label="1 个传输 · 2%").unwrap().rect
