@@ -18,6 +18,7 @@ import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./c
 import { devinCatalog, devinData } from "../agents/devin.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { claudePlan, codexClaims } from "./machine.ts";
 
 type Json = any;
@@ -176,7 +177,8 @@ async function modelIds(response: Response): Promise<string[]> {
 const sorted = (list: string[]) => list.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /// Runs a runtime's own status command, in `env` only; what it said and how it ended.
-function statusOf(command: string, args: string[], env: Env): Promise<{ code: number | null; stdout: string; stderr: string }> {
+async function statusOf(command: string, args: string[], env: Env): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  env = await withShellCommand(command, env);
   return new Promise((resolve, reject) => {
     const r = platform.runnable(command, args, env as NodeJS.ProcessEnv);
     execFile(r.file, r.args, { env: env as NodeJS.ProcessEnv, timeout: 20_000, killSignal: "SIGKILL", windowsVerbatimArguments: r.windowsVerbatimArguments }, (error, stdout, stderr) => {

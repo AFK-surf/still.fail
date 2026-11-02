@@ -45,6 +45,7 @@ import { Fibers } from "../ops/fibers.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import { forgetShellPaths, withShellCommand } from "../ops/shell-path.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { platform as machine } from "../platform/index.ts";
 import { holding, onLetGo } from "./holds.ts";
@@ -468,6 +469,7 @@ export class Updates {
   /// a newer release of the station's channel is installed when it updates itself.
   check(): Promise<void> {
     if (this.checking) return Promise.resolve();
+    forgetShellPaths();
     this.checking = this.read().finally(() => (this.checking = null));
     return this.checking;
   }
@@ -517,11 +519,12 @@ export class Updates {
 
   private async readRuntime(kind: Kind): Promise<Item> {
     if (kind === "cursor") return this.readCursor();
-    const found = findCommand(kindCommand(kind), this.env);
+    const env = await withShellCommand(kindCommand(kind), this.env);
+    const found = findCommand(kindCommand(kind), env);
     let version: string | null = null;
     if (found) {
       try {
-        const [ok, out] = await run(found.onPath, ["--version"], this.env, 20_000);
+        const [ok, out] = await run(found.onPath, ["--version"], env, 20_000);
         if (ok) version = versionIn(out);
       } catch {}
     }
@@ -534,7 +537,7 @@ export class Updates {
     } catch (e) {
       log.warn("updates", "the runtime's latest version not read", { runtime: kind, error: (e as Error).message });
     }
-    const how = found ? howToUpdate(kind, found, this.env) : howToInstall(kind, this.env, this.ownNode());
+    const how = found ? howToUpdate(kind, found, env) : howToInstall(kind, this.env, this.ownNode());
     return {
       ...empty(),
       installed: found !== null,
@@ -716,14 +719,15 @@ export class Updates {
   /// says it is at (Homebrew's, Claude Code's installer's).
   private async install(kind: Kind, how: How): Promise<[boolean, string, number | null]> {
     if (how.node) await this.installNode(kind, how.node);
+    const runtimeEnv = await withShellCommand(kindCommand(kind), this.env);
     const npm = isNpmInstall(how);
     if (kind === "codex" && npm) {
-      const version = await this.fetchCodex(how.program);
+      const version = await this.fetchCodex(how.program, runtimeEnv);
       // That version, as npm's cache has its build (`latest` from a cached list could be an older one).
       if (version !== null) how = pinNpmVersion(how, kindPackage(kind), version);
     }
     // npm of the station's own Node runs on it (its #! takes the node PATH finds first).
-    const env = how.node ? machine.prependPath(this.env, how.node.bin) : this.env;
+    const env = how.node ? machine.prependPath(runtimeEnv, how.node.bin) : runtimeEnv;
     const installing = { now: false };
     // Claude Code's own installer (not `claude update`, nor Homebrew).
     const own = how.program === "/bin/sh" || how === machine.claudeInstall;
@@ -801,7 +805,7 @@ export class Updates {
   /// Codex's build for this machine (nearly all its install downloads), fetched here so how much is in can be said,
   /// and put in npm's cache for the install to take: the version fetched; null when it was not (npm then downloads it
   /// itself, unmeasured).
-  private async fetchCodex(npm: string): Promise<string | null> {
+  private async fetchCodex(npm: string, env: Env): Promise<string | null> {
     const p = platform();
     if (p === null) return null;
     const pkg = kindPackage("codex");
@@ -818,7 +822,7 @@ export class Updates {
     try {
       await this.download("codex", version, url, file);
       this.say("codex", INSTALLING, null);
-      const [ok, said] = await run(npm, ["cache", "add", file], this.env, 120_000);
+      const [ok, said] = await run(npm, ["cache", "add", file], env, 120_000);
       if (ok) return version;
       log.warn("updates", "Codex's build not put in npm's cache; npm downloads it", { said: tail(said, "en") });
       return null;

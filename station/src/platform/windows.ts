@@ -372,6 +372,7 @@ export const windows: Platform = {
     env[key] = path === "" ? dir : `${path}${delimiter}${dir}`;
   },
   findCommand,
+  userShell: () => null,
   /// A bare name is found with PATHEXT (libuv adds .exe and .com only), and a .cmd or .bat (npm's shims) runs through
   /// cmd, which Node refuses to do by itself: each argument quoted, and one cmd would read into (a quote, a %) refused.
   runnable(command, args, env) {
