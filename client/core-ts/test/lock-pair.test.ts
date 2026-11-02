@@ -15,6 +15,7 @@ import { HostError } from "../src/error.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { base64url as toB64url, utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
+import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { pairs } from "../src/views/lock.ts";
 import { type Duplex, keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
@@ -185,10 +186,16 @@ test("the code is good until a set time, said where it is shown; wrong codes typ
   assert.deepEqual(m.cloud.posted, []);
 });
 
+/// Feed the app bridge a native wall clock with sub-millisecond precision.
+function useFractionalAppClock(host: { nowMs(): number }) {
+  const now = host.nowMs.bind(host);
+  const bridge = new BridgeHost(new Bridge({ now: () => now() + 0.439 } as never), "", false);
+  host.nowMs = () => bridge.nowMs();
+}
+
 test("a trusted device can show a pairing code when its clock has fractional milliseconds", async () => {
   const m = await met();
-  const now = m.host.nowMs.bind(m.host);
-  m.host.nowMs = () => now() + 0.439;
+  useFractionalAppClock(m.host);
   await m.hello();
   const shown = (await m.prompts()).pairing[0];
   assert.match(shown.code, /^[0-9]{6}$/);
@@ -198,8 +205,7 @@ test("a trusted device can show a pairing code when its clock has fractional mil
 test("a new device can show the pairing prompt when its clock has fractional milliseconds", async () => {
   const r = await rig((me) => ({ ws: genesis("ws", me, false) }));
   const lock = await r.watch({ topic: "lock", workspace: "ws" });
-  const now = r.host.nowMs.bind(r.host);
-  r.host.nowMs = () => now() + 0.439;
+  useFractionalAppClock(r.host);
   const [, phone] = await pipe();
   keep(r.core.inner, trying(r.core.inner, ["ws"]), PHONE, phone, ["ws"]);
   const shown = await lock();

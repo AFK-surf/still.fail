@@ -166,7 +166,7 @@ export interface Host {
   /// The app's performance record, where the host keeps one: what the connections do written into it while it is on
   /// (record.ts).
   readonly recorder?: Recorder | undefined;
-  /// Milliseconds since the Unix epoch.
+  /// Whole milliseconds since the Unix epoch.
   nowMs(): number;
   /// Milliseconds on a clock that only moves forward, for timing spans.
   monotonicMs(): number;
