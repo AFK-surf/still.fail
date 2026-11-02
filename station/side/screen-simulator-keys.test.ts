@@ -186,6 +186,12 @@ test("keys and text on a simulator, with and without its Device Hub window", { s
     }
     console.log(`⌘V after it: ${JSON.stringify(await said(4000))}`);
     await shot("5a-after-paste");
+    // Through Device Hub itself, where its window is on the device (SIM_HUB_POST: a program posting it ⌘V).
+    if (process.env.SIM_HUB_WINDOW && process.env.SIM_HUB_POST) {
+      console.log(`Device Hub ⌘V: ${execFileSync(process.env.SIM_HUB_POST, { encoding: "utf8", timeout: 20_000 }).trim().replaceAll("\n", "; ")}`);
+      console.log(`  it put in: ${JSON.stringify(await said(4000))}`);
+      await shot("5a2-hub-paste");
+    }
     // The field held down, as a finger does: the system's menu, whose 粘贴 a person can touch.
     const held = async (x: number, y: number, ms: number) => {
       await v.input({ t: "pointer", kind: "down", x, y, buttons: 1 });

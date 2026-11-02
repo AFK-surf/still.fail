@@ -1851,7 +1851,7 @@ let zh : Map[String, String] = {
   "web-pages.screen.debug.relaunch": "重启 App",
   "web-pages.screen.debug.relaunched": "已重启 {name}",
   "web-pages.screen.debug.relaunchOther": "重启 App：{name}",
-  "web-pages.screen.debug.keysNote": "iOS 27 模拟器暂时不能自动粘贴。中文这类电脑键盘直接打不出的内容，输入后会进模拟器的剪贴板，再长按输入框点“粘贴”。",
+  "web-pages.screen.debug.keysNote": "iOS 27 模拟器上，中文这类电脑键盘直接打不出的内容：这台模拟器开着 Device Hub 窗口时会直接粘贴；没开时会进模拟器的剪贴板，再长按输入框点“粘贴”。",
   "web-pages.screen.device.shot": "截图",
   "web-pages.screen.debug.shotCopied": "截图已复制",
   "web-pages.screen.debug.textLargest": "特大",
