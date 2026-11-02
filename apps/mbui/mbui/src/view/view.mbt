@@ -6970,8 +6970,10 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
     then(t)
     if moved.val {
       moved.val = false
-      match t {
-        Pressed(id) | Dragged(id) if self.alive_id(id) =>
+      // (to what is pointed at there, the one way it is said: what is pointed at alone over all else there, else what
+      // takes a press or a hold there, Tree::pointed_of)
+      match self.pointed_of(t) {
+        Some(id) if self.alive_id(id) =>
           match self.nodes[id.at].on_pointer_moved {
             Some(f) => @signals.untracked(f)
             None => ()

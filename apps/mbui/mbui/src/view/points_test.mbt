@@ -91,3 +91,39 @@ test "pointed at alone, pressed for nothing: a tap on its words the card's under
   k.tree.press(270.0, 20.0) |> ignore
   assert_eq((card, k.pressed.val, k.under.val), (1, 1, 1))
 }
+
+///|
+test "pointed at alone over a card that takes a press: the pointer moved over it, it told so, the card not; still, nothing told again" {
+  let moved = Ref(0)
+  let card_moved = Ref(0)
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(card) {
+        card
+        .width(Is(Some(300.0)))
+        .height(Is(Some(100.0)))
+        .on_press(fn() {  })
+        .on_pointer_moved(fn() { card_moved.val += 1 })
+        |> ignore
+        card.box(fn(t) {
+          t.width(Is(Some(200.0))).height(Is(Some(40.0))).points(Is(true)).on_pointer_moved(fn() { moved.val += 1 })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.frame(390.0, 844.0) |> ignore
+  tree.point_at(20.0, 20.0)
+  tree.frame(390.0, 844.0) |> ignore
+  let first = (moved.val, card_moved.val)
+  tree.point_at(20.0, 20.0)
+  tree.frame(390.0, 844.0) |> ignore
+  tree.point_at(20.0, 30.0)
+  tree.frame(390.0, 844.0) |> ignore
+  tree.point_at(20.0, 80.0)
+  tree.frame(390.0, 844.0) |> ignore
+  assert_eq((first, moved.val, card_moved.val), ((1, 0), 2, 1))
+}
