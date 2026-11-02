@@ -511,10 +511,12 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(removed.removed, true);
     assert.ok(!existsSync(idlePath));
     assert.ok(existsSync(join(idle, "source.txt")), "the source copy is untouched");
+    // The busy mirror has already been checked. Stop it before starting the replacement so the test does not wait
+    // for the host's real CPU load to fall below the queue's admission threshold.
+    await use("station_task", { station: "B", key: "two", action: "stop" });
     const again = await run("three", idle, "test -f source.txt && test ! -e built.txt");
     await until("the replacement task ends", () => b.store.getJob(again.job.id)!.state !== "running");
     assert.equal(b.store.getJob(again.job.id)!.exitCode, 0, "a later task syncs that mirror again");
-    await use("station_task", { station: "B", key: "two", action: "stop" });
   });
 
   test("a slow mirror cleanup answers pending, resumes the same removal, and holds the session lane", async () => {
