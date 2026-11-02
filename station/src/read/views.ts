@@ -433,8 +433,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   }
   const rows: Json[] = [];
   // The decisions the viewer said they will not take up.
-  const dismissed = store.dismissed(s, viewer.email);
-  const kept = store.keptChats(s, viewer.email);
+  const dismissed = store.dismissed(s, viewer.email, scope?.threads ?? null);
+  const kept = store.keptChats(s, viewer.email, scope?.threads ?? null);
   // The cards the viewer answered lately, by chat.
   const answered = new Map<number, Json[]>();
   if (!archived) {

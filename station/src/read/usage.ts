@@ -13,6 +13,7 @@ import { type InWorkspace, sees } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
+import { log } from "../ops/log.ts";
 import type { ContextCall } from "../store/usage.ts";
 
 // ── prices (usage.rs) ──
@@ -237,8 +238,20 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false): Json {
+  // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
+  // reads. Only durations are logged, never the request's arguments or the rows it reads.
+  const started = performance.now();
+  let last = started;
+  const stages: Record<string, number> = {};
+  const mark = (stage: string) => {
+    const now = performance.now();
+    stages[stage] = Math.round(now - last);
+    last = now;
+  };
   const seen = seenBy(s, viewer);
+  mark("visibility");
   const rows = summary(s, from, to, utcOffsetMin).filter((r) => seen(r.session));
+  mark("summary");
   const wanted = [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))];
   const threads: Record<string, Json> = {};
   for (const [t, first] of usageThreads(s, wanted)) {
@@ -246,33 +259,45 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     const title = titleOf(t, first, t.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, t.id), t.channel));
     threads[String(t.id)] = { title, surface: t.surface, home: t.home, archived: t.hiddenAt !== null };
   }
+  mark("threads");
   const refs = [...new Set(rows.map((r) => r.person).filter((p): p is string => p !== null))].sort(byBytes);
   const people: Record<string, Json> = {};
   for (const r of refs) people[r] = creator(s, lang, r);
+  mark("people");
   const i64 = (n: bigint) => (JSON as any).rawJSON(String(n));
-  return {
+  const since = usageSince(s);
+  const prices = priceTable(lang, rows.map((r) => r.model));
+  const profiles = configProfiles(s.dataDir);
+  const remoteRuns = remoteRunsSince(s, from).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? ""));
+  mark("details");
+  const answer = {
     from: i64(from),
     to: i64(to),
-    since: usageSince(s),
+    since,
     reading,
-    prices: priceTable(lang, rows.map((r) => r.model)),
+    prices,
     rows,
     threads,
     people,
-    profiles: configProfiles(s.dataDir),
+    profiles,
     // the tasks the viewer's workspace's chats on other stations ran here since `from` (the card's 跨设备执行): the
     // workspace their key names (`remote:<workspace>:…`)
-    remoteRuns: remoteRunsSince(s, from).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? "")),
-    ...(history ? { history: usageHistory(s, utcOffsetMin, viewer) } : {}),
+    remoteRuns,
+    ...(history ? { history: usageHistory(s, utcOffsetMin, viewer, mark) } : {}),
   };
+  mark("other");
+  const ms = Math.round(performance.now() - started);
+  if (ms >= 2_000) log.warn("readers", "a usage read's stages", { ms, ...stages });
+  return answer;
 }
 
 /// What the viewer's chats did on this station since it began counting (the usage page's summary): the tokens by day
 /// in the asker's time zone, runtime and model (the year, as Codex's usage summary has it); the chats of each place
 /// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's chat
 /// working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
-export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null): Json {
+export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}): Json {
   const seen = seenBy(s, viewer);
+  mark("historyVisibility");
   const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
   for (const r of usageByDay(s, utcOffsetMin)) {
     if (!seen(r.session)) continue;
@@ -282,6 +307,7 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
     d.calls += r.calls;
     days.set(key, d);
   }
+  mark("historyDays");
   // the chats of each place (still.fail's own, a Slack workspace's, a Feishu one's), and those archived
   const places: Record<string, number> = {};
   let archived = 0;
@@ -291,10 +317,13 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
     places[place] = (places[place] ?? 0) + 1;
     if (t.archived) archived++;
   }
+  mark("historyPlaces");
   // the tasks the viewer's chats on other stations ran here, as long as they are kept (remote_runs: 90 days)
   const remoteRuns = remoteRunsSince(s, 0n).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? "")).length;
+  mark("historyRemoteRuns");
   // the decision cards the viewer's chats were asked with, and those answered by an option pressed
   const cards = decisionCards(s).filter((c) => c.home === null || seen(c.home));
+  mark("historyCards");
   return {
     days: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),
     cards: cards.length,
@@ -308,10 +337,13 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
 /// The chats of the resources page (GET /resources): each session's latest thread and its title; null for one `viewer` does
 /// not see (another workspace's).
 export function resourceChats(s: Store, sessions: string[], viewer: InWorkspace | null): Record<string, Json> {
-  const seen = seenBy(s, viewer);
+  // A resource snapshot names a few running chats, not the station's entire history. Check each one's workspace by
+  // its key rather than loading every session for each snapshot (which is refreshed repeatedly).
+  const workspace = viewer === null ? null : s.db.prepare("SELECT ws FROM sessions WHERE key = ?");
   const out: Record<string, Json> = {};
   for (const key of sessions) {
-    if (!seen(key)) {
+    const ws = workspace?.get(key) as { ws: string | null } | undefined;
+    if (viewer !== null && !sees(viewer, ws?.ws ?? null)) {
       out[key] = null;
       continue;
     }

@@ -748,12 +748,46 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
     const store = openStore(r.data);
     const whole = chats(store, viewer, false);
     const byId = new Map(whole.map((row: any) => [String(row.id), row]));
+    // Unrelated histories must not be read every time one row changes. Count actual rows returned to the reader,
+    // rather than timing it: the result must stay bounded even when these pages are cold on disk.
+    const mark = r.store.db.prepare("INSERT INTO dismissed VALUES (?, ?, 1, ?)");
+    const keep = r.store.db.prepare("INSERT INTO kept_chats VALUES (?, ?)");
+    const closeCard = r.store.db.prepare("INSERT INTO closed_cards VALUES (?, 1, ?, ?)");
+    for (let i = 0; i < 500; i++) {
+      const thread = 100_000 + i;
+      mark.run(viewer.email, thread, Date.now());
+      keep.run(viewer.email, thread);
+      closeCard.run(thread, viewer.email, Date.now());
+    }
+    let unrelated = 0;
+    const db = store.db;
+    store.db = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          return new Proxy(statement, {
+            get(query, method) {
+              if (method === "all") return (...args: any[]) => {
+                const result = query.all(...args);
+                if (/\bFROM (dismissed|kept_chats|closed_cards)\b/i.test(sql)) unrelated += result.filter((row) => Number(row.thread) >= 100_000).length;
+                return result;
+              };
+              const value = Reflect.get(query, method, query);
+              return typeof value === "function" ? value.bind(query) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
     for (const [sessions, threads] of [[[made[1].key], []], [[], [made[0].thread.id]], [[made[2].key], []]] as [string[], number[]][]) {
       const some = chatRows(store, viewer, sessions, threads);
       assert.ok(some.rows.length > 0 && some.rows.length < whole.length, JSON.stringify(some.scope));
       for (const row of some.rows) assert.deepEqual(row, byId.get(String(row.id)));
       for (const row of some.rows) assert.ok(some.scope.includes(String(row.id)));
     }
+    assert.equal(unrelated, 0, "a scoped row update did not read marks or answers of unrelated chats");
     store.db.close();
   } finally {
     await r.close();
