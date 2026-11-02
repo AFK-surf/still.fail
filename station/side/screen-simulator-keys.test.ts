@@ -1,9 +1,7 @@
 // What a person's keys do on an iOS Simulator (docs/remote-screens.md "Simulators") on a real Mac with Xcode: a simulator
 // of this test's own, a small app whose focused field logs what it holds, keys and pasted text sent through still.fail
-// Helper's view as a person's are. Xcode 27's guest takes keys only through a focused Device Hub window
-// (vendor/serve-sim DeviceHubKeyboardBridge), so what arrives is said both without that window and with it, not held to:
-// it depends on this Mac's Accessibility grant and on what else is on its screen. STILLFAIL_HELPER and STILLFAIL_HELPER_DIR:
-// the station's own helper, with the grants it has. A side test.
+// Helper's view as a person's are, with no window of Device Hub's and none of its permissions needed (vendor/serve-sim
+// DTUHIDKeys). STILLFAIL_HELPER and STILLFAIL_HELPER_DIR: another helper. A side test.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -74,7 +72,8 @@ const run = (file: string, args: string[]) => Promise.resolve(execFileSync(file,
 
 test("keys and text on a simulator, with and without its Device Hub window", { skip: !hasSimctl && "no Xcode simulators here" }, async () => {
   const runtimes = JSON.parse(simctl("list", "-j", "runtimes")).runtimes.filter((r: any) => r.isAvailable && r.platform === "iOS");
-  const runtime = runtimes.at(-1);
+  // (SIM_RUNTIME: an older one, as "iOS-17": what an old runtime does on this Xcode)
+  const runtime = runtimes.findLast((r: any) => r.identifier.includes(process.env.SIM_RUNTIME ?? "")) ?? runtimes.at(-1);
   const type = runtime.supportedDeviceTypes.find((t: any) => t.productFamily === "iPhone");
   const udid = simctl("create", `still.fail side keys ${process.pid}`, type.identifier, runtime.identifier);
   const dir = mkdtempSync(join(tmpdir(), "sim-keys-"));
@@ -154,15 +153,16 @@ test("keys and text on a simulator, with and without its Device Hub window", { s
       return said(3000);
     };
     console.log(`no Device Hub window: keys ${JSON.stringify(await type_("abc"))}`);
-    console.log(`no Device Hub window: pasted ${JSON.stringify(await type_("中文"))}`);
     await shot("4-no-hub");
 
     execFileSync("open", [`devices://device/open?id=${udid}`], { timeout: 30_000 });
     await sleep(5000);
     console.log(`Device Hub window: keys ${JSON.stringify(await type_("def"))}`);
-    console.log(`Device Hub window: pasted ${JSON.stringify(await type_("汉字"))}`);
     await shot("5-hub");
-    // Keys sent put the device in a hardware keyboard's mode, its own keyboard gone: whether 软键盘 brings it back, to see.
+    console.log(`Device Hub window: pasted ${JSON.stringify(await type_("汉字"))}`);
+    await sleep(6000);
+    console.log(`after that paste: keys ${JSON.stringify(await type_("mno"))}`);
+    // 软键盘, its picture to see.
     await v.input({ t: "key", kind: "down", key: "k", code: "KeyK", mods: 4 });
     await v.input({ t: "key", kind: "up", key: "k", code: "KeyK", mods: 4 });
     await sleep(2000);

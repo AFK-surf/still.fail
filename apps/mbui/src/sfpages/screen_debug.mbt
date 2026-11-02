@@ -59,6 +59,10 @@ fn debug_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, beside : Bool) -> Unit
     u.logs.shot_said = false
     say(c, @sf.t("web-pages.screen.debug.shotCopied"))
   }
+  if u.logs.relaunch_said != "" {
+    say(c, u.logs.relaunch_said)
+    u.logs.relaunch_said = ""
+  }
   if s.driving() {
     for k in device_combos() {
       if round_button(c, "screen-device/" + k.keys, k.icon, k.name) {
@@ -71,9 +75,13 @@ fn debug_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, beside : Bool) -> Unit
     if round_button(c, "screen-shot", "camera", @sf.t("web-pages.screen.device.shot")) {
       debug_shot(s, u.logs)
     }
+    // the app last started again, at one press: what is restarted over and over while debugging (another: 设备)
     let relaunch = "screen-relaunch"
     if round_button(c, relaunch, "refresh", @sf.t("web-pages.screen.debug.relaunch")) {
-      debug_apps_open(s, u, Of(c.id(relaunch)))
+      match u.logs.last_app {
+        Some((id, name)) => debug_relaunch(s, u.logs, id, name)
+        None => debug_apps_open(s, u, Of(c.id(relaunch)))
+      }
     }
     let shown = "screen-logs"
     if round_button(c, shown, "file-text", @sf.t("web-pages.screen.debug.logs"), on=beside && u.logs.shown) {
@@ -84,6 +92,19 @@ fn debug_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, beside : Bool) -> Unit
       }
     }
   }
+}
+
+///|
+/// `id` started again, said when it was; the next press is for it too.
+fn debug_relaunch(s : ScreenSess, d : DebugLogs, id : String, name : String) -> Unit {
+  d.last_app = Some((id, name))
+  let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "app": Json::string(id) }
+  (s.src.call)("screen.relaunch", Json::object(params), fn(r) {
+    d.relaunch_said = match r {
+      Ok(_) => @sf.t("web-pages.screen.debug.relaunched", args=[("name", name)])
+      Err(e) => text(Some(e), "message")
+    }
+  })
 }
 
 ///|
@@ -146,6 +167,9 @@ priv struct DebugLogs {
   mut settings : Json?
   mut settings_asked : Bool
   mut shot_said : Bool
+  /// the app 重启 App is for (id, name), once one was chosen
+  mut last_app : (String, String)?
+  mut relaunch_said : String
 }
 
 ///|
@@ -185,9 +209,8 @@ fn DebugLogs::copied_text(self : DebugLogs) -> String {
 ///|
 /// 日志 from 控制中心.
 fn debug_logs_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
-  let d = u.logs
   let open = fn() {
-    @sf.panel(@sf.t("web-pages.screen.debug.logs"), fn(c, _) { debug_logs(c, s, d) }, from~, side=screen_panel_side(),
+    @sf.panel(@sf.t("web-pages.screen.debug.logs"), fn(c, _) { debug_logs(c, s, u) }, from~, side=screen_panel_side(),
       w=debug_panel_w, tall=0.7, grows=true, focus=false)
   }
   if @sf.native_on() && !u.in_tab {
@@ -211,6 +234,8 @@ fn debug_logs_new() -> DebugLogs {
     settings: None,
     settings_asked: false,
     shot_said: false,
+    last_app: None,
+    relaunch_said: "",
   }
 }
 
@@ -300,7 +325,8 @@ fn debug_setting(c : @ui.Ctx, s : ScreenSess, d : DebugLogs, label : String, nam
 
 ///|
 /// How the device is set: what a page is checked against most often without going into its 设置.
-fn debug_device(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
+fn debug_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let d = u.logs
   if !d.settings_asked {
     d.settings_asked = true
     c.tell("screen-settings/" + s.screen, fn() {
@@ -316,9 +342,17 @@ fn debug_device(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
   if d.failed != "" {
     @sf.panel_note(c, d.failed)
   }
-  // (what Xcode 27 took away, found on a real one: docs/remote-screens.md, the keys)
+  // (no paste on Xcode 27's yet: docs/remote-screens.md, the keys)
   if text(s.state, "title").contains("iOS 27") {
     @sf.panel_note(c, @sf.t("web-pages.screen.debug.keysNote"))
+  }
+  let other = "screen-relaunch-other"
+  let label = match d.last_app {
+    Some((_, name)) => @sf.t("web-pages.screen.debug.relaunchOther", args=[("name", name)])
+    None => @sf.t("web-pages.screen.debug.relaunch")
+  }
+  if @sf.menu_item(c, label, key=other, panel=true, icon="refresh", end="chevron-right") {
+    debug_apps_open(s, u, Of(c.id(other)))
   }
   debug_setting(c, s, d, @sf.t("web-pages.screen.debug.appearance"), "appearance", [
     ("light", "web-pages.screen.debug.light"),
@@ -334,7 +368,8 @@ fn debug_device(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
 
 ///|
 /// In a panel: its body scrolls as one.
-fn debug_logs(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
+fn debug_logs(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let d = u.logs
   c.box(style=debug_body, fn() {
     debug_tab(c, d)
     if d.tab == 0 {
@@ -345,7 +380,7 @@ fn debug_logs(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
         debug_line_row(c, d.lines[i])
       }
     } else {
-      debug_device(c, s, d)
+      debug_device(c, s, u)
     }
   })
   |> ignore
@@ -369,7 +404,7 @@ fn debug_pane(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       let n = d.lines.length()
       c.list("screen-logs/" + s.screen, n, 20.0, fn(i) { debug_line_row(c, d.lines[n - 1 - i]) }) |> ignore
     } else {
-      debug_device(c, s, d)
+      debug_device(c, s, u)
     }
   })
   |> ignore
@@ -398,7 +433,7 @@ fn debug_apps_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
     }
   })
   let open = fn() {
-    @sf.panel(@sf.t("web-pages.screen.debug.relaunch"), fn(c, _) { debug_apps(c, s, d) }, from~, side=screen_panel_side(),
+    @sf.panel(@sf.t("web-pages.screen.debug.relaunch"), fn(c, _) { debug_apps(c, s, u, d) }, from~, side=screen_panel_side(),
       w=net_panel_w, focus=false)
   }
   if @sf.native_on() && !u.in_tab {
@@ -409,7 +444,7 @@ fn debug_apps_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
 }
 
 ///|
-fn debug_apps(c : @ui.Ctx, s : ScreenSess, d : DebugApps) -> Unit {
+fn debug_apps(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, d : DebugApps) -> Unit {
   @sf.panel_group(c, fn() {
     match d.apps {
       None => @sf.panel_note(c, @sf.t("web-pages.screen.debug.appsLoading"))
@@ -428,6 +463,7 @@ fn debug_apps(c : @ui.Ctx, s : ScreenSess, d : DebugApps) -> Unit {
               note=if flag(Some(app), "running") { @sf.t("web-pages.screen.debug.appRunning") } else { "" },
             ) && !d.going {
             d.going = true
+            u.logs.last_app = Some((id, name))
             let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "app": Json::string(id) }
             (s.src.call)("screen.relaunch", Json::object(params), fn(r) {
               d.going = false

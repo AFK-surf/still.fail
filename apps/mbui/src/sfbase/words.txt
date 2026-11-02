@@ -1829,6 +1829,7 @@ web-pages.screen.debug.logsCopy
 web-pages.screen.debug.logsNone
 web-pages.screen.debug.relaunch
 web-pages.screen.debug.relaunched
+web-pages.screen.debug.relaunchOther
 web-pages.screen.debug.keysNote
 web-pages.screen.device.shot
 web-pages.screen.debug.shotCopied

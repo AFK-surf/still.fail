@@ -465,3 +465,16 @@ test "日志 asks for what came since while it shows; a member who may not debug
   assert_eq(text(Some(r.told("screen.logs")[0]), "screen"), r.sess().screen)
   screen_done(r.t)
 }
+
+///|
+test "重启 App: the list the first time, and the app chosen at one press after" {
+  let r = screen_rig()
+  simulator_live(r)
+  r.sess().src |> ignore
+  r.ui().logs.last_app = Some(("fail.still.demo", "Demo"))
+  r.tap_label(tr("web-pages.screen.debug.relaunch"))
+  r.t.draw()
+  assert_eq(text(Some(r.told("screen.relaunch")[0]), "app"), "fail.still.demo")
+  assert_true(r.told("screen.apps").is_empty())
+  screen_done(r.t)
+}

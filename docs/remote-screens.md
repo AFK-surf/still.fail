@@ -396,16 +396,21 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
 
 404 no such screen, 405 nothing to debug on it, 403 a read-only member, 502 simctl failed.
 
-**The keys on iOS 27** (seen 2026-11-02 on Xcode 27.2, iOS 27.1, station/side/screen-simulator-keys.test.ts): touches reach it,
-its own keyboard typed on by touch included (one run of two: in the other its first-use tip stayed up); keys and pasted text sent through the helper did not reach an app, with or
-without a Device Hub window (the guest takes no legacy keys, and the route through Device Hub needs a focused window of it
-and Accessibility, neither of which a person away from the Mac can see to), and a key sent puts the device in a hardware
-keyboard's mode, its own keyboard hidden, and 软键盘 did not bring it back. The device's panel says so on iOS 27.
+**The keys on Xcode 27** (seen 2026-11-02 on Xcode 27.2, iOS 27.1, iPhone Duo; station/side/screen-simulator-keys.test.ts). The
+guest drops Indigo's keys and buttons while the host's send still succeeds, so from CoreSimulator 1155.4 they go through its
+`dtuhidd` (vendor/serve-sim DTUHIDKeys.swift): no window of Device Hub's, focus or Accessibility is needed, and it held with
+Device Hub's window open on the device as well as without. Before 1155.4 nothing changes. Not tried on an Xcode before 27 (none
+at hand), nor on an old runtime on this Xcode (the test app did not lay out on iOS 17).
+
+Pasted text (what a US keyboard's keys cannot type: `SimInput`) does not arrive yet: `simctl pbcopy` is ignored while CoreDevice's
+pasteboard is in use, and here `devicectl device pasteboard copy` hung past its timeout, so the helper ends it after 5 s lest the
+keys behind it wait. Until then the device's panel says to type such text on the device's own keyboard, which a finger reaches.
 
 The app's viewer treats a simulator as the touchscreen it is (a finger where it touches, no trackpad to choose, no mouse's
-buttons), and its page is about the device and the app rather than the link: its buttons (主屏幕, 多任务, 锁屏, 软键盘) and
-重启 App beside the picture, and 日志 kept beside the device on a wide page (in a panel, from a button under the picture, on a
-narrow one). 控制中心 has only what the view does (画质, 帧率, 全屏, 断开).
+buttons), and its page is about the device and the app rather than the link: its buttons (主屏幕, 多任务, 锁屏, 软键盘), 截图 and
+重启 App (the app last chosen at one press; another from 设备) over the picture on a wide page, under it on a narrow one, and 日志
+and 设备 beside the device on a wide page, put away with their button, in a panel on a narrow one. 控制中心 has only what the view
+does (画质, 帧率, 全屏, 断开).
 
 ### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
 

@@ -189,11 +189,22 @@ final class SimulatorView: ScreenView {
     }
   }
 
-  /// The device's pasteboard set to `text` (`simctl pbcopy`).
+  /// The device's pasteboard set to `text`: through CoreDevice from Xcode 27, whose guest takes no legacy snapshots while
+  /// Device Hub's stack is in use (`simctl pbcopy` succeeds and changes nothing), else `simctl pbcopy` (CoreSimulator's own
+  /// simctl: Xcode's is a script that may ask for a password first, screens/simulator.ts).
   func pasteboard(_ text: String) async -> Bool {
+    if HIDInjector.usesDTUHID {
+      let copied = await piped(text, "/usr/bin/xcrun", ["devicectl", "device", "pasteboard", "copy", "--device", udid, "--timeout", "5", "--quiet"])
+      if copied { return true }
+    }
+    return await piped(text, "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl", ["pbcopy", udid])
+  }
+
+  /// `file` run with `text` on its stdin; whether it succeeded. Ended after a while: a person's next keys wait on it.
+  private func piped(_ text: String, _ file: String, _ arguments: [String]) async -> Bool {
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-    process.arguments = ["simctl", "pbcopy", udid]
+    process.executableURL = URL(fileURLWithPath: file)
+    process.arguments = arguments
     let input = Pipe()
     process.standardInput = input
     process.standardOutput = FileHandle.nullDevice
@@ -204,6 +215,7 @@ final class SimulatorView: ScreenView {
         try process.run()
         input.fileHandleForWriting.write(Data(text.utf8))
         try? input.fileHandleForWriting.close()
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5) { if process.isRunning { process.terminate() } }
       } catch {
         process.terminationHandler = nil
         done.resume(returning: false)
