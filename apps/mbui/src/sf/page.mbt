@@ -1773,8 +1773,12 @@ pub fn switch_row(
       wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words), lead?)
     Wide =>
       if in_list.val > 0 {
+        // (its title as strong as its list's other rows' titles: link_row's, a setting's)
         let mut now = on
-        c.box(style=wide_in_list(), fn() { now = wide_switch_row(c, key, title, on, note~, disabled~, busy~, lead?) }) |> ignore
+        c.box(style=wide_in_list(), fn() {
+          now = wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=setting_title(), lead?)
+        })
+        |> ignore
         now
       } else {
         wide_switch_row(c, key, title, on, note~, disabled~, busy~, lead?)
