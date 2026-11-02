@@ -262,7 +262,6 @@
   "core-logic.format.status.running": "进行中",
   "core-logic.format.status.unexpected": "出错：意外停止",
   "core-logic.format.status.unexpected.what": "意外停止",
-  "core-logic.format.thread.chat": "{brand} 对话",
   "core-logic.format.thread.dm": "私信",
   "core-logic.format.thread.feishu": "飞书对话",
   "core-logic.format.until.days": "{n} 天后",

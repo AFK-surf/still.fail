@@ -1,7 +1,6 @@
 // Words and marks the clients show, decided here once (format.rs): numbers, times and durations in words, day
 // headings, a thread's name, an agent's label, a model's maker, a runtime's efforts, a connect's state. Times are the
 // viewer's local ones: `offsetMin` is their UTC offset at that moment (Host).
-import * as brand from "./brand.ts";
 import { current, tr, type Lang } from "./i18n.ts";
 import * as model from "./shapes/model.ts";
 import * as reasoning from "./shapes/reasoning.ts";
@@ -334,12 +333,9 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   const text = (k: string) => str(get(thread, k)) ?? "";
   let where: string;
   if (channel === "EMBER" || channel === "STILLFAIL") {
-    const title = text("title");
-    if (title !== "") where = title;
-    else {
-      const first = cleanText(text("firstText"));
-      where = first === "" ? tr(current(), "core-logic.format.thread.chat", { brand: brand.name() }) : first;
-    }
+    // Its title as the station's titleOf takes it: a person's, else the agent's (autoTitle), else 新对话, never its first
+    // message.
+    where = [text("title"), text("autoTitle")].map((t) => t.trim()).find((t) => t !== "") ?? tr(current(), "core-views.new_chat");
   } else if (isFeishuChat(channel) || str(get(thread, "surface"))?.startsWith("feishu:")) {
     // A Feishu chat (群, 私聊) by its name, as its station read it.
     const n = text("channelName");

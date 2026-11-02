@@ -68,6 +68,21 @@ test("a_feishu_place_is_named_by_its_chat_and_opens_in_feishu_or_lark", () => {
   assert.equal(format.threadName(threads, "oc_a1b2", "om_x1", 480)[1], format.threadName([{ channel: "C1", threadTs: "1790000000" }], "C1", "1790000000", 480)[1]);
 });
 
+test("a_stillfail_place_is_its_title_or_the_agents_or_new_chat_never_its_first_message", () => {
+  // Named as the station's titleOf names it: its first message, links and all, is never its name.
+  const first = "看 [一起排查 ccvm 图片加载](https://app.still.fail/w/01M3/s/0c5f/chats/ember%3Ac-7c92) 要排队";
+  const threads = [
+    { surface: "ember", channel: "EMBER", threadTs: "1793652177.618000", title: null, firstText: first, sessions: [{ session: "s1" }] },
+    { surface: "ember", channel: "EMBER", threadTs: "1793652178.000000", title: "排查 ccvm 图片加载", firstText: first, sessions: [] },
+    // the agent's (chat_post title), a person's being none
+    { surface: "ember", channel: "EMBER", threadTs: "1793635478.750000", title: null, autoTitle: "ccvm 发消息和图片卡顿", firstText: first, sessions: [] },
+  ];
+  const untitled = format.place(threads, "EMBER/1793652177.618000", 480, new Map()) as J;
+  assert.deepEqual([untitled.name, untitled.surface, untitled.session], ["新对话", "ember", "s1"]);
+  assert.equal((format.place(threads, "EMBER/1793652178.000000", 480, new Map()) as J).name, "排查 ccvm 图片加载");
+  assert.equal((format.place(threads, "EMBER/1793635478.750000", 480, new Map()) as J).name, "ccvm 发消息和图片卡顿");
+});
+
 test("a_feishu_person_is_heard_as_a_slack_one_is", () => {
   const [said] = parsePrompt('<message via="feishu" connect="codex-bot" thread="oc_a1/om_1" from="Ada (slack:codex-bot:ou_1)" user="slack:codex-bot:ou_1" ts="om_2">\nhi\n</message>');
   assert.deepEqual([said.length, said[0].slack, said[0].text], [1, true, "hi"]);
