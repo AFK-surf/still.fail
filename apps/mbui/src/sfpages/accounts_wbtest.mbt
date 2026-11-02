@@ -59,14 +59,18 @@ test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, th
 }
 
 ///|
-test "a profile's models, a narrow page with a mouse: all it runs listed, none to tick; one named by hand added, then taken off by its ×" {
+test "a profile's models, a narrow page with a mouse: how many in a row; all of them in a panel, each a box to star; one named by hand added there, then taken off by its ×" {
   let t = setting_tester(Profile("ws1/st1", "cx"), 390.0)
-  scrolled_to(t, 390.0, "O9-MINI")
-  assert_true(t.find("GPT-6-MINI") is Some(_) && t.find("O9-MINI") is Some(_), msg="every one it runs")
-  assert_true(t.find("全部 12 个") is None, msg="as few as shown whole")
+  scrolled_to(t, 390.0, "全部模型")
+  assert_true(t.find("12 个模型") is Some(_), msg="how many")
+  assert_true(t.find("GPT-6-MINI") is None, msg="not laid out on the page")
+  t.tap_text("全部模型")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(@sf.presenting(), msg="a panel")
+  assert_true(t.find("GPT-6-MINI") is Some(_), msg="every one it runs")
+  assert_true(t.query(Checkbox, label="喜欢 GPT-6-MINI") is Some(_), msg="its box")
   assert_true(t.query(Button, label="移除 GPT-6-MINI") is None, msg="one its provider lists: not taken off")
   // a name typed, then 添加
-  scrolled_to(t, 390.0, "按名称添加模型")
   t.tap_text("按名称添加模型")
   t.type_text("my-model")
   t.frame()
@@ -74,13 +78,12 @@ test "a profile's models, a narrow page with a mouse: all it runs listed, none t
   tap_words(t, "添加")
   t.frame()
   t.frame()
-  scrolled_to(t, 390.0, "MY-MODEL")
-  assert_true(t.find("MY-MODEL") is Some(_), msg="the model named, among the rest")
+  assert_true(t.query(Button, label="移除 MY-MODEL") is Some(_), msg="the model named, among the rest")
   // its × takes it off again
   t.click(Button, label="移除 MY-MODEL")
   t.frame()
   t.frame()
-  assert_true(t.find("MY-MODEL") is None, msg="taken off")
+  assert_true(t.query(Button, label="移除 MY-MODEL") is None, msg="taken off")
 }
 
 ///|
