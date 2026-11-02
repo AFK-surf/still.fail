@@ -17,6 +17,7 @@ import { type FileHandle, open, readdir, realpath, stat } from "node:fs/promises
 import { basename, dirname, join, sep } from "node:path";
 import { createZstdDecompress } from "node:zlib";
 import { log } from "../ops/log.ts";
+import { segmentsFrom, writtenLength } from "../read/packed.ts";
 import { parseIso, sharedTranscripts, transcriptDir, transcriptPaths } from "../read/transcript.ts";
 import type { SessionRow, Store, UsageCall, UsageFile, UsageFor } from "../store/store.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
@@ -246,6 +247,30 @@ function* partsOf(bytes: Buffer, from: number): Generator<Part> {
 /// A file put away, past `offset`, as `readFrom` says it: decompressed as it is read, never whole (one is hundreds of MB,
 /// and every one is read again as the station starts). Shorter than `offset`: read again from its start.
 async function* packedFrom(path: string, offset: number): AsyncGenerator<Part> {
+  // In segments (read/packed.ts): those from `offset` on alone.
+  const length = await writtenLength(packed(path)).catch(() => null);
+  if (length !== null) {
+    if (offset > length) {
+      yield* packedFrom(path, 0);
+      return;
+    }
+    const segments = await segmentsFrom(packed(path), offset).catch(() => null);
+    if (segments === null) return;
+    let start = offset;
+    let held = Buffer.alloc(0);
+    try {
+      for await (const piece of segments) {
+        const bytes = held.length > 0 ? Buffer.concat([held, piece]) : piece;
+        const cut = bytes.lastIndexOf(0x0a);
+        if (cut >= 0) yield* partsOf(bytes.subarray(0, cut + 1), start);
+        start += cut + 1;
+        held = Buffer.from(bytes.subarray(cut + 1));
+      }
+    } catch {
+      return;
+    }
+    return;
+  }
   const raw = createReadStream(packed(path), { highWaterMark: CHUNK });
   const stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
   raw.on("error", (error) => stream.destroy(error));
@@ -718,6 +743,9 @@ export class UsageCounter {
     // restored before its runtime writes in it again. Read again as the station starts, every one was decompressed
     // whole at each start (10.8 s on ccvm, 2026-10-24, the station slow to answer meanwhile). One never read is read once.
     if (this.#first && was !== undefined && (await putAway(path))) return 0;
+    // Nor is one counted to its end read again: it is not written in while it is put away. (Every count of its session
+    // decompressed it whole before, 150 MB for one, to find nothing new: ccvm, 2026-11-02.)
+    if (was !== undefined && (await putAway(path)) && (await writtenLength(packed(path)).catch(() => null)) === was.offset) return 0;
     const before = was ?? { session: null, offset: 0, model: null };
     const state: CallState = { model: before.model, codexId: null };
     let added = 0;

@@ -236,6 +236,29 @@ export class ColdRooms implements ColdStorage {
     }
     if (done > 0) log.info("hub", "the Rust station's transcript copies let go, the transcripts packed", { sessions: done, freed });
   }
+
+  /// Transcripts put away before they were in segments (read/packed.ts), each read whole for every page of its history
+  /// (150 MB for one): put away again in segments, one after another. Once all are, this finds none to do.
+  async segmentHistories(): Promise<void> {
+    let done = 0;
+    for (const row of this.hub().store.listSessions()) {
+      if (row.archivedAt === null) continue;
+      let files: string[];
+      try {
+        files = this.historyFiles(row.key, false);
+      } catch {
+        continue;
+      }
+      for (const path of files) {
+        try {
+          if (await archive.segmentFile(path)) done++;
+        } catch (error) {
+          log.warn("hub", "a put-away transcript not put in segments", { session: row.key, error: (error as Error).message });
+        }
+      }
+    }
+    if (done > 0) log.info("hub", "put-away transcripts put in segments", { n: done });
+  }
 }
 
 /// The Rust station's copy of an archived session's transcript.
