@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { PLAIN } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
-import { backfillUseIndex, initializeUseIndex, PLAIN_USES, USE_BACKFILL_AFTER, UseIndex, VAULT_USES } from "../src/vault/use-index.ts";
+import { backfillNextWorkspace, backfillUseIndex, initializeUseIndex, PLAIN_USES, USE_BACKFILL_AFTER, UseIndex, VAULT_USES } from "../src/vault/use-index.ts";
 
 /// Count the JSON fields SQLite actually reads, including those it must examine and then discard. The function has the
 /// same results as json_extract for these request fields, and is deterministic so SQLite can use expression indexes.
@@ -54,6 +54,7 @@ test("a page of uses does not inspect other people's or other vaults' growing hi
   try {
     f.put("mine", 1, "alice@x.com");
     f.put("shared", 1, "", "v");
+    await f.read(PLAIN); // Fill this workspace before comparing page reads.
     const beforePlain = await f.read(PLAIN);
     const beforeShared = await f.read("v");
     for (let i = 0; i < 2_000; i++) {
@@ -93,6 +94,8 @@ test("a changed request moves in and out of the indexed page", async () => {
     assert.deepEqual((await f.read(PLAIN)).rows.map((r) => [r.item, r.denied]), [["b", true]]);
     f.db.prepare("DELETE FROM vault_requests WHERE id = 'b'").run();
     assert.deepEqual((await f.read(PLAIN)).rows.map((r) => r.item), ["a"]);
+    f.db.prepare("INSERT OR REPLACE INTO vault_requests (ws, id, session, status, body) VALUES ('w', 'a', 's', 'pending', ?)").run(body);
+    assert.deepEqual((await f.read(PLAIN)).rows, [], "replacing a decided request with a pending one removes it");
   } finally {
     f.db.close();
   }
@@ -109,11 +112,11 @@ test("old requests are indexed in bounded resumable batches while new writes kee
   }
   const f = fixture(db);
   try {
-    assert.equal(backfillUseIndex(db, 7), false);
+    assert.equal(backfillUseIndex(db, "w", 7), false);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM vault_use_lookup").get() as { n: number }).n, 7);
-    const state = db.prepare("SELECT after_ws, after_id, done FROM vault_use_backfill").get() as { after_ws: string; after_id: string; done: number };
-    assert.deepEqual([state.after_ws, state.after_id, state.done], ["w", "old-06", 0]);
-    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${USE_BACKFILL_AFTER}`).all(state.after_ws, state.after_id, 7) as { detail: string }[]).map((r) => r.detail).join(" | ");
+    const state = db.prepare("SELECT after_id, done FROM vault_use_backfill WHERE ws = 'w'").get() as { after_id: string; done: number };
+    assert.deepEqual([state.after_id, state.done], ["old-06", 0]);
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${USE_BACKFILL_AFTER}`).all("w", state.after_id, 7) as { detail: string }[]).map((r) => r.detail).join(" | ");
     assert.match(plan, /SEARCH vault_requests USING COVERING INDEX sqlite_autoindex_vault_requests_1/);
     assert.doesNotMatch(plan, /TEMP B-TREE/);
     // Changes behind the cursor and a new earlier key must survive a restart and the remaining backfill.
@@ -127,7 +130,7 @@ test("old requests are indexed in bounded resumable batches while new writes kee
     assert.equal(ids[0], "aaa-new");
     assert.ok(!ids.includes("old-03"));
     assert.ok(!ids.includes("zzz-new"));
-    assert.equal((db.prepare("SELECT done FROM vault_use_backfill").get() as { done: number }).done, 1);
+    assert.equal((db.prepare("SELECT done FROM vault_use_backfill WHERE ws = 'w'").get() as { done: number }).done, 1);
   } finally {
     db.close();
   }
@@ -146,7 +149,7 @@ test("a disk-backed backfill resumes after reopening and is read by its worker",
     put.run(id, JSON.stringify({ vault: PLAIN, owner: "alice@x.com", at: i, item: id }));
   }
   initializeUseIndex(db);
-  assert.equal(backfillUseIndex(db, 7), false);
+  assert.equal(backfillUseIndex(db, "w", 7), false);
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM vault_use_lookup").get() as { n: number }).n, 7);
   db.close();
   db = new DatabaseSync(path);
@@ -154,7 +157,77 @@ test("a disk-backed backfill resumes after reopening and is read by its worker",
   try {
     const bodies = await index.read("w", PLAIN, "alice@x.com", 2);
     assert.deepEqual(bodies.map((body) => (JSON.parse(body) as { item: string }).item), ["old-99", "old-98"]);
-    assert.equal((db.prepare("SELECT done FROM vault_use_backfill").get() as { done: number }).done, 1);
+    assert.equal((db.prepare("SELECT done FROM vault_use_backfill WHERE ws = 'w'").get() as { done: number }).done, 1);
+  } finally {
+    await index.close();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a workspace's first read does not backfill other workspaces' old requests", async () => {
+  async function readWith(unrelated: number) {
+    const db = new DatabaseSync(":memory:");
+    db.exec(`CREATE TABLE vault_requests (ws TEXT NOT NULL, id TEXT NOT NULL, session TEXT NOT NULL, status TEXT NOT NULL,
+      body TEXT NOT NULL, thread INTEGER, card_ts TEXT, PRIMARY KEY (ws, id));`);
+    const put = db.prepare("INSERT INTO vault_requests (ws, id, session, status, body) VALUES (?, ?, 's', 'granted', ?)");
+    const body = (item: string) => JSON.stringify({ vault: PLAIN, owner: "alice@x.com", at: 1, item, session: "s", mode: "env", status: "granted" });
+    put.run("w", "mine", body("mine"));
+    for (let i = 0; i < unrelated; i++) put.run("other", `id-${i}`, body(`id-${i}`));
+    const f = fixture(db);
+    try {
+      return await f.read(PLAIN);
+    } finally {
+      db.close();
+    }
+  }
+  const small = await readWith(0);
+  const large = await readWith(1_000);
+  assert.deepEqual(large.rows, small.rows);
+  assert.equal(large.examined, small.examined, "another workspace adds no JSON examinations to the first read");
+});
+
+test("background backfill can finish the other workspaces in bounded batches", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE vault_requests (ws TEXT NOT NULL, id TEXT NOT NULL, session TEXT NOT NULL, status TEXT NOT NULL,
+    body TEXT NOT NULL, thread INTEGER, card_ts TEXT, PRIMARY KEY (ws, id));`);
+  const put = db.prepare("INSERT INTO vault_requests (ws, id, session, status, body) VALUES (?, ?, 's', 'granted', ?)");
+  const body = JSON.stringify({ vault: PLAIN, owner: "alice@x.com", at: 1 });
+  put.run("w", "mine", body);
+  for (let i = 0; i < 70; i++) put.run("other", `id-${i}`, body);
+  initializeUseIndex(db);
+  try {
+    assert.equal(backfillUseIndex(db, "w"), true);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM vault_use_lookup WHERE ws = 'other'").get() as { n: number }).n, 0);
+    let before = 0;
+    let complete = false;
+    for (let batch = 0; batch < 10 && !complete; batch++) {
+      complete = backfillNextWorkspace(db);
+      const after = (db.prepare("SELECT COUNT(*) AS n FROM vault_use_lookup WHERE ws = 'other'").get() as { n: number }).n;
+      assert.ok(after - before <= 32, "one transaction indexes at most 32 old requests");
+      before = after;
+    }
+    assert.equal(complete, true);
+    assert.equal(before, 70);
+  } finally {
+    db.close();
+  }
+});
+
+test("an unreadable old request cannot stop another workspace's page", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vault-use-corrupt-"));
+  const db = new DatabaseSync(join(dir, "station.db"));
+  db.exec(`PRAGMA journal_mode = WAL;
+    CREATE TABLE vault_requests (ws TEXT NOT NULL, id TEXT NOT NULL, session TEXT NOT NULL, status TEXT NOT NULL,
+    body TEXT NOT NULL, thread INTEGER, card_ts TEXT, PRIMARY KEY (ws, id));`);
+  const put = db.prepare("INSERT INTO vault_requests (ws, id, session, status, body) VALUES (?, ?, 's', 'granted', ?)");
+  put.run("bad", "bad", "not JSON");
+  put.run("w", "mine", JSON.stringify({ vault: PLAIN, owner: "alice@x.com", at: 1, item: "mine" }));
+  const index = new UseIndex(db);
+  try {
+    await assert.rejects(index.read("bad", PLAIN, "alice@x.com", 1), /malformed JSON/);
+    const bodies = await index.read("w", PLAIN, "alice@x.com", 1);
+    assert.equal((JSON.parse(bodies[0]!) as { item: string }).item, "mine");
   } finally {
     await index.close();
     db.close();

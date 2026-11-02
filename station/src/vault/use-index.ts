@@ -12,9 +12,13 @@ CREATE TABLE IF NOT EXISTS vault_use_lookup (
 CREATE INDEX IF NOT EXISTS vault_use_lookup_vault ON vault_use_lookup (ws, vault, at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS vault_use_lookup_owner ON vault_use_lookup (ws, vault, owner, at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS vault_use_backfill (
-  id INTEGER PRIMARY KEY CHECK (id = 1), after_ws TEXT, after_id TEXT, done INTEGER NOT NULL
+  ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS vault_use_backfill_all (
+  id INTEGER PRIMARY KEY CHECK (id = 1), after_ws TEXT, done INTEGER NOT NULL
 );
 CREATE TRIGGER IF NOT EXISTS vault_use_lookup_add AFTER INSERT ON vault_requests BEGIN
+  DELETE FROM vault_use_lookup WHERE ws = NEW.ws AND id = NEW.id;
   INSERT OR REPLACE INTO vault_use_lookup
     SELECT NEW.ws, NEW.id, json_extract(NEW.body, '$.vault'), json_extract(NEW.body, '$.owner'), json_extract(NEW.body, '$.at')
     WHERE NEW.status IN ('granted', 'denied') AND json_extract(NEW.body, '$.save') IS NULL;
@@ -28,9 +32,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS vault_use_lookup_drop AFTER DELETE ON vault_requests BEGIN
   DELETE FROM vault_use_lookup WHERE ws = OLD.ws AND id = OLD.id;
 END;
--- The triggers are in place before this test: a request arriving after it is indexed by its own write.
-INSERT OR IGNORE INTO vault_use_backfill (id, after_ws, after_id, done)
-  SELECT 1, NULL, NULL, NOT EXISTS (SELECT 1 FROM vault_requests LIMIT 1);
+INSERT OR IGNORE INTO vault_use_backfill_all (id, after_ws, done) VALUES (1, NULL, 0);
 `;
 
 /// Both statements read only their page in time order, then fetch its request bodies by primary key.
@@ -40,7 +42,7 @@ export const VAULT_USES = `SELECT r.body FROM vault_use_lookup u INDEXED BY vaul
 export const PLAIN_USES = `SELECT r.body FROM vault_use_lookup u INDEXED BY vault_use_lookup_owner
   JOIN vault_requests r ON r.ws = u.ws AND r.id = u.id
   WHERE u.ws = ?1 AND u.vault = ?2 AND u.owner = ?3 ORDER BY u.at DESC, u.id DESC LIMIT ?4`;
-export const USE_BACKFILL_AFTER = "SELECT ws, id FROM vault_requests WHERE (ws, id) > (?, ?) ORDER BY ws, id LIMIT ?";
+export const USE_BACKFILL_AFTER = "SELECT id FROM vault_requests WHERE ws = ? AND id > ? ORDER BY id LIMIT ?";
 
 export type UseRead = { id: number; ws: string; vault: string; owner: string | null; limit: number };
 export type UseAnswer = { id: number; bodies?: string[]; error?: string };
@@ -56,33 +58,57 @@ export function readUses(db: DatabaseSync, q: UseRead): string[] {
   return rows.map((r) => r.body);
 }
 
-/// One resumable transaction, considering at most `limit` old requests, including requests that are not uses.
-/// New and changed requests are already maintained by triggers, including changes behind the saved cursor.
-export function backfillUseIndex(db: DatabaseSync, limit = 32): boolean {
+/// Whether a workspace's earlier requests have been filled. Writes after that are kept by the triggers.
+export function useIndexComplete(db: DatabaseSync, ws: string): boolean {
+  return (db.prepare("SELECT done FROM vault_use_backfill WHERE ws = ?").get(ws) as { done: number } | undefined)?.done === 1;
+}
+
+/// One resumable transaction, considering at most `limit` old requests of this workspace, including requests that are
+/// not uses. New and changed requests are already maintained by triggers, including changes behind the saved cursor.
+export function backfillUseIndex(db: DatabaseSync, ws: string, limit = 32): boolean {
   db.exec("BEGIN IMMEDIATE");
   try {
-    const state = db.prepare("SELECT after_ws, after_id, done FROM vault_use_backfill WHERE id = 1").get() as { after_ws: string | null; after_id: string | null; done: number };
+    db.prepare("INSERT OR IGNORE INTO vault_use_backfill (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
+    const state = db.prepare("SELECT after_id, done FROM vault_use_backfill WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
     if (state.done) {
       db.exec("COMMIT");
       return true;
     }
-    const rows = (state.after_ws === null
-      ? db.prepare("SELECT ws, id FROM vault_requests ORDER BY ws, id LIMIT ?").all(limit)
-      : db.prepare(USE_BACKFILL_AFTER).all(state.after_ws, state.after_id, limit)) as { ws: string; id: string }[];
+    const rows = (state.after_id === null
+      ? db.prepare("SELECT id FROM vault_requests WHERE ws = ? ORDER BY id LIMIT ?").all(ws, limit)
+      : db.prepare(USE_BACKFILL_AFTER).all(ws, state.after_id, limit)) as { id: string }[];
     const add = db.prepare(`INSERT OR IGNORE INTO vault_use_lookup
       SELECT ws, id, json_extract(body, '$.vault'), json_extract(body, '$.owner'), json_extract(body, '$.at') FROM vault_requests
       WHERE ws = ? AND id = ? AND status IN ('granted', 'denied') AND json_extract(body, '$.save') IS NULL`);
-    for (const row of rows) add.run(row.ws, row.id);
+    for (const row of rows) add.run(ws, row.id);
     const last = rows.at(-1);
     const done = rows.length < limit;
-    db.prepare("UPDATE vault_use_backfill SET after_ws = ?, after_id = ?, done = ? WHERE id = 1")
-      .run(last?.ws ?? state.after_ws, last?.id ?? state.after_id, done ? 1 : 0);
+    db.prepare("UPDATE vault_use_backfill SET after_id = ?, done = ? WHERE ws = ?")
+      .run(last?.id ?? state.after_id, done ? 1 : 0, ws);
     db.exec("COMMIT");
     return done;
   } catch (e) {
     db.exec("ROLLBACK");
     throw e;
   }
+}
+
+/// In the background, discover one workspace at a time through the requests' primary key and fill one batch. Reads
+/// can preempt this work with their own workspace; the saved per-workspace cursor also lets another process resume it.
+export function backfillNextWorkspace(db: DatabaseSync): boolean {
+  const state = db.prepare("SELECT after_ws, done FROM vault_use_backfill_all WHERE id = 1").get() as { after_ws: string | null; done: number };
+  if (state.done) return true;
+  const next = (state.after_ws === null
+    ? db.prepare("SELECT ws FROM vault_requests ORDER BY ws LIMIT 1").get()
+    : db.prepare("SELECT ws FROM vault_requests WHERE ws > ? ORDER BY ws LIMIT 1").get(state.after_ws)) as { ws: string } | undefined;
+  if (!next) {
+    db.prepare("UPDATE vault_use_backfill_all SET done = 1 WHERE id = 1 AND after_ws IS ?").run(state.after_ws);
+    return (db.prepare("SELECT done FROM vault_use_backfill_all WHERE id = 1").get() as { done: number }).done === 1;
+  }
+  if (useIndexComplete(db, next.ws) || backfillUseIndex(db, next.ws)) {
+    db.prepare("UPDATE vault_use_backfill_all SET after_ws = ? WHERE id = 1 AND after_ws IS ? AND done = 0").run(next.ws, state.after_ws);
+  }
+  return false;
 }
 
 /// A separate connection and worker keep both the backfill and reads away from the station's request thread. In-memory
@@ -131,7 +157,7 @@ export class UseIndex {
   async read(ws: string, vault: string, owner: string | null, limit: number): Promise<string[]> {
     const q = { id: ++this.#next, ws, vault, owner, limit };
     if (this.#path === null) {
-      while (!backfillUseIndex(this.#db)) await new Promise<void>((resolve) => setImmediate(resolve));
+      while (!useIndexComplete(this.#db, ws) && !backfillUseIndex(this.#db, ws)) await new Promise<void>((resolve) => setImmediate(resolve));
       return readUses(this.#db, q);
     }
     return new Promise((resolve, reject) => {
