@@ -102,6 +102,8 @@ pub fn generator_duration(Generator) -> Double
 
 pub fn generator_easing((Double, Double, Double) -> Generator, Double, Double, velocity? : Double, scale? : Double) -> ((Double) -> Double, Double)
 
+pub fn grown_shown(String) -> Double?
+
 pub fn inertia_generator(Double, velocity? : Double, power? : Double, time_constant? : Double, bounce_damping? : Double, bounce_stiffness? : Double, modify_target? : (Double) -> Double, min? : Double, max? : Double, rest_delta? : Double, rest_speed? : Double) -> Generator
 
 pub fn inertia_to(power? : Double, time_constant? : Double, bounce_damping? : Double, bounce_stiffness? : Double, modify_target? : (Double) -> Double, min? : Double, max? : Double, rest_delta? : Double, rest_speed? : Double, delay? : Double) -> Spec
@@ -116,7 +118,7 @@ pub fn keyframes_generator(Array[Double], duration? : Double, times? : Array[Dou
 
 pub fn keyframes_to(Array[Double], duration? : Double, times? : Array[Double], ease? : (Double) -> Double, eases? : Array[(Double) -> Double], delay? : Double) -> Spec
 
-pub fn layout(@ui.Ctx, Int32, String, spec? : Spec, by? : String, enter? : Trans, exit? : Trans, drive? : Double, screen? : Bool) -> Unit
+pub fn layout(@ui.Ctx, Int32, String, spec? : Spec, by? : String, enter? : Trans, exit? : Trans, drive? : Double, screen? : Bool, cut? : Bool) -> Unit
 
 pub fn layout_rest(String) -> Double
 

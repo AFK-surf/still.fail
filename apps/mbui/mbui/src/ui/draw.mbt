@@ -829,9 +829,11 @@ pub fn Ctx::drawn_at(self : Ctx, i : Int) -> (Double, Double) {
 
 ///|
 /// A translating node's drawn rectangle, the rectangular part its ancestors leave visible (left, top, right, bottom),
-/// its inherited opacity, and the softness of that part's edges (left, top, right, bottom).
+/// its inherited opacity, and the softness of that part's edges (left, top, right, bottom); `grown`, its rectangle as
+/// big as it is drawn too (their looks' scales in it).
 pub(all) struct DrawnState {
   rect : (Double, Double, Double, Double)
+  grown : (Double, Double, Double, Double)
   clip : (Double, Double, Double, Double)
   alpha : Double
   soft : (Double, Double, Double, Double)
@@ -839,7 +841,8 @@ pub(all) struct DrawnState {
 
 ///|
 /// What of node `i` shows by its and its ancestors' translating looks and rectangular cuts, after layout. For an action
-/// that carries the drawn thing elsewhere; scales, turns and rounded ancestor clips are not described here.
+/// that carries the drawn thing elsewhere; scales (but in `grown`), turns and rounded ancestor clips are not described
+/// here.
 pub fn Ctx::drawn_state(self : Ctx, i : Int) -> DrawnState {
   let n = self.nodes[i]
   let (x, y) = self.drawn_at(i)
@@ -852,11 +855,28 @@ pub fn Ctx::drawn_state(self : Ctx, i : Int) -> DrawnState {
   let mut sr = 0.0
   let mut sb = 0.0
   let mut alpha = 1.0
+  // (its corners as painting carries them, grown: by each look from its own, outwards, about its point)
+  let mut x0 = n.x
+  let mut y0 = n.y
+  let mut x1 = n.x + n.fw
+  let mut y1 = n.y + n.fh
   let mut p = i
   while p >= 0 {
     let q = self.nodes[p]
     let (px, py) = self.drawn_at(p)
     alpha = alpha * q.opacity
+    match self.drawn_entry(p) {
+      Some(e) => {
+        let l = e.look_now()
+        let ox = q.x + l.ox * q.fw
+        let oy = q.y + l.oy * q.fh
+        x0 = ox + (x0 - ox) * l.sx + l.dx
+        x1 = ox + (x1 - ox) * l.sx + l.dx
+        y0 = oy + (y0 - oy) * l.sy + l.dy
+        y1 = oy + (y1 - oy) * l.sy + l.dy
+      }
+      None => ()
+    }
     if p != i && q.clip {
       if px > left { left = px; sl = 0.0 }
       if py > top { top = py; st = 0.0 }
@@ -875,7 +895,7 @@ pub fn Ctx::drawn_state(self : Ctx, i : Int) -> DrawnState {
     }
     p = q.parent
   }
-  { rect: (x, y, n.fw, n.fh), clip: (left, top, dmax(left, right), dmax(top, bottom)), alpha, soft: (sl, st, sr, sb) }
+  { rect: (x, y, n.fw, n.fh), grown: (x0, y0, x1 - x0, y1 - y0), clip: (left, top, dmax(left, right), dmax(top, bottom)), alpha, soft: (sl, st, sr, sb) }
 }
 
 // ── painting ────────────────────────────────────────────────────────────

@@ -852,20 +852,23 @@ fn quote_comment_field(c : @ui.Ctx, key : String, f : @ui.Field, hint? : Bool = 
 /// words as their card, a station's file as its card, a link as its card, any other file as its card.
 fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?]) -> Unit {
   // The room for what is added is present even when empty, outside the flow then. Its height and position change with
-  // the ground, so something new is revealed inside that room as it grows.
+  // the ground; what is new in it grows with it as it opens, whole (held_coming), never cut through by its edge (a
+  // picture's foot cut square and faded as it came in, 2026-11-02 the user: 「能看出问题吗」).
   let empty = w.quotes.is_empty() && w.files.is_empty()
+  let room = Ref(-1)
   let area = c.box(
     style=extras_column,
     left?=if empty { Some(@sf.composer_pad) } else { None },
     top?=if empty { Some(@sf.composer_pad) } else { None },
-    fn() { composer_extra_items(c, src, spec, w, holds, shape, quote_pictures, file_pictures) },
+    fn() { composer_extra_items(c, src, spec, w, holds, shape, quote_pictures, file_pictures, room) },
   )
+  room.val = area
   @motion.scope(c, area)
-  @motion.layout(c, area, "composer/extras", spec=shape, by=holds)
+  @motion.layout(c, area, "composer/extras", spec=shape, by=holds, cut=false)
 }
 
 ///|
-fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?]) -> Unit {
+fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?], room : Ref[Int]) -> Unit {
   if !w.quotes.is_empty() {
     c.box(style=quotes_column, fn() {
       for i, q in w.quotes {
@@ -923,7 +926,7 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
           }
         })
         @motion.layout(c, item, key + "/in", spec=shape, by=holds)
-        held_coming(c, item, key)
+        held_coming(c, item, key, room)
       }
     })
     |> ignore
@@ -936,7 +939,7 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
         let key = "composer/file/" + text(Some(f), "id")
         @motion.layout(c, i, key + "/in", spec=shape, by=holds)
         @motion.measure_drawn(c, i, key + "/shown")
-        held_coming(c, i, key)
+        held_coming(c, i, key, room)
       }
     })
     |> ignore
@@ -947,9 +950,26 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
 /// What waits in it (a quote's card, a file's: node `i`, keyed `key`) put in while it shows comes in (`@sf.waiting_in`, the
 /// web's enterUp on composerQuote, fileCard and composerThumb), the first frame it is built; what a draft opened with,
 /// or the composer gone to another page with, is there at once (docs/motion.md: what is on a page does not move of its
-/// own as it comes), though said so as it is (built again the frame after, it was there before).
-fn held_coming(c : @ui.Ctx, i : Int, key : String) -> Unit {
+/// own as it comes), though said so as it is (built again the frame after, it was there before). Below what the room
+/// shows as it opens for it (`room`, composer_extras), it grows with it from its top, as a row coming where it is
+/// (@ui.Ctx::held_look's size; faded in by its entrance alone): whole, as far as the room has reached down it.
+fn held_coming(c : @ui.Ctx, i : Int, key : String, room : Ref[Int]) -> Unit {
   @motion.entering(c, i, key + "/in", @sf.waiting_in, at_once=!composing.same_draft)
+  c.look_by(i, fn() {
+    match @motion.grown_shown("composer/extras") {
+      Some(shown) if room.val >= 0 => {
+        let (_, top, _, _) = c.node_rect(room.val)
+        let (_, y, _, h) = c.node_rect(i)
+        if h > 0.0 {
+          // (seen from the first, as it comes in: its own entrance fades it, not its room)
+          { ..c.held_look(i, dclamp((shown - (y - top)) / h, 0.0, 1.0), top=true), alpha: 1.0 }
+        } else {
+          @ui.still_look
+        }
+      }
+      _ => @ui.still_look
+    }
+  })
 }
 
 ///|
@@ -1598,15 +1618,19 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
     match c.rect_of(c.id("composer/file/" + id)) {
       Some((x, y, wide, high)) if key != "" => {
         let restore = restorable(w, v)
-        // The tile is inside a moving composer: take it from where that held it on screen, not its final layout.
+        // The tile is inside a moving composer: take it from where that held it on screen, not its final layout, as big
+        // as it showed there (grown with its room as it came in, held_coming).
         let item = "composer/file/" + id + "/shown"
-        let (dx, dy) = match (@motion.measured_rect(c, item), @motion.measured_drawn_rect(c, item)) {
-          (Some((lx, ly, _, _)), Some((sx, sy, _, _))) => (sx - lx, sy - ly)
-          _ => (0.0, 0.0)
+        let from = match (@motion.measured_rect(c, item), @motion.measured_drawn_state(c, item).map(fn(s) { s.grown })) {
+          (Some((lx, ly, lw, _)), Some((sx, sy, sw, _))) => {
+            let k = if lw > 0.0 { sw / lw } else { 1.0 }
+            (sx + (x - lx) * k, sy + (y - ly) * k, wide * k, high * k)
+          }
+          _ => (x, y, wide, high)
         }
         Some({
           key,
-          from: (x + dx, y + dy, wide, high),
+          from,
           shown: @motion.measured_drawn_state(c, item),
           picture,
           paint: None,
