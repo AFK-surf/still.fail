@@ -1,6 +1,7 @@
 // Drives the browser build in Chromium: screenshots, a real input-method
 // composition through CDP (Input.imeSetComposition), and the scroll bench.
 import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,6 +24,11 @@ fs.mkdirSync(shots, { recursive: true });
 const headed = !!process.env.HEADED;
 const browser = await chromium.launch({ headless: !headed, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const ctx = await browser.newContext({ viewport: { width: 900, height: 720 }, deviceScaleFactor: 2 });
+// Exercise the Apple text bindings even when the browser test runs on another system.
+await ctx.addInitScript(() => {
+  Object.defineProperty(navigator, 'platform', { value: 'MacIntel' });
+  Object.defineProperty(navigator, 'userAgentData', { value: { platform: 'macOS' } });
+});
 const page = await ctx.newPage();
 const errors = [];
 // What the app took and drew, as its tape says (?MBUI_DRAW_LOG=1: an INPUT line for each input it was handed, as it
@@ -73,6 +79,58 @@ await cdp.send('Input.imeSetComposition', { text: 'shi jie', selectionStart: 7, 
 await cdp.send('Input.insertText', { text: '世界 👋' });
 await drawn(m, { k: 'text', s: '世界 👋' });
 await page.screenshot({ path: `${shots}/03-typed.png` });
+// A second paragraph makes moving to its start distinguishable from selecting the whole field.
+m = await mark();
+await page.keyboard.press('Shift+Enter');
+await drawn(m, { k: 'key' });
+m = await mark();
+await page.keyboard.type('abc');
+await drawn(m, { k: 'text', s: 'c' });
+// On a Mac Control-A moves the caret, while Command-A selects all. Read the app's selection back from the IME mirror
+// after the frame, not just the key the browser host handed it.
+const field = () => page.locator('#ime').evaluate((el) => ({ value: el.value, start: el.selectionStart, end: el.selectionEnd }));
+const typed = await field();
+const paragraph = typed.value.lastIndexOf('\n', typed.end - 1) + 1;
+assert.ok(paragraph > 0, 'the field has two paragraphs');
+const key = async (keys, n = 1) => { const from = await mark(); await page.keyboard.press(keys); await drawn(from, { k: 'key' }, n); };
+const picked = async (start, end, why) => {
+  const selection = await field();
+  assert.deepEqual([selection.start, selection.end], [start, end], why);
+};
+await key('Control+a');
+await picked(paragraph, paragraph, 'Control-A moves to the beginning of the paragraph');
+await key('Control+e');
+await picked(typed.end, typed.end, 'Control-E moves to the end of the paragraph');
+await key('Control+b');
+await picked(typed.end - 1, typed.end - 1, 'Control-B moves back');
+await key('Control+f');
+await picked(typed.end, typed.end, 'Control-F moves forward');
+await key('Control+Alt+b');
+await picked(paragraph, paragraph, 'Control-Option-B moves back a word');
+await key('Control+Alt+f');
+await picked(typed.end, typed.end, 'Control-Option-F moves forward a word');
+await key('Control+ArrowLeft');
+await picked(paragraph, paragraph, 'Control-Left moves to the line start');
+await key('Control+ArrowRight');
+await picked(typed.end, typed.end, 'Control-Right moves to the line end');
+await key('Control+Shift+a');
+await picked(paragraph, typed.end, 'Control-Shift-A selects back to the paragraph start');
+await key('Control+x');
+assert.equal((await field()).value, typed.value, 'Control-X does not cut on a Mac');
+await key('Meta+a');
+await picked(0, typed.value.length, 'Command-A selects all');
+await key('Control+e');
+await key('Control+b');
+await key('Control+d');
+assert.equal((await field()).value, typed.value.slice(0, -1), 'Control-D deletes forward');
+await key('Control+h');
+assert.equal((await field()).value, typed.value.slice(0, -2), 'Control-H deletes backward');
+await key('Control+a');
+await key('Control+k');
+assert.equal((await field()).value, typed.value.slice(0, paragraph), 'Control-K deletes to the paragraph end');
+await key('Control+o', 2);
+const selection = await field();
+assert.deepEqual([selection.value, selection.start, selection.end], [typed.value.slice(0, paragraph) + '\n', paragraph, paragraph], 'Control-O opens a line');
 m = await mark();
 await page.keyboard.press('Enter');
 await drawn(m, { k: 'key' });
@@ -81,6 +139,27 @@ m = await mark();
 for (let i = 0; i < 30; i++) await page.mouse.wheel(0, -120);
 await drawn(m, { k: 'wheel' }, 30);
 await page.screenshot({ path: `${shots}/05-scrolled.png` });
+
+// The same browser host must still use Control as the command key on Windows.
+const win = await browser.newContext({ viewport: { width: 900, height: 720 }, deviceScaleFactor: 2 });
+await win.addInitScript(() => {
+  Object.defineProperty(navigator, 'platform', { value: 'Win32' });
+  Object.defineProperty(navigator, 'userAgentData', { value: { platform: 'Windows' } });
+});
+const wp = await win.newPage();
+await wp.goto(base + '?MBUI_DRAW_LOG=1');
+await wp.waitForFunction(() => window.__logs.some((l) => l.startsWith('DRAWHASH ')), null, { timeout: 30000 });
+await wp.mouse.click(120, 690);
+await wp.waitForFunction(() => document.activeElement === document.getElementById('ime'));
+m = await mark(wp);
+await wp.keyboard.type('abc');
+await drawn(m, { k: 'text', s: 'c' }, 1, wp);
+m = await mark(wp);
+await wp.keyboard.press('Control+a');
+await drawn(m, { k: 'key' }, 1, wp);
+const winField = await wp.locator('#ime').evaluate((el) => ({ value: el.value, start: el.selectionStart, end: el.selectionEnd }));
+assert.deepEqual([winField.start, winField.end], [0, winField.value.length], 'Control-A selects all on Windows');
+await win.close();
 }
 
 // scroll bench in a fresh page

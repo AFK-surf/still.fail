@@ -2142,21 +2142,37 @@
     // the browser's own shortcuts left to it (reload, close, a new tab or window, the address bar, quit)
     const browsers = new Set(['r', 'w', 't', 'n', 'l', 'q', 'v']);
     const modsOf = (e) => (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+    const command = (e) => keysCmd() === 8 ? e.metaKey : e.ctrlKey;
+    // Cocoa translates these Control keys to editing commands in a field (mac_app.m's doCommandBySelector).
+    // The browser's hidden IME field cannot move the app's caret itself, so send the same commands to the editor.
+    const macEdit = (e) => {
+      if (keysCmd() !== 8 || !e.ctrlKey || e.metaKey) return 0;
+      const c = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : /^Key[A-Z]$/.test(e.code) ? e.code.slice(3).toLowerCase() : e.key;
+      if (e.altKey) return ({ b: 20, f: 21 })[c] || 0;
+      if (e.shiftKey && !['a', 'b', 'e', 'f', 'n', 'p', 'v', 'ArrowLeft', 'ArrowRight'].includes(c)) return 0;
+      return ({ a: 24, b: 3, d: 2, e: 25, f: 4, h: 1, k: 35, n: 6, p: 5, v: 16,
+        ArrowLeft: 22, ArrowRight: 23, ArrowUp: 15, ArrowDown: 16 })[c] || 0;
+    };
     ta.addEventListener('keydown', (e) => {
       if (e.isComposing || e.keyCode === 229) return;
       const mods = modsOf(e);
       // a key catcher's focus (device, below): Alt too makes a shortcut; select all, copy, cut are its keys
       if (catching && (e.metaKey || e.ctrlKey || e.altKey) && !keymap[e.key]) {
         const c = e.key.length === 1 ? e.key.toLowerCase() : '';
-        if (c && !browsers.has(c)) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
+        if (c && !(command(e) && browsers.has(c))) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
         return;
       }
+      // Cocoa's Control-O inserts a newline and leaves the caret before it (two text commands).
+      if (!catching && keysCmd() === 8 && e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
+        cb.key(7, 1); cb.key(3, 0); e.preventDefault(); return;
+      }
+      const edit = !catching && macEdit(e);
+      if (edit) { cb.key(edit, e.shiftKey ? 1 : 0); e.preventDefault(); return; }
       if ((e.metaKey || e.ctrlKey) && !keymap[e.key]) {
         const c = e.key.toLowerCase();
-        if (c === 'a') { cb.key(12, mods); e.preventDefault(); }
-        else if (c === 'c') { cb.key(13, mods); e.preventDefault(); }
-        else if (c === 'x') { cb.key(14, mods); e.preventDefault(); }
-        else if (c.length === 1 && !browsers.has(c)) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
+        const own = command(e) ? { a: 12, c: 13, x: 14 }[c] : undefined;
+        if (own) { cb.key(own, mods); e.preventDefault(); }
+        else if (c.length === 1 && !(command(e) && browsers.has(c))) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
         return; // paste arrives as a paste event
       }
       const code = keymap[e.key];
@@ -2171,9 +2187,9 @@
       if (code) { cb.key(code, mods); e.preventDefault(); return; }
       const c = e.key.length === 1 ? e.key.toLowerCase() : '';
       if (!c) return;
-      if ((e.metaKey || e.ctrlKey) && browsers.has(c)) return;
+      if (command(e) && browsers.has(c)) return;
       // select all, copy (the words picked with the pointer), cut: the editor's codes
-      const own = (e.metaKey || e.ctrlKey) ? { a: 12, c: 13, x: 14 }[c] : undefined;
+      const own = command(e) ? { a: 12, c: 13, x: 14 }[c] : undefined;
       cb.key(own ?? 1000 + c.charCodeAt(0), mods);
       e.preventDefault();
     });
