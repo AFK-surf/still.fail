@@ -372,6 +372,8 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   assert.deepEqual(usage.rows.map((x: any) => [x.thread, x.person, x.calls, x.input, x.cacheWrite]), [[home.id, "ann@x", 1, 100, 10]], "another workspace's chats are not the station's to give");
   assert.ok(usage.rows[0].cost > 0);
   assert.deepEqual(usage.people, { "ann@x": { email: "ann@x", via: "cloud" } });
+  const otherUsage = outflowUsage(r, "en", 86_400_000, 2 * 86_400_000, 0, { workspace: "other-ws", home: false }) as any;
+  assert.deepEqual(otherUsage.rows.map((x: any) => [x.session, x.thread]), [["b", away.id]]);
 
   const chats = outflowChats(r, 0) as any;
   assert.deepEqual(chats.chats.map((c: any) => [c.thread, c.title, c.state, c.creator?.email, c.surface, c.archived]), [[home.id, "Fix the build", "all_done", "ann@x", "stillfail", false]]);
