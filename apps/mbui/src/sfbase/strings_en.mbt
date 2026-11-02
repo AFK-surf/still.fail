@@ -2476,6 +2476,7 @@ let en : Map[String, String] = {
   "web-pages.settings.thisMac.noAnswer": "The app didn't respond",
   "web-pages.settings.thisPc.failed": "Couldn't add this PC: {error}",
   "web-pages.settings.title": "Settings",
+  "web-pages.settings.search": "Search settings",
   "web-pages.settings.usage.failed": "Couldn't load usage: {error}",
   "web-pages.settings.usage.title": "Usage",
   "web-pages.settings.workspace.name": "Name",

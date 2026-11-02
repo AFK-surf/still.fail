@@ -288,11 +288,178 @@ pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
 }
 
 ///|
+/// The search belongs to the settings list as it moves between a page and a sidebar. Its field follows edits and is
+/// kept while a result is open, so going back to the list does not lose the search.
+let settings_search_field : @ui.Field = @ui.Field::new()
+
+///|
+pub fn settings_search_reset() -> Unit {
+  settings_search_field.set("")
+}
+
+///|
+/// The same field over the list in either frame. The clear button has its own accessible name and press room.
+pub fn settings_search(c : @ui.Ctx) -> Unit {
+  c.box(style=settings_search_row, fn() {
+    c.box(style=settings_search_grow, fn() {
+      @sf.input(c, "settings/search", placeholder=@sf.t("web-pages.settings.search"), field=settings_search_field) |> ignore
+    }) |> ignore
+    if settings_search_field.text() != "" &&
+      @sf.icon_button(c, "close", key="settings/search/clear", round=true, label=@sf.t("android-misc.drive.pick.filterClear")) {
+      settings_search_field.set("")
+      settings_search_field.focus()
+    }
+  }) |> ignore
+}
+
+///|
+// kept across runs: values (no field changes)
+let settings_search_row : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let settings_search_grow : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let settings_search_page : @ui.Style = @ui.css("w=Full pb=S3 clip=true")
+
+///|
+/// The same search control hosted in the Small settings page's made-once tree.
+fn settings_search_node(parent : @view.View) -> Unit {
+  @ui.old(parent, fn(c) {
+    c.with_theme(@sf.ui_theme(), fn() {
+      c.box(style=settings_search_page, fn() { settings_search(c) }) |> ignore
+    })
+  }, natural=true).width_share(Is(1.0)) |> ignore
+}
+
+///|
+/// Searchable settings below a list row. A result names its parent and opens the page that owns the setting; entries
+/// with their own page go there directly. Only children of rows actually offered in this frame are considered.
+fn settings_search_children(row : SettingsRow, core : Core) -> Array[SettingsRow] {
+  let entries : Array[(String, String, @settings.Route)] = match row.key {
+    "me" => [
+      ("account", @sf.t("android-settings.me.title"), Me),
+      ("devices", @sf.t("web-pages.settings.account.sessions"), Me),
+      ("sign-out", @sf.t("android-settings.me.signOutOnly"), Me),
+      ("delete-account", @sf.t("android-settings.me.delete"), Me),
+    ]
+    "workspace" => [
+      ("workspace", @sf.t("android-settings.workspace.title"), Workspace),
+      ("name", @sf.t("android-settings.workspace.name"), Workspace),
+      ("members", @sf.t("android-settings.members.title"), Workspace),
+    ]
+    "security" => [("signing", @sf.t("web-pages.security.signing"), Security)]
+    "vault" => [("all", @sf.t("web-pages.vault.all"), VaultItems)]
+    "decisions" => [("completion", @sf.t("web-pages.automaticDecisions.completion"), AutoCompletion)]
+    "archiving" => [
+      ("suggest", @sf.t("web-pages.appearance.archive.title"), Archiving),
+      ("automatic", @sf.t("web-pages.archiving.auto.title"), Archiving),
+    ]
+    "appearance" => {
+      let a : Array[(String, String, @settings.Route)] = [
+        ("theme", @sf.t("web-pages.appearance.theme.title"), Appearance),
+        ("fonts", @sf.t("web-pages.appearance.fonts.title"), Fonts),
+        ("motion", @sf.t("web-pages.appearance.motion.title"), Appearance),
+        ("haptics", @sf.t("web-pages.appearance.haptics.title"), Appearance),
+        ("language", @sf.t("common.language"), Appearance),
+      ]
+      if @ui.window_zoom_supported() {
+        a.push(("zoom", @sf.t("desktop.menu.zoom"), Appearance))
+      }
+      if @ui.takes_drops() {
+        a.push(("drop", @sf.t("web-pages.appearance.drop.title"), Appearance))
+      }
+      a
+    }
+    "notifications" => [
+      ("ways", @sf.t("web-pages.notifications.ways.title"), Notifications),
+      ("kinds", @sf.t("web-pages.notifications.kinds.title"), Notifications),
+      ("preview", @sf.t("web-pages.notifications.preview"), Notifications),
+      ("permissions", @sf.t("web-pages.settings.nav.permissions"), Permissions),
+    ]
+    "about" => {
+      let a : Array[(String, String, @settings.Route)] = [
+        ("version", @sf.t("web-pages.settings.nav.version"), About),
+        ("changelog", @sf.t("web-pages.settings.nav.changelog"), Changelog),
+        ("terms", @sf.t("common.legal.terms"), About),
+        ("privacy", @sf.t("common.legal.privacy"), About),
+      ]
+      if (core.reporting)() is Some(_) {
+        a.push(("telemetry", @sf.t("common.telemetry.title"), About))
+      }
+      a
+    }
+    _ => []
+  }
+  entries.map(fn(e) {
+    let lead = match row.lead {
+      Person => Icon("user")
+      Space(_, _) => Icon("users")
+      lead => lead
+    }
+    { route: e.2, key: "find/" + row.key + "/" + e.0, lead, title: e.1, line: row.title, value: row.title, bad: false, dot: false }
+  })
+}
+
+///|
+/// Every word must be present, case independently. A child must match one word itself: searching a parent's name
+/// alone shows that row, not every setting under it. Its parent may supply the other words.
+fn settings_search_matches(row : SettingsRow, query : String, child : Bool) -> Bool {
+  let own = row.title.to_lower()
+  let all = (own + " " + row.line).to_lower()
+  let mut own_match = false
+  for word in query.split(" ") {
+    let word = word.to_owned()
+    if word == "" {
+      continue
+    }
+    if !all.contains(word) {
+      return false
+    }
+    if own.contains(word) {
+      own_match = true
+    }
+  }
+  !child || own_match
+}
+
+///|
+fn settings_found(parts : Array[SettingsPart], core : Core, query : String) -> Array[SettingsPart] {
+  if query == "" {
+    return parts
+  }
+  let found : Array[SettingsPart] = []
+  for part in parts {
+    let rows : Array[SettingsRow] = []
+    for row in part.rows {
+      if settings_search_matches(row, query, false) {
+        rows.push(row)
+      }
+      for child in settings_search_children(row, core) {
+        if settings_search_matches(child, query, true) {
+          rows.push(child)
+        }
+      }
+    }
+    if !rows.is_empty() {
+      found.push({ key: part.key, heading: part.heading, rows })
+    }
+  }
+  found
+}
+
+///|
 /// The list as a page of its own (a small screen's, the gear's): who is signed in and the workspace on cards of their
 /// own, each group on its card under its heading. `open`: a row pressed, its page.
 pub fn settings_blocks(c : @ui.Ctx, core : Core, here : @settings.Here, open : (@settings.Route) -> Unit) -> Array[() -> Unit] {
-  let parts = settings_parts(c, core, here)
-  let blocks : Array[() -> Unit] = []
+  let query = settings_search_field.text().trim(chars=" \t\n\r").to_owned().to_lower()
+  let parts = settings_found(settings_parts(c, core, here), core, query)
+  let blocks : Array[() -> Unit] = [fn() { c.box(style=settings_search_page, fn() { settings_search(c) }) |> ignore }]
+  if parts.is_empty() && query != "" {
+    blocks.push(fn() { @sf.page_note(c, @sf.t("common.noMatch")) })
+  }
   for part in parts {
     let identity = part.rows.iter().any(fn(r) { !(r.lead is Icon(_)) })
     // (the account and the workspace each a card of its own, as large as who and where they are)
@@ -309,7 +476,7 @@ pub fn settings_blocks(c : @ui.Ctx, core : Core, here : @settings.Here, open : (
                 c,
                 "settings/" + row.key,
                 row.title,
-                value=row.value,
+                value=if row.key.has_prefix("find/") { "" } else { row.value },
                 value_bad=row.bad,
                 value_dot=row.dot,
                 note=row.line,
@@ -338,7 +505,11 @@ pub fn settings_side_rows(
   open : (@settings.Route) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
-  let parts = settings_parts(c, core, here)
+  let query = settings_search_field.text().trim(chars=" \t\n\r").to_owned().to_lower()
+  let parts = settings_found(settings_parts(c, core, here), core, query)
+  if parts.is_empty() && query != "" {
+    c.box(style=settings_search_empty, fn() { c.text(@sf.t("common.noMatch"), style=@sf.secondary) |> ignore }) |> ignore
+  }
   for k, part in parts {
     if part.heading != "" {
       @sf.list_heading(c, part.heading, Side)
@@ -348,7 +519,8 @@ pub fn settings_side_rows(
     for i, row in part.rows {
       let key = "settings-nav/" + row.key
       let id = c.id(key)
-      let ground = @sf.nav_ground(c, key, c.lit(id) || c.pressed(id), lit == Some(row.route))
+      let selected = if row.key.has_prefix("find/") { lit == Some(row.route) } else { lit.map(settings_row_of) == Some(row.route) }
+      let ground = @sf.nav_ground(c, key, c.lit(id) || c.pressed(id), selected)
       // (a sidebar's row of one line, as its others are: its mark, its words, how things stand at its end, left out
       // where the row has not the room: its words whole till then, cut only where they alone have not)
       let draw = fn() {
@@ -385,6 +557,10 @@ pub fn settings_side_rows(
     }
   }
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let settings_search_empty : @ui.Style = @ui.css("w=Full px=S3 py=S4")
 
 ///|
 /// What a row is by. On a page's row, its line icon in the muted ink, the account's picture, the workspace's mark (its
@@ -465,7 +641,10 @@ pub fn settings_home_node(
 ) -> Unit {
   // (the bottom bar's row where the shell says the window has the bar, as that changes; what is kept asked of the core as
   // it is asked to be read again, not as the list is worked out)
-  let parts = @signals.computed(fn(_) { settings_parts(@ui.current(), core, here(), bars=bars(), asks=false) })
+  let query = fn() { settings_search_field.text().trim(chars=" \t\n\r").to_owned().to_lower() }
+  let parts = @signals.computed(fn(_) {
+    settings_found(settings_parts(@ui.current(), core, here(), bars=bars(), asks=false), core, query())
+  })
   v.reacts(fn() { @settings.kept_asked() }, fn(_) { @settings.kept_ask(@ui.current(), core) })
   // (its cards: each by its group's key (the account's and the workspace's by their rows'), its heading, its rows' keys; the account and the workspace each a card of
   // their own, as large as who and where they are)
@@ -495,18 +674,35 @@ pub fn settings_home_node(
     }
     None
   }
-  @sf.page_node(v, fn() { @sf.t("android-settings.title") }, on_back~, frame~, fn() { cards().map(fn(c) { c.0 }) }, fn(
+  let blocks = fn() -> Array[String] {
+    let all = ["settings-search"]
+    let found = cards()
+    if found.is_empty() && query() != "" {
+      all.push("settings-search-empty")
+    }
+    for card in found {
+      all.push(card.0)
+    }
+    all
+  }
+  @sf.page_node(v, fn() { @sf.t("android-settings.title") }, on_back=fn() { settings_search_reset(); on_back() }, frame~, blocks, fn(
     block,
     id,
   ) {
-    let heading = fn() { card_of(id).map(fn(c) { c.1 }).unwrap_or("") }
-    block.show(fn() { heading() != "" }, fn(h) { @sf.heading_node(h, heading) })
-    @sf.group_node(block, fn(g) {
-      g.each(fn() { card_of(id).map(fn(c) { c.2 }).unwrap_or([]) }, fn(k) { k }, fn(rb, key) {
-        let key = @signals.untracked(fn() { key.get() })
-        settings_row_node(rb, core, here, key, row_of, open, stint)
+    if id == "settings-search" {
+      settings_search_node(block)
+    } else if id == "settings-search-empty" {
+      @sf.page_note_node(block, fn() { @sf.t("common.noMatch") })
+    } else {
+      let heading = fn() { card_of(id).map(fn(c) { c.1 }).unwrap_or("") }
+      block.show(fn() { heading() != "" }, fn(h) { @sf.heading_node(h, heading) })
+      @sf.group_node(block, fn(g) {
+        g.each(fn() { card_of(id).map(fn(c) { c.2 }).unwrap_or([]) }, fn(k) { k }, fn(rb, key) {
+          let key = @signals.untracked(fn() { key.get() })
+          settings_row_node(rb, core, here, key, row_of, open, stint)
+        })
       })
-    })
+    }
   })
 }
 
@@ -548,7 +744,7 @@ fn settings_row_node(
         None => ()
       }
     },
-    value=said(fn(r) { r.value }),
+    value=said(fn(r) { if r.key.has_prefix("find/") { "" } else { r.value } }),
     value_bad=fn() { row().map(fn(r) { r.bad }).unwrap_or(false) },
     value_dot=fn() { row().map(fn(r) { r.dot }).unwrap_or(false) },
     note=said(fn(r) { r.line }),

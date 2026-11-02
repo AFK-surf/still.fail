@@ -54,7 +54,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     // the settings' list as a page of its own (a small screen's: sfpages' settings_list.mbt), a row pressed its page
     // pushed
     Home =>
-      @sf.page(c, on_back=core.pop, frame~, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
+      @sf.page(c, on_back=fn() { @sfpages.settings_search_reset(); (core.pop)() }, frame~, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
         (core.push)(r)
       }))
     Appearance => @sfpages.appearance_page(c, core, frame)
@@ -123,7 +123,7 @@ fn settings_reset() -> Unit {
 /// it, in place of the one there.
 fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let lit = match app.nav.top() {
-    Setting(r) => Some(@sfpages.settings_row_of(r))
+    Setting(r) => Some(r)
     // (the settings come to: their first row's page, settings_landing)
     Settings => Some(settings_landing)
     _ => None
@@ -152,6 +152,9 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if !@sf.native_on() {
       c.box(style=@sf.side_list().then(settings_back_band), fn() { settings_back(c, false) }) |> ignore
     }
+    // Without the back row, keep the field below the sidebar's upper corners.
+    let search_band = if @sf.native_on() { settings_search_native_band } else { settings_search_band }
+    c.box(style=@sf.side_list().then(search_band), fn() { @sfpages.settings_search(c) }) |> ignore
     side_scroll(c, "settings-nav", fn() {
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
@@ -183,6 +186,7 @@ fn settings_back(c : @ui.Ctx, band : Bool) -> Unit {
     nav_row(c, "settings-nav/back", false, body)
   }
   if pressed {
+    @sfpages.settings_search_reset()
     @sfbase.history_push()
     while app.nav.depth() > 1 {
       if !app.nav.pop() {
@@ -213,3 +217,11 @@ let settings_side_fill : @ui.Style = @ui.css("w=Full h=Full")
 /// The list supplies four points of its own top room; with the band's ten the groups remain fourteen apart.
 // kept across runs: a value (no field of it changes)
 let settings_back_band : @ui.Style = @ui.css("h=Hug pb=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let settings_search_band : @ui.Style = @ui.css("w=Full h=Hug pt=S0 pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let settings_search_native_band : @ui.Style = @ui.css("w=Full h=Hug pt=S5 pb=S2")

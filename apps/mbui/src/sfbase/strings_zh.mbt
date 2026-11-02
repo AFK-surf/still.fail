@@ -2450,6 +2450,7 @@ let zh : Map[String, String] = {
   "web-pages.settings.thisMac.noAnswer": "app 无响应",
   "web-pages.settings.thisPc.failed": "无法添加这台电脑：{error}",
   "web-pages.settings.title": "设置",
+  "web-pages.settings.search": "搜索设置",
   "web-pages.settings.usage.failed": "无法获取用量：{error}",
   "web-pages.settings.usage.title": "用量",
   "web-pages.settings.workspace.name": "名称",

@@ -967,6 +967,7 @@
   "web-pages.localStation.doing.install": "Downloading and installing",
   "web-pages.localStation.update": "Update to the latest",
   "web-pages.settings.title": "Settings",
+  "web-pages.settings.search": "Search settings",
   "web-pages.settings.usage.days": "Days",
   "web-pages.settings.usage.failed": "Couldn't load usage: {error}",
   "web-pages.settings.usage.lead": "Tokens used by agents on each station, priced at API rates, by person, chat, account and model. Visible to everyone in the workspace.",

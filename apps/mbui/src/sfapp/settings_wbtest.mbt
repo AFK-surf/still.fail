@@ -960,7 +960,7 @@ test "a station's permissions: each grant's mark across the middle of its title'
     t.draw()
     t.run_for(@ui.move_most_ms)
     // (its 设置 tab: what it is let do)
-    t.tap_text("设置")
+    t.click(Radio, label="设置")
     t.run_for(@ui.move_most_ms)
     for g in [("monitor", "屏幕录制"), ("cursor", "辅助功能"), ("file-text", "文稿")] {
       let title = match t.words().search_by(fn(x) { x.0 == g.1 }) {

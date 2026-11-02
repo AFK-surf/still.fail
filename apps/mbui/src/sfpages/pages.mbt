@@ -39,6 +39,7 @@ pub fn reset() -> Unit {
   sidebar_reset()
   finder_reset()
   search_reset()
+  settings_search_reset()
   marks_reset()
   news_reset()
   landing_reset()
