@@ -152,6 +152,10 @@ export class WakingHost implements Host {
   get recorder(): Host["recorder"] {
     return this.inner.recorder;
   }
+  /// This device's own adb session is held independently of any station or UI wake.
+  get adb(): Host["adb"] {
+    return this.inner.adb;
+  }
   readonly tcp?: Host["tcp"];
   readonly appKeys?: boolean;
   readonly openDb?: Host["openDb"];

@@ -2265,6 +2265,27 @@ test("speed_summary_only_shows_effective_fast_and_ignores_unsaved_drafts", async
   }
 });
 
+test("the_running_core_pairs_the_phone_with_its_own_adb", async () => {
+  const did: string[] = [];
+  const { host, core } = await started(base(), 0, undefined, ({ host }) => {
+    (host as J).adb = {
+      pair: (port: number, code: string) => Effect.sync(() => void did.push(`pair ${port} ${code}`)),
+      hold: (port: number) => Effect.sync(() => void did.push(`hold ${port}`)),
+      open: () => Effect.die("no station is opening a tunnel"),
+    };
+  });
+  try {
+    const ui = core.connect();
+    await ask(host, core, ui, 1, "client.device", { app: "android", build: "1" });
+    await ask(host, core, ui, 2, "adb.ports", { connect: 5555, pair: 37115, device: "Pixel" });
+    const result = await ask(host, core, ui, 3, "adb.pair", { code: "123 456" });
+    assert.deepEqual(result, { message: "已配对，以后连哪台 station 都不用再配" });
+    assert.deepEqual(did, ["pair 37115 123456", "hold 5555"]);
+  } finally {
+    core.close();
+  }
+});
+
 test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   const { host, core } = await started();
   const ui = core.connect();
