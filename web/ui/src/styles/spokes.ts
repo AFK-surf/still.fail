@@ -9,15 +9,15 @@ const at = (r: number, deg: number) => {
 
 /**
  * What is at work (mbui's sf/icons.mbt spokes draws the same): in a 24-unit square, a disc of the colour with four white
- * blades round its middle, each 50° of a circle 7.2 out, 3.4 thick with round ends, the first from straight up. White on
+ * blades round its middle, each 68° of a circle 7 out, 3.4 thick with round ends, 22° apart, from straight up. White on
  * a solid dot, as the other marks are dots: a light ink of fading spokes was not seen at 10px (2026-11-02). Alike every
  * quarter, they go round in four steps of a sixteenth (`spokesTurn(…, 22.5)`): it steps, it does not turn, a frame for
  * each step, none between (a turning ring drew one for every frame of the screen, 2026-10-19).
  */
-const BLADE_R = 7.2, BLADE_W = 3.4;
+const BLADE_R = 7, BLADE_W = 3.4;
 const blades = [0, 1, 2, 3].map((i) => {
   const cap = (BLADE_W / 2 / BLADE_R) * 180 / Math.PI;
-  return `<path d='M${at(BLADE_R, i * 90 + cap)}A${BLADE_R} ${BLADE_R} 0 0 1 ${at(BLADE_R, i * 90 + 50 - cap)}'/>`;
+  return `<path d='M${at(BLADE_R, i * 90 + cap)}A${BLADE_R} ${BLADE_R} 0 0 1 ${at(BLADE_R, i * 90 + 68 - cap)}'/>`;
 }).join("");
 const spokes = (color: string) => `url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='12' fill='${color.replace("#", "%23")}'/><g fill='none' stroke='%23fff' stroke-width='${BLADE_W}' stroke-linecap='round'>${blades}</g></svg>")`;
 

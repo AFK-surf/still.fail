@@ -479,8 +479,8 @@ let spoke_alpha : Array[Double] = [1.0, 0.75, 0.55, 0.42, 0.32, 0.25, 0.2, 0.2]
 
 ///|
 /// What is at work (the web's spokes.ts spokes): a disc `size` across in `color` with four white blades round its
-/// middle on the 24-unit drawing (each 50° of a circle 7.2 out, 3.4 thick with round ends, the first from straight
-/// up), turned a sixteenth each step: alike every quarter, they go round in four steps. White on a solid dot, as the
+/// middle on the 24-unit drawing (each 68° of a circle 7 out, 3.4 thick with round ends, 22° apart, the first from
+/// straight up: a ring in four), turned a sixteenth each step: alike every quarter, they go round in four steps. White on a solid dot, as the
 /// other marks are dots: a light ink of fading spokes was not seen at 10 (2026-11-02). In a box `box` across about its
 /// middle (`size` by default).
 pub fn spokes(c : @ui.Ctx, size : Double, color : Int64, box? : Double) -> Int {
@@ -489,7 +489,7 @@ pub fn spokes(c : @ui.Ctx, size : Double, color : Int64, box? : Double) -> Int {
   let mid = box / 2.0
   let pi = 3.141592653589793
   let deg = pi / 180.0
-  let r = 7.2 * u
+  let r = 7.0 * u
   let w = 3.4 * u
   let cap = w / 2.0 / r / deg
   // (the disc: a circle half its radius out, as thick as that radius, so it is filled to its edge)
@@ -497,7 +497,7 @@ pub fn spokes(c : @ui.Ctx, size : Double, color : Int64, box? : Double) -> Int {
   for i in 0..<4 {
     let from = (i.to_double() * 90.0 - 90.0 + cap) * deg
     lines.push(
-      @ui.line(@ui.arc(mid, mid, r, from~, sweep=(50.0 - 2.0 * cap) * deg), width=w, color=0xFFFFFFFFL),
+      @ui.line(@ui.arc(mid, mid, r, from~, sweep=(68.0 - 2.0 * cap) * deg), width=w, color=0xFFFFFFFFL),
     )
   }
   let node = c.lines(lines, w=Px(box), h=Px(box))
