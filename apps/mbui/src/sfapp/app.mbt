@@ -78,6 +78,7 @@ fn reset() -> Unit {
   share_in.query.set("")
   share_in.find.set("")
   share_closing.val = false
+  share_wide.set(false)
   splash_waited.set(false)
   splash_from.val = -1.0
   splash_owner.val = None

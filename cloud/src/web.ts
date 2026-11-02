@@ -59,10 +59,10 @@ function unkept(file: Response): Response {
 /**
  * The pages the app (index.html: mbui's, web/vite.config.ts) has none of yet, which the web's own React pages (web.html)
  * still answer: a sign-in coming back (/auth/callback, which goes on to the app's page), Slack sending back an app a
- * station made, what another app shares in, and a station's web service on a page of its own. Every other page is the
+ * station made, and a station's web service on a page of its own. Every other page is the
  * app's.
  */
-const WEB_PAGES = /^\/(auth\/callback|slack\/installed|share|w\/[^/]+\/s\/[^/]+\/services\/[^/]+)\/?$/;
+const WEB_PAGES = /^\/(auth\/callback|slack\/installed|w\/[^/]+\/s\/[^/]+\/services\/[^/]+)\/?$/;
 
 /** The file that answers `request`: web.html (at /web, as Cloudflare serves a page's .html) for one of WEB_PAGES. */
 function fileOf(request: Request): Request {

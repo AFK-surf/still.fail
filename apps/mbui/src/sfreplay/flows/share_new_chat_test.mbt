@@ -1,4 +1,4 @@
-// 94-share-new-chat (e2e/traces/share-new-chat.trace): files shared in from another app into a new chat (新 chat): they
+// 94-share-new-chat (e2e/traces/share-new-chat.trace): files shared in from another app into a new chat (新建对话): they
 // wait in its composer, nothing going up while where it runs may still change; sent with words, the chat is made and
 // they go up to its station as the message goes, the message waiting for them, and land in it.
 
@@ -11,7 +11,7 @@ test "94-share-new-chat" {
     f.see("发到")
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("e2e-photo.jpg")
-    f.tap("新 chat")
+    f.tap("新建对话")
     // the sheet going down as the new chat comes up, the files in its composer, waiting
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("想让 agent 做什么？")

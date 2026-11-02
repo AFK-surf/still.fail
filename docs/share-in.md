@@ -41,9 +41,12 @@ is its agent's business (a chat kept for videos, told once what to do with them)
 - **Android**: `ShareActivity` takes `ACTION_SEND` of `text/plain` (`EXTRA_TEXT`, `EXTRA_SUBJECT`); translucent over
   the app it came from, the app's own sheet (`SheetHost`, solid: there is no page of the app's to frost) with the
   view's rows. A tap opens the app at that chat (or a new chat), the shared thing in its composer.
-- **Web** `/share?text=&title=&url=` (the installed page's `share_target`, and what the extension opens): the same
-  sheet over the workspace's page, phone and wide screen alike; a tap goes to the chat in that page.
+- **Web** `/share?text=&title=&url=` (the installed page's `share_target`, and what the extension opens): the app's
+  own sheet (apps/mbui `sfapp/share.mbt`, as on Android), what /share was given handed to mbui's web host
+  (`web/src/mbui/share.ts`, the host's `shared_in`); signed out, signing in comes back to the same address. A tap
+  goes to the chat in that page.
 - **Browser extension** (`apps/extension`, Chrome/Edge, Manifest V3): its toolbar button and context menu (a page, a
   link, a video, selected text) open `<cloud>/share?…` in a small window of its own, signed in as the person's
-  still.fail page is; a tap there opens the chat in the still.fail tab (a new one if there is none) and the small
-  window closes. It reads nothing of the page beyond its address, title and what was clicked.
+  still.fail page is, where the app is over another app (`over`, as Android's) and draws its sheet alone; a tap there
+  opens the chat in the still.fail tab (a new one if there is none) and the small window closes, as does letting the
+  sheet go. It reads nothing of the page beyond its address, title and what was clicked.

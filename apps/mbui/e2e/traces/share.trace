@@ -50,7 +50,7 @@
 {"step":"wait 1449","w":1793294478493.299}
 {"step":"now until 发到","w":1793294479972.177}
 {"step":"until 列表视频105609","w":1793294479972.201}
-{"step":"until 新 chat","w":1793294479972.207}
+{"step":"until 新建对话","w":1793294479972.207}
 {"step":"tap 端到端测试","w":1793294479972.212}
 {"step":"tap 端到端测试","acted":true,"w":1793294479972.271}
 {"out":{"id":21,"call":"shareIn.open","params":{"scope":"01M64AW4DS3W5PAKRHZZMPMSXE","source":"https://www.youtube.com/watch?v=e2e105609","station":"01M64AW4DS3W5PAKRHZZMPMSXE/c98be9afae1168b069a621e3cc1f63def1dfa068637967b0f7b5ba8d565f982e","id":"ember:c-5d4bcda78f","title":"列表视频105609"}},"w":1793294479973.194}

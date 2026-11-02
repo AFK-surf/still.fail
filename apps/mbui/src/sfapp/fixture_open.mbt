@@ -657,11 +657,12 @@ fn open_service_fixture(mode : String) -> Unit {
 /// MBUI_FIXTURE=share-in…: the sheet raised over Home.
 fn open_share_fixture(mode : String) -> Unit {
   match mode {
-    "share-in" | "share-in-stations" => {
+    // (`-over`: over another app, as the browser extension's window and Android's share sheet show it)
+    "share-in" | "share-in-stations" | "share-in-over" => {
+      share_over.set(mode == "share-in-over")
       share_in.shared.set(Some(@sffixture.fix_shared))
+      // (put up by the first frame, in a sheet or the wide panel as the window is: share_in_frame)
       share_in.env_taken.set(true)
-      raise_sheet(ShareSheet)
-      share_in.raised.set(true)
       share_in.choosing.set(mode == "share-in-stations")
     }
     // files from another app's share sheet (ACTION_SEND_MULTIPLE): two pictures (the chat fixture's) and a document
@@ -673,8 +674,6 @@ fn open_share_fixture(mode : String) -> Unit {
         { name: "季度数据.csv", bytes: Bytes::new(23110), image: "" },
       ])
       share_in.env_taken.set(true)
-      raise_sheet(ShareSheet)
-      share_in.raised.set(true)
     }
     _ => ()
   }
