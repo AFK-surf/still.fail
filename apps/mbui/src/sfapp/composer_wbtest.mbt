@@ -69,11 +69,11 @@ fn fake_core(
       0
     },
     // the draft's files in the core's composer, as the test moves them on (`ups`: going_up, upped)
+    // (what the test makes over the made-up core's: what `over` reads of the test's own is a signal it sets, so what
+    // reads the topic follows it as it follows the core's)
     topic: fn(name, params) {
       ignore(ups)
-      // (what the test makes over the made-up core's, made up as it is read: followed by its version, as the core's
-      // by what it says)
-      topic_as_read(name, params, over(name, (base.topic)(name, params)))
+      over(name, (base.topic)(name, params))
     },
     now: fn() { now },
     read_only,
@@ -341,14 +341,14 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   assert_true(t.find("测试一下") is Some(_))
   assert_true(t.find("正在发送") is Some(_))
   // the station's clock on past its deliveries, its answers, a frame drawn for each
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   assert_true(t.find("正在发送") is None)
   assert_true(t.find("测试一下") is Some(_))
   // (the station answers fix_answer_ms later: that time passes on the page too, the words landed and the agent's line
   // come in their turns meanwhile)
   t.run_for(fix_answer_ms)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   // said while its agent's activity shows: out of its avatar once it has folded and hopped (emit.mbt)
   t.run_for(Pose::Fold.ms() + Pose::Float.ms())
@@ -360,13 +360,13 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.tap_text("发消息")
   t.type_text("这条会失败")
   tap_send(t)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   assert_true(t.find("未发送") is Some(_))
   // (its 重试 shown as its room opens to it: Ctx::row_size)
   t.run_for(@ui.move_most_ms)
   t.tap_text("重试")
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   // (what failed leaves the list as its room closes)
   t.run_for(@ui.move_most_ms)
@@ -376,7 +376,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.tap_text("发消息")
   t.type_text("这条失败了也重发不了")
   tap_send(t)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   t.run_for(@ui.move_most_ms)
   t.tap_text("重试")
@@ -591,7 +591,7 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   assert_eq(ends, [true])
   // someone says something: it comes at the end, the list gliding to it (list_to_end, the frame it comes)
   said_by_ana(171, "我也来看看")
-  clock.val = clock.val + fix_said_ms
+  fix_clock_set(clock, clock.val + fix_said_ms)
   t.draw()
   assert_true(t.find("我也来看看") is Some(_))
   let rest = t.rest_of("a list")
@@ -607,11 +607,11 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   t.tap_text("发消息")
   t.type_text("测试一下")
   tap_send(t)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   // (the station answers fix_answer_ms later: that time passes on the page too)
   t.run_for(fix_answer_ms)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   t.run_for(Pose::Fold.ms() + Pose::Float.ms())
   assert_true(t.find("收到：「测试一下」") is Some(_))

@@ -61,7 +61,7 @@ test "画质 chosen in 控制中心 is kept on the device and asked of the open 
   assert_eq(again.length(), 2)
   assert_eq(number(Some(again[1]), "maxWidth"), r.sess().stage_px.0.to_double())
   assert_eq(r.told("screen.view").length(), 1)
-  assert_eq(r.quality.val, "")
+  assert_eq(r.quality.get(), "")
   shut(r)
   screen_done(r.t)
 }
@@ -99,7 +99,7 @@ test "帧率 chosen in 控制中心 beside 画质 is kept on the device and aske
   let again = r.told("screen.bounds")
   assert_eq(again.length(), 3)
   assert_true(field(Some(again[2]), "fps") is None)
-  assert_eq(r.fps.val, 0)
+  assert_eq(r.fps.get(), 0)
   assert_eq(r.told("screen.view").length(), 1)
   shut(r)
   screen_done(r.t)
@@ -109,7 +109,7 @@ test "帧率 chosen in 控制中心 beside 画质 is kept on the device and aske
 test "a 帧率 kept on the device is asked for as the view opens; 自动 says none" {
   let r = screen_rig()
   assert_true(field(Some(r.told("screen.view")[0]), "fps") is None)
-  r.fps.val = 60
+  r.fps.set(60)
   // (the page opened again: a view of its own)
   @sfbase.close_page(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false })) |> ignore
   nav_rested(r.t)
@@ -122,7 +122,7 @@ test "a 帧率 kept on the device is asked for as the view opens; 自动 says no
 ///|
 test "a 画质 kept on the device is asked for as the view opens" {
   let r = screen_rig()
-  r.quality.val = "original"
+  r.quality.set("original")
   // (the page opened again: a view of its own)
   @sfbase.close_page(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false })) |> ignore
   nav_rested(r.t)

@@ -936,8 +936,6 @@ pub fn toast_later(String, action? : String, run? : () -> Unit) -> Unit
 
 pub let toast_ms : Double
 
-pub fn topic_as_read(String, Map[String, Json], @sfbase.Topic) -> @sfbase.Topic
-
 pub fn tr(String, args? : Array[(String, String)]) -> String
 
 pub fn trim_slash(String) -> String

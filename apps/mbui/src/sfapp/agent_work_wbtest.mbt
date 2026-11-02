@@ -41,13 +41,13 @@ test "an agent's card offers its jobs when a compact chat says it has them" {
 ///|
 /// The made-up core of `mode` whose agents' cards say four tasks in the background and a checklist of six, two done
 /// (views/brief.ts workOf), the tasks begun `ago` before the core's now.
-fn work_source(mode : String, on? : Ref[Bool] = Ref(true), running? : Bool = true) -> Source {
+fn work_source(mode : String, on? : @signals.Signal[Bool] = @signals.signal(true), running? : Bool = true) -> Source {
   let base = fixture(mode)
   {
     ..base,
     topic: fn(name, params) {
       let got = (base.topic)(name, params)
-      guard on.val && name == "agentCard" && got.value is Some(Object(card)) else { got }
+      guard on.get() && name == "agentCard" && got.value is Some(Object(card)) else { got }
       let now = (base.now)()
       let task = fn(id : String, kind : String, words : String, kind_words : String, ago : Double) -> Json {
         { "id": Json::string(id), "kind": Json::string(kind), "text": Json::string(words), "kindText": Json::string(kind_words), "since": Json::number(now - ago) }
@@ -116,7 +116,7 @@ test "an agent's card over its name, as over its picture: its background work an
 ///|
 test "the history's details: its turns' line says its work after it, none without it, nothing else moved; pressed, every task in the background and its whole checklist under it; the tabs and the head as they were" {
   new_run()
-  let on = Ref(false)
+  let on = @signals.signal(false)
   let src = work_source("chat-history-side", on~)
   decide_src.val = Some(src)
   open_fixture_over("chat-history-side", src)
@@ -131,7 +131,7 @@ test "the history's details: its turns' line says its work after it, none withou
   let before = t.words().filter(fn(w) { w.5 > 0.5 && w.0 != " · " }).map(fn(w) { (w.0, w.1, w.2) })
   // told: the mark at the turns' line's end, on its line; the line's words whole; nothing else anywhere moved (the
   // details as tall as they were)
-  on.val = true
+  on.set(true)
   t.frame()
   t.frame()
   let mark = forms()

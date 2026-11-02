@@ -12,7 +12,7 @@ test "chat neighbours: a list held under the pointer is traversed in its display
   t.move(x, y)
   t.frame()
   // The core moves CI to the top, while the list keeps it below the current row under the pointer.
-  clock.val = 2001.0
+  fix_clock_set(clock, 2001.0)
   t.frame()
   let core = (src.topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value
   let first_day = items(core, "days")[0]

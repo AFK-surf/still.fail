@@ -311,7 +311,7 @@ fn slack_only(base : Source) -> Source {
       v["slackUrl"] = Json::string("https://afk.slack.com/archives/C1/p12")
       v.remove("xshare")
       v.remove("publish")
-      @sfbase.topic_as_read(name, params, { ..got, value: Some(Json::object(v)) })
+      { ..got, value: Some(Json::object(v)) }
     },
   }
 }

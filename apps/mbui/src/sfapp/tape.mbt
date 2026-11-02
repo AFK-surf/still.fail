@@ -98,7 +98,8 @@ fn tape_topic_key(name : String, params : Map[String, Json]) -> Json {
 ///|
 /// The tape's core at its moment `at()`: each topic's value as last set by then (its version how many times it was),
 /// each call answered as Android's was (the one recorded with the same name and params, else the same name); over
-/// `base` (a made-up core's, the caller's: the app's own code links none).
+/// `base` (a made-up core's, the caller's: the app's own code links none). `at` read where it is followed (a signal's):
+/// what reads a topic of it follows the moment as it moves on.
 fn tape_source(tape : Tape, at : () -> Double, base : Source) -> Source {
   {
     ..base,
@@ -113,7 +114,7 @@ fn tape_source(tape : Tape, at : () -> Double, base : Source) -> Source {
       // its value a moment after the tap)
       match tape.events.iter().find_first(fn(e) { field(Some(e), "answered") == Some(want) }) {
         Some(e) if number(Some(e), "t") > now =>
-          return @sfbase.topic_as_read(name, params, { value: None, error: None, version: 0 })
+          return { value: None, error: None, version: 0 }
         _ => ()
       }
       for t in tape.topics {
@@ -131,10 +132,10 @@ fn tape_source(tape : Tape, at : () -> Double, base : Source) -> Source {
       }
       // (the device's prefs, which Android's tapes kept none of: a new device's, as the core has them from the start)
       if name == "prefs" && value is None {
-        return @sfbase.topic_as_read(name, params, { value: Some(Json::object(Map::new())), error: None, version: 1 })
+        return { value: Some(Json::object(Map::new())), error: None, version: 1 }
       }
-      // (its values as the tape set them by now, the clock going: followed as it is read)
-      @sfbase.topic_as_read(name, params, { value, error: None, version })
+      // (its values as the tape set them by now: followed by its moment as it moves on, `at`)
+      { value, error: None, version }
     },
     call: fn(name, params, done) {
       // answered as the core's answer comes: an event from outside, here at once
@@ -194,8 +195,9 @@ let tape_slack : Double = 2.0
 pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = []) -> Array[String] {
   new_run()
   let tape = tape_read(json)
-  let moment = Ref::new(-1.0)
-  let src = tape_source(tape, fn() { moment.val }, base)
+  // (its moment, told as it moves on: what reads the tape's core follows it, as the core's own topics by what it says)
+  let moment = @signals.signal(-1.0)
+  let src = tape_source(tape, fn() { moment.get() }, base)
   tape_open(tape)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=tape.w, h=tape.h, platform=2)
   // the system bars as Android's window had them (the host says them: bars.mbt)
@@ -222,7 +224,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
       if t0 + et > t.time() {
         t.run_for(t0 + et - t.time())
       }
-      moment.val = et
+      moment.set(et)
       match (field(Some(e), "push"), field(Some(e), "tapAt"), field(Some(e), "finger"), field(Some(e), "back")) {
         (Some(p), _, _, _) => tape_open_one(p)
         (_, Some(at), _, _) => t.tap(number(Some(at), "x"), number(Some(at), "y"))
@@ -247,7 +249,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
           }
       }
     }
-    moment.val = ft - 0.5
+    moment.set(ft - 0.5)
     if t0 + ft > t.time() {
       t.run_for(t0 + ft - t.time())
     }

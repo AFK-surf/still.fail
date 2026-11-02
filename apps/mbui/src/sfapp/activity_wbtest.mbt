@@ -14,7 +14,7 @@ test "activity: its ring steps round" {
   t.type_text("测试一下")
   tap_send(t)
   // delivered: its agent at work (the station's clock stays, so its turn's time does too)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   t.run_for(flight_wait_ms + @ui.move_most_ms + 1000.0)
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
@@ -135,12 +135,12 @@ test "activity: its line coming in at the list's end is followed, the list glidi
   tap_send(t)
   // delivered, its agent not at work yet; at work a moment later
   fix_later(fix_deliver_ms + 1.0, fn() { fix_chat("s-c1").working = -1.0 })
-  clock.val = clock.val + fix_deliver_ms + 1.0
+  fix_clock_set(clock, clock.val + fix_deliver_ms + 1.0)
   t.draw()
   t.run_for(agent_soon_ms)
   assert_true(t.at_end())
   fix_later(1.0, fn() { fix_chat("s-c1").working = clock.val })
-  clock.val = clock.val + 1.0
+  fix_clock_set(clock, clock.val + 1.0)
   t.draw()
   t.run_for(flight_wait_ms)
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
@@ -153,7 +153,7 @@ test "its avatar is back in its activity once a message has come out of it, the 
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   t.run_for(emit_all_ms())
   assert_true(em.watched)

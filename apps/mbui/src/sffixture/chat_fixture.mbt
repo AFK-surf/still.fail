@@ -712,10 +712,19 @@ pub fn fix_chat(session : String) -> FixChat {
 }
 
 ///|
-/// What the fixture's station does later (its answers): `ms` after it is said, on the window's runtime's clock
-/// (Runtime::after: the station is outside the view, timed as a host's answer is), or on a test's own clock
-/// (fix_clock). Due, it is done as the fixture is next read (fix_tick): what is shown reads it then.
-pub let fix_due : Array[() -> Unit] = []
+/// How many changes the made-up station made later were done (fix_later's at their moments, fix_clock_set's as a
+/// test's clock comes to theirs, fix_now's), each told as it is done: what its answers are worked out of
+/// (fixture_topic's version).
+// kept across runs: put back as a fixture is made (made.mbt)
+pub let fix_done : Ref[Int] = Ref(0)
+
+///|
+/// `f` done by the made-up station now, and told: what follows the made-up core reads it anew.
+pub fn fix_now(f : () -> Unit) -> Unit {
+  f()
+  fix_done.val += 1
+  @settings.fixture_changed()
+}
 
 ///|
 /// What was said later before the window's first frame (as the fixture is made): handed to its runtime as the
@@ -731,7 +740,8 @@ pub let fix_timers : Array[(Double, () -> Unit)] = []
 pub let fix_ctx : Ref[@ui.Ctx?] = { val: None }
 
 ///|
-/// A test's own clock for the fixture's station, moved on by the test (none: the window's runtime times it).
+/// A test's own clock for the fixture's station, moved on by the test (fix_clock_set; none: the window's runtime times
+/// it).
 pub let fix_clock : Ref[(() -> Double)?] = { val: None }
 
 ///|
@@ -756,9 +766,8 @@ pub let fix_xshared : Map[String, Bool] = {}
 pub let fix_serial : Ref[Int] = { val: 0 }
 
 ///|
-/// What is due, done (each a change: the views read again); what was said before the first frame, handed to the
-/// runtime.
-pub fn fix_tick(f : Fixture) -> Unit {
+/// What was said before the first frame, handed to the runtime as the fixture is first read in a window (fix_later).
+fn fix_tick() -> Unit {
   if fix_ctx.val is Some(_) && fix_unsaid.length() > 0 {
     let unsaid = fix_unsaid.copy()
     fix_unsaid.clear()
@@ -766,23 +775,19 @@ pub fn fix_tick(f : Fixture) -> Unit {
       fix_later(u.0, u.1)
     }
   }
-  match fix_clock.val {
-    Some(clock) => {
-      let now = clock()
-      for t in fix_timers.filter(fn(t) { t.0 <= now }) {
-        fix_due.push(t.1)
-      }
-      fix_timers.retain(fn(t) { t.0 > now })
+}
+
+///|
+/// A test's own clock (`clock`, fix_clock's) moved on to `ms`: what the station said it would do by then done, in the
+/// order it was said, and told (fix_now), as the core tells a change at its cause; what that says later in turn, done
+/// too once it is due by then.
+pub fn fix_clock_set(clock : Ref[Double], ms : Double) -> Unit {
+  clock.val = ms
+  while true {
+    match fix_timers.search_by(fn(t) { t.0 <= ms }) {
+      Some(i) => fix_now(fix_timers.remove(i).1)
+      None => break
     }
-    None => ()
-  }
-  if fix_due.length() > 0 {
-    let due = fix_due.copy()
-    fix_due.clear()
-    for d in due {
-      d()
-    }
-    f.changed()
   }
 }
 
@@ -801,13 +806,9 @@ pub let fix_turn_end_ms : Double = 700.0
 pub fn fix_later(ms : Double, f : () -> Unit) -> Unit {
   match (fix_clock.val, fix_ctx.val) {
     (Some(clock), _) => fix_timers.push((clock() + ms, f))
-    // (told as it is due, as the core tells a change it made: what read the made-up core is built again, and reads
-    // it then: fix_tick)
-    (None, Some(_)) =>
-      @ui.runtime().after(ms.ceil().to_int(), fn() {
-        fix_due.push(f)
-        @settings.fixture_changed()
-      })
+    // (done at its moment and told then, as the core tells a change it made at its cause: what follows the made-up core
+    // reads it anew, nothing of it done as that reads it)
+    (None, Some(_)) => @ui.runtime().after(ms.ceil().to_int(), fn() { fix_now(f) })
     (None, None) => fix_unsaid.push((ms, f))
   }
 }

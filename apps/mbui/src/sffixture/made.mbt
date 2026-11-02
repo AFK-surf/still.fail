@@ -34,7 +34,7 @@ pub fn fixture_reset() -> Unit {
   fix_timers.clear()
   fix_downloads.clear()
   fix_keeping_reset()
-  fix_due.clear()
+  fix_done.val = 0
   fix_unsaid.clear()
   fix_drafts.clear()
   fix_composers.clear()

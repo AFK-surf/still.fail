@@ -224,9 +224,9 @@ test "desk composer: the pointer moving over the `@` menu's chats chooses them; 
 test "desk composer: while the core looks up the `@` menu's next words, the chats the last ones found stay, not a line saying it is reading" {
   let calls : Array[Made] = []
   // (from when it is set, the core answers no `chatSearch` yet)
-  let held = Ref(false)
+  let held = @signals.signal(false)
   let (t, _) = desk_composer_tester(calls, over=fn(name, topic) {
-    if name == "chatSearch" && held.val {
+    if name == "chatSearch" && held.get() {
       { value: None, error: None, version: 0 }
     } else {
       topic
@@ -236,7 +236,7 @@ test "desk composer: while the core looks up the `@` menu's next words, the chat
   t.type_text("@首页")
   t.frame()
   assert_true(t.find("首页的列表改成按天分组") is Some(_))
-  held.val = true
+  held.set(true)
   t.type_text("的")
   t.frame()
   assert_true(t.find("引用对话") is Some(_))
@@ -353,9 +353,9 @@ test "desk composer: a file waiting and no words, Enter sends it (as send does)"
 test "desk composer: a file up after the page last heard of it goes once as Enter sends it: as the core took it (composer.take), not as the page drew it" {
   let calls : Array[Made] = []
   // the draft as the page last heard of it, its file going up, while the core's word that it is up is on its way
-  let heard : Ref[Topic?] = Ref(None)
+  let heard : @signals.Signal[Topic?] = @signals.signal(None)
   let (t, src) = desk_composer_tester(calls, over=fn(name, now) {
-    match heard.val {
+    match heard.get() {
       Some(before) if name == "composer" => before
       _ => now
     }
@@ -377,7 +377,7 @@ test "desk composer: a file up after the page last heard of it goes once as Ente
   let before = v.copy()
   before["files"] = Json::array(going)
   before["uploading"] = Json::boolean(true)
-  heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
+  heard.set(Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 }))
   t.frame()
   let drawn = @sfbase.writing(src, "ws1/st1:s-c1").files
   assert_eq(drawn.length(), 1)
@@ -423,9 +423,9 @@ test "desk composer: the same file picked or pasted again while it is in the dra
 test "desk composer: an image or a video sent while it goes up is among its message's files at once, its picture from here, a file of another kind a card saying how far" {
   let calls : Array[Made] = []
   // the draft as the page heard of it while its files went up (the fixture's core has them up at once)
-  let heard : Ref[Topic?] = Ref(None)
+  let heard : @signals.Signal[Topic?] = @signals.signal(None)
   let (t, src) = desk_composer_tester(calls, over=fn(name, now) {
-    match heard.val {
+    match heard.get() {
       Some(before) if name == "composer" => before
       _ => now
     }
@@ -448,7 +448,7 @@ test "desk composer: an image or a video sent while it goes up is among its mess
   let before = v.copy()
   before["files"] = Json::array(going)
   before["uploading"] = Json::boolean(true)
-  heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
+  heard.set(Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 }))
   t.frame()
   let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
   let clip = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[1]), "id")
@@ -500,9 +500,9 @@ fn loaded_sources(t : @ui.Tester) -> Int {
 /// a spinner turned over its tile as it waited there, and over what is drawn where its tile was till it sets off.
 fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   let calls : Array[Made] = []
-  let heard : Ref[Topic?] = Ref(None)
+  let heard : @signals.Signal[Topic?] = @signals.signal(None)
   let (t, src) = desk_composer_tester(calls, over=fn(name, now) {
-    match heard.val {
+    match heard.get() {
       Some(before) if name == "composer" => before
       _ => now
     }
@@ -521,7 +521,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   guard now.value is Some(Object(v)) else { abort("no draft") }
   let before = v.copy()
   before["files"] = Json::array(files)
-  heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
+  heard.set(Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 }))
   t.frame()
   // Compare the spinner on the visible tile with the face sent from it, after the composer's opening has shown it.
   t.run_for(@ui.move_most_ms)

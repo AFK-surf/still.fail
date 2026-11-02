@@ -52,7 +52,8 @@ fn jobs_tester() -> @ui.Tester {
   let src : Source = {
     ..base,
     topic: fn(name, params) {
-      match (name, (base.topic)(name, params).value) {
+      let got = (base.topic)(name, params)
+      match (name, got.value) {
         ("prefs", Some(Object(m))) => {
           let p = m.copy()
           // (the core's railView: ws1's own rail, 对话 and 文件)
@@ -62,9 +63,9 @@ fn jobs_tester() -> @ui.Tester {
           }
           view["by"] = { "ws1": { "items": ["chats", "files"] } }
           p["railView"] = Json::object(view)
-          { value: Some(Json::object(p)), error: None, version: 1 }
+          { ..got, value: Some(Json::object(p)) }
         }
-        _ => (base.topic)(name, params)
+        _ => got
       }
     },
   }

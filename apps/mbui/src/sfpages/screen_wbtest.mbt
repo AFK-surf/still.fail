@@ -16,9 +16,9 @@ priv struct ScreenRig {
   /// how the fake core answers a call (None: as the fixture does)
   answer : Ref[(String, Json) -> Result[Json, Json]?]
   /// the prefs' `screenTouch`, `screenQuality`, `screenFps` (0: none)
-  touch : Ref[String]
-  quality : Ref[String]
-  fps : Ref[Int]
+  touch : @signals.Signal[String]
+  quality : @signals.Signal[String]
+  fps : @signals.Signal[Int]
 }
 
 ///|
@@ -57,9 +57,9 @@ fn screen_rig(
   let views : Array[((Json, Bytes?) -> Unit, (Result[Json, Json]) -> Unit)] = []
   let cancelled : Array[Int] = []
   let answer : Ref[(String, Json) -> Result[Json, Json]?] = Ref(fn(_, _) { None })
-  let touch_ = Ref(touch)
-  let quality_ = Ref("")
-  let fps_ = Ref(0)
+  let touch_ = @signals.signal(touch)
+  let quality_ = @signals.signal("")
+  let fps_ = @signals.signal(0)
   let ask = fn(name : String, params : Json, bytes : Bytes?, done : (Result[Json, Json]) -> Unit, fallback : () -> Unit) {
     calls.push((name, params, bytes))
     match (answer.val)(name, params) {
@@ -76,19 +76,19 @@ fn screen_rig(
     ..base,
     topic: fn(name, params) {
       let tp = (base.topic)(name, params)
-      if name == "prefs" && (touch_.val != "" || quality_.val != "" || fps_.val != 0) {
+      if name == "prefs" && (touch_.get() != "" || quality_.get() != "" || fps_.get() != 0) {
         let m = match tp.value {
           Some(Object(m)) => m.copy()
           _ => {}
         }
-        if touch_.val != "" {
-          m["screenTouch"] = Json::string(touch_.val)
+        if touch_.get() != "" {
+          m["screenTouch"] = Json::string(touch_.get())
         }
-        if quality_.val != "" {
-          m["screenQuality"] = Json::string(quality_.val)
+        if quality_.get() != "" {
+          m["screenQuality"] = Json::string(quality_.get())
         }
-        if fps_.val != 0 {
-          m["screenFps"] = Json::number(fps_.val.to_double())
+        if fps_.get() != 0 {
+          m["screenFps"] = Json::number(fps_.get().to_double())
         }
         { ..tp, value: Some(Json::object(m)) }
       } else {
@@ -98,18 +98,18 @@ fn screen_rig(
     call: fn(name, params, done) {
       if name == "prefs.set" {
         match field(Some(params), "screenTouch") {
-          Some(String(v)) => touch_.val = v
-          Some(Null) => touch_.val = ""
+          Some(String(v)) => touch_.set(v)
+          Some(Null) => touch_.set("")
           _ => ()
         }
         match field(Some(params), "screenQuality") {
-          Some(String(v)) => quality_.val = v
-          Some(Null) => quality_.val = ""
+          Some(String(v)) => quality_.set(v)
+          Some(Null) => quality_.set("")
           _ => ()
         }
         match field(Some(params), "screenFps") {
-          Some(Number(n, ..)) => fps_.val = n.to_int()
-          Some(Null) => fps_.val = 0
+          Some(Number(n, ..)) => fps_.set(n.to_int())
+          Some(Null) => fps_.set(0)
           _ => ()
         }
       }

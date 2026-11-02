@@ -813,11 +813,11 @@ test "the wide frame's first page: shown once its pane has landed on what the co
   new_run()
   let base = fixture("home")
   // the core's marks of the workspaces (the chat last open in it among them) not come while `slow`
-  let slow = Ref(true)
+  let slow = @signals.signal(true)
   let src : Source = {
     ..base,
     topic: fn(name, params) {
-      if slow.val && name == "workspaceMarks" {
+      if slow.get() && name == "workspaceMarks" {
         return { value: None, error: None, version: 0 }
       }
       (base.topic)(name, params)
@@ -829,7 +829,7 @@ test "the wide frame's first page: shown once its pane has landed on what the co
   assert_true(t.find("整理发布清单") is Some(_), msg="the list built")
   t.run_for(@sf.local_ms)
   assert_true(!drawn("整理发布清单"), msg="not shown with nothing beside it")
-  slow.val = false
+  slow.set(false)
   t.frame()
   t.frame()
   assert_true(app.nav.top() == NewChat, msg="landed")

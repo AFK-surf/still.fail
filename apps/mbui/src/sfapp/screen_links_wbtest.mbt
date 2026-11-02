@@ -347,7 +347,7 @@ test "a tall browser picture fills its preview from the top of the page" {
 
 ///|
 test "a browser's card keeps its size as the browser is opened and closed on a small screen" {
-  let size = Ref((1280.0, 800.0))
+  let size = @signals.signal((1280.0, 800.0))
   let streams = []
   let cancelled = []
   let calls : Array[Made] = []
@@ -355,8 +355,8 @@ test "a browser's card keeps its size as the browser is opened and closed on a s
     guard name == "screenCard" && topic.value is Some(Object(card)) && text(topic.value, "kind") == "browser" &&
       !flag(topic.value, "gone") else { topic }
     let next = card.copy()
-    next["width"] = Json::number(size.val.0)
-    next["height"] = Json::number(size.val.1)
+    next["width"] = Json::number(size.get().0)
+    next["height"] = Json::number(size.get().1)
     { ..topic, value: Some(Json::object(next)) }
   })
   scroll_to_words(t, "发布清单预览")
@@ -369,7 +369,7 @@ test "a browser's card keeps its size as the browser is opened and closed on a s
   assert_eq(gap(), before, msg="the picture arriving does not change the card")
   // The browser is laid out for a small screen while its viewer is open. Its reported viewport changes in the
   // screen list, including while the chat is still visible; it goes back when the viewer closes.
-  size.val = (390.0, 760.0)
+  size.set((390.0, 760.0))
   t.frame()
   assert_eq(gap(), before, msg="the browser adapting to its viewer does not resize its card")
   // A new, portrait picture can arrive too; it replaces the old one inside the same card.
@@ -384,30 +384,30 @@ test "a browser's card keeps its size as the browser is opened and closed on a s
   t.back()
   t.run_for(@ui.move_most_ms)
   assert_eq(gap(), before, msg="the card has the same size on returning to the chat")
-  size.val = (1280.0, 800.0)
+  size.set((1280.0, 800.0))
   t.frame()
   assert_eq(gap(), before, msg="the browser returning to its former size does not resize its card")
-  size.val = (0.0, 0.0)
+  size.set((0.0, 0.0))
   t.frame()
   assert_eq(gap(), before, msg="the screen's size not yet known does not resize its card")
 }
 
 ///|
 test "a simulator's preview follows the simulated screen when it turns" {
-  let size = Ref((390.0, 844.0))
+  let size = @signals.signal((390.0, 844.0))
   let t = screen_links_core([], [], [], over=fn(name, topic) {
     guard name == "screenCard" && topic.value is Some(Object(card)) && text(topic.value, "kind") == "browser" &&
       !flag(topic.value, "gone") else { topic }
     let next = card.copy()
     next["kind"] = Json::string("simulator")
-    next["width"] = Json::number(size.val.0)
-    next["height"] = Json::number(size.val.1)
+    next["width"] = Json::number(size.get().0)
+    next["height"] = Json::number(size.get().1)
     { ..topic, value: Some(Json::object(next)) }
   })
   scroll_to_words(t, "发布清单预览")
   middle_words(t, "发布清单预览")
   let before = preview_gap(t)
-  size.val = (844.0, 390.0)
+  size.set((844.0, 390.0))
   t.frame()
   assert_true(preview_gap(t) < before, msg="the landscape simulator has a shorter preview")
 }

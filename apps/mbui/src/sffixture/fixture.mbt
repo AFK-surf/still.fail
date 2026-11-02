@@ -631,13 +631,20 @@ pub fn Fixture::changed(self : Fixture) -> Unit {
 }
 
 ///|
+/// How many changes the made-up core made: its own (Fixture::changed) and its station's later ones, done as they came
+/// (fix_done): what is worked out of its data is worked out again as this moves on.
+pub fn Fixture::changes(self : Fixture) -> Int {
+  self.version + fix_done.val
+}
+
+///|
 pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topic {
   // (read in a computed, followed as the made-up core changes: Fixture::changed)
   @settings.fixture_followed()
-  fix_tick(f)
+  fix_tick()
   // (the same answer while the made-up core is as it was, as the core's own: a subscription's value kept, not worked
   // out again each time it is read)
-  let version = f.version + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val
+  let version = f.changes() + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val
   let key = name + "\u{1}" + f.mode + "\u{1}" + Json::object(params).stringify()
   match fixture_answers.get(key) {
     Some(t) if t.version == version => return t
@@ -957,8 +964,8 @@ pub fn fixture_stations_way(v : Json?) -> Json? {
 
 ///|
 /// `base` answering `ms` late, as a phone's core across its thread does: each call's answer and each topic's first value
-/// (src/sffilm's MBUI_CORE_MS: what shows meanwhile filmed too). What is due comes as the fixture is next read
-/// (fix_later).
+/// (src/sffilm's MBUI_CORE_MS: what shows meanwhile filmed too). What is due comes at its moment, told then as the
+/// made-up core's change (fix_later), what reads it reading it anew.
 pub fn round_trip(base : Source, ms : Double) -> Source {
   round_trip_by(base, fn() { ms })
 }
@@ -972,10 +979,12 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
     ..base,
     call: fn(name, params, done) { (base.call)(name, params, fn(r) { fix_later(ms(), fn() { done(r) }) }) },
     topic: fn(name, params) {
+      @settings.fixture_followed()
       let t = (base.topic)(name, params)
       let k = name + Json::object(params).stringify()
-      // (its first value come late, as the clock goes: followed as it is read, @sfbase.topic_as_read)
-      @sfbase.topic_as_read(name, params, match read.get(k) {
+      // (its first value come late: set at its moment and told then (fix_later), what reads it following the made-up
+      // core's changes as it reads it (fixture_followed); nothing set as it is read)
+      match read.get(k) {
         Some(true) => t
         Some(false) => { value: None, error: None, version: -1 }
         None => {
@@ -983,7 +992,7 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
           fix_later(ms(), fn() { read[k] = true })
           { value: None, error: None, version: -1 }
         }
-      })
+      }
     },
   }
 }
@@ -996,7 +1005,7 @@ pub fn held_topics(base : Source, held : Array[String]) -> Source {
     ..base,
     topic: fn(name, params) {
       if held.contains(name) {
-        @sfbase.topic_as_read(name, params, { value: None, error: None, version: -1 })
+        { value: None, error: None, version: -1 }
       } else {
         (base.topic)(name, params)
       }
@@ -1012,7 +1021,7 @@ pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Sou
     ..base,
     topic: fn(name, params) {
       if failed.contains(name) {
-        @sfbase.topic_as_read(name, params, { value: None, error: Some({ "message": Json::string(why) }), version: 1 })
+        { value: None, error: Some({ "message": Json::string(why) }), version: 1 }
       } else {
         (base.topic)(name, params)
       }

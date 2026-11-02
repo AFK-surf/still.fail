@@ -7,7 +7,8 @@
 /// whether anything asked the vaults topic.
 priv struct VaultChat {
   mut status : String
-  mut version : Int
+  /// set as the core's message for it would come (the request decided), with `status`
+  version : @signals.Signal[Int]
   mut vaults_asked : Bool
   use_secret : Bool
 }
@@ -101,9 +102,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
             version: 1,
           }
         "prefs" => { value: Some(Json::object({ "workspace": Json::string("ws1") })), error: None, version: 1 }
-        // (made up as it is read: followed by its version, as the core's by what it says)
-        "chat" =>
-          topic_as_read(name, params, { value: Some(vault_chat_view(vc.status, vc.use_secret)), error: None, version: vc.version })
+        "chat" => { value: Some(vault_chat_view(vc.status, vc.use_secret)), error: None, version: vc.version.get() }
         "vaults" => {
           vc.vaults_asked = true
           { value: None, error: None, version: 0 }
@@ -115,7 +114,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
       calls.push(name)
       if name == "vault.deny" {
         vc.status = "denied"
-        vc.version = vc.version + 1
+        vc.version.set(vc.version.get() + 1)
       }
       done(Ok(Json::null()))
     },
@@ -130,7 +129,7 @@ test "an answered secret request can be read again from its outcome without answ
   ] {
     for (platform, width, height) in [(0, 390.0, 844.0), (0, 1280.0, 800.0), (2, 390.0, 844.0)] {
       new_run()
-      let vc : VaultChat = { status, version: 1, vaults_asked: false, use_secret }
+      let vc : VaultChat = { status, version: @signals.signal(1), vaults_asked: false, use_secret }
       let calls : Array[String] = []
       let src = vault_chat_src(vc, calls)
       open_chat({ station: "ws1/st1", session: "s-v1", title: "存密码", station_name: "Studio" })
@@ -178,7 +177,7 @@ test "an answered secret request can be read again from its outcome without answ
 test "the disclosure mark is centred on the result's first line" {
   for (platform, width, height, font_scale) in [(0, 1280.0, 800.0, 1.0), (2, 390.0, 844.0, 1.0), (2, 390.0, 844.0, 1.3)] {
     new_run()
-    let vc : VaultChat = { status: "denied", version: 1, vaults_asked: false, use_secret: false }
+    let vc : VaultChat = { status: "denied", version: @signals.signal(1), vaults_asked: false, use_secret: false }
     let calls : Array[String] = []
     let src = vault_chat_src(vc, calls)
     open_chat({ station: "ws1/st1", session: "s-v1", title: "存密码", station_name: "Studio" })
@@ -196,7 +195,7 @@ test "the disclosure mark is centred on the result's first line" {
 ///|
 test "an answered secret request's history is reachable and dismissible with the keyboard" {
   new_run()
-  let vc : VaultChat = { status: "denied", version: 1, vaults_asked: false, use_secret: false }
+  let vc : VaultChat = { status: "denied", version: @signals.signal(1), vaults_asked: false, use_secret: false }
   let calls : Array[String] = []
   let src = vault_chat_src(vc, calls)
   open_chat({ station: "ws1/st1", session: "s-v1", title: "存密码", station_name: "Studio" })
@@ -222,7 +221,7 @@ test "an answered secret request's history is reachable and dismissible with the
 ///|
 test "a request decided in its chat: its card closes on screen to how it went, nothing of it pressed any more" {
   new_run()
-  let vc : VaultChat = { status: "", version: 1, vaults_asked: false, use_secret: false }
+  let vc : VaultChat = { status: "", version: @signals.signal(1), vaults_asked: false, use_secret: false }
   let calls : Array[String] = []
   let src = vault_chat_src(vc, calls)
   let r : ChatRef = { station: "ws1/st1", session: "s-v1", title: "存密码", station_name: "Studio" }
