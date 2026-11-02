@@ -1087,18 +1087,6 @@ function gh(args: string[], options: { allowFail?: boolean } = {}): string {
   if (done.status !== 0 && !options.allowFail) throw new Error(`gh ${args.join(" ")}: ${done.stderr}`);
   return done.status === 0 ? done.stdout : "";
 }
-// An asset put in the release, asked again (a half-made one replaced) when GitHub's API breaks off: the renderer's
-// publish on Studio failed on one `Post "https://api.github.com/graphql": EOF`, main 492260fe, 41378296314, 2026-11-02.
-// Three tries, then the error.
-function upload(file: string): void {
-  for (let i = 1; ; i++) {
-    const args = ["release", "upload", RELEASE, file, "-R", REPO, ...(i > 1 ? ["--clobber"] : [])];
-    const done = spawnSync("gh", args, { encoding: "utf8", maxBuffer: 64 << 20 });
-    if (done.status === 0) return;
-    if (i === 3) throw new Error(`gh ${args.join(" ")}: ${done.stderr}`);
-    console.error(`native: ${basename(file)}'s upload broke off (${done.stderr.trim().split("\n").pop()}), asked again`);
-  }
-}
 async function published(): Promise<Set<string> | null> {
   // (one request, by fetch with the job's token where there is one: the release's own answer lists every asset, 180 of
   // them as they are kept. Through gh it was 21-35 s of Windows mbui runs with nothing missing, its first call in the job
@@ -1263,7 +1251,7 @@ async function main(argv: string[]) {
         let note = "";
         if (!there && publish) {
           const file = pack(dir, name, work);
-          upload(file);
+          gh(["release", "upload", RELEASE, file, "-R", REPO]);
           note = " → published";
         } else if (!there && outbox) {
           pack(dir, name, outbox);
@@ -1295,7 +1283,7 @@ async function main(argv: string[]) {
         any = true;
       }
       try {
-        if (any && toRelease) for (const f of readdirSync(join(work, "natives"))) upload(join(work, "natives", f));
+        if (any && toRelease) for (const f of readdirSync(join(work, "natives"))) gh(["release", "upload", RELEASE, join(work, "natives", f), "-R", REPO]);
         else if (any) run("sh", [join(ROOT, "scripts/release-put.sh"), "--files", work], { stdio: "inherit" });
       } finally { rmSync(work, { recursive: true, force: true }); }
       return;
