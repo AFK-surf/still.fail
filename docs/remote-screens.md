@@ -74,8 +74,8 @@
 A `ScreenSource` is something a person can see and drive: `desktop` (the station machine's display), `browser` (a tab
 of the station's browser) or `simulator` (an iOS Simulator booted on a Mac station, below). The `Screens` registry lists them and opens views. A view is pull-driven: the pace (below) asks for a frame when the link can carry it, so frames
 do not queue behind a slow link. The Mac and Windows desktop sources capture and encode on demand; Linux's X11 source
-keeps its newest JPEG. Each source picks its codec among those the client accepts: the desktop uses H.265 or H.264 on
-macOS and Windows, and JPEG on Linux; a browser tab uses JPEG (CDP screencast).
+keeps its newest raw picture for H.264 or its newest JPEG. Each source picks its codec among those the client accepts:
+the desktop uses H.265 or H.264 on macOS and Windows, H.264 or JPEG on Linux, and a browser tab uses JPEG (CDP screencast).
 
 The station's own users of a screen (the agents' computer-use tool) open views in the process with
 `ScreenHub.openAs(id, options, {name, control})` (station/src/screens/hub.ts): the view is the source's, with no member
@@ -329,13 +329,17 @@ operator; a station running as another user cannot use the session without that 
 session is reported as unsupported instead of sharing only its Xwayland windows. The list says when the display or
 tools are missing.
 
-Each view starts ffmpeg, captures the X11 root display (including its cursor) and sends JPEG frames at at most 15 fps,
-scaled to the viewer's bounds. It keeps only the latest frame while the viewer or link is slow. `xdotool` sends pointer,
-wheel and keyboard events to the same session; keys or buttons held by a view are released as it closes. Keyboard
-positions use Xorg's evdev keycodes; X servers with a different physical keycode map have not been tested. The first
-version does not carry system audio or the clipboard, select individual monitors, or resize an open view. The JPEG
-stream has no adaptive bitrate: fast-changing screens can be slow on narrow or lossy links. It is a software-encoded
-X11 implementation; Wayland needs a portal-backed source of its own.
+Each view captures the X11 root display (including its cursor) at at most 15 fps. For a client taking H.264, an ffmpeg
+with libx264 captures raw pictures up to 3840×2160, keeps the latest, and sends it to a second ffmpeg for encoding only
+when the pace asks for a frame. That way an encoded delta frame is never silently dropped. The encoder restarts with a
+new key frame and configuration when the requested bit rate changes substantially or a client asks for a key frame.
+When H.264 is unavailable or the client asks only for JPEG, one ffmpeg sends JPEG frames at the viewer's bounds and
+keeps its latest frame. The JPEG stream has no adaptive bitrate and can be slow on a narrow or lossy link.
+
+`xdotool` sends pointer, wheel and keyboard events to the same session; keys or buttons held by a view are released as
+it closes. Keyboard positions use Xorg's evdev keycodes; X servers with a different physical keycode map have not been
+tested. This version does not carry system audio or the clipboard, select individual monitors, or resize an open view.
+The encoders run in software; Wayland needs a portal-backed source of its own.
 
 The display's scale (Settings › Display › Scale) is a person's to change from the view, as UU Remote has it: on a phone
 the desktop's windows and text are made larger, readable at the phone's size. `stillfail-screen scale [percent]` reads

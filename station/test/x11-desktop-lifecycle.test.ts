@@ -28,24 +28,26 @@ test("repeated X11 views close their capture processes and release pending reads
   const initial = process.memoryUsage().rss;
   let peak = initial;
   try {
-    for (let i = 0; i < 20; i++) {
-      const view = await desktop.open({ maxWidth: 640, maxHeight: 400, codecs: ["jpeg"], fps: 15 });
-      const first = await view.next();
-      assert.ok(first && first.config?.codec === "jpeg" && first.data.length > 100);
-      const pending = view.next();
-      view.close();
-      await pending; // It either had a new frame already or is resolved by close.
-      assert.equal(await view.next(), null);
-      view.close(); // Closing a view twice is harmless.
-      peak = Math.max(peak, process.memoryUsage().rss);
+    for (const codec of ["jpeg", "h264"] as const) {
+      for (let i = 0; i < 20; i++) {
+        const view = await desktop.open({ maxWidth: 640, maxHeight: 400, codecs: [codec], fps: 15 });
+        const first = await view.next();
+        assert.ok(first && first.config?.codec === codec && first.data.length > 100);
+        const pending = view.next();
+        view.close();
+        await pending; // It either had a new frame already or is resolved by close.
+        assert.equal(await view.next(), null);
+        view.close(); // Closing a view twice is harmless.
+        peak = Math.max(peak, process.memoryUsage().rss);
+      }
     }
     await desktop.close();
     await until(async () => {
       const p = await run("ps", ["-o", "comm=", "--ppid", String(process.pid)], { env });
       return !p.stdout.split("\n").some((line) => line.trim() === "ffmpeg");
-    }, "all 20 capture processes to exit");
+    }, "all capture and encoder processes to exit");
     const growth = (peak - initial) / (1024 * 1024);
-    console.log(`20 open/close cycles: peak RSS grew ${growth.toFixed(1)} MiB; no capture processes remain`);
+    console.log(`20 open/close cycles per codec: peak RSS grew ${growth.toFixed(1)} MiB; no ffmpeg processes remain`);
     assert.ok(growth < 256, `unexpected RSS growth: ${growth.toFixed(1)} MiB`);
   } finally { await desktop.close(); }
 });

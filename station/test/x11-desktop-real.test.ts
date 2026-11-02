@@ -79,7 +79,7 @@ test("real QUIC: X11 frames, backpressure, read-only access, input and disconnec
     await run("xsetroot", ["-solid", "#ff0000"], { env });
     await desktop.refresh(true);
     assert.deepEqual(desktop.size(), { width: 1280, height: 800 });
-    await assert.rejects(desktop.open({ maxWidth: 640, maxHeight: 400, codecs: ["h264"] }), (e: ScreenRefused) => e.status === 415);
+    await assert.rejects(desktop.open({ maxWidth: 640, maxHeight: 400, codecs: ["h265"] }), (e: ScreenRefused) => e.status === 415);
     const denied = new X11Desktop({ env: { ...env, XAUTHORITY: "/nonexistent/stillfail-test-auth" }, changed: () => {} });
     await denied.refresh(true);
     assert.equal(denied.access().reason, "linuxUnavailable");

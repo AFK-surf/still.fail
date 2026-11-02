@@ -1,4 +1,4 @@
-// The station user's X11 desktop. ffmpeg captures it as JPEG frames and xdotool posts input; both are system tools.
+// The station user's X11 desktop. ffmpeg captures it and xdotool posts input; both are system tools.
 // A view keeps only the newest frame, so a slow client cannot build a queue of old pictures. Wayland needs its own
 // portal implementation: an Xwayland DISPLAY alone does not capture the Wayland desktop.
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import { ScreenRefused } from "./hub.ts";
 import type { Frame, ScreenAccess, ScreenInput, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
+import { X11H264 } from "./x11-h264.ts";
 
 const run = promisify(execFile);
 const MAX_FRAME = 16 * 1024 * 1024;
@@ -40,7 +41,8 @@ export class X11Desktop implements ScreenSource {
   readonly id = "desktop";
   readonly kind = "desktop" as const;
   readonly #o: X11DesktopOptions;
-  readonly #views = new Set<X11View>();
+  readonly #views = new Set<ScreenView>();
+  #h264: Promise<boolean> | null = null;
   #size: Size = { width: 0, height: 0 };
   #reason: Reason | undefined = "linuxNoDisplay";
   #looked = 0;
@@ -86,7 +88,7 @@ export class X11Desktop implements ScreenSource {
   }
 
   async open(options: ViewOptions): Promise<ScreenView> {
-    if (!options.codecs.includes("jpeg")) throw new ScreenRefused(415, "station.screen.codec", { codec: "JPEG" });
+    if (!options.codecs.includes("jpeg") && !options.codecs.includes("h264")) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264 or JPEG" });
     await this.refresh(true);
     if (this.#reason) throw new ScreenRefused(503, `station.screen.${this.#reason}`, {}, this.access());
     const env = this.#o.env ?? process.env;
@@ -94,6 +96,20 @@ export class X11Desktop implements ScreenSource {
     const ffmpeg = executable(this.#o.ffmpeg ?? "ffmpeg", env);
     const xdotool = executable(this.#o.xdotool ?? "xdotool", env);
     if (!ffmpeg || !xdotool) throw new ScreenRefused(503, "station.screen.linuxTools", {}, { capture: false, control: false, reason: "linuxTools" });
+    if (options.codecs.includes("h264")) {
+      this.#h264 ??= run(ffmpeg, ["-hide_banner", "-encoders"], { env, timeout: 3_000 }).then(({ stdout }) => /\blibx264\b/.test(stdout), () => false);
+      if (await this.#h264) {
+        const view = new X11H264View(ffmpeg, xdotool, env, this.#size, options, () => this.#views.delete(view));
+        this.#views.add(view);
+        try { await view.ready; return view; }
+        catch (error) {
+          view.close();
+          if (!options.codecs.includes("jpeg")) throw new ScreenRefused(503, "station.screen.failed", { said: (error as Error).message });
+        }
+      } else if (!options.codecs.includes("jpeg")) {
+        throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264" });
+      }
+    }
     const view = new X11View(ffmpeg, xdotool, env, this.#size, options, () => this.#views.delete(view));
     this.#views.add(view);
     try { await view.ready; return view; }
@@ -144,24 +160,101 @@ const MODS = [
 ];
 const BUTTONS = [{ bit: 1, button: 1 }, { bit: 2, button: 3 }, { bit: 4, button: 2 }];
 
-class X11View implements ScreenView {
-  readonly ready: Promise<void>;
-  readonly #child: ChildProcessWithoutNullStreams;
+class X11Input {
   readonly #xdotool: string;
   readonly #env: NodeJS.ProcessEnv;
   readonly #screen: Size;
-  readonly #picture: Size;
-  readonly #gone: () => void;
   readonly #keys = new Set<string>();
   readonly #buttons = new Set<number>();
   #input: Promise<void> = Promise.resolve();
+  #wheel = { x: 0, y: 0 };
+  #ended = false;
+
+  constructor(xdotool: string, env: NodeJS.ProcessEnv, screen: Size) {
+    this.#xdotool = xdotool;
+    this.#env = env;
+    this.#screen = { ...screen };
+  }
+
+  async #command(args: string[], timeout = 3_000): Promise<void> {
+    await run(this.#xdotool, args, { env: this.#env, timeout });
+  }
+  async #type(text: string): Promise<void> {
+    await this.#command(["type", "--delay", String(TYPE_DELAY_MS), "--", text], 5_000 + Array.from(text).length * TYPE_DELAY_MS * 3);
+  }
+  input(event: ScreenInput): Promise<void> {
+    const next = this.#input.then(async () => {
+      if (this.#ended) return;
+      const point = (x: number, y: number) => [String(Math.max(0, Math.min(this.#screen.width - 1, Math.round(x * (this.#screen.width - 1))))), String(Math.max(0, Math.min(this.#screen.height - 1, Math.round(y * (this.#screen.height - 1)))))];
+      if (event.t === "pointer") {
+        await this.#command(["mousemove", ...point(event.x, event.y)]);
+        for (const { bit, button } of BUTTONS) {
+          const down = (event.buttons & bit) !== 0, was = this.#buttons.has(button);
+          if (down === was) continue;
+          await this.#command([down ? "mousedown" : "mouseup", String(button)]);
+          if (down) this.#buttons.add(button); else this.#buttons.delete(button);
+        }
+      } else if (event.t === "wheel") {
+        await this.#command(["mousemove", ...point(event.x, event.y)]);
+        this.#wheel.x += event.dx / 100;
+        this.#wheel.y += event.dy / 100;
+        for (const axis of ["x", "y"] as const) {
+          const whole = Math.trunc(this.#wheel[axis]);
+          if (!whole) continue;
+          const count = Math.min(20, Math.abs(whole));
+          this.#wheel[axis] -= Math.sign(whole) * count;
+          const button = axis === "y" ? (whole > 0 ? 5 : 4) : (whole > 0 ? 7 : 6);
+          await this.#command(["click", "--repeat", String(count), "--delay", "0", String(button)]);
+        }
+      } else if (event.t === "key") {
+        const key = keyOf(event.code);
+        if (!key) {
+          if (event.kind === "down" && Array.from(event.key).length === 1 && (event.mods & 6) === 0) await this.#type(event.key);
+          return;
+        }
+        if (event.kind === "up") {
+          await this.#command(["keyup", key]);
+          this.#keys.delete(key);
+          return;
+        }
+        const temporary = MODS.filter((m) => (event.mods & m.bit) !== 0 && !m.keys.includes(key) && !m.keys.some((k) => this.#keys.has(k))).map((m) => m.keys[0]!);
+        for (const mod of temporary) { await this.#command(["keydown", mod]); this.#keys.add(mod); }
+        await this.#command(["keydown", key]);
+        this.#keys.add(key);
+        for (const mod of temporary.reverse()) { await this.#command(["keyup", mod]); this.#keys.delete(mod); }
+      } else if (event.text) {
+        await this.#type(event.text);
+      }
+    });
+    this.#input = next.catch(() => {});
+    return next;
+  }
+
+  close(): void {
+    if (this.#ended) return;
+    this.#ended = true;
+    // Release anything this view pressed even if its client disappeared while dragging or typing.
+    void this.#input.then(async () => {
+      for (const key of this.#keys) await this.#command(["keyup", key]).catch(() => {});
+      for (const button of this.#buttons) await this.#command(["mouseup", String(button)]).catch(() => {});
+      this.#keys.clear();
+      this.#buttons.clear();
+    });
+  }
+}
+
+class X11View implements ScreenView {
+  readonly ready: Promise<void>;
+  readonly #child: ChildProcessWithoutNullStreams;
+  readonly #inputs: X11Input;
+  readonly #picture: Size;
+  readonly #gone: () => void;
   #carry: Buffer = Buffer.alloc(0);
   #latest: { data: Buffer; ts: number } | null = null;
   #waiting: ((frame: Frame | null) => void)[] = [];
   #config = true;
   #lastTs = 0;
   #ended = false;
-  #wheel = { x: 0, y: 0 };
   #opened = false;
   #resolve!: () => void;
   #reject!: (error: Error) => void;
@@ -169,9 +262,7 @@ class X11View implements ScreenView {
   #stderr = "";
 
   constructor(ffmpeg: string, xdotool: string, env: NodeJS.ProcessEnv, screen: Size, options: ViewOptions, gone: () => void) {
-    this.#xdotool = xdotool;
-    this.#env = env;
-    this.#screen = { ...screen };
+    this.#inputs = new X11Input(xdotool, env, screen);
     this.#picture = fitted(screen, options.maxWidth, options.maxHeight);
     this.#gone = gone;
     this.ready = new Promise((resolve, reject) => { this.#resolve = resolve; this.#reject = reject; });
@@ -230,59 +321,7 @@ class X11View implements ScreenView {
   keyframe(): void {} // Each JPEG is a key frame.
   video(): ScreenVideo { return { capture: "X11", encoder: "ffmpeg MJPEG (software)" }; }
 
-  async #command(args: string[], timeout = 3_000): Promise<void> {
-    await run(this.#xdotool, args, { env: this.#env, timeout });
-  }
-  async #type(text: string): Promise<void> {
-    await this.#command(["type", "--delay", String(TYPE_DELAY_MS), "--", text], 5_000 + Array.from(text).length * TYPE_DELAY_MS * 3);
-  }
-  input(event: ScreenInput): Promise<void> {
-    const next = this.#input.then(async () => {
-      if (this.#ended) return;
-      const point = (x: number, y: number) => [String(Math.max(0, Math.min(this.#screen.width - 1, Math.round(x * (this.#screen.width - 1))))), String(Math.max(0, Math.min(this.#screen.height - 1, Math.round(y * (this.#screen.height - 1)))))];
-      if (event.t === "pointer") {
-        await this.#command(["mousemove", ...point(event.x, event.y)]);
-        for (const { bit, button } of BUTTONS) {
-          const down = (event.buttons & bit) !== 0, was = this.#buttons.has(button);
-          if (down === was) continue;
-          await this.#command([down ? "mousedown" : "mouseup", String(button)]);
-          if (down) this.#buttons.add(button); else this.#buttons.delete(button);
-        }
-      } else if (event.t === "wheel") {
-        await this.#command(["mousemove", ...point(event.x, event.y)]);
-        this.#wheel.x += event.dx / 100;
-        this.#wheel.y += event.dy / 100;
-        for (const axis of ["x", "y"] as const) {
-          const whole = Math.trunc(this.#wheel[axis]);
-          if (!whole) continue;
-          const count = Math.min(20, Math.abs(whole));
-          this.#wheel[axis] -= Math.sign(whole) * count;
-          const button = axis === "y" ? (whole > 0 ? 5 : 4) : (whole > 0 ? 7 : 6);
-          await this.#command(["click", "--repeat", String(count), "--delay", "0", String(button)]);
-        }
-      } else if (event.t === "key") {
-        const key = keyOf(event.code);
-        if (!key) {
-          if (event.kind === "down" && Array.from(event.key).length === 1 && (event.mods & 6) === 0) await this.#type(event.key);
-          return;
-        }
-        if (event.kind === "up") {
-          await this.#command(["keyup", key]);
-          this.#keys.delete(key);
-          return;
-        }
-        const temporary = MODS.filter((m) => (event.mods & m.bit) !== 0 && !m.keys.includes(key) && !m.keys.some((k) => this.#keys.has(k))).map((m) => m.keys[0]!);
-        for (const mod of temporary) { await this.#command(["keydown", mod]); this.#keys.add(mod); }
-        await this.#command(["keydown", key]);
-        this.#keys.add(key);
-        for (const mod of temporary.reverse()) { await this.#command(["keyup", mod]); this.#keys.delete(mod); }
-      } else if (event.text) {
-        await this.#type(event.text);
-      }
-    });
-    this.#input = next.catch(() => {});
-    return next;
-  }
+  input(event: ScreenInput): Promise<void> { return this.#inputs.input(event); }
 
   #end(error: Error) {
     if (this.#ended) return;
@@ -292,14 +331,40 @@ class X11View implements ScreenView {
     this.#child.kill();
     this.#latest = null;
     for (const waiting of this.#waiting.splice(0)) waiting(null);
-    // Release anything this view pressed even if its client disappeared while dragging or typing.
-    void this.#input.then(async () => {
-      for (const key of this.#keys) await this.#command(["keyup", key]).catch(() => {});
-      for (const button of this.#buttons) await this.#command(["mouseup", String(button)]).catch(() => {});
-      this.#keys.clear();
-      this.#buttons.clear();
-    });
+    this.#inputs.close();
     this.#gone();
   }
   close(): void { this.#end(new Error("X11 view closed")); }
+}
+
+/// The same X11 input as the JPEG view, with an on-demand H.264 encoder for clients that can decode it.
+class X11H264View implements ScreenView {
+  readonly ready: Promise<void>;
+  readonly #inputs: X11Input;
+  readonly #video: X11H264;
+  readonly #gone: () => void;
+  #ended = false;
+
+  constructor(ffmpeg: string, xdotool: string, env: NodeJS.ProcessEnv, screen: Size, options: ViewOptions, gone: () => void) {
+    this.#inputs = new X11Input(xdotool, env, screen);
+    this.#gone = gone;
+    // Raw frames live in memory while the encoder takes them; cap each view to a 4K picture.
+    const picture = fitted(screen, Math.min(options.maxWidth, 3840), Math.min(options.maxHeight, 2160));
+    const fps = Math.min(15, Math.max(1, Math.round(options.fps ?? 15)));
+    this.#video = new X11H264(ffmpeg, env, screen, picture, fps, options.bitrate, () => this.close());
+    this.ready = this.#video.ready;
+  }
+
+  next(): Promise<Frame | null> { return this.#video.next(); }
+  input(event: ScreenInput): Promise<void> { return this.#inputs.input(event); }
+  rate(bits: number): void { this.#video.rate(bits); }
+  keyframe(): void { this.#video.keyframe(); }
+  video(): ScreenVideo { return this.#video.video(); }
+  close(): void {
+    if (this.#ended) return;
+    this.#ended = true;
+    this.#video.close();
+    this.#inputs.close();
+    this.#gone();
+  }
 }
