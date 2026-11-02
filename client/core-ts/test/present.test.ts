@@ -346,19 +346,19 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const asked = row([done], false);
   asked.card = card;
   // A line that asks for a decision is about no message: the chat leads to what it asks.
-  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null, "域名用哪个？", { kind: "decision", text: "奏", rest: " · 域名用哪个？" }]]);
+  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["待处理 · 域名用哪个？", null, "域名用哪个？", { kind: "decision", text: "待处理", rest: " · 域名用哪个？" }]]);
   // A card waiting for the viewer: not ended, its agent's done or not.
   assert.ok(!p.ended(asked));
   asked.agents = [agent(null, "running")];
-  assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
+  assert.equal(p.rowStateText(asked), "待处理 · 域名用哪个？");
   asked.agents = [waits];
-  assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
+  assert.equal(p.rowStateText(asked), "待处理 · 域名用哪个？");
   asked.agents = [helped];
   assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null, "要 key", { kind: "need", rest: "要 key" }]);
   asked.agents = [agent({ outcome: "failed", detail: "auth: 401" }, "warm")];
   assert.equal(p.rowStateText(asked), "出错：登录失效");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
-  assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
+  assert.equal(p.rowStateText(asked), "待处理 · 域名用哪个？");
   // Let go by the viewer: the row says nothing of it, its agent asking still.
   asked.card.dismissed = true;
   assert.equal(p.rowStateText(asked), null);

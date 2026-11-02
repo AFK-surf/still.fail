@@ -73,7 +73,7 @@ export type LocalChange =
   | { kind: "changing"; station: string }
   | { kind: "archiving" }
   | { kind: "letGo"; station: string; thread: number }
-  /// A vault request decided here (`request`): its card off the 奏 page, how it went on its card in its chat.
+  /// A vault request decided here (`request`): update its card in the chat and the pending list.
   | { kind: "vault"; request: string };
 
 /// How a vault request decided here went, as its station restates its card (station/src/vault/secrets.ts #settle).
@@ -571,7 +571,7 @@ export class Local {
     return this.outbox(station, thread).some((m) => m.state !== "failed") || this.#sentIn.some(([s, t, n]) => s === station && t === thread && n > seq);
   }
 
-  /// A card let go from here (`decision.dismiss`): off the 奏 page at once. Refused (`ok` false), it is back; taken,
+  /// A card let go from here (`decision.dismiss`): removed from the pending list at once. Refused (`ok` false), it is back; taken,
   /// it stays off until its station's rows change from how they were then (`rev`), which then say it is dismissed.
   letGo(station: string, thread: number, seq: number): void {
     this.#lettingGo.push({ station, thread, seq });
@@ -593,7 +593,7 @@ export class Local {
     return this.#lettingGo.some((l) => l.station === station && l.thread === thread && l.seq === seq);
   }
 
-  /// A vault request approved or turned down here (`outcome`): its card is off the 奏 page, and its card in its chat says
+  /// A vault request approved or turned down here (`outcome`): the pending list and its card in the chat say
   /// how it went, at once (its station says so as it tells it).
   vaultDecided(request: string, outcome: VaultOutcome): void {
     if (this.decidedVault(request)) return;

@@ -53,8 +53,8 @@ test "Home: the workspace's name, the search, the days and their rows" {
   // a lead said as an icon: its words after it, not the lead
   assert_true(t.find("测试机的磁盘满了，要不要清理旧的缓存？") is Some(_))
   assert_true(t.find("要你帮忙：测试机的磁盘满了，要不要清理旧的缓存？") is None)
-  // 奏 · …: 奏 on its own, bold, the rest after it
-  assert_true(t.find("奏") is Some(_))
+  // 待处理 · …: 待处理 on its own, bold, the rest after it
+  assert_true(t.find("待处理") is Some(_))
   // rows are 66 high, under the top bar
   let (_, y1) = t.find("整理发布清单").unwrap()
   let (_, y2) = t.find("首页的列表改成按天分组").unwrap()
@@ -276,7 +276,7 @@ test "a state line's lead is the core's: an icon in its words' place with what f
         @sfpages.state_line(c, "a", c.id("a"), "要你帮忙：看一下", lead="need", rest="看一下")
         // (words that look like a lead, said by none: as they are)
         @sfpages.state_line(c, "b", c.id("b"), "要你帮忙看一眼")
-        @sfpages.state_line(c, "c", c.id("c"), "奏 · 用哪个？", lead="decision", lead_text="奏", rest=" · 用哪个？")
+        @sfpages.state_line(c, "c", c.id("c"), "待处理 · 用哪个？", lead="decision", lead_text="待处理", rest=" · 用哪个？")
       })
       |> ignore
     },
@@ -288,8 +288,44 @@ test "a state line's lead is the core's: an icon in its words' place with what f
   assert_true(t.find("看一下") is Some(_))
   assert_true(t.find("要你帮忙：看一下") is None, msg="the lead said by its icon")
   assert_true(t.find("要你帮忙看一眼") is Some(_))
-  assert_true(t.find("奏") is Some(_))
+  assert_true(t.find("待处理") is Some(_))
   assert_true(t.find(" · 用哪个？") is Some(_))
+}
+
+///|
+test "a pending card's long question gives way to its lead on a narrow row" {
+  for (lead, rest) in [
+    ("待处理", " · 分组的标题用相对日期还是具体日期？"),
+    ("Needs attention", " · Should the group titles use relative or exact dates?"),
+  ] {
+    for platform in [0, 2] {
+      new_run()
+      let width = Ref(240.0)
+      let t = @ui.Tester::new(
+        fn(c) {
+          @sf.begin(c) |> ignore
+          c.with_theme(@sf.ui_theme(), fn() {
+            c.box(w=Px(width.val), fn() {
+              @sfpages.state_line(c, "card", c.id("card"), lead + rest, lead="decision", lead_text=lead, rest~)
+            })
+            |> ignore
+          })
+        },
+        w=800.0,
+        h=120.0,
+        platform~,
+      )
+      t.draw()
+      assert_eq(t.lines_of(lead), [lead])
+      let narrow = t.lines_of(rest)
+      assert_true(narrow.length() == 1 && narrow[0].has_suffix("…"), msg="\{lead}: \{narrow}")
+      assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
+      width.val = 800.0
+      t.frame()
+      assert_eq(t.lines_of(lead), [lead])
+      assert_eq(t.lines_of(rest), [rest])
+    }
+  }
 }
 
 ///|

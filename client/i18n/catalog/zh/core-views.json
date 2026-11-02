@@ -326,8 +326,6 @@
   "core-views.present.watch_ask": "{names}仍在监控。归档会停止监控。",
   "core-views.present.watching": "监控中",
   "core-views.present.watching_names": "监控中：{names}",
-  "core-views.present.working": "在做",
-  "core-views.present.working.last": "在做 · {last}",
   "core-views.present.you": "你",
   "core-views.quoted": "「{text}」",
   "core-views.spent.back": "{when}恢复",

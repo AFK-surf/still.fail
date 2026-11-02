@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import * as d from "../src/decisions.ts";
-import { holdLanguage } from "../src/i18n.ts";
+import { holdLanguage, setCurrent } from "../src/i18n.ts";
+import { rowStateLine } from "../src/present.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -90,11 +91,24 @@ test("options_show_the_recommended_one_last", () => {
 });
 
 test("a_cards_line_is_its_whole_first_line", () => {
-  assert.equal(d.line("**「共」改成按今天累计吗？**\n细节"), "奏 · 「共」改成按今天累计吗？");
-  assert.equal(d.line("\n\n## 选哪个"), "奏 · 选哪个");
+  assert.equal(d.line("**「共」改成按今天累计吗？**\n细节"), "待处理 · 「共」改成按今天累计吗？");
+  assert.equal(d.line("\n\n## 选哪个"), "待处理 · 选哪个");
   const long = "字".repeat(50);
-  assert.equal(d.line(long), `奏 · ${long}`);
-  assert.equal(d.line(""), "奏");
+  assert.equal(d.line(long), `待处理 · ${long}`);
+  assert.equal(d.line(""), "待处理");
+});
+
+test("pending_card_labels_are_localized_and_leave_the_question_separate", () => {
+  setCurrent("en");
+  try {
+    const raw = { card: { seq: 2, card: { type: "text" }, message: { seq: 2, text: "**Which domain?**\nDetails" } } };
+    const row = d.presentRow(raw);
+    assert.equal(row.decision.text, "Needs attention · Which domain?");
+    assert.deepEqual(rowStateLine(row), ["Needs attention · Which domain?", null, "Which domain?", { kind: "decision", text: "Needs attention", rest: " · Which domain?" }]);
+    assert.equal(d.line(""), "Needs attention");
+  } finally {
+    setCurrent("zh");
+  }
 });
 
 test("a_rows_card_is_read_from_its_card_else_its_decision", () => {
@@ -127,7 +141,7 @@ test("a_row_with_a_card_says_so_and_is_marked_wait_until_dismissed", () => {
   let row: J = { state: "run", unread: true, decision: decision(4, false) };
   row = d.presentRow(row);
   assert.equal(row.tone, "wait");
-  assert.equal(row.decision.text, "奏 · 「共」改成按今天累计吗？");
+  assert.equal(row.decision.text, "待处理 · 「共」改成按今天累计吗？");
   assert.equal(row.decision.options[2].label, "按今天累计");
   assert.equal(row.decision.card.type, "options");
   assert.equal(row.decision.message, undefined);

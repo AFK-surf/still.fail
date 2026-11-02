@@ -382,11 +382,11 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     row("c2", "首页的列表改成按天分组", "ws1/st1", "8 分钟前", {
       "unread": true,
       "tone": "wait",
-      "decision": { "seq": 3, "options": [], "text": "奏 · 分组的标题用相对日期还是具体日期？" },
+      "decision": { "seq": 3, "options": [], "text": "待处理 · 分组的标题用相对日期还是具体日期？" },
       // (its line, and what leads it, as the core says them: client/core-ts present.ts rowStateLine)
-      "stateText": "奏 · 分组的标题用相对日期还是具体日期？",
+      "stateText": "待处理 · 分组的标题用相对日期还是具体日期？",
       "stateLead": "decision",
-      "stateLeadText": "奏",
+      "stateLeadText": "待处理",
       "stateRest": " · 分组的标题用相对日期还是具体日期？",
       "people": [me, ana],
       "creator": { "id": "lin@example.com", "name": "林", "via": "cloud" },
