@@ -68,6 +68,7 @@ test("parses_the_client_messages_of_the_protocol", () => {
   assert.deepEqual(parseClientMessage({ id: 5, subscribe: { topic: "chat", station: "w/s", thread: 7 } }), { kind: "subscribe", id: 5, subscribe: { topic: "chat", station: "w/s", thread: 7, session: null } });
   assert.deepEqual(parseClientMessage({ id: 6, subscribe: { topic: "chat", station: "w/s", session: "ds:C1:1.0" } }), { kind: "subscribe", id: 6, subscribe: { topic: "chat", station: "w/s", thread: null, session: "ds:C1:1.0" } });
   assert.deepEqual(parseClientMessage({ id: 6, subscribe: { topic: "chat", station: "w/s", session: "ds:C1:1.0", compact: true } }), { kind: "subscribe", id: 6, subscribe: { topic: "chat", station: "w/s", thread: null, session: "ds:C1:1.0", compact: true } });
+  assert.deepEqual(parseClientMessage({ id: 7, subscribe: { topic: "chatJobs", station: "w/s", session: "k", compact: true, summary: true } }), { kind: "subscribe", id: 7, subscribe: { topic: "chatJobs", station: "w/s", thread: null, session: "k", compact: true, summary: true } });
   // The cards of links in a message (a screen's, a station's 共享调试) are asked for by the UIs as any topic is.
   assert.deepEqual(parseClientMessage({ id: 8, subscribe: { topic: "screenCard", station: "w/s", screen: "desktop" } }), { kind: "subscribe", id: 8, subscribe: { topic: "screenCard", station: "w/s", screen: "desktop" } });
   assert.deepEqual(parseClientMessage({ id: 9, subscribe: { topic: "adbCard", station: "w/s" } }), { kind: "subscribe", id: 9, subscribe: { topic: "adbCard", station: "w/s" } });

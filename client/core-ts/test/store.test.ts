@@ -309,6 +309,7 @@ test("a_closed_page_is_not_formatted_until_it_is_opened_again", async () => {
     store.subscribe(1, 2, page);
     let shown: unknown;
     const messages = host.takeEmitted();
+    assert.equal(messages.length, 0, "a reopened page is not sent a stale value while its current one is prepared");
     await pass(COALESCE_MS * 2);
     messages.push(...host.takeEmitted());
     for (const [, message] of messages) {
@@ -336,6 +337,7 @@ test("a_reopened_held_page_catches_up_with_changes_while_closed", async () => {
   await pass(COALESCE_MS * 2);
   store.subscribe(1, 2, overview());
   const messages = host.takeEmitted();
+  assert.equal(messages.length, 0, "a reopened held value is not sent an outdated snapshot");
   await pass(COALESCE_MS * 2);
   messages.push(...host.takeEmitted());
   let shown: unknown;

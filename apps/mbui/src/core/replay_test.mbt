@@ -73,6 +73,20 @@ test "a chat recorded before compact views replays without a changed ask" {
 }
 
 ///|
+test "a jobs summary is answered by an older recording's full jobs view" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":7,"subscribe":{"topic":"chatJobs","station":"w/s","session":"k"},"keyed":true}}
+    #|{"in":{"id":7,"value":{"jobs":[{"id":"j1"}]}},"w":1}
+  ))
+  let c = r.client()
+  let s = c.subscribe("chatJobs", params={ "station": "w/s", "session": "k", "compact": true, "summary": true })
+  assert_eq(r.deliver(), 1)
+  assert_eq(s.value.unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
+  assert_eq(r.fuzzy().length(), 0)
+  assert_eq(r.diverged().length(), 0)
+}
+
+///|
 test "where the app goes apart from the run is said, and what waits on it stays" {
   let r = @core.Replay::parse(run)
   let c = r.client()

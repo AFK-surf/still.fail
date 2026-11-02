@@ -2748,6 +2748,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A thing of a chat's (`chatThings`)." }),
   ChatJobsView: struct([
     ["jobs", vec("Job")],
+    ["hasJobs", opt("bool"), { skipNone: true, doc: "On a summary, whether there are jobs; their details are read separately." }],
     ["alarm", opt("String"), { doc: "fail: one died lately; restart: a service is being started again." }],
     ["servicesNote", "String", { doc: "2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say)." }],
     ["jobsNote", "String"],

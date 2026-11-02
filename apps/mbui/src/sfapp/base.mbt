@@ -328,6 +328,7 @@ pub using @sfbase {
   absolute_times,
   message_runs,
   chat_params,
+  chat_jobs_summary_params,
   term_color,
   job_output_lines,
   agent_json,

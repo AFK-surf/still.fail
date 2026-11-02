@@ -3,6 +3,7 @@
 import "../src/hosts/hermes-globals.ts";
 import { Views } from "../src/views/views.ts";
 import { Output } from "../src/output.ts";
+import { chatJobs } from "../src/jobs.ts";
 import { deepFreeze } from "../src/util.ts";
 
 const g = globalThis as any;
@@ -55,3 +56,19 @@ while (frames(frameCount, false) < 250) frameCount *= 2;
 const fullMs = [frames(frameCount, false), frames(frameCount, false), frames(frameCount, false)];
 const compactMs = [frames(frameCount, true), frames(frameCount, true), frames(frameCount, true)];
 g.print(`frames=${frameCount} full_bytes=${fullBytes} compact_bytes=${compactBytes} full_ms=${fullMs.join(",")} compact_ms=${compactMs.join(",")}`);
+
+// The bar's job indicator versus the jobs sheet; both use the same synthetic jobs.
+const chat = { agents: [{ jobs: detail.jobs }] };
+function jobFrames(n: number, summary: boolean): number {
+  const before = Date.now();
+  for (let i = 0; i < n; i++) checksum += JSON.stringify(chatJobs(chat, clock, summary)[0]).length;
+  return Date.now() - before;
+}
+const [jobsFull] = chatJobs(chat, clock);
+const [jobsSummary] = chatJobs(chat, clock, true);
+if (jobsSummary.hasJobs !== (jobsFull.jobs.length > 0) || jobsSummary.alarm !== jobsFull.alarm) throw Error("different button state");
+let jobCount = 1;
+while (jobFrames(jobCount, false) < 250) jobCount *= 2;
+const jobsFullMs = [jobFrames(jobCount, false), jobFrames(jobCount, false), jobFrames(jobCount, false)];
+const jobsSummaryMs = [jobFrames(jobCount, true), jobFrames(jobCount, true), jobFrames(jobCount, true)];
+g.print(`jobs_frames=${jobCount} full_bytes=${JSON.stringify(jobsFull).length} summary_bytes=${JSON.stringify(jobsSummary).length} full_ms=${jobsFullMs.join(",")} summary_ms=${jobsSummaryMs.join(",")}`);

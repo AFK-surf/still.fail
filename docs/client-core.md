@@ -454,6 +454,8 @@ With `compact: true`, `chat` sends the same page and agent identities, but each 
 are empty and `hasJobs` says whether it has jobs. A client reads details through `history`, `session`, or `chatJobs`
 when it shows them. Without `compact`, the original full value is unchanged; an older core ignores the parameter and
 returns that full value. `chatJobs` accepts the same parameter to reuse that chat internally; its own result is full.
+With `summary: true`, `chatJobs` instead says `hasJobs` and `alarm` for the chat bar, without preparing the jobs list;
+the other fields are empty. Older cores return the full list, from which the client can tell whether jobs exist.
 
 `live` (above) stays its own topic: its steps change many times a second,
 while `chat` changes with messages.

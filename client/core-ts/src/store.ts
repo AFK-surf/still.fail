@@ -201,6 +201,9 @@ export class Store {
       this.#topics.set(key, entry);
     }
     const resumed = entry.idle !== null;
+    // Its last client output predates changes made while the page was closed. A new subscriber must receive the
+    // current value whole, rather than that old value followed by a delta.
+    if (entry.outputDirty && entry.subscribers.length === 0) entry.sent = undefined;
     entry.subscribers.push([client, id, keyed]);
     entry.idle = null;
     const cached = entry.sent;

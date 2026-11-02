@@ -1681,11 +1681,13 @@ test("a_compact_chat_keeps_the_page_and_its_jobs_available_separately", async ()
   const full = ui();
   const compact = ui();
   const jobs = ui();
+  const summary = ui();
   const topic = chatTopic("ws/a", 7);
   t.subscribe(1, topic);
   t.subscribe(2, { ...topic, compact: true });
   t.subscribe(3, { topic: "chatJobs", station: "ws/a", thread: 7, session: null, compact: true });
-  await t.readAll([[full, 1], [compact, 2], [jobs, 3]]);
+  t.subscribe(4, { topic: "chatJobs", station: "ws/a", thread: 7, session: null, compact: true, summary: true });
+  await t.readAll([[full, 1], [compact, 2], [jobs, 3], [summary, 4]]);
   const chat = thread(7, ["k"], t.host.nowMs());
   t.set(threads("ws/a"), [chat]);
   t.set(pageOf("ws/a", 7), page(1, ["hello"], chat));
@@ -1693,17 +1695,20 @@ test("a_compact_chat_keeps_the_page_and_its_jobs_available_separately", async ()
   const job = { id: "j1", session: "k", name: "job", state: "running", port: null, exitCode: null, startedAt: 1, endedAt: null, command: "", restarts: 0, notices: [] };
   const detail = { session: fullSession("k"), threads: [chat], turns: [turn("t1")], jobs: [job] };
   t.set(sessionOf("ws/a", "k"), detail);
-  await t.readAll([[full, 1], [compact, 2], [jobs, 3]]);
+  await t.readAll([[full, 1], [compact, 2], [jobs, 3], [summary, 4]]);
   assert.equal(full.value.agents[0].turns[0].id, "t1");
   assert.equal(full.value.agents[0].jobs[0].id, "j1");
   assert.deepEqual(compact.value.messages, full.value.messages);
   assert.equal(compact.value.agents[0].hasJobs, true);
   assert.deepEqual([compact.value.agents[0].turns, compact.value.agents[0].threads, compact.value.agents[0].jobs], [[], [], []]);
   assert.equal(jobs.value.jobs[0].id, "j1");
+  assert.equal(summary.value.hasJobs, true);
+  assert.deepEqual(summary.value.jobs, []);
   t.set(sessionOf("ws/a", "k"), { ...detail, jobs: [] });
-  await t.readAll([[full, 1], [compact, 2], [jobs, 3]]);
+  await t.readAll([[full, 1], [compact, 2], [jobs, 3], [summary, 4]]);
   assert.equal(compact.value.agents[0].hasJobs, false);
   assert.deepEqual(jobs.value.jobs, []);
+  assert.equal(summary.value.hasJobs, false);
 });
 
 test("chat_is_a_thread_its_messages_and_its_agents", async () => {

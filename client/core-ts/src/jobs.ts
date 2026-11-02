@@ -181,7 +181,26 @@ export function shown(input: J, c: Clock): J {
 }
 
 /// A chat's services and jobs as its pages show them (`ChatJobsView`), and in how many ms what it says changes.
-export function chatJobs(chat: J, c: Clock): [J, number] {
+export function chatJobs(chat: J, c: Clock, summary = false): [J, number] {
+  if (summary) {
+    // The chat's bar needs only whether the button exists and its alarm. Preparing and copying every job is left for
+    // the jobs page. A recent failure can cease to be news even when the station sends no change.
+    let hasJobs = false;
+    let alarm: string | null = null;
+    let next = Infinity;
+    for (const agent of arr(get(chat, "agents"))) for (const job of arr(get(agent, "jobs"))) {
+      hasJobs = true;
+      const tn = tone(job);
+      if (tn === "fail") {
+        const until = (msOf(job, "endedAt") ?? msOf(job, "startedAt") ?? 0) + NEWS - c.now;
+        if (until > 0) {
+          alarm = "fail";
+          next = Math.min(next, until);
+        }
+      } else if (tn === "restart" && alarm === null) alarm = "restart";
+    }
+    return [{ jobs: [], hasJobs, alarm, servicesNote: "", jobsNote: "", current: 0, ended: 0, clear: [], allText: "", clearText: "", hiddenText: "" }, next];
+  }
   const jobs: J[] = arr(get(chat, "agents")).flatMap((a) => arr(get(a, "jobs")));
   const next = jobs.reduce((m, j) => Math.min(m, jobChanges(j, c.now)), Infinity);
   jobs.sort((a, b) => rank(tone(a)) - rank(tone(b)) || (msOf(b, "startedAt") ?? 0) - (msOf(a, "startedAt") ?? 0));

@@ -106,7 +106,7 @@ export const TOPICS: Record<string, Spec> = {
   newChat: { scope: S },
   shareIn: { scope: S, source: S, query: ["string", "def"] },
   pick: { station: S, of: S },
-  chatJobs: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], compact: ["bool", "skipFalse"] },
+  chatJobs: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], compact: ["bool", "skipFalse"], summary: ["bool", "skipFalse"] },
   chatLetters: { station: S, thread: ["u64", "req"] },
   chatThings: { station: S, thread: ["u64", "req"], q: ["string", "skip"] },
   imageNear: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], path: S },

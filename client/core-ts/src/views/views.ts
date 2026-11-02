@@ -1283,7 +1283,7 @@ export class Views implements Owner {
       case "chatJobs": {
         const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null, ...(view.compact === true ? { compact: true } : {}) });
         if (chat === undefined || !("ok" in chat)) return chat;
-        const [value, next] = jobs.chatJobs(chat.ok, this.#clock());
+        const [value, next] = jobs.chatJobs(chat.ok, this.#clock(), view.summary === true);
         this.#againIn(view, next);
         return { ok: value };
       }

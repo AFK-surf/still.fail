@@ -388,9 +388,14 @@ test "a long title has what is left beside what follows it, which keeps its own 
 test "a chat left lets go of all that holds its thread at the core: its view and its jobs (Chat.kt's rememberTopic)" {
   new_run()
   let base = fixture("chat")
+  let asked : Array[(String, String)] = []
   let left : Array[(String, String)] = []
   let src : Source = {
     ..base,
+    topic: fn(name, params) {
+      asked.push((name, Json::object(params).stringify()))
+      (base.topic)(name, params)
+    },
     leave: fn(name, params) { left.push((name, Json::object(params).stringify())) },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
@@ -398,6 +403,11 @@ test "a chat left lets go of all that holds its thread at the core: its view and
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   assert_eq(left, [])
+  let summary = chat_params(r)
+  summary["summary"] = Json::boolean(true)
+  let summary_key = Json::object(summary).stringify()
+  assert_true(asked.contains(("chatJobs", summary_key)), msg="the bar reads only its jobs summary")
+  assert_false(asked.contains(("chatJobs", Json::object(chat_params(r)).stringify())), msg="the unopened jobs page is not read")
   t.back()
   t.run_for(@ui.move_most_ms)
   let held = Json::object(chat_params(r)).stringify()
@@ -405,6 +415,7 @@ test "a chat left lets go of all that holds its thread at the core: its view and
   // where it was left)
   assert_true(left.contains(("chat", held)))
   assert_true(left.contains(("chatJobs", held)))
+  assert_true(left.contains(("chatJobs", summary_key)))
 }
 
 ///|

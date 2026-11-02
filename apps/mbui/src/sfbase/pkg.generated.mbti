@@ -121,6 +121,8 @@ pub fn chat_item(Json) -> ChatItem
 
 pub let chat_jobs_asked : @ref.Ref[(@ui.Ctx, Source, ChatRef) -> Unit]
 
+pub fn chat_jobs_summary_params(ChatRef) -> Map[String, Json]
+
 pub fn chat_keep(Map[String, Json], Double) -> Unit
 
 pub fn chat_kept(ChatRef) -> ChatView?
