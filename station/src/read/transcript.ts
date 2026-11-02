@@ -216,9 +216,18 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = fa
   const kept = rollouts.get(at);
   if (kept !== undefined && isFile(storage(kept))) return kept;
   const find = (dir: string): string | null => {
-    for (const name of entriesOf(dir) ?? []) {
+    // Directory entries already say whether ordinary files are directories. Checking every transcript here blocks the
+    // station's main thread on disk when its file cache is cold; only links and unknown types need a metadata read.
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return null;
+    }
+    for (const entry of entries) {
+      const name = entry.name;
       const path = join(dir, name);
-      if (isDir(path)) {
+      if (entry.isDirectory() || (!entry.isFile() && isDir(path))) {
         const found = find(path);
         if (found !== null) return found;
       } else if (name.startsWith("rollout-") && name.endsWith(`${id}.jsonl`)) {

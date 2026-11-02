@@ -1,6 +1,6 @@
 // The readers: worker threads, each with its own read-only connection. Reads wait in one line and each goes to the first
-// reader free, one at a time, so a heavy one (a long chat list, a cold transcript) holds up only itself, no other request
-// and no writes; what the event streams tell (a message just said, a session's turn ending) goes before the pages asked.
+// reader free, one at a time. Bulk reads leave room for chat reads; what the event streams tell (a message just said,
+// a session's turn ending) goes before the pages asked. None of these reads holds up writes.
 // A reader is a V8 of its own (tens of MB), so they are started when reads come and let go once none has come for a
 // while: an idle station keeps none. One that dies (its heap is bounded) fails what it held and is replaced by the next
 // read.
@@ -36,6 +36,8 @@ type Asked = {
 const HOMES = 4096;
 /// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
 const CHECKPOINT_MS = 2_000;
+/// Reads that can traverse a whole list or aggregate: leave room for a chat or a stream even when several are asked.
+const BULK = new Set(["usage", "outflowUsage", "chats", "outflowChats", "threadList", "sessions", "openJobs", "machineSessions", "changed", "publishDraft"]);
 
 export class Readers {
   private slots: Slot[] = [];
@@ -50,6 +52,7 @@ export class Readers {
   private again = false;
   private readonly data: string;
   private readonly size: number;
+  private readonly workerFile: URL | undefined;
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
   readonly names = new Map<string, string>();
   /// What only the hub knows, given to every read: sessions' process states and client keys (the hub sets these).
@@ -57,14 +60,15 @@ export class Readers {
   clientKeys: () => Map<string, string> = () => new Map();
 
   /// At most two by default (STILLFAIL_READERS says otherwise).
-  constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1))) {
+  constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1)), workerFile?: URL) {
     this.data = data;
     this.size = size;
+    this.workerFile = workerFile;
   }
 
   private start(): Slot {
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
-    const file = new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
+    const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
     const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null };
@@ -117,16 +121,21 @@ export class Readers {
     });
   }
 
-  /// Reads in line go to readers free, the first first (a session's history to its home reader when that one is free),
-  /// and readers are started while reads wait and there is room; one left with nothing is let go of after a while.
+  /// Reads in line go to readers free, the first first (a session's history to its home reader when that one is free).
+  /// When there are at least two readers, bulk reads leave one free for other reads: a slow usage page must not occupy
+  /// both before a message arrives. A later non-bulk read can pass a bulk read that is waiting for that limit.
   private pump() {
     if (this.closed) return;
     while (this.line.length > 0) {
-      const asked = this.line[0]!;
+      const bulkHeld = this.slots.filter((s) => s.held !== null && !s.held.told && BULK.has(s.held.ask.op)).length;
+      const limited = this.size > 1 && bulkHeld >= this.size - 1;
+      const at = limited ? this.line.findIndex((a) => a.told || !BULK.has(a.ask.op)) : 0;
+      if (at < 0) break;
+      const asked = this.line[at]!;
       const home = asked.home !== null && asked.home.held === null && this.slots.includes(asked.home) ? asked.home : null;
       const slot = home ?? this.slots.find((s) => s.held === null) ?? (this.slots.length < this.size ? this.start() : null);
       if (slot === null) break;
-      this.line.shift();
+      this.line.splice(at, 1);
       this.give(slot, asked);
     }
     for (const slot of this.slots) if (slot.held === null) this.letGoLater(slot);

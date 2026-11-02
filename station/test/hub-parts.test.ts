@@ -560,6 +560,45 @@ test("a Codex transcript is looked for through its days once, then where it was 
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("finding a Codex transcript does not stat every other transcript", () => {
+  const dir = temp();
+  const day = join(dir, "transcripts", "codex", "2026", "10", "29");
+  mkdirSync(day, { recursive: true });
+  const others = Array.from({ length: 40 }, (_, i) => join(day, `rollout-other-${i}.jsonl`));
+  for (const path of others) writeFileSync(path, "");
+  const file = join(day, "rollout-wanted.jsonl.zst");
+  writeFileSync(file, "");
+  const checked: string[] = [];
+  const real = fs.statSync;
+  const mutable = fs as unknown as { statSync: typeof fs.statSync };
+  mutable.statSync = ((path: fs.PathLike, ...rest: unknown[]) => (checked.push(String(path)), (real as (...a: unknown[]) => unknown)(path, ...rest))) as typeof real;
+  syncBuiltinESMExports();
+  try {
+    assert.deepEqual(transcriptPaths("codex", dir, [], ["wanted"]).paths, [file.slice(0, -".zst".length)]);
+    assert.deepEqual(checked.filter((path) => others.includes(path)), [], "unrelated files need no metadata read");
+  } finally {
+    mutable.statSync = real;
+    syncBuiltinESMExports();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a Codex transcript can be in a linked directory", () => {
+  const dir = temp();
+  const root = join(dir, "transcripts", "codex");
+  const day = join(dir, "elsewhere");
+  mkdirSync(root, { recursive: true });
+  mkdirSync(day, { recursive: true });
+  const file = join(day, "rollout-linked.jsonl");
+  writeFileSync(file, "");
+  symlinkSync(day, join(root, "link"), "dir");
+  try {
+    assert.deepEqual(transcriptPaths("codex", dir, [], ["linked"]).paths, [join(root, "link", "rollout-linked.jsonl")]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("how fast the model writes is told once half a second of it has come", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
   const hub = new LiveHub(() => null);
