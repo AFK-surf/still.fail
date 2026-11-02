@@ -396,3 +396,37 @@ test "a page's list flung down, short of its foot by a little as what is above g
     assert_true(platform == 0 || past, msg="\{platform}: never past its foot")
   }
 }
+
+///|
+test "a page's list flung down near its foot, as much grown above as gone under what is in sight: as far as it can go the same, it meets its foot now" {
+  for platform in [1, 2] {
+    let above = @signals.signal(0.0)
+    let below = @signals.signal(grown_by * 3.0)
+    let (t, s) = same_tree(40, platform, above~, below~)
+    swipe(t, 700.0, -32.0, 12)
+    t.draw()
+    let tree = view_tree().unwrap()
+    while s.at(tree) < s.most() - near_foot {
+      t.frame()
+    }
+    let most = s.most()
+    above.set(grown_by * 3.0)
+    below.set(0.0)
+    s.grew_above(grown_by * 3.0)
+    t.draw()
+    assert_eq(s.most(), most)
+    // (past what it had left to go: at its foot, and past it from now, going back; at rest by when that is back)
+    let rest = s.glides_till().unwrap()
+    let mut past = false
+    let end = t.time() + grown_rest_ms
+    while t.time() < end {
+      t.frame()
+      if s.past(tree) != 0.0 {
+        past = true
+      }
+    }
+    assert_true(past, msg="\{platform}: never past its foot")
+    assert_true((s.at(tree) - most).abs() < 1.0e-6, msg="\{platform}: at rest at \{s.at(tree)} of \{most}")
+    assert_true(rest < t.time(), msg="\{platform}: at rest at \{rest}")
+  }
+}

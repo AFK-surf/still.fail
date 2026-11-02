@@ -258,7 +258,21 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
     }
     // (at rest when it now is: said again on its timeline)
     match self.host {
-      Some(v) => self.list_settles(v, t)
+      Some(v) => {
+        self.list_settles(v, t)
+        // (a fling down toward its foot: its foot where all of it is laid out as this change leaves it, worked out
+        // then, however far it can go came out, the same or not)
+        if self.fling.get() is Some({ v0, way: Some(_), .. }) && v0 > 0.0 {
+          v.tree.once_laid_out(fn() {
+            // (still scrolling in it, as it was: not let go meanwhile, nor said to scroll in another)
+            match self.host {
+              Some(h) if physical_equal(h.tree, v.tree) && h.live() is Some(_) && h.at == v.at && h.gen == v.gen =>
+                self.foot_moved(v, v.logic_at(), self.most(), laid=true)
+              _ => ()
+            }
+          })
+        }
+      }
       None => ()
     }
   })
