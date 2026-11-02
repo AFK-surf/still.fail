@@ -137,6 +137,8 @@ CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE ta
 -- A thread's people's messages since a time (rows.ts SAID_SINCE: the cards they answered, of the sidebar items a change
 -- touched): without it each went over the thread's every entry.
 CREATE INDEX IF NOT EXISTS entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
+-- The first person to answer a card is found by its entry number, without reading intervening agent messages.
+CREATE INDEX IF NOT EXISTS entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message';
 -- The login cards (store.ts closeLoginCards, as a login ends): without it each read every entry of the station's.
 CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%';
 CREATE TABLE IF NOT EXISTS deliveries (
