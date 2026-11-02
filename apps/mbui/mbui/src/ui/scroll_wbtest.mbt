@@ -72,11 +72,11 @@ test "the velocity tracker forgets samples over 100 ms old and stops at a 40 ms 
 ///|
 test "the fling spline is Android's (computeSplineInfo)" {
   // the bisection stops within 1e-5 of the time, not at 0
-  approx(spline_positions[0], 0.0, 1.0e-4)
-  approx(spline_positions[10], 0.2740024733220569, 1.0e-9)
-  approx(spline_positions[35], 0.7217749311525871, 1.0e-9)
-  approx(spline_positions[70], 0.9567898524767604, 1.0e-9)
-  approx(spline_positions[100], 1.0, 0.0)
+  approx(@view.spline_positions[0], 0.0, 1.0e-4)
+  approx(@view.spline_positions[10], 0.2740024733220569, 1.0e-9)
+  approx(@view.spline_positions[35], 0.7217749311525871, 1.0e-9)
+  approx(@view.spline_positions[70], 0.9567898524767604, 1.0e-9)
+  approx(@view.spline_positions[100], 1.0, 0.0)
 }
 
 ///|
@@ -164,7 +164,7 @@ fn swipe(t : Tester, y0 : Double, dy : Double, steps : Int) -> Unit {
 
 ///|
 /// The list's own motion run to its end (its fling, its overscroll going back, its scroll bar faded: what it said as
-/// it set out, scroll_path.mbt), and nothing after.
+/// it set out, @view's list_motion.mbt), and nothing after.
 fn run_to_rest(t : Tester) -> Unit {
   let r = t.rest_of("a list")
   if r > t.time() {

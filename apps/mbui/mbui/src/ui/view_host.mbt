@@ -283,6 +283,30 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   // (where a node said it yields to the list's thumb of an old view under it: that view's there, yield_thumbs)
   t.on_target(fn(picked, found, x, y) { view_retarget(t, picked, found, x, y) })
   t.on_through(view_through)
+  // (a column of the tree's gliding on by itself, let go: said to move till its end, as an old view's list's fling is)
+  t.on_glides(
+    fn(column, ends) {
+      let who = match tree_glide_movers.get(column) {
+        Some(m) => m
+        None => {
+          let m = Mover::new()
+          tree_glide_movers[column] = m
+          m
+        }
+      }
+      g().moving(who, ({ ends, } : TreeGlide) as &Moving, what="a list's fling, the tree's")
+    },
+    fn(column) { tree_glide_movers.remove(column) },
+  )
+  // (a page's list of it moving as an old view's list does here, on the device's pixels)
+  t.lists_feel(fn() {
+    let feel : @view.ListFeel = match scroll_kind() {
+      1 => Ios
+      2 => Android
+      _ => Desktop
+    }
+    (feel, g().scale)
+  })
   // (the focus on one of its nodes let go of at a cause: none's from then, on either side)
   t.on_focus_lost(view_focus_lost)
   // (a node asking for the focus (View::ask_focus): the old frame's focus moved there, the tree told back as of any
@@ -791,6 +815,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (the nodes what they hold fades out towards the edges of now, where each is drawn and how far before each edge it
   // fades, the innermost last: View::fades)
   let fading : Array[(@view.NodeId, (Double, Double, Double, Double), (Double, Double, Double, Double))] = []
+  // (the nodes what they hold is drawn stretched in, as Android's list at an end, the innermost last: its stretch, where
+  // its top is drawn, how tall, and the clip it cuts what it holds to: View::stretches)
+  let stretching : Array[(@view.NodeId, Double, Double, Double, Double, Double)] = []
   // what the old frame puts over all of it at its root (its layers: the overlays its views open, menus, sheets,
   // dialogs, raised to the root's end; what is built around the old views over them, a splash), over the tree, in their
   // order, the one old view the whole window or not (the way there: an old view's overlay not yet placed, cut and
@@ -815,6 +842,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     close_to(Some(c.id))
     while fading.length() > 0 && !tree.holds(fading[fading.length() - 1].0, c.id) {
       fading.pop() |> ignore
+    }
+    while stretching.length() > 0 && !tree.holds(stretching[stretching.length() - 1].0, c.id) {
+      stretching.pop() |> ignore
     }
     // (the root, the window, is drawn by nothing of its own)
     if c.id.at == 0 {
@@ -856,8 +886,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     defer {
       for f in fading {
         let (by, (x0, y0, x1, y1), (start, top, end, foot)) = f
-        // (what is drawn clear of it, none of its fading: View::fades_clear)
-        if tree.fades_clear_of(c.id, by) {
+        // (what is drawn clear of it, none of its fading: View::drawn_clear_of)
+        if tree.drawn_clear_of(c.id, by) {
           continue
         }
         for k in k0..<self.ninst {
@@ -873,6 +903,23 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       }
       if start > 0.0 || top > 0.0 || end > 0.0 || foot > 0.0 {
         fading.push((c.id, (x, y, x + c.w * s, y + c.h * s), (start * s, top * s, end * s, foot * s)))
+      }
+      // (what it draws, and an old view it hosts, as each that holds it stretched shows it, the innermost first: as an
+      // old view's list's rows, Ctx::stretch_rows; then what it holds in its own, not its own drawing)
+      for i = stretching.length() - 1; i >= 0; i = i - 1 {
+        let (by, ov, top, h, c0, c1) = stretching[i]
+        // (what is drawn clear of it, on its own track, none of its stretching: View::drawn_clear_of, as an old view's
+        // list's bar is painted after its rows are stretched)
+        if !tree.drawn_clear_of(c.id, by) {
+          self.stretch_insts(k0, self.ninst, ov, top, h, c0, c1)
+        }
+      }
+      let ov = tree.stretch_of(c.id)
+      if ov != 0.0 {
+        // (cut to its own clip, pushed by now: what is inside it is mapped with it, no further)
+        let k = clip_top()
+        let (c0, c1) = if c.clips { (clip_stack[k + 1], clip_stack[k + 3]) } else { (y, y + c.h * s) }
+        stretching.push((c.id, ov, y, c.h * s, c0, c1))
       }
     }
     // (what it holds cut to it, as an old view's clipping box cuts what it holds: push_round_clip's, after its own)
@@ -4394,3 +4441,21 @@ fn tree_layer_focused(c : Ctx, t : @view.Tree, layer : @view.NodeId) -> Bool {
       }
   }
 }
+
+///|
+/// A column of the window's tree gliding on by itself (Tree::on_glides): at rest as it says it is now, the end of the
+/// glide it is on (none: at rest, held again, stopped, let go of).
+priv struct TreeGlide {
+  ends : () -> Double?
+}
+
+///|
+impl Moving for TreeGlide with rest_at(self, _now, _frame) {
+  (self.ends)().unwrap_or(-1.0)
+}
+
+///|
+/// Who tells each of the tree's columns' glides, by its number (view_host's on_glides): one each, as an old view's list
+/// is its own; let go with it.
+// kept across runs: put back as each column is let go
+let tree_glide_movers : Map[Int, Mover] = {}

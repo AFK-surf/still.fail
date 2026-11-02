@@ -173,9 +173,9 @@ fn View::scroll_bar(self : View, s : Scroll, b : ScrollBar, bar : BarState) -> U
     }
   }
   self.box(fn(over) {
-    // (over what it holds, none of the column's own fading what it holds: its own showing alone; what holds the
-    // column fading it as it fades the column)
-    over.over(Is(true)).fades_clear_of(self) |> ignore
+    // (over what it holds, none of the column's own fading or stretching what it holds: its own showing alone, on its
+    // own track; what holds the column drawing it as it draws the column)
+    over.over(Is(true)).drawn_clear_of(self) |> ignore
     // (the pointer along its right brings it out: the innermost column at the pointer's, View::bar_near)
     over.reacts(fn() { (b.drawn)() && self.bar_near(if has_bar() { b.near } else { 0.0 }) }, fn(on) {
       let t = self.logic_at()
