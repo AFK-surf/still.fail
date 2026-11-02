@@ -275,13 +275,18 @@ pub fn is_chat_link(href : String) -> Bool {
   if !path.has_prefix("/o/") {
     return false
   }
+  // what follows its key, a query (one of its messages, its agent's history) or a fragment, is still the chat's
   let body = match path.find("#") {
     Some(i) => path.view(end_offset=i).to_string()
     None => path
   }
+  let body = match body.find("?") {
+    Some(i) => body.view(end_offset=i).to_string()
+    None => body
+  }
   let parts = body.view(start_offset=3).to_string().split("/").map(fn(v) { v.to_string() }).to_array()
   let parts = if parts.length() == 4 && parts[3] == "" { parts[:3].to_array() } else { parts }
-  parts.length() == 3 && parts.iter().all(fn(x) { x != "" && !x.contains("?") })
+  parts.length() == 3 && parts.iter().all(fn(x) { x != "" })
 }
 
 ///|
