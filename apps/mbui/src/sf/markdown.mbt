@@ -76,6 +76,8 @@ priv struct Md {
   mut bleed : Double
   /// its tables offer to be copied (table_copy.mbt): not in a picture of them
   copy : Bool
+  /// Fit a wide table whole in its column when the words are taken as a picture.
+  fit_tables : Bool
 }
 
 ///|
@@ -506,7 +508,8 @@ fn web() -> Palette {
 /// leads, `on_link_shown` each link, its words and its id as it is drawn (its card over it); `files` and `screens` as
 /// the file's head says; `document`: its headings a document's (Md's `document`);
 /// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin); `copy`
-/// false: its tables offer no copying (a picture of the words).
+/// false: its tables offer no copying (a picture of the words). `fit_tables`: show each table whole in the column,
+/// rather than leaving part of it to be scrolled to (a chat's shared picture).
 /// `line`: the lines' height over the size (0: Markdown's own); `one_line`: its first block's words alone, on one line
 /// as wide as they are, cut with an ellipsis where the column is narrower (a notice closed: Chat.css.ts
 /// `msgSystemBox:not([data-open])`). `chat_title`: the title of the chat a link written bare names, its reference
@@ -532,6 +535,7 @@ pub fn markdown(
   document? : Bool = false,
   bleed? : Double = 0.0,
   copy? : Bool = true,
+  fit_tables? : Bool = false,
   paths? : Bool = false,
   text_face? : Int? = None,
   code_face? : Int? = None,
@@ -564,6 +568,7 @@ pub fn markdown(
     document,
     bleed,
     copy,
+    fit_tables,
   }
   if tree is None && !core_parsed.contains(text) && !markdown_asked.contains(text) {
     if markdown_read.val is Some(read) {
@@ -685,6 +690,7 @@ pub fn markdown_part(
     document,
     bleed: 0.0,
     copy: true,
+    fit_tables: false,
   }
   let blocks = match parts.get(key) {
     Some(b) => b
@@ -1488,14 +1494,15 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   }
   let avail = room
   let least = 4.0 * 13.0 + 24.0
-  // (14em of the rows' words, at the system's size of words)
-  let readable = 14.0 * c.sp(13.0)
+  // In a picture, let words wrap into narrower columns first; only a table that still cannot fit is scaled down.
+  let readable = (if self.fit_tables { 4.0 } else { 14.0 }) * c.sp(13.0)
   let mins = Array::make(cols, least)
   let maxs = Array::make(cols, least)
   for r, row in rows {
     for k in 0..<cols {
       let (size, weight) = if r == 0 { (12.0, 500) } else { (13.0, 400) }
-      let (lo, hi) = match self.cell_images(row[k]) {
+      let images = self.cell_images(row[k])
+      let (lo, hi) = match images {
         // a cell of only images: as wide as their row
         Some(images) => {
           let w = cell_images_width(images)
@@ -1504,7 +1511,8 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
         // (measured as they are set: at the system's size of words)
         None => cell_widths(md_plain(row[k]), c.sp(size), weight)
       }
-      let floor = dmax(lo, dmin(hi, readable))
+      // Rich text can break an otherwise unbroken word when a cell is too narrow. Images must keep their width.
+      let floor = if self.fit_tables && images is None { dmin(hi, readable) } else { dmax(lo, dmin(hi, readable)) }
       let pad = table_cell_pad(k, cols)
       if floor + pad.0 + pad.1 > mins[k] {
         mins[k] = floor + pad.0 + pad.1
@@ -1539,6 +1547,15 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   let mut total = 0.0
   for x in widths {
     total = total + x
+  }
+  if self.fit_tables && total > avail && avail > 0.0 {
+    // Too many columns (or images that cannot wrap): size every part down before layout, so the table's own height
+    // holds the next block below it even on the first frame.
+    let scale = avail / total
+    c.box(style=@ui.style(w=Full), id~, taps=false, fn() {
+      self.table_frame(rows, widths.map(fn(w) { w * scale }), avail, key + "/head", scale~)
+    }) |> ignore
+    return
   }
   // what scrolls: the message's width and `bleed` more either side (what is measured: the room the table has; named to
   // be measured, not pressed: what holds the message takes the presses on its room), the table in it as wide as its
@@ -1581,6 +1598,7 @@ fn Md::table_frame(
   widths : Array[Double],
   total : Double,
   head_at : String,
+  scale? : Double = 1.0,
 ) -> Unit {
   let c = self.c
   let w = web()
@@ -1593,14 +1611,18 @@ fn Md::table_frame(
         let row_box = c.box(dir=Row, align=AStretch, fn() {
           for k in 0..<cols {
             let (pl, pr) = table_cell_pad(k, cols)
-            c.box(w=Px(widths[k]), pl~, pr~, pady=table_cell_y, justify=JCenter, fn() {
+            let cell_style = @ui.style(w=Fixed(widths[k]), pl=room_of(pl * scale), pr=room_of(pr * scale), py=room_of(table_cell_y * scale), justify=JCenter)
+            c.box(style=cell_style, fn() {
               match self.cell_images(row[k]) {
                 Some(images) => {
                   // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
-                  c.box(style=cell_image_row, fn() {
+                  let image_gap = 6.0 * scale
+                  let image_y = 4.0 * scale
+                  let image_row = if scale == 1.0 { cell_image_row } else { @ui.style(row=true, gap=room_of(image_gap), py=room_of(image_y)) }
+                  c.box(style=image_row, fn() {
                     for im in images {
                       let (r, draw) = im
-                      draw(cell_image_width(r))
+                      draw(cell_image_width(r) * scale)
                     }
                   })
                   |> ignore
@@ -1608,11 +1630,13 @@ fn Md::table_frame(
                 }
                 None => ()
               }
-              if head {
-                self.words(row[k], 12.0, 500, w.muted, None)
-              } else {
-                self.words(row[k], 13.0, 0, self.ink, None)
-              }
+              c.words_smaller(scale, fn() {
+                if head {
+                  self.words(row[k], 12.0, 500, w.muted, None)
+                } else {
+                  self.words(row[k], 13.0, 0, self.ink, None)
+                }
+              })
             })
             |> ignore
           }
@@ -1624,7 +1648,7 @@ fn Md::table_frame(
         // faint as is seen on what it lies on (docs/ui-panels.md 对比度): the rows' words part them, the rule only marks
         // where
         if r < rows.length() - 1 {
-          c.box(w=Px(total), h=Px(1.0), bg=rule, fn() {  }) |> ignore
+          c.box(style=@ui.style(w=Fixed(total), h=Fixed(scale), bg=Data(rule)), fn() {  }) |> ignore
         }
       }
     })
