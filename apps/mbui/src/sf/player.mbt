@@ -659,6 +659,7 @@ fn picture_place(
   w : Double,
   h : Double,
   still : String,
+  facts : FileFacts,
   top? : Double = 0.0,
   foot? : Double = 0.0,
 ) -> (Double, Double, Double, Double) {
@@ -666,6 +667,10 @@ fn picture_place(
   z.boxed(w, h - top - foot)
   if s.width > 0.0 && s.height > 0.0 {
     z.natural(s.width, s.height)
+  } else if facts.width > 0.0 && facts.height > 0.0 {
+    // (not playing yet: its size as its message says it, where the viewer's flight landed it and flies back from,
+    // not a point in the middle: a film not come yet, no still of it either, went back into its thumbnail from a dot)
+    z.natural(facts.width, facts.height)
   } else {
     // (its size not said yet: its still's, which is of it)
     match @ui.image_natural(still) {
@@ -1153,7 +1158,7 @@ fn desk_player(
         let w = dmax(desk_none, c.width - panel)
         match p.native() {
           Some(n) if n.here() && !flying => {
-            let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still, top=room_top, foot=room_foot)
+            let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still, file.facts, top=room_top, foot=room_foot)
             v.placed = Some((x, y, pw, ph))
             c.native(n, content=Some((x, y, pw, ph))) |> ignore
             player_still(c, n, still, x, y, pw, ph)
@@ -1622,7 +1627,7 @@ fn phone_player(
     c.box(style=player_fill, id=stage, fn() {
       match p.native() {
         Some(n) if n.here() && !flying => {
-          let (x, y, w, h) = picture_place(v, p, s, c.width, c.height, still)
+          let (x, y, w, h) = picture_place(v, p, s, c.width, c.height, still, file.facts)
           v.placed = Some((x, y + v.drag_dy, w, h))
           c.native(n, content=Some((x, y + v.drag_dy, w, h))) |> ignore
           player_still(c, n, still, x, y + v.drag_dy, w, h)
