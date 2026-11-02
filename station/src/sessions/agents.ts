@@ -728,7 +728,7 @@ export const AgentsLive = (control: Control) =>
       time.after(120_000, bringingIn);
 
       // What the Rust station's archiving left (the transcripts kept twice): once, when the devices have come back.
-      time.after(180_000, () => cold.finishLegacyCopies());
+      time.after(180_000, () => cold.finishLegacyCopies().then(() => cold.segmentHistories()));
 
       // The archive review turned on, or given another model: the done chats no decision has answered are reviewed then,
       // not only the ones that end all_done from now on; and once after the start (the profiles' checks read by then).

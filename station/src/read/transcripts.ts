@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { threadId } from "node:worker_threads";
 import { zstdDecompressSync } from "node:zlib";
 import type { RuntimeKind } from "../agents/runtime.ts";
+import { readSegments } from "./packed.ts";
 import { type Mark, type TailState, TranscriptTail, recordOf } from "./tail.ts";
 import { READING, type ReadState, type TimelineEntry, brief, storage, timelineOf, utf8 } from "./transcript.ts";
 
@@ -26,8 +27,8 @@ export type Marked = { reading: number; state: TailState; marks: Mark[] };
 
 const kept = new Map<string, Marked>();
 
-/// The transcript put away whose history is being read, decompressed (one is hundreds of MB): its pages are read one
-/// after another. Let go once another history is read (`chainOf`), and with the reader.
+/// The transcript put away before there were segments (read/packed.ts) whose history is being read, decompressed (one is
+/// hundreds of MB): its pages are read one after another. Let go once another history is read (`chainOf`), and with the reader.
 let unpacked: { path: string; stamp: string | null; bytes: Buffer } | null = null;
 
 /// Where the readings of transcripts are kept on disk.
@@ -143,8 +144,17 @@ function readBetween(runtime: RuntimeKind, m: Marked, from: number, to: number):
   };
   const disk = storage(path);
   if (disk !== path) {
-    // Put away: decompressed once while its history is read.
+    // Put away: the segments from the mark on, while more are wanted (read/packed.ts); one put away before there were
+    // segments decompressed once while its history is read.
     try {
+      let carry: Buffer = Buffer.alloc(0);
+      const segmented = readSegments(disk, mark.offset, end, (piece) => {
+        const left = lines(carry.length > 0 ? Buffer.concat([carry, piece]) : piece);
+        if (left === null) return false;
+        carry = Buffer.from(left);
+        return true;
+      });
+      if (segmented) return out;
       const stamp = m.state.packedStamp;
       if (unpacked?.path !== path || unpacked.stamp !== stamp) unpacked = { path, stamp, bytes: zstdDecompressSync(readFileSync(disk)) };
       lines(unpacked.bytes.subarray(mark.offset, end));

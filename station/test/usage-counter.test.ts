@@ -2,14 +2,16 @@
 // copy of a real station is at $USAGE_WORK, default /tmp/usage-work) what it records against what the Rust recorded.
 import type { Clock } from "effect";
 import assert from "node:assert/strict";
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
+import { SEGMENT } from "../src/read/packed.ts";
 import { cost, price, priceTable, sessionUsage, usageNow } from "../src/read/usage.ts";
+import { packFile } from "../src/sessions/archive.ts";
 import { iso, parseIso } from "../src/read/transcript.ts";
 import { type StoreChange, type UsageGroup, Store, newMessage } from "../src/store/store.ts";
 import { type CallState, UsageCounter, callsOf, claudeFiles, claudeProject, readFrom } from "../src/usage/counter.ts";
@@ -377,6 +379,24 @@ test("a large compressed file is read in parts from its offset, and from its sta
   assert.equal(read, text.slice(line(0).length * 7, whole));
   assert.deepEqual(await readAll(path, whole), null);
   assert.deepEqual(await readAll(path, whole + 100), [text.slice(0, whole), whole]);
+});
+
+test("a transcript put away in segments is read from the segment its offset is in, not from its start", async () => {
+  const root = tempdir();
+  const path = join(root, "big.jsonl");
+  const line = (i: number) => `${String(i).padStart(6, "0")}${"y".repeat(99_993)}\n`;
+  const text = Array.from({ length: Math.ceil((SEGMENT * 2) / line(0).length) }, (_, i) => line(i)).join("");
+  writeFileSync(path, text);
+  await packFile(path);
+  // Its first segment unreadable: what is after it is read all the same.
+  const file = openSync(`${path}.zst`, "r+");
+  writeSync(file, Buffer.alloc(64, 0xff), 0, 64, 32);
+  closeSync(file);
+  const from = text.length - line(0).length * 3;
+  let read = "";
+  for await (const p of readFrom(path, from)) read += p.text;
+  assert.equal(read, text.slice(from));
+  assert.equal(await readAll(path, text.length), null);
 });
 
 test("a file read in parts records each part's whole lines and leaves a partial last line for later", async () => {

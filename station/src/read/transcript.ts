@@ -13,11 +13,11 @@
 // an integer comes first, a number past 2^53 rounds (serde_json keeps each as written). Transcripts rarely have them.
 import { closeSync, existsSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { zstdDecompressSync } from "node:zlib";
 import { isPlanTool } from "./plan.ts";
 import { tr } from "./spoken.ts";
 import type { Json } from "./store.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
+import { unpackedWhole } from "./packed.ts";
 
 /// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none; `brief` when what it says is
 /// cut to what a history shows before it is opened (`brief`).
@@ -964,26 +964,9 @@ function transcriptBytes(path: string): { file: number; size: number } | { bytes
       const file = openSync(path, "r");
       return { file, size: statSync(path).size };
     }
-    return { bytes: zstdDecompressSync(readFileOf(disk)) };
+    return { bytes: unpackedWhole(disk) };
   } catch {
     return null;
-  }
-}
-
-function readFileOf(path: string): Buffer {
-  const file = openSync(path, "r");
-  try {
-    const size = statSync(path).size;
-    const out = Buffer.alloc(size);
-    let at = 0;
-    while (at < size) {
-      const n = readSync(file, out, at, size - at, at);
-      if (n === 0) break;
-      at += n;
-    }
-    return out.subarray(0, at);
-  } finally {
-    closeSync(file);
   }
 }
 

@@ -4,6 +4,7 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { zstdDecompressSync } from "node:zlib";
 import type { RuntimeKind } from "../agents/runtime.ts";
+import { readSegments, writtenSize } from "./packed.ts";
 import { type ReadState, type TimelineEntry, timelineOf, utf8 } from "./transcript.ts";
 
 type Json = any;
@@ -94,15 +95,19 @@ export class TranscriptTail {
     }
     const stamp = `${meta.size}:${meta.mtimeMs}`;
     if (compressed && this.packedStamp === stamp) return [start, []];
+    // Put away: its length from its table (read/packed.ts), its segments decompressed as they are read; one put away
+    // before there were segments decompressed whole.
     let unpacked: Buffer | null = null;
+    let size = meta.size;
     if (compressed) {
       try {
-        unpacked = zstdDecompressSync(readFileSync(disk));
+        const written = writtenSize(disk);
+        if (written !== null) size = written;
+        else size = (unpacked = zstdDecompressSync(readFileSync(disk))).length;
       } catch {
         return [start, []];
       }
     }
-    const size = unpacked ? unpacked.length : meta.size;
     this.packedStamp = compressed ? stamp : null;
     if (size < this.offset) {
       // Rewritten: start over.
@@ -154,6 +159,16 @@ export class TranscriptTail {
         take(piece);
       }
       this.offset = size;
+    } else if (compressed) {
+      try {
+        readSegments(disk, this.offset, size, (piece) => {
+          this.offset += piece.length;
+          take(piece);
+          return true;
+        });
+      } catch {
+        // What could be read is kept; the rest is read next time.
+      }
     } else {
       try {
         const file = openSync(this.path, "r");

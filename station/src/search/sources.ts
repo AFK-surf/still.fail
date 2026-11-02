@@ -8,6 +8,7 @@
 import { closeSync, createReadStream, existsSync, openSync, readSync, readdirSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { createZstdDecompress } from "node:zlib";
+import { segmentsFrom } from "../read/packed.ts";
 import * as store from "../read/store.ts";
 import type { MessageRow, SessionRow, Store } from "../read/store.ts";
 import { homesFirst, type ReadState, sessionPlaces, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
@@ -205,23 +206,38 @@ export async function mentions(path: string, words: string[]): Promise<boolean> 
     }
   }
   if (!existsSync(`${path}.zst`)) return false;
-  const raw = createReadStream(`${path}.zst`, { highWaterMark: 1 << 20 });
-  const stream = raw.pipe(createZstdDecompress({ chunkSize: 4 << 20 }));
-  raw.on("error", (error) => stream.destroy(error));
   let tail: Buffer = Buffer.alloc(0);
-  try {
-    for await (const chunk of stream as AsyncIterable<Buffer>) {
+  const through = async (chunks: AsyncIterable<Buffer>): Promise<boolean> => {
+    for await (const chunk of chunks) {
       const view = tail.length > 0 ? Buffer.concat([tail, chunk]) : chunk;
       if (look(view)) return true;
       tail = Buffer.from(view.subarray(Math.max(0, view.length - OVERLAP)));
     }
+    return false;
+  };
+  // In segments (read/packed.ts): each decompressed on its own.
+  const segments = await segmentsFrom(`${path}.zst`, 0).catch(() => null);
+  if (segments !== null) {
+    try {
+      return await through(segments);
+    } catch {
+      return false;
+    } finally {
+      await segments.return(undefined);
+    }
+  }
+  const raw = createReadStream(`${path}.zst`, { highWaterMark: 1 << 20 });
+  const stream = raw.pipe(createZstdDecompress({ chunkSize: 4 << 20 }));
+  raw.on("error", (error) => stream.destroy(error));
+  try {
+    return await through(stream as AsyncIterable<Buffer>);
   } catch {
     // Unreadable: not found there.
+    return false;
   } finally {
     raw.destroy();
     stream.destroy();
   }
-  return false;
 }
 
 export type HistoryFound = { hits: Hit[]; more: boolean; /** Sessions not looked through, the time being up. */ left: number };
