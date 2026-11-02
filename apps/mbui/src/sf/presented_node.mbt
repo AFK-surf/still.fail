@@ -26,8 +26,7 @@ fn tree_draws(p : Presented, sheet : Bool) -> Bool {
   (
     p.shows is (Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _)) ||
     p.shows is Pick(_, _, _, _, _, _) ||
-    // (one that goes in steps the host's still, whatever its kind: its steps a stack the host draws)
-    (p.shows is Panel(x) && !x.steps && (panel_popover_of(x, p.from) || panel_centred_of(x, p.from)))
+    (p.shows is Panel(x) && (panel_popover_of(x, p.from) || panel_centred_of(x, p.from)))
   )
 }
 
@@ -42,9 +41,9 @@ fn panel_popover_of(x : PanelOf, from : Anchor) -> Bool {
 ///|
 /// Whether panel `x` presented `from` is a panel opened by nothing, a dialog in the middle of the window, the window's
 /// tree draws (panel_centred_node): not a stage or a form, nor (yet) one a share of the window tall or whose title is as
-/// it is now (`live`), or one that goes in steps (`steps`).
+/// it is now (`live`) where it does not go in steps (one that does says its steps' words in them).
 fn panel_centred_of(x : PanelOf, from : Anchor) -> Bool {
-  !x.stage && !x.form && from == Unanchored && x.tall <= 0.0 && x.live is None && !x.steps
+  !x.stage && !x.form && from == Unanchored && x.tall <= 0.0 && (x.steps || x.live is None)
 }
 
 ///|
