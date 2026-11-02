@@ -12,7 +12,8 @@ import { diff } from "../src/delta.ts";
 import { CoreError, HostError } from "../src/error.ts";
 import { encode } from "../src/ops.ts";
 import * as prefs from "../src/prefs.ts";
-import { parseClientMessage } from "../src/protocol.ts";
+import { parseClientMessage, TOPICS } from "../src/protocol.ts";
+import { TOPIC_SHAPES } from "../src/shapes/schema.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { fromBase64, base64, parseJson, toJsonBytes } from "../src/util.ts";
@@ -73,6 +74,10 @@ test("parses_the_client_messages_of_the_protocol", () => {
   assert.deepEqual(parseClientMessage({ id: 2, subscribe: { topic: "accounts" } }), { kind: "subscribe", id: 2, subscribe: { topic: "accounts" } });
   assert.deepEqual(parseClientMessage({ id: 3, subscribe: { topic: "workspace", workspace: "w" } }), { kind: "subscribe", id: 3, subscribe: { topic: "workspace", workspace: "w" } });
   assert.deepEqual(parseClientMessage({ id: 8, unsubscribe: true }), { kind: "unsubscribe", id: 8, unsubscribe: true });
+});
+
+test("each_shaped_topic_is_registered_in_the_client_protocol", () => {
+  assert.deepEqual(Object.keys(TOPIC_SHAPES).filter((name) => !(name in TOPICS)), []);
 });
 
 test("answers_take_the_shapes_of_the_protocol", () => {

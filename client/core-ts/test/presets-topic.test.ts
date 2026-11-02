@@ -13,6 +13,36 @@ const profile = {
   env: [], usedBy: [], loginCommand: "", check: { state: "ok", detail: "", checkedAt: 1 }, quota: { state: "ok", windows: [], detail: null, checkedAt: 1 },
 };
 
+test("a_picker_subscribing_over_the_client_protocol_gets_the_repositories", async () => {
+  const said: Record<string, unknown> = {
+    ...base(),
+    "GET /overview": { ...overview, profiles: [profile] },
+    "GET /presets": { presets: [], candidates: [candidate] },
+  };
+  const { host, core, push } = await started(said as never);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  // The app first opens a new chat, whose view reads each station's presets, then opens the folder picker.
+  core.receiveJson(ui, JSON.stringify({ id: 1, subscribe: { topic: "newChat", scope: "ws" }, keyed: true }));
+  await host.settle();
+  apply(host, values);
+  assert.ok(host.requests.flatMap(readsOf).some((u) => u.endsWith("/admin/api/presets")));
+  core.receiveJson(ui, JSON.stringify({ id: 2, subscribe: { topic: "presets", station: S }, keyed: true }));
+  await host.settle();
+  const emitted = host.takeEmitted().map(([, message]) => message as { id?: number; value?: { candidates: { name: string }[] }; error?: unknown });
+  const answer = emitted.find((message) => message.id === 2);
+  assert.ok(answer?.value, `the picker must receive the cached folders, got ${JSON.stringify(answer)}`);
+  assert.deepEqual(answer.value.candidates.map((c) => c.name), ["app"]);
+  values.set(2, answer.value);
+  // A scan completed after the picker opened: the same subscription receives the new repository.
+  said["GET /presets"] = { presets: [], candidates: [candidate, { ...candidate, path: "/repos/lib", name: "lib", repo: "github.com/acme/lib" }] };
+  push("presets", {});
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 2).candidates.map((c: { name: string }) => c.name), ["app", "lib"]);
+  core.close();
+});
+
 test("presets_are_read_as_shown_again_once_one_is_made_and_the_one_picked_goes_with_a_new_chat", async () => {
   const said: Record<string, unknown> = {
     ...base(),
