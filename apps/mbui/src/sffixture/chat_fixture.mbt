@@ -596,6 +596,15 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         Some(String(x)) => x
         _ => ""
       }
+      // A full reference menu, for viewing and exercising its touch scrolling.
+      if query == "" && f.mode == "chat-ref-many" {
+        let names = ["整理发布清单", "首页列表的排序", "登录页的问题", "安卓更新通知", "对话里的图片", "工作区切换", "检查网络连接", "服务状态提醒"]
+        let results : Array[Json] = []
+        for i, name in names {
+          results.push(row("ref-\{i}", name, "ws1/st1", "刚才", {}))
+        }
+        return Some({ "items": Json::array(results) })
+      }
       // `@` alone: the Android app's ChatShareTest's (its screenshots' twin, xws-menu): two of this workspace's, then
       // two of the viewer's other workspaces', each saying whose
       if query == "" && params.get("elsewhere") is Some(True) {

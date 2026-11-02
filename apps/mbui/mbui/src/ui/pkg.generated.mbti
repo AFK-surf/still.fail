@@ -1082,7 +1082,7 @@ pub fn Ctx::building(Self) -> Int32
 #callsite(autofill(loc))
 pub fn Ctx::built_from_changed(Self, String, loc~ : SourceLoc) -> Unit
 pub fn Ctx::button(Self, String, key? : String, bg? : Int64, color? : Int64, w? : Size) -> Bool
-pub fn Ctx::capped(Self, String, Double, w? : Size, bg? : Int64, radius? : Double, padx? : Double, pady? : Double, shrinks? : Bool, past_most? : Bool, mx? : Double, () -> Unit) -> Int32
+pub fn Ctx::capped(Self, String, Double, w? : Size, bg? : Int64, radius? : Double, padx? : Double, pady? : Double, shrinks? : Bool, past_most? : Bool, mx? : Double, for_field? : Int32, () -> Unit) -> Int32
 pub fn Ctx::capped_id(Self, String) -> Int32
 pub fn Ctx::catch_keys(Self, String, Bool) -> Unit
 pub fn Ctx::clear_code_field(Self, String) -> Unit

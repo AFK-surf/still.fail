@@ -43,6 +43,8 @@ priv struct Sideways {
   mut built_frame : Int
   /// a field's words, more lines than it shows (Ctx::editor): how far it can go is its layout's (layout.mbt), not boxes'
   mut field : Bool
+  /// the field this scrolling box offers choices for (0: none); its focus stays while those choices scroll
+  mut for_field : Int
   /// built with room at its foot for its bar (Ctx::sideways: as it could scroll when last laid out)
   mut bar_room : Bool
   /// how far in from either side its bar runs (Ctx::sideways's `bar_in`)
@@ -189,6 +191,7 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         theme: self.theme,
         built_frame: -1,
         field: false,
+        for_field: 0,
         bar_room: false,
         bar_in: 0.0,
       }
@@ -309,7 +312,8 @@ pub fn Ctx::capped_id(self : Ctx, key : String) -> Int {
 /// row, `max_h` bounds only how tall it asks the row to be; the row taller (a column beside it taller), it is stretched
 /// to the row's height, what it holds scrolling in all of it. `mx`: its sides that
 /// far out from where they would be (out across a panel's padding, negative: what it holds scrolls to the panel's
-/// sides, `padx` in from them). Its id.
+/// sides, `padx` in from them). `for_field`: the focused field this box offers choices for; scrolling its choices
+/// keeps that field's keyboard. Its id.
 pub fn Ctx::capped(
   self : Ctx,
   key : String,
@@ -322,12 +326,14 @@ pub fn Ctx::capped(
   shrinks? : Bool = false,
   past_most? : Bool = false,
   mx? : Double = 0.0,
+  for_field? : Int = 0,
   body : () -> Unit,
 ) -> Int {
   let id = self.capped_id(key)
   let st = self.scroll_state(id, true)
   st.theme = self.theme
   st.built_frame = self.frame_no
+  st.for_field = for_field
   let mut inner = -1
   let b = self.box(w~, max_h~, mx~, bg~, radius~, clip=true, id~, fn() {
     inner = self.box(w=Fill(1.0), ty=-st.x, padx~, pady~, body)
@@ -585,9 +591,14 @@ fn sideways_move(c : Ctx, id : Int, x : Double, y : Double) -> Bool {
 
 ///|
 /// A finger setting off scrolling `scroller` (a list, a box scrolled inside one: a code block sideways) lets go of the
-/// keyboard, whichever field has it (UIScrollView's keyboardDismissMode onDrag); a field's own words scrolled keep it.
+/// keyboard, whichever field has it (UIScrollView's keyboardDismissMode onDrag); a field's own words or choices
+/// scrolled keep it.
 fn Ctx::scroll_lets_go(self : Ctx, scroller : Int) -> Unit {
-  if pointing() is Finger && self.editors.contains(self.focus) && scroller != self.focus {
+  let offered_for = match sideways.get(scroller) {
+    Some(st) => st.for_field
+    None => 0
+  }
+  if pointing() is Finger && self.editors.contains(self.focus) && scroller != self.focus && offered_for != self.focus {
     self.blur()
   }
 }

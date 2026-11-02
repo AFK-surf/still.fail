@@ -115,7 +115,7 @@ pub let hover_card_close_ms : Double
 
 pub let hover_card_open_ms : Double
 
-pub fn in_room(@ui.Ctx, PopState, () -> Unit, key? : String, most? : Double, style? : @ui.Style, reach? : @ui.Style) -> Bool
+pub fn in_room(@ui.Ctx, PopState, () -> Unit, key? : String, most? : Double, style? : @ui.Style, reach? : @ui.Style, for_field? : Int32) -> Bool
 
 pub fn initials(String) -> String
 

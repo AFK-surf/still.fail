@@ -2,6 +2,38 @@
 // markPasted): what the field holds read as the core reads it (its answers kept, src/sfkept).
 
 ///|
+test "a finger scrolls the @ menu while the composer and its keyboard keep focus" {
+  let rows : Array[Json] = []
+  for i in 0..<8 {
+    rows.push(row("ref-\{i}", "候选对话 \{i}", "ws1/st1", "刚才", {}))
+  }
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, topic) {
+    if name == "chatSearch" {
+      { ..topic, value: Some({ "items": Json::array(rows) }) }
+    } else {
+      topic
+    }
+  })
+  t.tap_text("发消息")
+  t.type_text("@")
+  t.frame()
+  let (x, y, w, h) = t.get(Button, label="候选对话 2").rect
+  let (_, before_y, _, _) = t.rect_of("候选对话 7").unwrap()
+  assert_true(t.ctx().field_focused(), msg="the composer starts focused")
+  t.drag(x + w / 2.0, y + h / 2.0, x + w / 2.0, y + h / 2.0 - 120.0)
+  assert_true(t.ctx().field_focused(), msg="the composer keeps its focus")
+  assert_true(t.ime().0, msg="the keyboard stays open")
+  let (_, after_y, _, _) = t.rect_of("候选对话 7").unwrap()
+  assert_true(after_y < before_y, msg="the results moved up")
+  t.tap_text("候选对话 7")
+  t.draw()
+  let picked = named(calls, "chat.ref")
+  assert_eq(picked.length(), 1)
+  assert_eq(text(Some(picked[0].params), "id"), "ref-7")
+}
+
+///|
 test "`@` and words: the chats they find over the composer; one picked goes in as its mark, a backspace takes it whole" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
