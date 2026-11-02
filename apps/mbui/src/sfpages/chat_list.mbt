@@ -128,13 +128,26 @@ pub fn chat_list(
               Out(_) => makes_way(lf, keys[i])
               _ => came_over(lf)
             }
-            // gone to, lit whole: a band across the list from edge to edge, half the room to the rows over and under
-            let band = match e {
-              Said(m) if whole && m.ts == lit.0 && lit.1 > 0.0 =>
-                Some((lit.1, top / 2.0, if i + 1 < n { top_at(i + 1) / 2.0 } else { 0.0 }))
-              _ => None
+            // gone to, lit whole: a band across the list from edge to edge, half the room to the rows over and under;
+            // its menu open (right clicked, its ⋯), the same band in the pointer's ground, easing in and out as a
+            // row's under the pointer does
+            let under = if i + 1 < n { top_at(i + 1) / 2.0 } else { 0.0 }
+            let (band, band_by) = match e {
+              Said(m) if whole && m.ts == lit.0 && lit.1 > 0.0 => (Some((lit.1, top / 2.0, under)), None)
+              Said(m) => {
+                let on = @sfbase.message_menu_on("m:" + m.ts)
+                let a = @motion.told(c, "msg-menu/" + m.ts, if on { 1.0 } else { 0.0 }, spec=@sf.nav_fade)
+                if on || !a.over() {
+                  let hover = @sf.theme().p.hover
+                  // (the last message's as far under it as over it: the list's foot under it, no row to meet)
+                  (Some((1.0, top / 2.0, if under > 0.0 { under } else { top / 2.0 })), Some(fn() { @sf.alpha(hover, a.get()) }))
+                } else {
+                  (None, None)
+                }
+              }
+              _ => (None, None)
             }
-            let ri = row_box(c, side, top, lit=band, fn() {
+            let ri = row_box(c, side, top, lit=band, lit_by=band_by, fn() {
               // (where a message out of a picture comes in over it: emit.mbt; read as it changes, Emits::read)
               em.read()
               if keys[i] == em.out_key {
@@ -648,13 +661,15 @@ let chat_list_box : @ui.Style = @ui.css("w=Full h=Full")
 ///|
 /// A row's room (its node): in from the pane's sides to the column (`side` each), `top` over it. `lit`: how lit it is
 /// as a message gone to, and how far its ground reaches over and under it (square, out to the pane's sides as the row
-/// runs: nothing of it in a corner; lit one after another, such grounds meet), its words where they are without it.
+/// runs: nothing of it in a corner; lit one after another, such grounds meet), its words where they are without it;
+/// `lit_by`, that band's ground as it is painted instead (Ctx::bg_by: a menu open for it).
 fn row_box(
   c : @ui.Ctx,
   side : Double,
   top : Double,
   body : () -> Unit,
   lit? : (Double, Double, Double)? = None,
+  lit_by? : (() -> Int64)? = None,
 ) -> Int {
   // The system column is reserved by the shell; the text still needs its own
   // inset from the card's edge, also when a details card stands beside it.
@@ -670,10 +685,17 @@ fn row_box(
     }
     c.box(style=line, fn() {
       match lit {
-        Some((alpha, _, _)) => {
-          let g = c.layer(fn() { c.box(style=flash_ground, fn() {  }) |> ignore })
-          c.look(g, @ui.look(alpha~))
-        }
+        Some((alpha, _, _)) =>
+          match lit_by {
+            Some(f) => {
+              let g = c.layer(fn() { c.box(style=band_ground, fn() {  }) |> ignore })
+              c.bg_by(g, f)
+            }
+            None => {
+              let g = c.layer(fn() { c.box(style=flash_ground, fn() {  }) |> ignore })
+              c.look(g, @ui.look(alpha~))
+            }
+          }
         None => ()
       }
       c.box(style=@ui.style(w=Fixed(side)), fn() {  }) |> ignore
@@ -711,6 +733,11 @@ fn float_box(c : @ui.Ctx, right : Double, foot : Double, body : () -> Int) -> Un
   })
   |> ignore
 }
+
+///|
+/// A message's band in a ground drawn as it is painted (its menu open: Ctx::bg_by), the band's room alone.
+// kept across runs: a value (no field of it changes)
+let band_ground : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// A message gone to lit whole, its ground (msgFlash): the accent's, as its row's band (row_box).

@@ -24,6 +24,7 @@ pub struct ContextMenu {
   mut share : (() -> Unit)?
   mut share_link : String
   mut share_words : String
+  mut share_key : String
 }
 
 ///|
@@ -40,6 +41,7 @@ pub let context : ContextMenu = {
   share: None,
   share_link: "",
   share_words: "",
+  share_key: "",
 }
 
 ///|
@@ -63,6 +65,7 @@ fn context_reset() -> Unit {
   context.share = None
   context.share_link = ""
   context.share_words = ""
+  context.share_key = ""
 }
 
 ///|
@@ -100,6 +103,7 @@ fn context_at(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? :
   context.share = None
   context.share_link = ""
   context.share_words = ""
+  context.share_key = ""
 }
 
 ///|
@@ -133,6 +137,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       context.share = None
       context.share_link = ""
       context.share_words = ""
+      context.share_key = ""
     }
     None => ()
   }
@@ -140,7 +145,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
   // the menu in the same frame), or alone. (A chat's list is built after the frame's overlays: an offer of the frame
   // before is taken as it comes.)
   match @sfbase.share_offered.val {
-    Some((at, x, y, go, link, words)) => {
+    Some((at, x, y, go, link, words, key)) => {
       @sfbase.share_offered.val = None
       // (not over a field right clicked)
       if (at == c.frame_number() || at == c.frame_number() - 1) && !(context.frame == at && context.field != 0) {
@@ -150,6 +155,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
         context.share = Some(go)
         context.share_link = link
         context.share_words = words
+        context.share_key = key
       }
     }
     None => ()
@@ -201,19 +207,27 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
   }
   if entries.is_empty() {
     context.open = false
+    context_lit()
     @sf.dropdown(c, "context-menu", false, 0, [], {}, context_menu_w) |> ignore
     return
   }
   let at = (context.x, context.y, 0.0, 0.0)
   // (dismissed, closed at the moment of what dismissed it: Escape, a press beside it)
   let menu : Ref[@kit.Menu?] = Ref(None)
-  c.with_dismissed(fn(_) { context.open = false }, fn() {
-    menu.val = Some(@sf.dropdown(c, "context-menu", true, 0, entries, context_icons, context_menu_w, offset=0.0, at~))
-  })
+  c.with_dismissed(
+    fn(_) {
+      context.open = false
+      context_lit()
+    },
+    fn() {
+      menu.val = Some(@sf.dropdown(c, "context-menu", true, 0, entries, context_icons, context_menu_w, offset=0.0, at~))
+    },
+  )
   let m = menu.val.unwrap()
   if m.chosen is Some(_) {
     context.open = false
   }
+  context_lit()
   let field = context.field
   match m.chosen {
     Some("open") => {
@@ -243,6 +257,12 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     Some("paste") => c.field_paste(field)
     _ => ()
   }
+}
+
+///|
+/// The message the menu is open for told (sfbase's message_menu): its row lit while it is, none once it is gone.
+fn context_lit() -> Unit {
+  @sfbase.message_menu.set(if context.open && context.share is Some(_) { context.share_key } else { "" })
 }
 
 ///|
