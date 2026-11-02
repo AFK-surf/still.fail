@@ -90,6 +90,10 @@ fn named_image_state(name : String) -> (Int, Array[String]) {
 let image_data : Map[String, Bytes] = {}
 
 ///|
+/// A vector picture's own renderer when the code that supplies the picture has one, by its source.
+let image_vector_drawers : Map[String, (Bytes, Int) -> (Int, Int, FixedArray[Byte])?] = {}
+
+///|
 /// Decoded bytes kept before unused images are dropped.
 let image_budget : Double = 192.0 * 1024.0 * 1024.0
 
@@ -101,6 +105,7 @@ let image_info_out : FixedArray[Double] = FixedArray::make(4, 0.0)
 /// Hands over an encoded image (JPEG, PNG, HEIC, WebP…) to show as `key`.
 pub fn Ctx::image_bytes(self : Ctx, key : String, data : Bytes) -> Unit {
   ignore(self)
+  image_vector_drawers.remove(key)
   if !add_gif(key, data) {
     image_data[key] = data
   }
@@ -110,10 +115,23 @@ pub fn Ctx::image_bytes(self : Ctx, key : String, data : Bytes) -> Unit {
 /// Hands over an encoded image to show as `key`, from outside a frame (a
 /// core call's answer). Keys starting `mem:` show nothing until given.
 pub fn add_image(key : String, data : Bytes) -> Unit {
+  image_vector_drawers.remove(key)
   // a GIF that moves: its frames each a picture (gif.mbt)
   if !add_gif(key, data) {
     image_data[key] = data
   }
+}
+
+///|
+/// Hands over a vector picture with the renderer that belongs to it. Other pictures continue to use the app's
+/// renderer; if this renderer declines the bytes, the app's gets the same chance as for any other picture.
+pub fn add_vector_image(
+  key : String,
+  data : Bytes,
+  draw : (Bytes, Int) -> (Int, Int, FixedArray[Byte])?,
+) -> Unit {
+  image_data[key] = data
+  image_vector_drawers[key] = draw
 }
 
 ///|
@@ -132,11 +150,21 @@ pub fn set_vector_pictures(draw : (Bytes, Int) -> (Int, Int, FixedArray[Byte])?)
 
 ///|
 /// An encoded picture as the host decodes it: a vector one drawn here at `px` on its longer side, as a PNG.
-fn host_bytes(data : Bytes, px : Int) -> Bytes {
-  if vector_pictures.length() > 0 && looks_like_svg(data) {
-    match vector_pictures[0](data, px) {
-      Some((w, h, rgba)) => return png_of(w, h, rgba)
+fn host_bytes(src : String, data : Bytes, px : Int) -> Bytes {
+  if looks_like_svg(data) {
+    match image_vector_drawers.get(src) {
+      Some(draw) =>
+        match draw(data, px) {
+          Some((w, h, rgba)) => return png_of(w, h, rgba)
+          None => ()
+        }
       None => ()
+    }
+    if vector_pictures.length() > 0 {
+      match vector_pictures[0](data, px) {
+        Some((w, h, rgba)) => return png_of(w, h, rgba)
+        None => ()
+      }
     }
   }
   data
@@ -255,7 +283,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   }
   if good is None && !pending && !failed {
     let id = match image_data.get(src) {
-      Some(d) => h_image_load_bytes(host_bytes(d, want), want, src)
+      Some(d) => h_image_load_bytes(host_bytes(src, d, want), want, src)
       None =>
         if src.has_prefix("pdf:") {
           pdf_page_load(src, want)
