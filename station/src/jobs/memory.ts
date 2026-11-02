@@ -287,6 +287,13 @@ export async function runnersWithSessions(data: string, whose: (ids: string[]) =
 export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock }): MemoryWatch {
   const { store } = o;
   const whose = runnerSessions(store);
+  // A directory none of the sessions shown has, and whose it is among every session ever (none: null): a session made
+  // since is shown, found among those first.
+  const found = new Map<string, string | null>();
+  const elsewhere = (dir: string): string | null => {
+    if (!found.has(dir)) found.set(dir, sessionIn(store.listSessions(), dir));
+    return found.get(dir)!;
+  };
   return new MemoryWatch({
     clock: o.clock,
     pressure: () => platform.memoryPressure(),
@@ -295,8 +302,10 @@ export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: 
     cwds: (pids) => platform.cwds(pids),
     jobs: () => watchedJobs(store),
     agents: async () => (await runnersWithSessions(o.data, whose)).map((r) => ({ pid: r.pid, session: r.session })),
-    // Among the sessions shown first; every session ever only for a directory none of them has (an archived one's).
-    sessionAt: (dir) => sessionIn(store.liveSessions(), dir) ?? sessionIn(store.listSessions(), dir),
+    // Among the sessions shown first; every session ever only for a directory none of them has (an archived one's),
+    // and what that found kept: under memory pressure (the whole while on ccvm) the watch looks every few seconds, and
+    // every session read each time held the main thread 3.2 s (2026-11-02).
+    sessionAt: (dir) => sessionIn(store.liveSessions(), dir) ?? elsewhere(dir),
     tell: (unit, text) => {
       const job = unit.job !== null ? store.getJob(unit.job) : null;
       // Another station's task: its notices, which go back to the session that asked for it (jobs/remote.ts).
