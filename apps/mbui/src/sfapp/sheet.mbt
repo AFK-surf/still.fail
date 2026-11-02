@@ -7,7 +7,8 @@
 /// Which sheet: what it shows and how it sits.
 priv enum SheetKind {
   NoSheet
-  /// what another app shares in, to a chat (ShareSheet.kt): 72%, draggable
+  /// what another app shares in, to a chat (the web's mobile/ShareIn.tsx; ShareIn.tsx's panel, 520 wide, with a wide
+  /// window): as tall as what it holds
   ShareSheet
   /// what an invitation's link leads to, before it is accepted (Workspaces.kt InviteLinkSheet): half the screen
   InviteLink
@@ -17,7 +18,7 @@ priv enum SheetKind {
 /// How a sheet sits: its share of the screen at first, whether its top drags it between half and full.
 fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
   match kind {
-    ShareSheet => (0.72, true)
+    ShareSheet => (0.0, false)
     InviteLink => (0.5, false)
     NoSheet => (0.5, false)
   }
@@ -55,6 +56,7 @@ fn raise_sheet(kind : SheetKind, from? : @sf.Anchor = Unanchored) -> Unit {
     from~,
     tall=share,
     grows=draggable,
+    w=if kind == ShareSheet { share_panel_w } else { @sf.panel_w },
     gone=fn() {
       if s.kind == kind {
         s.kind = NoSheet
@@ -100,3 +102,7 @@ fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
     v
   }
 }
+
+///|
+/// What another app shares, its panel's width with a wide window (ShareIn.css.ts panel: 520).
+let share_panel_w : Double = 520.0
