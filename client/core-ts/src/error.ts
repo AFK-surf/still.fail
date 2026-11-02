@@ -39,7 +39,7 @@ export class CoreError extends Error {
     if (text === DROPPED) return new CoreError("host", t("core-misc.wake.dropped"));
     if (text === GONE) return new CoreError("host", t("core-misc.wake.gone"));
     if (text === NETWORK) return new CoreError("host", t("core-misc.wake.network"));
-    if (error instanceof HostError && error.said) return new CoreError("host", text);
+    if (error instanceof HostError && error.said === true) return new CoreError("host", text);
     return CoreError.plainly("host", text);
   }
 
@@ -91,10 +91,10 @@ export class CoreError extends Error {
 /// What a host says when what it was asked failed (host.rs `HostError`): in its own words, or (`said`) in the person's,
 /// as the core says it to them.
 export class HostError extends Error {
-  readonly said: boolean;
+  readonly said?: true;
   constructor(message: string, said = false) {
     super(message);
-    this.said = said;
+    if (said) this.said = true;
   }
 
   /// A failure the core words for people itself (with `t`): said as it is.

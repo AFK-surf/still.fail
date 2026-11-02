@@ -25,7 +25,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { Deferred, Effect, Queue } from "effect";
 import type { Inner } from "../core.ts";
 import { hooks } from "../core/execute.ts";
-import { CoreError } from "../error.ts";
+import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import type { IrohConnection, IrohStream } from "../iroh.ts";
 import { Signer, WEB_DEVICE_SECS } from "../lock.ts";
@@ -338,7 +338,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
       const c = yield* Effect.result(inner.cloudSync.credential(ws, base, false, base, mesh.lockClaim(ws, base)));
       if (c._tag === "Success") credentials.push({ ws, credential: c.success.credential });
     }
-    const signer = inner.host.appKeys ? yield* Effect.mapError(Signer.make(inner.host), (e) => CoreError.plainly("lock_key", e, t("core-misc.lock.keyNotKept", { error: CoreError.host(e).message }))) : null;
+    const signer = inner.host.appKeys ? yield* Effect.mapError(Signer.make(inner.host), (e) => CoreError.plainly("lock_key", e, t("core-misc.lock.keyNotKept", { error: asCoreError(e).message }))) : null;
     if (signer) signerKnown(inner, signer.id);
     const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
