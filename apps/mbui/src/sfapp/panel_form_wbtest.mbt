@@ -140,3 +140,41 @@ test "panel a form at a point, its field given the focus and holding it, 大屏 
     "own: open {focused Some(TextField 填一下) ime (true, , 0, 0)} closed {focused None ime (false, , 0, 0)} after {focused None ime (false, , 0, 0)} said [ok] presenting false",
   ])
 }
+
+///|
+test "panel a form at a point, its field holding the focus, its own button closing it and opening another form with a field of its own: that field has the focus as it closes and after, typed into; the first's let go of before, not after" {
+  let said : Array[String] = []
+  let t = menu_tester(1280.0, 800.0, 0)
+  let pf = @ui.Field::new()
+  let other = @ui.Field::new()
+  let next = fn(c : @ui.Ctx, close : () -> Unit) {
+    c.editor("next field", field=other, placeholder="另一框") |> ignore
+    panel_test_body([])(c, close)
+  }
+  @sf.panel("面板", from=At(600.0, 100.0, 0.0, 0.0), form=true, field="form field", fn(c, close) {
+    c.editor("form field", field=pf, placeholder="填一下") |> ignore
+    @sf.panel_foot(c, fn() {
+      if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+        said.push("ok")
+        close()
+        @sf.panel("另一个", next, from=At(600.0, 100.0, 0.0, 0.0), form=true, field="next field")
+      }
+    })
+  })
+  t.run_for(@ui.move_most_ms)
+  let open = panel_focus_said(t)
+  t.click(Button, label="好的")
+  let at_close = panel_focus_said(t)
+  t.run_for(@ui.move_most_ms)
+  let after = panel_focus_said(t)
+  t.type_text("乙")
+  t.run_for(@ui.move_most_ms)
+  // (as main has it: the other form's field the focus's from the frame the first closes in, typed into; the first's
+  // field none of it)
+  assert_eq([open, at_close, after, "填 \{pf.text()} 另 \{other.text()} said \{said}"], [
+    "focused Some(TextField 填一下) ime (true, , 0, 0)",
+    "focused Some(TextField 另一框) ime (true, , 0, 0)",
+    "focused Some(TextField 另一框) ime (true, , 0, 0)",
+    "填  另 乙 said [ok]",
+  ])
+}
