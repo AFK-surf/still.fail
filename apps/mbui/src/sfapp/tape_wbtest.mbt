@@ -1288,3 +1288,30 @@ test "on the tape, a chat's service opened from the chat in use: its side panel 
   assert_eq(@sfdesk.side_now(src, r).1, "service:j-web")
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel)
 }
+
+///|
+test "on the tape a passage picked anew after the sidebar was brought over brings the page over again; a press taken while it stays picked brings nothing" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  t.draw()
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  t.run_for(@ui.move_most_ms)
+  t.drag(30.0, 400.0, 500.0, 400.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  assert_true(pk.ts != "")
+  // (a press something in the message took as it stays picked, a menu's: picks nothing, brings nothing)
+  pk.taken_at = pk.taken_at + 1
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  // (let go of, as a tap elsewhere lets it go; then picked anew where the page shows beside: over again)
+  @sfbase.pick_clear()
+  t.draw()
+  let serial = @sfbase.picked.get().serial
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  assert_true(@sfbase.picked.get().serial > serial, msg="picked anew")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+}

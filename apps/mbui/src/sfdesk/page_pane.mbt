@@ -76,15 +76,16 @@ fn pane_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
 /// While the workspace waits to be confirmed in its safe mode, what waits in its place instead, the stack none of it
 /// (nothing of it pressed, nothing of it back), as the frame had it before.
 fn pane_pages(v : @view.View, src : Source) -> Unit {
-  // (what the page's bars and the sidebar's parts work out from, where the block's move has got, said every frame the
-  // pane's frame is built, as the pane's island said it before its page: whichever page shows, or none)
-  @ui.old(v, fn(c) { pane_bars_said(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
   let gated = fn() {
     match @sfbase.workspace_in_view(src).0 {
       Some(w) => fold_target(src, w, v.window().0).0.gated
       None => false
     }
   }
+  // (the page on top switched, as the stack is told it, before any page of it is built; none while what waits in the
+  // safe mode is in the pages' place. What the page's bars and the sidebar's parts work out from, where the block's
+  // move has got, each of them works out as it is built: pane_page_one, pane_gate_built, pane_block_built)
+  page_switch_said(v, fn() { @sfbase.workspace_in_view(src).0 is Some(_) && !gated() })
   // (what waits in its place giving back the focus as it goes, to what had it as it came: the page under it kept, laid
   // out nowhere meanwhile (none of it built, pressed or read out), the focus in it let go of then, after it is kept)
   v.show(gated, fn(g) {
@@ -96,22 +97,6 @@ fn pane_pages(v : @view.View, src : Source) -> Unit {
     pane_stack(s, src)
   })
   |> ignore
-}
-
-///|
-/// The pane's frame's island (Large), drawing nothing: what the page's bars and the sidebar's parts work out from, where
-/// the block's move has got (fold_bars), and the page on top switched (page_switch_frame), said as it is built: before
-/// the stack's pages, built again as either changes.
-fn pane_bars_said(c : @ui.Ctx, src : Source) -> Unit {
-  let (now, _, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(w) else { return }
-  let (r, target) = fold_target(src, w, c.window_size().0)
-  fold_bars(fold_built(c, target))
-  // a chat and a new chat switched between: the composer moving, the rest crossfading (switch.mbt), as the page on top
-  // changes, before any page of it is built; none while what waits in the safe mode is in the pages' place
-  if !r.gated {
-    page_switch_frame(c)
-  }
 }
 
 ///|
