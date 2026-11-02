@@ -304,6 +304,9 @@ export class FakeHost implements Host {
   secureSet?: (key: string, value: Uint8Array, opts: { user: boolean }) => Effect.Effect<void, HostError> = (key, value, opts) =>
     Effect.sync(() => void this.secure.set(key, { value: value.slice(), user: opts.user }));
   secureDelete?: (key: string) => Effect.Effect<void, HostError> = (key) => Effect.sync(() => void this.secure.delete(key));
+  /// What an earlier install kept where `secureGet` no longer finds it (an iOS app's home moved), newest first.
+  readonly securePastValues = new Map<string, Uint8Array[]>();
+  securePast?: (key: string) => Effect.Effect<Uint8Array[], HostError> = (key) => Effect.sync(() => (this.securePastValues.get(key) ?? []).map((v) => v.slice()));
   /// Asking the person by itself (host.ts `secureAsk`): noted in `secureAsked` without a key; `secureRefused`, they say no.
   secureAsk?: (reason: string) => Effect.Effect<void, HostError> = (reason) =>
     Effect.suspend(() => {

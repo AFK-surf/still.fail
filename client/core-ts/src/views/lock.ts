@@ -105,6 +105,25 @@ export function signerKnown(inner: Inner, id: string | null): void {
   inner.views?.vaultChanged(null);
 }
 
+/// The signing keys the lock names as this device's, looked for among what earlier installs kept (`Signer.recover`):
+/// each once a run, per core.
+const recovering = new WeakMap<Inner, Set<string>>();
+
+/// The lock names `id` as this device's signing key and this one keeps another (or none): an iOS update moved the
+/// app's home, which the Keychain items were named by, so it is kept still where an earlier install was. Kept as this
+/// one's again, it signs as before, with no other device to approve it.
+function recover(inner: Inner, id: string): void {
+  const tried = recovering.get(inner) ?? new Set<string>();
+  recovering.set(inner, tried);
+  if (tried.has(id)) return;
+  tried.add(id);
+  inner.runner.fork(
+    Effect.map(Effect.orElseSucceed(Signer.recover(inner.host, id), () => null), (s) => {
+      if (s) signerKnown(inner, s.id);
+    }),
+  );
+}
+
 /// What each workspace's lock was read at (its head's hash and the waiting count the workspace view said), per core.
 const readAt = new WeakMap<Inner, Map<string, string>>();
 
@@ -540,6 +559,7 @@ export function lockView(inner: Inner, ws: string): J {
   // An app in the lock that does not sign with its key (let in before it kept one, as the devices there when the lock
   // was turned on were; or its key since lost): it may be made one that signs, approved face to face as a new one is.
   const unsigned = locked && mine !== undefined && mine.kind === "app" && inner.host.appKeys === true && signers.has(inner) && !signs;
+  if (unsigned && typeof mine.sign_key === "string") recover(inner, mine.sign_key);
   return {
     available: true,
     locked,

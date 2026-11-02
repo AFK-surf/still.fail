@@ -14,6 +14,9 @@ import { BEHIND_MS, BEHIND_TRIES, read, signerKnown } from "../src/views/lock.ts
 import { ME, PHONE, elsewhere, genesis, rig, unhex } from "./lock-rig.ts";
 import { stationLater, stationReplies, status } from "./station-fixture.ts";
 
+/// The signing key the lock's genesis names for this device.
+const signerOfLock = (r: Awaited<ReturnType<typeof rig>>) => (r.cloud.chains.get("ws")![0]!.body as { devices: { sign_key: string }[] }).devices[0]!.sign_key;
+
 const phoneRequest = { base: PHONE, sub: "s2", email: "b@x.com", kind: "app", label: "Pixel 8", sign_key: null, code: shortCode(PHONE), created_at: 1500 };
 /// Another member's phone in the lock: one a trusted device may take out.
 const phone = { id: PHONE, sub: "s2", kind: "app", label: "Pixel 8" };
@@ -84,6 +87,20 @@ test("an app in the lock without its signing key (the genesis put it in before i
   const s = await rig((me) => ({ ws: genesis("ws", me, true) }));
   const w = await (await s.watch({ topic: "lock", workspace: "ws" }))();
   assert.deepEqual([w.signs, w.me.unsigned ?? false], [true, false]);
+});
+
+test("an iOS update that moved where its signing key was kept: the key the lock names is found again, and it signs", async () => {
+  // The lock names this app's key; the update left it where the app's old home was, and approving face to face (none
+  // online to approve) made another since.
+  const r = await rig((me) => ({ ws: genesis("ws", me, true) }), (host) => {
+    host.securePastValues.set(Signer.KEY, [new Uint8Array(32).fill(7), host.secure.get(Signer.KEY)!.value]);
+    host.secure.set(Signer.KEY, { value: new Uint8Array(32).fill(9), user: false });
+  });
+  const lock = await r.watch({ topic: "lock", workspace: "ws" });
+  await r.host.time.pass(1_000);
+  const v = await lock();
+  assert.deepEqual([v.signs, v.me.unsigned ?? false], [true, false]);
+  assert.equal(Effect.runSync(Signer.load(r.host))!.id, signerOfLock(r), "kept as this one's again");
 });
 
 test("a station's refusal names the workspace and the code to approve, where the device is not in that workspace's lock", async () => {

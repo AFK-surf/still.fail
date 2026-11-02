@@ -110,6 +110,18 @@ export class Signer {
     });
   }
 
+  /// The one an earlier install kept whose id is `id` (`Host.securePast`), kept again as this one: null when none is.
+  static recover(host: Host, id: string): Effect.Effect<Signer | null, CoreError> {
+    return Effect.gen(function* () {
+      if (!host.appKeys || !host.securePast || !host.secureSet) return null;
+      const past = yield* Effect.mapError(host.securePast(Signer.KEY), asCoreError);
+      const seed = past.find((v) => v.length === 32 && new Signer(v).id === id);
+      if (!seed) return null;
+      yield* Effect.mapError(host.secureSet(Signer.KEY, seed, { user: false }), asCoreError);
+      return new Signer(seed);
+    });
+  }
+
   /// The kept one, made the first time (sealed where the host seals).
   static make(host: Host): Effect.Effect<Signer, CoreError> {
     return Effect.gen(function* () {
