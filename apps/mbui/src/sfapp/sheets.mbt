@@ -785,7 +785,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
           }
         _ => ()
       }
-      if jobs.length() > 0 &&
+      if (jobs.length() > 0 || flag(a, "hasJobs")) &&
         agent_row(
           c,
           "agent/jobs",

@@ -904,6 +904,18 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       break
     }
   }
+  // A compact chat can be answered by the full chat in a tape from before it, and conversely. Prefer an exact ask
+  // above when a tape has both.
+  if found < 0 && kind == "subscribe" && (name_of(m) == "chat" || name_of(m) == "chatJobs") {
+    let same_chat = sig(m, refers, ignore_compact=true)
+    for i in self.first_out..<self.evs.length() {
+      let e = self.evs[i]
+      if e.out && !e.done && e.msg is Object(r) && sig(r, ref_of(r), ignore_compact=true) == same_chat {
+        found = i
+        break
+      }
+    }
+  }
   if found < 0 && (kind == "subscribe" || kind == "call") {
     let name = name_of(m)
     for i in self.first_out..<self.evs.length() {
@@ -1047,11 +1059,18 @@ fn name_of(m : Map[String, Json]) -> String {
 ///|
 /// What an ask is, whatever its id: its message without the id, keys in order; an unsubscription or a cancel with the
 /// run's id of what it names (`refers`).
-fn sig(m : Map[String, Json], refers : Int?) -> String {
+fn sig(m : Map[String, Json], refers : Int?, ignore_compact? : Bool = false) -> String {
   let copy : Map[String, Json] = {}
   for k, v in m {
     if k != "id" {
-      copy[k] = v
+      match (k, v) {
+        ("subscribe", Object(t)) if ignore_compact && (t.get("topic") == Some(Json::string("chat")) || t.get("topic") == Some(Json::string("chatJobs"))) => {
+          let chat = t.copy()
+          chat.remove("compact")
+          copy[k] = Json::object(chat)
+        }
+        _ => copy[k] = v
+      }
     }
   }
   match refers {

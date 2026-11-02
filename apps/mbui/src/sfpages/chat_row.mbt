@@ -138,8 +138,9 @@ pub fn chat_row(
   let r = row_ref(item)
   let renaming = rows.renaming == key
   let pressed = parts.iter().any(fn(p) { c.pressed(p) })
-  // pressed by a finger, the chat is read ahead of its page (Home.kt onPress)
-  if finger && pressed && row_held.val.0 != id {
+  let down = parts.iter().any(fn(p) { c.held_down(p) })
+  // Start reading when the finger goes down: the visible press can be delayed in a scrolling list.
+  if finger && down && row_held.val.0 != id {
     row_held.val = (id, false)
     if !src.read_only {
       (src.topic)("chat", chat_params(r)) |> ignore
@@ -188,7 +189,7 @@ pub fn chat_row(
       }
     }
   })
-  if !pressed && row_held.val.0 == id && !menu_on && !c.clicked(id) {
+  if !down && row_held.val.0 == id && !menu_on && !c.clicked(id) {
     row_held.val = (0, false)
     if finger {
       unprime(src, r)
@@ -1121,4 +1122,3 @@ pub fn rename_escape(c : @ui.Ctx) -> Bool {
   c.blur()
   true
 }
-

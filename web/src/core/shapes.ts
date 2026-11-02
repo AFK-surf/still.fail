@@ -1630,6 +1630,8 @@ export interface ChatAgent {
 	threads: ChatThread[];
 	/** Its background jobs, newest first; those with a port are web services, shown by their names. */
 	jobs: Job[];
+	/** On a compact chat, whether it has jobs; their details are in chatJobs. */
+	hasJobs?: boolean;
 }
 
 /** A decision waiting in a chat (`ChatView.asks`). */

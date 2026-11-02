@@ -89,11 +89,11 @@ fn with_rail_view(v : Json?) -> Json? {
 pub fn source() -> @sfapp.Source {
   {
     topic: fn(name, params) {
-      let s = @core.subscribe(name, params~).followed()
+      let s = @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed()
       let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
       { value, error: s.error, version: s.version }
     },
-    waits: fn(name, params) { @core.subscribe(name, params~).followed().waiting },
+    waits: fn(name, params) { @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed().waiting },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
     // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
@@ -183,7 +183,7 @@ pub fn source() -> @sfapp.Source {
     },
     images,
     now: fn() { @ui.wall_ms() },
-    leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
+    leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params=@sfbase.core_topic_params(name, params))) },
     read_only: false,
   }
 }

@@ -189,6 +189,8 @@ pub fn core_doing(Source, Array[String], Array[(String, String)]) -> Bool
 
 pub fn core_failed(Source, Array[String], Array[(String, String)]) -> String?
 
+pub fn core_topic_params(String, Map[String, Json]) -> Map[String, Json]
+
 pub fn count(Json?, String) -> Int32
 
 pub fn css_box(Json?) -> (Double, Double, Double, Double)?
