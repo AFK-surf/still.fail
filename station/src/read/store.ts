@@ -10,13 +10,14 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { USAGE_GROUPS } from "../store/usage.ts";
+import { archiveEntries } from "../store/archive.ts";
+import { USAGE_GROUPS, type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import { QUARTER_MS } from "../store/rows.ts";
 import {
   CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LETTER_SQL, type Membership, type MessageRow, OPTIONS_BEFORE,
-  PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, attachment, authorKind, cardOf, isLetter, liveShare, mergeEntries,
-  ending, parsed, quote, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread, withLetter,
+  PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, isLetter, liveShare, mergeEntries,
+  ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
 
 export type Json = any;
@@ -60,20 +61,6 @@ function toSession(r: Json): SessionRow {
   return session;
 }
 
-/// An entry from an archive file, as serde reads EntryRow (null where an Option is: None).
-function archivedEntry(e: Json): EntryRow {
-  const kind = e.kind;
-  if (kind !== "message" && kind !== "edit") throw new Error(`unknown entry kind ${kind}`);
-  if (!["person", "agent", "ember", "stillfail"].includes(e.authorKind)) throw new Error(`unknown author kind ${e.authorKind}`);
-  const some = (v: Json) => (v === undefined || v === null ? undefined : v);
-  return {
-    agentIdentity: some(e.agentIdentity), thread: e.thread, n: e.n, kind, target: e.target ?? null, ts: e.ts ?? null,
-    authorKind: authorKind(e.authorKind), author: e.author, text: e.text ?? null, attachments: (e.attachments ?? []).map(attachment),
-    quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null, runtime: e.runtime ?? null,
-    options: some(e.options), card: some(e.card), at: e.at,
-    ...withLetter(e.letter),
-  };
-}
 
 // ---- the store ----
 
@@ -792,11 +779,7 @@ export function archivedEntries(s: Store, thread: number): EntryRow[] {
   }
   s.archived = s.archived.filter(([id]) => id !== thread);
   const text = version === LOST ? "" : zstdDecompressSync(readFileSync(path)).toString("utf8");
-  const entries = text
-    .split("\n")
-    .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))
-    .filter((l) => l !== "")
-    .map((l) => archivedEntry(JSON.parse(l)));
+  const entries = archiveEntries(text);
   if (s.archived.length >= ARCHIVE_CACHE) s.archived.shift();
   s.archived.push([thread, version, entries]);
   return entries;
@@ -820,21 +803,13 @@ const LOST = "lost";
 
 // ── usage (store/usage.rs) ──
 
-/// The calls of one day (in the asker's time zone) for one thread, person, profile and model, added up (UsageGroup).
-export type UsageGroup = {
-  day: string; session: string; thread: number | null; person: string | null; profile: string | null; runtime: string;
-  model: string | null; fast: boolean; calls: number; input: number; cacheRead: number; cacheWrite: number;
-  cacheWriteLong: number; output: number;
-};
+/// The calls of one day for one thread, person, profile and model, added up (store/usage.ts).
+export type { UsageGroup };
 
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and by
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint): UsageGroup[] {
-  return all(s, USAGE_GROUPS, from, to, utcOffsetMin).map((r) => ({
-    day: r.day, session: r.session, thread: r.thread, person: r.person, profile: r.profile, runtime: r.runtime, model: r.model,
-    fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
-    cacheWriteLong: r.cache_write_long, output: r.output,
-  }));
+  return all(s, USAGE_GROUPS, from, to, utcOffsetMin).map(usageGroupOf);
 }
 
 /// usage_threads: the threads usage names, each with the first thing a person said in it (for its title; none where

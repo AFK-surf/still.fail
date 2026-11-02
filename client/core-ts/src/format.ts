@@ -4,6 +4,7 @@
 import { current, tr, type Lang } from "./i18n.ts";
 import * as model from "./shapes/model.ts";
 import * as reasoning from "./shapes/reasoning.ts";
+import * as titles from "./titles.ts";
 import { get, str } from "./util.ts";
 
 const MINUTE = 60_000;
@@ -260,22 +261,7 @@ export function dayLabelIn(lang: Lang, ms: number, now: number, offsetMin: numbe
 
 /// Slack mentions and spacing out, for a title.
 export function cleanText(text: string): string {
-  let out = "";
-  let rest = text;
-  for (;;) {
-    const at = rest.indexOf("<@");
-    if (at < 0) break;
-    out += rest.slice(0, at);
-    const tail = rest.slice(at + 2);
-    const m = /^[A-Z0-9]*/.exec(tail)![0].length;
-    if (m > 0 && tail.slice(m).startsWith(">")) rest = tail.slice(m + 1);
-    else {
-      out += "<@";
-      rest = tail;
-    }
-  }
-  out += rest;
-  return splitWhitespace(out).join(" ");
+  return titles.splitWhitespace(titles.withoutMentions(text)).join(" ");
 }
 
 /// A message's text as plain words on a line, for where it is shown in brief (a chat's row, a notice): Markdown's and
@@ -317,62 +303,20 @@ export function plainText(text: string): string {
 const IMAGE = /\.(png|jpe?g|gif|webp|svg|heic|avif)(\?[^)\s]*)?$/i;
 
 /// Rust's `split_whitespace`: Unicode white space.
-export function splitWhitespace(text: string): string[] {
-  return text.split(/[\s\u0085]+/u).filter((w) => w !== "");
-}
+export const splitWhitespace = titles.splitWhitespace;
 
-/// Text without Slack's `<@U123>` mentions.
-function withoutMentions(text: string): string {
-  let out = "";
-  let rest = text;
-  for (;;) {
-    const at = rest.indexOf("<@");
-    if (at < 0) break;
-    out += rest.slice(0, at);
-    const after = rest.slice(at + 2);
-    const end = after.indexOf(">");
-    if (end > 0 && /^[A-Z0-9]+$/.test(after.slice(0, end))) rest = after.slice(end + 1);
-    else {
-      out += "<@";
-      rest = after;
-    }
-  }
-  return out + rest;
-}
 
 /// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
 export function placeName(surface: string, channel: string, channelName: string): string | null {
-  const feishu = surface.startsWith("feishu:") || isFeishuChat(channel);
-  if (feishu) return channelName || tr(current(), "core-logic.format.thread.feishu");
-  if (surface === "ember" || surface === "stillfail" || surface === "") return null;
-  return channel.startsWith("D") ? tr(current(), "core-views.direct_message") : `#${channelName || channel}`;
+  return titles.placeName(surface, channel, channelName, { directMessage: tr(current(), "core-views.direct_message"), feishu: tr(current(), "core-logic.format.thread.feishu") });
 }
 
 /// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
 /// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
 /// thread the first line a person wrote in it, else its channel.
 export function chatTitle(thread: unknown): string {
-  const text = (name: string): string | null => {
-    const v = get(thread, name);
-    return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
-  };
-  const title = text("title") ?? text("autoTitle");
-  if (title !== null) return title;
-  const surface = get(thread, "surface");
-  if (surface === "ember" || surface === "stillfail") return tr(current(), "core-views.new_chat");
-  const firstText = text("firstText");
-  if (firstText !== null) {
-    const first = withoutMentions(firstText)
-      .split("\n")
-      .map((l) => splitWhitespace(l).join(" "))
-      .find((l) => l !== "");
-    if (first !== undefined) return first;
-  }
-  const channel = text("channelName");
-  // A Feishu chat is named as it is there (no #).
-  if (channel !== null) return typeof surface === "string" && surface.startsWith("feishu:") ? channel : `#${channel}`;
-  if (text("channel")?.startsWith("D")) return tr(current(), "core-views.direct_message");
-  return tr(current(), "core-views.new_chat");
+  const words = { untitled: tr(current(), "core-views.new_chat"), directMessage: tr(current(), "core-views.direct_message") };
+  return titles.chatTitle(thread as titles.Titled, str(get(thread, "firstText")) ?? null, str(get(thread, "channelName")) ?? null, words);
 }
 
 /// A thread named for people: where (a still.fail chat by its title, chatTitle; a Slack or Feishu thread by its place,
@@ -392,7 +336,7 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
 }
 
 /// A Feishu chat's id (`oc_…`, docs/feishu.md).
-export const isFeishuChat = (channel: string) => /^oc_[A-Za-z0-9_-]+$/.test(channel);
+export const isFeishuChat = titles.isFeishuChat;
 
 /// "C0OPS/1727.0001" → its channel and thread; a Feishu chat's "oc_…/om_…" (or a topic's "omt_…") too.
 export function splitThread(address: string): [string, string] | null {

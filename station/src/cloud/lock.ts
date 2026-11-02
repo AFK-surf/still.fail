@@ -3,6 +3,7 @@
 // connect, with what role, which stations are peers, which gateways and grant keys count, all come from here. Pure:
 // what is kept and when it is told is cloud/state.ts's.
 import { createHash, createPublicKey, verify } from "node:crypto";
+import * as form from "../../../client/core-ts/src/lock-form.ts";
 
 export type Sig =
   | { key: string; alg: "Ed25519" | "ES256"; sig: string }
@@ -53,25 +54,14 @@ const str = (v: unknown, max = 200) => (typeof v === "string" && v.length <= max
 
 /// JSON with object keys sorted, no space: what is hashed. Only integers, strings, booleans, null, arrays, objects.
 export function canonical(v: unknown): string {
-  if (v === null || typeof v === "boolean" || typeof v === "string") return JSON.stringify(v);
-  if (typeof v === "number") {
-    if (!Number.isSafeInteger(v)) throw new Error("lock entries hold integers only");
-    return String(v);
-  }
-  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
-  if (typeof v === "object") {
-    const keys = Object.keys(v as object).filter((k) => (v as any)[k] !== undefined).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonical((v as any)[k])}`).join(",")}}`;
-  }
-  throw new Error("not a lock value");
+  return form.canonical(v);
 }
 
 const sha256 = (b: Uint8Array | string) => createHash("sha256").update(b).digest();
 
 /// An entry's hash (hex): of everything but its signature.
 export function entryHash(e: Entry): string {
-  const { v, ws, seq, prev, at, kind, body } = e;
-  return sha256(`stillfail-lock/1\n${canonical({ v, ws, seq, prev, at, kind, body })}`).toString("hex");
+  return sha256(form.entryText(e)).toString("hex");
 }
 
 /// What a device or app key signs for an entry: a tag, then the hash's bytes. (A passkey signs the hash as its
@@ -340,11 +330,7 @@ export class LockRefusal extends Error {
 
 /// A short code for a device, both sides work it out from its base key: what a person compares before confirming it.
 export function shortCode(base: string): string {
-  const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const h = sha256(`stillfail-lock-code/1\0${base}`);
-  let out = "";
-  for (let i = 0; i < 6; i++) out += alphabet[h[i]! % 32];
-  return `${out.slice(0, 3)}-${out.slice(3)}`;
+  return form.shortCodeOf(sha256(form.codeText(base)));
 }
 
 /// An entry as it may have come over the wire: its shape checked (not its signature).

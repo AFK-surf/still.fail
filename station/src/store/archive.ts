@@ -58,7 +58,11 @@ export function readArchive(path: string): EntryRow[] {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw e;
   }
-  const text = zstdDecompressSync(bytes).toString("utf8");
+  return archiveEntries(zstdDecompressSync(bytes).toString("utf8"));
+}
+
+/// An archive file's text as entries (each a line of JSON).
+export function archiveEntries(text: string): EntryRow[] {
   return text
     .split("\n")
     .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))

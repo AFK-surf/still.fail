@@ -13,7 +13,8 @@ export function diff(old: unknown, next: unknown): Op[] {
   return ops;
 }
 
-function diffAt(path: Segment[], old: unknown, next: unknown, ops: Op[]): void {
+/// `path` is pushed to and popped back as it goes (collections.ts takes this for a value with no keyed lists in it).
+export function diffAt(path: Segment[], old: unknown, next: unknown, ops: Op[]): void {
   if (old === next) return;
   if (isObject(old) && isObject(next)) {
     // Only the keys that may differ are put in order (serde's): the rest are the same value, no ops; sorting every

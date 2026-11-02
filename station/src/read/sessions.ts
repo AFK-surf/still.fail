@@ -9,7 +9,7 @@
 // - Slack names: as the names book has them (slack-known.ts), never waiting on Slack (a Slack user
 //   goes by their id, with no email);
 // - the cloud's names: those of the members who asked since the station started (`Store.names`).
-import { knownChannel, knownPerson, slackCreator } from "./slack-known.ts";
+import { knownChannel } from "./slack-known.ts";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, join, isAbsolute } from "node:path";
@@ -19,11 +19,11 @@ import type { Lang } from "../ops/i18n.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { watching } from "./store.ts";
 import * as store from "./store.ts";
-import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
+import type { Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
 import { homesFirst, sessionPlaces, transcriptPaths } from "./transcript.ts";
 import { chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
-import { HttpError, messageView } from "./views.ts";
+import { HttpError, apiOf, authorNames as authorNamesOf, creator as creatorOf, messageView, people as peopleOf, useNames } from "./views.ts";
 import { parseUsize } from "./jobs.ts";
 import { agentHomeOf } from "./memory.ts";
 import { shown } from "./jobs.ts";
@@ -70,61 +70,16 @@ function configOf(s: Store): Config {
   return config;
 }
 
-// ---- people (views.rs `creator`, `people`; as views.ts has them) ----
+// ---- people: views.ts's own, for this store ----
 
 /// A creator reference in words: who, and their email where known.
-function creator(s: Store, reference: string | null): Json | null {
-  if (reference === null) return null;
-  if (reference === "local") return { id: "local", name: tr("station.creator.localPage"), email: null, via: "local" };
-  const slack = slackCreator(s, reference);
-  if (slack !== null) return slack;
-  return { id: reference, name: s.names.get(reference) ?? reference, email: reference, via: "cloud" };
-}
+const creator = (s: Store, reference: string | null): Json | null => (useNames(s), creatorOf(reference));
 
 /// Several people, once each (by email, else id).
-function people(s: Store, refs: string[]): Json[] {
-  const seen = new Set<string>();
-  return refs
-    .map((r) => creator(s, r))
-    .filter((p): p is Json => p !== null)
-    .filter((p) => {
-      const key = typeof p.email === "string" ? p.email : typeof p.id === "string" ? p.id : "";
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
+const people = (s: Store, refs: string[]): Json[] => (useNames(s), peopleOf(refs));
 
-/// views.rs `author_names`: who wrote in a thread, in words, each author asked once.
-function authorNames(s: Store, thread: number): (kind: AuthorKind, author: string) => string | null {
-  const th = store.getThread(s, thread);
-  const members = store.threadSessions(s, thread);
-  const connects = configOf(s).connects;
-  const names = new Map<string, string | null>();
-  return (kind, author) => {
-    const key = `${kind}:${author}`;
-    if (names.has(key)) return names.get(key)!;
-    let name: string | null;
-    if (kind === "ember") name = "still.fail";
-    else if (kind === "agent") {
-      // An agent goes by the name of the connect it posts through (on the page, of the connect that started it).
-      const session = store.getSession(s, author);
-      const via = members.find((m) => m.session === author)?.connect;
-      const connect = via !== undefined && via !== INTERNAL_CONNECT ? via : (session?.connect ?? null);
-      const c = connects.find((c) => c.id === connect);
-      name = c ? c.name : (session?.title ?? null);
-    } else if (th !== null && th.surface === store.STILLFAIL_SURFACE) {
-      name = author === "local" ? tr("station.author.admin") : (s.names.get(author) ?? author);
-    } else {
-      // A Slack person: by the name their connect's Slack gives them, as far as known.
-      const connect = members.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null;
-      const person = connect === null ? null : knownPerson(s, connect, author);
-      name = person?.name ? person.name : null;
-    }
-    names.set(key, name);
-    return name;
-  };
-}
+/// Who wrote in a thread, in words, each author asked once.
+const authorNames = (s: Store, thread: number) => (useNames(s), authorNamesOf(apiOf(s), thread));
 
 // ---- sessions ----
 

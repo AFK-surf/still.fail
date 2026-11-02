@@ -3,9 +3,8 @@
 import { readFileSync } from "node:fs";
 import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
 import type { BackgroundTask } from "./runtime.ts";
+import { STILLFAIL_SURFACE } from "../store/rows.ts";
 
-/// The connect and surface of the station's own chats.
-const STILLFAIL_SURFACE = "ember";
 
 /// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
 export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string): string {
