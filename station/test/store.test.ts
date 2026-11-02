@@ -909,6 +909,10 @@ test("what the station asks again and again is planned by an index, never a scan
     assert.ok(!plan.some((d) => scans.test(d)), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
   }
+  // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
+  // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on ccvm).
+  assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));
+  assert.ok(!plans.get(STATS_OF)!.some((d) => d.includes("COVERING INDEX turns_by_session")), plans.get(STATS_OF)!.join(" | "));
   // The latest card before a message: by the index of cards, not by going back over the thread to it.
   assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
   assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));
@@ -929,7 +933,8 @@ test("what the station asks again and again is planned by an index, never a scan
   store.startTurn("t1", "a", "input");
   const stats = store.statsOf(["a", "missing"]);
   assert.deepEqual([...stats.keys()], ["a"]);
-  assert.deepEqual([stats.get("a")!.turns, stats.get("a")!.pending, stats.get("a")!.firstText, stats.get("a")!.lastTurn?.kind], [1, 0, null, "input"]);
+  assert.deepEqual(stats.get("a"), { pending: 0, lastTurn: stats.get("a")!.lastTurn });
+  assert.equal(stats.get("a")!.lastTurn?.kind, "input");
   // In use: shown, or at work though archived.
   assert.deepEqual(store.sessionsInUse().map((s) => s.key), ["a"]);
   store.setRunning("b", true);

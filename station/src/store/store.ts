@@ -21,7 +21,7 @@ import { readArchive, threadFile } from "./archive.ts";
 import {
   type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type Published, type ProcessRow, type ProfileStatus,
-  type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
+  type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
@@ -38,9 +38,12 @@ export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions G
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
 export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running' UNION ALL SELECT * FROM jobs WHERE state = 'exited' AND port IS NOT NULL) ORDER BY started_at DESC";
+/// A session's messages not delivered yet and its latest turn (`statsOf`): what is not delivered by the index of those
+/// alone. By (session, thread), SQLite went over every message the session was ever given, and every turn was counted
+/// besides, for no one: auto-archiving looked at each session shown so, on the main thread, 13 s and 22 s on ccvm short
+/// of memory (2026-11-02).
 export const STATS_OF = `SELECT
-    (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
-    ((SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) +
+    ((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
          (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
     l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
   FROM sessions s
@@ -1693,14 +1696,13 @@ export class Store {
     return this.#all("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
   }
 
-  /// For each of `keys` that is a session: its turn count, latest turn and undelivered messages as sessionStats says them,
-  /// but not the first message it heard (`firstText` null: a read of its deliveries and their messages each). Each a
-  /// row's lookups, for the station's own periodic work over the sessions at hand, not every session ever.
-  statsOf(keys: Iterable<string>): Map<string, SessionStats> {
-    const out = new Map<string, SessionStats>();
+  /// For each of `keys` that is a session: its latest turn and undelivered messages as sessionStats says them (STATS_OF),
+  /// for the station's own periodic work over the sessions at hand, not every session ever: a few index lookups each.
+  statsOf(keys: Iterable<string>): Map<string, SessionBusy> {
+    const out = new Map<string, SessionBusy>();
     for (const key of new Set(keys)) {
       const r = this.#one(STATS_OF, key);
-      if (r !== undefined) out.set(key, { turns: r.turns, pending: r.pending, firstText: null, lastTurn: r.started_at === null ? null : toTurnSummary(r) });
+      if (r !== undefined) out.set(key, { pending: r.pending, lastTurn: r.started_at === null ? null : toTurnSummary(r) });
     }
     return out;
   }
