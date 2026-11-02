@@ -12,6 +12,7 @@ using @sffixture {
   fix_browse_prefs_set,
   fix_chat,
   fix_clock,
+  fix_clock_set,
   fix_deliver_ms,
   fix_docs,
   fix_download_step_ms,

@@ -491,13 +491,13 @@ test "a station's 进程 on a computer's wide page: its totals four in a row, ea
 /// A station's variables (station_page.mbt station_env_editor, in its page's 设置): the field shows the core's draft as
 /// it changes while nothing typed here waits on it.
 test "the variables' field follows the core's text that comes after the page opened" {
-  let env : Ref[(String, Int)] = Ref(("", 1))
+  let env : @signals.Signal[(String, Int)] = @signals.signal(("", 1))
   let over = fn(base : Source) -> Source {
     {
       ..base,
       topic: fn(name, params) {
         if name == "agentEnvForm" {
-          let (words, v) = env.val
+          let (words, v) = env.get()
           {
             value: Some(
               Json::object({
@@ -524,7 +524,7 @@ test "the variables' field follows the core's text that comes after the page ope
   t.run_for(@ui.move_most_ms)
   // opened on the text before a save the core tells a moment later
   assert_false(t.dump().contains("\"E2E_A=1\""))
-  env.val = ("E2E_A=1", 2)
+  env.set(("E2E_A=1", 2))
   t.draw()
   t.draw()
   // (the field's words: the drawn tree's editor holds them)
@@ -539,16 +539,16 @@ test "two station variables editors share the draft without sharing editor state
   @sffixture.fixture_reset()
   @sf.presenters_reset()
   @sf.set_words(@sfbase.fill)
-  let env : Ref[(String, Int, Bool)] = Ref(("E2E_A=1", 1, false))
-  let saving = Ref(false)
+  let env : @signals.Signal[(String, Int, Bool)] = @signals.signal(("E2E_A=1", 1, false))
+  let saving = @signals.signal(false)
   let edits : Array[Json] = []
   let base = @sffixture.fixture("settings")
   let src : Source = {
     ..base,
     topic: fn(name, params) {
       if name == "agentEnvForm" {
-        let (words, version, dirty) = env.val
-        { value: Some({ "text": Json::string(words), "lines": [], "errors": 0, "dirty": Json::boolean(dirty), "pending": Json::boolean(saving.val) }), error: None, version }
+        let (words, version, dirty) = env.get()
+        { value: Some({ "text": Json::string(words), "lines": [], "errors": 0, "dirty": Json::boolean(dirty), "pending": Json::boolean(saving.get()) }), error: None, version }
       } else {
         (base.topic)(name, params)
       }
@@ -557,7 +557,7 @@ test "two station variables editors share the draft without sharing editor state
       if name == "agentEnv.form.edit" {
         edits.push(params)
         if flag(field(Some(params), "input"), "reset") {
-          env.val = ("E2E_A=1", 5, false)
+          env.set(("E2E_A=1", 5, false))
         }
         done(Ok(Json::null()))
       } else {
@@ -612,28 +612,28 @@ test "two station variables editors share the draft without sharing editor state
   assert_eq(b.text(), "E2E_A=123")
   assert_eq(edits.length(), 3)
 
-  env.val = ("E2E_A=12", 2, true)
+  env.set(("E2E_A=12", 2, true))
   t.draw()
   t.draw()
   assert_eq(a.text(), "E2E_A=123", msg="an older core answer does not replace a newer edit")
   assert_eq(b.text(), "E2E_A=123")
   assert_eq(edits.length(), 3, msg="an older answer does not send another edit")
-  env.val = ("E2E_A=123", 3, true)
+  env.set(("E2E_A=123", 3, true))
   t.draw()
   t.draw()
-  env.val = ("E2E_A=4", 4, true)
+  env.set(("E2E_A=4", 4, true))
   t.draw()
   t.draw()
   assert_eq(a.text(), "E2E_A=4", msg="later core changes reach both editors")
   assert_eq(b.text(), "E2E_A=4")
-  saving.val = true
+  saving.set(true)
   t.draw()
   a.set("E2E_A=45")
   t.draw()
   t.draw()
   assert_eq(b.text(), "E2E_A=45")
   assert_eq(edits.length(), 3, msg="an edit made while saving is not sent until saving finishes")
-  saving.val = false
+  saving.set(false)
   t.draw()
   t.draw()
   assert_eq(edits.length(), 4, msg="the queued edit is sent after saving")

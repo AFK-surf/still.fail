@@ -257,7 +257,6 @@ pub using @sfbase {
   type ListMade,
   type Reading,
   view_of_chat,
-  topic_as_read,
   chat_kept,
   with_lingering,
   type SendFlight,

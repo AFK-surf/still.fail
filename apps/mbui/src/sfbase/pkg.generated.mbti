@@ -915,6 +915,10 @@ pub fn menu_bar_json(Json?, Bool) -> String
 
 pub fn message_link(String, String, Double) -> String
 
+pub let message_menu : @signals.Signal[String]
+
+pub fn message_menu_on(String) -> Bool
+
 pub fn message_of(Json) -> Message
 
 pub fn message_runs(String, Int64, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Array[@ui.Run]
@@ -1431,7 +1435,7 @@ pub let share_face : Int32
 
 pub fn share_face_given() -> Int32
 
-pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit, String, String)?]
+pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit, String, String, String)?]
 
 pub let share_offered_told : @signals.Signal[Int32]
 
@@ -1564,8 +1568,6 @@ pub fn toast_words() -> String
 pub fn toasts(@ui.Ctx, Double) -> Unit
 
 pub fn toasts_node(@view.View, () -> Double) -> @view.View
-
-pub fn topic_as_read(String, Map[String, Json], Topic) -> Topic
 
 pub fn tr(String, args? : Array[(String, String)]) -> String
 

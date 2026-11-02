@@ -69,7 +69,7 @@ fn way_steps(t : @ui.Tester, most : Double) -> Array[String] {
 test "the flying avatar goes out of its activity, lands on its answer and goes home in one smooth motion" {
   let clock = Ref(0.0)
   let t = emit_core(clock)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   assert_eq(way_steps(t, emit_all_ms() + 500.0), [])
   emit_restore()
@@ -83,7 +83,7 @@ let more_said : String = "推送截图前要先登录 gh。"
 test "two answers of the same agent: the avatar drops on from the first to the second with no step in its motion" {
   let clock = Ref(0.0)
   let t = emit_core(clock)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   fix_later(1.0, fn() {
     fix_chat("s-c1").sent.push(
@@ -93,7 +93,7 @@ test "two answers of the same agent: the avatar drops on from the first to the s
       }),
     )
   })
-  clock.val = clock.val + 1.0
+  fix_clock_set(clock, clock.val + 1.0)
   t.draw()
   let em = emits_of("ws1/st1\u{1}s-c1")
   assert_eq(em.queue.length() + (if em.current is Some(_) { 1 } else { 0 }), 2)
@@ -108,7 +108,7 @@ test "words sent as the avatar is on its way: it slows to come down as they land
   let t = emit_core(clock)
   t.tap_text("发消息")
   t.type_text("再看一下按钮")
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   t.run_for(Pose::Fold.ms() + 200.0)
   tap_send(t)
@@ -124,7 +124,7 @@ test "an answer said once its agent's turn is over: no avatar to come out of, it
   let t = emit_core(clock)
   // its agent done (its line gone), then the answer said
   fix_later(1.0, fn() { fix_chat("s-c1").working = -1.0 })
-  clock.val = clock.val + 1.0
+  fix_clock_set(clock, clock.val + 1.0)
   t.draw()
   t.run_for(linger_ms + @ui.move_most_ms)
   assert_true(t.find(tr("android-chat.chat.working")) is None)
@@ -136,7 +136,7 @@ test "an answer said once its agent's turn is over: no avatar to come out of, it
       }),
     )
   })
-  clock.val = clock.val + 1.0
+  fix_clock_set(clock, clock.val + 1.0)
   t.draw()
   let em = emits_of("ws1/st1\u{1}s-c1")
   assert_true(emit_words_only(em, 171.0))

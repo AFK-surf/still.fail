@@ -110,8 +110,8 @@ priv struct KeptRun {
 let kept_run : KeptRun = { frame: -1, ctx: None }
 
 ///|
-/// This frame's number; its first read lets go of what no frame read since the last, and of the made-up topics nothing
-/// follows any more; a run anew (a Ctx of its own: another test's) of all of it.
+/// This frame's number; its first read lets go of what no frame read since the last; a run anew (a Ctx of its own:
+/// another test's) of all of it.
 fn kept_frame() -> Int {
   let c = @ui.current()
   let frame = c.frame_number()
@@ -127,15 +127,6 @@ fn kept_frame() -> Int {
     for l in kept_lists {
       (l.sweep)(frame)
     }
-    let gone = []
-    for key, cell in made_up_cells {
-      if !cell.watched() {
-        gone.push(key)
-      }
-    }
-    for key in gone {
-      made_up_cells.remove(key) |> ignore
-    }
   }
   frame
 }
@@ -146,7 +137,6 @@ fn kept_reset() -> Unit {
   for l in kept_lists {
     (l.clear)()
   }
-  made_up_cells.clear()
   kept_run.frame = -1
 }
 
@@ -258,27 +248,3 @@ pub fn[T] made_again(
   })
 }
 
-///|
-/// The made-up topics followed, by their name and params (topic_as_read).
-// kept across runs: let go of by a run anew and by reset (kept_reset)
-let made_up_cells : Map[String, @signals.Signal[Int]] = {}
-
-///|
-/// A topic a made-up core works out as it is read (a test's, a tape's, a late answer's), followed by its version as
-/// read: what a computed made of it is worked out again once it is read changed. The core's own topics are followed by
-/// what the core says (Sub.changes); the fixture's by its own changes (fixture.mbt fix_changes).
-pub fn topic_as_read(name : String, params : Map[String, Json], topic : Topic) -> Topic {
-  kept_frame() |> ignore
-  let key = name + " " + Json::object(params).stringify()
-  let cell = match made_up_cells.get(key) {
-    Some(c) => c
-    None => {
-      let c = @signals.signal(topic.version)
-      made_up_cells[key] = c
-      c
-    }
-  }
-  cell.set(topic.version)
-  cell.get() |> ignore
-  topic
-}

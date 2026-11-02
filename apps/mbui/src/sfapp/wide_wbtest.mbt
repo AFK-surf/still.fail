@@ -780,7 +780,7 @@ fn hint_drawn(t : @ui.Tester) -> Bool raise {
 ///|
 test "wide: a new chat's first words, the hint gone under them, into their bubble over the composer from the frame they are sent, whenever the core answers" {
   let held : Map[String, () -> Unit] = {}
-  let unread = Ref(true)
+  let unread = @signals.signal(true)
   let t = held_core(held, unread, w=1280.0, h=800.0, platform=0)
   t.frame()
   assert_true(app.nav.top() == NewChat)
@@ -819,7 +819,7 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
     }
     t.draw()
   }
-  unread.val = false
+  unread.set(false)
   t.draw()
   assert_at(landed, seen_once(t, words))
   // out of the composer: its hint still away while its field has the cursor, back once it is let go of
@@ -2413,7 +2413,7 @@ test "wide: a working agent's card whose standing is long (what it waits for) ha
 ///|
 test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx useLinesMotion), the first gone leaving" {
   new_run()
-  let latest : Ref[(Array[(String, String)], Int)] = Ref(
+  let latest : @signals.Signal[(Array[(String, String)], Int)] = @signals.signal(
     ([("k1", "读了 src/ui/list.mbt"), ("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt")], 1),
   )
   let base = fixture("chat-agent-card")
@@ -2421,7 +2421,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
     ..base,
     topic: fn(name, params) {
       if name == "agentCard" {
-        let (lines, v) = latest.val
+        let (lines, v) = latest.get()
         {
           value: Some({
             "latest": Json::array(
@@ -2458,7 +2458,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   let pitch = y2 - y1
   assert_true(pitch > 10.0 && near(y3 - y2, pitch), msg="\{(y1, y2, y3)}")
   // one more done: the first goes, the next comes
-  latest.val = ([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2)
+  latest.set(([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2))
   t.frame()
   // as they were: those that stay where they were drawn, the new one faint a line beyond the last, the first's copy
   // where it was, whole

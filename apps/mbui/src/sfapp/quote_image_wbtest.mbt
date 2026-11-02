@@ -219,7 +219,7 @@ test "the same picture quoted twice opens and closes at each quote" {
 
 ///|
 test "a quoted picture opened as it is sent returns to its row after the core takes it over" {
-  let has = Ref(false)
+  let has = @signals.signal(false)
   let made : Ref[Source?] = Ref(None)
   let calls : Array[Made] = []
   let name = "handoff-preview.png"
@@ -227,7 +227,7 @@ test "a quoted picture opened as it is sent returns to its row after the core ta
   let file : Json = { "name": Json::string(name), "path": Json::string(path), "size": 120, "width": 1600, "height": 900, "owner": "s-c1" }
   let t = fake_core(calls, made~, over=fn(topic, tp) {
     match (topic, tp.value) {
-      ("chat", Some(Object(m))) if has.val => {
+      ("chat", Some(Object(m))) if has.get() => {
         let v = m.copy()
         v["outbox"] = [{
           "id": "out-1", "text": ".", "createdAt": 0, "state": "sending",
@@ -253,7 +253,7 @@ test "a quoted picture opened as it is sent returns to its row after the core ta
   let v = viewer.get().unwrap()
   let thumb = v.thumb_id()
   assert_true(v.flies)
-  has.val = true
+  has.set(true)
   t.frame()
   let reading = @sfbase.readings.get("ws1/st1\u{1}s-c1").unwrap()
   assert_true(reading.sent_as.contains("o:out-1"), msg="the core's outbox row did not take over")
@@ -447,7 +447,7 @@ test "a quoted local video cover is never covered as its card flies to the messa
 
 ///|
 fn quoted_media_handoff(name : String) -> Unit raise {
-  let has = Ref(false)
+  let has = @signals.signal(false)
   let made : Ref[Source?] = Ref(None)
   let calls : Array[Made] = []
   let path = "/w/uploads/" + name
@@ -457,7 +457,7 @@ fn quoted_media_handoff(name : String) -> Unit raise {
   }
   let t = fake_core(calls, made~, over=fn(topic, tp) {
     match (topic, tp.value) {
-      ("chat", Some(Object(m))) if has.val => {
+      ("chat", Some(Object(m))) if has.get() => {
         let v = m.copy()
         v["outbox"] = [{
           "id": "out-1", "text": "", "createdAt": 0, "state": "sending",
@@ -477,7 +477,7 @@ fn quoted_media_handoff(name : String) -> Unit raise {
   @sfbase.writing_quote(src, w, { "author": "Ana", "text": Json::string(name), "ts": "ts8" }, file~)
   t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
   tap_send(t)
-  has.val = true
+  has.set(true)
   t.frame()
   t.run_for(@sfbase.flight_len(true) * 0.4)
   let images = picture_instances(t, "mem:fixture/" + name).map(fn(p) { p.1 }).filter(fn(a) { a[11] > 0.9 })

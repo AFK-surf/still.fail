@@ -690,10 +690,10 @@ test "an iPhone Duo: switching workspace from an open chat never restores the ol
     ..base,
     topic: fn(name, params) {
       if name == "workspaceMarks" {
-        topic_as_read(name, params, { value: Some({ "workspaces": {
+        { value: Some({ "workspaces": {
           "ws1": { "chat": { "station": "ws1/st1", "key": "s-c1" } },
           "ws2": {},
-        } }), error: None, version: 1 })
+        } }), error: None, version: 1 }
       } else {
         (base.topic)(name, params)
       }
@@ -1117,7 +1117,7 @@ test "an iPhone Duo on its side: the sidebar's edge held by a finger that wander
 ///|
 test "a picture looked at on an iPhone Duo, the language changed while it is (the core's prefs saying another): its actions in the system's bars said in the new one, nothing else of it changed" {
   new_run()
-  let lang = Ref("zh")
+  let lang = @signals.signal("zh")
   let base = fixture("chat-preview-image")
   // (the core's prefs saying the language `lang` has, as they are read each frame)
   let src : Source = {
@@ -1127,7 +1127,7 @@ test "a picture looked at on an iPhone Duo, the language changed while it is (th
       match (name, got.value) {
         ("prefs", Some(Object(m))) => {
           let o = m.copy()
-          o["lang"] = Json::string(lang.val)
+          o["lang"] = Json::string(lang.get())
           { ..got, value: Some(Json::object(o)) }
         }
         _ => got
@@ -1141,7 +1141,7 @@ test "a picture looked at on an iPhone Duo, the language changed while it is (th
   t.run_for(@ui.move_most_ms)
   let before = nav_icon_of(t, "lead/over/close", field="title")
   assert_eq(before, Some(@sf.t("common.close")), msg="close, in the language it was")
-  lang.val = "en"
+  lang.set("en")
   // (the frame that shows what the test changed: the prefs read again as it is built, the language said from them)
   t.draw()
   let want = @sf.t("common.close")

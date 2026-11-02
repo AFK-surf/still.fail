@@ -373,19 +373,21 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
   new_run()
   let base = fixture("home")
   let kept : Map[String, Json] = {}
+  // (told as `kept` changes, where the prefs set changes it)
+  let kept_told = @signals.signal(0)
   let src : Source = {
     ..base,
     topic: fn(name, params) {
       match changed.get(name) {
         Some(v) => { value: Some(v), error: None, version: 1 }
         None if name == "prefs" =>
-          match (base.topic)(name, params).value {
-            Some(Object(m)) => {
+          match (base.topic)(name, params) {
+            { value: Some(Object(m)), version, .. } => {
               let p = m.copy()
               p["trouble"] = Json::object(kept)
-              { value: Some(Json::object(p)), error: None, version: 2 + kept.length() }
+              { value: Some(Json::object(p)), error: None, version: version + kept_told.get() }
             }
-            v => { value: v, error: None, version: 1 }
+            t => t
           }
         None => (base.topic)(name, params)
       }
@@ -394,7 +396,7 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
       calls.push({ name, params, bytes: None, done, heard: None })
       if name == "prefs.set" {
         match field(Some(params), "trouble") {
-          Some(Object(t)) =>
+          Some(Object(t)) => {
             for k, v in t {
               if v == Json::null() {
                 kept.remove(k)
@@ -402,6 +404,8 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
                 kept[k] = v
               }
             }
+            kept_told.set(kept_told.get() + 1)
+          }
           _ => ()
         }
       }
@@ -1003,7 +1007,7 @@ test "wide: Station's page picked in one workspace: in another, that one's first
                   s["station"] = Json::string("ws2/st9")
                   s["id"] = Json::string("st9")
                   s["name"] = Json::string("家里的 mini")
-                  topic_as_read(name, params, { ..t, value: Some(Json::array([Json::object(s)])) })
+                  { ..t, value: Some(Json::array([Json::object(s)])) }
                 }
                 _ => t
               }

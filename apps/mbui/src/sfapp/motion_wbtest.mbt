@@ -11,7 +11,7 @@ test "Home: a chat with news goes to the top: it closes where it was and opens t
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let (_, y_top) = t.drawn_of("整理发布清单").unwrap()
   // its news comes (the fixture's first step)
-  clock.val = 2001.0
+  fix_clock_set(clock, 2001.0)
   t.frame()
   // half way: the first row, pushed down a row as the room at the top opens, on its way there; the chat with news
   // coming there where it is (as far shown as its room is open), and leaving where it was (2026-10-31 the user:
@@ -52,7 +52,7 @@ test "Home: back from a chat to the list changed meanwhile, the list drawn as it
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("搜索全部内容") is None)
   // while the chat shows: news in 盯着 CI, which goes to the top; a new chat
-  clock.val = 3601.0
+  fix_clock_set(clock, 3601.0)
   t.frame()
   t.back()
   let end = t.time() + @ui.move_most_ms + 600.0
@@ -71,7 +71,7 @@ test "Home: back from a chat to the list changed meanwhile, the list drawn as it
 ///|
 test "Home: a new chat its station makes keeps its row (its clientKey): it neither leaves nor comes in" {
   new_run()
-  let made = Ref::new(false)
+  let made = @signals.signal(false)
   let base = fixture("home")
   let src = {
     ..base,
@@ -80,9 +80,9 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
       match (name, tv.value) {
         ("chats", Some(Object(v))) => {
           let row : Map[String, Json] = {
-            "id": Json::string(if made.val { "c20" } else { "k-20" }),
+            "id": Json::string(if made.get() { "c20" } else { "k-20" }),
             "clientKey": "k-20",
-            "session": Json::string(if made.val { "s-c20" } else { "k-20" }),
+            "session": Json::string(if made.get() { "s-c20" } else { "k-20" }),
             "title": "新会话的第一句",
             "agents": [],
             "unread": false,
@@ -91,7 +91,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
             "station": "ws1/st1",
             "stationName": "Studio",
           }
-          if !made.val {
+          if !made.get() {
             row["pending"] = Json::boolean(true)
           }
           let days = match v.get("days") {
@@ -112,7 +112,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
           days[0] = Json::object(day)
           let out = v.copy()
           out["days"] = Json::array(days)
-          { value: Some(Json::object(out)), error: tv.error, version: tv.version * 2 + (if made.val { 1 } else { 0 }) }
+          { value: Some(Json::object(out)), error: tv.error, version: tv.version * 2 + (if made.get() { 1 } else { 0 }) }
         }
         _ => tv
       }
@@ -120,7 +120,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   assert_true(t.find("新会话的第一句") is Some(_))
-  made.val = true
+  made.set(true)
   // (the frame the list changes in: a row leaving or coming would be set going there)
   t.frame()
   assert_eq(home_moving(t), [])
@@ -296,23 +296,23 @@ test "words sent break their lines in their message where the composer broke the
 test "Home: the first rows, after the list waited, come as they are and a tap on one opens it at once" {
   new_run()
   let src = fixture("home")
-  let waiting = Ref::new(true)
+  // (the test's own state of the made-up core, told as it is set: what reads the list follows it)
+  let waiting = @signals.signal(true)
   let src = {
     ..src,
     topic: fn(name, params) {
-      // (made up as it is read: followed by its version, as the core's by what it says)
-      topic_as_read(name, params, if name == "chats" && waiting.val {
+      if name == "chats" && waiting.get() {
         { value: None, error: None, version: 0 }
       } else {
         (src.topic)(name, params)
-      })
+      }
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   assert_true(t.find("整理发布清单") is None)
   // the list is read: its rows are there, drawn where they are laid out, from the first frame (as the e2e's drive
   // taps them: where they are, as soon as they are still)
-  waiting.val = false
+  waiting.set(false)
   t.frame()
   let (x, y, w, h) = t.rect_of("整理发布清单").unwrap()
   let (dx, dy) = t.drawn_of("整理发布清单").unwrap()

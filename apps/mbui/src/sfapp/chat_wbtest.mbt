@@ -583,7 +583,7 @@ test "a message said just after the chat opened comes in with the list gliding a
     )
   })
   t.run_for(said_soon_ms)
-  clock.val = clock.val + 1.0
+  fix_clock_set(clock, clock.val + 1.0)
   t.draw()
   let mut from : Double? = None
   let mut n = 0
@@ -623,7 +623,7 @@ test "what was said while the app was away, brought after its chat opened at its
     fc.sent.push(msg(152, "person", by_person("安娜"), long_reply, "刚刚", { "ts": Json::string("ana152") }))
     fc.line.val = 150
   })
-  clock.val = said_soon_ms
+  fix_clock_set(clock, said_soon_ms)
   t.draw()
   t.run_for(@ui.move_most_ms)
   // the first of them from its top, under the line: not the list at the end of the newest

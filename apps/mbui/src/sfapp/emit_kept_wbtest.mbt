@@ -174,7 +174,7 @@ test "the avatar going home draws its movement without laying out the chat again
   // A focused editor keeps its page live for its caret. Put the keyboard away to test the avatar's work alone.
   t.keyboard_gone()
   t.frames_owed()
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   let em = emits_of(emit_chat)
   let until = t.time() + Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() / 4.0

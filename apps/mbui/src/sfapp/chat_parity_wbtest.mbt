@@ -49,7 +49,7 @@ fn edited_core(
   mode : String,
   edit : (String, Json) -> Json,
   answer? : (String) -> Json = fn(_) { Json::object({}) },
-  epoch? : Ref[Int] = Ref::new(0),
+  epoch? : @signals.Signal[Int] = @signals.signal(0),
   platform? : Int = 2,
 ) -> @ui.Tester {
   new_run()
@@ -58,12 +58,12 @@ fn edited_core(
     ..base,
     topic: fn(name, params) {
       let t = (base.topic)(name, params)
-      // (a change the test makes is a new version of what the core says: made up as it is read, followed by its
-      // version, as the core's by what it says)
-      topic_as_read(name, params, match t.value {
-        Some(v) => { ..t, value: Some(edit(name, v)), version: t.version + epoch.val }
+      // (a change the test makes is a new version of what the core says: `epoch` set as it makes it, followed as the
+      // core's is)
+      match t.value {
+        Some(v) => { ..t, value: Some(edit(name, v)), version: t.version + epoch.get() }
         None => t
-      })
+      }
     },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
@@ -151,7 +151,7 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
 test "an overload notice offers to cancel its retry at the notice" {
   let calls : Array[Made] = []
   let retrying = Ref::new(true)
-  let epoch = Ref::new(0)
+  let epoch = @signals.signal(0)
   let t = edited_core(
     calls,
     "chat",
@@ -183,7 +183,7 @@ test "an overload notice offers to cancel its retry at the notice" {
   assert_eq(number(Some(sent[0].params), "thread"), 7.0)
   assert_eq(number(Some(sent[0].params), "seq"), 9.0)
   retrying.val = false
-  epoch.val += 1
+  epoch.set(epoch.get() + 1)
   t.frame()
   t.run_for(@ui.row_size_ms)
   assert_true(t.find("取消") is None, msg="the action leaves once the retry is over")
