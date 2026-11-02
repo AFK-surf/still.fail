@@ -40,6 +40,7 @@ import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
+import { usageSummary } from "./usage-summary.ts";
 import { fleetView } from "./fleet.ts";
 import { chatsCard, usageCard } from "./rail-cards.ts";
 import { resourcesView } from "./resources.ts";
@@ -1311,7 +1312,9 @@ export class Views implements Owner {
         const now = this.#core.host.nowMs();
         const listed = this.#profilesView(scope);
         const accounts = listed !== undefined && "ok" in listed ? arr(get(listed.ok, "items")) : [];
-        return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_, { split: view.split, only: view.only, day: view.day }, accounts) };
+        const offset = this.#core.host.utcOffsetMin(now);
+        const summary = usageSummary(sources, now, offset, String(get(this.ok({ topic: "workspace", workspace: scope }), "name") ?? ""));
+        return { ok: { ...usageView(sources, typeof view.days === "number" ? view.days : 7, now, offset, this.me(scope), members_, { split: view.split, only: view.only, day: view.day }, accounts), ...(summary !== null ? { summary } : {}) } };
       }
       case "fleet": {
         const scope = view.scope as string;

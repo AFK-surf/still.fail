@@ -2853,6 +2853,7 @@ export const SHAPES: Record<string, Shape> = {
     ["notes", vec("String")],
     ["basis", "String"],
     ["prices", opt(vec("UsagePriceTable")), { doc: "Each station's own calculation table; absent with older cores." }],
+    ["summary", opt("UsageSummary"), { doc: "Everything since counting began, as Codex's usage summary (views/usage-summary.ts); absent where no station\nhas told its history (stations from before)." }],
   ], { doc: "What the agents of a workspace spent over its last `days` (the `usage` view, client/core-ts/src/views/usage.ts): a few\ntotals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,\nwhich chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that\nmeans). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.", keepNone: true }),
   FleetView: struct([
     ["at", "String", { doc: "When this is, in words: 10月26日 04:12." }],
@@ -2996,6 +2997,45 @@ export const SHAPES: Record<string, Shape> = {
   UsageRate: struct([
     ["label", "String"],
     ["value", "String"],
+  ], { keepNone: true }),
+  UsageSummary: struct([
+    ["title", "String", { said: true, doc: "Whose it is: the workspace's name." }],
+    ["figures", vec("UsageFigure"), { doc: "累计 token, 归档的对话, 跨设备任务, 决策点击率, 一起干活的设备." }],
+    ["activity", "UsageActivity"],
+    ["stations", "UsageFigures", { doc: "Each station's tokens and their share, the most first." }],
+    ["places", opt("UsageFigures"), { doc: "How many chats came from each place (still.fail, Slack, Feishu); absent with one place." }],
+    ["asOf", "String", { doc: "统计截至 11月2日." }],
+    ["partial", opt("String"), { doc: "Some stations told no history (from before, or not read): said under it." }],
+  ], { doc: "What a workspace's agents used since each station began counting (the usage page's summary).", keepNone: true }),
+  UsageFigure: struct([
+    ["label", "String"],
+    ["value", "String"],
+  ], { keepNone: true }),
+  UsageFigures: struct([
+    ["title", "String"],
+    ["items", vec("UsageNamed")],
+  ], { keepNone: true }),
+  UsageNamed: struct([
+    ["label", "String", { default: true }],
+    ["name", "String", { default: true, said: true, doc: "A station's name, or where chats came from." }],
+    ["value", "String"],
+  ], { keepNone: true }),
+  UsageActivity: struct([
+    ["title", "String"],
+    ["sub", "String"],
+    ["views", vec("String"), { doc: "按天, 按周, 累计: what the year can be drawn as." }],
+    ["weekdays", vec("String"), { doc: "The rows' names, Sunday first." }],
+    ["months", vec("UsageMonth"), { doc: "Each month's name over the week its first days are in." }],
+    ["cells", vec("i64"), { client: vec("I54"), doc: "The year's 364 days, a week of seven a column, Sunday first, the last week today's: each its level of the\nmost of a day, 0 none to 4 (Codex's graded levels); -1 a day after today." }],
+    ["weekly", vec("i64"), { client: vec("I54"), doc: "Each of the 52 weeks' tokens as how many of seven rows its bar fills, of the tallest." }],
+    ["cumulative", vec("i64"), { client: vec("I54"), doc: "The weeks' running total as the same." }],
+    ["less", "String"],
+    ["more", "String"],
+    ["captions", vec("String"), { doc: "Under each view: none under the days (their legend instead), what a column is under the others." }],
+  ], { keepNone: true }),
+  UsageMonth: struct([
+    ["week", "i64", { client: "I54" }],
+    ["label", "String"],
   ], { keepNone: true }),
   UsageTile: struct([
     ["label", "String"],

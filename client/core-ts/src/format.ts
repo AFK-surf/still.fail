@@ -29,6 +29,11 @@ function monthDay(lang: Lang, month: number, day: number): string {
   return tr(lang, `core-logic.format.date.${month}`, { day });
 }
 
+/// A day (YYYY-MM-DD) as people read a date: 11月2日, Nov 2.
+export function monthDayOf(day: string): string {
+  return monthDay(current(), Number(day.slice(5, 7)), Number(day.slice(8, 10)));
+}
+
 /// 950, 1.2K, 3.4M, 2.4B.
 export function compactNumber(n: number): string {
   const cut = (v: number, unit: string) => {

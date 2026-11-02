@@ -1504,6 +1504,9 @@ pub let said_paths : Map[String, Array[String]] = {
     "lists.*.items.*.person.shown.display",
     "lists.*.items.*.topModel",
     "lists.*.parts.*.title",
+    "summary.title",
+    "summary.stations.items.*.name",
+    "summary.places.items.*.name",
   ],
   "vaultItems": [
     "name",
