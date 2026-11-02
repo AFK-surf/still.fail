@@ -682,6 +682,8 @@ pub fn window_zoomed() -> Bool
 
 pub fn word_at(String, Int32) -> (Int32, Int32)
 
+pub fn words_over_closing_expected(Array[(String, String, String)]) -> Unit
+
 pub fn words_over_known(Array[(String, Int32)]) -> Unit
 
 pub fn yield_thumbs(@view.View, @view.View) -> Unit

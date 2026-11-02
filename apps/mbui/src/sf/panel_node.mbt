@@ -29,8 +29,16 @@ fn panel_node(
       layer.owns(gone) |> ignore
       // (how far in it is, from the moment it opened; out from the moment it closed)
       let way = EdgeWay::new(0.0)
+      let leave_from = Ref(0.0)
+      let leave_look = Ref(@kit.pop_in.at(0.0, 0.0))
       layer.reacts(fn() { layer.leaving() }, fn(going) {
         if going {
+          if x.fade_out_together {
+            // Keep the appearance reached if it is closed before its entrance finishes.
+            let p = way.way.value_at(layer.cause_at())
+            leave_from.val = p
+            leave_look.val = @kit.pop_in.at(p, p)
+          }
           way.go(layer, 0.0, @kit.pop_out_ms, ease=Leave)
         } else {
           way.go(layer, 1.0, @kit.pop_ms)
@@ -38,7 +46,11 @@ fn panel_node(
       })
       let look = fn() {
         let p = way.shown(layer)
-        if layer.leaving() {
+        if layer.leaving() && x.fade_out_together {
+          // Fade the whole panel from that appearance, retaining the popover's scale and curve.
+          let fade = if leave_from.val > 0.0 { dmin(1.0, dmax(0.0, p / leave_from.val)) } else { 0.0 }
+          { ..@kit.pop_out.at(p, p), alpha: leave_look.val.alpha * fade, words: leave_look.val.words }
+        } else if layer.leaving() {
           @kit.pop_out.at(p, p)
         } else {
           @kit.pop_in.at(p, p)
@@ -84,8 +96,8 @@ fn panel_node(
       let at = anchor(layer)
       // (what holds its body: what takes the focus as it opens)
       let body_box : Ref[@view.View?] = Ref(None)
-      // (its old views' words as far in as its look says: its ground first, then they, as kit's look gives them; read as
-      // they are painted (Ctx::look_by), so that its way in and out paints them, nothing of them built again)
+      // (its old views' words as far in as its look says: on entering, its ground first, then they; read as they are
+      // painted (Ctx::look_by), so that its way in and out paints them, nothing of them built again)
       // (`fits`: how wide what its head, its body and its foot each hold is laid out, out to the panel's sides: what it
       // is as wide as; each made before what reads them)
       let wide : Array[@signals.Signal[Double?]] = Array::makei(3, fn(_) { @signals.signal(None, same=fn(a, b) { a == b }) })

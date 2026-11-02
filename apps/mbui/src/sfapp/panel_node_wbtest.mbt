@@ -16,6 +16,58 @@ fn panel_test_body(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
 }
 
 ///|
+test "a panel's words, controls and surface fade out together" {
+  let t = menu_tester(1280.0, 800.0, 0)
+  @sf.panel("面板", from=At(600.0, 300.0, 0.0, 0.0), fade_out_together=true, fn(c, _) {
+    c.box(w=Px(12.0), h=Px(12.0), bg=0x23A1DFFFL, fn() {  }) |> ignore
+    c.text("一起退场", color=0xB45A29FFL) |> ignore
+  })
+  t.run_for(@ui.move_most_ms)
+  let original = t.drawn_rects().filter(fn(r) { r.0 == 600.0 && r.1 == 306.0 && r.2 > 200.0 })[0]
+  t.key(@ui.key_escape)
+  let mut previous = 255L
+  for _ in 0..<5 {
+    t.run_for(@kit.pop_out_ms / 6.0)
+    let surface = t.drawn_rects().filter(fn(r) {
+      r.4 >> 8 == original.4 >> 8 &&
+      (r.0 - original.0).abs() < 10.0 && (r.1 - original.1).abs() < 10.0 &&
+      r.2 > original.2 * 0.96 && r.3 > original.3 * 0.96
+    })
+    let mark = t.drawn_rects().filter(fn(r) { r.4 >> 8 == 0x23A1DFL })
+    let glyphs = t.drawn_glyphs().filter(fn(g) { g.2 >> 8 == 0xB45A29L })
+    assert_eq(surface.length(), 1, msg="the surface remains during its fade")
+    assert_eq(mark.length(), 1, msg="the control remains during its fade")
+    assert_true(!glyphs.is_empty(), msg="the words remain during their fade")
+    let alpha = surface[0].4 & 0xFFL
+    assert_true(alpha > 0L && alpha < previous, msg="the panel fades continuously")
+    assert_eq(mark[0].4 & 0xFFL, alpha, msg="the control and surface fade together")
+    assert_true(glyphs.iter().all(fn(g) { (g.2 & 0xFFL) == alpha }), msg="the words and surface fade together")
+    previous = alpha
+  }
+  t.run_for(@kit.pop_out_ms)
+  assert_false(@sf.presenter_visible())
+}
+
+///|
+test "a panel closed while opening fades from its current appearance" {
+  let t = menu_tester(1280.0, 800.0, 0)
+  @sf.panel("面板", from=At(600.0, 300.0, 0.0, 0.0), fade_out_together=true, fn(c, _) {
+    c.box(w=Px(12.0), h=Px(12.0), bg=0x23A1DFFFL, fn() {  }) |> ignore
+    c.text("一起退场", color=0xB45A29FFL) |> ignore
+  })
+  t.run_for(@kit.pop_ms / 2.0)
+  let painted = fn() {
+    (t.drawn_rects().filter(fn(r) { r.4 >> 8 == 0x23A1DFL }), t.drawn_glyphs().filter(fn(g) { g.2 >> 8 == 0xB45A29L }))
+  }
+  let before = painted()
+  assert_true(!before.0.is_empty() && !before.1.is_empty())
+  t.key(@ui.key_escape)
+  assert_eq(painted(), before, msg="closing does not change the current appearance")
+  t.run_for(@kit.pop_out_ms)
+  assert_false(@sf.presenter_visible())
+}
+
+///|
 /// Where what the panel shows is: its dialog, its title, its words, its button.
 fn panel_said(t : @ui.Tester) -> String {
   let r = fn(role : @ui.Role, label : String) { t.query(role, label~).map(fn(s) { s.rect }) }

@@ -133,6 +133,7 @@ pub fn open_triple_panel(
     focus=false,
     // (the models scroll by themselves, what goes with the one picked beside them in view)
     lists=true,
+    fade_out_together=true,
     // (no line over its foot: 2026-10-30 用户「分割线也去掉呗」, in place of 2026-10-25's line out to its edges)
     ruled=false,
     side~,
