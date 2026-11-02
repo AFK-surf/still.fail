@@ -37,6 +37,50 @@ fn code_view(handed : Array[String], wrong? : Bool = false, enabled? : Bool = tr
 }
 
 ///|
+test "a code field asks the host for the digits keyboard" {
+  let t = Tester::new(code_view([]), platform=2)
+  t.frame()
+  assert_true(t.ime().0)
+  assert_eq(t.ime_action(), @hostapi.ime_action_number)
+}
+
+///|
+test "a completed code field removed after verification lets go of the keyboard" {
+  let shown = Ref(true)
+  let handed : Array[String] = []
+  let t = Tester::new(fn(c) {
+    if shown.val {
+      code_view(handed)(c)
+    }
+  }, platform=2)
+  t.type_text("123456")
+  assert_eq(handed, ["123456"])
+  assert_true(t.ime().0)
+  shown.val = false
+  t.frame()
+  assert_false(t.ime().0)
+}
+
+///|
+test "removing a code field leaves the keyboard with another field that already took it" {
+  let shown = Ref(true)
+  let t = Tester::new(fn(c) {
+    if shown.val {
+      c.code_field("code") |> ignore
+    }
+    c.editor("next", max_lines=1) |> ignore
+  }, platform=2)
+  t.frame()
+  assert_true(t.ime().0)
+  t.ctx().focus_editor("next")
+  shown.val = false
+  t.frame()
+  assert_true(t.ime().0)
+  t.type_text("other")
+  assert_eq(t.ime().1, "other")
+}
+
+///|
 test "a code field: digits only, as many as it has boxes, the field taking the keys as it shows" {
   let handed = []
   let t = Tester::new(code_view(handed))
