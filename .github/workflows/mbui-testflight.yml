@@ -1,4 +1,6 @@
 name: mbui TestFlight (manual)
+# The build number in the run's name: the next dispatch takes one above every number any run was given, failed ones too.
+run-name: mbui TestFlight ${{ inputs.version }} (${{ inputs.build }})
 on:
   workflow_dispatch:
     inputs:
