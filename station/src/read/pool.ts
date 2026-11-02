@@ -1,6 +1,11 @@
-// The readers: worker threads, each with its own read-only connection. Reads wait in one line and each goes to the first
-// reader free, one at a time. Bulk reads leave room for chat reads; what the event streams tell (a message just said,
-// a session's turn ending) goes before the pages asked. None of these reads holds up writes.
+// The readers: worker threads, each with its own read-only connection. Two kinds, kept apart: one reader only for what
+// stands between a person and a message or file they are looking at (a chat's page, a file, the message just said),
+// and the rest for everything else (lists, summaries, usage, histories, notices). A bulk read never takes the chat
+// reader, however long it runs or however many wait, so a message is never queued behind one (2026-11-02 on ccvm: a
+// 97 s usage read and a sidebar update held both readers of one line, and two messages waited 50 s and 31 s for an
+// 11 ms read). What counts as a chat read is listed (`chat`); anything else, a new kind of read too, is bulk. A chat read
+// may also use a bulk reader that is free. Within each, what the event streams tell goes before the pages asked. None of
+// these reads holds up writes.
 // A reader is a V8 of its own (tens of MB), so they are started when reads come and let go once none has come for a
 // while: an idle station keeps none. One that dies (its heap is bounded) fails what it held and is replaced by the next
 // read.
@@ -16,14 +21,16 @@ const IDLE_MS = 60_000;
 /// A read that waited or took longer than this is logged, with what it was.
 const SLOW_MS = 2_000;
 
-/// `held`: the read it is answering, if any.
-type Slot = { worker: Worker; held: Asked | null; idle?: () => void };
+/// `held`: the read it is answering, if any. `chat`: the reader kept for chat reads.
+type Slot = { worker: Worker; held: Asked | null; chat: boolean; idle?: () => void };
 
 /// A read in line or being answered: when it was asked and when a reader took it, and the reader it is best read in (a
 /// session's history, where its reading stands in memory).
 type Asked = {
   ask: Ask;
   told: boolean;
+  /// A chat read (`chat`): it may use any reader free; the others only the bulk ones.
+  chat: boolean;
   session: string | null;
   home: Slot | null;
   at: number;
@@ -36,18 +43,25 @@ type Asked = {
 const HOMES = 4096;
 /// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
 const CHECKPOINT_MS = 2_000;
-/// The scoped reads on the path to showing a message or a file. Other page reads, including new kinds not yet
-/// classified, leave room for these: a slow transcript or resource snapshot can block just as a slow aggregate can.
-const INTERACTIVE = new Set(["thread", "sessionFile"]);
+/// A chat or a file, read whole and bounded by itself.
+const CHAT = new Set(["thread", "sessionFile"]);
+/// The most entries or letters a chat read gives (a page of an `after` is clamped to 500 too).
+const PAGE = 500;
 
-/// Stream updates and one thread's current or older page are interactive. An `after` or explicit range can ask for an
-/// unbounded amount on older clients, so it remains in the background until that request is paged end to end.
-function interactive(a: Asked): boolean {
-  if (a.told || INTERACTIVE.has(a.ask.op)) return true;
-  if (a.ask.op !== "entries" && a.ask.op !== "letters") return false;
-  const params = a.ask.args?.params;
-  const keys = Array.isArray(params) ? params.map((p: unknown) => Array.isArray(p) ? p[0] : null) : Object.keys(params ?? {});
-  return !keys.includes("after") && !keys.includes("from") && !keys.includes("to");
+/// Whether a read is one a person is waiting on to see a message or a file, and bounded: a chat, a file, one chat's
+/// current or older page, or a range or catch-up of at most PAGE (as the streams read the message just said). An open
+/// `after` or a wide range (older clients page everything at once) is bulk.
+export function chat(op: string, args: unknown): boolean {
+  if (CHAT.has(op)) return true;
+  if (op !== "entries" && op !== "letters") return false;
+  const params = (args as { params?: unknown } | null)?.params;
+  const pairs: [string, unknown][] = Array.isArray(params) ? params.filter((p): p is [string, unknown] => Array.isArray(p) && p.length >= 2) : Object.entries(params ?? {});
+  const value = (key: string) => pairs.find(([name]) => name === key)?.[1];
+  const has = (key: string) => pairs.some(([name]) => name === key);
+  if (has("after")) return has("limit");
+  if (!has("from") && !has("to")) return true;
+  const [from, to] = [Number(value("from")), Number(value("to"))];
+  return Number.isSafeInteger(from) && Number.isSafeInteger(to) && from >= 0 && to >= from && to - from < PAGE;
 }
 
 export class Readers {
@@ -62,7 +76,8 @@ export class Readers {
   private checkpointing = false;
   private again = false;
   private readonly data: string;
-  private readonly size: number;
+  /// How many bulk readers at most; the chat reader is one more.
+  private readonly bulk: number;
   private readonly workerFile: URL | undefined;
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
   readonly names = new Map<string, string>();
@@ -70,19 +85,20 @@ export class Readers {
   processes: () => Map<string, string> = () => new Map();
   clientKeys: () => Map<string, string> = () => new Map();
 
-  /// At most two by default (STILLFAIL_READERS says otherwise).
+  /// At most two by default, one of them the chat reader (STILLFAIL_READERS says how many in all; never fewer than
+  /// one of each).
   constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1)), workerFile?: URL) {
     this.data = data;
-    this.size = size;
+    this.bulk = Math.max(1, size - 1);
     this.workerFile = workerFile;
   }
 
-  private start(): Slot {
+  private start(chat: boolean): Slot {
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
     const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
     const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
-    const slot: Slot = { worker, held: null };
+    const slot: Slot = { worker, held: null, chat };
     worker.on("message", (answer: Answer) => {
       const asked = slot.held;
       slot.held = null;
@@ -124,7 +140,7 @@ export class Readers {
     const home = session !== null ? this.homes.get(session) : undefined;
     const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
-      const asked: Asked = { ask, told, session, home: home !== undefined && this.slots.includes(home) ? home : null, at: wall.now(), took: 0, resolve, reject };
+      const asked: Asked = { ask, told, chat: chat(op, args), session, home: home !== undefined && this.slots.includes(home) ? home : null, at: wall.now(), took: 0, resolve, reject };
       const behind = told ? this.line.findIndex((a) => !a.told) : -1;
       if (behind < 0) this.line.push(asked);
       else this.line.splice(behind, 0, asked);
@@ -132,25 +148,37 @@ export class Readers {
     });
   }
 
-  /// Reads in line go to readers free, the first first (a session's history to its home reader when that one is free).
-  /// When there are at least two readers, non-interactive reads leave one free for a message or file. Stream updates
-  /// remain interactive; a later interactive read passes a waiting non-interactive read.
+  /// Reads in line go to readers free, the first first (a session's history to its home reader when that one is free):
+  /// a chat read to the chat reader or any bulk reader free, a bulk read to a bulk reader only. One that cannot be
+  /// placed holds up none of the others.
   private pump() {
     if (this.closed) return;
-    while (this.line.length > 0) {
-      const background = (a: Asked) => !interactive(a);
-      const backgroundHeld = this.slots.filter((s) => s.held !== null && background(s.held)).length;
-      const limited = this.size > 1 && backgroundHeld >= this.size - 1;
-      const at = limited ? this.line.findIndex((a) => !background(a)) : 0;
-      if (at < 0) break;
+    for (let at = 0; at < this.line.length; ) {
       const asked = this.line[at]!;
-      const home = asked.home !== null && asked.home.held === null && this.slots.includes(asked.home) ? asked.home : null;
-      const slot = home ?? this.slots.find((s) => s.held === null) ?? (this.slots.length < this.size ? this.start() : null);
-      if (slot === null) break;
+      const slot = this.slotFor(asked);
+      if (slot === null) {
+        at++;
+        continue;
+      }
       this.line.splice(at, 1);
       this.give(slot, asked);
     }
     for (const slot of this.slots) if (slot.held === null) this.letGoLater(slot);
+  }
+
+  /// A reader free for this read, started if there is room for one: null when it has to wait.
+  private slotFor(asked: Asked): Slot | null {
+    const free = (s: Slot) => s.held === null && this.slots.includes(s);
+    if (asked.home !== null && free(asked.home) && (asked.chat || !asked.home.chat)) return asked.home;
+    const chatSlot = this.slots.find((s) => s.chat);
+    const bulkSlots = this.slots.filter((s) => !s.chat);
+    if (asked.chat) {
+      if (chatSlot === undefined) return this.start(true);
+      if (free(chatSlot)) return chatSlot;
+    }
+    const idle = bulkSlots.find(free);
+    if (idle !== undefined) return idle;
+    return bulkSlots.length < this.bulk ? this.start(false) : null;
   }
 
   private give(slot: Slot, asked: Asked) {
