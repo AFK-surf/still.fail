@@ -597,6 +597,36 @@ test("a sign-in that failed has its account checked again first: one whose login
   await r.close();
 });
 
+test("Codex authentication failure moves an automatic session and continues once", async () => {
+  const r = new Rig();
+  r.edit((raw) => {
+    const first = raw.profiles.find((p: any) => p.id === "cx");
+    first.models = ["gpt-x"];
+    raw.profiles.push({ ...first, id: "cx2", name: "second" });
+    raw.connects.find((c: any) => c.id === "gpt").bind = { runtime: "codex", model: "gpt-x", profile: "cx" };
+  });
+  let refused = false;
+  const checked: string[] = [];
+  r.hub.accounts.setHealth((id) => id === "cx" && refused ? { check: { state: "login" } } : {});
+  r.hub.accounts.setRecheck(async (id) => { checked.push(id); refused = true; });
+  const m = message();
+  await r.accept(m, "gpt");
+  await settle();
+  const first = r.codex.last();
+  assert.equal(first.options.profile.id, "cx");
+  r.store.setSessionProfile(sessionKey("gpt", m.channel, m.threadTs), "cx", false);
+  first.end({ kind: "failed", reason: "auth", message: "401 token_revoked" });
+  await settle();
+  const retry = r.codex.last();
+  assert.equal(retry.options.profile.id, "cx2");
+  assert.ok(retry.prompts[0]!.includes(GO_ON_AFTER_AUTH));
+  retry.end({ kind: "failed", reason: "auth", message: "401 token_revoked" });
+  await settle();
+  assert.equal(r.codex.count(), 2, "a second failure is reported, not retried indefinitely");
+  assert.deepEqual(checked, ["cx", "cx2"]);
+  await r.close();
+});
+
 test("a turn whose sandbox connection was lost goes on once from its transcript, then is said to have ended", async () => {
   const r = new Rig();
   const m = message();

@@ -80,6 +80,27 @@ const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().spl
 
 // Each test has its own driver, profile and runners: they run side by side.
 describe("the Codex driver", { concurrency: true }, () => {
+  test("a new sign-in replaces the app-server after its running turn, and new requests wait for it", async () => {
+    const d = driver();
+    const p = profile();
+    const { events, push, until } = listen();
+    const session = await d.open(options(p), push);
+    await session.prompt("hold:1");
+    await until((e) => deltas(e).length > 0);
+    await d.loginChanged(p.id);
+    let answered = false;
+    const limits = d.rateLimits(p).then((value) => { answered = true; return value; });
+    await sleep(100);
+    assert.equal(answered, false, "a request does not use the old process while its turn runs");
+    assert.equal(starts(p.dump).length, 1);
+    assert.equal(await session.steer("finish"), true);
+    await until(ended(1));
+    assert.equal(outcome(events).kind, "completed");
+    assert.deepEqual(await limits, { rateLimits: { primary: { usedPercent: 5 } } });
+    assert.equal(starts(p.dump).length, 2, "the next request uses a new process");
+    await session.dispose();
+  });
+
   test("a borrowed login about to run out is lent again under the running app-server, not by starting another", async () => {
     let until = Date.now() + 3600_000;
     const writes: number[] = [];
@@ -198,6 +219,8 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(classifyCodexError(null), "model");
     assert.equal(classifyCodexError({ serverOverloaded: null }), "overloaded");
     assert.equal(classifyCodexError({ usageLimitExceeded: null }), "rate_limit");
+    assert.equal(classifyCodexError(null, "auth error: 401, auth error code: token_revoked"), "auth");
+    assert.equal(classifyCodexError(null, "model not supported"), "model");
   });
 
   test("abort interrupts the running turn by its id; steer adds to it, and is refused with nothing running", async () => {
