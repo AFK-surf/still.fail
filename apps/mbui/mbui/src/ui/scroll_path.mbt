@@ -152,14 +152,15 @@ fn BackPath::edge_now(self : BackPath, h : Double, now : Double) -> (Double, Dou
 }
 
 ///|
-/// iOS's rubber band going back from (x0, v0): when it is gone.
+/// iOS's rubber band going back from (x0, v0): when it is gone. From the end itself going out (a fling meeting it), not
+/// gone as it sets out: it bounces past it first.
 fn BackPath::plan_rubber(self : BackPath) -> Unit {
   let x0 = self.x0
   let v0 = self.v0
   let end = first_when(
     fn(t) {
       let (x, v) = rubber_at(x0, v0, t)
-      x <= 0.0 || (x < 0.1 && v.abs() < 0.01)
+      (x <= 0.0 && (t > 0.0 || v0 <= 0.0)) || (x < 0.1 && v.abs() < 0.01)
     },
     1.0,
     60000.0,

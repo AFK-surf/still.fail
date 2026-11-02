@@ -433,6 +433,25 @@ test "iOS: pulled past the top on a rubber band, and back" {
 }
 
 ///|
+test "iOS: a fling into the end bounces past it on the rubber band and back" {
+  let t = Tester::new(rows_view(40), platform=1)
+  swipe(t, 700.0, -24.0, 12)
+  t.draw()
+  // (each of the display's frames for 1.5 s, the rows moved past the end at their furthest kept)
+  let mut furthest = 0.0
+  let end = t.time() + 1500.0
+  while t.time() < end {
+    t.frame()
+    furthest = dmin(furthest, t.list_state().over_offset())
+  }
+  // (a fling met at about 1.25 points a ms: past the end as far as the critically damped band takes it, ~29 points)
+  assert_true(furthest < -20.0, msg="furthest past the end \{furthest}")
+  run_to_rest(t)
+  approx(t.list_offset(), 40.0 * 50.0 - 844.0, 1.0e-6)
+  approx(t.list_state().over_offset(), 0.0, 0.0)
+}
+
+///|
 test "the desktop: a mouse drag past the top coasts into it and stops there, nothing stretches" {
   let t = Tester::new(rows_view(40))
   swipe(t, 300.0, 20.0, 10)
