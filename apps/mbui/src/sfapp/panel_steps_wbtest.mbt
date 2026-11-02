@@ -105,6 +105,24 @@ test "wide, a confirm over the preset's dialog (the window's tree's over the old
 }
 
 ///|
+test "a new connect's wizard (the core's steps): 下一步 slides its next step in, back goes back a step as the core does, then closes" {
+  let t = settings_tester("connects", mode="settings-new-connect", shows="settings-new-connect")
+  assert_true(shows(t, "Slack 工作区") && shows(t, "下一步"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  t.tap_text("下一步")
+  t.run_for(@ui.move_most_ms)
+  // (the app's step, in the same dialog: its title and its way on, the step before's gone)
+  assert_true(shows(t, "Slack 应用") && shows(t, "创建 app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_false(shows(t, "下一步"))
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "下一步") && !shows(t, "创建 app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  t.back()
+  t.run_for(@kit.sheet_scrim_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_false(shows(t, "下一步"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+}
+
+///|
 test "a folder picked in 添加目录 goes back to the fields with it among the preset's folders" {
   let t = preset_add(false)
   t.tap_text("tstst")

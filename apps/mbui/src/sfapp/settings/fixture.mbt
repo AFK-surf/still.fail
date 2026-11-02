@@ -1763,9 +1763,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       Some(
         obj([
           ("step", str(fx_connect_step.val)),
-          ("title", str("Slack 工作区")),
-          ("back", str("close")),
-          ("number", Json::number(1.0)),
+          ("title", str(if fx_connect_step.val == "app" { "Slack 应用" } else { "Slack 工作区" })),
+          ("back", str(if fx_connect_step.val == "app" { "team" } else { "close" })),
+          ("number", Json::number(if fx_connect_step.val == "app" { 2.0 } else { 1.0 })),
           ("total", Json::number(4.0)),
           ("mobile", Json::boolean(true)),
           ("adding", Json::boolean(false)),
@@ -2450,6 +2450,24 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       }
       fx_changed()
       Some(Ok(obj([])))
+    }
+    // a new connect's wizard gone on or back (its back as the core's: the app's step back to the workspace's, the first
+    // closing it)
+    "connect.flow.go" => {
+      let to = text(field(p, "input"), "to")
+      let target = match (to, fx_connect_step.val) {
+        ("back", "app") => "team"
+        ("back", "feishuScan") => "feishuWay"
+        ("back", _) => "close"
+        (step, _) => step
+      }
+      if target == "close" {
+        Some(Ok(obj([("close", Json::boolean(true))])))
+      } else {
+        fx_connect_step.val = target
+        fx_changed()
+        Some(Ok(obj([])))
+      }
     }
     // the drafts' forms (a new profile's, a new connect's, the decisions' and the archive policy's), opened and edited
     // an Anthropic plan's sign-in for a new profile, begun (settings-new-profile-login…)

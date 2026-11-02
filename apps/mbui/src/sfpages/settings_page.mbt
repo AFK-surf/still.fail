@@ -129,9 +129,10 @@ pub fn open_dialog(
   live? : () -> (String, String, String),
   on_gone? : () -> Unit = fn() {  },
   steps? : Bool = false,
+  back? : () -> Unit,
 ) -> Unit {
   desk_dialogs.val += 1
-  @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone=on_gone, steps~)
+  @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone=on_gone, steps~, back?)
 }
 
 // ── who a profile or a key is, at the head of its page (the web's Accounts.css.ts identity), and a card's foot ──

@@ -1314,7 +1314,7 @@ pub let pane_round : @ref.Ref[FixedArray[@paint.CornerOf]?]
 
 pub fn pane_top_right() -> Double?
 
-pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, fade_out_together? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, head_end? : (@ui.Ctx) -> Unit, side? : @view.Side, along? : @view.Along, offset? : Double, steps? : Bool) -> Unit
+pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, fade_out_together? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, head_end? : (@ui.Ctx) -> Unit, side? : @view.Side, along? : @view.Along, offset? : Double, steps? : Bool, back? : () -> Unit) -> Unit
 
 pub fn panel_back(to? : Int32) -> Bool
 
@@ -1334,7 +1334,7 @@ pub let panel_foot_end : @ui.Style
 
 pub let panel_foot_ends : @ui.Style
 
-pub fn panel_go(String, (@ui.Ctx, () -> Unit) -> Unit, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, left? : () -> Unit) -> Unit
+pub fn panel_go(String, (@ui.Ctx, () -> Unit) -> Unit, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, left? : () -> Unit, count? : String, back? : () -> Unit, live? : () -> (String, String, String)) -> Unit
 
 pub fn panel_ground() -> Int64
 

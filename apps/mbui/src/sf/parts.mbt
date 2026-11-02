@@ -2314,20 +2314,6 @@ pub fn dialog(
         // button in its top right corner, concentric with it, over what it holds (which keeps clear of it:
         // untitled_clear)
         let untitled = s.title == "" && step == ""
-        if untitled && close_label != "" {
-          c.layer(fn() {
-            c.box(style=dialog_close_row, fn() {
-              c.box(style=dialog_close_corner(), fn() {
-                if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
-                  closed.val = true
-                }
-              })
-              |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        }
         if !untitled {
         c.box(style=dialog_head.then(words_at), fn() {
           // a step's count beside the title (Connect.css.ts dialogStep: the ui's 13 in 400 muted, 8 after it)
@@ -2380,6 +2366,21 @@ pub fn dialog(
         match footer {
           Some(f) => c.box(style=dialog_foot.then(dialog_corner_foot(dialog_pad)), f) |> ignore
           None => ()
+        }
+        // (laid over what it holds, after it: over a step sliding in or away (a bare one's, its own layers) too)
+        if untitled && close_label != "" {
+          c.layer(fn() {
+            c.box(style=dialog_close_row, fn() {
+              c.box(style=dialog_close_corner(), fn() {
+                if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
+                  closed.val = true
+                }
+              })
+              |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
         }
         dialog_veil(c, veil)
         },

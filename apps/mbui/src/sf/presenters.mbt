@@ -118,12 +118,17 @@ priv struct PanelOf {
   offset : Double
   /// what it holds goes in steps in it (panel's `steps`: panel_go, panel_back)
   steps : Bool
+  /// what back does on its first step where its steps follow a flow kept elsewhere (panel's `back`: panel_go's)
+  on_back : (() -> Unit)?
 }
 
 ///|
 /// A step of a panel that goes in steps (panel_go): its title, what it is about ("" nothing), what it holds and what is
 /// at its foot (each given what closes the panel), what is let go of as it is left for good (gone back from, or the
-/// panel closed: what it holds with it); `n` its count in the panel (0 the panel's own, the first).
+/// panel closed: what it holds with it); `n` its count in the panel (0 the panel's own, the first); `count`, beside its
+/// title, which of a flow's steps it is ("" none: a wizard's 2 / 4); `on_back`, what back does on it where the steps
+/// follow a flow kept elsewhere (the core's wizard: told to go back, the panel going back a step as it does), in place
+/// of taking it off.
 priv struct PanelStep {
   n : Int
   title : String
@@ -131,6 +136,10 @@ priv struct PanelStep {
   body : (@ui.Ctx, () -> Unit) -> Unit
   foot : ((@ui.Ctx, () -> Unit) -> Unit)?
   left : () -> Unit
+  count : String
+  on_back : (() -> Unit)?
+  /// its title, count and what it is about as they are now, where they change while it shows (a wizard's)
+  live : (() -> (String, String, String))?
 }
 
 ///|
@@ -238,7 +247,17 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     Panel(x) if x.steps =>
       Some(
         @ui.Nav::new(
-          { n: 0, title: x.title, description: x.description, body: x.body, foot: x.foot, left: fn() {  } },
+          {
+            n: 0,
+            title: x.title,
+            description: x.description,
+            body: x.body,
+            foot: x.foot,
+            left: fn() {  },
+            count: "",
+            on_back: x.on_back,
+            live: x.live,
+          },
           on_leave=fn(s) { (s.left)() },
         ),
       )
@@ -373,6 +392,7 @@ pub fn panel(
   along? : @ui.Along = Start,
   offset? : Double = panel_offset,
   steps? : Bool = false,
+  back? : () -> Unit,
 ) -> Unit {
   present(
     Panel({
@@ -399,6 +419,7 @@ pub fn panel(
       along,
       offset,
       steps,
+      on_back: back,
     }),
     from,
     gone~,
@@ -412,20 +433,26 @@ pub fn panel(
 /// head a back key at its start. Back (that key, Escape, the system's back, its left edge swiped) takes it off, back to
 /// the step before; from the first, back closes the panel. A press outside, the sheet dragged down, its close button:
 /// the panel closes, all its steps with it. `left`: what is let go of as it is left for good (gone back from, or the
-/// panel closed), once.
+/// panel closed), once. `count`: which of a flow's steps it is, beside its title. `back`: where the steps follow a
+/// flow kept elsewhere (the core's wizard), what back does on it in place of taking it off (told to that flow, which
+/// sends the panel back a step as it goes: panel_back). `live`: its title, count and what it is about as they are now,
+/// where they change while it shows.
 pub fn panel_go(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
   description? : String = "",
   foot? : (@ui.Ctx, () -> Unit) -> Unit,
   left? : () -> Unit = fn() {  },
+  count? : String = "",
+  back? : () -> Unit,
+  live? : () -> (String, String, String),
 ) -> Unit {
   match stepping() {
     Some(p) =>
       match p.steps {
         Some(nav) => {
           p.steps_made += 1
-          nav.push({ n: p.steps_made, title, description, body, foot, left })
+          nav.push({ n: p.steps_made, title, description, body, foot, left, count, on_back: back, live })
         }
         None => ()
       }
@@ -1682,14 +1709,10 @@ fn dialog_page(
   back : (() -> Unit)?,
 ) -> Unit {
   let line = c.text_size(Heading).1
-  match back {
-    Some(f) => step_head(c, key, s.title, f, dialog_step_head.then(untitled_clear()), dialog_title, line)
-    None =>
-      c.box(style=dialog_step_head.then(untitled_clear()), fn() { c.text(s.title, style=dialog_title) |> ignore })
-      |> ignore
-  }
-  if s.description != "" {
-    c.box(style=dialog_lead_at, fn() { c.text(s.description, style=dialog_lead) |> ignore }) |> ignore
+  let (title, count, description) = words_of_step(s)
+  step_head(c, key, title, count, back, dialog_step_head.then(untitled_clear()), dialog_title, line)
+  if description != "" {
+    c.box(style=dialog_lead_at, fn() { c.text(description, style=dialog_lead) |> ignore }) |> ignore
   }
   c.box(style=if s.foot is None { dialog_body_end } else { dialog_body }, gone_empty=true, fn() {
     let (was, rows_were, given_was, in_was) = (panel_sides_in.val, rows_out.val, column_given.val, column_in_now.val)
@@ -2173,7 +2196,8 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         // (one that goes in steps: each its own title, what it holds and its foot, sliding in over the one before)
         Some(nav) =>
           steps_shown(c, p, nav, scrolls, 0.0, fn(s, back) {
-            sheet_step(c, key, p, { ..x, body: s.body, foot: s.foot }, s.title, s.description, close, scrolls, back?)
+            let (title, count, description) = words_of_step(s)
+            sheet_step(c, key, p, { ..x, body: s.body, foot: s.foot }, title, description, close, scrolls, back?, count~)
           })
         None => {
           let (title, _, description) = match x.live {
@@ -2247,13 +2271,12 @@ fn sheet_step(
   close : () -> Unit,
   scrolls : Bool,
   back? : () -> Unit,
+  count? : String = "",
 ) -> Unit {
-  match back {
-    Some(f) => step_head(c, key, title, f, sheet_title_row, sheet_title_words, c.text_size(Title).1)
-    None =>
-      if title != "" {
-        sheet_title(c, title)
-      }
+  if back is Some(_) || count != "" {
+    step_head(c, key, title, count, back, sheet_title_row, sheet_title_words, c.text_size(Title).1)
+  } else if title != "" {
+    sheet_title(c, title)
   }
   if description != "" {
     c.box(style=sheet_words_at, fn() { c.text(description, style=sheet_lead) |> ignore }) |> ignore
@@ -2392,12 +2415,21 @@ fn steps_shown(
     @ui.style(w=Full, h=Fixed(p.step_h.get()))
   }
   c.box(style=tall.then(@ui.style(mx=room(-out))), fn() {
-    c.nav(nav, fn(s) {
+    // (a flow kept elsewhere takes back on its step: no edge of the panel swiped back past it)
+    let follows = top.on_back is Some(_)
+    c.nav(nav, edge=if follows { 0.0 } else { step_edge }, fn(s) {
       let was = steps_drawn_now.val
       steps_drawn_now.val = p.serial
-      let i = c.box(style=@ui.style(w=Full, px=room(out)), fn() {
-        draw(s, if s.n > 0 { Some(fn() { nav.pop() |> ignore }) } else { None })
-      })
+      let back = match s.on_back {
+        Some(f) if s.n > 0 => Some(f)
+        _ => if s.n > 0 { Some(fn() { nav.pop() |> ignore }) } else { None }
+      }
+      // (back on the step on top told to the flow it follows, before the panel's own)
+      match s.on_back {
+        Some(f) if s.n == top.n => c.take_back(f)
+        _ => ()
+      }
+      let i = c.box(style=@ui.style(w=Full, px=room(out)), fn() { draw(s, back) })
       @motion.measure(c, i, key_of(s))
       steps_drawn_now.val = was
     })
@@ -2407,11 +2439,33 @@ fn steps_shown(
 }
 
 ///|
+/// How far in from a panel's left edge a swipe takes a step back (Ctx::nav's, as a page's).
+let step_edge : Double = 20.0
+
+///|
 /// Escape in a panel that goes in steps: back a step, where it is past its first (taken so, the panel open still).
 fn steps_escape(p : Presented) -> Bool {
   match p.steps {
-    Some(nav) if nav.depth() > 1 => nav.pop()
-    _ => false
+    Some(nav) =>
+      match nav.top().on_back {
+        // (a flow kept elsewhere: told, the panel going as it goes; its first step's back closing it there)
+        Some(f) => {
+          f()
+          true
+        }
+        None => nav.depth() > 1 && nav.pop()
+      }
+    None => false
+  }
+}
+
+///|
+/// A step's title, which of its flow's it is and what it is about: as they are now where it says (`live`: the first's
+/// the panel's, a wizard's), else as it was given.
+fn words_of_step(s : PanelStep) -> (String, String, String) {
+  match s.live {
+    Some(f) => f()
+    None => (s.title, s.count, s.description)
   }
 }
 
@@ -2422,19 +2476,31 @@ fn step_head(
   c : @ui.Ctx,
   key : String,
   title : String,
-  back : () -> Unit,
+  count : String,
+  back : (() -> Unit)?,
   row : @ui.Style,
   words : @ui.TextStyle,
   line : Double,
 ) -> Unit {
   c.box(style=row.then(step_head_gap), fn() {
-    c.box(style=in_line(step_back_side - line).then(@ui.style(ml=room(-step_back_in))), fn() {
-      if icon_button(c, "chevron-left", key=key + "/back", size=step_back_side, round=true, label=t("common.back")) {
-        back()
+    match back {
+      Some(f) =>
+        c.box(style=in_line(step_back_side - line).then(@ui.style(ml=room(-step_back_in))), fn() {
+          if icon_button(c, "chevron-left", key=key + "/back", size=step_back_side, round=true, label=t("common.back")) {
+            f()
+          }
+        })
+        |> ignore
+      None => ()
+    }
+    // (which of its flow's steps beside its title: Connect.css.ts dialogStep)
+    c.box(style=dialog_title_line, fn() {
+      c.text(title, style=words) |> ignore
+      if count != "" {
+        c.text(count, style=dialog_step) |> ignore
       }
     })
     |> ignore
-    c.text(title, style=words) |> ignore
   })
   |> ignore
 }
