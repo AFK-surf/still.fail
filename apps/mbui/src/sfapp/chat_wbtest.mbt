@@ -213,7 +213,7 @@ test "images are sized before they load" {
     held: false,
   }
   let box = fn(a : Attachment) {
-    @sfpages.image_box(a, @sfpages.image_least, min_tall_width=@sfpages.image_tall_min_w)
+    @sfpages.image_box(a, @sfpages.image_least, min_side=@sfpages.image_min_side)
   }
   assert_eq(box(a), (160.0, 300.0, false))
   assert_eq(box({ ..a, width: 1600.0, height: 900.0 }), (360.0, 203.0, false))
