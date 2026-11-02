@@ -3,7 +3,7 @@
 // within its silence, and the side here says the connection was lost. test/sandbox.test.ts covers the rest.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { BRIDGE, CONNECTION_LOST, LOST_EXIT } from "../src/agents/sandbox.ts";
@@ -42,12 +42,16 @@ far.on("exit", (code) => process.exit(code ?? 1));
   );
   chmodSync(ssh, 0o755);
   const pidFile = join(dir, "pid");
-  const spec = { ssh: [ssh, "s-x.ws@host"], program: "/bin/sh", args: ["-c", `echo $$ > ${pidFile}; exec tail -f /dev/null`], cwd: dir, ports: [], silentMs: 900 };
-  const child = spawn(process.execPath, [BRIDGE, "host", JSON.stringify(spec)], { stdio: ["pipe", "ignore", "pipe"] });
+  const spec = { ssh: [ssh, "s-x.ws@host"], program: "/bin/sh", args: ["-c", `echo $$ > ${pidFile}; echo ready; exec tail -f /dev/null`], cwd: dir, ports: [], silentMs: 900 };
+  const child = spawn(process.execPath, [BRIDGE, "host", JSON.stringify(spec)], { stdio: ["pipe", "pipe", "pipe"] });
+  let out = "";
   let err = "";
+  child.stdout.on("data", (b) => (out += b));
   child.stderr.on("data", (b) => (err += b));
   const ended = new Promise<number | null>((r) => child.on("close", (code) => r(code)));
-  await until(() => existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() !== "");
+  // Held once its output has come here, not once it wrote its pid there: that it started comes before its output, and
+  // held before it came, the side here never knew it started and said the sandbox was not reached (255, 41444453924).
+  await until(() => out.includes("ready"));
   const pid = Number(readFileSync(pidFile, "utf8"));
   process.kill(Number(readFileSync(join(dir, "ssh.pid"), "utf8")), "SIGSTOP");
   await until(() => !alive(pid));
