@@ -21,8 +21,13 @@ fn senren_art_url(art : String) -> String {
 }
 
 ///|
-/// Which drawing of the pictures is had (web/public/share-looks/<n>/).
+/// Which drawing of the pictures (and of the face the looks' words are in: @sfbase.share_face_whole) is had
+/// (web/public/share-looks/<n>/).
 let senren_drawn : Int = 1
+
+///|
+/// What each of these looks' keys starts with.
+let senren_prefix : String = "senren-"
 
 ///|
 /// Whether the look being drawn is drawn small, in the looks' strip (sr_box as box 0: share_looks.mbt look_tile): its

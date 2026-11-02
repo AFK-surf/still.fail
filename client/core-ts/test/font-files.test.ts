@@ -133,9 +133,21 @@ test("a face's preview is fetched once and kept", async () => {
   await assert.rejects(run(r.files.preview("comic-sans")));
 });
 
+test("a file of the share card's looks is fetched from the site once and kept; nothing else is", async () => {
+  const r = rig();
+  const url = `${ORIGIN}/share-looks/1/face-400.gz`;
+  r.host.onFetch((req) => (req.url === url ? { status: 200, headers: [], body: new Uint8Array([4, 2]) } : { status: 404, headers: [], body: new Uint8Array() }));
+  assert.deepEqual([...((await run(r.files.share("1/face-400.gz"))) as Beside).bytes], [4, 2]);
+  assert.deepEqual([...((await run(r.files.share("1/face-400.gz"))) as Beside).bytes], [4, 2]);
+  assert.equal(r.host.requests.filter((q) => q.url === url).length, 1);
+  await assert.rejects(run(r.files.share("1/face-600.gz")));
+  for (const file of ["../avatars/a.gz", "1/a1-murasame-adv.webp", "x/face-400.gz", "https://evil.test/a.gz"]) await assert.rejects(run(r.files.share(file)));
+});
+
 test("the calls: fonts.fetch, fonts.preview {id}; fonts.file {sha256}; fonts.keep {sha256} with the file beside", () => {
   assert.deepEqual(parseCall("fonts.fetch", { id: "inter" }), { kind: "fonts", call: { kind: "fetch", id: "inter" } });
   assert.deepEqual(parseCall("fonts.preview", { id: "inter" }), { kind: "fonts", call: { kind: "preview", id: "inter" } });
+  assert.deepEqual(parseCall("fonts.share", { file: "1/face-400.gz" }), { kind: "fonts", call: { kind: "share", file: "1/face-400.gz" } });
   assert.deepEqual(parseCall("fonts.file", { sha256: "ab" }), { kind: "fonts", call: { kind: "file", sha256: "ab" } });
   assert.deepEqual(parseCall("fonts.keep", { sha256: "ab" }, new Uint8Array([1])), { kind: "fonts", call: { kind: "keep", sha256: "ab", bytes: new Uint8Array([1]) } });
   assert.throws(() => parseCall("fonts.keep", { sha256: "ab" }));

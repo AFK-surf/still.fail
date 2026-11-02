@@ -1808,6 +1808,8 @@ pub let share_ground : Int64
 
 pub let share_ink : Int64
 
+pub let share_letters_apart : @ui.Tracking
+
 pub let share_look_in : @ui.Space
 
 pub let share_look_ring : @ui.Radius

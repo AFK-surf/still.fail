@@ -524,6 +524,8 @@ pub struct ContextMenu {
   mut copying : String
   mut share : (() -> Unit)?
   mut share_link : String
+  mut share_words : String
+  mut share_key : String
 }
 
 pub(all) struct Favorite {

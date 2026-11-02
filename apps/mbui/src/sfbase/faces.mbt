@@ -351,6 +351,50 @@ pub fn share_face_given() -> Int {
 }
 
 ///|
+/// The drawing whose whole share face was asked for (share_face_whole), 0 none.
+let share_face_whole_asked : Ref[Int] = Ref(0)
+
+///|
+/// The share card's face with the characters of looks whose words the app's carried face has not (千恋＊万花's: the
+/// card's every word, sfpages/share_senren.mbt), had from still.fail's site as their pictures are
+/// (web/public/share-looks/<drawing>/face-<weight>.gz, `fonts.share`, kept by the core once fetched; scripts/fonts.py
+/// --share makes both), so the app does not carry them: asked once a run, and once each weight's is here, given to the
+/// share face in place of the carried one (each a superset of it). Until then, or where it cannot be had, the card's
+/// words are in the carried face, a character not in it in the system's.
+pub fn share_face_whole(src : Source, drawing : Int) -> Unit {
+  if share_face_whole_asked.val == drawing {
+    return
+  }
+  share_face_whole_asked.val = drawing
+  // (the carried one given first: asked for later, it would not be given over the whole one)
+  ignore(share_face_given())
+  let weights = [400, 600]
+  let got : Map[Int, Bytes] = Map::new()
+  for weight in weights {
+    let file = "\{drawing}/face-\{weight}.gz"
+    (src.read_bytes)("fonts.share", Json::object({ "file": file.to_json() }), fn(r) {
+      match r {
+        Ok((_, gz)) =>
+          match @zip.gunzip(gz) {
+            Some(b) => {
+              got[weight] = b
+              if got.size() == weights.length() && share_face_whole_asked.val == drawing {
+                @ui.face_clear(share_face)
+                for w in weights {
+                  ignore(@ui.face_add_bytes(share_face, got.get(w).unwrap(), weight=w))
+                }
+              }
+            }
+            None => ()
+          }
+        // (asked again next run)
+        Err(_) => ()
+      }
+    })
+  }
+}
+
+///|
 /// The host face the fonts page's 默认 for code is in: the app's own code face, given to one of its own once.
 fn own_code_preview() -> Int {
   if !@ui.face_given(own_code_face) {

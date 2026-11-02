@@ -761,6 +761,8 @@ pub(all) struct ListsFrame {
   at : @sf.ListAt
 }
 
+type MapPlace
+
 pub(all) struct MessageHere {
   station : String
   session : String
@@ -820,6 +822,8 @@ pub(all) struct SquareParts {
   square : (Int64, () -> Unit, Int32) -> Int32
   corner : (String) -> Unit
 }
+
+type SrCover
 
 // Type aliases
 

@@ -141,6 +141,8 @@ pub fn fixture_fonts_read(f : Fixture, name : String) -> Result[(Json, Bytes), J
         },
       )
     "fonts.preview" => Some(Ok(({}, file)))
+    // a look's own face (@sfbase.share_face_whole): not on the made-up site, the card in the face the app carries
+    "fonts.share" => Some(Err({ "code": "not_found", "message": "没有这个文件" }))
     _ => None
   }
 }

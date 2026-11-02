@@ -244,16 +244,22 @@ SHARE_LATIN = list(range(0x20, 0x7F)) + list(range(0xA0, 0x180)) + [0x2013, 0x20
 # Garamond's on the line
 SHARE_FROM_CJK = "…"
 SHARE_OUT = ROOT / "apps/mbui/src/sfbase/share_face.mbt"
+# Looks whose words the app does not carry a face for (千恋＊万花's, apps/mbui/src/sfpages/share_senren.mbt): the face with
+# their characters too is put on still.fail's site beside their pictures (SHARE_SITE/face-<weight>.gz, the drawing's
+# number as share_senren.mbt's senren_drawn), had as the card is drawn in one of them (@sfbase.share_face_whole)
+SHARE_SITE_KEYS = ("web-main.stations.shareSenren.", "web-main.stations.shareLook.senren-")
+SHARE_SITE = ROOT / "web/public/share-looks/1"
 
 
-def share_chars() -> str:
+def share_chars(site: bool) -> str:
+    """The characters of the card's words: the app's (none of SHARE_SITE_KEYS'), or the site's (theirs too)."""
     words = SHARE_MORE
     for f in sorted((ROOT / "client/i18n/catalog/zh").glob("*.json")):
-        words += "".join(v for k, v in json.loads(f.read_text()).items() if k.startswith(SHARE_KEYS))
+        words += "".join(v for k, v in json.loads(f.read_text()).items() if k.startswith(SHARE_KEYS) and (site or not k.startswith(SHARE_SITE_KEYS)))
     return "".join(sorted({c for c in words if ord(c) >= 0x2E80 or c in SHARE_FROM_CJK}))
 
 
-def share_one(weight: int, latin_url: str, cjk_url: str) -> bytes:
+def share_one(weight: int, latin_url: str, cjk_url: str, site: bool) -> bytes:
     from fontTools import subset as fsubset
     from fontTools.merge import Merger
     from fontTools.ttLib import TTFont
@@ -279,7 +285,7 @@ def share_one(weight: int, latin_url: str, cjk_url: str) -> bytes:
     opts.hinting = False
     opts.notdef_outline = True
     sub = fsubset.Subsetter(opts)
-    sub.populate(text=share_chars())
+    sub.populate(text=share_chars(site))
     sub.subset(cjk)
     # (tables only one of them has: the merger takes neither)
     for font, tables in ((latin, ("STAT", "gasp")), (cjk, ("vhea", "vmtx", "gasp"))):
@@ -308,7 +314,8 @@ def share_one(weight: int, latin_url: str, cjk_url: str) -> bytes:
 
 
 def share() -> None:
-    """Writes SHARE_OUT: each weight's file, gzipped, as a Bytes literal (as inter_face.mbt keeps Inter)."""
+    """Writes SHARE_OUT: each weight's file, gzipped, as a Bytes literal (as inter_face.mbt keeps Inter); and the site's,
+    each gzipped in SHARE_SITE."""
     lines = [
         "// The share card's face: EB Garamond's Latin (grown to stand as tall as 霞鹜文楷's) and 霞鹜文楷's characters of the",
         "// card's words, one file a weight (SIL Open Font License, both). Made by scripts/fonts.py --share (do not edit: make",
@@ -316,7 +323,10 @@ def share() -> None:
         "",
     ]
     for weight, latin_url, cjk_url in SHARE_FACE:
-        data = share_one(weight, latin_url, cjk_url)
+        site = gzip.compress(share_one(weight, latin_url, cjk_url, True), 9, mtime=0)
+        (SHARE_SITE / f"face-{weight}.gz").write_bytes(site)
+        print(f"share {weight} (the site's): {len(site)} gzipped", file=sys.stderr)
+        data = share_one(weight, latin_url, cjk_url, False)
         gz = gzip.compress(data, 9, mtime=0)
         print(f"share {weight}: {len(data)} bytes, {len(gz)} gzipped, sha256 {hashlib.sha256(data).hexdigest()}", file=sys.stderr)
         lit = "".join(chr(b) if 0x20 <= b < 0x7F and b not in (0x22, 0x5C) else "\\x%02x" % b for b in gz)
