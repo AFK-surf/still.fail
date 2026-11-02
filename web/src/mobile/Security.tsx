@@ -2,7 +2,7 @@
 // the settings, turning it on, a device to confirm in a bottom sheet, and what a device waiting itself shows. The
 // core's (`lock`, `lockDraft`, `lockPrompts`; client/core-ts/src/views/lock.ts): this only draws.
 import { useEffect, useState } from "react";
-import { useCall } from "../core/react.ts";
+import { useCall, useTopic } from "../core/react.ts";
 import { useDoing } from "../doing.ts";
 import { ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { t } from "../i18n.ts";
