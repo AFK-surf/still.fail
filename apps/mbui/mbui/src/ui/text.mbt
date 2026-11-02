@@ -122,8 +122,8 @@ let text_cache : TextCache = {
 
 ///|
 /// A frame begins: what it shapes and draws from the atlas is kept through it. What the host drew and measured
-/// before, forgotten where it is gone (@hostapi.atlas_generation).
-fn text_frame() -> Unit {
+/// before, forgotten where it is gone (@hostapi.atlas_generation): true then, everything laid out anew.
+fn text_frame() -> Bool {
   text_cache.frame = text_cache.frame + 1
   for a in [text_cache.atlas, text_cache.colour_atlas] {
     match a {
@@ -145,8 +145,15 @@ fn text_frame() -> Unit {
       clear_shapes()
       text_cache.fonts.clear()
       text_cache.metrics.clear()
+      // (and the words laid out in what it measured before, a text's or a paragraph's layout kept on its node, laid out
+      // again: a page's face is loaded after it is given (words_forgotten then), its words laid out till it is in the
+      // place's face, else kept with those widths and drawn in the face, 「s till.fa il」)
+      words_shaped_in.val += 1
+      view_words_rescaled()
+      return true
     }
   }
+  false
 }
 
 ///|

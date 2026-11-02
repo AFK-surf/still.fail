@@ -76,6 +76,9 @@ struct FakeHost {
   // what the app's words' face (face_ui), once given, adds to a cluster's advance in what is set in it, in ems (0 by
   // default: a face given measures as the system's)
   mut ui_face : Double
+  // its glyphs' generation (@hostapi.atlas_generation): moved on by Tester::glyphs_moved_on, as a host's is once a face
+  // it was given is in (a page's, loaded after it is asked for), its scale changes or its atlas is lost
+  mut generation : Int
   // what a digit set all one width (@hostapi.style_tabular) adds to its advance, in ems (0 by default: the same either way)
   mut tabular : Double
   // how big each glyph's picture is, in points (6 by 10 by default): what fills an atlas's plots, as large ones do
@@ -784,7 +787,7 @@ fn h_face_clear(face : Int) -> Unit {
 fn h_atlas_generation() -> Int {
   match fake.val {
     Some({ live: Some(l), .. }) => l.host.atlas_generation()
-    Some(_) => 0
+    Some(f) => f.generation
     None => @hostapi.atlas_generation()
   }
 }

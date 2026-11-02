@@ -327,12 +327,13 @@ test "stage, 大屏 keyboard and mouse in a tall and a short window, touch in a 
     out.push("\{at}: \{stage_said(t)}")
     drawn.push(stage_drawn())
   }
-  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; 34 of them since 千恋＊万花's: their
+  // strip as wide as the picture is laid out, from its start, scrolled, the stage as wide)
   assert_eq(out, [
-    "(1440, 1000, 0): dialog Some((分享卡片, (545, 24, 350.1, 952))) line [(560, 757.6, 320, 21)] look Some((552, 797.2, 78, 124.8)) close Some((635.8, 942, 58, 34)) copy Some((701.8, 942, 102.5, 34)) save None squeeze 0",
-    "(1280, 640, 0): dialog Some((分享卡片, (472, 24, 336, 592))) line [(480, 757.6, 320, 21)] look Some((472, 437.2, 78, 124.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
-    "(840, 1100, 1): dialog Some((分享卡片, (240, 63.3, 360, 973.4))) line [(260, 796.9, 320, 21)] look Some((252, 857.9, 78, 124.8)) close Some((321.9, 1002.7, 62, 34)) copy None save Some((391.9, 1002.7, 126.2, 34)) squeeze 0",
-    "(390, 844, 2): dialog Some((分享卡片, (27, 24, 336, 796))) line [(35, 757.6, 320, 21)] look Some((27, 641.2, 78, 124.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
+    "(1440, 1000, 0): dialog Some((分享卡片, (540, 24, 360, 952))) line [(560, 757.6, 320, 21)] look Some((540, 797.2, 78, 124.8)) close Some((635.8, 942, 58, 34)) copy Some((701.8, 942, 102.5, 34)) save None squeeze 0",
+    "(1280, 640, 0): dialog Some((分享卡片, (460, 24, 360, 592))) line [(480, 757.6, 320, 21)] look Some((460, 437.2, 78, 124.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
+    "(840, 1100, 1): dialog Some((分享卡片, (240, 63.3, 360, 973.4))) line [(260, 796.9, 320, 21)] look Some((240, 857.9, 78, 124.8)) close Some((321.9, 1002.7, 62, 34)) copy None save Some((391.9, 1002.7, 126.2, 34)) squeeze 0",
+    "(390, 844, 2): dialog Some((分享卡片, (24, 24, 342, 796))) line [(35, 757.6, 320, 21)] look Some((15, 641.2, 78, 124.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
   ])
   assert_eq(drawn, [true, true, true, true])
 }
@@ -352,11 +353,12 @@ test "stage, 大屏 keyboard and mouse: the window made shorter and taller again
     out.push("\{h}: \{stage_said(t)}")
     ink.push("\{h}: \{stage_ink(t, 1280.0, h)}")
   }
-  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; 34 of them since 千恋＊万花's: their
+  // strip as wide as the picture is laid out, from its start, scrolled, the stage as wide)
   assert_eq(out, [
-    "800: dialog Some((分享卡片, (472, 24, 336, 752))) line [(480, 757.6, 320, 21)] look Some((472, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
-    "560: dialog Some((分享卡片, (472, 24, 336, 512))) line [(480, 757.6, 320, 21)] look Some((472, 357.2, 78, 124.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
-    "800: dialog Some((分享卡片, (472, 24, 336, 752))) line [(480, 757.6, 320, 21)] look Some((472, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(480, 757.6, 320, 21)] look Some((460, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "560: dialog Some((分享卡片, (460, 24, 360, 512))) line [(480, 757.6, 320, 21)] look Some((460, 357.2, 78, 124.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(480, 757.6, 320, 21)] look Some((460, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
   ])
   // (what it paints: its night over the window, the picture as large as it is drawn)
   // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)

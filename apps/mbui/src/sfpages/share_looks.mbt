@@ -27,6 +27,43 @@ let share_looks : Array[ShareLook] = [
   { key: "poster", draw: poster_look },
   { key: "receipt", draw: receipt_look },
   { key: "terminal", draw: terminal_look },
+  // 千恋＊万花's (share_senren.mbt): the heroines' own, 丛雨's ADV box, 芳乃's fortune slip, 茉子's mission report, 蕾娜's inn
+  // bill, 小春's menu, 芦花's ledger
+  senren("senren-adv", "a1-murasame-adv", sr_adv),
+  senren("senren-omikuji", "a2-yoshino-omikuji", sr_omikuji),
+  senren("senren-ninja", "a3-mako-roof", sr_ninja),
+  senren("senren-ryokan", "a4-lena-ryokan", sr_ryokan),
+  senren("senren-menu", "a5-koharu-sweets", sr_menu),
+  senren("senren-ledger", "a6-roka-ledger", sr_ledger),
+  // chibi: Ciallo's salute, 芳乃's dog ears, 丛雨's parfait, 小春's capsule toys, all six
+  senren("senren-ciallo", "b1-chibi-ciallo", sr_ciallo),
+  senren("senren-inumimi", "b2-chibi-yoshino-ears", sr_inumimi),
+  senren("senren-parfait", "b3-chibi-murasame-spoon", sr_parfait),
+  senren("senren-gacha", "b4-chibi-koharu-gacha", sr_gacha),
+  senren("senren-chibi", "b5-chibi-group", sr_chibi),
+  // the game's own screens: the title, the CG gallery, the routes' affection, the girls' group chat, the staff roll
+  senren("senren-title", "c1-title-kv", sr_title),
+  senren("senren-cg", "e1-murasame-beauty", sr_cg),
+  senren("senren-affection", "a2-yoshino-omikuji", sr_affection),
+  senren("senren-chat", "b2-chibi-yoshino-ears", sr_chat),
+  senren("senren-staff", "c5-staffroll-bg", sr_staff),
+  // 穗织's things: the sword's appraisal, the spring festival's kagura, the town's map, the votive plaques
+  senren("senren-sword", "b6-chibi-murasame-pout", sr_sword),
+  senren("senren-kagura", "d2-yoshino-kagura", sr_kagura),
+  senren("senren-map", "d3-hoori-map", sr_map),
+  senren("senren-ema", "d4-ema", sr_ema),
+  // 穗织画报, a magazine's covers, each heroine whole
+  senren("senren-gahou-murasame", "e1-murasame-beauty", sr_gahou_of("senren-gahou-murasame")),
+  senren("senren-gahou-mako", "e4-mako-beauty", sr_gahou_of("senren-gahou-mako")),
+  senren("senren-gahou-lena", "e3-lena-beauty", sr_gahou_of("senren-gahou-lena")),
+  senren("senren-gahou-roka", "e2-roka-beauty", sr_gahou_of("senren-gahou-roka")),
+  senren("senren-gahou-koharu", "e5-koharu-beauty", sr_gahou_of("senren-gahou-koharu")),
+  senren("senren-gahou-roka2", "f2-roka-cover", sr_gahou_of("senren-gahou-roka2")),
+  // together: the summer festival's photo, the sweets party, after school; 芦花's shop at night
+  senren("senren-photo", "h1-group-festival", sr_photo),
+  senren("senren-party", "h2-group-sweets", sr_party),
+  senren("senren-class", "h3-group-classroom", sr_class),
+  senren("senren-night", "f1-roka-night", sr_night),
 ]
 
 ///|
@@ -56,7 +93,10 @@ fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let now = share_look(src).key
   let fleet = share_fleet(src, w)
   let chosen = c.id("share-card/look/" + now)
-  c.sideways("share-card/looks", fill=true, show=chosen, fn() {
+  // (as wide as the picture is laid out: more looks than that has the room for scrolled in it, not the stage made as
+  // wide as all of them; no room of its own at its foot for a bar (`across`, one strip): the stage as tall as with
+  // four, the picture given the room it had, faded at the edge where more of it goes on)
+  c.sideways("share-card/looks", w=Px(@sf.share_w_most), across=true, fill=true, show=chosen, fn() {
     c.box(style=looks_row, fn() {
       for look in share_looks {
         let id = c.id("share-card/look/" + look.key)
@@ -410,10 +450,10 @@ fn prompt(c : @ui.Ctx, command : String) -> Unit {
 // ── the picker's styles ──────────────────────────────────────────────────
 
 ///|
-/// The looks side by side, 8 apart (four in a 360 phone's stage), in the stage's middle while there is room for all
-/// of them.
+/// The looks side by side, 8 apart (four in a 360 phone's stage), from the strip's start: what is past its end
+/// scrolled to (34 of them since 千恋＊万花's), the chosen one brought into view.
 // kept across runs: a value (no field of it changes)
-let looks_row : @ui.Style = @ui.css("row w=Full gap=S2 justify=JCenter")
+let looks_row : @ui.Style = @ui.css("row gap=S2")
 
 ///|
 /// A look: its small picture over its name, 6 apart, as wide as its name or its ring.

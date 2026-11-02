@@ -3892,6 +3892,8 @@ export interface FleetView {
 	 * today), and those that ran their tasks today: 今天用了 3 台设备.
 	 */
 	where: string;
+	/** That as a number: 3 (a look of the card says it alone, 千恋＊万花's). */
+	devices: number;
 	/** The chats archived and what was spent today; absent while it is read, or with nothing spent nor archived. */
 	today?: FleetToday;
 	/** The same over the last 7 days, each day's chats archived; absent with it. */
@@ -3901,6 +3903,8 @@ export interface FleetView {
 	 * absent with none, or with the days.
 	 */
 	tasksText?: string;
+	/** That as a number: 312; absent with it. */
+	tasks?: number;
 	/** How many each chat that ran any did, on average: 平均每个对话 5.2 个. */
 	tasksPer?: string;
 }

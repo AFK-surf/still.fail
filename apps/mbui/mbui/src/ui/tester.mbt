@@ -333,6 +333,7 @@ pub fn Tester::new(
     frame_failed_images: [],
     bold: 0.0,
     ui_face: 0.0,
+    generation: 0,
     tabular: 0.0,
     glyph_box: (6.0, 10.0),
     faces_wider: {},
@@ -2160,6 +2161,13 @@ pub fn Tester::bold_wider(self : Tester, em : Double) -> Unit {
 /// in the system's, from now on (the fake host's shapes ignore faces otherwise).
 pub fn Tester::ui_face_wider(self : Tester, em : Double) -> Unit {
   self.fake.ui_face = em
+}
+
+///|
+/// The host's glyphs moved on (@hostapi.atlas_generation), as a host's do once a face it was given is in (a page's,
+/// loaded after it was asked for), its scale changes or its atlas is lost: seen as the next frame begins.
+pub fn Tester::glyphs_moved_on(self : Tester) -> Unit {
+  self.fake.generation = self.fake.generation + 1
 }
 
 ///|

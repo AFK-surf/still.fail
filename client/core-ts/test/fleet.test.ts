@@ -128,6 +128,7 @@ test("the card shared says how many chats are at work now, and on how many stati
   // used today: a and b (chats at work), e and g (at rest), d (running their tasks) and h (it ran some today); not f
   assert.deepEqual([v.chats, v.chatsText, v.where, v.at], [4, "4 个对话正在运行", "今天用了 6 台设备", "10月26日 04:12"]);
   assert.deepEqual([v.tasksText, v.tasksPer], ["近 7 天 agent 跨设备执行了 4 个任务", "平均每个对话 2 个"]);
+  assert.deepEqual([v.tasks, v.devices], [4, 6]);
   // the calls of the last 7 days
   assert.deepEqual(v.spent.map((x: J) => [x.kind, x.tokens]), [["claude", 100]]);
   assert.deepEqual(v.today, { title: "今天", stats: [{ label: "归档的对话", value: "4 个" }, { label: "折合费用", value: "$8" }] });

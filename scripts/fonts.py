@@ -238,8 +238,11 @@ SHARE_FACE = [
 SHARE_GROW = 1.14
 SHARE_KEYS = ("core-logic.fleet.", "core-logic.format.", "core-views.profiles.group.", "core-views.usage.", "web-main.stations.share")
 SHARE_MORE = "亿万千百十零〇一二三四五六七八九年月日周时分秒个台，。：；、（）「」『』“”‘’…—·！？～"
-SHARE_LATIN = list(range(0x20, 0x7F)) + list(range(0xA0, 0x180)) + [0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2026,
+SHARE_LATIN = list(range(0x20, 0x7F)) + list(range(0xA0, 0x180)) + [0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022,
                                                                     0x2030, 0x20AC, 0x2122, 0x2212, 0x2264, 0x2265]
+# 文楷's though under 0x2E80: … as the card's words say it, as Chinese does (「……」, its dots in the middle), not EB
+# Garamond's on the line
+SHARE_FROM_CJK = "…"
 SHARE_OUT = ROOT / "apps/mbui/src/sfbase/share_face.mbt"
 
 
@@ -247,7 +250,7 @@ def share_chars() -> str:
     words = SHARE_MORE
     for f in sorted((ROOT / "client/i18n/catalog/zh").glob("*.json")):
         words += "".join(v for k, v in json.loads(f.read_text()).items() if k.startswith(SHARE_KEYS))
-    return "".join(sorted({c for c in words if ord(c) >= 0x2E80}))
+    return "".join(sorted({c for c in words if ord(c) >= 0x2E80 or c in SHARE_FROM_CJK}))
 
 
 def share_one(weight: int, latin_url: str, cjk_url: str) -> bytes:
