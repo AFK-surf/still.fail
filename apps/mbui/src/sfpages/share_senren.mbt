@@ -44,6 +44,7 @@ let senren_small : Ref[Bool] = Ref(false)
 fn senren(key : String, art : String, draw : (@ui.Ctx, Json?, Int, Bool) -> Int) -> ShareLook {
   {
     key,
+    group: "senren",
     draw: fn(c, fleet, id, flat) {
       if id == 0 {
         return sr_box(c, 0, true, senren_tile_ground, fn() {

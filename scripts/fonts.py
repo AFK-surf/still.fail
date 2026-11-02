@@ -247,7 +247,7 @@ SHARE_OUT = ROOT / "apps/mbui/src/sfbase/share_face.mbt"
 # Looks whose words the app does not carry a face for (千恋＊万花's, apps/mbui/src/sfpages/share_senren.mbt): the face with
 # their characters too is put on still.fail's site beside their pictures (SHARE_SITE/face-<weight>.gz, the drawing's
 # number as share_senren.mbt's senren_drawn), had as the card is drawn in one of them (@sfbase.share_face_whole)
-SHARE_SITE_KEYS = ("web-main.stations.shareSenren.", "web-main.stations.shareLook.senren-")
+SHARE_SITE_KEYS = ("web-main.stations.shareSenren.", "web-main.stations.shareLook.senren-", "web-main.stations.shareGroup.")
 SHARE_SITE = ROOT / "web/public/share-looks/1"
 
 

@@ -1245,6 +1245,8 @@ let en : Map[String, String] = {
   "web-main.stations.savedToPhotos": "Saved to Photos",
   "web-main.stations.shareCard": "Share card",
   "web-main.stations.shareFailed": "Couldn't copy the image",
+  "web-main.stations.shareGroup.own": "still.fail",
+  "web-main.stations.shareGroup.senren": "Senren＊Banka",
   "web-main.stations.shareLook": "Look",
   "web-main.stations.shareLook.night": "Night",
   "web-main.stations.shareLook.poster": "Poster",

@@ -1217,6 +1217,8 @@ web-main.stations.saveToPhotosFailed
 web-main.stations.savedToPhotos
 web-main.stations.shareCard
 web-main.stations.shareFailed
+web-main.stations.shareGroup.own
+web-main.stations.shareGroup.senren
 web-main.stations.shareLook
 web-main.stations.shareLook.night
 web-main.stations.shareLook.poster

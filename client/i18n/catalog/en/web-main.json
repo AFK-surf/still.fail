@@ -350,6 +350,8 @@
   "web-main.history.unbindFailed": "Couldn't unlink: {error}",
   "web-main.jobs.chip": "Running {n}",
   "web-main.stations.shareCard": "Share card",
+  "web-main.stations.shareGroup.own": "still.fail",
+  "web-main.stations.shareGroup.senren": "Senren＊Banka",
   "web-main.stations.shareLook": "Look",
   "web-main.stations.shareLook.night": "Night",
   "web-main.stations.shareLook.poster": "Poster",

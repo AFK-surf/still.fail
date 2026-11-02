@@ -1226,6 +1226,8 @@ let zh : Map[String, String] = {
   "web-main.stations.savedToPhotos": "已保存到相册",
   "web-main.stations.shareCard": "分享卡片",
   "web-main.stations.shareFailed": "无法复制图片",
+  "web-main.stations.shareGroup.own": "still.fail",
+  "web-main.stations.shareGroup.senren": "千恋＊万花",
   "web-main.stations.shareLook": "样式",
   "web-main.stations.shareLook.night": "夜色",
   "web-main.stations.shareLook.poster": "大字报",

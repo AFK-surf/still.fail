@@ -14,19 +14,28 @@
 /// `web-main.stations.shareLook.<key>`; `draw` the picture of the `fleet` view as box `id`, round as a card on the
 /// stage or `flat` (handed out: its ground to its edges). A new look is a `draw` and a line in share_looks: the picker,
 /// the fixtures (share-card-<key>) and the corners' check take it from there; the core keeps any key it is given.
+/// `group` the set it is offered in (share_groups), its looks alone in the strip while that set is shown.
 priv struct ShareLook {
   key : String
+  group : String
   draw : (@ui.Ctx, Json?, Int, Bool) -> Int
 }
+
+///|
+/// The sets the looks are offered in, in their order, each named by the app's words'
+/// `web-main.stations.shareGroup.<group>`: still.fail's own, and 千恋＊万花's thirty (share_senren.mbt), which in one strip
+/// put the others out of sight (2026-11-03 用户：「想办法分组吧，不然这一批分享卡放进去后其它的卡都看不到了」).
+// kept across runs: a table, never written
+let share_groups : Array[String] = ["own", "senren"]
 
 ///|
 /// The looks, in the order they are offered; the first the one drawn while none is chosen.
 // kept across runs: a table, never written
 let share_looks : Array[ShareLook] = [
-  { key: "night", draw: night_look },
-  { key: "poster", draw: poster_look },
-  { key: "receipt", draw: receipt_look },
-  { key: "terminal", draw: terminal_look },
+  { key: "night", group: "own", draw: night_look },
+  { key: "poster", group: "own", draw: poster_look },
+  { key: "receipt", group: "own", draw: receipt_look },
+  { key: "terminal", group: "own", draw: terminal_look },
   // 千恋＊万花's (share_senren.mbt): the heroines' own, 丛雨's ADV box, 芳乃's fortune slip, 茉子's mission report, 蕾娜's inn
   // bill, 小春's menu, 芦花's ledger
   senren("senren-adv", "a1-murasame-adv", sr_adv),
@@ -85,32 +94,56 @@ fn share_look(src : Source) -> ShareLook {
 }
 
 ///|
-/// Under the picture, over its buttons: each look the picture itself drawn small (its top, as wide as its tile), its
-/// name under it, the chosen one ringed; a strip that scrolls sideways once there are more than the stage is wide for,
-/// the chosen one brought into view. A press on another draws the card in it at once and keeps it the device's
-/// (`prefs.set`).
+/// Under the picture, over its buttons: the sets of looks by name (share_groups), the one shown in the white; under them
+/// that set's looks, each the picture itself drawn small (its top, as wide as its tile), its name under it, the chosen
+/// one ringed; a strip that scrolls sideways once there are more than the stage is wide for, the chosen one brought into
+/// view. The set shown is the chosen look's until another is pressed (share_group_shown). A press on a look draws the
+/// card in it at once and keeps it the device's (`prefs.set`).
 fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let now = share_look(src).key
+  let look_now = share_look(src)
+  let now = look_now.key
   let fleet = share_fleet(src, w)
   let chosen = c.id("share-card/look/" + now)
-  // (as wide as the picture is laid out: more looks than that has the room for scrolled in it, not the stage made as
-  // wide as all of them; no room of its own at its foot for a bar (`across`, one strip): the stage as tall as with
-  // four, the picture given the room it had, faded at the edge where more of it goes on)
-  c.sideways("share-card/looks", w=Px(@sf.share_w_most), across=true, fill=true, show=chosen, fn() {
-    c.box(style=looks_row, fn() {
-      for look in share_looks {
-        let id = c.id("share-card/look/" + look.key)
-        let on = look.key == now
-        let name = @sf.t("web-main.stations.shareLook." + look.key)
-        let b = c.box(style=looks_item, id~, fn() {
-          c.box(style=if on { looks_ring_on } else { looks_ring }, fn() { look_tile(c, look, fleet) }) |> ignore
-          c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
+  let shown = if share_group_shown.val == "" { look_now.group } else { share_group_shown.val }
+  c.box(style=groups_and_looks, fn() {
+    c.box(style=groups_row, fn() {
+      for group in share_groups {
+        let id = c.id("share-card/group/" + group)
+        let on = group == shown
+        let name = @sf.t("web-main.stations.shareGroup." + group)
+        let b = c.box(style=groups_item, id~, fn() {
+          c.text(name, style=if on { groups_name_on } else if c.lit(id) { groups_name_lit } else { groups_name }) |> ignore
         })
-        c.semantics(b, Button, id~, label=name, selected=on)
-        if c.clicked(id) && !on {
-          (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, fn(_) {  })
+        c.semantics(b, Tab, id~, label=name, selected=on)
+        if c.clicked(id) {
+          share_group_shown.val = group
         }
       }
+    })
+    |> ignore
+    // (as wide as the picture is laid out: more looks than that has the room for scrolled in it, not the stage made as
+    // wide as all of them; no room of its own at its foot for a bar (`across`, one strip): the stage as tall as with
+    // four, the picture given the room it had, faded at the edge where more of it goes on)
+    c.sideways("share-card/looks/" + shown, w=Px(@sf.share_w_most), across=true, fill=true, show=chosen, fn() {
+      c.box(style=looks_row, fn() {
+        for look in share_looks {
+          if look.group != shown {
+            continue
+          }
+          let id = c.id("share-card/look/" + look.key)
+          let on = look.key == now
+          let name = @sf.t("web-main.stations.shareLook." + look.key)
+          let b = c.box(style=looks_item, id~, fn() {
+            c.box(style=if on { looks_ring_on } else { looks_ring }, fn() { look_tile(c, look, fleet) }) |> ignore
+            c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
+          })
+          c.semantics(b, Button, id~, label=name, selected=on)
+          if c.clicked(id) && !on {
+            (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, fn(_) {  })
+          }
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -447,7 +480,45 @@ fn prompt(c : @ui.Ctx, command : String) -> Unit {
   |> ignore
 }
 
+///|
+/// The set of looks shown in the strip, pressed while the card is open; "" none pressed: the chosen look's.
+let share_group_shown : Ref[String] = Ref("")
+
+///|
+fn share_looks_reset() -> Unit {
+  share_group_shown.val = ""
+}
+
 // ── the picker's styles ──────────────────────────────────────────────────
+
+///|
+/// The sets' names over the strip, 8 apart.
+// kept across runs: a value (no field of it changes)
+let groups_and_looks : @ui.Style = @ui.css("gap=S2 w=Full align=ACenter")
+
+///|
+/// The sets' names in a line in the middle, 16 apart.
+// kept across runs: a value (no field of it changes)
+let groups_row : @ui.Style = @ui.css("row gap=S4 justify=JCenter w=Full")
+
+///|
+/// A set's name, with room round it to be pressed.
+// kept across runs: a value (no field of it changes)
+let groups_item : @ui.Style = @ui.css("py=S1")
+
+///|
+/// A set's name: as the looks' names are (the white thinned; the one shown the white, a little bolder), a size larger.
+// kept across runs: a value (no field of it changes)
+let groups_name : @ui.TextStyle = looks_name.then(@ui.text_style(size=Sm))
+
+///|
+// kept across runs: a value (no field of it changes)
+let groups_name_on : @ui.TextStyle = groups_name.then(@ui.text_style(color=Data(@sf.share_ink), weight=Medium))
+
+///|
+/// Another set's name under the hand: the white, as it rests otherwise (the hand changes its ink alone).
+// kept across runs: a value (no field of it changes)
+let groups_name_lit : @ui.TextStyle = groups_name.then(@ui.text_style(color=Data(@sf.share_ink)))
 
 ///|
 /// The looks side by side, 8 apart (four in a 360 phone's stage), from the strip's start: what is past its end
