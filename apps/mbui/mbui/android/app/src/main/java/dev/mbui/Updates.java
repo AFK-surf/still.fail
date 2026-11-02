@@ -213,17 +213,24 @@ final class Updates {
         percent = size > 0 ? (int) (Math.min(have, size) * 100 / size) : -1;
         changed(0);
         worker = new Thread(() -> {
+            String result = "ready", why = "";
             try {
                 download(c, url, sha256, size, name);
-                phase = "ready";
                 Host.log("update: " + name + " ready");
-                if (!inSight) away(c);
             } catch (Exception e) {
-                phase = "failed";
-                error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-                Host.log("update failed: " + error);
+                result = "failed";
+                why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                Host.log("update failed: " + why);
             }
-            changed(phase.equals("failed") ? -1 : 1);
+            // Publish the result only once another download can be accepted: an earlier progress event may read it
+            // before changed() is delivered, and the app may then hand us a newer build right away.
+            synchronized (Updates.class) {
+                worker = null;
+                error = why;
+                phase = result;
+                if (result.equals("ready") && !inSight) away(c);
+                changed(phase.equals("failed") ? -1 : 1);
+            }
         }, "mbui-update");
         worker.start();
     }

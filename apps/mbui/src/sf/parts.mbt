@@ -4622,12 +4622,10 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 
 
 ///|
-/// A newer build ready for the person's word (Home.kt's update key; one look wherever a frame puts it, the size of the
-/// keys beside it: `side` across, its mark `mark`): in its middle the update's mark, an arrow up in a ring (what a
-/// newer version is, as a station's updating_mark; not download's: the build is here already, the key is there only
-/// while it waits on its press, no dot over it to say so); while it is `busy` (being put in place, the app starting
-/// again), its arrow going up as a station's does as it updates (updating_mark), no words. `why` its tip. Said to be
-/// `label`. True on the frame it is pressed, not while it is busy.
+/// An update in a bar: while it comes, its progress in the mark's place (`coming`: Some of a known part or None for an
+/// unknown part); ready, the update's arrow up in a ring; being put in place (`busy`), that arrow going up. The two
+/// marks fade between each other without moving the key. `why` is its tip, `label` what it is said to be. True on its
+/// press, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
   key : String,
@@ -4636,19 +4634,38 @@ pub fn update_key(
   label : String,
   why : String,
   busy : Bool,
+  coming? : Double?? = None,
 ) -> Bool {
   let t = theme()
   let id = c.id(key)
   let hot = c.lit(id) && !busy
+  let progress = ease_to(c, "update/coming/" + key, coming is Some(_))
   let b = c.box(
     style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
     id~,
     fn() {
-      if busy {
-        updating_mark(c, mark, t.p.text) |> ignore
-      } else {
-        icon(c, "update", size=mark, color=t.p.text) |> ignore
-      }
+      c.box(style=@ui.style(w=Fixed(mark), h=Fixed(mark)), fn() {
+        let ready = c.box(style=update_ring_at, fn() {
+          if busy {
+            updating_mark(c, mark, t.p.text) |> ignore
+          } else {
+            icon(c, "update", size=mark, color=t.p.text) |> ignore
+          }
+        })
+        c.look(ready, @ui.look(alpha=1.0 - progress))
+        if progress > 0.0 {
+          c.layer(fn() {
+            let part = match coming {
+              Some(part) => part
+              None => Some(1.0)
+            }
+            let downloading = c.box(style=update_ring_at, fn() { coming_mark(c, key, part, mark, t.p.text) })
+            c.look(downloading, @ui.look(alpha=progress))
+          })
+          |> ignore
+        }
+      })
+      |> ignore
       if !busy {
         press_ripple(c, id, side / 2.0)
       }
