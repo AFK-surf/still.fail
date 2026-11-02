@@ -223,6 +223,46 @@ test("a stream that comes back after its link went is told what was told meanwhi
   await late.close();
 });
 
+// On ccvm (2026-11-02, 17:18-17:20) every device that came back had its viewer's whole sidebar read, 42 to 46 s a read
+// while memory was short, their other reads waiting behind it up to 99 s: a stream that comes back has read what
+// changed of its sidebar while none of its viewer's streams was here, and nothing more.
+test("a stream that comes back has read only what changed of its sidebar meanwhile, here and at the next process", async () => {
+  const time = testClock();
+  const file = join(mkdtempSync(join(tmpdir(), "events-")), "run", "events.json");
+  const before = setup(time.clock, { file, previous: previous() });
+  const sidebar = (reads: string[]) => reads.filter((r) => r === "chats" || r === "chatRows");
+  const first = await opened(before.events);
+  before.change({ type: "session", key: "s1" });
+  await settle();
+  // Nothing changed meanwhile: nothing read.
+  await first.close();
+  before.reads.length = 0;
+  const quiet = await opened(before.events, first.got.findLast((e) => e.id)!.id!);
+  await settle();
+  assert.equal(quiet.resumed, true);
+  assert.deepEqual(sidebar(before.reads), [], "nothing read");
+  // A session changed meanwhile: the items it touches alone.
+  await quiet.close();
+  before.rows["a@x"] = [{ id: "1", title: "one, renamed" }];
+  before.change({ type: "session", key: "1" });
+  await settle();
+  before.reads.length = 0;
+  const changed = await opened(before.events, quiet.got.findLast((e) => e.id)?.id ?? first.got.findLast((e) => e.id)!.id!);
+  await settle();
+  assert.deepEqual(sidebar(before.reads), ["chatRows"], "no sidebar read whole");
+  assert.deepEqual(changed.got.filter((e) => e.event === "chat").map((e) => e.data), [{ id: "1", title: "one, renamed" }]);
+  // An update with its stream here: back at the next process, nothing changed since, nothing read there.
+  const heard = changed.got.findLast((e) => e.id)!.id!;
+  await before.events.handOver();
+  await changed.close();
+  const after = setup(time.clock, { file, previous: previous() }, before);
+  const moved = await opened(after.events, heard);
+  await settle();
+  assert.equal(moved.resumed, true);
+  assert.deepEqual(sidebar(after.reads), [], "nothing read at the next process");
+  await moved.close();
+});
+
 test("a stream read afresh is told where the log is, so the next goes on from there though nothing was told", async () => {
   const time = testClock();
   const { events, change } = setup(time.clock);
