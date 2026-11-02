@@ -73,6 +73,8 @@ test "文件 and 用量 at the bar's top, their gear tapped: as 设置 comes in 
     let at_rest = bar_words(t, 0.0)
     let gear = t.locate("icon:settings")
     assert_eq(gear.length(), 1, msg=place)
+    // at the bar's right edge, right of the place's name, as Home's is
+    assert_true(gear[0].0 > rest_x && gear[0].0 > 390.0 - 16.0 - 34.0, msg="\{place}: \{gear[0].0}")
     t.tap(gear[0].0, gear[0].1)
     assert_true(app.nav.top() == Settings, msg=place)
     // halfway through 设置's slide in from the right: the place's page going out to the left beside it is drawn as it

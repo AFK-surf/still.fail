@@ -72,7 +72,7 @@ test "settings opened by Home's gear follow the system's back gesture to the rig
 
 ///|
 test "settings from another place come from its gear at the bar's right edge and return right" {
-  for place in ["stations", "files", "usage"] {
+  for place in ["stations", "usage"] {
     let t = tester("settings")
     assert_true(@sfbase.go_place(place), msg=place)
     t.run_for(switch_fade_ms)
