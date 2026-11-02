@@ -5,13 +5,13 @@
 /// Every place a bar can hold (the core's BAR_PLACES).
 // kept across runs: a table, never written
 let bar_places : Array[String] = [
-  "chats", "files", "stations", "profiles", "connects", "usage", "archive",
+  "chats", "files", "stations", "profiles", "connects", "usage", "archive", "vault",
 ]
 
 ///|
 /// The bars before the core has said (BARS_DEFAULT).
 fn default_bars() -> (Array[Array[String]], Int) {
-  ([["chats", "files", "profiles", "stations"], ["usage", "connects", "archive"]], 0)
+  ([["chats", "files", "profiles", "stations"], ["usage", "connects", "archive", "vault"]], 0)
 }
 
 ///|
@@ -97,6 +97,7 @@ pub fn place_icon(place : String) -> String {
     "connects" => "im"
     "usage" => "chart"
     "archive" => "archive"
+    "vault" => "key"
     _ => "server"
   }
 }

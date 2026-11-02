@@ -314,6 +314,7 @@ android-misc.bar.place.files
 android-misc.bar.place.profiles
 android-misc.bar.place.stations
 android-misc.bar.place.usage
+android-misc.bar.place.vault
 android-misc.core.restarted
 android-misc.drive.add
 android-misc.drive.choose

@@ -321,6 +321,7 @@ let zh : Map[String, String] = {
   "android-misc.bar.place.profiles": "Profile",
   "android-misc.bar.place.stations": "Station",
   "android-misc.bar.place.usage": "用量",
+  "android-misc.bar.place.vault": "密钥",
   "android-misc.core.restarted": "核心已重启，请重试",
   "android-misc.drive.add": "添加",
   "android-misc.drive.choose": "选择文件夹",
