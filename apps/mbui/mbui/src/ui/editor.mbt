@@ -1781,12 +1781,20 @@ pub fn Ctx::editor_focused(self : Ctx, key : String) -> Bool {
 ///|
 /// Lets go of the focus: no field takes keys, the keyboard goes; no layer that closes later gives it back to what had
 /// it as the layer opened (it was let go of, not taken by the layer: a tip, a toast, a menu over the field). What had it
-/// is drawn let go of from the frame it was let go in, as the focus given is (Ctx::focus_on).
+/// is drawn let go of from the frame it was let go in, as the focus given is (Ctx::focus_on). The window's tree's
+/// layers as the old frame's: none gives it back.
 pub fn Ctx::blur(self : Ctx) -> Unit {
   let had = self.focus != 0
   self.focus_moved(0)
   for k in self.layer_return.keys().collect() {
     self.layer_return[k] = 0
+  }
+  // (the window's tree's layers too: none of them gives it back as it goes, view_layers_focus; nor keeps what asks for
+  // it under one just opened as what it gives back, view_focus_kept_for)
+  for l in layer_focus_open {
+    l.back = 0
+    l.back_in = None
+    l.fresh = false
   }
   if had {
     self.read_changed("the focus let go")
