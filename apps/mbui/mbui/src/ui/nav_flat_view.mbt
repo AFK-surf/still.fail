@@ -78,7 +78,8 @@ fn[P] Nav::flat_entries(self : Nav[P]) -> Array[Int] {
 /// as its owner says (Nav::flat_owned, Nav::flat_keep), else at once; what is pushed over the page in place sliding in
 /// once `over_ready` says it has what it shows (`most` ms at most), taken off by back (within `edge` of its left side)
 /// while `takes_back` says back is the stack's; where `stacks` says not (a pane beside a sidebar off a tape), shown in
-/// place as any other. Over each page's own view what `head` makes of its entry (by its number), nodes of the tree's
+/// place as any other. Over each page's own view what `head` makes of its entry (by its number, and whether the page
+/// is made once there: `made`), nodes of the tree's
 /// laid over it (a panel's bar: the page leaving its room), the stack's back over the whole of both (Nav::backs_over);
 /// what was kept for it let go by `gone` as its entry is (not as it stops showing: shown again, as it was). `made`: a
 /// page made once as nodes of the tree's in the place of its old view, as nav_view's (Nav::made: what `head` makes in
@@ -94,9 +95,9 @@ pub fn[P] nav_flat_view(
   takes_back? : () -> Bool = fn() { true },
   stacks? : () -> Bool = fn() { true },
   page_key? : (P) -> String = fn(_) { "" },
-  head? : (@view.View, Int) -> Unit,
+  head? : (@view.View, Int, Bool) -> Unit,
   gone? : (Int) -> Unit = fn(_) {  },
-  made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int) -> Unit)? = fn(_) { None },
+  made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int, Int) -> Unit)? = fn(_) { None },
 ) -> @view.View {
   // (what shows pushed over the page in place, where what is pushed over is so here)
   let stacked = fn() { stacks() && nav.stacked() }
@@ -259,7 +260,7 @@ pub fn[P] nav_flat_view(
                   let floor = fn() { if takes_back() && stacks() { nav.over_floor() } else { nav.pages.length() } }
                   let when = fn() { seen.get().stacked && nav.entry(k) is Some(_) }
                   match head {
-                    Some(h) => nav.made(m, k, e, f, bg, edge, floor~, when~, head=fn(o) { h(o, k) })
+                    Some(h) => nav.made(m, k, e, f, bg, edge, floor~, when~, head=fn(o) { h(o, k, true) })
                     None => nav.made(m, k, e, f, bg, edge, floor~, when~)
                   }
                 },
@@ -327,7 +328,7 @@ pub fn[P] nav_flat_view(
                       island()
                       b.box(fn(o) {
                         o.over(Is(true)) |> ignore
-                        h(o, k)
+                        h(o, k, false)
                       })
                       |> ignore
                     })

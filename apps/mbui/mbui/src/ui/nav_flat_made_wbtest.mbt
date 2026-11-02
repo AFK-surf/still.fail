@@ -53,7 +53,7 @@ fn flat_made(owner_first : Bool) -> (Tester, Nav[String], @signals.Signal[Bool],
       fn(c, p) { c.text(p, size=12.0) |> ignore },
       fn(_) { true },
       0.0,
-      head=fn(b, k) {
+      head=fn(b, k, _) {
         log.heads.push(k)
         b.box(fn(h) { h.height(Is(Some(30.0))).words(Is("head")) |> ignore }) |> ignore
         b.owns(fn() { log.heads_dropped.push(k) }) |> ignore
@@ -65,7 +65,7 @@ fn flat_made(owner_first : Bool) -> (Tester, Nav[String], @signals.Signal[Bool],
         Some(
           (
             "page",
-            fn(v, page, _under, _stint) {
+            fn(v, page, _under, _stint, _k) {
               let name = @signals.untracked(page)
               log.made.push(name)
               v.box(fn(w) { w.words(By(fn() { page() })) |> ignore }) |> ignore
@@ -164,7 +164,7 @@ test "a flat stack's page made or drawn by its old view as what `made` reads say
       Some(
         (
           "page",
-          fn(v, page, _under, _stint) {
+          fn(v, page, _under, _stint, _k) {
             built.push(@signals.untracked(page))
             v.box(fn(n) { n.words(By(fn() { page() })) |> ignore }) |> ignore
           },

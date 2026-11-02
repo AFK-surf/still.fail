@@ -148,8 +148,9 @@ fn nav_views_framed(c : Ctx) -> Unit {
 /// pushed at the latest (none: at once). `made`: a page made once as nodes of the tree's in the place of its old view
 /// (Nav::made): what kind of page it is (one become another of the same kind, in place, the same nodes following what
 /// it is now) and what makes its nodes, in the node given, given what it is as that changes, the page under it (its
-/// own, whatever is on top when what they bind is read: not Nav::under) and its time on top (its entry's, as it is put
-/// there again: Ctx::page_stint's); none, its old view.
+/// own, whatever is on top when what they bind is read: not Nav::under), its time on top (its entry's, as it is put
+/// there again: Ctx::page_stint's) and its entry's number (what the frame keeps of the page by, as long as the entry
+/// is: nav_flat_view's `head`, `gone`); none, its old view.
 pub fn[P] nav_view(
   v : @view.View,
   nav : Nav[P],
@@ -159,7 +160,7 @@ pub fn[P] nav_view(
   ready? : (P) -> Bool,
   most? : Double = 0.0,
   page_key? : (P) -> String = fn(_) { "" },
-  made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int) -> Unit)? = fn(_) { None },
+  made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int, Int) -> Unit)? = fn(_) { None },
 ) -> @view.View {
   v.box(fn(s) {
     s.grow(Is(1.0)) |> ignore
@@ -477,7 +478,7 @@ fn[P] Nav::made(
   m : @view.View,
   serial : Int,
   e : NavPage[P],
-  f : (@view.View, () -> P, P?, () -> Int) -> Unit,
+  f : (@view.View, () -> P, P?, () -> Int, Int) -> Unit,
   bg : () -> Int64,
   edge : Double,
   floor? : () -> Int,
@@ -505,14 +506,14 @@ fn[P] Nav::made(
   }
   nav.backs_over(m, serial, edge, floor?, when~, fn() {
     match head {
-      None => nav.built_by(e, fn() { f(m, page, e.under, stint) })
+      None => nav.built_by(e, fn() { f(m, page, e.under, stint, serial) })
       // (what the frame puts over the page first (a panel's bar), in its flow; the page in what is left under it, cut
       // to it: what it scrolls never under the bar)
       Some(h) => {
         m.box(h) |> ignore
         m.box(fn(rest) {
           rest.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))).clips(Is(true)) |> ignore
-          nav.built_by(e, fn() { f(rest, page, e.under, stint) })
+          nav.built_by(e, fn() { f(rest, page, e.under, stint, serial) })
         })
         |> ignore
       }

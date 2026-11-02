@@ -351,12 +351,12 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// again as that changes; its frame what the shell gives a page (back to the one under it, under the status bar, over
 /// the navigation bar: setting_page's) as that changes; under the status bar the page's ground over it, and a window's
 /// band its buttons are in dragging it, as page_view puts them over a page that has no top of its own.
-fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int) -> Unit)? {
+fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
   let made = fn(kind : String, f : (@view.View, @settings.Core, () -> @settings.Here, () -> PageFrame, () -> Int) -> Unit) {
     Some(
       (
         kind,
-        fn(v : @view.View, _page : () -> Page, under : Page?, stint : () -> Int) {
+        fn(v : @view.View, _page : () -> Page, under : Page?, stint : () -> Int, _entry : Int) {
           let frame = fn() -> PageFrame {
             // (under the status bar as the window it is in is now: status_top_now, by its width as it changes)
             { back: under.map(@sfbase.back_label), top: status_top_now(v.window().0), foot: nav_foot(), named: false }

@@ -354,13 +354,13 @@ pub fn native_pointing() -> Pointing
 
 pub let native_unsupported : String
 
-pub fn[P] nav_flat_view(@view.View, Nav[P], (Ctx, P) -> Unit, (P) -> Bool, Double, bg? : () -> Int64, edge? : Double, takes_back? : () -> Bool, stacks? : () -> Bool, page_key? : (P) -> String, head? : (@view.View, Int32) -> Unit, gone? : (Int32) -> Unit, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32) -> Unit)?) -> @view.View
+pub fn[P] nav_flat_view(@view.View, Nav[P], (Ctx, P) -> Unit, (P) -> Bool, Double, bg? : () -> Int64, edge? : Double, takes_back? : () -> Bool, stacks? : () -> Bool, page_key? : (P) -> String, head? : (@view.View, Int32, Bool) -> Unit, gone? : (Int32) -> Unit, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32, Int32) -> Unit)?) -> @view.View
 
 pub let nav_late_most : Double
 
 pub fn nav_rest() -> Double
 
-pub fn[P] nav_view(@view.View, Nav[P], (Ctx, P) -> Unit, bg? : () -> Int64, edge? : Double, ready? : (P) -> Bool, most? : Double, page_key? : (P) -> String, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32) -> Unit)?) -> @view.View
+pub fn[P] nav_view(@view.View, Nav[P], (Ctx, P) -> Unit, bg? : () -> Int64, edge? : Double, ready? : (P) -> Bool, most? : Double, page_key? : (P) -> String, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32, Int32) -> Unit)?) -> @view.View
 
 pub fn notice_answer() -> Bool?
 
