@@ -40,16 +40,16 @@ fn panel_popover_of(x : PanelOf, from : Anchor) -> Bool {
 
 ///|
 /// Whether panel `x` presented `from` is a dialog in the middle of the window the window's tree draws
-/// (panel_centred_node): one opened by nothing, or a form whatever opened it (as the host draws it: how_of); not a stage,
-/// nor (yet) one whose title is as it is now (`live`) where it does not go in steps (one that does says its steps' words
-/// in them), nor (yet) one that goes in steps a share of the window tall or a form.
+/// (panel_centred_node): one opened by nothing (its title, step and what it says as they are now where `live`), or a
+/// form whatever opened it (as the host draws it: how_of; not yet one `live`); not a stage, nor (yet) one that goes in
+/// steps a share of the window tall or a form.
 fn panel_centred_of(x : PanelOf, from : Anchor) -> Bool {
   !x.stage &&
   (
     if x.form {
       !x.steps && x.live is None
     } else {
-      from == Unanchored && (if x.steps { x.tall <= 0.0 } else { x.live is None })
+      from == Unanchored && (!x.steps || x.tall <= 0.0)
     }
   )
 }
