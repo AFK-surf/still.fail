@@ -97,6 +97,7 @@ fn long_profile(s : Source) -> Source {
         let ms : Array[Json] = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5", "claude-haiku-5"]
         p["name"] = "claude5@jimmfly.example.com"
         p["models"] = Json::array(ms)
+        p["modelsText"] = "4 个模型"
         p["available"] = Json::array(ms)
         p["names"] = { "claude-fable-5-1": "Fable 5.1", "claude-opus-5-5": "Opus 5.5", "claude-sonnet-5": "Sonnet 5", "claude-haiku-5": "Haiku 5" }
         p["series"] = [{ "name": "Claude", "models": Json::array(ms) }]
@@ -137,7 +138,7 @@ fn long_profile(s : Source) -> Source {
 }
 
 ///|
-test "a profile's page on a phone: its long name, its figures on one line and its models' names whole, nothing squeezed" {
+test "a profile's page on a phone: its long name, its figures on one line and how many models it runs, nothing squeezed" {
   // (326, the page android 0.1.6389 cut its name, its Tokens figure and its models' names on, 2026-10-31)
   for w in [326.0, 390.0] {
     let t = setting_tester(Profile("ws1/st1", "cc"), w, platform=2, over=long_profile, h=2400.0)
@@ -145,7 +146,7 @@ test "a profile's page on a phone: its long name, its figures on one line and it
     let faults = t.squeeze_faults().filter(fn(f) { !f.contains("for what shares their row") })
     assert_eq(faults, [], msg=w.to_string() + faults.join("; "))
     assert_true(t.find("模型请求次数") is None && t.find("输入、缓存和输出") is None, msg="\{w}: no calls, nor what tokens are")
-    for f in ["$1,735", "49.7 亿", "最多 Opus 5.5", "Fable 5.1", "Opus 5.5", "Sonnet 5", "Haiku 5"] {
+    for f in ["$1,735", "49.7 亿", "最多 Opus 5.5", "4 个模型"] {
       assert_true(t.find(f) is Some(_), msg="\{w}: \{f}")
     }
     // its figures side by side

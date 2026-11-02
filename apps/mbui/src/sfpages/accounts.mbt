@@ -895,7 +895,7 @@ fn profile_models(c : @ui.Ctx, core : Core, here : Here, address : String, p : J
 /// All of a profile's models (by the core's series, each under its name where there are more than one), each with
 /// a box before it, ticked while it is starred (`pick.like`, as the model control's are: 2026-11-02 用户「这里改成也能
 /// 点勾」), its id under the pointer; one named by hand that its provider does not list taken off by its ×; one more
-/// named by hand under them, where it can be.
+/// named by hand over them, where it can be.
 fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
   let id = text(p, "id")
   let key = address + "/" + id
@@ -910,6 +910,10 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
     options.iter().any(fn(o) { flag(Some(o), "liked") && (text(Some(o), "model") == m || strings(Some(o), "ids").contains(m)) })
   }
   let series = items(p, "series")
+  // (one more named by hand over them, where it can be: under them it stood in the panel's corner)
+  if flag(p, "canAddModel") {
+    c.box(style=pf_models_add, fn() { add_model(c, core, address, id) }) |> ignore
+  }
   @sf.panel_column(c, "profile-models/" + key, pf_models_most, pf_model_rows, fn() {
     for s in series {
       let sv = Some(s)
@@ -959,9 +963,6 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
       }
     }
   })
-  if flag(p, "canAddModel") {
-    c.box(style=pf_models_add, fn() { add_model(c, core, address, id) }) |> ignore
-  }
 }
 
 ///|
@@ -1669,7 +1670,7 @@ let pf_chip : @ui.Style = @ui.css("row px=S2_5 py=S1 gap=S1_5 align=ACenter radi
 
 ///|
 /// A profile's models in their panel: a row each (a box, its maker's mark, its name, its ×), 1 apart, scrolling past
-/// this; a series' name over its models; one more named by hand under them.
+/// this; a series' name over its models; one more named by hand over them.
 let pf_models_most : Double = 420.0
 
 ///|
@@ -1694,7 +1695,7 @@ let pf_series_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, c
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_models_add : @ui.Style = @ui.css("w=Full pt=S2")
+let pf_models_add : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 /// The × of a model named by hand on its chip (a round button as high as its words' line).
