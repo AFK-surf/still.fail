@@ -331,7 +331,7 @@ fn diagnosis(s : ScreenSess, u : ScreenUi, net : Json?, os : String) -> Json {
     },
     "latency": field(st, "latency").unwrap_or(Json::null()),
     "video": field(st, "video").unwrap_or(Json::null()),
-    "agent": Json::string("still.fail mbui"),
+    "agent": Json::string("still.fail"),
   }
   Json::object(said)
 }

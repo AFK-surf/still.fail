@@ -26,7 +26,7 @@ The same code is built as each of still.fail's apps, by its variant (`MBUI_VARIA
 |---|---|---|---|---|
 | `stable` | still.fail, `fail.still.android` | still.fail, `fail.still.desktop` | `android`, `mac`, `win` | `scripts/release.sh` (stable.yml) |
 | `beta` | youdid.wtf, `fail.still.android.beta` | youdid.wtf, `fail.still.desktop.beta` | `android/beta`, `mac/beta`, `win/beta` | `scripts/release.sh --beta` (pipeline.yml, main once checked) |
-| `mbui` (Android's `release`) | still.fail mbui, `fail.still.mbui` | still.fail mbui, `fail.still.mbui` | `android/mbui`, `mac/mbui`, `win/mbui`, `linux/mbui` | `.github/workflows/mbui.yml`, every push that changes it |
+| `mbui` (Android's `release`) | still.fail preview, `fail.still.mbui` | still.fail preview, `fail.still.mbui` | `android/mbui`, `mac/mbui`, `win/mbui`, `linux/mbui` | `.github/workflows/mbui.yml`, every push that changes it |
 | `debug` | still.fail dev, `fail.still.android.dev` | | none | `scripts/android.sh build` |
 
 `mbui` is the build of every push, out in minutes, an app beside the released ones to try a change on before it is
