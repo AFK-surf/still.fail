@@ -900,7 +900,8 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.words.contains(s) {
+        // (none of a page's bones: View::bones)
+        if d.bones == 0L && d.words.contains(s) {
           return Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
         }
       }
@@ -1272,7 +1273,7 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.words != "" {
+        if d.words != "" && d.bones == 0L {
           out.push((d.words, d.x, d.y, d.w, d.h, d.alpha))
         }
       }
@@ -1318,7 +1319,7 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.words.contains(s) && d.alpha > 0.0 {
+        if d.bones == 0L && d.words.contains(s) && d.alpha > 0.0 {
           return Some((d.x, d.y, d.w, d.h))
         }
       }

@@ -866,16 +866,21 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // (for the room it is judged ready for where it is said: View::image_for)
     let unseen = fn() {
       match c.image {
-        Some((src, _, most)) => {
+        // (none in its bones: nothing it would show asked for, View::bones)
+        Some((src, _, most)) if c.bones == 0L => {
           let (fw, fh) = c.image_for
           let room = if fw > 0.0 || fh > 0.0 { dmax(fw, fh) * s } else { dmax(c.w * s, c.h * s) }
           self.image_ready(src, dmin(room * self.scale, most.to_double())) |> ignore
         }
-        None => ()
+        _ => ()
       }
     }
     if a <= 0.002 {
       unseen()
+      return
+    }
+    // (in a node drawn whole in its bones: nothing of it drawn, View::bone_whole)
+    if c.bones != 0L && c.bone_as == 2 {
       return
     }
     // (in the window's stack of layers, held by the root after what is in none of it: what clipped before it is none
@@ -950,6 +955,11 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         clipping.push(c.id)
       }
     }
+    // (an old view hosted in its bones: its box a bone, as an old view's view of another app is, bones.mbt)
+    if c.hosted && c.bones != 0L {
+      self.emit_bone(x, y, c.w * s, c.h * s, bone_shape_r(c.radius * s, c.w * s, c.h * s), c.bones, a)
+      return
+    }
     if c.hosted {
       if old_whole.val {
         // (the one old view the whole window: the old frame's, what it takes presses at its own, at the window's
@@ -1015,7 +1025,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // size, asked for as an old view's is, its own kept as one shown this frame, View::image; not in its block, whose
     // instances are kept as they were made)
     match c.image {
-      Some((src, stand_in, most)) => {
+      // (in its bones its block's bone stands for it: none asked for, View::bones)
+      Some((src, stand_in, most)) if c.bones == 0L => {
         // (its instances the node's, as what its block makes are: view_made's)
         let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
         inst_owners.painting = -1
@@ -1060,13 +1071,13 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         inst_owners.painting = was
         inst_owners.tree_painting = was_tree
       }
-      None => ()
+      _ => ()
     }
     // (a field of its own (ui's field): its words, what is picked or composed, its caret, each frame where it is drawn and
     // as big, as an old view's field is painted; not in its block, kept as it was made)
     match tree_fields.get(c.id) {
-      Some(tf) => self.paint_tree_field(c.id, tf, x, y, c.w, c.h, s, a, laid=(ux, uy))
-      None => ()
+      Some(tf) if c.bones == 0L => self.paint_tree_field(c.id, tf, x, y, c.w, c.h, s, a, laid=(ux, uy))
+      _ => ()
     }
     // (what it draws itself turned where it is drawn, as a look's turn is: about its middle, or the middle of what it
     // draws, as its block was made, its picture all of it: View::turn)
@@ -1205,9 +1216,16 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   let was_kept = glyphs_kept.val
   let kept : Array[(Int, Double, Double)] = []
   glyphs_kept.val = Some(kept)
+  // (in its bones (View::bones), what of it is drawn so: one piece of its own box (View::bone_whole), else its grounds
+  // and edges in the bones' colour where theirs says something, its words, shapes and picture as their bones: ui's
+  // bones.mbt, as an old view's are)
+  let bones = c.bones
+  let bone_whole = bones != 0L && c.bone_as == 1
+  let ground_c = if bones != 0L { self.bone_ground(c.ground, bones) } else { c.ground }
+  let edge_c = if bones != 0L { self.bone_ground(c.edge.1, bones) } else { c.edge.1 }
   // (the shadow it casts, as a box with a shadow casts it, Ctx::paint's and paint_glass's: under its ground; glass's
   // solid ground over it; frosted glass's after the glass, outside it only, so the glass frosts not its own shadow)
-  let (blur, dy, cast) = c.shadow
+  let (blur, dy, cast) = if bone_whole { (0.0, 0.0, 0L) } else { c.shadow }
   // (its corners each, where it says them (View::corners), on each instance of its ground as it is emitted)
   let each = fn() {
     match c.corners {
@@ -1215,7 +1233,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
       None => ()
     }
   }
-  match c.glass {
+  match (if bone_whole { None } else { c.glass }) {
     Some(gl) if solid => {
       if blur > 0.0 {
         self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
@@ -1241,26 +1259,69 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   }
   // (a ground of no opacity draws nothing, as an old view's box's: scene.mbt's paint of its bg)
   // (and its edge round it, inside it, one rect filled and edged as an old view's box's border is: View::edge)
-  let (ew, ec) = c.edge
+  let (ew, ec) = if bone_whole { (0.0, 0L) } else { (c.edge.0, edge_c) }
   let edged = ew > 0.0 && (ec & 0xFFL) != 0L
+  let ground_c = if bone_whole { 0L } else { ground_c }
   // (where its edge is drawn after what it holds: its ground stops at the edge's inside, the edge's band left clear, as
   // an old view's box with a border over what it holds draws its ground (scene.mbt's border_over))
   let mut ring_at = -1
   if edged && edge_after {
-    if (c.ground & 0xFFL) != 0L {
-      self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, ew, 0L, 1.0)
+    if (ground_c & 0xFFL) != 0L {
+      self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, ground_c, ew, 0L, 1.0)
       each()
     }
     ring_at = self.ninst - start
     self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, 0L, ew, ec, 1.0)
     each()
-  } else if (c.ground & 0xFFL) != 0L || edged {
-    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, if edged { ew } else { 0.0 }, if edged { ec } else { 0L }, 1.0)
+  } else if (ground_c & 0xFFL) != 0L || edged {
+    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, ground_c, if edged { ew } else { 0.0 }, if edged { ec } else { 0L }, 1.0)
     each()
   }
   // (its ground's instances: its shadow, its glass, its fill and edge, drawn off and bigger as it says, View::ground_drawn)
   let ground_n = self.ninst - start
-  if c.words != "" && !c.runs.is_empty() {
+  // (its bones' own: from here to bone_to, each instance a bone, View::bones)
+  let bone_from = ground_n
+  if bone_whole {
+    self.emit_bone(0.0, 0.0, c.w, c.h, bone_whole_r(c.radius, c.w, c.h), bones, 1.0)
+    each()
+  } else if bones != 0L {
+    // (its pictures, icons and drawings a shape of its box: its own picture, the shapes and lines it draws)
+    if c.image is Some(_) || c.picture is Some(_) || !c.shapes.is_empty() || !c.lines.is_empty() {
+      self.emit_bone(0.0, 0.0, c.w, c.h, bone_shape_r(c.radius, c.w, c.h), bones, 1.0)
+      each()
+    }
+    // (its words a bar on each line, laid out as they are drawn, the same layout: below)
+    // (as their words are laid out to be drawn, below: one line given less than it is wide cut to it, its ellipsis's
+    // bar with it)
+    if c.words != "" && !c.runs.is_empty() {
+      let r = view_rich(c.runs, c.words_look)
+      let lay = layout_rich(r, if r.wrap { c.w } else { 1.0e9 })
+      let lay = if !r.wrap && lay.w > c.w + 0.5 {
+        layout_rich(cut_rich({ ..r, max_lines: 1 }, lay, c.w), 1.0e9)
+      } else {
+        lay
+      }
+      self.emit_bone_rich(lay, 0.0, 0.0, self.sp(c.words_look.size), bones, 1.0)
+    } else if c.words != "" {
+      let k = c.words_look
+      let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
+      let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
+      let tl = if !k.wrap && tl.w > c.w + 0.5 {
+        ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
+      } else {
+        tl
+      }
+      self.emit_bone_text(tl, 0.0, 0.0, fn(l) {
+        if c.words_center && l < tl.line_w.length() {
+          dmax((c.w - tl.line_w[l]) / 2.0, 0.0)
+        } else {
+          0.0
+        }
+      }, size, bones, 1.0)
+    }
+  }
+  let bone_to = self.ninst - start
+  if bones == 0L && c.words != "" && !c.runs.is_empty() {
     // (in pieces each set its own way: one paragraph, as Ctx::rich's; one line given less than it is wide cut to it,
     // ending in an ellipsis, as its plain words are)
     let r = view_rich(c.runs, c.words_look)
@@ -1291,7 +1352,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     if over && lay.w > c.w + 0.5 {
       cut = (from, self.ninst - start)
     }
-  } else if c.words != "" {
+  } else if bones == 0L && c.words != "" {
     let k = c.words_look
     // (one line given less than it is wide: cut to it, ending in an ellipsis, as an old view's words on one line are)
     // (at the system's size of words, in the theme's digits, as measured: view_words_measure)
@@ -1323,7 +1384,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     }
     Some(p) => view_picture_shapes(c.id, c.shapes, p, c.w, self.scale)
   }
-  if shapes.length() > 0 {
+  if bones == 0L && shapes.length() > 0 {
     let bands = match view_shape_bands.get(c.id) {
       Some(b) if physical_equal(b.of, shapes) => b
       _ => {
@@ -1369,7 +1430,9 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     view_shape_bands.remove(c.id)
   }
   // (its lines over them, as an old view's box draws its own: Ctx::lines)
-  self.emit_lines(0.0, 0.0, c.lines, 1.0)
+  if bones == 0L {
+    self.emit_lines(0.0, 0.0, c.lines, 1.0)
+  }
   let segs = self.segs[seg_start:].to_array()
   self.segs.truncate(seg_start)
   inst_owners.painting = was
@@ -1389,6 +1452,11 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     for i in m.0..<m.1 {
       marks[i] = m.2
     }
+  }
+  // (each a bone: told as such where it is composed, Ctx::view_blit, not where it was made)
+  for i in bone_from..<bone_to {
+    marks[i] = 3
+    bone_insts.remove(start + i)
   }
   inst_owners.tree_words[c.id] = c.words
   self.ninst = start
@@ -1515,6 +1583,10 @@ fn Ctx::view_blit(
       inst_owned(k)
       inst_owners.cell[k] = if i < made.cells.length() { made.cells[i] } else { (0.0, 1.0) }
       inst_owners.mark[k] = if i < made.marks.length() { made.marks[i] } else { 0 }
+      // (a bone, as an old view's is told: bones.mbt's bone_insts)
+      if i < made.marks.length() && made.marks[i] == 3 {
+        bone_insts.add(k)
+      }
     }
     inst_owners.painting = was
     inst_owners.tree_painting = was_tree

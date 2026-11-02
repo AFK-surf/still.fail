@@ -58,7 +58,8 @@ fn styled_words(w : @view.View, words : () -> String, style : () -> @ui.TextStyl
   .ink(By(fn() { @ui.style_ink(style()) }))
   |> ignore
   if @ui.style_cut(@signals.untracked(style)) {
-    w.shrink(Is(1.0)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
+    // (cut short where their line has not the room across: given way along a row, never squeezed down, View::cuts)
+    w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
   }
   w
 }
@@ -149,10 +150,15 @@ pub fn page_node(
             |> ignore
           }
           // what it is for
-          Lead => {
-            s.padding(Is((pg_lead_x, 0.0, pg_lead_x, pg_lead_foot))) |> ignore
-            s.box(fn(w) { styled_words(w, lead, fn() { pg_lead }) |> ignore }) |> ignore
-          }
+          // (a block of the page's, in its room as the rest: narrow_page's)
+          Lead =>
+            page_block(s, fn(room) {
+              room.box(fn(l) {
+                l.padding(Is((pg_lead_x, 0.0, pg_lead_x, pg_lead_foot))) |> ignore
+                l.box(fn(w) { styled_words(w, lead, fn() { pg_lead }) |> ignore }) |> ignore
+              })
+              |> ignore
+            })
           // what it holds, each block in the page's room
           Block(k) => page_block(s, fn(room) { block(room, k) })
           // 30 under the last, then the frame's room
@@ -344,11 +350,13 @@ pub fn link_row_node(
     // its words: its title (as wide as the row leaves it) and what it says, then its chevron; its note under them, and
     // what is below
     r.box(fn(words) {
-      words.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+      // (as wide as the row leaves it, narrower where what it holds is wider: its words wrapped there, as a row's are)
+      words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
       words.box(fn(first) {
         first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
         first.box(fn(t) {
-          styled_words(t.grow(Is(1.0)), title, fn() { titled }) |> ignore
+          // (giving way to what it says where the line has not the room, cut short, as link_row's title in a row does)
+          styled_words(t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))), title, fn() { titled }) |> ignore
           if acts {
             t.ink(By(fn() { link_ink() })) |> ignore
           }
@@ -549,7 +557,8 @@ pub fn switch_row_node(
     .lines_up(Is(Some(Middle)))
     |> ignore
     r.box(fn(words) {
-      words.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+      // (as wide as the row leaves it, narrower where what it holds is wider: its words wrapped there, as a row's are)
+      words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
       words.box(fn(t) { styled_words(t, title, fn() { pg_switch_title }) |> ignore }) |> ignore
       words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { meta.then(full_words) }) |> ignore })
     })

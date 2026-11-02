@@ -153,7 +153,8 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
     if !n.live || n.out {
       return
     }
-    let hid = hid || n.said_hidden
+    // (in its bones: none of it there yet, View::bones)
+    let hid = hid || n.said_hidden || n.bones != 0L
     let id = { at, gen: n.gen }
     let mut up = parent
     let mut d = depth
@@ -221,7 +222,7 @@ pub fn Tree::words_within(self : Tree, id : NodeId, hosted : (NodeId) -> String)
     }
     for k in self.kids_in_order(at) {
       let kn = self.nodes[k]
-      if !kn.live || kn.out || kn.said_hidden {
+      if !kn.live || kn.out || kn.said_hidden || kn.bones != 0L {
         continue
       }
       match kn.said {
