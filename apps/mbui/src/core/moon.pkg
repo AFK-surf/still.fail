@@ -1,8 +1,10 @@
 import {
+  "moonbitlang/core/double",
   "mbui/codec",
   "mbui/hostapi",
   "mbui/signals",
   "moonbitlang/core/json",
+  "moonbitlang/core/double",
 }
 
 options(

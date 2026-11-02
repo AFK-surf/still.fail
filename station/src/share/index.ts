@@ -56,6 +56,8 @@ const CODEX_LEND_MS = 24 * 3600_000;
 const CODEX_MIN_MS = 3600_000;
 /// A login lent before is used again while its host does not answer, if it still has this long.
 const KEEP_LENT_MS = 3600_000;
+/// How long a login wanted waits for the cloud to say the workspace's stations.
+const ROSTER_WAIT_MS = 10_000;
 /// Edits to a skill are taken once they have settled this long.
 const SETTLE_MS = 2000;
 /// What could not be done because another station did not answer is tried again after this, then twice as long each
@@ -989,9 +991,30 @@ export class Sharing {
     return host;
   }
 
+  /// Once the cloud has said the workspace's stations, or ROSTER_WAIT_MS on. A station just started hears them some
+  /// 500 ms after what waited for an agent is given one again (2026-11-02), and nothing would try that again until it
+  /// next restarts: only what has no login kept to go on with waits here.
+  private rosterSaid(): Promise<void> {
+    const cloud = this.deps.cloud;
+    if (cloud.peersCurrent || cloud.state === null) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        stop();
+        giveUp();
+        resolve();
+      };
+      const stop = cloud.listen(() => {
+        if (cloud.peersCurrent) done();
+      });
+      const giveUp = this.time.after(ROSTER_WAIT_MS, done);
+    });
+  }
+
   /// A borrowed Claude subscription's token, from its host; `rejected`, the one a process here was refused with.
   async lendClaude(profile: Json, rejected?: string): Promise<MachineToken> {
     const host = this.hostOf(profile);
+    const before = this.lentClaude.get(profile.id);
+    if (!before || before.token === rejected || before.expiresAt - this.time.now() < KEEP_LENT_MS) await this.rosterSaid();
     try {
       const got = await this.deps.ask(host, null, { method: "share.lend", id: profile.share.id, ...(rejected !== undefined ? { rejected } : {}) });
       this.unreachable.delete(host);
@@ -1016,6 +1039,7 @@ export class Sharing {
   async lendCodex(profile: Json): Promise<number> {
     const host = this.hostOf(profile);
     const home = this.home(profile);
+    if (keptCodexExpiry(join(home, "auth.json")) - this.time.now() < KEEP_LENT_MS) await this.rosterSaid();
     let got: Json;
     try {
       got = await this.deps.ask(host, null, { method: "share.lend", id: profile.share.id });

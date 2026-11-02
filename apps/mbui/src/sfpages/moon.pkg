@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/core/cmp",
+  "moonbitlang/core/double",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "mbui/ui",
@@ -13,6 +15,8 @@ import {
   "mbui/signals",
   "mbui/view",
   "stillfail/gallery",
+  "moonbitlang/core/double",
+  "moonbitlang/core/cmp",
 }
 
 import { "stillfail/sffixture" } for "wbtest"

@@ -548,6 +548,13 @@ let panel_body_now : Ref[Int] = Ref(0)
 let lists_said_now : Ref[Bool] = { val: false }
 
 ///|
+/// While the body of a panel a share of the window caps is drawn by the window's tree (panel_centred_node): each list
+/// that says what it holds as tall as that, giving way where what holds it is laid out shorter (scrolling in itself
+/// there), so what holds them asks to be as tall as all of it: laid out, not measured after.
+// kept across runs: said by panel_centred_node round a tall panel's body
+let lists_sized_now : Ref[Bool] = { val: false }
+
+///|
 // kept across runs: said by panel_list as it is drawn in a capped panel's body
 let lists_now : Array[(Int, Double)] = []
 
@@ -557,16 +564,17 @@ let lists_now : Array[(Int, Double)] = []
 let lists_of : Map[Int, Array[(Int, Double)]] = {}
 
 ///|
-/// A capped panel's body (filling its share: `style`), its lists saying what they hold as it is drawn.
-fn measured_body(c : @ui.Ctx, serial : Int, id : Int, style : @ui.Style, body : () -> Unit) -> Unit {
+/// A capped panel's body (filling its share: `style`), its lists saying what they hold as it is drawn. Its box.
+fn measured_body(c : @ui.Ctx, serial : Int, id : Int, style : @ui.Style, body : () -> Unit) -> Int {
   let (said_was, were) = (lists_said_now.val, lists_now.copy())
   lists_said_now.val = true
   lists_now.clear()
-  c.box(style~, id~, body) |> ignore
+  let held = c.box(style~, id~, body)
   lists_of[serial] = lists_now.copy()
   lists_now.clear()
   lists_now.append(were)
   lists_said_now.val = said_was
+  held
 }
 
 ///|
@@ -617,14 +625,23 @@ pub fn panel_list(
   // the rest at `est`: none laid out to be measured), for the panel to be as tall as that up to its share
   // (measured_body); it fills the room it is given
   let room_id = c.id(key + "/room")
+  let mut sized = None
   if lists_said_now.val && !fills {
     let holds = match c.list_info_as(key, fn(i) { i.map(fn(x) { x.content }) }) {
       Some(i) => i.content
       None => est * count.to_double()
     }
     lists_now.push((room_id, holds))
+    // (drawn by the window's tree: as tall as it says, giving way: lists_sized_now)
+    if lists_sized_now.val {
+      sized = Some(holds)
+    }
   }
-  c.box(style=sheet_grows.then(@ui.style(mx=room(-out))), id=room_id, taps=false, fn() {
+  let room_at = match sized {
+    Some(holds) => @ui.style(w=Full, h=Fixed(holds), mx=room(-out))
+    None => sheet_grows.then(@ui.style(mx=room(-out)))
+  }
+  let room_box = c.box(style=room_at, id=room_id, taps=false, fn() {
     list = c.list(key, count, est, stick_end~, fn(i) {
       let was = (panel_sides_in.val, rows_out.val, words_in_now.val, panel_body_now.val, small_panel_now.val)
       panel_sides_in.val = sides - out
@@ -640,7 +657,9 @@ pub fn panel_list(
       small_panel_now.val = was.4
     })
   })
-  |> ignore
+  if sized is Some(_) {
+    c.gives_way(room_box)
+  }
   list
 }
 
@@ -681,7 +700,10 @@ pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (
   if lists_said_now.val && h > 0.0 {
     lists_now.push((room_id, h))
   }
-  c.box(style=room, id=room_id, taps=false, fn() {
+  // (drawn by the window's tree: as tall as it says, giving way: lists_sized_now)
+  let sized = lists_said_now.val && lists_sized_now.val && h > 0.0 && stage_room.val is None
+  let room = if sized { @ui.style(w=Full, h=Fixed(h)) } else { room }
+  let room_box = c.box(style=room, id=room_id, taps=false, fn() {
     // (as wide as it is laid out, in the room's middle, drawn smaller from its top's middle)
     let at = c.box(style=whole_box.then(@ui.style(w=Fixed(w))), left=(room_w - w) / 2.0, top=0.0, taps=false, fn() {
       draw(whole_id) |> ignore
@@ -691,7 +713,9 @@ pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (
     c.box(style=whole_box.then(@ui.style(w=Fixed(w * k), h=Fixed(h * k))), id~, left=(room_w - w * k) / 2.0, top=0.0, fn() {  })
     |> ignore
   })
-  |> ignore
+  if sized {
+    c.gives_way(room_box)
+  }
 }
 
 ///|
@@ -1629,7 +1653,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
           Some(most) => dmin(h, most)
           None => h
         }
-        measured_body(c, p.serial, id, @ui.style(w=Full, h=Fixed(h)), fn() { draw_panel_body(x, c, close, keyed=p) })
+        measured_body(c, p.serial, id, @ui.style(w=Full, h=Fixed(h)), fn() { draw_panel_body(x, c, close, keyed=p) }) |> ignore
       } else {
         panel_whole_now.val += 1
         draw_panel_body(x, c, close, keyed=p)
@@ -2346,7 +2370,7 @@ fn sheet_step(
     // (holding nothing this time, none of its room: its title and what it says straight over its foot; one a share
     // caps measured, its lists saying what they hold: measured_body)
     if capped {
-      measured_body(c, p.serial, sheet_capped.val, room, body)
+      measured_body(c, p.serial, sheet_capped.val, room, body) |> ignore
     } else {
       c.box(style=room, gone_empty=true, body) |> ignore
     }

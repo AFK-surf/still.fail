@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/cmp",
   "mbui/codec",
   "mbui/ui",
   "mbui/kit",
@@ -7,4 +8,5 @@ import {
   "stillfail/sf",
   "moonbitlang/core/json",
   "mbui/signals",
+  "moonbitlang/core/cmp",
 }

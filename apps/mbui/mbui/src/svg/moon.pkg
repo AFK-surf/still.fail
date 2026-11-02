@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/double",
   "mbui/dmath",
   "mbui/skia",
   "mbui/font",
@@ -9,4 +10,5 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/string",
   "moonbitlang/core/debug",
+  "moonbitlang/core/double",
 }

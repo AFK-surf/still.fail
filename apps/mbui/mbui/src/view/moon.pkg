@@ -1,9 +1,11 @@
 import {
+  "moonbitlang/core/double",
   "mbui/dmath",
   "mbui/flex",
   "mbui/paint",
   "mbui/pixels",
   "mbui/signals",
+  "moonbitlang/core/double",
 }
 
 import {
