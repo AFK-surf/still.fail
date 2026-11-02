@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Readers } from "../src/read/pool.ts";
+import { Store } from "../src/store/store.ts";
 
 /// Readers answering by reader-line-worker.mjs, and its state: how many reads started, which kinds, and the gate.
 function gated(size: number) {
@@ -67,4 +68,26 @@ for (const bulk of ["usage", "chats", "openJobs", "changed", "timeline", "aNewRe
     assert.ok(settled.every((s) => s.status === "fulfilled"), "the waiting bulk read is taken once a reader is free");
   }
   assert.equal(Atomics.load(state, 0), 3);
+});
+
+test("a history waiting for old usage to be summarized does not hold a device reader", { timeout: 30_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "reader-minute-"));
+  const store = Store.open(join(dir, "stillfail.db"));
+  const readers = new Readers(dir, 1, new URL("./reader-line-worker.mjs", import.meta.url));
+  const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
+  store.db.exec("UPDATE usage_minute_all SET done = 0; BEGIN IMMEDIATE");
+  // The write lock keeps the minute worker from finishing while the device reader stays available.
+  const history = readers.read("usage", { state: state.buffer, hold: true, history: true, viewer: null }, "en");
+  try {
+    assert.equal(await readers.read("thread", { state: state.buffer, hold: false }, "en"), "{}");
+    assert.equal(Atomics.load(state, 0), 1, "only the chat read entered a device reader");
+  } finally {
+    store.db.exec("COMMIT");
+    Atomics.store(state, 2, 1);
+    Atomics.notify(state, 2);
+    await history;
+    readers.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

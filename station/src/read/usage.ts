@@ -268,11 +268,9 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
 /// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's chat
 /// working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
 export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}): Json {
-  const seen = seenBy(s, viewer);
   mark("historyVisibility");
   const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
-  for (const r of usageByDay(s, utcOffsetMin)) {
-    if (!seen(r.session)) continue;
+  for (const r of usageByDay(s, utcOffsetMin, viewer)) {
     const key = `${r.day}\n${r.runtime}\n${r.model ?? ""}`;
     const d = days.get(key) ?? { day: r.day, runtime: r.runtime, model: r.model, tokens: 0, calls: 0 };
     d.tokens += r.tokens;
@@ -283,8 +281,7 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
   // the chats of each place (still.fail's own, a Slack workspace's, a Feishu one's), and those archived
   const places: Record<string, number> = {};
   let archived = 0;
-  for (const t of threadsByPlace(s)) {
-    if (t.home !== null && !seen(t.home)) continue;
+  for (const t of threadsByPlace(s, viewer)) {
     const place = t.surface.split(":")[0] ?? t.surface;
     places[place] = (places[place] ?? 0) + 1;
     if (t.archived) archived++;
@@ -294,7 +291,7 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
   const remoteRuns = remoteRunsSince(s, 0n).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? "")).length;
   mark("historyRemoteRuns");
   // the decision cards the viewer's chats were asked with, and those answered by an option pressed
-  const cards = decisionCards(s).filter((c) => c.home === null || seen(c.home));
+  const cards = decisionCards(s, viewer);
   mark("historyCards");
   return {
     days: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),

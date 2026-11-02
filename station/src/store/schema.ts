@@ -668,6 +668,16 @@ export function addUsageTotals(db: DatabaseSync): void {
 /// zone being whole quarters. Adding up its 30 days read every call of them, 440,000 on ccvm, each time a page showing
 /// it was told usage changed (every minute while agents work): 30 to 100 seconds a read on a machine short of memory,
 /// both of the station's readers held by it and every other read waiting.
+const USAGE_QUARTERS_DROP = `
+CREATE TRIGGER usage_quarters_drop AFTER DELETE ON usage BEGIN
+  UPDATE usage_quarters SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
+    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+  WHERE quarter = OLD.at / ${QUARTER_MS} AND session = OLD.session AND thread = COALESCE(OLD.thread, 0) AND person = COALESCE(OLD.person, '')
+    AND profile = COALESCE(OLD.profile, '') AND runtime = OLD.runtime AND model = COALESCE(OLD.model, '') AND fast = OLD.fast;
+  DELETE FROM usage_quarters WHERE quarter = OLD.at / ${QUARTER_MS} AND session = OLD.session AND thread = COALESCE(OLD.thread, 0)
+    AND person = COALESCE(OLD.person, '') AND profile = COALESCE(OLD.profile, '') AND runtime = OLD.runtime
+    AND model = COALESCE(OLD.model, '') AND fast = OLD.fast AND calls <= 0;
+END;`;
 const USAGE_QUARTERS_KEPT = `
 CREATE TRIGGER usage_quarters_add AFTER INSERT ON usage BEGIN
   INSERT INTO usage_quarters VALUES (NEW.at / ${QUARTER_MS}, NEW.session, COALESCE(NEW.thread, 0), COALESCE(NEW.person, ''), COALESCE(NEW.profile, ''), NEW.runtime,
@@ -676,13 +686,7 @@ CREATE TRIGGER usage_quarters_add AFTER INSERT ON usage BEGIN
     cache_read = cache_read + excluded.cache_read, cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long,
     output = output + excluded.output;
 END;
-CREATE TRIGGER usage_quarters_drop AFTER DELETE ON usage BEGIN
-  UPDATE usage_quarters SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
-    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
-  WHERE quarter = OLD.at / ${QUARTER_MS} AND session = OLD.session AND thread = COALESCE(OLD.thread, 0) AND person = COALESCE(OLD.person, '')
-    AND profile = COALESCE(OLD.profile, '') AND runtime = OLD.runtime AND model = COALESCE(OLD.model, '') AND fast = OLD.fast;
-  DELETE FROM usage_quarters WHERE quarter = OLD.at / ${QUARTER_MS} AND calls <= 0;
-END;
+${USAGE_QUARTERS_DROP}
 CREATE TRIGGER usage_quarters_grow AFTER UPDATE OF output ON usage WHEN NEW.output <> OLD.output BEGIN
   UPDATE usage_quarters SET output = output + NEW.output - OLD.output
   WHERE quarter = NEW.at / ${QUARTER_MS} AND session = NEW.session AND thread = COALESCE(NEW.thread, 0) AND person = COALESCE(NEW.person, '')
@@ -717,14 +721,28 @@ ${USAGE_QUARTERS_KEPT}`;
 /// triggers that keep it from then on (as addUsageTotals).
 export function addUsageQuarters(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_quarters'").get() !== undefined;
-  if (made()) return;
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    if (!made()) db.exec(USAGE_QUARTERS);
-    db.exec("COMMIT");
-  } catch (e) {
-    db.exec("ROLLBACK");
-    throw e;
+  if (!made()) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      if (!made()) db.exec(USAGE_QUARTERS);
+      db.exec("COMMIT");
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+  const bounded = () => ((db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'usage_quarters_drop'").get() as { sql: string } | undefined)?.sql ?? "")
+    .includes(`DELETE FROM usage_quarters WHERE quarter = OLD.at / ${QUARTER_MS} AND session = OLD.session`);
+  if (!bounded()) {
+    // Only the trigger changes; the existing totals need no rebuild.
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      if (!bounded()) db.exec(`DROP TRIGGER IF EXISTS usage_quarters_drop; ${USAGE_QUARTERS_DROP}`);
+      db.exec("COMMIT");
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
+    }
   }
 }
 

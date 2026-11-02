@@ -7,9 +7,13 @@
 // while: an idle station keeps none. One that dies (its heap is bounded) fails what it held and is replaced by the next
 // read.
 import { availableParallelism } from "node:os";
+import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
+import type { InWorkspace } from "../store/rows.ts";
+import { MinuteReader } from "../usage/minute-reader.ts";
 import type { Answer, Ask } from "./worker.ts";
+import { USAGE_MINUTES_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -63,6 +67,7 @@ export class Readers {
   private homes = new Map<string, Slot>();
   private next = 0;
   private closed = false;
+  private minutes: MinuteReader | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -81,6 +86,13 @@ export class Readers {
     this.workerFile = workerFile;
     this.asked = { told: false, size, room: true, slots: [], waiting: [] };
     this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
+  }
+
+  /// Begin filling old usage without occupying a device reader. The pool can also start it lazily for standalone tests.
+  startUsageIndex() {
+    if (this.closed) return;
+    if (this.minutes === null) this.minutes = new MinuteReader(join(this.data, "stillfail.db"));
+    this.minutes.start();
   }
 
   private start(line: Line): Slot {
@@ -123,6 +135,26 @@ export class Readers {
 
   /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
   read(op: string, args: unknown, lang: Ask["lang"], { told = false }: { told?: boolean } = {}): Promise<string> {
+    if (op === "usage" && (args as { history?: unknown } | null)?.history === true) return this.usageHistory(args, lang, told);
+    return this.enqueue(op, args, lang, told);
+  }
+
+  private async usageHistory(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
+    const viewer = (args as { viewer?: InWorkspace | null }).viewer ?? null;
+    while (!this.closed) {
+      this.startUsageIndex();
+      await this.minutes!.ready(viewer);
+      try {
+        return await this.enqueue("usage", args, lang, told);
+      } catch (error) {
+        // The reader checks within its snapshot: a session may have entered the workspace after the worker checked it.
+        if (!(error instanceof HttpError) || error.message !== USAGE_MINUTES_PENDING) throw error;
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     const line = told ? this.told : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
@@ -199,6 +231,7 @@ export class Readers {
 
   close() {
     this.closed = true;
+    if (this.minutes !== null) void this.minutes.close();
     for (const line of [this.asked, this.told]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();

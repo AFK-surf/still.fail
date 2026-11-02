@@ -29,6 +29,7 @@ import {
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addSessionTurns, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
+import { installUsageMinutes } from "./usage-minutes.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -168,6 +169,7 @@ export class Store {
       addUsageTotals(db);
       addUsageCompactions(db);
       addUsageQuarters(db);
+      installUsageMinutes(db);
       addListState(db);
       addLetters(db);
       addCardOutcomes(db);
