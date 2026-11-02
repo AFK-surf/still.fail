@@ -347,7 +347,7 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// The pages of the stack made once as nodes of the tree's in the narrow shell (nav_view's `made`), by their kind, the
-/// rest old views (narrow_page_held): the settings' list (the gear's), 关于 and 记忆. Each in the workspace in view, made
+/// rest old views (narrow_page_held): the settings' list (the gear's), 关于, 记忆 and 归档. Each in the workspace in view, made
 /// again as that changes; its frame what the shell gives a page (back to the one under it, under the status bar, over
 /// the navigation bar: setting_page's) as that changes; under the status bar the page's ground over it, and a window's
 /// band its buttons are in dragging it, as page_view puts them over a page that has no top of its own.
@@ -385,6 +385,14 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
         })
       })
     Setting(About) => made("about", fn(p, core, _here, frame, _stint) { @sfpages.about_node(p, core, on_back=core.pop, frame~) })
+    Setting(Archiving) =>
+      made("archiving", fn(p, core, here, frame, stint) {
+        @sfpages.archiving_node(p, core, here, on_back=core.pop, frame~, stint~)
+      })
+    Setting(StationArchiving(st)) =>
+      made("station-archiving/" + st, fn(p, core, here, frame, _stint) {
+        @sfpages.station_archiving_node(p, core, here, st, on_back=core.pop, frame~)
+      })
     Setting(Memories) =>
       made("memories", fn(p, core, here, frame, _stint) { @sfpages.memories_node(p, core, here, on_back=core.pop, frame~) })
     _ => None

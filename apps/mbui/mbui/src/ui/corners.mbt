@@ -1082,7 +1082,13 @@ fn Ctx::window_container(self : Ctx, n : Int) -> Bool {
 /// Whether a corner `k` round may be had by what lies in a container's corner (Theme::corner_fit: `least` to `most`;
 /// any where the theme says none).
 fn Ctx::corner_fits(self : Ctx, k : Double) -> Bool {
-  match self.corner_fit {
+  corner_fits_in(self.corner_fit, k)
+}
+
+///|
+/// Whether a corner `k` round is as round as ranges `fit` let what lies in a corner be (any, where there are none).
+fn corner_fits_in(fit : CornerFit?, k : Double) -> Bool {
+  match fit {
     Some(f) => k >= f.least - 0.5 && k <= f.most + 0.5
     None => true
   }
@@ -1415,20 +1421,18 @@ fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
         continue
       }
       match self.corner_inset_at(i, ct.node, k, self.container_r(ct, k)) {
-        Some(d) => {
-          let kk = concentric(self.container_r(ct, k), d)
-          if kk < half - 0.5 && self.corner_fits(kk) {
-            rs[k] = kk
-            moved += 1
+        Some(d) =>
+          match corner_following(rs[k], half, self.container_r(ct, k), d, self.corner_fit) {
+            Some(kk) => {
+              rs[k] = kk
+              moved += 1
+            }
+            None => ()
           }
-        }
         None => ()
       }
     }
-    // (only where its corners stay alike, or it fills the container, all four followed, as unlike as the container's
-    // are: never some followed and the others its own; corners not alike are a design's, said, and where it lies in
-    // only some corners, not concentric, corner_faults says so)
-    if moved > 0 && (moved == 4 || alike(rs)) {
+    if corners_kept(rs, moved) {
       b.set_radii(rs)
       b.corners_worked = true
     }
@@ -1446,18 +1450,51 @@ fn Ctx::corner_inset_at(self : Ctx, i : Int, p : Int, k : Int, ra : Double) -> D
   let t = b.y - a.y
   let r = a.x + a.fw - (b.x + b.fw)
   let d = a.y + a.fh - (b.y + b.fh)
-  let (dx, dy) = corner_gaps(a, b, k)
-  if dx < -0.5 ||
-    dy < -0.5 ||
-    dx >= ra ||
-    dy >= ra ||
-    !nearest_corner(k, l, t, r, d) ||
-    self.cut_round_at(i, p, k) ||
-    self.corner_cut_off(i, p, k) ||
-    (dx - dy).abs() > 0.5 {
+  match corner_lies_in(k, l, t, r, d, ra) {
+    Some(v) if !self.cut_round_at(i, p, k) && !self.corner_cut_off(i, p, k) => Some(v)
+    _ => None
+  }
+}
+
+///|
+/// How far a box stands from the two edges of a container's corner `k` (0 top left, then round it; `ra` round), it
+/// standing `l`, `t`, `r` and `d` in from the container's left, top, right and bottom: where it lies in that corner
+/// (nearest it of the four, nearer to both its edges than `ra`, past neither, as far from both, within half a pixel),
+/// the farther; None where it does not. (Ctx::corner_inset_at's, where nothing between them cuts that corner; what
+/// is placed in a container otherwise, a node's, asks it alike.)
+pub fn corner_lies_in(k : Int, l : Double, t : Double, r : Double, d : Double, ra : Double) -> Double? {
+  let dx = if corner_left(k) { l } else { r }
+  let dy = if k < 2 { t } else { d }
+  if dx < -0.5 || dy < -0.5 || dx >= ra || dy >= ra || !nearest_corner(k, l, t, r, d) || (dx - dy).abs() > 0.5 {
     return None
   }
   Some(dmax(dx, dy))
+}
+
+///|
+/// A box's corner `own` round (its shorter side's half `half`) lying `inset` in a container's corner `ra` round
+/// (corner_lies_in), as the corner rule makes it (corners_in_corners): concentric with the container's, where it is
+/// not round by its shape (a capsule's end), would not be rounded whole by it, and is as round as the theme's ranges
+/// `fit` let what lies in a corner be (Theme::corner_fit); None where it keeps its own.
+pub fn corner_following(own : Double, half : Double, ra : Double, inset : Double, fit : CornerFit?) -> Double? {
+  if own >= half - 0.5 {
+    return None
+  }
+  let kk = concentric(ra, inset)
+  if kk < half - 0.5 && corner_fits_in(fit, kk) {
+    Some(kk)
+  } else {
+    None
+  }
+}
+
+///|
+/// Whether a box's corners as the corner rule made them, `moved` of them following its container's (corner_following),
+/// are kept: only where they stay alike, or it fills the container, all four followed, as unlike as the container's
+/// are; never some followed and the others its own (corners not alike are a design's, said, and where it lies in only
+/// some corners, not concentric, corner_faults says so).
+pub fn corners_kept(rs : FixedArray[Double], moved : Int) -> Bool {
+  moved > 0 && (moved == 4 || alike(rs))
 }
 
 ///|

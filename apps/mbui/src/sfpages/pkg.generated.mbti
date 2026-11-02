@@ -37,6 +37,8 @@ pub fn answer_invitation(@sfbase.Source, Json?, String, Bool, String, () -> Unit
 
 pub fn appearance_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
+pub fn archiving_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32) -> Unit
+
 pub fn archiving_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
 pub let ask_turns : Map[String, Int32]
@@ -596,6 +598,8 @@ pub fn sign_in_node(@view.View, @sfbase.Source) -> @view.View
 pub fn sign_in_page(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn state_line(@ui.Ctx, String, Int32, String, lead? : String, lead_text? : String, rest? : String, alert? : Bool) -> Unit
+
+pub fn station_archiving_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
 
 pub fn station_archiving_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
 

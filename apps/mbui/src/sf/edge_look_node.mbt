@@ -51,6 +51,20 @@ fn EdgeWay::go_by(self : EdgeWay, n : @view.View, to : Double, spec : @motion.Sp
 }
 
 ///|
+/// Off from `from` (put there at that moment, still) to `to` as `spec` says, from `n`'s cause's moment; its end a moment
+/// of `n`'s: gone again from the start of its way (a cover's, sent to another item).
+fn EdgeWay::go_from(self : EdgeWay, n : @view.View, from : Double, to : Double, spec : @motion.Spec) -> Unit {
+  (self.due)()
+  self.way.put(from)
+  self.way.go(to, spec, at=n.cause_at())
+  self.due = if self.way.ends_at() >= 0.0 {
+    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+  } else {
+    fn() {  }
+  }
+}
+
+///|
 /// Where it is as `n` is drawn: at the moment it is drawn at while it goes, where it went once it is there.
 fn EdgeWay::shown(self : EdgeWay, n : @view.View) -> Double {
   self.way.said()

@@ -66,6 +66,8 @@ pub fn compose_to_motion(Double, Double) -> (Double, Double, Double)
 
 pub fn copy_box_into(Box, Box) -> Unit
 
+pub let cover_spring : Spec
+
 pub fn create_axis() -> Axis
 
 pub fn create_axis_delta() -> AxisDelta
