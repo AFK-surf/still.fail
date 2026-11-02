@@ -29,6 +29,10 @@ let duo_cover_shape : Double = 0.695
 let sim_bezel : Double = 8.0
 
 ///|
+/// How many straight pieces make a corner's curve where the picture's corner is cut off, under the body's own edge.
+let corner_cut_steps : Int = 24
+
+///|
 // kept across runs: a value (no field of it changes)
 let device_body : @ui.Color = Data(0x1C1C1EFFL)
 
@@ -161,6 +165,24 @@ fn device_round(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect) -> Uni
   let (tl, tr, br, bl) = panel_corners(field(s.state, "panels"), shown.w, shown.h)
   let body_w = shown.w + sim_bezel + sim_bezel
   let body_h = shown.h + sim_bezel + sim_bezel
+  // the picture's own corners, square, cut off where the body's curve leaves them showing: it lies on the system's video
+  // layer, under all this, where a box can round nothing
+  let ground = c.color(if u.full { Theater } else { Bg })
+  let cuts = [
+    (0.0, 0.0, 1.0, 1.0, tl),
+    (shown.w, 0.0, -1.0, 1.0, tr),
+    (shown.w, shown.h, -1.0, -1.0, br),
+    (0.0, shown.h, 1.0, -1.0, bl),
+  ].filter(fn(k) { k.4 > 0.0 }).map(fn(k) { (corner_cut(k.0, k.1, k.2, k.3, k.4), true) })
+  if cuts.length() > 0 {
+    c.layer(fn() {
+      c.box(style=@ui.style(w=Fixed(shown.w), h=Fixed(shown.h)), tx=shown.x, ty=shown.y, fn() {
+        c.shapes([@ui.shape_of(cuts, fill=ground)], w=Px(shown.w), h=Px(shown.h), name="device-corners") |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
   c.layer(fn() {
     c.box(
       style=@ui.style(
@@ -178,6 +200,19 @@ fn device_round(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect) -> Uni
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What lies outside a corner's curve of radius `r`, as an outline: from the corner at (`x`, `y`) round the curve, (`dx`, `dy`)
+/// the way into the picture from it.
+fn corner_cut(x : Double, y : Double, dx : Double, dy : Double, r : Double) -> Array[Double] {
+  let points = [x, y]
+  for i in 0..=corner_cut_steps {
+    let a = i.to_double() / corner_cut_steps.to_double() * @math.PI / 2.0
+    points.push(x + dx * r * (1.0 - @dmath.sin(a)))
+    points.push(y + dy * r * (1.0 - @dmath.cos(a)))
+  }
+  points
 }
 
 ///|

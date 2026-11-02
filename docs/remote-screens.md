@@ -420,7 +420,7 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
   and the rest by their buttons). Where the guest has `dtuhidd`, fingers go through it as keys do (`DTUHIDKeys`): an Indigo touch
   there could take the guest's backboardd down (seen on an iPhone Duo, 2026-11-02). Its panel is by display number, 1 and 3.
 - **The device's body**: the item's `panels` (`sim-mask.ts`: its type's framebuffer masks read for each panel's corners). The app paints
-  the body over the picture's corners, which the picture on its layer has square.
+  the body round the picture and the page's ground over what its curve leaves of the picture's corners, square on its layer.
 - **Screenshot**: `POST /admin/api/screens/<id>/screenshot` → `{png}` (base64), in the device's own pixels: a view's own
   picture, not `simctl io`'s, which of a foldable's screens it picks is not the one in use (an iPhone Duo's: black).
 
