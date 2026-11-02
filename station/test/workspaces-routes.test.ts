@@ -213,6 +213,7 @@ test("a viewer's event streams carry only their workspace's changes", async () =
         if (op === "chats") return "[]";
         if (op === "summary") return JSON.stringify({ key: args.key });
         if (op === "thread") return JSON.stringify({ id: args.id });
+        if (op === "threadViews") return JSON.stringify(args.viewers.map(() => ({ id: args.id })));
         if (op === "job") return JSON.stringify({ id: args.id });
         throw new Error(op);
       },

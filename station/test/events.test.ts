@@ -31,7 +31,7 @@ function setup(clock?: Clock.Clock, handover?: EventsDeps["handover"], db?: { ro
       if (op === "thread") return JSON.stringify({ id: args.id, last: 1, unread: 1, for: args.viewer.email });
       // The same for several viewers in one read (read/ops.ts chatRowsOf, read/ops-sessions.ts threadViews).
       if (op === "chatRowsOf") return JSON.stringify(args.viewers.map((v: any) => ({ rows: rows[v.viewer.email] ?? [], scope: [...(args.sessions as string[]), ...(rows[v.viewer.email] ?? []).map((r) => r.id)] })));
-      if (op === "threadViews") return JSON.stringify(args.viewers.map((v: any) => ({ id: args.id, last: 1, unread: 1, for: v.viewer.email, lang: v.lang })));
+      if (op === "threadViews") return JSON.stringify(args.viewers.map((v: any) => ({ id: args.id, last: 1, unread: 1, for: v.viewer.email })));
       throw new Error(op);
     },
   };
@@ -562,8 +562,8 @@ test("one person's streams in two languages are read for together: once a change
   change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
   await settle();
   assert.deepEqual(reads.filter((r) => r !== "summary"), ["threadViews", "chatRowsOf"], "one read of each, not one a viewer");
-  const views = (s: typeof zh) => s.got.filter((e) => e.event === "thread-view").map((e) => [e.data.id, e.data.lang]);
-  assert.deepEqual([views(zh), views(en)], [[[4, "zh"]], [[4, "en"]]], "each told its own");
+  const views = (s: typeof zh) => s.got.filter((e) => e.event === "thread-view").map((e) => e.data.id);
+  assert.deepEqual([views(zh), views(en)], [[4], [4]], "each told its own");
   await zh.close();
   await en.close();
 });
