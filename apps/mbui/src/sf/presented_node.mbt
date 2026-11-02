@@ -27,7 +27,7 @@ fn tree_draws(p : Presented, sheet : Bool) -> Bool {
     p.shows is (Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _)) ||
     p.shows is Pick(_, _, _, _, _, _) ||
     // (one that goes in steps the host's still, whatever its kind: its steps a stack the host draws)
-    (p.shows is Panel(x) && !x.steps && panel_popover_of(x, p.from))
+    (p.shows is Panel(x) && !x.steps && (panel_popover_of(x, p.from) || panel_centred_of(x, p.from)))
   )
 }
 
@@ -37,6 +37,14 @@ fn tree_draws(p : Presented, sheet : Bool) -> Bool {
 /// holds and a share of the window tall, or whose title is as it is now (`live`), or one that goes in steps (`steps`).
 fn panel_popover_of(x : PanelOf, from : Anchor) -> Bool {
   !x.stage && !x.form && from != Unanchored && !(x.fits && x.tall > 0.0) && x.live is None && !x.steps
+}
+
+///|
+/// Whether panel `x` presented `from` is a panel opened by nothing, a dialog in the middle of the window, the window's
+/// tree draws (panel_centred_node): not a stage or a form, nor (yet) one a share of the window tall or whose title is as
+/// it is now (`live`), or one that goes in steps (`steps`).
+fn panel_centred_of(x : PanelOf, from : Anchor) -> Bool {
+  !x.stage && !x.form && from == Unanchored && x.tall <= 0.0 && x.live is None && !x.steps
 }
 
 ///|
@@ -138,6 +146,18 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             gone~,
           )
         }
+        Panel(x) if p.from == Unanchored =>
+          panel_centred_node(
+            row,
+            "sf-present/\{serial}",
+            open,
+            x,
+            fn() { done(fn() {  }) },
+            fn() { dismissed_now(serial) },
+            p,
+            shown~,
+            gone~,
+          )
         Panel(x) => {
           // (beside what opened it, where it is drawn: as a menu's)
           let (anchor, _, _, _) = @signals.untracked(fn() { menu_anchor_now(p.from) })
