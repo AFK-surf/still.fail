@@ -794,6 +794,29 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
   }
 });
 
+test("a catch-up may ask for a bounded page of messages and letters", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    const id = made.thread.id;
+    for (let n = 1; n <= 5; n++) {
+      r.store.insertMessage(newMessage(id, `1.${n}`, "person", "a@x", `message ${n}`));
+      r.store.insertLetter({ thread: id, ts: `2.${n}`, authorKind: "agent", author: "another", text: `letter ${n}`, letter: { way: "in", title: "another", link: null } });
+    }
+    for (const kind of ["entries", "letters"] as const) {
+      const path = `/threads/${id}/${kind}`;
+      const [status, first] = await r.ask("GET", path, undefined, [["after", "0"], ["limit", "2"]]);
+      assert.equal(status, 200);
+      assert.deepEqual(first[kind].map((e: any) => e.n), [1, 2]);
+      assert.equal(first.last, 5);
+      const [, second] = await r.ask("GET", path, undefined, [["after", "2"], ["limit", "2"]]);
+      assert.deepEqual(second[kind].map((e: any) => e.n), [3, 4]);
+      const [, old] = await r.ask("GET", path, undefined, [["after", "0"]]);
+      assert.equal(old[kind].length, 5, "older clients retain the unlimited form");
+    }
+  } finally { await r.close(); }
+});
+
 test("writing in an agent's Slack thread makes its item the viewer's (我参与的), chat or no chat", async () => {
   const r = rig();
   try {

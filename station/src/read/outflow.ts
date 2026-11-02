@@ -108,7 +108,7 @@ export function outflowThread(s: Store, by: { thread?: number | null; session?: 
 /// Null for a chat that is not the workspace's.
 export function outflowMessages(s: Store, thread: number, after: number, limit: number, of: Of = HOME): Json {
   if (store.getThread(s, thread) === null || !store.seesThread(s, of, thread)) return null;
-  const entries = store.entriesAfter(s, thread, BigInt(after));
+  const entries = store.entriesAfter(s, thread, BigInt(after), limit + 1);
   const page = entries.slice(0, limit);
   return {
     thread,

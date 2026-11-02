@@ -36,8 +36,19 @@ type Asked = {
 const HOMES = 4096;
 /// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
 const CHECKPOINT_MS = 2_000;
-/// Reads that can traverse a whole list or aggregate: leave room for a chat or a stream even when several are asked.
-const BULK = new Set(["usage", "outflowUsage", "chats", "outflowChats", "threadList", "sessions", "openJobs", "machineSessions", "changed", "publishDraft"]);
+/// The scoped reads on the path to showing a message or a file. Other page reads, including new kinds not yet
+/// classified, leave room for these: a slow transcript or resource snapshot can block just as a slow aggregate can.
+const INTERACTIVE = new Set(["thread", "sessionFile"]);
+
+/// Stream updates and one thread's current or older page are interactive. An `after` or explicit range can ask for an
+/// unbounded amount on older clients, so it remains in the background until that request is paged end to end.
+function interactive(a: Asked): boolean {
+  if (a.told || INTERACTIVE.has(a.ask.op)) return true;
+  if (a.ask.op !== "entries" && a.ask.op !== "letters") return false;
+  const params = a.ask.args?.params;
+  const keys = Array.isArray(params) ? params.map((p: unknown) => Array.isArray(p) ? p[0] : null) : Object.keys(params ?? {});
+  return !keys.includes("after") && !keys.includes("from") && !keys.includes("to");
+}
 
 export class Readers {
   private slots: Slot[] = [];
@@ -122,14 +133,15 @@ export class Readers {
   }
 
   /// Reads in line go to readers free, the first first (a session's history to its home reader when that one is free).
-  /// When there are at least two readers, bulk reads leave one free for other reads: a slow usage page must not occupy
-  /// both before a message arrives. A later non-bulk read can pass a bulk read that is waiting for that limit.
+  /// When there are at least two readers, non-interactive reads leave one free for a message or file. Stream updates
+  /// remain interactive; a later interactive read passes a waiting non-interactive read.
   private pump() {
     if (this.closed) return;
     while (this.line.length > 0) {
-      const bulkHeld = this.slots.filter((s) => s.held !== null && !s.held.told && BULK.has(s.held.ask.op)).length;
-      const limited = this.size > 1 && bulkHeld >= this.size - 1;
-      const at = limited ? this.line.findIndex((a) => a.told || !BULK.has(a.ask.op)) : 0;
+      const background = (a: Asked) => !interactive(a);
+      const backgroundHeld = this.slots.filter((s) => s.held !== null && background(s.held)).length;
+      const limited = this.size > 1 && backgroundHeld >= this.size - 1;
+      const at = limited ? this.line.findIndex((a) => !background(a)) : 0;
       if (at < 0) break;
       const asked = this.line[at]!;
       const home = asked.home !== null && asked.home.held === null && this.slots.includes(asked.home) ? asked.home : null;

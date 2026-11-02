@@ -54,3 +54,29 @@ for (const bulk of ["usage", "chats", "openJobs", "changed"]) test(`messages and
   assert.equal(Atomics.load(state, 0), 4, "the waiting bulk read is also taken");
   assert.ok(finished.every((result) => result.status === "fulfilled"));
 });
+
+for (const background of ["timeline", "resourceChats", "aNewRead"]) test(`a stalled ${background} and usage cannot occupy both readers ahead of a file and a message`, async () => {
+  const data = mkdtempSync(join(tmpdir(), "reader-line-"));
+  const readers = new Readers(data, 2, new URL("./reader-line-worker.mjs", import.meta.url));
+  const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
+  const args = { state: state.buffer };
+  const asked = [readers.read("usage", args, "en"), readers.read(background, args, "en"), readers.read("sessionFile", args, "en"), readers.read("told", args, "en", { told: true })];
+  try {
+    const started = async (wanted: number) => {
+      while (Atomics.load(state, 0) < wanted) {
+        const count = Atomics.load(state, 0);
+        if (count < wanted) await Atomics.waitAsync(state, 0, count).value;
+      }
+    };
+    await started(2);
+    assert.notEqual(Atomics.load(state, 1) & 4, 0, "the file starts without waiting for both background reads");
+    await started(3);
+    assert.equal(Atomics.load(state, 1) & 6, 6, "the message starts too");
+  } finally {
+    Atomics.store(state, 2, 1);
+    Atomics.notify(state, 2);
+    await Promise.allSettled(asked);
+    readers.close();
+    rmSync(data, { recursive: true, force: true });
+  }
+});

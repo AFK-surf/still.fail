@@ -595,7 +595,7 @@ function asI64(n: number): bigint {
   return BigInt(Math.trunc(n));
 }
 
-/// GET /threads/:id/entries: `after` (an n) gives what came since; `before` pages back (`limit` entries); `from` and
+/// GET /threads/:id/entries: `after` (an n) gives what came since (at most `limit` if given); `before` pages back; `from` and
 /// `to` a gap (both included); none of them the latest page. `params`: the query's pairs, the first of a name counts
 /// (admin/mod.rs `query_pairs`, `Asked::param`), or a plain map of them.
 export function entries(station: Store, _viewer: Viewer, thread: number, params: Record<string, string> | [string, string][]): Json {
@@ -621,7 +621,7 @@ export function entries(station: Store, _viewer: Viewer, thread: number, params:
   const s = api.store;
   const last = store.lastEntry(s, thread);
   const found =
-    after !== null ? store.entriesAfter(s, thread, after) : from !== null && to !== null ? store.entriesBetween(s, thread, from, to) : store.entriesBefore(s, thread, before, limit);
+    after !== null ? store.entriesAfter(s, thread, after, asked === undefined ? undefined : limit) : from !== null && to !== null ? store.entriesBetween(s, thread, from, to) : store.entriesBefore(s, thread, before, limit);
   return { last, entries: entryViews(api, thread, found) };
 }
 
@@ -651,7 +651,7 @@ export function letters(station: Store, _viewer: Viewer, thread: number, params:
   const last = store.lastLetter(s, thread);
   const found =
     after !== null
-      ? store.lettersBetween(s, thread, BigInt.asIntN(64, after + 1n), store.I64_MAX)
+      ? store.lettersBetween(s, thread, BigInt.asIntN(64, after + 1n), store.I64_MAX, asked === undefined ? undefined : limit)
       : from !== null && to !== null
         ? store.lettersBetween(s, thread, from, to)
         : store.lettersBefore(s, thread, before, limit);
