@@ -98,8 +98,8 @@ fn Ctx::paint_over_layers(self : Ctx) -> Unit {
   let todo = dr.over_layers.copy()
   dr.over_layers.clear()
   for p in todo {
-    let (i, alpha) = p
-    self.paint(i, alpha)
+    let (i, alpha, words, surface) = p
+    self.paint_put_off(i, alpha, words, surface)
   }
   dr.mode = was
   dr.over_all = false
@@ -117,8 +117,8 @@ fn Ctx::paint_over_cover(self : Ctx) -> Unit {
   let todo = dr.over_cover.copy()
   dr.over_cover.clear()
   for p in todo {
-    let (i, alpha) = p
-    self.paint(i, alpha)
+    let (i, alpha, words, surface) = p
+    self.paint_put_off(i, alpha, words, surface)
   }
   dr.mode = was
   dr.covering = false

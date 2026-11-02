@@ -48,7 +48,8 @@ pub fn confirm_node(
 /// already, presenters' scrim_owner, and its ground clear). `first_stop`: the focus given as it opens to the first of
 /// what it holds that takes it, where the panel names no node of its own for it (Ctx::overlay's initial_focus by
 /// default: a panel's, with its fields; a confirm's ground is its own). `scrim`: what dims what is under it, as far as
-/// its ground has come (the theme's; a stage's its own night, stage_scrim).
+/// its ground has come (the theme's; a stage's its own night, stage_scrim), over `ground_ms` (a stage's night its
+/// surface, in by the time what it holds begins to come: stage_node).
 fn dialog_layer_node(
   parent : @view.View,
   open : () -> Bool,
@@ -62,6 +63,7 @@ fn dialog_layer_node(
   within? : () -> Bool = fn() { false },
   first_stop? : Bool = false,
   scrim? : () -> Int64 = fn() { @ui.tree_theme().scrim },
+  ground_ms? : Double = confirm_ground_ms,
 ) -> Unit {
   parent.show(
     open,
@@ -82,7 +84,7 @@ fn dialog_layer_node(
           dim.go(layer, 0.0, @kit.pop_out_ms, ease=Leave)
         } else {
           shown.go(layer, 1.0, @kit.dialog_ms)
-          dim.go(layer, 1.0, confirm_ground_ms)
+          dim.go(layer, 1.0, ground_ms)
         }
       })
       let look = fn() {
@@ -185,6 +187,8 @@ fn confirm_panel(
     .offset(By(fn() { (look().dx, look().dy) }))
     .says(By(fn() { Some(@view.said(Dialog, label=title(), description=if warning == "" { words() } else { words() + "\n" + warning })) }))
     |> ignore
+    // (all it holds as far in as its look says, past its own ground, edge and shadow: each part of it, its title, its
+    // words, its foot and its buttons, the same, Look's `words` as a surface's are)
     let words_in = fn() { look().words }
     d.box(fn(t) {
       t
@@ -221,11 +225,13 @@ fn confirm_panel(
       .lines_up(Is(Some(Middle)))
       .gap(Is(@ui.Space::px(S2)))
       .padding(Is((at - dialog_pad, @ui.Space::px(S2), at - dialog_pad, at)))
+      // (its buttons, their grounds and words, as far in as the rest of what it holds)
+      .alpha(By(words_in))
       |> ignore
       f.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
       // (going, they take nothing: what is leaving takes no press, focus or key; drawn as they were, going with it)
-      let no = button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost, words_in~)
-      button_node(f, action, confirm, tone=if danger { DangerSolid } else { Primary }, words_in~) |> ignore
+      let no = button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost)
+      button_node(f, action, confirm, tone=if danger { DangerSolid } else { Primary }) |> ignore
       cancel_at.val = Some(no)
     })
     |> ignore

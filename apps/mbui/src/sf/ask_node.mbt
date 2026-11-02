@@ -76,12 +76,14 @@ pub fn ask_node(
         .min_height(Is(Some(dialog_close)))
         .lines_up(Is(Some(Middle)))
         .row(Is(true))
+        // (all it holds as far in as its look says, past its own ground, edge and shadow: its title's row, what it
+        // holds, its foot, each the same, Look's `words` as a surface's are)
+        .alpha(By(words_in))
         |> ignore
         h.box(fn(t) {
           t
           .words(Is(title), look=toast_words_look(Heading, Font, 600, true))
           .ink(By(fn() { theme().color(Fg) }))
-          .alpha(By(words_in))
           |> ignore
         })
         |> ignore
@@ -90,18 +92,16 @@ pub fn ask_node(
       // (what it holds: 18 under its title, 16 apart; its field an old view's, its hint under it; scrolling in itself
       // where the panel is short of room, out to its sides: dialog's capped body)
       d.box(fn(body) {
+        body.alpha(By(words_in)) |> ignore
         body.scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
         b.padding(Is((dialog_pad, @ui.Space::px(S4_5), dialog_pad, 0.0))).gap(Is(@ui.Space::px(S4))) |> ignore
         @ui.old(b, fn(c) {
           let fid = c.id(key + "/line")
           let submitted = Ref(false)
-          let held = c.box(style=ask_field_at, fn() {
+          c.box(style=ask_field_at, fn() {
             submitted.val = input(c, key + "/line", placeholder~, secret~, field=line).submitted
           })
-          // (its words as far in as the panel's, its ground and edge with the panel: the old dialog's look's words,
-          // Look's `words`, on what its field draws, as kit.dialog's c.look put them)
-          let l = look()
-          c.look(held, { alpha: 1.0, dx: 0.0, dy: 0.0, sx: 1.0, sy: 1.0, ox: 0.5, oy: 0.5, rot: 0.0, circle: 0.0, words: l.words })
+          |> ignore
           if !focused.val && @signals.untracked(open) {
             if c.has_focus(fid) {
               focused.val = true
@@ -119,7 +119,7 @@ pub fn ask_node(
         |> ignore
         if hint != "" {
           b.box(fn(t) {
-            t.words(Is(hint), look=toast_words_look(Meta, L5, 400, true)).ink(By(fn() { theme().color(Muted) })).alpha(By(words_in)) |> ignore
+            t.words(Is(hint), look=toast_words_look(Meta, L5, 400, true)).ink(By(fn() { theme().color(Muted) })) |> ignore
           })
           |> ignore
         }
@@ -130,10 +130,10 @@ pub fn ask_node(
       // (its foot: its buttons at its end, 8 apart, 24 over them; as far from its foot and sides as its corner has them)
       d.box(fn(f) {
         let at = capsule_in(dialog_r, button_height())
-        f.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))).padding(Is((at, @ui.Space::px(S6), at, at))) |> ignore
+        f.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))).padding(Is((at, @ui.Space::px(S6), at, at))).alpha(By(words_in)) |> ignore
         f.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
-        let no = button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost, words_in~)
-        button_node(f, fn() { action }, go, tone=Primary, disabled=fn() { !can() }, words_in~) |> ignore
+        let no = button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost)
+        button_node(f, fn() { action }, go, tone=Primary, disabled=fn() { !can() }) |> ignore
         first.val = Some(no)
       })
       |> ignore

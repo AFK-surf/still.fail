@@ -240,9 +240,12 @@ pub fn menu_node(
         .on_press(fn() {  })
         |> ignore
         p.box(fn(body) {
+          // (all it holds as far in as its look says, past the panel's own ground, edge and shadow: its rows, their
+          // grounds, checks, marks and words, its headings and lines, the same, Look's `words` as a surface's are)
+          body.alpha(By(words_in)) |> ignore
           body.scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
             if title != "" {
-              menu_heading_node(b, fn() { title }, past, reach, words_in)
+              menu_heading_node(b, fn() { title }, past, reach)
             }
             // (each of what it holds by its place and its kind: one changing what it is (a line, a heading, a row) made
             // anew there; a row's words, icon, check and whether it can be chosen read again as they change, the row the
@@ -257,9 +260,9 @@ pub fn menu_node(
               }
               match kind {
                 0 => menu_rule_node(cell, reach)
-                1 => menu_heading_node(cell, fn() { item().label }, past, reach, words_in)
+                1 => menu_heading_node(cell, fn() { item().label }, past, reach)
                 _ => {
-                  rows[i] = menu_row_node(cell, item, i, lead, gap, reach, go, words_in, current, stop, extras(i))
+                  rows[i] = menu_row_node(cell, item, i, lead, gap, reach, go, current, stop, extras(i))
                   cell.owns(fn() { rows.remove(i) }) |> ignore
                 }
               }
@@ -321,7 +324,6 @@ fn menu_row_node(
   gap : () -> Double,
   reach : Double,
   go : (Int) -> Unit,
-  words_in : () -> Double,
   current : @signals.Signal[Int],
   stop : () -> Int,
   extra : MenuExtra,
@@ -374,7 +376,7 @@ fn menu_row_node(
     // mark after it, its words, and its value pushed to its end)
     let first_line = fn(into : @view.View) {
       into.show(lead, fn(col) {
-        col.width(Is(Some(menu_check_w))).lines_up(Is(Some(Middle))).alpha(By(words_in)) |> ignore
+        col.width(Is(Some(menu_check_w))).lines_up(Is(Some(Middle))) |> ignore
         let mark = fn() {
           let it = item()
           match it.chosen {
@@ -406,7 +408,6 @@ fn menu_row_node(
           @ui.old(into, fn(c) { m(c, menu_check_w) })
           .width(Is(Some(menu_check_w)))
           .height(Is(Some(menu_check_w)))
-          .alpha(By(words_in))
           |> ignore
         None => ()
       }
@@ -414,7 +415,6 @@ fn menu_row_node(
         w
         .words(By(fn() { item().label }), look=toast_words_look(Ui, L5, 400, false))
         .ink(By(fn() { @ui.tree_theme().color(if off() { Subtle } else if item().danger { Danger } else { Fg }) }))
-        .alpha(By(words_in))
         |> ignore
       })
       |> ignore
@@ -424,7 +424,6 @@ fn menu_row_node(
           w
           .words(Is(extra.value), look=toast_words_look(Meta, L5, 400, false))
           .ink(By(fn() { @ui.tree_theme().color(Muted) }))
-          .alpha(By(words_in))
           |> ignore
         })
         |> ignore
@@ -456,7 +455,6 @@ fn menu_row_node(
             w
             .words(Is(extra.note), look=toast_words_look(Meta, L5, 400, true))
             .ink(By(fn() { @ui.tree_theme().color(Muted) }))
-            .alpha(By(words_in))
             |> ignore
           })
           |> ignore
@@ -490,7 +488,6 @@ fn menu_heading_node(
   label : () -> String,
   past : () -> Double,
   reach : Double,
-  words_in : () -> Double,
 ) -> Unit {
   b.box(fn(h) {
     h.padding(By(fn() { (text_in + past() + reach, 6.0, 10.0 + reach, 4.0) })) |> ignore
@@ -498,7 +495,6 @@ fn menu_heading_node(
       w
       .words(By(label), look=toast_words_look(Meta, L4_75, 400, false))
       .ink(By(fn() { @ui.tree_theme().color(Muted) }))
-      .alpha(By(words_in))
       |> ignore
     })
     |> ignore

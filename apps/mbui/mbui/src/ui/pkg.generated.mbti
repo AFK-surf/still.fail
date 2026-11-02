@@ -1327,6 +1327,7 @@ pub fn Ctx::stop_wheel(Self, Int32) -> Unit
 pub fn Ctx::stratum(Self, Int32, Stratum) -> Unit
 pub fn Ctx::stream(Self, Stream, w? : Size, h? : Size, fit? : Fit, radius? : Double, at? : (Double, Double, Double, Double)?, layer? : Bool) -> Int32
 pub fn Ctx::style_size(Self, TextStyle) -> (Double, Double)
+pub fn Ctx::surface(Self, Int32) -> Unit
 pub fn Ctx::take_back(Self, () -> Unit) -> Unit
 pub fn Ctx::take_key(Self, Int32, mods? : Int32) -> Bool
 pub fn Ctx::take_press(Self) -> Unit

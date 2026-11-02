@@ -130,7 +130,8 @@ let sheet_under : Double = 26.0
 pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit) -> Unit {
   fn(c, s, body) {
     let t = theme()
-    c.box(
+    // (the sheet: the surface of the look it comes in by: Ctx::surface)
+    let sheet = c.box(
       w=Fill(1.0),
       h=Px(s.h + sheet_under),
       radius=26.0,
@@ -147,7 +148,7 @@ pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit
       pb=sheet_under,
       body,
     )
-    |> ignore
+    c.surface(sheet)
   }
 }
 
