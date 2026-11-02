@@ -45,6 +45,11 @@ type Line = { told: boolean; size: number; room: boolean; slots: Slot[]; waiting
 const HOMES = 4096;
 /// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
 const CHECKPOINT_MS = 2_000;
+/// Writing the store's log into the database (worker.ts `checkpoint`) is no read and waits for no one: it goes before
+/// the reads waiting, to the first reader free, the one bulk reads leave for a chat's included. In line behind them, it
+/// waited up to 98 s on ccvm (2026-11-02) while the log grew, until the main connection wrote it itself at its next
+/// commit (store.ts WAL_PAGES), holding every device and agent as it reached the disk.
+const CHECKPOINT = "checkpoint";
 /// The scoped reads on the path to showing a chat. Other page reads, including new kinds not yet classified, leave room
 /// for these: a slow transcript or resource snapshot can block just as a slow aggregate can.
 const INTERACTIVE = new Set(["thread"]);
@@ -136,7 +141,7 @@ export class Readers {
   /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
   read(op: string, args: unknown, lang: Ask["lang"], { told = false }: { told?: boolean } = {}): Promise<string> {
     if (op === "usage" && (args as { history?: unknown } | null)?.history === true) return this.usageHistory(args, lang, told);
-    return this.enqueue(op, args, lang, told);
+    return this.enqueue(op, args, lang, told, op === CHECKPOINT);
   }
 
   private async usageHistory(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
@@ -154,7 +159,8 @@ export class Readers {
     throw new HttpError(502, "station stopping");
   }
 
-  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
+  /// `first`: before the reads waiting (CHECKPOINT).
+  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     const line = told ? this.told : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
@@ -163,7 +169,9 @@ export class Readers {
     const home = session !== null ? this.homes.get(session) : undefined;
     const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
-      line.waiting.push({ ask, session, home: home !== undefined && line.slots.includes(home) ? home : null, at: wall.now(), took: 0, resolve, reject });
+      const asked = { ask, session, home: home !== undefined && line.slots.includes(home) ? home : null, at: wall.now(), took: 0, resolve, reject };
+      if (first) line.waiting.unshift(asked);
+      else line.waiting.push(asked);
       this.pump(line);
     });
   }
@@ -176,7 +184,7 @@ export class Readers {
     while (line.waiting.length > 0) {
       const bulkHeld = line.slots.filter((s) => s.held !== null && !interactive(s.held)).length;
       const limited = line.room && line.size > 1 && bulkHeld >= line.size - 1;
-      const at = limited ? line.waiting.findIndex(interactive) : 0;
+      const at = limited ? line.waiting.findIndex((a) => interactive(a) || a.ask.op === CHECKPOINT) : 0;
       if (at < 0) break;
       const asked = line.waiting[at]!;
       const home = asked.home !== null && asked.home.held === null && line.slots.includes(asked.home) ? asked.home : null;
@@ -215,7 +223,7 @@ export class Readers {
     this.again = false;
     wall.after(CHECKPOINT_MS, () => {
       if (this.closed) return;
-      this.read("checkpoint", {}, "en")
+      this.read(CHECKPOINT, {}, "en")
         .catch((error) => log.warn("readers", "the database's log not written into it", { error: (error as Error).message }))
         .finally(() => {
           this.checkpointing = false;
