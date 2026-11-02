@@ -45,6 +45,8 @@ priv struct OldIsland {
   /// as tall as what it holds at its width (old's `natural`): that height as the old frame last laid it out (None
   /// before it first is), what its node is as tall as; the box it is laid out in, as tall as it (-1: none this frame)
   natural : @signals.Signal[Double?]?
+  /// laid out in the height its node is given, as tall as what it holds asks all the same (old's `gives`)
+  gives : Bool
   /// as wide as what it holds, `most` at most and never narrower than it is (old's `fits`): the least that is, as the
   /// old frame last laid it out, told the signal (None before it first is)
   fits : (Double, @signals.Signal[Double?])?
@@ -616,7 +618,12 @@ fn old_frame(c : Ctx) -> Unit {
         let i = c.box(
           // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
           // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
-          style=if o.natural is Some(_) { style(w=Fixed(w), clip=true) } else { style(w=Fixed(w), h=Fixed(h), clip=true) },
+          // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
+          style=if o.natural is Some(_) && !o.gives {
+            style(w=Fixed(w), clip=true)
+          } else {
+            style(w=Fixed(w), h=Fixed(h), clip=true)
+          },
           left~,
           top~,
           fn() {
@@ -649,6 +656,8 @@ fn old_frame(c : Ctx) -> Unit {
                       })
                       |> ignore
                     }
+                    // (one that gives way: in the height its node is given, all of it)
+                    None if o.gives => o.held_box = c.box(style=style(w=Fixed(w), h=Full), fn() { put() })
                     None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
                   }
                 None => {
@@ -1945,11 +1954,17 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// most its first and never narrower than its node is (a panel as wide as what it holds, never narrower than it has been):
 /// that width as the old frame last laid it out told its second (None before), built for the most whatever it is; a
 /// `natural` one's alone.
+/// `gives`, a `natural` one's: as tall as what it holds asks still (what it holds laid out with no bound on its height,
+/// told its node), but laid out in the height its node is given, what in it gives way giving way (a list in it scrolling
+/// in itself): its node held shorter than what it holds asks (its holder short of room), nothing of it cut off; what it
+/// asks never the height it was given. Not with `fits` (not yet: one that fits laid out as a `natural` one is,
+/// cut where its node is shorter).
 pub fn old(
   v : @view.View,
   build : (Ctx) -> Unit,
   key? : () -> String = fn() { "" },
   natural? : Bool = false,
+  gives? : Bool = false,
   fits? : (Double, @signals.Signal[Double?]),
 ) -> @view.View {
   v.hosted(make=fn(n) {
@@ -2009,6 +2024,7 @@ pub fn old(
       part: -1,
       room,
       natural: natural_h,
+      gives: natural && gives,
       fits: if natural { fits } else { None },
       held_box: -1,
     })
@@ -3729,7 +3745,9 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
   for o in old_islands {
     match o.natural {
       Some(s) if o.held_box >= 0 && o.held_box < c.count => {
-        let h = c.nodes[o.held_box].fh
+        // (one that gives way: as tall as what it holds is laid out with no bound on its height, not the height it was
+        // given and laid out in)
+        let h = if o.gives { c.asked_height(o.held_box) } else { c.nodes[o.held_box].fh }
         if @signals.untracked(fn() { s.get() }) != Some(h) {
           s.set(Some(h))
           c.read_changed("an old view's height, what it holds laid out")
