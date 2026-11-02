@@ -105,6 +105,11 @@ priv enum ViewHeld {
 let view_held : Ref[ViewHeld?] = Ref(None)
 
 ///|
+/// Where the press held by nothing went down, on nothing of the tree's (view_pointer): a tap where it is let go near it.
+// kept across runs: put back as a run begins (view_forget)
+let view_nothing_down : Ref[(Double, Double)?] = Ref(None)
+
+///|
 /// Where the press held now went down in the window (its primary button's or a finger's), what may take it over as it
 /// moves, as found as it went down (Tree::claimers_at: of what it went down on, the old view it went on to under an
 /// empty one over it), and its events since (when, where: what it goes at taken over, Drag's `vy`); none once
@@ -380,6 +385,7 @@ fn view_forget() -> Unit {
   tree_links.clear()
   view_app.val = None
   view_held.val = None
+  view_nothing_down.val = None
   view_down.val = None
   old_focus_shown.val = 0
   old_show_due.val = None
@@ -426,7 +432,7 @@ fn view_forget() -> Unit {
 fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
   let c = g()
   let tl = layout_text(
-    words,
+    view_words_set(words, look),
     c.sp(look.size),
     look.weight,
     if width < 0.0 { 1.0e9 } else { width },
@@ -437,6 +443,19 @@ fn view_words_measure(words : String, look : @view.WordsLook, width : Double) ->
   )
   // (broken onto more lines than their own where the width ran out: as wide as it, as an old view's words are, leaf_size)
   (if width >= 0.0 && look.wrap && soft_wrapped(tl.line_end, tl.shaped.cu) { width } else { tl.w }, tl.h)
+}
+
+///|
+/// A node's words as they are set: on one line where they do not wrap, what breaks them run on with a space (as an old
+/// view's words on one line are: Ctx::text, one_line); else as said. What they measure, are drawn and are cut by.
+fn view_words_set(words : String, look : @view.WordsLook) -> String {
+  if look.wrap || !has_nl(words) {
+    return words
+  }
+  match one_line([words]) {
+    Some(t) => t[0]
+    None => words
+  }
 }
 
 ///|
@@ -456,8 +475,18 @@ fn view_words_style() -> Int {
 /// digits (view_words_style).
 fn view_rich(runs : Array[@view.WordsRun], look : @view.WordsLook) -> Rich {
   let c = g()
+  // (on one line where they do not wrap: what breaks them run on with a space across all of them at once, a break and
+  // what blanks follow it perhaps in two of them, as Ctx::rich's; each as weighty and inked as it was)
+  let texts = if look.wrap || !runs.iter().any(fn(r) { has_nl(r.text) }) {
+    runs.map(fn(r) { r.text })
+  } else {
+    match one_line(runs.map(fn(r) { r.text })) {
+      Some(t) => t
+      None => runs.map(fn(r) { r.text })
+    }
+  }
   {
-    runs: runs.map(fn(r) { span(r.text, weight=r.weight, color=r.ink) }),
+    runs: runs.mapi(fn(k, r) { span(texts[k], weight=r.weight, color=r.ink) }),
     size: c.sp(look.size),
     weight: look.weight,
     color: 0L,
@@ -1305,9 +1334,10 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     } else if c.words != "" {
       let k = c.words_look
       let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
-      let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
+      let words = view_words_set(c.words, k)
+      let tl = layout_text(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
       let tl = if !k.wrap && tl.w > c.w + 0.5 {
-        ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
+        ellipsized(words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
       } else {
         tl
       }
@@ -1358,9 +1388,10 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     // (at the system's size of words, in the theme's digits, as measured: view_words_measure)
     let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
     // (wrapped in its width as laid out, as an old view's words are where they are placed: Node::text_layout's)
-    let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
+    let words = view_words_set(c.words, k)
+    let tl = layout_text(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
     let tl = if !k.wrap && tl.w > c.w + 0.5 {
-      ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
+      ellipsized(words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
     } else {
       tl
     }
@@ -1458,7 +1489,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     marks[i] = 3
     bone_insts.remove(start + i)
   }
-  inst_owners.tree_words[c.id] = c.words
+  inst_owners.tree_words[c.id] = view_words_set(c.words, c.words_look)
   self.ninst = start
   glyphs_kept.val = was_kept
   {
@@ -1794,6 +1825,14 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   if kind == 0 {
     tree.went_down(at)
   }
+  // (a press on nothing a tap no more: another press, a second finger, moved past a gesture's slop from where it went
+  // down, come back or not)
+  match view_nothing_down.val {
+    Some((x0, y0)) if kind == 1 && ((x - x0).abs() > touch_slop() || (y - y0).abs() > touch_slop()) =>
+      view_nothing_down.val = None
+    _ if kind == 0 || kind >= 4 => view_nothing_down.val = None
+    _ => ()
+  }
   // (what the old frame put over all of it at its root (its overlays) is painted over the tree, whatever it draws:
   // what it takes there, a press or a pointer's move with none held, is its own before anything of the tree's under it)
   let over = (kind == 0 || (kind == 1 && view_held.val is None)) &&
@@ -1830,7 +1869,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       _ => ()
     }
   }
-  match (kind, view_held.val) {
+  // (a tap of the tree's, as what took it says it was one: a node's press run, a gesture's tap, a press on nothing let go
+  // where it went down; told the tree once that is done, after what it landed on: Tree::tapped)
+  let tapped = Ref(false)
+  let took = match (kind, view_held.val) {
     (0, _) if over => {
       view_held.val = Some(Old(-1, None))
       view_input_went(-1)
@@ -1920,6 +1962,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
             view_press_unfocused(g())
           }
           view_held.val = Some(Nowhere)
+          view_nothing_down.val = if button != 2 { Some((x, y)) } else { None }
           true
         }
       }
@@ -1965,7 +2008,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     (2, Some(Node(id))) => {
       view_held.val = None
       if tree.press_held(id) && tree.target_at(x, y) == Pressed(id) {
-        tree.run_press_at(id, at) |> ignore
+        tapped.val = tree.run_press_at(id, at)
       }
       tree_field_let_go(id, x, y, true)
       h_frame_owed()
@@ -2010,7 +2053,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     (4 | 5 | 6 | 8, Some(Nowhere)) => true
     (2 | 3, Some(Dragging(id))) => {
       view_held.val = None
+      tree.gesture_tap_taken() |> ignore
       tree.drag_at(id, if kind == 2 { Up } else { Off }, x, y, at, finger=view_fingers[0]) |> ignore
+      tapped.val = tree.gesture_tap_taken()
       h_frame_owed()
       true
     }
@@ -2026,14 +2071,36 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       tree_field_let_go(id, x, y, false)
       true
     }
-    (2 | 3, Some(_)) => {
+    (2 | 3, Some(held)) => {
       view_held.val = None
+      // (on nothing, held by nothing since, never past a gesture's slop: a tap where it is let go as near to where it went
+      // down)
+      match (kind, held, view_nothing_down.val) {
+        (2, Nowhere, Some((x0, y0))) =>
+          tapped.val = (x - x0).abs() <= touch_slop() && (y - y0).abs() <= touch_slop()
+        _ => ()
+      }
+      view_nothing_down.val = None
       true
     }
     _ => {
       view_input_went(-1)
       false
     }
+  }
+  if tapped.val {
+    tree.tapped(at)
+  }
+  took
+}
+
+///|
+/// A tap the old frame says landed on its views (Ctx::tapped_anywhere's), told the window's tree as of its moment, as
+/// it tells its own (view_pointer): what a tap anywhere lets go of follows both.
+fn view_tapped_old() -> Unit {
+  match view_app.val {
+    Some(tree) => tree.tapped(view_moment())
+    None => ()
   }
 }
 
@@ -3651,12 +3718,16 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
         let label = if s.label != "" {
           s.label
         } else {
-          tree.words_within(sn.id, fn(h) {
-            match old_boxes.get(h) {
-              Some(b) if b >= 0 && b < self.count => self.words_in(b)
-              _ => ""
-            }
-          })
+          tree.words_within(
+            sn.id,
+            fn(h) {
+              match old_boxes.get(h) {
+                Some(b) if b >= 0 && b < self.count => self.words_in(b)
+                _ => ""
+              }
+            },
+            set=view_words_set,
+          )
         }
         // (what can be done to it, of what it said or would: Activate where a press does something, Focus where it can take the focus)
         let actions : Array[Action] = if !sn.disabled && tree.presses_do(sn.id) { [Activate] } else { [] }

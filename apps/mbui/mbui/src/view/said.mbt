@@ -201,8 +201,14 @@ pub fn View::hides(self : View, hidden : Live[Bool]) -> View {
 /// then what it holds's in order, each one that says a label of its own by that label alone (none of what is in it), one
 /// kept from what is read out (View::hides) by nothing, one hosting an old view by what `hosted` says that old view is
 /// called the same way, the rest by the same, all one line; as ui's old frame calls a box with no label of its own
-/// (Ctx::words_in).
-pub fn Tree::words_within(self : Tree, id : NodeId, hosted : (NodeId) -> String) -> String {
+/// (Ctx::words_in). Each node's words as `set` sets them for its look (the host's: on one line where they do not wrap,
+/// as they are drawn and an old view's are).
+pub fn Tree::words_within(
+  self : Tree,
+  id : NodeId,
+  hosted : (NodeId) -> String,
+  set? : (String, WordsLook) -> String = fn(w, _) { w },
+) -> String {
   guard self.alive_id(id) else { return "" }
   let sb = StringBuilder()
   let put = fn(s : String) {
@@ -217,7 +223,7 @@ pub fn Tree::words_within(self : Tree, id : NodeId, hosted : (NodeId) -> String)
     let n = self.nodes[at]
     let me = { at, gen: n.gen }
     match self.drawn_of(me) {
-      Some(d) => put(d.words)
+      Some(d) => put(set(d.words, d.words_look))
       None => ()
     }
     for k in self.kids_in_order(at) {

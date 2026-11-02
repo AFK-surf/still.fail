@@ -314,17 +314,19 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
     // (or by what it is called, its label whole, as an old view's box is: as Compose's test finds a node by its
     // contentDescription, on_screen_nodes)
     let label = tree.said_label(d.id)
-    let by_words = !what.has_prefix("icon:") && d.words != "" &&
-      (if what.has_prefix("=") { d.words == what.unsafe_substring(start=1, end=what.length()) } else { d.words.contains(what) })
+    // (its words as they are drawn: on one line where they do not wrap, as an old view's text is found: view_words_set)
+    let words = view_words_set(d.words, d.words_look)
+    let by_words = !what.has_prefix("icon:") && words != "" &&
+      (if what.has_prefix("=") { words == what.unsafe_substring(start=1, end=what.length()) } else { words.contains(what) })
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
     } else if what.has_prefix("=") && what.length() > 1 {
       let exact = what.unsafe_substring(start=1, end=what.length())
-      d.words == exact || (label != "" && label == exact)
+      words == exact || (label != "" && label == exact)
     } else if what.contains(":") {
       false
     } else {
-      (d.words != "" && d.words.contains(what)) || (label != "" && label == what)
+      (words != "" && words.contains(what)) || (label != "" && label == what)
     }
     let (x, y) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
     if hit && !tree.leaving(d.id) && d.w > 0.0 && d.h > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {

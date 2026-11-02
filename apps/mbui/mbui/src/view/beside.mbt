@@ -363,6 +363,31 @@ pub fn View::window_downs(self : View) -> Int {
   self.tree.pressed_anywhere.get()
 }
 
+///|
+/// A tap in the window at `at`, wherever it landed (the host's, as the old frame's Ctx::tapped_anywhere has one: a
+/// press let go without dragging, not taken by what it went down on), told after what it landed on took it: one change
+/// at that moment, told to what follows the window's taps (View::window_taps).
+pub fn Tree::tapped(self : Tree, at : Double) -> Unit {
+  self.event(at, fn() { self.tapped_anywhere.set(@signals.untracked(fn() { self.tapped_anywhere.get() }) + 1) })
+}
+
+///|
+/// Whether a gesture's finger let go since this was last asked was its tap (View::gesture's: not moved past its slop,
+/// not held, not called off), as what took it said it; asked, none since: the host's, to tell the window's taps by
+/// (Tree::tapped).
+pub fn Tree::gesture_tap_taken(self : Tree) -> Bool {
+  let was = self.gesture_tapped
+  self.gesture_tapped = false
+  was
+}
+
+///|
+/// How many taps there have been anywhere in the window (Tree::tapped), followed: what a tap anywhere lets go of (a tip
+/// a finger tapped open).
+pub fn View::window_taps(self : View) -> Int {
+  self.tree.tapped_anywhere.get()
+}
+
 
 ///|
 /// Whether what a finger or a button at (`x`, `y`) of the window is for, as the tree is now, is this node (Tree::target_at:

@@ -2200,15 +2200,27 @@ let keys_row_look : @ui.Style = @ui.css("row align=ACenter")
 /// settings page's back) so in its top left one (`tape_bar_start`); `side` the last's height (a round button's 32:
 /// line_end_in; a capsule's of words, its own).
 pub fn tape_bar_end(alone : Double, side? : Double = bar_key_side) -> Double {
-  // (the panel at the window's right edge, the window's own buttons over its top right corner where they are the
-  // app's: its bar's last before them, alone: window_keys)
-  if pane_at_window_right() && @ui.window_keys_own() {
-    return window_keys_room_tape() - window_in + alone
-  }
-  match pane_top_right() {
-    Some(k) => line_end_in(k, alone, side~)
+  match pane_round.val {
+    Some(k) => tape_bar_end_of(k, @ui.corner_roots(), alone, side~)
     None => alone
   }
+}
+
+///|
+/// tape_bar_end in a panel whose corners are `k` (tape_corners', worked out from `roots`): what a node of the window's
+/// tree in it asks, the panel's corners told it, not the page's being built (pane_round).
+pub fn tape_bar_end_of(
+  k : FixedArray[@ui.CornerOf],
+  roots : @ui.CornerRoots,
+  alone : Double,
+  side? : Double = bar_key_side,
+) -> Double {
+  // (the panel at the window's right edge, the window's own buttons over its top right corner where they are the
+  // app's: its bar's last before them, alone: window_keys)
+  if k[1] == tape_edge && @ui.window_keys_own() {
+    return window_keys_room_tape() - window_in + alone
+  }
+  line_end_in(k[1].radius(roots), alone, side~)
 }
 
 ///|
@@ -2223,10 +2235,21 @@ pub fn pane_at_window_right() -> Bool {
 
 ///|
 pub fn tape_bar_start(alone : Double, side? : Double = bar_key_side) -> Double {
-  match pane_radii() {
-    Some(k) => line_end_in(k[0], alone, side~)
+  match pane_round.val {
+    Some(k) => tape_bar_start_of(k, @ui.corner_roots(), alone, side~)
     None => alone
   }
+}
+
+///|
+/// tape_bar_start in a panel whose corners are `k` (worked out from `roots`), as tape_bar_end_of.
+pub fn tape_bar_start_of(
+  k : FixedArray[@ui.CornerOf],
+  roots : @ui.CornerRoots,
+  alone : Double,
+  side? : Double = bar_key_side,
+) -> Double {
+  line_end_in(k[0].radius(roots), alone, side~)
 }
 
 ///|

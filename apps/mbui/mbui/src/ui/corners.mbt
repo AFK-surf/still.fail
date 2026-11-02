@@ -300,7 +300,11 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     if d.words != "" {
       let w = Node::new()
       w.kind = kind_text
-      w.text = d.words
+      w.text = view_words_set(d.words, d.words_look)
+      // (set as the tree draws them (view_host's words: at the system's size of words, Ctx::sp), its weight, its ink)
+      w.font_size = self.sp(d.words_look.size)
+      w.weight = d.words_look.weight
+      w.color = d.ink
       w.x = d.x
       w.y = d.y
       w.parent = i

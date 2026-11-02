@@ -16,6 +16,8 @@ import {
 // Values
 pub fn about(@ui.Ctx, String, String, label~ : String, side? : @view.Side) -> Unit
 
+pub fn about_mark_node(@view.View, () -> String, () -> String, TipLayer) -> @view.View
+
 pub let accent : @ui.TextStyle
 
 pub fn action(@ui.Ctx, String, String, icon? : String, busy? : Bool, disabled? : Bool, bad? : Bool) -> Bool
@@ -767,6 +769,8 @@ pub fn icon(@ui.Ctx, String, size? : Double, color? : Int64, by_ink? : Bool) -> 
 pub fn icon_action(@ui.Ctx, String, String, String, disabled? : Bool) -> Bool
 
 pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String) -> Bool
+
+pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double) -> @view.View
 
 pub let icon_button_side : Double
 
@@ -2038,11 +2042,15 @@ pub fn tape_bar_clear_start(Double) -> Double
 
 pub fn tape_bar_end(Double, side? : Double) -> Double
 
+pub fn tape_bar_end_of(FixedArray[@paint.CornerOf], @paint.CornerRoots, Double, side? : Double) -> Double
+
 pub fn tape_bar_over() -> Double
 
 pub fn tape_bar_over_room() -> @ui.Space
 
 pub fn tape_bar_start(Double, side? : Double) -> Double
+
+pub fn tape_bar_start_of(FixedArray[@paint.CornerOf], @paint.CornerRoots, Double, side? : Double) -> Double
 
 pub let tape_corner : Double
 
@@ -2998,6 +3006,8 @@ pub struct TipHand {
   hold : () -> Unit
   lift : () -> Unit
   cancel : () -> Unit
+  open : (Bool) -> Unit
+  opened : () -> Bool
 }
 
 type TipHeld derive(Eq)
