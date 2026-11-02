@@ -613,7 +613,7 @@ pub fn vault_foot(
   let acts_id = c.id("vault/" + request + "/acts")
   let picks = !save && scopes.length() > 1
   let over = picks &&
-    (match (c.laid_size(room_id), c.laid_size(acts_id), c.laid_size(c.id("vault/" + request + (if timed { "/timeout-button" } else { "/scope" })))) {
+    (match (c.laid_size(room_id), c.laid_size(acts_id), c.laid_size(c.id("vault/" + request + "/scope"))) {
       (Some((fw, _)), Some((aw, _)), Some((sw, _))) => {
         // (its foot reaching out past the card's words to its corners on a page card: that room the line's too)
         let out = if foot { 2.0 * dmax(0.0, @sf.card_pad - @sf.card_foot_in(@sf.button_height())) } else { 0.0 }
@@ -628,16 +628,18 @@ pub fn vault_foot(
         let duration = fill(if hours { "android-settings.vault.timeout.nHours" } else { "android-settings.vault.timeout.nMinutes" }, [("n", (if hours { minutes / 60 } else { minutes }).to_string())])
         fill("android-settings.vault.timeout.button." + scope, [("time", duration)])
       }
-      if @sf.button(c, words, key="vault/" + request + "/timeout-button", tone=Ghost, disabled=under) {
+      let open_panel = fn() {
         let unit : Ref[String] = Ref(if minutes % 60 == 0 { "hours" } else { "minutes" })
         let field = @ui.Field::new(text=(if unit.val == "hours" { minutes / 60 } else { minutes }).to_string())
         let chosen : Ref[String] = Ref(scope)
         @sf.panel(tr("android-settings.vault.timeout.title"), from=Unanchored, form=true, fn(pc, close) {
           pc.box(style=@sf.panel_words_in().then(vault_timeout_panel), fn() {
-            for k in ["once", "idle", "fixed"] {
-              let label = if k == "once" { tr("android-settings.vault.scope.once") } else { tr("android-settings.vault.timeout." + k) }
-              if @sf.choice_row(pc, "vault-timeout-kind/" + k, chosen.val == k, label) { chosen.val = k }
-            }
+            pc.box(style=@sf.full_width, fn() {
+              for k in ["once", "idle", "fixed"] {
+                let label = if k == "once" { tr("android-settings.vault.scope.once") } else { tr("android-settings.vault.timeout." + k) }
+                if @sf.choice_row(pc, "vault-timeout-kind/" + k, chosen.val == k, label) { chosen.val = k }
+              }
+            }) |> ignore
             if chosen.val != "once" {
               @sf.field(pc, tr("android-settings.vault.timeout.duration"), aside=fn() {
                 let id = "vault/" + request + "/panel-unit"
@@ -665,6 +667,7 @@ pub fn vault_foot(
           }) |> ignore
         })
       }
+      @sf.chooser(c, "vault/" + request + "/scope", words, [], fn() { false }, fn(on) { if on { open_panel() } }, disabled=under) |> ignore
     } else if picks {
       let entries = scopes.map(fn(s) { @kit.menu_radio(s, s == scope, label=tr("android-settings.vault.scope." + s)) })
       let m = @sf.chooser(c, "vault/" + request + "/scope", tr("android-settings.vault.scope." + scope), entries, fn() { vault_menu.val == request }, fn(on) { vault_menu_set(request, on) })
