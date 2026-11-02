@@ -70,6 +70,21 @@ for (const bulk of ["usage", "chats", "openJobs", "changed", "timeline", "aNewRe
   assert.equal(Atomics.load(state, 0), 3);
 });
 
+// On ccvm (2026-11-02) the log waited up to 98 s behind bulk reads, growing until the main connection wrote it itself.
+test("the database's log is written into it before the reads waiting, by the reader left for a chat", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(2);
+  // Two bulk reads: one takes a reader, the other waits, and the one left is a chat's.
+  const asked = [readers.read("usage", args(true), "en"), readers.read("usage", args(true), "en")];
+  try {
+    await started(1);
+    assert.equal(await readers.read("checkpoint", args(false), "en"), "{}");
+    assert.equal(Atomics.load(state, 0), 2, "the bulk read waiting still waits");
+  } finally {
+    const settled = await open(asked);
+    assert.ok(settled.every((s) => s.status === "fulfilled"));
+  }
+});
+
 test("a history waiting for old usage to be summarized does not hold a device reader", { timeout: 30_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "reader-minute-"));
   const store = Store.open(join(dir, "stillfail.db"));
