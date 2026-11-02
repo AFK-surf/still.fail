@@ -129,6 +129,31 @@ test("what a reader writes down of a reading goes on as the transcript grows: on
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a reading is written down as it goes on past what is written, not at its marks alone: one that starts again reads little", () => {
+  // At its marks alone (every MARK_EVERY entries or MARK_BYTES), a reading kept on disk was up to MB behind: every
+  // reader starting again (each start of the station) read and parsed it again, 27 MB of the transcripts at work on
+  // ccvm (2026-11-02), the first reads of their histories taking seconds after every update.
+  forgetKept();
+  const dir = temp();
+  const marks = join(dir, "marks");
+  const path = join(dir, "t.jsonl");
+  const lines = Array.from({ length: 10 }, (_, i) => said(`${i}`, `m${i}`));
+  writeFileSync(path, lines.join(""));
+  assert.equal(page([path], marks, 0, 0).end, 10);
+  // Some 400 KB more, far fewer entries than a mark's: read on past what is written down.
+  const more = Array.from({ length: 100 }, (_, i) => said(`${10 + i} ${"y".repeat(4000)}`, `m${10 + i}`));
+  appendFileSync(path, more.join(""));
+  lines.push(...more);
+  assert.ok(more.length < MARK_EVERY);
+  assert.equal(page([path], marks, 0, 0).end, lines.length);
+  // Spoilt before where it read to: one starting from what is written down does not read it again.
+  spoil(path, lines, 50);
+  forgetKept();
+  assert.equal(page([path], marks, 0, 0).end, lines.length);
+  forgetKept();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("a transcript put away is read from a mark as one read whole reads it, decompressed once for its pages", () => {
   forgetKept();
   const dir = temp();
