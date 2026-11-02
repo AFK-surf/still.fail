@@ -3,12 +3,32 @@
 // as it would be, the attachments ticked, the picture taken and kept in the photo album, and a link revoked once asked.
 
 ///|
-/// The chat's sheet open over the fixture's chat; `chat.publishPreview` answered with fix_preview, `chat.publish` with
+/// The source the last publish_core made.
+let publish_src : Ref[Source?] = Ref(None)
+
+///|
+/// The page that draws the chat as a picture opened, as 分享图片 in the chat's "…" does (the menu's own: wide_publish_wbtest).
+fn open_publish_page() -> Unit {
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0)
+}
+
+///|
+/// The chat's sheet open over the fixture's chat (`menu`: the chat in its detail with no sheet over it, its page opened by open_publish_page as its "…"'s
+/// 分享图片 does); `chat.publishPreview` answered with fix_preview, `chat.publish` with
 /// its link, the rest with nothing; `preview` in its place, where given; `finish` false: what is asked of the host (a
 /// picture decoded) done only as the test says (Tester::finish).
-fn publish_core(calls : Array[Made], preview? : () -> Json = fix_preview, finish? : Bool = true, platform? : Int = 2, width? : Double = 390.0) -> @ui.Tester {
+fn publish_core(
+  calls : Array[Made],
+  preview? : () -> Json = fix_preview,
+  finish? : Bool = true,
+  menu? : Bool = false,
+  platform? : Int = 2,
+  width? : Double = 390.0,
+) -> @ui.Tester {
   new_run()
-  let base = fixture("chat-info")
+  let mode = if menu { "chat-detail" } else { "chat-info" }
+  let base = fixture(mode)
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
@@ -29,7 +49,8 @@ fn publish_core(calls : Array[Made], preview? : () -> Json = fix_preview, finish
       }
     },
   }
-  open_fixture_over("chat-info", src)
+  publish_src.val = Some(src)
+  open_fixture_over(mode, src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0, platform~, finish~)
   t.run_for(@ui.move_most_ms)
   t
@@ -60,10 +81,11 @@ test "sharing a chat on a small screen: a table wider than the screen and the us
   let mut previous_height = 0
   for width in [320.0, 390.0] {
     let calls : Array[Made] = []
-    let t = publish_core(calls, preview~, width~)
-    t.tap_text("分享图片")
+    let t = publish_core(calls, preview~, width~, menu=true)
+    open_publish_page()
     t.frame()
     t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(@ui.move_most_ms)
     t.click(Button, label="保存到相册")
     t.run_for(@kit.presence_in_ms)
     let (pw, ph) = png_size(t.kept()[0].2).unwrap()
@@ -77,10 +99,10 @@ test "sharing a chat on a small screen: a table wider than the screen and the us
 }
 
 ///|
-test "分享图片: the chat's sheet opens it, and lists the public links made before; 复制 copies one" {
+test "分享图片: the chat's sheet lists the public links made before (making one is its menu's); 复制 copies one" {
   let calls : Array[Made] = []
   let t = publish_core(calls)
-  assert_true(t.find("分享图片") is Some(_))
+  assert_true(t.find("分享图片") is None)
   // when, then who: their face (their initial, without a picture) before their name
   assert_true(t.find("10 分钟前 · ") is Some(_) && t.find("Alice") is Some(_))
   assert_true(t.find("2 天前 · ") is Some(_) && t.find("Bob") is Some(_))
@@ -104,8 +126,8 @@ test "分享图片: the chat's sheet opens it, and lists the public links made b
 ///|
 test "分享图片: the page shows the picture as it would be, 取消 and 保存到相册 at its foot; 保存到相册 keeps it in the album, without what was left out" {
   let calls : Array[Made] = []
-  let t = publish_core(calls)
-  t.tap_text("分享图片")
+  let t = publish_core(calls, menu=true)
+  open_publish_page()
   // the chat's sheet put down (to where it rests, gone), the page over the whole screen (the pages', as on a computer)
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
@@ -165,8 +187,8 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
 ///|
 test "分享图片: a message unticked fades on the page and is not in the picture" {
   let calls : Array[Made] = []
-  let t = publish_core(calls)
-  t.tap_text("分享图片")
+  let t = publish_core(calls, menu=true)
+  open_publish_page()
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   // a box to tick for each message, all ticked; the agent's words (the second) left out
@@ -267,10 +289,11 @@ let publish_fold : Double = 600.0
 ///|
 /// The page over a chat with a page of HTML in it, as `publish_core` opens it, on the system `platform` numbers.
 fn publish_viz_page(calls : Array[Made], platform? : Int = 2) -> @ui.Tester {
-  let t = publish_core(calls, preview=fix_preview_viz, platform~)
-  t.tap_text("分享图片")
+  let t = publish_core(calls, preview=fix_preview_viz, platform~, menu=true)
+  open_publish_page()
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@ui.move_most_ms)
   t
 }
 

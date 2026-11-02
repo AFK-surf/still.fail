@@ -1,4 +1,4 @@
-// 26-history (e2e/traces/history.trace): an agent's execution history, from the chat's own sheet ("…": its agents)
+// 26-history (e2e/traces/history.trace): an agent's execution history, from the chat's own sheet (ⓘ: its agents)
 // and the agent's card (历史): what it received and posted, its steps; a group opened, a command in it opened to what
 // it printed.
 
@@ -15,11 +15,10 @@ test "26-history" {
     f.run_for(@sfapp.flight_ms)
     f.gone("正在发送")
     f.see_n(2, "文档目录看过了 083209")
-    f.tap("icon:more")
+    f.tap("icon:info")
     // the chat's sheet risen
     f.run_to(@kit.sheet_rest("sf-present"))
-    f.see("复制会话链接")
-    // (its first row's: under it, the public links' and the sharing's have one too)
+    // (its first row's: under it, the pull requests' and the public links' have one too)
     f.tap("icon:chevron-right", top=true)
     // the agent's card in the sheet's place, the sheet at its height
     f.run_to(@kit.sheet_rest("sf-present"))

@@ -387,14 +387,14 @@ fn tap_once_on(t : @ui.Tester, s : String) -> Unit {
 test "the chat's sheet going down takes no tap: the field tapped through it is the field's" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-info")
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("Claude · Opus 5.5") is Some(_))
   // the scrim, tapped: let go of
   t.tap_once(195.0, 60.0)
   t.frame()
   assert_true(!@sf.presenting())
   // still going down, drawn over the field
   assert_true(@sf.presented_drawn())
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("Claude · Opus 5.5") is Some(_))
   let (x, y, w, h) = t.rect_of("发消息").unwrap()
   t.tap_once(x + w / 2.0, y + h / 2.0)
   let (active, _, _, _) = t.ime()
@@ -406,10 +406,10 @@ test "the chat's sheet going down takes no tap: the field tapped through it is t
 ///|
 test "the chat's sheet going down: its own rows take no tap, the scrim none" {
   let calls : Array[Made] = []
-  let t = decide_core(calls, "chat-info")
+  let t = decide_core(calls, "chat-actions")
   t.tap_once(195.0, 60.0)
   t.frame()
-  tap_once_on(t, "固定到列表顶部")
+  tap_once_on(t, "固定")
   t.tap_once(195.0, 60.0)
   // sunk: on the sheet's spring, at most the window's height
   t.run_for(@motion.sheet_spring.duration(844.0, 0.0, 0.0))

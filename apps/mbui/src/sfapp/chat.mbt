@@ -224,7 +224,8 @@ fn bar_frame(
   after : () -> Unit,
   trailing : () -> Unit,
   more : Bool,
-  on_more? : () -> Unit = fn() {  },
+  on_info? : () -> Unit = fn() {  },
+  on_more? : (Int) -> Unit = fn(_) {  },
 ) -> Unit {
   let t = @sf.theme()
   // under the status bar (Chat.kt BarFrame: windowInsetsPadding(statusBars), then TopBarHeight, as Home's bar)
@@ -258,9 +259,16 @@ fn bar_frame(
     |> ignore
     trailing()
     if more {
+      // what it is (its info's sheet), then what is done with it ("…": the menu a row of the list has)
       c.box(style=bar_key_apart(), fn() {
-        if nav_button(c, "more", 18.0, key="chat-more", said=tr("android-chat.info.title")) {
-          on_more()
+        if nav_button(c, "info", 20.0, key="chat-info", said=tr("android-chat.info.title")) {
+          on_info()
+        }
+      })
+      |> ignore
+      c.box(style=bar_key_apart(), fn() {
+        if nav_button(c, "more", 18.0, key="chat-more", said=tr("common.more")) {
+          on_more(c.id("chat-more"))
         }
       })
       |> ignore
@@ -275,6 +283,8 @@ fn bar_frame(
 /// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let t = @sf.theme()
+  // (what its menu left to do, the list not being drawn beside it)
+  @sfpages.rows_frame(c, src)
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let jobs = (src.topic)("chatJobs", chat_jobs_summary_params(r))
@@ -377,7 +387,11 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
       },
       // (a chat of a Slack or Feishu thread alone too: where it is, its agents, the way there: chat_info_body)
       true,
-      on_more=fn() { open_info(src, r) },
+      on_info=fn() { open_info(src, r) },
+      on_more=fn(id) {
+        let chat = (src.topic)("chat", chat_params(r)).value
+        @sfpages.open_chat_menu(src, w.id, r, @sfpages.chat_extra_items(src, r, chat), from=Of(id))
+      },
     )
   })
   // over what runs under it: the scroll bar there keeps clear of it

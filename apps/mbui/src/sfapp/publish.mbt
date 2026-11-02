@@ -14,11 +14,6 @@ fn shown_publish(chat : Json?) -> Json? {
 }
 
 ///|
-/// The words of a row in the chat's sheet (14, the ink, one line).
-// kept across runs: a value (no field of it changes)
-let publish_row_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
-
-///|
 /// A published link's line: when and by whom (13, muted, one line, taking what the row leaves).
 // kept across runs: a value (no field of it changes)
 let published_words : @ui.TextStyle = @sf.secondary.then(@sf.one_line).then(@sf.full_words)
@@ -38,12 +33,10 @@ let published_line : @ui.Style = @ui.css("row gap=S1 align=ACenter").then(@ui.st
 let published_face : Double = 16.0
 
 ///|
-/// Sharing the chat, a card of its own in its sheet (Publish.kt PublishList): 分享图片 opens the page that draws it as a
-/// picture, for those who may (not a read-only member); each of its public links under it, when and by whom, 复制, and
-/// 撤销 for who published it or an owner or admin (asked first; gone from here at once).
+/// The chat's public links, a card of its own in its sheet (Publish.kt PublishList; making one is its menu's 分享图片): each
+/// when and by whom, 复制, and 撤销 for who published it or an owner or admin (asked first; gone from here at once).
 fn publish_list(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, p : Json?, close : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(style=publish_card_top, fn() { publish_list_rows(c, src, r, thread, p, t, close) }) |> ignore
+  c.box(style=publish_card_top, fn() { publish_list_rows(c, src, r, thread, p, close) }) |> ignore
 }
 
 ///|
@@ -53,21 +46,9 @@ fn publish_list_rows(
   r : ChatRef,
   thread : Double,
   p : Json?,
-  t : @sf.Theme,
   close : () -> Unit,
 ) -> Unit {
   info_list(c, fn() {
-    if flag(p, "may") &&
-      info_row(c, "info/publish", fn() {
-        // (a picture going out: not the photo of 图片、文件和链接)
-        @sf.icon(c, "image-upload", size=16.0, color=t.p.text) |> ignore
-        c.text(tr("web-pages.chat.shareImage"), style=publish_row_words.then(@sf.full_words)) |> ignore
-        chevron(c)
-      }) {
-      // (the chat's sheet put down, the publishing over the window)
-      close()
-      @sfpages.open_publish(src, r, thread)
-    }
     for l in items(p, "links") {
       published_row(c, src, r.station, thread, Some(l), close)
     }
