@@ -637,7 +637,7 @@ pub fn vault_foot(
             pc.box(style=@sf.full_width, fn() {
               for k in ["once", "idle", "fixed"] {
                 let label = if k == "once" { tr("android-settings.vault.scope.once") } else { tr("android-settings.vault.timeout." + k) }
-                if @sf.choice_row(pc, "vault-timeout-kind/" + k, chosen.val == k, label) { chosen.val = k }
+                if @sf.choice_row(pc, "vault-timeout-kind/" + k, chosen.val == k, label, note=if k == "once" { "" } else { tr("android-settings.vault.timeout.detail." + k) }) { chosen.val = k }
               }
             }) |> ignore
             if chosen.val != "once" {
@@ -658,13 +658,14 @@ pub fn vault_foot(
                 @sf.input(pc, "vault-timeout-value", solid=true, field~).text |> ignore
               })
             }
-            let n = if field.text().length() > 5 { 0 } else { int_of(field.text(), 0) * (if unit.val == "hours" { 60 } else { 1 }) }
-            if @sf.button(pc, tr("android-settings.vault.timeout.done"), key="vault-timeout-done", tone=Primary, disabled=chosen.val != "once" && (n < 1 || n > max_minutes)) {
-              vault_picked[request] = chosen.val
-              if chosen.val != "once" { vault_timeout_minutes[request] = n }
-              close()
-            }
           }) |> ignore
+        }, foot=fn(pc, close) {
+          let n = if field.text().length() > 5 { 0 } else { int_of(field.text(), 0) * (if unit.val == "hours" { 60 } else { 1 }) }
+          if @sf.button(pc, tr("android-settings.vault.timeout.done"), key="vault-timeout-done", tone=Primary, disabled=chosen.val != "once" && (n < 1 || n > max_minutes)) {
+            vault_picked[request] = chosen.val
+            if chosen.val != "once" { vault_timeout_minutes[request] = n }
+            close()
+          }
         })
       }
       @sf.chooser(c, "vault/" + request + "/scope", words, [], fn() { false }, fn(on) { if on { open_panel() } }, disabled=under) |> ignore

@@ -1705,4 +1705,6 @@ let zh : Map[String, String] = {
   "android-settings.vault.timeout.title": "授权时限",
   "android-settings.vault.timeout.done": "完成",
   "android-settings.vault.timeout.duration": "时长",
+  "android-settings.vault.timeout.detail.idle": "每次使用后重新计时",
+  "android-settings.vault.timeout.detail.fixed": "从批准时开始计时，使用不续期",
 }

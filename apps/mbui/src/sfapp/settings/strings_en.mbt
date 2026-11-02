@@ -1737,4 +1737,6 @@ let en : Map[String, String] = {
   "android-settings.vault.timeout.title": "Access duration",
   "android-settings.vault.timeout.done": "Done",
   "android-settings.vault.timeout.duration": "Duration",
+  "android-settings.vault.timeout.detail.idle": "The timer restarts whenever it is used",
+  "android-settings.vault.timeout.detail.fixed": "The timer starts on approval and does not renew",
 }

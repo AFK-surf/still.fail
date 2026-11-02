@@ -1691,3 +1691,5 @@ android-settings.vault.timeout.button.fixed
 android-settings.vault.timeout.title
 android-settings.vault.timeout.done
 android-settings.vault.timeout.duration
+android-settings.vault.timeout.detail.idle
+android-settings.vault.timeout.detail.fixed

@@ -831,5 +831,7 @@
   "android-settings.vault.timeout.done": "Done",
   "android-settings.vault.timeout.button.idle": "Expires after {time} idle",
   "android-settings.vault.timeout.button.fixed": "Expires after {time}",
-  "android-settings.vault.timeout.duration": "Duration"
+  "android-settings.vault.timeout.duration": "Duration",
+  "android-settings.vault.timeout.detail.idle": "The timer restarts whenever it is used",
+  "android-settings.vault.timeout.detail.fixed": "The timer starts on approval and does not renew"
 }
