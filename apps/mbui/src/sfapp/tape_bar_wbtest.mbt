@@ -527,3 +527,16 @@ test "on the tape a station's own archiving become another station's in its plac
   let shown = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words != "" && d.x >= p.x && d.y >= p.y + 56.0 && d.alpha > 0.5 })
   assert_true(shown.length() > 0, msg="that page empty")
 }
+
+///|
+test "on the tape 记忆 and 归档 made once under the tape's bar where their page is narrow: their title the bar's alone, what they hold the tree's" {
+  for page in [("settings-memories", "记忆"), ("settings-archiving", "归档")] {
+    let t = tape_bar_in(page.0, Ref(""), w=600.0, h=900.0)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg="\{page.0}")
+    assert_eq(bar_words_drawn(t, page.1).length(), 1, msg="\{page.0}: the bar's title")
+    assert_eq(bar_words_old(t, page.1).length(), 0, msg="\{page.0}: no old bar")
+    guard tape_page_panel(t) is Some(p) else { fail("no page") }
+    let held = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words != "" && d.x >= p.x && d.y >= p.y + 56.0 && d.alpha > 0.5 })
+    assert_true(held.length() > 0, msg="\{page.0}: what it holds the tree's")
+  }
+}

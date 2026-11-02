@@ -230,7 +230,8 @@ fn tape_bar_collected(c : @ui.Ctx, build : () -> Unit) -> Unit {
 
 ///|
 /// The pages of the library's made once as nodes in the page's panel, in the place of their old view (nav_flat_view's
-/// `made`), by what each is: 关于, as the settings' list opens it; a station's own archiving, as 归档 opens it. Made only where the page is narrow (look_for the
+/// `made`), by what each is: 关于, 记忆 and 归档, as the settings' list opens them; a station's own archiving, as 归档
+/// opens it. Made only where the page is narrow (look_for the
 /// stack's width in the panel at rest, as the tape lays it out now; none while that is not known): a gate between the
 /// page's two makings for now, the library's pages made once being narrow ones (@sf.page_node), no arrangement of the
 /// page's own; wider, its old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
@@ -240,11 +241,14 @@ fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
   let width = r.main_to - (if tape_shown_side() is None { r.under } else { 0.0 })
   guard width > 0.0 && @sf.look_for(width) is Narrow else { return None }
   // (made in the workspace in view, its settings' core; what it says of itself kept with its entry, `k`)
-  let made = fn(kind : String, f : (@view.View, @settings.Core, () -> @settings.Here, (@sf.PageSaid) -> Unit) -> Unit) {
+  let made = fn(
+    kind : String,
+    f : (@view.View, @settings.Core, () -> @settings.Here, () -> Int, (@sf.PageSaid) -> Unit) -> Unit,
+  ) {
     Some(
       (
         kind,
-        fn(v : @view.View, _page : () -> Page, _under : Page?, _stint : () -> Int, k : Int) {
+        fn(v : @view.View, _page : () -> Page, _under : Page?, stint : () -> Int, k : Int) {
           let told = fn(s : @sf.PageSaid) { tape_bar_of(k).page_said.set(Some(s)) }
           v.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
             match @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) {
@@ -252,7 +256,7 @@ fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
                 let core = settings_core(src, w)
                 let here = fn() { @settings.here_of(core, w.id, w.name) }
                 @settings.frame(core, @signals.untracked(here))
-                f(p, core, here, told)
+                f(p, core, here, stint, told)
               }
               None => ()
             }
@@ -263,12 +267,20 @@ fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
   }
   match page {
     Setting(About) =>
-      made("about", fn(p, core, _here, told) {
+      made("about", fn(p, core, _here, _stint, told) {
         @sfpages.about_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told)
+      })
+    Setting(Memories) =>
+      made("memories", fn(p, core, here, _stint, told) {
+        @sfpages.memories_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told)
+      })
+    Setting(Archiving) =>
+      made("archiving", fn(p, core, here, stint, told) {
+        @sfpages.archiving_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told)
       })
     // (by its station: another station's another page, not this one become it)
     Setting(StationArchiving(st)) =>
-      made("station-archiving/" + st, fn(p, core, here, told) {
+      made("station-archiving/" + st, fn(p, core, here, _stint, told) {
         @sfpages.station_archiving_node(p, core, here, st, on_back=core.pop, frame=fn() { tape_made_frame }, said=told)
       })
     _ => None

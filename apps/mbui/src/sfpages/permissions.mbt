@@ -201,7 +201,10 @@ pub fn archiving_node(
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
   stint~ : () -> Int,
+  said? : (@sf.PageSaid) -> Unit,
 ) -> Unit {
+  // (what it says of itself to a frame's bar that names it: page_node's)
+  let told = said
   let hints = ["off", "done", "reviewed"]
   let hint_now = fn() {
     match pref(core, "archiveHint") {
@@ -211,7 +214,7 @@ pub fn archiving_node(
   }
   let read = fn() { @settings.stations_of(core, here()).value }
   let said = fn() { (core.topic)("settings", { "scope": str(here().workspace) }).value }
-  @sf.page_node(v, fn() { @sf.t("web-pages.archiving.title") }, on_back~, frame~, fn() { ["hint", "auto"] }, fn(b, key) {
+  @sf.page_node(v, fn() { @sf.t("web-pages.archiving.title") }, on_back~, frame~, said?=told, fn() { ["hint", "auto"] }, fn(b, key) {
     match key {
       "hint" => {
         @sf.heading_node(b, fn() { @sf.t("web-pages.appearance.archive.title") })

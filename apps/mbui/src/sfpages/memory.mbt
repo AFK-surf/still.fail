@@ -42,6 +42,7 @@ pub fn memories_node(
   here : () -> @settings.Here,
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
 ) -> Unit {
   let topic = fn() { @settings.stations_of(core, here()) }
   @sf.page_node(
@@ -49,6 +50,7 @@ pub fn memories_node(
     fn() { @sf.t("web-pages.settings.memory.title") },
     on_back~,
     frame~,
+    said?,
     lead=fn() { @sf.t("android-misc.memory.note") },
     fn() { ["list"] },
     fn(b, _) {
