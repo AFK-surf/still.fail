@@ -1,6 +1,6 @@
-// The viewer's way in from a picture of the chat and back into it (sfbase viewer.mbt draw_flight, shown_picture): it
-// sets out as the chat draws its thumbnail, lands where the chat has the thumbnail then, and never shows a frame of
-// nothing as one picture of it takes another's place.
+// The viewer's way in from a picture of the chat and back into it (sfbase viewer_tree.mbt's flight nodes, viewer.mbt
+// shown_picture): it sets out as the chat draws its thumbnail, lands where the chat has the thumbnail then, and never
+// shows a frame of nothing as one picture of it takes another's place.
 
 ///|
 /// A photo the station keeps for chat s-c1, its size sent with it.
