@@ -906,7 +906,7 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
           }
         })
         |> ignore
-        c.box(style=custom_name, fn() { c.text(name, style=if checked { r.title.then(size_name_on) } else { r.title }) |> ignore })
+        c.box(style=custom_name, fn() { c.text(name, style=if checked { r.title.then(size_name_on) } else { r.title.then(size_name) }) |> ignore })
         |> ignore
         c.text(note, style=r.note) |> ignore
         // the row clickable over its clip
@@ -979,8 +979,13 @@ let size_option_corner : Double = 12.0
 let size_check_icon : Double = 16.0
 
 ///|
+/// A size's name: on its one line, whole (what it is, after it, gives way first).
 // kept across runs: a value (no field of it changes)
-let size_name_on : @ui.TextStyle = @ui.text_style(weight=Medium)
+let size_name : @ui.TextStyle = @ui.text_style(wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let size_name_on : @ui.TextStyle = @ui.text_style(weight=Medium, wrap=false)
 
 ///|
 /// Moving and fitting under 自定义, 12 under it, 8 apart.
