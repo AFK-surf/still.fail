@@ -789,6 +789,44 @@ test("groups_by_the_viewers_day_newest_first", async () => {
   assert.deepEqual(v.stations, [{ station: "ws/st", id: "st", name: "studio", state: "online", running: 0, doing: "正在连接" }]);
 });
 
+test("grouping_a_large_chat_list_does_not_repeatedly_ask_the_time_zone_for_the_same_row", async () => {
+  const t = setup();
+  const u = ui();
+  const topic: Topic = { topic: "chats", scope: "ws" };
+  const now = t.host.nowMs();
+  const cutover = now - 4 * DAY_MS;
+  const input = Array.from({ length: 257 }, (_, i) => row(String(i + 1), now - 1_000_000 - ((i * 113) % 257) * 3_600_000));
+  t.set(workspace(), oneStation());
+  t.set(rows("ws/st"), input);
+  t.subscribe(1, topic);
+  await t.read(u, 1);
+  await t.read(u, 1);
+  assert.equal(ids(u.value).length, input.length);
+
+  // The offset can differ at each row's time (for example across a daylight-saving change).
+  const times = new Set(input.map((r) => r.lastActiveAt as number));
+  const calls = new Map<number, number>();
+  const offset = (at: number) => at < cutover ? 60 : 120;
+  t.host.utcOffsetMin = (at) => {
+    if (times.has(at)) calls.set(at, (calls.get(at) ?? 0) + 1);
+    return offset(at);
+  };
+  const result = t.views.compute(topic);
+  assert.ok(result && "ok" in result);
+  const items = (result.ok as J).days.flatMap((d: J) => d.items);
+  const day = (at: number) => Math.floor((at + offset(at) * 60_000) / DAY_MS);
+  const expected = [...items].sort((a: J, b: J) => day(b.lastActiveAt) - day(a.lastActiveAt) || Number(a.settled === true) - Number(b.settled === true) || b.lastActiveAt - a.lastActiveAt);
+  assert.deepEqual(items.map((r: J) => r.id), expected.map((r: J) => r.id));
+  for (const group of (result.ok as J).days) {
+    const d = day(group.items[0].lastActiveAt);
+    assert.equal(group.daysAgo, day(now) - d);
+    assert.ok(group.items.every((r: J) => day(r.lastActiveAt) === d));
+  }
+  assert.equal(calls.size, input.length, "each row uses the offset at its own time");
+  const repeated = [...calls.values()].filter((n) => n > 1).length;
+  assert.equal(repeated, 0, "each row's date is converted once while the list is ordered");
+});
+
 test("a_chat_the_viewer_kept_out_of_the_archive_has_the_rows_color_and_order", async () => {
   const t = setup();
   const now = t.host.nowMs();

@@ -1762,22 +1762,24 @@ export class Views implements Owner {
     const host = this.#core.host;
     const at = (row: J) => (typeof row.lastActiveAt === "number" ? row.lastActiveAt : 0);
     const pinned = rows.filter((row) => pinnedAt.has(row));
-    const rest = rows.filter((row) => !pinnedAt.has(row));
     const when = (row: J) => pinnedAt.get(row) ?? 0;
     pinned.sort((a, b) => when(b) - when(a) || at(b) - at(a));
     const day = (ms: number) => Math.floor((ms + host.utcOffsetMin(ms) * 60_000) / DAY_MS);
     const settled = (row: J) => (row.settled === true ? 1 : 0);
-    rest.sort((a, b) => day(at(b)) - day(at(a)) || settled(a) - settled(b) || at(b) - at(a));
+    const rest = rows.filter((row) => !pinnedAt.has(row)).map((row) => {
+      const time = at(row);
+      return { row, time, day: day(time) };
+    });
+    rest.sort((a, b) => b.day - a.day || settled(a.row) - settled(b.row) || b.time - a.time);
     const now = host.nowMs();
-    const today = day(now);
+    const offset = host.utcOffsetMin(now);
+    const today = Math.floor((now + offset * 60_000) / DAY_MS);
     const days: [number, number, J[]][] = [];
-    for (const row of rest) {
-      const d = day(at(row));
+    for (const { row, time, day: d } of rest) {
       const last = days[days.length - 1];
       if (last && last[0] === d) last[2].push(row);
-      else days.push([d, at(row), [row]]);
+      else days.push([d, time, [row]]);
     }
-    const offset = host.utcOffsetMin(now);
     const out: J[] = [];
     if (pinned.length > 0) out.push({ daysAgo: -1, at: at(pinned[0]), label: t("core-views.pinned"), pinned: true, items: pinned });
     for (const [d, ti, items] of days) out.push({ daysAgo: today - d, at: ti, label: format.dayLabel(ti, now, offset), items });
