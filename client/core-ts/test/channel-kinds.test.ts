@@ -1,11 +1,12 @@
 // How a station is asked for its two kinds of channel, and what its answers hold (src/station/channel-kinds.ts).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ENTRIES, TRANSCRIPT } from "../src/station/channel-kinds.ts";
+import { ENTRIES, LETTERS, TRANSCRIPT } from "../src/station/channel-kinds.ts";
 
 test("a_read_as_the_station_takes_it", () => {
   assert.equal(ENTRIES.path("7", { latest: true }), "/threads/7/entries?limit=50");
-  assert.equal(ENTRIES.path("7", { after: 12 }), "/threads/7/entries?after=12");
+  assert.equal(ENTRIES.path("7", { after: 12 }), "/threads/7/entries?after=12&limit=50");
+  assert.equal(LETTERS.path("7", { after: 12 }), "/threads/7/letters?after=12&limit=50");
   assert.equal(ENTRIES.path("7", { from: 11, to: 12 }), "/threads/7/entries?from=11&to=12");
   assert.equal(ENTRIES.path("7", { before: 51 }), "/threads/7/entries?before=51&limit=50");
   assert.equal(TRANSCRIPT.path("k 1", { latest: true }), "/sessions/k%201/timeline?before=1000000000000000&limit=200&brief=1");
