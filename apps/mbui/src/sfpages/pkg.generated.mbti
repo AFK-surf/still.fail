@@ -119,7 +119,6 @@ pub fn composer_width(Double) -> Double
 
 pub fn composer_words_width(Double) -> Double
 
-
 pub fn connect_page(@ui.Ctx, @sfbase.Source, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 
 pub fn connects_add(@sfbase.Source, @settings.Core, @settings.Here) -> ((@sf.Beside) -> Unit)?
