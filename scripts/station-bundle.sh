@@ -47,7 +47,7 @@ tree=; [ "$platform" = win32-x64 ] && tree="$(native agent-desktop)"
 (cd "$root/station" && pnpm run build >&2)
 app="$out/stillfail"
 rm -rf "$app"
-mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station/read" "$app/station/search"
+mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station/read" "$app/station/search" "$app/station/vault"
 if [ "$platform" = win32-x64 ]; then
   cp "$root/bin/stillfail.cmd" "$root/bin/stillfail.ps1" "$app/bin/"
 else
@@ -83,6 +83,7 @@ fi
 cp "$root/station/dist/main.js" "$app/station/"
 cp "$root/station/dist/read/worker.js" "$app/station/read/"
 cp "$root/station/dist/search/worker.js" "$app/station/search/"
+cp "$root/station/dist/vault/use-index-worker.js" "$app/station/vault/"
 cp -R "$root/station/dist/skills" "$app/station/skills"
 # DeepSeek Harness loads the station's driver from here (agents/dsh.ts); Cursor's runs from here (agents/cursor.ts).
 cp "$root/station/dist/dsh-bridge.mjs" "$root/station/dist/cursor-bridge.mjs" "$root/station/dist/sandbox-bridge.mjs" "$app/station/"

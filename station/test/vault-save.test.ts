@@ -244,7 +244,7 @@ test("a secret to keep in a vault: sealed to its owner's devices, decided by the
     assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.secret.fields.password]), [[r.id, "chat", PASSWORD]]);
     // Now one agents may ask for; the save is no use of it.
     assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["UniFi UX7"]);
-    assert.deepEqual(h.secrets.uses(WS, w.state, VAULT, { sub: "alice", email: "alice@x.com" }), []);
+    assert.deepEqual(await h.secrets.uses(WS, w.state, VAULT, { sub: "alice", email: "alice@x.com" }), []);
     assert.match(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT })!, /the request is granted/);
 
     // Turned down from one of her devices, signed; not by bob.

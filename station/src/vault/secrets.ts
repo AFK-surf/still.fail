@@ -30,6 +30,7 @@ import { FILE_MOST, KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainO
 import { Proxy, placeholder } from "./proxy.ts";
 import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
+import { UseIndex } from "./use-index.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_requests (
@@ -192,6 +193,7 @@ export class Secrets {
   /// The plain library's items (docs/vault.md 不加锁的库).
   readonly plain: PlainStore;
   readonly #d: SecretsDeps;
+  readonly #uses: UseIndex;
   readonly #listeners: ((r: Request) => void)[] = [];
   /// Who hears of an item of the plain library written here (a sign-in's new cookies).
   #plainWritten: (i: PlainItem) => void = () => {};
@@ -205,6 +207,7 @@ export class Secrets {
   constructor(d: SecretsDeps) {
     this.#d = d;
     d.db.exec(SCHEMA);
+    this.#uses = new UseIndex(d.db);
     const ended = (session: string) => {
       const row = d.hub.store.getSession(session);
       return row === null || row.archivedAt != null;
@@ -384,14 +387,13 @@ export class Secrets {
   }
 
   /// The uses of a vault's (or the plain library's) secrets `viewer` may see, the latest first: the requests decided.
-  uses(ws: string, lock: LockState | null, vault: string, viewer: { sub: string; email: string }, limit = 500): Use[] {
+  async uses(ws: string, lock: LockState | null, vault: string, viewer: { sub: string; email: string }, limit = 500): Promise<Use[]> {
     if (vault !== PLAIN && (lock === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
-    const rows = this.#d.db
-      .prepare("SELECT body FROM vault_requests WHERE ws = ? AND status IN ('granted', 'denied') AND json_extract(body, '$.vault') = ? AND json_extract(body, '$.save') IS NULL ORDER BY json_extract(body, '$.at') DESC LIMIT ?")
-      .all(ws, vault, limit) as { body: string }[];
-    return rows
-      .map((row) => JSON.parse(row.body) as Request)
-      .filter((r) => vault !== PLAIN || r.owner === viewer.email.toLowerCase())
+    const bodies = await this.#uses.read(ws, vault, vault === PLAIN ? viewer.email.toLowerCase() : null, limit);
+    // A large old database may still have been filling its index: access can change while that read waits.
+    if (vault !== PLAIN && (this.#d.lock(ws) === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
+    return bodies
+      .map((body) => JSON.parse(body) as Request)
       .map((r) => ({ item: r.item, at: r.at, session: r.session, chatTitle: this.#title(r.session), mode: r.mode, command: r.command ?? null, hosts: r.hosts ?? [], denied: r.status === "denied" }));
   }
 

@@ -543,10 +543,10 @@ test("the plain library (no security mode): listed for its owner's chats, decide
     assert.equal(secrets.denyPlain(ws, bob.email, { request: second!.id }), null);
     await again;
     assert.match(notified.at(-1)![1], /refused/);
-    const uses = secrets.uses(ws, null, PLAIN, bob);
+    const uses = await secrets.uses(ws, null, PLAIN, bob);
     // Both asked in the same second: in either order.
     assert.deepEqual(uses.map((u) => [u.item, u.denied, u.chatTitle, u.command]).sort((x, y) => Number(x[1]) - Number(y[1])), [[item.id, false, "修 CI", "gh run rerun 1"], [item.id, true, "修 CI", null]]);
-    assert.deepEqual(secrets.uses(ws, null, PLAIN, { sub: "carol", email: "carol@x.com" }), [], "not carol's to see");
+    assert.deepEqual(await secrets.uses(ws, null, PLAIN, { sub: "carol", email: "carol@x.com" }), [], "not carol's to see");
 
     // Security mode on: the plain library is no longer offered, and nothing of it is granted.
     const third = secrets.ask("s1", { item: "GitHub", reason: "once more" });
