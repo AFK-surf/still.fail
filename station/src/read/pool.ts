@@ -39,10 +39,14 @@ const CHECKPOINT_MS = 2_000;
 /// The scoped reads on the path to showing a message or a file. Other page reads, including new kinds not yet
 /// classified, leave room for these: a slow transcript or resource snapshot can block just as a slow aggregate can.
 const INTERACTIVE = new Set(["thread", "sessionFile"]);
+// An event does not make a list or summary read small. In particular, multiple slow chatRows events used to occupy
+// both readers and leave message and file reads waiting (ccvm, 2026-11-02).
+const BACKGROUND_UPDATES = new Set(["chatRows", "summary"]);
 
 /// Stream updates and one thread's current or older page are interactive. An `after` or explicit range can ask for an
 /// unbounded amount on older clients, so it remains in the background until that request is paged end to end.
 function interactive(a: Asked): boolean {
+  if (BACKGROUND_UPDATES.has(a.ask.op)) return false;
   if (a.told || INTERACTIVE.has(a.ask.op)) return true;
   if (a.ask.op !== "entries" && a.ask.op !== "letters") return false;
   const params = a.ask.args?.params;
@@ -125,7 +129,9 @@ export class Readers {
     const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
       const asked: Asked = { ask, told, session, home: home !== undefined && this.slots.includes(home) ? home : null, at: wall.now(), took: 0, resolve, reject };
-      const behind = told ? this.line.findIndex((a) => !a.told) : -1;
+      // List and summary updates share the background line in arrival order; they cannot repeatedly jump ahead of an
+      // older timeline while waiting for the one background reader. Message events still go before page reads.
+      const behind = interactive(asked) ? this.line.findIndex((a) => !interactive(a) || (told && !a.told)) : -1;
       if (behind < 0) this.line.push(asked);
       else this.line.splice(behind, 0, asked);
       this.pump();

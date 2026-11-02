@@ -8,6 +8,57 @@ import { test } from "node:test";
 import { Readers } from "../src/read/pool.ts";
 import { Store } from "../src/store/store.ts";
 
+for (const op of ["chatRows", "summary"]) test(`two stalled ${op} updates cannot occupy both readers ahead of a chat`, async () => {
+  const data = mkdtempSync(join(tmpdir(), "reader-line-"));
+  const readers = new Readers(data, 2, new URL("./reader-line-worker.mjs", import.meta.url));
+  const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
+  const args = { state: state.buffer };
+  const asked = [readers.read(op, args, "en", { told: true }), readers.read(op, args, "en", { told: true }), readers.read("thread", args, "en")];
+  try {
+    while (Atomics.load(state, 0) < 2) {
+      const count = Atomics.load(state, 0);
+      if (count < 2) await Atomics.waitAsync(state, 0, count).value;
+    }
+    assert.notEqual(Atomics.load(state, 1) & 1, 0, "a chat can be read while a sidebar update is stalled");
+  } finally {
+    Atomics.store(state, 2, 1);
+    Atomics.notify(state, 2);
+    await Promise.allSettled(asked);
+    readers.close();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("a later sidebar update does not jump ahead of a waiting history", async () => {
+  const data = mkdtempSync(join(tmpdir(), "reader-line-"));
+  const readers = new Readers(data, 2, new URL("./reader-fair-worker.mjs", import.meta.url));
+  const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 4));
+  const args = { state: state.buffer };
+  const asked = [
+    readers.read("chatRows", { ...args, first: true }, "en", { told: true }),
+    readers.read("timeline", args, "en"),
+    readers.read("chatRows", args, "en", { told: true }),
+    readers.read("thread", args, "en"),
+  ];
+  try {
+    while (Atomics.load(state, 0) < 2) {
+      const count = Atomics.load(state, 0);
+      if (count < 2) await Atomics.waitAsync(state, 0, count).value;
+    }
+    assert.equal(Atomics.load(state, 1), 1, "the current chat can still be read");
+    Atomics.store(state, 2, 1);
+    Atomics.notify(state, 2);
+    await Promise.all(asked);
+    assert.equal(Atomics.load(state, 3), 1, "history starts before the later sidebar update");
+  } finally {
+    Atomics.store(state, 2, 1);
+    Atomics.notify(state, 2);
+    await Promise.allSettled(asked);
+    readers.close();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
 test("a read the streams tell is answered before the pages asked before it", async () => {
   const data = mkdtempSync(join(tmpdir(), "reader-line-"));
   const store = Store.open(join(data, "stillfail.db"), join(data, "archive"));
