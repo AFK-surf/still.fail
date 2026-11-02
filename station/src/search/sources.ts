@@ -16,6 +16,7 @@ import { readFrom } from "../usage/counter.ts";
 import { agentHomeOf, memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
+import { given, titleOf } from "../read/views.ts";
 import { type Asker, type Doc, type Hit, has, hitOf, sees } from "./match.ts";
 
 /// The workspace documents of nothing in particular are in (`ws` null: the station's home one).
@@ -23,7 +24,6 @@ type Ws = string | null;
 
 const all = (s: Store, sql: string, ...args: any[]): any[] => s.db.prepare(sql).all(...args);
 
-const firstChars = (text: string, n: number) => (text.length <= n ? text : Array.from(text).slice(0, n).join(""));
 
 // ── threads ──
 
@@ -37,12 +37,6 @@ export function chatOf(s: Store, thread: number): { ws: Ws; chat: string | null;
   return { ws: home?.ws ?? null, chat: sessions[0]?.key ?? null, sessions };
 }
 
-/// The words a chat is called by, as lists name it: its title, else what its agent called it, else the first thing said.
-function titleOf(row: store.ThreadRow, first: string | null): string {
-  const named = row.title?.trim() || row.autoTitle?.trim();
-  if (named) return named;
-  return first ? firstChars(first.replace(/\s+/gu, " ").trim(), 80) : "";
-}
 
 /// A thread's documents: its chat, and its messages (an archived one's read from its file).
 export function threadDocs(s: Store, id: number): Doc[] {
@@ -54,7 +48,8 @@ export function threadDocs(s: Store, id: number): Doc[] {
   const archived = filed || row.hiddenAt !== null || (sessions.length > 0 && sessions.every((x) => x.archivedAt !== null));
   const surface = row.surface === STILLFAIL_SURFACE ? "stillfail" : "slack";
   const messages: MessageRow[] = filed ? store.messagesBefore(s, id, null, 1_000_000) : all(s, "SELECT * FROM merged WHERE thread = ? ORDER BY n", id).map(toMessage);
-  const title = titleOf(row, messages.find((m) => m.authorKind === "person")?.text ?? messages[0]?.text ?? null);
+  // As the chat list calls it (read/views.ts titleOf).
+  const title = titleOf(row, messages.find((m) => m.authorKind === "person")?.text ?? null, null);
   const lastAt = messages.length > 0 ? Math.max(...messages.map((m) => m.createdAt ?? 0)) : null;
   const ref = { thread: id, chat, surface, archived, ...(row.channel ? { channel: row.channel } : {}) };
   const docs: Doc[] = [];
@@ -280,7 +275,7 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
       });
     }
     const thread = store.sessionThreads(s, session.key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
-    const chatTitle = session.title ?? thread?.title ?? thread?.autoTitle ?? "";
+    const chatTitle = (thread !== null ? given(thread) : null) ?? (session.title?.trim() || "");
     for (const { i, e, text } of latest.reverse()) {
       const at = e.at === null ? null : Date.parse(e.at);
       found.push(hitOf({

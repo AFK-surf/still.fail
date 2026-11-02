@@ -1601,7 +1601,7 @@ export class Views implements Owner {
       const channelName = text("channelName");
       // A Feishu chat's: its group by name, no #.
       const feishu = text("surface")?.startsWith("feishu:") === true || format.isFeishuChat(text("channel") ?? "");
-      const place = feishu ? channelName : channelName !== null ? `#${channelName}` : text("channel")?.startsWith("D") ? t("core-views.direct_message") : null;
+      const place = text("channel") === null && channelName === null ? null : format.placeName(text("surface") ?? "slack", text("channel") ?? "", channelName ?? "");
       row.originKind = feishu ? "feishu" : "slack";
       row.originText = [feishu ? t("core-views.feishu") : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
     }
@@ -2310,11 +2310,10 @@ export class Views implements Owner {
         let place: J = s.to === "" ? null : format.place(threads, s.to, offsetMin, workspaces);
         if (place === null && s.to !== "") {
           // A message of its own in a channel, before its ts is known.
-          const named = threads.find((th) => get(th, "channel") === s.to && typeof get(th, "channelName") === "string");
           const channel = s.to.split("/")[0]!;
-          place = format.isFeishuChat(channel)
-            ? { name: named?.channelName ?? t("core-logic.format.thread.feishu"), surface: "feishu" }
-            : { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
+          const named = threads.find((th) => get(th, "channel") === channel && typeof get(th, "channelName") === "string");
+          const surface = str(get(named, "surface")) || "slack";
+          place = { name: format.placeName(surface, channel, str(get(named, "channelName")) ?? "") ?? `#${channel}`, surface: surface.startsWith("feishu:") || format.isFeishuChat(channel) ? "feishu" : "slack" };
         }
         // (a bot is said as its mention, `<@U…>`)
         const picture = s.out || s.user === null ? undefined : pictures.get(s.user.replace(/^<@(.+)>$/, "$1"));

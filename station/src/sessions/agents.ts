@@ -377,14 +377,13 @@ export const AgentsLive = (control: Control) =>
         data, store, cloud,
         ask: (station, request) => remote.ask(station, request),
         link: (chat) => hub.link(chat) ?? null,
-        // As its messages are headed; a chat not named yet by what was first said in it.
+        // As its messages are headed (sender: as the chat list calls it).
         title: (chat) => {
-          let named = chat;
           try {
-            named = sender(hub, chat)[0];
-          } catch {}
-          const first = named === chat ? (store.listThreads("", chat, null)[0]?.firstText ?? "") : "";
-          return first.trim() !== "" ? Array.from(first.trim().split(/\s+/u).join(" ")).slice(0, 80).join("") : named;
+            return sender(hub, chat)[0];
+          } catch {
+            return chat;
+          }
         },
         touches: (request) => chatsTouched(hub, request),
         inbox: (peer, request) => local(peer, request),

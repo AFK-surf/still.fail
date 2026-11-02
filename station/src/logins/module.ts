@@ -103,15 +103,12 @@ export const LoginsLive = Layer.effectDiscard(
     const starterOf = (session: string): Starter => {
       const row = store.getSession(session);
       const email = row?.createdBy ?? "";
-      // Its chat's name; one not named yet, by what was first said in it (as a shared chat is titled).
+      // Its chat's name, as the chat list calls it (sender).
       let chatTitle: string | null = null;
       try {
         chatTitle = sender(hub, session)[0];
       } catch {}
-      if (chatTitle === null || chatTitle === session) {
-        const first = store.listThreads("", session, null)[0]?.firstText?.trim() ?? "";
-        chatTitle = first !== "" ? Array.from(first.split(/\s+/u).join(" ")).slice(0, 80).join("") : null;
-      }
+      if (chatTitle === session) chatTitle = null;
       return { by: { email, name: readers.names.get(email) ?? "" }, workspace: row?.ws ?? place()?.workspace ?? null, chat: session, chatTitle };
     };
     // Another station's agent logging this one in: its call acted on here, on the logins it started; and a login of

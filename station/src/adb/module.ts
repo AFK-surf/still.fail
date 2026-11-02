@@ -4,7 +4,6 @@ import { Effect, Layer } from "effect";
 import { writeLine } from "../mesh/serve.ts";
 import { readOnly } from "../mesh/credential.ts";
 import { titleOf } from "../read/views.ts";
-import { STILLFAIL_SURFACE } from "../store/store.ts";
 import { Agents } from "../sessions/agents.ts";
 import { wall } from "../ops/fibers.ts";
 import { ControlPlane, Events, Parts, Store } from "../services.ts";
@@ -32,9 +31,6 @@ export const AdbLive = Layer.effectDiscard(
         const latest = store.sessionChat(r.session);
         const thread = own ?? latest?.thread;
         if (!thread) return null;
-        const named = thread.title?.trim() || thread.autoTitle?.trim();
-        if (named) return named;
-        if (thread.surface === STILLFAIL_SURFACE) return null;
         return titleOf(thread, latest?.thread.id === thread.id ? latest.firstText : null, null);
       },
       told: (r: PhoneRequest, workspace, change) => {
