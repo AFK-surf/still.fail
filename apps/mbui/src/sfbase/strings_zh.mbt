@@ -1762,6 +1762,8 @@ let zh : Map[String, String] = {
   "web-mobile.files.wholeFolder": "整个文件夹",
   "web-mobile.history.copyLink": "复制执行记录链接",
   "web-mobile.profiles.addModelPlaceholder": "按名称添加模型",
+  "web-mobile.settings.profilesCount": "{n} 个",
+  "web-mobile.settings.profilesShort": "{n} 个需查看",
   "web-pages.addProfile.pick": "选择服务商",
   "web-pages.addProfile.protocol": "协议",
   "web-pages.addProfile.region": "区域",

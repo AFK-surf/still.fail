@@ -44,7 +44,7 @@ import { usageSummary } from "./usage-summary.ts";
 import { fleetView } from "./fleet.ts";
 import { chatsCard, usageCard } from "./rail-cards.ts";
 import { resourcesView } from "./resources.ts";
-import { workspaceProfiles } from "./profiles.ts";
+import { stationProfileSummary, workspaceProfiles } from "./profiles.ts";
 import { settingsView } from "./settings.ts";
 import { waysView, type WaysView } from "./ways.ts";
 import { admin, sources as adminSources } from "./admin.ts";
@@ -1769,6 +1769,7 @@ export class Views implements Owner {
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
     const c = this.#clock();
     let silentNext = Infinity;
+    const byId = new Map(stations.map((s) => [String(s.id), s]));
     const items = stations.map((s) => {
       const overview = this.ok({ topic: "overview", station: s.address });
       const hostRaw = this.ok({ topic: "host", station: s.address });
@@ -1822,6 +1823,7 @@ export class Views implements Owner {
         runtimes: runtimes(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview),
         models: models(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview, c.now),
         overview: shown,
+        ...stationProfileSummary(shown, s, byId),
         host,
         way: way === undefined ? null : present.way(way, (h) => this.relayName(h)),
         betaOffered: betaOffered(overview, () => this.#betaOf(scope)),

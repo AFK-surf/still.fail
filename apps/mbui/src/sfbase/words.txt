@@ -1753,6 +1753,8 @@ web-mobile.files.places
 web-mobile.files.wholeFolder
 web-mobile.history.copyLink
 web-mobile.profiles.addModelPlaceholder
+web-mobile.settings.profilesCount
+web-mobile.settings.profilesShort
 web-pages.addProfile.pick
 web-pages.addProfile.protocol
 web-pages.addProfile.region

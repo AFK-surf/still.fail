@@ -32,6 +32,106 @@ test "a station's page in three parts: 概览 what runs on it, 设置 what it is
 }
 
 ///|
+test "a station's profiles are grouped by account kind and open their own page" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    scrolled_to(t, w, "Claude 订阅")
+    assert_true(t.find("Claude 订阅") is Some(_), msg="the Claude group at width \{w}")
+    assert_true(t.find("ChatGPT 订阅") is Some(_), msg="the ChatGPT group at width \{w}")
+    assert_true(t.find("1 个需查看") is Some(_), msg="the affected kind says it needs attention")
+    assert_true(t.find("Claude 主账号") is None, msg="not laid out on the overview")
+    t.tap_text("Claude 订阅")
+    presented_in(t)
+    assert_true(@sf.presenting(), msg="the account kind opens")
+    assert_true(t.find("Claude 主账号") is Some(_), msg="the kind's account is listed")
+    assert_true(t.find("3 个模型") is Some(_), msg="the account's models remain visible")
+    assert_true(t.find("62%") is Some(_), msg="the account's five-hour allowance remains visible")
+    assert_true(t.find("19%") is Some(_), msg="the account's weekly allowance remains visible")
+    assert_true(t.find("ChatGPT 团队") is None, msg="other kinds are not in this list")
+    t.tap_text("Claude 主账号")
+    t.draw()
+    assert_true(app.nav.top() is Setting(Profile("ws1/st1", "cc")), msg="the selected profile opens")
+  }
+}
+
+///|
+test "a station with many profiles can search within one kind" {
+  let many = fn(base : Source) -> Source {
+    {
+      ..base,
+      topic: fn(name, params) {
+        let read = (base.topic)(name, params)
+        match (name, read.value) {
+          ("stations", Some(Array(stations))) => {
+            let shaped = stations.map(fn(station) {
+              match station {
+                Object(s) if text(Some(station), "station") == "ws1/st1" => {
+                  let copy = s.copy()
+                  copy["profileStates"] = { "extra-0": { "text": "额度查询失败", "tone": "amber" } }
+                  let ids : Array[Json] = []
+                  for i in 0..<12 {
+                    ids.push(Json::string("extra-" + i.to_string()))
+                  }
+                  copy["profileGroups"] = [{ "group": "claude", "title": "Claude 订阅", "profiles": Json::array(ids), "attention": 1 }]
+                  match field(Some(station), "overview") {
+                    Some(Object(overview)) => {
+                      let ov = overview.copy()
+                      let profiles = items(Some(Json::object(ov)), "profiles")
+                      match profiles[0] {
+                        Object(profile) => {
+                          let all : Array[Json] = []
+                          for i in 0..<12 {
+                            let p = profile.copy()
+                            p["id"] = Json::string("extra-" + i.to_string())
+                            p["name"] = Json::string("账号 " + i.to_string())
+                            all.push(Json::object(p))
+                          }
+                          ov["profiles"] = Json::array(all)
+                        }
+                        _ => ()
+                      }
+                      copy["overview"] = Json::object(ov)
+                    }
+                    _ => ()
+                  }
+                  Json::object(copy)
+                }
+                _ => station
+              }
+            })
+            { ..read, value: Some(Json::array(shaped)) }
+          }
+          _ => read
+        }
+      },
+    }
+  }
+  let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, over=many)
+  t.run_for(@ui.move_most_ms)
+  scrolled_to(t, 390.0, "Claude 订阅")
+  assert_true(t.find("12 个") is Some(_), msg="all twelve are counted")
+  t.tap_text("Claude 订阅")
+  presented_in(t)
+  assert_true(t.find("账号 0") is Some(_), msg="the list starts with the first")
+  assert_true(t.find("额度查询失败") is Some(_), msg="a quota problem is visible even after a successful account check")
+  for _ in 0..<8 {
+    t.wheel(195.0, 450.0, 400.0)
+    t.draw()
+  }
+  assert_true(t.find("账号 11") is Some(_), msg="the list scrolls to the last account")
+  assert_true(t.find("搜索") is Some(_), msg="the search stays visible while the list scrolls")
+  t.tap_text("搜索")
+  t.type_text("账号 11")
+  t.draw()
+  assert_true(t.find("账号 11") is Some(_), msg="search finds the last account")
+  assert_true(t.find("62%") is Some(_), msg="search keeps the account's allowance")
+  t.tap_text("账号 11")
+  t.draw()
+  assert_true(app.nav.top() is Setting(Profile("ws1/st1", "extra-11")), msg="the last profile opens")
+}
+
+///|
 test "a station's page, its parts chosen by its choice: 设置 pressed shows it" {
   let t = station_tester("ws1/st1")
   match t.find_last("设置") {
