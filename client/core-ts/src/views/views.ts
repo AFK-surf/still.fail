@@ -1661,7 +1661,7 @@ export class Views implements Owner {
       by.maker = present.maker(str(by.model));
     }
     row = decisions.presentRow(row);
-    // Archived with one tap whenever nothing is left in it; offered to archive (faded, below the rest of its day) as the
+    // Archived with one tap whenever nothing is left in it; offered to archive (faded) as the
     // viewer's `archiveHint` says.
     if (row.archiveReminderDismissed === true) row.kept = true;
     if (present.archivable(row)) {
@@ -1768,12 +1768,11 @@ export class Views implements Owner {
     const when = (row: J) => pinnedAt.get(row) ?? 0;
     pinned.sort((a, b) => when(b) - when(a) || at(b) - at(a));
     const day = (ms: number) => Math.floor((ms + host.utcOffsetMin(ms) * 60_000) / DAY_MS);
-    const settled = (row: J) => (row.settled === true ? 1 : 0);
     const rest = rows.filter((row) => !pinnedAt.has(row)).map((row) => {
       const time = at(row);
       return { row, time, day: day(time) };
     });
-    rest.sort((a, b) => b.day - a.day || settled(a.row) - settled(b.row) || b.time - a.time);
+    rest.sort((a, b) => b.day - a.day || b.time - a.time);
     const now = host.nowMs();
     const offset = host.utcOffsetMin(now);
     const today = Math.floor((now + offset * 60_000) / DAY_MS);

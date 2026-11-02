@@ -145,7 +145,7 @@
   "web-pages.appearance.drop.path": "发路径",
   "web-pages.appearance.drop.file": "发文件",
   "web-pages.appearance.archive.title": "提示归档",
-  "web-pages.appearance.archive.description": "做完的 chat 要不要提示你归档：侧栏里变淡、排到当天最后。只对这台设备生效；顶栏的归档按钮、快捷键和右键菜单都不受影响。",
+  "web-pages.appearance.archive.description": "做完的 chat 要不要提示你归档：侧栏里变淡。只对这台设备生效；顶栏的归档按钮、快捷键和右键菜单都不受影响。",
   "web-pages.appearance.archive.off": "不提示",
   "web-pages.appearance.archive.done": "做完就提示",
   "web-pages.appearance.archive.reviewed": "按模型判断",

@@ -2014,7 +2014,7 @@ export interface ChatItem {
 	/**
 	 * Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,
 	 * nothing unread; where its station's archive review is on, only once the review recommended archiving it; and the
-	 * viewer's `archiveHint` offers it. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise.
+	 * viewer's `archiveHint` offers it. Drawn faded. Absent otherwise.
 	 */
 	settled?: boolean;
 	/**
@@ -5878,7 +5878,7 @@ export interface PrefsView {
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
 	/**
-	 * When a done chat is offered to archive (drawn faded, below the rest of its day): `off`, never;
+	 * When a done chat is offered to archive (drawn faded): `off`, never;
 	 * `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
 	 * (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.
 	 */

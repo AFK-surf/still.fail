@@ -1117,7 +1117,7 @@ let en : Map[String, String] = {
   "web-pages.about.privacy": "Privacy",
   "web-pages.addProfile.editAction": "update the add page",
   "web-pages.addProfile.openAction": "open the add page",
-  "web-pages.appearance.archive.description": "Whether a finished chat suggests archiving it: faded in the sidebar and moved to the end of its day. Only on this device; the archive button in the bar, its shortcut and the context menu stay either way.",
+  "web-pages.appearance.archive.description": "Whether a finished chat suggests archiving it: faded in the sidebar. Only on this device; the archive button in the bar, its shortcut and the context menu stay either way.",
   "web-pages.appearance.archive.done": "When done",
   "web-pages.appearance.archive.doneHint": "Suggested once every agent said it is done, nothing waits for your decision and you have read it. It goes by these states, not by what was said; where the station has archive suggestions on, by the model's review.",
   "web-pages.appearance.archive.off": "Off",

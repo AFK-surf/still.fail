@@ -815,7 +815,7 @@ test("grouping_a_large_chat_list_does_not_repeatedly_ask_the_time_zone_for_the_s
   assert.ok(result && "ok" in result);
   const items = (result.ok as J).days.flatMap((d: J) => d.items);
   const day = (at: number) => Math.floor((at + offset(at) * 60_000) / DAY_MS);
-  const expected = [...items].sort((a: J, b: J) => day(b.lastActiveAt) - day(a.lastActiveAt) || Number(a.settled === true) - Number(b.settled === true) || b.lastActiveAt - a.lastActiveAt);
+  const expected = [...items].sort((a: J, b: J) => day(b.lastActiveAt) - day(a.lastActiveAt) || b.lastActiveAt - a.lastActiveAt);
   assert.deepEqual(items.map((r: J) => r.id), expected.map((r: J) => r.id));
   for (const group of (result.ok as J).days) {
     const d = day(group.items[0].lastActiveAt);
@@ -842,7 +842,7 @@ test("a_chat_the_viewer_kept_out_of_the_archive_has_the_rows_color_and_order", a
     t.set(rows("ws/st"), [structuredClone(done), structuredClone(active)]);
     await t.read(u, 1);
     const v = u.value;
-    assert.deepEqual(ids(v), dismissed ? ["done", "active"] : ["active", "done"]);
+    assert.deepEqual(ids(v), ["done", "active"]);
     const shown = v.days[0].items.find((r: J) => r.id === "done");
     assert.equal(shown.settled, dismissed ? undefined : true);
     assert.equal(shown.archivable, dismissed ? undefined : true);
