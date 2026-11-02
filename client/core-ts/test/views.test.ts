@@ -63,14 +63,13 @@ function setup() {
   store.setHeld((topic) => data.shared(topic), (topic) => data.release(topic));
   data.onChange((topic) => store.changed(topic));
   const router = new Router();
-  const beta = { on: false };
   const views = new Views({
     host,
     runner,
     store,
     data,
     emailOf: (ws) => (ws === "ws" ? "Me@x.com" : null),
-    betaOf: (ws) => ws === "ws" && beta.on,
+    betaOf: (ws) => ws === "ws" && (data.record("me", "s1") as J)?.user?.beta === true,
     relayName: () => null,
   });
   router.views = views;
@@ -81,7 +80,6 @@ function setup() {
     store,
     router,
     views,
-    beta,
     subscribe: (id: number, topic: Topic) => store.subscribe(1, id, topic),
     async readAll(uis: [Ui, number][]) {
       await host.time.pass(100);
@@ -260,6 +258,39 @@ test("profiles_keep_their_names_and_online_state_current", async () => {
   t.set(link("ws/st"), { state: "offline" });
   await t.read(u, 1);
   assert.equal(u.value.items[0].members[0].online, false);
+});
+
+test("profiles_follow_the_data_they_read_without_manual_invalidation", async () => {
+  const t = setup();
+  const u = ui();
+  // Keep each source alive, but do not use the old watch callbacks to invalidate the view.
+  const watch = t.store.watch.bind(t.store);
+  t.store.watch = (topic) => watch(topic, () => {});
+  t.set(workspace(), oneStation());
+  t.set(overview("ws/st"), overviewOf([], [profile("p1", { name: "Old" })]));
+  t.subscribe(1, { topic: "profiles", scope: "ws" });
+  await t.read(u, 1);
+  assert.equal(u.value.items[0].title, "Old");
+  t.set(overview("ws/st"), overviewOf([], [profile("p1", { name: "New" })]));
+  await t.read(u, 1);
+  assert.equal(u.value.items[0].title, "New");
+});
+
+test("profiles_ignore_unrelated_overview_changes_after_a_station_appears", async () => {
+  const t = setup();
+  const u = ui();
+  const over = overviewOf([], [profile("p1", { name: "Ada" })]);
+  t.set(workspace(), { id: "ws", stations: [] });
+  t.subscribe(1, { topic: "profiles", scope: "ws" });
+  await t.read(u, 1);
+  t.set(overview("ws/st"), over);
+  t.set(workspace(), oneStation());
+  await t.read(u, 1);
+  assert.equal(u.value.items[0].title, "Ada");
+  const before = t.router.computed;
+  t.set(overview("ws/st"), { ...over, counts: { sessions: 3, running: 2, warm: 1 } });
+  await t.read(u, 1);
+  assert.equal(t.router.computed, before, "a new station's unrelated fields do not rebuild the page");
 });
 const slackThread = (id: number): J => ({
   id, surface: "slack:T1", channel: "C1", channelName: "ops", threadTs: "1.0", title: null, createdBy: null, creator: null, createdAt: 1, sessions: [], last: 0,
@@ -500,6 +531,32 @@ test("待处理_is_what_went_wrong_till_let_go_or_waits_not_looked_at_since_of_w
   t.set(prefs(), { badgeKinds: { failed: false } });
   await t.readAll([[marks, 1]]);
   assert.deepEqual([listed(), marks.value.badge], [[["wait", "k1"]], 1]);
+});
+
+test("workspace_marks_follow_rows_read_directly_from_data_without_manual_invalidation", async () => {
+  const t = setup();
+  const u = ui();
+  const watch = t.store.watch.bind(t.store);
+  t.store.watch = (topic) => watch(topic, () => {});
+  t.store.watch({ topic: "workspaces" }, () => {});
+  t.store.watch(link("ws/st"), () => {});
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  t.set(rows("ws/st"), []);
+  await t.host.time.pass(100);
+  t.subscribe(1, { topic: "workspaceMarks" });
+  await t.read(u, 1);
+  assert.deepEqual(u.value.workspaces.ws.items, []);
+
+  const failed = row("failed", t.host.nowMs());
+  failed.mine = true;
+  failed.unread = true;
+  failed.agents[0].lastTurn = { kind: "message", outcome: "failed", detail: "auth: 401", startedAt: 1, endedAt: 1 };
+  t.set(rows("ws/st"), [failed]);
+  await t.read(u, 1);
+  assert.deepEqual(u.value.workspaces.ws.items.map((item: J) => item.session), ["failed"]);
 });
 
 // A message that did not go was said only in its chat, below what the agent last said: the list showed the agent's
@@ -1101,6 +1158,8 @@ test("stations_shows_each_station_with_its_models", async () => {
 
 test("the_beta_switch_follows_the_accounts_beta_at_once", async () => {
   const t = setup();
+  const watch = t.store.watch.bind(t.store);
+  t.store.watch = (topic) => watch(topic, () => {});
   const u = ui();
   t.subscribe(1, { topic: "stations", scope: "ws" });
   t.set(workspace(), stations(t.nowS()));
@@ -1110,8 +1169,7 @@ test("the_beta_switch_follows_the_accounts_beta_at_once", async () => {
   t.set(overview("ws/a"), o);
   await t.read(u, 1);
   assert.equal(u.value[0].betaOffered, false);
-  t.beta.on = true;
-  t.set({ topic: "workspaces" }, []);
+  t.data.put("me", "s1", { user: { beta: true } });
   await t.read(u, 1);
   assert.equal(u.value[0].betaOffered, true);
 });
@@ -1175,6 +1233,22 @@ const page = (first: number, texts: string[], kept: J): J => ({ first, last: fir
 const chatTopic = (station: string, th: number): Topic => ({ topic: "chat", station, thread: th, session: null });
 const agentPage = (station: string, key: string): Topic => ({ topic: "chat", station, thread: null, session: key });
 const hasTopic = (list: Topic[], topic: Topic) => list.some((x) => topicKey(x) === topicKey(topic));
+
+for (const omitted of [false, true]) test(`a_new_chat_shows_when_made_with_${omitted ? "an_omitted" : "a_null"}_thread`, async () => {
+  const t = setup();
+  const watch = t.store.watch.bind(t.store);
+  t.store.watch = (topic) => watch(topic, () => {});
+  const u = ui();
+  try {
+    const key = t.views.local.pendingNew("ws/a", {}, "new:test");
+    t.subscribe(1, omitted ? { topic: "chat", station: "ws/a", session: key } : agentPage("ws/a", key));
+    await t.read(u, 1);
+    assert.equal(u.value.pending, true);
+    t.views.local.pendingMade(key, "k", 7);
+    await t.read(u, 1);
+    assert.deepEqual([u.value.pending, u.value.key], [false, "k"]);
+  } finally { t.store.runner.shutdown(); }
+});
 
 test("hidden_letters_keep_the_loaded_entry_cursors_advancing", async () => {
   const t = setup();
@@ -1997,6 +2071,36 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
     // Someone none of the station's agents heard from: by their Slack id.
     [2, "@U7 补一句", true],
   ]);
+});
+
+test("a_chat_updates_a_slack_mention_when_another_agent_learns_the_name", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], t.host.nowMs())]);
+  t.set(pageOf("ws/a", 7), {
+    first: 1, last: 1,
+    entries: [{ ...entry(1, "<@U9> 发了"), authorKind: "agent", author: "k" }],
+    thread: null,
+  });
+  await t.read(u, 1);
+  assert.equal(u.value.messages[0].text, "@U9 发了");
+
+  const heard = (name: string, at: string) => ({
+    at, kind: "user", text: `<message via="slack" thread="C0OPS/1.2" from="${name} (U9)" ts="1.2">hi</message>`,
+  });
+  // The name came from a different agent, whose transcript this chat does not watch.
+  t.data.putItems("transcript", "ws/a", "other", [[0, heard("Mia", "1970-01-01T00:00:01Z")]]);
+  await t.read(u, 1);
+  assert.equal(u.value.messages[0].text, "@Mia 发了");
+  t.data.putItems("transcript", "ws/a", "other", [[1, heard("Mia Wu", "1970-01-01T00:00:02Z")]]);
+  await t.read(u, 1);
+  assert.equal(u.value.messages[0].text, "@Mia Wu 发了");
+  const made = t.router.computed;
+  t.data.putItems("transcript", "ws/a", "another", [[0, heard("Mia Wu", "1970-01-01T00:00:03Z")]]);
+  await t.read(u, 1);
+  assert.equal(t.router.computed, made, "hearing the same name again did not rebuild the chat");
 });
 
 test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_nothing_under_its_last_done_post", async () => {

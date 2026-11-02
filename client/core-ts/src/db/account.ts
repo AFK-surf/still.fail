@@ -32,6 +32,7 @@ export type Derive = { tone(row: J): string | null; asks(row: J): boolean };
 
 /// A chat row before and after a burst (undefined: not there).
 export type RowChange = { id: string; before: J | undefined; after: J | undefined };
+type ReadChatChange = RowChange & { archived: boolean; between?: J[] };
 
 /// What a burst changed.
 export type Changes = {
@@ -39,6 +40,8 @@ export type Changes = {
   topics: Map<string, Topic>;
   /// Each station's sidebar rows (archived = 0) that changed.
   chats: Map<string, Map<string, RowChange>>;
+  /// Changed rows, including archived ones: indexed readers must refresh after a commit or a rollback.
+  readChats: Map<string, Map<string, ReadChatChange>>;
   /// The logs that changed: [table, station, thread or session].
   logs: Map<string, [string, string, string]>;
   /// The stations whose sidebar rows were read for the first time (where noticing starts from).
@@ -254,7 +257,7 @@ export class AccountDb {
   #inTx = false;
   /// What failed in this burst: it is rolled back.
   #failed: SqlError | null = null;
-  #changes: Changes = { topics: new Map(), chats: new Map(), logs: new Map(), firstChats: new Set() };
+  #changes: Changes = { topics: new Map(), chats: new Map(), readChats: new Map(), logs: new Map(), firstChats: new Set() };
   /// The statements of this burst that are what the device did itself, to be written again if the burst fails.
   #precious: [string, readonly SqlValue[]][] = [];
   /// What could not be written even so, written again with the next burst.
@@ -352,7 +355,7 @@ export class AccountDb {
     if (!this.#inTx) return this.#settled();
     const changes = this.#changes;
     const precious = this.#precious;
-    this.#changes = { topics: new Map(), chats: new Map(), logs: new Map(), firstChats: new Set() };
+    this.#changes = { topics: new Map(), chats: new Map(), readChats: new Map(), logs: new Map(), firstChats: new Set() };
     this.#precious = [];
     this.#inTx = false;
     const failed = this.#failed;
@@ -447,6 +450,20 @@ export class AccountDb {
     m.set(id, { id, before: was ? was.before : before, after });
   }
 
+  #tellChatRead(station: string, archived: number, id: string, before: J | undefined, after: J | undefined): void {
+    let rows = this.#changes.readChats.get(station);
+    if (!rows) {
+      rows = new Map();
+      this.#changes.readChats.set(station, rows);
+    }
+    const key = K(String(archived), id);
+    const was = rows.get(key);
+    if (was) {
+      if (was.after !== undefined) (was.between ??= []).push(was.after);
+      was.after = after;
+    } else rows.set(key, { id, archived: archived !== 0, before, after });
+  }
+
   #tellLog(table: string, station: string, id: string): void {
     this.#logIndices.delete(K(table, station, id));
     this.#changes.logs.set(K(table, station, id), [table, station, id]);
@@ -533,9 +550,9 @@ export class AccountDb {
     return this.#doc(K("wpref", workspace, key), "SELECT json FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key]);
   }
 
-  putWorkspacePref(workspace: string, key: string, value: J | undefined): void {
-    if (value === undefined) this.#dropDoc(K("wpref", workspace, key), "DELETE FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], null);
-    else this.#putDoc(K("wpref", workspace, key), value, "SELECT json FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], "INSERT OR REPLACE INTO workspace_pref (workspace, key, json) VALUES (?, ?, ?)", (json) => [workspace, key, json], null);
+  putWorkspacePref(workspace: string, key: string, value: J | undefined, topic: Topic | null = null): void {
+    if (value === undefined) this.#dropDoc(K("wpref", workspace, key), "DELETE FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], topic);
+    else this.#putDoc(K("wpref", workspace, key), value, "SELECT json FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], "INSERT OR REPLACE INTO workspace_pref (workspace, key, json) VALUES (?, ?, ?)", (json) => [workspace, key, json], topic);
   }
 
   /// What this device did and its station has not confirmed (views/local.ts): every row of one of its tables.
@@ -713,6 +730,7 @@ export class AccountDb {
     const kept = frozen(JSON.parse(JSON.stringify(row)));
     this.#cache.set(K("chat", station, archived, id), kept);
     this.#loadedList(station, archived ? "archived" : "chats")?.set(id, kept, [ord]);
+    this.#tellChatRead(station, archived, id, before, kept);
     if (!archived) this.#tellChat(station, id, before, kept);
     this.#tell({ topic: archived ? "archivedRows" : "chatRows", station });
   }
@@ -753,6 +771,7 @@ export class AccountDb {
     this.#run("DELETE FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id]);
     this.#cache.delete(K("chat", station, archived, id));
     this.#loadedList(station, archived ? "archived" : "chats")?.delete(id);
+    this.#tellChatRead(station, archived, id, before, undefined);
     if (!archived) this.#tellChat(station, id, before, undefined);
     this.#tell({ topic: archived ? "archivedRows" : "chatRows", station });
   }
@@ -895,7 +914,7 @@ export class AccountDb {
         const json = JSON.stringify(s);
         if (r && r[3] === 1 && r[1] === places[i] && r[2] === json) return;
         changed = true;
-        this.#putSummary(station, key, s, json, 1, places[i], r !== undefined, r?.[4] !== null && r?.[4] !== undefined);
+        this.#putSummary(station, key, s, json, 1, places[i], r !== undefined);
       });
       for (const [key, r] of was) {
         if (seen.has(key) || r[3] !== 1) continue;
@@ -903,12 +922,13 @@ export class AccountDb {
         this.#run("UPDATE session SET listed = 0 WHERE station = ? AND key = ?", [station, key]);
         this.#loadedList(station, "sessions")?.delete(key);
         this.#tell({ topic: "sessions", station });
+        this.#tellSession(station, key);
       }
       this.#markListed(station, "sessions", confirmed, changed);
     });
   }
 
-  #putSummary(station: string, key: string, summary: J, json: string, listed: number, ord: number, exists: boolean, hasDetail: boolean): void {
+  #putSummary(station: string, key: string, summary: J, json: string, listed: number, ord: number, exists: boolean): void {
     const cols = this.#sessionCols(summary);
     if (exists) this.#run("UPDATE session SET summary = ?, listed = ?, ord = ?, last_active = ?, process = ?, connect = ?, archived_at = ?, turns = ? WHERE station = ? AND key = ?", [json, listed, ord, ...cols, station, key]);
     else this.#run("INSERT INTO session (station, key, listed, ord, last_active, process, connect, archived_at, turns, summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [station, key, listed, ord, ...cols, json]);
@@ -918,7 +938,7 @@ export class AccountDb {
     if (listed) list?.set(key, kept, [ord]);
     else list?.delete(key);
     this.#tell({ topic: "sessions", station });
-    if (hasDetail) this.#tellSession(station, key);
+    this.#tellSession(station, key);
   }
 
   #tellSession(station: string, key: string): void {
@@ -951,7 +971,7 @@ export class AccountDb {
       }
       if (r && r[1] === json && r[2] === listed) return;
       // Its detail shows it as it is now too (`detail`).
-      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined, detail !== undefined);
+      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined);
     });
     return again;
   }
@@ -1192,9 +1212,12 @@ export class AccountDb {
         const id = r[0] as number;
         if (seen.has(id)) continue;
         changed = true;
+        const before = this.thread(station, id);
         this.#run("UPDATE thread SET listed = 0 WHERE station = ? AND id = ?", [station, id]);
         this.#loadedList(station, "threads")?.delete(String(id));
         this.#tell({ topic: "threads", station });
+        this.#tell({ topic: "thread", station, thread: id });
+        for (const member of membersOf(before)) this.#tellSession(station, member);
       }
       this.#markListed(station, "threads", confirmed, changed);
     });
@@ -1862,7 +1885,12 @@ export class AccountDb {
         this.sql.run(`DELETE FROM ${table} WHERE ${column} = ?`, [station]);
       }
       if (this.sql.all("SELECT 1 FROM sqlite_master WHERE name = 'log_use'").length > 0) this.sql.run("DELETE FROM log_use WHERE station = ?", [station]);
-      if (this.#hasSlackSaid()) this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]);
+      if (this.#hasSlackSaid()) {
+        const sessions = this.sql.all("SELECT DISTINCT session FROM slack_said WHERE station = ?", [station]);
+        if (this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]) > 0) {
+          for (const [session] of sessions) this.#tellLog("slack", station, String(session));
+        }
+      }
       this.#slackNames.delete(station);
       if (this.#filesKept) this.sql.run("DELETE FROM file_kept WHERE station = ?", [station]);
       if (this.#mdKept) {
@@ -1874,6 +1902,7 @@ export class AccountDb {
       this.#logCache.clear();
       this.#logIndices.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);
+      this.#tell({ topic: "$station-reset", station });
       for (const topic of ["overview", "footprint", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
     });
   }
