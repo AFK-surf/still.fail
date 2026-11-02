@@ -135,6 +135,73 @@ test "usage: a finger slid across the days lets go on a day: it stays, the other
 }
 
 ///|
+/// The year as the core says it (views/usage-summary.ts) with today in the first week of November: every day a little,
+/// November's name over its one week, the last.
+fn usage_year_now() -> Json {
+  let cells : Array[Json] = []
+  let tips : Array[Json] = []
+  for k in 0..<(52 * 7) {
+    cells.push(Json::number(if k == 51 * 7 + 6 { -1.0 } else { 1.0 }))
+    tips.push(Json::string(if k == 51 * 7 + 6 { "" } else { "第 \{k} 天 · 1 token" }))
+  }
+  let weeks = Array::makei(52, fn(w) { Json::string("第 \{w} 周") })
+  {
+    "title": "Token 活跃度",
+    "sub": "近 12 个月",
+    "views": ["按天", "按周", "累计"],
+    "weekdays": ["日", "一", "二", "三", "四", "五", "六"],
+    "months": [{ "week": 43, "label": "9月" }, { "week": 47, "label": "10月" }, { "week": 51, "label": "11月" }],
+    "cells": Json::array(cells),
+    "weekly": Json::array(Array::make(52, Json::number(1.0))),
+    "cumulative": Json::array(Array::make(52, Json::number(1.0))),
+    "tips": Json::array(tips),
+    "weekTips": Json::array(weeks),
+    "runningTips": Json::array(weeks),
+    "less": "少",
+    "more": "多",
+    "captions": ["", "每列一周", "累计"],
+  }
+}
+
+///|
+test "the year: a month whose weeks have not the room for its name says none, not an ellipsis; a day pointed at says its date and tokens" {
+  usage_reset()
+  @sf.set_dark(Some(false))
+  let cell = Ref(None)
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        c.box(align=AStart, fn() {
+          c.box(w=Px(720.0), fn() {
+            usage_year(c, Some(usage_year_now()), 52)
+            cell.val = c.rect_of(c.id("usage-year/50/3"))
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+    },
+    w=800.0,
+    h=600.0,
+    native=Mouse,
+    pointing=Mouse,
+  )
+  t.draw()
+  t.draw()
+  assert_true(t.rect_of("10月") is Some(_))
+  let last = t.lines_of("11月")
+  assert_true(last.iter().all(fn(l) { !l.has_suffix("…") }), msg="\{last}")
+  // a day pointed at: its date and tokens a moment later
+  let (x, y, w, h) = cell.val.unwrap()
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  assert_true(t.find("第 \{50 * 7 + 3} 天 · 1 token") is Some(_))
+  t.leave()
+  t.run_for(@sf.tip_delay_ms * 2.0)
+}
+
+///|
 test "用量, at each width and with either hand: the cost and its change, the days split by person or by model, the chats; a day picked, then let go; 30 天 picked" {
   for case in page_cases {
     let (w, platform) = case
