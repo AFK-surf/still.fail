@@ -841,6 +841,9 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     // (a hold of the old view's it has not made its own, moved: what of the tree's holds it may take it over)
     if kind == 1 {
       view_old_moved(x, y)
+      // (what the old view found under the pointer as it moved, by its own targets, told it again as the tree finds it
+      // there: nothing of its where something of the tree's is pointed at over it, View::points)
+      view_pointed()
     }
   }
   // (a finger or button down, wherever it went (a node of the tree's, the old view): a press of its own from here, a

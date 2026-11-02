@@ -3489,31 +3489,45 @@ fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
     // (what the tree has there followed, whatever it is, and told both sides as it comes and as it changes)
     Some((x, y)) =>
       tree.follow_point(x, y, fn(t) {
-        match t {
-          Pressed(id) | Dragged(id) => {
-            tree.pointed_to(Some(id))
+        // (what is pointed at, the tree's one way: what says it is pointed at alone over it, View::points)
+        tree.pointed_to(tree.pointed_of(t))
+        // (who is lit and the pointer's shape that one's: what says it is pointed at alone, where it is over all that
+        // takes the pointer there, alone lit and shaping it, an old view under it lit not; else what takes it there.
+        // Where a press, a hold, a click goes, `t` as ever)
+        match tree.points_now() {
+          Some(id) => {
             view_old_pointed(None)
             view_shape_of.val = OfNode(id)
           }
-          Hosted(_) => {
-            tree.pointed_to(None)
-            view_old_pointed(Some((x, y)))
-            view_shape_of.val = OfOld
-          }
-          TopRow(_) => {
-            tree.pointed_to(None)
-            view_old_pointed(None)
-            view_shape_of.val = OfGround
-          }
-          Nothing => {
-            tree.pointed_to(None)
-            view_old_pointed(if old_whole.val { Some((x, y)) } else { None })
-            view_shape_of.val = if old_whole.val { OfOld } else { OfGround }
-          }
+          None => view_target_pointed(t, x, y)
         }
         // (its shape, as what it is over is told and as that changes)
         view_cursor_tell()
       })
+  }
+}
+
+///|
+/// What the old views light and the pointer's shape where the pointer at (x, y) is over `t`, nothing said to be pointed
+/// at alone over it (Tree::points_now).
+fn view_target_pointed(t : @view.Target, x : Double, y : Double) -> Unit {
+  match t {
+    Pressed(id) | Dragged(id) => {
+      view_old_pointed(None)
+      view_shape_of.val = OfNode(id)
+    }
+    Hosted(_) => {
+      view_old_pointed(Some((x, y)))
+      view_shape_of.val = OfOld
+    }
+    TopRow(_) => {
+      view_old_pointed(None)
+      view_shape_of.val = OfGround
+    }
+    Nothing => {
+      view_old_pointed(if old_whole.val { Some((x, y)) } else { None })
+      view_shape_of.val = if old_whole.val { OfOld } else { OfGround }
+    }
   }
 }
 
