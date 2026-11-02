@@ -397,6 +397,8 @@ pub(all) struct Asked {
   reason : String
   timeout_kind : String
   timeout_seconds : Int32
+  approved_timeout_kind : String
+  approved_timeout_seconds : Int32
   mode : String
   command : String
   how_text : String
