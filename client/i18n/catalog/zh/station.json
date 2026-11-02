@@ -258,7 +258,7 @@
   "station.notice.retryCanceled": "已取消重试",
   "station.wait.overloaded": "模型恢复可用",
   "station.notice.rateLimit": "额度已用完，恢复后自动继续",
-  "station.notice.refused": "模型服务拒绝了请求：在 Profile 中设置代理",
+  "station.notice.refused": "模型服务不接受此 station 的网络出口：在 Profile 中设置代理",
   "station.notice.runtimeMissing": "无法启动 agent：此 station 尚未安装 {name}",
   "station.notice.stopped": "已停止当前任务",
   "station.port.mcp": "agent 的 MCP 端点",
@@ -542,7 +542,7 @@
   "station.notice.model": "模型服务出错，回复即可重试",
   "station.notice.cannotStartWhy": "无法启动 agent：{why}",
   "station.failure.auth": "账号认证失败",
-  "station.failure.refused": "模型服务拒绝了请求",
+  "station.failure.refused": "网络出口不被模型服务接受",
   "station.failure.rateLimit": "已达到额度或速率限制",
   "station.failure.overloaded": "模型繁忙",
   "station.failure.network": "与模型服务的连接中断",
@@ -552,5 +552,7 @@
   "station.failure.other": "未知错误",
   "station.context.tooShort": "对话内容太少",
   "station.share.notLent": "登录此订阅的 station 未能借出它，可能已离线",
-  "station.claudeAuth.machineRunsOut": "此 station 的 Claude 登录即将过期，需要重新登录"
+  "station.claudeAuth.machineRunsOut": "此 station 的 Claude 登录即将过期，需要重新登录",
+  "station.notice.denied": "模型服务拒绝了请求（403），未说明原因",
+  "station.failure.denied": "模型服务拒绝了请求"
 }

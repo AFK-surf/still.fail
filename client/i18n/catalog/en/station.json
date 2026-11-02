@@ -258,7 +258,7 @@
   "station.notice.retryCanceled": "Retry canceled",
   "station.wait.overloaded": "the model to free up",
   "station.notice.rateLimit": "Out of quota; continues when it refills",
-  "station.notice.refused": "Request refused: set a proxy in the profile",
+  "station.notice.refused": "The provider won't take requests from this station's network: set a proxy in the profile",
   "station.notice.runtimeMissing": "Couldn't start the agent: {name} isn't installed on this station",
   "station.notice.stopped": "Stopped the current task",
   "station.port.mcp": "the agent MCP endpoint",
@@ -548,7 +548,7 @@
   "station.notice.model": "The model failed; reply to retry",
   "station.notice.cannotStartWhy": "Couldn't start the agent: {why}",
   "station.failure.auth": "Account authentication failed",
-  "station.failure.refused": "The model provider refused the request",
+  "station.failure.refused": "The provider won't take this network",
   "station.failure.rateLimit": "Hit a usage or rate limit",
   "station.failure.overloaded": "The model is busy",
   "station.failure.network": "Lost the connection to the model provider",
@@ -558,5 +558,7 @@
   "station.failure.other": "Unknown error",
   "station.context.tooShort": "there isn't enough in the conversation yet",
   "station.share.notLent": "The station this subscription is signed in on couldn't lend it; it may be offline",
-  "station.claudeAuth.machineRunsOut": "This station's Claude sign-in is about to expire; sign in again"
+  "station.claudeAuth.machineRunsOut": "This station's Claude sign-in is about to expire; sign in again",
+  "station.notice.denied": "The provider refused the request (403) without saying why",
+  "station.failure.denied": "The provider refused the request"
 }

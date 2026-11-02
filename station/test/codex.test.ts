@@ -221,10 +221,11 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(classifyCodexError({ usageLimitExceeded: null }), "rate_limit");
     assert.equal(classifyCodexError(null, "auth error: 401, auth error code: token_revoked"), "auth");
     assert.equal(classifyCodexError(null, "model not supported"), "model");
-    // Turned away with nothing said (2026-11-02, "unexpected status 403 Forbidden: "): the provider refusing the
-    // request (a region, a proxy), not the model's error nor the account's.
-    assert.equal(classifyCodexError({ responseStreamConnectionFailed: { httpStatusCode: 403 } }, "unexpected status 403 Forbidden: "), "refused");
-    assert.equal(classifyCodexError("other", "unexpected status 403 Forbidden: "), "refused");
+    // Turned away with nothing said (2026-11-02, "unexpected status 403 Forbidden: "): refused, why not known; not the
+    // model's error. Its region said, or Cloudflare's page for a blocked address: where it comes from.
+    assert.equal(classifyCodexError({ responseStreamConnectionFailed: { httpStatusCode: 403 } }, "unexpected status 403 Forbidden: Unknown error"), "denied");
+    assert.equal(classifyCodexError("other", "unexpected status 403 Forbidden: "), "denied");
+    assert.equal(classifyCodexError({ responseStreamConnectionFailed: { httpStatusCode: 403 } }, "unexpected status 403 Forbidden: <!DOCTYPE html><title>Just a moment...</title>"), "refused");
     assert.equal(classifyCodexError({ responseStreamConnectionFailed: { httpStatusCode: 401 } }, "unexpected status 401 Unauthorized: "), "auth");
     assert.equal(classifyCodexError({ responseStreamDisconnected: { httpStatusCode: null } }, "stream disconnected before completion"), "network");
     assert.equal(classifyCodexError(null, "stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses)"), "network");

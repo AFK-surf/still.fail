@@ -7,8 +7,12 @@ import { failureOf } from "../src/agents/runtime.ts";
 
 test("a failure is told apart by what it means to people", () => {
   assert.equal(failureOf("401 Unauthorized"), "auth");
-  // A 403 is the account's only where it says so; else the provider turning whoever asks away.
-  assert.equal(failureOf("unexpected status 403 Forbidden: "), "refused");
+  // A 403 is the account's where it says so, where the request comes from where it says that (a region, the CDN's page
+  // for a blocked address); else it is not known why, and not guessed (2026-11-02: "unexpected status 403 Forbidden:").
+  assert.equal(failureOf("unexpected status 403 Forbidden: "), "denied");
+  assert.equal(failureOf("unexpected status 403 Forbidden: Unknown error, url: https://chatgpt.com/backend-api/codex/responses, cf-ray: 9a1"), "denied");
+  assert.equal(failureOf("unexpected status 403 Forbidden: <html><head><title>Attention Required! | Cloudflare</title>"), "refused");
+  assert.equal(failureOf("unexpected status 403 Forbidden: Workspace is not authorized in this region."), "refused");
   assert.equal(failureOf("403: OAuth token does not meet scope requirement"), "auth");
   assert.equal(failureOf('{"error":{"code":"unsupported_country_region_territory"}}'), "refused");
   assert.equal(failureOf("429 Too Many Requests"), "rate_limit");
