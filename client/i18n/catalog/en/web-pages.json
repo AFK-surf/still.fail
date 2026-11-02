@@ -2141,5 +2141,6 @@
   "web-pages.vault.timeout.method": "Expiration",
   "web-pages.vault.timeout.duration": "Duration",
   "web-pages.vault.timeout.detail.idle": "The timer restarts whenever it is used",
-  "web-pages.vault.timeout.detail.fixed": "The timer starts on approval and does not renew"
+  "web-pages.vault.timeout.detail.fixed": "The timer starts on approval and does not renew",
+  "web-pages.vault.timeout.nDays": "{n} days"
 }

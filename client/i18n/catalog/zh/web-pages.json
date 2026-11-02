@@ -2066,5 +2066,6 @@
   "web-pages.vault.timeout.method": "失效方式",
   "web-pages.vault.timeout.duration": "时长",
   "web-pages.vault.timeout.detail.idle": "每次使用后重新计时",
-  "web-pages.vault.timeout.detail.fixed": "从批准时开始计时，使用不续期"
+  "web-pages.vault.timeout.detail.fixed": "从批准时开始计时，使用不续期",
+  "web-pages.vault.timeout.nDays": "{n} 天"
 }

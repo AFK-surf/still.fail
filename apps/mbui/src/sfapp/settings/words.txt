@@ -1695,3 +1695,4 @@ android-settings.vault.timeout.detail.idle
 android-settings.vault.timeout.detail.fixed
 android-settings.vault.timeout.custom
 android-settings.vault.timeout.method
+android-settings.vault.timeout.nDays

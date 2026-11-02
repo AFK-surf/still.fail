@@ -14,9 +14,11 @@ import { scopeOf } from "./station.tsx";
 import { useDoingList, doingMatches, failed } from "./doing.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { type Scope, fileSize, pickFile, scopesUpTo, useVaultCall, useVaultRequest } from "./vault.ts";
-import { Button, Chooser, ChooserItem, Dialog, Select, Choices, Field } from "./ui.tsx";
+import { Button, Chooser, ChooserItem, Dialog, Select, Field } from "./ui.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
-import { ChevronDown } from "@stillfail/ui/icons.tsx";
+import { ChevronDown, Check } from "@stillfail/ui/icons.tsx";
+import { RadioGroup } from "radix-ui";
+import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./VaultAsk.css.ts";
 import { t } from "./i18n.ts";
@@ -60,8 +62,8 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
   const kindPicked = maxMinutes === 0 ? "once" : timeoutKind ?? (request.timeoutKind === "fixed" ? "fixed" : "idle");
   const requestedMinutes = Math.min(maxMinutes, Math.ceil((request.timeoutSeconds ?? 3600) / 60));
   const minutes = timeoutMinutes ?? requestedMinutes;
-  const durationChoices = [...new Set([60, 360, 720, 1440, 2160, 4320, 10080, 20160, 43200, requestedMinutes].filter((n) => n > 0 && n <= maxMinutes))].sort((a, b) => a - b);
-  const durationLabel = (n: number) => t(`web-pages.vault.timeout.${n % 60 === 0 ? "nHours" : "nMinutes"}`, { n: String(n % 60 === 0 ? n / 60 : n) });
+  const durationChoices = [...new Set([60, 1440, 2160, 10080, 43200, requestedMinutes].filter((n) => n > 0 && n <= maxMinutes && ([60, 1440, 2160, 10080, 43200].includes(requestedMinutes) || n !== 2160)))].sort((a, b) => a - b);
+  const durationLabel = (n: number) => t(`web-pages.vault.timeout.${n % 1440 === 0 ? "nDays" : n % 60 === 0 ? "nHours" : "nMinutes"}`, { n: String(n % 1440 === 0 ? n / 1440 : n % 60 === 0 ? n / 60 : n) });
   const validTime = !timed || kindPicked === "once" || (Number.isSafeInteger(minutes) && minutes > 0 && minutes <= maxMinutes);
   const scope = timed ? (kindPicked === "once" || maxMinutes === 0 ? "once" : minutes <= 60 ? "hour" : "chat") : picked ?? scopes.at(-1)!;
   const under = pending !== null || doing.length > 0;
@@ -134,7 +136,12 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
         ]} />
       </Field>
       {draftDuration === "custom" && <Field label={t("web-pages.vault.timeout.minutes")}><input className={`${controlsCss.input} ${controlsCss.inputSolid}`} type="number" min={1} max={maxMinutes} step={1} value={draftCustom} onChange={(e) => setDraftCustom(e.target.value)} /></Field>}
-      {draftDuration !== "once" && <Field label={t("web-pages.vault.timeout.method")}><Choices<"idle" | "fixed"> value={draftKind} onChange={setDraftKind} label={t("web-pages.vault.timeout.method")} options={(["idle", "fixed"] as const).map((k) => ({ value: k, title: t(`web-pages.vault.timeout.${k}`), description: t(`web-pages.vault.timeout.detail.${k}`) }))} /></Field>}
+      {draftDuration !== "once" && <Field label={t("web-pages.vault.timeout.method")}><RadioGroup.Root className={partsCss.panelGroup} value={draftKind} onValueChange={(v) => setDraftKind(v === "fixed" ? "fixed" : "idle")} aria-label={t("web-pages.vault.timeout.method")}>
+        {(["idle", "fixed"] as const).map((k) => <RadioGroup.Item key={k} className={partsCss.panelRow} value={k}>
+          <span className={partsCss.choiceText}><span>{t(`web-pages.vault.timeout.${k}`)}</span><span className={partsCss.panelNote}>{t(`web-pages.vault.timeout.detail.${k}`)}</span></span>
+          <RadioGroup.Indicator><Check size={14} /></RadioGroup.Indicator>
+        </RadioGroup.Item>)}
+      </RadioGroup.Root></Field>}
     </Dialog><div className={pagesCss.cardFoot}>
       <Button variant="primary" busy={busy(true)} disabled={under || empty || !validTime} onClick={() => answer(true)}>{t(save ? "web-pages.vault.act.save" : "web-pages.vault.act.allow")}</Button>
       {no}

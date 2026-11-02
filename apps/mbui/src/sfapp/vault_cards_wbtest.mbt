@@ -158,6 +158,33 @@ test "the timeout button opens a panel for its mode and duration" {
 }
 
 ///|
+test "one use selected in the duration picker is approved once" {
+  new_run()
+  let calls = []
+  let src = vault_src(["r1"], true, calls)
+  let t = @ui.Tester::new(fn(c) {
+    ask_card(c, src, timeout_kind="idle", timeout_seconds=129600)
+    @sf.presented(c)
+  }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  t.tap_text("闲置 36 小时后失效")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  let (x, y, w, h) = t.query(Button, label="时长: 36 小时").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.tap_text("仅这一次")
+  t.draw()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("失效方式") is None)
+  t.tap_text("完成")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("允许")
+  t.draw()
+  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"once\"}"])
+}
+
+///|
 test "a request's card is whole with its post: its answer the core's with it, nothing asked of the vault's topic" {
   new_run()
   let asked : Array[String] = []
