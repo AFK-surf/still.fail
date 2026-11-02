@@ -13,13 +13,14 @@ fn tape_bar_in(
   platform? : Int = 2,
   w? : Double = 600.0,
   h? : Double = 900.0,
+  wrap? : (Source) -> Source = fn(s) { s },
 ) -> @ui.Tester {
   let src : Ref[Source?] = Ref(None)
   let made = fn() {
     match src.val {
       Some(s) => s
       None => {
-        let base = fixture_app(mode)
+        let base = wrap(fixture_app(mode))
         let s : Source = {
           ..base,
           topic: fn(name, params) {
@@ -408,10 +409,48 @@ test "on the tape 关于 made once scrolled: what it holds goes under nothing of
 }
 
 ///|
+/// `base` with the station Studio (ws1/st1) named `name` in what the core says of the stations, as that is set ("" as
+/// it is): told as it changes, as the core tells it.
+fn station_named(base : Source, name : @signals.Signal[String]) -> Source {
+  {
+    ..base,
+    topic: fn(topic, params) {
+      let r = (base.topic)(topic, params)
+      let n = name.get()
+      match (topic, r.value) {
+        ("stations", Some(Array(a))) if n != "" =>
+          {
+            ..r,
+            value: Some(
+              Json::array(
+                a.map(fn(st) {
+                  match st {
+                    Object(m) if m.get("station") == Some(Json::string("ws1/st1")) => {
+                      let m2 = m.copy()
+                      m2["name"] = Json::string(n)
+                      Json::object(m2)
+                    }
+                    _ => st
+                  }
+                }),
+              ),
+            ),
+          }
+        _ => r
+      }
+    },
+  }
+}
+
+///|
 /// 归档 on a tablet's tape 600 across (its page narrow), the core's prefs saying the language `lang` as it is now, a
 /// station's row pressed: its own archiving, made once, its page in use.
-fn tape_station_archiving(lang : Ref[String], platform? : Int = 2) -> @ui.Tester raise {
-  let t = tape_bar_in("settings-archiving", lang, platform~, w=600.0, h=900.0)
+fn tape_station_archiving(
+  lang : Ref[String],
+  platform? : Int = 2,
+  name? : @signals.Signal[String] = @signals.signal(""),
+) -> @ui.Tester raise {
+  let t = tape_bar_in("settings-archiving", lang, platform~, w=600.0, h=900.0, wrap=fn(s) { station_named(s, name) })
   t.tap_text("Studio")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
@@ -435,6 +474,24 @@ test "on the tape a station's own archiving made once under the tape's bar: its 
   let en = bar_words_drawn(t, "Automatic archiving · Studio")
   assert_eq(en.length(), 1, msg="the bar's title in English")
   assert_eq(en[0].id, zh[0].id)
+}
+
+///|
+test "on the tape a station's own archiving made once, its station renamed as the core tells it: its title anew in the same bar, the page and the bar not made again" {
+  let name = @signals.signal("")
+  let t = tape_station_archiving(Ref(""), name~)
+  let title = bar_words_drawn(t, "自动归档 · Studio")
+  assert_eq(title.length(), 1)
+  let rows = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == @sf.t("web-pages.archiving.mode") }).map(fn(d) { d.id })
+  assert_eq(rows.length(), 1)
+  let depth = app.nav.depth()
+  name.set("工作室")
+  t.run_for(@ui.move_most_ms)
+  let renamed = bar_words_drawn(t, "自动归档 · 工作室")
+  assert_eq(renamed.length(), 1, msg="its title anew")
+  assert_eq(renamed[0].id, title[0].id, msg="the same bar")
+  assert_true(@ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == @sf.t("web-pages.archiving.mode") }).map(fn(d) { d.id }) == rows, msg="the same page")
+  assert_eq(app.nav.depth(), depth)
 }
 
 ///|
@@ -464,4 +521,9 @@ test "on the tape a station's own archiving become another station's in its plac
   let now = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == @sf.t("web-pages.archiving.mode") }).map(fn(d) { d.id })
   assert_true(now.length() <= 1 && now != rows, msg="\{rows.length()} → \{now.length()}")
   assert_eq(bar_words_drawn(t, "自动归档 · Studio").length(), 0)
+  assert_eq(bar_words_drawn(t, "自动归档 · MBA").length(), 1, msg="that station's title")
+  // (what that page shows under its bar, the tree's: something of its own)
+  guard tape_page_panel(t) is Some(p) else { fail("no page") }
+  let shown = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words != "" && d.x >= p.x && d.y >= p.y + 56.0 && d.alpha > 0.5 })
+  assert_true(shown.length() > 0, msg="that page empty")
 }

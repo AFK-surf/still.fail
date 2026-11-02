@@ -7,6 +7,8 @@
 /// What a made stack did: the pages made (by what each was as made), those let go, the heads made and let go.
 priv struct FlatMadeLog {
   made : Array[String]
+  /// the entry each made page was told it is (its fifth argument), as made
+  serials : Array[Int]
   dropped : Array[String]
   heads : Array[Int]
   heads_dropped : Array[Int]
@@ -18,7 +20,19 @@ priv struct FlatMadeLog {
 /// tall of the tree's; with an owner as the panes', said before the stack's node or after it (`owner_first`). The
 /// stack, the readiness, what was done.
 fn flat_made(owner_first : Bool) -> (Tester, Nav[String], @signals.Signal[Bool], FlatMadeLog) {
-  let log : FlatMadeLog = { made: [], dropped: [], heads: [], heads_dropped: [], left: [] }
+  let log : FlatMadeLog = { made: [], serials: [], dropped: [], heads: [], heads_dropped: [], left: [] }
+  // (what each entry's page said of itself, by the entry: its head says it)
+  let said : Map[Int, @signals.Signal[String]] = {}
+  let said_of = fn(k : Int) {
+    match said.get(k) {
+      Some(s) => s
+      None => {
+        let s = @signals.signal("")
+        said[k] = s
+        s
+      }
+    }
+  }
   let nav = Nav::new("a", on_leave=fn(p) { log.left.push(p) })
   let ready = @signals.signal(true)
   let t = Tester::new(fn(_c) {  }, w=390.0, h=600.0)
@@ -55,7 +69,7 @@ fn flat_made(owner_first : Bool) -> (Tester, Nav[String], @signals.Signal[Bool],
       0.0,
       head=fn(b, k, _) {
         log.heads.push(k)
-        b.box(fn(h) { h.height(Is(Some(30.0))).words(Is("head")) |> ignore }) |> ignore
+        b.box(fn(h) { h.height(Is(Some(30.0))).words(By(fn() { "head " + said_of(k).get() })) |> ignore }) |> ignore
         b.owns(fn() { log.heads_dropped.push(k) }) |> ignore
       },
       made=fn(p) {
@@ -65,9 +79,12 @@ fn flat_made(owner_first : Bool) -> (Tester, Nav[String], @signals.Signal[Bool],
         Some(
           (
             "page",
-            fn(v, page, _under, _stint, _k) {
+            fn(v, page, _under, _stint, k) {
               let name = @signals.untracked(page)
               log.made.push(name)
+              log.serials.push(k)
+              // (what it says of itself, kept by its entry)
+              said_of(k).set(name)
               v.box(fn(w) { w.words(By(fn() { page() })) |> ignore }) |> ignore
               v.owns(fn() { log.dropped.push(name) }) |> ignore
             },
@@ -95,21 +112,28 @@ test "a flat stack's made pages: the one shown kept, its page and head the same 
   for owner_first in [false, true] {
     let (t, nav, ready, log) = flat_made(owner_first)
     let page = flat_made_nodes("a")
-    let head = flat_made_nodes("head")
+    let head = flat_made_nodes("head a")
     assert_eq((page.length(), head.length()), (1, 1), msg="\{owner_first}")
     assert_eq((log.made, log.heads.length()), (["a"], 1), msg="\{owner_first}")
+    // (the entry it was told it is, the head's the same)
+    assert_eq(log.serials, [log.heads[0]], msg="\{owner_first}")
     ready.set(false)
     nav.replace("b")
     t.draw()
     // (kept: the same nodes, nothing made or let go)
     assert_eq(flat_made_nodes("a"), page, msg="\{owner_first}")
-    assert_eq(flat_made_nodes("head"), head, msg="\{owner_first}")
+    // (its head still what it said of itself, the one put in its place not shown)
+    assert_eq(flat_made_nodes("head a"), head, msg="\{owner_first}")
+    assert_eq(flat_made_nodes("head b"), [], msg="\{owner_first}")
     assert_eq((log.made, log.dropped, log.heads.length(), log.heads_dropped, log.left), (["a"], [], 1, [], []), msg="\{owner_first}")
     // (it shows what it waited for: the other made, the one kept let go once)
     ready.set(true)
     t.draw()
     assert_eq(flat_made_nodes("b").length(), 1, msg="\{owner_first}")
     assert_eq(flat_made_nodes("a"), [], msg="\{owner_first}")
+    assert_eq(flat_made_nodes("head b").length(), 1, msg="\{owner_first}")
+    assert_eq(log.serials.length(), 2, msg="\{owner_first}")
+    assert_eq(log.serials[1], log.heads[1], msg="\{owner_first}")
     assert_eq((log.made, log.dropped, log.left), (["a", "b"], ["a"], ["a"]), msg="\{owner_first}")
     assert_eq((log.heads.length(), log.heads_dropped.length()), (2, 1), msg="\{owner_first}")
     t.draw()
@@ -138,7 +162,7 @@ test "a flat stack's made page under its head: what it holds in the room left un
   nav.push_over("c")
   t.draw()
   t.run_for(move_ms(390.0) * 2.0)
-  let head = view_tree().unwrap().drawn().filter(fn(d) { d.words == "head" && d.alpha > 0.0 })
+  let head = view_tree().unwrap().drawn().filter(fn(d) { d.words == "head c" && d.alpha > 0.0 })
   let page = view_tree().unwrap().drawn().filter(fn(d) { d.words == "c" })
   assert_eq((head.length(), page.length()), (1, 1))
   assert_true(page[0].y >= head[0].y + 30.0, msg="page at \{page[0].y}, head at \{head[0].y}")
