@@ -2264,7 +2264,7 @@ pub fn dialog_body_most(c : @ui.Ctx, key : String, inner : Int) -> Double? {
 /// goes in steps, each sliding in whole: panel_centred), untitled, none of the room round a body (its close button in
 /// its corner, over it: untitled_clear). An Escape `on_escape` says it took is a step back within it, not closing it.
 /// `scrim`: what the page under it is dimmed with (the theme's where not said; none, 0, where what is under it is
-/// dimmed already: presenters' scrim_owner).
+/// dimmed already: presenters' scrim_owner); `veil`: how far another over it dims it over itself (0 … 1: dialog_veil).
 /// Whether it is open now (closed by its close button too).
 pub fn dialog(
   c : @ui.Ctx,
@@ -2282,6 +2282,7 @@ pub fn dialog(
   bare? : Bool = false,
   on_escape? : () -> Bool,
   scrim? : Int64,
+  veil? : Double = 0.0,
 ) -> Bool {
   let closed = Ref(false)
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
@@ -2380,6 +2381,7 @@ pub fn dialog(
           Some(f) => c.box(style=dialog_foot.then(dialog_corner_foot(dialog_pad)), f) |> ignore
           None => ()
         }
+        dialog_veil(c, veil)
         },
       )
       |> ignore
@@ -2388,6 +2390,21 @@ pub fn dialog(
   )
   d.value && !closed.val
 }
+
+///|
+/// A dialog dimmed over all of itself `f` of the way (0 … 1) as the window under it is (the theme's scrim), another over
+/// it (it takes nothing then): over what it holds, its corners its own; nothing where `f` is 0.
+fn dialog_veil(c : @ui.Ctx, f : Double) -> Unit {
+  if f <= 0.0 {
+    return
+  }
+  let ink = @ui.alpha(c.theme().scrim, f)
+  c.layer(fn() { c.box(style=dialog_veil_at.then(@ui.style(bg=Data(ink))), fn() {  }) |> ignore }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_veil_at : @ui.Style = @ui.css("w=Full h=Full").then(@ui.style(radius=rounded(dialog_r)))
 
 ///|
 /// What the window keeps round a dialog up and down (parts.css.ts dialog: at most 100dvh - 48 tall).
@@ -3099,7 +3116,8 @@ pub(all) struct Confirmed {
 /// it): 420 wide, 28 over its title, 24 in; its title (22, 600) and `description` (13, muted), what went wrong (`error`:
 /// 13 red, 12 over the buttons, it stays open), then `cancel` (its words alone) and `action` (solid red, the primary's
 /// when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back and `cancel` close it.
-/// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already).
+/// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already); `veil`:
+/// how far another over it dims it over itself (0 … 1: dialog_veil).
 pub fn confirm_dialog(
   c : @ui.Ctx,
   key : String,
@@ -3112,6 +3130,7 @@ pub fn confirm_dialog(
   error? : String = "",
   danger? : Bool = true,
   scrim? : Int64,
+  veil? : Double = 0.0,
 ) -> Confirmed {
   let mut confirmed = false
   let mut closed = false
@@ -3138,6 +3157,7 @@ pub fn confirm_dialog(
           c.text(s.title, style=dialog_title) |> ignore
           c.text(s.description, style=dialog_lead) |> ignore
           inner()
+          dialog_veil(c, veil)
         },
       )
       |> ignore

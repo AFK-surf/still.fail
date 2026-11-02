@@ -95,6 +95,13 @@ test "wide, a confirm over the preset's dialog (the window's tree's over the old
   // (the confirm the window's tree's: found in what is read out)
   assert_true(t.semantics_dump().contains("删除预设"), msg=t.semantics_dump())
   assert_eq(scrims(), 1)
+  // (the preset's dialog under it taking nothing: dimmed over itself)
+  let rects = t.drawn_rects()
+  let scrim = rects.iter().find_first(fn(r) { r.2 >= 1280.0 && r.3 >= 800.0 && (r.4 & 0xFFL) > 0L && (r.4 & 0xFFL) < 0xFFL })
+  assert_true(
+    scrim is Some(s) && rects.iter().any(fn(r) { r.2 < 1280.0 && (r.4 >> 8) == (s.4 >> 8) && (r.4 & 0xFFL) > 0L }),
+    msg="\{rects.filter(fn(r) { (r.4 & 0xFFL) < 0xFFL })}",
+  )
 }
 
 ///|

@@ -23,8 +23,9 @@ fn panel_centred_node(
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
   dims? : () -> Bool = fn() { true },
+  covered? : () -> Bool = fn() { false },
 ) -> Unit {
-  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, fn(across, layer, look) {
+  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, covered~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
     let untitled = x.title == ""
     let w = fn() { dmin(if x.wide { dialog_wide_w } else { dialog_w }, layer.window().0 - dialog_margin) }
@@ -169,6 +170,8 @@ fn panel_centred_node(
           |> ignore
         None => ()
       }
+      // (another dialog over it: dimmed over all of itself, its corners its own)
+      d.box(fn(v) { v.over(Is(true)).radius(Is(dialog_r)).ground(By(veil)) |> ignore }) |> ignore
     })
     |> ignore
     // (the focus on its own ground as it opens, as kit's dialog's: back to what had it as it goes)

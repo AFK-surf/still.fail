@@ -82,7 +82,7 @@ pub fn ask_line_start(Double) -> @ui.Style
 
 pub fn ask_line_words(@ui.TextStyle) -> @ui.TextStyle
 
-pub fn ask_node(@view.View, String, () -> Bool, String, @ui.Field, String, String, String, String, Bool, Bool, () -> Unit, (String) -> Unit, shown? : () -> Unit, gone? : () -> Unit, dims? : () -> Bool) -> Unit
+pub fn ask_node(@view.View, String, () -> Bool, String, @ui.Field, String, String, String, String, Bool, Bool, () -> Unit, (String) -> Unit, shown? : () -> Unit, gone? : () -> Unit, dims? : () -> Bool, covered? : () -> Bool) -> Unit
 
 pub let ask_note : @ui.TextStyle
 
@@ -316,9 +316,9 @@ pub fn concentric_out(Double, Double) -> Double
 
 pub fn confirm(String, String, String, () -> Unit, danger? : Bool, from? : Anchor) -> Unit
 
-pub fn confirm_dialog(@ui.Ctx, String, Bool, String, String, String, cancel~ : String, busy? : Bool, error? : String, danger? : Bool, scrim? : Int64) -> Confirmed
+pub fn confirm_dialog(@ui.Ctx, String, Bool, String, String, String, cancel~ : String, busy? : Bool, error? : String, danger? : Bool, scrim? : Int64, veil? : Double) -> Confirmed
 
-pub fn confirm_node(@view.View, () -> Bool, () -> String, () -> String, () -> String, Bool, () -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit, dims? : () -> Bool) -> Unit
+pub fn confirm_node(@view.View, () -> Bool, () -> String, () -> String, () -> String, Bool, () -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit, dims? : () -> Bool, covered? : () -> Bool) -> Unit
 
 pub let confirm_w : Double
 
@@ -438,7 +438,7 @@ pub let desk_strong : @ui.TextStyle
 
 pub let desk_words : @ui.TextStyle
 
-pub fn dialog(@ui.Ctx, String, Bool, String, () -> Unit, description? : String, footer? : () -> Unit, wide? : Bool, w? : Double, close_label? : String, step? : String, column_in? : Double, bare? : Bool, on_escape? : () -> Bool, scrim? : Int64) -> Bool
+pub fn dialog(@ui.Ctx, String, Bool, String, () -> Unit, description? : String, footer? : () -> Unit, wide? : Bool, w? : Double, close_label? : String, step? : String, column_in? : Double, bare? : Bool, on_escape? : () -> Bool, scrim? : Int64, veil? : Double) -> Bool
 
 pub fn dialog_body_most(@ui.Ctx, String, Int32) -> Double?
 
