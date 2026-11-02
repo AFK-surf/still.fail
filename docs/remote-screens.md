@@ -72,11 +72,10 @@
 ### Sources (station/src/screens/source.ts)
 
 A `ScreenSource` is something a person can see and drive: `desktop` (the station machine's display), `browser` (a tab
-of the station's browser) or `simulator` (an iOS Simulator booted on a Mac station, below). The `Screens` registry lists them and opens views. A view is pull-driven: the next frame is
-captured/encoded only when the pace (below) lets one go, so a slow link lowers the bit rate and then the frame rate
-instead of queueing. Each source picks its codec among those the client accepts: the desktop is H.265 where the client
-decodes it and the Mac encodes it, else H.264 (hardware encoder; Windows H.264 only), a browser tab JPEG (CDP
-screencast).
+of the station's browser) or `simulator` (an iOS Simulator booted on a Mac station, below). The `Screens` registry lists them and opens views. A view is pull-driven: the pace (below) asks for a frame when the link can carry it, so frames
+do not queue behind a slow link. The Mac and Windows desktop sources capture and encode on demand; Linux's X11 source
+keeps its newest JPEG. Each source picks its codec among those the client accepts: the desktop uses H.265 or H.264 on
+macOS and Windows, and JPEG on Linux; a browser tab uses JPEG (CDP screencast).
 
 The station's own users of a screen (the agents' computer-use tool) open views in the process with
 `ScreenHub.openAs(id, options, {name, control})` (station/src/screens/hub.ts): the view is the source's, with no member
@@ -282,9 +281,9 @@ limits the packets (a LAN, 40 ms, 150 ms, with loss, with a narrow link), the fr
 sizes or (`SOURCE=helper`) still.fail Helper's made-up pictures encoded on the Mac's hardware; it says the frames a
 second drawn, how late (capture to drawn), the stalls over 200 ms and the bit rate that came.
 
-### The desktop (station/src/screens/desktop.ts, station/native/helper; Windows: win-desktop.ts, station/native/screen)
+### The desktop (station/src/screens/desktop.ts, station/native/helper; Windows: win-desktop.ts; Linux: x11-desktop.ts)
 
-macOS and Windows (elsewhere it is listed with `access` saying it is not supported, and opens nothing). On macOS still.fail Helper
+macOS, Windows, and Linux's X11 sessions. On macOS still.fail Helper
 (`still.fail Helper.app`, bundle id `fail.still.helper`, beside `mesh.node` in the release; docs/station-ts-native.md
 §4) does it: ScreenCaptureKit captures the main display scaled into `maxWidth`×`maxHeight`; VideoToolbox encodes on the
 hardware encoder with low-latency rate control, H.265 (Main, the hvcC as `description`) when the client takes it and the
@@ -321,6 +320,19 @@ modifiers not pressed before it, as a phone's keys row sends it, has them presse
 key), text as Unicode. Opening a view wakes a display gone to sleep (a pointer nudge) and keeps it on while it is open
 (`SetThreadExecutionState`). What Windows keeps from any app in the session is not had: the sign-in and UAC's secure
 desktop are not captured, and windows of apps run as administrator take no input.
+
+On Linux, `station/src/screens/x11-desktop.ts` can share an X11 session the station's own user can access. It needs
+`ffmpeg` (with the `x11grab` input) and `xdotool` in the station's `PATH`, as well as the session's `DISPLAY` and, when
+used, `XAUTHORITY`. A station started outside the graphical session must be given that session's environment by its
+operator; a station running as another user cannot use the session without that user's own authorization. A Wayland
+session is reported as unsupported instead of sharing only its Xwayland windows. The list says when the display or
+tools are missing.
+
+Each view starts ffmpeg, captures the X11 root display (including its cursor) and sends JPEG frames at at most 15 fps,
+scaled to the viewer's bounds. It keeps only the latest frame while the viewer or link is slow. `xdotool` sends pointer,
+wheel and keyboard events to the same session; keys or buttons held by a view are released as it closes. The first
+version does not carry system audio or the clipboard, select individual monitors, or resize an open view. It is a
+software-encoded X11 implementation; Wayland needs a portal-backed source of its own.
 
 The display's scale (Settings › Display › Scale) is a person's to change from the view, as UU Remote has it: on a phone
 the desktop's windows and text are made larger, readable at the phone's size. `stillfail-screen scale [percent]` reads

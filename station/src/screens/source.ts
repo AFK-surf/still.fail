@@ -1,6 +1,6 @@
 // What a person can see and drive on this station (docs/remote-screens.md): the machine's display, a tab of the
-// station's browser. A source opens views; a view is pull-driven (`next` captures and encodes only when asked), so a
-// slow link lowers the frame rate instead of queueing frames. The mesh layer carries views (`/admin/api/screens`);
+// station's browser. A source opens views; a view is pull-driven (`next` gives a frame only when asked), so a slow
+// link lowers the frame rate instead of queueing frames. The mesh layer carries views (`/admin/api/screens`);
 // sources know nothing of it.
 
 export type Codec = "h265" | "h264" | "jpeg";
@@ -152,7 +152,7 @@ export type ScreenResolution = { width: number; height: number; modes: { width: 
 /// Whether a source can be seen and driven now, for one that may not be (the desktop: macOS's grants, a machine it is
 /// not supported on). `app` and `path`: what a person turns on in System Settings for it; `asking`: a window on the
 /// machine asks for it now.
-export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; app?: string; path?: string; asking?: boolean };
+export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; reason?: "linuxNoDisplay" | "linuxWayland" | "linuxTools" | "linuxUnavailable"; app?: string; path?: string; asking?: boolean };
 
 export interface ScreenSource {
   /// Stable while the source lasts: `desktop`, `browser:<targetId>`, `simulator:<udid>`.
