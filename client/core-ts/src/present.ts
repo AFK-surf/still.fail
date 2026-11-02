@@ -17,6 +17,7 @@ import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
 import { SHAPES, TOPIC_SHAPES } from "./shapes/schema.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
+import { codexQuotaFailure } from "./codex-quota.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -697,10 +698,25 @@ function feishuApp(f: J): J {
   return { appSecret: "", ...f, appId: id, domain, console: id !== "" ? `${open}/app/${encodeURIComponent(id)}` : null };
 }
 
+/// An older station can still have Codex's raw RPC error saved. Give it the same treatment as a new station's answer.
+function legacyCodexQuota(p: J): J {
+  const q = get(p, "quota");
+  const detail = get(q, "detail");
+  if (get(p, "runtime") !== "codex" || !["unavailable", "blocked"].includes(get(q, "state")) || typeof detail !== "string" || !detail.startsWith("codex {")) return q;
+  const failure = codexQuotaFailure(detail);
+  const key = failure.kind === "other" ? "failed" : failure.kind;
+  return {
+    ...q,
+    state: failure.kind === "blocked" ? "blocked" : "unavailable",
+    detail: t(`core-views.present.trouble.codex_${key}`, { status: failure.status }),
+  };
+}
+
 /// A profile with its last check in words, its models' makers and series, what it can do, and its trouble.
 export function profile(p: J): J {
   if (!isObject(p)) return p;
   const o: J = { ...p };
+  if (isObject(o.quota)) o.quota = legacyCodexQuota(o);
   if (get(o.access, "kind") === "env" && typeof get(o.access, "provider") === "string") o.access = { ...o.access, kind: "api-provider" };
   const blocked = get(o.quota, "state") === "blocked";
   const [text, tone] = blocked ? [t("core-views.present.profile.blocked"), "red"] : format.checkText(o.check ?? null);

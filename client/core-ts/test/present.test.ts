@@ -87,6 +87,26 @@ test("profile_recovery_follows_states_and_clears_after_success", () => {
   assert.equal(q.checkTone, "red");
 });
 
+test("Codex allowance errors saved by older stations are explained; recovery follows the account check", () => {
+  const raw = `codex ${JSON.stringify({ code: -32603, message: 'failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; body={"error":{"code":"token_revoked"}}' })}`;
+  const base = { runtime: "codex", access: { kind: "subscription" }, check: { state: "ok" }, quota: { state: "unavailable", detail: raw, windows: [] } };
+  const legacy = p.profile(base);
+  assert.equal(legacy.quota.detail, "ChatGPT 登录已失效，请重新登录");
+  assert.equal(legacy.quota.reason, undefined);
+  assert.equal(legacy.trouble.action, "quota", "an old station's error does not override its check");
+  assert.equal(base.quota.detail, raw, "the stored station response is not mutated");
+  const current = p.profile({ ...base, check: { state: "login", detail: "登录已失效" }, quota: { state: "unavailable", detail: "登录已失效", windows: [] } });
+  assert.equal(current.trouble.action, "login");
+  assert.equal(current.trouble.detail, "登录已失效");
+  const machine = p.profile({ ...base, check: { state: "login" }, machine: true });
+  assert.equal(machine.trouble.action, "command");
+  const later = p.profile({ ...base, quota: { state: "ok", windows: [] } });
+  assert.equal(later.trouble, null);
+  const busy = p.profile({ ...base, quota: { ...base.quota, detail: `codex ${JSON.stringify({ message: "failed to fetch codex rate limits: GET /usage failed: 503 Service Unavailable; body=private" })}` } });
+  assert.equal(busy.quota.detail, "ChatGPT 暂时无法提供额度信息（HTTP 503）");
+  assert.equal(busy.trouble.action, "quota");
+});
+
 test("a_profile_says_what_it_can_do_from_where_its_provider_speaks", () => {
   const text = (q: J) => {
     q = p.profile(q);

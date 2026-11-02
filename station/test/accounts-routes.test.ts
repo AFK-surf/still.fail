@@ -368,6 +368,83 @@ describe("the accounts routes", { concurrency: true }, () => {
     await again.close();
   });
 
+  test("a revoked Codex login stays in the account check until the provider accepts it again", async () => {
+    const data = temp("codex-revoked");
+    const db = join(data, "stillfail.db");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "cx", runtime: "codex", home: "homes/cx", access: { kind: "subscription" } }], connects: [] }));
+    let outcome: "ok" | "revoked" | "offline" = "ok";
+    const readQuota = async () => outcome === "ok"
+      ? { state: "ok", windows: [{ label: "5h", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: 0 }
+      : { state: "unavailable", windows: [], detail: outcome, checkedAt: 0, ...(outcome === "revoked" ? { signedOut: true } : {}) };
+    const check = async () => ({ state: "ok", detail: "Logged in using ChatGPT", models: ["gpt-x"], checkedAt: 0 });
+    const first = await rig({ data, store: Store.open(db, null), readQuota, check });
+    await first.call("POST", "/profiles/cx/quota");
+    await first.call("POST", "/profiles/cx/check");
+    outcome = "revoked";
+    const quota = (await first.call("POST", "/profiles/cx/quota"))[1];
+    assert.equal(quota.state, "unavailable");
+    assert.equal(quota.signedOut, undefined, "the internal signal is not kept on quota");
+    assert.deepEqual([first.accounts.health("cx").check.state, first.accounts.health("cx").check.models], ["login", ["gpt-x"]]);
+    assert.equal((await first.call("POST", "/profiles/cx/check"))[1].state, "login", "the CLI's local status is insufficient");
+    await first.close();
+    first.store.close();
+
+    const again = await rig({ data, store: Store.open(db, null), readQuota, check });
+    assert.equal((await again.call("POST", "/profiles/cx/check"))[1].state, "login", "the refusal survives a station restart");
+    outcome = "offline";
+    await again.call("POST", "/profiles/cx/quota");
+    assert.equal(again.accounts.health("cx").check.state, "login", "a network failure does not clear the refusal");
+    outcome = "ok";
+    await again.call("POST", "/profiles/cx/quota");
+    assert.equal(again.accounts.health("cx").check.state, "ok");
+    assert.equal(again.accounts.health("cx").check.codexRevoked, undefined);
+    await again.close();
+    again.store.close();
+  });
+
+  test("a completed Codex sign-in clears the old refusal even when the allowance is offline", async () => {
+    const data = temp("codex-relogin-offline");
+    const approved = approval(data);
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "cx", runtime: "codex", home: "homes/cx", access: { kind: "subscription" } }], connects: [] }));
+    let phase: "revoked" | "pending" | "offline" = "revoked";
+    let startedOld!: () => void;
+    let releaseOld!: () => void;
+    const oldStarted = new Promise<void>((resolve) => { startedOld = resolve; });
+    const oldFinished = new Promise<void>((resolve) => { releaseOld = resolve; });
+    const readQuota = async () => {
+      const started = phase;
+      if (started === "pending") { startedOld(); await oldFinished; }
+      return { state: "unavailable", windows: [], detail: started === "offline" ? "offline" : "revoked", checkedAt: 0, ...(started !== "offline" ? { signedOut: true } : {}) };
+    };
+    const t = await rig({ data, approval: approved.path, readQuota });
+    await t.call("POST", "/profiles/cx/quota");
+    assert.equal(t.accounts.health("cx").check.state, "login");
+    await settle();
+    phase = "pending";
+    const old = t.call("POST", "/profiles/cx/quota");
+    await oldStarted;
+    await t.call("POST", "/profiles/cx/login");
+    await waitFor(t, "cx", "needs_approval");
+    await t.call("DELETE", "/profiles/cx/login");
+    assert.equal(t.accounts.health("cx").check.state, "login", "a cancelled sign-in does not clear the refusal");
+    await t.call("POST", "/profiles/cx/login");
+    await waitFor(t, "cx", "needs_approval");
+    phase = "offline";
+    await approved.approve();
+    await waitFor(t, "cx", "done");
+    assert.equal(t.accounts.health("cx").check.state, "ok");
+    releaseOld();
+    await old;
+    await until(() => t.accounts.health("cx").quota?.detail === "offline", "the post-login allowance read");
+    assert.equal(t.accounts.health("cx").check.state, "ok");
+    assert.equal(t.accounts.health("cx").check.codexRevoked, undefined);
+    await settle();
+    phase = "revoked";
+    await t.call("POST", "/profiles/cx/quota");
+    assert.equal(t.accounts.health("cx").check.state, "login", "a later refusal is still recorded");
+    await t.close();
+  });
+
   test("a profile on the machine's own login: made from a login kept in a file, its models chosen, never renamed or signed in, stopped", async () => {
     const m = fakeMachine({ claude: `echo '{"loggedIn": true, "email": "b@x.com", "subscriptionType": "pro"}'`, codex: "echo 'Logged in using ChatGPT'" });
     const { mkdirSync } = await import("node:fs");

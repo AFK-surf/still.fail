@@ -175,6 +175,20 @@ test "a profile's page, wide: a profile one of the station's lists no more says 
 // models all listed, one named by hand and taken off again.
 
 ///|
+test "a revoked Codex sign-in offers sign-in from the account check" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Profile("ws1/st1", "cx"), w, platform~, mode="settings-profile-quota-login")
+    assert_true(t.find("需要登录") is Some(_))
+    assert_true(t.find("ChatGPT 登录已失效，请重新登录") is Some(_))
+    assert_true(t.find("订阅有效") is None, msg="the earlier account check must not contradict the expired login")
+    assert_true(t.find("Studio 可用") is None, msg="this station must not be called usable after its login was refused")
+    t.click(Button, label="登录")
+    t.frame()
+    assert_true(t.find("正在登录 ChatGPT") is Some(_), msg="the sign-in was started at width \{w}")
+  }
+}
+
+///|
 test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, then uses one of the resets left" {
   let t = setting_tester(Profile("ws1/st1", "cx"), 390.0)
   scrolled_to(t, 390.0, "还可重置 2 次")

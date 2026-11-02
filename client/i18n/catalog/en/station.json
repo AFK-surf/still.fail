@@ -291,6 +291,10 @@
     "other": "Works, {n} models"
   },
   "station.quota.chatgptNoWindows": "ChatGPT returned no usage limits",
+  "station.quota.codexBlocked": "The ChatGPT account has been suspended",
+  "station.quota.codexFailed": "Couldn't check the ChatGPT allowance. Try again later.",
+  "station.quota.codexLogin": "ChatGPT sign-in is no longer valid. Sign in again.",
+  "station.quota.codexStatus": "ChatGPT couldn't provide allowance information (HTTP {status})",
   "station.quota.grokNoWindows": "SuperGrok returned no usage limits",
   "station.quota.kimiNoWindows": "Kimi Code returned no usage limits",
   "station.quota.kimiNone": "Kimi Code doesn't report usage limits for this account",
