@@ -499,6 +499,11 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
 ///|
 /// As the frame ends: what can take the focus now is what Tab goes among next frame.
 fn Ctx::focus_frame_end(self : Ctx) -> Unit {
+  // A one-time code is entered only while its boxes are shown. Its state can outlive those boxes on the same page,
+  // but it must not keep the keyboard once they are gone. Other editors keep their focus when a page covers them.
+  if code_fields.contains(self.focus) && !self.focusables.iter().any(fn(f) { f.id == self.focus }) {
+    self.focus_moved(0)
+  }
   // what has it now is what the next frame's keys and presses move it from (Ctx::focus_gained)
   self.focus_before = self.focus
   self.focus_roved = false

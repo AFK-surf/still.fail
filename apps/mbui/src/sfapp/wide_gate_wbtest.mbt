@@ -3,6 +3,48 @@
 // under Home's bar laid out Small; the web's desktop page with keyboard and mouse, its mobile screen with touch.
 
 ///|
+test "a waiting device enters a security code on the digits keyboard and approval puts it away" {
+  new_run()
+  let approved = @signals.signal(false)
+  let answers : Array[(Result[Json, Json]) -> Unit] = []
+  let base = fixture("lock-code")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "lock.pairCode" {
+        answers.push(done)
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+    topic: fn(name, params) {
+      let topic = (base.topic)(name, params)
+      if name == "lock" && approved.get() {
+        {
+          ..topic,
+          value: Some({ "me": { "waiting": Json::boolean(false), "unsigned": Json::boolean(false) } }),
+          version: topic.version + 1,
+        }
+      } else {
+        topic
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  assert_true(t.find("等待批准此设备") is Some(_))
+  assert_true(t.ime().0)
+  assert_eq(t.ime_action(), @hostapi.ime_action_number)
+  t.type_text("123456")
+  assert_eq(answers.length(), 1)
+  // Approval can reach the page before the call's answer.
+  approved.set(true)
+  t.frame()
+  assert_true(t.find("等待批准此设备") is None)
+  assert_false(t.ime().0)
+  answers[0](Ok(Json::object({})))
+}
+
+///|
 test "wide: a device waiting in the workspace's lock sees 等待批准此设备 in the page's place, centred in it, with 发送批准请求" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="lock-waiting")

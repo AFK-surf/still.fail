@@ -3,6 +3,57 @@
 // only by the code typed on it (lock_wait.mbt): nothing here approves one with a press.
 
 ///|
+test "安全码: a wrong code keeps the keyboard for another try; approval puts it away" {
+  let approved = Ref(false)
+  let answers : Array[(Result[Json, Json]) -> Unit] = []
+  let t = setting_tester(Security, 390.0, platform=2, mode="lock-upgrade", over=fn(base) {
+    {
+      ..base,
+      call: fn(name, params, done) {
+        if name == "lock.pairCode" {
+          answers.push(done)
+        } else {
+          (base.call)(name, params, done)
+        }
+      },
+      topic: fn(name, params) {
+        let topic = (base.topic)(name, params)
+        if name == "lock" && approved.val {
+          {
+            ..topic,
+            value: Some({
+              "available": Json::boolean(true),
+              "locked": Json::boolean(true),
+              "signs": Json::boolean(true),
+              "me": { "waiting": Json::boolean(false), "unsigned": Json::boolean(false) },
+            }),
+            version: topic.version + 1,
+          }
+        } else {
+          topic
+        }
+      },
+    }
+  })
+  assert_true(t.ime().0)
+  assert_eq(t.ime_action(), @hostapi.ime_action_number)
+  t.type_text("123456")
+  assert_eq(answers.length(), 1)
+  answers[0](Err(Json::string("wrong")))
+  t.frame()
+  assert_true(t.ime().0)
+  assert_eq(t.ime().1, "")
+  t.type_text("654321")
+  assert_eq(answers.length(), 2)
+  // The core can publish approval before the call's answer arrives.
+  approved.val = true
+  @settings.fixture_changed()
+  t.frame()
+  assert_false(t.ime().0)
+  answers[1](Ok(Json::object({})))
+}
+
+///|
 test "安全, at each width and with either hand: its people, devices and stations" {
   for case in page_cases {
     let (w, platform) = case

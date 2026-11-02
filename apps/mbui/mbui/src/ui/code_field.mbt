@@ -240,6 +240,7 @@ pub fn Ctx::code_field(
         placeholder_color=0x00000000L,
         caret_color=0x00000000L,
         enter_sends=true,
+        ime_action=@hostapi.ime_action_number,
       )
       |> ignore
     })
