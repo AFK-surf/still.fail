@@ -54,3 +54,20 @@ test("while the station is in no workspace, outward tools are refused and the re
   out = false;
   for (const name of OUTWARD) assert.equal((await call(name)).content[0].text, `${name} ran`);
 });
+
+test("a parameter newer than the session's tool list, sent as text, is read as its schema types it", async () => {
+  // phone_use {done: true} from a session begun before `done` was added arrives as done: "true".
+  const seen: Record<string, unknown>[] = [];
+  const tool: Tool = {
+    name: "phone_use",
+    description: "",
+    inputSchema: { type: "object", properties: { reason: { type: "string" }, done: { type: "boolean" }, seconds: { type: "integer" } } },
+    run: async (_s, args) => { seen.push(args); return "ok"; },
+  };
+  const e = new McpEndpoint((token) => (token === "good" ? "session-1" : undefined), [tool]);
+  const call = (args: unknown) => rpc(e, "good", { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "phone_use", arguments: args } });
+  await call({ reason: "true", done: "true", seconds: "30" });
+  await call({ done: "false" });
+  await call({ done: true, seconds: "soon" });
+  assert.deepEqual(seen, [{ reason: "true", done: true, seconds: 30 }, { done: false }, { done: true, seconds: "soon" }]);
+});
