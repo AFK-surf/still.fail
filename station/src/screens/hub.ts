@@ -2,6 +2,7 @@
 // `makeScreens`), and who is on each now. What members are told of them (GET /admin/api/screens, `screens` on the
 // event stream, the agents' `screen` tool) is said here; the views themselves go over the member link (mesh/screens.ts).
 import { type Lang, tr } from "../ops/i18n.ts";
+import type { SimDebug } from "./sim-debug.ts";
 import { type ScreenAccess, type ScreenSource, type ScreenView, type Screens, type ViewOptions, makeScreens } from "./source.ts";
 
 /// One view open now: whose, whether its input is taken, and how it is told its people changed.
@@ -163,11 +164,19 @@ export class ScreenHub implements Screens {
     await source.discard();
   }
 
+  /// A screen's apps' logs and their restart (a simulator's); refused for any other.
+  debugOf(id: string): SimDebug {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.debug === undefined) throw new ScreenRefused(405, "station.screen.noDebug");
+    return source.debug;
+  }
+
   /// GET /admin/api/screens, in `lang`: `{screens: [{id, kind, title, width, height, viewers, controlledBy, access?,
-  /// clipboard?, peek?, drop?, closable?, openedBy?}]}`: `clipboard`, the types a view that drives it carries both ways;
+  /// clipboard?, peek?, drop?, closable?, debug?, openedBy?}]}`: `clipboard`, the types a view that drives it carries both ways;
   /// `peek`, it can be previewed (ViewOptions.peek); `drop`, where a file
   /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`);
-  /// `closable`, a person may close it (POST …/close); `openedBy`, the session that opened it (an agent's tab).
+  /// `closable`, a person may close it (POST …/close); `debug`, its apps' logs and restart are had; `openedBy`, the session that opened it (an agent's tab).
   listed(lang: Lang): { screens: Record<string, unknown>[] } {
     const folder = this.#o.drop?.() ?? null;
     return {
@@ -181,6 +190,7 @@ export class ScreenHub implements Screens {
           ...(clipboard.length > 0 ? { clipboard } : {}),
           ...(s.peek ? { peek: true } : {}),
           ...(s.discard ? { closable: true } : {}),
+          ...(s.debug ? { debug: true } : {}),
           ...(by ? { openedBy: by } : {}),
           ...(folder !== null ? { drop: { folder, reveal: s.reveal === true } } : {}),
         };

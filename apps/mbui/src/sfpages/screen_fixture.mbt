@@ -21,6 +21,8 @@
 //   screen-files-going, -done (-dark)   two files sent to its machine: going (the first under a free name), then there
 //   screen-center, -stats (-dark)       driving a Windows desktop that changes its scale: 控制中心 open; the view's
 //                                       figures open
+//   screen-simulator, -center, -logs,   driving an iOS Simulator: its page, what debugs an app beside the picture; 控制中心
+//     -apps, -device (-dark)            open; its 日志 open; its 重启 App open; 设备 showing
 //   screen-login-fill, -pick (-dark)    driving a tab whose focus is in github.com's password field: 用 1Password
 //                                       填入 offered; pressed, its two logins there to pick from
 
@@ -78,6 +80,13 @@ pub fn open_screen_fixture(mode : String) -> Unit {
     }
     "screen-center" => u.asked_panel = "center"
     "screen-stats" => u.asked_panel = "net"
+    "screen-simulator-center" => u.asked_panel = "center"
+    "screen-simulator-logs" => u.asked_panel = "logs"
+    "screen-simulator-apps" => u.asked_panel = "apps"
+    "screen-simulator-device" => {
+      u.logs.tab = 1
+      u.asked_panel = "logs"
+    }
     _ => ()
   }
 }
@@ -237,6 +246,17 @@ pub fn screen_fixture_stream(
       st["scale"] = { "percent": 125.0, "recommended": 150.0, "steps": [100.0, 125.0, 150.0, 175.0] }
       st["latency"] = { "frame": 46.0, "before": 11.0 }
       st["video"] = { "capture": "Windows.Graphics.Capture", "encoder": "NVENC", "hardware": true }
+      on_value({ "state": Json::object(st) }, None)
+    }
+    "screen-simulator" | "screen-simulator-center" | "screen-simulator-logs" | "screen-simulator-apps" | "screen-simulator-device" => {
+      live(true, true, [], None, None, None, None, None, None)
+      let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, None, None) {
+        Object(m) => m.copy()
+        _ => {}
+      }
+      st["title"] = Json::string("iPhone Duo · iOS 27.1")
+      st["kind"] = Json::string("simulator")
+      st["debug"] = Json::boolean(true)
       on_value({ "state": Json::object(st) }, None)
     }
     "screen-login-fill" | "screen-login-pick" => {

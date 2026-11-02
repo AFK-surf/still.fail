@@ -375,6 +375,8 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
       ...(controlledBy.some((n) => n.startsWith(AGENT)) ? { agent: true } : {}),
       // Closed from here by a member who may drive it (a read-only one only looks).
       ...(get(s, "closable") === true && control ? { closable: true } : {}),
+      // Its apps' logs and restart, for one who may drive it (a simulator's; docs/remote-screens.md).
+      ...(get(s, "debug") === true && control ? { debug: true } : {}),
       ...(chat ? { chat } : {}),
     };
     const access = accessOf(get(s, "access"));
@@ -548,6 +550,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       const item = listedItem();
       if (state.title === "" && typeof get(item, "title") === "string") state.title = get(item, "title");
       if (state.kind === undefined && typeof get(item, "kind") === "string") state.kind = get(item, "kind");
+      state.debug = get(item, "debug") === true && may;
       const others = othersOf(onIt ?? names(get(item, "viewers")), mine).map(personShown);
       // Who else drives it now: an agent at work, another person.
       const drivers = othersOf(driving ?? names(get(item, "controlledBy")), mine);

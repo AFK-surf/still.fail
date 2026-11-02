@@ -88,7 +88,7 @@ JPEG frames are all key frames and their config has no `description`.
 ### Wire (member link, ALPN `stillfail/admin/1`)
 
 - **List**: `GET /admin/api/screens` →
-  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?, closable?, openedBy?}]}`; changes come on
+  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?, closable?, debug?, openedBy?}]}`; changes come on
   the station's event stream as `screens` (same shape). `viewers`: the names of those with a view of it open;
   `controlledBy`: those of them whose input is taken. `access`, only when something is missing:
   `{capture, control, message, app?, path?}` (`message` in the asker's language says what to turn on where; the desktop
@@ -373,6 +373,48 @@ a simulator directly on a phone (no trackpad to choose), a finger held being the
 drives it as any screen for now (its 触控板 switched off for direct touch). No clipboard,
 cursor or dropped files yet. `station/side/screen-simulator.test.ts` makes and boots a simulator of its own, views it
 through the real helper and says how soon a picture follows a finger and the frames a second.
+
+
+**Debugging an app on it** (station/src/screens/sim-debug.ts; the app: sfpages/screen_debug.mbt, from 控制中心). The list
+says `debug: true` of a simulator; only those who may drive it read or do this (what an app logs may be private):
+
+- **Logs**: `GET /admin/api/screens/<id>/logs?after=<n>` → `{next, lines: [{seq, at, level, app, text}]}`, what came from
+  `after` on (at most the newest 500), `next` where to ask from next; the app's 日志 asks every 1.5 s while it is open. It is
+  `log stream` inside the device, of the apps a person installed only (their image in the device's Containers; the
+  system's are thousands of lines a second), and of those what the app's own code says, Foundation's for it (`NSLog`) and
+  any error (the frameworks inside an app say hundreds more a second): started at the first ask, going on for 10 minutes after the last, the newest
+  2000 lines held. So it has what goes to the unified log (`Logger`, `os_log`, `NSLog`), not an app's stdout (`print`).
+- **Apps**: `GET /admin/api/screens/<id>/apps` → `{apps: [{id, name, running}]}`, those a person installed (`simctl
+  listapps`), running ones first (`launchctl list` inside the device, which does not say which is in front).
+- **Restart**: `POST /admin/api/screens/<id>/relaunch` `{app}` → `{}` (`simctl launch --terminate-running-process`), 404
+  for what is not an app a person installed there. Building it again is the agent's: the station does not know the project.
+
+- **Settings**: `GET /admin/api/screens/<id>/settings` → `{appearance, textSize}`; `POST` `{name, value}` sets one and says
+  them again (`simctl ui`: `appearance` light or dark, `textSize` a `content_size`), 400 for any other.
+- **Screenshot**: `POST /admin/api/screens/<id>/screenshot` → `{png}` (base64), in the device's own pixels: a view's own
+  picture, not `simctl io`'s, which of a foldable's screens it picks is not the one in use (an iPhone Duo's: black).
+
+404 no such screen, 405 nothing to debug on it, 403 a read-only member, 502 simctl failed.
+
+**The keys on Xcode 27** (seen 2026-11-02 on Xcode 27.2, iOS 27.1, iPhone Duo; station/side/screen-simulator-keys.test.ts). The
+guest drops Indigo's keys and buttons while the host's send still succeeds, so from CoreSimulator 1155.4 they go through its
+`dtuhidd` (vendor/serve-sim DTUHIDKeys.swift): no window of Device Hub's, focus or Accessibility is needed, and it held with
+Device Hub's window open on the device as well as without. Before 1155.4 nothing changes. Not tried on an Xcode before 27 (none
+at hand), nor on an old runtime on this Xcode (the test app did not lay out on iOS 17).
+
+Pasted text (what a US keyboard's keys cannot type: `SimInput`) reaches the device's pasteboard but not the field by itself. `simctl
+pbcopy` is ignored while CoreDevice's pasteboard is in use, so from 1155.4 the helper writes with CoreDevice's own `devicectl` (not
+Xcode's: that is a script that may first run `xcodebuild -runFirstLaunch`, waiting for a password, as `xcrun simctl` may). It held
+in about 0.1 s, read back exact, and left this Mac's clipboard as it was. Whether ⌘V then reaches the field depends on the device:
+with a Device Hub window open on it (what running an app from Xcode opens; its own keyboard then hidden) the text went in by itself;
+without one (its own keyboard up) ⌘V did nothing, and holding the field and touching the system's Paste put it in. The device's panel
+says so on iOS 27. One run of each. Going into that mode without the window is still to find.
+
+The app's viewer treats a simulator as the touchscreen it is (a finger where it touches, no trackpad to choose, no mouse's
+buttons), and its page is about the device and the app rather than the link: its buttons (主屏幕, 多任务, 锁屏, 软键盘), 截图 and
+重启 App (the app last chosen at one press; another from 设备) over the picture on a wide page, under it on a narrow one, and 日志
+and 设备 beside the device on a wide page, put away with their button, in a panel on a narrow one. 控制中心 has only what the view
+does (画质, 帧率, 全屏, 断开).
 
 ### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
 

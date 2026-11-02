@@ -156,6 +156,12 @@ export const PARAMS: Record<string, string> = {
   "job.log": "id:string lines:number",
   "job.stop": "id:string",
   "screen.close": "screen:string",
+  "screen.logs": "screen:string after:number",
+  "screen.apps": "screen:string",
+  "screen.relaunch": "screen:string app:string",
+  "screen.settings": "screen:string",
+  "screen.setSetting": "screen:string name:string value:string",
+  "screen.screenshot": "screen:string",
   "signin.fill": "id:string login:json keep?:boolean",
   "signin.self": "id:string done?:boolean",
   "signin.deny": "id:string",
@@ -557,6 +563,22 @@ function stationOp(name: string, params: unknown): Request | null {
     // the station tells it (`screens` on its stream).
     case "screen.close":
       return op("POST", () => `/screens/${p.at("screen")}/close`, null, NONE);
+    // An app debugged on a simulator (docs/remote-screens.md "Simulators"): its log's lines after `after` (`{next, lines}`),
+    // the apps installed there (`{apps}`), one of them started again.
+    case "screen.logs":
+      return op("GET", () => `/screens/${p.at("screen")}/logs?after=${p.u64("after")}`, null, NONE);
+    case "screen.apps":
+      return op("GET", () => `/screens/${p.at("screen")}/apps`, null, NONE);
+    case "screen.relaunch":
+      return op("POST", () => `/screens/${p.at("screen")}/relaunch`, p.pick(["app"]), NONE);
+    // What can be set of it (`{appearance, textSize}`), one of them set (the same back), and its picture in its own pixels
+    // (`{png}`, base64).
+    case "screen.settings":
+      return op("GET", () => `/screens/${p.at("screen")}/settings`, null, NONE);
+    case "screen.setSetting":
+      return op("POST", () => `/screens/${p.at("screen")}/settings`, p.pick(["name", "value"]), NONE);
+    case "screen.screenshot":
+      return op("POST", () => `/screens/${p.at("screen")}/screenshot`, null, NONE);
     // A sign-in its card asks of the person (station/src/vault/signin.ts, docs/vault.md 登录态): what their password
     // manager gave (`login`: username, password, code; an object, so `doing` keeps no copy of it), typed into the chat's
     // tab by the station; they sign in themselves on its screen (`signin.self`, `done` once they did); or they will not.
