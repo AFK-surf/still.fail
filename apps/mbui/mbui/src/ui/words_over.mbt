@@ -27,11 +27,26 @@ priv struct WordsOver {
   mut held : Bool
   mut file : String
   pairs : Set[String]
+  // (not held: each frame's, as it was found: Tester::words_over_frames)
+  frames : Array[WordsOverAt]
 }
 
 ///|
+/// Words over words found on a frame drawn (any frame where the rule is not held: Tester::words_over_frames): the
+/// moment it was drawn at, the words under and over, where they meet (the middle of where both are seen in the
+/// window), whether the words over are a layer leaving.
+pub(all) struct WordsOverAt {
+  at : Double
+  under : String
+  over : String
+  x : Double
+  y : Double
+  leaving : Bool
+} derive(Eq, Show)
+
+///|
 // kept across runs: begun anew by each Tester (words_over_begin)
-let words_over : WordsOver = { held: true, file: "", pairs: Set::new() }
+let words_over : WordsOver = { held: true, file: "", pairs: Set::new(), frames: [] }
 
 ///|
 /// Each file's bar: how many pairs of words over words a Tester made there may show while what it walks through
@@ -73,6 +88,7 @@ pub fn words_over_known(bars : Array[(String, Int)]) -> Unit {
 fn words_over_begin(loc : String, held : Bool) -> Unit {
   words_over.held = held
   words_over.pairs.clear()
+  words_over.frames.clear()
   words_over.file = match loc.find(":") {
     Some(i) => loc.unsafe_substring(start=0, end=i)
     None => loc
@@ -178,7 +194,8 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
     }
     who[o] = by
     // its ink, a little inside its picture and within its own cell across (a picture is made with room round its
-    // ink: a full stop's spills well past its advance), cut by its clip
+    // ink: a full stop's spills well past its advance), cut by its clip and by the window: what lies past the window
+    // is seen by no one, though its clip, the frame's base (0 to 1e9: Ctx::in_window), says none
     let (l, r) = inst_cell_of(k)
     // (and where it fades out towards a cut, scene.mbt 52-59, no more of it than is seen)
     let least = words_over_seen_least / a[b + 11]
@@ -190,6 +207,7 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
     let x1 = if a[b + 59] > 0.0 { dmin(x1, a[b + 58] - a[b + 59] * least) } else { x1 }
     let y1 = dmin(a[b + 1] + a[b + 3] - 0.75, a[b + 19])
     let y1 = if a[b + 55] > 0.0 { dmin(y1, a[b + 54] - a[b + 55] * least) } else { y1 }
+    let (x0, y0, x1, y1) = (dmax(x0, 0.0), dmax(y0, 0.0), dmin(x1, self.width), dmin(y1, self.height))
     if x1 > x0 && y1 > y0 {
       ks.push(k)
       rs.push((x0, y0, x1, y1))
@@ -257,7 +275,16 @@ fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)]
 /// its file's bar, fails the test at once, with what and where.
 fn Tester::hold_words_over(self : Tester) -> Unit {
   let c = g()
-  if !words_over.held || !(c.motion_left || c.page_in_hand) {
+  // (not held: every frame's, moving or not, kept as they are for the test to say which it shows, frame by frame:
+  // Tester::words_over_frames)
+  if !words_over.held {
+    for f in c.words_over_details() {
+      let (under, over, x, y, leaving) = f
+      words_over.frames.push({ at: self.fake.time, under, over, x, y, leaving })
+    }
+    return
+  }
+  if !(c.motion_left || c.page_in_hand) {
     return
   }
   for f in c.words_over_details() {
@@ -278,4 +305,14 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
       abort(said)
     }
   }
+}
+
+///|
+/// Every frame's words over words this Tester has drawn, moving or not, where it does not hold the rule
+/// (`words_over_held` false), in the order they were drawn: for a test to say which it shows, frame by frame (an old
+/// view's own and the same of the nodes made in its place at the same moments, no other). Where it holds the rule,
+/// none: what it finds fails it.
+pub fn Tester::words_over_frames(self : Tester) -> Array[WordsOverAt] {
+  ignore(self)
+  words_over.frames.copy()
 }

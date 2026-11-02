@@ -57,3 +57,42 @@ test "words in pieces on one line: a break across them run on as one, one line h
   let (_, h) = runs_high(true)
   assert_eq(h, 44.0)
 }
+
+///|
+test "words on one line saying shorter ones, breaks in them all: each run on as it is drawn, the first that fits so chosen, as wide as it is drawn" {
+  let probe : Ref[@view.View?] = Ref(None)
+  let node : Ref[@view.View?] = Ref(None)
+  let room = @signals.signal(1000.0)
+  let one = { ..@view.words_plain, wrap: false }
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    // (the shorter one as it is set on one line, alone: how wide that is)
+    root.box(fn(p) {
+      probe.val = Some(p)
+      p.words(Is("一二 三")).words_look(Is(one)) |> ignore
+    })
+    |> ignore
+    root.box(fn(r) {
+      r.row(Is(true)).width(By(fn() { Some(room.get()) })) |> ignore
+      r.box(fn(w) {
+        node.val = Some(w)
+        w.words(Is("一二三\n四五六")).words_look(Is(one)).shorter(Is(["一二\n三", "一"])) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let (fits, _) = @signals.untracked(fn() { probe.val.unwrap().laid_size() })
+  // (room for that one on one line and no more: it, its break run on, as wide as it is so)
+  room.set(fits + 0.5)
+  t.draw()
+  t.draw()
+  let (w, h) = @signals.untracked(fn() { node.val.unwrap().laid_size() })
+  let (x, y, _, _) = node.val.unwrap().rect()
+  let glyphs = t.drawn_instances().filter(fn(a) { a[5] == 1.0 && a[1] >= y - 1.0 && a[1] <= y + h + 1.0 && a[0] >= x - 1.0 })
+  assert_eq((w, h), (fits, 22.0), msg="\{w} of \{fits}")
+  assert_eq(glyphs.length(), 3, msg="drawn: \{glyphs.length()} glyphs")
+}

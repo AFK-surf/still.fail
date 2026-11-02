@@ -166,6 +166,12 @@ pub(all) struct Style {
   // flex basis of auto would be: the old views' `keep`), whatever its flex basis and min-width say: what is beside it
   // gives way first.
   mut min_held : Bool
+  // Not CSS's: a row that wraps (`wrap`) goes on in another line only where a line has not the room for its items at
+  // the least each comes to, not their flex bases: what never gives way (shrink 0) as wide as it is, the rest their
+  // min-width, a row of items at least the least of what it holds with its padding and gaps (layout.mbt least_held);
+  // and none of its items comes to less than that, so what a line holds is in it whole. On one line while all of it
+  // has the room so, its items sharing the line as they would without it.
+  mut wrap_least : Bool
   // Not CSS's: a box whose own height, not said, is this share (0 … 1; NaN: none) of the height what it holds comes to
   // at its width, what it holds laid out whole in it (past it where the share is less than 1): a room opening on what
   // it holds, its height and what it holds the same layout's, whatever what it holds comes to as it opens.
@@ -248,6 +254,7 @@ pub fn Style::new() -> Style {
     soft_min: 0.0 / 0.0,
     stretch_past_max: false,
     min_held: false,
+    wrap_least: false,
     content_share: 0.0 / 0.0,
     ver: 0,
     basis_v: 0.0,
@@ -326,6 +333,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.soft_min = 0.0 / 0.0
   self.stretch_past_max = false
   self.min_held = false
+  self.wrap_least = false
   self.ver = self.ver + 1
   self.basis_v = 0.0
   self.basis_k = LEN_AUTO

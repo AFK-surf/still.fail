@@ -2707,6 +2707,7 @@ pub fn Tester::window_shows(Self) -> Int32
 pub fn Tester::window_snap_rect(Self) -> (Double, Double, Double, Double)
 pub fn Tester::windows_opened(Self) -> Array[String]
 pub fn Tester::words(Self) -> Array[(String, Double, Double, Double, Double, Double)]
+pub fn Tester::words_over_frames(Self) -> Array[WordsOverAt]
 pub fn Tester::words_said(Self) -> Array[(String, Double, Double, Double, Double, Double)]
 
 type TextCache
@@ -2920,6 +2921,15 @@ pub fn Words::offset_at(Self, Double, Double) -> Int32
 pub fn Words::rects(Self, Int32, Int32) -> Array[(Double, Double, Double, Double)]
 pub fn Words::slice(Self, Int32, Int32) -> String
 pub fn Words::word_at(Self, Int32) -> (Int32, Int32)
+
+pub(all) struct WordsOverAt {
+  at : Double
+  under : String
+  over : String
+  x : Double
+  y : Double
+  leaving : Bool
+} derive(Eq, Show)
 
 pub struct WordsPiece {
   layout : RichLayout

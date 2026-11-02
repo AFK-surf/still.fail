@@ -92,6 +92,39 @@ test "a narrow page's choice as nodes, drawn as the old view's: each chosen, fil
 }
 
 ///|
+test "a narrow page's choice as nodes too narrow for its options side by side, drawn as the old view's: the chosen one's words cut short with a chevron at its end, each chosen, at larger words" {
+  let two = ["按天", "按周"]
+  let three = ["不提示", "做完就提示", "按模型判断"]
+  let cases = [(90.0, three, 1.0), (80.0, three, 1.5)]
+  for w = 60; w <= 92; w = w + 2 {
+    cases.push((w.to_double(), two, 2.0))
+  }
+  let wrong = []
+  for case in cases {
+    let (w, labels, scale) = case
+    for k in 0..<labels.length() {
+      let old = seg_fill_drawn(false, w, k, labels, scale~)
+      let made = seg_fill_drawn(true, w, k, labels, scale~)
+      // (not side by side: no words of the others drawn)
+      let drawn = @ui.view_tree().unwrap().drawn()
+      for j, l in labels {
+        if j != k {
+          assert_true(!drawn.iter().any(fn(d) { d.words == l }), msg="\{case}: a pick, \{l} not drawn")
+        }
+      }
+      try {
+        seg_same(made, old, "\{w} \{labels.length()} at \{scale}, chosen \{k}")
+      } catch {
+        Failure(e) => wrong.push(e)
+        e => wrong.push(e.to_string())
+      }
+    }
+  }
+  // (every case's, said together)
+  assert_true(wrong.is_empty(), msg=wrong.join("\n"))
+}
+
+///|
 /// A choice of `labels` in a window `w` wide (12 from its sides, 20 from its top), the first chosen: as an old view's
 /// (`node` false) or as nodes; `scrolled`, in a column that scrolls (as tall as the window less 20, something 600 tall
 /// under it: a page's list, as the old view's list is, pulled past its ends where its platform's is). Each choice made

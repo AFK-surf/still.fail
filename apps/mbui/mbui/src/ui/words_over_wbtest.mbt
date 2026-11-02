@@ -104,3 +104,34 @@ test "a named closing fade does not exempt other pairs, other files, or an overl
   assert_false(words_over_expected_closing("another-file", closing[0].0, closing[0].1, closing[0].4))
   assert_false(words_over_expected_closing("closing-probe", closing[0].0, "other words", closing[0].4))
 }
+
+///|
+/// tree_words_laid_over's, the nodes' words `under` and `over` from the window's left (300 wide): past its right where
+/// more than 300.
+fn tree_words_laid_at(under : Double, over : Double) -> Tester {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0, words_over_held=false)
+  set_view_app(fn(root) {
+    for p in [("under these", under), ("over those", over)] {
+      root.box(fn(b) {
+        b.over(Is(true)).padding(Is((p.1, 0.0, 0.0, 0.0))) |> ignore
+        b.box(fn(w) { w.width(Is(Some(200.0))).words(Is(p.0)) |> ignore }) |> ignore
+      })
+      |> ignore
+    }
+  })
+  t.draw()
+  t
+}
+
+///|
+test "words over words past the window, seen by no one, are not found; seen in part but met only past it, neither; met where they are seen in it, found" {
+  let found = fn(under : Double, over : Double) {
+    let _ = tree_words_laid_at(under, over)
+    g().words_over_faults().map(fn(f) { (f.0, f.1, f.2 < 300.0) })
+  }
+  // (both past it; the first seen from 250, the other from 300 on, past it, where they meet; both seen from 250)
+  assert_eq(
+    (found(320.0, 320.0), found(250.0, 300.0), found(250.0, 250.0)),
+    ([], [], [("under these", "over those", true)]),
+  )
+}
