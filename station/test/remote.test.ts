@@ -3,8 +3,8 @@
 // through a direct `call` that answers as the transport does.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
@@ -12,7 +12,7 @@ import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { signalGroup } from "../src/ops/group.ts";
 import { Jobs, type Machine } from "../src/jobs/jobs.ts";
-import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, readJson, writeJson } from "../src/jobs/remote.ts";
+import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, hash, readJson, writeJson } from "../src/jobs/remote.ts";
 import { type Load, OLDER } from "../src/jobs/load.ts";
 import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
@@ -74,13 +74,13 @@ async function rounds(_what: string, clock: ReturnType<typeof testClock>, by: Du
 
 type Station = { dir: string; store: Store; jobs: Jobs; remote: Remote; told: [string, string][] };
 
-function station(options: { clock?: Clock.Clock; jobsClock?: Clock.Clock; machine?: Machine; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void } = {}): Station {
+function station(options: { clock?: Clock.Clock; jobsClock?: Clock.Clock; machine?: Machine; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void; removeMirror?: (path: string) => Promise<void> } = {}): Station {
   const dir = options.dir ?? tempdir();
   const store = options.store ?? Store.open(":memory:");
   const told: [string, string][] = [];
   const jobs = options.jobs ?? new Jobs({ store, data: dir, notify: () => {}, link: () => null, clock: options.jobsClock, machine: options.machine });
   const remote = new Remote({
-    data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs,
+    data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs, removeMirror: options.removeMirror,
     notify: options.notify ?? ((session, text) => void told.push([session, text])),
   });
   cleanup.push(async () => {
@@ -434,10 +434,10 @@ describe("remote", { concurrency: true }, () => {
   /// A source station "A" and a target "B" in one workspace; each one's calls reach the other as the transport would
   /// carry them (errors come back as Refused). `reach`: whether B's calls get through to A. `roster`: the stations the
   /// workspace has, as the cloud names them.
-  function pair(roster: Json[] = [{ id: "A" }, { id: "B" }]) {
+  function pair(roster: Json[] = [{ id: "A" }, { id: "B" }], target: Parameters<typeof station>[0] = {}) {
     const clock = testClock();
     const a = station({ clock });
-    const b = station({ clock });
+    const b = station({ ...target, clock });
     mkdirSync(join(a.dir, "mesh"), { recursive: true });
     writeFileSync(join(a.dir, "mesh", "cloud.json"), JSON.stringify({ workspace: "ws", station: "A" }));
     const home = join(a.dir, "work");
@@ -466,6 +466,111 @@ describe("remote", { concurrency: true }, () => {
     const use = async (name: string, args: Json) => JSON.parse(await tools.find((t) => t.name === name)!.run("s1", args));
     return { a, b, home, clock, use, asked, back };
   }
+
+  test("a chat can ask the target station to remove its own unused mirror while a busy one stays", async () => {
+    const { b, home, use } = pair();
+    const idle = join(home, "idle");
+    const busy = join(home, "busy");
+    mkdirSync(idle);
+    mkdirSync(busy);
+    writeFileSync(join(idle, "source.txt"), "source\n");
+    writeFileSync(join(busy, "source.txt"), "keep\n");
+    const run = async (key: string, dir: string, command: string) => {
+      await use("station_task", { station: "B", key, action: "prepare", dir, command });
+      return use("station_task", { station: "B", key, action: "start" });
+    };
+    const first = await run("one", idle, "echo output > built.txt");
+    await until("the first task ends", () => b.store.getJob(first.job.id)!.state !== "running");
+    const second = await run("two", busy, FOREVER);
+    const room = b.remote.room("ws", "A", "s1");
+    const idlePath = join(room, "work", "idle");
+    const busyPath = join(room, "work", "busy");
+    const nonMirror = join(room, "work", "manual");
+    mkdirSync(nonMirror);
+    writeFileSync(join(nonMirror, "keep"), "work\n");
+    const listed = await use("station_task", { station: "B", action: "mirrors" });
+    assert.deepEqual(listed.mirrors.map((m: Json) => [m.name, m.busy]).sort(), [["busy", true], ["idle", false]]);
+    await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "busy" }), /in use/);
+    assert.ok(existsSync(busyPath), "a running task's directory remains");
+    const sync = join(room, "sync", "idle");
+    mkdirSync(sync, { recursive: true });
+    await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "idle" }), /in use/);
+    const old = new Date(Date.now() - 2 * 3600 * 1000);
+    utimesSync(sync, old, old);
+    const syncing = await use("station_task", { station: "B", action: "mirrors" });
+    assert.equal(syncing.mirrors.find((m: Json) => m.name === "idle").busy, true, "even an old sync is not safe to interrupt");
+    await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "idle" }), /in use/);
+    rmSync(sync, { recursive: true });
+    assert.equal((await use("station_task", { station: "B", action: "clean", mirror: "manual" })).removed, false);
+    assert.equal((await use("station_task", { station: "B", action: "clean", mirror: "../manual" })).removed, false);
+    assert.ok(existsSync(join(nonMirror, "keep")), "other directories and paths outside the mirror list stay");
+    const other = await b.remote.handle("ws", "another-source", { method: "task.clean", session: "s1", mirror: "idle" });
+    assert.equal(other.removed, false, "another station cannot remove this chat's mirror");
+    assert.ok(existsSync(idlePath));
+    const removed = await use("station_task", { station: "B", action: "clean", mirror: "idle" });
+    assert.equal(removed.removed, true);
+    assert.ok(!existsSync(idlePath));
+    assert.ok(existsSync(join(idle, "source.txt")), "the source copy is untouched");
+    const again = await run("three", idle, "test -f source.txt && test ! -e built.txt");
+    await until("the replacement task ends", () => b.store.getJob(again.job.id)!.state !== "running");
+    assert.equal(b.store.getJob(again.job.id)!.exitCode, 0, "a later task syncs that mirror again");
+    await use("station_task", { station: "B", key: "two", action: "stop" });
+  });
+
+  test("a slow mirror cleanup answers pending, resumes the same removal, and holds the session lane", async () => {
+    let release!: () => void;
+    let entered = 0;
+    const gate = new Promise<void>((resolve) => void (release = resolve));
+    const { b, home, use, clock } = pair(undefined, { removeMirror: async (path) => {
+      entered++;
+      await gate;
+      await rm(path, { recursive: true, force: true });
+    } });
+    const dir = join(home, "slow");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "source"), "data");
+    await use("station_task", { station: "B", key: "slow", action: "prepare", dir, command: "true" });
+    const started = await use("station_task", { station: "B", key: "slow", action: "start" });
+    await until("the task ends", () => b.store.getJob(started.job.id)!.state !== "running");
+    const sleeps = clock.asked();
+    const first = use("station_task", { station: "B", action: "clean", mirror: "slow" });
+    await until("removal starts", () => entered === 1);
+    await until("the answer timer is sleeping", () => clock.asked() > sleeps);
+    await Effect.runPromise(clock.adjust("2 seconds"));
+    assert.equal((await first).pending, true);
+    const again = use("station_task", { station: "B", action: "clean", mirror: "slow" });
+    let prepared = false;
+    const later = b.remote.handle("ws", "A", { method: "task.prepare", session: "s1", key: "later", spec: { command: "true", dir } }).then(() => void (prepared = true));
+    await turn();
+    assert.equal(prepared, false, "another request cannot race removal in this session");
+    assert.equal(entered, 1, "a repeated cleanup joins the existing removal");
+    release();
+    assert.equal((await again).removed, true);
+    await later;
+    assert.equal(prepared, true);
+  });
+
+  test("an interrupted cleanup leaves a prepared task needing a sync before it can start", async () => {
+    let fail = true;
+    const { b, home, use } = pair(undefined, { removeMirror: async (path) => {
+      if (fail) throw new Error("removal interrupted");
+      await rm(path, { recursive: true, force: true });
+    } });
+    const dir = join(home, "interrupted");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "source"), "data");
+    await use("station_task", { station: "B", key: "one", action: "prepare", dir, command: "true" });
+    const started = await use("station_task", { station: "B", key: "one", action: "start" });
+    await until("the task ends", () => b.store.getJob(started.job.id)!.state !== "running");
+    const record = join(b.remote.root, "incoming", hash(["ws", "A", "s1", "one"]), "task.json");
+    assert.equal(readJson(record).synced, true);
+    await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "interrupted" }), /could not be removed/);
+    assert.equal(readJson(record).synced, false, "a partially removed mirror is never considered synced");
+    const room = b.remote.room("ws", "A", "s1");
+    assert.ok(existsSync(join(room, "mirrors", "interrupted.json")), "the removal remains retryable");
+    fail = false;
+    assert.equal((await use("station_task", { station: "B", action: "clean", mirror: "interrupted" })).removed, true);
+  });
 
   test("the source can read its remote workspace size and address that station by name", async () => {
     const { a, b, use } = pair([{ id: "A", name: "Home" }, { id: "B", name: "Studio" }]);

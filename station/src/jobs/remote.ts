@@ -92,6 +92,8 @@ export type RemoteOptions = {
   places?: Places;
   /// The bytes free on the disk holding `path` (tests say how full it is). Default: statfs.
   diskFree?: (path: string) => number;
+  /// Remove a mirror's tree. Tests can hold or fail the removal to exercise interrupted requests.
+  removeMirror?: (path: string) => Promise<void>;
 };
 
 /// A start that syncs a directory answers within this, synced or not (the sync goes on): an agent's tool call is given
@@ -100,9 +102,13 @@ export type RemoteOptions = {
 export const SYNC_ANSWER_MS = 40_000;
 /// A sync that ended while no start waited for it is what the next start of its task gets, this long after.
 const SYNC_KEPT_MS = 10 * 60_000;
+/// A large mirror can take longer than the peer transport's 30-second answer limit to remove.
+const CLEAN_ANSWER_MS = 1000;
+const CLEAN_KEPT_MS = 10 * 60_000;
 
 /// A directory's sync to a station, for one task: the start that began it, and later ones of the same task, wait on it.
 type Syncing = { key: string; result: Promise<Synced | null>; endedAt: number | null };
+type Cleaning = { result: Promise<Json>; endedAt: number | null };
 
 /// The requests about tasks that only read what is here: answered as they come, never after another one (`lanes`).
 const READS = new Set(["task.get", "task.gets", "task.log", "task.list", "session.size"]);
@@ -233,9 +239,12 @@ export class Remote {
   /// The sync of each directory to each station of each session (by `hash([workspace, session, station, dir])`), the
   /// latest: one at a time, and a start asked again takes up its own task's.
   private syncs = new Map<string, Syncing>();
+  /// A requested mirror removal survives a short answer and is taken up by the next identical request.
+  private cleans = new Map<string, Cleaning>();
   private scope: Scope.Closeable;
   private run: (effect: Effect.Effect<void>) => Promise<void>;
   private diskFree: (path: string) => number;
+  private removeMirror: (path: string) => Promise<void>;
 
   constructor(options: RemoteOptions) {
     this.data = options.data;
@@ -245,6 +254,7 @@ export class Remote {
     this.notify = options.notify;
     this.places = options.places ?? new Places();
     this.diskFree = options.diskFree ?? diskFree;
+    this.removeMirror = options.removeMirror ?? ((path) => rm(path, { recursive: true, force: true }));
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
     this.scope = Effect.runSync(Scope.make());
@@ -256,6 +266,7 @@ export class Remote {
     this.bus.otherwise((peer, request, workspace) => {
       const ws = workspace ?? "";
       const method = text(request, "method");
+      if (method === "task.clean") return this.cleanRequest(ws, peer, request);
       if (READS.has(method)) return this.task(ws, peer, method, request);
       return this.inLane(this.room(ws, peer, text(request, "session")), () => this.task(ws, peer, method, request));
     });
@@ -567,7 +578,7 @@ export class Remote {
           return;
         }
         for (const m of this.mirrorsOf(workspace, peer, session, now)) {
-          if (!m.busy && now - m.used >= MIRROR_IDLE_MS) this.dropMirror(workspace, peer, session, m.name, "unused");
+          if (!m.busy && now - m.used >= MIRROR_IDLE_MS) await this.dropMirror(workspace, peer, session, m.name, "unused");
         }
       });
     }
@@ -655,18 +666,10 @@ export class Remote {
 
   /// Removes a mirror and what its tasks made in it; its tasks that have not started sync again first. Callers are
   /// in the session's lane.
-  private dropMirror(workspace: string, peer: string, session: string, mirror: string, why: string): void {
+  private async dropMirror(workspace: string, peer: string, session: string, mirror: string, why: string): Promise<boolean> {
     const room = this.room(workspace, peer, session);
     try {
-      rmSync(join(room, "work", mirror), { recursive: true, force: true });
-      rmSync(join(room, "sync", mirror), { recursive: true, force: true });
-      rmSync(join(room, "mirrors", `${mirror}.json`), { force: true });
-      const record = join(room, "mirrors-used.json");
-      try {
-        const used = readJson(record);
-        delete used[mirror];
-        writeJson(record, used);
-      } catch {}
+      // If removal is interrupted, a prepared task must resync before starting even if the manifest remains.
       for (const task of this.tasksOf(workspace, peer, session)) {
         const path = join(task, "task.json");
         const meta = readJson(path);
@@ -675,9 +678,20 @@ export class Remote {
           writeJson(path, meta);
         }
       }
+      await this.removeMirror(join(room, "work", mirror));
+      await rm(join(room, "sync", mirror), { recursive: true, force: true });
+      await rm(join(room, "mirrors", `${mirror}.json`), { force: true });
+      const record = join(room, "mirrors-used.json");
+      try {
+        const used = readJson(record);
+        delete used[mirror];
+        writeJson(record, used);
+      } catch {}
       log.info("remote", "remote mirror removed", { workspace, station: peer, session, mirror, why });
+      return true;
     } catch (error) {
       log.warn("remote", "remote mirror not removed", { mirror, error: (error as Error).message });
+      return false;
     }
   }
 
@@ -715,7 +729,7 @@ export class Remote {
       // Asked again in its lane: used since, it stays.
       await this.inLane(this.room(c.workspace, c.peer, c.session), async () => {
         const m = this.mirrorsOf(c.workspace, c.peer, c.session, now).find((x) => x.name === c.name);
-        if (m && !m.busy && now - m.used >= MIRROR_RECENT_MS) this.dropMirror(c.workspace, c.peer, c.session, c.name, "disk low");
+        if (m && !m.busy && now - m.used >= MIRROR_RECENT_MS) await this.dropMirror(c.workspace, c.peer, c.session, c.name, "disk low");
       });
     }
   }
@@ -1018,6 +1032,30 @@ export class Remote {
     return this.bus.handle(workspace, peer, request);
   }
 
+  /// A removal holds the session's lane while it runs; the transport answers early and a retry joins the same work.
+  private async cleanRequest(workspace: string, peer: string, request: Json): Promise<Json> {
+    const session = text(request, "session");
+    const mirror = text(request, "mirror");
+    const id = hash([workspace, peer, session, mirror]);
+    const now = this.store.now();
+    for (const [key, entry] of this.cleans) {
+      if (entry.endedAt !== null && now - entry.endedAt >= CLEAN_KEPT_MS) this.cleans.delete(key);
+    }
+    let clean = this.cleans.get(id);
+    if (!clean) {
+      clean = { result: this.inLane(this.room(workspace, peer, session), () => this.task(workspace, peer, "task.clean", request)), endedAt: null };
+      const entry = clean;
+      const ended = () => void (entry.endedAt = this.store.now());
+      entry.result.then(ended, ended);
+      this.cleans.set(id, entry);
+    }
+    const got = await this.bounded(clean.result, CLEAN_ANSWER_MS);
+    if (got === null) return { mirror, pending: true };
+    if (this.cleans.get(id) === clean) this.cleans.delete(id);
+    if ("error" in got) throw got.error;
+    return got.ok;
+  }
+
   private async task(workspace: string, peer: string, method: string, request: Json, queueLoad?: () => Promise<Json>): Promise<Json> {
     if (method === "task.gets") {
       // What `task.get` says of each, in one request (a source follows all its tasks here at once: `follow`).
@@ -1047,6 +1085,24 @@ export class Remote {
       if (!Number.isSafeInteger(cutoff) || cutoff < 1) throw new Error("limit must be a positive whole number of bytes");
       const size = this.workspaceReader.size(path, cutoff);
       return size === null ? { present: true, pending: true, path } : { present: true, pending: false, path, ...size };
+    }
+    if (method === "task.mirrors" || method === "task.clean") {
+      if (session === "" || bytes(session) > 256) throw new Error("session is required");
+      const room = this.room(workspace, peer, session);
+      const mirrors = existsSync(join(room, "session.json")) ? this.mirrorsOf(workspace, peer, session, this.store.now()) : [];
+      // Unlike the automatic sweep's age-based recovery, an explicit cleanup must not interrupt even a slow sync.
+      const inUse = (m: { name: string; busy: boolean }) => m.busy || existsSync(join(room, "sync", m.name));
+      if (method === "task.mirrors") {
+        return { mirrors: mirrors.map((m) => ({ name: m.name, path: join(room, "work", m.name), busy: inUse(m), lastUsed: m.used })) };
+      }
+      const name = text(request, "mirror");
+      if (name === "") throw new Error("mirror is required");
+      // The name must be one the station itself listed for this peer's session, never a supplied path.
+      const mirror = mirrors.find((m) => m.name === name);
+      if (!mirror) return { mirror: name, removed: false };
+      if (inUse(mirror)) throw new Error("mirror is in use by a task or sync");
+      if (!await this.dropMirror(workspace, peer, session, name, "requested")) throw new Error("mirror could not be removed completely");
+      return { mirror: name, removed: true };
     }
     if (method === "task.list") {
       if (session === "" || bytes(session) > 256) throw new Error("session is required");
@@ -1810,14 +1866,18 @@ export class Remote {
       return detailed(station === this.ownId() ? await this.describe() : await this.ask(station, { method: "describe", workspace }));
     }
     const key = text(args, "key");
-    const listing = tool === "station_task" && field(args, "action") === "list";
-    if (station === "" || (key === "" && !listing)) throw new Error("station and key are required (list needs only station)");
-    if (!listing) this.recordUse(workspace, session, station);
+    const action = tool === "station_task" ? text(args, "action") : "";
+    const sessionAction = ["list", "mirrors", "clean"].includes(action);
+    if (station === "" || (key === "" && !sessionAction)) throw new Error("station and key are required (list, mirrors and clean need only station)");
+    if (!sessionAction) this.recordUse(workspace, session, station);
     const request: Json = { workspace, session, key };
     if (tool === "station_task") {
-      const action = text(args, "action");
-      if (!["prepare", "start", "get", "log", "stop", "list"].includes(action)) throw new Error("unknown task action");
+      if (!["prepare", "start", "get", "log", "stop", "list", "mirrors", "clean"].includes(action)) throw new Error("unknown task action");
       request.method = `task.${action}`;
+      if (action === "mirrors" || action === "clean") {
+        if (action === "clean") request.mirror = field(args, "mirror");
+        return this.ask(station, request);
+      }
       request.lines = field(args, "lines");
       request.spec = { name: field(args, "name"), command: field(args, "command"), requestedBy: row.createdBy };
       // Said only when so: a task prepared before keeps the same inputs.
