@@ -490,8 +490,9 @@ export class Links {
   /// The stream's path for `wants`, each session asked for from the transcript items held; `since`: the last event the
   /// stream it takes over from gave (what was told after it comes first, else `missed`).
   #path(address: string, wants: EventsFor, since: string | null = null): string {
-    // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS).
-    const query: string[] = ["running=1"];
+    // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS); a thread's
+    // summary made here from what is said in it (thread-after.ts), not told.
+    const query: string[] = ["running=1", "views=1"];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
       const held = this.#core.data.logSpan("transcript", address, key);

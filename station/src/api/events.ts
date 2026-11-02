@@ -182,6 +182,9 @@ type Client = {
   host: boolean;
   /// Told what every session at work its viewer sees does (`running=1`, FOLLOWS).
   running: boolean;
+  /// Its client makes a thread's summary from what is said in it itself (`views=1`, client/core-ts/src/station/
+  /// thread-after.ts): none is read and told for it.
+  views: boolean;
   send(event: string, data: unknown): void;
   raw(text: string): void;
   /// What it follows besides (live sessions, job logs): ended with it.
@@ -456,7 +459,7 @@ export class Events {
   /// told after it is told first, and their sidebar and overview as they are now (RESUMED says so), or `missed`.
   /// `brief`: the sessions followed have their transcript entries in brief (read/transcript.ts `brief`).
   /// `logins`: those logins' terminals, each a `login-screen` event (all its rows first, then the rows that changed).
-  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false, logins: string[] = [], running = false): Promise<Answer> {
+  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false, logins: string[] = [], running = false, views = false): Promise<Answer> {
     // Following the sessions at work itself, it follows none by name: a client that asks both is one that does not know
     // yet whether this station does (an older one follows those it names).
     const follows = running && this.deps.held !== undefined;
@@ -477,6 +480,7 @@ export class Events {
       lang,
       host,
       running: follows,
+      views,
       // Its own (a session's steps, a log, a host sample, `missed`): not of the log, and without an id (event-log.ts).
       send: (event, data) => push(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
       raw: push,
@@ -774,7 +778,7 @@ export class Events {
   /// (read/ops-sessions.ts `threadViews`): one a viewer, one person's devices in two languages or workspaces read the
   /// same thread again each, after every message.
   private tellThreadViews(id: number, who: { viewer: Viewer; lang: Lang }) {
-    const viewers = this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: id }) ?? true);
+    const viewers = this.viewers(who).filter((v) => (this.deps.seen?.(v.viewer, { thread: id }) ?? true) && !this.makesViews(v));
     if (viewers.length === 0) return;
     const asked = { id, viewers: viewers.map(({ viewer, lang }) => ({ viewer, lang })) };
     this.whenRead(
@@ -790,6 +794,15 @@ export class Events {
         () => {},
       ),
     );
+  }
+
+  /// Whether every stream here of a viewer makes a thread's summary from what is said in it itself (`views=1`): then
+  /// none is read and told for them. The station tells what it writes as it writes it, and leaves what that makes of
+  /// a thread to the device: read for each viewer after every message, it was read from the disk while memory was short.
+  private makesViews(v: { viewer: Viewer; lang: Lang }): boolean {
+    const k = viewerKey(v.viewer, v.lang);
+    const theirs = this.clients.filter((c) => viewerKey(c.viewer, c.lang) === k);
+    return theirs.length > 0 && theirs.every((c) => c.views);
   }
 
   /// Usage told, at most once a USAGE_EVERY_MS.

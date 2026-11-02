@@ -20,7 +20,7 @@ test("a_reached_station_is_linked_read_as_its_stream_opens_and_its_topics_read_o
   assert.equal(streams.length, 1, "its events stream is open");
   const read = host.requests.find(r => r.url.endsWith("/admin/api/overview"));
   assert.equal(read?.headers.find(([key]) => key === "stillfail-runtimes")?.[1], RUNTIMES.join(","));
-  assert.equal(streams[0].path, "/events?running=1");
+  assert.equal(streams[0].path, "/events?running=1&views=1");
   for (const path of ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"]) assert.equal(gets(host, path), 1, path);
   // Its chats' entries are brought onto the device, nobody looking.
   assert.equal(gets(host, "/admin/api/threads/7/entries?limit=50"), 1);
@@ -71,8 +71,9 @@ test("events_keep_the_records_current", async () => {
   assert.deepEqual(v(values, 2).entries.map((e: { n: number }) => e.n), [1, 2, 3, 4]);
   assert.equal(v(values, 2).caught, 3, "said as it came: it comes in with a motion");
   assert.deepEqual(v(values, 3).map((r: { id: string }) => r.id), ["7", "8"]);
-  // A burst of thread events reads the thread's summary once.
-  assert.equal(gets(host, "/admin/api/threads/7"), 1);
+  // Its summary made from what was said (station/thread-after.ts), not read.
+  assert.equal(gets(host, "/admin/api/threads/7"), 0);
+  assert.equal((core.inner.data.of("ws/st")!.thread("ws/st", 7) as { last: number }).last, 4);
   core.close();
 });
 
