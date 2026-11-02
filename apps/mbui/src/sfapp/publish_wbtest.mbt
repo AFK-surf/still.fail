@@ -202,9 +202,11 @@ test "分享图片: 撤销 asks first, then revokes that public link" {
   t.tap_text("撤销")
   assert_eq(named(calls, "chat.unpublish").length(), 0)
   assert_true(t.find("撤销此链接？") is Some(_))
+  let felt = t.haptics().length()
   tap_last(t, "撤销")
   let revoked = named(calls, "chat.unpublish")
   assert_eq(revoked.length(), 1)
+  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
   assert_eq(text(Some(revoked[0].params), "id"), "p2")
   assert_eq(number(Some(revoked[0].params), "thread"), 7.0)
 }

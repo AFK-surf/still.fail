@@ -307,6 +307,7 @@ fn outbox_call(src : Source, here : MessageHere, call : String, id : String) -> 
   } else {
     @sf.t("android-chat.chat.delete.verb")
   }
+  @ui.haptic(Confirm)
   act(src, what, "", call, Json::object(p))
 }
 

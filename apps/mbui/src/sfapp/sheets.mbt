@@ -528,6 +528,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
                   @sf.spinner(c, size=12.0) |> ignore
                 }
               }) {
+              @ui.haptic(Confirm)
               act(
                 src,
                 tr(if p { "android-chat.unpin.verb" } else { "android-chat.pin.verb" }),
@@ -1249,6 +1250,7 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
           |> ignore
         }) &&
         !doing(clear_key) {
+        @ui.haptic(Confirm)
         for session in items(view, "clear") {
           match session {
             String(s) =>
@@ -1476,6 +1478,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
       let busy = doing(skey)
       let sid = c.id("job/stop")
       if !busy && c.clicked(sid) {
+        @ui.haptic(Confirm)
         act(
           src,
           fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]),
@@ -1586,6 +1589,7 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let skey = "job-stop/" + station + "/" + id
   let stop = c.id("open-job-stop/" + station + "/" + id)
   if !doing(skey) && c.clicked(stop) {
+    @ui.haptic(Confirm)
     act(
       src,
       fill("android-misc.jobs.stopWhat", [("name", text(job, "name"))]),

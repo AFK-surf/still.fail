@@ -37,9 +37,11 @@ test "an agent's context: its tile opens what can be done; clearing it asked fir
   assert_true(t.find("清空此 agent 的上下文？") is Some(_), msg="the question")
   assert_eq(t.locate("清空上下文").length(), 1)
   assert_eq(named(calls, "session.clear").length(), 0)
+  let felt = t.haptics().length()
   t.tap_text("清空上下文")
   t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "session.clear").length(), 1)
+  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
 }
 
 ///|

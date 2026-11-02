@@ -301,8 +301,10 @@ test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin
   hold_row(t, "夜里的构建又失败了")
   match t.find("固定") {
     Some(_) => {
+      let felt = t.haptics().length()
       t.tap_text("固定")
       assert_eq(named(calls, "chat.pin").length(), 1)
+      assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
     }
     // (a fixture row from a station before pins has none)
     None => ()
