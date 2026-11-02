@@ -85,9 +85,24 @@ function SlackInstalled() {
 
 function Home() {
   const list = useAccounts();
-  const narrow = useNarrow();
   if (!list) return <Splash />;
   if (list.length > 0) return <SignedIn />;
+  return <StartSignIn />;
+}
+
+/** The cloud's sign-in page already offers all ways to sign in. Go there directly. */
+function StartSignIn() {
+  const narrow = useNarrow();
+  const signIn = useSignIn();
+  const started = useRef(false);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void signIn.signIn().then((going) => { if (!going) setFailed(true); });
+  }, [signIn.signIn]);
+  if (!failed) return <Splash />;
+  // If starting sign-in failed, leave a way to retry.
   if (narrow) return <MobileSignIn />;
   // Signed in, it comes back here (accounts.ts signIn): to what was being shared, still in the address.
   if (location.pathname === "/share") return <SignInPage lead={t("web-main.shareIn.signIn", { name: NAME })} />;
