@@ -1138,7 +1138,7 @@ pub fn Ctx::held_down(Self, Int32) -> Bool
 pub fn Ctx::held_due(Self, String) -> Double
 pub fn Ctx::held_for(Self, Double) -> Bool
 pub fn Ctx::held_long(Self, Int32) -> Bool
-pub fn Ctx::held_look(Self, Int32, Double) -> Look
+pub fn Ctx::held_look(Self, Int32, Double, top? : Bool) -> Look
 pub fn Ctx::hidden_from_semantics(Self, () -> Unit) -> Unit
 pub fn Ctx::holds_through(Self, Int32) -> Unit
 pub fn Ctx::hover_since(Self, Int32) -> Double
@@ -1419,6 +1419,7 @@ pub fn Drawing::new() -> Self
 
 pub(all) struct DrawnState {
   rect : (Double, Double, Double, Double)
+  grown : (Double, Double, Double, Double)
   clip : (Double, Double, Double, Double)
   alpha : Double
   soft : (Double, Double, Double, Double)

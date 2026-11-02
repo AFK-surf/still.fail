@@ -76,8 +76,9 @@ pub fn row_held_look(p : Double, ox? : Double = 0.5, oy? : Double = 0.5) -> Look
 /// What node `i` holds, coming or going where it is as far as `p` of it is open (row_held_look), as it is painted:
 /// grown and shrunk about the middle of what of it is drawn (its words, pictures, grounds), not of the box it is in,
 /// a page's width as it may be (2026-10-31 the user: 「有些东西就应该偏心缩放」「每个都在整个页面宽度中心缩放感觉不是很
-/// 对」): a bubble to its side, a card under a post where it is.
-pub fn Ctx::held_look(self : Ctx, i : Int, p : Double) -> Look {
+/// 对」): a bubble to its side, a card under a post where it is. `top`: about the top of what it draws, not its middle
+/// down (what comes into a room opening below what was there, growing down into it with it as it opens).
+pub fn Ctx::held_look(self : Ctx, i : Int, p : Double, top? : Bool = false) -> Look {
   if p >= 1.0 {
     return still_look
   }
@@ -102,9 +103,10 @@ pub fn Ctx::held_look(self : Ctx, i : Int, p : Double) -> Look {
   }
   take(i)
   if x1 < x0 || n.fw <= 0.0 || n.fh <= 0.0 {
-    return row_held_look(p)
+    return row_held_look(p, oy=if top { 0.0 } else { 0.5 })
   }
-  row_held_look(p, ox=((x0 + x1) / 2.0 - n.x) / n.fw, oy=((y0 + y1) / 2.0 - n.y) / n.fh)
+  let pivot = if top { y0 } else { (y0 + y1) / 2.0 }
+  row_held_look(p, ox=((x0 + x1) / 2.0 - n.x) / n.fw, oy=(pivot - n.y) / n.fh)
 }
 
 ///|

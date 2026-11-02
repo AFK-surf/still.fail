@@ -105,6 +105,9 @@ priv struct Moving {
   /// layout animation: by `spec`, when its cause changed (`by`: what it moves for, as said this build; "" none) or, in
   /// a list told its rows, as they change; `drive` ≥ 0: the move goes by that progress the app gives (0 → 1)
   mut flip : Bool
+  /// grown for its cause: what it holds cut to as tall as it shows (its words a line more); false where what comes
+  /// into it grows with it of itself, drawn whole (`grown_shown`)
+  mut cut : Bool
   mut spec : Spec
   mut by : String
   mut drive : Double
@@ -473,6 +476,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     node: i,
     key: 0,
     flip: false,
+    cut: true,
     spec: row_spring,
     by: "",
     drive: -1.0,
@@ -535,7 +539,8 @@ fn entry_of(c : @ui.Ctx, i : Int) -> Moving? {
 /// moves for (a window resized, a keyboard, a pane made narrower), it is put in its new place at once, a move of its
 /// own going on as it was: no difference found between frames moves anything (docs/motion.md of the app). `enter` is how a row new to its list comes in, `exit` how one gone leaves (a copy of it where it was).
 /// `drive` (0 → 1, from the frame it moved): the move goes by that progress instead of `spec`. `screen`: in a list, by
-/// where it shows in the list's view.
+/// where it shows in the list's view. `cut`: grown for its cause, what it holds is cut to as tall as it shows; false
+/// where what is new in it grows with its room of itself (`grown_shown`): drawn whole, never cut through.
 pub fn layout(
   c : @ui.Ctx,
   i : Int,
@@ -546,11 +551,13 @@ pub fn layout(
   exit? : Trans,
   drive? : Double = -1.0,
   screen? : Bool = false,
+  cut? : Bool = true,
 ) -> Unit {
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
   e.flip = true
+  e.cut = cut
   e.screen = screen
   e.spec = spec
   if by != "" {
@@ -1206,6 +1213,24 @@ pub fn leaving(c : @ui.Ctx, i : Int, shown : Bool) -> Unit {
 }
 
 ///|
+/// How tall the node keyed `key` (layout) shows now, grown for its cause and on its way to as tall as it is laid out
+/// (from its top); None where it shows whole. Read as it is drawn (a look_by): what is new in a room that does not cut
+/// it (layout's `cut`) grows with it by this.
+pub fn grown_shown(key : String) -> Double? {
+  match mo.recs.get(motion_key(key)) {
+    Some(r) => {
+      let p = r.hp.get()
+      if p < 1.0 {
+        Some(dmax(r.hh + (r.h - r.hh) * p, 0.0))
+      } else {
+        None
+      }
+    }
+    None => None
+  }
+}
+
+///|
 /// How tall what `reveal(key)` shows was laid out whole, the last time it was (0: never): how far its room goes.
 pub fn reveal_height(key : String) -> Double {
   match mo.recs.get(motion_key("reveal\u{1}" + key)) {
@@ -1816,7 +1841,9 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         if p < 1.0 {
           let h = r.hh + (nh - r.hh) * p
           r.shown_h = dmax(h, 0.0)
-          c.cut_to_top(e.node, dmax(h, 0.0), soft=@ui.cut_soft(h - r.hh, nh - h))
+          if e.cut {
+            c.cut_to_top(e.node, dmax(h, 0.0), soft=@ui.cut_soft(h - r.hh, nh - h))
+          }
         }
       }
       // coming in: a row new to its list, or (entering) a node not there the frame before
