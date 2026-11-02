@@ -20,8 +20,12 @@ Other stations' tasks (`remote_…` jobs) go through it; an agent's own jobs and
 - Of the sessions with tasks waiting, the one whose task last started longest ago goes first, its oldest task.
 - A task started beside others gets `STILLFAIL_CPUS`, and `MAKEFLAGS`, `CARGO_BUILD_JOBS`, `CMAKE_BUILD_PARALLEL_LEVEL`
   where its environment has none, with how many CPUs were free (at least 1). One started alone gets none of them.
+- One explicitly `small: true` task may start beside busy work without waiting for a CPU sample, provided memory is
+  not under pressure. Its separate slot holds one task at a time; it is told to use one CPU. This is for brief offscreen
+  work such as rendering a picture with prebuilt tools, not a build, test suite, video or task using the screen. An
+  older station is checked at prepare and rejected rather than silently placing it in the ordinary queue.
 
-A waiting task is a job with `state: running` and `queued: true` (the jobs table's `queued` and `screen` columns):
+A waiting task is a job with `state: running` and `queued: true` (the jobs table's `queued`, `screen` and `small` columns):
 running as far as its agent and an older source station are concerned, with no process yet. `station_task start` and
 `get` answer `queue` while it waits: its place, its own blocker and note; `cause` distinguishes a CPU sample still being
 taken from a sample that actually found the CPUs busy. `decision` contains the queue's CPU sample (share, seconds and

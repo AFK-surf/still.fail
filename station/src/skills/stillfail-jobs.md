@@ -73,6 +73,11 @@ pressure. A task started beside others gets `STILLFAIL_CPUS` (and `MAKEFLAGS`, `
 `CMAKE_BUILD_PARALLEL_LEVEL` when not set) with how many CPUs are free: pass it to tools that take every core
 otherwise. You end `waiting` as for any task; its end is told as usual.
 
+For a brief offscreen task such as a single picture made with a prebuilt renderer, `station_task` prepare takes
+`small: true`: one such task may run alongside busy builds without waiting for the CPU sampling interval. It is told
+to use one CPU, still waits under memory pressure, and waits if another small task is running. Do not use it for builds,
+test suites, video, or work needing the screen. An older target that cannot do this says so at prepare.
+
 The screen (windows, GUI tests, simulators, emulators, screenshots of what is on it) is one task's at a time. Run just
 the command that uses it as `stillfail-job screen <command>…`: it waits while another task has the screen, has it while
 that command runs, and gives it back when it ends, so the builds and tests around it run beside the other tasks. A

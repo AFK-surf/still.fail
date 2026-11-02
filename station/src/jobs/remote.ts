@@ -526,6 +526,7 @@ export class Remote {
       q.why === "memory" ? "the machine's memory is under pressure"
       : q.why === "screen" ? q.holder !== undefined ? `the screen is held by ${q.holder}` : "the screen is held or an earlier request is waiting for it"
       : q.why === "person" ? "a person is using this machine's screen (its input not idle): no task is given it meanwhile"
+      : q.cause === "small" ? "another small task is using the station's small-work slot"
       : q.cause === "sampling" ? "the queue is sampling CPU use before another task starts"
       : q.cause === "cpu" ? `the queue measured the CPUs at least ${BUSY_MAX * 100}% busy`
       : "it is waiting for its turn";
@@ -960,7 +961,7 @@ export class Remote {
 
   /// `describe`'s answer: what this station takes, and how busy it is (`load`, LOAD_WAIT_MS at most).
   private async describe(): Promise<Json> {
-    const answer: Json = { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, sync: 1, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
+    const answer: Json = { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, sync: 1, smallTasks: 1, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
     if (this.load !== null) answer.load = await this.measuredLoad();
     return answer;
   }
@@ -1138,6 +1139,8 @@ export class Remote {
     if (method === "task.prepare") {
       const spec = field(request, "spec");
       if (text(spec, "command").trim() === "") throw new Error("command is required");
+      if (field(spec, "small") !== null && typeof field(spec, "small") !== "boolean") throw new Error("small must be a boolean");
+      if (field(spec, "small") === true && field(spec, "screen") === true) throw new Error("a small task cannot use the screen");
       const from = field(spec, "dir");
       if (from !== null && (typeof from !== "string" || from === "" || bytes(from) > 4096)) throw new Error("dir must be a path");
       let meta: Json;
@@ -1208,7 +1211,7 @@ export class Remote {
         }
         const spec = field(meta, "spec");
         // Through the station's queue (jobs/admit.ts): started now if there is room, else when there is.
-        const started = this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), cwd, null, false, jobId, false, { screen: field(spec, "screen") === true });
+        const started = this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), cwd, null, false, jobId, false, { screen: field(spec, "screen") === true, small: field(spec, "small") === true });
         // Where its source wants to be told of it (`pushOut`): from its first start, as it is then (a start asked again
         // keeps what was told).
         const push = text(request, "push");
@@ -1882,14 +1885,20 @@ export class Remote {
       request.spec = { name: field(args, "name"), command: field(args, "command"), requestedBy: row.createdBy };
       // Said only when so: a task prepared before keeps the same inputs.
       if (field(args, "screen") === true) request.spec.screen = true;
+      if (field(args, "small") === true) request.spec.small = true;
       // A task's directory and what it brings back, as this station has them (remote/prepared).
       const preparedName = `${hash([workspace, session, station, key])}.json`;
       const prepared = join(this.preparedDir(session), preparedName);
       if (action === "prepare") {
         const dir = field(args, "dir");
         const back = field(args, "back");
+        const small = field(args, "small") === true;
+        if (small && field(args, "screen") === true) throw new Error("a small task cannot use the screen");
+        if (dir !== null && (typeof dir !== "string" || !isAbsolute(dir))) throw new Error("dir must be an absolute path on this machine");
+        // An older station would silently use the ordinary queue. Ask once for both small-task support and sync.
+        const described = dir !== null || small ? await this.ask(station, { method: "describe", workspace }) : null;
+        if (small && field(described, "smallTasks") !== 1) throw new Error(`${station} cannot run small tasks; update that station first`);
         if (dir !== null) {
-          if (typeof dir !== "string" || !isAbsolute(dir)) throw new Error("dir must be an absolute path on this machine");
           // The station reads it itself as it syncs: in a folder macOS protects, only when it may (looked at off its
           // thread, ops/places.ts), never held on a prompt.
           try {
@@ -1899,7 +1908,6 @@ export class Remote {
             throw e;
           }
           // A station from before would take the task and run it without the files.
-          const described = await this.ask(station, { method: "describe", workspace });
           if (field(described, "sync") === null) {
             throw new Error(`${station} is from before directory sync and would run the task without the files; update that station first, or upload inputs with station_file`);
           }

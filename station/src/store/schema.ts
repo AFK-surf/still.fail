@@ -214,7 +214,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   watch INTEGER NOT NULL DEFAULT 0,
   queued INTEGER,
   screen INTEGER,
-  size TEXT
+  size TEXT,
+  small INTEGER
 );
 CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
 -- The jobs running (store.ts runningJobs, JOBS_RUNNING: every station_list that asks how busy this one is, the
@@ -551,6 +552,11 @@ export function addWatchColumn(db: DatabaseSync): void {
 export function addQueueColumns(db: DatabaseSync): void {
   if (!has(db, "jobs", "queued")) db.exec("ALTER TABLE jobs ADD COLUMN queued INTEGER");
   if (!has(db, "jobs", "screen")) db.exec("ALTER TABLE jobs ADD COLUMN screen INTEGER");
+}
+
+/// A job that asked for the single small-work slot (added after jobs.size on older stores too).
+export function addSmallJobColumn(db: DatabaseSync): void {
+  if (!has(db, "jobs", "small")) db.exec("ALTER TABLE jobs ADD COLUMN small INTEGER");
 }
 
 /// The column saying a wait is its session's watch came with (turns.wait_watch, chat_state waiting `watch`): 1 it is, 0
