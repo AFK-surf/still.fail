@@ -53,12 +53,12 @@ fn bar_title_x(t : @ui.Tester, title : String) -> Double {
 }
 
 ///|
-/// The words drawn in the top bar's band from `from` on, as (words, x − from, y): the page's there, not the one beside
-/// it to its left.
+/// The words drawn in the top bar's band of the page a width wide from `from` on, as (words, x − from, y): the page's
+/// there, not the one beside it.
 fn bar_words(t : @ui.Tester, from : Double) -> Array[(String, Double, Double)] {
   t
   .words()
-  .filter(fn(w) { w.2 < status_top() + top_bar_h() && w.1 >= from - 0.5 })
+  .filter(fn(w) { w.2 < status_top() + top_bar_h() && w.1 >= from - 0.5 && w.1 < from + 390.0 - 0.5 })
   .map(fn(w) { (w.0, (w.1 - from).round(), w.2.round()) })
 }
 
@@ -75,11 +75,11 @@ test "文件 and 用量 at the bar's top, their gear tapped: as 设置 comes in 
     assert_eq(gear.length(), 1, msg=place)
     t.tap(gear[0].0, gear[0].1)
     assert_true(app.nav.top() == Settings, msg=place)
-    // halfway through 设置's slide in from the left: the place's page going out to the right beside it is drawn as it
+    // halfway through 设置's slide in from the right: the place's page going out to the left beside it is drawn as it
     // was at rest, moved (the stack two deep, it is still its root: its gear, not a way back to 设置)
     t.run_for(@ui.move_most_ms / 2.0)
     let from = bar_title_x(t, title) - rest_x
-    assert_true(from > 0.0, msg=place)
+    assert_true(from < 0.0, msg=place)
     assert_eq(bar_words(t, from), at_rest, msg=place)
   }
 }

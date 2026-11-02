@@ -71,22 +71,27 @@ test "settings opened by Home's gear follow the system's back gesture to the rig
 }
 
 ///|
-test "settings from another place come from its left-hand gear and return left" {
-  let t = tester("settings")
-  assert_true(@sfbase.go_place("stations"))
-  t.run_for(switch_fade_ms)
-  let (gx, gy, gw, gh) = t.query(Button, label="设置").unwrap().rect
-  t.tap(gx + gw / 2.0, gy + gh / 2.0)
-  t.draw()
-  t.draw()
-  let x0 = t.find("lin@example.com").unwrap().0
-  t.run_for(@ui.move_most_ms)
-  let x = t.find("lin@example.com").unwrap().0
-  assert_eq((x - x0).round(), 390.0)
-  t.back()
-  t.draw()
-  t.run_for(@ui.move_ms(390.0) / 2.0)
-  assert_true(t.find("lin@example.com").unwrap().0 < x - 195.0)
+test "settings from another place come from its gear at the bar's right edge and return right" {
+  for place in ["stations", "files", "usage"] {
+    let t = tester("settings")
+    assert_true(@sfbase.go_place(place), msg=place)
+    t.run_for(switch_fade_ms)
+    let (gx, gy, gw, gh) = t.query(Button, label="设置").unwrap().rect
+    // the gear right of the place's name, at the bar's right edge as Home's is
+    let tx = bar_title_x(t, place_label(place))
+    assert_true(tx >= 0.0 && tx < gx && gx + gw <= 390.0 && gx + gw >= 390.0 - 16.0 - 1.0, msg="\{place}: \{tx}, \{gx}")
+    t.tap(gx + gw / 2.0, gy + gh / 2.0)
+    t.draw()
+    t.draw()
+    let x0 = t.find("lin@example.com").unwrap().0
+    t.run_for(@ui.move_most_ms)
+    let x = t.find("lin@example.com").unwrap().0
+    assert_eq((x0 - x).round(), 390.0, msg=place)
+    t.back()
+    t.draw()
+    t.run_for(@ui.move_ms(390.0) / 2.0)
+    assert_true(t.find("lin@example.com").unwrap().0 > x + 195.0, msg=place)
+  }
 }
 
 ///|
