@@ -317,7 +317,12 @@ jobs:
             undone=$!
           fi
           status=0
-          if [ "$range" = all ]; then sh scripts/check.sh all || status=1; else sh scripts/check.sh full "$range" || status=1; fi
+          # In the background, so that when the job's time is up the runner's signal (to this shell alone) reaches it too,
+          # and it says which steps were still running and where each had got to (it said nothing: 41434693142).
+          if [ "$range" = all ]; then sh scripts/check.sh all & else sh scripts/check.sh full "$range" & fi
+          check=$!
+          trap 'kill -TERM $check 2> /dev/null; wait $check; exit 1' INT TERM
+          wait $check || status=1
           if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             if node scripts/changelog.ts --refuse "$(git merge-base HEAD origin/main)..HEAD"; then echo "· changelog trailers … ok"; else echo "· changelog trailers … FAILED"; status=1; fi
@@ -355,7 +360,9 @@ jobs:
         run: |
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui[.-]'; then range=all; fi
-          if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+          # exec: the runner's signal when the job's time is up goes to this shell alone; so it reaches the check, which
+          # says then which steps were still running and where each had got to.
+          if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
 
   # The mbui app's check and tests, on native, on Linux: mbui-check.yml, main's there on its own.
   check-mbui:
@@ -390,7 +397,9 @@ jobs:
         run: |
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui[.-]'; then range=all; fi
-          if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+          # exec: the runner's signal when the job's time is up goes to this shell alone; so it reaches the check, which
+          # says then which steps were still running and where each had got to.
+          if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
 
   # A branch: what main would deploy, built and bundled beside the check (not after it: the build is most of the run);
   # nothing sent, no secrets.
