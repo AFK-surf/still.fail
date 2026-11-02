@@ -212,8 +212,8 @@ test("each workspace has its own memory and skills: a session gets its workspace
 test("a session's runtime is given its workspace's memory and skills, never another workspace's", () => withTwo(async (t) => {
   const { rig, one, two } = t;
   const home = rig.config.agentHome;
-  writeFileSync(join(home, "MEMORY.md"), "# one's lessons\n");
   mkdirSync(join(home, "skills", "one-project"), { recursive: true });
+  writeFileSync(join(home, "MEMORY.md"), "# one's lessons\n");
   writeFileSync(join(home, "skills", "one-project", "SKILL.md"), "---\ndescription: 项目记忆：one\n---\n");
   writeFileSync(rig.hub.deps.memoryPath(two), "# two's lessons\n");
   mkdirSync(join(home, "workspaces", W2, "skills", "two-project"), { recursive: true });
