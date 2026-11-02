@@ -14,6 +14,7 @@ import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
+import { started } from "../platform/processes.ts";
 import { type Loopback, asksEnter, assignmentsOf, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, secretAsked, storesSecret, unwrapped, urlsIn } from "../ops/command-output.ts";
 
 export const COLS = 200;
@@ -157,10 +158,7 @@ export class LoginRun {
       return this.#fail(tr(this.#o.lang, "station.machineLogin.cannotRun", { error: (e as Error).message }));
     }
     this.#child = child;
-    const spawned = await new Promise<Error | null>((resolve) => {
-      child.once("spawn", () => resolve(null));
-      child.once("error", (e) => resolve(e));
-    });
+    const spawned = await started(child);
     if (spawned) {
       this.#exited = true;
       return this.#fail(tr(this.#o.lang, "station.machineLogin.cannotRun", { error: spawned.message }));

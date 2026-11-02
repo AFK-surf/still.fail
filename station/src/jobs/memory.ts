@@ -21,7 +21,7 @@ import { liveRunners, type RunnerInfo } from "../agents/runner.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import { type ProcessInfo, platform } from "../platform/index.ts";
+import { type ProcessInfo, platform, treeOf } from "../platform/index.ts";
 import type { Store } from "../store/store.ts";
 import type { Pressure } from "./admit.ts";
 import { type Jobs, named } from "./jobs.ts";
@@ -56,12 +56,7 @@ export type WatchedAgent = { pid: number; session: string | null };
 
 /// The units of `table`: the jobs' groups first, then the commands each runtime started (children of `agents`' pids).
 export function unitsOf(table: readonly ProcessInfo[], jobs: readonly WatchedJob[], agents: readonly WatchedAgent[], self: number): Unit[] {
-  const children = new Map<number, number[]>();
-  const byPid = new Map<number, ProcessInfo>();
-  for (const p of table) {
-    byPid.set(p.pid, p);
-    if (p.pid !== p.ppid) children.set(p.ppid, [...(children.get(p.ppid) ?? []), p.pid]);
-  }
+  const { byPid, children } = treeOf(table);
   const taken = new Set<number>([self]);
   // What runs the agents is never part of a unit.
   for (const a of agents) taken.add(a.pid);

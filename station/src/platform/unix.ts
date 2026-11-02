@@ -2,13 +2,13 @@
 // differ in (how the machine reads: sysctl and vm_stat, or /proc; the keychain and QuickLook) is said here too.
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
 import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { cpus as cpuList, release, type as osType } from "node:os";
+import { release, type as osType } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import { readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
-import { holder } from "./processes.ts";
+import { holder, osCpuTicks } from "./processes.ts";
 import { fieldOrNull, firstWord, idleOfIoreg, output, parseF64, parseLsof, parseMounts, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
@@ -75,16 +75,7 @@ const host: Host = {
   /// On macOS the CPUs' user, system, idle and nice time (os.cpus, from the same counters as Mach's
   /// HOST_CPU_LOAD_INFO, in ms rather than ticks: the share is the same); elsewhere /proc/stat.
   cpuTicks() {
-    if (MACOS) {
-      const all = cpuList();
-      if (all.length === 0) return null;
-      let [busy, total] = [0, 0];
-      for (const { times: t } of all) {
-        busy += t.user + t.sys + t.nice;
-        total += t.user + t.sys + t.idle + t.nice;
-      }
-      return [busy, total];
-    }
+    if (MACOS) return osCpuTicks();
     try {
       return procStatTicks(readFileSync("/proc/stat", "utf8"));
     } catch {

@@ -5,7 +5,7 @@
 import { createReadStream } from "node:fs";
 import { access, mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
+import { type Answer, type Request, error, json, param, segment } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { changed } from "./changed.ts";
 import { ioMessage, mime } from "../../read/sessions.ts";
@@ -15,9 +15,9 @@ import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOfSoon } from "../../sessions/footprint.ts";
 import { tr } from "../../ops/i18n.ts";
 import { clean, samePath, within } from "../../ops/paths.ts";
+import { readAt } from "../../drive/fs.ts";
 
 /// admin/mod.rs `segment_decode`.
-const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 /// What the Rust answers a path it has no route for.
 const noRoute = (r: Request) => error(404, `no route ${r.method} ${r.path}`);
 
@@ -122,15 +122,8 @@ async function rangeAnswer(path: string, type: string, offset: number, length: n
   try {
     handle = await open(path, "r");
     const total = (await handle.stat()).size;
-    const want = Math.max(0, Math.min(length, total - offset));
-    const bytes = Buffer.alloc(want);
-    let got = 0;
-    while (got < want) {
-      const { bytesRead } = await handle.read(bytes, got, want - got, offset + got);
-      if (bytesRead === 0) break;
-      got += bytesRead;
-    }
-    return answered(type, bytes.subarray(0, got), { ...extra, "stillfail-total": String(total) });
+    const bytes = await readAt(handle, offset, Math.max(0, Math.min(length, total - offset)));
+    return answered(type, bytes, { ...extra, "stillfail-total": String(total) });
   } catch (e) {
     return error(500, ioMessage(e as NodeJS.ErrnoException));
   } finally {

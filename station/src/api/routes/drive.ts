@@ -51,7 +51,8 @@ const num = (r: Request, name: string, fallback: number) => {
   return v === undefined ? fallback : /^[0-9]+$/.test(v) ? Number(v) : -1;
 };
 
-function body(r: Request): Record<string, unknown> {
+/// A request's JSON object (none is `{}`); anything else refused as the drive refuses.
+export function body(r: Request): Record<string, any> {
   try {
     const v = JSON.parse(r.body.toString("utf8") || "{}");
     if (v !== null && typeof v === "object" && !Array.isArray(v)) return v;

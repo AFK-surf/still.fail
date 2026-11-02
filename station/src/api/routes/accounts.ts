@@ -1,7 +1,7 @@
 // The accounts' part of the admin API (admin/mod.rs, admin/edits.rs, admin/decision.rs): profiles made, edited,
 // checked, signed in and deleted; allowances read and reset; sign-ins for new profiles; the automatic decisions'
 // settings. Edits answer with the overview, as the Rust station's do.
-import { type Request, type Answer, error, json, percentDecode } from "../request.ts";
+import { type Request, type Answer, error, segment, ok, input } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { type Accounts, Refusal } from "../../accounts/index.ts";
 import type { Sharing } from "../../share/index.ts";
@@ -34,8 +34,6 @@ export type AccountsRouteDeps = {
   policies?: { store: Parameters<typeof savePolicy>[0]; review(): void };
 };
 
-const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
-const ok = (value: unknown) => json(200, JSON.stringify(value));
 
 /// The key a write is asked under (once.rs KEY), when it has a usable one.
 const idempotencyKey = (r: Request): string | undefined => {
@@ -43,18 +41,6 @@ const idempotencyKey = (r: Request): string | undefined => {
   return found !== undefined && found !== "" && found.length <= 200 ? found : undefined;
 };
 
-/// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
-function input(r: Request): Record<string, unknown> {
-  if (r.body.length > 1_000_000) throw new Refusal(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refusal(400, "invalid JSON");
-  }
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
 
 export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteDeps): Route[] => {
   /// Answered by the accounts, their refusals as `{error}` with their status; 503 while there are none.

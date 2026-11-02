@@ -15,6 +15,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import { type Lang, tr as translate } from "../ops/i18n.ts";
 import { sees } from "../store/rows.ts";
 import * as store from "./store.ts";
+import { Refused as HttpError } from "../api/request.ts";
 import { entryJson } from "../store/archive.ts";
 import * as titles from "../../../client/core-ts/src/titles.ts";
 import { trim } from "../../../client/core-ts/src/whitespace.ts";
@@ -30,14 +31,8 @@ const ANSWERED_WITHIN = 36 * 3600 * 1000;
 /// The connect of the station's own chats (chat/internal.rs).
 const INTERNAL_CONNECT = "ember";
 
-/// An error with the status the admin API answers it with (admin/mod.rs `http_error`).
-export class HttpError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+/// An error with the status the admin API answers it with (admin/mod.rs `http_error`): the routes' own.
+export { HttpError };
 
 // ---- words, in the language of the request (`spoken()`) ----
 

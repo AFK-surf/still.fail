@@ -1,7 +1,7 @@
 // The station's and its runtimes' versions read again, or one of them updated: the station's own business, for a
 // workspace's owner or admin (admin/mod.rs `updates_for`). Each answers the versions as they are after it (the
 // overview's `updates` says them too). A station with nothing to update (tests, a part not made) answers 404.
-import { type Request, type Answer, error, json } from "../request.ts";
+import { type Request, type Answer, error, ok, Refused, input } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { managesStation } from "../../mesh/credential.ts";
 import { tr } from "../../ops/i18n.ts";
@@ -10,27 +10,7 @@ import { channelOfId } from "../../updates/versions.ts";
 
 export type UpdatesDeps = { updates?: Updates | null };
 
-const ok = (value: unknown) => json(200, JSON.stringify(value));
-class Refused extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 
-/// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
-function input(r: Request): Record<string, unknown> {
-  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refused(400, "invalid JSON");
-  }
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
 
 /// Whether they manage the workspace (its owner or an admin).
 const manages = (r: Request) => managesStation(r.viewer);

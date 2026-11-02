@@ -1,7 +1,7 @@
 // What the agents spent, the machine's own sessions, the agents' memory, the machine itself, and the retired footprint
 // (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint), and what
 // still.fail uses of the machine (GET /resources, POST /resources/processes/:pid/end).
-import { type Request, type Answer, error, json, param, percentDecode } from "../request.ts";
+import { type Request, type Answer, error, json, param, segment } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { memory } from "../../read/memory.ts";
 import { cpus, totalmem } from "node:os";
@@ -25,7 +25,6 @@ function number(r: Request, name: string): bigint | null {
 }
 
 /// A path segment (admin/mod.rs segment_decode): `+` stays itself there.
-const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 
 /// The Rust's `/footprint` for clients from before footprint statistics were retired (admin/footprint.rs `retired`).
 const RETIRED = JSON.stringify({

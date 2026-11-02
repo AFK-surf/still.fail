@@ -12,7 +12,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
-import { CARD_OCCUPIED, cardPlace } from "../sessions/card-place.ts";
+import { CARD_OCCUPIED, cardPlace, postCard } from "../sessions/card-place.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Driven, FormAsks, FormField, FormValues } from "../browser/signin-form.ts";
 import type { Request } from "./crypto.ts";
@@ -266,12 +266,7 @@ export class SignIns {
           signin: { id: x.id, site: x.site, reason: x.reason, screen: `browser:${x.tab}` },
         }
       : null;
-    const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
-    const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
-    if (requireEmpty && this.#d.hub.store.pendingCard(thread.thread.id) !== null) throw new Refused(CARD_OCCUPIED);
-    const [n] = this.#d.hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
-    this.#d.hub.shared(thread.thread.id, n as number, session, text);
-    return card !== null ? posted : null;
+    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null);
   }
 
   /// The ask's card as it stands now (`signin.outcome`): where it is, why a person is needed, whether it is kept.
