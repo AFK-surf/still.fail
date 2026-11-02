@@ -71,6 +71,9 @@ pub(all) struct Look {
   /// that room; (0, 0): where it is drawn), as what a picture on its way somewhere is judged by where it goes:
   /// View::image_for
   mut image_for : (Double, Double)
+  /// where in it its picture lies (x, y, w, h, in its own terms) and the matte filling the rest of it, drawn with the
+  /// picture in one (its edge cut once, its corners its own): View::image_in; None, the picture fills it
+  mut image_in : ((Double, Double, Double, Double), Int64)?
   /// how round its corners are (its ground's, its glass's), and the glass it is drawn as under what it draws (None: none):
   /// View::radius, View::glass
   mut radius : Double
@@ -136,6 +139,8 @@ pub(all) struct Content {
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
   image_for : (Double, Double)
+  /// where in it its picture lies and the matte round it (View::image_in)
+  image_in : ((Double, Double, Double, Double), Int64)?
   glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
@@ -192,6 +197,8 @@ pub(all) struct Drawn {
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
   image_for : (Double, Double)
+  /// where in it its picture lies and the matte round it (View::image_in)
+  image_in : ((Double, Double, Double, Double), Int64)?
   glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
@@ -769,6 +776,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.edge = (0.0, 0L)
       n.look.image = None
       n.look.image_for = (0.0, 0.0)
+      n.look.image_in = None
       n.look.glass = None
       n.look.words_look = words_plain
       n.look.shadow = (0.0, 0.0, 0L)
@@ -862,7 +870,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -1547,6 +1555,7 @@ priv enum Prop {
   Edge
   Image
   ImageFor
+  ImageIn
   Corners
 } derive(Eq, Hash)
 
@@ -2007,6 +2016,16 @@ pub fn View::image(self : View, image : Live[(String, String, Int)?]) -> View {
 /// where it goes, its decode for that room asked for as it sets out; paint's.
 pub fn View::image_for(self : View, room : Live[(Double, Double)]) -> View {
   self.bind(ImageFor, room, Paint, fn(r) { self.tree.nodes[self.at].look.image_for = r })
+  self
+}
+
+///|
+/// Where in it its picture lies (View::image: x, y, w, h, in its own terms) and the colour filling the rest of it, as
+/// changes: its picture and that matte drawn as one instance (its edge cut once, its corners its own), the matte alone
+/// over its box till the picture is decoded, as an old view's picture at a rect of its own in a matte (Ctx::picture's
+/// `matte`); None, the picture filling it. Paint's.
+pub fn View::image_in(self : View, at : Live[((Double, Double, Double, Double), Int64)?]) -> View {
+  self.bind(ImageIn, at, Paint, fn(i) { self.tree.nodes[self.at].look.image_in = i })
   self
 }
 
@@ -5465,6 +5484,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     edge: n.look.edge,
     image: n.look.image,
     image_for: n.look.image_for,
+    image_in: n.look.image_in,
     glass: n.look.glass,
     words_look: n.look.words_look,
     runs: n.look.runs,
@@ -5696,6 +5716,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     edge: c.edge,
     image: c.image,
     image_for: c.image_for,
+    image_in: c.image_in,
     glass: c.glass,
     words_look: c.words_look,
     runs: c.runs,

@@ -625,11 +625,18 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     over(marks)
   })
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
-  note_thumb(c, thumb, b, corner, picture=if still == "!" { "" } else { still }, letterbox~, list=list_of(here), over=fn(
-    alpha,
-  ) {
-    over(alpha * marks)
-  })
+  // (what decides how its capsule looks said with it: what draws it in flight told as it changes)
+  note_thumb(
+    c,
+    thumb,
+    b,
+    corner,
+    picture=if still == "!" { "" } else { still },
+    letterbox~,
+    list=list_of(here),
+    over=fn(alpha) { over(alpha * marks) },
+    said="\{marks} \{coming} \{a.duration} \{corner}",
+  )
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)
   @sf.lift_over(c, b, "file/" + thumb, @sf.lift_of(c, "file/" + thumb, false, file_held_open(open)), file_lift_scale)

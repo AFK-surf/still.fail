@@ -2381,7 +2381,7 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
       note_thumb(c, thumb, tile, files_corner(), picture~)
     }
     // not drawn while the viewer is its picture (one picture on the screen, never two: preview.mbt)
-    if pv_hidden.val == thumb {
+    if pv_hidden.get() == thumb {
       c.look(tile, @ui.look(alpha=0.0))
     }
   })

@@ -5,16 +5,17 @@
 
 ///|
 /// The chat's video 演示录屏.mp4 alone in a column, an old view the window's tree hosts, the viewer its node beside it,
-/// `w` wide (`platform`'s).
-fn media_tree(w? : Double = 390.0, platform? : Int = 0) -> @ui.Tester {
+/// `w` wide (`platform`'s); over the chat, under the viewer, a button of the tree's at the window's foot (按下 said in
+/// `pressed` each time it is pressed).
+fn media_tree(w? : Double = 390.0, platform? : Int = 0, pressed? : Array[Int] = [], sent? : (Double, Double) = (1280.0, 720.0)) -> @ui.Tester {
   new_run()
   let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
   let a : Attachment = {
     name: "演示录屏.mp4",
     path: "uploads/fx/演示录屏.mp4",
     size: 5242880.0,
-    width: 1280.0,
-    height: 720.0,
+    width: sent.0,
+    height: sent.1,
     thumbhash: "",
     owner: "s-c1",
     upload: "",
@@ -31,6 +32,11 @@ fn media_tree(w? : Double = 390.0, platform? : Int = 0) -> @ui.Tester {
           c.box(style=@ui.style(w=Full, h=Full), fn() { chat_file(c, src, a) }) |> ignore
         })
         .over(Is(true))
+        |> ignore
+        v.box(fn(f) {
+          f.over(Is(true)).padding(Is((0.0, 760.0, 0.0, 0.0))) |> ignore
+          @sf.button_node(f, fn() { "树按钮" }, fn() { pressed.push(1) }) |> ignore
+        })
         |> ignore
         @sfbase.viewer_node(v, src, fn() { v.window() })
       })
@@ -79,8 +85,9 @@ fn media_closed(t : @ui.Tester) -> Int {
 }
 
 ///|
-test "a video closed, the frame it shows grabbed and its answer late (past a whole flight's time): its player's picture held where it was, nothing let go, till then; answered, back with that frame from there, then gone, its player closed once" {
-  let t = media_tree()
+test "a video closed, the frame it shows grabbed and its answer late (past a whole flight's time): its player's picture held where it was, nothing let go, till then (a button of the tree's under it pressed meanwhile, its own); answered, back with that frame from there, then gone, its player closed once" {
+  let pressed : Array[Int] = []
+  let t = media_tree(pressed~)
   media_opened(t)
   let v = viewer.get().unwrap()
   let m = v.media
@@ -94,6 +101,16 @@ test "a video closed, the frame it shows grabbed and its answer late (past a who
     assert_true(t.holes() is [h] && media_near(h, hole), msg="its player's picture where it was: \{t.holes()}, was \{hole}")
     assert_eq(media_closed(t), 0, msg="its player not closed")
   }
+  // (going, nothing of it takes a press: the button under it its own, the player not closed by it)
+  match t.all(@ui.Role::Button, label="树按钮") {
+    [b] => {
+      let (x, y, w, h) = b.rect
+      t.tap(x + w / 2.0, y + h / 2.0)
+    }
+    other => fail("the tree's button: \{other}")
+  }
+  t.run_for(@ui.frame_period_default)
+  assert_eq((pressed, media_closed(t)), ([1], 0), msg="the button under it pressed, its player not closed")
   let frame = fixture_file_png("演示录屏.mp4")
   assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"\{hex_bytes(frame)}\"}"))
   t.draw()
@@ -178,4 +195,35 @@ test "a film played on an iPhone Duo, the window from wide to Small with its act
   let m = viewer.get().unwrap().media.unwrap()
   assert_true(m.is_sideways() && !@sf.player_full_native(), msg="turned sideways, the window not filled")
   m.upright()
+}
+
+///|
+test "a video sent with no size, its still's known: opened from its thumbnail, its flight sets out at once from the thumbnail with its still, as big as it is there, in the very frame it opens" {
+  let t = media_tree(sent=(0.0, 0.0))
+  guard t.reachable("演示录屏.mp4") is [(x, y), ..] else { fail("no video") }
+  // (where the thumbnail is: its still as the chat draws it)
+  let thumbs = t.drawn_images().filter(fn(i) { i[2] > 100.0 })
+  guard thumbs is [th] else { fail("its thumbnail: \{thumbs}") }
+  // (each frame drawn from the press on, as it is drawn: whether the viewer is up, and where its still is)
+  let seen : Array[(Bool, Array[(Double, Double, Double, Double)])] = []
+  t.each_frame(
+    Some(fn() {
+      match viewer.get() {
+        Some(v) => seen.push((v.flies && !v.fly_back, media_drawn(t, v.still(fixture("chat")))))
+        None => ()
+      }
+    }),
+  )
+  t.tap(x, y)
+  t.each_frame(None)
+  let v = viewer.get().unwrap()
+  let still = v.still(fixture("chat"))
+  assert_true(v.file.width == 0.0 && @ui.image_natural(still) is Some((sw, sh)) && sw > 0.0 && sh > 0.0, msg="sent with no size, its still's known: \{@ui.image_natural(still)}")
+  // (the first frame it is up in: flying, its still once, where its thumbnail was, as big)
+  guard seen.get(0) is Some((flying, drawn)) else { fail("no frame drawn with it up") }
+  assert_true(flying, msg="set out as a flight in its first frame")
+  assert_true(
+    drawn is [r] && (r.0 - th[0]).abs() < 1.0 && (r.1 - th[1]).abs() < 1.0 && (r.2 - th[2]).abs() < 1.0 && (r.3 - th[3]).abs() < 1.0,
+    msg="its still where its thumbnail was, in its first frame: \{drawn}, the thumbnail \{th} (frames: \{seen.length()})",
+  )
 }

@@ -979,7 +979,7 @@ pub let note_pop_ms : Double
 
 pub let note_subtle : Int64
 
-pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, top_crop? : Bool, list? : String, over? : (Double) -> Unit) -> Unit
+pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, top_crop? : Bool, list? : String, over? : (Double) -> Unit, said? : String) -> Unit
 
 pub let notice_host : @ref.Ref[NoticeHost]
 
@@ -1227,7 +1227,7 @@ pub let pv_frames : Map[String, (String, Double)]
 
 pub let pv_frames_n : @ref.Ref[Int32]
 
-pub let pv_hidden : @ref.Ref[String]
+pub let pv_hidden : @signals.Signal[String]
 
 pub let pv_leaving : @signals.Signal[Viewer?]
 
@@ -1548,6 +1548,8 @@ pub fn this_machine() -> String
 pub fn thumb_of(@ui.Ctx, String) -> Thumb?
 
 pub fn thumb_shows(String) -> Double
+
+pub fn thumbs_said() -> Unit
 
 pub fn toast_later(String, action? : String, run? : () -> Unit) -> Unit
 
@@ -3170,6 +3172,7 @@ pub(all) struct ThumbLook {
   id : Int32
   list : String
   over : (Double) -> Unit
+  said : String
 }
 
 pub(all) struct ToastSaid {
@@ -3389,7 +3392,6 @@ pub fn Viewer::desk_back(Self, Source) -> String
 pub fn Viewer::download(Self, Source) -> Json?
 pub fn Viewer::draft_key(Self) -> String
 pub fn Viewer::drag_zoomed(Self, @kit.Zoom, @motion.Way, Double, Double, Bool, Bool, Double) -> Unit
-pub fn Viewer::draw_flight(Self, @ui.Ctx, String, (Double, Double, Double, Double), Double, ground? : Int64) -> Unit
 pub fn Viewer::fetch(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::finish_marks(Self, @ui.Ctx, Bool) -> Unit
 pub fn Viewer::flight_from(Self, @ui.Ctx) -> Thumb?
@@ -3436,6 +3438,7 @@ pub fn Viewer::shut(Self, @ui.Ctx) -> Unit
 pub fn Viewer::stand_in(Self, Source) -> String
 pub fn Viewer::still(Self, Source) -> String
 pub fn Viewer::text_stage(Self, @ui.Ctx, PKind, Bytes, Int32) -> Unit
+pub fn Viewer::thumb_over(Self) -> (Double) -> Unit
 pub fn Viewer::toggle(Self) -> Unit
 pub fn Viewer::told_of(Self) -> Bool
 pub fn Viewer::up_still(Self) -> Bool

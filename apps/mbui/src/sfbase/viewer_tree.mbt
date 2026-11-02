@@ -189,7 +189,9 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   n.reacts(
     fn() {
       let (w, h) = stage()
-      ((w, h + @ui.current().ime_inset()), vw.natural_size(src))
+      // (a film's or a song's picture sized by its player alone, Viewer::video_natural: nothing of a picture's asked
+      // for it here, its thumbnail none)
+      ((w, h + @ui.current().ime_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) })
     },
     fn(told) {
       let ((bw, bh), (nw, nh)) = told
@@ -621,7 +623,7 @@ fn image_ends(n : @view.View, vw : Viewer, src : Source) -> Unit {
     n.at_moment(vw.fly.end(), fn() {
       if vw.flies && !vw.fly_back {
         vw.flies = false
-        pv_hidden.val = ""
+        pv_hidden.set("")
       }
     })
     |> ignore
@@ -646,7 +648,7 @@ fn image_ends(n : @view.View, vw : Viewer, src : Source) -> Unit {
         ends.val = n.at_moment(end, fn() {
           match pv_leaving.get() {
             Some(l) if physical_equal(l, vw) => {
-              pv_hidden.val = ""
+              pv_hidden.set("")
               leaving_done()
             }
             _ => ()
@@ -1654,19 +1656,133 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
 
 ///|
 /// What viewer `vw` shows of a film or a song, in node `n`: the player (@sf.player_view: its picture, its bars and
-/// controls, its keys, the full screen and turning sideways), an old view hosted on the stage as the old frame's preview
-/// layer drew it (Viewer::player_stage: in flight, its still flying there from the thumbnail and back, the player's bars
-/// coming as its ground is whole; Escape in flight the viewer's), as far in as its fade has come (a flight's fade is
-/// put in whole: the flight its own); going, the page's presses theirs. Back is the player's first (its 全屏 left,
-/// beside the system's bars), then the viewer's: the viewer's said before the player's, the last said taking it.
+/// controls, its keys, the full screen and turning sideways), an old view hosted on the stage (Viewer::player_stage), as
+/// far in as its fade has come and, while the picture flies, as far as its bars come with it (bars_share: none till
+/// its ground is whole); in flight its still the tree's (Viewer::player_flight): from the thumbnail to where the player
+/// draws its picture and back, the black and the still one frame cut once (View::image_in), what the thumbnail draws
+/// over it (its capsule) going as it leaves and back as it lands; going, the page's presses theirs. Back is the
+/// player's first (its 全屏 left, beside the system's bars), then the viewer's: the viewer's said before the player's,
+/// the last said taking it.
 fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
+  // (the moment what follows its flight and fade reads them at: as each frame draws it while either goes; else as it
+  // is, the clock read no more)
+  let at = fn(node : @view.View) {
+    vw.fly.said()
+    vw.fade.said()
+    let now = node.logic_at()
+    if vw.fly.goes_at(now) || vw.fade.goes_at(now) {
+      node.drawn_at()
+    } else {
+      @double.infinity
+    }
+  }
+  // its flight: the box it is cut to, its box round (the thumbnail's corners as far as the flight leaves them), the
+  // still in it on the black where it is letterboxed or not decoded yet (one frame), what the thumbnail draws over it
+  let flight = fn(node : @view.View) -> FlightBox? { vw.player_flight(src, node, at(node)).map(fn(f) { f.0 }) }
+  n.box(fn(cut) {
+    cut
+    .over(Is(true))
+    // (a picture alone: no press taken anywhere in it, whatever is under it its own (it covers the window as it waits
+    // for the frame it goes back with))
+    .presses(Is(false))
+    .clips(Is(true))
+    .offset(By(fn() {
+      match flight(cut) {
+        Some(f) => (f.cut.0, f.cut.1)
+        None => (0.0, 0.0)
+      }
+    }))
+    .width(By(fn() { flight(cut).map(fn(f) { f.cut.2 }) }))
+    .height(By(fn() { flight(cut).map(fn(f) { f.cut.3 }) }))
+    |> ignore
+    cut.box(fn(b) {
+      let picture = fn() {
+        vw.grab_told.get() |> ignore
+        if vw.fly_pic != "" {
+          vw.fly_pic
+        } else if vw.shown_kind() == Some(KVideo) {
+          vw.still(src)
+        } else {
+          ""
+        }
+      }
+      b
+      .over(Is(true))
+      .clips(Is(true))
+      .corners(By(fn() { flight(b).map(fn(f) { f.corners }) }))
+      .offset(By(fn() {
+        match flight(b) {
+          Some(f) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
+          None => (0.0, 0.0)
+        }
+      }))
+      .width(By(fn() { flight(b).map(fn(f) { f.box.2 }) }))
+      .height(By(fn() { flight(b).map(fn(f) { f.box.3 }) }))
+      // (no still: the black alone)
+      .ground(By(fn() {
+        if flight(b) is Some(_) && picture() == "" {
+          0x000000FFL
+        } else {
+          0L
+        }
+      }))
+      |> ignore
+      // (the still and the black round it one frame filling the box, cut once by its round corners, as the old
+      // flight's picture in its matte was)
+      b.box(fn(f) {
+        f
+        .over(Is(true))
+        .image(By(fn() {
+          match flight(f) {
+            Some(_) if picture() != "" => Some((picture(), "", stage_px))
+            _ => None
+          }
+        }))
+        .image_in(By(fn() {
+          match flight(f) {
+            Some(fb) if picture() != "" =>
+              Some(((fb.picture.0 - fb.box.0, fb.picture.1 - fb.box.1, fb.picture.2, fb.picture.3), 0x000000FFL))
+            _ => None
+          }
+        }))
+        |> ignore
+      })
+      |> ignore
+      // what the thumbnail draws over its picture (its capsule), whole, in its box: gone by halfway out, back from
+      // halfway in, as a row's content goes with its room; none seen where it flies not (its old view made as the
+      // viewer is, built by the time it sets out)
+      b.box(fn(o) {
+        o
+        .over(Is(true))
+        .alpha(By(fn() {
+          match vw.player_flight(src, o, at(o)) {
+            Some((_, p)) => dmax(0.0, 1.0 - flight_over_gone * p)
+            None => 0.0
+          }
+        }))
+        |> ignore
+        // (what it draws over its picture alone, as its chat said it last (Viewer::thumb_over): where it is and how big
+        // the flight's, followed by the nodes round it; none of its place read here)
+        @ui.old(o, fn(_c) { (vw.thumb_over())(1.0) })
+        .over(Is(true))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+  // (the player over its flight, its bars coming as its ground is whole)
   n.box(fn(s) {
     s
     .over(Is(true))
     .alpha(By(fn() {
-      vw.fade.said()
-      let now = s.logic_at()
-      vw.fade.value_at(if vw.fade.goes_at(now) { s.drawn_at() } else { @double.infinity })
+      let t = at(s)
+      let bars = match vw.player_flight(src, s, t) {
+        Some((_, p)) => bars_share(p)
+        None => 1.0
+      }
+      bars * vw.fade.value_at(t)
     }))
     .presses(By(fn() {
       match pv_leaving.get() {
@@ -1689,6 +1805,32 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// A film's flight as node `node` draws it at `t` (from the thumbnail where the chat lays it out, Viewer::flight_from, to
+/// where its player draws its picture, or back from where it was: Viewer::fly_to) and how far it has come: None where
+/// it flies not (or waits for the frame it shows to be grabbed as it closes: its player's picture where it was).
+fn Viewer::player_flight(self : Viewer, src : Source, node : @view.View, t : Double) -> (FlightBox, Double)? {
+  let vw = self
+  vw.fly.said()
+  vw.grab_told.get() |> ignore
+  if !vw.flies || (vw.closing && vw.leaving_grab) {
+    return None
+  }
+  let (w, h) = node.window()
+  let width = player_width(w)
+  let to = match vw.fly_to {
+    Some(r) if vw.fly_back => Some(r)
+    _ => vw.video_target(src, width, h)
+  }
+  match (vw.flight_from(@ui.current()), to) {
+    (Some(from), Some(to)) => {
+      let p = vw.flying_at(t)
+      flight_box(from, vw.lifted_at(t), to, p, width, h).map(fn(f) { (f, p) })
+    }
+    _ => None
+  }
 }
 
 ///|
