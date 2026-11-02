@@ -216,6 +216,38 @@ pub fn Scroll::at(self : Scroll, tree : Tree) -> Double {
 }
 
 ///|
+/// How far it is scrolled as what is drawn is drawn, followed: where it is on by itself (a fling, a page's list's wheel's
+/// notches easing in), read again as the time goes till it is at rest; else as it stands. What works out what of what
+/// it holds to make as it scrolls (a page's list built by the rows in sight) reads it so, never its own copy of how it
+/// moves. Not what shows past an end (iOS's rubber band, Android's stretch: Scroll::past).
+pub fn Scroll::drawn(self : Scroll, tree : Tree) -> Double {
+  self.where_at(if self.goes_on() { tree.drawn_at() } else { 0.0 })
+}
+
+///|
+/// What it holds above where it is grew by `d` (less, where less than 0: rows above those in sight measured anew, come
+/// or gone), as of the logic's moment: where it is and what it is on by itself (a fling and the end it was to meet, a
+/// page's list's wheel's notches easing in) moved by as much, so what is in sight stays where it is drawn and what
+/// moves it goes on as it was, at rest when it was to be. No scroll of the hand's: nothing told as scrolled (its bar).
+/// What shows past an end stays as it is.
+pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
+  if d == 0.0 {
+    return
+  }
+  @signals.untracked(fn() {
+    self.x.set(self.x.get() + d)
+    match self.fling.get() {
+      Some(f) => self.fling.set(Some({ ..f, x0: f.x0 + d, end_x: f.end_x + d }))
+      None => ()
+    }
+    match self.notch.get() {
+      Some(n) => self.notch.set(Some({ ..n, x0: n.x0 + d }))
+      None => ()
+    }
+  })
+}
+
+///|
 /// How far it can go, as it was last laid out (0 before it first is).
 pub fn Scroll::most(self : Scroll) -> Double {
   @signals.untracked(fn() { self.most_now() })
