@@ -100,7 +100,10 @@ const askingsOf = (inner: Inner) => {
 };
 const told = (inner: Inner) => inner.store.invalidate({ topic: "lockPrompts" });
 
-/// A new device's connection, as the mesh's endpoint took it: its one stream served, then closed.
+/// A new device's connection, as the mesh's endpoint took it: its one stream served, what it said last taken by the
+/// new device (the stream finished and its end acknowledged), then closed. Closed at once, the close would race what is
+/// still on its way (an approval, why it is turned away), and the new device could hear its connection cut instead.
+/// Failed or stopped on the way, it is closed as it is.
 export function served(inner: Inner, connection: IrohConnection): void {
   inner.runner.fork(
     Effect.ignore(
@@ -110,6 +113,8 @@ export function served(inner: Inner, connection: IrohConnection): void {
           const me = inner.meshNow()?.deviceId() ?? baseOf(inner);
           if (stream === null || me === null) return;
           yield* serveTrusted(inner, connection.remoteId(), me, streamDuplex(stream, () => connection.close(0, "done")));
+          yield* stream.finish();
+          yield* stream.stopped();
         }),
         Effect.sync(() => connection.close(0, "done")),
       ),

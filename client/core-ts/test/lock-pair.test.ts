@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect, Queue } from "effect";
+import { Deferred, Effect, Queue } from "effect";
 import { HostError } from "../src/error.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { base64url as toB64url, utf8 } from "../src/util.ts";
@@ -293,6 +293,48 @@ test("a new device that dialled someone else cannot prove even the right code to
   // Its idea of the other end is not the trusted device's (a relay between them, a false lock).
   assert.deepEqual(await m.prove(code, "ef".repeat(32)), { ok: { left: PAIR_TRIES - 1 } });
   assert.deepEqual(m.cloud.posted, []);
+});
+
+/// A trusted device's core serving a new device's connection (`served`) whose credential is for another device (told
+/// it is not here, and the exchange ends), over a stream that says what is done to it: the acknowledgement of what it
+/// sent held until `ack` is told; `finishFails`, the stream fails to finish.
+async function servedAlone(finishFails: boolean) {
+  const g = grant();
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  r.core.inner.meshNow = () => ({ deviceId: () => ME }) as never;
+  const said: string[] = [];
+  const acked = Deferred.makeUnsafe<number | null>();
+  const hello = utf8(`${JSON.stringify({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", "someone-else", "s2") }], kind: "web", label: "Chrome", sign_key: null })}\n`);
+  let heard = false;
+  const stream = {
+    read: () => (heard ? Effect.never : Effect.sync(() => ((heard = true), hello))),
+    write: (b: Uint8Array) => Effect.sync(() => void said.push(`write ${new TextDecoder().decode(b).trim()}`)),
+    finish: () => (finishFails ? Effect.andThen(Effect.sync(() => void said.push("finish failed")), Effect.fail(new HostError("gone"))) : Effect.sync(() => void said.push("finish"))),
+    stopped: () => Effect.andThen(Effect.sync(() => void said.push("waits")), Effect.tap(Deferred.await(acked), () => Effect.sync(() => void said.push("acknowledged")))),
+    reset: (code: number) => void said.push(`reset ${code}`),
+  };
+  const connection = { remoteId: () => PHONE, acceptBi: () => Effect.succeed(stream), close: (code: number, why: string) => void said.push(`close ${code} ${why}`) };
+  served(r.core.inner, connection as never);
+  const until = async (f: () => boolean) => {
+    for (let i = 0; i < 50 && !f(); i++) await r.host.time.pass(10);
+    await r.host.time.pass(10);
+  };
+  return { said, until, ack: () => Deferred.doneUnsafe(acked, Effect.succeed(null)) };
+}
+
+test("the trusted device's last word to a new device is taken before its connection ends: closed only once what it sent is acknowledged; its stream failing to finish, closed at once", async () => {
+  const no = `write ${JSON.stringify({ t: "no", error: "not_here" })}`;
+  const s = await servedAlone(false);
+  await s.until(() => s.said.includes("waits"));
+  // (its last word sent, not yet acknowledged: the connection still up)
+  assert.deepEqual(s.said, [no, "finish", "waits"]);
+  s.ack();
+  await s.until(() => s.said.some((x) => x.startsWith("close")));
+  assert.deepEqual(s.said, [no, "finish", "waits", "acknowledged", "close 0 done"]);
+  const f = await servedAlone(true);
+  await f.until(() => f.said.some((x) => x.startsWith("close")));
+  assert.deepEqual(f.said, [no, "finish failed", "close 0 done"]);
 });
 
 test("over iroh: the trusted device takes the new one on its endpoint, and the code typed signs it in", { skip: loadAddon() === null ? "the mesh addon is not built here" : false }, async () => {
