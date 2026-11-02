@@ -388,7 +388,9 @@ export async function candidates(reposDir: string, presets: Preset[], found: Can
     if (mine) out.set(keyOf(c), { ...mine, chats: mine.chats + c.chats, lastAt: Math.max(mine.lastAt, c.lastAt), ...(mine.icon || !c.icon ? {} : { icon: c.icon }) });
     else out.set(keyOf(c), { ...c, cached: true, where: c.repo ?? shortPath(c.path) });
   }
-  for (const p of presets) for (const d of p.dirs) if (!out.has(d.repo ?? d.path)) out.set(d.repo ?? d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt, where: shortPath(d.path) });
+  // A preset may also name another station's folders. Those are not candidates on this machine: treating them as
+  // local both puts them in the wrong group and can make a later save try to validate a remote path here.
+  for (const p of presets) for (const d of p.dirs) if (!d.station && !out.has(d.repo ?? d.path)) out.set(d.repo ?? d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt, where: shortPath(d.path) });
   return [...out.values()].sort((a, b) => b.chats - a.chats || b.lastAt - a.lastAt || a.name.localeCompare(b.name));
 }
 

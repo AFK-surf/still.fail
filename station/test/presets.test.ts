@@ -105,6 +105,14 @@ test("the directories offered are the station's clones, those its chats worked i
   assert.deepEqual(offered.map((c) => [c.name, c.repo, c.chats]), [["app", "github.com/acme/app", 2], ["lib", "github.com/acme/lib", 1], [elsewhere.split("/").pop(), null, 0]]);
 });
 
+test("a preset's remote folders are not offered as directories on this station", async () => {
+  const repos = mkdtempSync(join(tmpdir(), "presets-"));
+  const local = mkdtempSync(join(tmpdir(), "presets-local-"));
+  const remote = "/other-station/Design";
+  const offered = await candidates(repos, [{ id: "p", name: "p", dirs: [{ path: local, repo: null }, { path: remote, repo: null, station: "ws/mba", stationName: "MBA" }], instructions: "", createdBy: "", createdAt: 0, updatedAt: 0 }]);
+  assert.deepEqual(offered.map((c) => c.path), [local]);
+});
+
 test("the repositories on the machine are found under its home, a few levels down, kept and offered after the cache's", async () => {
   const home = mkdtempSync(join(tmpdir(), "presets-home-"));
   clone(join(home, "code"), "app", "git@github.com:acme/app.git");

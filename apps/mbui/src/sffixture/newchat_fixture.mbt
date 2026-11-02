@@ -113,7 +113,7 @@ fn fix_preset_design() -> Json {
 
 ///|
 /// A made-up station's presets and the folders it offers (the `presets` topic): MBA's a design folder and a clone of
-/// still.fail of its own (offered once, as the first station's), the first station's the rest.
+/// still.fail of its own (offered under MBA too), the first station's the rest.
 pub fn fix_presets_of(station : String) -> Json {
   if station.has_suffix("st2") {
     {
