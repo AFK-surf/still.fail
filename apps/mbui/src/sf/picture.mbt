@@ -94,7 +94,8 @@ pub fn drawable(c : @ui.Ctx, name : String, w : Double, tint? : Int64) -> Int {
 let mono_makers : Array[String] = [
   "anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter",
   "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface",
-  "nvidia", "baseten", "dsh", "cursor", "devin", "hermes",
+  "nvidia", "baseten", "dsh", "cursor", "devin", "hermes", "meta", "stepfun", "tencent",
+  "meituan",
 ]
 
 ///|

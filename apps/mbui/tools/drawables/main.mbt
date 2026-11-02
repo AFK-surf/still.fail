@@ -15,7 +15,8 @@ let drawables : Array[String] = [
   "maker_anthropic", "maker_openai", "maker_deepseek", "maker_qwen", "maker_zhipu", "maker_gemini", "maker_kimi", "maker_minimax",
   "maker_xai", "maker_mistral", "maker_xiaomi", "maker_ant_ling", "maker_openrouter", "maker_vercel", "maker_cloudflare",
   "maker_azure", "maker_groq", "maker_together", "maker_fireworks", "maker_cerebras", "maker_huggingface", "maker_nvidia",
-  "maker_baseten", "maker_dsh", "maker_cursor", "maker_devin", "maker_hermes", "slack", "feishu", "stillfail_mark", "stillfail_mark_dark",
+  "maker_baseten", "maker_dsh", "maker_cursor", "maker_devin", "maker_hermes", "maker_meta", "maker_stepfun",
+  "maker_tencent", "maker_meituan", "slack", "feishu", "stillfail_mark", "stillfail_mark_dark",
   "illus_sign_in", "illus_sign_in_dark", "illus_new_chat", "illus_new_chat_dark", "illus_no_station", "illus_no_station_dark",
   "illus_no_profile", "illus_no_profile_dark",
   // the programs a station logs in to (its 登录's rows: web/public/tools)

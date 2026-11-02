@@ -39,6 +39,10 @@ test("words_as_the_clients_had_them", () => {
   assert.deepEqual(f.makerOf("deepseek-flash"), ["deepseek", "DeepSeek"]);
   assert.deepEqual(f.makerOf("o3"), ["openai", "OpenAI"]);
   assert.equal(f.makerOf("something"), null);
+  assert.deepEqual(f.labMaker("zhipuai", "Zhipu AI"), ["zhipu", "智谱"]);
+  assert.deepEqual(f.labMaker("tencent", null), ["tencent", "腾讯"]);
+  assert.deepEqual(f.labMaker("sakana", "Sakana AI"), ["sakana", "Sakana AI"]);
+  assert.deepEqual(f.labMaker("bytedance-seed", null), ["bytedance-seed", "Bytedance Seed"]);
   assert.equal(f.agentLabel("gpt-6-astra", "medium"), "GPT-6 Astra · medium");
   assert.equal(f.agentLabel("my-model", null), "my-model");
   assert.equal(f.cleanText("<@U1> hi   there"), "hi there");

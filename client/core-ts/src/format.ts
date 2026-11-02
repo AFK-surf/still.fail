@@ -402,18 +402,53 @@ export function makerOf(modelName: string): [string, string] | null {
   const m = modelName.toLowerCase();
   const has = (words: string[]) => words.some((w) => m.includes(w));
   const o = m.startsWith("o") && /^[0-9]/.test(m.slice(1));
-  if (has(["claude", "opus", "sonnet", "haiku", "fable"])) return ["anthropic", "Anthropic"];
-  if (has(["gpt", "codex", "openai"]) || o) return ["openai", "OpenAI"];
-  if (has(["deepseek"])) return ["deepseek", "DeepSeek"];
-  if (has(["qwen", "qwq"])) return ["qwen", "Qwen"];
-  if (has(["glm", "zhipu"])) return ["zhipu", said("core-logic.format.maker.zhipu")];
-  if (has(["gemini", "gemma"])) return ["gemini", "Google"];
-  if (has(["kimi", "moonshot"])) return ["kimi", "Kimi"];
-  if (has(["minimax", "abab"])) return ["minimax", "MiniMax"];
-  if (has(["grok"])) return ["xai", "xAI"];
-  if (has(["composer"])) return ["cursor", "Cursor"];
-  if (/^swe-/.test(m)) return ["devin", "Cognition"];
-  return null;
+  const id = has(["claude", "opus", "sonnet", "haiku", "fable"]) ? "anthropic"
+    : has(["gpt", "codex", "openai"]) || o ? "openai"
+    : has(["deepseek"]) ? "deepseek"
+    : has(["qwen", "qwq"]) ? "qwen"
+    : has(["glm", "zhipu"]) ? "zhipu"
+    : has(["gemini", "gemma"]) ? "gemini"
+    : has(["kimi", "moonshot"]) ? "kimi"
+    : has(["minimax", "abab"]) ? "minimax"
+    : has(["grok"]) ? "xai"
+    : has(["composer"]) ? "cursor"
+    : /^swe-/.test(m) ? "devin"
+    : null;
+  return id === null ? null : [id, makerName(id)!];
+}
+
+/// The marks of the labs models.dev names otherwise (its `maker`: google's is Gemini's mark).
+const LAB_MARKS: Record<string, string> = { google: "gemini", moonshotai: "kimi", zhipuai: "zhipu", alibaba: "qwen", inclusionai: "ant-ling" };
+
+/// A maker by its mark's id, as people call it; null for one not known here.
+function makerName(id: string): string | null {
+  switch (id) {
+    case "anthropic": return "Anthropic";
+    case "openai": return "OpenAI";
+    case "deepseek": return "DeepSeek";
+    case "qwen": return "Qwen";
+    case "zhipu": return said("core-logic.format.maker.zhipu");
+    case "gemini": return "Google";
+    case "kimi": return "Kimi";
+    case "minimax": return "MiniMax";
+    case "xai": return "xAI";
+    case "cursor": return "Cursor";
+    case "devin": return "Cognition";
+    case "ant-ling": return "Ant Ling";
+    case "xiaomi": return said("core-logic.format.maker.xiaomi");
+    case "meta": return "Meta";
+    case "stepfun": return said("core-logic.format.maker.stepfun");
+    case "tencent": return said("core-logic.format.maker.tencent");
+    case "meituan": return said("core-logic.format.maker.meituan");
+    default: return null;
+  }
+}
+
+/// Who made a model as the model catalog says (the station's `modelMakers`: `lab` as models.dev names it, `labName`
+/// as its own API is called), [id, name] for its mark: a lab named otherwise by the marks by theirs.
+export function labMaker(lab: string, labName: string | null): [string, string] {
+  const id = LAB_MARKS[lab] ?? lab;
+  return [id, makerName(id) ?? labName ?? lab.split("-").map((w) => (w === "" ? w : w[0]!.toUpperCase() + w.slice(1))).join(" ")];
 }
 
 /// How an agent is named: its model as people call it and its effort (GPT-6 Astra · medium).
