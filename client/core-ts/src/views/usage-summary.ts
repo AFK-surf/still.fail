@@ -122,6 +122,15 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
     if (Number(day.slice(8, 10)) <= 7) months.push({ week: w, label: names[Number(day.slice(5, 7)) - 1] ?? "" });
   }
   const year = values.some((v) => v > 0);
+  // what each is, said as the pointer rests on it: a day its date and tokens, a week its first day and tokens, the
+  // running total as of the week's last day so far
+  const tokens = (n: number) => (n > 0 ? t("core-views.usage.summary.tokens", { n: count(n) }) : t("core-views.usage.summary.no_tokens"));
+  const tips = values.map((v, i) => (plus(start, i) > today ? "" : t("core-views.usage.summary.day_tip", { date: format.monthDayOf(plus(start, i)), tokens: tokens(v) })));
+  const weekTips = weeks.map((v, w) => t("core-views.usage.summary.week_tip", { date: format.monthDayOf(plus(start, w * WEEK_DAYS)), tokens: tokens(v) }));
+  const runningTips = running.map((v, w) => {
+    const last = plus(start, w * WEEK_DAYS + WEEK_DAYS - 1);
+    return t("core-views.usage.summary.running_tip", { date: format.monthDayOf(last > today ? today : last), tokens: tokens(v) });
+  });
   byStation.sort((x, y) => y[1] - x[1]);
   const placed = [...places].sort((x, y) => y[1] - x[1]);
   return {
@@ -136,6 +145,9 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
       cells,
       weekly: weeks.map((v) => height(v, tallest)),
       cumulative: running.map((v) => height(v, top)),
+      tips,
+      weekTips,
+      runningTips,
       less: t("core-views.usage.summary.less"),
       more: t("core-views.usage.summary.more"),
       captions: year
