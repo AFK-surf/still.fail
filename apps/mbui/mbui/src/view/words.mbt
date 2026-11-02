@@ -83,12 +83,112 @@ pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
   self.bind(RunsSet, set, Both, fn(s) {
     let l = tree.nodes[at].look.runs_look
     tree.nodes[at].look.runs_look = { ..l, code_scale: s.0, words: s.1 }
+    // (how its words are set said: what follows it told, once this is)
+    self.words_told()
   })
   self.bind(RunsInk, ink, Paint, fn(k) {
     let l = tree.nodes[at].look.runs_look
     tree.nodes[at].look.runs_look = { ..l, link: k.0, pressed: k.1, code_ink: k.2, code_ground: k.3 }
+    // (code's ground come or gone is its sizes' too (RunsSet's, told before this is written): told again once it is,
+    // what follows it reading both as they are now; another colour alone, nothing of how they are laid out)
+    if (l.code_ground != 0L) != (k.3 != 0L) {
+      self.words_told()
+    }
   })
   self
+}
+
+///|
+/// The link of its words in pieces held (by its first piece, as their runs say it: -1 none), as it changes: its
+/// pressed ground (RunsLook's `pressed`) drawn under that link alone.
+pub fn View::runs_pressed(self : View, k : Live[Int]) -> View {
+  let tree = self.tree
+  let at = self.at
+  self.bind(RunsPressed, k, Paint, fn(k) { tree.nodes[at].look.runs_pressed = k })
+  self
+}
+
+///|
+/// Where the pointer is in its own terms (where it is drawn now, as big as it is drawn), as the tree last had it; None
+/// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (pointer_here_told).
+pub fn View::pointer_here(self : View) -> (Double, Double)? {
+  guard self.alive() else { return None }
+  self.tree.pointer_in(self.at)
+}
+
+///|
+/// Where the pointer is in node `at`'s own terms as it was last placed (its holders' place and scale with it); None
+/// where it is nowhere.
+fn Tree::pointer_in(self : Tree, at : Int) -> (Double, Double)? {
+  let (px, py) = self.pointer_xy
+  if px < 0.0 || py < 0.0 || self.nodes.length() == 0 || self.last_w <= 0.0 {
+    return None
+  }
+  let (x, y, s) = self.placed(at)
+  let s = if s > 0.0 { s } else { 1.0 }
+  Some(((px - x) / s, (py - y) / s))
+}
+
+///|
+/// Where the pointer is in its own terms (pointer_here's), followed: told as the pointer moves and as what changed is
+/// placed (it, or what holds it, moved or grown under a pointer that stays where it is), at the change's end, no frame
+/// waited for (as View::pointer_within is: Tree::withins_told). Never what a move of the pointer's own is told by
+/// (View::on_pointer_moved).
+pub fn View::pointer_here_told(self : View) -> (Double, Double)? {
+  guard self.live() is Some(n) else { return None }
+  let cell = match n.here_cell {
+    Some(c) => c
+    None => {
+      let c = @signals.signal(self.tree.pointer_in(self.at), same=fn(a, b) { a == b })
+      n.here_cell = Some(c)
+      if n.within_cell is None {
+        self.tree.withins_at.push((self.at, n.gen))
+      }
+      c
+    }
+  }
+  cell.get()
+}
+
+///|
+/// How many times how its words are set was said (their words or pieces, how they look, how the pieces are set to
+/// their size: View::words, View::words_runs, View::words_look, View::runs_look), followed: what is worked out of how
+/// they are laid out read again as that is said, at that moment, whether or not how big it is changes.
+pub fn View::words_said(self : View) -> Int {
+  guard self.live() is Some(n) else { return 0 }
+  let cell = match n.said_cell {
+    Some(c) => c
+    None => {
+      let c = @signals.signal(0)
+      n.said_cell = Some(c)
+      c
+    }
+  }
+  cell.get()
+}
+
+///|
+/// How its words are set said again (words_said), told what follows it.
+fn View::words_told(self : View) -> Unit {
+  match self.live() {
+    Some({ said_cell: Some(c), .. }) => c.set(@signals.untracked(fn() { c.get() }) + 1)
+    _ => ()
+  }
+}
+
+///|
+/// Its words in pieces and how they are set as they are said now (what lays them out: its own, the same it is drawn
+/// from as it is laid out next), not as the frame before drew them.
+pub fn View::runs_set_now(self : View) -> (Array[@text.Run], WordsLook, RunsLook) {
+  guard self.live() is Some(n) else { return ([], words_plain, runs_plain) }
+  (n.look.runs, n.look.words_look, n.look.runs_look)
+}
+
+///|
+/// Whether its words' lines each stand in the middle of its width as it is said now (View::words_centered).
+pub fn View::words_centered_now(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  n.look.words_center
 }
 
 ///|
@@ -175,6 +275,8 @@ pub fn View::words_look(self : View, look : Live[WordsLook]) -> View {
     if n.shorter.length() > 0 {
       self.tree.give_way_applied(self.at)
     }
+    // (how its words are set said: what follows it told, once this is)
+    self.words_told()
   })
   self
 }

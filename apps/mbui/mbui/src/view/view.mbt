@@ -58,6 +58,8 @@ pub(all) struct Look {
   mut runs : Array[@text.Run]
   /// how its pieces are set where they say nothing of it themselves (View::runs_look: a link's ink, code's, faces)
   mut runs_look : RunsLook
+  /// the link of its pieces held, by its first piece (-1 none): its pressed ground under it (View::runs_pressed)
+  mut runs_pressed : Int
   /// the shadow it casts under its ground (blur, how far down, colour; 0 blur: none): View::shadow
   mut shadow : (Double, Double, Int64)
   /// the shapes it draws over its ground (their outlines, as said: what they come to drawn kept by them), and the one
@@ -142,6 +144,7 @@ pub(all) struct Content {
   words_look : WordsLook
   runs : Array[@text.Run]
   runs_look : RunsLook
+  runs_pressed : Int
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
@@ -212,6 +215,7 @@ pub(all) struct Drawn {
   words_look : WordsLook
   runs : Array[@text.Run]
   runs_look : RunsLook
+  runs_pressed : Int
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
@@ -332,6 +336,10 @@ struct Node {
   mut pointed_in_cell : @signals.Signal[Bool]?
   /// whether the pointer is within it as it was last placed, made as first read (View::pointer_within)
   mut within_cell : @signals.Signal[Bool]?
+  /// where the pointer is in its own terms as it was last placed, made as first read (View::pointer_here_told)
+  mut here_cell : @signals.Signal[(Double, Double)?]?
+  /// how many times how its words are set was said (their words, pieces, look: View::words_said), made as first read
+  mut said_cell : @signals.Signal[Int]?
   /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
   mut input_cell : @signals.Signal[Bool]?
   /// whether it can take the keyboard's focus, which of Enter (1) and Space (2) press it as it has it (View::focusable;
@@ -879,6 +887,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.max_w_said = None
       n.look.runs = []
       n.look.runs_look = runs_plain
+      n.look.runs_pressed = -1
       n.look.shapes = []
       n.look.tint = 0L
       n.look.radius = 0.0
@@ -937,6 +946,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_pointer_moved = None
       n.pointed_in_cell = None
       n.within_cell = None
+      n.here_cell = None
+      n.said_cell = None
       n.focusable = false
       n.focus_keys = 0
       n.focus_tab = true
@@ -991,7 +1002,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -1016,6 +1027,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_pointer_moved: None,
         pointed_in_cell: None,
         within_cell: None,
+        here_cell: None,
+        said_cell: None,
         focusable: false,
         input_cell: None,
         cursor: None,
@@ -1639,6 +1652,7 @@ priv enum Prop {
   Words
   RunsSet
   RunsInk
+  RunsPressed
   Over
   Shift
   Presses
@@ -2112,7 +2126,10 @@ pub fn Tree::input_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, 
 /// each part of it), as an old view's centred words do (Ctx::text's `center`): how they are drawn only, measured and
 /// wrapped as ever, a change of it drawn again, nothing laid out again.
 pub fn View::words_centered(self : View, on : Live[Bool]) -> View {
-  self.bind(WordsCentered, on, Paint, fn(on) { self.tree.nodes[self.at].look.words_center = on })
+  self.bind(WordsCentered, on, Paint, fn(on) {
+    self.tree.nodes[self.at].look.words_center = on
+    self.words_told()
+  })
   self
 }
 
@@ -3222,6 +3239,8 @@ pub fn View::words(
     if tree.nodes[at].shorter.length() > 0 {
       tree.give_way_applied(at)
     }
+    // (how its words are set said: what follows it told, once this is)
+    self.words_told()
   })
   self
 }
@@ -3330,6 +3349,8 @@ pub fn View::words_runs(
     if tree.nodes[at].shorter.length() > 0 {
       tree.give_way_applied(at)
     }
+    // (how its words are set said: what follows it told, once this is)
+    self.words_told()
   })
   self
 }
@@ -5970,6 +5991,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     words_look: n.look.words_look,
     runs: n.look.runs,
     runs_look: n.look.runs_look,
+    runs_pressed: n.look.runs_pressed,
     shadow: n.look.shadow,
     hosted: n.hosted,
     clips: n.look.clips,
@@ -6208,6 +6230,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     words_look: c.words_look,
     runs: c.runs,
     runs_look: c.runs_look,
+    runs_pressed: c.runs_pressed,
     shadow: c.shadow,
     hosted: c.hosted,
     clips: c.clips,
@@ -7044,7 +7067,10 @@ pub fn View::pointer_within(self : View) -> Bool {
     None => {
       let s = @signals.signal(self.tree.within(self.at), same=fn(a, b) { a == b })
       n.within_cell = Some(s)
-      self.tree.withins_at.push((self.at, n.gen))
+      // (once for both it and where the pointer is in it: View::pointer_here_told)
+      if n.here_cell is None {
+        self.tree.withins_at.push((self.at, n.gen))
+      }
       s
     }
   }
@@ -7072,16 +7098,31 @@ fn Tree::withins_told(self : Tree) -> Bool {
   for w in self.withins_at {
     let (at, gen) = w
     let n = self.nodes[at]
+    if !n.live || n.gen != gen {
+      continue
+    }
     match n.within_cell {
-      Some(cell) if n.live && n.gen == gen => {
+      Some(cell) => {
         let now = self.within(at)
         if @signals.untracked(fn() { cell.get() }) != now {
           changed = true
           cell.set(now)
         }
-        keep.push(w)
       }
-      _ => ()
+      None => ()
+    }
+    match n.here_cell {
+      Some(cell) => {
+        let now = self.pointer_in(at)
+        if @signals.untracked(fn() { cell.get() }) != now {
+          changed = true
+          cell.set(now)
+        }
+      }
+      None => ()
+    }
+    if n.within_cell is Some(_) || n.here_cell is Some(_) {
+      keep.push(w)
     }
   }
   self.withins_at.clear()
