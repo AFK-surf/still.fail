@@ -52,40 +52,42 @@ test("repeated X11 views close their capture processes and release pending reads
   } finally { await desktop.close(); }
 });
 
-test("an X server that exits ends the view and is reported unavailable", { skip: !enabled, timeout: 30_000 }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), "sf-x11-failure-"));
-  const auth = join(dir, "Xauthority");
-  const display = ":196";
-  const env: NodeJS.ProcessEnv = { ...process.env, DISPLAY: display, XAUTHORITY: auth, XDG_SESSION_TYPE: "x11" };
-  delete env.WAYLAND_DISPLAY;
-  await run("xauth", ["-f", auth, "add", display, ".", randomBytes(16).toString("hex")], { env });
-  const xserver = process.env.STILLFAIL_TEST_XSERVER ?? "Xvfb";
-  const args = xserver.endsWith("Xvnc")
-    ? [display, "-auth", auth, "-nolisten", "tcp", "-rfbport", "-1", "-geometry", "640x480", "-depth", "24"]
-    : [display, "-auth", auth, "-nolisten", "tcp", "-screen", "0", "640x480x24"];
-  const server = spawn(xserver, args, { env, stdio: "ignore" });
-  const desktop = new X11Desktop({ env, changed: () => {} });
-  try {
-    await until(async () => {
-      if (server.exitCode !== null) throw new Error("the disposable X server did not start");
-      try { await run("xdotool", ["getdisplaygeometry"], { env }); return true; } catch { return false; }
-    }, "the disposable X server");
-    const view = await desktop.open({ maxWidth: 640, maxHeight: 480, codecs: ["jpeg"] });
-    assert.ok(await view.next());
-    server.kill("SIGTERM");
-    let ended = false;
-    for (let i = 0; i < 10 && !ended; i++) {
-      const got = await Promise.race([view.next(), sleep(5_000, "timeout" as const, { ref: false })]);
-      assert.notEqual(got, "timeout", "a lost X server must not leave a frame read hanging");
-      ended = got === null;
+test("an X server that exits ends JPEG and H.264 views and is reported unavailable", { skip: !enabled, timeout: 30_000 }, async () => {
+  for (const [i, codec] of (["jpeg", "h264"] as const).entries()) {
+    const dir = mkdtempSync(join(tmpdir(), "sf-x11-failure-"));
+    const auth = join(dir, "Xauthority");
+    const display = `:${196 + i}`;
+    const env: NodeJS.ProcessEnv = { ...process.env, DISPLAY: display, XAUTHORITY: auth, XDG_SESSION_TYPE: "x11" };
+    delete env.WAYLAND_DISPLAY;
+    await run("xauth", ["-f", auth, "add", display, ".", randomBytes(16).toString("hex")], { env });
+    const xserver = process.env.STILLFAIL_TEST_XSERVER ?? "Xvfb";
+    const args = xserver.endsWith("Xvnc")
+      ? [display, "-auth", auth, "-nolisten", "tcp", "-rfbport", "-1", "-geometry", "640x480", "-depth", "24"]
+      : [display, "-auth", auth, "-nolisten", "tcp", "-screen", "0", "640x480x24"];
+    const server = spawn(xserver, args, { env, stdio: "ignore" });
+    const desktop = new X11Desktop({ env, changed: () => {} });
+    try {
+      await until(async () => {
+        if (server.exitCode !== null) throw new Error("the disposable X server did not start");
+        try { await run("xdotool", ["getdisplaygeometry"], { env }); return true; } catch { return false; }
+      }, "the disposable X server");
+      const view = await desktop.open({ maxWidth: 640, maxHeight: 480, codecs: [codec] });
+      assert.equal((await view.next())?.config?.codec, codec);
+      server.kill("SIGTERM");
+      let ended = false;
+      for (let i = 0; i < 10 && !ended; i++) {
+        const got = await Promise.race([view.next(), sleep(5_000, "timeout" as const, { ref: false })]);
+        assert.notEqual(got, "timeout", "a lost X server must not leave a frame read hanging");
+        ended = got === null;
+      }
+      assert.ok(ended, "the view ends after its display goes away");
+      await desktop.refresh(true);
+      assert.equal(desktop.access().reason, "linuxUnavailable");
+      view.close();
+    } finally {
+      server.kill("SIGTERM");
+      await desktop.close();
+      rmSync(dir, { recursive: true, force: true });
     }
-    assert.ok(ended, "the view ends after its display goes away");
-    await desktop.refresh(true);
-    assert.equal(desktop.access().reason, "linuxUnavailable");
-    view.close();
-  } finally {
-    server.kill("SIGTERM");
-    await desktop.close();
-    rmSync(dir, { recursive: true, force: true });
   }
 });

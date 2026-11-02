@@ -1,6 +1,6 @@
 // Real X11 and (when requested) real QUIC, on a disposable display. Never use a person's desktop for this test.
 import assert from "node:assert/strict";
-import { execFile, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -50,12 +50,20 @@ function annexFrame(bytes: Buffer): Buffer[] {
 
 test("H.264 over the screen wire stays decodable through backpressure and a key-frame request", { skip: !enabled, timeout: 45_000 }, async () => {
   const env = { ...process.env };
+  // Keep an X client connected: Xvfb resets its root background when its last client disconnects.
+  const observer = spawn("xev", ["-event", "keyboard"], { env, stdio: "ignore" });
   const desktop = new X11Desktop({ env, changed: () => {} });
   const hub = new ScreenHub();
   hub.add(desktop);
   let station: Endpoint | undefined, device: Endpoint | undefined, conn: Connection | undefined, stream: Stream | undefined;
   let served: Promise<void> | undefined;
   try {
+    let connected = false;
+    for (let i = 0; i < 100 && !connected; i++) {
+      try { await run("xdotool", ["search", "--name", "Event Tester"], { env }); connected = true; }
+      catch { await sleep(50); }
+    }
+    assert.ok(connected, "the X observer connected");
     await run("xsetroot", ["-solid", "#ff0000"], { env });
     const real = process.env.STILLFAIL_TEST_X11_REAL_MESH === "1";
     const mesh = real ? loadMesh() : memoryMesh();
@@ -143,6 +151,7 @@ test("H.264 over the screen wire stays decodable through backpressure and a key-
     conn?.close(0, "test done");
     await Promise.all([station?.close(), device?.close()]);
     await desktop.close();
+    observer.kill();
   }
 });
 

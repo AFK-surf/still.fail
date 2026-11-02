@@ -26,10 +26,14 @@ async function until<T>(get: () => T | null | Promise<T | null>, what: string): 
 test("the web ScreenFrames decoder draws X11 H.264 across encoder restarts", { skip: !enabled, timeout: 45_000 }, async () => {
   const env = { ...process.env };
   const desktop = new X11Desktop({ env, changed: () => {} });
+  const observer = spawn("xev", ["-event", "keyboard"], { env, stdio: "ignore" });
   const dir = mkdtempSync(join(tmpdir(), "sf-x11-browser-"));
   let chrome: ChildProcess | undefined;
   let socket: WebSocket | undefined;
   try {
+    await until(async () => {
+      try { await run("xdotool", ["search", "--name", "Event Tester"], { env }); return true; } catch { return null; }
+    }, "the X observer");
     await run("xsetroot", ["-solid", "#ff0000"], { env });
     const view = await desktop.open({ maxWidth: 640, maxHeight: 400, codecs: ["h264"] });
     const frames: object[] = [];
@@ -107,6 +111,7 @@ test("the web ScreenFrames decoder draws X11 H.264 across encoder restarts", { s
     socket?.close();
     chrome?.kill();
     await desktop.close();
+    observer.kill();
     rmSync(dir, { recursive: true, force: true });
   }
 });
