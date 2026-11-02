@@ -74,6 +74,27 @@ pub fn message_runs(
 }
 
 ///|
+/// A person's words in the runs the core read them in (the message's `words`: refLinks.ts personWords), as message_runs
+/// draws them: a reference to a chat `@` a little lighter and its title in `accent` (one written bare reading as
+/// `chat_title` says), a web address a link. What is not the core's yet (sent from here, its marks) message_runs reads.
+pub fn words_runs(parts : Array[Json], accent : Int64, chat_title? : (String) -> String? = fn(_) { None }) -> Array[@ui.Run] {
+  let out : Array[@ui.Run] = []
+  for p in parts {
+    let words = text(Some(p), "text")
+    let link = text(Some(p), "link")
+    match field(Some(p), "ref") {
+      Some(True) => {
+        let title = if words == link { chat_title(link).unwrap_or(link) } else { words }
+        out.push(@ui.span("@", link~, color=@sf.alpha(accent, 0.7)))
+        out.push(@ui.span(title, link~, color=accent))
+      }
+      _ => out.push(if link != "" { @ui.link(words, link) } else { @ui.plain(words) })
+    }
+  }
+  out
+}
+
+///|
 /// Words with the web addresses in them as links (bareLinks.ts: one ends at a space or at Chinese); one to a chat a
 /// reference to it (message_runs).
 fn bare_links(s : String, out : Array[@ui.Run], accent : Int64, chat_title : (String) -> String?) -> Unit {

@@ -325,6 +325,7 @@ pub using @sfbase {
   under_turn,
   absolute_times,
   message_runs,
+  words_runs,
   chat_params,
   chat_jobs_summary_params,
   term_color,

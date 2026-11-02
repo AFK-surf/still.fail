@@ -2336,6 +2336,11 @@ export interface ChatMessage {
 	 * person's, drawn as they wrote it, and for still.fail's notice (its `notice` has its words').
 	 */
 	md?: unknown;
+	/**
+	 * A person's words in runs (refLinks.ts personWords: as written, a bare web address `link`, a reference to a chat
+	 * `ref`): what the clients draw. Absent for others' and from a core from before.
+	 */
+	words?: unknown;
 	attachments: Attachment[];
 	quotes: Quote[];
 	/** An agent's post that ended its turn: final, block (the words from before; `ending` has today's). */

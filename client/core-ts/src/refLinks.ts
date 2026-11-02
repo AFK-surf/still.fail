@@ -156,3 +156,26 @@ export function pastedRefs(pasted: string, here: string): { start: number; end: 
     return chat && scope(chat.station) === scope(here) ? [{ start: m.index, end: m.index + m[0].length, title: m[1]!, station: chat.station, id: chat.id, history: chat.history || chat.message }] : [];
   });
 }
+
+/// A run of a person's words as the clients draw it: as they wrote it, a web address written bare (`link`), or a
+/// reference to a chat (`ref`: its title is `text` where they wrote one, `[title](its page)`; a chat's page written bare
+/// is one too, `text` its address, the message's `chats` saying its title).
+export type WordsRun = { text: string; link?: string; ref?: true };
+
+/// What a person wrote, in runs (WordsRun): references to chats, and web addresses written bare (bareLinks.ts). The one
+/// reading the clients draw a person's words by (apps/mbui sfbase/message_words.mbt for words not the core's yet).
+export function personWords(text: string): WordsRun[] {
+  const out: WordsRun[] = [];
+  for (const part of splitBy(text, REF_LINK)) {
+    if (typeof part !== "string") {
+      out.push({ text: part[1]!, link: part[2]!, ref: true });
+      continue;
+    }
+    for (const bit of bareLinks(part)) {
+      if (typeof bit === "string") {
+        if (bit !== "") out.push({ text: bit });
+      } else out.push({ text: bit.url, link: bit.url, ...(isChatLink(bit.url) ? { ref: true as const } : {}) });
+    }
+  }
+  return out;
+}

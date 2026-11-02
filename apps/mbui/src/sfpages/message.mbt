@@ -142,7 +142,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
       if m.author_kind == "person" {
         if m.text != "" {
           picking(here, c, src, m.ts, m.seq, m.by.name, "person", m.text, fn() {
-            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m))
+            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m), runs=m.words)
           })
         }
         message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f")
@@ -172,7 +172,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
     message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)), at=message_place(m) + "/f")
     if m.text != "" {
       picking(here, c, src, m.ts, m.seq, @sf.t("web-main.chat.you"), "person", m.text, fn() {
-        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m))
+        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m), runs=m.words)
       }, fill=false)
     }
     if !m.followed {
@@ -449,10 +449,16 @@ pub fn person_words(
   peek? : ((String, String, Int) -> Unit)? = None,
   chat_title? : (String) -> String? = fn(_) { None },
   marks? : Array[(Int, Int)] = [],
+  runs? : Json? = None,
 ) -> Unit {
   let p = @sf.theme().p
+  // (the core's reading where it gave one: a message's `words`; else what is not its yet, read here)
+  let shown = match runs {
+    Some(Array(parts)) => words_runs(parts, p.accent, chat_title~)
+    _ => message_runs(words, p.accent, chat_title~, marks~)
+  }
   c.rich(
-    @sf.found_weight(message_runs(words, p.accent, chat_title~, marks~), found),
+    @sf.found_weight(shown, found),
     key="msg-words/" + key,
     style=@sf.theme().t.words,
     link_color=p.blue,
@@ -505,6 +511,7 @@ fn mine_bubble(
   peek? : ((String, String, Int) -> Unit)? = None,
   chat_title? : (String) -> String? = fn(_) { None },
   marks? : Array[(Int, Int)] = [],
+  runs? : Json? = None,
 ) -> Unit {
   // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
   let flight = flight_here(here)
@@ -524,11 +531,11 @@ fn mine_bubble(
       // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
       match flight {
         Some(f) => {
-          let w = c.box(fn() { person_words(c, words, key, found~, peek~, chat_title~, marks~) })
+          let w = c.box(fn() { person_words(c, words, key, found~, peek~, chat_title~, marks~, runs~) })
           flight_landing_words(c, f, w)
           flight_pieces_in(c, f, bubble_node)
         }
-        None => person_words(c, words, key, found~, peek~, chat_title~, marks~)
+        None => person_words(c, words, key, found~, peek~, chat_title~, marks~, runs~)
       }
     },
   )

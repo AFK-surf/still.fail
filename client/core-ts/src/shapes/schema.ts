@@ -199,6 +199,7 @@ export const SHAPES: Record<string, Shape> = {
     ["authorRuntime", opt("String"), { doc: "An agent's: its session's runtime, for its mark before the session is read. Absent for others and from a\nstation that does not say." }],
     ["text", "String"],
     ["md", opt("Value"), { doc: "An agent's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. Absent for a\nperson's, drawn as they wrote it, and for still.fail's notice (its `notice` has its words')." }],
+    ["words", opt("Value"), { doc: "A person's words in runs (refLinks.ts personWords: as written, a bare web address `link`, a reference to a chat\n`ref`): what the clients draw. Absent for others' and from a core from before." }],
     ["attachments", vec("Attachment")],
     ["quotes", vec("Quote")],
     ["declared", opt("String"), { doc: "An agent's post that ended its turn: final, block (the words from before; `ending` has today's)." }],

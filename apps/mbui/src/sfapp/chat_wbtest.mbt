@@ -187,6 +187,26 @@ test "references in plain words: a still.fail link's, and one linked bare readin
 }
 
 ///|
+test "a person's words as the core gives them in runs are drawn as the words read here are" {
+  let accent = @sf.theme().p.accent
+  let page = "https://app.still.fail/w/ws1/s/st1/chats/s-c2"
+  let old = "https://app.still.fail/o/ws1/st1/c-old"
+  let title = fn(h) { if h == old { Some("旧的对话") } else { None } }
+  // (refLinks.ts personWords of these words, as the core gives them in a message's `words`)
+  let parts : Array[Json] = [
+    { "text": "看 " },
+    { "text": "首页", "link": Json::string(page), "ref": true },
+    { "text": " 和 " },
+    { "text": "https://example.com/a", "link": "https://example.com/a" },
+    { "text": " 还有 " },
+    { "text": Json::string(old), "link": Json::string(old), "ref": true },
+  ]
+  let core = words_runs(parts, accent, chat_title=title)
+  let here = message_runs("看 [首页](\{page}) 和 https://example.com/a 还有 \{old}", accent, chat_title=title)
+  assert_eq(core.map(fn(r) { (r.text, r.link, r.color) }), here.map(fn(r) { (r.text, r.link, r.color) }))
+}
+
+///|
 test "what was sent from here draws the composer's marks as the references its message will have" {
   let accent = @sf.theme().p.accent
   let sent = message_runs("看 @[首页] 吧", accent, marks=[(2, 7)])

@@ -23,7 +23,7 @@ import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
 import { untracked } from "../reactive.ts";
-import { chatsLinked } from "../refLinks.ts";
+import { chatsLinked, personWords } from "../refLinks.ts";
 import { timed } from "../spent.ts";
 import type { Value, Watch } from "../store.ts";
 import { arr as arrU, deepFreeze, equal, get as getU, isObject, shaped, sharedValue } from "../util.ts";
@@ -2614,7 +2614,8 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     // Markdown, read here (once: markdown.ts keeps it by the words); still.fail's notice's are too, as its pill says
     // them (noticeOf: a chat it opened is a link to it).
     if (isObject(m.notice)) out.notice = { ...m.notice, md: markdown(str(m.notice.words) ?? "", md) };
-    else if (m.authorKind !== "person") {
+    else if (m.authorKind === "person") out.words = personWords(str(m.text) ?? "");
+    else {
       out.md = markdown(str(m.text) ?? "", md);
       if (Array.isArray(files) && files.length > 0) {
         const { placed } = placeFiles(str(m.text) ?? "", files as J[]);
