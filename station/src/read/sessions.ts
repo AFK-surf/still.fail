@@ -176,8 +176,14 @@ function threadJson(t: ThreadRow): Json {
   return v;
 }
 
-/// views.rs `thread_view`: a thread with its sessions, last entry and message, what the viewer read, who wrote.
-function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.chatShares> = store.chatShares(s), published: ReturnType<typeof store.publishedByThread> = store.publishedByThread(s)): Json {
+/// views.rs `thread_view`: a thread with its sessions, last entry and message, what the viewer read, who wrote. Of one
+/// thread (what is told of it as it changes, for each viewer), its own shares and snapshots alone.
+function threadView(
+  s: Store,
+  t: ThreadSummary,
+  shares: ReturnType<typeof store.chatShares> = store.chatShares(s, [t.thread.home ?? t.sessions[0]?.session ?? ""]),
+  published: ReturnType<typeof store.publishedByThread> = store.publishedByThread(s, [t.thread.id]),
+): Json {
   const names = authorNames(s, t.thread.id);
   const v = threadJson(t.thread);
   v.sessions = t.sessions.map((m) => ({ thread: m.thread, session: m.session, connect: m.connect, joinedAt: m.joinedAt }));

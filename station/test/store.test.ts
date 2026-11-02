@@ -12,6 +12,7 @@ import {
   MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
+import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM, USAGE_GROUPS } from "../src/store/usage.ts";
 import * as read from "../src/read/store.ts";
 import { fileAway } from "./archived-before.ts";
@@ -344,7 +345,7 @@ test("letters from before they were marked are marked as the column comes, by th
   const db = new DatabaseSync(path);
   db.exec("DROP TRIGGER thread_state_add; DROP TRIGGER thread_state_drop; DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop");
   db.exec("DROP TABLE thread_state; DROP TABLE thread_people; DROP TABLE session_first");
-  db.exec("DROP VIEW merged; DROP INDEX entries_letters; ALTER TABLE entries DROP COLUMN letter");
+  db.exec("DROP VIEW merged; DROP INDEX entries_letters; DROP INDEX entries_said; ALTER TABLE entries DROP COLUMN letter");
   db.close();
   const again = open(path);
   assert.deepEqual(
@@ -949,6 +950,67 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.equal(store.sessionOfRuntime("claude", "r1")?.key, "b");
   assert.equal(store.sessionOfRuntime("codex", "r1"), null, "another runtime's");
   assert.equal(store.sessionOfRuntime("claude", "r9"), null);
+});
+
+test("what is told as chats change is planned by the size of what it finds, not by a chat's or a session's history", () => {
+  const store = memory();
+  // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its
+  // messages alone; an agent's message during a turn by the index of theirs by time; a session's turns as counted, its
+  // undelivered messages by the index of those alone, its latest turn by its index; the Slack threads a chat copies to,
+  // by their last entry; and of the items a change touched, or of a chat, their own shares, openers and snapshots. Each
+  // as it was read every message of a chat, every turn or delivery of a session, or every row of its table: a notice of
+  // a chat of 534 messages read 479 pages, 3 to 16 s on ccvm short of memory (2026-11-02), every telling after it waiting.
+  const planned: [string, unknown[]][] = [
+    [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [CC_THREADS_SQL, [1]],
+    [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]],
+  ];
+  const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
+  const plans = new Map<string, string[]>();
+  for (const [sql, args] of planned) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(!plan.some((d) => scans.test(d)), `${sql}\n  ${plan.join(" | ")}`);
+    plans.set(sql, plan);
+  }
+  const has = (sql: string, step: string) => assert.ok(plans.get(sql)!.some((d) => d.includes(step)), `${step}\n  ${plans.get(sql)!.join(" | ")}`);
+  const lacks = (sql: string, step: string) => assert.ok(!plans.get(sql)!.some((d) => d.includes(step)), `${step}\n  ${plans.get(sql)!.join(" | ")}`);
+  has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
+  has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");
+  const stats = `${read.SESSION_STATS} WHERE s.key = ?`;
+  has(stats, "c USING PRIMARY KEY (session=?)");
+  has(stats, "deliveries_pending (session=?)");
+  lacks(stats, "COVERING INDEX turns_by_session");
+  lacks(stats, "deliveries_session");
+  has(read.LAST_TURN, "turns_by_session (session_key=?)");
+  has(CC_THREADS_SQL, "e USING INDEX sqlite_autoindex_entries_1 (thread=? AND n=?)");
+  lacks(CC_THREADS_SQL, "e USING INDEX sqlite_autoindex_entries_1 (thread=?)");
+  has(read.SHARES_OF, "chat_shares USING INDEX sqlite_autoindex_chat_shares_1 (session=?)");
+  has(read.OPENERS_OF, "o USING INDEX sqlite_autoindex_opened_chats_1 (child_station=? AND child=?)");
+  has(read.OPENED_OF, "o USING INDEX opened_chats_by_key (parent_station=? AND parent=?)");
+  has(read.PUBLISHED_OF, "published USING INDEX published_by_thread (thread=?)");
+});
+
+test("a session's turns are counted as they are written and removed, and once from those before", () => {
+  const path = join(tempdir(), "stillfail.db");
+  let store = open(path);
+  session(store, "a");
+  session(store, "b");
+  store.startTurn("t1", "a", "input");
+  store.startTurn("t2", "a", "input");
+  store.startTurn("t3", "b", "input");
+  const turns = (s: Store) => {
+    const r = read.makeStore(s.db, tempdir());
+    return Object.fromEntries([...read.sessionStats(r, null)].map(([key, stats]) => [key, stats.turns]));
+  };
+  assert.deepEqual(turns(store), { a: 2, b: 1 });
+  store.deleteSession("b");
+  assert.deepEqual(turns(store), { a: 2 });
+  assert.deepEqual(store.db.prepare("SELECT session, n FROM session_turns").all().map((r: any) => [r.session, r.n]), [["a", 2]]);
+  // A database from before the count: made from the turns it has, as it opens.
+  store.db.exec("DROP TRIGGER session_turns_add; DROP TRIGGER session_turns_drop; DROP TABLE session_turns;");
+  store.startTurn("t4", "a", "input");
+  store.close();
+  store = open(path);
+  assert.deepEqual(turns(store), { a: 3 });
 });
 
 test("usage: where a model's context was compacted is kept as calls are recorded, and made once from those before", () => {

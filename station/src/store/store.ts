@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addSessionTurns, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 
@@ -53,11 +53,13 @@ export const STATS_OF = `SELECT
 // Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
 // an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
 // The checks are grouped by `+session`: by `session`, the station's SQLite went over every check in order of session.
+// The login cards are read by their own index, named: with no statistics to go by, SQLite took the index of every
+// agent's message by time (schema.ts entries_agent_at) for them once there was one.
 export { CARD_BEFORE, CLOSED_SINCE, OPTIONS_BEFORE };
 export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
 export const LOGIN_CARDS =
-  "SELECT thread, n, author FROM entries WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
+  "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 
 export * from "./rows.ts";
 export { SCHEMA_VERSION } from "./schema.ts";
@@ -159,6 +161,8 @@ export class Store {
       addListState(db);
       addLetters(db);
       addCardOutcomes(db);
+      addSessionTurns(db);
+      addTellIndexes(db);
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
       db.close();

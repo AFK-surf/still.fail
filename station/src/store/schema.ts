@@ -953,6 +953,53 @@ export function addCardOutcomes(db: DatabaseSync): void {
   }
 }
 
+/// How many turns each session has had, kept by the database as turns are written and removed (as LIST_STATE): what a
+/// session's summary says (read/store.ts `sessionStats`). Counted from all of a session's turns, it was read again each
+/// time the session changed: with the session's every delivery besides (its undelivered ones looked for by the wrong
+/// index), 65 pages for a session of 1,900 turns, each from the disk on ccvm short of memory (2026-11-02).
+const SESSION_TURNS = `
+CREATE TABLE session_turns (
+  session TEXT PRIMARY KEY,
+  n INTEGER NOT NULL
+) WITHOUT ROWID;
+INSERT INTO session_turns SELECT session_key, COUNT(*) FROM turns GROUP BY session_key;
+CREATE TRIGGER session_turns_add AFTER INSERT ON turns BEGIN
+  INSERT INTO session_turns VALUES (NEW.session_key, 1) ON CONFLICT (session) DO UPDATE SET n = n + 1;
+END;
+CREATE TRIGGER session_turns_drop AFTER DELETE ON turns BEGIN
+  UPDATE session_turns SET n = n - 1 WHERE session = OLD.session_key;
+  DELETE FROM session_turns WHERE session = OLD.session_key AND n <= 0;
+END;
+`;
+
+/// The sessions' turn counts (SESSION_TURNS), made once from the turns written before, in the same transaction as the
+/// triggers that keep them from then on (as addCardOutcomes).
+export function addSessionTurns(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_turns'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(SESSION_TURNS);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+/// What is told as chats change (a chat's row and how it stands for each viewer, a turn's end) is read by these, each
+/// lookup the size of what it finds rather than of the chat's history:
+/// - entries_said: a chat's messages after where a viewer read, counted from the index alone (read/store.ts `unreadOf`;
+///   `letter`, always none here, so that SQLite need not read the message to know it). From the messages themselves, a
+///   page each: a notice of a chat of 534 messages read 479 pages, 3 to 16 s each time on ccvm short of memory
+///   (2026-11-02).
+/// - entries_agent_at: what an agent said during a turn, by when (`askingMessage`): by the chat alone, every message
+///   it had was read.
+export function addTellIndexes(db: DatabaseSync): void {
+  db.exec("CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL");
+  db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
+}
+
 /// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
 export function addListState(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thread_state'").get() !== undefined;

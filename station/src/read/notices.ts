@@ -5,7 +5,7 @@
 import { type Lang, tr as translate } from "../ops/i18n.ts";
 import { type EntryRow, type MessageRow, STILLFAIL_SURFACE, type Store, type TurnSummary } from "./store.ts";
 import * as store from "./store.ts";
-import { apiOf, authorNames, chatTitle, people, useNames } from "./views.ts";
+import { apiOf, authorNames, people, titleOf, useNames } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
 /// How long a notice's text is kept, in characters (still.fail cloud cuts it shorter).
@@ -47,19 +47,23 @@ function emailsOf(s: Store, creator: string | null, said: string[], sessions: st
     .filter((e) => e !== not && !seen.has(e) && (seen.add(e), true));
 }
 
+/// A notice of a chat: its name and whom to tell, each looked up alone. As lists have the chat, its every message was
+/// counted besides (unread, for no one): 479 pages of a chat of 534 messages, 3 to 16 s each time on ccvm short of
+/// memory (2026-11-02), every telling after it waiting.
 function notice(s: Store, thread: number, seq: number | null, session: string, kind: string, by: string, text: string, except: string | null): Notice | null {
-  const summary = store.listThreads(s, "", null, thread).pop();
-  if (summary === undefined) return null;
-  const to = emailsOf(s, summary.thread.createdBy, summary.people, summary.sessions.map((m) => m.session), except);
+  const t = store.getThread(s, thread);
+  if (t === null) return null;
+  const sessions = store.threadSessions(s, thread).map((m) => m.session);
+  const to = emailsOf(s, t.createdBy, store.threadPeople(s, thread, t.surface), sessions, except);
   if (to.length === 0) return null;
-  return { to, kind, session, thread, seq, title: chatTitle(summary, null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
+  return { to, kind, session, thread, seq, title: titleOf(t, store.firstText(s, thread), null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
 }
 
 /// A session changed: its last turn, if it ended since `since` and is not `ended` (the end already told), told to its
 /// chats. Gives the end it saw.
 export function turnNotices(s: Store, key: string, since: number, ended: number | null, lang: Lang): { ended: number | null; notices: Notice[] } {
   useNames(s);
-  const turn = store.sessionStats(s, key).get(key)?.lastTurn ?? null;
+  const turn = store.lastTurn(s, key);
   const at = turn?.endedAt;
   if (turn === null || typeof at !== "number" || at < since) return { ended, notices: [] };
   if (at === ended) return { ended, notices: [] };
