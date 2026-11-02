@@ -1273,11 +1273,12 @@ fn profile_workspaces(c : @ui.Ctx, core : Core, address : String, p : Json?) -> 
         let next = @sf.switch_row(
           c,
           "profile-ws/" + address + "/" + id + "/" + ws,
-          @sf.t("web-pages.profiles.workspaces.for", args=[("name", name)]),
+          name,
           on,
           note=@sf.t(if on { "web-pages.profiles.workspaces.on" } else { "web-pages.profiles.workspaces.off" }, args=[("name", name)]),
           busy~,
-          // its mark before it, as the workspace is named everywhere
+          // named by the workspace, its mark before its name as everywhere (notifications' rows too): before a sentence
+          // about it the mark read as a word of it (「个 同时用于 个人」)
           lead=fn(c) { @sf.workspace_badge(c, name, text(wv, "emoji"), text(wv, "icon"), profile_ws_mark) },
         )
         if next != on {
