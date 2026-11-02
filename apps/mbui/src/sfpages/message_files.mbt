@@ -72,10 +72,9 @@ fn media_content(c : @ui.Ctx, p : MediaPicture, w : Double, h : Double, fit : @u
   } else if p.key != "" {
     c.image(p.key, w=Px(w), h=Px(h), fit~, radius~, bg=0L, fade=false) |> ignore
   } else {
-    match @gallery.thumbhash_image(p.hash) {
+    match image_wait_colours(p.hash, w, h) {
       Some(likeness) => {
-        c.image(likeness, w=Px(w), h=Px(h), fit~, radius~, bg=0L, fade=false) |> ignore
-        reveal_frosted(c, reveal_blur)
+        c.image(likeness, w=Px(w), h=Px(h), fit=FitFill, radius~, bg=0L, fade=false) |> ignore
       }
       None => c.box(style=image_fill_waiting, fn() {  }) |> ignore
     }
@@ -352,8 +351,8 @@ fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 }
 
 ///|
-/// An image (FileItem's image): in its box on the neutral ground, what it waits on until it is decoded (its ThumbHash's
-/// likeness), then brushed in from its top; one sent from here the picture it was picked as, there at once; one that
+/// An image (FileItem's image): in its box on the neutral ground, what it waits on until it is decoded (a field of its
+/// colours), then brushed in from its top; one sent from here the picture it was picked as, there at once; one that
 /// cannot be had says so. Pressed, the preview; right-clicked, 复制图片.
 fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, by~ : (String, String, String)?, corner~ : Double, at~ : String) -> Unit {
 
@@ -384,7 +383,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let (pw, ph) = (w * sw, h * sh)
   let top_crop = tall_image_cropped(a)
   let fit : @ui.Fit = if top_crop { FitCoverAt(0.0) } else { FitCover }
-  let likeness = @gallery.thumbhash_image(a.thumbhash).unwrap_or("")
+  let likeness = image_wait_colours(a.thumbhash, pw, ph).unwrap_or("")
   let picture = fn() { media_content(c, p, pw, ph, fit, 0.0) }
   // one the device holds and not decoded yet: what the app's first page waits for
   if a.held && !p.sent && (key == "" || (key != "!" && !c.image_ready(key, reveal_px(c, pw, ph)))) {
@@ -724,9 +723,9 @@ fn reveal_px(c : @ui.Ctx, w : Double, h : Double) -> Double {
 
 ///|
 /// A message's image coming in, as the web's (msgImageWait, msgImageReveal): until it is decoded what it waits on (its
-/// likeness, the ThumbHash sent with it, else the neutral ground) under the frost its way in starts with, so nothing
-/// changes as it is decoded but the edge setting off (the user, 2026-10-31: the likeness first, then blurred, then
-/// brushed in was a change too many); once it is, brushed in from its top (an edge half its height deep going down
+/// colours made from the ThumbHash sent with it, else the neutral ground); once it is decoded, the same colours cover
+/// the frosted image and the edge sets off (the user, 2026-10-31: the likeness first, then blurred, then brushed in was a
+/// change too many). It is brushed in from its top (an edge half its height deep going down
 /// it), blurred to sharp and from 1.04 its size to its own (1100 ms, the ease out), what it waited on fading out behind
 /// it (300 ms, from 800). One already decoded as it is first shown, or one the device had (`held`: kept here, not
 /// brought from its station, a decode away), comes as it is.
@@ -766,8 +765,10 @@ pub fn image_reveal(
     return
   }
   c.look(img, @ui.look(alpha=if ready { 1.0 } else { 0.0 }, scale=1.0 + reveal_grow * (1.0 - e)))
-  // blurred to sharp: a frost over it and what it waits on, its blur going (all of it while it waits)
-  let frost = fn() { reveal_frosted(c, reveal_blur * (1.0 - e)) }
+  // The waiting field is already soft. Frost the arriving image below it, so decoding never blurs the field again.
+  if ready {
+    reveal_frosted(c, reveal_blur * (1.0 - e))
+  }
   // what it waits on, under the edge brushing down (its band in steps), fading out from 800 ms
   let waited = if ready {
     1.0 - dmin(1.0, dmax(0.0, (p * reveal_ms - reveal_wait_after_ms) / reveal_wait_out_ms))
@@ -775,10 +776,9 @@ pub fn image_reveal(
     1.0
   }
   if waited <= 0.0 {
-    frost()
     return
   }
-  let likeness = @gallery.thumbhash_image(hash)
+  let likeness = image_wait_colours(hash, w, h)
   // (each step on the screen's pixels: one meets the next with no seam)
   let px_of = fn(y : Double) { (y * c.scale).round() / c.scale }
   let wait = fn(y0 : Double, y1 : Double, alpha : Double) {
@@ -794,7 +794,7 @@ pub fn image_reveal(
       }
       let strip = c.box(style=@ui.style(w=Full, h=Fixed(y1 - y0), clip=true), fn() {
         let inner = match likeness {
-          Some(l) => c.image(l, w=Px(w), h=Px(h), fit~, bg=0L, fade=false)
+          Some(l) => c.image(l, w=Px(w), h=Px(h), fit=FitFill, bg=0L, fade=false)
           None => c.box(style=reveal_ground.then(@ui.style(w=Fixed(w), h=Fixed(h))), fn() {  })
         }
         c.look(inner, @ui.look(dy=-y0))
@@ -820,7 +820,6 @@ pub fn image_reveal(
     }
   })
   |> ignore
-  frost()
 }
 
 ///|
