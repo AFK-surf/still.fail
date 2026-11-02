@@ -310,11 +310,13 @@ test "a node's words hidden (what holds them faded out) hold no room in the atla
     root.lines_up(Is(Some(Start))) |> ignore
     root.box(fn(h) {
       h.alpha(By(fn() { if first_shown.get() { 1.0 } else { 0.0 } })) |> ignore
-      h.box(fn(n) { n.offset(Is((0.0, 100.0))).words(Is(one), ink=0x333333FFL, look~) |> ignore }) |> ignore
+      // (as wide as its letters, said so: one line past the window's width, not held to it, every glyph drawn)
+      h.box(fn(n) { n.offset(Is((0.0, 100.0))).width(Is(Some(600.0))).words(Is(one), ink=0x333333FFL, look~) |> ignore })
+      |> ignore
     })
     |> ignore
     root.show(fn() { second_there.get() }, fn(b) {
-      b.offset(Is((0.0, 200.0))).words(Is(two), ink=0x333333FFL, look~) |> ignore
+      b.offset(Is((0.0, 200.0))).width(Is(Some(600.0))).words(Is(two), ink=0x333333FFL, look~) |> ignore
     })
   })
   t.draw()

@@ -78,10 +78,9 @@ pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)]) -> View {
 /// How wide it may grow at most (points; None: as wide as its holder lets it), as it changes: layout's.
 pub fn View::max_width(self : View, w : Live[Double?]) -> View {
   self.bind(MaxWidth, w, Layout, fn(w) {
-    self.tree.nodes[self.at].flex.style.set_max_width(match w {
-      Some(w) => Pt(w)
-      None => Auto
-    })
+    // (said: as said, or, one line of words in a column, within the column's width: Tree::capped_applied)
+    self.tree.nodes[self.at].max_w_said = Some(w)
+    self.tree.capped_applied(self.at)
   })
   self
 }
@@ -117,7 +116,16 @@ pub fn View::max_height(self : View, h : Live[Double?]) -> View {
 /// How its words are set, as it changes (a theme's for the window's width): layout's (what they measure) and paint's
 /// (how they are drawn), one said value read by both.
 pub fn View::words_look(self : View, look : Live[WordsLook]) -> View {
-  self.bind(WordsLook, look, Both, fn(k) { self.tree.nodes[self.at].look.words_look = k })
+  self.bind(WordsLook, look, Both, fn(k) {
+    let n = self.tree.nodes[self.at]
+    n.look.words_look = k
+    // (on one line or not: held to its column's width or not)
+    self.tree.capped_applied(self.at)
+    // (saying shorter words: how narrow it may be as they look now, and whether they are on one line)
+    if n.shorter.length() > 0 {
+      self.tree.give_way_applied(self.at)
+    }
+  })
   self
 }
 
@@ -161,7 +169,8 @@ pub fn View::shrink(self : View, s : Live[Double]) -> View {
   // (said so, not cut short by what holds it: its one say of how it gives way, View::cuts let go of)
   self.bind(Shrink, s, Layout, fn(s) {
     self.tree.nodes[self.at].cut = false
-    self.tree.nodes[self.at].flex.style.shrink = s
+    self.tree.nodes[self.at].shrink_said = Some(s)
+    self.tree.give_way_applied(self.at)
   })
   self
 }
@@ -179,9 +188,13 @@ pub fn View::cuts(self : View, on : Live[Bool]) -> View {
     let n = self.tree.nodes[self.at]
     n.cut = c
     if c {
+      // (how it gives way its row's: Tree::cut_applied)
+      n.shrink_said = None
       self.tree.cut_applied(self.at)
     } else {
-      n.flex.style.shrink = 0.0
+      // (said not to give way: so, whatever else would have it give way, View::shorter's)
+      n.shrink_said = Some(0.0)
+      self.tree.give_way_applied(self.at)
     }
   })
   self
@@ -213,10 +226,27 @@ fn Tree::cut_applied(self : Tree, at : Int) -> Unit {
 fn Tree::cuts_under(self : Tree, at : Int) -> Unit {
   for k in self.nodes[at].kids {
     self.cut_applied(k)
+    // (one line of words, in a column or not now)
+    self.capped_applied(k)
+    // (saying shorter words, giving way along a row alone)
+    if self.nodes[k].shorter.length() > 0 {
+      self.give_way_applied(k)
+    }
     if self.nodes[k].slot {
       self.cuts_under(k)
     }
   }
+}
+
+///|
+/// Whether, where it wraps (View::wraps), what it holds goes on in another line only where a line has not the room for
+/// its parts at the least each comes to, as it changes (false: at what each asks, CSS's): what never gives way as wide
+/// as it is, the rest their least width, a row of parts at least theirs with its gaps; and none of them comes to less,
+/// so a line holds each of its parts whole. On one line, while all of it has the room so, its parts sharing it as they
+/// would without it. Layout's.
+pub fn View::wraps_at_least(self : View, on : Live[Bool]) -> View {
+  self.bind(WrapsLeast, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.wrap_least = on })
+  self
 }
 
 ///|
@@ -260,10 +290,8 @@ pub fn View::wraps(self : View, lines : Live[Double?]) -> View {
 /// How wide it is at least (points; None: as what it holds makes it), as it changes: layout's.
 pub fn View::min_width(self : View, w : Live[Double?]) -> View {
   self.bind(MinWidth, w, Layout, fn(w) {
-    self.tree.nodes[self.at].flex.style.set_min_width(match w {
-      Some(w) => Pt(w)
-      None => Auto
-    })
+    self.tree.nodes[self.at].min_w_said = Some(w)
+    self.tree.give_way_applied(self.at)
   })
   self
 }
@@ -333,7 +361,10 @@ pub fn View::lies_along(self : View, along : Live[Along]) -> View {
 /// How wide it is as a share of what holds it (0 to 1; the same binding as View::width, which says it in points), as it
 /// changes: layout's.
 pub fn View::width_share(self : View, share : Live[Double]) -> View {
-  self.bind(Width, share, Layout, fn(s) { self.tree.nodes[self.at].flex.style.set_width(Pct(s * 100.0)) })
+  self.bind(Width, share, Layout, fn(s) {
+    self.tree.nodes[self.at].flex.style.set_width(Pct(s * 100.0))
+    self.tree.capped_applied(self.at)
+  })
   self
 }
 

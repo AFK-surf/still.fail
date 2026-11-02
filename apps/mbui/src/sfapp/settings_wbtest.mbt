@@ -336,16 +336,28 @@ test "usage: the days split by model, a model named there pressed seen alone" {
   let t = settings_tester("usage")
   assert_true(t.find("↑18%") is Some(_) && t.find("比前 7 天") is Some(_))
   // split by model: each named over the days; GPT-6 pressed there (its name over the bars, above the chats that say
-  // it too): everything of it alone, said under the cost
-  t.scroll_to_end()
-  t.draw()
+  // it too): everything of it alone, said under the cost. The page scrolled by the mouse's wheel to it (its list the
+  // window's tree's, as the platform's lists scroll), and back to its top after
+  let shown = fn(w : String) { t.words().iter().any(fn(x) { x.0 == w && x.2 >= 0.0 && x.2 + x.4 <= 844.0 }) }
+  let wheel_till = fn(w : String, dy : Double) {
+    for _ in 0..<20 {
+      if shown(w) {
+        break
+      }
+      t.wheel(195.0, 400.0, dy)
+      t.run_for(@ui.move_most_ms)
+    }
+  }
+  wheel_till("按模型", 300.0)
+  assert_true(shown("按模型"), msg="按模型 in the window")
   t.tap_text("按模型")
   t.run_for(@ui.move_most_ms)
+  assert_true(shown("GPT-6"), msg="GPT-6 in the window")
   let (x, y) = t.find("GPT-6").unwrap()
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
-  t.scroll_to(0)
-  t.draw()
+  wheel_till("用量", -300.0)
+  assert_true(shown("用量"), msg="back at its top")
   assert_true(t.find("$50") is Some(_))
   assert_true(t.find("只看 GPT-6") is Some(_))
   assert_true(t.find("$118") is None)

@@ -8,12 +8,28 @@
 ///|
 /// Whether the hand is on `v` as the theme answers it: a mouse over it or pressing it, a finger pressing it; the
 /// keyboard's focus shown on it (what lights a row, a button: c.lit's).
-fn lit_node(v : @view.View) -> Bool {
+pub fn lit_node(v : @view.View) -> Bool {
   v.focus_shown() ||
   (match @ui.pointing() {
     Mouse => v.pointed() || v.pressed()
     Finger => v.pressed()
   })
+}
+
+///|
+/// `v` pressed as an old view's box with an id is (a tap on it, a mouse's let go on it, Enter or Space with the
+/// keyboard's focus on it, a screen reader's Activate), `press` done then; while `on` says so (a box given no id: none
+/// of these). Nothing drawn of it: what it draws as the hand is on it is its own (lit_node).
+pub fn presses_node(v : @view.View, press : () -> Unit, on? : () -> Bool = fn() { true }) -> Unit {
+  // (taken by the keyboard's focus as it is pressed: an old view's box with an id)
+  v.presses(By(on)).focusable(By(on)).on_press(press) |> ignore
+  let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
+  v.gesture(
+    @ui.touch_slop(),
+    tap=fn(d) { if on_it(d) { press() } },
+    drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { press() } },
+  )
+  |> ignore
 }
 
 ///|
@@ -80,7 +96,8 @@ priv enum PageItem {
 /// A page titled `title` in node `v` (page's, narrow: page.mbt narrow_page), as nodes: under what stands over it as the
 /// frame says (`frame`'s top), back where the frame says it goes (TopBack: its chevron and its words, `on_back` as it
 /// is pressed), its large title (as far down as a wide page's head where nothing is over it), what it is for (`lead`)
-/// under it, then its blocks, those `blocks` names now by their keys, each made by `block` in the page's room
+/// under it (`actions`: what it does, made in its title's line after the title, at its end, scrolling with it), then its blocks, those `blocks`
+/// names now by their keys, each made by `block` in the page's room
 /// (page_block), and 30 under the last, then the frame's room at its foot; all of it scrolling in the page, each part
 /// made only while it shows (View::scrolls_window, as narrow_list's old list builds only the rows in view). What the
 /// frame says is followed as it changes. What it says of itself told `said` as that changes (a frame's bar that names
@@ -94,6 +111,7 @@ pub fn page_node(
   frame? : () -> PageFrame = fn() { no_frame },
   lead? : () -> String = fn() { "" },
   about? : () -> String = fn() { "" },
+  actions? : (@view.View) -> Unit,
   said? : (PageSaid) -> Unit,
 ) -> Unit {
   // (what it says of itself to the frame's bar that names it, as that changes, whole: the frame's own to keep)
@@ -148,12 +166,35 @@ pub fn page_node(
             }))
             |> ignore
             s.box(fn(l) {
-              l.row(Is(true)).gap(Is(pg_title_gap)).lines_up(Is(Some(Middle))) |> ignore
+              // (one line while its title at its least and what it does at the least that comes to have the room
+              // beside each other; else what it does, all of it, under the title at the same end, the line's end:
+              // View::wraps_at_least, from the least each part says of itself as it is laid out)
+              l
+              .row(Is(true))
+              .gap(Is(pg_title_gap))
+              .wraps(Is(Some(pg_title_lines)))
+              .wraps_at_least(Is(true))
+              .lies_along(Is(End))
+              .lines_up(Is(Some(Middle)))
+              |> ignore
               l.box(fn(w) {
-                w.grow(Is(1.0)).min_width(Is(Some(pg_title_least))) |> ignore
+                // (as wide as its words, sharing the line's lack with what is at its end by their widths, 80 at least:
+                // pg_title_words' in a row; alone in its line, all of it)
+                w.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(pg_title_least))) |> ignore
                 w.box(fn(t) { styled_words(t, title, fn() { pg_title }) |> ignore }) |> ignore
               })
               |> ignore
+              // what it does at its line's end (head_end's: a row of them each 10 apart, as the title's line has them),
+              // giving way first where the line has not the room, each down to the least it says: its title kept whole
+              match actions {
+                Some(f) =>
+                  l.box(fn(a) {
+                    a.row(Is(true)).gap(Is(pg_title_gap)).lines_up(Is(Some(Middle))).shrink(Is(1.0)) |> ignore
+                    f(a)
+                  })
+                  |> ignore
+                None => ()
+              }
             })
             |> ignore
           }
@@ -209,6 +250,10 @@ let pg_title_gap : Double = 10.0
 
 ///|
 let pg_title_least : Double = 80.0
+
+///|
+/// How far under its title's line what a page does is where that line has not the room for both (page_node's).
+let pg_title_lines : Double = 6.0
 
 ///|
 let pg_lead_x : Double = 12.0
@@ -729,3 +774,10 @@ let page_card_gap : Double = 14.0
 
 ///|
 let page_card_foot : Double = 10.0
+
+///|
+/// Words of `style` in a node of `parent`'s (styled_words': cut short on their line where `style` says so), `words` as
+/// they are said: the node.
+pub fn words_node(parent : @view.View, words : () -> String, style : () -> @ui.TextStyle) -> @view.View {
+  parent.box(fn(w) { styled_words(w, words, style) |> ignore })
+}

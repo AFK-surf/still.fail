@@ -397,6 +397,8 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
       made("auto-decisions", fn(p, core, here, frame, _stint) {
         @sfpages.decisions_node(p, core, here, on_back=core.pop, frame~)
       })
+    Setting(Usage) =>
+      made("usage", fn(p, core, here, frame, _stint) { @sfpages.usage_node(p, core, here, on_back=core.pop, frame~) })
     Setting(Memories) =>
       made("memories", fn(p, core, here, frame, _stint) { @sfpages.memories_node(p, core, here, on_back=core.pop, frame~) })
     _ => None

@@ -293,6 +293,8 @@ fn memories_tester(
   mode? : String = "settings-memories",
   calls? : Array[String] = [],
   wrap? : (Source) -> Source = fn(s) { s },
+  w? : Double = 390.0,
+  words_over_held? : Bool = true,
 ) -> @ui.Tester {
   let made = fixture_app(mode)
   // (what is asked of the core, by name, kept in `calls`)
@@ -312,9 +314,9 @@ fn memories_tester(
     base
   }
   let t = if tree {
-    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=2400.0, platform~)
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=2400.0, platform~, words_over_held~)
   } else {
-    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0, platform~)
+    @ui.Tester::new(fn(c) { view(c, src) }, w~, h=2400.0, platform~, words_over_held~)
   }
   // (the system's size of words as said: what the bones' bars are as high as follows it)
   t.set_font_scale(scale)
@@ -667,3 +669,444 @@ test "自动决定 made once: every instance drawn as its old view's, with a fin
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::AutoCompletion), msg="on top \{@sfbase.page_kind(app.nav.top())}")
 }
+
+///|
+test "用量 made once: every instance drawn as its old view's, with a finger and with keyboard and mouse, at the system's larger words" {
+  for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
+    let (platform, scale) = case
+    let old = memories_tester(false, platform, scale~, mode="settings-usage")
+    let old_drawn = instances_sorted(old)
+    let old_words = words_where(old)
+    let made = memories_tester(true, platform, scale~, mode="settings-usage")
+    assert_true(app.nav.top() == Setting(@settings.Route::Usage))
+    same_drawn(words_where(made), old_words, "words at \{case}")
+    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
+    assert_true(old_drawn.length() > 0)
+  }
+}
+
+
+///|
+test "用量 made once in a window 220 wide at words twice as large, as it is reached: its title on its line and 分享 with its days under it at the line's end, each within the window and over none, 分享 opening its card and 30 天 chosen; what is under them as the old view's, all of it as far down as the title's line is taller (the old view's title ran over its days: not kept)" {
+  // (words over words as it comes in, frame by frame: the old view's read here (its title's line drawing its words
+  // over its days), the nodes' none but the old view's at the same moments as far down: usage_over_same)
+  let old = memories_tester(false, 2, scale=2.0, mode="settings-usage", w=220.0, words_over_held=false)
+  // (read now: what a Tester draws and finds is the one made last's)
+  let old_words = old.words()
+  let old_drawn = old.drawn_instances()
+  let old_over = old.words_over_frames()
+  let made = memories_tester(true, 2, scale=2.0, mode="settings-usage", w=220.0, words_over_held=false)
+  let made_over = made.words_over_frames()
+  assert_true(app.nav.top() == Setting(@settings.Route::Usage))
+  let words = made.words()
+  let at = fn(all : Array[(String, Double, Double, Double, Double, Double)], w : String) {
+    match all.search_by(fn(x) { x.0 == w }) {
+      Some(i) => Some(all[i])
+      None => None
+    }
+  }
+  let title = at(words, "用量").unwrap()
+  let share = match made.semantics().search_by(fn(n) { n.role == Button && n.label == @sf.t("web-main.stations.shareCard") }) {
+    Some(i) => made.semantics()[i].rect
+    None => fail("分享 read out")
+  }
+  let day = at(words, "7 天").unwrap()
+  // (each within the window; 分享 and the days under the title, 分享 before the days, the days' end 16 in)
+  for p in [("title", (title.1, title.2, title.3, title.4)), ("分享", share), ("7 天", (day.1, day.2, day.3, day.4))] {
+    let (x, y, w, h) = p.1
+    assert_true(x >= 0.0 && x + w <= 220.0 + 0.01 && y >= 0.0 && w > 0.0 && h > 0.0, msg="\{p.0} within the window: \{p.1}")
+  }
+  assert_true(share.1 >= title.2 + title.4 && day.2 >= title.2 + title.4, msg="under the title: \{title} \{share} \{day}")
+  assert_true(share.0 + share.2 <= day.1, msg="分享 before the days: \{share} \{day}")
+  // (what is under them: each of the old view's words under its title's line where it is, all as far down as the
+  // made one's are below its own, by the first of them)
+  let (old_end, made_end, dy) = usage_line_ends(old_words, words)
+  let (old_body, made_body) = (usage_body(old_words, old_end), usage_body(words, made_end))
+  assert_true(dy > 0.0, msg="under a taller line: \{dy}")
+  usage_over_same(made_over, old_over, made_end, dy)
+  // (the year's head and the days' bars' split, each a line of words beside a choice: sharing it alike now, the old
+  // view's choice 4 wider where it is its chosen one with the chevron (its track's padding its share's base): seen
+  // apart, below; the rest of what is under the title's line as the old view's, each instance)
+  let bands = fn(all : Array[(String, Double, Double, Double, Double, Double)]) {
+    let band = fn(names : Array[String]) {
+      let of = all.filter(fn(x) { names.contains(x.0) })
+      (
+        of.fold(init=1.0e9, fn(m, x) { @cmp.minimum(m, x.2) }) - 4.0,
+        of.fold(init=0.0, fn(m, x) { @cmp.maximum(m, x.2 + x.4) }) + 4.0,
+      )
+    }
+    [band(["Token 活跃度", "近 12 个月", "按天", "按周", "累计"]), band(["按人", "按模型"])]
+  }
+  let (old_bands, made_bands) = (bands(old_words), bands(words))
+  let apart = fn(y : Double, h : Double, bs : Array[(Double, Double)]) {
+    !bs.iter().any(fn(b) { y + h > b.0 && y < b.1 })
+  }
+  let said = fn(all : Array[(String, Double, Double, Double, Double, Double)], by : Double) {
+    let bs = if by == 0.0 { made_bands } else { old_bands }
+    let out = all
+      .filter(fn(x) { x.2 + by + x.4 <= 2400.0 && apart(x.2, x.4, bs) })
+      .map(fn(x) { "\{x.0} at \{(x.1 * 100.0).round() / 100.0},\{((x.2 + by) * 100.0).round() / 100.0} \{(x.3 * 100.0).round() / 100.0}x\{(x.4 * 100.0).round() / 100.0}" })
+    out.sort()
+    out
+  }
+  same_drawn(said(made_body, 0.0), said(old_body, dy), "under the title's line, \{dy} further down")
+  // (and every instance drawn there, as instances_sorted has them: each as far down by dy, where it is and what cuts
+  // it and fades it along y with it; the window's bounds, the base's, as they are)
+  let drawn_under = fn(all : Array[Array[Double]], end : Double, by : Double) {
+    let bs = if by == 0.0 { made_bands } else { old_bands }
+    let out = all
+      .filter(fn(a) { a[1] >= end && a[1] + by + a[3] <= 2400.0 && apart(a[1], a[3], bs) })
+      .map(fn(a) {
+        let a = a.copy()
+        a[1] = a[1] + by
+        for j in [17, 19] {
+          if a[j] != 0.0 && a[j] < 2400.0 {
+            a[j] = a[j] + by
+          }
+        }
+        if a[32] != 0.0 {
+          a[34] = a[34] + by
+        }
+        if a[53] > 0.0 {
+          a[52] = a[52] + by
+        }
+        if a[55] > 0.0 {
+          a[54] = a[54] + by
+        }
+        a
+        .mapi(fn(j, x) {
+          if a[5] == 1.0 && j == 12 {
+            if x >= 16384.0 { "colour" } else { "mono" }
+          } else if a[5] == 1.0 && j == 13 {
+            "-"
+          } else {
+            ((x * 100.0).round() / 100.0).to_string()
+          }
+        })
+        .join(",")
+      })
+    out.sort()
+    out
+  }
+  let made_drawn = made.drawn_instances()
+  same_drawn(drawn_under(made_drawn, made_end, 0.0), drawn_under(old_drawn, old_end, dy), "drawn under the title's line, \{dy} further down")
+  // (those two lines: the words beside the choice as wide as its track, 12 apart; the chosen one's words drawn within
+  // the track, seen)
+  for b in made_bands {
+    let track = made_drawn.filter(fn(a) {
+      a[5] == 0.0 && a[11] > 0.05 && a[11] < 0.07 && a[1] + a[3] > b.0 && a[1] < b.1
+    })
+    assert_true(track.length() == 1, msg="the choice's track in \{b}: \{track.length()}")
+    let (tx, tw) = (track[0][0], track[0][2])
+    // (what is beside it from the card's room's start, where the year's title starts, to 12 before it: as wide as it,
+    // each within that)
+    let beside = words.filter(fn(x) { x.2 + x.4 > b.0 && x.2 < b.1 && x.1 + x.3 <= tx })
+    let start = words.fold(init=1.0e9, fn(m, x) { if x.0 == "Token 活跃度" { @cmp.minimum(m, x.1) } else { m } })
+    assert_true(beside.length() > 0 && (tx - 12.0 - start - tw).abs() < 0.5, msg="the line shared alike: from \{start}, \{beside} \{tx}+\{tw}")
+    for x in beside {
+      assert_true(x.1 + x.3 <= tx - 12.0 + 0.5, msg="\{x.0} beside the track \{tx}+\{tw}")
+    }
+    let glyphs = made_drawn.filter(fn(a) { a[5] == 1.0 && a[1] + a[3] > b.0 && a[1] < b.1 && a[0] >= tx })
+    assert_true(
+      glyphs.length() > 0 && glyphs.iter().all(fn(a) { a[0] + a[2] <= tx + tw + 0.5 && a[18] > a[0] }),
+      msg="the chosen one's words within the track, seen: \{glyphs.map(fn(a) { (a[0], a[2], a[16], a[18]) })}",
+    )
+  }
+  // (分享: its card; then 30 天: chosen there, or from the pick the chosen one opens)
+  // (its card put up and drawn: what the library's presenters show)
+  let shown = @sf.last_presented()
+  made.tap(share.0 + share.2 / 2.0, share.1 + share.3 / 2.0)
+  made.run_for(@ui.move_most_ms)
+  let card = @sf.last_presented()
+  assert_true(card != shown && @sf.presented_drawn_of(card), msg="分享's card: \{shown} then \{card}")
+}
+
+///|
+/// Where 用量's title's line ends down, an old view's and made once (`old`, `made`: their words), and how much further
+/// down what is under it is made once: its title (the first 用量 down) and its days; what is under them by the first of
+/// it.
+fn usage_line_ends(
+  old : Array[(String, Double, Double, Double, Double, Double)],
+  made : Array[(String, Double, Double, Double, Double, Double)],
+) -> (Double, Double, Double) {
+  let line_end = fn(all : Array[(String, Double, Double, Double, Double, Double)]) {
+    let first = all.fold(init=1.0e9, fn(m, x) { if x.0 == "用量" { @cmp.minimum(m, x.2) } else { m } })
+    all.fold(init=0.0, fn(m, x) {
+      if (x.0 == "用量" && x.2 == first) || x.0 == "7 天" || x.0 == "30 天" { @cmp.maximum(m, x.2 + x.4) } else { m }
+    })
+  }
+  let (old_end, made_end) = (line_end(old), line_end(made))
+  let top = fn(all : Array[(String, Double, Double, Double, Double, Double)]) {
+    all.fold(init=1.0e9, fn(m, x) { @cmp.minimum(m, x.2) })
+  }
+  (old_end, made_end, top(usage_body(made, made_end)) - top(usage_body(old, old_end)))
+}
+
+///|
+/// 用量's words under its title's line (`end` down), but its days'.
+fn usage_body(
+  all : Array[(String, Double, Double, Double, Double, Double)],
+  end : Double,
+) -> Array[(String, Double, Double, Double, Double, Double)] {
+  all.filter(fn(x) { x.2 >= end && x.0 != "7 天" && x.0 != "30 天" })
+}
+
+///|
+/// Words over words made once (`made`, frame by frame) none but the old view's (`old`) at the same moment, the same
+/// words where they meet as far down by `dy` (what is under the title's line, `made_end` down, made once); and none on
+/// the title's line made once: said, each that is not.
+fn usage_over_same(made : Array[@ui.WordsOverAt], old : Array[@ui.WordsOverAt], made_end : Double, dy : Double) -> Unit raise {
+  let wrong = []
+  for m in made {
+    if m.y < made_end {
+      wrong.push("on the title's line: \{m}")
+      continue
+    }
+    let seen = old.iter().any(fn(o) {
+      o.at == m.at &&
+      o.under == m.under &&
+      o.over == m.over &&
+      o.leaving == m.leaving &&
+      (o.x - m.x).abs() <= 0.5 &&
+      (o.y + dy - m.y).abs() <= 0.5
+    })
+    if !seen {
+      wrong.push("not the old view's: \{m}")
+    }
+  }
+  assert_true(wrong.is_empty(), msg="words over words: \{wrong.length()} of \{made.length()}, the old view's \{old.length()}\n\{wrong.join("\n")}")
+}
+
+///|
+/// 30 天 chosen in 用量 by a finger: where both show, tapped; else the chosen one tapped and 30 天 in the pick it
+/// opens.
+fn usage_30_days(t : @ui.Tester) -> Unit {
+  if !t.words().iter().any(fn(x) { x.0 == "30 天" }) {
+    t.tap_text("7 天")
+    t.run_for(@ui.move_most_ms)
+  }
+  t.tap_text("30 天")
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+/// usage_30_days's steps as a screen reader takes them, at the same moments: an old view's days 220 wide at words twice
+/// as large, its title's line drawing its title over them, not reached by a finger there.
+fn usage_30_days_said(t : @ui.Tester) -> Unit raise {
+  if t.semantics().iter().any(fn(n) { n.role == Radio && n.label == "30 天" }) {
+    t.act(Radio, Activate, label="30 天")
+  } else {
+    t.act(Button, Activate, label="7 天")
+    t.run_for(@ui.move_most_ms)
+    t.act(MenuItemRadio, Activate, label="30 天")
+  }
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+test "用量 made once in a window 220 wide at words twice as large: 30 天 chosen by a finger from its days under the title, its total then; words over words as it goes, frame by frame, none but the old view's at the same moments" {
+  // (the old view's: its days reached as a screen reader does, at the same moments, its title over them)
+  let old = memories_tester(false, 2, scale=2.0, mode="settings-usage", w=220.0, words_over_held=false)
+  let old_words = old.words()
+  let from = old.words_over_frames().length()
+  usage_30_days_said(old)
+  assert_true(old.words().iter().any(fn(x) { x.0 == "$486" }), msg="the old view's 30 天's total")
+  let old_over = old.words_over_frames()[from:].to_array()
+  let made = memories_tester(true, 2, scale=2.0, mode="settings-usage", w=220.0, words_over_held=false)
+  let (_, made_end, dy) = usage_line_ends(old_words, made.words())
+  let from = made.words_over_frames().length()
+  usage_30_days(made)
+  assert_true(made.words().iter().any(fn(x) { x.0 == "$486" }), msg="30 天's total")
+  usage_over_same(made.words_over_frames()[from:].to_array(), old_over, made_end, dy)
+}
+
+///|
+/// 用量 as an old view's or made once, a finger's steps on its days' bars (by where its days' names are), then what
+/// it says: its words where they are, as words_where has them.
+fn usage_days_after(tree : Bool, steps : (@ui.Tester, (String) -> (Double, Double)) -> Unit) -> Array[String] {
+  let t = memories_tester(tree, 2, mode="settings-usage")
+  // (a day's bar's middle, by its name under it: 6 under the plot's foot, the plot 150 high)
+  let at = fn(name : String) {
+    match t.words().search_by(fn(w) { w.0 == name }) {
+      Some(i) => {
+        let w = t.words()[i]
+        (w.1 + w.3 / 2.0, w.2 - 7.0 - 40.0)
+      }
+      None => (-1.0, -1.0)
+    }
+  }
+  steps(t, at)
+  t.run_for(@ui.move_most_ms)
+  let out = words_where(t)
+  // (and back as it was: what is picked kept across pages, usage_pick)
+  out
+}
+
+///|
+/// How long a finger stays down before it is let go or called off, in the steps usage's days are driven by: a press,
+/// short of any hold.
+let usage_press_ms : Double = 30.0
+
+///|
+test "用量 made once: its days chosen by a finger as the old view's: a day tapped seen alone, tapped again all again; slid across, the one let go on; slid up or down, the list's, none; called off, none" {
+  let tap = fn(name : String) {
+    fn(t : @ui.Tester, at : (String) -> (Double, Double)) {
+      let (x, y) = at(name)
+      t.touch(0, x, y)
+      t.run_for(usage_press_ms)
+      t.touch(2, x, y)
+      t.run_for(@ui.move_most_ms)
+    }
+  }
+  let cases : Array[(String, (@ui.Tester, (String) -> (Double, Double)) -> Unit)] = [
+    ("tapped", tap("10/3")),
+    ("tapped again", fn(t, at) {
+      tap("10/3")(t, at)
+      tap("10/3")(t, at)
+    }),
+    ("slid across", fn(t, at) {
+      let (x0, y) = at("10/1")
+      let (x1, _) = at("10/5")
+      t.touch(0, x0, y)
+      for k in 1..=8 {
+        t.run_for(@ui.input_step_ms)
+        t.touch(1, x0 + (x1 - x0) * k.to_double() / 8.0, y)
+      }
+      t.touch(2, x1, y)
+    }),
+    ("slid up", fn(t, at) {
+      let (x, y) = at("10/3")
+      t.touch(0, x, y)
+      for k in 1..=8 {
+        t.run_for(@ui.input_step_ms)
+        t.touch(1, x, y - 10.0 * k.to_double())
+      }
+      t.touch(2, x, y - 80.0)
+    }),
+    ("called off", fn(t, at) {
+      let (x, y) = at("10/3")
+      t.touch(0, x, y)
+      t.run_for(usage_press_ms)
+      t.touch(3, x, y)
+    }),
+  ]
+  for c in cases {
+    let (what, steps) = c
+    // (each a run of its own: what the page picked put back as it starts, @sfpages.reset)
+    let old = usage_days_after(false, steps)
+    let made = usage_days_after(true, steps)
+    same_drawn(made, old, what)
+  }
+}
+
+
+///|
+/// `base` with the core's `usage` view as `f` makes it of the one it says.
+fn usage_as(base : Source, f : (Json) -> Json) -> Source {
+  {
+    ..base,
+    topic: fn(name, params) {
+      let r = (base.topic)(name, params)
+      if name == "usage" {
+        { ..r, value: r.value.map(f) }
+      } else {
+        r
+      }
+    },
+  }
+}
+
+///|
+/// The usage view with `fields` said anew.
+fn usage_with_fields(fields : Array[(String, Json)]) -> (Json) -> Json {
+  fn(v) {
+    match v {
+      Object(m) => {
+        let m2 = m.copy()
+        for kv in fields {
+          m2[kv.0] = kv.1
+        }
+        Json::object(m2)
+      }
+      _ => v
+    }
+  }
+}
+
+///|
+test "用量 made once, while it is read, failed, nothing spent (still read or not): drawn as its old view's, read out the same, at the system's sizes of words" {
+  let cases : Array[(String, (Source) -> Source)] = [
+    ("read the first time", fn(s) { @sffixture.held_topics(s, ["usage"]) }),
+    ("failed", fn(s) { @sffixture.failed_topics(s, ["usage"], "网络连接失败") }),
+    ("nothing spent", fn(s) { usage_as(s, usage_with_fields([("empty", Json::boolean(true))])) }),
+    (
+      "nothing spent, still read",
+      fn(s) { usage_as(s, usage_with_fields([("empty", Json::boolean(true)), ("wait", { "reading": true })])) },
+    ),
+  ]
+  for c in cases {
+    let (what, wrap) = c
+    for scale in [1.0, 2.0] {
+      let seen = fn(tree : Bool) {
+        let t = memories_tester(tree, 2, scale~, mode="settings-usage", wrap~)
+        let t0 = t.time()
+        let out = [instances_sorted(t)]
+        t.frame_at(t0 + @sf.breath_ms / 2.0)
+        out.push(instances_sorted(t))
+        (out, words_where(t), t.words_said().map(fn(w) { w.0 }))
+      }
+      let (old, old_words, old_said) = seen(false)
+      let (made, made_words, made_said) = seen(true)
+      same_drawn(made_words, old_words, "words, \{what} at \{scale}")
+      assert_eq(made_said, old_said, msg="read out, \{what} at \{scale}")
+      for i, o in old {
+        same_drawn(made[i], o, "instances, \{what} at \{scale}, step \{i}")
+        assert_true(o.length() > 0)
+      }
+    }
+  }
+}
+
+///|
+test "用量 made once: a day's bar activated by a screen reader seen alone, as the old view's; read out the same" {
+  let seen = fn(tree : Bool) raise {
+    let t = memories_tester(tree, 2, mode="settings-usage")
+    let said = t.semantics().filter(fn(s) { s.role == Button && s.label.contains("$") })
+    assert_true(said.length() >= 3, msg="the days read out: \{said.length()}")
+    t.act(Button, Activate, label=said[2].label)
+    t.run_for(@ui.move_most_ms)
+    (words_where(t), t.words_said().map(fn(w) { w.0 }))
+  }
+  let (old_words, old_said) = seen(false)
+  let (made_words, made_said) = seen(true)
+  same_drawn(made_words, old_words, "words")
+  assert_eq(made_said, old_said, msg="read out")
+}
+
+///|
+test "用量 made once: what the pointer rests on said as the old view's: a day of the year, then by week" {
+  let seen = fn(tree : Bool) raise {
+    let t = memories_tester(tree, 0, mode="settings-usage")
+    // (the year's last week's Monday: by its weekday's name's row, at the grid's end)
+    let mon = match t.words().search_by(fn(w) { w.0 == "一" || w.0 == "周一" || w.0 == "Mon" }) {
+      Some(i) => t.words()[i]
+      None => ("", 0.0, 0.0, 0.0, 0.0, 0.0)
+    }
+    assert_true(mon.0 != "", msg="the year's Monday row found")
+    let before = words_where(t)
+    t.move(370.0 - 20.0, mon.2 + mon.4 / 2.0)
+    t.run_for(@ui.move_most_ms + @sf.tip_delay_ms)
+    let first = words_where(t)
+    // (something said there: a tip over the day)
+    assert_true(first.length() > before.length(), msg="a tip shown: \{first.length()} words, \{before.length()} before")
+    t.tap_text("按周")
+    t.move(370.0 - 20.0, mon.2 + mon.4 / 2.0 + 1.0)
+    t.run_for(@ui.move_most_ms + @sf.tip_delay_ms)
+    (first, words_where(t))
+  }
+  let (old_a, old_b) = seen(false)
+  let (made_a, made_b) = seen(true)
+  same_drawn(made_a, old_a, "by day")
+  same_drawn(made_b, old_b, "by week")
+}
+

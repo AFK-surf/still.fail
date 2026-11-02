@@ -275,6 +275,7 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     },
     measure=view_words_measure,
     measure_runs=view_runs_measure,
+    measure_shorter=view_shorter_measure,
     time=fn() { h_event_time() },
   )
   made.val = Some(t)
@@ -456,6 +457,19 @@ fn view_words_set(words : String, look : @view.WordsLook) -> String {
     Some(t) => t[0]
     None => words
   }
+}
+
+///|
+/// How wide a node's words too wide for `width` on one line are drawn where they say `shorter` ways (View::shorter), as
+/// an old view's are laid out (said_in: the first that fits whole, else the last cut with an ellipsis).
+fn view_shorter_measure(words : String, shorter : Array[String], look : @view.WordsLook, width : Double) -> Double {
+  let c = g()
+  let lay = fn(s : String) {
+    layout_text(s, c.sp(look.size), look.weight, 1.0e9, false, line=view_line(c, look), spacing=view_spacing(c, look), style=view_words_style())
+  }
+  // (set on one line as they are drawn, its own and the shorter ones alike: view_words_set)
+  let words = view_words_set(words, look)
+  said_in(words, lay(words), shorter.map(fn(a) { view_words_set(a, look) }), width, lay).w
 }
 
 ///|
@@ -1331,10 +1345,12 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
         lay
       }
       self.emit_bone_rich(lay, 0.0, 0.0, self.sp(c.words_look.size), bones, 1.0)
-    } else if c.words != "" {
+    } else if c.words_drawn.unwrap_or(c.words) != "" {
+      // (what is drawn of its words: shorter ones where it says them and its own have not the room, View::shorter)
+      let shown = c.words_drawn.unwrap_or(c.words)
       let k = c.words_look
       let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
-      let words = view_words_set(c.words, k)
+      let words = view_words_set(shown, k)
       let tl = layout_text(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
       let tl = if !k.wrap && tl.w > c.w + 0.5 {
         ellipsized(words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
@@ -1379,16 +1395,19 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
       unplaced=glyphs,
       center_in=if c.words_center { c.w } else { -1.0 },
     )
-    if over && lay.w > c.w + 0.5 {
+    // (past its box where it says so, View::ellipsis_past: as its plain words, below)
+    if over && lay.w > c.w + 0.5 && !c.ellipsis_past {
       cut = (from, self.ninst - start)
     }
-  } else if bones == 0L && c.words != "" {
+  } else if bones == 0L && c.words_drawn.unwrap_or(c.words) != "" {
+    // (what is drawn of its words: shorter ones where it says them and its own have not the room, View::shorter)
+    let shown = c.words_drawn.unwrap_or(c.words)
     let k = c.words_look
     // (one line given less than it is wide: cut to it, ending in an ellipsis, as an old view's words on one line are)
     // (at the system's size of words, in the theme's digits, as measured: view_words_measure)
     let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
     // (wrapped in its width as laid out, as an old view's words are where they are placed: Node::text_layout's)
-    let words = view_words_set(c.words, k)
+    let words = view_words_set(shown, k)
     let tl = layout_text(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
     let tl = if !k.wrap && tl.w > c.w + 0.5 {
       ellipsized(words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
@@ -1398,8 +1417,9 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     let from = self.ninst - start
     // (each line in the middle of its width where it says so, as an old view's centred words: Ctx::text's `center`)
     self.emit_text(tl, 0.0, 0.0, c.ink, 1.0, unplaced=glyphs, center_in=if c.words_center { c.w } else { -1.0 })
-    // (cut short to less than its ellipsis: no further than its box, as an old view's line is in the box that clips it)
-    if !k.wrap && tl.w > c.w + 0.5 {
+    // (cut short to less than its ellipsis: no further than its box, as an old view's line is in the box that clips it;
+    // or, said so, its ellipsis drawn past it as an old view's words cut short (`w=Cut`) are: View::ellipsis_past)
+    if !k.wrap && tl.w > c.w + 0.5 && !c.ellipsis_past {
       cut = (from, self.ninst - start)
     }
   }

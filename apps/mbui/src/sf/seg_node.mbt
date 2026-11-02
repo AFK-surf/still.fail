@@ -630,7 +630,10 @@ pub fn seg_fill_node(
         opened.set(last_presented())
       })
       |> ignore
-      m.box(fn(w) { styled_words(w.grow(Is(1.0)), words, fn() { seg_menu_words }) |> ignore }) |> ignore
+      // (where even its ellipsis has not the room, that drawn past its words' box into the gap before the chevron, as
+      // seg_menu_words' `w=Cut` words are drawn)
+      m.box(fn(w) { styled_words(w.grow(Is(1.0)), words, fn() { seg_menu_words }).ellipsis_past(Is(true)) |> ignore })
+      |> ignore
       icon_node(m, "chevron-down", seg_chevron, By(fn() { theme().p.muted })) |> ignore
     })
   })
@@ -639,3 +642,42 @@ pub fn seg_fill_node(
 ///|
 /// A filling Seg's corner (seg's `radius`, 10).
 let seg_radius : Double = 10.0
+
+///|
+/// How wide a filling Seg of `labels` is with their words whole at their size with their sides, and how narrow it may
+/// go: the chosen one's (the widest's) words with the chevron (seg_room's, the old view's), as node `v` has the system's
+/// size of words and the theme as they change (a binding reading it follows them).
+fn seg_room_of(v : @view.View, labels : Array[String]) -> (Double, Double) {
+  v.words_redone() |> ignore
+  let c = @ui.current()
+  let t = @ui.tree_theme()
+  let size = c.sp(t.text_size(Base).0)
+  let whole = labels.fold(init=2.0 * seg_inset, fn(s, l) { s + choice_words_w(c, l, size) + 2.0 * seg_side })
+  let menu = c.sp(t.text_size(Body).0)
+  let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, choice_words_w(c, l, menu)) })
+  (whole, 2.0 * seg_inset + 2.0 * seg_menu_in + widest + seg_menu_gap + seg_chevron)
+}
+
+///|
+/// A narrow page's choice at a head's end (segmented's there: seg_room), in `parent`: a Seg as wide as its options
+/// with their words whole at their size with their sides, as narrow as the chosen one's (the widest's) words with the
+/// chevron where its line has less (giving way first: what is at a head's end does), filling what that leaves it, as
+/// seg_fill_node is; its words at the system's size of words as that changes. `labels`, `chosen`, `choose`, `said`:
+/// seg_fill_node's.
+pub fn seg_head_node(
+  parent : @view.View,
+  labels : () -> Array[String],
+  chosen : () -> Int,
+  choose : (Int) -> Unit,
+  said? : String = "",
+) -> @view.View {
+  parent.box(fn(b) {
+    let room = fn() { seg_room_of(b, labels()) }
+    b
+    .width(By(fn() { Some(room().0) }))
+    .min_width(By(fn() { Some(room().1) }))
+    .shrink(Is(1.0))
+    |> ignore
+    seg_fill_node(b, labels, chosen, choose, said~) |> ignore
+  })
+}

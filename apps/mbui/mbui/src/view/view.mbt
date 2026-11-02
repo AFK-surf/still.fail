@@ -49,6 +49,9 @@ pub(all) struct Look {
   mut ground : Int64
   mut ink : Int64
   mut words : String
+  /// what is drawn of its words where they have not the room on their line and it says shorter ones (View::shorter;
+  /// None: its words): read out, found and measured as its words, drawn as this
+  mut words_drawn : String?
   /// how its words are set (View::words: their size, weight, line and whether they wrap)
   mut words_look : WordsLook
   /// its words in pieces set their own way (View::words_runs: a weight, an ink; none: all of them as words_look says)
@@ -115,6 +118,8 @@ pub(all) struct Look {
   mut clips : Bool
   /// whether its words' lines each stand in the middle of its width (View::words_centered)
   mut words_center : Bool
+  /// whether its words' ellipsis, one line cut short past it, is drawn past its box (View::ellipsis_past)
+  mut ellipsis_past : Bool
   /// the picture it draws as wide as it is laid out, its curves cut for the pixels it is drawn at (View::picture)
   mut picture : @pixels.Vector?
 } derive(Eq, Debug)
@@ -130,6 +135,8 @@ pub(all) struct Content {
   ground : Int64
   ink : Int64
   words : String
+  /// what is drawn of its words (Look's words_drawn: shorter ones in their place; None: its words)
+  words_drawn : String?
   words_look : WordsLook
   runs : Array[WordsRun]
   shadow : (Double, Double, Int64)
@@ -158,6 +165,8 @@ pub(all) struct Content {
   clips : Bool
   /// its words' lines each in the middle of its width (View::words_centered)
   words_center : Bool
+  /// its words' ellipsis drawn past its box where it has not the room for it (View::ellipsis_past)
+  ellipsis_past : Bool
   /// the picture it draws as wide as it is (View::picture)
   picture : @pixels.Vector?
   /// what it is drawn in as its bones, its own or what holds it's (View::bones): 0 none
@@ -225,6 +234,8 @@ pub(all) struct Drawn {
   clips : Bool
   /// its words' lines each in the middle of its width (View::words_centered)
   words_center : Bool
+  /// its words' ellipsis drawn past its box where it has not the room for it (View::ellipsis_past)
+  ellipsis_past : Bool
   /// the picture it draws as wide as it is (View::picture)
   picture : @pixels.Vector?
   /// what it is drawn in as its bones (Content's): 0 none; nothing of its words found as words then
@@ -362,6 +373,16 @@ struct Node {
   mut yields : Bool
   /// how far apart the lines of a row that wraps are laid out (View::wraps; None: as its gap says, or none wraps)
   mut line_gap : Double?
+  /// what it says in place of its words, in order, where they have not the room on their line (View::shorter; none:
+  /// none)
+  mut shorter : Array[String]
+  /// how much it gives way and how narrow it may be as said of it (View::shrink, View::min_width; None: not said, as
+  /// what it is makes them: Tree::give_way_applied)
+  mut shrink_said : Double?
+  mut min_w_said : Double??
+  /// how wide it may be at most as said of it (View::max_width; None: not said, as what it is makes it:
+  /// Tree::capped_applied)
+  mut max_w_said : Double??
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
@@ -469,6 +490,9 @@ pub struct Tree {
   measure : (String, WordsLook, Double) -> (Double, Double)
   /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered)
   measure_runs : (Array[WordsRun], WordsLook, Double) -> (Double, Double)
+  /// how wide words too wide for a width on one line are drawn where they say shorter ways (View::shorter): the first of
+  /// those that fits, else the last cut with an ellipsis, as the host lays them out
+  measure_shorter : (String, Array[String], WordsLook, Double) -> Double
   nodes : Array[Node]
   free : Array[Int]
   /// what a frame is to do: the nodes whose look changed, those whose place changed; whether any is to be laid out,
@@ -676,11 +700,12 @@ pub struct View {
 
 ///|
 /// A tree whose root `make` makes (as the root's own: its bindings, its nodes), its words measured by `measure` (in
-/// pieces set their own way: `measure_runs`).
+/// pieces set their own way: `measure_runs`; said a shorter way where too wide: `measure_shorter`).
 pub fn Tree::new(
   make : (View) -> Unit,
   measure? : (String, WordsLook, Double) -> (Double, Double) = words_measure,
   measure_runs? : (Array[WordsRun], WordsLook, Double) -> (Double, Double) = runs_measure,
+  measure_shorter? : (String, Array[String], WordsLook, Double) -> Double,
   time? : () -> Double,
 ) -> Tree {
   // (the moment it is made, taken once: its logic and what it draws start there, and what it is made with is of then)
@@ -705,6 +730,10 @@ pub fn Tree::new(
     cause_at: -1.0,
     measure,
     measure_runs,
+    measure_shorter: match measure_shorter {
+      Some(f) => f
+      None => fn(words, shorter, look, room) { shorter_w_by(measure, words, shorter, look, room) }
+    },
     nodes: [],
     free: [],
     looks_due: [],
@@ -832,6 +861,11 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.ground = 0L
       n.look.ink = 0L
       n.look.words = ""
+      n.look.words_drawn = None
+      n.shorter = []
+      n.shrink_said = None
+      n.min_w_said = None
+      n.max_w_said = None
       n.look.runs = []
       n.look.shapes = []
       n.look.tint = 0L
@@ -861,6 +895,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.drawn_as = ""
       n.look.clips = false
       n.look.words_center = false
+      n.look.ellipsis_past = false
       n.look.picture = None
       n.look.turn = 0.0
       n.look.turn_drawn = false
@@ -943,7 +978,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -989,6 +1024,10 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         claims_said: 0,
         yields: false,
         line_gap: None,
+        shrink_said: None,
+        min_w_said: None,
+        max_w_said: None,
+        shorter: [],
         claims_scroll: false,
         scroll_held: -1,
         focus_shown_cell: None,
@@ -1607,6 +1646,8 @@ priv enum Prop {
   Shrink
   Gap
   Wraps
+  WrapsLeast
+  Shorter
   MinWidth
   LinesUp
   LiesAlong
@@ -1620,6 +1661,7 @@ priv enum Prop {
   BoundsInput
   Measured
   WordsCentered
+  EllipsisPast
   Picture
   Drop
   Fits
@@ -1710,6 +1752,8 @@ pub fn View::width(self : View, w : Live[Double?]) -> View {
       Some(w) => Pt(w)
       None => Auto
     })
+    // (words as wide as said: not held to their column's width)
+    self.tree.capped_applied(self.at)
   })
   self
 }
@@ -2052,6 +2096,17 @@ pub fn Tree::input_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, 
 /// wrapped as ever, a change of it drawn again, nothing laid out again.
 pub fn View::words_centered(self : View, on : Live[Bool]) -> View {
   self.bind(WordsCentered, on, Paint, fn(on) { self.tree.nodes[self.at].look.words_center = on })
+  self
+}
+
+///|
+/// Whether its words, on one line cut short where even their ellipsis has not the room in its box, have that ellipsis
+/// drawn past its box (true), as an old view's words cut short (`w=Cut`) are, or cut to its box (false, by default: no
+/// glyph of them past it, the room beside it kept). What holds it that clips cuts it either way. How they are drawn
+/// only, their words and runs alike: measured, laid out, found by a press and read out as ever, a change of it drawn
+/// again, nothing laid out again; not View::clips.
+pub fn View::ellipsis_past(self : View, on : Live[Bool]) -> View {
+  self.bind(EllipsisPast, on, Paint, fn(on) { self.tree.nodes[self.at].look.ellipsis_past = on })
   self
 }
 
@@ -3118,11 +3173,23 @@ pub fn View::words(
       Undefined => -1.0
     }
     tree.work.measured = tree.work.measured + 1
-    let look = tree.nodes[at].look
+    let nd = tree.nodes[at]
+    let look = nd.look
     let (mw, mh) = if look.runs.is_empty() {
       (tree.measure)(look.words, look.words_look, offered)
     } else {
       (tree.measure_runs)(look.runs, look.words_look, offered)
+    }
+    // (on one line wider than it may be, saying shorter ones: as wide as what of them would be drawn there, as an old
+    // view's leaf_size has it; what is drawn chosen once it is laid out, Tree::shorter_in, not by this)
+    let mw = if look.runs.is_empty() &&
+      !look.words_look.wrap &&
+      nd.shorter.length() > 0 &&
+      wm == AtMost &&
+      mw > offered + 0.5 {
+      (tree.measure_shorter)(look.words, nd.shorter, look.words_look, offered)
+    } else {
+      mw
     }
     match wm {
       Exactly => (w, mh)
@@ -3132,10 +3199,36 @@ pub fn View::words(
   self.bind(Words, words, Both, fn(s) {
     tree.nodes[at].look.words = s
     tree.nodes[at].look.runs = []
+    // (on one line in a column: no wider than it, Tree::capped_applied)
+    tree.capped_applied(at)
+    // (words alone again: whether its shorter words hold, how it gives way with them, as they do now)
+    if tree.nodes[at].shorter.length() > 0 {
+      tree.give_way_applied(at)
+    }
   })
   self
 }
 
+///|
+/// What it says in place of its words (View::words), in order, where they have not the room on their line: the first
+/// of these that has, else the last ("": nothing), chosen as it is laid out, as an old view's text's `shorter`; its own
+/// words where they have the room. Saying them, it gives way along a row (not down a column) down to the last of them,
+/// as its words look now, where how it gives way and how narrow it may be are not said of it (View::shrink,
+/// View::cuts, View::min_width: theirs where said, whichever is said first); saying none, as ever. As it changes:
+/// layout's.
+pub fn View::shorter(self : View, alts : Live[Array[String]]) -> View {
+  let at = self.at
+  let tree = self.tree
+  // (how narrow it may be follows how its words look as the system's size of words changes: worked out again then)
+  if self.live() is Some(n) && n.props.get(Shorter) is None {
+    self.reacts(fn() { self.words_redone() }, fn(_) { tree.give_way_applied(at) })
+  }
+  self.bind(Shorter, alts, Layout, fn(a) {
+    tree.nodes[at].shorter = a
+    tree.give_way_applied(at)
+  })
+  self
+}
 ///|
 /// Left out of its row where the row has not the room for all it holds (`k` > 0: the k-th to go, the last in the row
 /// first of the same k; -1: there only while something of its row is left out, its ⋯; 0: always there), as it
@@ -3215,6 +3308,11 @@ pub fn View::words_runs(
     }
     tree.nodes[at].look.words = words.to_string()
     tree.nodes[at].look.runs = rs
+    tree.capped_applied(at)
+    // (in pieces: its shorter words hold of words alone, how it gives way without them, as now)
+    if tree.nodes[at].shorter.length() > 0 {
+      tree.give_way_applied(at)
+    }
   })
   self
 }
@@ -5628,11 +5726,155 @@ fn Tree::walk(self : Tree, at : Int, gen : Int, holder_laid : Bool) -> Unit {
       n.drawn_stale = true
     }
   }
+  // (where it says shorter words, or drew some: what it draws decided anew, its own where it says none now)
+  if laid && (n.shorter.length() > 0 || n.look.words_drawn is Some(_)) {
+    self.shorter_in(at)
+  }
   self.place(at)
   if laid {
     for k in n.kids {
       self.walk(k, gen, laid)
     }
+  }
+}
+
+///|
+/// How wide node `at` may be at most, of what is said of it (View::max_width) and what it is, as an old view's box is
+/// (ui/layout.mbt's `capped`): words on one line (not wrapped, plain or in pieces) in a column (past any slot), no width
+/// said of them (View::width), no wider than the column (all of its width; what is said, where the column has less:
+/// Within), cut short there; else what is said, else none.
+fn Tree::capped_applied(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  guard n.live else { return }
+  let mut p = n.parent
+  while p >= 0 && self.nodes[p].slot {
+    p = self.nodes[p].parent
+  }
+  let in_column = p >= 0 && !(self.nodes[p].flex.style.direction is (Row | RowReverse))
+  let st = n.flex.style
+  let one_line = (n.look.words != "" || !n.look.runs.is_empty()) && !n.look.words_look.wrap
+  let said = match n.max_w_said {
+    Some(Some(w)) => Some(w)
+    _ => None
+  }
+  let max : @flex.Dim = if one_line && in_column && st.width_kind() == @flex.LEN_AUTO {
+    match said {
+      Some(w) => Within(w)
+      None => Pct(100.0)
+    }
+  } else {
+    match said {
+      Some(w) => Pt(w)
+      None => Auto
+    }
+  }
+  if st.get_max_width() != max {
+    st.set_max_width(max)
+    self.layout_marked_at(at)
+  }
+}
+
+///|
+/// How node `at` gives way and how narrow it may be, of what is said of it (View::shrink, View::min_width) and what
+/// its words say (View::shorter): what is said its own; else, saying shorter words on one line, giving way along a row
+/// down to the last of them as its words look now (an old view's one-line words said shorter ways, their least
+/// one_line_least_w's); else as a node gives way of itself (none, as narrow as nothing). Cut short (View::cuts):
+/// how it gives way its own (Tree::cut_applied).
+fn Tree::give_way_applied(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  guard n.live else { return }
+  let shorter = n.shorter.length() > 0 && n.look.runs.is_empty() && !n.look.words_look.wrap
+  let mut p = n.parent
+  while p >= 0 && self.nodes[p].slot {
+    p = self.nodes[p].parent
+  }
+  let along = p >= 0 && self.nodes[p].flex.style.direction is (Row | RowReverse)
+  let st = n.flex.style
+  if !n.cut {
+    let s = match n.shrink_said {
+      Some(s) => s
+      None => if shorter && along { 1.0 } else { 0.0 }
+    }
+    if st.shrink != s {
+      st.shrink = s
+      self.layout_marked_at(at)
+    }
+  }
+  let min : @flex.Dim = match n.min_w_said {
+    Some(Some(w)) => Pt(w)
+    Some(None) => Auto
+    // (along a row alone, as an old view's least of one-line words is: in a column, cut to the column's width)
+    None =>
+      if shorter && along {
+        Pt((self.measure)(n.shorter[n.shorter.length() - 1], n.look.words_look, -1.0).0)
+      } else {
+        Auto
+      }
+  }
+  if st.get_min_width() != min {
+    st.set_min_width(min)
+    self.layout_marked_at(at)
+  }
+}
+
+///|
+/// How wide what is drawn of words too wide for `room` on one line is where they say `shorter` ways, without a host's
+/// own layout of them (a tree made with none: words_measure's): the first of those that fits, else the last cut, by
+/// its characters, where it and an ellipsis fit (no space left before it); measured by `measure`.
+fn shorter_w_by(
+  measure : (String, WordsLook, Double) -> (Double, Double),
+  words : String,
+  shorter : Array[String],
+  look : WordsLook,
+  room : Double,
+) -> Double {
+  ignore(words)
+  let wide = fn(s : String) { measure(s, look, -1.0).0 }
+  for alt in shorter {
+    if wide(alt) <= room + 0.5 {
+      return wide(alt)
+    }
+  }
+  let chars = shorter[shorter.length() - 1].to_array()
+  let mut end = chars.length()
+  while end > 0 {
+    let mut e = end
+    while e > 0 && chars[e - 1] == ' ' {
+      e = e - 1
+    }
+    let cut = String::from_array(chars[:e].to_array()) + "…"
+    if wide(cut) <= room + 0.5 {
+      return wide(cut)
+    }
+    end = end - 1
+  }
+  wide("…")
+}
+
+///|
+/// What node `at` shows where it says shorter words (View::shorter), as it is laid out: its words where they have the
+/// room it is laid out in, else the first of the shorter ones that has, else the last (cut short there where it lets
+/// its words be: View::allow_ellipsis), as an old view's one-line words are (said_in): drawn so, read out, found and
+/// measured as its words.
+fn Tree::shorter_in(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  let w = n.flex.width
+  let fits = fn(s : String) { (self.measure)(s, n.look.words_look, -1.0).0 <= w + 0.5 }
+  let mut shown : String? = None
+  // (one line's words alone, saying shorter ones: words that wrap have the room of their lines, as an old view's do;
+  // none said now, its own)
+  if n.look.runs.is_empty() && !n.look.words_look.wrap && n.shorter.length() > 0 && !fits(n.look.words) {
+    shown = Some(n.shorter[n.shorter.length() - 1])
+    for alt in n.shorter {
+      if fits(alt) {
+        shown = Some(alt)
+        break
+      }
+    }
+  }
+  if shown != n.look.words_drawn {
+    n.look.words_drawn = shown
+    self.look_marked_at(at)
   }
 }
 
@@ -5694,6 +5936,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     ground: n.look.ground,
     ink: n.look.ink,
     words: n.look.words,
+    words_drawn: n.look.words_drawn,
     shapes: n.look.shapes,
     lines: n.look.lines,
     tint: n.look.tint,
@@ -5712,6 +5955,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     hosted: n.hosted,
     clips: n.look.clips,
     words_center: n.look.words_center,
+    ellipsis_past: n.look.ellipsis_past,
     picture: n.look.picture,
     bones: self.bones_of_at(at),
     bone_as: self.bone_as_at(at),
@@ -5948,6 +6192,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     hosted: c.hosted,
     clips: c.clips,
     words_center: c.words_center,
+    ellipsis_past: c.ellipsis_past,
     picture: c.picture,
     bones: c.bones,
     bone_as: c.bone_as,
