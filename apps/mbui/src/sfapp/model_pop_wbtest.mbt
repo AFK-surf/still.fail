@@ -35,6 +35,34 @@ test "wide, short names: the model's panel as wide as what it holds, not as wide
 }
 
 ///|
+test "a frequent model with a different runtime is applied as its panel leaves without the contents jumping" {
+  let t = model_pop("newchat-crowded-model")
+  let before = t.find("常用").unwrap()
+  let words = fn(name : String) { t.words().filter(fn(w) { w.0 == name }).last().unwrap() }
+  let heading = words("常用")
+  let row = words("SWE-2")
+  let other = words("DeepSeek V4.1 Flash")
+  assert_true(t.find("DeepSeek Harness") is Some(_))
+  t.click(Button, label="GPT-6 Astra")
+  assert_eq(new_fix.model, "gpt-6-astra")
+  assert_eq(t.find("常用"), Some(before), msg="the model rows stay where they were as the panel starts to close")
+  assert_true(t.find("DeepSeek Harness") is Some(_), msg="the leaving panel keeps the runtime that was shown")
+  t.run_for(@kit.pop_out_ms / 2.0)
+  // The rows' layout stays fixed while the whole panel moves away.
+  let heading_out = words("常用")
+  let row_out = words("SWE-2")
+  let other_out = words("DeepSeek V4.1 Flash")
+  assert_true(((row_out.2 - heading_out.2) - (row.2 - heading.2)).abs() < 1.0, msg="the model rows keep their layout")
+  assert_true(((other_out.2 - heading_out.2) - (other.2 - heading.2)).abs() < 1.0, msg="the other model row keeps its layout")
+  assert_true(t.find("DeepSeek Harness") is Some(_), msg="the runtime stays with the leaving panel")
+  // Open it again while the first panel is still leaving: the new one has its own, current contents.
+  t.tap_text("GPT-6 Astra")
+  t.run_for(@kit.pop_ms)
+  assert_true(t.query(@ui.Role::Dialog) is Some(_), msg="the panel opens again")
+  assert_true(t.query(Button, label="DeepSeek Harness") is None, msg="the reopened panel shows the new model")
+}
+
+///|
 /// Whether `a`, `b`, `c` lie in that order along the panel, one way or the other.
 fn in_line(a : Double, b : Double, c : Double) -> Bool {
   (a < b && b < c) || (a > b && b > c)
