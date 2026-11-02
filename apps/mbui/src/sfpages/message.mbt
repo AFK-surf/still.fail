@@ -96,6 +96,12 @@ fn here_ref(here : MessageHere) -> ChatRef {
 }
 
 ///|
+/// The row's identity stays the outbox entry's when the sent message takes its place.
+fn message_place(m : Message) -> String {
+  if m.outgoing != "" { "o:" + m.outgoing } else { "m:" + m.ts }
+}
+
+///|
 /// A message as a chat draws it (MessageRow), out of its list (StaticMessage: no options under it).
 pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
   if m.mine {
@@ -130,7 +136,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     fn() { message_name(c, src, here, "m:" + m.ts, m.by.name, agent, m.by.from) },
     None,
     fn() {
-      quotes(c, src, here, m.quotes, m.attachments)
+      quotes(c, src, here, m.quotes, m.attachments, at=message_place(m))
       let files = beside_quotes(m.quotes, m.attachments)
       if m.author_kind == "person" {
         if m.text != "" {
@@ -138,7 +144,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
             person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m))
           })
         }
-        message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)))
+        message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f")
       } else {
         picking(here, c, src, m.ts, m.seq, m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.text, fn() {
           prose_with_files(c, src, here, m, files)
@@ -161,8 +167,8 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
 /// that its agents have yet to take it, or its time.
 fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
   c.box(style=mine_column, fn() {
-    quotes(c, src, here, m.quotes, m.attachments, mine=true)
-    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)))
+    quotes(c, src, here, m.quotes, m.attachments, mine=true, at=message_place(m))
+    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)), at=message_place(m) + "/f")
     if m.text != "" {
       picking(here, c, src, m.ts, m.seq, @sf.t("web-main.chat.you"), "person", m.text, fn() {
         mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m))
@@ -538,6 +544,7 @@ fn mine_bubble(
 fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, files : Array[Attachment]) -> Unit {
   // (whose its files are, quoted from their menus)
   let by = (m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.ts)
+  let at = message_place(m) + "/f"
   // an agent's request about a vault item: its card in place of the words, answered on it (decision.mbt)
   match m.card {
     Some({ ask: Some(ask), .. } as card) => {
@@ -578,7 +585,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       on_link=fn(h) {
         match placed.get(@sf.file_name_of(h)) {
           Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here.session, linked=true)
-          Some(a) => open_file(here, a)
+          Some(a) => open_file(here, a, at~)
           None =>
             match @sf.path_of_link(h) {
               // a file its path names: itself, as it is now, in the preview (its card is the pointer's, or a finger's
@@ -599,7 +606,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           Some(a) if is_viz(a.name) && picturing.val is Some((seq, taking)) && publish_viz_drawn(seq, taking, a) =>
             Some({
               draw: fn() {
-                publish_viz(c, src, here, seq, taking, a, fn() { message_files(c, src, here, [a], false, by=Some(by)) })
+                publish_viz(c, src, here, seq, taking, a, fn() { message_files(c, src, here, [a], false, by=Some(by), at~) })
               },
               image: None,
             })
@@ -614,7 +621,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                   owner_of(here, a),
                   m.ts,
                   a,
-                  fn() { message_files(c, src, here, [a], false, by=Some(by)) },
+                  fn() { message_files(c, src, here, [a], false, by=Some(by), at~) },
                   @sf.theme().p.subtle,
                 )
               },
@@ -622,8 +629,8 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             })
           Some(a) =>
             Some({
-              draw: fn() { message_files(c, src, here, [a], false, by=Some(by)) },
-              image: image_ratio(a).map(fn(r) { (r, fn(w) { file_item(c, src, here, a, w, by=Some(by)) }) }),
+              draw: fn() { message_files(c, src, here, [a], false, by=Some(by), at~) },
+              image: image_ratio(a).map(fn(r) { (r, fn(w) { file_item(c, src, here, a, w, by=Some(by), at~) }) }),
             })
           None => None
         }
@@ -648,7 +655,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     )
     |> ignore
   }
-  message_files(c, src, here, rest, false, by=Some(by))
+  message_files(c, src, here, rest, false, by=Some(by), at~)
 }
 
 ///|
@@ -867,6 +874,7 @@ pub fn quotes(
   quotes : Array[Quote],
   files : Array[Attachment],
   mine? : Bool = false,
+  at? : String = "",
 ) -> Unit {
   if quotes.length() == 0 {
     return
@@ -896,7 +904,7 @@ pub fn quotes(
         words_width?,
         // (its own box, as the message's files have theirs: at most as wide as the card has room; its corner concentric
         // with the card's)
-        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i), corner=@sf.quote_picture_corner) } }),
+        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i), corner=@sf.quote_picture_corner, at=if at == "" { "" } else { at + "/q:" + i.to_string() }) } }),
       )
       // (the passage it quotes lit there alone, where that message's words have it)
       match here.go {

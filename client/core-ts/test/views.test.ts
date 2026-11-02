@@ -2364,6 +2364,30 @@ test("a_chats_page_is_told_which_files_its_agents_words_place_and_an_open_image_
   assert.deepEqual(await shown("x.png", 6), [null, null, null]);
 });
 
+test("imageNear identifies the particular message or quote that opened the same file", async () => {
+  const t = setup();
+  const chat = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const photo = { name: "photo.png", path: "ws/k/photo.png", size: 1 };
+  const original = { ...entry(1, ""), attachments: [photo] };
+  const quoted = { ...entry(2, "."), attachments: [photo], quotes: [{ author: "Ana", text: "photo.png", comment: "", ts: "1.0", file: "photo.png" }] };
+  t.views.local.remember("ws/a", 7, 2, "sent-1");
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [original, quoted], thread: null });
+  t.set(rows("ws/a"), [{ ...row("k", now), thread: 7 }]);
+  await t.read(chat, 1);
+  for (const [id, at, index, other] of [[2, "m:1.0/f", 0, "o:sent-1/q:0"], [3, "o:sent-1/q:0", 1, "m:1.0/f"]] as const) {
+    const shown = ui();
+    t.subscribe(id, { topic: "imageNear", station: "ws/a", thread: 7, session: null, path: photo.path, at });
+    await t.read(shown, id);
+    assert.equal(shown.value.count, 2);
+    assert.equal(shown.value.index, index);
+    assert.equal(index === 0 ? shown.value.afterAt : shown.value.beforeAt, other);
+  }
+});
+
 test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () => {
   const t = setup();
   const u = ui();

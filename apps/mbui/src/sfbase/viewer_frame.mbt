@@ -20,6 +20,10 @@ pub fn viewer_place(vw : Viewer, src : Source) -> (Int, Int) {
     NoSteps => (-1, 0)
     InChat(thread, session) => {
       let p : Map[String, Json] = { "station": Json::string(vw.station), "path": Json::string(vw.file.path) }
+      let at = vw.gallery_at()
+      if at != "" {
+        p["at"] = Json::string(at)
+      }
       match thread {
         Some(th) => p["thread"] = Json::number(th)
         None => p["session"] = Json::string(session)

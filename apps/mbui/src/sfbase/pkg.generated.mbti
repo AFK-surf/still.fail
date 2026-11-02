@@ -955,7 +955,7 @@ pub fn new_nav() -> @ui.Nav[Page]
 
 pub fn new_sending(@ui.Ctx) -> (Double, Double)
 
-pub fn new_viewer(String, String, Attachment, DriveFile?, Stepping, named? : Bool) -> Viewer
+pub fn new_viewer(String, String, Attachment, DriveFile?, Stepping, named? : Bool, at? : String) -> Viewer
 
 pub fn no_fragment(String) -> String
 
@@ -1013,7 +1013,7 @@ pub fn open_page(Page) -> Unit
 
 pub fn open_page_over(Page) -> Unit
 
-pub fn open_preview(String, String, Attachment, drive? : DriveFile?, steps? : Stepping, named? : Bool) -> Unit
+pub fn open_preview(String, String, Attachment, drive? : DriveFile?, steps? : Stepping, named? : Bool, at? : String) -> Unit
 
 pub fn open_screen(String, String, String?) -> Unit
 
@@ -1545,7 +1545,11 @@ pub fn text(Json?, String) -> String
 
 pub fn this_machine() -> String
 
+pub fn thumb_occurrence(String, String, String) -> String
+
 pub fn thumb_of(@ui.Ctx, String) -> Thumb?
+
+pub fn thumb_place(String, String, String, String) -> String
 
 pub fn thumb_shows(String) -> Double
 
@@ -2865,6 +2869,7 @@ pub(all) struct Reading {
   mut follow_key : String
   sent : Map[Double, String]
   sent_as : Map[String, String]
+  sent_as_told : @signals.Signal[Int32]
   linger : Map[String, Lingering]
   mut lingered : Int32
   linger_said : @signals.Signal[Int32]
@@ -3350,6 +3355,7 @@ pub(all) struct Viewer {
   reads : @signals.Signal[Int32]
   mut pinned : @kit.MediaStatus?
   steps : Stepping
+  at : String
   mut swiping : Bool
   mut down_x : Double
   mut down_y : Double
@@ -3438,6 +3444,7 @@ pub fn Viewer::shut(Self, @ui.Ctx) -> Unit
 pub fn Viewer::stand_in(Self, Source) -> String
 pub fn Viewer::still(Self, Source) -> String
 pub fn Viewer::text_stage(Self, @ui.Ctx, PKind, Bytes, Int32) -> Unit
+pub fn Viewer::thumb_id(Self) -> String
 pub fn Viewer::thumb_over(Self) -> (Double) -> Unit
 pub fn Viewer::toggle(Self) -> Unit
 pub fn Viewer::told_of(Self) -> Bool
