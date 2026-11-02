@@ -43,6 +43,29 @@ test("each host serves its own static site, the API and the relay on their paths
   }
 });
 
+// src/web.ts `hardened`: the app's answers carry the headers that keep a page from being framed, keep its addresses
+// out of other sites' logs, and stop a browser reading a file as something else.
+test("the app's host answers with what a page there may do; the test channel's too", async () => {
+  const h = await harness();
+  try {
+    const fetch = async (path: string, beta = false) => (beta ? h.fetchBeta(path) : h.fetch(path));
+    for (const [path, beta] of [["/", false], ["/assets/app.js", false], ["/auth/callback?code=x&state=y", false], ["/", true], ["/assets/app.js", true]] as const) {
+      const answer = await fetch(path, beta);
+      const at = `${path}${beta ? " (test channel)" : ""}`;
+      assert.equal(answer.headers.get("referrer-policy"), "no-referrer", at);
+      assert.equal(answer.headers.get("x-content-type-options"), "nosniff", at);
+      const csp = answer.headers.get("content-security-policy") ?? "";
+      for (const said of ["object-src 'none'", "base-uri 'none'", "form-action 'self' https://accounts.google.com", "frame-ancestors 'none'"]) assert.ok(csp.split("; ").includes(said), `${at}: ${said}`);
+    }
+    // A page asked for on an old host is a redirect first: it says where it went, not what a page may do.
+    const old = await h.fetchOld("main", "/w/ws1/chats", { redirect: "manual" });
+    assert.equal(old.status, 302);
+    assert.equal(old.headers.get("location"), `${h.origin}/w/ws1/chats`);
+  } finally {
+    await h.close();
+  }
+});
+
 test("the console's host answers only the calls its core makes; other API paths are 404 there, and other hosts 421", async () => {
   const h = await harness();
   try {
