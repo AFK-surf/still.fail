@@ -62,6 +62,33 @@ export const LATEST_DECISIONS =
 /// Whether a session has read something from a thread (`heardThreads`): by its deliveries there, named (SQLite took the
 /// index of all it was given by when, from the first).
 export const HEARD_IN = "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = ? AND thread = ? AND delivered_at IS NOT NULL LIMIT 1";
+/// Whether a pending delivery can actually be read by the session, without loading the message's text or edits.
+export const HAS_PENDING_MESSAGE = `SELECT 1 FROM deliveries d INDEXED BY deliveries_pending
+  JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
+  JOIN threads t ON t.id = d.thread
+  JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+  WHERE d.session = ? AND d.delivered_at IS NULL LIMIT 1`;
+export const HAS_PENDING_LETTER = `SELECT 1 FROM letter_deliveries d INDEXED BY letter_deliveries_pending
+  JOIN letters l ON l.thread = d.thread AND l.n = d.n
+  JOIN threads t ON t.id = d.thread
+  JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+  WHERE d.session = ? AND d.delivered_at IS NULL LIMIT 1`;
+/// Seek to each next session in the partial indexes, rather than visiting all of a session's pending deliveries.
+export const PENDING_SESSIONS = `WITH RECURSIVE
+  said(session) AS (
+    VALUES ((SELECT session FROM deliveries INDEXED BY deliveries_pending WHERE delivered_at IS NULL ORDER BY session LIMIT 1))
+    UNION ALL
+    SELECT (SELECT session FROM deliveries INDEXED BY deliveries_pending WHERE delivered_at IS NULL AND session > said.session ORDER BY session LIMIT 1)
+      FROM said WHERE said.session IS NOT NULL
+  ),
+  letters_pending(session) AS (
+    VALUES ((SELECT session FROM letter_deliveries INDEXED BY letter_deliveries_pending WHERE delivered_at IS NULL ORDER BY session LIMIT 1))
+    UNION ALL
+    SELECT (SELECT session FROM letter_deliveries INDEXED BY letter_deliveries_pending WHERE delivered_at IS NULL AND session > letters_pending.session ORDER BY session LIMIT 1)
+      FROM letters_pending WHERE letters_pending.session IS NOT NULL
+  )
+  SELECT session FROM said WHERE session IS NOT NULL
+  UNION SELECT session FROM letters_pending WHERE session IS NOT NULL`;
 /// The threads an older station wrote out to their archive files (`bringInArchived`, `lostArchives`), by the index of
 /// those alone (schema.ts threads_archived): by every thread there was, looked for after each start, 3 s on ccvm.
 export const ARCHIVED_THREADS = "SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id";
@@ -1236,6 +1263,11 @@ export class Store {
     return out;
   }
 
+  /// Whether `pendingMessages` would find anything, stopping at the first message or letter.
+  hasPending(session: string): boolean {
+    return this.#one(HAS_PENDING_MESSAGE, session) !== undefined || this.#one(HAS_PENDING_LETTER, session) !== undefined;
+  }
+
   /// Marks messages read by the session.
   markDelivered(session: string, messages: Handed[]): void {
     this.#with((changes) => {
@@ -1266,9 +1298,7 @@ export class Store {
   }
 
   sessionsWithPending(): string[] {
-    return this.#all(
-      "SELECT session FROM deliveries WHERE delivered_at IS NULL UNION SELECT session FROM letter_deliveries WHERE delivered_at IS NULL",
-    ).map((r) => r.session);
+    return this.#all(PENDING_SESSIONS).map((r) => r.session);
   }
 
   /// The person session `key` works for, as a creator reference (lowercased): whoever its chat was started for, its

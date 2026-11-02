@@ -303,7 +303,7 @@ export class Hub {
   backIn(ws: string) {
     for (const row of this.store.listSessions().filter((s) => s.ws === ws)) {
       if (row.running && this.online(row)) void this.actor(row).recover();
-      else if (this.store.sessionsWithPending().includes(row.key) && this.online(row)) void this.actor(row).kick();
+      else if (this.store.hasPending(row.key) && this.online(row)) void this.actor(row).kick();
     }
   }
 
