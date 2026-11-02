@@ -32,6 +32,74 @@ pub fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -
 }
 
 ///|
+/// 记忆 made once as nodes (memories_page's, narrow: page_node) in node `v`: what it is for over its list, a row to each
+/// station's memory (its name, opening it), one offline saying so, followed as the core says them; while the stations
+/// are read the first time, the list in its bones (waiting_node: three made up, the core asked nothing for them), what
+/// could not be read said over them. `here`: who and where, as that changes.
+pub fn memories_node(
+  v : @view.View,
+  core : Core,
+  here : () -> @settings.Here,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+) -> Unit {
+  let topic = fn() { @settings.stations_of(core, here()) }
+  @sf.page_node(
+    v,
+    fn() { @sf.t("web-pages.settings.memory.title") },
+    on_back~,
+    frame~,
+    lead=fn() { @sf.t("android-misc.memory.note") },
+    fn() { ["list"] },
+    fn(b, _) {
+      b.pick(fn() { topic().value is None }, fn(p, reading) {
+        if reading {
+          @sf.waiting_node(
+            p,
+            fn(s) { memories_list_node(s, core.quiet(), fn() { sample_stations() }) },
+            error=fn() {
+              match topic().error {
+                Some(e) => error_text(e)
+                None => ""
+              }
+            },
+          )
+        } else {
+          memories_list_node(p, core, fn() {
+            match topic().value {
+              Some(Array(a)) => a
+              _ => []
+            }
+          })
+        }
+      })
+    },
+  )
+}
+
+///|
+/// A row to each of `stations`' memory as they are now, by its address (memories_list's, as nodes): online, its name
+/// and 查看 opening it; offline, its name and that it is.
+fn memories_list_node(v : @view.View, core : Core, stations : () -> Array[Json]) -> Unit {
+  @sf.group_node(v, fn(g) {
+    g.each(stations, fn(s) { text(Some(s), "station") }, fn(row, s) {
+      let sv = fn() { Some(s.get()) }
+      row.pick(fn() { flag(sv(), "online") }, fn(r, online) {
+        if online {
+          @sf.link_row_node(r, fn() { text(sv(), "name") }, fn() { (core.push)(Memory(text(sv(), "station"))) }, value=fn() {
+            @sf.t("android-misc.memory.row")
+          })
+        } else {
+          @sf.link_row_node(r, fn() { text(sv(), "name") }, fn() {  }, goes=false, note=fn() {
+            @sf.t("web-pages.settings.memory.offline")
+          })
+        }
+      })
+    })
+  })
+}
+
+///|
 /// One station's memory, on a page of its own (MemoryScreen; wide, a link to it): as 记忆 shows it, under its name.
 pub fn memory_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String) -> Unit {
   let look = look_of(c)

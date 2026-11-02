@@ -160,6 +160,11 @@ pub(all) struct Content {
   words_center : Bool
   /// the picture it draws as wide as it is (View::picture)
   picture : @pixels.Vector?
+  /// what it is drawn in as its bones, its own or what holds it's (View::bones): 0 none
+  bones : Int64
+  /// in its bones, how: drawn as its words, shapes and grounds are (0), one piece of its own box (1: View::bone_whole),
+  /// or nothing, in one drawn whole (2)
+  bone_as : Int
 } derive(Eq, Debug)
 
 ///|
@@ -222,6 +227,10 @@ pub(all) struct Drawn {
   words_center : Bool
   /// the picture it draws as wide as it is (View::picture)
   picture : @pixels.Vector?
+  /// what it is drawn in as its bones (Content's): 0 none; nothing of its words found as words then
+  bones : Int64
+  /// in its bones, how (Content's)
+  bone_as : Int
 } derive(Eq, Debug)
 
 ///|
@@ -381,6 +390,12 @@ struct Node {
   mut said : Said?
   /// what it and all it holds are kept from what is read out (View::hides)
   mut said_hidden : Bool
+  /// what it and all it holds are drawn in, as their bones (View::bones): 0 none
+  mut bones : Int64
+  /// drawn in its bones as one piece of its own box, nothing in it drawn (View::bone_whole)
+  mut bone_whole : Bool
+  /// its words cut short across where what holds it has not the room (View::cuts)
+  mut cut : Bool
   /// its instance to be made again (its look changed); its place (and what it holds) to be worked out again
   mut look_due : Bool
   mut place_due : Bool
@@ -823,6 +838,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.shadow = (0.0, 0.0, 0L)
       n.said = None
       n.said_hidden = false
+      n.bones = 0L
+      n.bone_whole = false
+      n.cut = false
       n.look.alpha = 1.0
       n.look.dx = 0.0
       n.look.dy = 0.0
@@ -973,6 +991,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         hosted: false,
         said: None,
         said_hidden: false,
+        bones: 0L,
+        bone_whole: false,
+        cut: false,
         look_due: false,
         place_due: false,
         placed: false,
@@ -1607,6 +1628,8 @@ priv enum Prop {
   ImageFade
   ImageIn
   Corners
+  Bones
+  BoneWhole
 } derive(Eq, Hash)
 
 ///|
@@ -1753,7 +1776,11 @@ pub fn View::sides(self : View, lr : Live[(Double, Double)]) -> View {
 ///|
 /// What it holds laid out across (true) or down.
 pub fn View::row(self : View, across : Live[Bool]) -> View {
-  self.bind(Row, across, Layout, fn(a) { self.tree.nodes[self.at].flex.style.direction = if a { Row } else { Column } })
+  self.bind(Row, across, Layout, fn(a) {
+    self.tree.nodes[self.at].flex.style.direction = if a { Row } else { Column }
+    // (what it holds cut short gives way along it only where it is a row: View::cuts)
+    self.tree.cuts_under(self.at)
+  })
   self
 }
 
@@ -4308,6 +4335,9 @@ fn View::let_go(self : View) -> Unit {
   }
   n.said = None
   n.said_hidden = false
+  n.bones = 0L
+  n.bone_whole = false
+  n.cut = false
   n.pressed_cell = None
   n.pointed_cell = None
   n.on_pointer_moved = None
@@ -4718,7 +4748,8 @@ fn Tree::pressless_at(self : Tree, at : Int) -> Bool {
 fn Tree::pressless_own_at(self : Tree, at : Int) -> Bool {
   let mut i = at
   while i >= 0 {
-    if self.nodes[i].left_at >= 0.0 || self.nodes[i].inert || self.nodes[i].out {
+    // (in its bones: not there yet, View::bones)
+    if self.nodes[i].left_at >= 0.0 || self.nodes[i].inert || self.nodes[i].out || self.nodes[i].bones != 0L {
       return true
     }
     i = self.nodes[i].parent
@@ -5666,6 +5697,8 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     clips: n.look.clips,
     words_center: n.look.words_center,
     picture: n.look.picture,
+    bones: self.bones_of_at(at),
+    bone_as: self.bone_as_at(at),
   })
   self.changed.push(id)
   self.pending.push(id)
@@ -5900,6 +5933,8 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     clips: c.clips,
     words_center: c.words_center,
     picture: c.picture,
+    bones: c.bones,
+    bone_as: c.bone_as,
   }
 }
 
@@ -6380,7 +6415,8 @@ pub fn Tree::reads_out(self : Tree, id : NodeId) -> Bool {
   }
   let mut i = id.at
   while i >= 0 {
-    if self.nodes[i].said_hidden {
+    // (nor in its bones: View::bones)
+    if self.nodes[i].said_hidden || self.nodes[i].bones != 0L {
       return false
     }
     i = self.nodes[i].parent
@@ -6404,7 +6440,8 @@ fn Tree::said_now(self : Tree, at : Int) -> Bool {
   }
   let mut i = at
   while i >= 0 {
-    if self.nodes[i].said_hidden {
+    // (nor in its bones: View::bones)
+    if self.nodes[i].said_hidden || self.nodes[i].bones != 0L {
       return false
     }
     i = self.nodes[i].parent

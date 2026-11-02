@@ -158,8 +158,65 @@ pub fn Tree::allows_ellipsis(self : Tree, id : NodeId) -> Bool {
 /// ellipsis: WordsLook's `wrap` false), the others kept whole. Its share alone: how wide it is at least is min_width's
 /// (one binding to a field). Layout's.
 pub fn View::shrink(self : View, s : Live[Double]) -> View {
-  self.bind(Shrink, s, Layout, fn(s) { self.tree.nodes[self.at].flex.style.shrink = s })
+  // (said so, not cut short by what holds it: its one say of how it gives way, View::cuts let go of)
+  self.bind(Shrink, s, Layout, fn(s) {
+    self.tree.nodes[self.at].cut = false
+    self.tree.nodes[self.at].flex.style.shrink = s
+  })
   self
+}
+
+///|
+/// Cut short where what holds it has not the room across (an old view's w=Cut: ui's layout.mbt, `Cut => if in_row {
+/// shrink = 1.0 }`): in a row it gives way along the row's length; in a column it keeps its own height, never squeezed
+/// down. That alone: how wide it may be and whether its words end in an ellipsis are their own properties
+/// (View::min_width, View::max_width, View::allow_ellipsis). As what holds it lays out now (View::row), as it changes.
+/// How much it gives way said otherwise (View::shrink) or this said again: the one said last.
+pub fn View::cuts(self : View, on : Live[Bool]) -> View {
+  // (how it gives way, as View::shrink says it: one binding of the two, the last said taking it; not cut short, it
+  // gives way nowhere, as a node says nothing of it)
+  self.bind(Shrink, on, Layout, fn(c) {
+    let n = self.tree.nodes[self.at]
+    n.cut = c
+    if c {
+      self.tree.cut_applied(self.at)
+    } else {
+      n.flex.style.shrink = 0.0
+    }
+  })
+  self
+}
+
+///|
+/// Node `at`, cut short (View::cuts), giving way along what holds it where that is a row, not where it is a column.
+fn Tree::cut_applied(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  if !n.live || !n.cut {
+    return
+  }
+  // (what lays it out: what holds it, past any slot, which lays what it holds out in its own place)
+  let mut p = n.parent
+  while p >= 0 && self.nodes[p].slot {
+    p = self.nodes[p].parent
+  }
+  let along = p >= 0 && self.nodes[p].flex.style.direction is (Row | RowReverse)
+  let s = if along { 1.0 } else { 0.0 }
+  if n.flex.style.shrink != s {
+    n.flex.style.shrink = s
+    self.layout_marked_at(at)
+  }
+}
+
+///|
+/// What node `at` lays out (what it holds, and what a slot of it holds in its place) cut short given way along it or not,
+/// as it is a row or not (View::row).
+fn Tree::cuts_under(self : Tree, at : Int) -> Unit {
+  for k in self.nodes[at].kids {
+    self.cut_applied(k)
+    if self.nodes[k].slot {
+      self.cuts_under(k)
+    }
+  }
 }
 
 ///|

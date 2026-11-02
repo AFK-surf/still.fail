@@ -1138,9 +1138,7 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   // built in a page's bones and drawn whole: one piece of its own box, nothing in it (bones.mbt)
   if n.bones != 0L && n.bone_whole {
-    // (in its own corners; with none, round at its ends: a control's)
-    let r = if n.radius > 0.0 { n.radius } else { dmin(n.fw, n.fh) / 2.0 }
-    self.emit_bone(n.x, n.y, n.fw, n.fh, r, n.bones, alpha)
+    self.emit_bone(n.x, n.y, n.fw, n.fh, bone_whole_r(n.radius, n.fw, n.fh), n.bones, alpha)
     self.corners_last(n)
     return
   }

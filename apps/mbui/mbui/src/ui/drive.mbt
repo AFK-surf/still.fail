@@ -307,6 +307,10 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
   // (each: where, which, and whether by its words, not its label alone)
   let hits : Array[(Double, Double, @view.NodeId, Bool)] = []
   for d in tree.drawn() {
+    // (none of a page's bones: not there yet, View::bones)
+    if d.bones != 0L {
+      continue
+    }
     // (or by what it is called, its label whole, as an old view's box is: as Compose's test finds a node by its
     // contentDescription, on_screen_nodes)
     let label = tree.said_label(d.id)

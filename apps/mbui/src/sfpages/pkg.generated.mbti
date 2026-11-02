@@ -327,6 +327,8 @@ pub fn me_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
 pub let mem_narrow_title : @ui.TextStyle
 
+pub fn memories_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
+
 pub fn memories_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
 pub fn memory_doc_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String, Int32) -> Unit

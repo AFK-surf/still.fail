@@ -12,13 +12,17 @@ fn settings_home_tester(
   h? : Double = 2400.0,
   mode? : String = "settings-home",
   wait? : Double = @ui.move_most_ms,
+  scale? : Double = 1.0,
+  corners_held? : Bool = true,
 ) -> (@ui.Tester, Source) {
   let src = fixture_app(mode)
   let t = if tree {
-    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h~, platform~)
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h~, platform~, corners_held~)
   } else {
-    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h~, platform~)
+    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h~, platform~, corners_held~)
   }
+  // (the system's size of words as said)
+  t.set_font_scale(scale)
   t.run_for(wait)
   (t, src)
 }
@@ -97,12 +101,26 @@ fn same_drawn(made : Array[String], old : Array[String], what : String) -> Unit 
 }
 
 ///|
-test "the settings' list made once: every instance drawn as its old view's, with a finger and with keyboard and mouse" {
-  for platform in [2, 0] {
-    let (old, _) = settings_home_tester(false, platform)
+test "the settings' list made once: every instance drawn as its old view's, with a finger and with keyboard and mouse, at the system's larger words" {
+  for case in [(2, 1.0), (0, 1.0), (2, 2.0)] {
+    let (platform, scale) = case
+    // (at twice the words main's old view of this list breaks the corner rule (its account card's row, 18 round in a
+    // card 22.8 round, too square to follow it): what this compares with, not held here, its fault said and kept
+    // known; every other case, and every other page at any size, held as ever)
+    let corners_held = scale < 2.0
+    let (old, _) = settings_home_tester(false, platform, scale~, corners_held~)
+    if !corners_held {
+      let faults = old.corner_faults()
+      assert_true(faults.length() == 1 && faults[0].contains("lin@example.com"), msg="main's own fault at \{scale}: \{faults}")
+    }
     let old_drawn = instances_sorted(old)
     let old_words = words_where(old)
-    let (made, _) = settings_home_tester(true, platform)
+    let (made, _) = settings_home_tester(true, platform, scale~, corners_held~)
+    if !corners_held {
+      // (the tree's drawn as the old view's, every instance (below); its corner checker finds nothing: it does not look
+      // at that pair among the tree's own nodes, the old views' alone, a difference of what it checks, said so)
+      assert_eq(made.corner_faults(), [])
+    }
     assert_true(app.nav.top() == Settings)
     // (the words first: what differs said by what it says)
     same_drawn(words_where(made), old_words, "words")
@@ -134,12 +152,13 @@ test "the settings' list made once: a row pressed opens its page" {
 }
 
 ///|
-test "关于 made once: every instance drawn as its old view's, with an update on its way and statistics sent" {
-  for platform in [2, 0] {
-    let (old, _) = settings_home_tester(false, platform, mode="settings-about")
+test "关于 made once: every instance drawn as its old view's, with an update on its way and statistics sent, at the system's larger words" {
+  for case in [(2, 1.0), (0, 1.0), (2, 2.0)] {
+    let (platform, scale) = case
+    let (old, _) = settings_home_tester(false, platform, mode="settings-about", scale~)
     let old_drawn = instances_sorted(old)
     let old_words = words_where(old)
-    let (made, _) = settings_home_tester(true, platform, mode="settings-about")
+    let (made, _) = settings_home_tester(true, platform, mode="settings-about", scale~)
     assert_true(app.nav.top() == Setting(@settings.Route::About))
     // (the words first: what differs said by what it says)
     same_drawn(words_where(made), old_words, "words")
@@ -260,4 +279,112 @@ test "the settings' list dragged on past its end by a finger, counted taller bel
   assert_true(before.length() == 1 && held.length() == 1 && rests.length() == 1, msg="\{before} \{held} \{rests}")
   assert_true(held[0] < before[0], msg="not moved by the finger: \{before} \{held}")
   assert_eq(held, rests)
+}
+
+///|
+/// 记忆 on a small screen (`platform`'s input), 390 × 2400, its stations as the fixture has them, never come (`held`) or
+/// failed (`failed`): drawn by the old frame alone (`tree` false) or by the window's tree, its page made once.
+fn memories_tester(
+  tree : Bool,
+  platform : Int,
+  held? : Bool = false,
+  failed? : Bool = false,
+  scale? : Double = 1.0,
+) -> @ui.Tester {
+  let base = fixture_app("settings-memories")
+  let src = if held {
+    @sffixture.held_topics(base, ["stations"])
+  } else if failed {
+    @sffixture.failed_topics(base, ["stations"], "网络连接失败")
+  } else {
+    base
+  }
+  let t = if tree {
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=2400.0, platform~)
+  } else {
+    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0, platform~)
+  }
+  // (the system's size of words as said: what the bones' bars are as high as follows it)
+  t.set_font_scale(scale)
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+test "记忆 made once: every instance drawn as its old view's, a station online and one offline, with a finger and with keyboard and mouse, at the system's larger words" {
+  for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
+    let (platform, scale) = case
+    let old = memories_tester(false, platform, scale~)
+    let old_drawn = instances_sorted(old)
+    let old_words = words_where(old)
+    let made = memories_tester(true, platform, scale~)
+    assert_true(app.nav.top() == Setting(@settings.Route::Memories))
+    same_drawn(words_where(made), old_words, "words at \{case}")
+    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
+  }
+}
+
+///|
+test "记忆 made once, its stations read the first time: its list in its bones as the old view's, as it breathes, at the system's sizes of words; none of it found or read out" {
+  for scale in [1.0, 1.5, 2.0] {
+    let seen = fn(tree : Bool) {
+      let t = memories_tester(tree, 2, held=true, scale~)
+      let t0 = t.time()
+      let out = [instances_sorted(t)]
+      for dt in [@sf.breath_ms / 4.0, @sf.breath_ms / 2.0] {
+        t.frame_at(t0 + dt)
+        out.push(instances_sorted(t))
+      }
+      (out, words_where(t), t.words_said().map(fn(w) { w.0 }))
+    }
+    let (old, old_words, old_said) = seen(false)
+    let (made, made_words, made_said) = seen(true)
+    same_drawn(made_words, old_words, "words at \{scale}")
+    assert_eq(made_said, old_said, msg="read out at \{scale}")
+    for i, o in old {
+      same_drawn(made[i], o, "instances at \{scale}, step \{i}")
+      assert_true(o.length() > 0, msg="nothing drawn at \{scale}, step \{i}")
+    }
+    // (it breathes: not drawn the same at its faintest as at first)
+    assert_true(made[0] != made[2], msg="not breathing at \{scale}")
+    assert_true(!made_words.iter().any(fn(w) { w.contains("字") }), msg="\{made_words}")
+  }
+}
+
+///|
+test "记忆 made once, its stations not read: what failed said over its list in its bones, still, read out, as the old view's, at the system's sizes of words" {
+  for scale in [1.0, 1.5, 2.0] {
+    let seen = fn(tree : Bool) {
+      let t = memories_tester(tree, 2, failed=true, scale~)
+      let t0 = t.time()
+      let out = [instances_sorted(t)]
+      t.frame_at(t0 + @sf.breath_ms / 2.0)
+      out.push(instances_sorted(t))
+      (out, words_where(t), t.words_said().map(fn(w) { w.0 }), t.find("网络连接失败") is Some(_))
+    }
+    let (old, old_words, old_said, _) = seen(false)
+    let (made, made_words, made_said, found) = seen(true)
+    same_drawn(made_words, old_words, "words at \{scale}")
+    assert_eq(made_said, old_said, msg="read out at \{scale}")
+    assert_true(made_said.contains("网络连接失败"), msg="\{made_said}")
+    assert_true(found)
+    for i, o in old {
+      same_drawn(made[i], o, "instances at \{scale}, step \{i}")
+      assert_true(o.length() > 0, msg="nothing drawn at \{scale}, step \{i}")
+    }
+    // (still: what failed stops its breath, whole at its faintest's moment as at first)
+    same_drawn(made[1], made[0], "still at \{scale}")
+  }
+}
+
+///|
+test "记忆 made once: its rows are the tree's own; an online station's opens its memory" {
+  let t = memories_tester(true, 2)
+  let own = tree_words_drawn()
+  for w in [@sf.t("web-pages.settings.memory.title"), @sf.t("android-misc.memory.note"), @sf.t("android-misc.memory.row")] {
+    assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="not the tree's own: \{w} in \{own}")
+  }
+  t.tap_text(@sf.t("android-misc.memory.row"))
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.top() is Setting(@settings.Route::Memory(_)), msg="on top \{@sfbase.page_kind(app.nav.top())}")
 }
