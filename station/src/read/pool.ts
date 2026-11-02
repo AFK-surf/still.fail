@@ -1,10 +1,11 @@
-// The readers: worker threads, each with its own read-only connection. Two kinds, kept apart: one reader only for what
+// The readers: worker threads, each with its own read-only connection. Two kinds, kept apart: CHAT_READERS only for what
 // stands between a person and a message or file they are looking at (a chat's page, a file, the message just said),
 // and the rest for everything else (lists, summaries, usage, histories, notices). A bulk read never takes the chat
 // reader, however long it runs or however many wait, so a message is never queued behind one (2026-11-02 on ccvm: a
 // 97 s usage read and a sidebar update held both readers of one line, and two messages waited 50 s and 31 s for an
 // 11 ms read). What counts as a chat read is listed (`chat`); anything else, a new kind of read too, is bulk. A chat read
-// may also use a bulk reader that is free. Within each, what the event streams tell goes before the pages asked. None of
+// may also use a bulk reader that is free. Chat reads are bounded and quick, but one can still be slow (a file's
+// metadata on a busy disk): there are two chat readers, so one slow chat read leaves the other to the next message. Within each, what the event streams tell goes before the pages asked. None of
 // these reads holds up writes.
 // A reader is a V8 of its own (tens of MB), so they are started when reads come and let go once none has come for a
 // while: an idle station keeps none. One that dies (its heap is bounded) fails what it held and is replaced by the next
@@ -21,7 +22,7 @@ const IDLE_MS = 60_000;
 /// A read that waited or took longer than this is logged, with what it was.
 const SLOW_MS = 2_000;
 
-/// `held`: the read it is answering, if any. `chat`: the reader kept for chat reads.
+/// `held`: the read it is answering, if any. `chat`: one of the readers kept for chat reads.
 type Slot = { worker: Worker; held: Asked | null; chat: boolean; idle?: () => void };
 
 /// A read in line or being answered: when it was asked and when a reader took it, and the reader it is best read in (a
@@ -43,6 +44,8 @@ type Asked = {
 const HOMES = 4096;
 /// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
 const CHECKPOINT_MS = 2_000;
+/// How many readers are kept for chat reads.
+const CHAT_READERS = 2;
 /// A chat or a file, read whole and bounded by itself.
 const CHAT = new Set(["thread", "sessionFile"]);
 /// The most entries or letters a chat read gives (a page of an `after` is clamped to 500 too).
@@ -76,7 +79,7 @@ export class Readers {
   private checkpointing = false;
   private again = false;
   private readonly data: string;
-  /// How many bulk readers at most; the chat reader is one more.
+  /// How many bulk readers at most; the chat readers are CHAT_READERS more.
   private readonly bulk: number;
   private readonly workerFile: URL | undefined;
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
@@ -85,8 +88,8 @@ export class Readers {
   processes: () => Map<string, string> = () => new Map();
   clientKeys: () => Map<string, string> = () => new Map();
 
-  /// At most two by default, one of them the chat reader (STILLFAIL_READERS says how many in all; never fewer than
-  /// one of each).
+  /// One bulk reader by default, or STILLFAIL_READERS less one (never none), and CHAT_READERS chat readers. Each is
+  /// started only when a read needs it.
   constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1)), workerFile?: URL) {
     this.data = data;
     this.bulk = Math.max(1, size - 1);
@@ -170,11 +173,12 @@ export class Readers {
   private slotFor(asked: Asked): Slot | null {
     const free = (s: Slot) => s.held === null && this.slots.includes(s);
     if (asked.home !== null && free(asked.home) && (asked.chat || !asked.home.chat)) return asked.home;
-    const chatSlot = this.slots.find((s) => s.chat);
+    const chatSlots = this.slots.filter((s) => s.chat);
     const bulkSlots = this.slots.filter((s) => !s.chat);
     if (asked.chat) {
-      if (chatSlot === undefined) return this.start(true);
-      if (free(chatSlot)) return chatSlot;
+      const idle = chatSlots.find(free);
+      if (idle !== undefined) return idle;
+      if (chatSlots.length < CHAT_READERS) return this.start(true);
     }
     const idle = bulkSlots.find(free);
     if (idle !== undefined) return idle;

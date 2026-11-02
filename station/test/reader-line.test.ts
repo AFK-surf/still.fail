@@ -68,10 +68,10 @@ for (const background of ["timeline", "resourceChats", "aNewRead"]) test(`a stal
         if (count < wanted) await Atomics.waitAsync(state, 0, count).value;
       }
     };
-    await started(2);
-    assert.notEqual(Atomics.load(state, 1) & 4, 0, "the file starts without waiting for both background reads");
+    // Three can start (the usage read, the file and the message), in whatever order the readers come up; the other
+    // background read waits for the usage one.
     await started(3);
-    assert.equal(Atomics.load(state, 1) & 12, 12, "the message starts too");
+    assert.equal(Atomics.load(state, 1) & 12, 12, "the file and the message start without waiting for both background reads");
   } finally {
     Atomics.store(state, 2, 1);
     Atomics.notify(state, 2);
@@ -108,11 +108,37 @@ for (const told of [false, true]) test(`bulk reads${told ? " the streams tell" :
     readers.read("sessionFile", args, "en"),
   ];
   try {
-    // Two reads have started: a bulk one, and the message just said (not a second bulk one).
+    // Two reads have started: one bulk read, and a chat read (not a second bulk one), whichever reader comes up first.
     await started(state, 2, asked);
-    assert.equal(Atomics.load(state, 1) & 8, 8, "the message is read while the bulk reads wait");
+    assert.notEqual(Atomics.load(state, 1) & 13, 0, "a chat read starts while the bulk reads wait");
+    // Then all three chat reads, while the other bulk reads still wait.
     await started(state, 4, asked);
-    assert.equal(Atomics.load(state, 1) & 13, 13, "the chat and the file too");
+    assert.equal(Atomics.load(state, 1) & 13, 13, "the message, the chat and the file are read");
+  } finally {
+    Atomics.store(state, 2, 1);
+    Atomics.notify(state, 2);
+    await Promise.allSettled(asked);
+    readers.close();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+// One slow chat read (a file's metadata on a busy disk, a chat's view) does not hold up the next message.
+for (const slow of ["sessionFile", "thread"]) test(`a slow ${slow} and a usage read leave a reader to the message just said`, async () => {
+  const data = mkdtempSync(join(tmpdir(), "reader-line-"));
+  const readers = new Readers(data, 2, new URL("./reader-line-worker.mjs", import.meta.url));
+  const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
+  const args = { state: state.buffer };
+  const asked = [readers.read("usage", args, "en"), readers.read(slow, { ...args, hold: true }, "en")];
+  try {
+    await started(state, 2, asked);
+    // The message comes after both have started, as it did on ccvm: a reader is found for it at once (one with no
+    // reader left would wait for one of them, held, to be let go), and it is read.
+    const message = readers.read("entries", { ...args, params: [["from", "41"], ["to", "41"]] }, "en", { told: true });
+    asked.push(message);
+    assert.equal((await readers.heaps()).length, 3, "a reader is there for the message");
+    await message;
+    assert.equal(Atomics.load(state, 1) & 8, 8, "the message is read while the usage read and the slow one wait");
   } finally {
     Atomics.store(state, 2, 1);
     Atomics.notify(state, 2);
