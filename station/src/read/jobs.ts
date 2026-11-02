@@ -6,7 +6,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import { setLang } from "./spoken.ts";
 import * as store from "./store.ts";
 import type { Json, JobRow, Store } from "./store.ts";
-import { HttpError, chats } from "./views.ts";
+import { HttpError, chats, scopeOf } from "./views.ts";
 import type { Lang } from "../ops/i18n.ts";
 
 /// How much of a log `tail` reads at most.
@@ -89,20 +89,24 @@ export function rustLines(text: string): string[] {
 
 /// GET /jobs (views.rs `open_jobs`): the jobs still up (running, or a service being started again), newest first, each
 /// with the chat it is in as the viewer's list has it (`chat`: its id, title and whether it is archived). Those of the
-/// viewer's workspace's chats.
+/// viewer's workspace's chats. The jobs up by the index of their states, and the chats of their sessions alone: read
+/// with every job the station ever ran, the whole sidebar and (for a session whose own chat is not listed) the whole
+/// archive, a read took 56 s on ccvm short of memory (2026-11-02), as every device read the station again.
 export function openJobs(s: Store, viewer: Viewer, lang: Lang): Json[] {
   setLang(lang);
-  const seen = store.seenBy(s, viewer);
-  const open = store.listJobs(s, null).filter((j) => (j.state === "running" || (j.port !== null && j.state === "exited")) && seen(j.sessionKey));
+  const up = store.upJobs(s);
+  const seen = store.seenBy(s, viewer, up.map((j) => j.sessionKey));
+  const open = up.filter((j) => seen(j.sessionKey));
   if (open.length === 0) return [];
   // Each job's chat: the session's own over one it only takes part in, a listed one over an archived one (the last of
-  // each, as the sidebar lists them). The archive's rows are read only for a session whose own chat is not listed: they
-  // are the slow part (every chat ever made), and a job's session is mostly its listed chat's own.
+  // each, as the sidebar lists them): of the items its session and the chats it takes part in make (views.ts
+  // `scopeOf`), each as the whole list has it. The archive's are read only for a session whose own chat is not listed.
   const keys = new Set(open.map((j) => j.sessionKey));
+  const scope = scopeOf(s, [...keys], store.threadsOfSessions(s, [...keys]));
   const scan = (archived: boolean) => {
     const own = new Map<string, Json>();
     const any = new Map<string, Json>();
-    for (const chat of chats(s, viewer, archived)) {
+    for (const chat of chats(s, viewer, archived, scope)) {
       const shownChat = { id: chat.id ?? null, title: chat.title ?? null, archived };
       for (const agent of Array.isArray(chat.agents) ? chat.agents : []) {
         const key = agent?.key;

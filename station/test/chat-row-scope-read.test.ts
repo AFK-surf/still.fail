@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ops } from "../src/read/ops.ts";
 import { answersSince, dismissed, keptChats, makeStore, openStore } from "../src/read/store.ts";
-import { Store, newMessage } from "../src/store/store.ts";
+import { MANUAL, Store, newMessage } from "../src/store/store.ts";
 
 test("a scoped chat update reads marks and answers only for those chats", () => {
   const db = new DatabaseSync(":memory:");
@@ -103,6 +103,74 @@ test("a change's sidebar items and a chat's view read their own shares, openers 
       const view = ops.thread!(reader, { viewer, id: String(chat.id), lang: "zh" }) as any;
       assert.deepEqual([view.xshare?.to.map((t: any) => t.workspace), view.published?.map((p: any) => p.id)], [["w2"], ["mine"]]);
       assert.deepEqual(counts, { chat_shares: 2, opened_chats: 1, published: 1 });
+    } finally {
+      db.close();
+    }
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the jobs up are listed with their own chats, not every job and chat the station ever had", () => {
+  // Read with every job ever run, the whole sidebar and, for a job whose session had no listed chat of its own, the
+  // whole archive: 56 s a read on ccvm short of memory (2026-11-02), read again by every device that read the station.
+  const dir = mkdtempSync(join(tmpdir(), "chat-row-scope-"));
+  const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"));
+  try {
+    const session = (key: string, at: number) => store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: at, lastActiveAt: at, createdBy: "ada@x.com" } as any);
+    const job = (id: string, key: string, state: string, at: number, port: number | null = null) =>
+      store.insertJob({ id, sessionKey: key, name: id, command: "sleep 9", cwd: "/", port, token: id, state, pgid: null, exitCode: null, startedAt: at, endedAt: null, restarts: 0, log: "/dev/null", watch: false });
+    // A job running in a listed chat, and a service up in one whose chat is archived.
+    session("k", 10);
+    const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
+    store.joinThread(chat.id, "k", "ember");
+    store.setThreadTitle(chat.id, "修登录");
+    session("old", 5);
+    const gone = store.openThread("ember", "EMBER", "2.1", null, "ada@x.com");
+    store.joinThread(gone.id, "old", "ember");
+    store.setArchived("old", true, MANUAL);
+    job("j1", "k", "running", 3);
+    job("j2", "old", "exited", 2, 8080);
+    // And 300 chats, listed and archived, each with jobs long over.
+    for (let i = 0; i < 300; i++) {
+      session(`s${i}`, 1);
+      const t = store.openThread("ember", "EMBER", `3.${i}`, null, "ada@x.com");
+      store.joinThread(t.id, `s${i}`, "ember");
+      if (i % 2 === 0) store.setArchived(`s${i}`, true, MANUAL);
+      job(`x${i}`, `s${i}`, "exited", 1);
+    }
+    const reader = openStore(dir);
+    const counts: Record<string, number> = {};
+    const db = reader.db;
+    (reader as any).db = new Proxy(db, {
+      get: (target, property) => {
+        if (property !== "prepare") {
+          const value = Reflect.get(target, property, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        }
+        return (sql: string) => {
+          const statement = target.prepare(sql);
+          const table = /\bFROM (jobs|sessions|threads)\b/i.exec(sql)?.[1];
+          return new Proxy(statement, {
+            get: (s, p) => {
+              const v = Reflect.get(s, p, s);
+              if (p !== "all" && p !== "get") return typeof v === "function" ? v.bind(s) : v;
+              return (...args: any[]) => {
+                const rows = v.apply(s, args);
+                if (table) counts[table] = (counts[table] ?? 0) + (Array.isArray(rows) ? rows.length : rows ? 1 : 0);
+                return rows;
+              };
+            },
+          });
+        };
+      },
+    });
+    try {
+      const viewer = { sub: "ada@x.com", email: "ada@x.com", name: "Ada", role: "member", workspace: "w", device: "d" };
+      const open = ops.openJobs!(reader, { viewer, lang: "zh" }) as any[];
+      assert.deepEqual(open.map((j) => [j.id, j.chat?.id, j.chat?.archived]), [["j1", "k", false], ["j2", "old", true]]);
+      for (const table of ["jobs", "sessions", "threads"]) assert.ok((counts[table] ?? 0) < 30, `${table}: ${counts[table]} rows read`);
     } finally {
       db.close();
     }
