@@ -335,12 +335,14 @@ fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       }
     })
     |> ignore
-    c.box(style=term_palette, fn() {
+    // (a drawing of the terminal's colours, its swatches edge to edge as a terminal's palette shows them: read out as
+    // one picture, its blocks what it draws, not the app's to stand apart)
+    let palette = c.box(style=term_palette, fn() {
       for ink in @sf.share_terminal_palette {
         c.box(style=term_swatch.then(@ui.style(bg=Data(ink))), fn() {  }) |> ignore
       }
     })
-    |> ignore
+    c.semantics(palette, Image, label=@sf.t("web-main.stations.sharePalette"))
     c.box(style=term_prompt_row, fn() {
       code_words(c, "~ $", term_prompt)
       c.box(style=term_cursor, fn() {  }) |> ignore

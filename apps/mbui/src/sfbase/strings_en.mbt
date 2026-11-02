@@ -1247,6 +1247,7 @@ let en : Map[String, String] = {
   "web-main.stations.shareLook.poster": "Poster",
   "web-main.stations.shareLook.receipt": "Receipt",
   "web-main.stations.shareLook.terminal": "Terminal",
+  "web-main.stations.sharePalette": "Terminal palette",
   "web-main.stations.shareTagline": "All in one, all is one.",
   "web-main.status.done": "Done",
   "web-main.status.waiting": "Waiting",

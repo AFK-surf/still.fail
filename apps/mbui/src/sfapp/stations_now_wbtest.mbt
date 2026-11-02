@@ -239,3 +239,167 @@ test "the 用量 page: 分享卡片 beside its days once something was spent (no
   t.frame()
   assert_eq(@sf.presenting(), true)
 }
+
+
+///|
+/// Where a stage's parts are: its dialog and what it is read out as, the picture (its line's words and how large they
+/// are drawn), the first look and 关闭 and the stage's own button (复制图片, 保存到相册 on a phone).
+fn stage_said(t : @ui.Tester) -> String {
+  let dialog = t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) })
+  let line = t.words().filter(fn(w) { w.0 == "一生万物，万物归一" && w.5 > 0.5 }).map(fn(w) { tenth4((w.1, w.2, w.3, w.4)) })
+  let b = fn(label : String) { t.query(Button, label~).map(fn(s) { tenth4(s.rect) }) }
+  "dialog \{dialog} line \{line} look \{b("夜色")} close \{b("关闭")} copy \{b("复制图片")} save \{b("保存到相册")} squeeze \{t.squeeze_faults().length()}"
+}
+
+///|
+/// What a stage paints, as drawn on the last frame: the window's night (an instance over all of it in stage_scrim's
+/// colour: its alpha) and the picture's ground (the largest instance in share_ground's colour: where it is drawn, as
+/// large as it is drawn after its look).
+fn stage_ink(t : @ui.Tester, w : Double, h : Double) -> String {
+  let near = fn(a : Array[Double], c : Int64) {
+    let ch = fn(shift : Int) { ((c >> shift) & 0xFFL).to_double() / 255.0 }
+    (a[8] - ch(24)).abs() < 0.01 && (a[9] - ch(16)).abs() < 0.01 && (a[10] - ch(8)).abs() < 0.01
+  }
+  let drawn = t.drawn_instances()
+  let night = drawn
+    .filter(fn(a) { a[5] == 0.0 && a[0] <= 0.5 && a[1] <= 0.5 && a[2] >= w - 0.5 && a[3] >= h - 0.5 && near(a, @sf.stage_scrim) })
+    .map(fn(a) { (a[11] * 100.0).round() / 100.0 })
+  let mut ground : (Double, Double, Double, Double)? = None
+  for a in drawn {
+    if a[5] == 0.0 && near(a, @sf.share_ground) && a[11] > 0.5 {
+      match ground {
+        Some(g) if g.2 * g.3 >= a[2] * a[3] => ()
+        _ => ground = Some((a[0], a[1], a[2], a[3]))
+      }
+    }
+  }
+  // (its words as drawn (glyphs, kind 1, seen): how many lie whole in the picture and how low the lowest reaches; and
+  // how many reach out of it down into what is under it, over the looks)
+  let looks_top = t.query(Button, label="夜色").map(fn(s) { s.rect.1 }).unwrap_or(h)
+  let glyphs = drawn.filter(fn(a) { a[5] == 1.0 && a[11] > 0.0 })
+  let words = match ground {
+    Some((gx, gy, gw, gh)) => {
+      let inside = glyphs.filter(fn(a) { a[0] >= gx - 0.5 && a[0] + a[2] <= gx + gw + 0.5 && a[1] >= gy - 0.5 && a[1] + a[3] <= gy + gh + 0.5 })
+      let lowest = inside.iter().fold(init=0.0, fn(m, a) { dmax(m, a[1] + a[3]) })
+      let out = glyphs.filter(fn(a) { a[0] >= gx && a[0] < gx + gw && a[1] + a[3] > gy + gh + 0.5 && a[1] < looks_top })
+      "words in \{inside.length()} lowest \{(lowest * 10.0).round() / 10.0} out under \{out.length()}"
+    }
+    None => "words none"
+  }
+  "night \{night} picture \{ground.map(tenth4)} \{words}"
+}
+
+///|
+/// A stage come in and settled: its way in over, and what moves after it (the picture drawn smaller as the room it is
+/// given is known) at rest.
+fn stage_settled(t : @ui.Tester) -> Unit {
+  t.run_for(@kit.presence_in_ms)
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+/// Whether a stage is drawn by the window's tree: a dialog said there titled 分享卡片.
+fn stage_drawn() -> Bool {
+  tree_said(Dialog, "分享卡片") is Some(_)
+}
+
+///|
+test "stage, 大屏 keyboard and mouse in a tall and a short window, touch in a tablet's and a phone's: the picture, its looks and buttons, where each is, drawn by the window's tree: as main has it" {
+  let out = []
+  let drawn = []
+  for at in [(1440.0, 1000.0, 0), (1280.0, 640.0, 0), (840.0, 1100.0, 1), (390.0, 844.0, 2)] {
+    let src = fixture_app("share-card")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=at.0, h=at.1, platform=at.2)
+    stage_settled(t)
+    out.push("\{at}: \{stage_said(t)}")
+    drawn.push(stage_drawn())
+  }
+  // (as main has it, 435d3ba8)
+  assert_eq(out, [
+    "(1440, 1000, 0): dialog Some((分享卡片, (540, 37.3, 360, 925.4))) line [(560, 770.9, 320, 21)] look Some((618, 831.9, 42, 76.8)) close Some((635.8, 928.7, 58, 34)) copy Some((701.8, 928.7, 102.5, 34)) save None squeeze 0",
+    "(1280, 640, 0): dialog Some((分享卡片, (537.5, 24, 205.1, 592))) line [(480, 757.6, 320, 21)] look Some((538, 485.2, 42, 76.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
+    "(840, 1100, 1): dialog Some((分享卡片, (240, 87.3, 360, 925.4))) line [(260, 820.9, 320, 21)] look Some((318, 881.9, 42, 76.8)) close Some((321.9, 978.7, 62, 34)) copy None save Some((391.9, 978.7, 126.2, 34)) squeeze 0",
+    "(390, 844, 2): dialog Some((分享卡片, (45.1, 24, 299.9, 796))) line [(35, 757.6, 320, 21)] look Some((93, 689.2, 42, 76.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
+  ])
+  assert_eq(drawn, [true, true, true, true])
+}
+
+///|
+test "stage, 大屏 keyboard and mouse: the window made shorter and taller again while it shows (frames as the display draws them): the picture drawn smaller and back, its buttons under it in the window: as main has it" {
+  let src = fixture_app("share-card")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  stage_settled(t)
+  let out = ["800: \{stage_said(t)}"]
+  let ink = ["800: \{stage_ink(t, 1280.0, 800.0)}"]
+  for h in [560.0, 800.0] {
+    t.resize(1280.0, h)
+    for _ in 0..<30 {
+      t.frame_at(t.next_frame_time())
+    }
+    out.push("\{h}: \{stage_said(t)}")
+    ink.push("\{h}: \{stage_ink(t, 1280.0, h)}")
+  }
+  // (as main has it, 435d3ba8)
+  assert_eq(out, [
+    "800: dialog Some((分享卡片, (500.3, 24, 279.4, 752))) line [(480, 757.6, 320, 21)] look Some((538, 645.2, 42, 76.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "560: dialog Some((分享卡片, (538, 24, 204, 512))) line [(480, 757.6, 320, 21)] look Some((538, 405.2, 42, 76.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (500.3, 24, 279.4, 752))) line [(480, 757.6, 320, 21)] look Some((538, 645.2, 42, 76.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+  ])
+  // (what it paints: its night over the window, the picture as large as it is drawn)
+  // (as main has it, 435d3ba8)
+  assert_eq(ink, [
+    "800: night [0.92] picture Some((500.3, 24, 279.4, 601.2)) words in 366 lowest 604.9 out under 0",
+    "560: night [0.92] picture Some((556.1, 24, 167.9, 361.2)) words in 337 lowest 373 out under 0",
+    "800: night [0.92] picture Some((500.3, 24, 279.4, 601.2)) words in 366 lowest 604.9 out under 0",
+  ])
+}
+
+///|
+test "stage, 大屏 keyboard and mouse: closed by Escape, by back, by 关闭, by a press beside the picture, and a look chosen first: presenting no more, gone at once from what is read out; the look chosen drawn: as main has it" {
+  let out = []
+  for how in ["escape", "back", "close", "beside", "look"] {
+    let src = fixture_app("share-card")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+    t.run_for(@kit.presence_in_ms)
+    match how {
+      "escape" => t.key(@ui.key_escape)
+      "back" => t.back() |> ignore
+      "close" => {
+        let (x, y, w, h) = t.get(Button, label="关闭").rect
+        t.tap(x + w / 2.0, y + h / 2.0)
+      }
+      "beside" => t.tap(20.0, 400.0)
+      _ => {
+        let (x, y, w, h) = t.get(Button, label="大字报").rect
+        t.tap(x + w / 2.0, y + h / 2.0)
+      }
+    }
+    t.frame()
+    let at_once = "presenting \{@sf.presenting()} dialog \{t.query(Dialog).map(fn(s) { s.label })}"
+    t.run_for(@kit.presence_in_ms)
+    let selected = t.all(Button).filter(fn(s) { s.selected == Some(true) }).map(fn(s) { s.label })
+    out.push("\{how}: at once {\{at_once}} after {presenting \{@sf.presenting()} dialog \{t.query(Dialog).map(fn(s) { s.label })} selected \{selected}}")
+  }
+  // (as main has it, 435d3ba8)
+  assert_eq(out, [
+  "escape: at once {presenting false dialog None} after {presenting false dialog None selected []}",
+  "back: at once {presenting false dialog None} after {presenting false dialog None selected []}",
+  "close: at once {presenting false dialog None} after {presenting false dialog None selected []}",
+  "beside: at once {presenting false dialog None} after {presenting false dialog None selected []}",
+  "look: at once {presenting true dialog Some(分享卡片)} after {presenting true dialog Some(分享卡片) selected [大字报]}",
+  ])
+}
+
+///|
+test "stage, 大屏 keyboard and mouse: the focus as it opens and after a Tab: as main has it" {
+  let src = fixture_app("share-card")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@kit.presence_in_ms)
+  let focused = fn() { t.focused().map(fn(s) { "\{s.role} \{s.label}" }) }
+  let open = focused()
+  t.key(@ui.key_tab)
+  t.run_for(@kit.presence_in_ms)
+  let tabbed = focused()
+  // (as main has it, 435d3ba8: nothing of it given the focus, nor by a Tab)
+  assert_eq(["open \{open}", "tab \{tabbed}"], ["open None", "tab None"])
+}
