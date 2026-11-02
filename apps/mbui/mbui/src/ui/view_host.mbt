@@ -578,7 +578,6 @@ fn view_island_said() -> String {
 /// The old frame's build where the window is a tree: the one old view's own where it is the whole window; else each
 /// old view in a box of its own where it is placed, cut to it, its subtree made once there by its own watch.
 fn old_frame(c : Ctx) -> Unit {
-  old_built.val = false
   // (what the stacks the tree holds say of a frame: nav_view.mbt)
   nav_views_framed(c)
   // (told since the frame began (what the frame took as it went: a core's answer, the system's bars), or old views made
@@ -604,7 +603,6 @@ fn old_frame(c : Ctx) -> Unit {
       }
       None => ()
     }
-    old_built.val = true
     return
   }
   old_box_owners.clear()
@@ -698,15 +696,7 @@ fn old_frame(c : Ctx) -> Unit {
       None => ()
     }
   }
-  old_built.val = true
 }
-
-///|
-/// Whether the old views were built in this pass of the frame: one made after (by what a list's row took as it was laid
-/// out: a picture tapped, its viewer's node made over it) builds the frame again, so that it is drawn in the frame
-/// that made it (old's), as what the frame took is.
-// kept across runs: written as each pass builds the old views
-let old_built : Ref[Bool] = Ref(false)
 
 ///|
 /// The window painted in the tree's order: what is made once, each node's instances as kept (made where its instance
@@ -2003,8 +1993,9 @@ pub fn old(
       build(c)
       island_building.val = was
     }
-    // (made after the old views were built in this pass: the frame built again, this one with them)
-    if building.val && old_built.val {
+    // (made as the frame is built: as the old views are built (by what one of them builds: a dialog presented as a page
+    // is built) or after, either way after this pass placed them: the frame built again, this one with them)
+    if building.val {
       g().read_changed("an old view made as the frame was built")
     }
     old_islands.push({

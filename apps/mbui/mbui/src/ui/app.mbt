@@ -314,7 +314,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     layout_coming.val = true
     c.read_back_moved = false
     c.read_back_whole = false
-    old_built.val = false
     building.val = true
     c.build_no = next_build()
     // (a hold handed an old view: the frame it comes to, as its build begins; gone once that frame is)
