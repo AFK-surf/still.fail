@@ -6,7 +6,7 @@
 /// The chat's sheet open over the fixture's chat; `chat.publishPreview` answered with fix_preview, `chat.publish` with
 /// its link, the rest with nothing; `preview` in its place, where given; `finish` false: what is asked of the host (a
 /// picture decoded) done only as the test says (Tester::finish).
-fn publish_core(calls : Array[Made], preview? : () -> Json = fix_preview, finish? : Bool = true) -> @ui.Tester {
+fn publish_core(calls : Array[Made], preview? : () -> Json = fix_preview, finish? : Bool = true, platform? : Int = 2) -> @ui.Tester {
   new_run()
   let base = fixture("chat-info")
   let src : Source = {
@@ -30,7 +30,7 @@ fn publish_core(calls : Array[Made], preview? : () -> Json = fix_preview, finish
     },
   }
   open_fixture_over("chat-info", src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, finish~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~, finish~)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -221,3 +221,111 @@ fn tap_last(t : @ui.Tester, s : String) -> Unit {
 ///|
 /// Where the chat's sheet's rows are well in view on a phone (844 high): a row under it is brought up to it.
 let publish_fold : Double = 600.0
+
+///|
+/// The page over a chat with a page of HTML in it, as `publish_core` opens it, on the system `platform` numbers.
+fn publish_viz_page(calls : Array[Made], platform? : Int = 2) -> @ui.Tester {
+  let t = publish_core(calls, preview=fix_preview_viz, platform~)
+  t.tap_text("分享图片")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t
+}
+
+///|
+/// The page of HTML drawn on the sharing page: its view's id, it told loaded and drawn by its host.
+fn publish_viz_drawn_up(t : @ui.Tester) -> Int raise {
+  let mut view = 0
+  for k, f in viz_frames {
+    if k.has_prefix("publish/") {
+      view = f.view.id()
+    }
+  }
+  assert_true(view != 0, msg="no page of HTML on the sharing page")
+  assert_true(t.view_said("{\"info\":{\"view\":\{view},\"state\":1,\"at\":[-1,0,0,0,0,0,0,0,0,0]}}"))
+  t.frame()
+  view
+}
+
+///|
+/// A PNG `w` by `h`, all of one colour.
+fn publish_blank_png(w : Int, h : Int) -> Bytes {
+  let png = @pixels.PngRows::new(w, h)
+  png.add(FixedArray::make(w * h * 4, b'\x80'), h)
+  png.end()
+}
+
+///|
+test "分享图片: a page of HTML its words place is drawn live on the page and, grabbed as the picture is asked for, in the picture" {
+  let calls : Array[Made] = []
+  let t = publish_viz_page(calls)
+  let view = publish_viz_drawn_up(t)
+  t.run_for(@ui.move_most_ms)
+  let (bw, bh) = match view_rect(t, view) {
+    Some((_, _, w, h)) => (w, h)
+    None => fail("the page is not in sight")
+  }
+  t.click(Button, label="保存到相册")
+  // not taken till its page is grabbed: first left to draw what comes in as it does
+  t.run_for(@sfpages.publish_viz_settle_ms + 100.0)
+  assert_eq(t.shots().length(), 0)
+  let png = publish_blank_png((bw * 2.0).to_int(), (bh * 2.0).to_int())
+  assert_true(t.view_said("{\"still\":{\"view\":\{view}},\"b\":\"\{@codec.hex(png)}\"}"))
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(t.shots().length(), 1)
+  // its card not in it: its grab where it was
+  assert_true(!t.shots()[0].join("|").contains(".html"), msg=t.shots()[0].join("|"))
+  assert_true(@sfpages.publish_has_still("f0"))
+  assert_eq(t.kept().length(), 1)
+}
+
+///|
+test "分享图片: a page of HTML whose grab fails, or is of a part of it, is its card in the picture" {
+  for said in ["", "part"] {
+    let calls : Array[Made] = []
+    let t = publish_viz_page(calls)
+    let view = publish_viz_drawn_up(t)
+    t.run_for(@ui.move_most_ms)
+    t.click(Button, label="保存到相册")
+    t.run_for(@sfpages.publish_viz_settle_ms + 100.0)
+    if said == "" {
+      assert_true(t.view_said("{\"view\":{\"view\":\{view},\"what\":2,\"text\":\"-1\"}}"))
+    } else {
+      assert_true(t.view_said("{\"still\":{\"view\":\{view}},\"b\":\"\{@codec.hex(publish_blank_png(100, 10))}\"}"))
+    }
+    t.run_for(@kit.presence_in_ms)
+    assert_eq(t.shots().length(), 1)
+    assert_true(t.shots()[0].join("|").contains(".html"), msg=t.shots()[0].join("|"))
+    assert_true(!@sfpages.publish_has_still("f0"))
+  }
+}
+
+///|
+test "分享图片: a page of HTML taken out of the picture is its card on the page, not grabbed" {
+  let calls : Array[Made] = []
+  let t = publish_viz_page(calls)
+  let outs = t.all(Button, label="移出图片")
+  assert_eq(outs.length(), 1)
+  let (x, y, w, h) = outs[0].rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sfpages.publish_left_out("f0"))
+  assert_true(t.find(".html") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  // (taken at once: nothing to wait for)
+  assert_eq(t.shots().length(), 1)
+  assert_true(!t.shots()[0].join("|").contains(".html"), msg=t.shots()[0].join("|"))
+}
+
+///|
+test "分享图片: in a browser, which grabs no page, a page of HTML is its card on the page and in the picture" {
+  let calls : Array[Made] = []
+  let t = publish_viz_page(calls, platform=4)
+  assert_true(t.find(".html") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(!viz_frames.keys().any(fn(k) { k.has_prefix("publish/") }))
+  t.click(Button, label="复制图片")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(t.shots().length(), 1)
+  assert_true(t.shots()[0].join("|").contains(".html"), msg=t.shots()[0].join("|"))
+}

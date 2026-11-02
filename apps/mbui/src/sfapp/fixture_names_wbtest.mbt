@@ -23,6 +23,7 @@ using @sffixture {
   fix_letters,
   fix_places,
   fix_preview,
+  fix_preview_viz,
   fix_reads,
   fix_service_html,
   fix_shared,

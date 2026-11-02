@@ -441,6 +441,8 @@ pub fn profile_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, Stri
 
 pub fn publish_close() -> Unit
 
+pub fn publish_has_still(String) -> Bool
+
 pub fn publish_layer(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn publish_left_out(String) -> Bool
@@ -452,6 +454,8 @@ pub fn publish_open() -> Bool
 pub fn publish_reset() -> Unit
 
 pub fn publish_set(@sfbase.ChatRef, Double, Json) -> Unit
+
+pub let publish_viz_settle_ms : Double
 
 pub fn pull_mark(@ui.Ctx, Json?, Double) -> Unit
 

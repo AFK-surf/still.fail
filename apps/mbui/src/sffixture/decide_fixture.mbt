@@ -577,6 +577,27 @@ pub fn fix_preview() -> Json {
 }
 
 ///|
+/// What a picture of a chat would hold (fix_preview) where an agent's words place a page of HTML (the chat's release.html).
+pub fn fix_preview_viz() -> Json {
+  let file : Json = { "name": "release.html", "path": "/w/release.html", "size": 1200 }
+  {
+    "upto": 3,
+    "title": "发布节奏",
+    "list": [
+      msg(3, "agent", by_agent("anthropic", "claude", "s-c1"), "这周的发布节奏：\n\n[发布节奏](release.html)\n", "", {
+        "attachments": [file],
+        "placed": ["release.html"],
+        "md": [["p", [[0, 8]]], ["p", [["a", [[11, 15]], { "href": "release.html" }]]]],
+        "time": { "createdAt": { "ago": "1 分钟前", "full": "10月15日 10:00" } },
+      }),
+    ],
+    "messages": [],
+    "files": [{ "k": "f0", "name": "release.html", "size": 1200, "sizeText": "1.2 KB", "type": "text/html", "n": 3, "file": file }],
+    "hidden": 0,
+  }
+}
+
+///|
 /// This slice's calls in the fixture: taken as a station would.
 pub fn decide_fixture_call(name : String) -> Result[Json, Json]? {
   match name {
