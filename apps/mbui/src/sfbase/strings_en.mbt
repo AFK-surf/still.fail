@@ -1107,6 +1107,8 @@ let en : Map[String, String] = {
   "web-main.preview.loadFailed": "Couldn't load: {error}",
   "web-main.preview.loadingLabel": "Loading",
   "web-main.preview.nextKey": "Next (→)",
+  "web-main.preview.openFailed": "Couldn't open {name}: {error}",
+  "web-main.preview.openFolder": "it is a folder",
   "web-main.preview.path": "Path",
   "web-main.preview.pr.closed": "Closed",
   "web-main.preview.pr.draft": "Draft",

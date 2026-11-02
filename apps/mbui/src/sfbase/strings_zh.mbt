@@ -1088,6 +1088,8 @@ let zh : Map[String, String] = {
   "web-main.preview.loadFailed": "无法载入：{error}",
   "web-main.preview.loadingLabel": "正在读取",
   "web-main.preview.nextKey": "下一张（→）",
+  "web-main.preview.openFailed": "无法打开 {name}：{error}",
+  "web-main.preview.openFolder": "这是文件夹",
   "web-main.preview.path": "路径",
   "web-main.preview.pr.closed": "已关闭",
   "web-main.preview.pr.draft": "草稿",
