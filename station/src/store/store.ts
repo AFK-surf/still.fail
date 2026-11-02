@@ -57,6 +57,15 @@ export const STATS_OF = `SELECT
 export { CARD_BEFORE, CLOSED_SINCE, OPTIONS_BEFORE };
 export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
+/// Whether a session has read something from a thread (`heardThreads`): by its deliveries there, named (SQLite took the
+/// index of all it was given by when, from the first).
+export const HEARD_IN = "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = ? AND thread = ? AND delivered_at IS NOT NULL LIMIT 1";
+/// The threads an older station wrote out to their archive files (`bringInArchived`, `lostArchives`), by the index of
+/// those alone (schema.ts threads_archived): by every thread there was, looked for after each start, 3 s on ccvm.
+export const ARCHIVED_THREADS = "SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id";
+/// How many chats someone started since a time, by runtime and model (`modelsUsedBy`): from the index of them alone
+/// (schema.ts sessions_models), not each session's row (1.2 s on ccvm, as an agent opened a chat).
+export const MODELS_USED_BY = "SELECT runtime, model, COUNT(*) AS n FROM sessions INDEXED BY sessions_models WHERE created_by = ? AND created_at >= ? GROUP BY runtime, model";
 export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 export const PEOPLE_SAID_AFTER =
@@ -572,7 +581,7 @@ export class Store {
   /// How many chats `createdBy` started here since `since`, by runtime and model (what chat_create runs when it is told
   /// no model: sessions/model-choice.ts).
   modelsUsedBy(createdBy: string, since: number): { runtime: string; model: string | null; n: number }[] {
-    return this.#all("SELECT runtime, model, COUNT(*) AS n FROM sessions WHERE created_by = ? AND created_at >= ? GROUP BY runtime, model", createdBy, since).map((r) => ({
+    return this.#all(MODELS_USED_BY, createdBy, since).map((r) => ({
       runtime: r.runtime as string,
       model: typeof r.model === "string" ? r.model : null,
       n: Number(r.n),
@@ -1237,9 +1246,11 @@ export class Store {
     });
   }
 
-  /// Threads the session has already read something from.
-  heardThreads(session: string): Set<number> {
-    return new Set(this.#all("SELECT DISTINCT thread FROM deliveries WHERE session = ? AND delivered_at IS NOT NULL", session).map((r) => r.thread));
+  /// Of `threads`, those the session has already read something from: each by the index of its deliveries by session
+  /// and thread, its first one delivered. Asked of every thread, it read every message the session was ever given, on
+  /// the main thread as the session was given more: 3.3 s on ccvm short of memory (2026-11-02), every device waiting.
+  heardThreads(session: string, threads: number[]): Set<number> {
+    return new Set([...new Set(threads)].filter((thread) => this.#one(HEARD_IN, session, thread) !== undefined));
   }
 
   sessionsWithPending(): string[] {
@@ -2184,14 +2195,14 @@ export class Store {
   /// the oldest first: how many it brought, and how many are left. Their entries are the same, so what clients keep of
   /// them stays true.
   bringInArchived(most: number): { brought: number; left: number } {
-    const ids = this.#all("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id LIMIT ?", most).map((r) => r.id as number);
+    const ids = this.#all(`${ARCHIVED_THREADS} LIMIT ?`, most).map((r) => r.id as number);
     for (const id of ids) this.#restoreThread(id);
-    return { brought: ids.length, left: this.#one("SELECT COUNT(*) AS c FROM threads WHERE archived_at IS NOT NULL").c };
+    return { brought: ids.length, left: this.#one("SELECT COUNT(*) AS c FROM threads INDEXED BY threads_archived WHERE archived_at IS NOT NULL").c };
   }
 
   /// The archived threads whose file is not there (lost with the disk it was on): each reads as one with no entries.
   lostArchives(): number[] {
-    return this.#all("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id")
+    return this.#all(ARCHIVED_THREADS)
       .map((r) => r.id as number)
       .filter((id) => !existsSync(this.#threadFile(id)));
   }

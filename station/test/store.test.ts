@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS,
+  ANY_RUNNING, ARCHIVED_THREADS, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
@@ -877,10 +877,10 @@ test("bindings tell both sessions; delivered can be taken back", () => {
   const [n] = say(store, thread.id, "1.2", "person", "local", "hi");
   store.deliver(thread.id, n, ["a"]);
   store.markDelivered("a", [{ thread: thread.id, n, apart: false }]);
-  assert.deepEqual([...store.heardThreads("a")], [thread.id]);
+  assert.deepEqual([...store.heardThreads("a", [thread.id, 999])], [thread.id]);
   store.markUndelivered("a", [{ thread: thread.id, n, apart: false }]);
   assert.equal(store.pendingMessages("a").length, 1);
-  assert.deepEqual([...store.heardThreads("a")], []);
+  assert.deepEqual([...store.heardThreads("a", [thread.id])], []);
 });
 
 test("jobs: started, said, ended and cleared", () => {
@@ -928,8 +928,9 @@ test("what the station asks again and again is planned by an index, never a scan
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
+    [HEARD_IN, ["a", 1]], [ARCHIVED_THREADS, []], [MODELS_USED_BY, ["a@x", 0]],
   ];
-  const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
+  const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards|threads_archived)\b)/;
   const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
@@ -940,6 +941,12 @@ test("what the station asks again and again is planned by an index, never a scan
   // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on ccvm).
   assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));
   assert.ok(!plans.get(STATS_OF)!.some((d) => d.includes("COVERING INDEX turns_by_session")), plans.get(STATS_OF)!.join(" | "));
+  // Whether a session heard from a thread: by its deliveries there alone, not every message it was ever given (3.3 s on
+  // the main thread on ccvm); the threads still in archive files by the index of those alone; the models someone's
+  // chats ran on from the index alone.
+  assert.ok(plans.get(HEARD_IN)!.some((d) => d.includes("deliveries_session (session=? AND thread=?)")), plans.get(HEARD_IN)!.join(" | "));
+  assert.deepEqual(plans.get(ARCHIVED_THREADS), ["SCAN threads USING COVERING INDEX threads_archived"]);
+  assert.ok(plans.get(MODELS_USED_BY)!.some((d) => d.includes("COVERING INDEX sessions_models (created_by=? AND created_at>?)")), plans.get(MODELS_USED_BY)!.join(" | "));
   // The latest card before a message: by the index of cards, not by going back over the thread to it.
   assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
   assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));

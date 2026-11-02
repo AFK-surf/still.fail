@@ -50,7 +50,7 @@ const ADDED: [string, string][] = [
 ];
 /// What those columns bring with them: an index of its own (letters; the sessions counted by connect and workspace; the
 /// threads' homes), and the `merged` view saying the column (letters).
-const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home", "threads_own", "entries_said", "entries_agent_at", "sessions_ws", "turns_by_end"];
+const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home", "threads_own", "entries_said", "entries_agent_at", "sessions_ws", "turns_by_end", "threads_archived", "sessions_models"];
 const MERGED_ADDS = [", m.letter"];
 /// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`, `addUsageQuarters`): each with its columns,
 /// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes

@@ -1017,10 +1017,15 @@ export function addSessionTurns(db: DatabaseSync): void {
 ///   it had was read.
 /// - turns_by_end: a session's turns by when they ended (`TOLD_BLOCKED`, whether a blocked ask was told already): by
 ///   when they started, every turn the session had was read.
+/// - threads_archived: the threads an older station wrote out to files (store.ts ARCHIVED_THREADS), none once all are
+///   brought back: by every thread there is, looked for again after each start.
+/// - sessions_models: the chats someone started by when, with their runtime and model (store.ts MODELS_USED_BY).
 export function addTellIndexes(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL");
   db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
   db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS threads_archived ON threads (id, archived_at) WHERE archived_at IS NOT NULL");
+  db.exec("CREATE INDEX IF NOT EXISTS sessions_models ON sessions (created_by, created_at, runtime, model)");
 }
 
 /// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
