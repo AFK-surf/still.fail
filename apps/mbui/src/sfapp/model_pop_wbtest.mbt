@@ -212,3 +212,27 @@ test "wide: how hard it thinks picked in the panel is made what it runs on at on
     assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{label} picked: \{now}, opened \{opened}")
   }
 }
+
+///|
+test "wide: how much context, under how hard it thinks in its column, picked is made what it runs on at once" {
+  let t = model_pop("newchat-model")
+  let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
+  let high = t.get(Radio, label="高").rect
+  // (its whole window first, then less of it, one under another under the levels, as they are: 2026-11-03 用户「把
+  // opus5.5 上下文长度限制在 500k 或者 300k」)
+  let levels = ["完整 · 1M", "500K", "300K", "200K"].map(fn(l) { t.get(Radio, label=l).rect })
+  for i, r in levels {
+    assert_true(r.0 == high.0 && r.1 > high.1, msg="\{levels}, under \{high}")
+    assert_true(i == 0 || r.1 > levels[i - 1].1, msg="\{levels}")
+    assert_true(r.0 + r.2 <= px + pw && r.1 + r.3 <= py + ph, msg="\{r} past the panel")
+  }
+  assert_true(t.words().iter().any(fn(w) { w.0 == "上下文" }), msg="no head over them")
+  let opened = t.get(@ui.Role::Dialog).rect
+  for (label, context) in [("300K", "300000"), ("完整 · 1M", "")] {
+    t.click(Radio, label~)
+    t.run_for(squeeze_opening)
+    assert_eq(new_fix.context, context)
+    let now = t.get(@ui.Role::Dialog).rect
+    assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{label} picked: \{now}, opened \{opened}")
+  }
+}

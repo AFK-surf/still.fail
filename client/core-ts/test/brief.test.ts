@@ -41,6 +41,9 @@ test("the_card_says_what_it_did_cost_and_used", () => {
   assert.equal(c.jobs, "服务在线：web");
   // A quota running out is its account's windows' to say.
   assert.deepEqual(c.attention, [{ text: "磁盘剩 8 GB", level: "amber" }, { text: "「lin」需要重新登录", level: "red" }]);
+  // Kept to less context than its model's window: that is the window it fills.
+  const kept = card({ ...agent, session: { context: 500_000 } }, { usage: { ...live.usage, contextTokens: 450_000, contextWindow: 1_000_000 } });
+  assert.deepEqual(kept.context, { percent: 90, text: "450K / 500K", level: "amber" });
   // Before its first turn and its usage is read: nothing.
   const none = card({ turns: [], attention: [], jobs: [] }, null);
   assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.latest, none.attention], [null, undefined, undefined, undefined, null, [], []]);

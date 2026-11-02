@@ -5,6 +5,7 @@
 import type { Clock } from "effect";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
+import { checkContext } from "./context-cap.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
 import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
@@ -21,7 +22,7 @@ const CALLS_LOOKED_AT = 200;
 
 /// How a session runs from its next turn on. A field left out: unchanged; null: back to the default. `repick`: back to the
 /// station's choice (no profile given), its account picked again now, as a new session's would be (`Accounts.repick`).
-export type SessionChange = { profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null; repick?: boolean; afresh?: boolean | null };
+export type SessionChange = { profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null; context?: number | null; repick?: boolean; afresh?: boolean | null };
 
 /// A profile as a session's runtime starts on it, with its spelling of the session's model.
 export type RunOn = Profile & { spelling(model: string): string | null };
@@ -271,6 +272,7 @@ export class Accounts {
     const newModel = nonEmpty(change.model);
     const newEffort = nonEmpty(change.effort);
     if (change.fast !== undefined && change.fast !== null && runtime !== "codex") throw new Error(t("station.session.fastOpenAiOnly"));
+    checkContext(runtime, change.context, lang);
     const allowed = (p: Profile) => this.allows(key, p);
     if (typeof wantedProfile === "string") {
       const next = config.profiles.find((p) => p.id === wantedProfile);

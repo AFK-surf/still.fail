@@ -708,6 +708,8 @@ export class CodexDriver implements AgentDriver {
       "mcp_servers.stillfail.http_headers": { Authorization: `Bearer ${options.mcpToken}` },
     };
     if (options.effort !== undefined) config.model_reasoning_effort = options.effort;
+    // The most context it runs with: it compacts on its own at it.
+    if (options.context !== undefined) config.model_auto_compact_token_limit = options.context;
     if (skillsOff.length > 0) config["skills.config"] = skillsOff;
     const common: Json = { cwd: options.cwd, approvalPolicy: "never", sandbox: "danger-full-access", developerInstructions: options.instructions, config };
     if (model !== undefined) common.model = model;

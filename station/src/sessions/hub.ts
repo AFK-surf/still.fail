@@ -764,9 +764,10 @@ export class Hub {
     await this.actors.get(key)?.evict();
   }
 
-  /// How a session runs changed: its process ends now if idle, else before its next turn (SessionActor.changed).
-  async changed(key: string) {
-    await this.actors.get(key)?.changed();
+  /// How a session runs changed: its process ends now if idle, else before its next turn (SessionActor.changed); `restart`:
+  /// what changed is what its process started with, which only a new one takes.
+  async changed(key: string, restart = false) {
+    await this.actors.get(key)?.changed(restart);
   }
 
   /// What every runtime process starts with changed (the station's variables for its agents, ops/agent-env.ts): each

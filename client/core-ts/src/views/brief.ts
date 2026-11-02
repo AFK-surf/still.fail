@@ -103,14 +103,19 @@ const CONTEXT_RED = 95;
 /// recorded them, the usage page's count too): while it works, as its station's stream tells it as more are recorded
 /// (`live`); at rest, as its summary says it, which the device holds of every session (told again as the count of its
 /// last turn comes in after it ended); either where the other says none (a station from before says it in no summary,
-/// and on its stream only of a session named there). None before a call.
+/// and on its stream only of a session named there). None before a call. Kept to less context than its model's window
+/// (its session's `context`), that is the window its context fills.
 export function usageNow(session: unknown, live: unknown): J {
   const told = get(live, "usage");
   const said = get(session, "usage");
   const has = (u: unknown) => u !== null && typeof u === "object" && !Array.isArray(u);
   const status = shownStatus(session);
   const [first, then] = status === "running" || status === "queued" ? [told, said] : [said, told];
-  return has(first) ? first : has(then) ? then : null;
+  const u = has(first) ? first : has(then) ? then : null;
+  const cap = get(session, "context");
+  if (u === null || typeof cap !== "number" || cap <= 0) return u;
+  const window = get(u, "contextWindow");
+  return typeof window === "number" && window > 0 && window <= cap ? u : { ...u, contextWindow: cap };
 }
 
 /// Of a chat's agents (ViewsInner `agent`), the one at rest whose prompt cache is over, with a context worth going on

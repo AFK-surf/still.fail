@@ -252,3 +252,27 @@ test("a_quota_in_a_line_names_only_the_window_running_low", () => {
   assert.deepEqual(quotaLine({ state: "unavailable", windows: [], detail: "读不到" }), { text: "读不到" });
   assert.equal(quotaLine(null), null);
 });
+
+test("a_model_can_be_kept_to_the_steps_under_its_window_on_a_runtime_that_takes_one", () => {
+  const overview = {
+    profiles: [
+      { id: "cc", runtimes: ["claude"], models: ["claude-opus-5-5", "claude-haiku-4-5"] },
+      { id: "ds", runtimes: ["dsh"], models: ["deepseek-v4"] },
+    ],
+    contextCaps: { runtimes: ["claude", "codex"], least: 100_000, windows: { "claude-opus-5-5": 1_000_000, "claude-haiku-4-5": 200_000, "deepseek-v4": 1_000_000 } },
+  };
+  const list = models(overview, 0);
+  const opus = list.find((m: J) => m.model === "claude-opus-5-5");
+  assert.deepEqual([opus.contexts.claude, opus.contextWindow], [[500_000, 300_000, 200_000], 1_000_000]);
+  // (a window no step is under; a runtime that cannot)
+  assert.deepEqual(list.find((m: J) => m.model === "claude-haiku-4-5").contexts.claude, []);
+  assert.deepEqual(list.find((m: J) => m.model === "deepseek-v4").contexts.dsh, []);
+  // a step kept, another not offered given way to its whole window; as a client says it, in digits too
+  assert.equal(resolve(list, { model: "claude-opus-5-5", runtime: "claude", context: 300_000 }).context, 300_000);
+  assert.equal(resolve(list, { model: "claude-opus-5-5", runtime: "claude", context: "500000" }).context, 500_000);
+  assert.equal(resolve(list, { model: "claude-opus-5-5", runtime: "claude", context: 400_000 }).context, null);
+  assert.equal(resolve(list, { model: "claude-haiku-4-5", runtime: "claude", context: 300_000 }).context, null);
+  // a station from before them offers none
+  const before = models({ profiles: overview.profiles }, 0).find((m: J) => m.model === "claude-opus-5-5");
+  assert.deepEqual([before.contexts.claude, before.contextWindow], [[], undefined]);
+});

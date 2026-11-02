@@ -26,7 +26,14 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const TABLE = "choice";
 /// How many of the models used most a model control's panel keeps nearest what opened it.
 const NEAR = 4;
-const FIELDS = ["runtime", "model", "effort", "profile", "fast"];
+const FIELDS = ["runtime", "model", "effort", "profile", "fast", "context"];
+
+/// The most context picked (views/models.ts `contextSteps`), as a client says it: tokens, as a number or its digits;
+/// anything else (null, "") the model's whole window.
+const contextOf = (v: J): number | null => {
+  const n = typeof v === "string" && /^[0-9]+$/.test(v) ? Number(v) : v;
+  return typeof n === "number" && Number.isInteger(n) && n > 0 ? n : null;
+};
 
 /// What a pick's save does: done here, or a request to the station.
 export type Saved = { done: J } | { op: ops.Request };
@@ -51,13 +58,17 @@ const stationId = (address: string) => address.slice(address.lastIndexOf("/") + 
 const address = (scope: string, id: string) => `${scope}/${id}`;
 const text = (v: J): string | null => (typeof v === "string" && v !== "" ? v : null);
 
+/// A model's whole window as a model control offers it: 完整 · 1M (just 完整 where its window is not known).
+const wholeWindow = (option: J): string =>
+  typeof get(option, "contextWindow") === "number" ? t("core-logic.choose.context.whole_of", { window: format.compactNumber(option.contextWindow) }) : t("core-logic.choose.context.whole");
+
 function optionOf(options: J[], m: string | null): J {
   if (m === null || m === "") return undefined;
   return options.find((o) => o.model === m) ?? options.find((o) => arr(o.ids).some((i) => i === m));
 }
 
 /// A choice as the station has it now.
-export type Resolved = { entry: J; runtime: string | null; effort: string | null; fast: boolean | null; profile: string | null; efforts: J[]; accounts: J[] };
+export type Resolved = { entry: J; runtime: string | null; effort: string | null; fast: boolean | null; context: number | null; profile: string | null; efforts: J[]; contexts: number[]; accounts: J[] };
 
 export function resolve(options: J[], choice: J): Resolved {
   const entry = optionOf(options, typeof get(choice, "model") === "string" ? choice.model : null) ?? options[0];
@@ -74,11 +85,14 @@ export function resolve(options: J[], choice: J): Resolved {
   const e = text(get(choice, "effort"));
   const effort = e !== null && efforts.some((x) => x === e) ? e : null;
   const fast = typeof get(choice, "fast") === "boolean" && runtime === "codex" ? choice.fast : null;
-  return { entry: entry === undefined ? null : entry, runtime, effort, fast, profile, efforts, accounts };
+  const contexts = at("contexts").filter((n): n is number => typeof n === "number");
+  const c = contextOf(get(choice, "context"));
+  const context = c !== null && contexts.includes(c) ? c : null;
+  return { entry: entry === undefined ? null : entry, runtime, effort, fast, context, profile, efforts, contexts, accounts };
 }
 
 function picked(r: Resolved): J {
-  return { model: r.entry !== null ? r.entry.model : null, runtime: r.runtime ?? "claude", effort: r.effort, fast: r.fast, profile: r.profile };
+  return { model: r.entry !== null ? r.entry.model : null, runtime: r.runtime ?? "claude", effort: r.effort, fast: r.fast, context: r.context, profile: r.profile };
 }
 
 const comboFast = (v: J): boolean | null => get(v, "runtime") === "codex" && typeof get(v, "fast") === "boolean" ? v.fast : null;
@@ -218,7 +232,9 @@ export class Choose implements Owner {
 
   #keepChoice(scope: string, id: string, choice: J, key = `ws:${scope}:station:${id}`): void {
     const kept: J = {};
-    for (const f of FIELDS) kept[f] = f === "fast" ? (typeof get(choice, f) === "boolean" ? choice[f] : null) : typeof get(choice, f) === "string" ? choice[f] : "";
+    for (const f of FIELDS) {
+      kept[f] = f === "fast" ? (typeof get(choice, f) === "boolean" ? choice[f] : null) : f === "context" ? contextOf(get(choice, f)) : typeof get(choice, f) === "string" ? choice[f] : "";
+    }
     this.#env.data.put(TABLE, key, kept, false);
   }
 
@@ -393,7 +409,7 @@ export class Choose implements Owner {
     if (FIELDS.some((f) => get(params, f) !== undefined)) {
       const id = station ?? this.#shown(scope);
       const [options, now] = this.#onStation(address(scope, id));
-      const next: J = { runtime: now.runtime, model: now.entry !== null ? now.entry.model : null, effort: now.effort, fast: now.fast, profile: now.profile };
+      const next: J = { runtime: now.runtime, model: now.entry !== null ? now.entry.model : null, effort: now.effort, fast: now.fast, context: now.context, profile: now.profile };
       const m = text(get(params, "model"));
       if (m !== null) {
         const runs = arr(get(optionOf(options, m), "runtimes"));
@@ -408,7 +424,7 @@ export class Choose implements Owner {
         if (next.runtime !== rt) next.effort = null;
         next.runtime = rt;
       }
-      for (const field of ["effort", "profile", "fast"]) if (get(params, field) !== undefined) next[field] = params[field];
+      for (const field of ["effort", "profile", "fast", "context"]) if (get(params, field) !== undefined) next[field] = params[field];
       this.#keepChoice(scope, id, next);
     }
     this.#changed();
@@ -422,6 +438,7 @@ export class Choose implements Owner {
     if (r.effort !== null) ask.effort = r.effort;
     if (r.profile !== null) ask.profile = r.profile;
     if (r.fast !== null) ask.fast = r.fast;
+    if (r.context !== null) ask.context = r.context;
     // The preset picked: by its id where it is this station's, else all of it as its station said it (its folders
     // that station's).
     const scope = ofAddress(station);
@@ -523,7 +540,7 @@ export class Choose implements Owner {
         if (agent === null || agent === undefined) return undefined;
         const s = agent.session;
         const pinned = get(s, "profilePinned") === true;
-        const value = { model: text(get(s, "model")), runtime: get(s, "runtime") ?? null, effort: text(get(s, "effort")), fast: get(s, "fast") ?? null, profile: pinned ? text(get(s, "profile")) : null };
+        const value = { model: text(get(s, "model")), runtime: get(s, "runtime") ?? null, effort: text(get(s, "effort")), fast: get(s, "fast") ?? null, context: contextOf(get(s, "context")), profile: pinned ? text(get(s, "profile")) : null };
         const current = isObject(agent.account) ? agent.account : null;
         return [arr(agent.choices), value, current, true, false, arr(agent.profiles).length];
       }
@@ -589,6 +606,13 @@ export class Choose implements Owner {
     const dropped = profileDrafted !== null && profile === null;
     const e = pickedOf("effort");
     const effort = e !== null && efforts.some((x) => x === e) ? e : null;
+    // How much less context than its whole window it can be kept to: a new chat's and a chat's (a connect's sessions
+    // are made by the station, as it is set).
+    const contexts: number[] = option !== undefined && (o.kind === "new" || o.kind === "session")
+      ? arr(get(get(option, "contexts"), onName)).filter((n): n is number => typeof n === "number")
+      : [];
+    const cPicked = contextOf("context" in draft ? draft.context : get(value, "context"));
+    const context = cPicked !== null && contexts.includes(cPicked) ? cPicked : null;
     const nextModel = option !== undefined && (valueOption === undefined || valueOption.model !== option.model) ? option.model : (value.model ?? null);
     const overview = this.#env.store.get({ topic: "overview", station });
     const fastAvailable =
@@ -602,7 +626,7 @@ export class Choose implements Owner {
     const fastRaw = "fast" in draft ? draft.fast : get(value, "fast");
     const fast = typeof fastRaw === "boolean" && onName === "codex" ? fastRaw : null;
     const speedText = (f: boolean | null) => (f === true ? "Fast" : f === false ? t("core-logic.choose.speed.standard") : t("core-logic.choose.speed.plan"));
-    const next = { model: nextModel, runtime: on ?? null, effort, profile, fast };
+    const next = { model: nextModel, runtime: on ?? null, effort, profile, fast, context };
     const changed = FIELDS.some((f) => !equal((next as J)[f], value[f] ?? null));
     const kept = text(get(value, "profile"));
     let shown: J = null;
@@ -692,15 +716,16 @@ export class Choose implements Owner {
     }
     const annotated = options.map((opt: J) => {
       const id = typeof opt.model === "string" ? opt.model : "";
-      const ran = id === m ? { runtime: on ?? null, effort, fast } : this.#usual(scope, id, history);
-      const r = ran === undefined ? null : resolve(options, { model: id, runtime: fixed ? value.runtime : ran.runtime, effort: ran.effort, fast: ran.fast });
+      const ran = id === m ? { runtime: on ?? null, effort, fast, context } : this.#usual(scope, id, history);
+      const r = ran === undefined ? null : resolve(options, { model: id, runtime: fixed ? value.runtime : ran.runtime, effort: ran.effort, fast: ran.fast, context: ran.context });
       const parts: string[] = [];
       if (r !== null) {
         if (!fixed && arr(opt.runtimes).length > 1 && r.runtime !== null) parts.push(format.runtimeLabel(r.runtime));
         if (r.effort !== null) parts.push(format.effortLabel(r.effort));
         if (r.fast === true) parts.push("Fast");
+        if (r.context !== null && (o.kind === "new" || o.kind === "session")) parts.push(format.compactNumber(r.context));
       }
-      const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast };
+      const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast, context: o.kind === "new" || o.kind === "session" ? r.context : null };
       return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, uses: uses.get(id) ?? 0, liked: likedKeys.includes(model.key(id)) };
     });
     const near = o.kind === "new" || o.kind === "session"
@@ -732,10 +757,13 @@ export class Choose implements Owner {
         value,
         valueOption: valueOption ?? null,
         account: accountView,
-        draft: { model: m, runtime: on ?? null, effort, profile, fast },
+        draft: { model: m, runtime: on ?? null, effort, profile, fast, context },
         option: option !== undefined ? (option.model ?? null) : null,
         runtimes: !fixed && runtimes.length > 1 ? runtimes : [],
         efforts,
+        // The most context it can be kept to, each said ("" its whole window, first), and the one picked.
+        contexts: contexts.length === 0 ? [] : [{ id: "", text: wholeWindow(option) }, ...contexts.map((n) => ({ id: String(n), text: format.compactNumber(n) }))],
+        contextNow: context === null ? "" : String(context),
         accounts,
         dropped: dropped ? t("core-logic.choose.dropped", { model: optionName ?? (typeof next.model === "string" ? next.model : "") }) : null,
         who,
@@ -826,13 +854,13 @@ export class Choose implements Owner {
     if (isObject(kept)) return kept;
     let newest: J;
     for (const h of history) if (get(h, "model") === model && (newest === undefined || (h.last ?? 0) > (newest.last ?? 0))) newest = h;
-    return newest === undefined ? undefined : { runtime: newest.runtime ?? null, effort: text(newest.effort), fast: comboFast(newest) };
+    return newest === undefined ? undefined : { runtime: newest.runtime ?? null, effort: text(newest.effort), fast: comboFast(newest), context: null };
   }
 
   #keepUsual(scope: string, choice: J): void {
     const model = text(get(choice, "model"));
     if (model === null) return;
-    this.#env.data.put(TABLE, `ws:${scope}:usual:${model}`, { runtime: get(choice, "runtime") ?? null, effort: text(get(choice, "effort")), fast: typeof get(choice, "fast") === "boolean" ? choice.fast : null }, false);
+    this.#env.data.put(TABLE, `ws:${scope}:usual:${model}`, { runtime: get(choice, "runtime") ?? null, effort: text(get(choice, "effort")), fast: typeof get(choice, "fast") === "boolean" ? choice.fast : null, context: contextOf(get(choice, "context")) }, false);
   }
 
   /// `pick.save`: what the panel picked, made what it runs on; with picks of its own (a frequent combination's), those
@@ -858,7 +886,7 @@ export class Choose implements Owner {
     let saved: Saved;
     switch (o.kind) {
       case "new":
-        this.pickNew(ofAddress(station), { station: stationId(station), model: next.model, runtime: next.runtime, effort: textOf("effort"), profile: textOf("profile"), fast: next.fast });
+        this.pickNew(ofAddress(station), { station: stationId(station), model: next.model, runtime: next.runtime, effort: textOf("effort"), profile: textOf("profile"), fast: next.fast, context: next.context });
         saved = { done: { saved: true } };
         break;
       case "connectNew":
@@ -868,6 +896,7 @@ export class Choose implements Owner {
       case "session": {
         const params: J = { station, key: o.key, model: next.model, effort: next.effort, profile: next.profile };
         if (v.fastAvailable === true) params.fast = next.fast;
+        if (arr(v.contexts).length > 0) params.context = next.context;
         const op = ops.request("session.settings", params);
         if (op === null) throw CoreError.invalid("session.settings");
         saved = { op };

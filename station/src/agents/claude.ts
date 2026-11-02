@@ -300,7 +300,12 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     // A key the station renews in a file (a Kimi sign-in's token, minutes long): Claude Code's key helper reads it,
     // again every minute and after a 401 (Claude Code runs it in a POSIX shell, Git Bash on Windows).
     const file = keyFile(options.profile);
-    const settings = { ...(ours ? SETTINGS : {}), ...(file === undefined ? {} : { apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }) };
+    const settings = {
+      ...(ours ? SETTINGS : {}),
+      ...(file === undefined ? {} : { apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }),
+      // The most context it runs with: it compacts on its own at it (its window for the model, clamped to the model's).
+      ...(options.context === undefined ? {} : { autoCompactWindow: options.context }),
+    };
     if (Object.keys(settings).length > 0) args.push("--settings", JSON.stringify(settings));
 
     const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "claude"), options.route) };

@@ -38,6 +38,7 @@ import { shownFacts } from "../../sessions/image-size.ts";
 import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";
 import { runtimeKind } from "../../agents/runtime.ts";
+import { contextAsked } from "../../sessions/context-cap.ts";
 
 /// A hub error the Rust maps to a status (`map_err(|e| http_error(status, e.to_string()))`).
 async function as<T>(status: number, f: () => T | Promise<T>): Promise<T> {
@@ -384,6 +385,7 @@ export const routes = (tools: Tools): Route[] => {
                 model: given("model"),
                 effort: given("effort"),
                 fast: typeof i.fast === "boolean" ? i.fast : null,
+                context: contextAsked(i.context, r.lang),
                 title: typeof i.title === "string" ? chars(i.title, 120) : null,
                 createdBy: r.viewer.email,
                 clientKey: given("clientKey"),
@@ -550,6 +552,8 @@ export const routes = (tools: Tools): Route[] => {
                 if (i.fast !== null && typeof i.fast !== "boolean") throw new Refused(400, tr(r.lang, "station.admin.badFast"));
                 change.fast = i.fast;
               }
+              // The most context it runs with: null gives it the model's whole window.
+              if ("context" in i) change.context = await as(400, () => contextAsked(i.context, r.lang));
               await as(400, () => configure(a.hub, key, change, r.lang));
               // With the profile it runs on now (picked again: the one picked).
               return ok({ ok: true, profile: a.hub.store.getSession(key)?.profile ?? null });

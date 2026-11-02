@@ -910,6 +910,7 @@
   "web-main.model.default": "Default",
   "web-main.model.defaultEffort": "Default effort",
   "web-main.model.effort": "Effort",
+  "web-main.model.context": "Context",
   "web-main.model.effortLevel.high": "High",
   "web-main.model.effortLevel.low": "Low",
   "web-main.model.effortLevel.max": "Max",

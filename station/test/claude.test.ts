@@ -215,6 +215,20 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await until((e) => e.some((x) => x.type === "closed"));
   });
 
+  test("a session kept to less context starts Claude Code compacting at it", async () => {
+    const d = driver();
+    const o = options({ context: 300_000 });
+    const { push, until } = listen();
+    const session = await d.open(o, push);
+    await session.prompt("say:hi");
+    await until(ended(1));
+    const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
+    const settings = JSON.parse(started.argv[started.argv.indexOf("--settings") + 1]);
+    assert.equal(settings.autoCompactWindow, 300_000);
+    assert.equal(settings.disableClaudeAiConnectors, true, "with the station's own settings");
+    await session.dispose();
+  });
+
   test("a Kimi Code sign-in's key is read from its home by Claude Code's key helper, not given it", async () => {
     const d = driver();
     const base = options();

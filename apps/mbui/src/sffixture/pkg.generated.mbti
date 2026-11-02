@@ -666,6 +666,7 @@ pub(all) struct NewFix {
   mut d_runtime : String
   mut d_effort : String
   mut d_profile : String
+  mut context : String
   mut made : Int32
   mut reading : Int32
   mut crowded : Bool

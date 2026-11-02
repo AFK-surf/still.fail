@@ -134,10 +134,41 @@ export function choices(overview: J, session: J, now: number): J[] {
       ...makerFamily(m, madeBy(overview, ids)),
       runtimes: [runtime],
       efforts: { [runtime]: commonEfforts(offered.profiles, runtime, m) },
+      contexts: { [runtime]: contextSteps(overview, runtime, ids) },
+      ...windowOf(overview, ids),
       accounts: { [runtime]: profileLines(offered.profiles, runtime, m, current, now) },
     };
   });
 }
+
+/// The most context a chat can be kept to under a model's whole window, the most first (a station's sessions/context-cap.ts).
+const CONTEXT_STEPS = [500_000, 300_000, 200_000];
+
+/// How much less context than its whole window model `m` (spelled as any of `ids`) can run with on `runtime`, the most
+/// first: the steps under its window as its station's model catalog says it (`contextCaps`), on a runtime that takes
+/// one. None from a station from before them, for a model whose window is not known, or one too short for any.
+export function contextSteps(overview: J, runtime: string, ids: Iterable<string>): number[] {
+  const caps = get(overview, "contextCaps");
+  if (!arr(get(caps, "runtimes")).includes(runtime)) return [];
+  const least = typeof get(caps, "least") === "number" ? caps.least : 0;
+  const window = contextWindow(overview, ids);
+  return window === null ? [] : CONTEXT_STEPS.filter((s) => s >= least && s < window);
+}
+
+/// Model `m`'s whole context window (spelled as any of `ids`), as its station's model catalog says it; null, not said.
+export function contextWindow(overview: J, ids: Iterable<string>): number | null {
+  let window: number | null = null;
+  for (const id of ids) {
+    const w = get(get(get(overview, "contextCaps"), "windows"), id);
+    if (typeof w === "number") window = Math.max(window ?? 0, w);
+  }
+  return window;
+}
+
+const windowOf = (overview: J, ids: Iterable<string>): { contextWindow?: number } => {
+  const window = contextWindow(overview, ids);
+  return window === null ? {} : { contextWindow: window };
+};
 
 function profileEfforts(profile: J, runtime: string, m: string | null): string[] {
   const catalog = get(get(profile, "check"), "modelEfforts");
@@ -244,13 +275,15 @@ export function models(overview: J, now: number): J[] {
     const rts = sortedSet(rs).sort((a, b) => order(a) - order(b));
     const spent = backs.every((b) => b !== null) ? backs.reduce<number>((min, b) => Math.min(min, b as number), Infinity) : null;
     const efforts: Record<string, J> = {};
+    const contexts: Record<string, number[]> = {};
     const accounts: Record<string, J> = {};
     for (const r of rts) {
       const offered = profiles.get(r) ?? [];
       efforts[r] = commonEfforts(offered, r, m);
+      contexts[r] = contextSteps(overview, r, spelled);
       accounts[r] = profileLines(offered, r, m, null, now);
     }
-    return { model: m, name: model.name(m), ids: spelled, runtimes: rts, ...makerFamily(m, madeBy(overview, spelled)), efforts, accounts, spent: spent !== null ? spentView(spent, now) : null };
+    return { model: m, name: model.name(m), ids: spelled, runtimes: rts, ...makerFamily(m, madeBy(overview, spelled)), efforts, contexts, ...windowOf(overview, spelled), accounts, spent: spent !== null ? spentView(spent, now) : null };
   });
 }
 
