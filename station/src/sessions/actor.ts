@@ -65,7 +65,7 @@ export type SessionStore = {
   markUndelivered(key: string, handed: Handed[]): void;
   untoldWidgetModels(key: string): any[];
   markWidgetModelsTold(key: string, pairs: [string, string][]): void;
-  heardThreads(key: string): Set<number> | number[];
+  heardThreads(key: string, threads: number[]): Set<number> | number[];
   postAfter(key: string, thread: number, n: number): string | null;
   cardEndedByMessage(thread: number, n: number): [MessageRow, any] | null;
   pendingCard(thread: number): [MessageRow, any] | null;
@@ -934,8 +934,9 @@ export class SessionActor {
   /// The messages as the agent reads them, made now so edits count (session.rs `format`).
   private async format(said: any[]): Promise<[string, [string, string][]]> {
     const store = this.deps.store;
-    const heard = new Set(store.heardThreads(this.key));
-    const newThreads = new Set<number>(said.map((m) => m.message.thread).filter((t: number) => !heard.has(t)));
+    const threads: number[] = said.map((m) => m.message.thread);
+    const heard = new Set(store.heardThreads(this.key, threads));
+    const newThreads = new Set<number>(threads.filter((t) => !heard.has(t)));
     const names = new Map<string, string>();
     for (const m of said) {
       if (names.has(m.message.author)) continue;
