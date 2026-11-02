@@ -885,8 +885,9 @@ pub fn quotes(
         jump=q.ts != "" && here.go is Some(_),
         words_key~,
         words_width?,
-        // (its own box, as the message's files have theirs: at most as wide as the card has room)
-        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i)) } }),
+        // (its own box, as the message's files have theirs: at most as wide as the card has room; its corner concentric
+        // with the card's)
+        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i), corner=@sf.quote_picture_corner) } }),
       )
       // (the passage it quotes lit there alone, where that message's words have it)
       match here.go {

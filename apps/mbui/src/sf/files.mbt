@@ -508,6 +508,12 @@ pub let message_file_corner : Double = card_corner
 pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
 
 ///|
+/// A picture's corner `corner` as a style's: a message's file's, or a quote's own picture's (quote_picture_corner).
+pub fn file_radius(corner : Double) -> @ui.Radius {
+  rounded(corner)
+}
+
+///|
 /// A file's card at its widest (fileCard: 236).
 pub let file_card_w : Double = 236.0
 
@@ -810,13 +816,20 @@ let quote_box : @ui.Style = @ui.style(w=Full, radius=rounded(quote_corner), bg=O
 
 ///|
 /// In a message, as a message's bubble (sfpages message.mbt bubble: Xl2, its words 14 across and 8 over and under):
-/// what it holds the bubble's 8 in from its edges (its picture there, concentric with it), 6 apart; its words as far
+/// what it holds the bubble's 8 in from its edges (its picture the ladder's 10: quote_picture), 6 apart; its words as far
 /// in across as a bubble's.
 // kept across runs: a value (no field of it changes)
 let quote_box_message : @ui.Style = quote_box.then(@ui.style(p=room(quote_card_in), gap=S1_5))
 
 ///|
 let quote_card_in : Double = 8.0
+
+///|
+/// A quote's own picture in a message (an image, a video's still): in its card's foot corners, so as anything with a
+/// ground there, the ladder's inset in (quote_picture) and round by the ladder's next step, concentric with the card
+/// (its 18, so 10), all four corners alike; a message's file's 26 alone there is rounder than the card round it (the
+/// user, 2026-11-02).
+pub let quote_picture_corner : Double = @ui.concentric(quote_corner, corner_inset)
 
 ///|
 /// A quote's corner in a message: a message's bubble's.
@@ -957,9 +970,14 @@ let quote_pin : @ui.Style = @ui.css("h=S4 min_w=S4 px=S1 radius=Full bg=Accent a
 let quote_pin_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnAccent, wrap=false)
 
 ///|
-/// Its picture in a message: at its card's padding (in the composer 6 over it, 16 in).
+/// Its picture in a message: in its card's foot corners the ladder's inset in from its sides and foot, past its card's
+/// padding (in the composer 6 over it, 16 in).
 // kept across runs: a value (no field of it changes)
-let quote_picture : @ui.Style = @ui.css("row")
+let quote_picture : @ui.Style = @ui.style(
+  row=true,
+  px=room(corner_inset - quote_card_in),
+  pb=room(corner_inset - quote_card_in),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

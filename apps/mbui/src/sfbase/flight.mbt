@@ -124,8 +124,11 @@ pub fn quote_key(i : Int) -> String {
 ///|
 /// What flies to the picture in the `i`th quote: each quote has its own picture even when several name one file.
 pub fn quote_picture_key(i : Int) -> String {
-  "quote-picture:" + i.to_string()
+  quote_picture_prefix + i.to_string()
 }
+
+///|
+let quote_picture_prefix : String = "quote-picture:"
 
 ///|
 let quote_prefix : String = "quote:"
@@ -964,9 +967,15 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
           let (ew, eh) = (bw * sw, bh * sh)
           let w = fw + (ew - fw) * up
           let h = fh + (eh - fh) * up
-          // (on no ground, its corner its tile's in the composer as it leaves, a file's in its message as it lands,
-          // in the one change of shape: sfpages composer.mbt, message_files.mbt)
-          let corner = @sf.composer_inner() + (@sf.message_file_corner - @sf.composer_inner()) * up
+          // (on no ground, its corner its tile's in the composer as it leaves, a file's in its message as it lands
+          // (a quote's picture's, concentric with its card), in the one change of shape: sfpages composer.mbt,
+          // message_files.mbt)
+          let lands = if ff.key.has_prefix(quote_picture_prefix) {
+            @sf.quote_picture_corner
+          } else {
+            @sf.message_file_corner
+          }
+          let corner = @sf.composer_inner() + (lands - @sf.composer_inner()) * up
           let pic = c.box(style=@ui.style(w=Fixed(w), h=Fixed(h), radius=@sf.radius_between(corner), clip=true), fn() {
             let fit : @ui.Fit = if top_crop { FitCoverAt(0.5 * (1.0 - up)) } else { FitCover }
             paint(w, h, fit, corner)
