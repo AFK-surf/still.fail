@@ -183,7 +183,7 @@ pub fn source() -> @sfapp.Source {
     },
     images,
     now: fn() { @ui.wall_ms() },
-    leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params=@sfbase.core_topic_params(name, params))) },
+    leave: fn(name, params) { @core.unsubscribe_topic(name, params=@sfbase.core_topic_params(name, params)) },
     read_only: false,
   }
 }

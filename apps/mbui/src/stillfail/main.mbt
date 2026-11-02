@@ -290,7 +290,7 @@ let core_source : @sfapp.Source = {
   draft_picture,
   images: chat_images,
   now: fn() { @ui.wall_ms() },
-  leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params=@sfbase.core_topic_params(name, params))) },
+  leave: fn(name, params) { @core.unsubscribe_topic(name, params=@sfbase.core_topic_params(name, params)) },
   read_only,
 }
 
