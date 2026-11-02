@@ -53,6 +53,8 @@ pub(all) struct Browse {
   does : BrowseDoes
   /// what the core says of it now (or last, while it is read)
   shown : BrowseView?
+  /// the count only for this topic, not a previous folder kept while the next is read
+  count_text : String?
 }
 
 ///|
@@ -114,13 +116,13 @@ pub fn browse(
 ) -> Browse {
   let p = browse_place(key)
   let root = at.root.unwrap_or("")
-  let b0 : Browse = { key, owner, view, at, root, write, does, shown: None }
+  let b0 : Browse = { key, owner, view, at, root, write, does, shown: None, count_text: None }
   let got = browse_topic(src, b0.where_())
   match got {
     Some(v) => p.last = Some(v)
     None => ()
   }
-  let b = { ..b0, shown: match got { Some(v) => Some(v); None => p.last } }
+  let b = { ..b0, shown: match got { Some(v) => Some(v); None => p.last }, count_text: match got { Some(v) => v.count_text; None => None } }
   let here = view + "\n" + at.station + "\n" + root + "\n" + at.path
   if p.told != here {
     // (a name being changed lets go as another folder is shown)

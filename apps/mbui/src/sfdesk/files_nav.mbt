@@ -1,8 +1,7 @@
 // The files' sidebar (ember web/src/pages/FilesNav.tsx, FilesNav.css.ts), as Finder's: the person's own folders kept at
-// hand (个人收藏, of any station: favorites.mbt), then every station of the workspace with a drive, a row each (online or
-// not, whether it is this machine, how full its disk is), opened to its places (its home, the home's own folders, its
-// disks), then the folders the stations pin for everyone (团队共享). A row opens its folder in the side in front;
-// something dragged onto one goes into it, and a folder dragged onto 个人收藏 is kept there (drag.mbt).
+// hand (个人收藏, of any station: favorites.mbt, including old pins), then every station of the workspace with a drive,
+// opened to its places. A row opens its folder in the side in front; something dragged onto one goes into it, and a
+// folder dragged onto 个人收藏 is kept there (drag.mbt).
 
 ///|
 /// What the sidebar holds: the stations opened (to their places), each station's places as read (asked once).
@@ -21,6 +20,8 @@ fn nav_reset() -> Unit {
   nav.open.clear()
   nav.places.clear()
   nav.asked.clear()
+  places_rows.clear()
+  places_keys.clear()
 }
 
 ///|
@@ -45,16 +46,15 @@ pub fn drive_start(s : DvStation) -> String? {
 }
 
 ///|
-/// The files' sidebar of workspace `ws` (FilesNav): its band (Pin 文件夹, the folders of the one station it can be done
-/// on, else which first), then the places.
+/// The files' sidebar of workspace `ws`: its add-favorite action, then the places.
 pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   // what is dragged over it moved on or let go
   drag_frame(c, src, ws)
   c.box(style=nav_side, fn() {
     side_top(c)
-    let pins = pin_stations(src, ws)
-    if pins.length() > 0 {
-      nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn(_) { add_folder(src, ws, pins) }))
+    let stations = favorite_stations(src, ws)
+    if stations.length() > 0 {
+      nav_action(c, "files/pin", @sf.t("web-pages.files.addFavorite"), Some(fn(_) { add_favorite_folder(src, ws, stations) }))
     }
     // (a folder chosen there in the page, on the tape brought over to show it)
     files_places(c, src, ws, top=nav_top, foot=@sf.list_foot_in(Side), go=fn(at) {
@@ -72,17 +72,38 @@ priv enum PlaceItem {
   PTrouble(String)
   PReading
   PNone
-  PFavorites
+  PFavoriteHead
+  PFavoriteHint
+  PFavorite(Favorite, DvStation, Bool)
   PHeading(String)
   PStation(DvStation)
-  PShared(DvStation, DvRoot)
   PFoot(Double)
 }
 
 ///|
+/// Each places list keeps its own rows and their identities, so favorites enter and leave where they are.
+// kept across runs: put back by nav_reset
+let places_rows : Map[String, @ui.ListRows[PlaceItem]] = {}
+
+///|
+// kept across runs: put back by nav_reset
+let places_keys : Map[String, Array[String]] = {}
+
+///|
+fn places_rows_of(ws : String) -> @ui.ListRows[PlaceItem] {
+  match places_rows.get(ws) {
+    Some(rows) => rows
+    None => {
+      let rows = @ui.ListRows::new()
+      places_rows[ws] = rows
+      rows
+    }
+  }
+}
+
+///|
 /// The files' places of workspace `ws` (FilesNav's list; the phone's 文件, Files.tsx, is the same list), in the box it
-/// is given, scrolling: the person's own folders kept at hand (个人收藏), every station with a drive (its places under
-/// it, opened), the folders the stations pin for everyone (团队共享). Its rows a sidebar list's on this screen (the
+/// is given, scrolling: the person's folders kept at hand, then every station with a drive. Its rows a sidebar list's on this screen (the
 /// theme's: touch's a finger's list's, a size up, the box's width). `top`, `foot`: room kept at its ends for
 /// what is over it;
 /// `go`: a folder opened (the side in front, by default).
@@ -99,8 +120,14 @@ pub fn files_places(
   // those with a drive, this machine's first, then as the workspace lists them
   let (known, error) = drive_stations(src, ws)
   let stations = known.unwrap_or([])
-  // (what the stations pin and the favourites' stations are among those with a drive: the one list read)
-  let views = stations
+  let favs = favorites_in(src, ws, stations)
+  let visible : Array[(Favorite, DvStation)] = []
+  for f in favs {
+    match stations.iter().find_first(fn(s) { s.station == f.station }) {
+      Some(s) => visible.push((f, s))
+      None => ()
+    }
+  }
   let rows : Array[PlaceItem] = [PTop(top)]
   match (known, error) {
     (None, Some(e)) => rows.push(PTrouble(e))
@@ -109,7 +136,13 @@ pub fn files_places(
   if known is Some(_) && stations.length() == 0 {
     rows.push(PNone)
   }
-  rows.push(PFavorites)
+  rows.push(PFavoriteHead)
+  if favs.is_empty() {
+    rows.push(PFavoriteHint)
+  }
+  for i, (f, s) in visible {
+    rows.push(PFavorite(f, s, i + 1 < visible.length()))
+  }
   // (while they are read, the stations to come in their bones where they will be)
   if known is None && error is None {
     rows.push(PReading)
@@ -120,53 +153,67 @@ pub fn files_places(
   for s in stations {
     rows.push(PStation(s))
   }
-  let pinned : Array[PlaceItem] = []
-  for s in views {
-    for r in s.roots {
-      pinned.push(PShared(s, r))
-    }
-  }
-  if pinned.length() > 0 {
-    rows.push(PHeading(@sf.t("web-pages.files.shared")))
-    rows.append(pinned)
-  }
   rows.push(PFoot(foot))
+  // The same workspace's places can be shown in different panes; each list owns its motion.
+  let list_id = c.id("files/places/" + ws).to_string()
+  let keys = rows.map(fn(row) {
+    match row {
+      PTop(_) => "top"
+      PTrouble(_) => "trouble"
+      PReading => "reading"
+      PNone => "none"
+      PFavoriteHead => "favorite-head"
+      PFavoriteHint => "favorite-hint"
+      PFavorite(f, _, _) => "favorite/" + f.station + "\u{1}" + favorite_path(f.root, f.path)
+      PHeading(h) => "heading/" + h
+      PStation(s) => "station/" + s.station
+      PFoot(_) => "foot"
+    }
+  })
+  let content = keys.filter(fn(k) { k.has_prefix("favorite/") || k.has_prefix("station/") })
+  let before = places_keys.get(list_id).unwrap_or([])
+  places_keys[list_id] = content
+  let lr = places_rows_of(list_id)
+  let (rows, shown_keys) = lr.rows(
+    c,
+    keys,
+    rows,
+    fn(row) {
+      match row {
+        PFavorite(_, _, more) => if more { "more" } else { "last" }
+        _ => ""
+      }
+    },
+    watched=content.iter().any(fn(k) { before.contains(k) }),
+  )
   c.box(style=@sf.theme().chat_list.side_list, fn() {
     c.list("files/places/" + ws, rows.length(), place_est, fn(i) {
-      match rows[i] {
-        PTop(h) | PFoot(h) => c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
-        PTrouble(e) => c.text(e, style=nav_trouble) |> ignore
-        PReading => @sf.waiting(c, fn() { places_sample(c) })
-        PNone =>
-          c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
-        PFavorites => places_favorites(c, src, ws, views, go)
-        PHeading(h) => @sf.list_heading(c, h, Side)
-        PStation(s) => {
-          let more = i + 1 < rows.length() && rows[i + 1] is PStation(_)
-          station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, more, go)
-        }
-        PShared(s, r) => {
-          let t = @sf.theme()
-          let name = if r.name != "" { r.name } else { dv_name(r.path) }
-          let into : DriveAt = { station: s.station, root: Some(r.path), path: "" }
-          fdrag_side_row(c, "shared/" + s.station + "/" + r.path, into, name, dv_rights(src, ws, Some(s)).write, s.transfers, fn() {
-            if nav_row(
-                c,
-                "files/shared/" + s.station + "/" + r.path,
-                place_lit(s.station, r.path, ""),
-                fn() {
-                  @sf.icon(c, "pin", size=nav_icon, color=t.p.muted) |> ignore
-                  nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
-                  c.text(s.name, style=nav_meta(), allow_ellipsis=true) |> ignore
-                },
-                more=i + 1 < rows.length() && rows[i + 1] is PShared(_),
-              ) {
-              go(into)
-            }
+      let box = c.box(style=@sf.full_width, fn() {
+        match rows[i] {
+          PTop(h) | PFoot(h) => c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
+          PTrouble(e) => c.text(e, style=nav_trouble) |> ignore
+          PReading => @sf.waiting(c, fn() { places_sample(c) })
+          PNone =>
+            c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
+          PFavoriteHead => favorite_drop(c, "head", fn() { @sf.list_heading(c, @sf.t("web-pages.files.favorites"), Side) })
+          PFavoriteHint => favorite_drop(c, "hint", fn() {
+            c.box(style=@sf.theme().chat_list.side_hint, fn() {
+              @sf.icon(c, "star", size=nav_icon, color=@sf.theme().p.subtle) |> ignore
+              c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta()) |> ignore
+            })
+            |> ignore
           })
+          PFavorite(f, s, more) => favorite_row(c, src, ws, f, s, more, go)
+          PHeading(h) => @sf.list_heading(c, h, Side)
+          PStation(s) => {
+            let more = i + 1 < rows.length() && rows[i + 1] is PStation(_)
+            station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, more, go)
+          }
         }
-      }
-    })
+      })
+      lr.enter(c, box, shown_keys[i])
+      lr.leave(c, box, shown_keys[i])
+    }, sized=lr.sized())
     |> ignore
   })
   |> ignore
@@ -176,67 +223,91 @@ pub fn files_places(
 /// Whether the folder is the one shown (the side in front: the stack's top), its row lit.
 fn place_lit(station : String, root : String, path : String) -> Bool {
   match app.nav.top() {
-    Drive(h) => h.station == station && h.root == Some(root) && h.path == path
+    Drive(h) =>
+      if h.station != station {
+        false
+      } else {
+        match h.root {
+          Some(r) => favorite_same_path(r, h.path, root, path)
+          None => false
+        }
+      }
     _ => false
   }
 }
 
 ///|
-/// 个人收藏 (the person's own folders kept at hand, of any station): a folder dragged onto it kept there; none yet, where
-/// they go.
-fn places_favorites(
+/// A part of 个人收藏 takes a folder dragged onto it; a favorite's own drop target takes precedence.
+fn favorite_drop(c : @ui.Ctx, key : String, body : () -> Unit) -> Unit {
+  let kid = c.id("files/keep/" + key)
+  let keeping = fdrag_target(c, kid, "keep/" + key, None, "", true, true, 0, outside=false) is Some(_)
+  c.box(style=if keeping { keep_on } else { keep_off }, id=kid, body) |> ignore
+}
+
+///|
+/// One favorite: its row opens the folder; a hold or right click offers to remove it. A pointer also gets a remove key.
+fn favorite_row(
   c : @ui.Ctx,
   src : Source,
   ws : String,
-  views : Array[DvStation],
+  f : Favorite,
+  st : DvStation,
+  more : Bool,
   go : (DriveAt) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
-  let favs = favorites(src, ws)
-  let kid = c.id("files/keep")
-  let keeping = fdrag_target(c, kid, "keep", None, "", true, true, 0, outside=false) is Some(_)
-  c.box(style=if keeping { keep_on } else { keep_off }, id=kid, fn() {
-    @sf.list_heading(c, @sf.t("web-pages.files.favorites"), Side)
-    if favs.length() == 0 {
-      c.box(style=@sf.theme().chat_list.side_hint, fn() {
-        @sf.icon(c, "star", size=nav_icon, color=t.p.subtle) |> ignore
-        c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta()) |> ignore
-      })
-      |> ignore
-    }
-    for k, f in favs {
-      match views.iter().find_first(fn(x) { x.station == f.station }) {
-        Some(st) => {
-          let place = f.station + "/" + f.root + "/" + f.path
-          let rid = c.id("files/unfav/" + place)
-          let into : DriveAt = { station: f.station, root: Some(f.root), path: f.path }
-          fdrag_side_row(c, "fav/" + place, into, f.name, dv_rights(src, ws, Some(st)).write, st.transfers, fn() {
-            if c.clicked(rid) {
-              favorite_remove(src, ws, f.station, f.root, f.path)
-            } else if nav_row(
-                c,
-                "files/fav/" + place,
-                place_lit(f.station, f.root, f.path),
-                fn() {
-                  @sf.icon(c, "folder", size=nav_icon, color=t.p.muted) |> ignore
-                  nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) })
-                  c.text(st.name, style=nav_meta(), allow_ellipsis=true) |> ignore
-                  let ub = c.box(style=unkeep(), id=rid, fn() {
-                    @sf.icon(c, "close", size=nav_icon, color=t.p.subtle) |> ignore
-                  })
-                  c.semantics(ub, Button, id=rid, label=@sf.t("web-pages.files.unfavorite", args=[("name", f.name)]))
-                },
-                more=k + 1 < favs.length(),
-              ) {
-              go(into)
-            }
-          })
+  let place = f.station + "/" + f.root + "/" + f.path
+  let rid = c.id("files/unfav/" + place)
+  let old_root = st.roots.iter().find_first(fn(r) { favorite_same_path(f.root, f.path, r.path, "") })
+  // Preserve the root used by older station integrations that can only read configured roots.
+  let into : DriveAt = match old_root {
+    Some(r) => { station: f.station, root: Some(r.path), path: "" }
+    None => { station: f.station, root: Some(f.root), path: f.path }
+  }
+  favorite_drop(c, "favorite/" + place, fn() {
+    fdrag_side_row(c, "fav/" + place, into, f.name, dv_rights(src, ws, Some(st)).write, st.transfers, fn() {
+      let key = "files/fav/" + place
+      let id = c.id(key)
+      let label = @sf.t("web-pages.files.unfavorite", args=[("name", f.name)])
+      match c.menu_asked(id) {
+        Some((x, y)) => {
+          let held = @sf.menu_held(c, "files/favorite/" + place)
+          @sf.menu(
+            [Some(@sf.menu_item_of(label, icon="star", fn() { favorite_remove(src, ws, f.station, f.root, f.path) }))],
+            from=if held { Of(id) } else { @sf.at_point(x, y) },
+            title=f.name,
+          )
         }
         None => ()
       }
-    }
+      let removed = c.clicked(rid)
+      let opened = nav_row(
+          c,
+          key,
+          place_lit(f.station, into.root.unwrap_or(""), into.path),
+          fn() {
+            @sf.icon(c, "folder", size=nav_icon, color=t.p.muted) |> ignore
+            nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) })
+            c.text(st.name, style=nav_meta(), allow_ellipsis=true) |> ignore
+            if !@sf.more_held() {
+              c.hand_shown(c.lit(id) || c.lit(rid), fn() {
+                let ub = c.box(style=favorite_remove_key(), id=rid, fn() {
+                  @sf.icon(c, "close", size=nav_icon, color=t.p.subtle) |> ignore
+                })
+                c.semantics(ub, Button, id=rid, label~)
+                @sf.tip(c, "files/favorite-tip/" + place, rid, label)
+              })
+            }
+          },
+          more~,
+        )
+      if removed {
+        favorite_remove(src, ws, f.station, f.root, f.path)
+      } else if opened {
+        go(into)
+      }
+    })
   })
-  |> ignore
 }
 
 ///|
@@ -463,25 +534,12 @@ let keep_off : @ui.Style = @ui.css("w=Full radius=Xl")
 let keep_on : @ui.Style = keep_off.then(@ui.css("border=B1 border_color=Accent"))
 
 ///|
-/// A favourite's remove (unkeep): 20 across, round, in the middle of its row's end (a sidebar's row as high as a row
-/// at least, row_least: a capsule) as far in as makes it concentric with it (capsule_in: 8 in a row 36 high), past the
-/// row's 10. (Its row was 32 high when this was said once: 6 in a row 36 high since rows' least height, its corner
-/// none of the row's.)
-fn unkeep() -> @ui.Style {
+/// A row key concentric with the side row's rounded end, without increasing the row's height.
+fn favorite_remove_key() -> @ui.Style {
   let corner = @sf.row_least() / 2.0
-  let off = @sf.capsule_in(corner, unkeep_side, room=corner) - unkeep_row_pad
-  unkeep_look.then(@ui.style(mr=@sf.room_of(off)))
+  let inset = @sf.capsule_in(corner, @sf.row_keys_room(1), room=corner)
+  @sf.row_key_box.then(@ui.style(mr=@sf.room_of(inset - @sf.theme().chat_list.band_pad)))
 }
-
-///|
-// kept across runs: a value (no field of it changes)
-let unkeep_look : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter radius=Full hovered{bg=Hover}")
-
-///|
-let unkeep_row_pad : Double = 10.0
-
-///|
-let unkeep_side : Double = 20.0
 
 ///|
 /// A station's disclosure: its chevron 16 across, its box as wide as makes it a press's room inside its row (whose sides

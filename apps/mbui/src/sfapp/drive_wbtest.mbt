@@ -56,9 +56,9 @@ fn hold(t : @ui.Tester, s : String) -> Unit {
 }
 
 ///|
-test "文件: the files' places (the wide frame's sidebar's list): 个人收藏, each station with a drive, one away said so; 团队共享 the folders pinned" {
+test "文件: favorites and each station with a drive, with an offline station said so" {
   let t = drive_tester("files")
-  for words in ["文件", "个人收藏", "Station", "Studio", "离线", "团队共享", "文档", "照片"] {
+  for words in ["文件", "个人收藏", "Station", "Studio", "离线", "文档", "照片"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
   // back says the page under it
@@ -71,7 +71,7 @@ test "a folder: what it holds in a line, folders first, hidden files left out; i
   let t = drive_tester("files")
   t.tap_text("文档")
   nav_rested(t)
-  assert_true(t.find("2 个文件夹 · 7 个文件") is Some(_))
+  assert_true(t.find("2 个文件夹 · 6 个文件") is Some(_))
   assert_true(t.find(".草稿缓存") is None)
   let (_, y1) = t.find("设计稿").unwrap()
   let (_, y2) = t.find("长篇小说.txt").unwrap()

@@ -1,6 +1,6 @@
 // A station's files picked to go into a message (ember web/src/mobile/StationFiles.tsx, as the phone's ＋ → Station
-// 文件 and a narrow chat's 文件 tab): the places (each station's home, for a member who browses every folder, and its
-// folders pinned, under its name, 离线 beside it while away), a folder entered by a tap, the way back as crumbs over
+// 文件 and a narrow chat's 文件 tab): each station's home and the person's favorites, under its name (离线 while away),
+// a folder entered by a tap, the way back as crumbs over
 // them; files ticked (and the folder shown, as a whole), then 添加: each into the chat's message as the 文件 tab's
 // 添加到消息 puts it (sfbase's files_into: the composer takes it, named by its path or as a file as the chat says).
 // In the ＋'s sheet (the library's panel: station_files_pick), its rows the panel's; a chat's 文件 tab picks as it
@@ -131,8 +131,7 @@ fn station_pick_way(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// Each station's places: its home (for a member who browses every folder), then its folders pinned, under its name
-/// (离线 beside it while away).
+/// Each station's home and the same favorites offered on the files page, under its name (离线 while away).
 fn station_pick_places(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let (list, error) = dv_stations(src, ws)
   let stations = match list {
@@ -146,15 +145,23 @@ fn station_pick_places(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     narrow_empty(c, @sf.t("web-main.rail.filesNone"), None)
     return
   }
-  // (a station's name over its places; each place: the station, where, its name, whether its home)
-  let rows : Array[(DvStation, String, String, Bool)] = []
+  // Each place keeps its root and relative path: old integrations may only open a configured root.
+  let rows : Array[(DvStation, String, String, String, Bool)] = []
+  let kept = favorites_in(src, ws, stations)
   for s in stations {
-    rows.push((s, "", "", false))
+    rows.push((s, "", "", "", false))
     if s.anywhere && s.home != "" {
-      rows.push((s, s.home, @sf.t("web-pages.drive.home"), true))
+      rows.push((s, s.home, "", @sf.t("web-pages.drive.home"), true))
     }
-    for r in s.roots {
-      rows.push((s, r.path, r.name, false))
+    for f in kept {
+      if f.station == s.station && !(s.anywhere && s.home != "" && favorite_same_path(f.root, f.path, s.home, "")) {
+        let old = s.roots.iter().find_first(fn(r) { favorite_same_path(f.root, f.path, r.path, "") })
+        let (root, path) = match old {
+          Some(r) => (r.path, "")
+          None => (f.root, f.path)
+        }
+        rows.push((s, root, path, f.name, false))
+      }
     }
   }
   @sf.panel_list(c, "station-pick/places", rows.length(), pick_row_est, fills=true, fn(i) {
@@ -166,19 +173,20 @@ fn station_pick_places(c : @ui.Ctx, src : Source, ws : String) -> Unit {
 ///|
 /// Line `i` of the places (`rows`: each a station, a place's path, its name, whether it is the home): a station's name
 /// over its places, or a place.
-fn place_line(c : @ui.Ctx, rows : Array[(DvStation, String, String, Bool)], i : Int) -> Unit {
+fn place_line(c : @ui.Ctx, rows : Array[(DvStation, String, String, String, Bool)], i : Int) -> Unit {
   let t = @sf.theme()
-  let (s, path, name, home) = rows[i]
-  if path == "" && name == "" {
+  let (s, root, path, name, home) = rows[i]
+  if root == "" && name == "" {
     c.box(style=@sf.panel_words_in().then(if i == 0 { pick_head_first } else { pick_head }), fn() {
       let words = if s.online { s.name } else { s.name + " · " + @sf.t("web-pages.stations.offline") }
       c.text(words, style=pick_head_words) |> ignore
     })
     |> ignore
-  } else if @sf.link_row(c, "station-pick/place/" + s.station + "|" + path, name, note=path, lead=fn() {
+  } else if @sf.link_row(c, "station-pick/place/" + s.station + "|" + root + "|" + path, name, note=dv_absolute(root, path), lead=fn() {
       @sf.icon(c, if home { "server" } else { "folder" }, size=pick_mark, color=t.p.muted) |> ignore
     }) {
-    spick.at = Some({ station: s.station, station_name: s.name, root: path, root_name: name, path: "" })
+    let root_name = if path == "" { name } else { dv_root_label(s.roots, root) }
+    spick.at = Some({ station: s.station, station_name: s.name, root, root_name, path })
   }
 }
 
@@ -187,8 +195,8 @@ fn place_line(c : @ui.Ctx, rows : Array[(DvStation, String, String, Bool)], i : 
 /// and its places, as place_line draws them.
 fn places_pick_sample(c : @ui.Ctx) -> Unit {
   let s = @sfbase.dv_station({ "station": "sample", "name": Json::string(@sf.sample_words(4)), "online": true })
-  let rows = [(s, "", "", false), (s, @sf.sample_words(12), @sf.sample_words(3), true)] +
-    [(18, 5), (14, 7), (20, 4)].map(fn(n) { (s, @sf.sample_words(n.0), @sf.sample_words(n.1), false) })
+  let rows = [(s, "", "", "", false), (s, @sf.sample_words(12), "", @sf.sample_words(3), true)] +
+    [(18, 5), (14, 7), (20, 4)].map(fn(n) { (s, @sf.sample_words(n.0), "", @sf.sample_words(n.1), false) })
   for i in 0..<rows.length() {
     place_line(c, rows, i)
   }

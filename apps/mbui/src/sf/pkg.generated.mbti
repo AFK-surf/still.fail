@@ -2286,7 +2286,7 @@ pub fn way_in_title(@ui.Ctx, String) -> Unit
 
 pub fn way_in_title_node(@view.View, () -> String) -> @view.View
 
-pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit) -> Unit
+pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit, last_link? : Bool) -> Unit
 
 pub let way_more : String
 

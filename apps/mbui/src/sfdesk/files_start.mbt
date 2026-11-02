@@ -1,8 +1,7 @@
 // Where the files' place starts on the desktop (ember web/src/pages/Drive.tsx DriveHome, DrivePage, Roots, RootRow;
 // Drive.css.ts): 文件 in the rail opens the folder in front of the tabs as they were left (else the folder last open on
-// this page), else this machine's home, else the first folder pinned on any station, else the first station's home;
-// none, says so (with 选择文件夹 for one who may pin). A station's own files with no folder asked (or one without a drive,
-// or one from before drives) is its list of the folders it pins, or why there is none.
+// this page), else this machine's home, another station's home, an older configured root or a favorite; none, says so.
+// A station without a home offers its configured folders, or says why there is none.
 
 ///|
 /// The pane's width: what the frame lays its page out in (Ctx::sized: the window less the rail and the sidebar, or on
@@ -28,10 +27,12 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
           let mine = stations.iter().find_first(fn(s) { s.station == here && s.anywhere && s.home != "" })
           let pinned = stations.iter().find_first(fn(s) { s.roots.length() > 0 })
           let home = stations.iter().find_first(fn(s) { s.anywhere && s.home != "" })
-          match (mine, pinned, home) {
-            (Some(s), _, _) => Some({ station: s.station, root: Some(s.home), path: "" })
-            (_, Some(s), _) => Some({ station: s.station, root: Some(s.roots[0].path), path: "" })
-            (_, _, Some(s)) => Some({ station: s.station, root: Some(s.home), path: "" })
+          let saved = favorites_in(src, w.id, stations).iter().find_first(fn(f) { stations.iter().any(fn(s) { s.station == f.station && s.drive }) })
+          match (mine, pinned, home, saved) {
+            (Some(s), _, _, _) => Some({ station: s.station, root: Some(s.home), path: "" })
+            (_, _, Some(s), _) => Some({ station: s.station, root: Some(s.home), path: "" })
+            (_, Some(s), _, _) => Some({ station: s.station, root: Some(s.roots[0].path), path: "" })
+            (_, _, _, Some(f)) => Some({ station: f.station, root: Some(f.root), path: f.path })
             _ => None
           }
         }
@@ -40,7 +41,7 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
   match first {
     Some(at) => files_shell(c, src, w.id, stations, at, room)
     None => {
-      let can = pin_stations(src, w.id)
+      let can = favorite_stations(src, w.id)
       desk_page(c, core, "files-home", @sf.t("web-pages.drive.title"), [
         fn() {
           if known is None {
@@ -48,8 +49,8 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
           } else {
             @sf.empty(c, fn() {
               c.text(@sf.t("web-main.rail.filesNone"), style=fs_empty_words) |> ignore
-              if can.length() > 0 && @sf.button(c, @sf.t("web-pages.drive.pick"), key="files-home/pick", tone=Primary) {
-                add_folder(src, w.id, can)
+              if can.length() > 0 && @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-home/pick", tone=Primary) {
+                add_favorite_folder(src, w.id, can, picked=fn(f) { files_go({ station: f.station, root: Some(f.root), path: f.path }) })
               }
             })
           }
@@ -61,7 +62,7 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
 
 ///|
 /// A station's files at `at` (DrivePage), in whichever frame: a folder where there is one to show (the one asked, else
-/// the one folder pinned, else the home for a member who browses every folder), else its folders pinned (Roots). The
+/// the home where there is one, else a configured root), else its configured folders (Roots). The
 /// folder is its page (drive_page.mbt), one on every screen; what holds it by the room: wide, the files' page's tabs
 /// (files.mbt), whose bar holds what can be done to it; narrow, its own bar in the frame it is given (`narrow`: back,
 /// the room over and under it). `go`: a folder shown in place of this one (the side in front, by default).
@@ -80,6 +81,7 @@ pub fn files_station(
   let st = stations.iter().find_first(fn(s) { s.station == at.station })
   let root = match (at.root, st) {
     (Some(r), _) => Some(r)
+    (None, Some(s)) if s.drive && s.anywhere && s.home != "" => Some(s.home)
     (None, Some(s)) if s.drive =>
       match s.roots {
         [r] if r.state == "ok" => Some(r.path)
@@ -88,9 +90,8 @@ pub fn files_station(
     _ => None
   }
   let look = look_of(c)
-  let manage = st is Some(s) && pin_stations(src, w.id).iter().any(fn(p) { p.station == s.station })
   // (the page's arrangement said once, here, for what draws it: wide, the tabs' sides; narrow, its own frame)
-  @sf.with_look(look, fn() { files_station_in(c, src, w, core, at, room, narrow, go, st, root, look, manage, known, error, stations) })
+  @sf.with_look(look, fn() { files_station_in(c, src, w, core, at, room, narrow, go, st, root, look, known, error, stations) })
 }
 
 ///|
@@ -107,7 +108,6 @@ fn files_station_in(
   st : DvStation?,
   root : String?,
   look : @sf.Look,
-  manage : Bool,
   known : Array[DvStation]?,
   error : String?,
   stations : Array[DvStation],
@@ -134,13 +134,12 @@ fn files_station_in(
           go: fn(to, _) { go(to) },
           open_in: None,
           go_to: None,
-          manage: Some(fn() { manage_roots(src, w.id, s.station) }),
         },
         Some(narrow),
       )
     }
     // (its folders pinned: one page, laid out by its own width)
-    _ => roots_page(c, src, w.id, st, known is None, error, manage, narrow, go)
+    _ => roots_page(c, src, w.id, st, known is None, error, narrow, go)
   }
 }
 

@@ -1656,6 +1656,11 @@ web-pages.files.favorite
 web-pages.files.favoriteIt
 web-pages.files.favorites
 web-pages.files.favoritesHint
+web-pages.files.addFavorite
+web-pages.files.whichFavoriteStation
+web-pages.files.pickFavoriteNote
+web-pages.files.pickFavorite
+web-pages.files.alreadyFavorite
 web-pages.files.filesCount
 web-pages.files.folder
 web-pages.files.fromInto

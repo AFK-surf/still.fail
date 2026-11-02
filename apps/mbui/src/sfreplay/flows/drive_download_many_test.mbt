@@ -16,14 +16,21 @@ fn replay_drive_download_many() -> Unit raise {
     // (put in the lent folder before the app starts: a live run's step, the trace has what came of it)
     f.before("drive-big 105609")
     f.open_page(@sfapp.Page::Files)
-    f.tap("=e2e-105609")
+    // The favorite and the folder in the station's home can both be visible. Open the favorite.
+    f.see_n(2, "=e2e-105609")
+    f.tap("=e2e-105609", top=true)
     f.run_for(@ui.move_most_ms)
+    // A folder in the wide list opens on a double click.
+    f.see("=大文件")
+    f.tap("=大文件")
     f.tap("=大文件")
     f.run_for(@ui.move_most_ms)
+    f.see("大文件.bin")
     f.tap("大文件.bin")
     f.key("cmd+a")
     f.right_click("大文件.bin")
     f.run_for(@kit.presence_in_ms)
+    f.see("下载 2 个文件")
     f.tap("下载 2 个文件")
     // its toast, up as the download begins (looked for then: how long the parts take is the run's own, the toast's
     // time its own, and one may outlast the other)

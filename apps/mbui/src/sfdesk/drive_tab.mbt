@@ -248,7 +248,8 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
   let t = @sf.theme()
   let root = at.root.unwrap_or("")
   let here = dv_absolute(root, at.path)
-  let pinned = st.roots.iter().any(fn(r) { r.path == here })
+  let favs = favorites_in(src, ws, [st])
+  let kept = favorite_has(favs, at.station, root, at.path)
   // (a list, whatever the files' page shows: picking from it needs no columns nor tree)
   let view = "list"
   let previewing = preview_shown(src, "tab")
@@ -304,9 +305,12 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     })
     |> ignore
     c.box(style=ftab_actions, fn() {
-      if st.anywhere &&
-        lit_button(c, "files-tab/pin", "pin", @sf.t(if pinned { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }), pinned) {
-        pin_folder(c, src, st, here, !pinned)
+      if lit_button(c, "files-tab/favorite", "star", @sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", folder_name(st, at))]), kept) {
+        if kept {
+          favorite_remove(src, ws, at.station, root, at.path)
+        } else {
+          favorite_add(src, ws, { station: at.station, root, path: at.path, name: folder_name(st, at) })
+        }
       }
       if lit_button(
           c,
@@ -375,10 +379,15 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
         if !e.dir {
           out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.download"), icon="download", fn() { save_entry(c, src, in_, e) })))
         }
-        if e.dir && st.anywhere {
-          let on = st.roots.iter().any(fn(r) { r.path == abs })
-          out.push(Some(@sf.menu_item_of(@sf.t(if on { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }), icon="pin", fn() {
-            pin_folder(c, src, st, abs, !on)
+        if e.dir {
+          let path = dv_join(in_.path, e.name)
+          let saved = favorite_has(favs, at.station, root, path)
+          out.push(Some(@sf.menu_item_of(@sf.t(if saved { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", e.name)]), icon="star", fn() {
+            if saved {
+              favorite_remove(src, ws, at.station, root, path)
+            } else {
+              favorite_add(src, ws, { station: at.station, root, path, name: e.name })
+            }
           })))
         }
         out

@@ -277,7 +277,7 @@ fn peek_ways(c : @ui.Ctx, core : Core, address : String, s : Json?, close : () -
         (core.open_drive)(address)
       }))]
       let roots = items(drive, "roots")
-      if !roots.is_empty() {
+      if !flag(drive, "anywhere") && !roots.is_empty() {
         files.push(None)
         files.push(Some(@sf.menu_item_of(tr("web-pages.drive.pinnedFolders"), heading=true, fn() { })))
         for root in roots {

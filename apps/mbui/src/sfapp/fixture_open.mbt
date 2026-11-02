@@ -363,13 +363,13 @@ pub fn open_fixture_over(mode : String, src : Source) -> Unit {
 ///|
 /// What the mode opens over the app once its source is made (what is put up reading through it), as open_fixture_mode
 /// opens its pages: ＋'s Station 文件 (chat-station-files); a station's file's card pressed, its panel (chat-station-sheet);
-/// the files' Pin 文件夹 with no one station in view, which station first (files-add-folder: its rows' grounds under the
+/// the files' favorite picker with no one station in view, which station first (files-add-folder: its rows' grounds under the
 /// pointer, the last in the dialog's foot corners); the card to share of the agents at work (share-card).
 pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   // slice 8's panels over the chat (decide_fixture.mbt)
   open_decide_panels(mode, src)
   if mode == "files-add-folder" {
-    @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
+    @sfdesk.add_favorite_folder(src, "ws1", @sfdesk.favorite_stations(src, "ws1"))
   }
   // (share-card-dark: over the dark theme; share-card-poster, -receipt, -terminal: in those looks)
   if mode == "share-card" || mode == "share-card-dark" || mode == "share-card-poster" || mode == "share-card-receipt" || mode == "share-card-terminal" {
@@ -536,6 +536,12 @@ pub fn open_mode(mode : String) -> Unit {
       @sffixture.fix_browse_do(None, mode, "drive.browse", Json::object(o)) |> ignore
     }
     match mode {
+      "files-columns" => @sffixture.fix_browse_prefs_set({ "driveViews": { "page": "columns" } }) |> ignore
+      "files-favorite" | "files-favorite-dark" => {
+        // A saved favorite and an old pinned root name the same folder, for a before/after comparison.
+        let saved : Json = [{ "station": "ws1/st1", "root": Json::string(@sffixture.fix_docs), "path": "", "name": "文档" }]
+        @sffixture.fix_browse_prefs_set({ "driveFavorites": { "ws1": Json::string(saved.stringify()) } }) |> ignore
+      }
       "files-tree" => {
         @sffixture.fix_browse_prefs_set({ "driveViews": { "page": "tree" } }) |> ignore
         browse({ "act": "tree", "folder": "设计稿", "view": "tree" })

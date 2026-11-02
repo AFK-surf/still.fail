@@ -6,7 +6,7 @@
 // the order, hidden files, read again. The keys are the rows' wherever on the page they are pressed but a field (the
 // core says which act: browse.mbt). Deleted to the machine's trash, as Finder does, nothing asked; where none takes it,
 // asked first, then for good. The preview beside it (⌘⇧P: drive_pane.mbt). What a folder's bar holds (its ways, put
-// up, a new folder, read again, 收藏, pin, its ⋯) is `folder_actions`, put in the files' page's bar by it.
+// up, a new folder, read again, 收藏, its ⋯) is `folder_actions`, put in the files' page's bar by it.
 
 ///|
 /// What opens an entry, by its kind (drive/model.ts openerOf): a folder gone into, read, played, previewed, saved.
@@ -36,7 +36,6 @@ pub(all) struct FolderOf {
   go : (DriveAt, Bool) -> Unit
   open_in : ((DriveAt, Bool) -> Unit)?
   go_to : (() -> Unit)?
-  manage : (() -> Unit)?
 }
 
 ///|
@@ -182,27 +181,6 @@ pub fn refresh_folder(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
 /// Whether the folder is being read again.
 pub fn refreshing(at : DriveAt) -> Bool {
   held.refreshing.contains(at.station + "\n" + at.root.unwrap_or("") + "\n" + at.path)
-}
-
-///|
-/// A folder pinned for everyone or not (drive.setRoots: the station's folders lent, with it or without it).
-pub fn pin_folder(c : @ui.Ctx, src : Source, st : DvStation, abs : String, on : Bool) -> Unit {
-  let roots = st.roots.map(fn(r) { r.path }).filter(fn(p) { p != abs })
-  if on {
-    roots.push(abs)
-  }
-  let name = dv_name(abs.trim_end(chars="/\\").to_string())
-  c.tell("pin/" + st.station + "/" + abs, fn() {
-    (src.call)(
-      "drive.setRoots",
-      { "station": Json::string(st.station), "roots": Json::array(roots.map(fn(p) { Json::string(p) })) },
-      act_done(
-        c,
-        @sf.t("web-pages.drive.rootsWhat"),
-        done=@sf.t(if on { "web-pages.drive.shared" } else { "web-pages.drive.unpinned" }, args=[("name", name)]),
-      ),
-    )
-  })
 }
 
 ///|
@@ -382,7 +360,7 @@ fn entry_busy(src : Source, at : DriveAt, name : String) -> Bool {
 /// it, its preview beside it (⌘⇧P) where the room has it; `foot` the frame's room under the last row. What is dropped
 /// where no folder of it takes it goes into it. Its keys while it is in front: the rows' (the core's), ⌘U puts files
 /// up, ⌘⇧N a new folder, ⌘⇧P the preview.
-fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot~ : Double) -> Unit {
+fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Unit, foot~ : Double) -> Unit {
   let at = f.at
   let root = at.root.unwrap_or("")
   let st = f.st
@@ -411,10 +389,11 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
     remove: fn(items) { remove_entries(c, src, st, items) },
   })
   b_ref.val = Some(b)
+  let draw_head = fn() { head(b.count_text) }
   let name = folder_name(st, at)
   // what goes into a folder dropped on it, where the viewer may write there
   let into = fn(folder : DriveAt) -> DriveAt? { if write { Some(folder) } else { None } }
-  let favs = favorites(src, f.ws)
+  let favs = favorites_in(src, f.ws, [st])
   let row_of = fn(in_ : DriveAt, e : DvEntry) -> RowProps {
     {
       items: fn() { row_items(c, src, f, b, in_, e, favs) },
@@ -452,7 +431,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
   }
   let ups_here = ups.uploads.filter(fn(u) { u.station == at.station && u.root == root && u.dir == at.path })
   let empty = fn() {
-    folder_empty(c, @sf.t("web-pages.drive.emptyFolder"), if write { Some(fn() { dv_upload(c, at) }) } else { None })
+    folder_empty(c, if write { Some(fn() { dv_upload(c, at) }) } else { None })
   }
   // a right click where there is no row: what can be done to the folder
   let folder_menu = fn() -> Array[@sf.MenuItem?] {
@@ -483,7 +462,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
     c.box(style=list_box, id=lid, fn() {
       if view == "columns" {
         // (columns stay while the folder opened is read: each column says its own reading or trouble)
-        head()
+        draw_head()
         uploads_here(c, src, ups_here)
         columns_view(
           c,
@@ -498,15 +477,15 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
         match (value, error) {
           // (why it was not read: the head's, with its 重试)
           // (its head where its rows' list stands it: @sf.rows_list)
-          (None, Some(_)) => @sf.rows_room(c, head)
+          (None, Some(_)) => @sf.rows_room(c, draw_head)
           (None, None) => {
-            @sf.rows_room(c, head)
+            @sf.rows_room(c, draw_head)
             @sf.waiting(c, fn() { rows_sample(c, at, shown, 8) })
           }
           (Some(_), _) =>
             match b.arranged(at.path, entries) {
               None => {
-                @sf.rows_room(c, head)
+                @sf.rows_room(c, draw_head)
                 @sf.waiting(c, fn() { rows_sample(c, at, shown, 8) })
               }
               Some(list) =>
@@ -519,7 +498,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
                   view == "tree",
                   foot~,
                   head=fn() {
-                    head()
+                    draw_head()
                     uploads_here(c, src, ups_here)
                     // (its columns' heads where its rows have their columns: not where they say it under the name)
                     if view == "list" && list.length() > 0 && f.room >= row_stack_below {
@@ -607,12 +586,7 @@ pub fn folder_name(st : DvStation, at : DriveAt) -> String {
     if root == st.home {
       @sf.t("web-pages.drive.home")
     } else {
-      let n = dv_name(root.trim_end(chars="/\\").to_string())
-      if n == "" {
-        root
-      } else {
-        n
-      }
+      dv_root_label([], root)
     }
   } else {
     dv_root_label(st.roots, root)
@@ -683,15 +657,14 @@ fn row_items(
     }
     _ => ()
   }
-  if e.dir && !favorite_has(favs, in_.station, root, full) {
-    item(@sf.t("web-pages.files.favoriteIt"), "star", fn() {
-      favorite_add(src, f.ws, { station: in_.station, root, path: full, name: e.name })
-    })
-  }
-  if e.dir && st.anywhere {
-    let on = st.roots.iter().any(fn(r) { r.path == abs })
-    item(@sf.t(if on { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }), "pin", fn() {
-      pin_folder(c, src, st, abs, !on)
+  if e.dir {
+    let kept = favorite_has(favs, in_.station, root, full)
+    item(@sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", e.name)]), "star", fn() {
+      if kept {
+        favorite_remove(src, f.ws, in_.station, root, full)
+      } else {
+        favorite_add(src, f.ws, { station: in_.station, root, path: full, name: e.name })
+      }
     })
   }
   if write {
@@ -713,9 +686,8 @@ fn row_items(
 
 ///|
 /// What can be done to the folder (FolderView's actions), for the bar it is shown under (the files' page's while it
-/// is in front, or its own): the ways its room has, the preview, put up and a new folder (who may write), read again
-/// (turning while it is read), 收藏 (lit while it is kept), pin (for one who browses every folder: lit while pinned),
-/// its ⋯ (复制路径, 前往文件夹, 管理). Short of room they go into the ⋯, what is needed least first.
+/// is in front, or its own): the views, preview, upload and new folder. Its ⋯ holds refresh, favorite, order and path
+/// actions. Short of room the bar's actions go into the ⋯, what is needed least first.
 pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Style = actions_row()) -> Unit {
   let at = f.at
   let root = at.root.unwrap_or("")
@@ -725,8 +697,7 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
   let previewing = preview_shown(src, "page")
   let here = dv_absolute(root, at.path)
   let name = folder_name(st, at)
-  let pinned = st.roots.iter().any(fn(r) { r.path == here })
-  let kept = favorite_has(favorites(src, f.ws), at.station, root, at.path)
+  let kept = favorite_has(favorites_in(src, f.ws, [st]), at.station, root, at.path)
   let b = browse(c, src, f.key, "page", view, at, f.rights.write, {
     open: fn(_, _) {  },
     preview: fn(_, _) {  },
@@ -736,8 +707,7 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
   let lit = @sf.theme().p.accent
   let on = fn(yes : Bool) -> Int64? { if yes { Some(lit) } else { None } }
   let tools : Array[@sf.Tool] = [
-    // (short of room, what is needed least goes into the ⋯ first: reading it again, pinning it, 收藏, the preview,
-    // the way it is shown (the others offered there), a new folder; putting files up last)
+    // (short of room, the preview leaves first, then the view, a new folder and uploading)
     @sf.tool_of(
       "view",
       fn() { view_switch(c, "files/view", view, fn(v) { set_drive_view(src, "page", v) }, ways~) },
@@ -773,51 +743,26 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
       @sf.tool_button(c, "files/mkdir", "folder-plus", @sf.t("web-pages.drive.mkdir"), on_press=fn() { b.new_folder(c, src, at.path) }, drop=folder_drop_mkdir),
     )
   }
-  tools.push(
-    @sf.tool_button(
-      c,
-      "files/refresh",
-      "refresh",
-      @sf.t("web-pages.drive.refresh"),
-      on_press=fn() { refresh_folder(c, src, at) },
-      drop=folder_drop_refresh,
-      disabled=refreshing(at),
-    ),
-  )
-  tools.push(
-    @sf.tool_button(
-      c,
-      "files/fav",
-      "star",
+  // Less frequent actions stay named in the folder's menu, apart from the view and creation controls in the bar.
+  let more : Array[@sf.MenuItem?] = [
+    Some(@sf.menu_item_of(@sf.t("web-pages.drive.refresh"), icon="refresh", disabled=refreshing(at), fn() {
+      refresh_folder(c, src, at)
+    })),
+    Some(@sf.menu_item_of(
       @sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", name)]),
-      on_press=fn() {
+      icon="star",
+      fn() {
         if kept {
           favorite_remove(src, f.ws, at.station, root, at.path)
         } else {
           favorite_add(src, f.ws, { station: at.station, root, path: at.path, name })
         }
       },
-      drop=folder_drop_favorite,
-      lit?=on(kept),
-    ),
-  )
-  if st.anywhere {
-    tools.push(
-      @sf.tool_button(
-        c,
-        "files/pin",
-        "pin",
-        @sf.t(if pinned { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }),
-        on_press=fn() { pin_folder(c, src, st, here, !pinned) },
-        drop=folder_drop_pin,
-        lit?=on(pinned),
-      ),
-    )
-  }
-  // its ⋯: the order and hidden files (where its rows have no heads to sort by, and no right click: a finger's), then
-  // its path, a folder by its path, 管理
+    )),
+  ]
+  // Its ⋯ also has the order and hidden files, the path and a folder by its path.
   let a = b.arrangement()
-  let more : Array[@sf.MenuItem?] = []
+  more.push(None)
   for by in ["name", "time", "size", "kind"] {
     more.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), chosen=a.by == by, fn() {
       b.arrange_as(c, src, by~, down=false)
@@ -832,35 +777,21 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
     Some(g) => more.push(Some(@sf.menu_item_of(@sf.t("web-pages.files.goTo"), icon="search", g)))
     None => ()
   }
-  match f.manage {
-    Some(m) if f.rights.manage || st.anywhere =>
-      more.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.manage"), icon="folder", m)))
-    _ => ()
-  }
   @sf.tools_row(c, "files/more", tools, more~, label=@sf.t("web-main.menu.more"), style~)
 }
 
 ///|
-/// The order a folder's actions go into its ⋯ in, short of room (refreshing first, putting files up last).
-let folder_drop_refresh : Int = 1
+/// The order a folder's actions go into its ⋯ in, short of room (the preview first, putting files up last).
+let folder_drop_preview : Int = 1
 
 ///|
-let folder_drop_pin : Int = 2
+let folder_drop_view : Int = 2
 
 ///|
-let folder_drop_favorite : Int = 3
+let folder_drop_mkdir : Int = 3
 
 ///|
-let folder_drop_preview : Int = 4
-
-///|
-let folder_drop_view : Int = 5
-
-///|
-let folder_drop_mkdir : Int = 6
-
-///|
-let folder_drop_upload : Int = 7
+let folder_drop_upload : Int = 4
 
 ///|
 /// A row of a folder's list, as the files' page and a chat's 文件 tab draw it (DriveRow): its mark, name, size and time
@@ -1148,7 +1079,7 @@ pub fn list_head(c : @ui.Ctx, a : Arrangement, on_sort : (String) -> Unit) -> Un
       on_sort(by)
     }
     let on = a.by == by
-    let b = c.box(style~, id~, fn() {
+    let b = c.box(style=style.then(@ui.style(min_h=Fixed(@ui.room_least()))), id~, fn() {
       c.text(words, style=if on || c.lit(id) { head_words_on } else { head_words }) |> ignore
       if on {
         @sf.icon(c, if a.down { "chevron-up" } else { "chevron-down" }, size=head_chevron, color=t.p.text) |> ignore
@@ -1359,12 +1290,11 @@ fn uploads_here(c : @ui.Ctx, src : Source, ups_here : Array[DvUpload]) -> Unit {
 }
 
 ///|
-/// Nothing in the folder (Empty): a folder's mark (36), what it says, what can be done (put files up).
-pub fn folder_empty(c : @ui.Ctx, words : String, upload : (() -> Unit)?) -> Unit {
+/// Nothing in the folder: the head already says it is empty; here is its mark and what can be done.
+fn folder_empty(c : @ui.Ctx, upload : (() -> Unit)?) -> Unit {
   let t = @sf.theme()
   c.box(style=empty_box, fn() {
     @sf.icon(c, "folder", size=empty_icon, color=t.p.muted) |> ignore
-    c.text(words, style=empty_words) |> ignore
     match upload {
       Some(up) => if @sf.button(c, @sf.t("web-pages.drive.upload"), key="files/empty/upload", icon="upload") { up() }
       None => ()
@@ -1709,10 +1639,6 @@ let upload_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap
 /// Nothing in it (empty): in the middle, 56 by 24 in, 12 apart, muted.
 // kept across runs: a value (no field of it changes)
 let empty_box : @ui.Style = @ui.css("w=Full pt=S14 pb=S14 px=S6 gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
 
 ///|
 /// What is held over the list (drop): over all of it, its words and mark in the middle, the page's ground at 82%

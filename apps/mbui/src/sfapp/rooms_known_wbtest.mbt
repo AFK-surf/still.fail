@@ -40,8 +40,9 @@
 /// alone (a profile's, a station's, a connect's ⋯ in the page's corner): 28 room fewer, 228. A new chat's frequent
 /// combinations in the model's panel, off its page (2026-11-01): 15 room fewer, 213. A mermaid chart the app's own
 /// picture, no page with its ways over it (2026-11-01): 4 room fewer, 209. A new chat's preset among its chips over the
-/// composer, before its station's and model's (2026-11-01), what they have: 33 more, 242.)
-let rooms_known : Map[String, Int] = { "room": 242, "apart": 0, "hover": 0 }
+/// composer, before its station's and model's (2026-11-01), what they have: 33 more, 242. The file list's sort
+/// headings each have a press's least height with either native input: 15 fewer, 227.)
+let rooms_known : Map[String, Int] = { "room": 227, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

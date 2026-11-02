@@ -1,9 +1,9 @@
-# Pin 文件夹 on the files' page (Drive.tsx useAddFolder, PickerDialog): MBUI_FIXTURE=drive MBUI_WIN=1280x800. The
-# sidebar's Pin 文件夹, the station chosen, the picker at its home.
+# Add a favorite on the files' page: MBUI_FIXTURE=drive MBUI_WIN=1280x800. The sidebar action, the station chosen,
+# the picker at its home.
 timeout 20000
 until 设计稿
 wait 600
-tap Pin 文件夹
+tap 添加到收藏
 wait 900
 tap Studio
 wait 1500

@@ -3530,6 +3530,8 @@ export interface DriveBrowseView {
 	 * and in columns those before it, in a tree those open under it; one not read yet is not here.
 	 */
 	folders: Record<string, string[]>;
+	/** The current folder's visible files and folders in words; absent while it is read. */
+	countText?: string;
 	chosen: DriveChosen;
 	/** The folders a tree has open under the folder shown (relative to the root). */
 	open: string[];
@@ -5861,7 +5863,7 @@ export interface PrefsView {
 	dropFiles?: Record<string, boolean>;
 	/**
 	 * How a station's files are listed on this device: each place's view (`page`: the files' page, `tab`: a
-	 * chat's 文件 tab; tree, columns or list, none: columns), their order (`sort`: name, time, size or kind, `-down`
+	 * chat's 文件 tab; tree, columns or list, none: list for the page and columns for the tab), their order (`sort`: name, time, size or kind, `-down`
 	 * after it for the other way; none: name), whether hidden files show (`hidden`: shown) and how wide columns are
 	 * (`column`: in pixels; none: 240).
 	 */
@@ -5876,6 +5878,11 @@ export interface PrefsView {
 	 * (JSON: [{station, path, name}]), whoever else browses there.
 	 */
 	driveFavorites?: Record<string, string>;
+	/**
+	 * Formerly pinned folders the person removed from their shortcuts on this device, by workspace (JSON places).
+	 * This leaves the station's existing pinned folders and access rules unchanged.
+	 */
+	driveFavoritesHidden?: Record<string, string>;
 	/**
 	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device:
 	 * `poster`, `receipt`, `terminal`, or (none) `night`.

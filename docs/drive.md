@@ -12,10 +12,11 @@ no allowlist of its own, no transport of its own).
   whoever can have an agent run there could have it read any file anyway, so
   the drive does not pretend otherwise. They start at the machine's home; any
   absolute path is a root to ask from.
-- **Pinned folders** (`drive.roots` in config.json) are the list everyone sees
-  first (the files' sidebar, a chat's 文件 tab); any member who may write pins
-  and unpins them. **Read-only members** (viewers) reach only these, and only
-  browse and read (the admin API refuses their writes).
+- **Configured roots** (`drive.roots` in config.json) are retained for older
+  integrations. Existing roots appear among a person's favorites, where they
+  can be removed without changing the station. still.fail workspace members
+  can browse every folder; an older integration may instead give the station a
+  read-only viewer, which can only browse and read configured roots.
 - Every path is relative to a root and stays in it: `..` is refused; for a
   viewer, a link that leads out of the pinned folder is refused (and not
   listed). The station's own data (its data directory, config, the profiles'
@@ -243,7 +244,7 @@ of a folder within one station by the disk's own clone.
 - How it is browsed, the same for every client (views/browse.ts; what follows
   from what, drive-browse.ts; docs/client-core.md has each): view `driveBrowse
   {owner, place, view, station, root, path, write?}` (a place's folders in the
-  order kept on the device, what is chosen there, a tree's folders open, the
+  order kept on the device, the count of those visible, what is chosen there, a tree's folders open, the
   columns' widths, the keys that act now) and `drive.browse` (a press, a key, a
   letter typed: what is chosen after it and what the client does), `drive.arrange`
   (the order, hidden files), `drive.name` (a new folder's name, a copy kept
@@ -264,12 +265,10 @@ of a folder within one station by the disk's own clone.
 
 ## Clients
 
-On a wide screen the rail's 文件 (web/src/Rail.tsx) goes to `/w/<ws>/files`,
-which opens the first folder pinned (else the first station's home); the
-sidebar beside the drive's pages lists, under a heading for each station
-(离线 beside its name while it is away), its home and the folders pinned; the
-phone's 文件 (the bottom bar's place) lists them the same way. A folder's page has the way up
-to the home (or the disk's top), a pin, and each row's path to copy; a row
+The files page opens the folder last left there, or a station's home. Its places
+list has the person's favorites and the stations of the workspace (离线 beside
+one while it is away). A folder's page has the way up to the home (or the disk's
+top), a favorite action, and each row's path to copy; a row
 dragged out carries the file and its path. A chat's 文件 tab
 (web/src/pages/DriveTab.tsx) browses every station's files beside the chat, to
 drag into the composer or add to the message; a new chat has the same tab
@@ -281,17 +280,16 @@ a name, ⏎ changes a name in place, space previews, ⌘⌫ deletes what is chos
 ⌘⇧N makes a folder (named as Finder names one, its name then changed). Hidden
 files (a name starting with `.`) show only after ⌘⇧. ; the order (name, time,
 size or kind, by the list's heads or the folder's right-click menu) and whether
-they show are the person's, on the device (prefs `driveViews`); names go in the order the device's language reads
+they show are the person's, on the device (prefs `driveViews`); the count follows the entries shown. The files' page
+starts as a list and a chat's files tab as columns, until another view is chosen. Names go in the order the device's language reads
 them (the host's `collate`: 中文 by pinyin), by hand where it has none. A column's edge is
 dragged as Finder's: that column wider or narrower (kept while the page is), with ⌥
 every column (kept on the device, `driveViews.column`), a double click as wide as its
 longest name. On the files' page what is
 dragged onto a folder (its row, a column, the list) goes into it: a station's own
 files moved (`drive.rename`; by the top of the disk for one from another folder
-pinned; ⌥ copies them), another station's copied ("The files' page", below), the computer's put up, a folder of them made there and filled. The phone reaches a drive from
-its station's page, and puts a station's files into a message from ＋'s Station
-文件 (web/src/mobile/StationFiles.tsx, apps/android/…/screens/StationFiles.kt):
-the places, a folder entered, files (or the folder as a whole) ticked; each goes
+pinned; ⌥ copies them), another station's copied ("The files' page", below), the computer's put up, a folder of them made there and filled. A station's files go into a message from ＋'s Station
+文件: the station homes and the same favorites, a folder entered, files (or the folder as a whole) ticked; each goes
 in named by its path, or as a file where the chat says so, its card tapped to
 switch it. The Android app stages a file of the chat's own station with
 `drive.stage`, and reads one of another station's and sends it up.
@@ -312,10 +310,14 @@ On a wide screen the files' page is a window of Finder's over every station of t
   ⌘⇧] go along them; a folder's menu opens it in a new tab or on the other side. Kept on the device (prefs
   `filesTabs`, by workspace): 文件 in the rail comes back to the folder in front as it was left; the first time, to this
   machine's home (the desktop app on a station of the workspace).
-- **The sidebar** (FilesNav.tsx): 个人收藏, the person's own folders of any station (prefs `driveFavorites`, by
-  workspace; ☆ on a folder's page or its menu, or a folder dragged onto it); then each station with a drive, a row
-  each (this machine marked 本机, its disk's fill, offline faint), its home on a press and its places (the home's own
-  folders, its disks) under it opened; then 团队共享, the folders the stations pin for every member.
+- **The sidebar** (`apps/mbui/src/sfdesk/files_nav.mbt`): one personal favorites list of folders on any station, then each station with a drive
+  (this machine marked 本机, its disk's fill, offline faint), its home on a press and its places under it opened.
+  A folder is added from its menu, the picker, or a drag onto the list. The old station-pinned folders also appear as
+  favorites, once each even if already saved through a different root. Removing a favorite records that choice on this
+  device (`driveFavoritesHidden`, by workspace), so an old pin does not reappear when its station comes back online;
+  adding it again clears that choice. Neither operation changes the station's pinned roots or a member's access. A
+  favorite matching an old root opens through that root, preserving compatibility with station integrations that
+  restrict which roots they can read.
 - **Another station** from the start of a folder's trail: the same folder there where it has one, else its home (said
   so); ⌥ opens it in a new tab. **前往文件夹** (⌘⇧G): a path, the station's name before a colon if another
   (`mba:~/Projects`), `~` its home, a path without a slash in front under the folder shown; Tab completes a folder's
@@ -330,4 +332,3 @@ On a wide screen the files' page is a window of Finder's over every station of t
   under is a rename, at once; anything else a copy as above. The bar's 传输 says how many go and how far; its list
   stops one, tries one that failed again, or shows the folder of one done. A station from before copies takes none
   (`transfers` absent): what is dragged onto it is not taken, and 复制到… says it needs an update.
-

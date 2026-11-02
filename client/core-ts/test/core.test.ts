@@ -423,6 +423,30 @@ async function stationCore() {
   return { host, core };
 }
 
+test("removed legacy shortcuts are kept per workspace on the device", async () => {
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await host.settle();
+  const removed = JSON.stringify([{ station: "w1/s1", root: "/docs", path: "", name: "" }]);
+  call(core, ui, 2, "prefs.set", { driveFavoritesHidden: { w1: removed, w2: "[]" } });
+  call(core, ui, 3, "prefs.set", { driveFavoritesHidden: { w2: null } });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).driveFavoritesHidden, { w1: removed });
+  await run(core.inner.data.written);
+  core.close();
+  const reopened = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui2 = reopened.connect();
+  subscribe(reopened, ui2, 1, { topic: "prefs" });
+  await host.settle();
+  const after = new Map();
+  apply(host, after);
+  assert.deepEqual(v(after, 1).driveFavoritesHidden, { w1: removed });
+  reopened.close();
+});
+
 test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", async () => {
   const { host, core } = await stationCore();
   const ui = core.connect();

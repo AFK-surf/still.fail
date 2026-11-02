@@ -1,8 +1,5 @@
-// The files' page's dialogs about the folders a station pins (ember web/src/pages/Drive.tsx useAddFolder, useManage,
-// RootsDialog, PickerDialog; Drive.css.ts rootsList, picker): Pin 文件夹 (the station first, where there are several),
-// the folders pinned (each taken back after asking), and the picker of a folder on a station (its places beside its
-// folders, the way back as a trail, a filter; entered by a click, the one shown pinned). Each is the library's panel
-// (@sf.panel, opened by nothing): a dialog in the middle of a wide window, a sheet on a narrow one.
+// The folder picker for the files page and other panels. A favorite belongs to the person using this device;
+// choosing one does not change the station's configured folders.
 
 ///|
 /// The picker's state (it is the one open: presented, its body drawn each frame): the station it shows (`picking`: ""
@@ -56,23 +53,21 @@ fn picker_close() -> Unit {
 }
 
 ///|
-/// The stations the viewer may pin a folder on (useAddFolder): those with a drive, for a manager of the workspace any,
-/// else those it browses everywhere on.
-pub fn pin_stations(src : Source, ws : String) -> Array[DvStation] {
+/// Stations whose folder picker is available. Older station integrations can restrict that picker.
+pub fn favorite_stations(src : Source, ws : String) -> Array[DvStation] {
   let manager = dv_rights(src, ws, None).manage
   drive_stations(src, ws).0.unwrap_or([]).filter(fn(s) { s.drive && (manager || s.anywhere) })
 }
 
 ///|
-/// Pin 文件夹 of workspace `ws` where no one station is in view (the files' sidebar): the picker of the one station,
-/// else which first (useAddFolder's dialog: the stations, one chosen opening its picker).
-pub fn add_folder(src : Source, ws : String, stations : Array[DvStation]) -> Unit {
+/// Choose a folder for the person's shortcuts, leaving the station's old pinned folders alone.
+pub fn add_favorite_folder(src : Source, ws : String, stations : Array[DvStation], picked? : (Favorite) -> Unit = fn(_) {  }) -> Unit {
   match stations {
-    [s] => picker_open(src, ws, s.station)
+    [s] => picker_open(src, ws, s.station, picked)
     [] => ()
     _ =>
       @sf.panel(
-        @sf.t("web-pages.drive.addRoot"),
+        @sf.t("web-pages.files.addFavorite"),
         fn(c, close) {
           let t = @sf.theme()
           // (in a dialog, round rows out to its corners, the last concentric with them: @sf.dialog_rows)
@@ -82,7 +77,7 @@ pub fn add_folder(src : Source, ws : String, stations : Array[DvStation]) -> Uni
               let id = c.id("drive/which/" + s.station)
               if c.clicked(id) {
                 close()
-                picker_open(src, ws, s.station)
+                picker_open(src, ws, s.station, picked)
               }
               let b = c.box(style=pick_row.then(row), id~, fn() {
                 @sf.station_icon(c, s.emoji, s.icon, pick_icon, t.p.muted)
@@ -97,69 +92,9 @@ pub fn add_folder(src : Source, ws : String, stations : Array[DvStation]) -> Uni
           |> ignore
         },
         from=Unanchored,
-        description=@sf.t("web-pages.drive.whichStation"),
+        description=@sf.t("web-pages.files.whichFavoriteStation"),
       )
   }
-}
-
-///|
-/// The folders `station` of workspace `ws` pins (useManage's RootsDialog): each to be taken back (asked first), another
-/// to be pinned.
-pub fn manage_roots(src : Source, ws : String, station : String) -> Unit {
-  @sf.panel(
-    @sf.t("web-pages.drive.manage"),
-    fn(c, _) {
-      let t = @sf.theme()
-      let st = drive_station_of(src, ws, station)
-      let roots = match st {
-        Some(s) => s.roots
-        None => []
-      }
-      c.box(style=roots_list, fn() {
-        if roots.length() == 0 {
-          c.text(@sf.t("web-pages.drive.noneYet"), style=pick_meta) |> ignore
-        }
-        for r in roots {
-          c.box(style=root_line, fn() {
-            @sf.icon(c, "folder", size=root_icon, color=t.p.muted) |> ignore
-            c.box(style=root_text, fn() {
-              c.text(r.name, style=pick_name) |> ignore
-              c.text(r.path, style=pick_meta) |> ignore
-              match dv_trouble(r.state) {
-                Some((what, hint)) => c.text(what + " · " + hint, style=root_trouble_words) |> ignore
-                None => ()
-              }
-            })
-            |> ignore
-            match st {
-              Some(s) if @sf.icon_button(c, "close", key="drive/roots/unpin/" + r.path, label=@sf.t("web-pages.drive.unshare")) =>
-                ask_unpin(c, src, s, r)
-              _ => ()
-            }
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    },
-    from=Unanchored,
-    description=@sf.t("web-pages.drive.manageNote"),
-    foot=fn(c, close) {
-      if @sf.button(c, @sf.t("common.done"), key="drive/roots/done", tone=Ghost) {
-        close()
-      }
-      if @sf.button(c, @sf.t("web-pages.drive.addRoot"), key="drive/roots/add", tone=Primary, icon="plus") {
-        close()
-        picker_open(src, ws, station)
-      }
-    },
-  )
-}
-
-///|
-/// Station `id` of workspace `ws`, as the files' pages know it.
-fn drive_station_of(src : Source, ws : String, id : String) -> DvStation? {
-  dv_stations(src, ws).0.unwrap_or([]).iter().find_first(fn(s) { s.station == id })
 }
 
 ///|
@@ -202,60 +137,38 @@ fn picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> Uni
 }
 
 ///|
-/// The station's folders pinned set to `roots` (`drive.setRoots`), said when done.
-fn set_roots(c : @ui.Ctx, src : Source, station : String, roots : Array[String], done? : String = "") -> Unit {
-  // (told once the frame's builds are over: a press asks it)
-  c.tell("drive.setRoots", fn() {
-    (src.call)(
-      "drive.setRoots",
-      { "station": Json::string(station), "roots": Json::array(roots.map(fn(r) { Json::string(r) })) },
-      act_done(c, @sf.t("web-pages.drive.rootsWhat"), done~),
-    )
-  })
-}
-
-///|
 /// The picker on `station` of workspace `ws`, at its home (PickerDialog): the way to where it is, a filter; the
-/// station's places beside the folders where it is (over them, narrow); entered by a click; 选这个文件夹 pins the one
-/// shown (one pinned already, or one the station may not read, is not).
-fn picker_open(src : Source, ws : String, station : String) -> Unit {
+/// station's places beside the folders where it is (over them, narrow); the folder shown can be kept as a favorite.
+fn picker_open(src : Source, ws : String, station : String, picked : (Favorite) -> Unit) -> Unit {
   picker_close()
   dialogs.picking.set(station)
-  let lent = fn() {
-    match drive_station_of(src, ws, station) {
-      Some(s) => s.roots.map(fn(r) { r.path })
-      None => []
-    }
-  }
   @sf.panel(
-    @sf.t("web-pages.drive.pick"),
+    @sf.t("web-pages.files.addFavorite"),
     fn(c, _) { picker(c, src, station) },
     from=Unanchored,
-    description=@sf.t("web-pages.drive.pickNote"),
+    description=@sf.t("web-pages.files.pickFavoriteNote"),
     wide=true,
     foot=fn(c, close) {
       let v = dialogs.value.get()
       let path = text(v, "path")
-      let lent = lent()
-      let taken = v is Some(_) && lent.contains(path)
+      let taken = v is Some(_) && favorite_has(favorites(src, ws), station, path, "")
       if @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost) {
         close()
         picker_close()
       }
       if @sf.button(
           c,
-          @sf.t(if taken { "web-pages.drive.already" } else { "web-pages.drive.pickThis" }),
+          @sf.t(if taken { "web-pages.files.alreadyFavorite" } else { "web-pages.files.pickFavorite" }),
           key="drive/picker/pick",
           tone=Primary,
           disabled=v is None || taken || dialogs.denied.get(),
         ) {
-        let name = match dv_name(path.trim_end(chars="/\\").to_owned()) {
-          "" => path
-          n => n
-        }
+        let name = dv_root_label([], path)
         close()
         picker_close()
-        set_roots(c, src, station, lent + [path], done=@sf.t("web-pages.drive.shared", args=[("name", name)]))
+        let f : Favorite = { station, root: path, path: "", name }
+        favorite_add(src, ws, f)
+        picked(f)
       }
     },
     gone=picker_close,
@@ -411,7 +324,7 @@ fn way_of(here : Json) -> Array[(String, String)] {
   }
   let path = text(h, "path")
   let home_path = text(h, "home")
-  let home = home_path.trim_end(chars="/\\").to_owned()
+  let home = @sfbase.dv_trim_root(home_path)
   let under = home != "" && (path == home_path || path.has_prefix(home + "/"))
   let way : Array[(String, String)] = [if under { (@sf.t("web-pages.drive.home"), home_path) } else { ("/", "/") }]
   let mut at = if under { home } else { "" }
@@ -431,9 +344,6 @@ fn way_of(here : Json) -> Array[(String, String)] {
 let pick_icon : Double = 18.0
 
 ///|
-let root_icon : Double = 16.0
-
-///|
 let crumb_icon : Double = 12.0
 
 ///|
@@ -449,15 +359,7 @@ let roots_list : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let root_line : @ui.Style = @ui.css("row w=Full px=S1 py=S2 gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
 let root_text : @ui.Style = @ui.style(w=@sf.grow, gap=SPx, clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let root_trouble_words : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk, wrap=false)
 
 ///|
 /// A row to pick (pickRow): 40 high at least, 6 by 10 in, 10 between, the field's corner; the list's ground under the

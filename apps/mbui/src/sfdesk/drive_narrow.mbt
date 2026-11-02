@@ -178,18 +178,6 @@ let chip_words_box : @ui.Style = @ui.css("row px=S2 align=ACenter")
 // kept across runs: a value (no field of it changes)
 let chip_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Fg, wrap=false)
 
-///|
-/// A folder pinned no longer, asked first (unshare: 取消共享…).
-pub fn ask_unpin(c : @ui.Ctx, src : Source, s : DvStation, r : DvRoot) -> Unit {
-  @sf.confirm(
-    @sf.t("web-pages.drive.unshareAsk", args=[("name", r.name)]),
-    @sf.t("web-pages.drive.unshareText"),
-    @sf.t("web-pages.drive.unshare"),
-    fn() { set_roots(c, src, s.station, s.roots.filter(fn(x) { x.path != r.path }).map(fn(x) { x.path })) },
-    danger=true,
-  )
-}
-
 
 ///|
 /// How tall a row is taken to be before it is laid out.
@@ -323,7 +311,6 @@ let narrow_trouble : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, weigh
 ///|
 // kept across runs: a value (no field of it changes)
 let narrow_trouble_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Muted, w=Full)
-
 
 
 
