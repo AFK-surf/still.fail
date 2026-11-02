@@ -2,12 +2,12 @@
 // (src/read/transcripts.ts).
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { appendFileSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync, writeSync, closeSync } from "node:fs";
+import { appendFileSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, rmSync, writeFileSync, writeSync, closeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { zstdCompressSync } from "node:zlib";
-import { SEGMENT, segmented, unpackedWhole } from "../src/read/packed.ts";
+import { SEGMENT, framesOf, segmented, unpackedWhole } from "../src/read/packed.ts";
 import { ChainTail, MARK_EVERY, PIECE, TranscriptTail } from "../src/read/tail.ts";
 import { READING, brief, readTimeline } from "../src/read/transcript.ts";
 import { chainOf, entriesOf, forgetKept, lengthOf } from "../src/read/transcripts.ts";
@@ -174,6 +174,29 @@ test("a transcript put away is in segments: a page decompresses the segments it 
     assert.deepEqual([read.end, read.entries], [whole.length, whole.slice(at, at + 4)]);
   }
   forgetKept();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("however long a transcript put away is, its last segment is not empty and is stored as it is", async () => {
+  const dir = temp();
+  const line = `${"z".repeat(1023)}\n`;
+  for (const size of [0, 1024, SEGMENT - 1024, SEGMENT, SEGMENT + 1024, SEGMENT * 2]) {
+    const path = join(dir, `t${size}.jsonl`);
+    writeFileSync(path, line.repeat(size / 1024));
+    await packFile(path);
+    const file = openSync(`${path}.zst`, "r");
+    const frames = framesOf(file)!;
+    const last = frames.at(-1)!;
+    const head = Buffer.alloc(5);
+    readSync(file, head, 0, 5, last.at);
+    closeSync(file);
+    assert.equal(frames.reduce((n, f) => n + f.size, 0), size);
+    assert.ok(size === 0 || last.size > 0, `${size}: the last segment holds something`);
+    assert.equal(head[4], 0xe0, `${size}: the last segment is stored as it is`);
+    assert.ok(frames.slice(0, -1).every((f) => f.size <= SEGMENT && f.size % 1024 === 0), `${size}: segments end at lines`);
+    assert.equal(frames.length, Math.max(1, Math.ceil(size / SEGMENT)));
+    assert.deepEqual(unpackedWhole(`${path}.zst`), Buffer.from(line.repeat(size / 1024)));
+  }
   rmSync(dir, { recursive: true, force: true });
 });
 

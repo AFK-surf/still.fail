@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
+import { unpackedWhole } from "../src/read/packed.ts";
 import { packFile, packWorkspace, packed, restoreFile, restoreWorkspace, workspaceArchive, workspaceFile } from "../src/sessions/archive.ts";
 
 const binary = process.env.ARCHIVE_RS ?? join(import.meta.dirname, "archive-rs", "target", "release", "archive-rs");
@@ -138,15 +139,16 @@ for (const [packer, restorer] of [
     rmSync(root, { recursive: true });
   });
 
-  test(`a transcript the ${packer} station packed, the ${restorer} one restores`, { skip }, async () => {
+  // Long enough for several segments too (read/packed.ts): the Rust reads each frame after the other.
+  for (const lines of [30_000, 900_000]) test(`a transcript the ${packer} station packed, the ${restorer} one restores (${lines} lines)`, { skip }, async () => {
     const root = temp();
     const path = join(root, "projects", "x", "abc.jsonl");
-    const text = Array.from({ length: 30_000 }, (_, i) => `{"type":"user","n":${i},"text":"第${i}行"}\n`).join("");
+    const text = Array.from({ length: lines }, (_, i) => `{"type":"user","n":${i},"text":"第${i}行"}\n`).join("");
     write(path, text);
     if (packer === "Rust") rust("pack-file", path);
     else await packFile(path);
     assert.ok(!existsSync(path) && existsSync(packed(path)));
-    assert.equal(zstdDecompressSync(readFileSync(packed(path))).toString(), text);
+    assert.equal(unpackedWhole(packed(path)).toString(), text);
     if (restorer === "TS") await restoreFile(path);
     else rust("restore-file", path);
     assert.equal(readFileSync(path, "utf8"), text);

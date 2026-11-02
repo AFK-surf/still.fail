@@ -254,10 +254,12 @@ async function segmentInto(path: string, source: AsyncIterable<Buffer>): Promise
     const frames: { packed: number; size: number }[] = [];
     let held: Buffer[] = [];
     let n = 0;
-    // A segment ends at the end of a line (as zork's at a snapshot): what comes after goes on in the next.
+    // A segment ends at the end of its last line within SEGMENT (as zork's at a snapshot): what comes after goes on in
+    // the next. One is made only once more than SEGMENT came, so the last, however long the transcript, is never empty
+    // and is the one stored as it is.
     const frame = async (last: boolean) => {
       const all = Buffer.concat(held, n);
-      const cut = last ? all.length : all.lastIndexOf(0x0a) + 1 || all.length;
+      const cut = last ? all.length : all.lastIndexOf(0x0a, SEGMENT - 1) + 1 || SEGMENT;
       const raw = all.subarray(0, cut);
       held = cut < all.length ? [all.subarray(cut)] : [];
       n = all.length - cut;
@@ -267,11 +269,11 @@ async function segmentInto(path: string, source: AsyncIterable<Buffer>): Promise
     };
     for await (let chunk of source) {
       while (chunk.length > 0) {
-        const take = Math.min(SEGMENT - n, chunk.length);
+        const take = Math.min(SEGMENT + 1 - n, chunk.length);
         held.push(chunk.subarray(0, take));
         n += take;
         chunk = chunk.subarray(take);
-        if (n >= SEGMENT) await frame(false);
+        if (n > SEGMENT) await frame(false);
       }
     }
     await frame(true);
