@@ -7,6 +7,7 @@
 // value, the next ones only what changed (delta.ts), and an unchanged value sends nothing. Code inside the core can
 // `watch` a topic; a derived topic is `invalidate`d and computed by its source when its emission goes out.
 import { Effect } from "effect";
+import { computed, observe, signal, tracking, untracked, type Derived, type Source as ReactiveSource } from "./reactive.ts";
 import { type AnyOp, diffKeyed, heavier, specOf } from "./collections.ts";
 import { diff, largerThan, type Op } from "./delta.ts";
 import { Output } from "./output.ts";
@@ -78,6 +79,12 @@ export class Watch {
 type Entry = {
   topic: Topic;
   value?: Value;
+  usage: ReactiveSource<number>;
+  input: ReactiveSource<ReactiveInput>;
+  read: Derived<Value | undefined>;
+  selections: WeakMap<(value: Value | undefined) => unknown, WeakMap<object, Derived<unknown>>>;
+  stop?: () => void;
+  job?: () => void;
   /// The value last sent to the subscribers; the next emission is the difference to it.
   sent?: Value;
   /// Who subscribes, and whether it takes keyed ops (collections.ts).
@@ -93,6 +100,8 @@ type Entry = {
   /// Its subscribers told it waits on a station (Source.waits), while it has no value.
   waiting?: boolean;
 };
+
+type ReactiveInput = { mode: "direct"; value?: Value } | { mode: "derived" };
 
 type Out = { value: unknown } | { delta: AnyOp[] } | { error: CoreError };
 
@@ -114,7 +123,9 @@ export class Store {
   #source: Source | null = null;
   #idleCount = 0;
   #watchCount = 0;
-  #pending: Topic[] = [];
+  #firstPending = new Map<string, Entry>();
+  #updatesPending = new Map<string, Entry>();
+  #pumping = false;
   #windowOpen = false;
   #soon = false;
   #held: ((topic: Topic) => unknown) | null = null;
@@ -154,6 +165,20 @@ export class Store {
     if (this.#held !== null && holds(topic)) this.invalidate(topic);
   }
 
+  /// A topic owns its signal nodes for precisely as long as the store owns the topic.
+  #newEntry(topic: Topic): Entry {
+    let entry: Entry;
+    const usage = signal(0, () => this.#release(topic));
+    const input = signal<ReactiveInput>({ mode: "direct" });
+    const read = computed(() => {
+      const state = input.get();
+      if (state.mode === "direct") return state.value;
+      return this.#compute(topic) ?? entry.value;
+    });
+    entry = { topic, usage, input, read, selections: new WeakMap(), subscribers: [], watchers: [], stale: false, emitScheduled: false, idle: null };
+    return entry;
+  }
+
   /// The data changed a topic's value: it goes out, and whatever watches it hears now.
   changed(topic: Topic): void {
     this.invalidate(topic);
@@ -170,13 +195,18 @@ export class Store {
     let entry = this.#topics.get(key);
     const started = entry === undefined;
     if (!entry) {
-      entry = { topic, subscribers: [], watchers: [], stale: false, emitScheduled: false, idle: null };
+      entry = this.#newEntry(topic);
       this.#topics.set(key, entry);
     }
     const resumed = entry.idle !== null;
     entry.subscribers.push([client, id, keyed]);
     entry.idle = null;
     const cached = entry.sent;
+    if (cached === undefined && this.#updatesPending.get(key) === entry) {
+      this.#updatesPending.delete(key);
+      this.#firstPending.set(key, entry);
+      this.#wakePending(true);
+    }
     if (cached !== undefined) this.host.emit(client, to(whole(cached), id));
     else {
       if (entry.waiting === true) this.host.emit(client, { id, waiting: true });
@@ -236,6 +266,11 @@ export class Store {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry) return;
     entry.subscribers = entry.subscribers.filter(([c, i]) => !(c === client && i === id));
+    if (entry.subscribers.length === 0 && entry.sent === undefined && this.#firstPending.get(topicKey(topic)) === entry) {
+      const key = topicKey(topic);
+      this.#firstPending.delete(key);
+      this.#updatesPending.set(key, entry);
+    }
     if (entry.subscribers.length === 0 && entry.opening) {
       entry.opening.span.cancel();
       entry.opening = undefined;
@@ -251,7 +286,7 @@ export class Store {
     let entry = this.#topics.get(key);
     const started = entry === undefined;
     if (!entry) {
-      entry = { topic, subscribers: [], watchers: [], stale: false, emitScheduled: false, idle: null };
+      entry = this.#newEntry(topic);
       this.#topics.set(key, entry);
     }
     const resumed = entry.idle !== null;
@@ -273,7 +308,7 @@ export class Store {
   #release(topic: Topic): void {
     const idle = ++this.#idleCount;
     const entry = this.#topics.get(topicKey(topic));
-    if (!entry || entry.subscribers.length > 0 || entry.watchers.length > 0) return;
+    if (!entry || entry.subscribers.length > 0 || entry.watchers.length > 0 || entry.usage.hasSubscribers()) return;
     entry.idle = idle;
     this.runner.fork(laterSleep(EVICT_AFTER_MS).pipe(Effect.andThen(Effect.sync(() => this.#evict(topic, idle)))));
   }
@@ -294,6 +329,7 @@ export class Store {
     entry.emitScheduled = true;
     const watchers = entry.watchers.map(([, w]) => w);
     if (schedule) this.#scheduleEmit(topic);
+    entry.input.set({ mode: "direct", value });
     for (const w of watchers) w();
   }
 
@@ -307,6 +343,7 @@ export class Store {
     entry.emitScheduled = true;
     const watchers = entry.watchers.map(([, w]) => w);
     if (schedule) this.#scheduleEmit(topic);
+    entry.input.set({ mode: "direct", value: entry.value });
     for (const w of watchers) w();
   }
 
@@ -315,6 +352,7 @@ export class Store {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry) return;
     entry.stale = true;
+    entry.input.set({ mode: "derived" });
     const schedule = !entry.emitScheduled;
     entry.emitScheduled = true;
     if (schedule) this.#scheduleEmit(topic);
@@ -325,16 +363,62 @@ export class Store {
     for (const topic of this.liveTopics().filter(pick)) this.invalidate(topic);
   }
 
+  #entryForRead(topic: Topic): Entry | undefined {
+    const key = topicKey(topic);
+    let entry = this.#topics.get(key);
+    if (tracking()) {
+      const started = entry === undefined;
+      if (!entry) {
+        entry = this.#newEntry(topic);
+        this.#topics.set(key, entry);
+      }
+      entry.usage.get();
+      const resumed = entry.idle !== null;
+      entry.idle = null;
+      if (started) untracked(() => this.#start(topic));
+      else if (resumed) untracked(() => this.#source?.resume?.(topic));
+    }
+    return entry;
+  }
+
   /// The topic's value or error; undefined while it has neither.
   value(topic: Topic): Value | undefined {
+    const entry = this.#entryForRead(topic);
+    // Held values come straight from Data, but changes to their topics must still invalidate their readers.
     const held = this.#heldValue(topic);
-    if (held !== undefined) return { ok: held };
-    const entry = this.#topics.get(topicKey(topic));
-    const value = entry?.value;
+    if (entry && (held !== undefined || (this.#held !== null && holds(topic)))) void entry.input.get();
+    if (held !== undefined) {
+      return { ok: held };
+    }
+    const value = entry?.read.get();
     if (value === undefined) return undefined;
     if ("err" in value) return value;
     // With a data center, a value of its topics here is only what was last sent.
     return this.#held !== null && holds(topic) ? undefined : value;
+  }
+
+  /// Reads one part of a topic. A reader is only made again if the selected part changes.
+  select<T>(topic: Topic, pick: (value: Value | undefined) => T, same: (a: T, b: T) => boolean = equal): T {
+    const entry = this.#entryForRead(topic);
+    if (!entry) return pick(this.value(topic));
+    let selections = entry.selections.get(pick);
+    if (!selections) {
+      selections = new WeakMap();
+      entry.selections.set(pick, selections);
+    }
+    let selected = selections.get(same) as Derived<T> | undefined;
+    if (!selected) {
+      let made = false;
+      let previous: T;
+      selected = computed(() => {
+        const next = pick(this.value(topic));
+        if (made && same(previous, next)) return previous;
+        made = true;
+        return (previous = next);
+      });
+      selections.set(same, selected as Derived<unknown>);
+    }
+    return selected.get();
   }
 
   get(topic: Topic): unknown {
@@ -350,7 +434,7 @@ export class Store {
   /// Whether anything shows the topic now: a UI subscribes to it, or a view built from it is watched (a page open).
   inUse(topic: Topic): boolean {
     const entry = this.#topics.get(topicKey(topic));
-    return entry !== undefined && (entry.subscribers.length > 0 || entry.watchers.length > 0);
+    return entry !== undefined && (entry.subscribers.length > 0 || entry.watchers.length > 0 || entry.usage.hasSubscribers());
   }
 
   /// Topics with at least one subscriber (or within their eviction grace).
@@ -359,9 +443,18 @@ export class Store {
   }
 
   #scheduleEmit(topic: Topic): void {
-    this.#pending.push(topic);
-    const entry = this.#topics.get(topicKey(topic));
-    const first = entry !== undefined && entry.sent === undefined && entry.subscribers.length > 0;
+    const key = topicKey(topic);
+    const entry = this.#topics.get(key);
+    if (!entry) return;
+    const first = entry.sent === undefined && entry.subscribers.length > 0;
+    this.#firstPending.delete(key);
+    this.#updatesPending.delete(key);
+    (first ? this.#firstPending : this.#updatesPending).set(key, entry);
+    this.#wakePending(first);
+  }
+
+  #wakePending(first: boolean): void {
+    if (this.#pumping) return;
     if (first) {
       if (this.#soon) return;
       this.#soon = true;
@@ -369,27 +462,44 @@ export class Store {
       if (this.#windowOpen) return;
       this.#windowOpen = true;
     }
-    this.runner.fork((first ? Effect.yieldNow : Effect.sleep(COALESCE_MS)).pipe(Effect.andThen(Effect.sync(() => this.#flushPending()))));
+    this.runner.fork((first ? Effect.yieldNow : Effect.sleep(COALESCE_MS)).pipe(Effect.andThen(this.#flushPending())));
   }
 
-  #flushPending(): void {
-    this.#windowOpen = false;
-    this.#soon = false;
-    const pending = this.#pending;
-    this.#pending = [];
-    const t0 = this.host.monotonicMs();
-    const spentFrom = this.#tracer !== null ? { ...spent } : null;
-    let slowest = "";
-    let slowestMs = 0;
-    for (const topic of pending) {
-      const t = this.host.monotonicMs();
-      this.#flush(topic);
-      const ms = this.host.monotonicMs() - t;
-      if (ms > slowestMs) {
-        slowestMs = ms;
-        slowest = topic.topic;
+  #flushPending(): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.#pumping) return;
+      this.#pumping = true;
+      this.#windowOpen = false;
+      this.#soon = false;
+      let wasFirst = false;
+      try {
+        while (this.#firstPending.size > 0 || this.#updatesPending.size > 0) {
+          // A new page takes its turn immediately after background work; alternating while both queues have work
+          // also gives already queued updates a turn if pages keep opening.
+          const first: boolean = this.#firstPending.size > 0 && (this.#updatesPending.size === 0 || !wasFirst);
+          const queue = first ? this.#firstPending : this.#updatesPending;
+          const [key, entry] = queue.entries().next().value!;
+          queue.delete(key);
+          if (this.#topics.get(key) !== entry || !entry.emitScheduled) continue;
+          wasFirst = first;
+          const topic = entry.topic;
+          const t0 = this.host.monotonicMs();
+          const spentFrom = this.#tracer !== null ? { ...spent } : null;
+          this.#flush(topic);
+          this.#heldFor(topic, t0, spentFrom);
+          if (this.#firstPending.size > 0 || this.#updatesPending.size > 0) yield* Effect.yieldNow;
+        }
+      } finally {
+        this.#pumping = false;
+        if (!this.runner.closed) {
+          if (this.#firstPending.size > 0) this.#wakePending(true);
+          else if (this.#updatesPending.size > 0) this.#wakePending(false);
+        }
       }
-    }
+    });
+  }
+
+  #heldFor(topic: Topic, t0: number, spentFrom: Record<string, number> | null): void {
     const now = this.host.monotonicMs();
     const held = now - t0;
     if (held < FLUSH_HELD_MS || this.#tracer === null) return;
@@ -398,7 +508,7 @@ export class Store {
     const h = (this.#heldRounds ??= { from: now, rounds: 0, ms: 0, worst: null });
     h.rounds++;
     h.ms += held;
-    if (h.worst === null || held > h.worst.ms) h.worst = { ms: held, topics: pending.length, slowest, slowestMs, parts: spentFrom ? spentSince(spentFrom) : [] };
+    if (h.worst === null || held > h.worst.ms) h.worst = { ms: held, topics: 1, slowest: topic.topic, slowestMs: held, parts: spentFrom ? spentSince(spentFrom) : [] };
     if (!first && now - h.from < FLUSH_TOLD_EVERY_MS) return;
     const span = this.#tracer.root("core.flush", Kind.Internal);
     span.set("stillfail.rounds", h.rounds);
@@ -434,6 +544,9 @@ export class Store {
     entry.emitScheduled = false;
     const stale = entry.stale;
     entry.stale = false;
+    const job = entry.job;
+    entry.job = undefined;
+    job?.();
     const isHeld = this.#held !== null && holds(topic);
     let computed: Value | undefined;
     const workFrom = entry.opening ? this.host.monotonicMs() : 0;
@@ -449,7 +562,21 @@ export class Store {
         return;
       }
       const held = this.#heldValue(topic);
-      computed = held !== undefined ? { ok: held } : this.#compute(topic);
+      // A direct set after an invalidation is visible immediately; the queued recomputation still follows it.
+      if (held === undefined && entry.input.get().mode !== "derived") entry.input.set({ mode: "derived" });
+      if (held !== undefined) computed = { ok: held };
+      else {
+        entry.stop ??= observe(() => { entry.read.get(); }, (next) => {
+          entry.job = next;
+          // A direct write already schedules this entry; it only needs its observer refreshed.
+          if (entry.input.get().mode === "direct" && !entry.stale) return;
+          entry.stale = true;
+          const schedule = !entry.emitScheduled;
+          entry.emitScheduled = true;
+          if (schedule) this.#scheduleEmit(topic);
+        });
+        computed = entry.read.get();
+      }
     }
     const now = this.#topics.get(topicKey(topic));
     if (!now) return;
@@ -529,6 +656,9 @@ export class Store {
     if (!entry || entry.idle !== idle) return;
     // Gone before its source hears: what the source asks of the live topics then no longer has it.
     this.#topics.delete(topicKey(topic));
+    entry.stop?.();
+    if (this.#firstPending.get(topicKey(topic)) === entry) this.#firstPending.delete(topicKey(topic));
+    if (this.#updatesPending.get(topicKey(topic)) === entry) this.#updatesPending.delete(topicKey(topic));
     this.#source?.stop(topic);
     if (holds(topic)) this.#release_?.(topic);
   }

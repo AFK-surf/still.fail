@@ -22,6 +22,7 @@ import { conformTy, type Ty } from "../conform.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
+import { untracked } from "../reactive.ts";
 import { chatsLinked } from "../refLinks.ts";
 import { timed } from "../spent.ts";
 import type { Value, Watch } from "../store.ts";
@@ -88,6 +89,21 @@ export function down(link: J): boolean {
   if (state !== "online" && get(link, "cause") === "updating") return true;
   return state === "offline" || (state === "connecting" && get(link, "last") === "offline");
 }
+
+function linkValue(v: Value | undefined): J {
+  if (v === undefined) return { state: "connecting", message: null };
+  if ("err" in v) return { state: "error", message: v.err.message };
+  const cause = get(v.ok, "cause");
+  const catching = get(v.ok, "catching");
+  return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}), ...(typeof catching === "number" ? { catching } : {}) };
+}
+
+const stationOnline = (v: Value | undefined): boolean => !down(linkValue(v));
+const profileOverview = (v: Value | undefined): J => v && "ok" in v ? v.ok : undefined;
+const sameProfileOverview = (a: J, b: J): boolean => {
+  if (!isObject(a) || !isObject(b)) return equal(a, b);
+  return equal(get(a, "profiles"), get(b, "profiles")) && equal(get(a, "sharing"), get(b, "sharing"));
+};
 
 /// A station taken for down, in words, as its link says why (link.ts DownCause): the device's network, the station, or
 /// the way between them, or its update.
@@ -558,12 +574,6 @@ export class Views implements Owner {
     core.data.onLogChange((table) => {
       if (table === "entry") this.#invalidate((v) => ((v.topic === "chatSearch" && typeof v.messages === "number" && v.messages > 0) || v.topic === "search") && refs.terms(String(v.query ?? "")).length > 0);
     });
-    // What an agent said in Slack or heard from it changed: the chats it is in show it.
-    core.data.onLogChange((table, station, key) => {
-      if (table !== "slack") return;
-      const session = topicKey({ topic: "session", station, key });
-      for (const v of [...this.#views.values()]) if (v.topic.topic === "chat" && v.topic.station === station && v.watches.has(session)) this.#core.store.invalidate(v.topic);
-    });
   }
 
   owns(topic: Topic): boolean {
@@ -689,10 +699,10 @@ export class Views implements Owner {
         this.#invalidate((v) => v.topic === "workspaceMarks" || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
         return;
       case "pending":
-        this.#invalidate((v) => (v.topic === "chat" && v.thread === null && v.session === change.key) || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
+        this.#invalidate((v) => (v.topic === "chat" && typeof v.thread !== "number" && v.session === change.key) || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
         return;
       case "first":
-        this.#invalidate((v) => v.topic === "chat" && v.station === change.station && v.thread === null && v.session === change.key);
+        this.#invalidate((v) => v.topic === "chat" && v.station === change.station && typeof v.thread !== "number" && v.session === change.key);
         return;
       case "archiving":
         this.#invalidate((v) => v.topic === "chats" || v.topic === "workspaceMarks");
@@ -717,7 +727,7 @@ export class Views implements Owner {
     return this.#live().filter((view) => {
       if (view.topic !== "chat" || view.station !== station) return false;
       if (view.thread === thread) return true;
-      if (view.thread !== null || typeof view.session !== "string") return false;
+      if (typeof view.thread === "number" || typeof view.session !== "string") return false;
       if (view.session.startsWith(PENDING_PREFIX)) return this.local.pendingThread(station, view.session) === thread;
       return this.boundThread(station, view.session) === thread;
     });
@@ -733,7 +743,7 @@ export class Views implements Owner {
       this.#invalidate((v) => v.station === station && v.thread === thread && ["chatLetters", "chatThings", "imageNear"].includes(v.topic));
     } else if (of.startsWith("s:")) {
       const key = of.slice(2);
-      this.#invalidate((v) => v.station === station && ((v.topic === "history" && v.key === key) || (v.topic === "chat" && v.thread === null && v.session === key)));
+      this.#invalidate((v) => v.station === station && ((v.topic === "history" && v.key === key) || (v.topic === "chat" && typeof v.thread !== "number" && v.session === key)));
     }
   }
 
@@ -767,24 +777,8 @@ export class Views implements Owner {
     }
     for (const [key, topic] of wanted) {
       if (live.watches.has(key)) continue;
-      // Profiles and usage read a station's profiles and whether it is up, not its other overview or link fields.
-      // Those other fields change often while agents work and would otherwise make usage total every row again.
-      const relevant = (view.topic === "profiles" || view.topic === "usage") && (topic.topic === "overview" || topic.topic === "link")
-        ? () => {
-            if (topic.topic === "link") return down(this.link(topic.station as string));
-            const overview = this.ok(topic);
-            return isObject(overview) ? [get(overview, "profiles"), get(overview, "sharing")] : null;
-          }
-        : null;
-      let before = relevant?.();
-      const watch = this.#core.store.watch(topic, () => {
-        if (relevant !== null) {
-          const after = relevant();
-          if (equal(before, after)) return;
-          before = after;
-        }
-        this.#core.store.invalidate(view);
-      });
+      // Keep sources prefetched; the values the view actually reads schedule its updates.
+      const watch = this.#core.store.watch(topic, () => {});
       // Released meanwhile (a watch's start can stop the view).
       if (this.#views.get(topicKey(view)) !== live) {
         watch.drop();
@@ -919,18 +913,18 @@ export class Views implements Owner {
         ];
       case "chat": {
         const session = typeof view.session === "string" ? view.session : null;
-        if (view.thread === null && session !== null && session.startsWith(PENDING_PREFIX)) {
+        if (typeof view.thread !== "number" && session !== null && session.startsWith(PENDING_PREFIX)) {
           topics.push({ topic: "overview", station });
           const thread = this.local.pendingThread(station, session);
           if (typeof thread === "number") return this.#sources({ topic: "chat", station, thread, session: null });
           topics.push({ topic: "link", station }, { topic: "workspace", workspace: ofAddress(station) });
           return topics;
         }
-        if (view.thread === null && session !== null) {
+        if (typeof view.thread !== "number" && session !== null) {
           const bound = this.boundThread(station, session);
           if (bound !== null) return this.#sources({ topic: "chat", station, thread: bound, session: null });
         }
-        if (view.thread === null) {
+        if (typeof view.thread !== "number") {
           if (session !== null) topics.push({ topic: "session", station, key: session });
           topics.push(
             { topic: "threads", station },
@@ -1018,7 +1012,7 @@ export class Views implements Owner {
       const id = str(get(s, "id"));
       if (id === null) return [];
       const address = `${scope}/${id}`;
-      return [{ address, id, name: str(get(s, "name")) ?? id, emoji: str(get(s, "emoji")) || null, icon: str(get(s, "icon")) || null, online: !down(this.link(address)), lastSeen: get(s, "last_seen") ?? null, version: get(s, "version") ?? null, joined: get(s, "joined") === true }];
+      return [{ address, id, name: str(get(s, "name")) ?? id, emoji: str(get(s, "emoji")) || null, icon: str(get(s, "icon")) || null, online: this.#core.store.select({ topic: "link", station: address }, stationOnline), lastSeen: get(s, "last_seen") ?? null, version: get(s, "version") ?? null, joined: get(s, "joined") === true }];
     });
   }
 
@@ -1093,12 +1087,7 @@ export class Views implements Owner {
 
   /// The station's link as `{ state, message, last, retrying }`.
   link(station: string): J {
-    const v = this.value({ topic: "link", station });
-    if (v === undefined) return { state: "connecting", message: null };
-    if ("err" in v) return { state: "error", message: v.err.message };
-    const cause = get(v.ok, "cause");
-    const catching = get(v.ok, "catching");
-    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}), ...(typeof catching === "number" ? { catching } : {}) };
+    return linkValue(this.value({ topic: "link", station }));
   }
 
   #clock(): present.Clock {
@@ -1155,7 +1144,7 @@ export class Views implements Owner {
 
   compute(view: Topic): Value | undefined {
     if (!this.#views.has(topicKey(view))) return undefined;
-    timed(`${view.topic}.sources`, () => this.#sync(view));
+    timed(`${view.topic}.sources`, () => untracked(() => this.#sync(view)));
     const out = timed(`${view.topic}.make`, () => this.#compute(view));
     if (view.topic !== "chat" || out === undefined || !("ok" in out)) return out;
     const v = out.ok as J;
@@ -1809,7 +1798,7 @@ export class Views implements Owner {
       name: s.name,
       online: s.online,
       joined: s.joined,
-      overview: this.#stationOverview(s.address, this.ok({ topic: "overview", station: s.address }), c),
+      overview: this.#stationOverview(s.address, this.#core.store.select({ topic: "overview", station: s.address }, profileOverview, sameProfileOverview), c),
     }))) };
   }
 
