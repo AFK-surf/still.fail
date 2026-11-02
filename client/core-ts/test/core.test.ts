@@ -449,6 +449,40 @@ test("removed legacy shortcuts are kept per workspace on the device", async () =
   reopened.close();
 });
 
+test("what_changes_while_no_page_shows_goes_out_as_one_difference_once_one_shows_again", async () => {
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  subscribe(core, ui, 2, { topic: "notify" });
+  call(core, ui, 3, "client.focus", { visible: true, focused: true });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  // The app behind (a phone's draws nothing then and keeps every message for its first frame back): what changes
+  // meanwhile waits, however often it changes.
+  call(core, ui, 4, "client.focus", { visible: false, focused: false });
+  await host.settle();
+  apply(host, values);
+  const sent = (id: number) => host.emitted.filter(([, m]) => (m as { id?: number }).id === id).length;
+  for (let n = 0; n < 30; n++) {
+    prefs.chatOpened(core.inner.data, `w${n}/st`, `k${n}`);
+    await host.settle();
+  }
+  assert.equal(sent(1), 0);
+  // What the app acts on while behind still goes (its notices).
+  call(core, ui, 5, "notify.set", { on: false });
+  await host.settle();
+  assert.equal(sent(2), 1);
+  // Shown again: one difference, to what the core holds now.
+  call(core, ui, 6, "client.focus", { visible: true, focused: true });
+  await host.settle();
+  assert.equal(sent(1), 1);
+  apply(host, values);
+  assert.equal(Object.keys(v(values, 1).openChat).length, 30);
+  assert.equal(v(values, 2).on, false);
+  core.close();
+});
+
 test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", async () => {
   const { host, core } = await stationCore();
   const ui = core.connect();
