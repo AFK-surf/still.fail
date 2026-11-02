@@ -259,6 +259,15 @@ jobs:
           (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           export STILLFAIL_AGENT_DESKTOP="$(node scripts/native.ts file agent-desktop win32-x64)"
           cd station && STILLFAIL_UI_LIVE=1 node --test --test-timeout=120000 test/ui-live.test.ts
+      # What the job started that is still running as it ends: the runner's clean-up of them took 52-237 s after the
+      # last step of some runs (the rest 2-9 s), the release's job at 282 of its 300 (main 08c83003, 41537791777).
+      - name: What it left running
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $since = (Get-Process -Id $PID).StartTime.AddMinutes(-10)
+          Get-Process | Where-Object { $_.StartTime -gt $since } | Sort-Object StartTime | Format-Table -AutoSize Id, ProcessName, StartTime, Path | Out-String -Width 200
 
   # main: the prebuilt Windows natives in the releases bucket's natives/ (what `prebuild --release` put in the release
   # native-artifacts, the prebuild workflow's or a Mac's, copied over: nothing is built here), once the API (which serves
