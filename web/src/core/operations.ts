@@ -100,7 +100,6 @@ export interface OperationParams {
   "signin.fill": { id: string; login: unknown; keep?: boolean | null | undefined };
   "signin.self": { id: string; done?: boolean | null | undefined };
   "signin.deny": { id: string };
-  "job.clearEnded": { session: string };
   "memory.get": {  };
   "outflow.revoke": { id: string };
   "outflow.answer": { id: string; allow: boolean; scopes?: string[] | null | undefined; workspace?: boolean | null | undefined };
@@ -264,7 +263,6 @@ export function bindStationOperations(call: Call) {
     signinFill: <T = unknown>(params: OperationParams["signin.fill"]) => call("signin.fill", params) as Promise<T>,
     signinSelf: <T = unknown>(params: OperationParams["signin.self"]) => call("signin.self", params) as Promise<T>,
     signinDeny: <T = unknown>(params: OperationParams["signin.deny"]) => call("signin.deny", params) as Promise<T>,
-    jobClearEnded: <T = unknown>(params: OperationParams["job.clearEnded"]) => call("job.clearEnded", params) as Promise<T>,
     memoryGet: <T = unknown>(params: OperationParams["memory.get"] = {}) => call("memory.get", params) as Promise<T>,
     outflowRevoke: <T = unknown>(params: OperationParams["outflow.revoke"]) => call("outflow.revoke", params) as Promise<T>,
     outflowAnswer: <T = unknown>(params: OperationParams["outflow.answer"]) => call("outflow.answer", params) as Promise<T>,

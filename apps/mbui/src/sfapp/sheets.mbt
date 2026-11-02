@@ -684,7 +684,6 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
           label_w,
           fn() {  },
         ) {
-        dui.jobs_all = false
         close()
         open_chat_jobs(src, r)
       }
@@ -1068,8 +1067,8 @@ fn job_groups(
 }
 
 ///|
-/// What matters now of the chat's services and jobs (Jobs.kt openJobs), from the bar's button: the rest a tap away,
-/// the ended cleared.
+/// What matters now of the chat's services and jobs (Jobs.kt openJobs), from the bar's button: those over are not
+/// shown (the core leaves them out).
 fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let topic = (src.topic)("chatJobs", chat_params(r))
@@ -1081,8 +1080,6 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
     }
   }
   let jobs = items(view, "jobs")
-  let shown = if dui.jobs_all { jobs } else { jobs.filter(fn(j) { flag(Some(j), "current") }) }
-  let clear_key = "clear/" + r.station
   let rows : Array[() -> Unit] = []
   if jobs.length() == 0 {
     rows.push(fn() {
@@ -1093,58 +1090,7 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
       |> ignore
     })
   }
-  if jobs.length() > 0 && shown.length() == 0 {
-    rows.push(fn() {
-      c.box(padx=20.0, pady=8.0, fn() {
-        c.text(tr("android-misc.jobs.noneNow"), size=t.t.meta, color=t.p.muted) |> ignore
-      })
-      |> ignore
-    })
-  }
-  rows.push(fn() { job_groups(c, src, r, view, shown, close) })
-  if jobs.length().to_double() > number(view, "current") {
-    rows.push(fn() {
-      if sheet_link(c, "jobs/all", fn() {
-          if dui.jobs_all {
-            c.text(tr("android-misc.jobs.onlyNow"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
-          } else {
-            c.text(text(view, "allText"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
-            c.text(text(view, "hiddenText"), size=t.t.caption, color=t.p.muted) |> ignore
-          }
-        }) {
-        dui.jobs_all = !dui.jobs_all
-      }
-    })
-  }
-  if number(view, "ended") > 0.0 {
-    rows.push(fn() {
-      if sheet_link(c, "jobs/clear", fn() {
-          c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-            c.text(text(view, "clearText"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
-            if doing(clear_key) {
-              @sf.spinner(c, size=12.0) |> ignore
-            }
-          })
-          |> ignore
-        }) &&
-        !doing(clear_key) {
-        @ui.haptic(Confirm)
-        for session in items(view, "clear") {
-          match session {
-            String(s) =>
-              act(
-                src,
-                tr("android-misc.jobs.clearWhat"),
-                clear_key,
-                "job.clearEnded",
-                { "station": Json::string(r.station), "session": Json::string(s) },
-              )
-            _ => ()
-          }
-        }
-      }
-    })
-  }
+  rows.push(fn() { job_groups(c, src, r, view, jobs, close) })
   // (its rows on the panel's words' line as the list builds them, as tall as they come to up to the panel's share:
   // @sf.panel_list)
   // (no room of its own under its last: the panel's foot is under it)
@@ -1163,23 +1109,6 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
 /// all of it.
 fn open_chat_jobs(src : Source, r : ChatRef) -> Unit {
   @sf.panel(tr("android-misc.jobs.title"), from=Unanchored, tall=0.62, grows=true, fn(c, close) { jobs_body(c, src, r, close) })
-}
-
-///|
-/// A quiet text button under the groups (Jobs.kt SheetLink).
-fn sheet_link(c : @ui.Ctx, key : String, body : () -> Unit) -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  c.box(pt=14.0, fn() {
-    c.box(padx=2.0, pady=6.0, gap=2.0, radius=8.0, id~, fn() {
-      body()
-      // Jobs.kt SheetLink: clip(Smooth(8)).clickable
-      @motion.ripple(c, id, 8.0)
-    })
-    |> ignore
-  })
-  |> ignore
-  c.clicked(id)
 }
 
 ///|

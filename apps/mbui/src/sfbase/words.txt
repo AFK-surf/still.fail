@@ -471,7 +471,6 @@ android-misc.invite.someone
 android-misc.invite.unusable
 android-misc.invite.view
 android-misc.invite.whichAccount
-android-misc.jobs.clearWhat
 android-misc.jobs.gone
 android-misc.jobs.job
 android-misc.jobs.jobs
@@ -479,9 +478,7 @@ android-misc.jobs.noNotices
 android-misc.jobs.noOutput
 android-misc.jobs.none
 android-misc.jobs.none.text
-android-misc.jobs.noneNow
 android-misc.jobs.notices
-android-misc.jobs.onlyNow
 android-misc.jobs.output
 android-misc.jobs.services
 android-misc.jobs.stop
@@ -938,7 +935,6 @@ web-main.history.stepUnread
 web-main.history.subagent
 web-main.history.thinking
 web-main.jobs.chip
-web-main.jobs.clearWhat
 web-main.jobs.inPanel
 web-main.jobs.jobs
 web-main.jobs.long
@@ -951,7 +947,6 @@ web-main.jobs.noneInChat
 web-main.jobs.noneNote
 web-main.jobs.notices
 web-main.jobs.output
-web-main.jobs.quiet
 web-main.jobs.services
 web-main.jobs.show
 web-main.jobs.stop

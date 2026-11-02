@@ -531,10 +531,9 @@ const someJobs: DemoExtension = {
     const now = Date.now();
     return {
       jobs: [
-        { id: "j1", name: "dev server", state: "running", port: 5173, startedAt: now - 20 * 60_000, tone: "up", service: true, open: true, current: true, word: "运行中", meta: [{ text: ":5173" }], age: "20 分钟" },
-        { id: "j2", name: "pnpm test", state: "exited", exitCode: 0, startedAt: now - 9 * 60_000, endedAt: now - 7 * 60_000, tone: "off", ended: true, word: "已结束", meta: [{ text: "2 分钟" }], age: "9 分钟前" },
+        { id: "j1", name: "dev server", state: "running", port: 5173, startedAt: now - 20 * 60_000, tone: "up", service: true, open: true, word: "运行中", meta: [{ text: ":5173" }], age: "20 分钟" },
       ],
-      servicesNote: "1 个运行中", jobsNote: "", current: 1, ended: 1, clear: ["c1"], allText: "全部 2 个", clearText: "清除已结束的", hiddenText: "",
+      servicesNote: "1 个运行中", jobsNote: "", allText: "全部 1 个",
     };
   },
 };

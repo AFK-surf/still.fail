@@ -1596,10 +1596,6 @@ export interface Job {
 	service?: boolean;
 	/** A service whose page can be opened: up, or being started again. */
 	open?: boolean;
-	/** Over, so clearing takes it away (stopped, failed, ended by itself; not a service started again). */
-	ended?: boolean;
-	/** It matters now: up, alive, restarting, or died lately (a day). */
-	current?: boolean;
 	/** Its state in a word (在线, 在盯着, 意外退出…), coloured as its dot. */
 	word?: string;
 	/** The line under its name, in parts (see `JobPart`). */
@@ -2122,9 +2118,9 @@ export interface ChatDay {
 }
 
 /**
- * A chat's services and background jobs as its pages show them (the `chatJobs` view): every one, those that matter
- * now first (died, restarting, up and alive, over; newest first within each); what the button's dot says; each
- * group's head's note; how many matter now, how many are over and whose they are (clearing them is per session).
+ * A chat's services and background jobs as its pages show them (the `chatJobs` view): those that matter now, the
+ * ones over left out (died lately, restarting, up and alive; newest first within each); what the button's dot says;
+ * each group's head's note.
  */
 export interface ChatJobsView {
 	jobs: Job[];
@@ -2135,14 +2131,8 @@ export interface ChatJobsView {
 	/** 2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say). */
 	servicesNote: string;
 	jobsNote: string;
-	current: number;
-	ended: number;
-	/** The sessions whose jobs that are over clearing takes away (`job.clearEnded` each). */
-	clear: string[];
-	/** 全部 5 个; 清掉 2 个已结束的; 另有 2 个已停止或结束. */
+	/** 全部 5 个. */
 	allText: string;
-	clearText: string;
-	hiddenText: string;
 }
 
 /**

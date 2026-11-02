@@ -109,17 +109,6 @@ export const jobsAll = style({
     "&:hover": { background: vars.hover, color: vars.text },
   },
 });
-export const jobsClear = style({
-  flex: "none", alignSelf: "flex-start", height: "38px", padding: "0 12px", border: "0", borderRadius: vars.rOption,
-  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textUi, whiteSpace: "nowrap", cursor: "pointer",
-  cornerShape: vars.cornerShape,
-  display: "inline-flex", alignItems: "center", gap: "6px",
-  selectors: {
-    "&:hover:not(:disabled)": { background: vars.hover, color: vars.text },
-    "&:disabled": { cursor: "progress" },
-  },
-});
-export const jobsQuiet = style({ margin: "8px 12px 0 32px", fontSize: vars.textUi, color: vars.muted });
 export const jobsEmpty = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "26px 20px",
   textAlign: "center", color: vars.muted, fontSize: vars.textMeta,
@@ -219,4 +208,3 @@ globalStyle(msgWaitingLate, { animation: `${msgWaitingInKeyframes} 0s linear 1s 
 globalStyle(`${jobsPanel} :is(${jobRow}, ${jobsAll})`, { borderRadius: "var(--panel-in)", paddingInline: `${TEXT_IN}px` });
 globalStyle(`${jobsPanel} ${jobsAll}`, { paddingLeft: `${TEXT_IN + 20}px` });
 // As tall as the row beside it, in the panel's corner as it is: at the panel's padding from its side and its foot.
-globalStyle(`${jobsPanel} ${jobsClear}`, { height: "38px", padding: `0 ${TEXT_IN}px`, borderRadius: "var(--panel-in)", alignSelf: "center", fontSize: vars.textMeta });

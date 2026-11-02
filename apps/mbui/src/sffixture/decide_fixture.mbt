@@ -83,7 +83,6 @@ pub fn fix_job(id : String) -> Json {
         "tone": "up",
         "service": true,
         "open": true,
-        "current": true,
         "word": "在线",
         "meta": [{ "text": "在线", "kind": "word" }, { "text": " · 3 小时" }],
         "notices": [],
@@ -98,7 +97,6 @@ pub fn fix_job(id : String) -> Json {
         "command": "gh run watch 4821 --exit-status",
         "tone": "live",
         "watch": true,
-        "current": true,
         "meta": [
           { "text": "在盯着", "kind": "word" },
           { "text": " · " },
@@ -119,8 +117,6 @@ pub fn fix_job(id : String) -> Json {
         "startedAt": 0,
         "command": "scripts/android.sh build",
         "tone": "off",
-        "ended": true,
-        "current": false,
         "meta": [{ "text": "已结束", "kind": "word" }, { "text": " · 20 分钟前" }],
         "notices": [],
       }
@@ -346,15 +342,10 @@ pub fn fix_history() -> Json {
 ///|
 pub fn fix_chat_jobs() -> Json {
   {
-    "jobs": [fix_job("j-web"), fix_job("j-ci"), fix_job("j-build")],
+    "jobs": [fix_job("j-web"), fix_job("j-ci")],
     "servicesNote": "1 个在线",
     "jobsNote": "1 个在盯着",
-    "current": 2,
-    "ended": 1,
-    "clear": ["s-c1"],
-    "allText": "全部 3 个",
-    "clearText": "清掉 1 个已结束的",
-    "hiddenText": "另有 1 个已停止或结束",
+    "allText": "全部 2 个",
   }
 }
 
@@ -601,7 +592,7 @@ pub fn fix_preview_viz() -> Json {
 /// This slice's calls in the fixture: taken as a station would.
 pub fn decide_fixture_call(name : String) -> Result[Json, Json]? {
   match name {
-    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "job.clearEnded" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
+    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
       Some(Ok(Json::object({})))
     "chat.publishPreview" => Some(Ok(fix_preview()))
     _ => None
