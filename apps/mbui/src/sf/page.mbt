@@ -601,7 +601,7 @@ pub fn section(
 pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String = "") -> Unit {
   match look() {
     Wide => {
-      let row = fn() { control_row(c, title, fn() { in_setting(control) }, note~) }
+      let row = fn() { control_row(c, title, fn() { in_setting(control) }, note~, title_style=setting_title()) }
       if in_list.val > 0 {
         c.box(style=wide_in_list(), row) |> ignore
       } else {
@@ -640,6 +640,12 @@ pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String
 let setting_in_card_control : @ui.Style = @ui.css("w=Full py=S2")
 
 ///|
+/// A wide setting's title, as strong as the titles of the page's other rows while keeping the input's text size.
+fn setting_title() -> @ui.TextStyle {
+  theme().rows.title.then(@ui.text_style(weight=Medium))
+}
+
+///|
 /// A setting kept on a page of its own (字体: the faces chosen): its `title`, what it is for (`note`) and what it is
 /// now (`value`), pressed to open its page. Wide: a row of its list card (`group`), a link's (link_row): its title
 /// with its note under it at its start, what it is now and the chevron at its end; narrow: as a `setting`, its title
@@ -647,7 +653,7 @@ let setting_in_card_control : @ui.Style = @ui.css("w=Full py=S2")
 /// it. True on the frame it is pressed.
 pub fn setting_link(c : @ui.Ctx, key : String, title : String, value : String, note? : String = "") -> Bool {
   match look() {
-    Wide => link_row(c, key, title, value~, note~, title_style=theme().rows.title)
+    Wide => link_row(c, key, title, value~, note~, title_style=setting_title())
     Narrow => {
       let mut pressed = false
       section(c, title, heads=true, fn() {

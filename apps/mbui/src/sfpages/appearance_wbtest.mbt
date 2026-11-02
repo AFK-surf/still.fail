@@ -38,14 +38,21 @@ test "外观, at each width on either screen: 主题, 字体, 动画, 语言; �
 }
 
 ///|
-test "外观: a setting opening another page has the same title weight as a setting changed here" {
+test "外观: wide setting titles have the same weight as the rows in 自动决策" {
   for platform in [0, 2] {
+    let decision = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.link_row(c, "decision", "结束时") |> ignore
+    }, w=900.0, platform~)
+    decision.draw()
+    let weight = decision.census().weight
+    assert_eq(weight, ["500"])
     let plain = @ui.Tester::new(fn(c) {
       @sf.begin(c) |> ignore
       @sf.setting(c, "主题", fn() {  })
     }, w=900.0, platform~)
     plain.draw()
-    let weight = plain.census().weight
+    assert_eq(plain.census().weight, weight)
     let link = @ui.Tester::new(fn(c) {
       @sf.begin(c) |> ignore
       @sf.setting_link(c, "fonts", "字体", "") |> ignore
