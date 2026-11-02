@@ -80,3 +80,106 @@ test "a phone's new chat shows its preset's control, the composer a capsule as t
   t.run_for(@ui.move_most_ms)
   assert_true(shows(t, "不用预设") && shows(t, "新预设"), msg="\{t.text_runs().map(fn(r) { r.text })}")
 }
+
+///|
+test "browsing starts on the station picked in the new chat composer" {
+  new_run()
+  @sffixture.new_fix.station = "st2"
+  let calls : Array[Made] = []
+  let base = fixture("newchat-preset-new-browse")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_mode("newchat-preset-new-browse")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="选择文件夹所在的 station: MBA") is Some(_), msg=t.semantics_dump())
+  assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st2")
+}
+
+///|
+test "switching the browsing station starts at its home and saves the chosen folder on that station" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("newchat-preset-new-browse")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_mode("newchat-preset-new-browse")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st1")
+  t.click(Button, label="项目")
+  t.frame()
+  assert_eq(text(Some(named(calls, "drive.folders")[1].params), "path"), "/Users/lin/项目")
+  t.click(Button, label="选择文件夹所在的 station: Studio")
+  t.run_for(@ui.move_most_ms)
+  t.click(MenuItemRadio, label="MBA")
+  t.run_for(@ui.move_most_ms)
+  let asks = named(calls, "drive.folders")
+  assert_eq(text(Some(asks[2].params), "station"), "ws1/st2")
+  assert_eq(text(Some(asks[2].params), "path"), "")
+  t.click(Button, label="项目")
+  t.frame()
+  t.click(Button, label="用这个文件夹")
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="创建")
+  t.frame()
+  let made = Some(named(calls, "preset.add")[0].params)
+  let folder = Some(items(made, "dirs")[0])
+  assert_eq(text(folder, "path"), "/Users/lin/项目")
+  assert_eq(text(folder, "station"), "ws1/st2")
+  assert_eq(text(folder, "stationName"), "MBA")
+  let picked = Some(named(calls, "newChat.pick").last().unwrap().params)
+  assert_eq(text(picked, "presetStation"), "ws1/st1")
+}
+
+///|
+test "editing another station's preset still starts browsing on the composer's station" {
+  new_run()
+  @sffixture.new_fix.station = "st2"
+  @sffixture.new_fix.preset = "p-sf"
+  let calls : Array[Made] = []
+  let base = fixture("newchat")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      match got.value {
+        Some(Object(m)) if name == "newChat" => {
+          let v = m.copy()
+          v["presetStation"] = "ws1/st1"
+          { ..got, value: Some(Json::object(v)) }
+        }
+        _ => got
+      }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_mode("newchat")
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="still.fail 开发")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("编辑「still.fail 开发」")
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="添加目录")
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="浏览文件夹…")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="选择文件夹所在的 station: MBA") is Some(_), msg=t.semantics_dump())
+  assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st2")
+}

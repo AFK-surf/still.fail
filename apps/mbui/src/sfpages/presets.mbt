@@ -82,7 +82,7 @@ fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, picked 
     menu.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.preset.editNamed", args=[("name", text(v, "presetName"))]), fn() {
-          preset_dialog(src, w, if at == "" { address } else { at }, picked, items(v, "stations"))
+          preset_dialog(src, w, if at == "" { address } else { at }, picked, items(v, "stations"), browse_station=address)
         }, icon="edit"),
       ),
     )
@@ -120,6 +120,7 @@ priv struct PresetEditing {
   serial : Int
   mut adding : Bool
   mut browsing : Bool
+  mut browse_station : String
 }
 
 ///|
@@ -133,9 +134,9 @@ let preset_serial : Ref[Int] = Ref(0)
 /// for the station's new chats.
 /// `adding`: 添加目录 asked open as it is first drawn, `browsing` its 浏览文件夹 too (a fixture's screen of each).
 /// `stations`: the workspace's up now (the `newChat` view's), whose folders are offered too.
-fn preset_dialog(src : Source, w : Workspace, address : String, id : String, stations : Array[Json], adding? : Bool = false, browsing? : Bool = false) -> Unit {
+fn preset_dialog(src : Source, w : Workspace, address : String, id : String, stations : Array[Json], adding? : Bool = false, browsing? : Bool = false, browse_station? : String = "") -> Unit {
   preset_serial.val += 1
-  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding: adding || browsing, browsing }
+  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding: adding || browsing, browsing, browse_station: if browse_station == "" { address } else { browse_station } }
   let key = fn(part : String) { "preset-editor/" + e.serial.to_string() + "/" + part }
   let name = field_of(key("name"))
   let instructions = field_of(key("instructions"))
@@ -288,7 +289,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
             Ok(made) => {
               // made: the one the station's new chats are opened with
               if id == "" {
-                @sfbase.pick_new(src, w.id, { "preset": Json::string(text(Some(made), "id")) })
+                @sfbase.pick_new(src, w.id, { "preset": Json::string(text(Some(made), "id")), "presetStation": Json::string(address) })
               }
               shut()
             }
@@ -352,26 +353,51 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, stations : Array
     c.semantics(b, Button, id~, label=@sf.t("web-main.preset.browse"))
     if c.clicked(id) || e.browsing {
       e.browsing = false
-      preset_browse(src, address, e, key)
+      preset_browse(src, address, stations, e, key)
     }
   })
   |> ignore
 }
 
 ///|
-/// 浏览文件夹, a step in from 添加目录: the preset's station's folders, gone into one by one (the files' page's folder
-/// picker); at its foot 使用此文件夹, the folder it is in taken among the preset's and the fields shown again. Left, the
-/// browsing let go of.
-fn preset_browse(src : Source, address : String, e : PresetEditing, key : (String) -> String) -> Unit {
-  (@sfbase.folder_browse_open.val)(address)
+/// 浏览文件夹, a step in from 添加目录: choose a station (initially the new chat composer's), then go into its folders
+/// one by one. Switching stations starts at that station's home and lets go of any earlier request. The folder taken
+/// keeps its station when it is not the preset's own.
+fn preset_browse(src : Source, address : String, stations : Array[Json], e : PresetEditing, key : (String) -> String) -> Unit {
+  (@sfbase.folder_browse_open.val)(e.browse_station)
   @sf.panel_go(
     @sf.t("web-main.preset.pickFolder"),
-    fn(c, _) { (@sfbase.folder_browse_body.val)(c, src, address) },
+    fn(c, _) {
+      @sf.field(c, @sf.t("android-misc.files.lendOn"), fn() {
+        let choices = stations.map(fn(s) { (text(Some(s), "station"), preset_station_name(text(Some(s), "station"), "", stations)) })
+        @sf.select(c, key("browse-station"), e.browse_station, choices, fn(at) {
+          if at != e.browse_station {
+            e.browse_station = at
+            (@sfbase.folder_browse_open.val)(at)
+          }
+        }, label=@sf.t("android-misc.files.lendOn"))
+      })
+      (@sfbase.folder_browse_body.val)(c, src, e.browse_station)
+    },
     foot=fn(c, _) {
       c.spacer()
       let here = (@sfbase.folder_browse_here.val)()
       if @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "") {
-        let d = Json::object({ "path": Json::string(here) })
+        let d = if e.browse_station == address {
+          Json::object({ "path": Json::string(here) })
+        } else {
+          // If the station already offered this folder as a repository, preserve that information too.
+          let repo = match items(presets_of(src, e.browse_station), "candidates").iter().find_first(fn(o) { text(Some(o), "path") == here }) {
+            Some(o) => field(Some(o), "repo").unwrap_or(Json::null())
+            None => Json::null()
+          }
+          Json::object({
+            "path": Json::string(here),
+            "repo": repo,
+            "station": Json::string(e.browse_station),
+            "stationName": Json::string(preset_station_name(e.browse_station, "", stations)),
+          })
+        }
         if !e.dirs.iter().any(fn(x) { dir_key(Some(x)) == dir_key(Some(d)) }) {
           e.dirs.push(d)
         }
