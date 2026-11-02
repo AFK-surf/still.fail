@@ -536,6 +536,8 @@ export function failureText(detail: string): string {
       return said("core-logic.format.failure.auth");
     case "refused":
       return said("core-logic.format.failure.refused");
+    case "blocked":
+      return said("core-logic.format.failure.blocked");
     case "denied":
       return said("core-logic.format.failure.denied");
     case "model":

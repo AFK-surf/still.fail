@@ -15,9 +15,9 @@ export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" 
 
 /// What failed a turn, as people are told it (sessions/actor.ts `failureNotice`, the client's `failureText`): the account
 /// (`auth`), the provider turning away where the request comes from (`refused`: a region it does not serve, an address
-/// its CDN blocks, said so in its answer), or turning it away without saying why (`denied`: a bare 403), a limit, the provider out of room, the way to it (`network`), the conversation grown past what the model takes
+/// or `blocked`: its CDN's firewall turning the address away, said so in its answer), or turning it away without saying why (`denied`: a bare 403), a limit, the provider out of room, the way to it (`network`), the conversation grown past what the model takes
 /// (`context`), else the model's own error; the process gone (`exited`), or the station's (`other`).
-export type FailureReason = "auth" | "refused" | "denied" | "rate_limit" | "overloaded" | "network" | "context" | "model" | "exited" | "other";
+export type FailureReason = "auth" | "refused" | "blocked" | "denied" | "rate_limit" | "overloaded" | "network" | "context" | "model" | "exited" | "other";
 
 export type TurnOutcome = { kind: "completed" } | { kind: "aborted" } | { kind: "failed"; reason: FailureReason; message: string };
 
@@ -138,8 +138,8 @@ const AUTH = ["unauthorized", "authenticat", "not logged in", "sign in", "log in
 /// What they say when the provider turns away where the request comes from, whoever asks: its region. Only what says
 /// so: a 403 that does not is `denied`, its cause not known.
 const REFUSED = ["request not allowed", "unsupported_country", "unsupported country", "not available in your region", "region is not supported", "not authorized in this region"];
-/// What a 403 is answered with when the provider's CDN blocks the address it comes from: its page (Cloudflare's, HTML
-/// where an API answer was due).
+/// What a 403 is answered with when the provider's CDN firewall blocks the address it comes from (its IP's reputation:
+/// a datacenter's, a shared proxy's, whatever region): its page (Cloudflare's, HTML where an API answer was due).
 const BLOCK_PAGE = ["<html", "<!doctype html", "attention required", "just a moment", "cloudflare"];
 /// What they say when it is a limit: of rate, quota or usage.
 const LIMIT = ["rate limit", "rate_limit", "quota", "usage limit", "limit reached", "resource_exhausted", "too many requests"];
@@ -170,7 +170,7 @@ export function failureOf(text: string, extra: FailureWords = {}): FailureReason
   // A code decides before any phrase: a limit's message may well mention the account ("upgrade your subscription").
   if (["401", ...(extra.authCodes ?? [])].some(word)) return "auth";
   // A 403 is the account's where it says so, the request's origin where it says that; else not known.
-  if (word("403")) return account(["token", "scope"]) ? "auth" : [...REFUSED, ...BLOCK_PAGE].some(says) ? "refused" : "denied";
+  if (word("403")) return account(["token", "scope"]) ? "auth" : REFUSED.some(says) ? "refused" : BLOCK_PAGE.some(says) ? "blocked" : "denied";
   if (["429", ...(extra.limitCodes ?? [])].some(word)) return "rate_limit";
   if (word("529")) return "overloaded";
   if (REFUSED.some(says)) return "refused";

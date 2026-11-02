@@ -1662,7 +1662,7 @@ const failureWords = (reason: FailureReason) => t(`station.failure.${reason === 
 function cannotStartWords(error: unknown): string {
   if (error instanceof Said) return t("station.notice.cannotStartWhy", { why: error.message });
   const reason = failureOf((error as Error)?.message ?? "");
-  return reason === "auth" || reason === "refused" || reason === "network" ? t("station.notice.cannotStartWhy", { why: failureWords(reason) }) : t("station.notice.cannotStart");
+  return reason === "auth" || reason === "refused" || reason === "blocked" || reason === "network" ? t("station.notice.cannotStartWhy", { why: failureWords(reason) }) : t("station.notice.cannotStart");
 }
 
 /// Compaction that could not begin, in words: the station's own as they are, else what kind of failure it was.
