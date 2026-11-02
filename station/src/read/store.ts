@@ -11,9 +11,9 @@ import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
 import { archiveEntries } from "../store/archive.ts";
+import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { USAGE_GROUPS, type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
-import { QUARTER_MS } from "../store/rows.ts";
 import {
   CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, type Membership, type MessageRow, OPTIONS_BEFORE,
   PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, isLetter, liveShare, mergeEntries,
@@ -889,24 +889,78 @@ export function usageThreads(s: Store, ids: number[]): [ThreadRow, string | null
   return out;
 }
 
-/// Every call ever recorded, added up by day in the asker's time zone (`utcOffsetMin`, whole quarters of an hour: the
-/// quarters' table, usage_quarters, kept by its triggers, some ten thousand rows where the calls are half a million),
-/// session, runtime and model: the tokens (read and written, the cache's too) and the calls. The usage
-/// page's year (GET /usage?history=1, read/usage.ts usageHistory).
-export function usageByDay(s: Store, utcOffsetMin: bigint): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
-  return all(
-    s,
-    `SELECT strftime('%Y-%m-%d', (quarter * ${QUARTER_MS} + ?1 * 60000) / 1000, 'unixepoch') AS day, session, runtime, NULLIF(model, '') AS model,
-       SUM(input + cache_read + cache_write + cache_write_long + output) AS tokens, SUM(calls) AS calls
-     FROM usage_quarters GROUP BY day, session, runtime, model`,
-    utcOffsetMin,
-  ).map((r) => ({ day: r.day, session: r.session, runtime: r.runtime, model: r.model, tokens: Number(r.tokens), calls: Number(r.calls) }));
+/// Sent back to the pool if a session entered a workspace while its old minutes were being filled; it retries after
+/// that session is ready. The check and the read use the same SQLite snapshot in the reader.
+export const USAGE_MINUTES_PENDING = "usage minutes are still being indexed";
+const QUARTERS_ALL = `FROM usage_day_quarters q`;
+const QUARTERS_SCOPED = `FROM usage_minute_scope sc INDEXED BY usage_minute_scope_ws
+  CROSS JOIN usage_day_quarters q ON q.session = sc.session`;
+const QUARTERS_HOME = `FROM (
+  SELECT session FROM usage_minute_scope INDEXED BY usage_minute_scope_ws WHERE ws = ?2
+  UNION ALL SELECT session FROM usage_minute_scope INDEXED BY usage_minute_scope_ws WHERE ws IS NULL
+) sc CROSS JOIN usage_day_quarters q ON q.session = sc.session`;
+// Each quarter is entirely within one local day except one crossing midnight. Keep those quarters' minutes separate;
+// all the others are read once regardless of how many calls or occupied minutes they contain.
+const CROSSES_DAY = `((q.quarter * 15 + CAST(?1 AS INTEGER)) % 1440 + 1440) % 1440 > 1425`;
+function quartersByDay(from: string, visible: string): string {
+  return `SELECT strftime('%Y-%m-%d', (q.quarter * 15 + CAST(?1 AS INTEGER)) * 60, 'unixepoch') AS day,
+    q.session, q.runtime, NULLIF(q.model, '') AS model, SUM(q.tokens) AS tokens, SUM(q.calls) AS calls
+    ${from} WHERE ${visible} GROUP BY day, q.session, q.runtime, q.model`;
+}
+function minutesAtDayEdges(from: string, visible: string): string {
+  return `WITH edge(session, quarter) AS (
+      SELECT DISTINCT q.session, q.quarter ${from} WHERE ${visible} AND ${CROSSES_DAY}
+    ), parts AS (
+      SELECT q.session, q.quarter * 15 AS minute, q.runtime, q.model, q.tokens, q.calls
+        ${from} WHERE ${visible} AND NOT (${CROSSES_DAY})
+      UNION ALL
+      SELECT m.session, m.minute, m.runtime, m.model, m.tokens, m.calls
+        FROM edge e CROSS JOIN usage_minute m ON m.session = e.session
+          AND m.minute >= e.quarter * 15 AND m.minute < (e.quarter + 1) * 15
+    )
+    SELECT strftime('%Y-%m-%d', (p.minute + CAST(?1 AS INTEGER)) * 60, 'unixepoch') AS day,
+      p.session, p.runtime, NULLIF(p.model, '') AS model, SUM(p.tokens) AS tokens, SUM(p.calls) AS calls
+      FROM parts p GROUP BY day, p.session, p.runtime, p.model`;
+}
+export const USAGE_QUARTERS_ALL = quartersByDay(QUARTERS_ALL, "1");
+export const USAGE_QUARTERS_SCOPED = quartersByDay(QUARTERS_SCOPED, "sc.ws = ?2");
+export const USAGE_QUARTERS_HOME = quartersByDay(QUARTERS_HOME, "1");
+export const USAGE_DAY_ALL = minutesAtDayEdges(QUARTERS_ALL, "1");
+export const USAGE_DAY_SCOPED = minutesAtDayEdges(QUARTERS_SCOPED, "sc.ws = ?2");
+export const USAGE_DAY_HOME = minutesAtDayEdges(QUARTERS_HOME, "1");
+
+/// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
+export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
+  if (viewer === null || viewer.home !== false) {
+    if (one(s, "SELECT done FROM usage_minute_all WHERE id = 1")?.done !== 1) throw new Error(USAGE_MINUTES_PENDING);
+  } else if (one(s, PENDING_MINUTE_SESSION, viewer.workspace)) {
+    throw new Error(USAGE_MINUTES_PENDING);
+  }
+  const aligned = utcOffsetMin % 15n === 0n;
+  const found = viewer === null ? all(s, aligned ? USAGE_QUARTERS_ALL : USAGE_DAY_ALL, utcOffsetMin)
+    : all(s, viewer.home === false ? (aligned ? USAGE_QUARTERS_SCOPED : USAGE_DAY_SCOPED) : (aligned ? USAGE_QUARTERS_HOME : USAGE_DAY_HOME), utcOffsetMin, viewer.workspace);
+  return found.map((r) => ({ day: r.day, session: r.session, runtime: r.runtime, model: r.model, tokens: Number(r.tokens), calls: Number(r.calls) }));
 }
 
-/// Every chat by where it is (its surface: ember, slack:…, feishu:…), the session it is at home in and whether it was
-/// archived: the usage page's chats from each place and those archived.
-export function threadsByPlace(s: Store): { surface: string; home: string | null; archived: boolean }[] {
-  return all(s, "SELECT surface, home, hidden_at IS NOT NULL AS archived FROM threads").map((r) => ({
+/// The threads visible through sessions in this workspace. A thread with no sessions belongs to the home workspace.
+/// Drive memberships from the matching sessions, so another workspace's growing card history is never visited.
+export const VISIBLE_USAGE_THREADS = `WITH visible(thread) AS (
+  SELECT ts.thread FROM sessions s INDEXED BY sessions_ws
+  CROSS JOIN thread_sessions ts INDEXED BY thread_sessions_session ON ts.session = s.key
+  WHERE s.ws = ?1 OR (?2 AND s.ws IS NULL)
+  UNION
+  SELECT t.id FROM threads t WHERE ?2 AND NOT EXISTS (SELECT 1 FROM thread_sessions ts WHERE ts.thread = t.id)
+)`;
+export const VISIBLE_USAGE_CARDS = `${VISIBLE_USAGE_THREADS}
+  SELECT t.home AS home, c.said OR EXISTS (SELECT 1 FROM closed_cards x WHERE x.thread = c.thread AND x.n = c.n AND x.viewer != c.author) AS picked
+  FROM visible v CROSS JOIN card_outcomes c ON c.thread = v.thread JOIN threads t ON t.id = c.thread`;
+
+/// Chats by where they are and whether they were archived: only those the viewer's workspace can see.
+export function threadsByPlace(s: Store, viewer: InWorkspace | null = null): { surface: string; home: string | null; archived: boolean }[] {
+  const found = viewer === null
+    ? all(s, "SELECT surface, home, hidden_at IS NOT NULL AS archived FROM threads")
+    : all(s, `${VISIBLE_USAGE_THREADS} SELECT t.surface, t.home, t.hidden_at IS NOT NULL AS archived FROM visible v JOIN threads t ON t.id = v.thread`, viewer.workspace, viewer.home === false ? 0 : 1);
+  return found.map((r) => ({
     surface: String(r.surface),
     home: r.home ?? null,
     archived: r.archived === 1,
@@ -917,12 +971,12 @@ export function threadsByPlace(s: Store): { surface: string; home: string | null
 /// option pressed (a person's next message in the thread is one of its labels, or a person closed it with one), or
 /// not (answered in their own words, or not yet): the usage page's 决策点击率. With the session its thread is at home in.
 /// As the database keeps them (store/schema.ts CARD_OUTCOMES): no entry is read.
-export function decisionCards(s: Store): { home: string | null; picked: boolean }[] {
-  return all(
-    s,
-    `SELECT t.home AS home, c.said OR EXISTS (SELECT 1 FROM closed_cards x WHERE x.thread = c.thread AND x.n = c.n AND x.viewer != c.author) AS picked
-     FROM card_outcomes c LEFT JOIN threads t ON t.id = c.thread`,
-  ).map((r) => ({ home: r.home ?? null, picked: r.picked === 1 }));
+export function decisionCards(s: Store, viewer: InWorkspace | null = null): { home: string | null; picked: boolean }[] {
+  const found = viewer === null
+    ? all(s, `SELECT t.home AS home, c.said OR EXISTS (SELECT 1 FROM closed_cards x WHERE x.thread = c.thread AND x.n = c.n AND x.viewer != c.author) AS picked
+       FROM card_outcomes c LEFT JOIN threads t ON t.id = c.thread`)
+    : all(s, VISIBLE_USAGE_CARDS, viewer.workspace, viewer.home === false ? 0 : 1);
+  return found.map((r) => ({ home: r.home ?? null, picked: r.picked === 1 }));
 }
 
 /// usage_since: when the earliest call recorded was made.

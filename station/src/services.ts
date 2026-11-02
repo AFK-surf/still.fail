@@ -98,7 +98,12 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
     Readers,
     Effect.gen(function* () {
       const { data } = yield* Paths;
-      return yield* Effect.acquireRelease(Effect.sync(() => new ReaderPool(data)), (pool) => Effect.sync(() => pool.close()));
+      yield* Store;
+      return yield* Effect.acquireRelease(Effect.sync(() => {
+        const pool = new ReaderPool(data);
+        pool.startUsageIndex();
+        return pool;
+      }), (pool) => Effect.sync(() => pool.close()));
     }),
   );
 }
@@ -134,6 +139,9 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
     }),
   );
 }
+
+/// Start the store before the usage-index worker, and keep the same store available to the station's other parts.
+export const ReadersAndStore = Readers.layer.pipe(Layer.provideMerge(Store.layer));
 
 /// still.fail Helper (macOS; docs/station-ts-native.md §4), installed and talked to under <data>/helper: this Mac's
 /// screen (the desktop's) and the drive's protected folders (helper/files.ts); null where there is none.
