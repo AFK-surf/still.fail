@@ -479,15 +479,20 @@ pub fn fixture_json_app(json : String) -> Source {
 pub fn open_mode(mode : String) -> Unit {
   if mode.has_prefix("newchat") {
     app.nav.rise(NewChat)
-    if mode.has_prefix("newchat-crowded") || mode == "newchat-tall-model" {
+    if mode.has_prefix("newchat-crowded") || mode.has_prefix("newchat-providers") || mode == "newchat-tall-model" {
       // (it starts on the model that runs on three runtimes, on the one of them its combination names)
       let n = @sffixture.new_fix
       n.crowded = true
       n.tall = mode == "newchat-tall-model"
+      n.providers = mode.has_prefix("newchat-providers")
       n.model = "deepseek-v4-1-flash"
       n.runtime = "dsh"
       n.d_model = n.model
       n.d_runtime = n.runtime
+    }
+    // (with models starred: under 喜欢 in its model's panel)
+    if mode.has_suffix("-liked") {
+      @sffixture.new_fix.liked.push_iter(["claude-sonnet-5", "kimi-for-coding"].iter())
     }
     match mode {
       "newchat-station" => @sfpages.new_chat_ask("station")
@@ -498,7 +503,8 @@ pub fn open_mode(mode : String) -> Unit {
       "newchat-preset-new-add" => @sfpages.new_chat_ask("preset-new-add")
       "newchat-preset-new-browse" => @sfpages.new_chat_ask("preset-new-browse")
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
-      "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" => @sfpages.new_chat_ask("model")
+      "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" =>
+        @sfpages.new_chat_ask("model")
       _ => ()
     }
   } else if mode == "home-bars" {

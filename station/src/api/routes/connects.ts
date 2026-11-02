@@ -10,7 +10,7 @@ import type { Viewer } from "../../mesh/credential.ts";
 import type { ConfigFile } from "../../ops/config.ts";
 import { type Lang, tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
-import { hubConfig, sameModel } from "../../sessions/config.ts";
+import { hubConfig, runs } from "../../sessions/config.ts";
 import type { Hub } from "../../sessions/hub.ts";
 import { bindSingle } from "../../sessions/lifecycle.ts";
 import { runtimeKind, type RuntimeKind } from "../../agents/runtime.ts";
@@ -146,15 +146,10 @@ export function connectEdits(deps: ConnectEditDeps) {
       } else throw new Error("runtime is required");
       // The profile its sessions keep to (null: the pool's pick), one that runs its runtime and model.
       if (profile !== null) {
-        const p = hubConfig(raw, deps.data).profiles.find((p) => p.id === profile);
+        // (as the hub has it: running what its check found too)
+        const p = (deps.hub()?.config() ?? hubConfig(raw, deps.data)).profiles.find((p) => p.id === profile);
         if (!p || !p.runtimes.includes(runtime)) throw new Error(tr(lang, "station.profile.cannotRun", { profile, runtime }));
-        if (model !== null) {
-          const rawProfile = (Array.isArray(raw.profiles) ? raw.profiles : []).find((x: Json) => x?.id === profile);
-          const models: unknown[] = Array.isArray(rawProfile?.models) ? rawProfile.models : [];
-          if (!models.some((m) => typeof m === "string" && sameModel(m, model))) {
-            throw new Error(tr(lang, "station.profile.modelOff", { profile: typeof rawProfile?.name === "string" ? rawProfile.name : profile, model }));
-          }
-        }
+        if (model !== null && !runs(p, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: p.name, model }));
       }
       if (effort !== null && ["model", "effort", "profile"].some((f) => get(bind, f) !== undefined)) {
         const allowed = deps.hub()?.accounts.modelEfforts(runtime, model, profile);

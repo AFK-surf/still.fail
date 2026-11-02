@@ -294,45 +294,19 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
-  test("a profile just signed in takes the models the others of its runtime have, none outdated, unless some were chosen first", async () => {
-    const data = temp("adopt");
-    writeFileSync(
-      join(data, "config.json"),
-      JSON.stringify({
-        profiles: [
-          { id: "cc", runtime: "claude", home: "homes/cc", models: ["claude-opus-5-5"] },
-          // gpt-6-sol checked again by hand after it was unchecked: outdated all the same, not passed on.
-          { id: "cx", runtime: "codex", home: "homes/cx", models: ["gpt-6-astra", "gpt-6-sol"] },
-          { id: "routed", runtime: "codex", home: "homes/routed", models: ["openai/gpt-6.1-sol"] },
-        ],
-        outdatedUnchecked: [...OUTDATED.keys()],
-      }),
-    );
-    let gate: Promise<void> | null = null;
-    const offered = ["gpt-5.6-sol", "gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol"];
-    const t = await rig({
-      data,
-      check: async (request) => {
-        if (gate) await gate;
-        return { state: "ok", detail: "fake", models: request.kind === "subscription" ? offered : [], checkedAt: Date.now() };
-      },
-    });
-    const signedIn = async () => {
-      const [status, body] = await t.call("POST", "/logins", { runtime: "codex" });
-      assert.equal(status, 200, JSON.stringify(body));
-      return upon((wake) => t.accounts.onChange(wake), () => t.accounts.loginsView().find((l) => l.id === body.id)?.created as string | undefined, `the sign-in ${body.id} made a profile`);
-    };
-    const first = await signedIn();
-    const models = await upon((wake) => t.config.listen(wake), () => (t.profile(first)?.models.length ? t.profile(first)!.models : undefined), `${first} took models`);
-    assert.deepEqual(models, ["gpt-6-astra", "gpt-6.1-sol"]);
-    // Models chosen on its page before its check answered stay as chosen.
-    let open = () => {};
-    gate = new Promise((resolve) => (open = resolve));
-    const second = await signedIn();
-    assert.equal((await t.call("PUT", `/profiles/${second}`, { models: ["gpt-6-luna"] }))[0], 200);
-    open();
-    await settle();
-    assert.deepEqual(t.profile(second)!.models, ["gpt-6-luna"]);
+  test("a profile runs every model its check found, besides those config.json names, and names none of them there", async () => {
+    const data = temp("found");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [] }));
+    const offered = ["gpt-6-astra", "gpt-6-luna"];
+    const t = await rig({ data, check: async (request) => ({ state: "ok", detail: "fake", models: request.kind === "subscription" ? offered : [], checkedAt: Date.now() }) });
+    const [status, body] = await t.call("POST", "/logins", { runtime: "codex" });
+    assert.equal(status, 200, JSON.stringify(body));
+    const made = await upon((wake) => t.accounts.onChange(wake), () => t.accounts.loginsView().find((l) => l.id === body.id)?.created as string | undefined, `the sign-in ${body.id} made a profile`);
+    const runs = await upon((wake) => t.accounts.onChange(wake), () => (t.profile(made)?.models.length ? t.profile(made)!.models : undefined), `${made} runs what its check found`);
+    assert.deepEqual(runs, offered);
+    assert.deepEqual(t.profile(made)!.named, [], "config.json names none of them");
+    const raw = JSON.parse(readFileSync(join(data, "config.json"), "utf8"));
+    assert.equal(raw.profiles.find((p: { id: string }) => p.id === made).models, undefined);
     await t.close();
   });
 
@@ -346,12 +320,12 @@ describe("the accounts routes", { concurrency: true }, () => {
     const store = Store.open(db, null);
     store.setProfileCheck("cc", { state: "ok", detail: "", models: ["claude-opus-4-6", "claude-opus-5-5", "claude-sonnet-5-5"], checkedAt: 1 });
     const first = await rig({ data, store });
-    assert.deepEqual(first.profile("cc")!.models, ["claude-sonnet-5-5", "claude-opus-5-5"]);
+    assert.deepEqual(first.profile("cc")!.named, ["claude-sonnet-5-5", "claude-opus-5-5"]);
     assert.deepEqual(JSON.parse(readFileSync(first.path, "utf8")).outdatedUnchecked, [...OUTDATED.keys()].sort());
     assert.equal((await first.call("PUT", "/profiles/cc", { models: ["claude-opus-4-6", "claude-opus-5-5"] }))[0], 200);
     await first.close();
     const again = await rig({ data, store: Store.open(db, null) });
-    assert.deepEqual(again.profile("cc")!.models, ["claude-opus-4-6", "claude-opus-5-5"]);
+    assert.deepEqual(again.profile("cc")!.named, ["claude-opus-4-6", "claude-opus-5-5"]);
     await again.close();
   });
 
@@ -676,12 +650,14 @@ test("a Hermes profile offers discovered models and keeps a manual selection whe
     const id = created.id;
     await r.accounts.check(id);
     assert.deepEqual(r.view(id).check.models,["openrouter:model-a","custom:model-b"]);
+    // every one discovered runs, the one named by hand first
     await r.accounts.putProfile(id,{addModel:"custom:model-b"},owner);
-    assert.deepEqual(r.profile(id)?.models,["custom:model-b"]);
+    assert.deepEqual(r.profile(id)?.named,["custom:model-b"]);
+    assert.deepEqual(r.profile(id)?.models,["custom:model-b","openrouter:model-a"]);
     fail = true;
     const check = await r.accounts.check(id);
     assert.deepEqual(check.models,["openrouter:model-a","custom:model-b"]);
-    assert.deepEqual(r.profile(id)?.models,["custom:model-b"]);
+    assert.deepEqual(r.profile(id)?.models,["custom:model-b","openrouter:model-a"]);
     assert.match(check.detail,/provider unavailable/);
   } finally {await r.close();}
 });

@@ -48,7 +48,7 @@ import { CURSOR, authFile as cursorAuthFile, cursorIn } from "./cursor.ts";
 import { KIMI_AUTH, kimiDue, readKimi, renewKimiToken, writeKimi } from "./kimi.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexAccountIdentity, codexClaimsIn, type MachineLogin, MachineLogins } from "./machine.ts";
-import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
+import { OUTDATED, uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, lentCodexUsage, machineUsage } from "./quota.ts";
@@ -327,10 +327,13 @@ export class Accounts {
     }
   }
 
-  /// The profiles as the config has them now (parse_config's derivations).
+  /// The profiles as the config has them now (parse_config's derivations), each running the models its check found.
   profiles(): Profile[] {
-    return hubConfig(this.deps.config.raw(), this.deps.data).profiles;
+    return hubConfig(this.deps.config.raw(), this.deps.data, this.found).profiles;
   }
+
+  /// The models profile `id`'s last check found (null: none listed), which it runs besides those config.json names.
+  readonly found = (id: string): readonly string[] | null => this.checks.get(id)?.models ?? null;
 
   private profile(id: string): Profile | undefined {
     return this.profiles().find((p) => p.id === id);
@@ -606,7 +609,7 @@ export class Accounts {
       const made = { id, name, runtime, access: { kind: "subscription" }, home: `homes/${id}`, env: {}, machine: true };
       raw.profiles = [...(Array.isArray(raw.profiles) ? raw.profiles : []), made];
     });
-    this.afterSignIn(id, viewer);
+    this.afterSignIn(id);
     return id;
   }
 
@@ -713,7 +716,7 @@ export class Accounts {
       return this.pendingFailed(id, tr(lang, "station.login.saveFailed", { error: (e as Error).message }));
     }
     p.created = profileId;
-    this.afterSignIn(profileId, p.by);
+    this.afterSignIn(profileId);
     // Kept a while for the page that started it to follow it to the profile.
     this.background.after(PENDING_KEPT_MS, () => this.dropLogin(id));
   }
@@ -823,41 +826,17 @@ export class Accounts {
     });
   }
 
-  /// A profile just signed in: checked (which lists its models) and its allowance read, so its page shows them at once.
-  /// One just made (`made`: by whom) then takes the models of the others of its runtime.
-  private afterSignIn(id: string, made?: Viewer) {
+  /// A profile just signed in: checked (which lists its models, all of them run) and its allowance read, so its page
+  /// shows them at once.
+  private afterSignIn(id: string) {
     this.background.spawn(async () => {
       try {
-        const check = await this.check(id);
-        // Checked again with the models it took, as an edit on its page is.
-        if (made && this.adoptModels(id, check, made)) await this.check(id);
+        await this.check(id);
       } catch (e) {
         log.warn("accounts", "check after sign-in failed", { profile: id, error: (e as Error).message });
       }
       await this.refreshQuota(id);
     });
-  }
-
-  /// A profile just made, still with no model chosen, takes the models the station's other profiles of its runtime have
-  /// enabled, those its check found (in its spelling) and none known outdated (models.ts): it serves chats at once,
-  /// rather than none until someone picks its models (2026-10-09: one signed in and never given any got no chat for a
-  /// day). The first of its runtime has none to take; its models are chosen on its page. Whether it took any.
-  private adoptModels(id: string, check: ProfileCheck, by: Viewer): boolean {
-    const profile = this.profile(id);
-    if (!profile || profile.models.length > 0 || check.models === null) return false;
-    const others = this.profiles().filter((p) => p.id !== id && p.runtimes.some((r) => profile.runtimes.includes(r)));
-    const models = adopted(check.models, others.flatMap((p) => p.models));
-    if (models.length === 0) return false;
-    try {
-      this.save(by, `profile ${id} models of the others of its runtime`, (raw) => {
-        const p = (Array.isArray(raw.profiles) ? raw.profiles : []).find((x: Json) => x?.id === id);
-        if (isObject(p)) p.models = models;
-      });
-      return true;
-    } catch (e) {
-      log.warn("accounts", "a new profile could not take the others' models", { profile: id, error: (e as Error).message });
-      return false;
-    }
   }
 
   /// The known outdated models (models.ts) unchecked on this station's profiles, each once: config.json keeps which were
@@ -1243,7 +1222,7 @@ export class Accounts {
   /// (docs/multi-workspace.md); `workspaces` says which joined ones' chats run on each.
   profilesView(viewer?: Viewer): Json[] {
     const raw = this.deps.config.raw();
-    const config = hubConfig(raw, this.deps.data);
+    const config = hubConfig(raw, this.deps.data, this.found);
     const joined = viewer !== undefined && viewer.home === false ? viewer.workspace : null;
     const home = this.deps.workspaces?.()[0] ?? null;
     const others = this.joined();
@@ -1274,7 +1253,9 @@ export class Accounts {
           // Its key is the token of a sign-in to the OpenCode Console or to Kimi (signed in again, not replaced).
           login: (kind === "opencode-go" || kimiSignedIn(p)) && a.login === true,
         },
-        home: p.home, homeExists: says.exists, model: p.model ?? null, models: p.models,
+        home: p.home, homeExists: says.exists, model: p.model ?? null,
+        // What it runs, and of those what config.json names (by hand where its provider lists none: those can be taken off).
+        models: p.models, named: p.named,
         env,
         // Connects whose sessions can run on it: of its runtime, and its models have theirs.
         usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),

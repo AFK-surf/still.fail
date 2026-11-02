@@ -350,7 +350,7 @@ test("invalid edits are refused and leave the config unchanged", async () => {
     assert.match(bad[1].error, /unknown runtime/);
     assert.deepEqual(await t.ask("PUT", "/connects/y", {}), [400, { error: "runtime is required" }]);
     assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cx" } }), [400, { error: "「cx」无法运行 claude" }]);
-    assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cc", model: "opus" } }), [400, { error: "「cc」未启用 opus" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cc", model: "opus" } }), [400, { error: "「cc」无法运行 opus" }]);
     assert.equal((await t.ask("PUT", "/connects/ds", { bind: { effort: "ultra" } }))[0], 400);
     assert.deepEqual(await t.ask("PUT", "/connects/ds", "{" as unknown as Json).then(([s]) => s), 200, "a body that is a string is no object: {}");
     assert.equal(readFileSync(t.path, "utf8").includes("nope"), false);

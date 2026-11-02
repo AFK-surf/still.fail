@@ -63,5 +63,4 @@ pub fn reset() -> Unit {
   signin_reset()
   fx_policy_up.val = ""
   fx_vault_add_up.val = false
-  fx_spread_up.val = false
 }

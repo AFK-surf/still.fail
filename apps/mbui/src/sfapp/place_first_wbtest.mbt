@@ -49,10 +49,10 @@ fn first_open_islands() -> Array[(Double, Double, Double, Double)] {
 test "the pages of the stack come in the same way the first time and again" {
   for mode in [
     "chat", "history", "files", "archived", "drive", "reader", "player-video", "service", "newchat", "screen-full",
-    "direct-preview", "direct-words", "direct-pick-models", "direct-profile-account", "direct-kept-chat", "direct-station-archiving",
+    "direct-preview", "direct-words", "direct-profile-account", "direct-kept-chat", "direct-station-archiving",
     "settings-home", "settings-appearance", "settings-fonts", "settings-me", "settings-workspace", "settings-security",
     "settings-security-open", "settings-vault", "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station",
-    "settings-profiles", "settings-profile", "settings-new-profile", "settings-profile-models", "settings-connects", "settings-connect",
+    "settings-profiles", "settings-profile", "settings-new-profile", "settings-connects", "settings-connect",
     "settings-memories", "settings-memory", "settings-memory-doc", "settings-usage", "settings-archive", "settings-kept",
     "settings-adb-chats", "settings-decisions", "settings-completion", "settings-policy", "settings-bars", "settings-run",
     "settings-about", "settings-changelog", "settings-prices", "settings-notify", "settings-notify-off", "settings-permissions",
@@ -63,7 +63,6 @@ test "the pages of the stack come in the same way the first time and again" {
     let page : Page = match mode {
       "direct-preview" => PreviewFile("ws1/st1", "s-c1", "work/s-c1/release.html", "release.html")
       "direct-words" => Words("完整内容", "一段短的粘贴文字，来自剪贴板 082947")
-      "direct-pick-models" => Setting(@settings.Route::PickModels("ws1/st1", "cc"))
       "direct-profile-account" => Setting(@settings.Route::ProfileAccount("cc"))
       "direct-kept-chat" => Setting(@settings.Route::KeptChat("ws1/st1", 7))
       "direct-station-archiving" => Setting(@settings.Route::StationArchiving("ws1/st1"))

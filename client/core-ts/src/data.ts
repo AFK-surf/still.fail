@@ -697,7 +697,7 @@ export class Data {
     if (kind && station !== null) this.of(station)?.release(station, kind);
   }
 
-  /// The visible selection over confirmed data (a profile's models being saved shown as picked).
+  /// The visible selection over confirmed data (a profile's named models being saved shown as named).
   shown(topic: Topic): unknown {
     const value = topic.topic === "overview" ? structuredClone(this.#rawOverview(topic)) : this.get(topic);
     if (value === undefined) return undefined;
@@ -706,8 +706,12 @@ export class Data {
         if (!isObject(p)) continue;
         const edit = this.#modelEdits.get(join([String(topic.station), typeof p.id === "string" ? p.id : ""]));
         if (edit) {
+          // (those named as they are being saved; the rest it runs, those its check found, as they were)
+          const was: unknown[] = Array.isArray(p.named) ? p.named : [];
+          const named: unknown[] = Array.isArray(edit[0]) ? edit[0] : [];
           p.modelsSaving = edit[1] as never;
-          p.models = edit[0] as never;
+          p.named = named as never;
+          p.models = [...named, ...(Array.isArray(p.models) ? p.models : []).filter((m) => !was.some((x) => equal(x, m)) && !named.some((x) => equal(x, m)))] as never;
         }
       }
     }
@@ -742,7 +746,7 @@ export class Data {
     const key = join([station, id]);
     const overview = this.#rawOverview({ topic: "overview", station });
     const profile = isObject(overview) && Array.isArray(overview.profiles) ? overview.profiles.find((p) => isObject(p) && p.id === id) : undefined;
-    const before: unknown[] = isObject(profile) && Array.isArray(profile.models) ? profile.models : [];
+    const before: unknown[] = isObject(profile) && Array.isArray(profile.named) ? profile.named : [];
     const after: unknown[] = Array.isArray(models) ? models : [];
     const has = (list: unknown[], m: unknown) => list.some((x) => equal(x, m));
     const changed = [...before, ...after].filter((m) => has(before, m) !== has(after, m));

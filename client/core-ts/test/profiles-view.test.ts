@@ -288,46 +288,9 @@ test("two profiles of one station signed in to the same account: the station sai
 test("Hermes profiles can name models and expose a selected model to new chats", () => {
   const base = { id: "hm", name: "Hermes", runtime: "hermes", runtimes: ["hermes"], access: {kind:"env"}, models: [], env: [] };
   assert.equal(shownProfile(base).canAddModel, true);
-  const listed = shownProfile({...base, check: {state:"ok",models:["openrouter:model-a"],detail:""}});
+  const listed = shownProfile({...base, models:["openrouter:model-a"], check: {state:"ok",models:["openrouter:model-a"],detail:""}});
   assert.ok(listed.available.includes("openrouter:model-a"));
   const selected = {...base,models:["openrouter:model-a"]};
   assert.deepEqual(runtimes({profiles:[selected]}),[{runtime:"hermes",models:["openrouter:model-a"]}]);
 });
 
-test("a profile's models are offered to the workspace's other profiles whose provider lists them and that do not have them on", () => {
-  const key = (id: string, extra: Record<string, unknown>) => shownProfile({ id, name: id, access: { kind: "api-provider", provider: "openrouter", key: `k-${id}` }, ...extra });
-  const view = workspaceProfiles([
-    station(A, "studio", true, [
-      key("work", { models: ["anthropic/claude-opus-5-5", "gpt-6"], check: { state: "ok", models: ["anthropic/claude-opus-5-5", "gpt-6"] } }),
-      key("cheap", { models: [], check: { state: "ok", models: ["claude-opus-5-5"] } }),
-    ]),
-    station(B, "mini", true, [
-      key("cheap", { models: ["claude-opus-5-5"], check: { state: "ok", models: ["claude-opus-5-5", "gpt-6"] } }),
-      key("other", { models: [], check: { state: "ok", models: ["kimi-k3"] } }),
-    ]),
-    station("c".repeat(64), "pi", true, [key("cheap", { models: [], check: { state: "ok", models: ["gpt-6"] } })]),
-    station("d".repeat(64), "away", false, [key("off", { models: [], check: { state: "ok", models: ["gpt-6"] } })]),
-  ]);
-  const member = (st: string, id: string) => view.items.flatMap((e: any) => e.members).find((m: any) => m.stationName === st && m.profileId === id);
-  const work = member("studio", "work");
-  // Opus, as studio's cheap spells it (mini's has it on already); gpt-6 to the two that list it, told apart by their
-  // stations, and not to the station that is away.
-  assert.deepEqual(
-    work.spread.map((s: any) => [s.model, s.targets.map((x: any) => [x.stationName, x.profileId, x.model]), s.targetsText]),
-    [
-      ["anthropic/claude-opus-5-5", [["studio", "cheap", "claude-opus-5-5"]], "cheap"],
-      ["gpt-6", [["mini", "cheap", "gpt-6"], ["pi", "cheap", "gpt-6"]], "cheap · mini、cheap · pi"],
-    ],
-  );
-  assert.deepEqual(member("mini", "cheap").spread.map((s: any) => [s.model, s.targetsText]), [["claude-opus-5-5", "cheap"]]);
-  assert.deepEqual(member("mini", "other").spread, []);
-});
-
-test("a borrowed copy neither offers its models nor is offered them", () => {
-  const share = { id: "sh-1", host: A, allow: null };
-  const view = workspaceProfiles([
-    station(A, "studio", true, [profile("max", { models: ["claude-opus-5-5"], available: ["claude-opus-5-5"], share: { ...share, role: "host" } })]),
-    station(B, "mini", true, [profile("sh-1", { models: [], available: ["claude-opus-5-5"], share: { ...share, role: "user", reachable: true } })]),
-  ]);
-  for (const m of view.items.flatMap((e: any) => e.members)) assert.deepEqual(m.spread, [], m.stationName);
-});

@@ -84,7 +84,7 @@ function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; eff
 function chosenHere(hub: Hub, createdBy: string, ws: string | null, runtime: RuntimeName | null): { runtime: RuntimeName; model: string | null } {
   const cands = candidates(hub.profilesIn(ws), runtime);
   if (cands.length === 0) throw new Error(runtime !== null ? `no ${runtime} profile on the station it is opened on` : "no profile on the station it is opened on");
-  const c = choose(cands, hub.store.modelsUsedBy(createdBy, hub.now() - USED_WITHIN_MS));
+  const c = choose(cands, hub.store.modelsUsedBy(createdBy, hub.now() - USED_WITHIN_MS), candidates(hub.profilesIn(ws), runtime, true));
   if ("ask" in c) throw new Error(askWhich(c.ask, "the station it is opened on"));
   return { runtime: c.pick.runtime as RuntimeName, model: c.pick.model };
 }

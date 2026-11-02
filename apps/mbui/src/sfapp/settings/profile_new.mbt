@@ -152,8 +152,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     Some(id) => {
       n.login.set("")
       (core.say)(tr("android-settings.profile.addedLogin"))
-      // on to choosing its models (PickModels), the step chats need
-      (core.in_place)(PickModels(station, id))
+      (core.in_place)(Profile(station, id))
     }
     None => ()
   }
@@ -391,7 +390,7 @@ fn connect_form(
         match r {
           Ok(v) => {
             (core.say)(tr("android-settings.profile.verifiedAdded"))
-            (core.in_place)(PickModels(station, text(Some(v), "id")))
+            (core.in_place)(Profile(station, text(Some(v), "id")))
           }
           // (what is wrong is the draft's own `error`, under the key)
           Err(_) => ()

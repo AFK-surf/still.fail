@@ -1,8 +1,8 @@
-// Which models a profile has enabled without anyone choosing them (accounts/models.ts): what a profile just signed in
-// takes from the others of its runtime, and the known outdated models unchecked once.
+// What the station knows of models (accounts/models.ts): which read images, and the known outdated models a profile
+// names unchecked once.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { adopted, OUTDATED, outdated, replacement, seesImages, VISION, uncheckOutdated } from "../src/accounts/models.ts";
+import { OUTDATED, outdated, replacement, seesImages, VISION, uncheckOutdated } from "../src/accounts/models.ts";
 import { modelKey } from "../src/read/usage.ts";
 
 test("a model that reads images is known however it is spelled; one that was not checked is not", () => {
@@ -34,12 +34,6 @@ test("the table lists models by key, and each of its lines ends", () => {
       seen.add(next);
     }
   }
-});
-
-test("a profile just signed in takes the others' models it has, in its own spelling, and none outdated", () => {
-  const offered = ["gpt-5.6-sol", "gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol"];
-  assert.deepEqual(adopted(offered, ["openai/gpt-6.1-sol", "gpt-6-astra", "gpt-6-astra", "gpt-6-sol", "gpt-7-nova"]), ["gpt-6-astra", "gpt-6.1-sol"]);
-  assert.deepEqual(adopted(offered, []), [], "the first of its runtime takes none");
 });
 
 test("known outdated models are unchecked once, each replaced by what came after it", () => {

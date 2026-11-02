@@ -677,7 +677,7 @@ export interface ModelOption {
 	name: string;
 	/** Its series (Opus, GPT), what a list groups it under; none when not known. Lists come by series, newest first. */
 	family?: string;
-	/** Every spelling of it the station's profiles have enabled (openai/gpt-6-astra, gpt-6-astra): one model. */
+	/** Every spelling of it the station's profiles run (openai/gpt-6-astra, gpt-6-astra): one model. */
 	ids: string[];
 	maker?: Maker;
 	runtimes: RuntimeKind[];
@@ -710,6 +710,8 @@ export interface ModelOption {
 	usualText?: string;
 	/** In a model control: how many new chats here started on it. */
 	uses?: number;
+	/** In a model control: starred (`pick.like`), kept on this device for the workspace. */
+	liked?: boolean;
 }
 
 /**
@@ -744,6 +746,16 @@ export interface PickBorrow {
 	allowed: boolean;
 	/** Why not, where not allowed. */
 	why?: string;
+}
+
+/** A maker a model control's panel lists all its models by. */
+export interface ModelMaker {
+	/** As ModelOption `maker.id` names it; "" for those of none known. */
+	id: string;
+	/** In words: Anthropic, OpenAI, 其他. */
+	title: string;
+	/** How many of the control's models it makes. */
+	count: number;
 }
 
 /**
@@ -802,6 +814,16 @@ export interface PickView {
 	 * four, the station's own: kept nearest what opened its panel, the rest past them.
 	 */
 	near?: string[];
+	/**
+	 * The models (their `model`) starred (`pick.like`), the first starred first, those in `near` left out:
+	 * past them, before the rest.
+	 */
+	liked?: string[];
+	/**
+	 * The makers of its options, in the order their models come, none known last: what the list of
+	 * them all is grouped by.
+	 */
+	makers?: ModelMaker[];
 }
 
 export interface AutomaticDecisionDraft {
@@ -1325,8 +1347,14 @@ export interface Profile {
 	home: string;
 	homeExists: boolean;
 	model?: string;
+	/** The models it runs: those named in config.json, then the rest its check found. */
 	models: string[];
-	/** Models changed by the pending selection; None when no selection is being saved. */
+	/**
+	 * Those of its models named in config.json (by hand, or ticked on before every model its check found ran);
+	 * none from a station of before.
+	 */
+	named?: string[];
+	/** Models changed by the pending change to those named; None when none is being saved. */
 	modelsSaving?: string[];
 	env: EnvVar[];
 	usedBy: string[];
@@ -1353,19 +1381,24 @@ export interface Profile {
 	group?: string;
 	/** That kind in words: Claude 订阅. */
 	groupTitle?: string;
-	/** The makers of its models, and of those its check found, by model. */
+	/** The makers of its models, by model. */
 	makers: Record<string, Maker>;
-	/** Its models, its default and those its check found as people call them (Opus 5.5), by model. */
+	/** Its models and its default as people call them (Opus 5.5), by model. */
 	names: Record<string, string>;
 	/**
-	 * Its models and those its check found, by series (Claude's biggest first, the rest by name; 其他 last), newest
-	 * first: how the list to enable them from is laid out.
+	 * Its models by series (Claude's biggest first, the rest by name; 其他 last), newest first: how its page lists
+	 * them.
 	 */
 	series: ModelSeries[];
-	/** How many of the models it could run are enabled, in words. */
+	/** How many models it runs, in words. */
 	modelsText: string;
-	/** What can be enabled on it: what its provider lists, then whatever is enabled already, each once. */
+	/** Its models (`models`), as an older page read them. */
 	available?: string[];
+	/**
+	 * Those named by hand that its provider does not list: what can be taken off (`profile.put` `models`, the
+	 * named without it).
+	 */
+	added?: string[];
 	/** Its models are still being read: never checked yet (one just added is checked at once, a few seconds). */
 	modelsReading?: boolean;
 	/**
@@ -5134,29 +5167,6 @@ export interface MeshStatus {
 	name?: string;
 }
 
-export interface ModelSpreadTarget {
-	/** Its station's address (where `profile.addModel` goes). */
-	station: string;
-	stationName: string;
-	profileId: string;
-	profileName: string;
-	/** Its profile's name, with its station's where two are called alike. */
-	title: string;
-	/** The model as its provider spells it there (what is added). */
-	model: string;
-}
-
-/** A model a profile may use that other profiles of the workspace list and do not have on. */
-export interface ModelSpread {
-	/** The model as this profile has it. */
-	model: string;
-	/** Its name: Claude Opus 5.5. */
-	name: string;
-	targets: ModelSpreadTarget[];
-	/** Those profiles in words: 工作、Max · mini. */
-	targetsText: string;
-}
-
 /** A figure in words, and how bad it is. */
 export interface NetFigure {
 	text: string;
@@ -6088,11 +6098,6 @@ export interface ProfileMember {
 	checkTone: string;
 	/** How many connects use it there. */
 	usedBy: number;
-	/**
-	 * Its models other profiles of the workspace could have too (views/profiles.ts spread), each
-	 * with the profiles to give it to; a model none could take is left out.
-	 */
-	spread?: ModelSpread[];
 }
 
 /** How a profile of the workspace's list is, in a few words and their tone. */

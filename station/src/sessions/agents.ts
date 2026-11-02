@@ -175,7 +175,9 @@ export const AgentsLive = (control: Control) =>
         return s && plane.spec().pages && (ws === s.workspace || cloud.membership(ws!) !== null) ? `${s.origin}/o/${ws}/${s.station}/${encode(key)}` : undefined;
       };
 
-      const settings = () => hubConfig(config.raw(), data);
+      // Each profile running the models its last check found besides those config.json names (the accounts, once made).
+      let found = (_: string): readonly string[] | null => null;
+      const settings = () => hubConfig(config.raw(), data, (id) => found(id));
       // The folders macOS protects (Documents, Desktop, Downloads, disks) through still.fail Helper: the drive's and
       // the directories people and agents name (ops/places.ts), never touched on the station's thread.
       const helperFiles = yield* HelperFolders;
@@ -466,6 +468,7 @@ export const AgentsLive = (control: Control) =>
         workspaces: () => hub.workspaces(),
         shared: { status: (p) => sharing!.status(p), view: (p) => sharing?.profileView(p) ?? null, hostName },
       });
+      found = accounts.found;
       accounts.start();
       sharing = new Sharing({
         data, config, cloud,

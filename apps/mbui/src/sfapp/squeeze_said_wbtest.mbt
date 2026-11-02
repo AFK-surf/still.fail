@@ -66,7 +66,7 @@ let said_modes : Array[String] = [
   "drive-upload", "drive-empty", "reader", "history", "history-details",
   "switcher", "keys-dialog", "search", "search-results", "home-jobs", "service", "settings-home", "settings-appearance", "settings-me",
   "settings-workspace", "settings-security", "settings-vault", "settings-vault-items", "settings-vault-item", "settings-stations",
-  "settings-station", "settings-station-env", "settings-station-processes", "settings-profiles", "settings-profile", "settings-profile-models",
+  "settings-station", "settings-station-env", "settings-station-processes", "settings-profiles", "settings-profile",
   "settings-connects", "settings-connect", "settings-memory", "settings-memory-doc", "settings-usage",
   "settings-archive", "settings-run-models", "settings-run", "settings-decisions", "settings-changelog",
   "settings-new-profile",

@@ -710,19 +710,18 @@ export function profile(p: J): J {
   // The kind of account it is listed under, as the workspace's list has it (views/profiles.ts).
   o.group = profileGroup(o);
   o.groupTitle = profileGroupTitle(o.group);
-  const found: J[] = [...(arr(get(o.check, "models")) ?? []), ...(arr(o.modelsSaving) ?? [])];
   const strs = (list: J[]) => list.filter((m): m is string => typeof m === "string");
-  const models = arr(o.models) ?? [];
+  // What it runs: those named in config.json, then the rest its check found (the station's `models`).
+  const all = strs(arr(o.models) ?? []);
+  const found = new Set(strs(arr(get(o.check, "models")) ?? []).map(model.key));
   const makers: Record<string, J> = {};
-  for (const m of strs([...models, ...found])) makers[m] = maker(m);
-  const enabled = strs(models);
-  const all = [...new Set([...strs(found), ...enabled])].sort();
-  const modelsText = all.length === 0 ? t("core-views.present.profile.no_models") : t("core-views.present.profile.models", { enabled: enabled.length, n: all.length });
-  const bySeries = series(all);
-  const available: string[] = [];
-  for (const m of [...strs(found), ...enabled]) if (!available.includes(m)) available.push(m);
+  for (const m of all) makers[m] = maker(m);
+  const modelsText = all.length === 0 ? t("core-views.present.profile.no_models") : t("core-views.present.profile.models", { n: all.length });
+  const bySeries = series([...all].sort());
+  // Named by hand and not listed by its provider: the ones that can be taken off.
+  const added = strs(arr(o.named) ?? []).filter((m) => !found.has(model.key(m)));
   const names: Record<string, string> = {};
-  for (const m of strs([...models, ...found, ...(o.model !== undefined ? [o.model] : [])])) if (m !== "") names[m] = model.name(m);
+  for (const m of [...all, ...strs(o.model !== undefined ? [o.model] : [])]) if (m !== "") names[m] = model.name(m);
   const [usesList, provider] = uses(o);
   const pid = str(get(o.access, "provider"));
   const src = pid !== undefined ? providers.find(pid) : null;
@@ -750,7 +749,8 @@ export function profile(p: J): J {
   o.names = names;
   o.series = bySeries;
   o.modelsText = modelsText;
-  o.available = available;
+  o.available = all;
+  o.added = added;
   o.modelsReading = !isObject(o.check) && !decisionOnly;
   // What it is, in a word (a page's facts): the machine's own login, its provider, else its kind of account.
   o.kindText = o.machine === true ? t("core-views.present.profile.machine") : (o.providerName ?? accessLabel(str(kind) ?? ""));

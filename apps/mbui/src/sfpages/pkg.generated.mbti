@@ -119,7 +119,6 @@ pub fn composer_width(Double) -> Double
 
 pub fn composer_words_width(Double) -> Double
 
-
 pub fn connect_page(@ui.Ctx, @sfbase.Source, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 
 pub fn connects_add(@sfbase.Source, @settings.Core, @settings.Here) -> ((@sf.Beside) -> Unit)?
@@ -219,8 +218,6 @@ pub let flashing_now : @ref.Ref[(String, Double)]
 pub fn fonts_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub let fx_policy_up : @ref.Ref[String]
-
-pub let fx_spread_up : @ref.Ref[Bool]
 
 pub let fx_vault_add_up : @ref.Ref[Bool]
 
@@ -426,8 +423,6 @@ pub let pf_tag_words : @ui.TextStyle
 
 pub fn pick_files(@sfbase.Writing) -> Unit
 
-pub fn pick_models_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
-
 pub fn picking(MessageHere, @ui.Ctx, @sfbase.Source, String, Double, String, String, String, () -> Unit, fill? : Bool) -> Unit
 
 pub fn picture_out(@ui.Ctx, Bytes?, copy_said? : Bool) -> Bool
@@ -441,8 +436,6 @@ pub fn play_page(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
 pub fn policy_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
 
 pub fn profile_field(String) -> @ui.Field
-
-pub fn profile_models_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 
 pub fn profile_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 

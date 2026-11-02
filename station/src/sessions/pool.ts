@@ -1,5 +1,5 @@
 // The account pool (the Rust station's pool.rs): which of a station's profiles a session runs on. Only profiles with the
-// chosen model enabled qualify; of those, one whose check says it cannot sign in or was rejected, or whose allowance is
+// chosen model (one they run) qualify; of those, one whose check says it cannot sign in or was rejected, or whose allowance is
 // used up, is passed over. Accounts paid for already (subscriptions, memberships) go first: one billed per use (an API
 // key, a gateway) runs a session only when none of them can, and its sessions move back before a turn when one can again
 // and that loses little. Of the rest: one whose short window (5 hours) is nearly full goes last. The others share the
@@ -108,10 +108,10 @@ export function usable(health: ProfileHealth): boolean {
   return !health.spent && state !== "login" && state !== "failed" && used(health.quota) < 100;
 }
 
-/// A chosen model needs the profile to have it enabled; no model means the profile's own default.
+/// A chosen model needs the profile to run it; no model means the profile's own default.
 export const serves = (profile: Profile, model: string | null | undefined): boolean => model === null || model === undefined || runs(profile, model);
 
-/// `strict` (a chat started by hand): the model must be enabled on a profile. Otherwise (a connect's binding, set up
+/// `strict` (a chat started by hand): a profile must run the model. Otherwise (a connect's binding, set up
 /// before models were enabled) profiles with it enabled are preferred, and without any the bound ones still serve.
 export function pickProfile(candidates: Profile[], model: string | null | undefined, signals: PoolSignals, strict: boolean): Profile {
   if (candidates.length === 0) throw new Error("no profile to run on");

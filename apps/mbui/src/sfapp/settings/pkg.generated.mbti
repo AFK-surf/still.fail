@@ -488,8 +488,6 @@ pub(all) enum Route {
   Station(String)
   Profiles(String)
   Profile(String, String)
-  PickModels(String, String)
-  ProfileModels(String, String)
   Connects(String)
   Connect(String, String)
   Memories

@@ -1,5 +1,5 @@
-// Which models a profile has enabled without anyone choosing them (2026-10-09): a profile just signed in takes those the
-// station's other profiles of its runtime have enabled, and models known to be outdated are unchecked, once each.
+// What the station knows of models: which read images, and which are outdated: those a profile names in config.json
+// (by hand, or ticked on before every model a profile's check found ran) unchecked once each.
 import { modelKey } from "../read/usage.ts";
 import { facts } from "./catalog.ts";
 
@@ -95,13 +95,6 @@ export const seesImages = (model: string): boolean => {
   const key = split(model)[0]!;
   return VISION.has(key) || VISION_FAMILIES.some((family) => key.startsWith(family)) || (facts(model)?.input?.includes("image") ?? false);
 };
-
-/// The models a profile just signed in takes: those the station's other profiles of its runtime have enabled
-/// (`others`), as the account spells them among those its check found (`offered`), and none known outdated.
-export function adopted(offered: string[], others: string[]): string[] {
-  const wanted = new Set(others.map(modelKey));
-  return [...new Set(offered.filter((m) => wanted.has(modelKey(m)) && !outdated(m)))].sort();
-}
 
 /// What unchecking changed on a profile.
 export type Unchecked = { profile: string; removed: string[]; added: string[] };
