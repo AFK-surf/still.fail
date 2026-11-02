@@ -7,7 +7,7 @@ fn init {
   // The requested whole-panel fade lets the page show through for its last frames. Keep this exception exact: the
   // checker still reports every other overlap, and even this pair outside a closing layer.
   @ui.words_over_closing_expected([
-    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "Opus 5.5"),
+    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "高"),
   ])
   @ui.words_over_known([
     ("src/sfapp/composer_wbtest.mbt", 2),

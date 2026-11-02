@@ -108,7 +108,7 @@ test "narrow: the models used most nearest how hard it thinks, at the sheet's fo
     let (x, _, w, _) = row.rect
     assert_true(x >= sx && x + w <= sx + sw + 0.5, msg="\{row.label} \{row.rect}")
   }
-  // how each last ran after its name, on its line: GPT-6 Astra's 中; DeepSeek's, the runtime it runs on of three and how
+  // how each last ran right after its name, on its line: GPT-6 Astra's 中; DeepSeek's, the runtime it runs on of three and how
   // hard it thinks, giving way to its name where the row is short (cut short, else left out: the text's widths differ
   // by machine)
   let runs_of = fn(r : (Double, Double, Double, Double)) {

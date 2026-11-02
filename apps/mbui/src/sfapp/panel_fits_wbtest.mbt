@@ -91,13 +91,14 @@ test "panel fits, the model's (model_pop): where it is, its models and how hard 
     }
   }
   // (as main has it, a4c845604; since 2026-11-02 the tall and the crowded open on those used most and starred alone, the
-  // rest a step further, room between its parts: Opus not among them)
+  // rest a step further, room between its parts: Opus not among them; since 2026-11-02 how each runs under its name,
+  // the rows taller and the panel narrower)
   assert_eq(out, [
-    "newchat-model: dialog Some((648.9, 265.9, 258, 261.6)) opus Some((654.9, 404.8, 246, 34)) high Some((855.9, 448.8, 43, 30))",
-    "newchat-tall-model: dialog Some((648.9, 146.9, 520, 380.6)) opus None high Some((943.9, 378.8, 54.3, 30))",
-    "newchat-crowded-model: dialog Some((648.9, 195.9, 364, 331.6)) opus None high Some((893.7, 413.8, 55.6, 30))",
-    "newchat-crowded-model 低: dialog Some((648.9, 195.9, 364, 331.6)) high Some((893.7, 413.8, 55.6, 30))",
-    "newchat-crowded-model 最高: dialog Some((648.9, 195.9, 364, 331.6)) high Some((893.7, 413.8, 55.6, 30))",
+    "newchat-model: dialog Some((648.9, 239.9, 258, 287.6)) opus Some((654.9, 391.8, 246, 47)) high Some((855.9, 448.8, 43, 30))",
+    "newchat-tall-model: dialog Some((648.9, 107.9, 520, 419.6)) opus None high Some((943.9, 378.8, 54.3, 30))",
+    "newchat-crowded-model: dialog Some((648.9, 156.9, 302, 370.6)) opus None high Some((856.5, 413.8, 43.2, 30))",
+    "newchat-crowded-model 低: dialog Some((648.9, 156.9, 302, 370.6)) high Some((856.5, 413.8, 43.2, 30))",
+    "newchat-crowded-model 最高: dialog Some((648.9, 156.9, 302, 370.6)) high Some((856.5, 413.8, 43.2, 30))",
   ])
   assert_eq(drawn, [true, true, true])
 }
