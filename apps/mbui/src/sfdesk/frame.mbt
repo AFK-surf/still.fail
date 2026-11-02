@@ -807,6 +807,11 @@ let tape_pull_over : Double = 0.3
 let tape_fling : Double = 900.0
 
 ///|
+/// How many times further across than up or down a finger on the panel in use has gone to be a swipe to the one beside
+/// it (tape_swiped): what is held at a slant is mostly a chat scrolled.
+let tape_swipe_steep : Double = 1.5
+
+///|
 /// The corners of panel `p` on the tape (@sf.tape_corners): on the side it stands at the window's edge in use the
 /// window's less its 6 from it where they follow it, the others the tape's corner. The sidebar's at the window's
 /// left, the side panel's at its right, the page's at its right with no side panel open after it (`panel`).

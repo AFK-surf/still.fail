@@ -629,8 +629,8 @@ test "on the tape a chat opened from the page in use goes over it, as on a phone
 }
 
 ///|
-test "on the tape a finger dragging across the one in use moves no tape: the tape stays where it is" {
-  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+test "on the tape a pointer dragging across the one in use moves no tape: the tape stays where it is (a finger's swipe brings the one beside it: tape_moment_wbtest)" {
+  let t = tape_chat(0, 690.0, 840.0, width="medium", height="medium")
   page_over(t, 690.0)
   let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   t.drag(mx, my, mx + 300.0, my)

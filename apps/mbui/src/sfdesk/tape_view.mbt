@@ -9,7 +9,8 @@
 //     use, a cover of the tree's: a tap or a secondary press brings it over, a drag across pulls it with the finger and,
 //     let go, over or back, a finger held still on it handed to the words under it (the long press's), each at its
 //     event's moment; what it says a screen reader reads, its press of it the same as a tap, at that press's moment
-//     (tape_cover);
+//     (tape_cover); on the one in use, a finger's swipe across brings what is beside it over, whatever holds it not
+//     taking it its own way first (tape_swipes);
 //   - over the panels, an old view taking presses where it draws them alone: the edges dragged (tape_edge).
 //
 // The tape's move is a trajectory committed at its cause (tape_moves_from): where everything was at that moment,
@@ -774,6 +775,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     row.box(fn(side) {
       tape_goes.parts.push(side)
       side.width(By(fn() { Some(tape_col_at(tape_drawn_at(side))) })) |> ignore
+      tape_swipes(side, Side)
       @ui.old(side, fn(c) { tape_side_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
       tape_cover(side, Side, fn() {
         let r = tape_room_now()
@@ -792,6 +794,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
         Some(if tape_shown_side() is None { w + r.under } else { w })
       }))
       |> ignore
+      tape_swipes(page, Page)
       tape_panel_box(page, 0.0, fn(pane) {
         @ui.old(pane, fn(c) { tape_page_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
       })
@@ -806,6 +809,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
         Some(bar_gap_now() + r.panel_w + r.under)
       }))
       |> ignore
+      tape_swipes(panel, Panel)
       tape_panel_box(panel, bar_gap_now(), fn(pane) {
         @ui.old(pane, fn(c) { tape_panel_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
       })
@@ -1001,6 +1005,53 @@ fn tape_pulled(p : TapePane, d : @view.Drag, down : (Double, Double)) -> Unit {
         })
       }
   }
+}
+
+///|
+/// Which panel a finger moved (dx, dy) since it went down on panel `p` brings over: past the slop, steeply more across
+/// than up or down (a chat scrolled at a slant stays scrolled), toward the panel beside `p` that way; none but on the one
+/// in use at rest, a finger's alone (a pointer's drag picks words), nor over what back leaves the tape's (a screen, a
+/// file read: tape_back_to).
+fn tape_swiped(p : TapePane, dx : Double, dy : Double) -> TapePane? {
+  guard !@sf.pointer_rests() &&
+    wide.tape_at.get() == p &&
+    !tape_covered(p) &&
+    !(app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))) &&
+    dx.abs() > @ui.press_slop &&
+    dx.abs() > dy.abs() * tape_swipe_steep else {
+    return None
+  }
+  match (p, dx > 0.0) {
+    (Panel, true) | (Side, false) => Some(Page)
+    (Page, true) => Some(Side)
+    (Page, false) if (tape_goes.panel_of)() is Some(_) => Some(Panel)
+    _ => None
+  }
+}
+
+///|
+/// Panel `p`'s column `n` taking a finger's swipe across it over (tape_swiped), from wherever it went down on what it
+/// holds: what the panel holds that goes that way (a code block with further to scroll, a row swiped, a column's edge)
+/// has it first; from there the tape in its hand, as on a cover (tape_pulled).
+fn tape_swipes(n : @view.View, p : TapePane) -> Unit {
+  let to : Ref[TapePane?] = Ref(None)
+  n
+  .claims(fn(dx, dy) {
+    to.val = tape_swiped(p, dx, dy)
+    to.val is Some(_)
+  })
+  .on_drag(fn(d) {
+    match to.val {
+      Some(q) => {
+        tape_pulled(q, d, (d.wx, d.at))
+        if d.kind is (Up | Off) {
+          to.val = None
+        }
+      }
+      None => ()
+    }
+  })
+  |> ignore
 }
 
 ///|
