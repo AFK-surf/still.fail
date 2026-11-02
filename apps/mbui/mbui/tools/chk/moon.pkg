@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/cmp",
   "mbctools/re",
   "mbctools/rjson",
   "mbctools/sys",
