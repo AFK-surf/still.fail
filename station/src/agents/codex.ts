@@ -97,6 +97,8 @@ export function classifyCodexError(info: unknown): FailureReason {
 export class ModelCatalog {
   models: string[] = [];
   efforts = new Map<string, string[]>();
+  /// Each model's own reasoning level, where it says one (model/list's defaultReasoningEffort).
+  defaults = new Map<string, string>();
 
   extend(answer: Json) {
     const rows = answer?.data;
@@ -113,6 +115,7 @@ export class ModelCatalog {
         }
         this.efforts.set(id, efforts);
       }
+      if (typeof m.defaultReasoningEffort === "string" && m.defaultReasoningEffort !== "") this.defaults.set(id, m.defaultReasoningEffort);
     }
   }
 }

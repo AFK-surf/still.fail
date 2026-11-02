@@ -525,6 +525,7 @@ export const SHAPES: Record<string, Shape> = {
     ["decision", opt("DecisionCapability")],
     ["plan", opt("String"), { doc: "The subscription tier reported by its login; absent when unknown or on older stations." }],
     ["modelEfforts", opt(map(map(vec("String")))), { doc: "Runtime → model → supported reasoning levels; absent on older stations." }],
+    ["modelEffortDefaults", opt(map(map("String"))), { doc: "Runtime → model → its own reasoning level, where the runtime says one (Codex); absent on older stations." }],
     ["state", "String", { doc: "ok | login | failed | unknown" }],
     ["detail", "String", { said: true }],
     ["models", opt(vec("String"))],
@@ -2225,6 +2226,8 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low." }),
   PickView: struct([
     ["fastAvailable", opt("bool")],
+    ["effortDefault", opt("String"), { doc: "The model's own reasoning level where none is picked (the draft's `effort` null), where its runtime says one." }],
+    ["fastPlan", opt("bool"), { doc: "How fast it runs where none is picked (the draft's `fast` null): its account's own, true Fast." }],
     ["fastText", opt("String")],
     ["options", vec("ModelOption")],
     ["runtimeFixed", "bool"],

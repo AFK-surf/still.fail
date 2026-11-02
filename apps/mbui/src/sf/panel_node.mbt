@@ -142,9 +142,14 @@ fn panel_node(
         // (each part of it out to the panel's edges it stands by, the panel's padding round what it holds inside it: what
         // reaches into that padding on purpose (a head's search in its top corner, a foot's buttons in its foot corner, a
         // row out to its sides) drawn and pressed there, cut by the panel alone, as small_panel's are)
-        let headed = x.title != "" || x.head_end is Some(_)
+        let headed = !x.heads_itself && (x.title != "" || x.head_end is Some(_))
         let footed = x.foot is Some(_)
-        let (over, under) = (if headed { 0.0 } else { panel_pad }, if footed { 0.0 } else { panel_pad })
+        // (ruled, the room over the line its body's, not the foot's: a line of what it holds going down to meet it reaches
+        // it, its body cutting nothing of it: panel_rule_over)
+        let ruled_foot = x.ruled && footed
+        let (over, under) = (if headed { 0.0 } else { panel_pad }, if !footed || ruled_foot { panel_pad } else { 0.0 })
+        // (out to the panel's edge under it where nothing is under it; over a ruled foot, the room its own, in it)
+        let out_under = if footed { 0.0 } else { panel_pad }
         // (its title, panel_head's)
         if headed {
           @ui.old(p, natural=true, fits?=fits(0), key=fn() { key + "/head" }, fn(c) {
@@ -159,7 +164,7 @@ fn panel_node(
         // (`tall`: what it holds fills the room it is given, laid out in it, scrolling as it does itself: panel_grows)
         if x.tall > 0.0 {
           p.box(fn(b) {
-            b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(Is((-panel_pad, -over, -panel_pad, -under))).focusable(Is(x.focus), keys=0, tab=false) |> ignore
+            b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(Is((-panel_pad, -over, -panel_pad, -out_under))).focusable(Is(x.focus), keys=0, tab=false) |> ignore
             body_box.val = Some(b)
             @ui.old(b, key=fn() { key + "/body" }, fn(c) {
               let was = opened()
@@ -214,7 +219,7 @@ fn panel_node(
                 beside_given.val = was
                 words_look(c, held)
               })
-              .margin(Is((0.0, -over, 0.0, -under)))
+              .margin(Is((0.0, -over, 0.0, -out_under)))
               |> ignore
             })
             // (cut at its box while what it holds is taller than it, as @kit.in_room's held list (pick_node's): else what
@@ -233,7 +238,7 @@ fn panel_node(
               let was = opened()
               let held = c.box(style=panel_part_in(0.0, panel_pad), fn() {
                 if x.ruled {
-                  c.box(style=foot_rule.then(@ui.style(mx=room(-panel_pad), mt=room(panel_pad))), fn() {  }) |> ignore
+                  c.box(style=foot_rule.then(@ui.style(mx=room(-panel_pad))), fn() {  }) |> ignore
                 }
                 let at = if x.ruled { panel_corner_foot().then(@ui.style(pt=room(capsule_in(r_menu, button_height())))) } else { panel_corner_foot() }
                 c.box(style=panel_foot_at.then(at), fn() { f(c, close) }) |> ignore

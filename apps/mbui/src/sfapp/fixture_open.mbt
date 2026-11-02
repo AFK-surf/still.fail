@@ -506,6 +506,11 @@ pub fn open_mode(mode : String) -> Unit {
     if mode.has_suffix("-liked") {
       @sffixture.new_fix.liked.push_iter(["claude-sonnet-5", "kimi-for-coding"].iter())
     }
+    // (with many models starred: more of them than the levels beside them)
+    if mode.has_suffix("-many") {
+      @sffixture.new_fix.liked.push_iter(["claude-sonnet-5", "kimi-for-coding"].iter())
+      @sffixture.new_fix.liked.push_iter(@sffixture.fix_providers[:8].iter().map(fn(p) { p.0 }))
+    }
     match mode {
       "newchat-station" => @sfpages.new_chat_ask("station")
       "newchat-preset" => @sfpages.new_chat_ask("preset")
@@ -515,7 +520,7 @@ pub fn open_mode(mode : String) -> Unit {
       "newchat-preset-new-add" => @sfpages.new_chat_ask("preset-new-add")
       "newchat-preset-new-browse" => @sfpages.new_chat_ask("preset-new-browse")
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
-      "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" =>
+      "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" | "newchat-providers-model-many" =>
         @sfpages.new_chat_ask("model")
       _ => ()
     }

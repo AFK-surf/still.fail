@@ -2212,6 +2212,32 @@ test("session_speed_pick_sends_true_false_and_null_and_new_chats_keep_it", async
   core.close();
 });
 
+test("pick_says_the_models_own_effort_and_its_accounts_speed_where_none_is_picked", async () => {
+  for (const profileFast of [false, true]) {
+    const s = (key: string) => ({ ...session(key), runtime: "codex", model: "gpt-6-astra", profile: "p3", fast: null, effort: null });
+    const check = { state: "ok", detail: "", checkedAt: 1, modelEfforts: { codex: { "gpt-6-astra": ["low", "medium", "high"] } }, modelEffortDefaults: { codex: { "gpt-6-astra": "medium" } } };
+    const { host, core } = await started({
+      ...base(),
+      "GET /overview": { ...overview, profiles: [profile("p3", "codex", ["gpt-6-astra"], true, 0, { fast: profileFast, check })] },
+      "GET /sessions": [s("k1")],
+      "GET /sessions/k1": { session: s("k1"), threads: [], turns: [], jobs: [] },
+    });
+    const ui = core.connect();
+    subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+    await host.settle();
+    const values = new Map();
+    apply(host, values);
+    assert.equal(v(values, 1).effortDefault, "medium");
+    assert.equal(v(values, 1).fastPlan === true, profileFast);
+    // (picked, the draft says it; the model's own stays what it is)
+    await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", effort: "high" });
+    apply(host, values);
+    assert.equal(v(values, 1).draft.effort, "high");
+    assert.equal(v(values, 1).effortDefault, "medium");
+    core.close();
+  }
+});
+
 test("speed_summary_only_shows_effective_fast_and_ignores_unsaved_drafts", async () => {
   for (const profileFast of [false, true]) {
     for (const sessionFast of [null, false, true]) {
