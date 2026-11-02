@@ -176,6 +176,33 @@ test "squeeze_faults: what a box that takes its room squeezes lies over what is 
 }
 
 ///|
+test "squeeze_faults: words in a page drawn small in a box that clips it (a picture of itself) are not cut by it; laid as large unscaled, they are" {
+  let small = Ref(true)
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Px(60.0), h=Px(80.0), clip=true, fn() {
+        let at = c.box(w=Px(300.0), left=0.0, top=0.0, taps=false, fn() {
+          c.text("still.fail shared a picture", size=14.0) |> ignore
+        })
+        if small.val {
+          c.look(at, look(scale=0.2, ox=0.0, oy=0.0))
+        }
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
+  small.val = false
+  t.frame()
+  let faults = t.squeeze_faults()
+  assert_eq(faults.length(), 1, msg=faults.join("\n"))
+  assert_true(faults[0].contains("by what clips it"), msg=faults[0])
+}
+
+///|
 test "squeeze_faults: words wrapped narrower than a word of them (broken inside it) are squeezed; wrapped between words they are not" {
   let narrow = Ref(30.0)
   let t = Tester::new(

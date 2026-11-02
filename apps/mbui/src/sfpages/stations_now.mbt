@@ -26,7 +26,7 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
     // (as large as the picture while the window has the room; past it, the picture drawn smaller: @sf.whole_fitted)
     stage=true,
     // the looks it can be drawn in, over its buttons (share_looks.mbt)
-    above=fn(c) { share_looks_pick(c, src) },
+    above=fn(c) { share_looks_pick(c, src, w) },
     // (its title said as it is drawn, in the language then)
     live=fn() { (@sf.t("web-main.stations.shareCard"), "", "") },
     foot=fn(c, _) {
@@ -77,13 +77,13 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// The poster (share_picture) as box `id`: round as a card, or `flat` (handed out: its ground to its edges), in the look
 /// chosen under it (share_look: the night's here, the others' share_looks.mbt).
 fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, flat? : Bool = false) -> Int {
-  let fleet = (src.topic)("fleet", { "scope": Json::string(w.id) }).value
-  match share_look(src) {
-    "poster" => poster_look(c, fleet, id, flat)
-    "receipt" => receipt_look(c, fleet, id, flat)
-    "terminal" => terminal_look(c, fleet, id, flat)
-    _ => night_look(c, fleet, id, flat)
-  }
+  (share_look(src).draw)(c, share_fleet(src, w), id, flat)
+}
+
+///|
+/// What the card to share of workspace `w` says (the core's `fleet` view), whatever look draws it.
+fn share_fleet(src : Source, w : Workspace) -> Json? {
+  (src.topic)("fleet", { "scope": Json::string(w.id) }).value
 }
 
 ///|

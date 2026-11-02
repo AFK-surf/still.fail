@@ -1804,6 +1804,8 @@ pub let share_look_ring : @ui.Radius
 
 pub let share_look_tile : @ui.Style
 
+pub let share_look_tile_w : Double
+
 pub let share_orange : Int64
 
 pub let share_poster_dim : Int64

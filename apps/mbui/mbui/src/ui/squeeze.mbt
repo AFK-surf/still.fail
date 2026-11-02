@@ -97,7 +97,9 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
       seen[i] = seen[p] && b.opacity > 0.01
       // (what scrolls sideways may run past its edges; a list or a scroll runs up and down, and cuts across as a box
       // that clips does)
-      if a.sideways {
+      // (nor what is drawn at another size than it is laid out at, a picture of a page drawn small: what holds it cuts
+      // it as drawn, its words lie where they are laid out)
+      if a.sideways || self.squeeze_scaled(p) {
         room[i * 2] = -1.0e9
         room[i * 2 + 1] = 1.0e9
       } else if a.squeeze_cuts() {
@@ -408,6 +410,18 @@ fn Node::squeeze_shows(self : Node) -> Bool {
 /// sideways, a box that clips.
 fn Node::squeeze_cuts(self : Node) -> Bool {
   self.clip || self.sideways || self.kind == kind_list || self.kind == kind_scroll || self.kind == kind_page
+}
+
+///|
+/// Whether node `i` is drawn at another size than it is laid out at (its look scales it).
+fn Ctx::squeeze_scaled(self : Ctx, i : Int) -> Bool {
+  match self.drawn_entry(i) {
+    Some(e) => {
+      let l = e.look_now()
+      l.sx != 1.0 || l.sy != 1.0
+    }
+    None => false
+  }
 }
 
 ///|

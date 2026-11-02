@@ -5887,8 +5887,8 @@ export interface PrefsView {
 	 */
 	driveFavoritesHidden?: Record<string, string>;
 	/**
-	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device:
-	 * `poster`, `receipt`, `terminal`, or (none) `night`.
+	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device: the app's
+	 * key for it (`night`, `poster`, …; none or one the app does not know: its first).
 	 */
 	shareLook?: string;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */

@@ -2679,6 +2679,7 @@ pub fn Tester::window_shows(Self) -> Int32
 pub fn Tester::window_snap_rect(Self) -> (Double, Double, Double, Double)
 pub fn Tester::windows_opened(Self) -> Array[String]
 pub fn Tester::words(Self) -> Array[(String, Double, Double, Double, Double, Double)]
+pub fn Tester::words_said(Self) -> Array[(String, Double, Double, Double, Double, Double)]
 
 type TextCache
 
