@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writePrivate } from "../ops/files.ts";
 import { profileFetch } from "../ops/agent-env.ts";
+import { Said } from "../ops/i18n.ts";
 
 type Json = any;
 
@@ -36,7 +37,7 @@ export type Token = { access: string; refresh: string; expiresInMs: number; org:
 /// A sign-in that can no longer be renewed (the Console's, Kimi's, Claude Code's: oauth.ts): its refresh token turned
 /// down (`status`), or none kept (null). It is over (signed out there, or spent elsewhere): its check says to sign in
 /// again.
-export class RenewRefused extends Error {
+export class RenewRefused extends Said {
   readonly status: number | null;
   constructor(status: number | null, message: string) {
     super(message);

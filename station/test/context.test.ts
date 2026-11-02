@@ -73,7 +73,7 @@ test("a compaction that fails is said with why; one asked while a turn runs is r
   assert.equal(await r.hub.compact(key), null);
   session.end({ kind: "failed", reason: "other", message: "Not enough messages to compact." });
   await settle();
-  assert.equal(r.chat.lastText(), "⚠️ 无法压缩上下文：Not enough messages to compact.");
+  assert.equal(r.chat.lastText(), "⚠️ 无法压缩上下文：对话内容太少");
   assert.equal(session.prompts.length, 1, "no nudge after it");
   await r.close();
 });

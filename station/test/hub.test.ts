@@ -554,7 +554,8 @@ test("claude auth retries once, then reports the profile and does not loop", asy
   retry.end({ kind: "failed", reason: "auth", message: "401 Missing API key" });
   await settle();
   assert.equal(r.claude.count(), 2, "a persistent auth failure must stop, not loop");
-  assert.ok(matches(r.chat.lastText(), ["认证失败", "401 Missing API key"]));
+  // Said as what it means and what to do, not in the runtime's words (those go with the turn, for a report).
+  assert.equal(r.chat.lastText(), "⚠️ 账号认证失败：在 Profile 中检查或重新登录");
   assert.equal(r.claude.last().prompts.length, 1);
   // The notice says whose sign-in failed, for the clients to link that profile's page; another failure is no profile's.
   const thread = r.thread("C1", m.threadTs);
@@ -646,7 +647,7 @@ test("a turn whose sandbox connection was lost goes on once from its transcript,
   retry.end(lost);
   await settle();
   assert.equal(r.claude.count(), 2);
-  assert.ok(matches(r.chat.lastText(), ["意外退出", CONNECTION_LOST]));
+  assert.equal(r.chat.lastText(), "⚠️ agent 进程意外退出，回复即可恢复");
   // A runtime that exited by itself is not started again.
   await r.accept(reply(m, "9999.2", "<@UBOT> again", { addressed: true }));
   await settle();
@@ -2226,7 +2227,7 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   second.end(spent("usage limit reached"));
   await settle();
   assert.equal(r.claude.count(), 2, "no account left to go on with");
-  assert.ok(matches(r.chat.lastText(), ["已达到额度或速率限制", "usage limit reached"]));
+  assert.equal(r.chat.lastText(), "⚠️ 已达到额度或速率限制，且没有其他可用账号；额度恢复后自动继续，也可回复重试");
   // Changed by hand (here: kept to the first again): it goes on by itself.
   await configure(r.hub, key, { profile: on });
   await settle();

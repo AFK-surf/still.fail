@@ -15,7 +15,7 @@ import { linkCodexAuth, type Env } from "./machine-logins.ts";
 import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 import { run } from "../updates/runtimes.ts";
@@ -85,14 +85,22 @@ export function hostSkillsOff(root: string): { path: string; enabled: false }[] 
   return found.sort(comparePaths).map((path) => ({ path, enabled: false as const }));
 }
 
+/// Why a Codex turn failed, from its error's `codexErrorInfo` (a code, or a code with the HTTP status it came with) and
+/// message: the code first, then the status, then what the message says (`failureOf`).
 export function classifyCodexError(info: unknown, message = ""): FailureReason {
   const code = typeof info === "string" ? info : info && typeof info === "object" && !Array.isArray(info) ? Object.keys(info)[0] : undefined;
   if (code === "unauthorized") return "auth";
   if (code === "usageLimitExceeded" || code === "rateLimitExceeded") return "rate_limit";
   if (code === "serverOverloaded") return "overloaded";
+  if (code === "contextWindowExceeded") return "context";
+  const held = code !== undefined && info && typeof info === "object" ? (info as Record<string, unknown>)[code] : undefined;
+  const status = held && typeof held === "object" ? (held as { httpStatusCode?: unknown }).httpStatusCode : undefined;
+  if (typeof status === "number" && [401, 403, 429, 529].includes(status)) return failureOf(`${status} ${message}`);
   // Some versions report the HTTP refusal in the message without an unauthorized codexErrorInfo.
   if (/\b(?:401|unauthorized|token_revoked)\b|invalidated oauth token/i.test(message)) return "auth";
-  return "model";
+  // The request not made, or its answer cut off, with no status that says more: the way to the provider.
+  if (["httpConnectionFailed", "responseStreamConnectionFailed", "responseStreamDisconnected"].includes(code ?? "") && (typeof status !== "number" || status >= 500)) return "network";
+  return failureOf(message);
 }
 
 /// Keeps capabilities alongside model ids; an old runtime may omit them.

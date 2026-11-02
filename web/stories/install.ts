@@ -34,8 +34,8 @@ function withStory(chat: ChatView, story: InstallStory): ChatView {
     by: { name: "still.fail" }, text, ...over,
   });
   const after = story === "turn"
-    ? [notice("⚠️ 本轮出错：API Error: 529 overloaded_error · the model is overloaded, try again in a moment")]
-    : story === "report" ? [notice("⚠️ 本轮出错：workspace routing discovery timed out", { reportable: true }), notice("⚠️ 本轮出错：stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses), Transport error: network error", { seq: seq + 2, ts: `${ts + 32}`, reportable: true })]
+    ? [notice("⚠️ 模型服务返回错误，回复即可重试")]
+    : story === "report" ? [notice("⚠️ 本轮出错，回复即可重试", { reportable: true }), notice("⚠️ 与模型服务的连接中断，回复即可重试", { seq: seq + 2, ts: `${ts + 32}`, reportable: true })]
     : story === "notice" ? [notice(`⚠️ 无法启动 agent：${MISSING}`, { runtime: "dsh", install: INSTALL.notice })] : [];
   return { ...chat, messages: [...chat.messages, asked, ...after] };
 }

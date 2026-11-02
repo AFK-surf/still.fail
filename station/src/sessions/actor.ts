@@ -9,7 +9,7 @@ import { presetCopyOf, presetInstructions } from "./presets.ts";
 import { sessionSkills } from "./agent-home.ts";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
-import type { AgentDriver, AgentSession, BackgroundTask, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
+import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
 import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
@@ -18,8 +18,8 @@ import { latest as latestNote, untold } from "../agents/migrations.ts";
 import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
 import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
-import { tr, stationLang } from "../ops/i18n.ts";
-import { runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
+import { Said, tr, stationLang } from "../ops/i18n.ts";
+import { failureOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 import { type Handed, type MessageRow, type PendingMessage, handedOf } from "../store/rows.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
@@ -627,7 +627,7 @@ export class SessionActor {
     try {
       agent = await this.ensureAgent();
     } catch (error) {
-      return t("station.notice.compactFailed", { error: (error as Error).message });
+      return compactFailed(error);
     }
     // Gone on in a new runtime session (another account's): nothing in it to compact yet.
     if (this.afresh !== null) return t("station.context.empty");
@@ -642,7 +642,7 @@ export class SessionActor {
       this.compacting = false;
       this.deps.store.setRunning(this.key, false);
       this.deps.store.notify(this.key);
-      return t("station.notice.compactFailed", { error: (error as Error).message });
+      return compactFailed(error);
     }
     return null;
   }
@@ -658,7 +658,12 @@ export class SessionActor {
     store.notify(this.key);
     log.info("session", "compaction by hand ended", { session: this.key, outcome: outcome.kind });
     if (outcome.kind === "completed") await this.notice(t("station.notice.compacted"));
-    else if (outcome.kind === "failed") await this.notice(`⚠️ ${t("station.notice.compactFailed", { error: outcome.message })}`, outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null);
+    else if (outcome.kind === "failed") {
+      log.warn("session", "compaction failed", { session: this.key, reason: outcome.reason, error: outcome.message });
+      // Claude Code's own reason for compacting nothing is one people can act on.
+      const why = /not enough messages/i.test(outcome.message) ? t("station.context.tooShort") : failureWords(outcome.reason);
+      await this.notice(`⚠️ ${t("station.notice.compactFailed", { why })}`, outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null);
+    }
     else if (stopRequested) await this.notice(t("station.notice.stopped"));
     if (this.archived()) {
       await this.letGo();
@@ -1073,10 +1078,10 @@ export class SessionActor {
       // on). Tried again (each restart gives it what waits) and failing the same, it is not said again.
       const missing = error instanceof CommandMissing && error.command === this.runtime;
       if (missing) this.deps.runtimeMissing?.(this.runtime);
-      const said = missing ? `⚠️ ${t("station.notice.runtimeMissing", { name: runtimeLabel(this.runtime) })}` : `⚠️ ${t("station.notice.cannotStart", { error: message })}`;
+      const said = missing ? `⚠️ ${t("station.notice.runtimeMissing", { name: runtimeLabel(this.runtime) })}` : `⚠️ ${cannotStartWords(error)}`;
       // Nothing said since it last could not start: not said again, for another reason either (two taking turns as the
       // station restarted filled a chat, 2026-11-02). A person's word in between is answered.
-      const cannotStart = `⚠️ ${t("station.notice.cannotStart", { error: "" })}`;
+      const cannotStart = `⚠️ ${t("station.notice.cannotStart")}`;
       if (!this.saidLast((last) => last === said || (!missing && last.startsWith(cannotStart)))) await this.notice(said, null, missing ? this.runtime : null);
       throw error;
     }
@@ -1161,7 +1166,7 @@ export class SessionActor {
     // terminal) is looked at as ops/places.ts does, never on this thread in a folder macOS protects (still.fail Helper
     // asked for it, its window put up for a grant it lacks); the session's own workspace is the station's.
     if (row.cwd) await (this.deps.places ?? defaultPlaces()).directory(row.cwd, { lang: stationLang() });
-    else if (unreadableDir(base.cwd)) throw new Error(unreadableDirMessage(stationLang(), base.cwd));
+    else if (unreadableDir(base.cwd)) throw new Said(unreadableDirMessage(stationLang(), base.cwd));
     const generation = this.nextGeneration();
     let agent: AgentSession;
     // Recorded before it may be left, so the history reads on from it.
@@ -1633,16 +1638,37 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
 /// How long a spent account is waited on when it refills is not known.
 const REFILL_FALLBACK_MS = 60 * 60 * 1000;
 
-/// The start of the notice that its account is spent, whatever the runtime said.
-const SPENT_NOTICE = () => `⚠️ ${t("station.notice.rateLimit", { error: "" })}`;
+/// The start of the notice that its account is spent, whatever the runtime said (before 2026-11-02 it went on with
+/// that, after a ：).
+const SPENT_NOTICE = () => `⚠️ ${t("station.notice.rateLimit")}`;
 
 /// That the provider had no room for it: its words, about no account, are of no use to people.
 const OVERLOADED_NOTICE = () => `⚠️ ${t("station.notice.overloaded")}`;
 
+/// A failed turn as its chat is told it: what it means and what to do, by its reason. What the runtime said is kept
+/// with the turn (its `detail`) for the logs and a report, not said: it is the provider's or the process's, in English.
 function failureNotice(outcome: TurnOutcome): string {
   if (outcome.kind !== "failed") return "";
-  const key = outcome.reason === "auth" ? "auth" : outcome.reason === "refused" ? "refused" : outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "exited" ? "exited" : "failed";
-  return `⚠️ ${t(`station.notice.${key}`, { error: outcome.message })}`;
+  const key = outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "other" ? "failed" : outcome.reason;
+  return `⚠️ ${t(`station.notice.${key}`)}`;
+}
+
+/// A failure's reason in a few words, after what failed ("Couldn't compact the context: …").
+const failureWords = (reason: FailureReason) => t(`station.failure.${reason === "rate_limit" ? "rateLimit" : reason}`);
+
+/// Why its agent could not start, as its chat is told it: the station's own words as they are (`Said`); else what the
+/// error means where that is the account, the provider or the network, and otherwise only that it could not.
+function cannotStartWords(error: unknown): string {
+  if (error instanceof Said) return t("station.notice.cannotStartWhy", { why: error.message });
+  const reason = failureOf((error as Error)?.message ?? "");
+  return reason === "auth" || reason === "refused" || reason === "network" ? t("station.notice.cannotStartWhy", { why: failureWords(reason) }) : t("station.notice.cannotStart");
+}
+
+/// Compaction that could not begin, in words: the station's own as they are, else what kind of failure it was.
+function compactFailed(error: unknown): string {
+  if (error instanceof Said) return t("station.notice.compactFailed", { why: error.message });
+  log.warn("session", "compaction could not begin", { error: (error as Error)?.message ?? String(error) });
+  return t("station.notice.compactFailed", { why: failureWords(failureOf((error as Error)?.message ?? "")) });
 }
 
 /// Who wrote a message, as a creator reference: their email on the page, their Slack user through the connect it came by.
