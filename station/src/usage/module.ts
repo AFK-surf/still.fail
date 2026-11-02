@@ -5,11 +5,12 @@
 import { Effect, Layer } from "effect";
 import { join } from "node:path";
 import { usageRoutes } from "../api/routes/usage.ts";
+import { log } from "../ops/log.ts";
 import { usageNow } from "../read/usage.ts";
 import { Agents } from "../sessions/agents.ts";
 import { hubConfig } from "../sessions/config.ts";
 import type { LiveHub } from "../sessions/live.ts";
-import { Parts, Paths, StationConfig, Store } from "../services.ts";
+import { Parts, Paths, Previous, StationConfig, Store } from "../services.ts";
 import type { Store as StationStore } from "../store/store.ts";
 import { UsageCounter } from "./counter.ts";
 import { CompactionBackfill } from "./compaction-backfill.ts";
@@ -44,13 +45,16 @@ export const UsageLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const { data } = yield* Paths;
     const store = yield* Store;
+    const previous = yield* Previous;
     const config = yield* StationConfig;
     const { hub } = yield* Agents;
     const backfill = yield* Effect.acquireRelease(
-      Effect.sync(() => new CompactionBackfill(join(data, "stillfail.db"))),
+      Effect.sync(() => new CompactionBackfill(join(data, "stillfail.db"), store.backfillPriority)),
       (index) => Effect.promise(() => index.stop()),
     );
-    if (!store.compactionsReady()) backfill.start();
+    if (!store.compactionsReady()) void previous.exited.then(() => backfill.start()).catch((error) => {
+      log.error("usage", "the compaction history worker could not start", { error: (error as Error).message });
+    });
     const usage = yield* Effect.acquireRelease(
       Effect.sync(() => new UsageCounter({ store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock })),
       (u) => Effect.promise(() => u.stop()),

@@ -50,6 +50,7 @@ export const VaultLive = Layer.effectDiscard(
       ask: (station, request) => remote.ask(station, request),
       workOf: (ws, peer, session) => remote.work(ws, peer, session),
       coming: () => coming,
+      backfill: { previousGone: previous.exited, priority: store.backfillPriority },
       // Sign-ins (kind browser) go into each chat's own context in the station's browser (docs/vault.md 登录态).
       browsers: {
         cookies: (session, sites, station) => browsers.cookies(session, sites, station), signIn: (session, d) => browsers.signIn(session, d), extendSignIn: (session, request, until) => browsers.extendSignIn(session, request, until),

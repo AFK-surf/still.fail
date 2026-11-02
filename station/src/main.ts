@@ -156,7 +156,7 @@ function run() {
   hearLines((line) => stationLog.add(line));
   const paths = Layer.succeed(Paths)({ data, app });
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
-  const base = Layer.mergeAll(Key.layer, ReadersAndStore, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(paths));
+  const base = Layer.mergeAll(Key.layer, ReadersAndStore, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(Previous.layer), Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive, CheckpointsLive).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
@@ -177,7 +177,6 @@ function run() {
     // config.json, what is the station's own, and the process before this one: the platform's, for every part.
     Layer.provideMerge(Own.layer),
     Layer.provideMerge(StationConfig.layer),
-    Layer.provideMerge(Previous.layer),
     // The requests between the stations of the workspace (mesh/bus.ts): the mesh attaches them, the parts answer.
     Layer.provideMerge(Peers.layer),
     // What the mesh and the agents' side share, each filling in its own (services.ts MeshSide).

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Effect, Layer } from "effect";
 import { makeStore } from "../src/read/store.ts";
 import { usageHistory } from "../src/read/usage.ts";
-import { Paths, Readers, ReadersAndStore, Store as StoreService } from "../src/services.ts";
+import { Paths, Previous, Readers, ReadersAndStore, Store as StoreService } from "../src/services.ts";
 import { Store } from "../src/store/store.ts";
 import { MinuteReader } from "../src/usage/minute-reader.ts";
 
@@ -19,7 +19,7 @@ test("the station starts its store before the background minute reader", async (
       const readers = yield* Readers;
       assert.equal(readers.data, dir);
       assert.equal((store.db.prepare("SELECT done FROM usage_minute_all WHERE id = 1").get() as { done: number }).done, 1);
-    }).pipe(Effect.provide(ReadersAndStore.pipe(Layer.provide(paths)))));
+    }).pipe(Effect.provide(ReadersAndStore.pipe(Layer.provide(Layer.succeed(Previous)({ pid: null, gone: Promise.resolve(), exited: Promise.resolve() })), Layer.provide(paths)))));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

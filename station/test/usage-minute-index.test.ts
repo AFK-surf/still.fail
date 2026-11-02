@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { on, once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { Worker } from "node:worker_threads";
 import { backfillNextUsageSession, backfillUsageMinutes, installUsageMinutes, MINUTE_SAME_END, MINUTE_SAME_TIME, PENDING_MINUTE_SESSION } from "../src/store/usage-minutes.ts";
 
 function oldDatabase(path = ":memory:") {
@@ -146,5 +148,80 @@ test("checking whether a workspace is ready skips all of its completed sessions"
       "the lookup must seek directly to unfinished sessions, not examine every completed session");
   } finally {
     db.close();
+  }
+});
+
+test("minute backfill waits for a foreground writer, then catches up", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-minute-priority-"));
+  const path = join(dir, "old.db");
+  const db = oldDatabase(path);
+  const priority = new Int32Array(new SharedArrayBuffer(8));
+  let worker: Worker | null = null;
+  try {
+    db.exec("PRAGMA journal_mode = WAL");
+    for (let n = 0; n < 100; n++) add(db, `a${n}`, "a", n * 60_000);
+    installUsageMinutes(db);
+    Atomics.store(priority, 0, 1);
+    worker = new Worker(new URL("../src/usage/minute-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
+    const [notice] = await once(worker, "message") as [{ foreground?: boolean }];
+    assert.equal(notice.foreground, true);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_minute").get() as { n: number }).n, 0);
+    db.prepare("UPDATE sessions SET ws = 'workspace-c' WHERE key = 'a'").run();
+    Atomics.store(priority, 0, 0);
+    const [complete] = await once(worker, "message") as [{ complete?: boolean }];
+    assert.equal(complete.complete, true);
+    assert.deepEqual(totals(db), expected(db));
+    assert.equal((db.prepare("SELECT ws FROM usage_minute_scope WHERE session = 'a'").get() as { ws: string }).ws, "workspace-c");
+  } finally {
+    if (worker !== null) await worker.terminate();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a workspace whose minutes are ready does not wait for foreground writes or another workspace's backfill", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-minute-ready-"));
+  const path = join(dir, "old.db");
+  const db = oldDatabase(path);
+  const priority = new Int32Array(new SharedArrayBuffer(8));
+  let worker: Worker | null = null;
+  try {
+    db.exec("PRAGMA journal_mode = WAL; CREATE INDEX sessions_ws ON sessions (key, ws)");
+    add(db, "a1", "a", 1);
+    for (let n = 0; n < 100; n++) add(db, `b${n}`, "b", n * 60_000);
+    installUsageMinutes(db);
+    assert.equal(backfillUsageMinutes(db, "a").done, true);
+    const empty = db.prepare("INSERT INTO sessions VALUES (?, 'workspace-a')");
+    for (let n = 0; n < 320; n++) empty.run(`empty-${n}`);
+    Atomics.store(priority, 0, 1);
+    worker = new Worker(new URL("../src/usage/minute-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
+    const messages = on(worker, "message");
+    const next = async () => (await messages.next()).value![0] as { id?: number; foreground?: boolean; request?: number };
+    const blocked = async (id: number) => {
+      for (;;) {
+        const message = await next();
+        if (message.foreground && message.request === id) return;
+        assert.equal(message.id, undefined, "a different request cannot finish yet");
+      }
+    };
+    const busy = await next();
+    assert.equal(busy.foreground, true);
+    worker.postMessage({ id: 1, viewer: { workspace: "workspace-a", home: false } });
+    const answer = await next();
+    assert.equal(answer.id, 1, "a completed workspace needs no backfill write");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_minute WHERE session = 'b'").get() as { n: number }).n, 0);
+
+    worker.postMessage({ id: 2, viewer: { workspace: "workspace-b", home: false } });
+    await blocked(2);
+    worker.postMessage({ id: 3, viewer: { workspace: "workspace-a", home: false } });
+    await blocked(2);
+    worker.postMessage({ id: 4, viewer: { workspace: "workspace-a", home: false } });
+    const behind = await next();
+    assert.equal(behind.id, 3, "a ready workspace passes a different workspace waiting for a write");
+    await messages.return?.();
+  } finally {
+    if (worker !== null) await worker.terminate();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });

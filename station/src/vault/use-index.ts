@@ -3,6 +3,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
+import { releaseStoppedBackfill } from "../store/backfill.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_use_lookup (
@@ -116,24 +117,39 @@ export function backfillNextWorkspace(db: DatabaseSync): boolean {
 export class UseIndex {
   readonly #db: DatabaseSync;
   readonly #path: string | null;
+  readonly #previousGone: Promise<void> | null;
+  readonly #priority: SharedArrayBuffer | undefined;
   #worker: Worker | null = null;
+  #closed = false;
+  #stopped!: () => void;
+  readonly #whenStopped = new Promise<void>((resolve) => { this.#stopped = resolve; });
   #next = 0;
   #waiting = new Map<number, { resolve: (bodies: string[]) => void; reject: (error: Error) => void }>();
 
-  constructor(db: DatabaseSync) {
+  constructor(db: DatabaseSync, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}) {
     this.#db = db;
+    this.#previousGone = options.previousGone ?? null;
+    this.#priority = options.priority;
     initializeUseIndex(db);
     this.#path = db.location();
-    if (this.#path !== null) this.#start();
+    if (this.#path !== null) {
+      if (this.#previousGone === null) this.#start();
+      else void this.#previousGone.then(() => { if (!this.#closed) this.#start(); }).catch((error) => {
+        log.error("vault", "the use reader could not start", { error: (error as Error).message });
+      });
+    }
   }
 
   #start(): Worker {
     if (this.#worker !== null) return this.#worker;
     const file = new URL(import.meta.url.endsWith(".ts") ? "./use-index-worker.ts" : "./vault/use-index-worker.js", import.meta.url);
-    const worker = new Worker(file, { workerData: { path: this.#path } });
+    const worker = new Worker(file, { workerData: { path: this.#path, priority: this.#priority } });
+    const owner = worker.threadId;
+    worker.once("exit", () => releaseStoppedBackfill(this.#priority, owner));
     this.#worker = worker;
     worker.unref();
-    worker.on("message", (answer: UseAnswer) => {
+    worker.on("message", (answer: UseAnswer | { foreground: true }) => {
+      if ("foreground" in answer) return;
       const waiting = this.#waiting.get(answer.id);
       if (!waiting) return;
       this.#waiting.delete(answer.id);
@@ -160,6 +176,8 @@ export class UseIndex {
       while (!useIndexComplete(this.#db, ws) && !backfillUseIndex(this.#db, ws)) await new Promise<void>((resolve) => setImmediate(resolve));
       return readUses(this.#db, q);
     }
+    if (this.#previousGone !== null) await Promise.race([this.#previousGone, this.#whenStopped]);
+    if (this.#closed) throw new Error("station stopping");
     return new Promise((resolve, reject) => {
       try {
         const worker = this.#start();
@@ -173,6 +191,8 @@ export class UseIndex {
   }
 
   async close(): Promise<void> {
+    this.#closed = true;
+    this.#stopped();
     if (this.#worker !== null) await this.#worker.terminate();
   }
 }

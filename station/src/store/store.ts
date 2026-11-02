@@ -100,6 +100,7 @@ const optFlag = (b: boolean | null | undefined): number | null => (b === null ||
 
 export class Store {
   readonly db: DatabaseSync;
+  readonly backfillPriority: SharedArrayBuffer;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -117,8 +118,9 @@ export class Store {
   /// Its time: what the rows say things happened at (a TestClock in tests).
   readonly clock: Clock.Clock;
 
-  private constructor(db: DatabaseSync, archiveDir: string, temp: string | null, clock: Clock.Clock) {
+  private constructor(db: DatabaseSync, archiveDir: string, temp: string | null, clock: Clock.Clock, backfillPriority: SharedArrayBuffer) {
     this.db = db;
+    this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
     this.#temp = temp;
@@ -132,7 +134,8 @@ export class Store {
     if (!memory) mkdirSync(dirname(path), { recursive: true });
     // Busy for a moment (another process reading, the WAL recovered after a crash): waited for, from the first statement.
     // On the main thread, what takes long is said (timed.ts).
-    const db = timed(new DatabaseSync(path, { timeout: 5000 }));
+    const priority = new Int32Array(new SharedArrayBuffer(8));
+    const db = timed(new DatabaseSync(path, { timeout: 5000 }), undefined, undefined, priority);
     try {
       // A commit waits for the log's write, not for the disk: what the last moments before a power cut wrote may be lost,
       // the database never damaged (WAL). Each live step of an agent commits a few times; with each its own flush to
@@ -182,13 +185,13 @@ export class Store {
       db.close();
       throw e;
     }
-    if (archive !== null) return new Store(db, archive, null, clock);
+    if (archive !== null) return new Store(db, archive, null, clock, priority.buffer as SharedArrayBuffer);
     if (memory) {
       const dir = join(tmpdir(), `stillfail-archive-${randomBytes(8).toString("hex")}`);
       mkdirSync(dir, { recursive: true });
-      return new Store(db, dir, dir, clock);
+      return new Store(db, dir, dir, clock, priority.buffer as SharedArrayBuffer);
     }
-    return new Store(db, join(dirname(path), "archive"), null, clock);
+    return new Store(db, join(dirname(path), "archive"), null, clock, priority.buffer as SharedArrayBuffer);
   }
 
   /// Now, by its clock.

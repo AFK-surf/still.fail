@@ -7,6 +7,7 @@ import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { isMainThread } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import { askedBy, noWaits, waited, type Waits } from "../ops/waits.ts";
+import { foreground } from "./backfill.ts";
 
 /// A statement on the main thread taking this long is said.
 export const SLOW_MS = 200;
@@ -36,9 +37,10 @@ export function takeQueries(): Waits {
 
 /// `db` with its statements' runs and execs timed (by `now`, ms), those of SLOW_MS or more told to `said`, and each put
 /// down for `takeQueries`; as it is off the main thread (the readers': theirs hold no device), unless `said` is given.
-export function timed(db: DatabaseSync, said: Said | null = isMainThread ? inLog : null, now: () => number = () => performance.now()): DatabaseSync {
-  if (said === null) return db;
+export function timed(db: DatabaseSync, said: Said | null = isMainThread ? inLog : null, now: () => number = () => performance.now(), priority: Int32Array | null = null): DatabaseSync {
+  if (said === null && priority === null) return db;
   const time = <T>(sql: () => string, run: () => T): T => {
+    if (said === null) return run();
     const at = now();
     let answer: T | undefined;
     // One that fails is said too: a write waiting for another connection's lock fails once the busy time is out (5 s,
@@ -68,7 +70,7 @@ export function timed(db: DatabaseSync, said: Said | null = isMainThread ? inLog
       get(target, key) {
         const v = Reflect.get(target, key, target);
         if (typeof v !== "function") return v;
-        if (key === "all" || key === "get" || key === "run") return (...args: unknown[]) => time(() => target.sourceSQL, () => v.apply(target, args));
+        if (key === "all" || key === "get" || key === "run") return (...args: unknown[]) => time(() => target.sourceSQL, () => key === "run" ? foreground(priority, () => v.apply(target, args)) : v.apply(target, args));
         return v.bind(target);
       },
     });
@@ -77,7 +79,7 @@ export function timed(db: DatabaseSync, said: Said | null = isMainThread ? inLog
       const v = Reflect.get(target, key, target);
       if (typeof v !== "function") return v;
       if (key === "prepare") return (...args: Parameters<DatabaseSync["prepare"]>) => statement(target.prepare(...args));
-      if (key === "exec") return (sql: string) => time(() => sql, () => target.exec(sql));
+      if (key === "exec") return (sql: string) => time(() => sql, () => foreground(priority, () => target.exec(sql)));
       return v.bind(target);
     },
   });

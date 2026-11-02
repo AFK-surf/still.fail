@@ -37,7 +37,7 @@ import { HelperGrants } from "./helper/grants.ts";
 import { HelperFiles } from "./helper/files.ts";
 import { ConfigFile } from "./ops/config.ts";
 import { Own as OwnPaths } from "./ops/own.ts";
-import { previousProcess } from "./ops/previous.ts";
+import { previousExited, previousProcess } from "./ops/previous.ts";
 import { PeerBus } from "./mesh/bus.ts";
 import type { Outside } from "./mesh/peer.ts";
 import { Net } from "./jobs/load.ts";
@@ -98,9 +98,10 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
     Readers,
     Effect.gen(function* () {
       const { data } = yield* Paths;
-      yield* Store;
+      const store = yield* Store;
+      const previous = yield* Previous;
       return yield* Effect.acquireRelease(Effect.sync(() => {
-        const pool = new ReaderPool(data);
+        const pool = new ReaderPool(data, undefined, undefined, undefined, { previousGone: previous.exited, priority: store.backfillPriority });
         pool.startUsageIndex();
         return pool;
       }), (pool) => Effect.sync(() => pool.close()));
@@ -326,11 +327,12 @@ export class Own extends Context.Service<Own, OwnPaths>()("stillfail/Own") {
 /// The station process before this one (ops/previous.ts), and its end: what only one process may have waits on it, and
 /// what its event streams told is taken up from it alone (api/events.ts). Looked for as this process starts, before it
 /// writes its own run/hub.json.
-export class Previous extends Context.Service<Previous, { readonly pid: number | null; readonly gone: Promise<void> }>()("stillfail/Previous") {
+export class Previous extends Context.Service<Previous, { readonly pid: number | null; readonly gone: Promise<void>; readonly exited: Promise<void> }>()("stillfail/Previous") {
   static readonly layer = Layer.effect(
     Previous,
     Effect.gen(function* () {
-      return previousProcess(join((yield* Paths).data, "run"));
+      const previous = previousProcess(join((yield* Paths).data, "run"));
+      return { ...previous, exited: previousExited(previous) };
     }),
   );
 }
