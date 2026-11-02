@@ -116,12 +116,18 @@ export function getSession(s: Store, key: string): SessionRow | null {
 }
 
 /// Which sessions `viewer` sees (docs/multi-workspace.md): those whose chat is in their workspace (one not there: the
-/// home one's). A read made for no one (null) sees every one.
-export function seenBy(s: Store, viewer: InWorkspace | null | undefined): (key: string) => boolean {
+/// home one's). A read made for no one (null) sees every one. For a viewer, `keys` limits the work and the predicate
+/// to those keys, including missing sessions (which still count as the home workspace's).
+export function seenBy(s: Store, viewer: InWorkspace | null | undefined, keys?: readonly string[]): (key: string) => boolean {
   if (!viewer) return () => true;
   // `*`: a database from before has no `ws` (every chat its home workspace's).
-  const ws = new Map<string, string | null>(all(s, "SELECT * FROM sessions").map((r) => [r.key, r.ws ?? null]));
-  return (key) => sees(viewer, ws.get(key) ?? null);
+  const wanted = keys === undefined ? null : new Set(keys);
+  if (wanted?.size === 0) return () => false;
+  const rows = wanted === null
+    ? all(s, "SELECT * FROM sessions")
+    : all(s, "SELECT * FROM sessions WHERE key IN (SELECT value FROM json_each(?))", JSON.stringify([...wanted]));
+  const ws = new Map<string, string | null>(rows.map((r) => [r.key, r.ws ?? null]));
+  return (key) => (wanted === null || wanted.has(key)) && sees(viewer, ws.get(key) ?? null);
 }
 
 /// Whether `viewer` sees a thread: one of its sessions is in their workspace (a thread with none: the home one's).
@@ -834,7 +840,7 @@ export function usageThreads(s: Store, ids: number[]): [ThreadRow, string | null
     const thread = getThread(s, id);
     if (thread === null) continue;
     let first: string | null = null;
-    if (thread.title === null && thread.autoTitle === null) {
+    if (thread.surface !== STILLFAIL_SURFACE && thread.title === null && thread.autoTitle === null) {
       try {
         first = firstText(s, id);
       } catch {
