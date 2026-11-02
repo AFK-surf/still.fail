@@ -1125,10 +1125,22 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
     case "filePeek":
       if (isObject(v) && typeof v.mtime === "number" && v.mtime > 0) value = { ...v, time: { mtime: stamp(v.mtime, c) } };
       break;
+    // One message's card: who said it, when, and its words as a chat's row has them. No such message: nothing.
+    case "messagePeek":
+      value = messagePeek(v, c);
+      break;
   }
   const own = DECORATORS[topic.topic];
   if (own) value = own(value, c);
   return times(value, c);
+}
+
+function messagePeek(answer: J, c: Clock): J | null {
+  const entry = arr(answer.entries)?.find((e: J) => e.kind === "message");
+  if (entry === undefined) return null;
+  const text = format.cleanText(format.plainText(str(entry.text) ?? ""));
+  const at = entry.at;
+  return { author: str(entry.authorName) ?? "", text: text === "" ? t("core-views.file") : text, ...(typeof at === "number" && at > 0 ? { time: { at: stamp(at, c) } } : {}) };
 }
 
 function overview(value: J, c: Clock, station: string | null): J {

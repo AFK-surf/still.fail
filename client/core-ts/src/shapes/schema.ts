@@ -246,6 +246,7 @@ export const SHAPES: Record<string, Shape> = {
     ["title", "String", { said: true, doc: "The chat's title as its list says it: what a link to it written bare reads as." }],
     ["archived", opt("bool"), { doc: "It is archived (its station's archivedRows). Absent otherwise." }],
     ["note", opt("String"), { doc: "Where it stands in words, where its list's row is not there to say it: 已归档. Absent otherwise." }],
+    ["thread", opt("i64"), { client: opt("I54"), doc: "Its thread, for a link to one of its messages (`messagePeek`). Absent for a chat with none." }],
   ], { doc: "A chat a message links to (views.ts #linkedChats)." }),
   Opener: struct([
     ["station", "String", { doc: "Its station's address." }],
@@ -1298,6 +1299,11 @@ export const SHAPES: Record<string, Shape> = {
     ["type", "String"],
     ["data", "String", { doc: "Base64." }],
   ], { doc: "An image file's picture (its thumbnail where it is big)." }),
+  MessagePeek: struct([
+    ["author", "String", { said: true, doc: "Who said it." }],
+    ["text", "String", { said: true, doc: "Its words as a chat's row has them; a file's word for one without any." }],
+    ["time", opt(map("Stamp")), { doc: "When it was said, in words (`at`)." }],
+  ], { doc: "One message of a chat a link names, for the link's card (the `messagePeek` topic, GET /threads/:id/entries of\nthat entry alone): as first said, an edit made since on Slack or Feishu not in it." }),
   StationPresets: struct([
     ["presets", vec("Preset")],
     ["candidates", vec("PresetCandidate")],
@@ -3989,6 +3995,7 @@ export const TOPIC_SHAPES: Record<string, Ty> = {
   presets: "StationPresets",
   linkPreview: { opt: "LinkPreview" },
   filePeek: { opt: "FilePeek" },
+  messagePeek: { opt: "MessagePeek" },
   machineLogin: { opt: "MachineLoginShown" },
   machineLoginScreen: { opt: "MachineLoginScreen" },
   prefs: "PrefsView",

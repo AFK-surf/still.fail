@@ -2166,6 +2166,8 @@ export interface LinkedChat {
 	archived?: boolean;
 	/** Where it stands in words, where its list's row is not there to say it: 已归档. Absent otherwise. */
 	note?: string;
+	/** Its thread, for a link to one of its messages (`messagePeek`). Absent for a chat with none. */
+	thread?: number;
 }
 
 /** still.fail's notice as a chat shows it (core views.ts noticeOf). */
@@ -5181,6 +5183,19 @@ export interface MeshStatus {
 	workspace?: string;
 	workspaceId?: string;
 	name?: string;
+}
+
+/**
+ * One message of a chat a link names, for the link's card (the `messagePeek` topic, GET /threads/:id/entries of
+ * that entry alone): as first said, an edit made since on Slack or Feishu not in it.
+ */
+export interface MessagePeek {
+	/** Who said it. */
+	author: string;
+	/** Its words as a chat's row has them; a file's word for one without any. */
+	text: string;
+	/** When it was said, in words (`at`). */
+	time?: Record<string, Stamp>;
 }
 
 /** A figure in words, and how bad it is. */

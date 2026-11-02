@@ -30,7 +30,7 @@ import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, LETTERS, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, lettersOf, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, PRESETS, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
 import { readAll, replyHeader, type StationWire } from "./wire.ts";
 import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
@@ -475,6 +475,12 @@ export class StationsSync {
     const topic: Topic = { topic: "filePeek", station: address, key, path, ...(line !== null ? { line } : {}) };
     const at = `/sessions/${encode(key)}/peek?path=${encode(path)}${line !== null ? `&line=${line}` : ""}`;
     this.#cardShown(address, topic, at, filePeekKey(key, path, line));
+  }
+
+  /// One message of a chat a link names (GET /threads/:id/entries of that entry alone, the `messagePeek` topic), read as
+  /// its card shows it (cardShown).
+  messagePeekShown(address: string, thread: number, seq: number): void {
+    this.#cardShown(address, { topic: "messagePeek", station: address, thread, seq }, `/threads/${thread}/entries?from=${seq}&to=${seq}`, messagePeekKey(thread, seq));
   }
 
   /// What a link in a message is, for its card (`topic`, the station's `path`), read each time the card shows it (a pull
