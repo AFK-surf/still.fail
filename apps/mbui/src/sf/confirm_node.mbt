@@ -42,7 +42,8 @@ pub fn confirm_node(
 /// in the row across the window's middle, looking as the look it is given says; the node given the focus as it opens)
 /// in its middle, coming in by @kit.dialog_in and going by @kit.pop_out; Escape and back close it (`cancel`), and a
 /// press outside its panel where `outside` (a dialog's; an alert's not). `shown` as its layer is made, `gone` once its
-/// way out is over. What is under it dimmed only while `dims` (read as it changes: one presented under it that dims
+/// way out is over. Escape and back offered to `within` first (a step back within it: true where it took them so). What
+/// is under it dimmed only while `dims` (read as it changes: one presented under it that dims
 /// already, presenters' scrim_owner, and its ground clear).
 fn dialog_layer_node(
   parent : @view.View,
@@ -54,6 +55,7 @@ fn dialog_layer_node(
   gone? : () -> Unit = fn() {  },
   dims? : () -> Bool = fn() { true },
   covered? : () -> Bool = fn() { false },
+  within? : () -> Bool = fn() { false },
 ) -> Unit {
   parent.show(
     open,
@@ -105,16 +107,19 @@ fn dialog_layer_node(
           cancel()
         }
       })
+      // (Escape and back a step back within it first, where it says it took them so: one that goes in steps)
       .on_key(fn(k) {
         if k.code == @ui.key_escape && @signals.untracked(live) {
-          cancel()
+          if !within() {
+            cancel()
+          }
           true
         } else {
           false
         }
       })
       .takes_back(fn() {
-        if @signals.untracked(live) {
+        if @signals.untracked(live) && !within() {
           cancel()
         }
       })

@@ -91,6 +91,32 @@ test("a new chat: its session and its thread, refused without a runtime or with 
   }
 });
 
+test("retrying a new chat after the station restarts returns the same chat", async () => {
+  const r = rig();
+  try {
+    const ask = { runtime: "codex", clientKey: "new:restart-test" };
+    const [, first] = await r.ask("POST", "/sessions", ask);
+    // The process-local keys are lost when the station restarts.
+    r.hub.clientKeysMade.clear();
+    const [, retry] = await r.ask("POST", "/sessions", ask);
+    assert.equal(retry.key, first.key);
+    assert.equal(retry.thread.id, first.thread.id);
+    // A stop between the thread and its membership must also be repaired.
+    r.store.db.prepare("DELETE FROM thread_sessions WHERE thread = ?").run(first.thread.id);
+    const [, repaired] = await r.ask("POST", "/sessions", ask);
+    assert.equal(repaired.thread.id, first.thread.id);
+    assert.deepEqual(repaired.thread.sessions.map((m: any) => m.session), [first.key]);
+    // A stop after the session but before the thread leaves the same session to finish.
+    r.store.db.prepare("DELETE FROM thread_sessions WHERE thread = ?").run(first.thread.id);
+    r.store.db.prepare("DELETE FROM threads WHERE id = ?").run(first.thread.id);
+    const [, finished] = await r.ask("POST", "/sessions", ask);
+    assert.equal(finished.key, first.key);
+    assert.deepEqual(finished.thread.sessions.map((m: any) => m.session), [first.key]);
+  } finally {
+    await r.close();
+  }
+});
+
 test("a chat's relaying through the routes (docs/relay.md): where to, read past the thread's other actions; to where, checked", async () => {
   const r = rig();
   try {

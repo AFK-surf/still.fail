@@ -661,7 +661,6 @@
   "web-pages.profiles.machineLoginOn": "{station} 上 {runtime} 的登录",
   "web-pages.profiles.machineSignedIn": "已在 {station} 上登录",
   "web-pages.profiles.manual": "也可以在服务器上手动登录",
-  "web-pages.profiles.allModels": "全部 {n} 个",
   "web-pages.profiles.removeModel": "移除 {model}",
   "web-pages.profiles.models": "模型",
   "web-pages.profiles.modelsAbout": "列出的模型都可在新对话和连接中选择",

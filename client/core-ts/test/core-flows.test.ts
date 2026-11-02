@@ -872,7 +872,14 @@ test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_
   const values = new Map();
   apply(host, values);
   const option = (model: string) => v(values, 1).options.find((o: J) => o.model === model);
-  assert.deepEqual(v(values, 1).liked, [], "none starred yet");
+  // none starred yet: those the profiles named, ticked on before (a station of before `named` says what it ran: those
+  // ticked on)
+  assert.deepEqual(v(values, 1).liked, ["claude-opus-5-5", "claude-sonnet-5", "gpt-6-astra"], "those ticked on before");
+  await ask(host, core, ui, 9, "pick.like", { station: "ws/st", of: "new", model: "claude-sonnet-5", liked: false });
+  await ask(host, core, ui, 10, "pick.like", { station: "ws/st", of: "new", model: "claude-opus-5-5", liked: false });
+  await ask(host, core, ui, 11, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: false });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).liked, [], "once changed, as changed");
   // the makers of its models, in their models' order, each with how many
   assert.deepEqual(v(values, 1).makers.map((k: J) => [k.id, k.title, k.count]), [["anthropic", "Anthropic", 2], ["openai", "OpenAI", 1]]);
   // starred, in the order starred; one used most is not listed again
