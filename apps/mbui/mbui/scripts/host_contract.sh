@@ -40,7 +40,7 @@
 #   scripts/host_contract.sh HOST play          test/host/playcheck.mp4 played by the host's player, its bytes read
 #        through the app: its length and size once ready, (Linux) the middle of its first frame as the canvas drew it
 #        red and its frames' times read, played to its end, a frame grabbed (kitdemo's MBUI_PLAYCHECK,
-#        src/kitdemo/gallery/playcheck.mbt)
+#        src/kitdemo/gallery/playcheck.mbt); on Android, sent behind as it plays and brought back: paused as it went
 #   scripts/host_contract.sh linux station      this machine's station as the host says it, in a home of the run's own
 #        (kitdemo's MBUI_STATIONCHECK, src/kitdemo/gallery/stationcheck.mbt): one started by hand said so, with its
 #        release, workspace and data, and stopped; then one the installer's service runs said so
@@ -677,7 +677,28 @@ INSTALL
     if [ "$have" != "$want" ]; then
       echo "play contract ($H): the host said \"$have\", not \"$want\""; tail -30 $O/play.log; exit 1
     fi
-    echo "play contract ($H): $have" ;;
+    echo "play contract ($H): $have"
+    if [ "$H" = android ]; then
+      # (sent behind as it plays, at a tenth of its speed, and brought back: paused as the app went, not played on
+      # behind to its end; the app's log and the system's events from its start, as scripts/android-keyboard.sh's)
+      $ADB shell am force-stop dev.mbui.demo
+      $ADB logcat -b all -c
+      $ADB logcat -b main,system,crash,events -v brief > $O/play-behind.log 2>&1 &
+      LC=$!
+      END='Fatal signal .*dev\.mbui|FATAL EXCEPTION|PLAYCHECK failed'
+      EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 ENV="$(echo "MBUI_PLAYCHECK_BEHIND=1 $vars" | tr ' ' ';')" \
+        bash scripts/android.sh run
+      scripts/chk logwait --log $O/play-behind.log --line "PLAYCHECK playing|$END" --deadline 60 >/dev/null
+      $ADB shell input keyevent KEYCODE_HOME
+      scripts/chk logwait --log $O/play-behind.log --line "wm_on_stop_called.*dev\.mbui\.MainActivity|$END" --deadline 60 >/dev/null
+      $ADB shell am start -n dev.mbui.demo/dev.mbui.MainActivity >/dev/null
+      l=$(scripts/chk logwait --log $O/play-behind.log --line "PLAYCHECK (paused|ended)|$END" --deadline 60)
+      kill $LC 2>/dev/null
+      case "$l" in
+        *"PLAYCHECK paused"*) echo "play contract ($H): sent behind as it played, ${l##*PLAYCHECK }" ;;
+        *) echo "play contract ($H): sent behind as it played, it said \"${l:-nothing}\", not paused"; tail -30 $O/play-behind.log; exit 1 ;;
+      esac
+    fi ;;
   fontscale)
     [ "$H" = windows ] || { echo "fontscale contract: Windows'"; exit 1; }
     # the system's Text size set as Settings sets it (its value in the person's registry, 100-225), the app run, what
