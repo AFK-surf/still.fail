@@ -1196,12 +1196,12 @@ pub fn chat_keep(p : Map[String, Json], size : Double) -> Unit {
 }
 
 ///|
-/// Whether a chat's file read whole is kept with its chat: what Android's viewers read off the disk (a PDF, a video,
-/// a song) and a big one (FilePreview.kt: OnDisk, toDisk past BIG_FILE); others are held in memory only.
+/// Whether a chat's file read whole is kept with its chat: pictures as well as PDFs, videos, songs and big files.
+/// A file named by its path may change and is always read as it is now.
 pub fn Viewer::kept_whole(self : Viewer) -> Bool {
   guard !self.named else { return false }
   match self.shown_kind() {
-    Some(KPdf) | Some(KVideo) | Some(KAudio) => true
+    Some(KImage) | Some(KPdf) | Some(KVideo) | Some(KAudio) => true
     _ => self.file.size > big_file
   }
 }
