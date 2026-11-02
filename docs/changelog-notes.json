@@ -1,4 +1,8 @@
 {
+  "91a5abe7bf": {
+    "text": ["修复：安全模式下批准新设备时，设备上的批准码或申请页面可能无法显示"],
+    "parts": ["android", "desktop"]
+  },
   "3972ec39a": {
     "parts": ["android", "desktop"]
   },
