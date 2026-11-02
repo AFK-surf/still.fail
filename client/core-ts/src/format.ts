@@ -333,9 +333,9 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   const text = (k: string) => str(get(thread, k)) ?? "";
   let where: string;
   if (channel === "EMBER" || channel === "STILLFAIL") {
-    // Only a name people or an agent gave is its title; one never named is 新对话, not its first message (titleOf).
-    const title = text("title");
-    where = title !== "" ? title : tr(current(), "core-views.new_chat");
+    // Its title as the station's titleOf takes it: a person's, else the agent's (autoTitle), else 新对话, never its first
+    // message.
+    where = [text("title"), text("autoTitle")].map((t) => t.trim()).find((t) => t !== "") ?? tr(current(), "core-views.new_chat");
   } else if (isFeishuChat(channel) || str(get(thread, "surface"))?.startsWith("feishu:")) {
     // A Feishu chat (群, 私聊) by its name, as its station read it.
     const n = text("channelName");
