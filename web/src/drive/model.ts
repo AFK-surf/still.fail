@@ -100,7 +100,7 @@ export function readKept(at: At, entry: Pick<DriveEntry, "size" | "mtime">, type
 }
 
 /** Saves a file of the drive to this device: downloaded by the core (chatDownloads.ts), whatever becomes of the page,
- * how far in the files' transfers, saved by the browser once all of it is here (chatDownloadsSaved.ts). */
+ * how far in the files' transfers. */
 export async function download(at: At, entry: Pick<DriveEntry, "size" | "name" | "mtime">): Promise<void> {
   await core().call("download.start", { station: at.station, root: at.root, path: at.path, name: entry.name, size: entry.size, mtime: entry.mtime });
 }

@@ -3,7 +3,7 @@
 // how far each has come said by its `downloads` topic, which the preview and the message's file read (✕ calls one
 // off). Once all of one is here it is taken (`download.take`, once) whatever page shows, read off the device a part at
 // a time (`keep`: not from the station again), saved as the preview's 下载 saves a file, and said done.
-// (What saves them is the signed-in app's: chatDownloadsSaved.ts. The preview is the share page's too, which has no core.)
+// (The preview is the share page's too, which has no core.)
 import { core, useTopicSelect } from "./core/react.ts";
 import type { DownloadShown, DownloadsView } from "./core/shapes.ts";
 
