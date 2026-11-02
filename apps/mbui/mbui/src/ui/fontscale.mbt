@@ -59,6 +59,44 @@ pub fn sp_at(scale : Double, v : Double) -> Double {
 }
 
 ///|
+/// The size words are said at to be drawn `px`, at the system's `scale` (sp_at's inverse: its tables followed straight
+/// between their points, as it does, so one is the other's way back): for words said by what they are drawn at, as a
+/// node of the window's tree's are said by their size (Ctx::sp_of, Ctx::words_smaller's for them).
+pub fn sp_from(scale : Double, px : Double) -> Double {
+  if scale < sp_curve_from || scale > 2.0 {
+    return px / scale
+  }
+  let sign = if px < 0.0 { -1.0 } else { 1.0 }
+  let a = px.abs()
+  // (sp_at grows with v: the size it draws `a` at found between two of its sizes, then straight between them)
+  let mut lo = 0.0
+  let mut lo_at = 0.0
+  for v in sp_sizes {
+    let at = sp_at(scale, v)
+    if at >= a {
+      return sign * (lo + (v - lo) * (if at > lo_at { (a - lo_at) / (at - lo_at) } else { 0.0 }))
+    }
+    lo = v
+    lo_at = at
+  }
+  // (past the last: its last point's factor)
+  sign * a * lo / lo_at
+}
+
+///|
+/// The size words are said at so that this frame draws them `px` (Ctx::sp's way back, as much smaller as it says): what
+/// a node of the window's tree says to be drawn as an old view's words made smaller are (Ctx::words_smaller), its size
+/// said before the system's size of words applies.
+pub fn Ctx::sp_of(self : Ctx, px : Double) -> Double {
+  let px = px / self.words_k
+  if self.font_scale == 1.0 {
+    px
+  } else {
+    sp_from(self.font_scale, px)
+  }
+}
+
+///|
 /// What words of size `v` (or a line, a letter spacing said with them) are drawn at, at the system's size of words
 /// this frame, made as much smaller as where they are drawn says (Ctx::words_smaller) (Ctx::text, rich and editor take
 /// sizes this way; what lays out round words measured by hand, too).

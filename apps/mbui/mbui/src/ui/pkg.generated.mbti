@@ -76,13 +76,27 @@ pub fn contrast_words_least(Double, Int32) -> Double
 
 pub fn copy_shown() -> Bool
 
+pub fn corner_following(Double, Double, Double, Double, @paint.CornerFit?) -> Double?
+
+pub fn corner_lies_in(Int32, Double, Double, Double, Double, Double) -> Double?
+
 pub fn corner_middle(Double, Double) -> Double
 
 pub fn corner_of(@paint.CornerOf) -> @view.Live[Double]
 
 pub fn corner_roots() -> @paint.CornerRoots
 
+pub fn corners_kept(FixedArray[Double], Int32) -> Bool
+
+pub fn cover_rect(Array[(Int32, Double)], Int32, Double, (Int32) -> (Double, Double, Double, Double)?) -> (Double, Double, Double, Double)?
+
+pub fn cover_set_out(Array[(Int32, Double)], Int32, Double) -> Array[(Int32, Double)]
+
 pub let cover_slide_ms : Double
+
+pub fn cover_spring_at(Double, Double, Double) -> (Double, Double)
+
+pub fn cover_spring_end(Double, Double) -> Double
 
 pub fn css(String) -> Style
 
@@ -541,6 +555,8 @@ pub let smooth_scale : Double
 pub fn smoothness(Double, Double) -> Double
 
 pub fn sp_at(Double, Double) -> Double
+
+pub fn sp_from(Double, Double) -> Double
 
 pub fn space_scale() -> Array[Space]
 
@@ -1323,6 +1339,7 @@ pub fn Ctx::sideways_at(Self, String, across? : Bool) -> Double
 pub fn Ctx::sideways_rest(Self, String, capped? : Bool) -> Double
 pub fn Ctx::sized(Self, Double, Double, () -> Unit) -> Unit
 pub fn Ctx::sp(Self, Double) -> Double
+pub fn Ctx::sp_of(Self, Double) -> Double
 pub fn Ctx::space(Self, Space) -> Double
 pub fn Ctx::spacer(Self) -> Unit
 #callsite(autofill(loc))

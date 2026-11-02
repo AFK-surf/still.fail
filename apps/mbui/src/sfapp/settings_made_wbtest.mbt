@@ -290,8 +290,20 @@ fn memories_tester(
   held? : Bool = false,
   failed? : Bool = false,
   scale? : Double = 1.0,
+  mode? : String = "settings-memories",
+  calls? : Array[String] = [],
+  wrap? : (Source) -> Source = fn(s) { s },
 ) -> @ui.Tester {
-  let base = fixture_app("settings-memories")
+  let made = fixture_app(mode)
+  // (what is asked of the core, by name, kept in `calls`)
+  let base : Source = {
+    ..made,
+    call: fn(name, params, done) {
+      calls.push(name)
+      (made.call)(name, params, done)
+    },
+  }
+  let base = wrap(base)
   let src = if held {
     @sffixture.held_topics(base, ["stations"])
   } else if failed {
@@ -387,4 +399,250 @@ test "记忆 made once: its rows are the tree's own; an online station's opens i
   t.tap_text(@sf.t("android-misc.memory.row"))
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is Setting(@settings.Route::Memory(_)), msg="on top \{@sfbase.page_kind(app.nav.top())}")
+}
+
+///|
+test "归档 made once: every instance drawn as its old view's, its choice, notes and stations, with a finger and with keyboard and mouse, at the system's larger words" {
+  for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
+    let (platform, scale) = case
+    let old = memories_tester(false, platform, scale~, mode="settings-archiving")
+    let old_drawn = instances_sorted(old)
+    let old_words = words_where(old)
+    let made = memories_tester(true, platform, scale~, mode="settings-archiving")
+    assert_true(app.nav.top() == Setting(@settings.Route::Archiving))
+    same_drawn(words_where(made), old_words, "words at \{case}")
+    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
+    assert_true(old_drawn.length() > 0)
+  }
+}
+
+///|
+test "归档 made once, its stations read the first time: their rows in their bones as the old view's, as they breathe" {
+  for scale in [1.0, 2.0] {
+    let seen = fn(tree : Bool) {
+      let t = memories_tester(tree, 2, held=true, scale~, mode="settings-archiving")
+      let t0 = t.time()
+      let out = [instances_sorted(t)]
+      t.frame_at(t0 + @sf.breath_ms / 2.0)
+      out.push(instances_sorted(t))
+      (out, words_where(t), t.words_said().map(fn(w) { w.0 }))
+    }
+    let (old, old_words, old_said) = seen(false)
+    let (made, made_words, made_said) = seen(true)
+    same_drawn(made_words, old_words, "words at \{scale}")
+    assert_eq(made_said, old_said, msg="read out at \{scale}")
+    for i, o in old {
+      same_drawn(made[i], o, "instances at \{scale}, step \{i}")
+      assert_true(o.length() > 0)
+    }
+  }
+}
+
+///|
+test "归档 made once: its own nodes; its choice chosen, what the one chosen means said under it, the one set chosen again saying nothing" {
+  let calls : Array[String] = []
+  let t = memories_tester(true, 2, mode="settings-archiving", calls~)
+  let own = tree_words_drawn()
+  for w in [@sf.t("web-pages.archiving.title"), @sf.t("web-pages.archiving.auto.title")] {
+    assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="not the tree's own: \{w} in \{own}")
+  }
+  let sets = fn() { calls.filter(fn(n) { n == "prefs.set" }).length() }
+  // (the one set (做完就提示, the device's own) chosen again: nothing kept anew)
+  t.tap_text(@sf.t("web-pages.appearance.archive.done"))
+  t.run_for(@ui.move_most_ms)
+  assert_eq(sets(), 0)
+  t.tap_text(@sf.t("web-pages.appearance.archive.off"))
+  t.run_for(@ui.move_most_ms)
+  assert_eq(sets(), 1)
+  assert_true(t.find(@sf.t("web-pages.appearance.archive.offHint")) is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+}
+
+///|
+/// `base` with each station's own archiving (its overview's) as `f` makes it of the core's, as `f` is now (followed:
+/// the core said to have it anew), and the station's save `busy()` on its way as long as that says so (the core's
+/// `doing`).
+fn archiving_as(base : Source, f : @signals.Signal[(Json) -> Json], busy : @signals.Signal[Bool]) -> Source {
+  {
+    ..base,
+    topic: fn(name, params) {
+      let r = (base.topic)(name, params)
+      match name {
+        "stations" => {
+          let g = f.get()
+          let value = match r.value {
+            Some(Array(a)) =>
+              Some(
+                Json::array(
+                  a.map(fn(st) {
+                    match st {
+                      Object(m) =>
+                        match m.get("overview") {
+                          Some(Object(o)) =>
+                            match o.get("archiving") {
+                              Some(ar) => {
+                                let o2 = o.copy()
+                                o2["archiving"] = g(ar)
+                                let m2 = m.copy()
+                                m2["overview"] = Json::object(o2)
+                                Json::object(m2)
+                              }
+                              None => st
+                            }
+                          _ => st
+                        }
+                      _ => st
+                    }
+                  }),
+                ),
+              )
+            v => v
+          }
+          { ..r, value, }
+        }
+        "doing" if busy.get() =>
+          {
+            ..r,
+            value: Some({
+              "doing": [{ "call": "archiving.save", "stage": "running", "params": { "station": "ws1/st1" } }],
+            }),
+          }
+        _ => r
+      }
+    },
+  }
+}
+
+///|
+/// An archiving of the core's with `fields` said anew.
+fn archiving_with(fields : Array[(String, Json)]) -> (Json) -> Json {
+  fn(ar) {
+    match ar {
+      Object(m) => {
+        let m2 = m.copy()
+        for kv in fields {
+          m2[kv.0] = kv.1
+        }
+        Json::object(m2)
+      }
+      _ => ar
+    }
+  }
+}
+
+///|
+/// The station's own archiving page (st1's), as an old view's or made once, its archiving as `f` has it.
+fn station_archiving_tester(
+  tree : Bool,
+  platform : Int,
+  scale? : Double = 1.0,
+  f? : @signals.Signal[(Json) -> Json] = @signals.signal(fn(a) { a }),
+  busy? : @signals.Signal[Bool] = @signals.signal(false),
+  calls? : Array[String] = [],
+) -> @ui.Tester {
+  memories_tester(tree, platform, scale~, mode="settings-archiving:ws1/st1", calls~, wrap=fn(s) { archiving_as(s, f, busy) })
+}
+
+///|
+test "一台 station 的归档 made once: every instance drawn as its old view's, with a finger and with keyboard and mouse, at the system's larger words; its managers' alone, off, and not online" {
+  let cases : Array[(String, Int, Double, (Json) -> Json)] = [
+    ("as it is", 2, 1.0, fn(a) { a }),
+    ("as it is", 0, 1.0, fn(a) { a }),
+    ("as it is", 2, 1.5, fn(a) { a }),
+    ("as it is", 2, 2.0, fn(a) { a }),
+    ("not a manager", 2, 1.0, archiving_with([("canEdit", Json::boolean(false))])),
+    ("off", 2, 1.0, archiving_with([("mode", Json::string("off"))])),
+    ("too old to say", 2, 1.0, fn(_) { Json::null() }),
+  ]
+  for c in cases {
+    let (what, platform, scale, f) = c
+    let old = station_archiving_tester(false, platform, scale~, f=@signals.signal(f))
+    let old_drawn = instances_sorted(old)
+    let old_words = words_where(old)
+    let made = station_archiving_tester(true, platform, scale~, f=@signals.signal(f))
+    assert_true(app.nav.top() == Setting(@settings.Route::StationArchiving("ws1/st1")), msg="\{what}")
+    same_drawn(words_where(made), old_words, "words, \{what} at \{platform} \{scale}")
+    same_drawn(instances_sorted(made), old_drawn, "instances, \{what} at \{platform} \{scale}")
+    assert_true(old_drawn.length() > 0)
+  }
+}
+
+///|
+/// How many saves of the station's archiving were asked for, in a page made once or an old one, after `act` (taps by
+/// words), as its archiving is (`f`) and a save of it on its way or not (`busy`).
+fn station_archiving_saves(tree : Bool, f : (Json) -> Json, busy : Bool, act : (@ui.Tester) -> Unit) -> Int {
+  let calls : Array[String] = []
+  let t = station_archiving_tester(tree, 2, f=@signals.signal(f), busy=@signals.signal(busy), calls~)
+  act(t)
+  t.run_for(@ui.move_most_ms)
+  calls.filter(fn(n) { n == "archiving.save" }).length()
+}
+
+///|
+test "一台 station 的归档 made once: chosen as the old view's: a way, after how long, Slack's, saved; the one chosen again, a way not allowed, not a manager's, or while a save is on its way, not" {
+  let tap = fn(w : String) { fn(t : @ui.Tester) { t.tap_text(w) } }
+  let cases : Array[(String, (Json) -> Json, Bool, (@ui.Tester) -> Unit, Int)] = [
+    ("another way", fn(a) { a }, false, tap("按模型判断"), 1),
+    ("the way it is", fn(a) { a }, false, tap("空闲就归档"), 0),
+    ("after another while", fn(a) { a }, false, tap("7 天"), 1),
+    ("after the while it is", fn(a) { a }, false, tap("1 天"), 0),
+    ("Slack's", fn(a) { a }, false, tap("不归档"), 1),
+    (
+      "a way not allowed",
+      archiving_with([
+        (
+          "modes",
+          [
+            { "mode": "off", "label": "不自动归档", "days": 0.0, "reviewed": false, "allowed": true },
+            { "mode": "idle", "label": "空闲就归档", "days": 1.0, "reviewed": false, "allowed": true },
+            { "mode": "reviewed", "label": "按模型判断", "days": 1.0, "reviewed": true, "allowed": false },
+          ],
+        ),
+      ]),
+      false,
+      tap("按模型判断"),
+      0,
+    ),
+    ("not a manager", archiving_with([("canEdit", Json::boolean(false))]), false, tap("按模型判断"), 0),
+    ("a save on its way", fn(a) { a }, true, tap("7 天"), 0),
+  ]
+  for c in cases {
+    let (what, f, busy, act, n) = c
+    let old = station_archiving_saves(false, f, busy, act)
+    let made = station_archiving_saves(true, f, busy, act)
+    assert_eq(old, n, msg="\{what}: the old one saved \{old} times")
+    assert_eq(made, old, msg="\{what}: made, saved \{made} times, the old one \{old}")
+  }
+}
+
+///|
+test "一台 station 的归档 made once: as the core says it anew, the same nodes say it: the way and the while chosen, its note" {
+  let anew = archiving_with([("mode", Json::string("reviewed")), ("days", Json::number(7.0)), ("modeNote", Json::string("按模型判断，空闲七天以上"))])
+  // (the old view's as the core says it then: made first, alone)
+  let old_drawn = instances_sorted(station_archiving_tester(false, 2, f=@signals.signal(anew)))
+  let f : @signals.Signal[(Json) -> Json] = @signals.signal(fn(a) { a })
+  let t = station_archiving_tester(true, 2, f~)
+  let ids = fn(w : String) {
+    @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words == w }).map(fn(d) { (d.id.at, d.id.gen) })
+  }
+  let before = (ids("7 天"), ids("按模型判断"), ids(@sf.t("web-pages.archiving.slackHint")))
+  // (7 天 both an idle while and a Slack one: two nodes, each the same)
+  assert_true(before.0.length() == 2 && before.1.length() == 1 && before.2.length() == 1, msg="\{before}")
+  f.set(anew)
+  // (its thumbs sent to the way and the while said anew, from that moment, on a cover's way, 0 to 1: at rest at the
+  // first whole ms past its length, as a Way ends; nothing still moving then)
+  t.run_for(@ui.cover_slide_ms.ceil())
+  assert_eq(t.moving(), [], msg="at rest once a cover's way is out")
+  assert_eq((ids("7 天"), ids("按模型判断"), ids(@sf.t("web-pages.archiving.slackHint"))), before, msg="the same nodes")
+  assert_true(t.find("按模型判断，空闲七天以上") is Some(_), msg="its note said anew")
+  same_drawn(instances_sorted(t), old_drawn, "said anew, as the old one draws it")
+}
+
+///|
+test "归档 made once: a station's row pressed opens its own archiving, made once too" {
+  let t = memories_tester(true, 2, mode="settings-archiving")
+  t.tap_text("Studio")
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.top() == Setting(@settings.Route::StationArchiving("ws1/st1")), msg="on top \{@sfbase.page_kind(app.nav.top())}")
+  let own = tree_words_drawn()
+  assert_true(own.iter().any(fn(o) { o.contains(@sf.t("web-pages.archiving.mode")) }), msg="not the tree's own: \{own}")
 }

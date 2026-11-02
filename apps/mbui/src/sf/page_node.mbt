@@ -295,6 +295,7 @@ pub fn link_row_node(
   value_bad? : () -> Bool = fn() { false },
   value_dot? : () -> Bool = fn() { false },
   note? : () -> String = fn() { "" },
+  trouble? : () -> String = fn() { "" },
   strong? : Bool = false,
   lead? : RowLead = NoLead,
   goes? : Bool = true,
@@ -305,7 +306,7 @@ pub fn link_row_node(
   below_open? : () -> Double = fn() { 0.0 },
 ) -> Unit {
   let below_shown = fn() { below is Some(_) && below_open() > 0.0 }
-  let under = fn() { note() != "" || below_shown() }
+  let under = fn() { note() != "" || trouble() != "" || below_shown() }
   let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
   let mark = if out { "arrow-up-right" } else { "chevron-right" }
   let ends = goes && (out || (chevron && !acts))
@@ -376,6 +377,8 @@ pub fn link_row_node(
       })
       |> ignore
       words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { pg_link_note }) |> ignore })
+      // (what is wrong, in red under it: link_row's `trouble`)
+      words.show(fn() { trouble() != "" }, fn(n) { styled_words(n, trouble, fn() { pg_link_note.then(bad) }) |> ignore })
       match below {
         Some(f) =>
           words.show(below_shown, fn(room) {
@@ -578,3 +581,83 @@ pub fn page_block(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// What the part over it does, in a line or two (page_note's, narrow: mSegNote, 12 in, 8 over and 4 under, the meta's
+/// muted; in red where it says what is wrong, `bad`), as `words` says it now.
+pub fn page_note_node(parent : @view.View, words : () -> String, bad? : () -> Bool = fn() { false }) -> Unit {
+  parent.box(fn(n) {
+    n.padding(Is((pg_note_x, pg_note_top, pg_note_x, pg_note_foot))) |> ignore
+    n.box(fn(w) { styled_words(w, words, fn() { if bad() { pg_note_bad } else { pg_note } }) |> ignore }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// pg_note_box's room (px=S3, pt=S2, pb=S1).
+let pg_note_x : Double = 12.0
+
+///|
+let pg_note_top : Double = 8.0
+
+///|
+let pg_note_foot : Double = 4.0
+
+///|
+/// A choice of a few on the page (page_choice's, narrow: Seg as wide as the page's room, seg_fill_node, 10 under it), `labels`
+/// as they are now, `chosen()` the one chosen, `choose` told the one a person chooses (the caller says it chosen then:
+/// `chosen` follows it).
+pub fn page_choice_node(
+  parent : @view.View,
+  labels : () -> Array[String],
+  chosen : () -> Int,
+  choose : (Int) -> Unit,
+  item_w? : Double = 0.0,
+) -> Unit {
+  parent.box(fn(b) {
+    b.padding(Is((0.0, 0.0, 0.0, pg_choice_foot))) |> ignore
+    // (a narrow page's: Seg filling the page's room, as segmented's on a narrow page; `item_w` a wide page's alone)
+    ignore(item_w)
+    seg_fill_node(b, labels, chosen, choose) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// pg_choice_box's room under it (pb=S2_5).
+let pg_choice_foot : Double = 10.0
+
+///|
+/// Words that do something when tapped (tap_text's, as a node): a link's ink, `size` (15) on 1.4 its size, one line,
+/// rippled round its words (6 past them on each side, 3 over and under, 8 round) as it is pressed; `press` done then.
+pub fn tap_text_node(parent : @view.View, label : () -> String, press : () -> Unit, size? : Double = 15.0) -> Unit {
+  parent.box(fn(b) {
+    // (its ripple's room round its words, taking none of the line's: tap_text's press_out)
+    b
+    .row(Is(true))
+    .padding(Is((tap_out, tap_out / 2.0, tap_out, tap_out / 2.0)))
+    .margin(Is((-tap_out, -tap_out / 2.0, -tap_out, -tap_out / 2.0)))
+    |> ignore
+    pressed_node(b, press, Is(tap_corner), Link, label)
+    b.box(fn(w) {
+      w
+      .words(By(label))
+      .words_look(Is({ size, weight: 400, line: size * 1.4, wrap: false, tracking: @view.letters_own }))
+      .ink(By(fn() { link_ink() }))
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// tap_text's ripple past its words (press_out) and its corner (press_corner).
+let tap_out : Double = 6.0
+
+///|
+let tap_corner : Double = 8.0
+
+///|
+/// How big a station's mark stands before a row's name (desk_mark's, on every width).
+pub let row_mark : Double = desk_mark

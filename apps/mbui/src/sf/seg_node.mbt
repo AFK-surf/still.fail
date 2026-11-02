@@ -270,3 +270,372 @@ pub fn seg_node(
     |> ignore
   })
 }
+
+///|
+/// A sliding group's lens's shadow, held all the way (@kit.toggle_group's): its blur and how far down.
+let seg_lens_shadow : Double = 6.0
+
+///|
+let seg_lens_shadow_y : Double = 2.0
+
+///|
+/// A narrow page's choice of a few (seg's filling Seg, as nodes: segmented's on a narrow page) in `parent`: as wide as
+/// where it is, `labels` sharing it alike, none narrower than its words with their sides (fitted: where they need more,
+/// their sides narrower, else their words smaller alike, else the chosen one alone with a chevron, the others in a pick a
+/// press on it opens), on a track the ink at 6%, 34 high, 2 in, 10 round; a thumb lifted out of it (the theme's lifted,
+/// a hairline round it) under the chosen one's words, sliding to the one chosen as that changes, from where it is then,
+/// as a cover does (@ui.Ctx::cover: on its spring, between where those options are laid out as it is drawn); a finger
+/// held on an option (glass not drawn solid), the thumb there, fading under a lens of liquid glass growing over it, the
+/// option chosen as it is let go on it. `chosen()` the one chosen; `choose` told the one a press, an arrow, a screen
+/// reader or its pick chooses (the caller says it chosen then: `chosen` follows it); `said` what a screen reader calls
+/// it. As wide as where it is laid out, its words at the system's size of words, in the language as it is, as those
+/// change. `labels()` says how many options there are once, as it is made: their words may change (another language),
+/// their number not.
+pub fn seg_fill_node(
+  parent : @view.View,
+  labels : () -> Array[String],
+  chosen : () -> Int,
+  choose : (Int) -> Unit,
+  said? : String = "",
+) -> @view.View {
+  parent.box(fn(track) {
+    // how its options share the room its track was laid out in, as seg's: where their words with their sides come to
+    // more than it, fitted to it (seg's fitted); else none, the layout sharing it alike (none narrower than its words
+    // with their sides: Seg's flex)
+    let fit : () -> Fitted? = fn() {
+      match track.laid_size_told() {
+        Some((w, _)) => {
+          track.words_redone() |> ignore
+          let c = @ui.current()
+          let base = @ui.tree_theme().text_size(Base).0
+          let size = c.sp(base)
+          let room = w - 2.0 * seg_inset
+          let need = labels().fold(init=0.0, fn(s, l) { s + choice_words_w(c, l, size) + 2.0 * seg_side })
+          if need > room + 0.5 {
+            Some(fitted(c, labels(), room, base, 400, seg_side, seg_least))
+          } else {
+            None
+          }
+        }
+        None => None
+      }
+    }
+    let menu = fn() { fit() is Some({ fit: Menu, .. }) }
+    let widths = fn() {
+      match fit() {
+        Some({ widths, fit: Whole | Smaller(_) }) => widths
+        _ => []
+      }
+    }
+    let smaller = fn() {
+      match fit() {
+        Some({ fit: Smaller(k), .. }) => k
+        _ => 1.0
+      }
+    }
+    let options : Array[@view.View] = []
+    track
+    .row(Is(true))
+    .padding(Is((seg_inset, seg_inset, seg_inset, seg_inset)))
+    .height(Is(Some(segmented_narrow_h)))
+    .radius(Is(seg_radius))
+    .ground(By(fn() { alpha(theme().p.text, 0.06) }))
+    .says(By(fn() { if menu() { None } else { Some(@view.said(RadioGroup, label=said)) } }))
+    // (a roving group, as @kit.toggle_group's: Tab stops at the chosen one alone; ← and → go to the one before and after,
+    // round from the ends, Home and End to the first and the last, each chosen and its focus as it is)
+    .on_key(fn(k) {
+      let n = @signals.untracked(labels).length()
+      let now = @signals.untracked(chosen)
+      let focused = options.iter().any(fn(o) { o.focused() })
+      let to = if n == 0 || k.mods != 0 || !focused {
+        None
+      } else if k.code == @ui.key_code_left {
+        Some((now + n - 1) % n)
+      } else if k.code == @ui.key_code_right {
+        Some((now + 1) % n)
+      } else if k.code == @ui.key_code_home {
+        Some(0)
+      } else if k.code == @ui.key_code_end {
+        Some(n - 1)
+      } else {
+        None
+      }
+      match to {
+        Some(i) => {
+          if i != now {
+            choose(i)
+          }
+          match options.get(i) {
+            Some(o) => o.ask_focus(visible=true) |> ignore
+            None => ()
+          }
+          true
+        }
+        _ => false
+      }
+    })
+    |> ignore
+    // side by side: the thumb under the options' words, and the options
+    track.show(fn() { !menu() }, fn(strip) {
+      options.clear()
+      strip.row(Is(true)).grow(Is(1.0)) |> ignore
+      // (each option's width as laid out, told as it is: where the thumb goes while the layout shares the room; a cell
+      // each, all made before anything reads them, with this strip, as many as there are options)
+      let laid : Array[@signals.Signal[Double]] = Array::makei(@signals.untracked(labels).length(), fn(_) {
+        @signals.signal(0.0)
+      })
+      let w_of = fn(k : Int) {
+        let ws = widths()
+        if ws.length() > 0 {
+          ws.get(k).unwrap_or(0.0)
+        } else {
+          laid.get(k).map(fn(l) { l.get() }).unwrap_or(0.0)
+        }
+      }
+      let x_of = fn(k : Int) {
+        let mut x = seg_inset
+        for i in 0..<k {
+          x = x + w_of(i)
+        }
+        x
+      }
+      // (a finger held on an option, where glass is not drawn solid: the thumb there, a lens over it; the one chosen
+      // only as it is let go on it, @kit.toggle_group's)
+      let fingered : @signals.Signal[Int] = @signals.signal(-1)
+      let lensed = fn() { !@ui.current().glass_solid() && fingered.get() >= 0 }
+      let held = EdgeWay::new(0.0)
+      strip.reacts(lensed, fn(down) { held.go_by(strip, if down { 1.0 } else { 0.0 }, @motion.lift_spring) })
+      let lens = fn() { if @ui.current().glass_solid() { 0.0 } else { held.shown(strip) } }
+      // the thumb's and the lens's cover (@ui.Ctx::cover's): the item it goes to, what it set out from (items by their
+      // shares) and how far it is from there (0 to 1, on a cover's spring), sent on as it goes to another item, from
+      // that moment; where it is drawn the blend of where those items are laid out as it is drawn (moved or resized
+      // meanwhile: with them)
+      let at = fn() { if lensed() { fingered.get() } else { chosen() } }
+      let first = @signals.untracked(at)
+      let cover : @signals.Signal[(Array[(Int, Double)], Int)] = @signals.signal(([(first, 1.0)], first))
+      let way = EdgeWay::new(1.0)
+      strip.reacts(at, fn(k) {
+        let (from, to) = @signals.untracked(fn() { cover.get() })
+        if k != to {
+          let p = way.way.value_at(strip.cause_at())
+          cover.set((@ui.cover_set_out(from, to, p), k))
+          way.go_from(strip, 0.0, 1.0, @motion.cover_spring)
+        }
+      })
+      let rect = fn() {
+        let (from, to) = cover.get()
+        let p = way.shown(strip)
+        let h = segmented_narrow_h - 2.0 * seg_inset
+        @ui.cover_rect(from, to, p, fn(k) { if k >= 0 && k < laid.length() { Some((x_of(k), 0.0, w_of(k), h)) } else { None } })
+      }
+      // (each of its corners as the corner rule makes it in the track's (@ui corners.mbt, as the old frame works them out
+      // after layout): concentric with the track's where it lies in that corner as far from both its edges, at an end
+      // or a hair short of it on its way there, as the theme's ranges let it be; else its own. Nothing between them cuts
+      // a corner of the track's: the rule's own conditions, here, are these)
+      let thumb_corners = fn(r : (Double, Double, Double, Double)) -> (Double, Double, Double, Double)? {
+        let (x, _, w, h) = r
+        let own = inner_corner(seg_radius, seg_inset)
+        let room = track.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
+        let (l, t, rr, d) = (x, seg_inset, room - x - w, seg_inset)
+        let half = dmin(w, h) / 2.0
+        let fit = @ui.tree_theme().corner_fit
+        let rs = FixedArray::make(4, own)
+        let mut moved = 0
+        for k in 0..<4 {
+          match @ui.corner_lies_in(k, l, t, rr, d, seg_radius) {
+            Some(inset) =>
+              match @ui.corner_following(own, half, seg_radius, inset, fit) {
+                Some(kk) => {
+                  rs[k] = kk
+                  moved += 1
+                }
+                None => ()
+              }
+            None => ()
+          }
+        }
+        if @ui.corners_kept(rs, moved) {
+          Some((rs[0], rs[1], rs[2], rs[3]))
+        } else {
+          None
+        }
+      }
+      // the thumb: where its cover has it, its corner concentric in the track's; faded under the lens
+      strip.show(fn() { w_of(cover.get().1) > 0.0 }, fn(th) {
+        th
+        .over(Is(true))
+        .offset(By(fn() { (rect().map(fn(r) { r.0 }).unwrap_or(seg_inset) - seg_inset, 0.0) }))
+        .width(By(fn() { rect().map(fn(r) { r.2 }) }))
+        .height(Is(Some(segmented_narrow_h - 2.0 * seg_inset)))
+        .radius(Is(inner_corner(seg_radius, seg_inset)))
+        .corners(By(fn() {
+          match rect() {
+            Some(r) => thumb_corners(r)
+            None => None
+          }
+        }))
+        .ground(By(fn() { @ui.tree_theme().lifted }))
+        .edge(By(fn() { (0.5, theme().p.line) }))
+        // (as the old thumb: faded only while the lens is out, not past 1 as the hand's spring comes back past 0)
+        .alpha(By(fn() {
+          let l = lens()
+          if l > 0.0 {
+            1.0 - dmin(1.0, l)
+          } else {
+            1.0
+          }
+        }))
+        |> ignore
+      })
+      // its options: each its share (alike as laid out till the track's room is known), its words in its middle, the
+      // chosen one's in the ink, the others muted, smaller as fitted
+      for k, told in laid {
+        let label = fn() { labels().get(k).unwrap_or("") }
+        let on = fn() { chosen() == k }
+        // (another chosen by a finger: felt, as @kit.toggle_group's)
+        let press = fn() {
+          if !@signals.untracked(on) {
+            if @ui.pointing() is Finger {
+              @ui.haptic(TextHandleMove)
+            }
+            choose(k)
+          }
+        }
+        strip.box(fn(o) {
+          o
+          // (alike as the layout shares the room, none narrower than its words with their sides; else as fitted)
+          .grow(By(fn() { if widths().length() > 0 { 0.0 } else { 1.0 } }))
+          .min_width(By(fn() {
+            if widths().length() > 0 {
+              None
+            } else {
+              o.words_redone() |> ignore
+              let c = @ui.current()
+              Some(choice_words_w(c, label(), c.sp(@ui.tree_theme().text_size(Base).0)) + 2.0 * seg_side)
+            }
+          }))
+          // (a basis of none where its width is said: flex's basis would else be taken over it)
+          .basis(By(fn() { if widths().length() > 0 { None } else { Some(0.0) } }))
+          .width(By(fn() { if widths().length() > 0 { Some(w_of(k)) } else { None } }))
+          .height(Is(Some(segmented_narrow_h - 2.0 * seg_inset)))
+          .row(Is(true))
+          .lines_up(Is(Some(Middle)))
+          // (its words in its middle, as laid out: seg_full_option's justify)
+          .lies_along(Is(Middle))
+          .presses(Is(true))
+          .focusable(Is(true))
+          .tab_stop(By(on))
+          .says(By(fn() { Some(@view.said(Radio, label=label(), check=if on() { On } else { Off })) }))
+          .on_press(press)
+          |> ignore
+          // (a finger let go on it chooses it, however long it was held (no hold of its own: under a lens it is still its
+          // press, as @kit.toggle_group's, Ctx::interact's `holds`) and wherever it went meanwhile, as an old view's
+          // click; called off, or taken by what holds it (a list, as it moves), nothing)
+          let on_it = fn(d : @view.Drag) { o.finger_target(d.wx, d.wy) }
+          o.gesture(
+            @ui.touch_slop(),
+            tap=fn(d) { if on_it(d) { press() } },
+            drag=fn(d) { if d.kind == Up && on_it(d) { press() } },
+          )
+          |> ignore
+          o.reacts(fn() { o.pressed() && @ui.pointing() is Finger }, fn(down) {
+            if down {
+              fingered.set(k)
+            } else if @signals.untracked(fn() { fingered.get() }) == k {
+              fingered.set(-1)
+            }
+          })
+          options.push(o)
+          o.reacts(fn() { o.laid_size_told() }, fn(z) {
+            match z {
+              Some((w, _)) => told.set(w)
+              None => ()
+            }
+          })
+          o.box(fn(w) {
+            w
+            .words(By(label))
+            .words_look(By(fn() {
+              // (Base, on its own line, as Seg's words: both that much smaller where fitted as drawn, after the system's size
+              // of words applies, as Ctx::words_smaller has them: said by the size that draws them so)
+              o.words_redone() |> ignore
+              let (size, line) = @ui.tree_theme().text_size(Base)
+              let k = smaller()
+              let c = @ui.current()
+              let (size, line) = if k == 1.0 { (size, line) } else { (c.sp_of(c.sp(size) * k), c.sp_of(c.sp(line) * k)) }
+              { size, weight: 400, line, wrap: false, tracking: @view.letters_own }
+            }))
+            .ink(By(fn() { if on() { theme().p.text } else { theme().p.muted } }))
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      }
+      // held by a finger: the thumb a lens of liquid glass over the options (iOS 26's), a capsule on the thumb's way,
+      // larger as it is held (past the track's edges), raised off it by a shadow as far as it is in the finger
+      strip.show(fn() { lens() > 0.0 }, fn(l) {
+        let full = fn() { dmin(1.0, lens()) }
+        l
+        .over(Is(true))
+        .offset(By(fn() { (rect().map(fn(r) { r.0 }).unwrap_or(seg_inset) - seg_inset, 0.0) }))
+        .width(By(fn() { rect().map(fn(r) { r.2 }) }))
+        .height(Is(Some(segmented_narrow_h - 2.0 * seg_inset)))
+        // (round as a pill is said to be, Full, as the old lens's capsule: as round as it can be)
+        .radius(Is(1.0e6))
+        .glass(Is(Some(glass_knob())))
+        .shadow(By(fn() { (seg_lens_shadow * full(), seg_lens_shadow_y * full(), @ui.tree_theme().shadow) }))
+        .alpha(By(full))
+        .scale(By(fn() { 1.0 + (seg_lens_grow - 1.0) * lens() }))
+        |> ignore
+      })
+    })
+    // not side by side: the chosen one's words (cut short where they must be), a chevron at its end; pressed, a pick of
+    // them all beside it, the chosen one marked
+    track.show(menu, fn(m) {
+      let words = fn() { labels().get(chosen()).unwrap_or("") }
+      let opened : @signals.Signal[Int] = @signals.signal(0)
+      let open = fn() {
+        let s = opened.get()
+        s != 0 && presented_drawn_of(s)
+      }
+      m
+      .row(Is(true))
+      .grow(Is(1.0))
+      .lines_up(Is(Some(Middle)))
+      .padding(Is((seg_menu_in, 0.0, seg_menu_in, 0.0)))
+      .gap(Is(seg_menu_gap))
+      .presses(Is(true))
+      .focusable(Is(true))
+      .says(By(fn() {
+        Some(@view.said(Button, label=if said == "" { words() } else { said + " " + words() }, expanded=open()))
+      }))
+      .on_press(fn() {
+        let (x, y, w, h) = m.rect()
+        let all = @signals.untracked(labels)
+        let now = @signals.untracked(chosen)
+        pick(
+          "",
+          all.mapi(fn(i, l) { choice(i.to_string(), l) }),
+          now.to_string(),
+          fn(k) {
+            let i = labels_at(all, k, now)
+            if i != now {
+              choose(i)
+            }
+          },
+          from=At(x, y, w, h),
+          search=false,
+        )
+        opened.set(last_presented())
+      })
+      |> ignore
+      m.box(fn(w) { styled_words(w.grow(Is(1.0)), words, fn() { seg_menu_words }) |> ignore }) |> ignore
+      icon_node(m, "chevron-down", seg_chevron, By(fn() { theme().p.muted })) |> ignore
+    })
+  })
+}
+
+///|
+/// A filling Seg's corner (seg's `radius`, 10).
+let seg_radius : Double = 10.0
