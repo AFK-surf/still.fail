@@ -425,7 +425,8 @@ test("a turn's end is read shortly after, and the pages are told", async () => {
   const calls = () => r.store.usageGroups(0, MAX, 0).reduce((s, g) => s + g.calls, 0);
   assert.equal(calls(), 0);
   r.store.startTurn("t1", "k", "input");
-  append(join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl"), [claudeLine("m", r.store.now() + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  const made = r.store.now() + 1;
+  append(join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl"), [claudeLine("m", made, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
   // Woken, it lets the burst settle; a turn starting is not its end: it waits again, nothing read (a read would come
   // before that wait).
   await time.begun(2);
@@ -437,8 +438,9 @@ test("a turn's end is read shortly after, and the pages are told", async () => {
   await time.adjust(20);
   await time.begun(5);
   assert.equal(calls(), 1);
-  // Told once the read is over (the rows are there a moment before), with the sessions it counted anew.
-  assert.deepEqual(told.filter((c) => c.type === "usage"), [{ type: "usage", sessions: ["k"] }]);
+  // Told once the read is over (the rows are there a moment before), with the sessions it counted anew and when the
+  // earliest call it recorded was made (a page holding the usage reads again from that day on).
+  assert.deepEqual(told.filter((c) => c.type === "usage"), [{ type: "usage", sessions: ["k"], from: made }]);
   await r.usage.stop();
 });
 

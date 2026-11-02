@@ -995,9 +995,12 @@ export function addSessionTurns(db: DatabaseSync): void {
 ///   (2026-11-02).
 /// - entries_agent_at: what an agent said during a turn, by when (`askingMessage`): by the chat alone, every message
 ///   it had was read.
+/// - turns_by_end: a session's turns by when they ended (`TOLD_BLOCKED`, whether a blocked ask was told already): by
+///   when they started, every turn the session had was read.
 export function addTellIndexes(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL");
   db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
+  db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
 }
 
 /// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
@@ -1021,4 +1024,7 @@ export function addWorkspaceColumns(db: DatabaseSync): void {
   if (!has(db, "archive_policy", "ws")) db.exec("ALTER TABLE archive_policy ADD COLUMN ws TEXT");
   // The sessions counted by connect and workspace (store.ts SESSION_COUNTS, in every overview): from the index alone.
   db.exec("CREATE INDEX IF NOT EXISTS sessions_by_connect ON sessions (connect, ws)");
+  // Which workspace each session is in, by its key (read/store.ts SEEN_OF, in each usage read): from the index alone,
+  // not each session's whole row (every session's, for the usage page's history).
+  db.exec("CREATE INDEX IF NOT EXISTS sessions_ws ON sessions (key, ws)");
 }
