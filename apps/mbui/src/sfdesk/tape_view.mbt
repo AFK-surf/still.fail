@@ -85,6 +85,7 @@ let tape_goes : TapeGoes = {
 
 ///|
 fn tape_goes_reset() -> Unit {
+  tape_bars.clear()
   (tape_goes.end_due)()
   tape_goes.end_due = fn() {  }
   tape_page_wait.reset()

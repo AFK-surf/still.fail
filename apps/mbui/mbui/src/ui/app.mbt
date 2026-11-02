@@ -1230,6 +1230,8 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     // a tap wherever it lands (Ctx::tapped_anywhere), not a drag, not a press the app took
     if !c.dragging && c.taken_at != c.press_at {
       c.tapped = Some((x, y))
+      // (the window's tree told it too: what of it a tap anywhere lets go of)
+      view_tapped_old()
     }
     // taken by none: the innermost's tap (as a press on it alone); the others let it go
     for other in c.press_chain {

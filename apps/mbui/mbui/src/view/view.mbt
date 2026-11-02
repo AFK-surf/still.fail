@@ -502,6 +502,9 @@ pub struct Tree {
   /// how many times a finger or a button went down anywhere in the window, as the host tells each (Tree::went_down):
   /// what closes at the next press, wherever it lands, follows it
   pressed_anywhere : @signals.Signal[Int]
+  /// how many taps there have been anywhere in the window, as the host tells each (Tree::tapped): what a tap anywhere
+  /// lets go of follows it
+  tapped_anywhere : @signals.Signal[Int]
   /// how many times its words were measured anew for all of them (Tree::words_again: the system's size of words)
   words_redone : @signals.Signal[Int]
   /// how many times what its rows left out changed, as it was laid out (View::left_out)
@@ -537,6 +540,9 @@ pub struct Tree {
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
+  /// whether a gesture's finger let go was its tap (View::gesture: not moved past its slop, not held, not called off),
+  /// as the event being taken told it: the host's, to tell the window's taps by (Tree::tapped)
+  mut gesture_tapped : Bool
   /// each finger holding what is held, by its own id: where it went across and down by its own events' times (Drag's
   /// `vx`, `vy`)
   held_tracks : Map[Int, (Tracker, Tracker)]
@@ -688,6 +694,7 @@ pub fn Tree::new(
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
+    tapped_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_said: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_changed: false,
@@ -725,6 +732,7 @@ pub fn Tree::new(
     afters: [],
     modals_due: false,
     held: None,
+    gesture_tapped: false,
     held_tracks: {},
     through: None,
     on_through: fn(_, _, _, _, _) {  },
@@ -4226,11 +4234,14 @@ pub fn View::gesture(
               Some(f) => word(f, d, o)
               None => ()
             }
-          Some(o) =>
+          Some(o) => {
+            // (a tap: told the tree, after what it does, for the window's taps: Tree::gesture_tapped)
             match tap {
               Some(f) => word(f, d, o)
               None => ()
             }
+            self.tree.gesture_tapped = true
+          }
           None => ()
         }
       }

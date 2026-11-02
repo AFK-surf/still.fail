@@ -403,7 +403,8 @@ pub fn[P] Nav::held_over(self : Nav[P], s : @view.View, ready : (P) -> Bool, mos
 /// Page `serial` of the stack built (its old view): over its whole room, on the stack's back (its gesture, from within
 /// `edge` of its left side) where it is the top and a page is under it or moving, the page's own back taken before it;
 /// one leaving, or under a page coming in, its back none (its presses none: its node's, Nav::takes, as the tree says
-/// where an input finds what: old_hits_place).
+/// where an input finds what: old_hits_place). Not `stack`: the stack's back none of the old view's (a node of the
+/// tree's over the whole page has it: Nav::backs_over), the page's own as above.
 fn[P] Nav::page_built(
   self : Nav[P],
   c : Ctx,
@@ -411,6 +412,7 @@ fn[P] Nav::page_built(
   page : (Ctx, P) -> Unit,
   bg : Int64,
   edge : Double,
+  stack? : Bool = true,
 ) -> Unit {
   self.said.get() |> ignore
   self.shown.get() |> ignore
@@ -421,7 +423,7 @@ fn[P] Nav::page_built(
   let n = self.pages.length()
   let leaving = self.leaving is Some(l) && l.serial == serial
   let top = !leaving && self.pages[n - 1].serial == serial
-  let takes = top && (n > self.floor + 1 || self.mode >= 3 || (self.floor == 0 && self.mode != 0))
+  let takes = stack && top && (n > self.floor + 1 || self.mode >= 3 || (self.floor == 0 && self.mode != 0))
   let before = c.back_next
   let before_node = c.back_node_next
   let before_edge = c.back_edge_next
@@ -468,11 +470,7 @@ let nav_page_whole : Style = css("w=Full h=Full")
 ///|
 /// Page `serial` of the stack (`e`) made once as nodes of the tree's in node `m` (nav_view's `made`): on a ground of
 /// `bg`, its nodes `f` makes in it, once (as it is put on, the stack's `under` as of it: Nav::under), given what the
-/// page is as that changes; back the stack's while it
-/// takes it as the old view says it (Nav::page_built): a node of the tree's following it, before the page's own (said
-/// in the page: they take it first), after them while the one over it goes back off (it takes none of its own then);
-/// the swipe from its left edge (within `edge`, a finger's on a platform with none of the system's, a mouse's where it
-/// drags) taken over from whatever it went down on once it goes across more than up or down, past the old view's slop.
+/// page is as that changes; back the stack's as Nav::backs_over has it, the whole of `m`.
 fn[P] Nav::made(
   self : Nav[P],
   m : @view.View,
@@ -483,6 +481,48 @@ fn[P] Nav::made(
   edge : Double,
 ) -> Unit {
   let nav = self
+  m
+  .grow(Is(1.0))
+  // (cut to its room, its ground and all it holds, as the old view of a page is by the island it is built in)
+  .clips(Is(true))
+  |> ignore
+  // (its ground, under all it holds)
+  m.box(fn(g) { g.over(Is(true)).ground(By(bg)) |> ignore }) |> ignore
+  // (what it is: as it was put on, then what it becomes in place, Nav::become)
+  let page = fn() {
+    nav.said.get() |> ignore
+    e.page
+  }
+  // (its time on top, as it is put there again: what is put up anew then, a picture that could not be had asked for
+  // again, Ctx::page_stint's)
+  let stint = fn() {
+    nav.said.get() |> ignore
+    e.stint
+  }
+  nav.backs_over(m, serial, edge, fn() { nav.built_by(e, fn() { f(m, page, e.under, stint) }) })
+}
+
+///|
+/// Back the stack's over the whole of node `m`, page `serial`'s (what `build` makes in it its own, the page and what is
+/// over it), while it takes it as the old view says it (Nav::page_built's `takes`, from the stack's `floor`; and where
+/// `when` says so): a node of the tree's following it, before what `build` makes (the page's own back said in it takes
+/// it first), after it while the one over it goes back off (it takes none of its own then); the swipe from its left
+/// edge (within `edge`, a finger's on a platform with none of the system's, a mouse's where it drags) taken over from
+/// whatever of `m` it went down on once it goes across more than up or down, past the old view's slop, as wide as `m`.
+fn[P] Nav::backs_over(
+  self : Nav[P],
+  m : @view.View,
+  serial : Int,
+  edge : Double,
+  build : () -> Unit,
+  floor? : () -> Int,
+  when? : () -> Bool = fn() { true },
+) -> Unit {
+  let nav = self
+  let floor = match floor {
+    Some(f) => f
+    None => fn() { nav.floor }
+  }
   // (whether back is the stack's, and before or after what the page says takes it: Nav::page_built's `takes`)
   let backs = fn(leaving : Bool) {
     nav.said.get() |> ignore
@@ -490,8 +530,10 @@ fn[P] Nav::made(
     let n = nav.pages.length()
     let gone = nav.leaving is Some(l) && l.serial == serial
     let top = !gone && n > 0 && nav.pages[n - 1].serial == serial
+    let fl = floor()
+    when() &&
     top &&
-    (n > nav.floor + 1 || nav.mode >= 3 || (nav.floor == 0 && nav.mode != 0)) &&
+    (n > fl + 1 || nav.mode >= 3 || (fl == 0 && nav.mode != 0)) &&
     (nav.leaving is Some(_)) == leaving
   }
   // (each step to the stack as one of the old frame's (Ctx::back_gesture's kinds), x from the page's left, as wide as it
@@ -512,9 +554,6 @@ fn[P] Nav::made(
   let down_x = Ref(0.0)
   let swiped = Ref(false)
   m
-  .grow(Is(1.0))
-  // (cut to its room, its ground and all it holds, as the old view of a page is by the island it is built in)
-  .clips(Is(true))
   .claims(
     fn(dx, dy) {
       swiped.val = dx > 6.0 && dx.abs() > dy.abs()
@@ -546,20 +585,7 @@ fn[P] Nav::made(
     }
   })
   |> ignore
-  // (its ground, under all it holds)
-  m.box(fn(g) { g.over(Is(true)).ground(By(bg)) |> ignore }) |> ignore
   m.show(fn() { backs(false) }, back_node)
-  // (what it is: as it was put on, then what it becomes in place, Nav::become)
-  let page = fn() {
-    nav.said.get() |> ignore
-    e.page
-  }
-  // (its time on top, as it is put there again: what is put up anew then, a picture that could not be had asked for
-  // again, Ctx::page_stint's)
-  let stint = fn() {
-    nav.said.get() |> ignore
-    e.stint
-  }
-  nav.built_by(e, fn() { f(m, page, e.under, stint) })
+  build()
   m.show(fn() { backs(true) }, back_node)
 }

@@ -185,6 +185,15 @@ pub fn tip_node(
       hand.set(Free)
     }
   })
+  // (opened on its control (TipHand::open): shown till the next tap, wherever it lands (the window's taps,
+  // View::window_taps: a press let go without dragging, as about's tapped_anywhere; a finger's tap that opened it told
+  // after its control took it, so the one after that); a press held, dragged or called off shuts it not)
+  let opened_at = Ref(0)
+  anchor.reacts(fn() { anchor.window_taps() }, fn(n) {
+    if @signals.untracked(fn() { hand.get() }) == Opened && n > opened_at.val + 1 {
+      hand.set(Free)
+    }
+  })
   // (its control let go: nothing of it left pending)
   anchor.owns(fn() {
     stop_rest()
@@ -201,6 +210,15 @@ pub fn tip_node(
       (lifted_end.val)()
       hand.set(Free)
     },
+    open: fn(tapped) {
+      (lifted_end.val)()
+      // (the tap opening it told the window after its control took it: the one after it shuts it; opened otherwise (a
+      // key, a screen reader), the next)
+      let now = @signals.untracked(fn() { anchor.window_taps() })
+      opened_at.val = if tapped { now } else { now - 1 }
+      hand.set(Opened)
+    },
+    opened: fn() { @signals.untracked(fn() { hand.get() }) == Opened },
     lift: fn() {
       if @signals.untracked(fn() { hand.get() }) == Held {
         hand.set(Lifted)
@@ -211,11 +229,13 @@ pub fn tip_node(
 }
 
 ///|
-/// How a finger holds a tip open (tip_node): not at all, held down on its control, let go of it a moment ago.
+/// How a finger holds a tip open (tip_node): not at all, held down on its control, let go of it a moment ago, tapped open
+/// (till the next tap).
 enum TipHeld {
   Free
   Held
   Lifted
+  Opened
 } derive(Eq)
 
 ///|
@@ -227,6 +247,11 @@ pub struct TipHand {
   hold : () -> Unit
   lift : () -> Unit
   cancel : () -> Unit
+  /// shown till the next tap, wherever it lands (about's): after the finger's tap on its control that opens it where
+  /// `tapped` (told the window after its control took it), else (a key, a screen reader) the next one
+  open : (Bool) -> Unit
+  /// whether it is so opened now (not shut since: a tap after, `cancel`)
+  opened : () -> Bool
 }
 
 ///|
