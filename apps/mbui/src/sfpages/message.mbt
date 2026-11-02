@@ -594,7 +594,14 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       paths=m.by.agent != "",
       files=fn(name) {
         match placed.get(name) {
-          // (a page drawn live is not in a picture of the chat: its card is, to tick)
+          // (in a picture of the chat being shared: its own way, publish.mbt, or its card, to tick)
+          Some(a) if is_viz(a.name) && picturing.val is Some((seq, taking)) && publish_viz_drawn(seq, taking, a) =>
+            Some({
+              draw: fn() {
+                publish_viz(c, src, here, seq, taking, a, fn() { message_files(c, src, here, [a], false, by=Some(by)) })
+              },
+              image: None,
+            })
           Some(a) if is_viz(a.name) && picturing.val is None =>
             Some({
               draw: fn() {
