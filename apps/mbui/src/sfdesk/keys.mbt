@@ -50,7 +50,9 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     0
   }
   if way != 0 && framed {
-    neighbour(src, w, way)
+    // A menu action remains asked through the frame's builds. Opening a chat can cause another build, so doing this
+    // here would handle the same action again and skip rows. Tell it once after the builds, as for an input.
+    c.tell("chat/neighbour", fn() { neighbour(src, w, way) })
   }
   let escape = c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true)
   let left = escape && !frame_escape(c)

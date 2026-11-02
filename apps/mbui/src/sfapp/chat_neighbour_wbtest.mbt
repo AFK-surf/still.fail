@@ -14,9 +14,18 @@ test "chat neighbours: a list held under the pointer is traversed in its display
   // The core moves CI to the top, while the list keeps it below the current row under the pointer.
   clock.val = 2001.0
   t.frame()
+  let core = (src.topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value
+  let first_day = items(core, "days")[0]
+  assert_eq(text(Some(items(Some(first_day), "items")[0]), "id"), "c5")
   assert_true(t.find("给设置页加一个深色模式开关").unwrap().1 < t.find("盯着 CI，绿了告诉我").unwrap().1)
+  // A menu action stays asked throughout the frame. Even if it is built more than once, it moves just one row.
   @settings.ask_action("chat.next")
   t.frame()
+  assert_eq(open_title(), "盯着 CI，绿了告诉我")
+  @settings.ask_action("chat.prev")
+  t.frame()
+  assert_eq(open_title(), "给设置页加一个深色模式开关")
+  t.key(@ui.key_code_down, mods=@ui.mod_alt)
   assert_eq(open_title(), "盯着 CI，绿了告诉我")
   t.key(@ui.key_code_up, mods=@ui.mod_alt)
   assert_eq(open_title(), "给设置页加一个深色模式开关")
@@ -34,6 +43,42 @@ fn neighbour_field(value : Json, key : String, field : Json) -> Json {
     }
     _ => value
   }
+}
+
+///|
+test "chat neighbours: the chosen filter determines which rows are traversed" {
+  new_run()
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      match (name, got.value) {
+        ("chats", Some(v)) if params.get("mine") is Some(True) => {
+          let days = items(Some(v), "days").map(fn(day) {
+            let rows = items(Some(day), "items").filter(fn(row) {
+              let id = text(Some(row), "id")
+              id != "c2" && id != "c3"
+            })
+            neighbour_field(day, "items", Json::array(rows))
+          })
+          { ..got, value: Some(neighbour_field(v, "days", Json::array(days))) }
+        }
+        _ => got
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.tap_text("整理发布清单")
+  let (x, y, w, h) = t.query(Button, label="筛选会话：全部").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.tap_text("我参与的")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("给设置页加一个深色模式开关") is Some(_))
+  t.key(@ui.key_code_down, mods=@ui.mod_alt)
+  assert_eq(open_title(), "给设置页加一个深色模式开关")
+  t.key(@ui.key_code_up, mods=@ui.mod_alt)
+  assert_eq(open_title(), "整理发布清单")
 }
 
 ///|
