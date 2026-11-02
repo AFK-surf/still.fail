@@ -1282,6 +1282,28 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
 }
 
 ///|
+/// The words Tester::words has of the app's own nodes, but those made where nothing is read out (Ctx::hidden_from_semantics:
+/// a picture drawn small to stand for itself, say), as a person reading the screen out would have them.
+pub fn Tester::words_said(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  let c = g()
+  let hid = []
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) && n.text != "" {
+      hid.push(n.sem_hid)
+    }
+  }
+  // (Tester::words has the nodes' words first, in the same order; the window's tree's after them)
+  let out = []
+  for i, w in self.words() {
+    if i >= hid.length() || !hid[i] {
+      out.push(w)
+    }
+  }
+  out
+}
+
+///|
 /// The rectangle of the first node whose text contains `s` (x, y, w, h).
 pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
   let c = g()

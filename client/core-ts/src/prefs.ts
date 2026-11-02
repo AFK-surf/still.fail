@@ -72,8 +72,9 @@ export function failsGoneOf(prefs: unknown, workspace: string): Set<string> {
   return new Set(Array.isArray(by) ? by.filter((k): k is string => typeof k === "string") : []);
 }
 
-/// The looks the card shared can be drawn in (`shareLook`, chosen under it): none kept, night.
-export const SHARE_LOOKS = ["night", "poster", "receipt", "terminal"];
+/// A look the card shared is drawn in (`shareLook`, chosen under it): the app's own key for it (its table of looks is
+/// the app's, which draws the first while none is kept or one it does not know).
+const SHARE_LOOK = /^[a-z][a-z0-9-]{0,31}$/;
 
 export type ArchiveHint = "off" | "done" | "reviewed";
 
@@ -207,7 +208,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if ("haptics" in prefs && prefs.haptics !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "haptics" }));
   if ("windowZoom" in prefs && !["50", "67", "75", "80", "90", "110", "125", "150", "175", "200"].includes(prefs.windowZoom as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "windowZoom" }));
   if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
-  if ("shareLook" in prefs && !SHARE_LOOKS.includes(prefs.shareLook as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "shareLook" }));
+  if ("shareLook" in prefs && !(typeof prefs.shareLook === "string" && SHARE_LOOK.test(prefs.shareLook))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "shareLook" }));
   if ("archiveHint" in prefs && !["off", "done", "reviewed"].includes(prefs.archiveHint as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "archiveHint" }));
   if ("screenTouch" in prefs && prefs.screenTouch !== "direct" && prefs.screenTouch !== "pad") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenTouch" }));
   if ("screenQuality" in prefs && !["smooth", "hd", "original"].includes(prefs.screenQuality as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenQuality" }));

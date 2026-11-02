@@ -39,8 +39,8 @@ pub(all) struct Fixture {
   /// each sidebar's width and folding as kept on this device (the prefs' `sidebars`, by `<workspace>\n<group>`), as
   /// the core's prefs.ts keeps a map: by key, null letting one go
   sidebars : Map[String, Json]
-  /// the look the card to share is drawn in (the prefs' `shareLook`; "" none kept): share-card-poster, -receipt and
-  /// -terminal open it in theirs
+  /// the look the card to share is drawn in (the prefs' `shareLook`; "" none kept): share-card-<key> (but -dark) opens
+  /// it in that look
   mut share_look : String
 }
 
@@ -1047,11 +1047,10 @@ pub fn fixture(mode : String) -> Source {
     chat_tabs: fixture_chat_tabs(mode),
     tabs_shown: fixture_tabs_shown(mode),
     sidebars: {},
-    share_look: match mode {
-      "share-card-poster" => "poster"
-      "share-card-receipt" => "receipt"
-      "share-card-terminal" => "terminal"
-      _ => ""
+    share_look: if mode.has_prefix("share-card-") && mode != "share-card-dark" {
+      mode.unsafe_substring(start="share-card-".length(), end=mode.length())
+    } else {
+      ""
     },
   }
   if f.mode == "drive-motion" {

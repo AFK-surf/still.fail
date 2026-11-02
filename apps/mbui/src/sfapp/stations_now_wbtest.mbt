@@ -78,7 +78,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=at.0, h=at.1, platform=at.2)
     t.run_for(@kit.presence_in_ms)
     // the night's, none kept: its rings' lead
-    assert_true(t.find("用 6 个 Claude 订阅账号消耗了") is Some(_))
+    assert_true(picture_says(t, "用 6 个 Claude 订阅账号消耗了"))
     // each its own picture, saying what serves it (「信息甚至都不用一样」): what each says that another does not, and
     // what it leaves out
     for look in [
@@ -89,8 +89,8 @@ test "the card to share's looks: each chosen under it draws the picture in it at
     ] {
       t.click(Button, label=look.0)
       t.run_for(@kit.presence_in_ms)
-      assert_true(t.find(look.1) is Some(_), msg="\{(at, look)}")
-      assert_true(t.find(look.2) is None, msg="\{(at, look)}")
+      assert_true(picture_says(t, look.1), msg="\{(at, look)}")
+      assert_true(!picture_says(t, look.2), msg="\{(at, look)}")
       assert_eq(t.squeeze_faults(), [])
       assert_eq(t.corner_faults(), [])
       assert_eq(t.contrast_faults(), [])
@@ -111,6 +111,19 @@ test "the card to share's looks: each chosen under it draws the picture in it at
 }
 
 ///|
+/// The words drawn now in the picture, seen (not the looks' small pictures under it: each stands for itself, its words
+/// not read out).
+fn picture_words(t : @ui.Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  t.words_said().filter(fn(w) { w.5 > 0.5 })
+}
+
+///|
+/// Whether the picture says `s` (in words of its own, or a part of them).
+fn picture_says(t : @ui.Tester, s : String) -> Bool {
+  picture_words(t).iter().any(fn(w) { w.0.contains(s) })
+}
+
+///|
 /// The words of the picture whose places say how it is laid out (each said alone, not a part of a line of several).
 // kept across runs: a table, never written
 let picture_part_words : Array[String] = [
@@ -122,7 +135,7 @@ let picture_part_words : Array[String] = [
 /// Where each of picture_part_words is in the picture `t` shows, from what leads its share (用 6 个 Claude 订阅账号消耗了),
 /// rounded to the point.
 fn picture_parts(t : @ui.Tester) -> Array[(String, Int, Int)] {
-  let words = t.words().filter(fn(w) { w.5 > 0.5 })
+  let words = picture_words(t)
   let lead = words.filter(fn(w) { w.0 == "用 6 个 Claude 订阅账号消耗了" })
   if lead.length() != 1 {
     return []
@@ -162,7 +175,7 @@ test "the card to share on a phone: the picture as wide as its sheet lets it, no
 /// The card to share as `t` shows it: laid out the one way.
 fn share_card_laid(t : @ui.Tester) -> Unit raise {
   t.run_for(@kit.presence_in_ms)
-  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  let word = fn(s : String) { picture_words(t).filter(fn(w) { w.0 == s }) }
   // the first kind's said round its first model's tokens, read down: what leads it over the rings and the tokens, the
   // tokens large, the model and what they would cost under them; each other kind a line of its own, its ring's key: its
   // name, its accounts; each other model a line, its tokens and cost at the line's end (2026-10-30 用户「按模型分开写
@@ -204,8 +217,8 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   let days = ["10/20", "10/26"].map(fn(d) { word(d) })
   assert_true(days.iter().all(fn(d) { d.length() == 1 }) && days[0][0].1 < days[1][0].1, msg="\{days}")
   // the chats at work now, the tasks run across devices, and still.fail's line
-  assert_true(t.find("9 个对话正在运行") is Some(_) && t.find("今天用了 3 台设备") is Some(_))
-  assert_true(t.find("近 7 天 agent 跨设备执行了 312 个任务") is Some(_) && t.find("平均每个对话 5.2 个") is Some(_))
+  assert_true(picture_says(t, "9 个对话正在运行") && picture_says(t, "今天用了 3 台设备"))
+  assert_true(picture_says(t, "近 7 天 agent 跨设备执行了 312 个任务") && picture_says(t, "平均每个对话 5.2 个"))
   // the picture all in its sheet or dialog, over its button
   let line = word("一生万物，万物归一")
   let button = match t.query(Button, label="保存到相册") {
@@ -225,7 +238,7 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   let tasks = word("近 7 天 agent 跨设备执行了 312 个任务")
   let more = word("平均每个对话 5.2 个")
   assert_true(tasks.length() == 1 && more.length() == 1 && tasks[0].4 == more[0].4 && more[0].2 > tasks[0].2, msg="\{(tasks, more)}")
-  assert_true(t.find("一生万物，万物归一") is Some(_))
+  assert_true(picture_says(t, "一生万物，万物归一"))
   assert_eq(t.squeeze_faults(), [])
   assert_eq(t.corner_faults(), [])
   assert_eq(t.contrast_faults(), [])
@@ -246,7 +259,7 @@ test "the 用量 page: 分享卡片 beside its days once something was spent (no
 /// are drawn), the first look and 关闭 and the stage's own button (复制图片, 保存到相册 on a phone).
 fn stage_said(t : @ui.Tester) -> String {
   let dialog = t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) })
-  let line = t.words().filter(fn(w) { w.0 == "一生万物，万物归一" && w.5 > 0.5 }).map(fn(w) { tenth4((w.1, w.2, w.3, w.4)) })
+  let line = picture_words(t).filter(fn(w) { w.0 == "一生万物，万物归一" }).map(fn(w) { tenth4((w.1, w.2, w.3, w.4)) })
   let b = fn(label : String) { t.query(Button, label~).map(fn(s) { tenth4(s.rect) }) }
   "dialog \{dialog} line \{line} look \{b("夜色")} close \{b("关闭")} copy \{b("复制图片")} save \{b("保存到相册")} squeeze \{t.squeeze_faults().length()}"
 }
@@ -314,12 +327,12 @@ test "stage, 大屏 keyboard and mouse in a tall and a short window, touch in a 
     out.push("\{at}: \{stage_said(t)}")
     drawn.push(stage_drawn())
   }
-  // (as main has it, 435d3ba8)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
   assert_eq(out, [
-    "(1440, 1000, 0): dialog Some((分享卡片, (540, 37.3, 360, 925.4))) line [(560, 770.9, 320, 21)] look Some((618, 831.9, 42, 76.8)) close Some((635.8, 928.7, 58, 34)) copy Some((701.8, 928.7, 102.5, 34)) save None squeeze 0",
-    "(1280, 640, 0): dialog Some((分享卡片, (537.5, 24, 205.1, 592))) line [(480, 757.6, 320, 21)] look Some((538, 485.2, 42, 76.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
-    "(840, 1100, 1): dialog Some((分享卡片, (240, 87.3, 360, 925.4))) line [(260, 820.9, 320, 21)] look Some((318, 881.9, 42, 76.8)) close Some((321.9, 978.7, 62, 34)) copy None save Some((391.9, 978.7, 126.2, 34)) squeeze 0",
-    "(390, 844, 2): dialog Some((分享卡片, (45.1, 24, 299.9, 796))) line [(35, 757.6, 320, 21)] look Some((93, 689.2, 42, 76.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
+    "(1440, 1000, 0): dialog Some((分享卡片, (545, 24, 350.1, 952))) line [(560, 757.6, 320, 21)] look Some((552, 797.2, 78, 124.8)) close Some((635.8, 942, 58, 34)) copy Some((701.8, 942, 102.5, 34)) save None squeeze 0",
+    "(1280, 640, 0): dialog Some((分享卡片, (472, 24, 336, 592))) line [(480, 757.6, 320, 21)] look Some((472, 437.2, 78, 124.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
+    "(840, 1100, 1): dialog Some((分享卡片, (240, 63.3, 360, 973.4))) line [(260, 796.9, 320, 21)] look Some((252, 857.9, 78, 124.8)) close Some((321.9, 1002.7, 62, 34)) copy None save Some((391.9, 1002.7, 126.2, 34)) squeeze 0",
+    "(390, 844, 2): dialog Some((分享卡片, (27, 24, 336, 796))) line [(35, 757.6, 320, 21)] look Some((27, 641.2, 78, 124.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
   ])
   assert_eq(drawn, [true, true, true, true])
 }
@@ -339,18 +352,18 @@ test "stage, 大屏 keyboard and mouse: the window made shorter and taller again
     out.push("\{h}: \{stage_said(t)}")
     ink.push("\{h}: \{stage_ink(t, 1280.0, h)}")
   }
-  // (as main has it, 435d3ba8)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
   assert_eq(out, [
-    "800: dialog Some((分享卡片, (500.3, 24, 279.4, 752))) line [(480, 757.6, 320, 21)] look Some((538, 645.2, 42, 76.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
-    "560: dialog Some((分享卡片, (538, 24, 204, 512))) line [(480, 757.6, 320, 21)] look Some((538, 405.2, 42, 76.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
-    "800: dialog Some((分享卡片, (500.3, 24, 279.4, 752))) line [(480, 757.6, 320, 21)] look Some((538, 645.2, 42, 76.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (472, 24, 336, 752))) line [(480, 757.6, 320, 21)] look Some((472, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "560: dialog Some((分享卡片, (472, 24, 336, 512))) line [(480, 757.6, 320, 21)] look Some((472, 357.2, 78, 124.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (472, 24, 336, 752))) line [(480, 757.6, 320, 21)] look Some((472, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
   ])
   // (what it paints: its night over the window, the picture as large as it is drawn)
-  // (as main has it, 435d3ba8)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
   assert_eq(ink, [
-    "800: night [0.92] picture Some((500.3, 24, 279.4, 601.2)) words in 366 lowest 604.9 out under 0",
-    "560: night [0.92] picture Some((556.1, 24, 167.9, 361.2)) words in 337 lowest 373 out under 0",
-    "800: night [0.92] picture Some((500.3, 24, 279.4, 601.2)) words in 366 lowest 604.9 out under 0",
+    "800: night [0.92] picture Some((511.4, 24, 257.1, 553.2)) words in 360 lowest 558.6 out under 0",
+    "560: night [0.92] picture Some((567.2, 24, 145.6, 313.2)) words in 336 lowest 337.5 out under 0",
+    "800: night [0.92] picture Some((511.4, 24, 257.1, 553.2)) words in 360 lowest 558.6 out under 0",
   ])
 }
 
@@ -380,7 +393,7 @@ test "stage, 大屏 keyboard and mouse: closed by Escape, by back, by 关闭, by
     let selected = t.all(Button).filter(fn(s) { s.selected == Some(true) }).map(fn(s) { s.label })
     out.push("\{how}: at once {\{at_once}} after {presenting \{@sf.presenting()} dialog \{t.query(Dialog).map(fn(s) { s.label })} selected \{selected}}")
   }
-  // (as main has it, 435d3ba8)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
   assert_eq(out, [
   "escape: at once {presenting false dialog None} after {presenting false dialog None selected []}",
   "back: at once {presenting false dialog None} after {presenting false dialog None selected []}",
@@ -403,3 +416,4 @@ test "stage, 大屏 keyboard and mouse: the focus as it opens and after a Tab: a
   // (as main has it, 435d3ba8: nothing of it given the focus, nor by a Tab)
   assert_eq(["open \{open}", "tab \{tabbed}"], ["open None", "tab None"])
 }
+
