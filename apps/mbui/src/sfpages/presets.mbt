@@ -120,9 +120,6 @@ priv struct PresetEditing {
   serial : Int
   mut adding : Bool
   mut browsing : Bool
-  /// What the dialog shows, in place of the one before (no sheet over a sheet): its fields (0), the folders to add (1),
-  /// a station's folders browsed (2).
-  mut step : Int
 }
 
 ///|
@@ -138,7 +135,7 @@ let preset_serial : Ref[Int] = Ref(0)
 /// `stations`: the workspace's up now (the `newChat` view's), whose folders are offered too.
 fn preset_dialog(src : Source, w : Workspace, address : String, id : String, stations : Array[Json], adding? : Bool = false, browsing? : Bool = false) -> Unit {
   preset_serial.val += 1
-  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding: adding || browsing, browsing, step: 0 }
+  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding: adding || browsing, browsing }
   let key = fn(part : String) { "preset-editor/" + e.serial.to_string() + "/" + part }
   let name = field_of(key("name"))
   let instructions = field_of(key("instructions"))
@@ -154,24 +151,9 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
   let title = if id == "" { @sf.t("web-main.preset.new") } else { @sf.t("web-main.preset.edit") }
   open_dialog(
     title,
-    live=fn() {
-      match e.step {
-        1 => (@sf.t("web-main.preset.add"), "", "")
-        2 => (@sf.t("web-main.preset.pickFolder"), "", "")
-        _ => (title, "", "")
-      }
-    },
-    on_gone=fn() { (@sfbase.folder_browse_close.val)() },
+    steps=true,
     fn(c, _) {
       let offered = offered_dirs(src, address, stations)
-      if e.step == 1 {
-        preset_add_step(c, src, address, offered, e, key)
-        return
-      }
-      if e.step == 2 {
-        (@sfbase.folder_browse_body.val)(c, src, address)
-        return
-      }
       // (one changed: what it is, once the station's presets are read)
       if !e.filled {
         match was() {
@@ -224,7 +206,10 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
           if @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus") || (e.adding && e.filled) {
             e.adding = false
             field_of(key("q")).set("")
-            e.step = 1
+            // (a step in, in the dialog: back from it to the fields)
+            @sf.panel_go(@sf.t("web-main.preset.add"), fn(c, _) {
+              preset_add_step(c, src, address, offered_dirs(src, address, stations), e, key)
+            })
           }
         })
         |> ignore
@@ -236,31 +221,6 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
       })
     },
     fn(c, shut) {
-      // (the folders to add, or a station's browsed: back to what was before, or this folder taken)
-      if e.step == 1 {
-        c.spacer()
-        if @sf.button(c, @sf.t("common.back"), key=key("back"), tone=Ghost) {
-          e.step = 0
-        }
-        return
-      }
-      if e.step == 2 {
-        c.spacer()
-        if @sf.button(c, @sf.t("common.back"), key=key("back2"), tone=Ghost) {
-          (@sfbase.folder_browse_close.val)()
-          e.step = 1
-        }
-        let here = (@sfbase.folder_browse_here.val)()
-        if @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "") {
-          let d = Json::object({ "path": Json::string(here) })
-          if !e.dirs.iter().any(fn(x) { dir_key(Some(x)) == dir_key(Some(d)) }) {
-            e.dirs.push(d)
-          }
-          (@sfbase.folder_browse_close.val)()
-          e.step = 0
-        }
-        return
-      }
       if id != "" {
         if @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger) {
           confirm(
@@ -358,7 +318,7 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, offered : Array[
       c.semantics(b, Button, id~, label=name)
       if c.clicked(id) {
         e.dirs.push(o)
-        e.step = 0
+        @sf.panel_back() |> ignore
       }
     }
     // (last, its folder where the others' marks stand)
@@ -373,11 +333,34 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, offered : Array[
     c.semantics(b, Button, id~, label=@sf.t("web-main.preset.browse"))
     if c.clicked(id) || e.browsing {
       e.browsing = false
-      (@sfbase.folder_browse_open.val)(address)
-      e.step = 2
+      preset_browse(src, address, e, key)
     }
   })
   |> ignore
+}
+
+///|
+/// 浏览文件夹, a step in from 添加目录: the preset's station's folders, gone into one by one (the files' page's folder
+/// picker); at its foot 使用此文件夹, the folder it is in taken among the preset's and the fields shown again. Left, the
+/// browsing let go of.
+fn preset_browse(src : Source, address : String, e : PresetEditing, key : (String) -> String) -> Unit {
+  (@sfbase.folder_browse_open.val)(address)
+  @sf.panel_go(
+    @sf.t("web-main.preset.pickFolder"),
+    fn(c, _) { (@sfbase.folder_browse_body.val)(c, src, address) },
+    foot=fn(c, _) {
+      c.spacer()
+      let here = (@sfbase.folder_browse_here.val)()
+      if @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "") {
+        let d = Json::object({ "path": Json::string(here) })
+        if !e.dirs.iter().any(fn(x) { dir_key(Some(x)) == dir_key(Some(d)) }) {
+          e.dirs.push(d)
+        }
+        @sf.panel_back(to=1) |> ignore
+      }
+    },
+    left=fn() { (@sfbase.folder_browse_close.val)() },
+  )
 }
 
 ///|

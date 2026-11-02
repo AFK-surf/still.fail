@@ -676,6 +676,22 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
 }
 
 ///|
+/// Back to the page `depth` deep (1 the root): the top slides away over it, those between taken off as they are, never
+/// shown again (forgotten, `on_leave` told, as the top's slide begins); false when the stack is no deeper than that.
+pub fn[P] Nav::pop_to(self : Nav[P], depth : Int) -> Bool {
+  if depth < 1 || self.pages.length() <= depth {
+    return false
+  }
+  if self.mode != 0 && self.mode != 3 {
+    self.settle()
+  }
+  while self.pages.length() > depth + 1 {
+    self.gone.push(self.pages.remove(self.pages.length() - 2))
+  }
+  self.pop()
+}
+
+///|
 /// The top page replaced by `page`, in place (nothing slides).
 pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
   self.settle()

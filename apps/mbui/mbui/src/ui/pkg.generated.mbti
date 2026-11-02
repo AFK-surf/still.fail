@@ -1862,6 +1862,7 @@ pub fn[P] Nav::new(P, on_leave? : (P) -> Unit, went_back? : (P, Bool, Bool, Arra
 pub fn[P] Nav::offset(Self[P]) -> Double
 pub fn[P] Nav::pages(Self[P]) -> Array[P]
 pub fn[P] Nav::pop(Self[P]) -> Bool
+pub fn[P] Nav::pop_to(Self[P], Int32) -> Bool
 pub fn[P] Nav::push(Self[P], P) -> Unit
 pub fn[P] Nav::push_over(Self[P], P) -> Unit
 pub fn[P] Nav::replace(Self[P], P) -> Unit

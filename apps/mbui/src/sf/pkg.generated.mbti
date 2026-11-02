@@ -438,7 +438,7 @@ pub let desk_strong : @ui.TextStyle
 
 pub let desk_words : @ui.TextStyle
 
-pub fn dialog(@ui.Ctx, String, Bool, String, () -> Unit, description? : String, footer? : () -> Unit, wide? : Bool, w? : Double, close_label? : String, step? : String, column_in? : Double) -> Bool
+pub fn dialog(@ui.Ctx, String, Bool, String, () -> Unit, description? : String, footer? : () -> Unit, wide? : Bool, w? : Double, close_label? : String, step? : String, column_in? : Double, bare? : Bool, on_escape? : () -> Bool) -> Bool
 
 pub fn dialog_body_most(@ui.Ctx, String, Int32) -> Double?
 
@@ -1312,7 +1312,9 @@ pub let pane_round : @ref.Ref[FixedArray[@paint.CornerOf]?]
 
 pub fn pane_top_right() -> Double?
 
-pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, head_end? : (@ui.Ctx) -> Unit, side? : @view.Side, along? : @view.Along, offset? : Double) -> Unit
+pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, head_end? : (@ui.Ctx) -> Unit, side? : @view.Side, along? : @view.Along, offset? : Double, steps? : Bool) -> Unit
+
+pub fn panel_back(to? : Int32) -> Bool
 
 pub fn panel_bleed() -> @ui.Style
 
@@ -1322,11 +1324,15 @@ pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
 pub fn panel_corner_foot() -> @ui.Style
 
+pub fn panel_depth() -> Int32
+
 pub fn panel_foot(@ui.Ctx, () -> Unit) -> Unit
 
 pub let panel_foot_end : @ui.Style
 
 pub let panel_foot_ends : @ui.Style
+
+pub fn panel_go(String, (@ui.Ctx, () -> Unit) -> Unit, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, left? : () -> Unit) -> Unit
 
 pub fn panel_ground() -> Int64
 

@@ -2260,7 +2260,9 @@ pub fn dialog_body_most(c : @ui.Ctx, key : String, inner : Int) -> Double? {
 /// its top beside the close button (round, 32: `close_label`, none when ""), `description` 6 under it (13, muted),
 /// what `body` holds 18 under that (its parts 16 apart; none of that room where it holds nothing), and `footer`'s
 /// buttons at its end 24 under it, 8 apart; what it holds `column_in` in from its padding (a panel's dialog's: on its
-/// words' line, panel_centred).
+/// words' line, panel_centred). `bare`: what it holds has its head and its buttons of its own (a step of a panel that
+/// goes in steps, each sliding in whole: panel_centred), untitled, none of the room round a body (its close button in
+/// its corner, over it: untitled_clear). An Escape `on_escape` says it took is a step back within it, not closing it.
 /// Whether it is open now (closed by its close button too).
 pub fn dialog(
   c : @ui.Ctx,
@@ -2275,6 +2277,8 @@ pub fn dialog(
   close_label? : String = "",
   step? : String = "",
   column_in? : Double = 0.0,
+  bare? : Bool = false,
+  on_escape? : () -> Bool,
 ) -> Bool {
   let closed = Ref(false)
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
@@ -2286,6 +2290,7 @@ pub fn dialog(
     description~,
     w=dmin(w, c.window_size().0 - dialog_margin),
     close_label="",
+    on_escape?,
     look=fn(c, s, inner) {
       c.box(
         style=dialog_box,
@@ -2354,7 +2359,8 @@ pub fn dialog(
           let column = @ui.style(px=room(column_in))
           // (untitled: from its padding's top, its head its own)
           let top = if untitled { dialog_untitled_top } else { no_style }
-          c.box(style=(if footer is None { dialog_body_end } else { dialog_body }).then(column).then(top), id=c.id(key + "/held"), gone_empty=true, fn() {
+          let held = if bare { full_width } else if footer is None { dialog_body_end } else { dialog_body }
+          c.box(style=held.then(column).then(top), id=c.id(key + "/held"), gone_empty=true, fn() {
             // (its rows told they are in a dialog: dialog_rows; untitled, its close button over its corner)
             let (was, clear_was) = (in_dialog.val, untitled_clear_now.val)
             in_dialog.val = true
