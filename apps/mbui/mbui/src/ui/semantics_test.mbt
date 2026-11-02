@@ -66,3 +66,14 @@ test "aspect: a box's height follows its width" {
   assert_eq(w, 160.0)
   assert_eq(h, 90.0)
 }
+
+///|
+test "aspect: a box's height follows its width as its most leaves it" {
+  let t = Tester::new(fn(c) {
+    let i = c.box(style=style(w=Full, max_w=Fixed(160.0)), aspect=16.0 / 9.0, fn() {  })
+    c.semantics(i, Image, label="picture")
+  }, w=640.0, h=480.0)
+  let (_, _, w, h) = t.get(Image, label="picture").rect
+  assert_eq(w, 160.0)
+  assert_eq(h, 90.0)
+}
