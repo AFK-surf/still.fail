@@ -1059,7 +1059,10 @@ export class SessionActor {
       const missing = error instanceof CommandMissing && error.command === this.runtime;
       if (missing) this.deps.runtimeMissing?.(this.runtime);
       const said = missing ? `⚠️ ${t("station.notice.runtimeMissing", { name: runtimeLabel(this.runtime) })}` : `⚠️ ${t("station.notice.cannotStart", { error: message })}`;
-      if (!this.saidLast(said)) await this.notice(said, null, missing ? this.runtime : null);
+      // Nothing said since it last could not start: not said again, for another reason either (two taking turns as the
+      // station restarted filled a chat, 2026-11-02). A person's word in between is answered.
+      const cannotStart = `⚠️ ${t("station.notice.cannotStart", { error: "" })}`;
+      if (!this.saidLast((last) => last === said || (!missing && last.startsWith(cannotStart)))) await this.notice(said, null, missing ? this.runtime : null);
       throw error;
     }
   }
