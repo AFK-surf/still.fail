@@ -62,6 +62,7 @@ export const TOPICS: Record<string, Spec> = {
   host: { station: S },
   footprint: { station: S },
   memory: { station: S },
+  presets: { station: S },
   outflowGrants: { station: S },
   net: { station: S },
   way: { station: S },
