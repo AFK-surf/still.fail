@@ -425,6 +425,12 @@ export type CodexDriverOptions = {
   installedVersion?: () => Promise<string | null>;
   /// Bytes of output an app-server may have before it is replaced (OUTPUT_LIMIT).
   outputLimit?: number;
+  /// Settled once what the station before this one left is taken up (sessions/agents.ts `start`). Until then an
+  /// app-server a runner keeps is that station's, to be taken up with its snapshot by the session that ran on it. Asked
+  /// for before (a profile's quota or the model catalog, as the station starts), one was taken up as after a crash, all
+  /// it ever wrote read again on the main thread (131 MB on ccvm, 2026-11-02: held 4.8 s as devices came back after an
+  /// update), and taken from the station still handing over, which let go of the turns running on it.
+  takenUp?: Promise<unknown>;
 };
 
 /// An app-server's runner keeps all it wrote (every diff and command output of every thread on it, hundreds of MB in a
@@ -594,6 +600,7 @@ export class CodexDriver implements AgentDriver {
   }
 
   private async host(profile: Profile, session?: string, cwd?: string): Promise<Host> {
+    await this.options.takenUp;
     const installed = await this.installedVersion();
     const key = this.hostKey(profile.id, session);
     for (;;) {
