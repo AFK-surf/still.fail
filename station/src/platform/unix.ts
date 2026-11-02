@@ -655,5 +655,5 @@ export const unix: Platform = {
   hasFolderPermissions: MACOS,
   hasSpotlight: MACOS,
   hasUnixSockets: true,
-  desktopScreen: MACOS ? "helper" : null,
+  desktopScreen: MACOS ? "helper" : process.platform === "linux" ? "x11" : null,
 };

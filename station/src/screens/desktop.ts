@@ -1,8 +1,8 @@
 // This machine's display as a screen source (`desktop`, docs/remote-screens.md): on macOS, still.fail Helper
 // (helper/app.ts) captures the main display with ScreenCaptureKit, encodes H.264 with VideoToolbox (or a JPEG a
 // picture, for a view that takes no H.264) and posts input with CGEvent, a view a connection to it. Windows' is
-// win-desktop.ts (its views are this file's HelperView too); elsewhere the desktop says it is not supported, and opens
-// nothing.
+// win-desktop.ts (its views are this file's HelperView too); Linux's X11 source is x11-desktop.ts. Elsewhere the
+// desktop says it is not supported, and opens nothing.
 //
 // macOS grants Screen Recording and Accessibility to the helper app. Opening the desktop while one is missing puts the
 // helper's window up on this Mac (once an attempt, the system's own prompt not asked: it would fight the window): a
