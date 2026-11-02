@@ -117,20 +117,7 @@ pub fn picture(
       return false
     }
   }
-  if !t.pending().is_empty() {
-    say("picture: images or native views are still pending")
-    return false
-  }
-  let failed = t.failed_images()
-  if !failed.is_empty() {
-    for id in failed {
-      say("picture: image could not be decoded: \{t.image_src(id)}")
-    }
-    return false
-  }
-  // A native web or video view is a hole in mbui's canvas: the native view is not part of this offscreen renderer.
-  if !t.holes().is_empty() {
-    say("picture: native view content cannot be drawn offscreen")
+  if !scene_drawable(t, "picture", false) {
     return false
   }
   let buf = Ref::new(FixedArray::make(0, 0.0))

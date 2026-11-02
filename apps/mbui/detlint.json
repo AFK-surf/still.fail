@@ -48,7 +48,8 @@
       "src/sf/tokens.mbt"
     ],
     "outside": [
-      "src/keyboard/*.mbt"
+      "src/keyboard/*.mbt",
+      "src/sffilmcheck/main.mbt"
     ]
   },
   "library": {

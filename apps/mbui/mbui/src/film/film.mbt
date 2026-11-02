@@ -11,6 +11,7 @@
 //   [MBUI_DARK=1] [MBUI_FILM_INSET=1: the window's buttons in the app's top row, a Mac's] [MBUI_FILM_FRAMES=3000]
 //   [MBUI_FILM_FPS=60: the rate both the app and the video are drawn at]
 //   [MBUI_FILM_PREPARE=<script>: actions and named resource requirements before filming begins]
+//   [MBUI_FILM_ALLOW_INCOMPLETE=1: intentionally film the parts mbui can draw when other content is missing]
 //   [MBUI_NATIVE_INPUT=finger|mouse: the input the scene was started for; otherwise the platform's]
 //   MBUI_PICTURE=<out.png> selects a still image from the same scene instead; MBUI_PICTURE_AT is milliseconds after
 //   the supplied preparation and drive, or MBUI_PICTURE_FRAME selects a zero-based frame of the drive. Set
@@ -42,7 +43,8 @@ pub let film_fps : Int = 60
 /// MP4, `fps` frames a second) from the Tester's first frame to the script's end (or `max` frames of it), the
 /// run's text and pictures as this host answered them beside it (`out`.textrec). Whether the film was made and the
 /// script passed, what went wrong said. `prepare` runs against the same view before the first filmed frame; a failed
-/// preparation leaves the previous film untouched.
+/// preparation leaves the previous film untouched. A failed image or a native view cannot be drawn offscreen, so the
+/// film fails rather than omitting it; `allow_incomplete` deliberately films just the parts mbui can draw.
 pub fn film(
   view : (@ui.Ctx) -> Unit,
   tree? : (@view.View) -> Unit,
@@ -60,6 +62,7 @@ pub fn film(
   max? : Int = 3000,
   last? : String = "",
   copied? : String = "",
+  allow_incomplete? : Bool = false,
 ) -> Bool {
   if !supported {
     say("film: this host has no film")
@@ -113,6 +116,9 @@ pub fn film(
     fps=fps.to_double(),
     max~,
     draw=fn(t) {
+      if !allow_incomplete && !scene_drawable(t, "film", true) {
+        return false
+      }
       if draw_frame(t, buf) {
         drawn.val = drawn.val + 1
         true
@@ -246,7 +252,7 @@ pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
   let drive = arg("MBUI_FILM_DRIVE")
   if out == "" || drive == "" {
     say(
-      "film: MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_FILM_PREPARE=<script>] [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0] [MBUI_FILM_FPS=60] [MBUI_KEYBOARD=1] [MBUI_DARK=1] [MBUI_FILM_INSET=1] [MBUI_FILM_FRAMES=3000] [MBUI_LOCAL_STATION=<json>]",
+      "film: MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_FILM_PREPARE=<script>] [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0] [MBUI_FILM_FPS=60] [MBUI_FILM_ALLOW_INCOMPLETE=1] [MBUI_KEYBOARD=1] [MBUI_DARK=1] [MBUI_FILM_INSET=1] [MBUI_FILM_FRAMES=3000] [MBUI_LOCAL_STATION=<json>]",
     )
     exit(2)
     return
@@ -302,6 +308,7 @@ pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
     max~,
     last=arg("MBUI_FILM_LAST"),
     copied=arg("MBUI_FILM_COPIED"),
+    allow_incomplete=arg("MBUI_FILM_ALLOW_INCOMPLETE") == "1",
   )
   exit(if ok { 0 } else { 1 })
 }

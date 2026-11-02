@@ -32,7 +32,11 @@ External assets and a dirty or unavailable source revision still need to be kept
 publication is interrupted, compare the result's SHA-256 to the record before treating them as a pair.
 
 Rendering uses the Mac offscreen host. System keyboards, dialogs and native web or video views are not drawn by mbui;
-use a real system capture for a scene that needs them. `docs/figures.md` describes building reusable graphics.
+use a real system capture for a scene that needs them. Films fail when an image cannot be decoded or a native view is
+visible, instead of silently omitting it. When deliberately filming only the parts mbui draws, set
+`MBUI_FILM_ALLOW_INCOMPLETE=1`; this choice is recorded in the scene metadata. Images that are still loading can be
+filmed as loading; use the preparation script and `image_ready SRC` if they must be ready before filming begins.
+`docs/figures.md` describes building reusable graphics.
 
 ## Assemble a timeline
 
