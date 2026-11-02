@@ -1497,7 +1497,9 @@ test("a chat is headed as the chat list calls it: its name, the agent's, else �
   const child = r.store.openedBy(keyA)[0]!.child;
   const thread = r.store.homeChat(child)!;
   assert.equal(sender(r.hub, child)[0], "安卓构建");
+  // (chat_create names its session too)
   r.store.setThreadTitle(thread.id, null);
+  r.store.setTitle(child, null);
   assert.equal(sender(r.hub, child)[0], untitled());
   r.store.setAutoTitle(thread.id, "安卓发版", true);
   assert.equal(sender(r.hub, child)[0], "安卓发版");

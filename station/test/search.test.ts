@@ -58,8 +58,8 @@ test("a chat's messages are found by any part of their words, in any script, cas
   const t = chat(s.store, "k1", null);
   say(s.store, t, "1", "我们用 DuckDB 做分析");
   say(s.store, t, "2", "sqlite 的全文索引", "agent");
-  // The chat too: it is called by what was first said in it.
-  assert.deepEqual(kinds(find(s, "duckdb", home)), { chat: [`c:${t}`], message: [`m:${t}:1`] });
+  // Not the chat: never named, it is 新对话 as the chat list calls it (read/views.ts titleOf), not what was first said.
+  assert.deepEqual(kinds(find(s, "duckdb", home)), { message: [`m:${t}:1`] });
   assert.deepEqual(kinds(find(s, "uckD", home, { kinds: ["message"] })), { message: [`m:${t}:1`] });
   assert.deepEqual(kinds(find(s, "索引", home)), { message: [`m:${t}:2`] });
   // Every word must be there.
@@ -68,8 +68,10 @@ test("a chat's messages are found by any part of their words, in any script, cas
   assert.equal(hit!.chat, "k1");
   assert.equal(hit!.seq, 1);
   assert.equal(hit!.text, "我们用 DuckDB 做分析");
-  // A chat's hit says where in its title the words are.
-  assert.equal(find(s, "duckdb", home, { kinds: ["chat"] })[0]!.hits[0]!.text, "我们用 DuckDB 做分析");
+  // Named by its agent, it is found by that; its hit says where in its title the words are.
+  s.store.setAutoTitle(t, "DuckDB 分析", true);
+  assert.deepEqual(kinds(find(s, "duckdb", home)), { chat: [`c:${t}`], message: [`m:${t}:1`] });
+  assert.equal(find(s, "duckdb", home, { kinds: ["chat"] })[0]!.hits[0]!.text, "DuckDB 分析");
   // Cased letters beyond ASCII's.
   say(s.store, t, "3", "Über die ЖУРНАЛ");
   assert.deepEqual(kinds(find(s, "über журнал", home)), { message: [`m:${t}:3`] });
