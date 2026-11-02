@@ -1,30 +1,102 @@
+// The decision cards the usage page counts (read/store.ts decisionCards), as the database keeps them (store/schema.ts
+// CARD_OUTCOMES): made from what was written before, kept as messages are written, the same as working them out from
+// every card's next message, and read without reading an entry.
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { decisionCards, makeStore } from "../src/read/store.ts";
+import { cardOf } from "../src/store/rows.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 
-test("the first human answer after a card is sought among human messages", () => {
-  const store = Store.open(":memory:");
-  const thread = store.openThread("ember", "EMBER", "1", null, null);
-  store.insertMessage({ ...newMessage(thread.id, "1", "agent", "agent", "choose"), card: { type: "options", options: [{ label: "yes" }] } });
-  for (let n = 0; n < 100; n++) store.insertMessage(newMessage(thread.id, `a${n}`, "agent", "agent", "working"));
-  store.insertMessage(newMessage(thread.id, "answer", "person", "person", "yes"));
-  let plan: string[] = [];
-  const db = new Proxy(store.db, {
-    get(target, property) {
-      if (property === "prepare") return (sql: string) => {
-        if (sql.startsWith("SELECT text FROM entries WHERE thread = ? AND n > ?")) {
-          plan = (target.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(thread.id, 1) as { detail: string }[]).map((r) => r.detail);
-        }
-        return target.prepare(sql);
-      };
-      const value = Reflect.get(target, property, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  }) as DatabaseSync;
+/// How each card was answered, worked out as it was before the outcomes were kept: each agent's options card, and the
+/// first thing a person said after it in its chat (one of its labels, trimmed), or a close by someone not its author.
+function workedOut(store: Store): string[] {
+  const asked = store.db.prepare("SELECT thread, n, author, card, options FROM entries WHERE kind = 'message' AND author_kind = 'agent' AND (card IS NOT NULL OR options IS NOT NULL)").all() as any[];
+  const next = store.db.prepare("SELECT text FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person' ORDER BY n LIMIT 1");
+  const closed = store.db.prepare("SELECT viewer FROM closed_cards WHERE thread = ? AND n = ?");
+  const out: string[] = [];
+  for (const r of asked) {
+    const card = cardOf(r.card ?? null, r.options ?? null);
+    if (card?.type !== "options" || !Array.isArray(card.options)) continue;
+    const labels = new Set(card.options.map((o: any) => (typeof o?.label === "string" ? o.label.trim() : "")).filter((l: string) => l !== ""));
+    const said = next.get(r.thread, r.n) as any;
+    const shut = closed.get(r.thread, r.n) as any;
+    const picked = (said !== undefined && typeof said.text === "string" && labels.has(said.text.trim())) || (shut !== undefined && shut.viewer !== r.author);
+    out.push(`${r.thread}:${r.n}:${picked}`);
+  }
+  return out.sort();
+}
+
+/// How each card was answered, as the database keeps it.
+const kept = (store: Store) =>
+  (store.db.prepare("SELECT c.thread, c.n, c.said OR EXISTS (SELECT 1 FROM closed_cards x WHERE x.thread = c.thread AND x.n = c.n AND x.viewer != c.author) AS picked FROM card_outcomes c").all() as any[])
+    .map((r) => `${r.thread}:${r.n}:${r.picked === 1}`)
+    .sort();
+
+/// Chats with cards of every shape, answered every way.
+function write(store: Store) {
+  const a = store.openThread("ember", "EMBER", "a", null, null).id;
+  const b = store.openThread("ember", "EMBER", "b", null, null).id;
+  let ts = 0;
+  const say = (thread: number, kind: "agent" | "person", text: string, more: { card?: unknown; options?: unknown } = {}) =>
+    store.insertMessage({ ...newMessage(thread, String(++ts), kind, kind === "agent" ? "k1" : "p@x", text), ...more } as any)[0];
+  const options = (...labels: unknown[]) => ({ card: { type: "options", options: labels.map((label) => (typeof label === "string" ? { label } : label)) } });
+  // Answered with one of its labels, written around (a tab, a no-break space, a newline).
+  say(a, "agent", "pick", options("yes", " no "));
+  say(a, "agent", "working");
+  say(a, "person", "\t no \n");
+  // Two cards before one answer: both answered by it, one by a label of its own.
+  say(a, "agent", "first", options("go"));
+  say(a, "agent", "second", options("stay", { label: 3 }, "x", { label: "  " }));
+  say(a, "person", "stay");
+  // Answered in a person's own words, then closed by them.
+  const closedByPerson = say(a, "agent", "close me", options("ok"));
+  say(a, "person", "whatever");
+  // Closed by its own agent: not picked.
+  const closedByAgent = say(a, "agent", "withdrawn", options("ok"));
+  // Options from before cards; a card that is none of options; one with no list.
+  say(b, "agent", "old", { options: [{ label: "a" }, "b"] });
+  say(b, "agent", "login", { card: { type: "login", login: "l1" } });
+  say(b, "agent", "odd", { card: { type: "options", options: "none" } });
+  say(b, "person", "a");
+  // Not answered yet.
+  say(b, "agent", "open", options("later"));
+  store.db.prepare("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, 1)").run(a, closedByPerson, "p@x");
+  store.db.prepare("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, 1)").run(a, closedByAgent, "k1");
+  // A card a station before wrote whose own JSON does not read: its options from before cards count.
+  store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at, card, options) VALUES (?, 100, 'message', 'agent', 'k1', 'broken', 1, '{nope', ?)").run(b, JSON.stringify([{ label: "fix" }]));
+  store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, 101, 'message', 'person', 'p@x', 'fix', 1)").run(b);
+}
+
+test("the decision cards are kept as they are answered, the same as worked out from every card's next message", () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-outcomes-"));
+  const path = join(dir, "stillfail.db");
   try {
-    assert.deepEqual(decisionCards(makeStore(db, ".")), [{ home: null, picked: true }]);
-    assert.ok(plan.some((line) => line.includes("entries_people_by_n")), plan.join(" | "));
-  } finally { store.close(); }
+    const store = Store.open(path, join(dir, "archive"));
+    write(store);
+    const want = workedOut(store);
+    // Five cards in the first chat, three in the second (not the login card, nor the one without a list); five picked.
+    assert.equal(want.length, 8);
+    assert.equal(want.filter((c) => c.endsWith(":true")).length, 5);
+    assert.deepEqual(kept(store), want, "kept as they were written");
+    // A database from before them: made from what was written then, on opening.
+    store.db.exec("DROP TRIGGER card_outcomes_asked; DROP TRIGGER card_outcomes_answered; DROP TRIGGER card_outcomes_dropped; DROP TABLE card_outcomes;");
+    store.close();
+    const again = Store.open(path, join(dir, "archive"));
+    assert.deepEqual(kept(again), want, "made from what was written before");
+    // What the usage page counts, with the thread each is at home in; and none of it read from the entries.
+    const counted = decisionCards(makeStore(again.db, dir));
+    assert.deepEqual([counted.length, counted.filter((c) => c.picked).length], [8, 5]);
+    const plan = (again.db.prepare("EXPLAIN QUERY PLAN SELECT t.home AS home, c.said OR EXISTS (SELECT 1 FROM closed_cards x WHERE x.thread = c.thread AND x.n = c.n AND x.viewer != c.author) AS picked FROM card_outcomes c LEFT JOIN threads t ON t.id = c.thread").all() as { detail: string }[]).map((r) => r.detail);
+    assert.ok(!plan.some((line) => /\bentries\b/.test(line)), plan.join(" | "));
+    // A chat removed with its entries takes its cards with it.
+    const [first] = again.db.prepare("SELECT thread FROM card_outcomes ORDER BY thread LIMIT 1").all() as { thread: number }[];
+    again.db.prepare("DELETE FROM entries WHERE thread = ?").run(first!.thread);
+    assert.equal((again.db.prepare("SELECT COUNT(*) AS c FROM card_outcomes WHERE thread = ?").get(first!.thread) as { c: number }).c, 0);
+    again.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

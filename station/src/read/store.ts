@@ -884,28 +884,13 @@ export function threadsByPlace(s: Store): { surface: string; home: string | null
 /// Every decision card an agent posted (an options card, or options from before cards) and how it was answered: by an
 /// option pressed (a person's next message in the thread is one of its labels, or a person closed it with one), or
 /// not (answered in their own words, or not yet): the usage page's 决策点击率. With the session its thread is at home in.
+/// As the database keeps them (store/schema.ts CARD_OUTCOMES): no entry is read.
 export function decisionCards(s: Store): { home: string | null; picked: boolean }[] {
-  const out: { home: string | null; picked: boolean }[] = [];
-  // (by the cards' and the options' indexes, entries_cards and entries_options: a LIKE over every entry's card was
-  // 600 ms on ccvm's 40 thousand, this 13)
-  const homes = new Map(all(s, "SELECT id, home FROM threads").map((t) => [Number(t.id), t.home ?? null]));
-  const asked = all(
+  return all(
     s,
-    `SELECT thread, n, kind, author_kind, author, card, options FROM entries WHERE card IS NOT NULL
-     UNION ALL SELECT thread, n, kind, author_kind, author, card, options FROM entries WHERE options IS NOT NULL AND card IS NULL`,
-  ).filter((r) => r.kind === "message" && r.author_kind === "agent");
-  const next = s.db.prepare("SELECT text FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person' ORDER BY n LIMIT 1");
-  const closed = s.db.prepare("SELECT viewer FROM closed_cards WHERE thread = ? AND n = ?");
-  for (const r of asked) {
-    const card = rows.cardOf(r.card ?? null, r.options ?? null);
-    if (card?.type !== "options" || !Array.isArray(card.options)) continue;
-    const labels = new Set(card.options.map((o: Json) => (typeof o?.label === "string" ? o.label.trim() : "")).filter((l: string) => l !== ""));
-    const said = next.get(r.thread, r.n) as Json;
-    const shut = closed.get(r.thread, r.n) as Json;
-    const picked = (said !== undefined && typeof said.text === "string" && labels.has(said.text.trim())) || (shut !== undefined && shut.viewer !== r.author);
-    out.push({ home: homes.get(Number(r.thread)) ?? null, picked });
-  }
-  return out;
+    `SELECT t.home AS home, c.said OR EXISTS (SELECT 1 FROM closed_cards x WHERE x.thread = c.thread AND x.n = c.n AND x.viewer != c.author) AS picked
+     FROM card_outcomes c LEFT JOIN threads t ON t.id = c.thread`,
+  ).map((r) => ({ home: r.home ?? null, picked: r.picked === 1 }));
 }
 
 /// usage_since: when the earliest call recorded was made.
