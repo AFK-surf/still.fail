@@ -5,6 +5,10 @@ D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
 
+if [ "${1:-}" = preview ]; then
+  shift
+  exec bash "$D/media-preview.sh" "$@"
+fi
 usage='media.sh picture|film OUTPUT DRIVE [PREPARE]'
 [ "$#" -ge 3 ] && [ "$#" -le 4 ] || { echo "$usage" >&2; exit 2; }
 kind=$1

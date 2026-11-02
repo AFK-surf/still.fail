@@ -225,6 +225,18 @@ fn host_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> (Int, (Double, D
 /// A film made of the process's arguments (the head of this file says which), `view` the app's: the process ends
 /// with 0 when it was made and the script passed, 1 when not, 2 when it was not asked for rightly.
 pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+  if arg("MBUI_MEDIA_PREVIEW") == "1" {
+    // The very same scene and window tree as the offscreen export, hosted in an interactive native window.
+    let platform = number(arg("MBUI_FILM_PLATFORM")).unwrap_or(0.0).to_int()
+    @ui.set_platform(Some(platform))
+    match arg("MBUI_POINTING") {
+      "finger" => @ui.set_pointing(Some(@ui.Pointing::Finger))
+      "mouse" => @ui.set_pointing(Some(@ui.Pointing::Mouse))
+      _ => ()
+    }
+    @ui.run("mbui scene", view, tree?)
+    return
+  }
   if arg("MBUI_PICTURE") != "" {
     run_picture(view, tree?)
     return
