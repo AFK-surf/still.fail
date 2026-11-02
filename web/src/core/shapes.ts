@@ -7000,6 +7000,12 @@ export interface UsageActivity {
 	weekly: number[];
 	/** The weeks' running total as the same. */
 	cumulative: number[];
+	/** Each of `cells` said as the pointer rests on it: its date and tokens; "" a day after today. */
+	tips: string[];
+	/** Each of the 52 weeks said so: its first day and tokens. */
+	weekTips: string[];
+	/** Each week's running total said so: as of its last day so far. */
+	runningTips: string[];
 	less: string;
 	more: string;
 	/** Under each view: none under the days (their legend instead), what a column is under the others. */

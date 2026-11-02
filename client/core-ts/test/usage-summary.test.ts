@@ -54,6 +54,17 @@ test("the year: 52 weeks Sunday first, today in the last, a day after it -1; eac
   assert.ok(s.activity.months.length >= 11);
 });
 
+test("what each day and week says under the pointer: its date and tokens; a day after today nothing", () => {
+  const s = usageSummary([source("studio", history([day("2026-10-02", 1200), day("2026-09-28", 300)]))], NOW, 480, "")!;
+  const a = s.activity;
+  assert.equal(a.tips.length, WEEKS * 7);
+  assert.deepEqual(a.tips.slice(-7), ["9月27日 · 没有用 token", "9月28日 · 300 token", "9月29日 · 没有用 token", "9月30日 · 没有用 token", "10月1日 · 没有用 token", "10月2日 · 1,200 token", ""]);
+  assert.equal(a.weekTips[WEEKS - 1], "9月27日起一周 · 1,500 token");
+  // the running total as of today, the week's last day so far
+  assert.equal(a.runningTips[WEEKS - 1], "截至10月2日累计 · 1,500 token");
+  assert.equal(a.runningTips[WEEKS - 2], "截至9月26日累计 · 没有用 token");
+});
+
 test("a station from before tells no history: left out and said; none at all: no summary", () => {
   const s = usageSummary([source("studio", history([day("2026-10-02", 1)])), source("old", undefined)], NOW, 480, "")!;
   assert.ok(s.partial !== null);
