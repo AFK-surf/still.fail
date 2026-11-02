@@ -525,6 +525,8 @@ pub struct Tree {
   mut glides_gone : (Int) -> Unit
   /// how a page's list moves where it is drawn, and how many pixels a point is there (Tree::lists_feel)
   mut list_feel : () -> (ListFeel, Double)
+  /// what waits on all of it laid out as it is next, whatever came out otherwise (Tree::once_laid_out)
+  laid_waits : Array[() -> Unit]
   /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
@@ -700,6 +702,7 @@ pub fn Tree::new(
     glides: fn(_, _) {  },
     glides_gone: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
+    laid_waits: [],
     pressing: None,
     pointed: None,
     lit_every: false,
@@ -5320,6 +5323,18 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if self.sized.length() > 0 && self.sizes_told() && self.due {
     self.laid_out(upto)
   }
+  // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
+  // tells laid out in this same pass)
+  if self.laid_waits.length() > 0 {
+    let waits = self.laid_waits.copy()
+    self.laid_waits.clear()
+    for f in waits {
+      @signals.untracked(f)
+    }
+    if self.due {
+      self.laid_out(upto)
+    }
+  }
   // (what is to be brought into sight, where all of it is laid out, before it is drawn; what that moves laid out in
   // this same pass)
   if self.shows_due.length() > 0 {
@@ -6229,6 +6244,15 @@ pub fn Tree::on_target(self : Tree, f : (Target, Array[Target], Double, Double) 
 pub fn Tree::on_glides(self : Tree, glides : (Int, () -> Double?) -> Unit, gone : (Int) -> Unit) -> Unit {
   self.glides = glides
   self.glides_gone = gone
+}
+
+///|
+/// `f` done once all of it is laid out as it is next (sizes told: View::laid_size_told), as one with that layout, whether
+/// anything it follows came out otherwise or not: what waits on where a change it made leaves things (a page's list's
+/// fling toward its foot as what is above it grew, Scroll::grew_above).
+fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
+  self.laid_waits.push(f)
+  self.marked()
 }
 
 ///|

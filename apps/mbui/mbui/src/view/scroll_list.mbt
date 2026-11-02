@@ -538,18 +538,22 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
 }
 
 ///|
-/// How far it can go laid out anew as `most` at `t`: a fling under way down toward its foot, short of it still, meets it
+/// How far it can go laid out anew as `most` at `t` (`laid`: all of it laid out as a change of what it holds left it,
+/// however far that is: Scroll::grew_above): a fling under way down toward its foot, short of it still, meets it
 /// where it is now, worked out again from where it set out (rows below measured anew, come or gone; what grew above,
 /// Scroll::grew_above), at rest then.
-fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double) -> Unit {
+fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? : Bool = false) -> Unit {
   guard @signals.untracked(fn() { self.fling.get() }) is Some({ way: Some(w), .. } as f) &&
     f.v0 > 0.0 &&
     t < f.end_t &&
-    f.till != most else {
+    (laid || f.till != most) else {
     return
   }
   let density = w.px / dmax(w.h, 1.0)
   match list_planned(f.t0, f.x0, f.v0, w, w.same, density, most) {
+    // (past its foot already as it is laid out now (what is under what is in sight less by more than it had left to
+    // go): it meets it now, at its speed now)
+    Some(g) if g.end_t < t => self.fling.set(Some(met_now(f, w, t, most, density)))
     Some(g) => self.fling.set(Some(g))
     None => {
       self.fling.set(None)
@@ -557,4 +561,29 @@ fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double) -> Uni
     }
   }
   self.list_settles(v, t)
+}
+
+///|
+/// Fling `f` on `w` meeting its end at `bound` at `t`, at its speed then: at rest there, what it brings past it going
+/// back from then (as list_planned's meeting).
+fn met_now(f : Fling, w : ListWay, t : Double, bound : Double, density : Double) -> Fling {
+  let edge = if f.v0 > 0.0 { -1 } else { 1 }
+  let at = w.speed(f.v0, t - f.t0)
+  let hit = match w.feel {
+    Desktop => None
+    feel => {
+      let p = BackPath::new()
+      p.t0 = t
+      if feel == Android {
+        p.x0 = w.same
+        p.v0 = (at * 1000.0 * density).round() * 13.0
+        p.plan_edge(w.px)
+      } else {
+        p.v0 = at
+        p.plan_rubber()
+      }
+      Some({ feel, edge, over: w.same, back: Some(p), h: w.h, px: w.px })
+    }
+  }
+  { ..f, end_t: t, end_x: bound, till: bound, way: Some({ ..w, hit, }) }
 }
