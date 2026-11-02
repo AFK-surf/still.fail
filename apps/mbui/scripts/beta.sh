@@ -312,17 +312,20 @@ linux() {
 # (into a file, and its bytes read only once curl said it got them all: piped to shasum, a fetch cut off by --max-time
 # was hashed as it stood, and the retries' bytes after it, linux x64's 36 MB taking 74 s from GitHub's runner on main
 # 57dd8b8e, said "not as made" of what was put whole. A fetch that stalls gives up by its speed, not a fixed time)
+# (and a connection not made in 15 s given up and tried again, as scripts/release-put.sh's: curl's own wait for one is
+# 300 s, and the Windows installer's check said nothing for the 150 s its step waits after the put, main d2791c4f,
+# 41379568722, 2026-11-02)
 check_put() {
-  local name=$1 file=$2 want got= account back
+  local name=$1 file=$2 want got= account back limits="--connect-timeout 15 --speed-limit 1024 --speed-time 30"
   want=$(shasum -a 256 "$file" | cut -d' ' -f1)
   back=$(mktemp)
   if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
-    account=${CLOUDFLARE_ACCOUNT_ID:-$(curl -fsS --retry 4 --retry-all-errors -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)}
-    curl -fsS --retry 4 --retry-all-errors --speed-limit 1024 --speed-time 30 -o "$back" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    account=${CLOUDFLARE_ACCOUNT_ID:-$(curl -fsS $limits --retry 4 --retry-all-errors -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)}
+    curl -fsS $limits --retry 4 --retry-all-errors -o "$back" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
       "https://api.cloudflare.com/client/v4/accounts/$account/r2/buckets/stillfail-releases/objects/$name" 2>/dev/null \
       && got=$(shasum -a 256 "$back" | cut -d' ' -f1)
   else
-    curl -fsS --retry 4 --retry-all-errors --speed-limit 1024 --speed-time 30 -o "$back" "$ORIGIN/releases/$name" 2>/dev/null \
+    curl -fsS $limits --retry 4 --retry-all-errors -o "$back" "$ORIGIN/releases/$name" 2>/dev/null \
       && got=$(shasum -a 256 "$back" | cut -d' ' -f1)
   fi
   rm -f "$back"
