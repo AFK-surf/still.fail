@@ -79,6 +79,7 @@ export class Readers {
   /// The station's data directory, whose database they read.
   readonly data: string;
   private readonly workerFile: URL | undefined;
+  private readonly backfill: { previousGone?: Promise<void>; priority?: SharedArrayBuffer };
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
   readonly names = new Map<string, string>();
   /// What only the hub knows, given to every read: sessions' process states and client keys (the hub sets these).
@@ -86,9 +87,10 @@ export class Readers {
   clientKeys: () => Map<string, string> = () => new Map();
 
   /// For what devices ask, at most two by default (STILLFAIL_READERS says otherwise); for what is told, `tellers`.
-  constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1)), workerFile?: URL, tellers = 1) {
+  constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1)), workerFile?: URL, tellers = 1, backfill: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}) {
     this.data = data;
     this.workerFile = workerFile;
+    this.backfill = backfill;
     this.asked = { told: false, size, room: true, slots: [], waiting: [] };
     this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
   }
@@ -96,7 +98,7 @@ export class Readers {
   /// Begin filling old usage without occupying a device reader. The pool can also start it lazily for standalone tests.
   startUsageIndex() {
     if (this.closed) return;
-    if (this.minutes === null) this.minutes = new MinuteReader(join(this.data, "stillfail.db"));
+    if (this.minutes === null) this.minutes = new MinuteReader(join(this.data, "stillfail.db"), this.backfill);
     this.minutes.start();
   }
 

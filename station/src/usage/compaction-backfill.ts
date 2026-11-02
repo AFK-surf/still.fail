@@ -1,6 +1,7 @@
 import { Worker } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
+import { releaseStoppedBackfill } from "../store/backfill.ts";
 
 /// The backfill is needed only for an old database and stops itself once it has caught up.
 export class CompactionBackfill {
@@ -9,13 +10,16 @@ export class CompactionBackfill {
   #closed = false;
   #complete = false;
   readonly #path: string;
+  readonly #priority: SharedArrayBuffer | undefined;
 
-  constructor(path: string) { this.#path = path; }
+  constructor(path: string, priority?: SharedArrayBuffer) { this.#path = path; this.#priority = priority; }
 
   start(): void {
     if (this.#closed || this.#complete || this.#worker !== null) return;
     const file = new URL(import.meta.url.endsWith(".ts") ? "./compaction-worker.ts" : "./usage/compaction-worker.js", import.meta.url);
-    const worker = new Worker(file, { workerData: { path: this.#path }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
+    const worker = new Worker(file, { workerData: { path: this.#path, priority: this.#priority }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
+    const owner = worker.threadId;
+    worker.once("exit", () => releaseStoppedBackfill(this.#priority, owner));
     this.#worker = worker;
     worker.unref();
     worker.on("message", (answer: { complete?: boolean }) => { if (answer.complete) this.#complete = true; });

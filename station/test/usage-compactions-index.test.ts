@@ -128,6 +128,41 @@ test("the worker resumes the same backfill when another connection releases its 
   }
 });
 
+test("a waiting foreground writer gets the connection before another backfill batch", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-compactions-priority-"));
+  const path = join(dir, "stillfail.db");
+  const db = oldDatabase(path);
+  const priority = new Int32Array(new SharedArrayBuffer(8));
+  let worker: Worker | null = null;
+  try {
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("CREATE TABLE foreground (n INTEGER)");
+    for (let n = 0; n < 100; n++) add(db, `call-${n}`, n, 100_000);
+    installUsageCompactions(db);
+    db.exec("BEGIN IMMEDIATE");
+    worker = new Worker(new URL("../src/usage/compaction-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
+    const [busy] = await once(worker, "message") as [{ waiting?: boolean }];
+    assert.equal(busy.waiting, true, "the worker has encountered the other connection's write lock");
+    Atomics.store(priority, 0, 1); // A write is waiting on the station's connection.
+    db.exec("COMMIT");
+    const [yielded] = await once(worker, "message") as [{ foreground?: boolean }];
+    assert.equal(yielded.foreground, true, "the next batch yields while the station is trying to write");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_main_calls").get() as { n: number }).n, 0);
+    db.prepare("INSERT INTO foreground VALUES (1)").run();
+    Atomics.store(priority, 0, 0);
+    const [code] = await once(worker, "exit");
+    worker = null;
+    assert.equal(code, 0);
+    assert.equal(usageCompactionsReady(db), true);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM foreground").get() as { n: number }).n, 1);
+  } finally {
+    if (worker !== null) await worker.terminate();
+    try { db.exec("ROLLBACK"); } catch { /* already committed */ }
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("neighbors seek only main calls of the requested session", () => {
   const db = oldDatabase();
   try {

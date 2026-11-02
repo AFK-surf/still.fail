@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { on, once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { Worker } from "node:worker_threads";
 import { PLAIN } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
 import { backfillNextWorkspace, backfillUseIndex, initializeUseIndex, PLAIN_USES, USE_BACKFILL_AFTER, UseIndex, VAULT_USES } from "../src/vault/use-index.ts";
@@ -160,6 +162,108 @@ test("a disk-backed backfill resumes after reopening and is read by its worker",
     assert.equal((db.prepare("SELECT done FROM vault_use_backfill WHERE ws = 'w'").get() as { done: number }).done, 1);
   } finally {
     await index.close();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("vault backfill waits for a foreground writer, then serves the indexed page", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vault-backfill-priority-"));
+  const path = join(dir, "station.db");
+  const db = new DatabaseSync(path);
+  const priority = new Int32Array(new SharedArrayBuffer(8));
+  let worker: Worker | null = null;
+  try {
+    db.exec(`PRAGMA journal_mode = WAL;
+      CREATE TABLE vault_requests (ws TEXT NOT NULL, id TEXT NOT NULL, session TEXT NOT NULL, status TEXT NOT NULL,
+        body TEXT NOT NULL, thread INTEGER, card_ts TEXT, PRIMARY KEY (ws, id));`);
+    const put = db.prepare("INSERT INTO vault_requests (ws, id, session, status, body) VALUES ('w', ?, 's', 'granted', ?)");
+    const body = (id: string, at: number) => JSON.stringify({ vault: PLAIN, owner: "alice@x.com", at, item: id });
+    for (let n = 0; n < 100; n++) put.run(`old-${n}`, body(`old-${n}`, n));
+    initializeUseIndex(db);
+    Atomics.store(priority, 0, 1);
+    worker = new Worker(new URL("../src/vault/use-index-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
+    const [notice] = await once(worker, "message") as [{ foreground?: boolean }];
+    assert.equal(notice.foreground, true);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM vault_use_lookup").get() as { n: number }).n, 0);
+    put.run("new", body("new", 200));
+    Atomics.store(priority, 0, 0);
+    worker.postMessage({ id: 1, ws: "w", vault: PLAIN, owner: "alice@x.com", limit: 2 });
+    const [answer] = await once(worker, "message") as [{ bodies: string[] }];
+    assert.deepEqual(answer.bodies.map((b) => JSON.parse(b).item), ["new", "old-99"]);
+  } finally {
+    if (worker !== null) await worker.terminate();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a ready vault page can be read while a foreground write is pending", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vault-ready-while-writing-"));
+  const path = join(dir, "station.db");
+  const db = new DatabaseSync(path);
+  const priority = new Int32Array(new SharedArrayBuffer(8));
+  let worker: Worker | null = null;
+  try {
+    db.exec(`PRAGMA journal_mode = WAL;
+      CREATE TABLE vault_requests (ws TEXT NOT NULL, id TEXT NOT NULL, session TEXT NOT NULL, status TEXT NOT NULL,
+        body TEXT NOT NULL, thread INTEGER, card_ts TEXT, PRIMARY KEY (ws, id));`);
+    db.prepare("INSERT INTO vault_requests (ws, id, session, status, body) VALUES ('w', 'old', 's', 'granted', ?)")
+      .run(JSON.stringify({ vault: PLAIN, owner: "alice@x.com", at: 1, item: "old" }));
+    db.prepare("INSERT INTO vault_requests (ws, id, session, status, body) VALUES ('slow', 'old', 's', 'granted', ?)")
+      .run(JSON.stringify({ vault: PLAIN, owner: "alice@x.com", at: 1, item: "slow" }));
+    initializeUseIndex(db);
+    assert.equal(backfillUseIndex(db, "w"), true);
+    Atomics.store(priority, 0, 1);
+    worker = new Worker(new URL("../src/vault/use-index-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
+    const messages = on(worker, "message");
+    const next = async () => (await messages.next()).value![0] as { id?: number; foreground?: boolean; request?: number; bodies?: string[] };
+    const blocked = async (id: number) => {
+      for (;;) {
+        const message = await next();
+        if (message.foreground && message.request === id) return;
+        assert.equal(message.id, undefined, "a different request cannot finish yet");
+      }
+    };
+    const busy = await next();
+    assert.equal(busy.foreground, true);
+    worker.postMessage({ id: 1, ws: "w", vault: PLAIN, owner: "alice@x.com", limit: 2 });
+    const answer = await next();
+    assert.equal(answer.id, 1, "a completed page does not wait behind a writer");
+    assert.deepEqual(answer.bodies!.map((b) => JSON.parse(b).item), ["old"]);
+
+    worker.postMessage({ id: 2, ws: "slow", vault: PLAIN, owner: "alice@x.com", limit: 2 });
+    await blocked(2);
+    worker.postMessage({ id: 3, ws: "w", vault: PLAIN, owner: "alice@x.com", limit: 2 });
+    await blocked(2);
+    worker.postMessage({ id: 4, ws: "w", vault: PLAIN, owner: "alice@x.com", limit: 2 });
+    const behind = await next();
+    assert.equal(behind.id, 3, "a ready vault passes a different workspace waiting for a write");
+    await messages.return?.();
+  } finally {
+    if (worker !== null) await worker.terminate();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a vault history waiting for handover is cancelled when the station closes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vault-handover-close-"));
+  const db = new DatabaseSync(join(dir, "station.db"));
+  try {
+    db.exec(`CREATE TABLE vault_requests (ws TEXT NOT NULL, id TEXT NOT NULL, session TEXT NOT NULL, status TEXT NOT NULL,
+      body TEXT NOT NULL, thread INTEGER, card_ts TEXT, PRIMARY KEY (ws, id));`);
+    let finish!: () => void;
+    const previousGone = new Promise<void>((resolve) => { finish = resolve; });
+    const index = new UseIndex(db, { previousGone });
+    const pending = index.read("w", PLAIN, "alice@x.com", 2);
+    const stopped = assert.rejects(pending, /station stopping/);
+    await index.close();
+    await stopped;
+    finish();
+    await Promise.resolve();
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM vault_use_backfill").get() as { n: number }).n, 0);
+  } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });
   }

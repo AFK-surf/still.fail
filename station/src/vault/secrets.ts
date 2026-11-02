@@ -151,6 +151,8 @@ export type SecretsDeps = {
   /// Whether what the process before this one held may still come (a handover under way, `carry`): until then a
   /// request whose box is not here yet is not let go.
   coming?(): boolean;
+  /// Background use-index work waits for the previous process and gives foreground database writes priority.
+  backfill?: { previousGone?: Promise<void>; priority?: SharedArrayBuffer };
   /// The chats' browsers (browser/browsers.ts), for sign-ins (kind browser); none: no sign-in is kept or given.
   browsers?: SignIns;
 };
@@ -207,7 +209,7 @@ export class Secrets {
   constructor(d: SecretsDeps) {
     this.#d = d;
     d.db.exec(SCHEMA);
-    this.#uses = new UseIndex(d.db);
+    this.#uses = new UseIndex(d.db, d.backfill);
     const ended = (session: string) => {
       const row = d.hub.store.getSession(session);
       return row === null || row.archivedAt != null;

@@ -1,9 +1,10 @@
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
+import { releaseStoppedBackfill } from "../store/backfill.ts";
 
 export type MinuteRequest = { id: number; viewer: InWorkspace | null };
-export type MinuteResponse = { id?: number; error?: string; complete?: boolean };
+export type MinuteResponse = { id?: number; error?: string; complete?: boolean; foreground?: boolean };
 
 /// A history waits here, away from all of the readers, while its old minute summaries are filled.
 export class MinuteReader {
@@ -13,14 +14,33 @@ export class MinuteReader {
   #closed = false;
   #complete = false;
   #termination: Promise<number> | null = null;
-  #waiting = new Map<number, { resolve: () => void; reject: (error: Error) => void }>();
+  #waiting = new Map<number, { resolve: () => void; reject: (error: Error) => void; viewer: InWorkspace | null; sent: boolean }>();
+  #previousGone: Promise<void> | null;
+  #starting = false;
+  readonly #priority: SharedArrayBuffer | undefined;
 
-  constructor(path: string) { this.#path = path; }
+  constructor(path: string, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}) {
+    this.#path = path;
+    this.#previousGone = options.previousGone ?? null;
+    this.#priority = options.priority;
+  }
 
   start(): void {
-    if (this.#closed || this.#complete || this.#worker !== null) return;
+    if (this.#closed || this.#complete || this.#worker !== null || this.#starting) return;
+    if (this.#previousGone !== null) {
+      this.#starting = true;
+      const previous = this.#previousGone;
+      this.#previousGone = null;
+      void previous.then(() => {
+        this.#starting = false;
+        try { this.start(); } catch (error) { this.#fail(error as Error); }
+      }, (error) => { this.#starting = false; this.#fail(error as Error); });
+      return;
+    }
     const file = new URL(import.meta.url.endsWith(".ts") ? "./minute-worker.ts" : "./usage/minute-worker.js", import.meta.url);
-    const worker = new Worker(file, { workerData: { path: this.#path }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
+    const worker = new Worker(file, { workerData: { path: this.#path, priority: this.#priority }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
+    const owner = worker.threadId;
+    worker.once("exit", () => releaseStoppedBackfill(this.#priority, owner));
     this.#worker = worker;
     worker.unref();
     worker.on("message", (answer: MinuteResponse) => {
@@ -51,6 +71,20 @@ export class MinuteReader {
         this.#waiting.clear();
       }
     });
+    this.#sendWaiting();
+  }
+
+  #fail(error: Error): void {
+    for (const waiting of this.#waiting.values()) waiting.reject(error);
+    this.#waiting.clear();
+  }
+
+  #sendWaiting(): void {
+    if (this.#worker === null) return;
+    for (const [id, waiting] of this.#waiting) if (!waiting.sent) {
+      this.#worker.postMessage({ id, viewer: waiting.viewer } satisfies MinuteRequest);
+      waiting.sent = true;
+    }
   }
 
   ready(viewer: InWorkspace | null): Promise<void> {
@@ -59,9 +93,9 @@ export class MinuteReader {
     return new Promise((resolve, reject) => {
       const id = ++this.#next;
       try {
+        this.#waiting.set(id, { resolve, reject, viewer, sent: false });
         this.start();
-        this.#waiting.set(id, { resolve, reject });
-        this.#worker!.postMessage({ id, viewer } satisfies MinuteRequest);
+        this.#sendWaiting();
       } catch (error) {
         this.#waiting.delete(id);
         reject(error);
