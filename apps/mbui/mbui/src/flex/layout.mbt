@@ -413,6 +413,18 @@ pub fn compute(
 }
 
 ///|
+/// How tall `node` would be `width` wide with no bound on its height, as its subtree stands since the last compute():
+/// measured only, its measures kept among those of that compute: what that compute laid out stands as it was, where
+/// nothing in it is aligned by baseline (finding one lays items out while measuring their container, as compute's reuse
+/// refuses it). What is laid out in less than it asks, giving way, asks this.
+pub fn measured_height(node : Node, width : Double) -> Double {
+  let b = box_of(node.style, width, undef)
+  let w = or_else(b.w, width)
+  size_node(node, w, undef, w, undef, w, undef, false) |> ignore
+  out_h.val
+}
+
+///|
 /// The offset of a relatively positioned box from its insets.
 fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> Double {
   if s.position != Relative {
