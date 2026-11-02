@@ -11,7 +11,7 @@ fn centred_said(t : @ui.Tester) -> String {
 }
 
 ///|
-test "panel centred, 大屏 keyboard and mouse: plain, with what it says, a foot of its own, wide, untitled, a share of the window tall in a tall window and a short one: where it is and what it shows, drawn by the window's tree (not yet a share of the window tall): as main has it" {
+test "panel centred, 大屏 keyboard and mouse: plain, with what it says, a foot of its own, wide, untitled, a share of the window tall in a tall window and a short one: where it is and what it shows, drawn by the window's tree: as main has it" {
   let out = []
   let drawn = []
   for kind in ["plain", "says", "foot", "wide", "untitled", "tall 800", "tall 500"] {
@@ -47,7 +47,7 @@ test "panel centred, 大屏 keyboard and mouse: plain, with what it says, a foot
     "tall 800: dialog Some((面板, (380, 173.7, 520, 452.5))) title [(414, 199.7, 44, 30)] says [] words [] ok Some((826.5, 576.7, 58, 34)) close Some((851.5, 190.3, 32, 32)) focus None row0 [(424, 248.7, 432, 22)]",
     "tall 500: dialog Some((面板, (380, 98.7, 520, 302.5))) title [(414, 124.7, 44, 30)] says [] words [] ok Some((826.5, 351.7, 58, 34)) close Some((851.5, 115.3, 32, 32)) focus None row0 [(424, 173.7, 432, 22)]",
   ])
-  assert_eq(drawn, [Some(true), Some(true), Some(true), Some(true), Some(true), Some(false), Some(false)])
+  assert_eq(drawn, [Some(true), Some(true), Some(true), Some(true), Some(true), Some(true), Some(true)])
 }
 
 ///|
