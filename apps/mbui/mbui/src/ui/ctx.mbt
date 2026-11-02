@@ -116,7 +116,7 @@ struct ListState {
   // pulled while held, shown while springing back), at which end (1 the
   // top, -1 the bottom, 0 none), held (1) or springing back (2), its
   // velocity outward (Android: pixels per second; iOS: points per ms); going
-  // back, its path (scroll_path.mbt)
+  // back, its path (@view's list_motion.mbt)
   mut over : Double
   mut over_edge : Int
   mut over_state : Int

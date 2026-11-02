@@ -16,6 +16,27 @@
 // - the desktop (kind 0: macOS, Windows, a browser) keeps what it had: a
 //   mouse drag coasts, slowing 0.997 per ms, and stops at the ends (a
 //   trackpad's momentum comes from the system as wheel events).
+//
+// Each is said once as it sets out and is a function of the time from there (docs/determinism.md, "Motion is data"):
+// the curves, the springs and the stretch's mapping are @view's (list_motion.mbt), one for these lists and the window's
+// tree's columns that scroll as a page's list does (@view.Scroll::list).
+
+using @view {
+  spline_fling,
+  spline_at,
+  fling_distance,
+  stretch_amount,
+  stretch_map,
+  rubber,
+  unrubber,
+  rubber_at,
+  edge_spring_at,
+  first_when,
+  ease_come,
+  ease_state,
+  ease_end,
+  type BackPath,
+}
 
 ///|
 /// How far back the velocity tracker looks (ms; Compose's HorizonMilliseconds), and the pause after which it takes the
@@ -53,159 +74,6 @@ let max_fling : Double = 8.0
 
 // ---------------------------------------------------------------------------
 // Velocity
-
-// ---------------------------------------------------------------------------
-// Android's fling: Compose's FlingCalculator over AndroidFlingSpline
-
-///|
-/// The spline's distance at 101 evenly spaced times (computeSplineInfo).
-// kept across runs: a constant, computed once: nothing writes it after
-let spline_positions : FixedArray[Double] = compute_spline()
-
-///|
-fn compute_spline() -> FixedArray[Double] {
-  let samples = 100
-  let inflection = 0.35
-  let start_tension = 0.5
-  let end_tension = 1.0
-  let p1 = start_tension * inflection
-  let p2 = 1.0 - end_tension * (1.0 - inflection)
-  let pos = FixedArray::make(samples + 1, 0.0)
-  let mut x_min = 0.0
-  for i in 0..<samples {
-    let alpha = i.to_double() / samples.to_double()
-    let mut x_max = 1.0
-    let mut x = 0.0
-    let mut coef = 0.0
-    while true {
-      x = x_min + (x_max - x_min) / 2.0
-      coef = 3.0 * x * (1.0 - x)
-      let tx = coef * ((1.0 - x) * p1 + x * p2) + x * x * x
-      if (tx - alpha).abs() < 1.0e-5 {
-        break
-      }
-      if tx > alpha {
-        x_max = x
-      } else {
-        x_min = x
-      }
-    }
-    pos[i] = coef * ((1.0 - x) * start_tension + x) + x * x * x
-  }
-  pos[samples] = 1.0
-  pos
-}
-
-///|
-/// ln(0.78) / ln(0.9)
-let deceleration_rate : Double = @dmath.ln(0.78) / @dmath.ln(0.9)
-
-///|
-/// A fling at `v` pixels per second (physical pixels, on a screen of
-/// `density` pixels per dp): how far it goes (pixels) and how long it
-/// takes (whole ms), as Compose's FlingCalculator has them.
-fn spline_fling(v : Double, density : Double) -> (Double, Double) {
-  let speed = v.abs()
-  if speed == 0.0 {
-    return (0.0, 0.0)
-  }
-  // gravity × inches per meter × 160 dpi × density × 0.84, by the friction
-  let physical = 386.0878 * 160.0 * density * 0.84
-  let friction = 0.015 * physical
-  let l = @dmath.ln(0.35 * speed / friction)
-  let dur = (1000.0 * @dmath.exp(l / (deceleration_rate - 1.0))).floor()
-  let dist = friction *
-    @dmath.exp(deceleration_rate / (deceleration_rate - 1.0) * l)
-  (dist, dmax(dur, 0.0))
-}
-
-///|
-/// Where along a spline fling `dur` ms long it is at `t` ms: the share of
-/// its distance gone and its velocity in distances per unit of time
-/// (AndroidFlingSpline.flingPosition).
-fn spline_at(t : Double, dur : Double) -> (Double, Double) {
-  let s = dclamp(if dur > 0.0 { t / dur } else { 1.0 }, 0.0, 1.0)
-  let index = (100.0 * s).to_int()
-  if index >= 100 {
-    return (1.0, 0.0)
-  }
-  let t_inf = index.to_double() / 100.0
-  let d_inf = spline_positions[index]
-  let d_sup = spline_positions[index + 1]
-  let vc = (d_sup - d_inf) / 0.01
-  (d_inf + (s - t_inf) * vc, vc)
-}
-
-///|
-/// How far (logical pixels) a fling at `v` logical pixels per ms goes on a
-/// screen of `density`.
-fn fling_distance(v : Double, density : Double) -> Double {
-  spline_fling(v * 1000.0 * density, density).0 / density
-}
-
-// ---------------------------------------------------------------------------
-// Overscroll
-
-///|
-/// Android's stretch intensity for a pull of `d` (in the view's heights):
-/// EdgeEffect.dampStretchVector.
-fn stretch_amount(d : Double) -> Double {
-  let o = d.abs()
-  let linear = 0.016 * o
-  let exp_part = 0.016 * (1.0 - @dmath.exp(-o * (2.718281828459045 / 0.33)))
-  linear + exp_part
-}
-
-///|
-/// Where a point `p` of the content (0 the top of the view, 1 its bottom)
-/// shows under a stretch of `ov` (positive from the top, negative from the
-/// bottom): HWUI StretchEffect's computeReverseOverscroll, the inverse of
-/// its shader. Outside the view it moves as the view's edge does.
-fn stretch_map(ov : Double, p : Double) -> Double {
-  if ov > 0.0 {
-    if p < 0.0 {
-      return p
-    }
-    if p > 1.0 {
-      return stretch_map(ov, 1.0) + (p - 1.0)
-    }
-    let num = -p * ov * ov - 2.0 * p * ov - p
-    let den = 1.0 + 0.3 * ov + 0.7 * p * ov * ov + 0.7 * p * ov
-    -(num / den)
-  } else if ov < 0.0 {
-    if p > 1.0 {
-      return p
-    }
-    if p < 0.0 {
-      return stretch_map(ov, 0.0) + p
-    }
-    let num = 0.3 * ov * ov - 0.3 * p * ov * ov + 1.3 * p * ov - ov - p
-    let den = 0.7 * p * ov * ov - 0.7 * p * ov - 0.7 * ov * ov + ov - 1.0
-    num / den
-  } else {
-    p
-  }
-}
-
-///|
-/// iOS's rubber band: how far content pulled `x` past an end of a view `d`
-/// long shows past it.
-fn rubber(x : Double, d : Double) -> Double {
-  let d = dmax(d, 1.0)
-  (1.0 - 1.0 / (x * 0.55 / d + 1.0)) * d
-}
-
-///|
-/// The pull that shows as `y` past the end (rubber's inverse).
-fn unrubber(y : Double, d : Double) -> Double {
-  let d = dmax(d, 1.0)
-  let y = dmin(y, d * 0.999)
-  y * d / (0.55 * (d - y))
-}
-
-///|
-/// The rubber band's spring back (critically damped), per ms.
-let rubber_omega : Double = 0.0157
 
 ///|
 /// The hand moved the list between frames (a finger dragging it, a wheel): what lays it out (Ctx::place_list) is told,
@@ -385,8 +253,8 @@ fn ListState::fling_rest(self : ListState) -> Double {
 fn ListState::fling_length(self : ListState) -> Double {
   match self.fling {
     1 => self.fling_dur.ceil()
-    2 => dmax(0.0, @dmath.ln(0.02 / self.fling_v.abs()) / @dmath.ln(ios_decel))
-    _ => dmax(0.0, @dmath.ln(0.02 / self.fling_v.abs()) / @dmath.ln(coast_decel))
+    2 => dmax(0.0, @dmath.ln(0.02 / self.fling_v.abs()) / @dmath.ln(@view.ios_decel))
+    _ => dmax(0.0, @dmath.ln(0.02 / self.fling_v.abs()) / @dmath.ln(@view.coast_decel))
   }
 }
 
@@ -401,14 +269,6 @@ fn ListState::back_rest(self : ListState) -> Double {
     self.back.rest
   }
 }
-
-///|
-/// UIScrollView's normal deceleration rate (per ms).
-let ios_decel : Double = 0.998
-
-///|
-/// The desktop's coast after a drag let go (per ms).
-let coast_decel : Double = 0.997
 
 ///|
 /// The finger left the list at `v` (logical pixels per ms, positive down
@@ -475,7 +335,7 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double, at : Double) -> Unit {
 
 ///|
 /// A frame of the list's own motion: its fling, and its overscroll going back, where each is at this frame's time by
-/// what was said as it set out (scroll_path.mbt).
+/// what was said as it set out (@view's list_motion.mbt).
 fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
   if st.vel != 0.0 && st.fling != 0 {
     // Android's and iOS's start at their first frame (Compose's playtime 0); the desktop's coast as it was let go
@@ -493,12 +353,12 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
       }
       2 => {
         // UIScrollView's normal deceleration
-        let k = ios_decel
+        let k = @view.ios_decel
         (st.fling_v * (@dmath.pow(k, t) - 1.0) / @dmath.ln(k), st.fling_v * @dmath.pow(k, t))
       }
       _ => {
         // the desktop's coast
-        let k = coast_decel
+        let k = @view.coast_decel
         (st.fling_v * (@dmath.pow(k, t) - 1.0) / @dmath.ln(k), st.fling_v * @dmath.pow(k, t))
       }
     }
@@ -570,13 +430,33 @@ fn Ctx::stretch_rows(
   c0 : Double,
   c1 : Double,
 ) -> Unit {
-  if scroll_kind() != 2 || st.over <= 0.0 || st.over_edge == 0 || h <= 0.0 {
+  if scroll_kind() != 2 || st.over <= 0.0 || st.over_edge == 0 {
     return
   }
-  let ov = stretch_amount(st.over) * st.over_edge.to_double()
+  self.stretch_insts(from, self.ninst, stretch_amount(st.over) * st.over_edge.to_double(), top, h, c0, c1)
+}
+
+///|
+/// Instances `from` to `till` of the frame (what a list holds, drawn in it from `top`, `h` high, cut to `c0`-`c1`) as
+/// Android's stretch `ov` shows them (from the top positive: @view.stretch_map), what cuts them inside the list and what
+/// they fade towards with them: an old view's list's (Ctx::stretch_rows) and a column of the window's tree's that
+/// scrolls as a page's list (View::stretches).
+fn Ctx::stretch_insts(
+  self : Ctx,
+  from : Int,
+  till : Int,
+  ov : Double,
+  top : Double,
+  h : Double,
+  c0 : Double,
+  c1 : Double,
+) -> Unit {
+  if ov == 0.0 || h <= 0.0 {
+    return
+  }
   let map = fn(y : Double) { top + h * stretch_map(ov, (y - top) / h) }
   let a = self.inst
-  for k in from..<self.ninst {
+  for k in from..<till {
     let b = k * inst_size
     let y0 = map(a[b + 1])
     let y1 = map(a[b + 1] + a[b + 3])
