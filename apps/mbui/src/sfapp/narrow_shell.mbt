@@ -393,6 +393,10 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
       made("station-archiving/" + st, fn(p, core, here, frame, _stint) {
         @sfpages.station_archiving_node(p, core, here, st, on_back=core.pop, frame~)
       })
+    Setting(AutoDecisions) =>
+      made("auto-decisions", fn(p, core, here, frame, _stint) {
+        @sfpages.decisions_node(p, core, here, on_back=core.pop, frame~)
+      })
     Setting(Memories) =>
       made("memories", fn(p, core, here, frame, _stint) { @sfpages.memories_node(p, core, here, on_back=core.pop, frame~) })
     _ => None

@@ -646,3 +646,24 @@ test "归档 made once: a station's row pressed opens its own archiving, made on
   let own = tree_words_drawn()
   assert_true(own.iter().any(fn(o) { o.contains(@sf.t("web-pages.archiving.mode")) }), msg="not the tree's own: \{own}")
 }
+
+///|
+test "自动决定 made once: every instance drawn as its old view's, with a finger and with keyboard and mouse, at the system's larger words; its row opens the decision's page" {
+  for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
+    let (platform, scale) = case
+    let old = memories_tester(false, platform, scale~, mode="settings-decisions-settings")
+    let old_drawn = instances_sorted(old)
+    let old_words = words_where(old)
+    let made = memories_tester(true, platform, scale~, mode="settings-decisions-settings")
+    assert_true(app.nav.top() == Setting(@settings.Route::AutoDecisions))
+    same_drawn(words_where(made), old_words, "words at \{case}")
+    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
+    assert_true(old_drawn.length() > 0)
+  }
+  let t = memories_tester(true, 2, mode="settings-decisions-settings")
+  let own = tree_words_drawn()
+  assert_true(own.iter().any(fn(o) { o.contains(@sf.t("web-pages.automaticDecisions.completion")) }), msg="not the tree's own: \{own}")
+  t.tap_text(@sf.t("web-pages.automaticDecisions.completion"))
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.top() == Setting(@settings.Route::AutoCompletion), msg="on top \{@sfbase.page_kind(app.nav.top())}")
+}

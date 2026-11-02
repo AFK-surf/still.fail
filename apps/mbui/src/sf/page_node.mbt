@@ -306,8 +306,10 @@ pub fn link_row_node(
   below_open? : () -> Double = fn() { 0.0 },
 ) -> Unit {
   let below_shown = fn() { below is Some(_) && below_open() > 0.0 }
-  let under = fn() { note() != "" || trouble() != "" || below_shown() }
+  // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
+  let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
   let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
+  let titled_in = if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in }
   let mark = if out { "arrow-up-right" } else { "chevron-right" }
   let ends = goes && (out || (chevron && !acts))
   parent.box(fn(r) {
@@ -355,22 +357,42 @@ pub fn link_row_node(
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
       words.box(fn(first) {
         first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
-        first.box(fn(t) {
-          // (giving way to what it says where the line has not the room, cut short, as link_row's title in a row does)
-          styled_words(t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))), title, fn() { titled }) |> ignore
-          if acts {
-            t.ink(By(fn() { link_ink() })) |> ignore
-          }
-        })
-        |> ignore
-        first.show(fn() { value() != "" }, fn(said) {
-          said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
-          said.show(value_dot, fn(d) { status_dot_node(d) })
-          said.box(fn(w) {
-            styled_words(w, value, fn() { if value_bad() { pg_value.then(bad) } else { pg_value } }) |> ignore
+        // with words under it, its title and what it says in a line, what it says under the title where the line has not
+        // the room (pg_title_value, a row in lines: its ends the title's and what it says'); else all of it on one line,
+        // its title giving way (link_row's `!under`)
+        first.box(fn(tv) {
+          tv
+          .grow(Is(1.0))
+          .shrink(Is(1.0))
+          .min_width(Is(Some(0.0)))
+          .row(Is(true))
+          .gap(Is(12.0))
+          .wraps(By(fn() { if under() && value() != "" { Some(0.0) } else { None } }))
+          .lines_up(Is(Some(Middle)))
+          |> ignore
+          tv.box(fn(t) {
+            // (giving way to what it says where the line has not the room, cut short, as link_row's title in a row does;
+            // beside what it says, its words' own (pg_row_title_in), the line's room left between them: its line's ends
+            // the title's and what it says')
+            styled_words(t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))), title, fn() {
+              if under() && value() != "" { titled_in } else { titled }
+            })
+            |> ignore
+            if acts {
+              t.ink(By(fn() { link_ink() })) |> ignore
+            }
           })
           |> ignore
+          tv.show(fn() { value() != "" }, fn(said) {
+            said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
+            said.show(value_dot, fn(d) { status_dot_node(d) })
+            said.box(fn(w) {
+              styled_words(w, value, fn() { if value_bad() { pg_value.then(bad) } else { pg_value } }) |> ignore
+            })
+            |> ignore
+          })
         })
+        |> ignore
         if ends {
           icon_node(first, mark, pg_chevron, By(fn() { theme().p.subtle })) |> ignore
         }
@@ -661,3 +683,41 @@ let tap_corner : Double = 8.0
 ///|
 /// How big a station's mark stands before a row's name (desk_mark's, on every width).
 pub let row_mark : Double = desk_mark
+
+///|
+/// A card of a page's (page_card's, narrow) in `parent`: as wide as the page's room, 20 in, what `body` puts on it 14
+/// apart, round as a card is (Xl3), on the card's ground; 10 under it to what follows (pg_card_room), none where it is a
+/// layer of one thing (`layered`: page_card in layers, the card alone). `footed`: a button at its foot, the card's
+/// room under it the capsule's that stands in its corner (foot_pad). What is on it is a card's words (page_card's
+/// `in_words`): a row on it that has a card's form (a switch's row) is told so where it is made, by whoever makes it on
+/// the card (`body` given the card's node), as what is made later on it is.
+pub fn page_card_node(parent : @view.View, body : (@view.View) -> Unit, footed? : Bool = false, layered? : Bool = false) -> Unit {
+  let card = fn(v : @view.View) {
+    v.box(fn(k) {
+      k
+      .padding(Is((card_pad, card_pad, card_pad, if footed { card_foot_in(button_height()) } else { card_pad })))
+      .gap(Is(page_card_gap))
+      .radius(By(fn() { @ui.tree_theme().corner(Xl3) }))
+      .ground(By(fn() { @ui.tree_theme().color(Card) }))
+      |> ignore
+      body(k)
+    })
+    |> ignore
+  }
+  if layered {
+    card(parent)
+  } else {
+    parent.box(fn(room) {
+      room.padding(Is((0.0, 0.0, 0.0, page_card_foot))) |> ignore
+      card(room)
+    })
+    |> ignore
+  }
+}
+
+///|
+/// A page's card's room between what is on it (desk_card's gap=S3_5) and under it (pg_card_room's pb=S2_5).
+let page_card_gap : Double = 14.0
+
+///|
+let page_card_foot : Double = 10.0

@@ -223,9 +223,35 @@ fn Tree::cuts_under(self : Tree, at : Int) -> Unit {
 /// How far apart what it holds is laid out (points, along and across), as it changes: layout's.
 pub fn View::gap(self : View, g : Live[Double]) -> View {
   self.bind(Gap, g, Layout, fn(g) {
-    let st = self.tree.nodes[self.at].flex.style
-    st.set_gap_row(Pt(g))
+    let n = self.tree.nodes[self.at]
+    let st = n.flex.style
+    // (between the lines of a row that wraps, as View::wraps says where it says so)
+    st.set_gap_row(Pt(n.line_gap.unwrap_or(g)))
     st.set_gap_col(Pt(g))
+  })
+  self
+}
+
+///|
+/// Whether what it holds, laid out in a row, goes on in another line where the row has not the room (Some: the lines
+/// that far apart, its gap along each line as View::gap says; None: one line), as an old view's box's `flow` (with
+/// its `line_gap`), as it changes: layout's.
+pub fn View::wraps(self : View, lines : Live[Double?]) -> View {
+  self.bind(Wraps, lines, Layout, fn(lines) {
+    let n = self.tree.nodes[self.at]
+    let st = n.flex.style
+    n.line_gap = lines
+    match lines {
+      Some(g) => {
+        st.wrap = Wrap
+        st.set_gap_row(Pt(g))
+      }
+      None => {
+        st.wrap = NoWrap
+        // (one line: its gap's, the same both ways)
+        st.set_gap_row(st.get_gap_col())
+      }
+    }
   })
   self
 }
