@@ -175,14 +175,19 @@ export const USAGE_GROUPS = `WITH a AS (SELECT CAST(?1 AS INTEGER) AS f, CAST(?2
   ), b
   GROUP BY day, session, thread, person, profile, runtime, model, fast`;
 
+/// A row of USAGE_GROUPS (or of a session's totals, its day and where left empty) as a UsageGroup.
+export function usageGroupOf(r: Json): UsageGroup {
+  return {
+    day: r.day ?? "", session: r.session, thread: r.thread ?? null, person: r.person ?? null, profile: r.profile ?? null, runtime: r.runtime,
+    model: r.model, fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
+    cacheWriteLong: r.cache_write_long, output: r.output,
+  };
+}
+
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and
 /// by thread, person, profile and model.
 export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffsetMin: number): UsageGroup[] {
-  return (db.prepare(USAGE_GROUPS).all(from, to, utcOffsetMin) as Json[]).map((r) => ({
-    day: r.day, session: r.session, thread: r.thread, person: r.person, profile: r.profile, runtime: r.runtime, model: r.model,
-    fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
-    cacheWriteLong: r.cache_write_long, output: r.output,
-  }));
+  return (db.prepare(USAGE_GROUPS).all(from, to, utcOffsetMin) as Json[]).map(usageGroupOf);
 }
 
 /// A session's calls, added up by model (its day, thread, person and profile left empty): what its execution details
@@ -196,10 +201,7 @@ export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] 
          FROM usage_totals WHERE session = ?1 AND calls > 0 ORDER BY runtime, model, fast`,
       )
       .all(session) as Json[]
-  ).map((r) => ({
-    day: "", session, thread: null, person: null, profile: null, runtime: r.runtime, model: r.model, fast: r.fast !== 0 && r.fast !== null,
-    calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write, cacheWriteLong: r.cache_write_long, output: r.output,
-  }));
+  ).map((r) => usageGroupOf({ ...r, session }));
 }
 
 /// usage_since: when the earliest call recorded was made.

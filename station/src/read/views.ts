@@ -15,6 +15,9 @@ import type { Viewer } from "../mesh/credential.ts";
 import { type Lang, tr as translate } from "../ops/i18n.ts";
 import { sees } from "../store/rows.ts";
 import * as store from "./store.ts";
+import { entryJson } from "../store/archive.ts";
+import * as titles from "../../../client/core-ts/src/titles.ts";
+import { trim } from "../../../client/core-ts/src/whitespace.ts";
 
 export { makeStore, openStore } from "./store.ts";
 import { knownChannel, knownPerson, slackCreator, teamName } from "./slack-known.ts";
@@ -55,14 +58,6 @@ const tr = (key: string, args: Record<string, string> = {}) => translate(spokenL
 
 /// What a chat with no name yet is called.
 export const untitled = () => tr("station.chat.untitled");
-
-// ---- Rust's whitespace (char::is_whitespace), for trim and split_whitespace ----
-
-const WS = "\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
-const TRIM = new RegExp(`^[${WS}]+|[${WS}]+$`, "g");
-const SPLIT = new RegExp(`[${WS}]+`);
-const trim = (s: string) => s.replace(TRIM, "");
-const splitWhitespace = (s: string) => s.split(SPLIT).filter((w) => w !== "");
 
 // ---- the station's config: its connects' names, and whether the archive review is on ----
 
@@ -122,7 +117,7 @@ export function slackConnectOf(t: ThreadSummary): string | null {
 
 /// The name a chat has been given: by people, else by its agent.
 export function given(thread: ThreadRow): string | null {
-  return [thread.title, thread.autoTitle].filter((s): s is string => s !== null).map(trim).find((s) => s !== "") ?? null;
+  return titles.givenTitle(thread);
 }
 
 /// What a thread is called (title_of over a summary).
@@ -130,39 +125,9 @@ export function chatTitle(t: ThreadSummary, channelName: string | null): string 
   return titleOf(t.thread, t.firstText, channelName);
 }
 
-/// What a thread is called: the name people gave it, else the one its agent gave it. A chat of still.fail's own is a
-/// new chat (新对话) until it has one, the same all along, not named by what is said in it as that comes in. A Slack
-/// or Feishu thread is called by the first line a person wrote in it (Slack mentions left out, spaces collapsed), else
-/// by its channel (`#name`, 私信 for a direct message).
+/// What a thread is called, by the one rule the core names it by too (client/core-ts/src/titles.ts).
 export function titleOf(thread: ThreadRow, firstText: string | null, channelName: string | null): string {
-  const title = given(thread);
-  if (title !== null) return title;
-  if (thread.surface === STILLFAIL_SURFACE) return untitled();
-  const text = withoutMentions(firstText ?? "");
-  const first = text.split("\n").map((line) => splitWhitespace(line).join(" ")).find((l) => l !== "");
-  if (first !== undefined) return first;
-  const name = channelName === null ? "" : trim(channelName);
-  if (name !== "") return `#${name}`;
-  if (thread.channel.startsWith("D")) return tr("station.chat.directMessage");
-  return untitled();
-}
-
-/// `<@U…>` mentions taken out.
-function withoutMentions(text: string): string {
-  let out = "";
-  let rest = text;
-  for (let at = rest.indexOf("<@"); at >= 0; at = rest.indexOf("<@")) {
-    out += rest.slice(0, at);
-    const after = rest.slice(at + 2);
-    const end = after.indexOf(">");
-    if (end > 0 && /^[A-Z0-9]+$/.test(after.slice(0, end))) {
-      rest = after.slice(end + 1);
-    } else {
-      out += "<@";
-      rest = after;
-    }
-  }
-  return out + rest;
+  return titles.chatTitle(thread, firstText, channelName, { untitled: untitled(), directMessage: tr("station.chat.directMessage") });
 }
 
 // ---- people ----
@@ -171,7 +136,7 @@ function withoutMentions(text: string): string {
 /// The names of the store being answered for (creator and people have no store of their own).
 let cloudNames = new Map<string, string>();
 
-function creator(reference: string | null): Json | null {
+export function creator(reference: string | null): Json | null {
   if (reference === null) return null;
   if (reference === "local") return { id: "local", name: tr("station.creator.localPage"), email: null, via: "local" };
   if (reference.startsWith("slack:") && currentStore !== null) {
@@ -668,23 +633,6 @@ export function letters(station: Store, _viewer: Viewer, thread: number, params:
   return { last, letters: entryViews(api, thread, found) };
 }
 
-/// EntryRow as serde writes it: its fields in their order, the skipped Nones left out.
-function entryJson(e: EntryRow): Json {
-  const v: Json = {};
-  if (e.agentIdentity !== undefined) v.agentIdentity = e.agentIdentity;
-  Object.assign(v, {
-    thread: e.thread, n: e.n, kind: e.kind, target: e.target, ts: e.ts, authorKind: e.authorKind, author: e.author, text: e.text,
-    attachments: e.attachments, quotes: e.quotes, declared: e.declared,
-  });
-  if (e.client !== null) v.client = e.client;
-  if (e.profile !== null) v.profile = e.profile;
-  if (e.runtime !== null) v.runtime = e.runtime;
-  if (e.options !== undefined) v.options = e.options;
-  if (e.card !== undefined) v.card = e.card;
-  v.at = e.at;
-  if (e.letter !== undefined) v.letter = e.letter;
-  return v;
-}
 
 /// Entries with their authors' names; an agent's also with its session's model and runtime (`authorModel`,
 /// `authorRuntime`), so its mark is drawn before the client has read the session.

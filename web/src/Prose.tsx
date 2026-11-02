@@ -13,7 +13,7 @@ import { RefChip } from "./ChatRef.tsx";
 import { adbOfLink, isChatLink, screenOfLink } from "./chatRefs.ts";
 import { ScreenCard, ScreenName } from "./screen/ScreenLink.tsx";
 import { AdbCard, AdbName } from "./AdbLink.tsx";
-import { bareLinks } from "./bareLinks.ts";
+import { bareLinks } from "../../client/core-ts/src/bareLinks.ts";
 import { nameOf } from "../../client/core-ts/src/placed.ts";
 import { codeChunks } from "./codeChunks.ts";
 import { runsOf } from "../../client/core-ts/src/highlight.ts";

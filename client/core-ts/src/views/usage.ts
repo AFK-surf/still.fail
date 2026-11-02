@@ -4,6 +4,7 @@
 // of it of one person, account or model where one is picked (`only`).
 import type { CoreError } from "../error.ts";
 import { current, t, tr, type Lang } from "../i18n.ts";
+import * as format from "../format.ts";
 import { waitNote } from "../looks.ts";
 import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
@@ -29,16 +30,7 @@ const two = (n: number) => String(n).padStart(2, "0");
 
 /// `YYYY-MM-DD` of a moment, on a clock `offset` minutes east of UTC.
 export function localDay(ms: number, offset: number): string {
-  const days = Math.floor((ms + offset * 60_000) / DAY_MS);
-  const z = days + 719_468;
-  const era = Math.floor(z / 146_097);
-  const doe = z - era * 146_097;
-  const yoe = Math.trunc((doe - Math.trunc(doe / 1460) + Math.trunc(doe / 36_524) - Math.trunc(doe / 146_096)) / 365);
-  const doy = doe - (365 * yoe + Math.trunc(yoe / 4) - Math.trunc(yoe / 100));
-  const mp = Math.trunc((5 * doy + 2) / 153);
-  const d = doy - Math.trunc((153 * mp + 2) / 5) + 1;
-  const m = mp < 10 ? mp + 3 : mp - 9;
-  const y = yoe + era * 400 + (m <= 2 ? 1 : 0);
+  const [y, m, d] = format.local(ms, offset);
   return `${String(y).padStart(4, "0")}-${two(m)}-${two(d)}`;
 }
 

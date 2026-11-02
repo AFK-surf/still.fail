@@ -10,6 +10,7 @@ import { threadHistory } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
 import { Refused } from "./neighbours.ts";
 import { fetchAttachments, type Listed } from "./peer-files.ts";
+import { percentDecode } from "../api/request.ts";
 
 type Json = any;
 
@@ -20,21 +21,7 @@ export const READ = "session.read";
 export type Named = { type: "thread"; thread: ThreadRow } | { type: "session"; key: string; entry: number | null };
 
 /// admin/mod.rs `percent_decode`: %XX a byte, `+` a space, the rest as it is (UTF-8, lossy).
-export function percentDecode(s: string): string {
-  const bytes = Buffer.from(s, "utf8");
-  const out: number[] = [];
-  for (let i = 0; i < bytes.length; ) {
-    const hex = bytes.subarray(i + 1, i + 3).toString("latin1");
-    if (bytes[i] === 0x25 && /^[0-9A-Fa-f]{2}$/.test(hex)) {
-      out.push(parseInt(hex, 16));
-      i += 3;
-    } else if (bytes[i] === 0x2b) {
-      out.push(0x20);
-      i++;
-    } else out.push(bytes[i++]!);
-  }
-  return new TextDecoder("utf-8").decode(Buffer.from(out));
-}
+export { percentDecode };
 
 /// A session key a reference holds, in whichever form people pass chats around: a chat's page (…/chats/<key>), a
 /// still.fail link (…/o/<workspace>/<station>/<key>), a link to execution history (?history=<key>&entry=<n>).

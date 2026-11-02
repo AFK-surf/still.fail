@@ -15,6 +15,7 @@ import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
 import { log } from "../ops/log.ts";
 import type { ContextCall } from "../store/usage.ts";
+import { key as modelKey } from "../../../client/core-ts/src/shapes/model.ts";
 
 // ── prices (usage.rs) ──
 
@@ -67,39 +68,9 @@ export function priceTable(lang: Lang, models: (string | null)[] = []): Json {
   };
 }
 
-/// Bedrock's version stamp after `-v`: `1:0` (not a model's own v4). (shapes model.rs `stamp`)
-function stamp(s: string): boolean {
-  const colon = s.indexOf(":");
-  if (colon < 0) return false;
-  const [major, minor] = [s.slice(0, colon), s.slice(colon + 1)];
-  return /^[0-9]+$/.test(major) && /^[0-9]+$/.test(minor);
-}
+/// What a model is, however it is spelled (the core's, client/core-ts/src/shapes/model.ts `key`).
+export { modelKey };
 
-/// shapes model.rs `key`: what a model is, however it is spelled: lower case, without its provider's prefix, region,
-/// version stamp or date; a `[1m]` context stays.
-export function modelKey(spelled: string): string {
-  const id = spelled.trim().toLowerCase();
-  const bracket = id.indexOf("[");
-  const [base, context] = bracket >= 0 ? [id.slice(0, bracket), id.slice(bracket)] : [id, ""];
-  // OpenRouter's and other routers' `vendor/model`; Vertex's `model@date`.
-  let m = base.slice(base.lastIndexOf("/") + 1);
-  m = m.split("@")[0]!;
-  // Bedrock's `us.anthropic.model-v1:0`: region and vendor are words and a dot, a version is not (gpt-5.1).
-  for (let dot = m.indexOf("."); dot >= 0; dot = m.indexOf(".")) {
-    const [head, rest] = [m.slice(0, dot), m.slice(dot + 1)];
-    if (head === "" || !/^[A-Za-z]+$/.test(head) || rest === "") break;
-    m = rest;
-  }
-  const v = m.lastIndexOf("-v");
-  if (v >= 0 && stamp(m.slice(v + 2))) m = m.slice(0, v);
-  // A date: -20251001, or -2024-08-06.
-  const parts = m.split("-");
-  const digits = (s: string, n: number) => s.length === n && /^[0-9]+$/.test(s);
-  const n = parts.length;
-  if (n > 1 && digits(parts[n - 1]!, 8)) m = parts.slice(0, n - 1).join("-");
-  else if (n > 3 && digits(parts[n - 3]!, 4) && digits(parts[n - 2]!, 2) && digits(parts[n - 1]!, 2)) m = parts.slice(0, n - 3).join("-");
-  return m + context;
-}
 
 /// price: a model's prices, however a profile spells it (anthropic/claude-opus-5-5, claude-opus-5-5[1m]): the model
 /// catalog's, else the station's own table's; none for a model without a list price in either.
