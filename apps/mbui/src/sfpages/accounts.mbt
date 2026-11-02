@@ -169,7 +169,7 @@ fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, name : 
   } else {
     text(entry, "where")
   }
-  let facts = join([text(p, "kindText"), if email != text(p, "name") { email } else { "" }, place], " · ")
+  let facts = join([text(p, "kindText"), text(p, "planText"), if email != text(p, "name") { email } else { "" }, place], " · ")
   @sf.own_head(
     c,
     fn(_) { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), pf_mark_glyph, text(p, "providerMark")) },

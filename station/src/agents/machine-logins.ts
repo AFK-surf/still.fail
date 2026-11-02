@@ -16,7 +16,7 @@ export type Env = Record<string, string | undefined>;
 /// process handed one this close is started again for its next turn.
 export const CLAUDE_TOKEN_MARGIN_MS = 5 * 60_000;
 
-export type MachineToken = { token: string; expiresAt: number };
+export type MachineToken = { token: string; expiresAt: number; subscriptionType?: string; rateLimitTier?: string };
 
 const homeOf = (env: Env) => platform.home(env) ?? ".";
 export const claudeCredentialsFile = (env: Env) => join(homeOf(env), ".claude", ".credentials.json");
@@ -46,7 +46,12 @@ export function parseClaudeCredentials(text: string): MachineToken | undefined {
     const oauth = JSON.parse(text)?.claudeAiOauth;
     const token = oauth?.accessToken;
     if (typeof token !== "string" || token === "") return undefined;
-    return { token, expiresAt: typeof oauth.expiresAt === "number" ? oauth.expiresAt : 0 };
+    return {
+      token,
+      expiresAt: typeof oauth.expiresAt === "number" ? oauth.expiresAt : 0,
+      ...(typeof oauth.subscriptionType === "string" ? { subscriptionType: oauth.subscriptionType } : {}),
+      ...(typeof oauth.rateLimitTier === "string" ? { rateLimitTier: oauth.rateLimitTier } : {}),
+    };
   } catch {
     return undefined;
   }

@@ -255,7 +255,7 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
                       " · ",
                     )
                   }
-                  c.text(line, size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+                  c.text(join([text(p, "planText"), line], " · "), size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
                   // its allowance a line of its own, so the name and where it is keep the row's width (Profiles.kt)
                   if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
                     // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)

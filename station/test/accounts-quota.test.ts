@@ -31,6 +31,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
     const file = join(dir, "auth.json");
     writeFileSync(file, JSON.stringify({ tokens: { access_token: "at", account_id: "acc" } }));
     const body = {
+      plan_type: "pro",
       rate_limit: {
         primary_window: { used_percent: 30, limit_window_seconds: 18_000, reset_at: 1_900_000_000 },
         secondary_window: { used_percent: 80, limit_window_seconds: 604_800, reset_at: 1_900_500_000 },
@@ -38,6 +39,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
     };
     const p = await provider(() => ({ status: 200, body }));
     const quota = await codexUsage(file, { ...URLS, chatgpt: p.base });
+    assert.equal(quota!.plan, "pro");
     assert.deepEqual(quota!.windows, [
       { label: "5 小时", usedPercent: 30, resetsAt: 1_900_000_000_000, minutes: 300 },
       { label: "每周", usedPercent: 80, resetsAt: 1_900_500_000_000, minutes: 10080 },
@@ -78,6 +80,8 @@ describe("allowances and renewing", { concurrency: true }, () => {
   test("codex app-server limits and window names", () => {
     const limits = { rateLimits: { primary: { usedPercent: 12.4, windowDurationMins: 300, resetsAt: 1_900_000_000 }, secondary: null } };
     assert.deepEqual(codexWindows(limits), [{ label: "5 小时", usedPercent: 12, resetsAt: 1_900_000_000_000, minutes: 300 }]);
+    assert.equal(codexQuota({ rateLimits: { ...limits.rateLimits, planType: "ultra" } }).plan, "ultra");
+    assert.equal(codexQuota(limits).plan, undefined);
     assert.equal(windowLabel(10080, "x"), "每周");
     assert.equal(windowLabel(43200, "x"), "每月");
     assert.equal(windowLabel(2880, "x"), "2 天");

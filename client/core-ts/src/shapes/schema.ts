@@ -522,6 +522,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   ProfileCheck: struct([
     ["decision", opt("DecisionCapability")],
+    ["plan", opt("String"), { doc: "The subscription tier reported by its login; absent when unknown or on older stations." }],
     ["modelEfforts", opt(map(map(vec("String")))), { doc: "Runtime → model → supported reasoning levels; absent on older stations." }],
     ["state", "String", { doc: "ok | login | failed | unknown" }],
     ["detail", "String", { said: true }],
@@ -552,6 +553,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   Quota: struct([
     ["credits", opt("QuotaCredits")],
+    ["plan", opt("String"), { doc: "The subscription tier, when reported with the allowance." }],
     ["resetCount", opt("u64"), { client: opt("I54") }],
     ["creditsText", opt("String")],
     ["resetText", opt("String")],
@@ -620,6 +622,7 @@ export const SHAPES: Record<string, Shape> = {
     ["workspaces", vec("String"), { default: true, doc: "The workspaces the station joined whose chats may run on it too (docs/multi-workspace.md; none: its home's\nonly), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one." }],
     ["serves", opt("bool"), { doc: "The chats of the viewer's workspace may run on it (absent: a station of before it, which says so in `workspaces`\nof joined ones only): a copy of another station's serves only the workspaces that station shares it in." }],
     ["kindText", "String", { default: true, doc: "What it is, in a word: the machine's own login (终端里的登录), its provider, else its kind of account." }],
+    ["planText", "String", { said: true, default: true, doc: "The subscription tier as a name (Pro 200, Max); empty when unknown." }],
     ["signInProvider", "String", { default: true, doc: "Who signing it in goes to: OpenCode, Kimi, Claude, Grok, Cursor, Devin, ChatGPT." }],
     ["checkLine", "String", { said: true, default: true, doc: "Its last check in a line: its detail (without the 可用 a working one starts with), or that it has none yet." }],
   ], { doc: "A profile, with its last check in words and its models' makers." }),
