@@ -83,6 +83,9 @@ jobs:
             !apps/mbui/_build/**/*.mbc
           key: mbui-moon-build-${{ env.PART }}-${{ github.sha }}
           restore-keys: mbui-moon-build-${{ env.PART }}-
+      # (each file an mtime of its content: moon builds again only what changed since that build, not all of it after
+      # the checkout's new mtimes: the replay's 170 tasks over main's last build, 0b0e29e8, 41381222307, 2026-11-02)
+      - run: bash apps/mbui/scripts/moon-mtimes.sh
       # The units main's newest run kept, and on a branch its own last run's beside them (a store by content: the two
       # together, nothing of one replaces the other's). A branch's own alone, after it took main's newer commits in
       # (a rebase), compiled again all main had changed since: 253 s of the app part where its push before was 82 s
