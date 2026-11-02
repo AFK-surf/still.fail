@@ -767,6 +767,10 @@ export interface ModelMaker {
  */
 export interface PickView {
 	fastAvailable?: boolean;
+	/** The model's own reasoning level where none is picked (the draft's `effort` null), where its runtime says one. */
+	effortDefault?: string;
+	/** How fast it runs where none is picked (the draft's `fast` null): its account's own, true Fast. */
+	fastPlan?: boolean;
 	fastText?: string;
 	options: ModelOption[];
 	runtimeFixed: boolean;
@@ -1271,6 +1275,8 @@ export interface ProfileCheck {
 	plan?: string;
 	/** Runtime → model → supported reasoning levels; absent on older stations. */
 	modelEfforts?: Record<string, Record<string, string[]>>;
+	/** Runtime → model → its own reasoning level, where the runtime says one (Codex); absent on older stations. */
+	modelEffortDefaults?: Record<string, Record<string, string>>;
 	/** ok | login | failed | unknown */
 	state: string;
 	detail: string;

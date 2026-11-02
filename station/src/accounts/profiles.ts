@@ -29,6 +29,8 @@ export type ProfileCheck = {
   plan?: string;
   /// runtime → model → reasoning levels, as the runtime reports them.
   modelEfforts?: Record<string, Record<string, string[]>>;
+  /// runtime → model → its own reasoning level, where the runtime says one.
+  modelEffortDefaults?: Record<string, Record<string, string>>;
   /// ok: usable; login: needs a subscription sign-in; failed: the key or login was rejected; unknown.
   state: string;
   detail: string;

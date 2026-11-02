@@ -112,6 +112,8 @@ priv struct PanelOf {
   above : ((@ui.Ctx) -> Unit)?
   /// beside what opened it, what stands at its head's end, beside its title (panel's `head_end`)
   head_end : ((@ui.Ctx) -> Unit)?
+  /// beside what opened it, no head: what it holds draws its own (panel's `heads_itself`)
+  heads_itself : Bool
   /// beside what opened it: on which side of it, along it where, how far from it (panel's `side`, `along`, `offset`)
   side : @ui.Side
   along : @ui.Along
@@ -368,6 +370,8 @@ pub fn pick(
 /// start at the start of it); what opens from a bar down the window's side (the rail) stands beside the bar, out of
 /// it, as everything opened from there does. `head_end`: beside what opened it, what stands at the end of its head's
 /// line, beside its title (the model panel's search: a sheet, its head the sheet's own, leaves it to what it holds).
+/// `heads_itself`: beside what opened it, no head drawn for it: what it holds draws its title where it wants it (the
+/// model panel's, a title over each of its columns; a sheet's head is the sheet's own still).
 /// `fade_out_together`: its ground and contents leave as one instead of the usual staged fade; what is behind it may
 /// show through while it goes (the model picker, 2026-11-02).
 pub fn panel(
@@ -392,6 +396,7 @@ pub fn panel(
   stage? : Bool = false,
   above? : (@ui.Ctx) -> Unit,
   head_end? : (@ui.Ctx) -> Unit,
+  heads_itself? : Bool = false,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   offset? : Double = panel_offset,
@@ -419,6 +424,7 @@ pub fn panel(
       stage,
       above,
       head_end,
+      heads_itself,
       side,
       along,
       offset,
@@ -1567,7 +1573,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         Some(f) => f().0
         None => x.title
       }
-      if title != "" {
+      if title != "" && !x.heads_itself {
         panel_head(c, title, end?=x.head_end)
       }
       // (small_panel's pad round it: what reaches its sides on purpose goes out past that, panel_bleed; its rows stand

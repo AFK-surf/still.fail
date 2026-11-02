@@ -14,7 +14,7 @@ import { topicKey, type Topic } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
 import type { Store, Value, Watch } from "./store.ts";
 import { arr as arrU, equal, get as getU, isObject } from "./util.ts";
-import { borrowable, models, quotaLine, servingIn, sourced } from "./views/models.ts";
+import { borrowable, effortDefault, models, quotaLine, servingIn, sourced } from "./views/models.ts";
 import { pendingKeyMade } from "./views/local.ts";
 import { ofAddress } from "./workspace.ts";
 
@@ -594,6 +594,10 @@ export class Choose implements Owner {
       onName === "codex" &&
       (o.kind === "new" || o.kind === "session") &&
       arr(get(overview, "profiles")).some((p) => typeof p.fast === "boolean" && (profile === null || p.id === profile) && accounts.some((a) => a.id === p.id));
+    // How fast it runs where none is picked: its account's own (the one drafted, else the one it is on), said as what
+    // it is rather than as 跟随订阅 (2026-11-02 用户「谁知道订阅是什么，应该直接显示具体值」).
+    const planFastOf = profile ?? (typeof get(current, "id") === "string" ? current.id : null);
+    const fastPlan = arr(get(overview, "profiles")).some((p) => planFastOf !== null && p.id === planFastOf && p.fast === true);
     const fastRaw = "fast" in draft ? draft.fast : get(value, "fast");
     const fast = typeof fastRaw === "boolean" && onName === "codex" ? fastRaw : null;
     const speedText = (f: boolean | null) => (f === true ? "Fast" : f === false ? t("core-logic.choose.speed.standard") : t("core-logic.choose.speed.plan"));
@@ -713,6 +717,11 @@ export class Choose implements Owner {
     return {
       ok: {
         fastAvailable,
+        effortDefault: (() => {
+          const level = effortDefault(overview, onName, option !== undefined ? (option.model ?? null) : null, profile);
+          return level !== null && efforts.some((x) => x === level) ? level : null;
+        })(),
+        fastPlan,
         fastText: effectiveFast ? "Fast" : null,
         options: annotated,
         near,
