@@ -21,6 +21,40 @@ test "a profile's page, wide: who it is and whether it works, then its allowance
 }
 
 ///|
+test "a shared subscription's main switch and its station details remain usable at each width" {
+  for case in page_cases {
+    let (w, platform) = case
+    let calls : Array[(String, Json)] = []
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, h=2400.0, over=fn(s) {
+      { ..s, call: fn(name, params, done) {
+          calls.push((name, params))
+          if name == "profile.share" { done(Ok(obj([]))) } else { (s.call)(name, params, done) }
+        } }
+    })
+    let at = "\{w} platform \{platform}"
+    scrolled_to(t, w, "分享给其他 station")
+    assert_eq(t.get(Switch, label="分享给其他 station").check, Some(On), msg=at)
+    assert_true(t.find("登录在") is Some(_) && t.find("可用的 station") is Some(_), msg=at)
+    assert_true(t.find("使用中：MBA") is Some(_), msg=at)
+    t.tap_text("登录在")
+    t.run_for(@kit.presence_in_ms)
+    assert_true(t.find("选择登录的 station") is Some(_), msg=at)
+    @sf.presenters_reset()
+    t.frame()
+    t.tap_text("可用的 station")
+    t.run_for(@kit.presence_in_ms)
+    assert_true(t.find("以后新加的 station 也能用") is Some(_), msg=at)
+    @sf.presenters_reset()
+    t.frame()
+    t.click(Switch, label="分享给其他 station")
+    t.frame()
+    let asked = calls.filter(fn(c) { c.0 == "profile.share" })
+    assert_eq(asked.length(), 1, msg=at)
+    assert_false(flag(Some(asked[0].1), "on"), msg=at)
+  }
+}
+
+///|
 test "a subscription's tier is shown on its page at every width" {
   for case in page_cases {
     let (w, platform) = case
