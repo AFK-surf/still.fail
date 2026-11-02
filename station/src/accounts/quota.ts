@@ -179,6 +179,14 @@ function withCodexCredits(q: ProfileQuota, limits: Json, resets: Json): ProfileQ
   }
   const count = resets?.availableCount ?? resets?.available_count;
   if (Number.isInteger(count) && count >= 0) q.resetCount = count;
+  if (q.resetCount && Array.isArray(resets?.credits)) {
+    const expiries = resets.credits.flatMap((credit: Json) => {
+      if (credit?.status !== "available") return [];
+      const expires = at(credit.expiresAt ?? credit.expires_at);
+      return expires !== null && Number.isSafeInteger(expires) && expires > 0 ? [expires] : [];
+    });
+    if (expiries.length) q.resetExpiries = expiries.sort((a: number, b: number) => a - b).slice(0, q.resetCount);
+  }
   if (q.credits !== undefined || q.resetCount !== undefined) {
     q.state = "ok";
     q.detail = null;
@@ -397,6 +405,17 @@ export async function codexUsage(authFile: string, urls: Urls = URLS, lang: Lang
     return [{ label: windowLabel(minutes, fallback), usedPercent: percent(w.used_percent), resetsAt: at(w.reset_at), minutes }];
   });
   const q = withCodexCredits(okOrUnavailable(windows, tr(lang, "station.quota.chatgptNoWindows")), body, body?.rate_limit_reset_credits);
+  // The usage endpoint only gives the count. For a machine or a borrowed login, get details just as Codex's
+  // app-server does; a failure must not hide the allowance and count we already received.
+  if (q.resetCount && q.resetExpiries === undefined) {
+    try {
+      const detail = await get(`${urls.chatgpt}/backend-api/wham/rate-limit-reset-credits`, headers);
+      if (detail.ok) {
+        const resets: Json = await detail.json();
+        withCodexCredits(q, body, { available_count: q.resetCount, credits: resets?.credits });
+      }
+    } catch {}
+  }
   if (typeof body?.plan_type === "string" && body.plan_type.trim() !== "") q.plan = body.plan_type.trim();
   return q;
 }

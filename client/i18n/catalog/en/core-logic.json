@@ -331,10 +331,15 @@
     "one": "in 1 day",
     "other": "in {n} days"
   },
+  "core-logic.format.until.days_hours": {
+    "one": "in {n} day {h} hr",
+    "other": "in {n} days {h} hr"
+  },
   "core-logic.format.until.hours": {
     "one": "in 1 hr",
     "other": "in {n} hr"
   },
+  "core-logic.format.until.hours_minutes": "in {h} hr {m} min",
   "core-logic.format.until.minute": "in 1 min",
   "core-logic.format.until.minutes": "in {n} min",
   "core-logic.format.weekday.0": "Sunday",

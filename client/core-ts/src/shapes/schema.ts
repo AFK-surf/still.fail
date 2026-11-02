@@ -561,6 +561,7 @@ export const SHAPES: Record<string, Shape> = {
     ["credits", opt("QuotaCredits")],
     ["plan", opt("String"), { doc: "The subscription tier, when reported with the allowance." }],
     ["resetCount", opt("u64"), { client: opt("I54") }],
+    ["resetExpiries", opt(vec("i64")), { client: opt(vec("I54")), doc: "Expiry times of the available reset credits whose details are known, in milliseconds." }],
     ["creditsText", opt("String")],
     ["resetText", opt("String")],
     ["state", "String", { doc: "ok | unsupported | unavailable | blocked (the provider refuses the account)" }],

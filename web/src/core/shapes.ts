@@ -603,6 +603,8 @@ export interface Quota {
 	/** The subscription tier, when reported with the allowance. */
 	plan?: string;
 	resetCount?: number;
+	/** Expiry times of the available reset credits whose details are known, in milliseconds. */
+	resetExpiries?: number[];
 	creditsText?: string;
 	resetText?: string;
 	/** ok | unsupported | unavailable | blocked (the provider refuses the account) */

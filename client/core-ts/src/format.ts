@@ -164,6 +164,19 @@ export function timeUntilIn(lang: Lang, ms: number, now: number): string {
   return tr(lang, "core-logic.format.until.days", { n: round(hours / 24) });
 }
 
+/// A deadline's remaining time, to the minute, without a unit that is zero: 3 天 5 小时后, 3 天后, 6 小时 35 分钟后,
+/// 1 小时后, 25 分钟后, 1 分钟内.
+export function preciseTimeUntil(ms: number, now: number): string {
+  const lang = current();
+  const minutes = Math.floor(Math.max(ms - now, 0) / MINUTE);
+  if (minutes <= 1) return tr(lang, "core-logic.format.until.minute");
+  if (minutes < 60) return tr(lang, "core-logic.format.until.minutes", { n: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 === 0 ? tr(lang, "core-logic.format.until.hours", { n: hours }) : tr(lang, "core-logic.format.until.hours_minutes", { h: hours, m: minutes % 60 });
+  const days = Math.floor(hours / 24);
+  return hours % 24 === 0 ? tr(lang, "core-logic.format.until.days", { n: days }) : tr(lang, "core-logic.format.until.days_hours", { n: days, h: hours % 24 });
+}
+
 /// When a quota window refills, in words.
 export function refillsIn(ms: number, now: number): string {
   return refillsInLang(current(), ms, now);

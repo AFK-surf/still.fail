@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conform } from "../src/conform.ts";
-import { holdLanguage } from "../src/i18n.ts";
+import { holdLanguage, setCurrent } from "../src/i18n.ts";
 import * as p from "../src/present.ts";
 import { packetsSince } from "../src/station/topics.ts";
 
@@ -10,6 +10,37 @@ holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
 const GIB = 1024 ** 3;
+
+test("reset credits show the expiries known for each available card", () => {
+  const now = 1_900_000_000_000;
+  const day = 86_400_000;
+  const c = { now, offsetMin: 0 };
+  const raw = { state: "ok", windows: [], detail: null, checkedAt: now, resetCount: 3, resetExpiries: [now + 8 * day, now + 3 * day, now + 3 * day] };
+  let shown = p.times(raw, c) as J;
+  assert.equal(shown.resetText, "剩余 3 次 · 3 天后、3 天后、8 天后到期");
+  const shaped = conform("Quota", shown) as J;
+  assert.deepEqual(shaped.ok.resetExpiries, raw.resetExpiries);
+  assert.equal(shaped.ok.resetText, shown.resetText);
+  assert.equal((p.times({ ...raw, resetExpiries: [now + day + 19 * 3_600_000] }, c) as J).resetText, "剩余 3 次 · 1 天 19 小时后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + day] }, c) as J).resetText, "剩余 3 次 · 1 天后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + day - 1] }, c) as J).resetText, "剩余 3 次 · 23 小时 59 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 6 * 3_600_000 + 35 * 60_000] }, c) as J).resetText, "剩余 3 次 · 6 小时 35 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 3_600_000] }, c) as J).resetText, "剩余 3 次 · 1 小时后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 5 * 60_000] }, c) as J).resetText, "剩余 3 次 · 5 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 1] }, c) as J).resetText, "剩余 3 次 · 1 分钟内到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now - 1] }, c) as J).resetText, "剩余 3 次 · 已到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now - 1, now + day] }, c) as J).resetText, "剩余 3 次 · 已到期 · 1 天后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: undefined }, c) as J).resetText, "剩余 3 次");
+  assert.equal((p.times({ ...raw, resetCount: 0 }, c) as J).resetText, "剩余 0 次");
+  try {
+    setCurrent("en");
+    shown = p.times(raw, c) as J;
+    assert.equal(shown.resetText, "3 left · Expiry: in 3 days, in 3 days, in 8 days");
+    assert.equal((p.times({ ...raw, resetExpiries: [now + 1] }, c) as J).resetText, "3 left · Expiry: in 1 min");
+  } finally {
+    setCurrent("zh");
+  }
+});
 
 test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
   const unnamed = () => null;

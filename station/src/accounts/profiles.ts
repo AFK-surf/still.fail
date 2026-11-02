@@ -53,6 +53,8 @@ export type ProfileQuota = {
   windows: QuotaWindow[];
   credits?: QuotaCredits;
   resetCount?: number;
+  /// Expiries of available reset credits for which the provider returned details, in epoch milliseconds.
+  resetExpiries?: number[];
   /// The subscription tier, when the provider reports it with the allowance.
   plan?: string;
   detail: string | null;

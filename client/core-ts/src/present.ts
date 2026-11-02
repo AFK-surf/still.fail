@@ -113,7 +113,15 @@ export function times(value: unknown, c: Clock): unknown {
     }
     const count = u64(map.resetCount);
     if (count !== undefined) {
-      map.resetText = t("core-views.present.resets_left", { n: count });
+      const expiry: string[] = [];
+      if (count > 0 && Array.isArray(map.resetExpiries)) {
+        const expiries = map.resetExpiries.filter((at: unknown): at is number => typeof at === "number" && Number.isSafeInteger(at) && at > 0)
+          .sort((a: number, b: number) => a - b).slice(0, count);
+        if (expiries.some((at: number) => at <= c.now)) expiry.push(t("core-views.present.resets_expired"));
+        const future = expiries.filter((at: number) => at > c.now).map((at: number) => format.preciseTimeUntil(at, c.now));
+        if (future.length) expiry.push(t("core-views.present.resets_expire", { when: future.join(t("core-views.present.resets_separator")) }));
+      }
+      map.resetText = [t("core-views.present.resets_left", { n: count }), ...expiry].join(" · ");
       changed = true;
     }
   }
