@@ -343,6 +343,7 @@ export const SHAPES: Record<string, Shape> = {
   MessageDecision: struct([
     ["resolved", "bool"],
     ["dismissed", opt("bool"), { doc: "Still waiting, and the viewer dismissed it (off their list; the options still work)." }],
+    ["locked", opt("bool"), { doc: "Still waiting, and the agent that asked is in a turn (its session's latest has not ended, whichever chat it is\nfor): an option that closes the card (its `closes`) is refused by the station until it ends, so the clients draw it\nas not answerable yet." }],
     ["answeredBy", opt("String"), { said: true, doc: "Who answered it (the first person to write after it), by name; absent while it waits, or when a newer decision\nreplaced it." }],
     ["chosen", opt("String"), { doc: "The option they picked (their message quoted it with an option's label), its label." }],
     ["text", opt("String"), { said: true, doc: "Resolved, in words: 林晓 选了「先不改」, 林晓 回复了, 已换成新的问题." }],

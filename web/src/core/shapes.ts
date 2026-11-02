@@ -2165,6 +2165,12 @@ export interface MessageDecision {
 	/** Still waiting, and the viewer dismissed it (off their list; the options still work). */
 	dismissed?: boolean;
 	/**
+	 * Still waiting, and the agent that asked is in a turn (its session's latest has not ended, whichever chat it is
+	 * for): an option that closes the card (its `closes`) is refused by the station until it ends, so the clients draw it
+	 * as not answerable yet.
+	 */
+	locked?: boolean;
+	/**
 	 * Who answered it (the first person to write after it), by name; absent while it waits, or when a newer decision
 	 * replaced it.
 	 */

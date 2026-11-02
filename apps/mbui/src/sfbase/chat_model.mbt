@@ -205,6 +205,8 @@ pub(all) struct VaultAsk {
 pub(all) struct Decision {
   resolved : Bool
   dismissed : Bool
+  /// still waiting, its agent in a turn: an option that closes the card waits for that turn's end (the station refuses it)
+  locked : Bool
   text : String?
   /// the option picked, once answered
   chosen : String?
@@ -468,6 +470,7 @@ pub fn message_of(m : Json) -> Message {
         Some({
           resolved: flag(d, "resolved"),
           dismissed: flag(d, "dismissed"),
+          locked: flag(d, "locked"),
           text: opt_text(d, "text"),
           chosen: opt_text(d, "chosen"),
         })

@@ -247,6 +247,8 @@ pub let fix_transfers : Array[Json]
 
 pub let fix_turn_end_ms : Double
 
+pub let fix_turn_over : @ref.Ref[Bool]
+
 pub let fix_unsaid : Array[(Double, () -> Unit)]
 
 pub let fix_vault : @ref.Ref[String]

@@ -1282,6 +1282,10 @@ pub fn seeded_outbox(mode : String) -> Array[Json] {
 pub let fix_decided : Map[Int, Json] = {}
 
 ///|
+/// chat-locked: its agent's turn has ended (`fix.turn_over`, as a session's change brings it).
+pub let fix_turn_over : Ref[Bool] = Ref(false)
+
+///|
 /// The answers given here, by the card's seq: the viewer's message the core posts with each (said as the chat shows).
 pub let fix_replied : Map[Int, String] = {}
 
@@ -1392,6 +1396,8 @@ pub fn ask_end_post() -> Json {
 pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
   let ask_end = f.mode == "chat-ask-end"
+  // (chat-locked: its card's first option closes it, and its agent is in a turn till fix_turn_over)
+  let locked = f.mode == "chat-locked"
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use"
   let linked = f.mode.has_prefix("chat-phone-linked-")
   let signin = f.mode.has_prefix("chat-signin")
@@ -1412,7 +1418,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       None => rest
     }
   }
-  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !signin && !ask_end) {
+  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !signin && !ask_end && !locked) {
     return v
   }
   match v {
@@ -1436,8 +1442,25 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
             y["asked"] = Json::boolean(false)
             all[i] = Json::object(y)
           }
+          (None, Object(xm)) if locked && seq == 8 => {
+            let y = xm.copy()
+            y["card"] = {
+              "type": "options",
+              "assigneeText": "等 林 决定",
+              "options": [
+                { "label": "先不换", "detail": "这次只改列表，截图下次再说", "closes": true },
+                { "label": "一起换", "detail": "把首页和聊天页的截图都更新", "recommended": true },
+              ],
+            }
+            y["decision"] = { "resolved": false, "locked": Json::boolean(!fix_turn_over.val) }
+            all[i] = Json::object(y)
+          }
           _ => ()
         }
+      }
+      // (chat-locked: its card at the chat's end, as one asked in a turn going on is)
+      if locked {
+        all.retain(fn(x) { number(Some(x), "seq") <= 8.0 })
       }
       // what the chat's end says it needs, let go here: said let go at once, as the core says it (views.ts withLetGo)
       match o.get("stateAsk") {
@@ -1506,6 +1529,11 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
       }
       fix_decided[seq] = decided_json(label)
       fix_replied[seq] = label
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
+    "fix.turn_over" => {
+      fix_turn_over.val = true
       f.changed()
       Some(Ok(Json::object({})))
     }

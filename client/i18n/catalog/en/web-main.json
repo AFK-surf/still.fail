@@ -270,6 +270,7 @@
   "web-main.decisions.answerWhat": "reply \"{option}\"",
   "web-main.decisions.dismiss": "Dismiss",
   "web-main.decisions.dismissWhat": "dismiss it",
+  "web-main.decisions.locked": "Its agent is busy — pick this once it's done",
   "web-main.decisions.options": "Options",
   "web-main.demoReal.dismiss": "Got it",
   "web-main.demoReal.open": "Open still.fail",

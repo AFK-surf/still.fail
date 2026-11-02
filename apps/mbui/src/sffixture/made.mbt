@@ -40,6 +40,7 @@ pub fn fixture_reset() -> Unit {
   fix_writes.clear()
   fix_xshared.clear()
   fix_decided.clear()
+  fix_turn_over.val = false
   fix_replied.clear()
   fix_vault.val = ""
   fix_phone.val = ""

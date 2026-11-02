@@ -882,6 +882,7 @@ web-main.composer.send
 web-main.decisions.answerWhat
 web-main.decisions.dismiss
 web-main.decisions.dismissWhat
+web-main.decisions.locked
 web-main.doing.failed
 web-main.draft.notSent
 web-main.file.cancelDownload

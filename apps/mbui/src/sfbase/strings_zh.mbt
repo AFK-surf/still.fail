@@ -890,6 +890,7 @@ let zh : Map[String, String] = {
   "web-main.decisions.answerWhat": "回复「{option}」",
   "web-main.decisions.dismiss": "不再提醒",
   "web-main.decisions.dismissWhat": "不再提醒",
+  "web-main.decisions.locked": "助手正忙，忙完才能选",
   "web-main.doing.failed": "失败",
   "web-main.draft.notSent": "发送失败：{error}",
   "web-main.file.cancelDownload": "取消下载",

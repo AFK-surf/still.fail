@@ -33,7 +33,7 @@ export const choice = style({
     "&:hover:not(:disabled)": { background: vars.hover },
     "&:disabled": { cursor: "default" },
     // Another one of them is being sent, or was picked: the rest step back.
-    "&:disabled:not([data-busy]):not([data-chosen])": { opacity: ".5" },
+    "&:disabled:not([data-busy]):not([data-chosen]):not([data-locked])": { opacity: ".5" },
   },
 });
 /**
@@ -46,16 +46,21 @@ export const choiceNumber = style({
   color: vars.muted, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "20px", fontVariantNumeric: "tabular-nums",
   // (picked, answered: its ground and ink over --dur, as a control answers)
   transition: `background-color ${vars.dur}, color ${vars.dur}`,
-  selectors: { [`${choice}[data-recommended] &, ${choice}[data-chosen] &`]: { background: accent, color: "#fff" } },
+  selectors: { [`${choice}[data-recommended] &, ${choice}[data-chosen] &`]: { background: accent, color: "#fff" }, [`${choice}[data-locked] &`]: { opacity: ".5" } },
 });
 globalStyle(`${choiceNumber} > svg`, { display: "block" });
 export const choiceLabel = style({
   gridColumn: "2", fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
-  selectors: { [`${choice}[data-busy] &`]: { paddingRight: "22px" } },
+  selectors: { [`${choice}[data-busy] &`]: { paddingRight: "22px" }, [`${choice}[data-locked] &`]: { opacity: ".5" } },
 });
 /** Being sent: a small ring at the option's right, level with its label. */
 export const choiceSpinner = style({ position: "absolute", right: `${CARD_PAD - LIST_PAD}px`, top: `${NUMBER_IN + 4}px` });
-export const choiceDetail = style({ gridColumn: "2", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere" });
+export const choiceDetail = style({
+  gridColumn: "2", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere",
+  selectors: { [`${choice}[data-locked] &`]: { opacity: ".5" } },
+});
+/** Under an option that closes the card while its agent is in a turn: why it waits, whole while the option is faded (Decisions.tsx). */
+export const choiceLocked = style({ gridColumn: "2", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere" });
 
 export const option = style({
   position: "relative", display: "grid", gap: "0", width: "100%", boxSizing: "border-box", padding: "9px 14px",

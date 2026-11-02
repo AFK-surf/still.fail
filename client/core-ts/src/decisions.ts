@@ -13,6 +13,8 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 const trimmed = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 const lines = (text: string): string[] => text.split("\n").map((l) => l.replace(/\r$/, "").trim());
+/// No agent at work (inMessages' `working`).
+const NONE: ReadonlySet<string> = new Set();
 
 /// The answers an options card offers, as shown: labelled ones, the recommended moved last.
 export function optionsShown(options: J): J[] {
@@ -279,7 +281,9 @@ export function presentRow(row: J): J {
 /// Where each card in a chat's messages stands. `pending`: undefined when the row is not known; null when none waits.
 /// `sending`: what the viewer sent into the chat that has not come back as its entries yet (the outbox, not failed): it
 /// answers the last card at once, as the chat shows it sent, rather than when the station has it.
-export function inMessages(messages: J[], pendingOf: [number, boolean] | null | undefined, sending: J[] = []): J[] {
+/// `working`: the chat's agents in a turn (their session keys): a card one of them asked is `locked` while it lasts,
+/// the first it asked from or a later one (the station refuses closing one meanwhile, station/src/store/store.ts closeCard).
+export function inMessages(messages: J[], pendingOf: [number, boolean] | null | undefined, sending: J[] = [], working: ReadonlySet<string> = NONE): J[] {
   const out = [...messages];
   const cards: [number, J][] = [];
   for (let i = 0; i < messages.length; i++) {
@@ -310,6 +314,9 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
       isDismissed = pendingOf[0] === seq && pendingOf[1] && !sentHere;
     }
     const decision: J = { resolved: !isWaiting };
+    // Its agent is in a turn: an option that closes the card is refused until it ends, so the clients draw it as not
+    // answerable yet rather than let it be picked and fail.
+    if (isWaiting && working.has(str(get(get(messages[i], "by"), "agent")) ?? "")) decision.locked = true;
     if (isDismissed) {
       decision.dismissed = true;
       decision.text = t("core-logic.decisions.dismissed");

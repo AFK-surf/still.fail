@@ -902,6 +902,7 @@ let en : Map[String, String] = {
   "web-main.decisions.answerWhat": "reply \"{option}\"",
   "web-main.decisions.dismiss": "Dismiss",
   "web-main.decisions.dismissWhat": "dismiss it",
+  "web-main.decisions.locked": "Its agent is busy — pick this once it's done",
   "web-main.doing.failed": "Failed",
   "web-main.draft.notSent": "Couldn't send: {error}",
   "web-main.file.cancelDownload": "Cancel download",
