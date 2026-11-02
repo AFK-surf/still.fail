@@ -24,8 +24,8 @@
 //
 // A page pushed over the page's own stack (Nav::push_over) slides in at its causes: the stack held by the page's panel
 // (tape_page.mbt: @ui.nav_flat_view, Nav::held_by), each of its pages a node of its own. Still the old frame's (the way
-// there): what the side panels hold (their islands); a passage picked bringing the page over (read as the page's panel
-// says it, tape_page_said). The edges and back are nodes of the
+// there): what the side panels hold (their islands). A passage picked brings the page over as it is picked
+// (tape_page.mbt's tape_pick_said). The edges and back are nodes of the
 // tree's (tape_side_edge, tape_panel_edge; wide_takes_back, wide_back_step).
 
 ///|

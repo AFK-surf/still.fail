@@ -16,16 +16,18 @@ fn tape_page_ground(n : @view.View) -> Int64 {
 }
 
 ///|
-/// The page's panel (in node `v`, as tape_panel_box gives it room): what it says each frame its pages are built, before
-/// them (tape_page_said); its ground, corners and line, cutting what is in it to them; the stack in it, as wide as beside
-/// the system's column (`under` its ground alone).
+/// The page's panel (in node `v`, as tape_panel_box gives it room): the page on top switched as the stack is told it
+/// (page_switch_said), a passage picked as it is picked (tape_pick_said); its ground, corners and line, cutting what is
+/// in it to them; the stack in it, as wide as beside the system's column (`under` its ground alone).
 fn tape_page_pane(v : @view.View, src : Source) -> Unit {
   // (its tips over all of the window, as the old frame's are: none cut by the panel)
   let tips = @sf.TipLayer::new(fn() { tape_goes.node })
   // (what is drawn in it cut to its room, as the island it was drawn by before was: the panel's ground and line too)
   v.clips(Is(true)) |> ignore
-  // (drawing nothing, under all of it: taking no press, what the page's bar does not take nothing's, not its)
-  @ui.old(v, fn(c) { tape_page_said(c, src) }, key=tape_island_key).over(Is(true)).presses(Is(false)) |> ignore
+  // (the page on top switched, as the stack is told it: before any page of it is built; a passage picked while the page
+  // is not in use, as it is picked: tape_pick_said)
+  page_switch_said(v, fn() { @sfbase.workspace_in_view(src).0 is Some(_) })
+  tape_pick_said(v, src)
   v.box(fn(panel) {
     panel
     .grow(Is(1.0))
@@ -60,27 +62,27 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
 }
 
 ///|
-/// What the page's panel says each frame its pages are built (its island, before them, drawing nothing): the page on
-/// top switched (page_switch_frame); a passage of a message picked while the page is not in use brings it over.
-fn tape_page_said(c : @ui.Ctx, src : Source) -> Unit {
-  let (now, _, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(_) else { return }
-  // a chat and a new chat switched between: the composer moving, the rest crossfading (switch.mbt), as the page on top
-  // changes, before any page of it is built
-  page_switch_frame(c)
-  // a passage of a message picked while the page is not in use (held where it shows beside the sidebar): the page comes
-  // over with it, its bar there to be pressed (pengxiao, 2026-10-25: 引用 pressed there went to what showed of the page
-  // and brought it over, quoting nothing). As it is picked, once: a passage left picked keeps nothing from being brought
-  // over after (pengxiao, 2026-10-25: the sidebar pressed or pulled over went straight back)
-  let pick = if @sfbase.pk.ts == "" { "" } else { "\{@sfbase.pk.ts}\u{1}\{@sfbase.pk.taken_at}" }
-  if pick != "" &&
-    pick != wide.tape_pick.get() &&
-    wide.tape_at.get() != Page &&
-    wide.tape_ask.get() is None &&
-    wide.tape_pull.get() is None {
-    wide.tape_ask.set(Some(Page))
-  }
-  wide.tape_pick.set(pick)
+/// A passage of a message picked while the page is not in use (held where it shows beside the sidebar), followed in
+/// node `v`: the page comes over with it, its bar there to be pressed (pengxiao, 2026-10-25: 引用 pressed there went to
+/// what showed of the page and brought it over, quoting nothing). As it is picked, once (@sfbase.picked: a new
+/// identity), never as it stays picked: a passage left picked keeps nothing from being brought over after (pengxiao,
+/// 2026-10-25: the sidebar pressed or pulled over went straight back).
+fn tape_pick_said(v : @view.View, src : Source) -> Unit {
+  // (what is picked, as told, while a workspace is in view: none taken while none is, what is picked then taken as one
+  // is again)
+  v.reacts(fn() { (@sfbase.picked.get().serial, @sfbase.workspace_in_view(src).0 is Some(_)) }, fn(now) {
+    let (serial, held) = now
+    guard held else { return }
+    let pick = if serial == 0 { "" } else { serial.to_string() }
+    if pick != "" &&
+      pick != wide.tape_pick.get() &&
+      wide.tape_at.get() != Page &&
+      wide.tape_ask.get() is None &&
+      wide.tape_pull.get() is None {
+      wide.tape_ask.set(Some(Page))
+    }
+    wide.tape_pick.set(pick)
+  })
 }
 
 ///|
