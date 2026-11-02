@@ -120,6 +120,8 @@ priv struct Moving {
   /// what its size and place in the window are kept as (reveal's content, measure; 0: nothing), apart from `key`, so
   /// that a node measured can move by its layout too, in its list or scope
   mut kept : Int
+  /// Its drawn origin is also kept, for an action that takes it from what was shown.
+  mut kept_drawn : Bool
   /// a frame its keyed nodes' places are taken in (scope): 1 from its top left, 2 from its bottom left
   mut scope : Int
   /// flown from (x, y, scale), how far across, down and grown
@@ -143,6 +145,9 @@ priv struct Rec {
   mut y : Double
   mut w : Double
   mut h : Double
+  /// How a measured node was drawn after all of its ancestors' looks were applied.
+  mut drawn : @ui.DrawnState?
+  mut drawn_frame : Int
   mut ref : Int
   mut seen : Int
   /// where it showed in its list's view
@@ -162,6 +167,8 @@ priv struct Rec {
   drawing : @ui.Drawing
   mut exit : Trans?
   mut list : Int
+  /// The current scope node for a scoped place, or -1 for a list or window place.
+  mut scope_node : Int
   /// how far down from its place it is drawn on its way there this frame (0: in its place; makes_room)
   mut moving_dy : Double
   /// how tall it shows this frame (as tall as it is laid out, or less: grown for its cause, coming out with its move;
@@ -245,6 +252,8 @@ fn Rec::new() -> Rec {
     y: 0.0,
     w: 0.0,
     h: 0.0,
+    drawn: None,
+    drawn_frame: -10,
     ref: 0,
     seen: -10,
     vy: 0.0,
@@ -262,6 +271,7 @@ fn Rec::new() -> Rec {
     drawing: @ui.Drawing::new(),
     exit: None,
     list: 0,
+    scope_node: -1,
     frame_at: -1,
     was_x: 0.0,
     was_y: 0.0,
@@ -472,6 +482,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     exit: None,
     fresh: false,
     kept: 0,
+    kept_drawn: false,
     scope: 0,
     fly: None,
     reshape: false,
@@ -673,6 +684,15 @@ pub fn placed(c : @ui.Ctx, i : Int, at : () -> @ui.Look) -> Unit {
 pub fn measure(c : @ui.Ctx, i : Int, key : String) -> Unit {
   let e = moving_of(c, i)
   e.kept = motion_key("measure\u{1}" + key)
+  e.kept_drawn = false
+}
+
+///|
+/// Keep node `i`'s layout as for measure and its last drawn origin, for an action taking it from where it showed.
+pub fn measure_drawn(c : @ui.Ctx, i : Int, key : String) -> Unit {
+  let e = moving_of(c, i)
+  e.kept = motion_key("measure\u{1}" + key)
+  e.kept_drawn = true
 }
 
 ///|
@@ -713,6 +733,24 @@ pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Doub
   measure_read(measure_size, motion_key("measure\u{1}" + key), name=key)
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
     Some(r) if r.seen >= c.frame_number() - 1 => Some((r.x, r.y, r.w, r.h))
+    _ => None
+  }
+}
+
+///|
+/// Where a measured node was drawn in the last frame, for an action taking it from there. Its place includes its own
+/// and its ancestors' offsets; its size is as laid out (scales and clipping are not included). Unlike measured_rect,
+/// this is a snapshot for an action, not a place for something to follow while the node moves.
+pub fn measured_drawn_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
+  measured_drawn_state(c, key).map(fn(s) { s.rect })
+}
+
+///|
+/// The drawn rectangle, rectangular cuts and inherited opacity kept by measure_drawn, for an action taking the node
+/// from where it showed. None once it has not been measured for a frame.
+pub fn measured_drawn_state(c : @ui.Ctx, key : String) -> @ui.DrawnState? {
+  match mo.recs.get(motion_key("measure\u{1}" + key)) {
+    Some(r) if r.drawn_frame >= c.frame_number() - 1 => r.drawn
     _ => None
   }
 }
@@ -1273,6 +1311,18 @@ fn after_layout(c : @ui.Ctx) -> Unit {
     }
   }
   makes_room(c)
+  // Take the drawn state after every node's look has been set: a measured node can be carried or cut by an ancestor.
+  for e in mo.entries {
+    if e.kept != 0 && e.kept_drawn {
+      match mo.recs.get(e.kept) {
+        Some(r) if r.seen == frame => {
+          r.drawn = Some(c.drawn_state(e.node))
+          r.drawn_frame = frame
+        }
+        _ => ()
+      }
+    }
+  }
   forget_recs(c)
 }
 
@@ -1405,7 +1455,7 @@ fn makes_room(c : @ui.Ctx) -> Unit {
       let mut bottom = nh
       for m in moving {
         let (me, mr) = m
-        if mr.list != r.list || me.node == e.node || mr.moving_dy.abs() <= r.moving_dy.abs() + 0.5 {
+        if mr.list != r.list || mr.scope_node != r.scope_node || me.node == e.node || mr.moving_dy.abs() <= r.moving_dy.abs() + 0.5 {
           continue
         }
         ignore(mr.oy.get())
@@ -1516,7 +1566,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
     }
     if e.key != 0 {
       let li = c.list_above(e.node)
-      let (ref, rx, ry) = if li >= 0 {
+      let (ref, scope_node, rx, ry) = if li >= 0 {
         let (lx, ly, _, _) = c.node_rect(li)
         let (pl, pt, _, _) = c.node_pad(li)
         let s = match scrolled.get(li) {
@@ -1527,15 +1577,15 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             s
           }
         }
-        (c.node_id(li), nx - lx - pl, ny - ly - pt + s)
+        (c.node_id(li), -1, nx - lx - pl, ny - ly - pt + s)
       } else {
         match scope_above(c, e.node) {
           Some(sc) => {
             let (sx, sy, _, sh) = c.node_rect(sc.node)
             let oy = if sc.scope == 2 { sy + sh } else { sy }
-            (-7, nx - sx, ny - oy)
+            (-7, sc.node, nx - sx, ny - oy)
           }
-          None => (0, nx, ny)
+          None => (0, -1, nx, ny)
         }
       }
       let r = match mo.recs.get(e.key) {
@@ -1868,6 +1918,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       r.seen = frame
       r.exit = e.exit
       r.list = ref
+      r.scope_node = scope_node
       match e.exit {
         // what it draws kept, for its copy should it leave its list
         Some(_) if li >= 0 => c.keep_drawing(e.node, li, r.drawing)

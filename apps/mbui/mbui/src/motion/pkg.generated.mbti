@@ -142,7 +142,13 @@ pub let max_generator_duration : Double
 
 pub fn measure(@ui.Ctx, Int32, String) -> Unit
 
+pub fn measure_drawn(@ui.Ctx, Int32, String) -> Unit
+
 pub fn measured(@ui.Ctx, String) -> Double?
+
+pub fn measured_drawn_rect(@ui.Ctx, String) -> (Double, Double, Double, Double)?
+
+pub fn measured_drawn_state(@ui.Ctx, String) -> @ui.DrawnState?
 
 pub fn measured_radii(@ui.Ctx, String) -> MeasuredCorners?
 

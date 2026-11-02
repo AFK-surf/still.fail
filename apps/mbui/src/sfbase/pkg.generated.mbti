@@ -2320,6 +2320,7 @@ pub(all) struct FlowPiece {
 pub(all) struct FlyingFile {
   key : String
   from : (Double, Double, Double, Double)
+  shown : @ui.DrawnState?
   picture : String?
   mut paint : ((Double, Double, @ui.Fit, Double) -> Unit)?
   face : () -> Unit

@@ -326,6 +326,24 @@ pub fn composer(
   let mut send_i = -1
   let mut chosen = -1
   let mut said = -1
+  // A still appearing can turn a file card into a tile, and a quote can acquire its own picture. Both change what the
+  // composer holds even when the number of files and quotes stays the same.
+  let quote_pictures = w.quotes.map(fn(q) { quote_picture(c, src, w, spec.station, Some(q)) })
+  let file_pictures = w.files.map(fn(f) { waiting_picture(src, w, Some(f)) })
+  let quote_shapes = w.quotes.mapi(fn(i, q) {
+    let v = Some(q)
+    text(v, "id") + "\u{1}" + text(v, "author") + "\u{1}" + text(v, "text") + "\u{1}" + text(v, "role") +
+    (if quote_pictures[i] is Some(_) { "|picture" } else { "|words" })
+  }).join("\u{2}")
+  let file_shapes = w.files.mapi(fn(i, f) {
+    text(Some(f), "id") + (if file_pictures[i] is Some(_) { "|picture" } else { "|card" })
+  }).join("\u{2}")
+  let holds = if whose != composing.draft_before && !moved {
+    ""
+  } else {
+    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{file_shapes}|\{quote_shapes}|\{w.error != ""}|" +
+    w.field.text()
+  }
   let box = c.box(
     style=if sent_box > 0.0 {
       composer_box_open().then(@ui.style(min_h=Fixed(sent_box), justify=JBetween))
@@ -338,8 +356,8 @@ pub fn composer(
     glass=@sf.glass_floating(tint?=if dragging { Some(@sf.alpha(p.accent, drag_tint)) } else { None }),
     id=cap,
     fn() {
+      composer_extras(c, src, spec, w, holds, shape, quote_pictures, file_pictures)
       if multiline {
-        composer_extras(c, src, spec, w)
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tools_row(), fn() {
           plus = attach(c, src, spec, w, no_files)
@@ -393,12 +411,6 @@ pub fn composer(
   // window, the sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is
   // where it is laid out at once (docs/motion.md)
   composing.roomy = Some(spec.roomy)
-  let holds = if whose != composing.draft_before && !moved {
-    ""
-  } else {
-    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
-    w.field.text()
-  }
   // (at a page's foot down the system's column, not roomy in a new chat's middle: opened from its foot, a keyboard
   // coming in the same frame taken at once, the user 2026-10-30 「以底部为 origin」; there the keyboard lifts it from its
   // first point on, ios_app.m ime_over)
@@ -838,10 +850,25 @@ fn quote_comment_field(c : @ui.Ctx, key : String, f : @ui.Field, hint? : Bool = 
 /// What waits to go with the message (ComposerExtras): the quotes, each with a line for what is said about it (the one
 /// just added takes the focus; Enter in it goes back to the text), then the files: a picture as its picture, pasted
 /// words as their card, a station's file as its card, a link as its card, any other file as its card.
-fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) -> Unit {
-  if w.quotes.length() > 0 {
+fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?]) -> Unit {
+  // The room for what is added is present even when empty, outside the flow then. Its height and position change with
+  // the ground, so something new is revealed inside that room as it grows.
+  let empty = w.quotes.is_empty() && w.files.is_empty()
+  let area = c.box(
+    style=extras_column,
+    left?=if empty { Some(@sf.composer_pad) } else { None },
+    top?=if empty { Some(@sf.composer_pad) } else { None },
+    fn() { composer_extra_items(c, src, spec, w, holds, shape, quote_pictures, file_pictures) },
+  )
+  @motion.scope(c, area)
+  @motion.layout(c, area, "composer/extras", spec=shape, by=holds)
+}
+
+///|
+fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?]) -> Unit {
+  if !w.quotes.is_empty() {
     c.box(style=quotes_column, fn() {
-      for q in w.quotes {
+      for i, q in w.quotes {
         let v = Some(q)
         let id = text(v, "id")
         let key = "composer/quote/" + id
@@ -858,52 +885,58 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
           c.focus_editor(key)
           writing_focused(src, w)
         }
-        let done = @sf.quote_card(
-          c,
-          key,
-          text(v, "author"),
-          text(v, "text"),
-          role=text(v, "role"),
-          composer=true,
-          remove=true,
-          words_key=quote_words_key(id),
-          // its own picture (an image of a message quoted, a mark's screenshot) in its card as a picture waiting is,
-          // where it flies from to its place in the message (flying_quotes)
-          picture?=quote_picture(c, src, w, spec.station, v).map(fn(own) {
-            fn() {
-              let (picture, f) = own
-              let tile = picture_tile(c, picture, going_now(f), gone_up(f), text(f, "error"))
-              @motion.measure(c, tile, quote_picture_key(id))
-              composing.pictures[id] = picture
-            }
-          }),
-          comment_field=fn() {
-            let res = quote_comment_field(c, key, f)
-            if res.text != text(v, "comment") {
-              writing_comment(src, w, id, res.text)
-            }
-            if res.submitted is Some(_) {
-              c.focus_editor(composer_field_key)
-            }
-          },
-        )
-        held_coming(c, done.card, key)
-        // (where it is and its colour: what flies from it as it is sent, flying_quotes)
-        @motion.measure(c, done.card, quote_card_key(id))
-        composing.grounds[id] = c.node_bg(done.card)
-        if done.removed {
-          writing_unquote(src, w, id)
-        }
+        let item = c.box(style=@ui.css("w=Full"), fn() {
+          let done = @sf.quote_card(
+            c,
+            key,
+            text(v, "author"),
+            text(v, "text"),
+            role=text(v, "role"),
+            composer=true,
+            remove=true,
+            words_key=quote_words_key(id),
+            // its own picture (an image of a message quoted, a mark's screenshot) in its card as a picture waiting is,
+            // where it flies from to its place in the message (flying_quotes)
+            picture?=quote_pictures[i].map(fn(own) {
+              fn() {
+                let (picture, f) = own
+                let tile = picture_tile(c, picture, going_now(f), gone_up(f), text(f, "error"))
+                @motion.measure_drawn(c, tile, quote_picture_key(id))
+                composing.pictures[id] = picture
+              }
+            }),
+            comment_field=fn() {
+              let res = quote_comment_field(c, key, f)
+              if res.text != text(v, "comment") {
+                writing_comment(src, w, id, res.text)
+              }
+              if res.submitted is Some(_) {
+                c.focus_editor(composer_field_key)
+              }
+            },
+          )
+          // (where it is and its colour: what flies from it as it is sent, flying_quotes)
+          @motion.measure_drawn(c, done.card, quote_card_key(id))
+          composing.grounds[id] = c.node_bg(done.card)
+          if done.removed {
+            writing_unquote(src, w, id)
+          }
+        })
+        @motion.layout(c, item, key + "/in", spec=shape, by=holds)
+        held_coming(c, item, key)
       }
     })
     |> ignore
   }
   // (a quote's picture is its own, not among them)
-  if w.files.length() > 0 {
+  if !w.files.is_empty() {
     c.box(style=files_flow(), flow=true, line_gap=files_lines(), fn() {
-      for f in w.files {
-        let i = c.box(fn() { composer_file(c, src, spec, w, f) })
-        held_coming(c, i, "composer/file/" + text(Some(f), "id"))
+      for n, f in w.files {
+        let i = c.box(fn() { composer_file(c, src, spec, w, f, file_pictures[n]) })
+        let key = "composer/file/" + text(Some(f), "id")
+        @motion.layout(c, i, key + "/in", spec=shape, by=holds)
+        @motion.measure_drawn(c, i, key + "/shown")
+        held_coming(c, i, key)
       }
     })
     |> ignore
@@ -922,12 +955,12 @@ fn held_coming(c : @ui.Ctx, i : Int, key : String) -> Unit {
 ///|
 /// One file waiting: a picture shown from here (its bytes) or from the station, pasted words, a station's file named
 /// by its path or going as a file, a link, or any other file; each with its ✕, a failed one's ↻ where it can go again.
-fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f : Json) -> Unit {
+fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f : Json, picture : String?) -> Unit {
   let v = Some(f)
   let id = text(v, "id")
   let key = "composer/file/" + id
   let name = text(v, "name")
-  match waiting_picture(src, w, v) {
+  match picture {
     Some(picture) => composer_picture(c, src, w, key, id, name, picture, going_now(v), gone_up(v), text(v, "error"))
     None => {
       // as wide as a card is (236), however little the row has: a card hugging its words in a row that wraps had none
@@ -1442,6 +1475,10 @@ let round_hot : @ui.Style = @ui.css("bg=Hover")
 ///|
 /// The quotes waiting, 6 apart.
 // kept across runs: a value (no field of it changes)
+let extras_column : @ui.Style = @ui.css("w=Full gap=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
 let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
@@ -1559,12 +1596,18 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
     let picture = waiting_picture(src, w, v)
     let key = flying_key(v, going.contains(id), picture is Some(_))
     match c.rect_of(c.id("composer/file/" + id)) {
-      Some(from) if key != "" => {
+      Some((x, y, wide, high)) if key != "" => {
         let restore = restorable(w, v)
-        let (_, _, wide, _) = from
+        // The tile is inside a moving composer: take it from where that held it on screen, not its final layout.
+        let item = "composer/file/" + id + "/shown"
+        let (dx, dy) = match (@motion.measured_rect(c, item), @motion.measured_drawn_rect(c, item)) {
+          (Some((lx, ly, _, _)), Some((sx, sy, _, _))) => (sx - lx, sy - ly)
+          _ => (0.0, 0.0)
+        }
         Some({
           key,
-          from,
+          from: (x + dx, y + dy, wide, high),
+          shown: @motion.measured_drawn_state(c, item),
           picture,
           paint: None,
           // as the composer drew it (composer_file), but its ✕: a new chat's picture waiting for its message not going
@@ -1682,19 +1725,24 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
     let v = Some(w.quotes[i])
     let id = text(v, "id")
     let own = field(v, "own")
-    let picture = match (own, composing.pictures.get(id), @motion.measured_rect(c, quote_picture_key(id))) {
-      (Some(_), Some(picture), Some(from)) => {
+    let picture = match (own, composing.pictures.get(id), @motion.measured_drawn_state(c, quote_picture_key(id))) {
+      (Some(_), Some(picture), Some(shown)) => {
         let key = flying_key(own, going.contains(text(own, "id")), true)
         if key != "" {
-          Some((@sfbase.quote_picture_key(i), picture, from))
+          Some((@sfbase.quote_picture_key(i), picture, shown))
         } else {
           None
         }
       }
       _ => None
     }
-    match @motion.measured_rect(c, quote_card_key(id)) {
-      Some((x, y, wide, high)) => {
+    match @motion.measured_drawn_state(c, quote_card_key(id)) {
+      Some(shown) => {
+        let (x, y, wide, high) = shown.rect
+        let (dx, dy) = match @motion.measured_rect(c, quote_card_key(id)) {
+          Some((lx, ly, _, _)) => (x - lx, y - ly)
+          None => (0.0, 0.0)
+        }
         let s = @sfbase.quote_of(q)
         let written = text(v, "comment")
         let copy = @ui.Field::new(text=written)
@@ -1708,7 +1756,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
           match c.field_words("composer/quote/" + id) {
             Some((_, (lx, ly, lw, lh))) if lw > 0.0 && lh > 0.0 => {
               let hint_field = @ui.Field::new()
-              Some(((lx, ly, lw, lh), fn() {
+              Some(((lx + dx, ly + dy, lw, lh), fn() {
                 quote_comment_field(@ui.current(), "flying/quote-hint/" + id, hint_field) |> ignore
               }))
             }
@@ -1720,6 +1768,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
         flying.push({
           key: @sfbase.quote_key(i),
           from: (x, y, wide, high),
+          shown: Some(shown),
           picture: None,
           paint: None,
           face: fn() {
@@ -1735,7 +1784,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
                 words_width?=words_width,
                 // (its picture's room: the picture is drawn there flying, over the card)
                 picture?=picture.map(fn(p) {
-                  let (_, _, pw, ph) = p.2
+                  let (_, _, pw, ph) = p.2.rect
                   fn() { c.box(style=@ui.style(w=Fixed(pw), h=Fixed(ph)), fn() {  }) |> ignore }
                 }),
                 comment_field=fn() {
@@ -1755,10 +1804,11 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
       None => ()
     }
     match (own, picture) {
-      (Some(f), Some((key, picture, from))) =>
+      (Some(f), Some((key, picture, shown))) =>
         flying.push({
           key,
-          from,
+          from: shown.rect,
+          shown: Some(shown),
           picture: Some(picture.key),
           paint: None,
           face: fn() {

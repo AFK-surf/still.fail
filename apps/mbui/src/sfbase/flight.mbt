@@ -101,6 +101,8 @@ pub(all) struct SendFlight {
 pub(all) struct FlyingFile {
   key : String
   from : (Double, Double, Double, Double)
+  /// The source's visible part and opacity, if it was still coming into its container when sent.
+  shown : @ui.DrawnState?
   picture : String?
   mut paint : ((Double, Double, @ui.Fit, Double) -> Unit)?
   face : () -> Unit
@@ -912,6 +914,31 @@ pub fn flight_quote_words(c : @ui.Ctx, f : SendFlight, key : String) -> (String,
 }
 
 ///|
+/// A thing sent while it was coming into its container starts with the part and opacity that were visible. As it goes
+/// to its message, its existing flight opens that cut and brings its opacity to the message's, on the same way.
+fn flight_shown(c : @ui.Ctx, node : Int, shown : @ui.DrawnState?, from : (Double, Double, Double, Double), w : Double, h : Double, up : Double) -> Double {
+  match shown {
+    None => 1.0
+    Some(s) => {
+      let (x, y, fw, fh) = from
+      if fw <= 0.0 || fh <= 0.0 { return s.alpha }
+      let p = dclamp(up, 0.0, 1.0)
+      let (l, t, r, b) = s.clip
+      let left = dclamp((l - x) / fw, 0.0, 1.0) * (1.0 - p)
+      let top = dclamp((t - y) / fh, 0.0, 1.0) * (1.0 - p)
+      let right = 1.0 - (1.0 - dclamp((r - x) / fw, 0.0, 1.0)) * (1.0 - p)
+      let bottom = 1.0 - (1.0 - dclamp((b - y) / fh, 0.0, 1.0)) * (1.0 - p)
+      let soft = dmax(dmax(s.soft.0, s.soft.1), dmax(s.soft.2, s.soft.3)) * (1.0 - p)
+      if left > 0.0 { c.cut_to_right(node, w * (1.0 - left), soft~) }
+      if top > 0.0 { c.cut_to_bottom(node, h * (1.0 - top), soft~) }
+      if right < 1.0 { c.cut_to_left(node, w * right, soft~) }
+      if bottom < 1.0 { c.cut_to_top(node, h * bottom, soft~) }
+      s.alpha + (1.0 - s.alpha) * p
+    }
+  }
+}
+
+///|
 /// Each file sent (ChatHost.kt FlightLayer, files): as its tile was, where it was, until the row is in the list; then a
 /// picture from there to its place in the message (where the message's own box is laid out: flight_landing), its box
 /// growing to its picture's there (a letterboxed one's share of it). Over the composer and the list, drawn only.
@@ -953,8 +980,9 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
             match @motion.measured_rect(c, to) {
               Some((bx, by, bw, bh)) => {
                 let (ex, ey) = (bx + bw * (1.0 - sw) / 2.0, by + bh * (1.0 - sh) / 2.0)
-                let (px, py, _, _) = c.node_rect(pic)
-                @ui.look(dx=fx + (ex - fx) * across - px, dy=fy + (ey - fy) * up - py)
+                let (px, py, pw, ph) = c.node_rect(pic)
+                let alpha = flight_shown(c, pic, ff.shown, ff.from, pw, ph, up)
+                @ui.look(alpha~, dx=fx + (ex - fx) * across - px, dy=fy + (ey - fy) * up - py)
               }
               None => @ui.look(alpha=0.0)
             }
@@ -965,8 +993,9 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
         _ => {
           let tile = c.box(fn() { (ff.face)() })
           @motion.placed(c, tile, fn() {
-            let (tx, ty, _, _) = c.node_rect(tile)
-            @ui.look(dx=fx - tx, dy=fy - ty)
+            let (tx, ty, tw, th) = c.node_rect(tile)
+            let alpha = flight_shown(c, tile, ff.shown, ff.from, tw, th, 0.0)
+            @ui.look(alpha~, dx=fx - tx, dy=fy - ty)
           })
         }
       }
@@ -1001,8 +1030,9 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
                 Some((bx, by, _, _)) if flying => (fx + (bx - fx) * across, fy + (by - fy) * up)
                 _ => (fx, fy)
               }
-              let (px, py, _, _) = c.node_rect(part)
-              @ui.look(alpha=1.0 - gone, dx=gx + lx - fx - px, dy=gy + ly - fy - py)
+              let (px, py, pw, ph) = c.node_rect(part)
+              let alpha = flight_shown(c, part, ff.shown, (lx, ly, lw, lh), pw, ph, up)
+              @ui.look(alpha=alpha * (1.0 - gone), dx=gx + lx - fx - px, dy=gy + ly - fy - py)
             })
           }
           None => ()
@@ -1016,9 +1046,10 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
             Some((bx, by, bw, _)) if flying => (fx + (bx - fx) * across, fy + (by - fy) * up, fw + (bw - fw) * across)
             _ => (fx, fy, fw)
           }
-          let (xx, xy, xw, _) = c.node_rect(x)
+          let (xx, xy, xw, xh) = c.node_rect(x)
+          let alpha = flight_shown(c, x, ff.shown, (fx + fw + reach - xw, fy - reach, xw, xh), xw, xh, up)
           @ui.look(
-            alpha=1.0 - gone,
+            alpha=alpha * (1.0 - gone),
             scale=1.0 - (1.0 - @sf.leave_scale) * gone,
             dx=gx + gw + reach - xw - xx,
             dy=gy - reach - xy,
@@ -1070,6 +1101,10 @@ pub fn flight_landing(
   // (in a new chat's list coming up with the words, drawn below its place by as much: from its tile all the same,
   // straight, as its words go: flight_carry_shift)
   @motion.fly(c, i, fx, fy - flight_carry_rise(c, f), scale=s0, px=flight_across_of(c, f), py=up, ps=up)
+  @motion.placed(c, i, fn() {
+    let (_, _, w, h) = c.node_rect(i)
+    @ui.look(alpha=flight_shown(c, i, ff.shown, ff.from, w, h, up))
+  })
 }
 
 ///|
@@ -1114,6 +1149,6 @@ pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : Strin
       c.node_radii(card),
       bg=@sf.mix_seen(from, 1.0 - up, own),
     )
-    @ui.look(dx~, dy~)
+    @ui.look(alpha=flight_shown(c, card, ff.shown, ff.from, w, h, up), dx~, dy~)
   })
 }
