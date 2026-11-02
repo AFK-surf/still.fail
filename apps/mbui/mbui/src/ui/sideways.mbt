@@ -526,6 +526,7 @@ fn outer_scroll_in(ids : Array[Int], rects : Array[Double], x : Double, y : Doub
   while k >= 0 {
     let r = k * 4
     if !sideways.contains(ids[k]) &&
+      (!drags.contains(ids[k]) || captures.contains(ids[k]) || g().lists.contains(ids[k])) &&
       x >= rects[r] &&
       x < rects[r + 2] &&
       y >= rects[r + 1] &&
