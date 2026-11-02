@@ -41,8 +41,6 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   assert_true(t.find("界面草图.png") is Some(_))
   assert_true(t.find("100%") is None)
   let v = viewer.get().unwrap()
-  // a picture read whole, held in memory only (FilePreview.kt: FileData.fetch), not kept on the device
-  assert_true(fix_fetches.iter().all(fn(f) { !flag(Some(f.1), "keep") }))
   // 600 × 400 in 390 × 844 with 12 round it: (390 - 24) / 600
   assert_true((shown_scale(t, v.zoom) - 366.0 / 600.0).abs() < 0.001)
   t.tap(195.0, 422.0)
@@ -66,6 +64,27 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   t.run_for(if v.flies { @ui.move_most_ms } else { pv_fade_ms })
   assert_true(t.find("界面草图.png") is None)
   t.assert_idle()
+}
+
+///|
+test "a chat picture opened is kept on the device when its memory copy has gone" {
+  let t = preview_tester("image")
+  let first = fix_fetches.filter(fn(f) { f.0 == "station.file" && text(Some(f.1), "name") == "界面草图.png" })
+  assert_eq(first.length(), 1)
+  assert_true(flag(Some(first[0].1), "keep"))
+  assert_eq(number(Some(first[0].1), "size"), 18000.0)
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  // The viewer holds only the most recently read files in memory. Once this one is evicted, it must still ask the
+  // core for the device's copy, with the same identity and size.
+  @sfbase.pv_read.clear()
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", a)
+  t.frame()
+  let reads = fix_fetches.filter(fn(f) { f.0 == "station.file" && text(Some(f.1), "name") == "界面草图.png" })
+  assert_eq(reads.length(), 2)
+  assert_true(flag(Some(reads[1].1), "keep"))
+  assert_eq(number(Some(reads[1].1), "size"), 18000.0)
 }
 
 ///|
