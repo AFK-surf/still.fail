@@ -794,6 +794,7 @@
   "web-main.preview.checks.failed": "{count} checks failed",
   "web-main.preview.checks.pending": "{count} checks running",
   "web-main.preview.openFailed": "Couldn't open {name}: {error}",
+  "web-main.preview.openFolder": "it is a folder",
   "web-main.preview.more": "{count} more",
   "web-main.preview.binary": "Binary file",
   "web-main.preview.items": {

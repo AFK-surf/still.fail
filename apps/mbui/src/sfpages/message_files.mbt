@@ -219,7 +219,9 @@ fn open_named(src : Source, station : String, agent : String, path : String) -> 
         let a = attachment_of({ "name": Json::string(stored_name(path)), "path": Json::string(path) })
         open_preview(station, agent, a, named=true)
       }
-      _ => ()
+      // (not opened is said, as the web's FileRef says a failed open: the press is not left without an answer)
+      Ok(_) => toast_later(@sf.t("web-main.preview.openFailed", args=[("name", stored_name(path)), ("error", @sf.t("web-main.preview.openFolder"))]))
+      Err(e) => toast_later(@sf.t("web-main.preview.openFailed", args=[("name", stored_name(path)), ("error", text(Some(e), "message"))]))
     }
   })
 }

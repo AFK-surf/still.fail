@@ -728,6 +728,7 @@
   "web-main.preview.checks.failed": "检查失败 {count}",
   "web-main.preview.checks.pending": "检查中 {count}",
   "web-main.preview.openFailed": "无法打开 {name}：{error}",
+  "web-main.preview.openFolder": "这是文件夹",
   "web-main.preview.more": "还有 {count} 项",
   "web-main.preview.binary": "二进制文件",
   "web-main.preview.items": "共 {count} 项",
