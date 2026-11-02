@@ -7,7 +7,7 @@
 // Which are booted is CoreSimulator's own simctl's (`simctl list`), looked at again when CoreSimulator rewrites a device's device.plist (it
 // does as the device boots and shuts down) or the list of devices changes, and as the screens are asked for.
 import { execFile } from "node:child_process";
-import { type FSWatcher, existsSync, readdirSync, watch } from "node:fs";
+import { type FSWatcher, existsSync, readFileSync, readdirSync, watch } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { HelperApp } from "../helper/app.ts";
@@ -17,6 +17,7 @@ import { HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
 import { SimDebug } from "./sim-debug.ts";
 import { SimInput } from "./sim-input.ts";
+import { type Panel, panelOf } from "./sim-mask.ts";
 import type { Codec, ScreenSource, ScreenView, Screens, ViewOptions } from "./source.ts";
 
 /// A booted device as simctl lists it.
@@ -79,8 +80,8 @@ export class Simulators {
   readonly #run: Run;
   readonly #devices: string;
   readonly #listed = new Map<string, { source: Simulator; remove: () => void }>();
-  /// A device type's screen in pixels (its capabilities.plist), by its identifier.
-  readonly #sizes = new Map<string, { width: number; height: number }>();
+  /// A device type's screen and panels (`#typed`), by its identifier.
+  readonly #types = new Map<string, { size: { width: number; height: number }; panels: Panel[] }>();
   readonly #watchers = new Map<string, FSWatcher>();
   #looking: Promise<void> | null = null;
   #again = false;
@@ -139,27 +140,33 @@ export class Simulators {
     }
     for (const b of booted) {
       if (this.#listed.has(b.udid)) continue;
-      const source = new Simulator(b, this.#o.helper!, await this.#size(b.type), this.#run);
+      const { size, panels } = await this.#typed(b.type);
+      const source = new Simulator(b, this.#o.helper!, size, this.#run, panels);
       if (this.#closed || this.#listed.has(b.udid)) continue;
       this.#listed.set(b.udid, { source, remove: this.#o.screens.add(source) });
     }
     this.#follow();
   }
 
-  /// A device type's screen in pixels, from its bundle's capabilities.plist (0×0 when it cannot be read).
-  async #size(type: string): Promise<{ width: number; height: number }> {
-    const known = this.#sizes.get(type);
+  /// A device type's screen in pixels (its capabilities.plist; 0×0 when it cannot be read) and panels (as its masks say
+  /// them; none: no corners drawn), read from its bundle once.
+  async #typed(type: string): Promise<{ size: { width: number; height: number }; panels: Panel[] }> {
+    const known = this.#types.get(type);
     if (known) return known;
-    let size = { width: 0, height: 0 };
+    const typed = { size: { width: 0, height: 0 }, panels: [] as Panel[] };
     try {
       const types = JSON.parse(await this.#run(SIMCTL, ["list", "-j", "devicetypes"])).devicetypes as { identifier?: string; bundlePath?: string }[];
       const bundle = types.find((t) => t.identifier === type)?.bundlePath;
       if (bundle) {
-        size = screenOf(JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(bundle, "Contents/Resources/capabilities.plist")])));
+        typed.size = screenOf(JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(bundle, "Contents/Resources/capabilities.plist")])));
+        const dir = join(bundle, "Contents/Resources");
+        typed.panels = readdirSync(dir)
+          .filter((f) => f.endsWith(".pdf") && !f.startsWith("sensor_bar"))
+          .flatMap((f) => panelOf(readFileSync(join(dir, f))) ?? []);
       }
     } catch {}
-    this.#sizes.set(type, size);
-    return size;
+    this.#types.set(type, typed);
+    return typed;
   }
 
   /// Watches the devices' folder (a device made or deleted) and each device's (its device.plist rewritten as it boots
@@ -222,14 +229,18 @@ export class Simulator implements ScreenSource {
   readonly peek = true;
   /// Its apps' logs and their restart, for a person debugging one.
   readonly debug: SimDebug;
+  readonly poses: boolean;
+  readonly panels: Panel[];
   readonly #device: Booted;
   readonly #helper: HelperApp;
   #size: { width: number; height: number };
   readonly #views = new Set<HelperView>();
 
-  constructor(device: Booted, helper: HelperApp, size: { width: number; height: number }, simctl: Run = run) {
+  constructor(device: Booted, helper: HelperApp, size: { width: number; height: number }, simctl: Run = run, panels: Panel[] = []) {
     this.id = `simulator:${device.udid}`;
     this.debug = new SimDebug(SIMCTL, device.udid, simctl, () => this.#picture());
+    this.poses = device.type.endsWith(".iPhone-Duo");
+    this.panels = panels;
     this.#device = device;
     this.#helper = helper;
     this.#size = size;

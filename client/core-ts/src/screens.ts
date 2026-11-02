@@ -219,6 +219,9 @@ export function checkInput(input: unknown): J {
       const mods = finite(input.mods) && input.mods >= 0 ? Math.floor(input.mods) & 15 : 0;
       return { t: "key", kind: input.kind, key: input.key, code, mods };
     }
+    case "pose":
+      if (input.name !== "closed" && input.name !== "book" && input.name !== "open") throw bad();
+      return { t: "pose", name: input.name };
     case "text":
       if (typeof input.text !== "string" || input.text === "" || input.text.length > TEXT_MAX) throw bad();
       return { t: "text", text: input.text };
@@ -377,6 +380,10 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
       ...(get(s, "closable") === true && control ? { closable: true } : {}),
       // Its apps' logs and restart, for one who may drive it (a simulator's; docs/remote-screens.md).
       ...(get(s, "debug") === true && control ? { debug: true } : {}),
+      // It folds (an iPhone Duo): `screen.input` {t: "pose", name}.
+      ...(get(s, "poses") === true && control ? { poses: true } : {}),
+      // A simulator's panels, for the device body drawn round its picture.
+      ...(Array.isArray(get(s, "panels")) ? { panels: get(s, "panels") } : {}),
       ...(chat ? { chat } : {}),
     };
     const access = accessOf(get(s, "access"));
@@ -551,6 +558,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       if (state.title === "" && typeof get(item, "title") === "string") state.title = get(item, "title");
       if (state.kind === undefined && typeof get(item, "kind") === "string") state.kind = get(item, "kind");
       state.debug = get(item, "debug") === true && may;
+      state.poses = get(item, "poses") === true && may;
+      state.panels = get(item, "panels") ?? [];
       const others = othersOf(onIt ?? names(get(item, "viewers")), mine).map(personShown);
       // Who else drives it now: an agent at work, another person.
       const drivers = othersOf(driving ?? names(get(item, "controlledBy")), mine);

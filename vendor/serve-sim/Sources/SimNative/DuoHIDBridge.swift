@@ -33,8 +33,9 @@ final class DuoHIDBridge {
                 guard FileManager.default.isExecutableFile(atPath: executable) else { return false }
                 let child = Process()
                 let stdin = Pipe(), stdout = Pipe()
-                child.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-                child.arguments = ["simctl", "spawn", udid, executable]
+                // (CoreSimulator's own: Xcode's is a script that may first wait on `xcodebuild -runFirstLaunch`)
+                child.executableURL = URL(fileURLWithPath: "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl")
+                child.arguments = ["spawn", udid, executable]
                 child.standardInput = stdin
                 child.standardOutput = stdout
                 child.standardError = FileHandle.standardError

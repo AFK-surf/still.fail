@@ -222,7 +222,7 @@ class X11Input {
         await this.#command(["keydown", key]);
         this.#keys.add(key);
         for (const mod of temporary.reverse()) { await this.#command(["keyup", mod]); this.#keys.delete(mod); }
-      } else if (event.text) {
+      } else if (event.t === "text" && event.text) {
         await this.#type(event.text);
       }
     });

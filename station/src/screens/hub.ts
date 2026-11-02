@@ -174,7 +174,7 @@ export class ScreenHub implements Screens {
   }
 
   /// GET /admin/api/screens, in `lang`: `{screens: [{id, kind, title, width, height, viewers, controlledBy, access?,
-  /// clipboard?, peek?, drop?, closable?, debug?, openedBy?}]}`: `clipboard`, the types a view that drives it carries both ways;
+  /// clipboard?, peek?, drop?, closable?, debug?, poses?, panels?, openedBy?}]}`: `clipboard`, the types a view that drives it carries both ways;
   /// `peek`, it can be previewed (ViewOptions.peek); `drop`, where a file
   /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`);
   /// `closable`, a person may close it (POST …/close); `debug`, its apps' logs and restart are had; `openedBy`, the session that opened it (an agent's tab).
@@ -192,6 +192,8 @@ export class ScreenHub implements Screens {
           ...(s.peek ? { peek: true } : {}),
           ...(s.discard ? { closable: true } : {}),
           ...(s.debug ? { debug: true } : {}),
+          ...(s.poses ? { poses: true } : {}),
+          ...(s.panels?.length ? { panels: s.panels } : {}),
           ...(by ? { openedBy: by } : {}),
           ...(folder !== null ? { drop: { folder, reveal: s.reveal === true } } : {}),
         };

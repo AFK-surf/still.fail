@@ -21,6 +21,18 @@ let debug_panel_w : Double = 420.0
 let debug_pane_w : Double = 380.0
 
 ///|
+/// An iPhone Duo's picture narrower than this (width by height) is its cover's, 1398×2034, not its inner panel's, 2007×2853.
+let duo_cover_shape : Double = 0.695
+
+///|
+/// How thick the device's body shows round its picture (`B8`, its border).
+let sim_bezel : Double = 8.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let device_body : @ui.Color = Data(0x1C1C1EFFL)
+
+///|
 /// What the page shows in the picture's place: a simulator's with what debugs an app beside it, any other's the picture
 /// alone.
 fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit {
@@ -35,7 +47,7 @@ fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Un
       c.box(style=screen_row, fn() {
         c.box(style=debug_stage_side, fn() {
           c.box(style=debug_tools_bar, fn() { debug_tools(c, s, u, true) }) |> ignore
-          c.box(style=debug_stage_side, fn() { screen_stage(c, s, u, key) }) |> ignore
+          c.box(style=debug_stage_body, fn() { screen_stage(c, s, u, key) }) |> ignore
         })
         |> ignore
         if flag(s.state, "debug") && u.logs.shown {
@@ -45,7 +57,11 @@ fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Un
       |> ignore
     },
     narrow=fn() {
-      c.box(style=debug_stage_side, fn() { screen_stage(c, s, u, key) }) |> ignore
+      c.box(style=debug_stage_body, fn() { screen_stage(c, s, u, key) }) |> ignore
+      // (a row of its own: with the buttons there is no room for all of them on a narrow page)
+      if s.driving() && flag(s.state, "poses") {
+        c.box(style=debug_tools_bar, fn() { debug_poses(c, s, u) }) |> ignore
+      }
       c.box(style=debug_tools_bar, fn() { debug_tools(c, s, u, false) }) |> ignore
     },
   )
@@ -71,6 +87,9 @@ fn debug_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, beside : Bool) -> Unit
       }
     }
   }
+  if beside && s.driving() && flag(s.state, "poses") {
+    debug_poses(c, s, u)
+  }
   if flag(s.state, "debug") {
     if round_button(c, "screen-shot", "camera", @sf.t("web-pages.screen.device.shot")) {
       debug_shot(s, u.logs)
@@ -91,6 +110,111 @@ fn debug_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, beside : Bool) -> Unit
         debug_logs_open(s, u, Of(c.id(shown)))
       }
     }
+  }
+}
+
+///|
+/// An iPhone Duo's hinge: which it is as its picture says (the cover's is closed, the inner panel's half open only when
+/// asked for here, Device Hub's own being told by none), and each its press.
+fn debug_poses(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let names = ["closed", "book", "open"]
+  let cover = match s.frame_size() {
+    Some((w, h)) => w.to_double() / h.to_double() < duo_cover_shape
+    None => true
+  }
+  let chosen = if cover {
+    0
+  } else if u.logs.half_open {
+    1
+  } else {
+    2
+  }
+  let pick = @sf.segmented(
+    c,
+    "screen-pose",
+    [
+      @sf.t("web-pages.screen.device.pose.closed"),
+      @sf.t("web-pages.screen.device.pose.book"),
+      @sf.t("web-pages.screen.device.pose.open"),
+    ],
+    chosen,
+    bar=true,
+    said=@sf.t("web-pages.screen.device.pose"),
+  )
+  if pick != chosen {
+    u.logs.half_open = pick == 1
+    let name = names[pick]
+    c.tell("screen-pose/" + s.view + "/" + name, fn() {
+      s.input(s.src, Json::object({ "t": Json::string("pose"), "name": Json::string(name) }))
+    })
+  }
+}
+
+///|
+/// The device's body round its picture, over the picture's corners: drawn from what its type's masks say of the panel
+/// the picture is of. The picture is square on its layer under the canvas; the body's edge is painted over what lies
+/// outside the screen's corners. Not while zoomed in: what shows is then a part of the screen.
+fn device_round(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect) -> Unit {
+  if !s.simulator() || u.zoom.zoomed() || shown.w <= 0.0 {
+    return
+  }
+  let (tl, tr, br, bl) = panel_corners(field(s.state, "panels"), shown.w, shown.h)
+  let body_w = shown.w + sim_bezel + sim_bezel
+  let body_h = shown.h + sim_bezel + sim_bezel
+  c.layer(fn() {
+    c.box(
+      style=@ui.style(
+        w=Fixed(body_w),
+        h=Fixed(body_h),
+        // det-ok(corners-each): the device's own: an iPhone Duo's cover is nearly square along its hinge (sim-mask.ts)
+        radius=Corners(tl + sim_bezel, tr + sim_bezel, br + sim_bezel, bl + sim_bezel),
+        border=B8,
+        border_color=device_body,
+      ),
+      tx=shown.x - sim_bezel,
+      ty=shown.y - sim_bezel,
+      fn() {  },
+    )
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The corners of the panel whose shape is nearest `w`×`h`, in px: top left, then round it (none known, square). Turned
+/// on its side the device's are all the same, the smallest, as which way is not known.
+fn panel_corners(panels : Json?, w : Double, h : Double) -> (Double, Double, Double, Double) {
+  let shape = dmin(w, h) / dmax(w, h)
+  let mut best : Array[Json] = []
+  let mut off = 1.0
+  match panels {
+    Some(Array(all)) =>
+      for p in all {
+        let (pw, ph) = (number(Some(p), "width"), number(Some(p), "height"))
+        if ph > 0.0 && (shape - pw / ph).abs() < off {
+          off = (shape - pw / ph).abs()
+          best = match field(Some(p), "corners") {
+            Some(Array(a)) => a
+            _ => []
+          }
+        }
+      }
+    _ => ()
+  }
+  if best.length() != 4 {
+    return (0.0, 0.0, 0.0, 0.0)
+  }
+  let at = fn(i : Int) {
+    match best[i] {
+      Number(v, ..) => v * dmin(w, h)
+      _ => 0.0
+    }
+  }
+  if w > h {
+    let least = dmin(dmin(at(0), at(1)), dmin(at(2), at(3)))
+    (least, least, least, least)
+  } else {
+    (at(0), at(1), at(2), at(3))
   }
 }
 
@@ -170,6 +294,8 @@ priv struct DebugLogs {
   /// the app 重启 App is for (id, name), once one was chosen
   mut last_app : (String, String)?
   mut relaunch_said : String
+  /// asked here for an iPhone Duo's half open (the inner panel's picture says the rest)
+  mut half_open : Bool
 }
 
 ///|
@@ -236,6 +362,7 @@ fn debug_logs_new() -> DebugLogs {
     shot_said: false,
     last_app: None,
     relaunch_said: "",
+    half_open: false,
   }
 }
 

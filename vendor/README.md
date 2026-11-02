@@ -19,12 +19,14 @@ the same.
 
 - **serve-sim** (Swift, EvanBacon/serve-sim at 0193e65, `packages/serve-sim/Sources`, Apache-2.0; still.fail Helper's
   `simulator.view` uses it, docs/remote-screens.md "Simulators"): only the iOS Simulator's capture and input,
-  `SimNative/{FrameCapture,HIDInjector,DeviceHubKeyboardBridge,DuoHIDBridge,PixelBufferUtils,SimFrameworks,Xcode}.swift`
+  `SimDuoHID/main.m`, `SimNative/{FrameCapture,HIDInjector,DeviceHubKeyboardBridge,DuoHIDBridge,PixelBufferUtils,SimFrameworks,Xcode}.swift`
   and the `SimNativeSupport` they use; not its Node module, encoders, recorder or accessibility dumps. Package.swift is
   ours (no node-swift).
   - Shared.swift: what FrameCapture takes from upstream's files left out (PixelConsumerCount, isoTimestamp,
     jsonString), as they are there.
   - FrameCapture and HIDInjector, and the methods the helper calls, are public (another module uses them).
+  - SimDuoHID/main.m, as upstream, is built for the simulator into the helper's Resources (scripts/native.ts): an iPhone Duo's
+    hinge. HIDInjector and DuoHIDBridge run CoreSimulator's own simctl, and what the helper calls is public.
   - DTUHIDKeys.swift is ours (the wire format Meta idb's, MIT): keys and the home and lock buttons through the guest's
     `dtuhidd` from CoreSimulator 1155.4, where it drops Indigo's; HIDInjector tries it first.
   - FrameCapture re-emits a still screen's picture at its 5 fps idle floor only when asked (`setReemitsIdle`): the

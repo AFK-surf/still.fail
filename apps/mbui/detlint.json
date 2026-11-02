@@ -493,7 +493,8 @@
     "corners-each": {
       "src/sf/tokens.mbt": 1,
       "src/sfdesk/chat_page.mbt": 2,
-      "src/sfdesk/drive_views.mbt": 1
+      "src/sfdesk/drive_views.mbt": 1,
+      "src/sfpages/screen_debug.mbt": 1
     },
     "cursor-hand": {},
     "tier-outside-shell": {},

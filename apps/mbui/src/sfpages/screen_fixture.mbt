@@ -257,6 +257,19 @@ pub fn screen_fixture_stream(
       st["title"] = Json::string("iPhone Duo · iOS 27.1")
       st["kind"] = Json::string("simulator")
       st["debug"] = Json::boolean(true)
+      st["poses"] = Json::boolean(true)
+      st["panels"] = Json::array([
+        {
+          "width": Json::number(466.0),
+          "height": Json::number(678.0),
+          "corners": Json::array([Json::number(0.022), Json::number(0.1622), Json::number(0.1622), Json::number(0.022)]),
+        },
+        {
+          "width": Json::number(1252.0),
+          "height": Json::number(1780.0),
+          "corners": Json::array([Json::number(0.1024), Json::number(0.1024), Json::number(0.1024), Json::number(0.1024)]),
+        },
+      ])
       on_value({ "state": Json::object(st) }, None)
     }
     "screen-login-fill" | "screen-login-pick" => {

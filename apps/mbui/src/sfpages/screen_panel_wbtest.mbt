@@ -446,6 +446,50 @@ test "a simulator's page: its device's buttons by the picture, a finger where it
 }
 
 ///|
+test "an iPhone Duo's poses are by its picture, each a press; another device has none" {
+  let r = screen_rig()
+  simulator_live(r)
+  assert_true(r.t.find(tr("web-pages.screen.device.pose.open")) is None)
+  r.state("live", more={ "kind": Json::string("simulator"), "poses": Json::boolean(true) })
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.device.pose.closed"))
+  r.t.draw()
+  let ins = r.inputs()
+  assert_eq(text(Some(ins[ins.length() - 1]), "t"), "pose")
+  assert_eq(text(Some(ins[ins.length() - 1]), "name"), "closed")
+  r.tap_label(tr("web-pages.screen.device.pose.book"))
+  r.t.draw()
+  assert_true(r.ui().logs.half_open)
+  // (the moment the choice's mark has moved to it)
+  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  screen_done(r.t)
+}
+
+///|
+test "a device's body has the corners of the panel its picture is of" {
+  let duo = Some(
+    Json::array([
+      {
+        "width": Json::number(466.0),
+        "height": Json::number(678.0),
+        "corners": Json::array([Json::number(0.02), Json::number(0.16), Json::number(0.16), Json::number(0.02)]),
+      },
+      {
+        "width": Json::number(1252.0),
+        "height": Json::number(1780.0),
+        "corners": Json::array([Json::number(0.1), Json::number(0.1), Json::number(0.1), Json::number(0.1)]),
+      },
+    ]),
+  )
+  // the cover's 1398×2034, nearly square along its hinge, then the inner panel's 2007×2853
+  assert_eq(panel_corners(duo, 400.0, 582.0), (8.0, 64.0, 64.0, 8.0))
+  assert_eq(panel_corners(duo, 400.0, 568.6), (40.0, 40.0, 40.0, 40.0))
+  // on its side, the smallest all round; none said, square
+  assert_eq(panel_corners(duo, 582.0, 400.0), (8.0, 8.0, 8.0, 8.0))
+  assert_eq(panel_corners(None, 400.0, 582.0), (0.0, 0.0, 0.0, 0.0))
+}
+
+///|
 test "日志 asks for what came since while it shows; a member who may not debug has neither it nor 重启 App" {
   let r = screen_rig()
   r.state("live", more={ "kind": Json::string("simulator") })

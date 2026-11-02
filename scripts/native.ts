@@ -397,6 +397,14 @@ const PARTS: Record<string, Part> = {
       }
       mkdirSync(join(app, "Contents/Resources"), { recursive: true });
       run("iconutil", ["-c", "icns", iconset, "-o", join(app, "Contents/Resources/AppIcon.icns")]);
+      // An iPhone Duo's hinge, run inside the simulator (vendor/serve-sim SimDuoHID); a Mac without its SDK builds none, and
+      // its poses are not offered.
+      try {
+        const sdk = execFileSync("xcrun", ["--sdk", "iphonesimulator", "--show-sdk-path"], { encoding: "utf8" }).trim();
+        run("xcrun", ["--sdk", "iphonesimulator", "clang", "-arch", "arm64", "-mios-simulator-version-min=15.0", "-isysroot", sdk, "-fobjc-arc", "-framework", "Foundation", "-Wl,-adhoc_codesign", "-o", join(app, "Contents/Resources/stillfail-duo-hid"), join(ROOT, "vendor/serve-sim/Sources/SimDuoHID/main.m")], {});
+      } catch (error) {
+        console.error(`native: no iPhone Duo hinge in the helper: ${(error as Error).message}`);
+      }
       rmSync(iconset, { recursive: true });
       writeFileSync(join(app, "Contents/PkgInfo"), "APPL????");
       // agent-desktop beside its executable (Ui.swift): run by the app, it has the app's grants. Signed before the

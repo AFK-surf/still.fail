@@ -412,6 +412,15 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
 
 - **Settings**: `GET /admin/api/screens/<id>/settings` → `{appearance, textSize}`; `POST` `{name, value}` sets one and says
   them again (`simctl ui`: `appearance` light or dark, `textSize` a `content_size`), 400 for any other.
+- **Fold** (an iPhone Duo's, the item's `poses`): `{t: "pose", name: "closed"|"book"|"open"}` as input. The helper runs its bundled
+  `stillfail-duo-hid` inside the simulator (upstream's SimDuoHID), which turns the hinge; which panel the picture is of
+  follows SpringBoard's log, so one folded from Device Hub is followed as well.
+  Its inner panel's framebuffer is upright with its UI on its side, so the helper turns the picture (and each finger, wheel and
+  part asked for, back) as `simctl io enumerate` says the panel stands; a picture so turned has no edge gestures from here (home
+  and the rest by their buttons). Where the guest has `dtuhidd`, fingers go through it as keys do (`DTUHIDKeys`): an Indigo touch
+  there could take the guest's backboardd down (seen on an iPhone Duo, 2026-11-02). Its panel is by display number, 1 and 3.
+- **The device's body**: the item's `panels` (`sim-mask.ts`: its type's framebuffer masks read for each panel's corners). The app paints
+  the body over the picture's corners, which the picture on its layer has square.
 - **Screenshot**: `POST /admin/api/screens/<id>/screenshot` → `{png}` (base64), in the device's own pixels: a view's own
   picture, not `simctl io`'s, which of a foldable's screens it picks is not the one in use (an iPhone Duo's: black).
 

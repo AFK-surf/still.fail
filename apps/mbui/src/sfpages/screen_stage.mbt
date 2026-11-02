@@ -190,7 +190,8 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   if u.mouse.over {
     c.cursor(stage, cursor_of_shape(text(field(s.state, "cursor"), "shape")))
   }
-  c.box(style=stage_box, id=stage, fn() {
+  let in_body = s.simulator() && !u.zoom.zoomed()
+  c.box(style=if in_body { stage_box_body } else { stage_box }, id=stage, fn() {
     if size is Some(_) && fit.w > 0.0 {
       let shown = u.shown()
       // on its way back, as it was, faded; over (ended, gone…), blurred under the dark it has gone to
@@ -231,6 +232,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
         |> ignore
       })
       |> ignore
+      device_round(c, s, u, shown)
       if over {
         // the screen gone dark in its place (its last frame showing through, blurred), what happened said there
         c.layer(fn() {
