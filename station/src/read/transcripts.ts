@@ -27,6 +27,15 @@ export type Marked = { reading: number; state: TailState; marks: Mark[] };
 
 const kept = new Map<string, Marked>();
 
+/// How far a transcript's reading may go on past what is kept of it on disk: a reader starting again (every one at each
+/// start of the station, some 30 a day on ccvm) reads on from there, each line parsed again. Written down at each mark
+/// alone, a reading was up to MARK_BYTES behind: 27 MB over the transcripts written to in the last hours on ccvm
+/// (2026-11-02), read again after every update, the first reads of each session's history taking 3 to 7 s.
+const KEPT_BYTES = 256 << 10;
+
+/// Where each transcript's reading kept on disk stands (its offset), as this reader last read or wrote it.
+const onDisk = new Map<string, number>();
+
 /// The transcript put away before there were segments (read/packed.ts) whose history is being read, decompressed (one is
 /// hundreds of MB): its pages are read one after another. Let go once another history is read (`chainOf`), and with the reader.
 let unpacked: { path: string; stamp: string | null; bytes: Buffer } | null = null;
@@ -50,7 +59,10 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
   if (had === null && dir !== null) {
     try {
       const v = JSON.parse(readFileSync(fileOf(dir, path), "utf8")) as Marked;
-      if (v.reading === READING && v.state.path === path) had = v;
+      if (v.reading === READING && v.state.path === path) {
+        had = v;
+        onDisk.set(path, v.state.offset);
+      }
     } catch {}
   }
   const tail = had === null ? new TranscriptTail(runtime, path, null, false, true) : TranscriptTail.from(runtime, had.state, had.marks);
@@ -58,9 +70,10 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
   const now: Marked = { reading: READING, state: tail.snapshot(), marks: tail.marks };
   kept.set(path, now);
   if (kept.size > KEPT) kept.delete(kept.keys().next().value!);
-  // Written down when there is a mark more (or it was written anew, or put away or back): what a reader starting again
-  // reads on from there is less than MARK_EVERY entries and MARK_BYTES.
-  const changed = had === null || tail.anew || now.marks.length !== had.marks.length || now.state.packedStamp !== had.state.packedStamp;
+  // Written down when there is a mark more (or it was written anew, or put away or back), or it read on KEPT_BYTES past
+  // what is written down: what a reader starting again reads on from there is less than that.
+  const behind = now.state.offset - (onDisk.get(path) ?? -Infinity);
+  const changed = had === null || tail.anew || now.marks.length !== had.marks.length || now.state.packedStamp !== had.state.packedStamp || behind >= KEPT_BYTES;
   if (dir !== null && changed) {
     try {
       mkdirSync(dir, { recursive: true });
@@ -69,6 +82,7 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
       const tmp = `${file}.${process.pid}.${threadId}.tmp`;
       writeFileSync(tmp, JSON.stringify(now));
       renameSync(tmp, file);
+      onDisk.set(path, now.state.offset);
     } catch {}
   }
   return now;
@@ -192,6 +206,7 @@ const PIECE_READ = 1 << 20;
 /// Lets go of the readings kept in memory (for tests: a reader started again), and of those on disk in `dir`.
 export function forgetKept(dir: string | null = null): void {
   kept.clear();
+  onDisk.clear();
   unpacked = null;
   if (dir !== null) rmSync(dir, { recursive: true, force: true });
 }
