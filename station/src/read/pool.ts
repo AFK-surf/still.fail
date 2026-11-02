@@ -43,15 +43,22 @@ const INTERACTIVE = new Set(["thread", "sessionFile"]);
 // both readers and leave message and file reads waiting (ccvm, 2026-11-02).
 const BACKGROUND_UPDATES = new Set(["chatRows", "summary"]);
 
-/// Stream updates and one thread's current or older page are interactive. An `after` or explicit range can ask for an
-/// unbounded amount on older clients, so it remains in the background until that request is paged end to end.
+/// Stream updates and bounded thread pages are interactive. The older unlimited catch-up and wide explicit ranges stay
+/// in the background: unlike a current client's bounded catch-up, they can read a whole growing conversation.
 function interactive(a: Asked): boolean {
   if (BACKGROUND_UPDATES.has(a.ask.op)) return false;
   if (a.told || INTERACTIVE.has(a.ask.op)) return true;
   if (a.ask.op !== "entries" && a.ask.op !== "letters") return false;
   const params = a.ask.args?.params;
-  const keys = Array.isArray(params) ? params.map((p: unknown) => Array.isArray(p) ? p[0] : null) : Object.keys(params ?? {});
-  return !keys.includes("after") && !keys.includes("from") && !keys.includes("to");
+  const pairs: [string, unknown][] = Array.isArray(params) ? params.filter((p: unknown) => Array.isArray(p) && p.length >= 2) : Object.entries(params ?? {});
+  const has = (key: string) => pairs.some(([name]) => name === key);
+  const value = (key: string) => pairs.find(([name]) => name === key)?.[1];
+  if (has("after")) return has("limit"); // Both endpoints clamp a supplied limit to at most 500.
+  if (!has("from") && !has("to")) return true;
+  if (!has("from") || !has("to")) return false;
+  const from = Number(value("from"));
+  const to = Number(value("to"));
+  return Number.isSafeInteger(from) && Number.isSafeInteger(to) && from >= 0 && to >= from && to - from < 500;
 }
 
 export class Readers {

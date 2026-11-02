@@ -59,6 +59,60 @@ test("a later sidebar update does not jump ahead of a waiting history", async ()
   }
 });
 
+for (const op of ["entries", "letters"]) for (const params of [
+  [["after", "300"], ["limit", "50"]],
+  { after: "300", limit: "50" },
+  [["from", "201"], ["to", "250"]],
+]) test(`a bounded ${op} catch-up ${JSON.stringify(params)} is available while usage is stalled`, async () => {
+  const data = mkdtempSync(join(tmpdir(), "reader-line-"));
+  const readers = new Readers(data, 2, new URL("./reader-line-worker.mjs", import.meta.url));
+  const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
+  const args = { state: state.buffer };
+  const asked = [
+    readers.read("usage", args, "en"),
+    readers.read(op, { ...args, params }, "en"),
+    readers.read("thread", args, "en"),
+  ];
+  try {
+    while (Atomics.load(state, 0) < 2) {
+      const count = Atomics.load(state, 0);
+      if (count < 2) await Atomics.waitAsync(state, 0, count).value;
+    }
+    assert.notEqual(Atomics.load(state, 1) & 8, 0, "a bounded page starts without waiting for usage");
+  } finally {
+    Atomics.store(state, 2, 1);
+    Atomics.notify(state, 2);
+    await Promise.allSettled(asked);
+    readers.close();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+for (const params of [
+  [["after", "300"]],
+  [["from", "1"], ["to", "10000"], ["limit", "50"]],
+]) test(`an unbounded page ${JSON.stringify(params)} leaves room for a chat`, async () => {
+  const data = mkdtempSync(join(tmpdir(), "reader-line-"));
+  const readers = new Readers(data, 2, new URL("./reader-line-worker.mjs", import.meta.url));
+  const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
+  const args = { state: state.buffer };
+  const asked = [readers.read("usage", args, "en"), readers.read("entries", { ...args, params, hold: true }, "en"), readers.read("thread", args, "en")];
+  try {
+    while (Atomics.load(state, 0) < 2) {
+      const count = Atomics.load(state, 0);
+      if (count < 2) await Atomics.waitAsync(state, 0, count).value;
+    }
+    assert.equal(Atomics.load(state, 1) & 1, 1, "the chat starts while the unlimited page waits");
+    assert.equal(Atomics.load(state, 1) & 8, 0, "a limit does not bound a from/to range");
+  } finally {
+    Atomics.store(state, 2, 1);
+    Atomics.notify(state, 2);
+    await Promise.allSettled(asked);
+    readers.close();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
 test("a read the streams tell is answered before the pages asked before it", async () => {
   const data = mkdtempSync(join(tmpdir(), "reader-line-"));
   const store = Store.open(join(data, "stillfail.db"), join(data, "archive"));
