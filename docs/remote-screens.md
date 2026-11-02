@@ -402,9 +402,11 @@ guest drops Indigo's keys and buttons while the host's send still succeeds, so f
 Device Hub's window open on the device as well as without. Before 1155.4 nothing changes. Not tried on an Xcode before 27 (none
 at hand), nor on an old runtime on this Xcode (the test app did not lay out on iOS 17).
 
-Pasted text (what a US keyboard's keys cannot type: `SimInput`) does not arrive yet: `simctl pbcopy` is ignored while CoreDevice's
-pasteboard is in use, and here `devicectl device pasteboard copy` hung past its timeout, so the helper ends it after 5 s lest the
-keys behind it wait. Until then the device's panel says to type such text on the device's own keyboard, which a finger reaches.
+Pasted text (what a US keyboard's keys cannot type: `SimInput`) reaches the device's pasteboard but not the field by itself. `simctl
+pbcopy` is ignored while CoreDevice's pasteboard is in use, so from 1155.4 the helper writes with CoreDevice's own `devicectl` (not
+Xcode's: that is a script that may first run `xcodebuild -runFirstLaunch`, waiting for a password, as `xcrun simctl` may). It held
+in about 0.1 s, read back exact, and left this Mac's clipboard as it was. ⌘V then did nothing; holding the field and touching the
+system's Paste put the text in. The device's panel says so on iOS 27. Doing that by itself needs the menu found through accessibility.
 
 The app's viewer treats a simulator as the touchscreen it is (a finger where it touches, no trackpad to choose, no mouse's
 buttons), and its page is about the device and the app rather than the link: its buttons (主屏幕, 多任务, 锁屏, 软键盘), 截图 and

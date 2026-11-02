@@ -194,7 +194,9 @@ final class SimulatorView: ScreenView {
   /// simctl: Xcode's is a script that may ask for a password first, screens/simulator.ts).
   func pasteboard(_ text: String) async -> Bool {
     if HIDInjector.usesDTUHID {
-      let copied = await piped(text, "/usr/bin/xcrun", ["devicectl", "device", "pasteboard", "copy", "--device", udid, "--timeout", "5", "--quiet"])
+      // (CoreDevice's own devicectl: Xcode's, as its simctl, is a script that may first run `xcodebuild -runFirstLaunch`, which
+      // waits for an administrator's password nobody at this view can give)
+      let copied = await piped(text, "/Library/Developer/PrivateFrameworks/CoreDevice.framework/Versions/A/Resources/bin/devicectl", ["device", "pasteboard", "copy", "--device", udid, "--timeout", "5", "--quiet"])
       if copied { return true }
     }
     return await piped(text, "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl", ["pbcopy", udid])
@@ -215,7 +217,7 @@ final class SimulatorView: ScreenView {
         try process.run()
         input.fileHandleForWriting.write(Data(text.utf8))
         try? input.fileHandleForWriting.close()
-        DispatchQueue.global().asyncAfter(deadline: .now() + 5) { if process.isRunning { process.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 8) { if process.isRunning { process.terminate() } }
       } catch {
         process.terminationHandler = nil
         done.resume(returning: false)

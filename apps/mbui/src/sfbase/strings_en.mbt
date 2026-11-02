@@ -1876,7 +1876,7 @@ let en : Map[String, String] = {
   "web-pages.screen.debug.relaunch": "Restart app",
   "web-pages.screen.debug.relaunched": "Restarted {name}",
   "web-pages.screen.debug.relaunchOther": "Restart app: {name}",
-  "web-pages.screen.debug.keysNote": "iOS 27 simulators can't paste yet. For text this keyboard can't type directly, like Chinese, use the on-screen keyboard in the picture.",
+  "web-pages.screen.debug.keysNote": "iOS 27 simulators can't paste by themselves yet. Text this keyboard can't type directly, like Chinese, goes to the simulator's clipboard: hold the field and tap Paste.",
   "web-pages.screen.device.shot": "Screenshot",
   "web-pages.screen.debug.shotCopied": "Screenshot copied",
   "web-pages.screen.debug.textLargest": "Largest",

@@ -1608,7 +1608,7 @@
   "web-pages.screen.debug.appsNone": "No apps are installed on this simulator yet.",
   "web-pages.screen.debug.appRunning": "Running",
   "web-pages.screen.debug.relaunched": "Restarted {name}",
-  "web-pages.screen.debug.keysNote": "iOS 27 simulators can't paste yet. For text this keyboard can't type directly, like Chinese, use the on-screen keyboard in the picture.",
+  "web-pages.screen.debug.keysNote": "iOS 27 simulators can't paste by themselves yet. Text this keyboard can't type directly, like Chinese, goes to the simulator's clipboard: hold the field and tap Paste.",
   "web-pages.screen.debug.relaunchOther": "Restart app: {name}",
   "web-pages.screen.debug.device": "Device",
   "web-pages.screen.debug.appearance": "Appearance",

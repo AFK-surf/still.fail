@@ -110,6 +110,8 @@ test("keys and text on a simulator, with and without its Device Hub window", { s
     assert.ok(source, "listed");
     view = await source.open({ maxWidth: 800, maxHeight: 800, codecs: ["jpeg"] });
     const v = view;
+    // (a device just booted may still be on its spinner, though the app has logged)
+    await sleep(8000);
     // What a viewer sees: the view's own last picture, a JPEG, whichever of a foldable's screens simctl's shows.
     let last: Uint8Array | null = null;
     const pulling = (async () => {
@@ -152,16 +154,53 @@ test("keys and text on a simulator, with and without its Device Hub window", { s
       await v.input({ t: "text", text });
       return said(3000);
     };
-    console.log(`no Device Hub window: keys ${JSON.stringify(await type_("abc"))}`);
+    console.log(`keys ${JSON.stringify(await type_("abc"))}`);
     await shot("4-no-hub");
 
-    execFileSync("open", [`devices://device/open?id=${udid}`], { timeout: 30_000 });
-    await sleep(5000);
-    console.log(`Device Hub window: keys ${JSON.stringify(await type_("def"))}`);
+    // (SIM_HUB_WINDOW: its window opened too, in front of whatever a person is doing on this Mac)
+    if (process.env.SIM_HUB_WINDOW) {
+      execFileSync("open", [`devices://device/open?id=${udid}`], { timeout: 30_000 });
+      await sleep(5000);
+    }
+    console.log(`keys again ${JSON.stringify(await type_("def"))}`);
     await shot("5-hub");
-    console.log(`Device Hub window: pasted ${JSON.stringify(await type_("汉字"))}`);
+    console.log(`pasted through the helper ${JSON.stringify(await type_("汉字"))}`);
     await sleep(6000);
     console.log(`after that paste: keys ${JSON.stringify(await type_("mno"))}`);
+    // CoreDevice's pasteboard by hand: how long it takes, what it holds after, whether ⌘V takes it.
+    const timed = (args: string[], input?: string) => {
+      const at = Date.now();
+      try {
+        const out = execFileSync("/Library/Developer/PrivateFrameworks/CoreDevice.framework/Versions/A/Resources/bin/devicectl", ["device", "pasteboard", ...args, "--device", udid, "--timeout", "20", "--quiet"], { encoding: "utf8", timeout: 60_000, ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] as const } : { input }) });
+        return `ok in ${Date.now() - at} ms: ${JSON.stringify(out.slice(0, 40))}`;
+      } catch (e) {
+        return `failed in ${Date.now() - at} ms: ${(e as Error).message.slice(0, 300)}`;
+      }
+    };
+    console.log(`devicectl copy: ${timed(["copy"], "中文ok")}`);
+    console.log(`devicectl paste: ${timed(["paste"])}`);
+    for (const kind of ["down", "up"] as const) {
+      if (kind === "down") await v.input({ t: "key", kind, key: "Meta", code: "MetaLeft", mods: 4 });
+      await v.input({ t: "key", kind, key: "v", code: "KeyV", mods: 4 });
+      if (kind === "up") await v.input({ t: "key", kind, key: "Meta", code: "MetaLeft", mods: 0 });
+    }
+    console.log(`⌘V after it: ${JSON.stringify(await said(4000))}`);
+    await shot("5a-after-paste");
+    // The field held down, as a finger does: the system's menu, whose 粘贴 a person can touch.
+    const held = async (x: number, y: number, ms: number) => {
+      await v.input({ t: "pointer", kind: "down", x, y, buttons: 1 });
+      await sleep(ms);
+      await v.input({ t: "pointer", kind: "up", x, y, buttons: 0 });
+      await sleep(1500);
+    };
+    await held(at.x, at.y, 900);
+    await shot("5c-menu");
+    if (process.env.SIM_PASTE_AT) {
+      const [x, y] = process.env.SIM_PASTE_AT.split(",").map(Number) as [number, number];
+      await held(x, y, 80);
+      console.log(`粘贴 touched: ${JSON.stringify(await said(3000))}`);
+      await shot("5d-pasted");
+    }
     // 软键盘, its picture to see.
     await v.input({ t: "key", kind: "down", key: "k", code: "KeyK", mods: 4 });
     await v.input({ t: "key", kind: "up", key: "k", code: "KeyK", mods: 4 });
