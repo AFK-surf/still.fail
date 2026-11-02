@@ -880,7 +880,8 @@ export class StationsSync {
   }
 
   /// What the station's agents spent over the last 60 days, days as this device's clock has them: the usage page's 30 at
-  /// most and as many before, to say its totals against (views/usage.ts). Current from when it is asked: a change said
+  /// most and as many before, to say its totals against (views/usage.ts); and everything since it began counting by
+  /// day (`history`: the page's summary, views/usage-summary.ts). Current from when it is asked: a change said
   /// meanwhile has it read again.
   #usage(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
@@ -891,7 +892,7 @@ export class StationsSync {
       const day = 86_400_000;
       const local = Math.trunc(now) + offset * 60_000;
       const from = local - (((local % day) + day) % day) - 59 * day - offset * 60_000;
-      return this.#read(address, { topic: "stationUsage", station: address }, `/usage?from=${from}&tz=${offset}`, undefined, ctx);
+      return this.#read(address, { topic: "stationUsage", station: address }, `/usage?from=${from}&tz=${offset}&history=1`, undefined, ctx);
     });
   }
 
