@@ -623,6 +623,8 @@ pub struct Tree {
   /// what the pointer is over of what says it is pointed at alone (View::points), where that is over all that takes
   /// it there (Tree::points_over)
   mut points_hover : NodeId?
+  /// what scrolls in each node that does (View::scrolls), by the node: what it holds finds it (View::scroll_holding)
+  scrolls_at : Map[Int, Scroll]
   /// the columns that scroll whose bars come out where the pointer is along their edge (View::bar_near), and which
   /// the pointer is along now (told as withins are: Tree::bars_near_told)
   bar_cols : Array[(Int, Int)]
@@ -801,6 +803,7 @@ pub fn Tree::new(
     lit_every: false,
     pointer_xy: (-1.0, -1.0),
     points_hover: None,
+    scrolls_at: {},
     bar_cols: [],
     drawn_marks: [],
     bars_due: false,
