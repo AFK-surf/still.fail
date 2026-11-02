@@ -512,10 +512,14 @@ describe("the Codex driver", { concurrency: true }, () => {
     const gate = gates(p.dump, "early");
     await one.prompt("gate:6:3:early");
     await a.until((e) => deltas(e).length >= 3);
-    // The next station asks the profile's quota as it starts, before what the one before left is taken up.
+    // The next station asks the profile's quota as it starts, before what the one before left is taken up: it does not
+    // so much as look for an app-server yet.
     const taken = Promise.withResolvers<void>();
-    const next = driver({ takenUp: taken.promise });
+    let looked = false;
+    const next = driver({ takenUp: taken.promise, installedVersion: async () => ((looked = true), null) });
     const quota = next.rateLimits(p);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(looked, false, "no app-server looked for before the station before is taken up");
     await gate.open("a");
     await eventually(gate.said);
     await gate.open("b");
