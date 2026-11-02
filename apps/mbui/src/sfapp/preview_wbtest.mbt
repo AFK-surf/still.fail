@@ -984,7 +984,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   t.run_for(@ui.move_most_ms)
   assert_true(!v.flies)
   // where its thumbnail is in the chat under it
-  let th = thumb_of(t.ctx(), v.id()).unwrap()
+  let th = thumb_of(t.ctx(), v.thumb_id()).unwrap()
   let tc = (th.x + th.w / 2.0, th.y + th.h / 2.0)
   t.back()
   // closed as back is taken: only drawn, flying back into its thumbnail

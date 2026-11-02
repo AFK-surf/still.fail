@@ -230,6 +230,8 @@ pub(all) struct Viewer {
   mut pinned : @kit.MediaStatus?
   /// what it steps through (an image): its chat's images, a folder's
   steps : Stepping
+  /// Where this occurrence is in its chat, distinct from the file shared by other messages or quotes.
+  at : String
   /// a finger moving it sideways to the one before or after (fitted, not zoomed)
   mut swiping : Bool
   /// where the finger went down (in the window's terms; on the stage, `down_lx`, `down_ly`: the canvas's own)
@@ -337,7 +339,7 @@ pub(all) struct ThumbLook {
 }
 
 ///|
-/// The chat's thumbnails by the file each shows (Viewer::id), as last built.
+/// The chat's thumbnails by their place (Viewer::thumb_id), as last built.
 pub let pv_thumbs : Map[String, ThumbLook] = Map([])
 
 ///|
@@ -495,7 +497,7 @@ pub fn note_thumb(
 /// Its place read none.
 pub fn Viewer::thumb_over(self : Viewer) -> (Double) -> Unit {
   thumbs_said()
-  match pv_thumbs.get(self.id()) {
+  match pv_thumbs.get(self.thumb_id()) {
     Some(l) => l.over
     None =>
       match self.fly_from {
@@ -714,10 +716,11 @@ pub fn open_preview(
   drive? : DriveFile? = None,
   steps? : Stepping = NoSteps,
   named? : Bool = false,
+  at? : String = "",
 ) -> Unit {
   close_now()
   pv_strip.leaving = None
-  viewer.set(Some(new_viewer(station, key, a, drive, steps, named~)))
+  viewer.set(Some(new_viewer(station, key, a, drive, steps, named~, at~)))
 }
 
 ///|
@@ -729,6 +732,7 @@ pub fn new_viewer(
   drive : DriveFile?,
   steps : Stepping,
   named? : Bool = false,
+  at? : String = "",
 ) -> Viewer {
   let (kind, mime, _) = preview_kind(a.name)
   let v : Viewer = {
@@ -784,6 +788,7 @@ pub fn new_viewer(
     reads: @signals.signal(0),
     pinned: None,
     steps,
+    at,
     swiping: false,
     down_x: 0.0,
     down_y: 0.0,
@@ -840,6 +845,80 @@ pub fn Viewer::id(self : Viewer) -> String {
   match self.drive {
     Some(d) => self.station + "/drive:" + d.root + "/" + d.path
     None => self.station + "/" + self.key + "/" + self.file.path
+  }
+}
+
+///|
+/// The row in an occurrence's place and the file or quote within it.
+fn place_parts(at : String) -> (String, String) {
+  match at.rev_find("/") {
+    Some(i) => (at.view(end_offset=i).to_owned(), at.view(start_offset=i).to_owned())
+    None => (at, "")
+  }
+}
+
+///|
+/// The chat's row keeps the identity it had before the core took it over (Reading::sent_as).
+fn placed_row(station : String, session : String, row : String) -> String {
+  match readings.get(station + "\u{1}" + session) {
+    Some(r) => {
+      r.sent_as_told.get() |> ignore
+      r.sent_as.get(row).unwrap_or(row)
+    }
+    None => row
+  }
+}
+
+///|
+/// The occurrence as its list knows it, including a row that went from local to the core's outbox.
+pub fn thumb_occurrence(station : String, session : String, at : String) -> String {
+  if at == "" {
+    ""
+  } else {
+    let (row, part) = place_parts(at)
+    placed_row(station, session, row) + part
+  }
+}
+
+///|
+/// A file can be drawn in several messages or quotes. Its thumbnail's place is separate from the file's identity,
+/// which still names the shared bytes and video frame. The list's row identity survives the outbox handoff.
+pub fn thumb_place(file : String, station : String, session : String, at : String) -> String {
+  if at == "" {
+    file
+  } else {
+    let place = thumb_occurrence(station, session, at)
+    Json::array([Json::string(file), Json::string(session), Json::string(place)]).stringify()
+  }
+}
+
+///|
+pub fn Viewer::thumb_id(self : Viewer) -> String {
+  match self.steps {
+    InChat(_, session) => thumb_place(self.id(), self.station, session, self.at)
+    _ => self.id()
+  }
+}
+
+///|
+/// What the core now calls an occurrence opened before its local row was handed over.
+fn Viewer::gallery_at(self : Viewer) -> String {
+  match self.steps {
+    InChat(_, session) =>
+      match readings.get(self.station + "\u{1}" + session) {
+        Some(r) => {
+          r.sent_as_told.get() |> ignore
+          let (row, part) = place_parts(self.at)
+          for source, local in r.sent_as {
+            if local == row {
+              return source + part
+            }
+          }
+          self.at
+        }
+        None => self.at
+      }
+    _ => self.at
   }
 }
 
@@ -1444,7 +1523,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
     // an image grows from its thumbnail when the chat shows it and its size is known here (FilePreview.kt ViewerLayer)
     match v.flight_target(c, src) {
       Some(to) =>
-        match thumb_of(c, v.id()) {
+        match thumb_of(c, v.thumb_id()) {
           Some(t) => {
             v.flies = true
             v.fly_back = false
@@ -1460,7 +1539,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
             v.fly_lift = lift
             v.fly.put(0.0)
             v.fly.go(1.0, @motion.move(points=far), at~)
-            pv_hidden.set(v.id())
+            pv_hidden.set(v.thumb_id())
           }
           None => ()
         }
@@ -1484,12 +1563,12 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     leaving_done()
     // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to), else
     // it fades out
-    match (thumb_of(c, self.id()), self.shown_kind(), self.zoom.rect_at(viewer_moment(c))) {
+    match (thumb_of(c, self.thumb_id()), self.shown_kind(), self.zoom.rect_at(viewer_moment(c))) {
       (Some(t), Some(KImage), Some(r)) => {
         self.fly_from = Some(t)
         self.fly_back = true
         self.fly_home_from(t, Some(r))
-        pv_hidden.set(self.id())
+        pv_hidden.set(self.thumb_id())
       }
       // a video, its thumbnail on the screen: back into it with the frame it shows (grabbed first: the thumbnail keeps
       // it, and where it was), else with its still (FilePreview.kt close: flight.frame())
@@ -1540,7 +1619,7 @@ pub fn Viewer::fly_home(self : Viewer, picture : String) -> Unit {
     Some(t) => self.fly_home_from(t, self.fly_to)
     None => ()
   }
-  pv_hidden.set(self.id())
+  pv_hidden.set(self.thumb_id())
 }
 
 ///|
@@ -2000,7 +2079,7 @@ fn flight_box(
 /// with it where it is drawn nowhere now (hidden while the picture is out); where it is not on the screen, where it was
 /// last (Viewer's fly_from). Read only.
 pub fn Viewer::flight_from(self : Viewer, c : @ui.Ctx) -> Thumb? {
-  match (thumb_of(c, self.id()), self.fly_from) {
+  match (thumb_of(c, self.thumb_id()), self.fly_from) {
     // (hidden while the picture is out, it is drawn nowhere: what showed of it as it was last drawn, moved with it)
     (Some(t), Some({ seen: Some((sx, sy, sw, sh)), x, y, .. })) if t.seen is None =>
       Some({ ..t, seen: Some((sx + t.x - x, sy + t.y - y, sw, sh)) })
@@ -2056,6 +2135,10 @@ fn[T] Viewer::near_by(self : Viewer, src : Source, made : (String, () -> Viewer)
     NoSteps => (None, None)
     InChat(thread, session) => {
       let p : Map[String, Json] = { "station": Json::string(self.station), "path": Json::string(self.file.path) }
+      let at = self.gallery_at()
+      if at != "" {
+        p["at"] = Json::string(at)
+      }
       match thread {
         Some(th) => p["thread"] = Json::number(th)
         None => p["session"] = Json::string(session)
@@ -2067,7 +2150,9 @@ fn[T] Viewer::near_by(self : Viewer, src : Source, made : (String, () -> Viewer)
           Some(Object(_) as j) => {
             let a = attachment_of(j)
             let key = if a.owner != "" { a.owner } else { self.key }
-            Some(made(self.station + "/" + key + "/" + a.path, fn() { new_viewer(self.station, key, a, None, self.steps) }))
+            let at = text(told, k + "At")
+            let file = self.station + "/" + key + "/" + a.path
+            Some(made(thumb_place(file, self.station, session, at), fn() { new_viewer(self.station, key, a, None, self.steps, at~) }))
           }
           _ => None
         }
@@ -2151,7 +2236,7 @@ pub fn Viewer::picture(self : Viewer, src : Source) -> String {
 /// shows (the same picture, decoded already: it flies out as the chat drew it, one sent from here the picture picked),
 /// else the station's thumbnail of it, else its likeness; "" none.
 pub fn Viewer::stand_in(self : Viewer, src : Source) -> String {
-  match pv_thumbs.get(self.id()) {
+  match pv_thumbs.get(self.thumb_id()) {
     Some(l) if l.picture != "" => return l.picture
     _ => ()
   }
@@ -2171,7 +2256,7 @@ pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : 
   for n in [before, after] {
     match n {
       Some(n) => {
-        ids.push(n.id())
+        ids.push(n.thumb_id())
         if n.bytes.get() is None && !n.fetching.get() && n.error.get() is None && n.file.size <= big_file {
           n.fetching.set(true)
           n.read_whole(src, fn(r) {
@@ -2190,7 +2275,7 @@ pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : 
     }
   }
   let gone = []
-  pv_strip.near.each(fn(id, _) { if !ids.contains(id) && id != self.id() { gone.push(id) } })
+  pv_strip.near.each(fn(id, _) { if !ids.contains(id) && id != self.thumb_id() { gone.push(id) } })
   for id in gone {
     pv_strip.near.remove(id)
   }
@@ -2247,7 +2332,7 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
       n.awake = self.awake
       n.awake_said()
       viewer.set(Some(n))
-      pv_strip.near.remove(n.id())
+      pv_strip.near.remove(n.thumb_id())
       strip.put(from + dir.to_double() * width)
       strip.go(0.0, @motion.sheet_spring, at~, velocity~)
       // the frame built again from the one it stepped to: a swipe let go steps in the middle of the stage's build,
@@ -2366,7 +2451,7 @@ pub fn Viewer::still(self : Viewer, src : Source) -> String {
     None => ()
   }
   // what its thumbnail in the chat shows (video_still: one sent from here, the host's picture of it as it was picked)
-  match pv_thumbs.get(self.id()) {
+  match pv_thumbs.get(self.thumb_id()) {
     Some(l) if l.picture != "" => return l.picture
     _ => ()
   }

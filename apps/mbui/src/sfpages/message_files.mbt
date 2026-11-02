@@ -99,13 +99,15 @@ pub fn message_files(
   by? : (String, String, String)? = None,
   landing_key? : String = "",
   corner? : Double = @sf.message_file_corner,
+  at? : String = "",
 ) -> Unit {
   if list.length() == 0 {
     return
   }
   // as wide as where it is at most (the column's, as laid out: c.width is the pane's), the pane's until it is laid out
-  let at = c.id("msg-files/" + here.station + "/" + @sfbase.file_key(list[0]))
-  let room = match c.laid_size(at) {
+  let place = @sfbase.thumb_occurrence(here.station, here.session, at)
+  let row = c.id("msg-files/" + place + "/" + here.station + "/" + @sfbase.file_key(list[0]))
+  let room = match c.laid_size(row) {
     Some((w, _)) if w > 0.0 => w
     _ => c.width
   }
@@ -137,7 +139,7 @@ pub fn message_files(
   } else {
     column
   }
-  c.box(style=column, id=at, fn() {
+  c.box(style=column, id=row, fn() {
     for r in rows {
       c.box(style=files_row, fn() {
         for i in r {
@@ -149,7 +151,7 @@ pub fn message_files(
             "image" | "video" => Some(message_media(c, src, here.station, owner_of(here, a), a))
             _ => None
           }
-          let item = c.box(style=@ui.style(w=Fixed(widths[i] + hung)), fn() { file_item(c, src, here, a, widths[i], by~, landing_key=key, media~, corner~) })
+          let item = c.box(style=@ui.style(w=Fixed(widths[i] + hung)), fn() { file_item(c, src, here, a, widths[i], by~, landing_key=key, media~, corner~, at~) })
           let paint = media.map(fn(p) { fn(w, h, fit, radius) { media_content(c, p, w, h, fit, radius) } })
           match flight_here(here) {
             Some(f) => flight_landing(
@@ -190,8 +192,8 @@ fn stored_name(path : String) -> String {
 
 ///|
 /// A message's file opened in the preview (FilePreview): an image steps through the chat's.
-fn open_file(here : MessageHere, a : Attachment) -> Unit {
-  open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session))
+fn open_file(here : MessageHere, a : Attachment, at? : String = "") -> Unit {
+  open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session), at~)
 }
 
 ///|
@@ -311,11 +313,11 @@ fn thumb_ratio(hash : String) -> Double? {
 
 ///|
 /// One of a message's files (FileItem), `w` wide.
-fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner) -> Unit {
+fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner, at? : String = "") -> Unit {
   match picturing.val {
     // (in a picture of the chat being shared: to tick, publish.mbt)
     Some((seq, taking)) => publish_file(c, src, here, seq, taking, a, w, by~)
-    None => file_drawn(c, src, here, a, w, by~, landing_key~, media~, corner~)
+    None => file_drawn(c, src, here, a, w, by~, landing_key~, media~, corner~, at~)
   }
 }
 
@@ -332,7 +334,7 @@ fn quote_of(here : MessageHere, a : Attachment, owner : String, by : (String, St
 
 ///|
 /// A message's file as the chat draws it, by its kind.
-fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner) -> Unit {
+fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner, at? : String = "") -> Unit {
   match file_kind(a.name) {
     "image" | "video" => {
       let p = match media {
@@ -340,12 +342,12 @@ fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
         None => message_media(c, src, here.station, owner_of(here, a), a)
       }
       if p.kind == "image" {
-        image_item(c, src, here, a, w, p, by~, corner~)
+        image_item(c, src, here, a, w, p, by~, corner~, at~)
       } else {
-        video_item(c, src, here, a, w, p, if landing_key == "" { @sfbase.file_key(a) } else { landing_key }, by~, corner~)
+        video_item(c, src, here, a, w, p, if landing_key == "" { @sfbase.file_key(a) } else { landing_key }, by~, corner~, at~)
       }
     }
-    _ => card_item(c, src, here, a, by~)
+    _ => card_item(c, src, here, a, by~, at~)
   }
 }
 
@@ -353,9 +355,10 @@ fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 /// An image (FileItem's image): in its box on the neutral ground, what it waits on until it is decoded (its ThumbHash's
 /// likeness), then brushed in from its top; one sent from here the picture it was picked as, there at once; one that
 /// cannot be had says so. Pressed, the preview; right-clicked, 复制图片.
-fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, by~ : (String, String, String)?, corner~ : Double) -> Unit {
+fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, by~ : (String, String, String)?, corner~ : Double, at~ : String) -> Unit {
 
-  let open = c.id("msg-file/" + @sfbase.file_key(a))
+  let place = @sfbase.thumb_occurrence(here.station, here.session, at)
+  let open = c.id("msg-file/" + place + "/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
   let (bw, bh, letterbox) = image_box(a, image_least, min_side=image_min_side)
   let h = bh * w / bw
@@ -369,10 +372,10 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     if unreached {
       src.images.again(here.station)
     } else {
-      open_file(here, a)
+      open_file(here, a, at~)
     }
   }
-  let thumb = here.station + "/" + owner + "/" + a.path
+  let thumb = @sfbase.thumb_place(here.station + "/" + owner + "/" + a.path, here.station, here.session, at)
   file_menu(c, open, key, quote=quote_of(here, a, owner, by))
   // the picture covering the whole box; a letterboxed one's covering its own proportions centred in it, all it and
   // what it waits on take, the box's corners cutting it (imageBox.ts letterbox; any: its frame's, concentric with
@@ -544,14 +547,15 @@ fn image_box_style(w : Double, h : Double, shown : Bool, corner : Double) -> @ui
 /// (loaded, or after everything else once opened and let go: fill.ts), how far there. Held or right clicked, its menu:
 /// 引用; 加载 (brought onto this device by the core before everything else, from what of it is here, whatever page
 /// shows, to play from here at once), 停止加载 while it is brought either way (what came stays).
-fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, landing_key : String, by~ : (String, String, String)?, corner~ : Double) -> Unit {
+fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, landing_key : String, by~ : (String, String, String)?, corner~ : Double, at~ : String) -> Unit {
 
-  let open = c.id("msg-file/" + @sfbase.file_key(a))
+  let place = @sfbase.thumb_occurrence(here.station, here.session, at)
+  let open = c.id("msg-file/" + place + "/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
   // (still going up: no station has it to play or ask its still of yet)
   let going_up = a.upload != "" && a.path == @sfbase.upload_path(a.upload)
   if c.clicked(open) && !going_up {
-    open_file(here, a)
+    open_file(here, a, at~)
   }
   let name = stored_name(a.path)
   let saving = download_of(src, here.station, owner, name)
@@ -578,10 +582,10 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   }
   file_menu(c, open, "", quote=quote_of(here, a, owner, by), more=load)
   // (its name, which nothing over its picture says)
-  @sf.tip(c, "msg-file/" + @sfbase.file_key(a), open, a.name, repeats=true)
+  @sf.tip(c, "msg-file/" + place + "/" + @sfbase.file_key(a), open, a.name, repeats=true)
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw
-  let thumb = here.station + "/" + owner + "/" + a.path
+  let thumb = @sfbase.thumb_place(here.station + "/" + owner + "/" + a.path, here.station, here.session, at)
   // (going up: the picture this device has of it, else its play mark on black alone)
   let still = p.key
   // its still kept on the device and not decoded yet: what the app's first page waits for
@@ -603,14 +607,14 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     None => false
   }
   let target = if landing { 0.0 } else { 1.0 }
-  let marks = @motion.animate(c, "video-marks/" + @sfbase.file_key(a), target, spec=@motion.tween(@sf.dur_ms, ease=Out), from=target)
+  let marks = @motion.animate(c, "video-marks/" + place + "/" + @sfbase.file_key(a), target, spec=@motion.tween(@sf.dur_ms, ease=Out), from=target)
   // its capsule in its foot's start corner (its length; while the core brings it, how far), at `alpha`: here, and over
   // its picture as the viewer flies it out of here and back (note_thumb's over)
   let coming = if flag(dl, "active") || kept is Some(_) { Some(number(dl, "progress")) } else { None }
   let over = fn(alpha : Double) {
     c.layer(fn() {
-      let at = c.box(style=video_over, fn() { @sf.video_capsule(c, "video/" + @sfbase.file_key(a), a.duration, coming~, corner~) })
-      c.look(at, @ui.look(alpha~))
+      let capsule = c.box(style=video_over, fn() { @sf.video_capsule(c, "video/" + place + "/" + @sfbase.file_key(a), a.duration, coming~, corner~) })
+      c.look(capsule, @ui.look(alpha~))
     })
     |> ignore
   }
@@ -646,12 +650,13 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 ///|
 /// Any other file as a card (MessageFileCard): pressed, the preview; while the core downloads it, or brings it after
 /// everything else once opened and let go (fill.ts), how far in its size's place, ✕ at its end to call it off; failed, why, ↻ to ask it again. Held or right clicked, its menu (引用).
-fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ : (String, String, String)?) -> Unit {
+fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ : (String, String, String)?, at~ : String) -> Unit {
   let owner = owner_of(here, a)
   let (dl, kept) = card_coming(src, here, a)
   let active = flag(dl, "active") || kept is Some(_)
   let failed = text(dl, "state") == "failed"
-  let key = "msg-card/" + @sfbase.file_key(a)
+  let place = @sfbase.thumb_occurrence(here.station, here.session, at)
+  let key = "msg-card/" + place + "/" + @sfbase.file_key(a)
   file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by))
   let done = @sf.file_card(
     c,
@@ -673,7 +678,7 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
   } else if done.retried {
     c.tell(key + "/retry", fn() { download_retry(src, id) })
   } else if done.opened {
-    open_file(here, a)
+    open_file(here, a, at~)
   }
 }
 

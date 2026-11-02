@@ -1293,7 +1293,12 @@ export class Views implements Owner {
         if (chat === undefined || !("ok" in chat)) return chat;
         // All of the chat's held, where it has a thread (its page holds a window of it); the outbox's after them.
         const whole = typeof view.thread === "number" ? this.#things(view.station as string, view.thread) : null;
-        return { ok: near(whole === null ? chat.ok : { messages: whole.messages, outbox: get(chat.ok, "outbox") }, view.path as string) };
+        const messages = whole?.messages.map((m) => {
+          const seq = u64(m.seq);
+          const outgoing = seq === null ? undefined : this.local.outgoing(view.station as string, view.thread as number, seq);
+          return outgoing === undefined ? m : { ...m, outgoing };
+        });
+        return { ok: near(whole === null ? chat.ok : { messages, outbox: get(chat.ok, "outbox") }, view.path as string, view.at as string | undefined) };
       }
       case "workspaceWays": {
         const ways = this.#core.ways?.(view.workspace as string);

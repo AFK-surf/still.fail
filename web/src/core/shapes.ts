@@ -4379,13 +4379,17 @@ export interface Host {
 
 /**
  * An image of a chat opened in the preview (the `imageNear` view): the ones beside it in the order its page shows them
- * (each message's placed ones first, then those below it; the outbox's last), to step to (arrows, a swipe).
+ * (quotes, placed ones, then those below; the outbox's last), to step to (arrows, a swipe).
  */
 export interface ImageNear {
 	/** The image shown just before it, with its `owner`. Absent for the first (or one not among them). */
 	before?: Attachment;
 	/** The one just after it. Absent for the last. */
 	after?: Attachment;
+	/** The previous image's place in its message, when a place was requested. */
+	beforeAt?: string;
+	/** The next image's place in its message, when a place was requested. */
+	afterAt?: string;
 	/** Where it is among them (0: the first), for `2 / 5`. Absent when it is not among them. */
 	index?: number;
 	/** How many images the chat shows. */

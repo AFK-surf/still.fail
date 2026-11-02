@@ -138,6 +138,8 @@ pub(all) struct Reading {
   /// the key each row of the core's that what was sent from here became goes on by: the key it had as it was sent
   /// ("o:local:n"), its one identity from the press on (its outbox entry's and its message's keys to it)
   sent_as : Map[String, String]
+  /// Told when a local row is taken over, so a viewer opened before that can follow its new core identity.
+  sent_as_told : @signals.Signal[Int]
   /// agents whose turn ended, still shown a moment (Chat.kt lingering: 600 ms, then fading 220): Lingering
   linger : Map[String, Lingering]
   /// how many have lingered (Lingering.id)
@@ -259,6 +261,7 @@ pub fn reading_of(key : String) -> Reading {
         follow_key: "",
         sent: {},
         sent_as: {},
+        sent_as_told: @signals.signal(0),
         linger: {},
         lingered: 0,
         linger_said: @signals.signal(0),
@@ -970,6 +973,7 @@ pub fn row_keys(
         // (the row goes on by the key it was sent as)
         came = "o:" + l.row.id
         rd.sent_as[k] = came
+        rd.sent_as_told.set(@signals.untracked(fn() { rd.sent_as_told.get() }) + 1)
         all_keys[i] = came
         taken[k] = true
         break
