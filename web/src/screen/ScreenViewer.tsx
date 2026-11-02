@@ -425,14 +425,14 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
   const headline = OVER.has(phase) ? t(`web-pages.screen.over.${phase}`) : "";
   const why = [failure ?? shown?.message, access?.message].filter((w, i, all): w is string => !!w && w !== headline && all.indexOf(w) === i);
   // Denied for a grant the station lacks (macOS's): where it is asked for is a tap away, not to be looked for.
-  const granting = phase === "denied" && onGrants !== undefined && (access?.capture === false || access?.control === false);
+  const os = useStationOs(station);
+  const granting = !os?.toLowerCase().startsWith("linux") && phase === "denied" && onGrants !== undefined && (access?.capture === false || access?.control === false);
   // How this device reaches the station while it is seen: the way (直连, a relay), its round trip and packets lost,
   // each in its colour as it gets worse (the station page's figures, the `stationNet` view). With a mouse they are the
   // bar's own mark (NetChip); a phone says them in its head's line.
   const net = useStationNet(live ? station : null);
   const netParts = phone && net ? [<span key="path">{net.path}</span>, ...[net.rtt, net.loss].flatMap((f, i) => (f ? [<span key={i} className={css.figure} data-level={f.level}>{f.text}</span>] : []))] : [];
   const meta = line || netParts.length ? <>{[...(line ? [<span key="line">{line}</span>] : []), ...netParts].flatMap((part, i) => (i ? [" · ", part] : [part]))}</> : null;
-  const os = useStationOs(station);
   // A tab of the station's browser: the chat that opened it, and closing it (then back where it was opened from).
   const tab = useTabActions(station, useScreens(station)?.screens.find((s) => s.id === screen), onBack);
   const sendCombo = (c: Combo) => {

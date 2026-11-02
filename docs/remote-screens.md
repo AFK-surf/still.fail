@@ -322,12 +322,18 @@ key), text as Unicode. Opening a view wakes a display gone to sleep (a pointer n
 (`SetThreadExecutionState`). What Windows keeps from any app in the session is not had: the sign-in and UAC's secure
 desktop are not captured, and windows of apps run as administrator take no input.
 
-On Linux, `station/src/screens/x11-desktop.ts` can share an X11 session the station's own user can access. It needs
-`ffmpeg` (with the `x11grab` input) and `xdotool` in the station's `PATH`, as well as the session's `DISPLAY` and, when
-used, `XAUTHORITY`. A station started outside the graphical session must be given that session's environment by its
+On Linux, `station/src/screens/x11-desktop.ts` can share an X11 session the station's own user can access. It uses
+`ffmpeg` (with the `x11grab` input) and `xdotool` from the station's `PATH`. When either is missing, on Debian and
+Ubuntu the station can prepare a pair itself on the first opening (`screens/linux-tools.ts`): APT downloads the packages
+and missing dependencies from the machine's configured repositories, and `dpkg-deb` extracts them into
+`<data>/screen-tools/apt`. No system package is installed, no maintainer script is run, and no administrator password
+is needed. The private pair's libraries are added to its own processes' environment only. Concurrent openings share a
+preparation; the directory appears after both commands have been checked, and a later opening retries a failure.
+Other Linux distributions need those two programs on the station's `PATH`. A display also needs the session's `DISPLAY`
+and, when used, `XAUTHORITY`. A station started outside the graphical session must be given that session's environment by its
 operator; a station running as another user cannot use the session without that user's own authorization. A Wayland
 session is reported as unsupported instead of sharing only its Xwayland windows. The list says when the display or
-tools are missing.
+tools are missing, when the pair is being prepared, and when preparation fails.
 
 Each view captures the X11 root display (including its cursor) at at most 15 fps. For a client taking H.264, an ffmpeg
 with libx264 captures raw pictures up to 3840×2160, keeps the latest, and sends it to a second ffmpeg for encoding only

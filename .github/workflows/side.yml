@@ -52,4 +52,5 @@ jobs:
           for test in test/x11-desktop.test.ts test/x11-desktop-real.test.ts test/x11-h264.test.ts test/x11-desktop-lifecycle.test.ts; do
             node ../scripts/native.ts run mesh -- xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test "$test"
           done
+          STILLFAIL_TEST_X11_APT=1 xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test --test-name-pattern='private APT pair' test/linux-screen-tools.test.ts
           STILLFAIL_TEST_X11_BROWSER=1 node ../scripts/native.ts run mesh -- xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test test/x11-h264-browser.test.ts

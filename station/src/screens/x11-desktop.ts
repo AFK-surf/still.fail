@@ -1,13 +1,14 @@
-// The station user's X11 desktop. ffmpeg captures it and xdotool posts input; both are system tools.
+// The station user's X11 desktop. ffmpeg captures it and xdotool posts input; LinuxScreenTools can prepare them when
+// the machine has no pair of its own.
 // A view keeps only the newest frame, so a slow client cannot build a queue of old pictures. Wayland needs its own
 // portal implementation: an Xwayland DISPLAY alone does not capture the Wayland desktop.
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { accessSync, constants } from "node:fs";
 import { hostname } from "node:os";
-import { delimiter, isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
+import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
+import { executable, type LinuxScreenTools, type LinuxToolPair } from "./linux-tools.ts";
 import type { Frame, ScreenAccess, ScreenInput, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
 import { X11H264 } from "./x11-h264.ts";
 
@@ -20,21 +21,15 @@ const TYPE_DELAY_MS = 20;
 type Size = { width: number; height: number };
 type Reason = NonNullable<ScreenAccess["reason"]>;
 
-/// Resolve only executables, without invoking a shell or consulting a different user's environment.
-function executable(name: string, env: NodeJS.ProcessEnv): string | null {
-  const paths = isAbsolute(name) || name.includes("/") ? [name] : (env.PATH ?? "").split(delimiter).filter(Boolean).map((dir) => join(dir, name));
-  return paths.find((path) => {
-    try { accessSync(path, constants.X_OK); return true; } catch { return false; }
-  }) ?? null;
-}
-
 export type X11DesktopOptions = {
   changed: () => void;
   title?: () => string;
+  tools?: LinuxScreenTools;
   /// A test may supply its own desktop environment and binaries.
   env?: NodeJS.ProcessEnv;
   ffmpeg?: string;
   xdotool?: string;
+  prepareWaitMs?: number;
 };
 
 export class X11Desktop implements ScreenSource {
@@ -43,16 +38,40 @@ export class X11Desktop implements ScreenSource {
   readonly #o: X11DesktopOptions;
   readonly #views = new Set<ScreenView>();
   #h264: Promise<boolean> | null = null;
+  #h264Path: string | null = null;
   #size: Size = { width: 0, height: 0 };
   #reason: Reason | undefined = "linuxNoDisplay";
   #looked = 0;
   #looking: Promise<void> | null = null;
+  #preparing: Promise<void> | null = null;
+  #prepareFailed = false;
+  #closed = false;
 
   constructor(options: X11DesktopOptions) { this.#o = options; }
   title(): string { return this.#o.title?.() ?? hostname(); }
   size(): Size { return { ...this.#size }; }
   access(): ScreenAccess {
     return this.#reason ? { capture: false, control: false, reason: this.#reason } : { capture: true, control: true };
+  }
+
+  #binaries(env: NodeJS.ProcessEnv): LinuxToolPair | null {
+    const ffmpeg = executable(this.#o.ffmpeg ?? "ffmpeg", env);
+    const xdotool = executable(this.#o.xdotool ?? "xdotool", env);
+    if (ffmpeg && xdotool) return { ffmpeg, xdotool, env };
+    return this.#o.ffmpeg || this.#o.xdotool ? null : this.#o.tools?.prepared(env) ?? null;
+  }
+
+  #prepare(env: NodeJS.ProcessEnv): void {
+    const tools = this.#o.tools;
+    if (this.#preparing || !tools?.canPrepare(env)) return;
+    this.#prepareFailed = false;
+    this.#preparing = tools.prepare(env).catch(() => {
+      this.#prepareFailed = true;
+      if (!this.#closed) log.warn("screen", "could not prepare the Linux screen tools");
+    }).finally(() => {
+      this.#preparing = null;
+      if (!this.#closed) void this.refresh(true);
+    });
   }
 
   /// Ask the X server in the station's own session; neither a display name nor a running process implies access.
@@ -73,11 +92,10 @@ export class X11Desktop implements ScreenSource {
     const empty = { width: 0, height: 0 };
     if (env.XDG_SESSION_TYPE?.toLowerCase() === "wayland" || env.WAYLAND_DISPLAY) return { size: empty, reason: "linuxWayland" };
     if (!env.DISPLAY) return { size: empty, reason: "linuxNoDisplay" };
-    const ffmpeg = executable(this.#o.ffmpeg ?? "ffmpeg", env);
-    const xdotool = executable(this.#o.xdotool ?? "xdotool", env);
-    if (!ffmpeg || !xdotool) return { size: empty, reason: "linuxTools" };
+    const pair = this.#binaries(env);
+    if (!pair) return { size: empty, reason: this.#preparing ? "linuxToolsPreparing" : this.#prepareFailed ? "linuxToolsFailed" : "linuxTools" };
     try {
-      const { stdout } = await run(xdotool, ["getdisplaygeometry"], { env, timeout: 3_000 });
+      const { stdout } = await run(pair.xdotool, ["getdisplaygeometry"], { env: pair.env, timeout: 3_000 });
       const match = /^(\d+)\s+(\d+)\s*$/.exec(stdout);
       const width = Number(match?.[1]), height = Number(match?.[2]);
       if (!Number.isInteger(width) || !Number.isInteger(height) || width < 2 || height < 2 || width > 16384 || height > 16384) throw new Error("invalid display size");
@@ -90,16 +108,29 @@ export class X11Desktop implements ScreenSource {
   async open(options: ViewOptions): Promise<ScreenView> {
     if (!options.codecs.includes("jpeg") && !options.codecs.includes("h264")) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264 or JPEG" });
     await this.refresh(true);
-    if (this.#reason) throw new ScreenRefused(503, `station.screen.${this.#reason}`, {}, this.access());
     const env = this.#o.env ?? process.env;
+    if (this.#reason === "linuxTools" || this.#reason === "linuxToolsFailed") this.#prepare(env);
+    if (this.#preparing) {
+      // A first opening can take the pair as soon as it is ready. If a download takes longer, say so and let the
+      // person reopen it; preparation continues even if the view was closed in the meantime.
+      const preparing = this.#preparing;
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, this.#o.prepareWaitMs ?? 8_000);
+        preparing.then(() => { clearTimeout(timer); resolve(); });
+      });
+      await this.refresh(true);
+    }
+    if (this.#reason) throw new ScreenRefused(503, `station.screen.${this.#reason}`, {}, this.access());
     // Both were found by refresh, but may have been removed since.
-    const ffmpeg = executable(this.#o.ffmpeg ?? "ffmpeg", env);
-    const xdotool = executable(this.#o.xdotool ?? "xdotool", env);
-    if (!ffmpeg || !xdotool) throw new ScreenRefused(503, "station.screen.linuxTools", {}, { capture: false, control: false, reason: "linuxTools" });
+    const pair = this.#binaries(env);
+    if (!pair) throw new ScreenRefused(503, "station.screen.linuxTools", {}, { capture: false, control: false, reason: "linuxTools" });
+    const { ffmpeg, xdotool } = pair;
+    const childEnv = pair.env;
     if (options.codecs.includes("h264")) {
-      this.#h264 ??= run(ffmpeg, ["-hide_banner", "-encoders"], { env, timeout: 3_000 }).then(({ stdout }) => /\blibx264\b/.test(stdout), () => false);
+      if (this.#h264Path !== ffmpeg) { this.#h264Path = ffmpeg; this.#h264 = null; }
+      this.#h264 ??= run(ffmpeg, ["-hide_banner", "-encoders"], { env: childEnv, timeout: 3_000 }).then(({ stdout }) => /\blibx264\b/.test(stdout), () => false);
       if (await this.#h264) {
-        const view = new X11H264View(ffmpeg, xdotool, env, this.#size, options, () => this.#views.delete(view));
+        const view = new X11H264View(ffmpeg, xdotool, childEnv, this.#size, options, () => this.#views.delete(view));
         this.#views.add(view);
         try { await view.ready; return view; }
         catch (error) {
@@ -110,13 +141,17 @@ export class X11Desktop implements ScreenSource {
         throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264" });
       }
     }
-    const view = new X11View(ffmpeg, xdotool, env, this.#size, options, () => this.#views.delete(view));
+    const view = new X11View(ffmpeg, xdotool, childEnv, this.#size, options, () => this.#views.delete(view));
     this.#views.add(view);
     try { await view.ready; return view; }
     catch (error) { view.close(); throw new ScreenRefused(503, "station.screen.failed", { said: (error as Error).message }); }
   }
 
-  async close(): Promise<void> { for (const view of [...this.#views]) view.close(); }
+  async close(): Promise<void> {
+    this.#closed = true;
+    this.#o.tools?.close();
+    for (const view of [...this.#views]) view.close();
+  }
 }
 
 /// The JPEG encoder needs even dimensions and does not enlarge a screen beyond its native size.
