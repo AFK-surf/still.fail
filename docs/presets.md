@@ -24,6 +24,8 @@
 
 排序：对话用过的在前（多的在前），其余按最近改动（`.git/index` 的修改时间）。再加上别的预设用到的目录。全程异步读，不卡主线程。
 
+各 station 的候选目录只包含它自己的目录；预设引用的其他 station 的目录不会冒充本机目录。界面将候选目录和已选目录按 station 分组，同一仓库在多台 station 上各有一项。
+
 ## agent 拿到什么
 
 Claude Code 和 Codex 都只在自己运行的目录里自动读说明文件和 skill（2026-11-01 对过两边文档：Claude Code `--add-dir` 的目录只加载 skill，CLAUDE.md 要另设环境变量，AGENTS.md 不读；Codex 只从当前目录往上到仓库根找 `.agents/skills` 和 AGENTS.md）。agent 的运行目录是会话工作区，所以开对话时 station 把预设里本机的目录「搬进」这个工作区（`keepCopy`）：
