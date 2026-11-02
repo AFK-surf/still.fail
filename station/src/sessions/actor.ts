@@ -61,6 +61,7 @@ type Working = { connect: string; channel: string; threadTs: string; ts: string 
 /// What the actor needs of the store: the Rust Store's methods, camelCase (src/store/store.ts).
 export type SessionStore = {
   pendingMessages(key: string): any[];
+  hasPending(key: string): boolean;
   markDelivered(key: string, handed: Handed[]): void;
   markUndelivered(key: string, handed: Handed[]): void;
   untoldWidgetModels(key: string): any[];
@@ -528,7 +529,7 @@ export class SessionActor {
     return this.enqueue(async () => {
       if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
       this.refill = null;
-      if (this.deps.store.pendingMessages(this.key).length > 0) return this.pump();
+      if (this.deps.store.hasPending(this.key)) return this.pump();
       const last = this.deps.store.lastTurn(this.key);
       await this.startTurn("resume", last && retrying(last) ? GO_ON_AFTER_OVERLOADED : GO_ON_AFTER_SPENT);
     });
@@ -674,7 +675,7 @@ export class SessionActor {
       this.overWhileCompacting = false;
       if (this.waiting !== null) this.waitMs(this.waitingSeconds, 0);
     }
-    if (store.pendingMessages(this.key).length > 0) return this.pump();
+    if (store.hasPending(this.key)) return this.pump();
     if (this.notices.length > 0) return this.giveNotices();
     this.deps.idle(this.key);
   }
@@ -1356,7 +1357,7 @@ export class SessionActor {
         await this.endProcess(agent);
         log.info("session", "allowance ran out; going on on another profile", { session: this.key, from: moved[0], to: moved[1] });
         this.refill = null;
-        if (store.pendingMessages(this.key).length > 0) return this.pump();
+        if (store.hasPending(this.key)) return this.pump();
         return this.startTurn("resume", GO_ON_AFTER_SPENT);
       }
       // Said once: what wakes it meanwhile (a job's notice, a wait over) would only run into it again.
@@ -1408,7 +1409,7 @@ export class SessionActor {
       this.deps.idle(this.key);
       return;
     }
-    if (store.pendingMessages(this.key).length > 0) return this.pump();
+    if (store.hasPending(this.key)) return this.pump();
     if (this.notices.length > 0) return this.giveNotices();
     const declared = turn?.declared ?? null;
     if (ends?.kind === "waiting") {
@@ -1573,7 +1574,7 @@ export class SessionActor {
               // Held, it goes on when released (its notices); a running turn ends as it will.
               if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
               log.info("session", "its allowance should have refilled; going on", { session: this.key });
-              if (this.deps.store.pendingMessages(this.key).length > 0) return this.pump();
+              if (this.deps.store.hasPending(this.key)) return this.pump();
               await this.startTurn("resume", GO_ON_AFTER_REFILL);
             }),
           ),
