@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Data, dbName, type RowChange } from "../src/data.ts";
 import { CHUNK, importFormer } from "../src/db/import.ts";
-import { placesFor } from "../src/db/account.ts";
+import { placesFor, sameTurns } from "../src/db/account.ts";
 import { VERSION } from "../src/db/schema.ts";
 import { type Sql, type SqlRow, type SqlValue, SqlError } from "../src/host.ts";
 import { NodeSql } from "../src/hosts/node-sql.ts";
@@ -396,6 +396,96 @@ test("a_session_event_says_whether_its_detail_is_to_be_read_again", async () => 
   data.putSummary("w/a", { key: "k1", turns: 1, archivedAt: 5 });
   assert.deepEqual((data.get(sessions("w/a")) as J[]).map((s) => s.key), ["k2"]);
   assert.equal((data.get({ topic: "session", station: "w/a", key: "k1" }) as J).session.archivedAt, 5);
+  runner.shutdown();
+});
+
+test("refreshing_sessions_does_not_read_unlisted_sessions_or_their_details", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  class SessionsRead extends Counted {
+    rows: SqlRow[] | null = null;
+    override all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+      const rows = super.all(sql, params);
+      if (sql.startsWith("SELECT key, ord, summary, listed")) this.rows = rows;
+      return rows;
+    }
+  }
+  const sql = new SessionsRead(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  data.set(sessions("w/a"), [{ key: "live", turns: 0 }]);
+  data.set({ topic: "session", station: "w/a", key: "live" }, { turns: [], jobs: [], note: "history".repeat(500) });
+  await run(data.written);
+  const detail = JSON.stringify({ turns: [], jobs: [], note: "history".repeat(500) });
+  sql.exec("BEGIN");
+  for (let i = 0; i < 1000; i++) {
+    sql.run("INSERT INTO session (station, key, listed, ord, summary, detail) VALUES (?, ?, 0, 0, ?, ?)", ["w/a", `old${i}`, JSON.stringify({ key: `old${i}` }), detail]);
+  }
+  sql.exec("COMMIT");
+  data.set(sessions("w/a"), [{ key: "live", turns: 0 }, { key: "old17", turns: 0 }]);
+  assert.equal(sql.rows?.length, 1, "only the already listed sessions need comparing");
+  assert.ok(sql.rows?.every((row) => row.every((value) => typeof value !== "string" || value.length < 1000)), "the details are not read to compare the list");
+  await run(data.written);
+  assert.equal((data.get({ topic: "session", station: "w/a", key: "old17" }) as J).note, "history".repeat(500), "a previously unlisted session keeps its detail when listed again");
+  assert.equal(sql.all("SELECT count(*) FROM session WHERE station = ? AND listed = 0", ["w/a"])[0]?.[0], 999, "unrelated unlisted sessions remain held");
+  runner.shutdown();
+});
+
+test("finding_sessions_to_refresh_does_not_read_earlier_turns", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  class Observed extends Counted {
+    observing = false;
+    values: SqlRow[] = [];
+    override all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+      const rows = super.all(sql, params);
+      if (this.observing) this.values.push(...rows);
+      return rows;
+    }
+  }
+  const sql = new Observed(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  const last = { kind: "chat", outcome: "done", startedAt: 7, endedAt: 8 };
+  const marker = "the old turn that should stay on disk ".repeat(1000);
+  data.set(sessions("w/a"), [
+    { key: "current", turns: 2, lastTurn: last },
+    { key: "changed", turns: 2, lastTurn: last },
+    { key: "missing", turns: 0, lastTurn: null },
+    { key: "empty", turns: 0, lastTurn: null },
+  ]);
+  data.set({ topic: "session", station: "w/a", key: "current" }, { turns: [{ kind: "old", detail: marker }, last], threads: [] });
+  data.set({ topic: "session", station: "w/a", key: "changed" }, { turns: [last], threads: [] });
+  data.set({ topic: "session", station: "w/a", key: "empty" }, { turns: "not a list", threads: [] });
+  await run(data.written);
+  sql.observing = true;
+  const need = data.sessionsToRead("w/a");
+  sql.observing = false;
+  assert.deepEqual(need, [["current", false], ["changed", true], ["missing", true], ["empty", false]]);
+  assert.ok(sql.values.every((row) => row.every((value) => typeof value !== "string" || !value.includes(marker))), "earlier turns are not read to decide which sessions need refreshing");
+  runner.shutdown();
+});
+
+test("the_sessions_to_refresh_match_their_held_turns_including_unusual_values", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  const sql = db();
+  const variants: unknown[] = [[], null, "not a list", [null], [true], ["text"], [{ kind: "chat" }], [{ kind: "chat", outcome: "done" }, { kind: "end", detail: { a: 1 } }]];
+  const last: unknown[] = [null, { kind: "chat" }, { kind: "end", detail: { a: 1 } }, "text"];
+  const expected: [string, boolean][] = [];
+  let n = 0;
+  for (const turns of variants) {
+    for (const end of last) {
+      const key = `s${n++}`;
+      const summary = { key, turns: Array.isArray(turns) ? turns.length : 0, lastTurn: end };
+      sql.run("INSERT INTO session (station, key, listed, ord, summary, detail) VALUES (?, ?, 1, ?, ?, ?)", ["w/a", key, n, JSON.stringify(summary), JSON.stringify({ turns })]);
+      expected.push([key, !sameTurns(turns, summary)]);
+    }
+  }
+  assert.deepEqual(data.sessionsToRead("w/a"), expected);
+  assert.deepEqual(data.sessionsToRead("w/a", ["s2", "s17", "s31"]), [expected[2], expected[17], expected[31]]);
   runner.shutdown();
 });
 

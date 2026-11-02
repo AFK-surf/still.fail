@@ -518,6 +518,167 @@ test("a_chat_opened_is_read_at_once_not_behind_the_batches", async () => {
   s.core.close();
 });
 
+test("a_cached_chat_opens_while_a_background_history_batch_is_being_kept", async () => {
+  let release!: () => void;
+  const s = await ui(manyChats(60, 3), (st) => { release = st.host.hold("/admin/api/batch"); });
+  const data = s.core.inner.data;
+  // The chat was opened before. Its own messages are already on the device, while the station's other histories
+  // come back in a batch. Start opening it as the first of those histories is put.
+  data.putItems("entry", ST, "1", entries(1, 3).map((e) => [e.n, { ...e, thread: 1 }]));
+  await s.host.settle();
+  const put = data.putItems.bind(data);
+  const saved: string[] = [];
+  data.putItems = (...args) => {
+    put(...args);
+    if (args[0] !== "entry" || args[1] !== ST || args[2] === "1") return;
+    saved.push(args[2]);
+    if (saved.length === 1) setImmediate(() => subscribe(s.core, s.ui, 1, { topic: "thread", station: ST, thread: 1 }));
+  };
+  const emit = s.host.emit.bind(s.host);
+  let savedAtDisplay: number | null = null;
+  s.host.emit = (client, message) => {
+    const value = message as J;
+    if (client === s.ui && value.id === 1 && value.value?.entries?.length === 3 && savedAtDisplay === null) savedAtDisplay = saved.length;
+    emit(client, message);
+  };
+  try {
+    release();
+    await s.host.time.pass(1000, 20);
+    assert.ok(savedAtDisplay !== null, "the cached chat is shown");
+    assert.ok(savedAtDisplay < 39, `the chat opens before all 39 other histories in the batch are kept (saw ${savedAtDisplay})`);
+    for (const id of [1, 30, 60]) assert.deepEqual(data.logNumbers("entry", ST, String(id)), [1, 2, 3]);
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_thread_removed_while_a_history_batch_is_kept_stays_removed", async () => {
+  let release!: () => void;
+  const s = await ui(manyChats(60, 3), (st) => { release = st.host.hold("/admin/api/batch"); });
+  const data = s.core.inner.data;
+  const put = data.putItems.bind(data);
+  let removed = false;
+  let staleAnswerArrived = false;
+  data.putItems = (...args) => {
+    put(...args);
+    if (args[0] !== "entry" || args[1] !== ST) return;
+    if (args[2] === "60") setImmediate(() => {
+      removed = true;
+      s.core.inner.stations.onEvent(ST, "thread-removed", JSON.stringify({ id: 58 }));
+    });
+    if (args[2] === "58" && removed) staleAnswerArrived = true;
+  };
+  try {
+    release();
+    await s.host.time.pass(1000, 20);
+    assert.equal(staleAnswerArrived, true, "the old batch answer came after the removal");
+    assert.equal(data.thread(ST, 58), undefined);
+    assert.deepEqual(data.logNumbers("entry", ST, "58"), [], "an old batch cannot bring the removed chat's messages back");
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_cached_chat_opens_while_the_station_prepares_its_history_sweep", async () => {
+  const s = await ui(manyChats(60, 3));
+  const data = s.core.inner.data;
+  const numbers = data.logNumbers.bind(data);
+  const inspected: string[] = [];
+  data.logNumbers = (...args) => {
+    const result = numbers(...args);
+    if (args[0] !== "entry" || args[1] !== ST || args[2] === "1") return result;
+    inspected.push(args[2]);
+    if (inspected.length === 1) setImmediate(() => subscribe(s.core, s.ui, 1, { topic: "thread", station: ST, thread: 1 }));
+    return result;
+  };
+  const emit = s.host.emit.bind(s.host);
+  let inspectedAtDisplay: number | null = null;
+  s.host.emit = (client, message) => {
+    const value = message as J;
+    if (client === s.ui && value.id === 1 && value.value?.entries?.length === 3 && inspectedAtDisplay === null) inspectedAtDisplay = inspected.length;
+    emit(client, message);
+  };
+  try {
+    // A fresh sweep starts after the station's lists are read again. Opening this cached chat must not wait for the
+    // station's other histories to be inspected before the core gives the page its value.
+    s.core.inner.stations.snapshot(ST);
+    await s.host.time.pass(1000, 20);
+    assert.ok(inspectedAtDisplay !== null, "the cached chat is shown");
+    assert.ok(inspectedAtDisplay < 59, `the chat opens while the history sweep is prepared (inspected ${inspectedAtDisplay})`);
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_cached_chat_opens_while_changed_channels_are_checked", async () => {
+  const s = await ui(manyChats(60, 3));
+  await s.host.time.pass(5_000, 50);
+  const data = s.core.inner.data;
+  const numbers = data.logNumbers.bind(data);
+  const inspected = new Set<string>();
+  let checking = false;
+  data.logNumbers = (...args) => {
+    const result = numbers(...args);
+    if (!checking || args[0] !== "entry" || args[1] !== ST || args[2] === "1") return result;
+    inspected.add(args[2]);
+    if (inspected.size === 1) setImmediate(() => subscribe(s.core, s.ui, 1, { topic: "thread", station: ST, thread: 1 }));
+    return result;
+  };
+  const emit = s.host.emit.bind(s.host);
+  let inspectedAtDisplay: number | null = null;
+  s.host.emit = (client, message) => {
+    const value = message as J;
+    if (client === s.ui && value.id === 1 && value.value?.entries?.length === 3 && inspectedAtDisplay === null) inspectedAtDisplay = inspected.size;
+    emit(client, message);
+  };
+  try {
+    // A burst of summaries is coalesced before checking whether each channel is behind.
+    for (let id = 2; id <= 60; id++) s.core.inner.stations.putThread(ST, threadView(id, 3));
+    checking = true;
+    await s.host.time.pass(1_000, 20);
+    assert.ok(inspectedAtDisplay !== null, "the cached chat is shown");
+    assert.ok(inspectedAtDisplay < 59, `the chat opens before all 59 other channels are checked (inspected ${inspectedAtDisplay})`);
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_cached_chat_opens_while_an_older_station_schedules_history", async () => {
+  let release!: () => void;
+  const s = await ui(manyChats(60, 3), (st) => {
+    st.batches.on = false;
+    release = st.host.hold("/admin/api/batch");
+  });
+  const data = s.core.inner.data;
+  data.putItems("entry", ST, "1", entries(1, 3).map((e) => [e.n, { ...e, thread: 1 }]));
+  await s.host.settle();
+  const channels = s.core.inner.stations.channels;
+  const bring = channels.bring.bind(channels);
+  const scheduled = new Set<string>();
+  channels.bring = (channel, ...args) => {
+    const result = bring(channel, ...args);
+    if (channel.kind.name !== "entry" || channel.station !== ST || channel.id === "1") return result;
+    scheduled.add(channel.id);
+    if (scheduled.size === 1) setImmediate(() => subscribe(s.core, s.ui, 1, { topic: "thread", station: ST, thread: 1 }));
+    return result;
+  };
+  const emit = s.host.emit.bind(s.host);
+  let scheduledAtDisplay: number | null = null;
+  s.host.emit = (client, message) => {
+    const value = message as J;
+    if (client === s.ui && value.id === 1 && value.value?.entries?.length === 3 && scheduledAtDisplay === null) scheduledAtDisplay = scheduled.size;
+    emit(client, message);
+  };
+  try {
+    release();
+    await s.host.time.pass(1_000, 20);
+    assert.ok(scheduledAtDisplay !== null, "the cached chat is shown");
+    assert.ok(scheduledAtDisplay < 59, `the chat opens before all 59 other histories are scheduled (saw ${scheduledAtDisplay})`);
+  } finally {
+    s.core.close();
+  }
+});
+
 test("a_station_from_before_batches_is_read_a_request_a_read", async () => {
   const { host, core } = await started(manyChats(3, 3), 0, undefined, (st) => (st.batches.on = false));
   // Asked once, refused (it has no such route): each read its own request, as before.

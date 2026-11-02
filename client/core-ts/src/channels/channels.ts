@@ -83,12 +83,17 @@ export type Reach = {
   /// A task of the station's lane: one a name, the one asked for again while it waits being the same task.
   enqueue(station: string, task: string, priority: number, work: Effect.Effect<void, CoreError>): Deferred.Deferred<void, CoreError>;
   /// Runs `work` once the burst of what the station is saying is over.
-  later(station: string, work: () => void): void;
+  later(station: string, work: Effect.Effect<void>): void;
+  /// The clock and whether a newly opened view is waiting, for sharing the engine with it during a large burst.
+  now(): number;
+  firstWaiting(): boolean;
   /// A read made in the background answered, well (`error` null) or not; `nothing`: none of the channel is held.
   answered(channel: Channel, error: CoreError | null, nothing: boolean): void;
 };
 
 const keyOf = (c: Channel) => `${c.kind.name}\u0001${c.station}\u0001${c.id}`;
+const SETTLE_SLICE_ITEMS = 32;
+const SETTLE_SLICE_MS = 8;
 
 export class Channels {
   readonly #held: Held;
@@ -97,6 +102,8 @@ export class Channels {
   readonly #unsure = new Set<string>();
   /// Channels said to go further by something other than their items, looked at once the burst is over.
   readonly #raised = new Map<string, Map<string, Channel>>();
+  /// Invalidates a burst already being checked when its station is let go.
+  readonly #epochs = new Map<string, object>();
 
   constructor(held: Held, reach: Reach) {
     this.#held = held;
@@ -128,19 +135,36 @@ export class Channels {
   }
 
   #settleLater(c: Channel): void {
-    let waiting = this.#raised.get(c.station);
-    if (waiting) return void waiting.set(keyOf(c), c);
-    waiting = new Map([[keyOf(c), c]]);
+    const previous = this.#raised.get(c.station);
+    if (previous) return void previous.set(keyOf(c), c);
+    const waiting = new Map([[keyOf(c), c]]);
     this.#raised.set(c.station, waiting);
-    this.#reach.later(c.station, () => {
+    const epoch = this.#epochs.get(c.station) ?? {};
+    this.#epochs.set(c.station, epoch);
+    this.#reach.later(c.station, Effect.gen({ self: this }, function* () {
+      if (this.#raised.get(c.station) !== waiting || this.#epochs.get(c.station) !== epoch) return;
+      // New summaries while this burst is checked make their own burst and wait for its items, too.
       this.#raised.delete(c.station);
-      for (const channel of waiting.values()) this.settle(channel);
-    });
+      let at = this.#reach.now();
+      let sliced = 0;
+      let visited = 0;
+      for (const channel of waiting.values()) {
+        if (this.#epochs.get(c.station) !== epoch) return;
+        this.settle(channel);
+        sliced++;
+        if (++visited < waiting.size && (visited === 1 || this.#reach.firstWaiting() || sliced >= SETTLE_SLICE_ITEMS || this.#reach.now() - at >= SETTLE_SLICE_MS)) {
+          yield* Effect.yieldNow;
+          at = this.#reach.now();
+          sliced = 0;
+        }
+      }
+    }));
   }
 
   /// A station is let go of: what waited on its burst to be over waits no more.
   forget(station: string): void {
     this.#raised.delete(station);
+    this.#epochs.delete(station);
   }
 
   // ── the rule ──

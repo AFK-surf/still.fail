@@ -166,6 +166,8 @@ export class Link {
   /// What is left of the sweep of its history under way (#history), and what the sweep asked (each read once).
   history: HistoryRead[] = [];
   readonly historyAsked = new Set<string>();
+  /// Which preparation of a history sweep is newest (an older one may still be yielding).
+  historySweep = 0;
   /// Catching up on what changed while the device was away (sync.ts `#catching`): from its stream's opening after it
   /// was, until the threads it found behind have their latest on the device. Before it has looked (`tallied`), what is
   /// behind is not known; null once caught up, or while it is not reached.
