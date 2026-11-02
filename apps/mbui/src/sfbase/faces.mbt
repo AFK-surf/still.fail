@@ -58,6 +58,7 @@ fn faces_reset() -> Unit {
   }
   previews.clear()
   share_face_asked.val = false
+  share_face_whole_asked.val = 0
   vector_cjk.set(CjkUnwanted)
 }
 
