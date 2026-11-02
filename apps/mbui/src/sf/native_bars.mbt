@@ -14,8 +14,9 @@ pub(all) struct NativeBars {
   /// what is laid out beside it (the tape's panels) follows it
   side : @signals.Signal[Double]
   /// the screen's corners where the cards along its edges follow them, each its own (top left, then round it: an
-  /// iPhone Duo's outer screen 8 along its hinge, 59 on the other side; 0: the window's own, as elsewhere)
-  corners : FixedArray[Double]
+  /// iPhone Duo's outer screen 8 along its hinge, 59 on the other side; 0: the window's own, as elsewhere), a signal:
+  /// what is drawn round by them (the tape's panels, the window's tree's) follows them, told only as one changes
+  corners : @signals.Signal[FixedArray[Double]]
 }
 
 ///|
@@ -23,7 +24,7 @@ pub(all) struct NativeBars {
 pub let native_bars : NativeBars = {
   on: @signals.signal(false, same=fn(a, b) { a == b }),
   side: @signals.signal(0.0, same=fn(a, b) { a == b }),
-  corners: FixedArray::make(4, 0.0),
+  corners: @signals.signal(FixedArray::make(4, 0.0), same=fn(a, b) { a == b }),
 }
 
 ///|
@@ -31,8 +32,8 @@ pub let native_bars : NativeBars = {
 pub fn native_bars_reset() -> Unit {
   native_bars.on.set(false)
   native_bars.side.set(0.0)
-  native_bars.corners.fill(0.0)
-  native_foot_made.val = None
+  native_bars.corners.set(FixedArray::make(4, 0.0))
+  native_foot_made.set(None)
   native_foot_rest.val = None
   native_over_clear()
 }
@@ -101,8 +102,8 @@ pub fn native_capsule_h() -> Double? {
 /// Whether it is another than the last frame's (what was kept of the cards, drawn cut by their corners, is drawn anew).
 /// `keyboard`: how far it is up; the corner it left, kept for what stays as it was under it (pane_foot_rest).
 pub fn native_foot_set(foot : Double, keyboard? : Double = 0.0) -> Bool {
-  let was = native_foot_made.val
-  native_foot_made.val = match (native_capsule_h(), @ui.system_nav_action()) {
+  let was = @signals.untracked(fn() { native_foot_made.get() })
+  let made = match (native_capsule_h(), @ui.system_nav_action()) {
     (Some(h), Some((_, y, _, _))) => {
       let d = foot - (y + h)
       if d < corner_fit.near || d > h {
@@ -113,27 +114,29 @@ pub fn native_foot_set(foot : Double, keyboard? : Double = 0.0) -> Bool {
     }
     _ => None
   }
+  native_foot_made.set(made)
   if keyboard <= 0.0 {
-    native_foot_rest.val = native_foot_made.val
+    native_foot_rest.val = made
   }
-  native_foot_made.val != was
+  made != was
 }
 
 ///|
 /// The cards' foot corners away from the screen's edges as native_foot_set said them this frame (None: the tape's own).
 pub fn native_foot_corner() -> Double? {
-  native_foot_made.val
+  native_foot_made.get()
 }
 
 ///|
 /// Whether a panel's foot left corner `r` round is one native_foot_corner made this frame (beside the system's action).
 fn native_foot_corner_now(r : Double) -> Bool {
-  native_foot_made.val is Some(m) && (m - r).abs() < 1.0e-6
+  native_foot_made.get() is Some(m) && (m - r).abs() < 1.0e-6
 }
 
 ///|
-// kept across runs: said by native_foot_set as the frame lays out the cards, None as the app begins anew
-let native_foot_made : Ref[Double?] = Ref(None)
+// kept across runs: said by native_foot_set as the frame lays out the cards, None as the app begins anew; a signal,
+// told only as it changes: what is drawn round by it (the page's panel, a node of the window's tree's) follows it
+let native_foot_made : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
 
 ///|
 // kept across runs: said by native_foot_set while no keyboard is up, None as the app begins anew
@@ -164,7 +167,7 @@ pub let native_in : Double = 4.0
 /// screen's own there, so the screen cuts none of a card's line (the user, 2026-10-27), each corner its own (an iPhone
 /// Duo's outer screen: along its hinge, its 8, the cards' 4); 0 where it says none.
 pub fn native_card_corner_at(k : Int) -> Double {
-  let r = native_bars.corners[k]
+  let r = native_bars.corners.get()[k]
   if native_bars.on.get() && r > 0.0 {
     @ui.concentric(r, native_in)
   } else {

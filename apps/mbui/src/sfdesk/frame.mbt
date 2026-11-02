@@ -520,73 +520,6 @@ fn side_brand_h(bar : Bool, top : Double) -> Double {
 }
 
 ///|
-/// The page in its pane, `main_w` wide and `ph` high, in workspace `w`: its top row a bar's height, the window's title
-/// bar under the page, whether the page has a bar there or not (a new chat, settings: title_row); what waits to be
-/// confirmed in the workspace's safe mode (`gated`), else the stack's top drawn flat, moved `aside` (the folded sidebar
-/// shown a while). On the tape the page a phone's screen: what is opened from it pushed over it, slid in and taken off
-/// by back as a phone's are, down to the page chosen to be shown in it (page_goes_on).
-fn page_in(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  gated : Bool,
-  main_w : Double,
-  ph : Double,
-  aside : Double,
-  finger : Bool,
-) -> Unit {
-  if @ui.window_inset() {
-    title_row(c, "page-title-row", @sf.wide_bar_h + (if wide.tape { @sf.tape_bar_over() } else { 0.0 }))
-  }
-  c.sized(main_w, ph, fn() {
-    let page = fn() {
-      if gated {
-        c.box(style=frame_gate.then(@ui.style(w=Fixed(main_w), h=Fixed(c.height))), fn() {
-          let core = settings_core(src, w)
-          @sfpages.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
-        })
-        |> ignore
-      } else {
-        // a chat and a new chat switched between: the composer moving, the rest crossfading (switch.mbt)
-        page_switch_frame(c)
-        // (moved aside for the sidebar shown a while within what cuts the page at its edges, so a bar of it that
-        // stays as folded is not cut there: page_bar_row; what moves in it of its own takes its place from its foot,
-        // the move aside moving none of it)
-        c.nav_flat(
-          app.nav,
-          fn(page) {
-            let moved = c.box(style=page_aside, tx=aside, fn() {
-              // (the page drawn: one on its way out, a stack's move, hands no actions to the system's bars)
-              drawn_page.val = Some(page)
-              if page == app.nav.top() {
-                top_drawn.val = true
-              }
-              // (the workspaces as read here: what the page is built from, read by it)
-              let (now, all, _, invited) = @sfbase.workspace_in_view(src)
-              main_page(c, src, now.unwrap_or(w), all, invited, page)
-              drawn_page.val = None
-            })
-            @motion.scope(c, moved, bottom=true)
-          },
-          bg=@sf.theme().p.bg,
-          stacks=wide.tape,
-          // (back its while the page is in use: the side panel's, the sidebar's first)
-          takes_back=!wide.tape || wide.tape_at.get() == Page,
-        )
-        |> ignore
-      }
-    }
-    // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not); a finger picks
-    // them as on a phone (pick.mbt)
-    if finger {
-      page()
-    } else {
-      c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), page)
-    }
-  })
-}
-
-///|
 /// Back on the wide frame (docs/architecture.md, the tiers' table): what is over the whole window (a screen, a file
 /// read or played) put away first, a page of the stack popped. On the tape, with a chat's side panel in use, the page
 /// brought over; with the page in use, what was opened over it from there taken off (Nav::push_over), else the
@@ -897,7 +830,7 @@ pub fn page_bar_room() -> (Double, Double, Double, Double) {
 ///|
 /// A page's bar's row (`style`: as wide as the page, its height) with its room (page_bar_room) round what `bar` builds
 /// (told its padding at its left and its right): its margins as spaces at its ends, one less than none taken back by
-/// drawing the row moved back as far (the page drawn moved aside within what cuts it: frame's page_in). Named
+/// drawing the row moved back as far (the page drawn moved aside within what cuts it: page_pane.mbt's page_one). Named
 /// "page-bar" (what the page shows across leaves it out: peek_shift).
 pub fn page_bar_row(c : @ui.Ctx, style : @ui.Style, bar : (Double, Double) -> Unit) -> Int {
   let (pl, pr, ml, mr) = page_bar_room()

@@ -455,10 +455,20 @@ fn push_round_clip(n : Node) -> Unit {
   } else {
     0.0
   }
-  let x = n.x + bw
-  let y = n.y + bw
-  let w = n.fw - 2.0 * bw
-  let h = n.fh - 2.0 * bw
+  push_inset_clip(n.x, n.y, n.fw, n.fh, fn(j) { n.radius_at(j) }, bw)
+}
+
+///|
+/// A clip pushed for what a box `w` by `h` at (x, y) holds, its corners `radius_at` each (top left, then round it),
+/// cut `bw` in from its edges where its line is drawn over what it holds (the line's inside, as CSS's overflow cuts at
+/// the padding box), its corners concentric with the box's there; within the clip it is in. An old view's box's
+/// (push_round_clip) and a node's of the window's tree (view_host.mbt), the same.
+fn push_inset_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (Int) -> Double, bw : Double) -> Unit {
+  let bw = dmax(0.0, dmin(bw, dmin(w, h) / 2.0))
+  let x = x + bw
+  let y = y + bw
+  let w = w - 2.0 * bw
+  let h = h - 2.0 * bw
   let k = clip_top()
   let s = clip_stack
   let x0 = dmax(x, s[k])
@@ -472,7 +482,7 @@ fn push_round_clip(n : Node) -> Unit {
   // where a corner is both's, the rounder
   let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
     let (pr, ps) = clip_corner_r(k, j, cx, cy)
-    let r = dmax(dmin(concentric(n.radius_at(j), bw), room), 0.0)
+    let r = dmax(dmin(concentric(radius_at(j), bw), room), 0.0)
     if r > 0.0 && cx == ox && cy == oy && r >= pr {
       (r, smoothness(r, room))
     } else {
