@@ -1209,6 +1209,13 @@ pub fn fixture(mode : String) -> Source {
         )
         return
       }
+      if name == "file.peek" {
+        match fixture_file_peek(text(Some(params), "path")) {
+          Object(_) as found => done(Ok(found))
+          _ => done(Err({ "code": "not_found", "message": "找不到文件" }))
+        }
+        return
+      }
       // the faces' files (fonts_fixture.mbt)
       if fixture_fonts_call(f, name, params, done) {
         return

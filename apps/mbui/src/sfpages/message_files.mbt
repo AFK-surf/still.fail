@@ -196,12 +196,34 @@ fn open_file(here : MessageHere, a : Attachment, at? : String = "") -> Unit {
 }
 
 ///|
-/// A file a message of agent `agent` names by its path opened in the preview (Peeks.tsx FileRef open), read through
-/// the agent's session as it is now; not a directory.
-fn open_named(here : MessageHere, agent : String, path : String) -> Unit {
+/// The last request to open a named path: a late answer cannot replace a later choice.
+let named_open_serial : Ref[Int] = Ref(0)
+
+///|
+/// A file an agent names by its path: check it in the agent's session before opening it. A path in code can name
+/// something that was never a file, or one removed since the pointer last rested on it.
+fn open_named(src : Source, station : String, agent : String, path : String) -> Unit {
+  named_open_serial.val += 1
+  let serial = named_open_serial.val
   guard agent != "" && !path.has_suffix("/") else { return }
-  let a = attachment_of({ "name": Json::string(stored_name(path)), "path": Json::string(path) })
-  open_preview(here.station, agent, a, named=true)
+  let page = @sfbase.app.nav.top()
+  let params : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(agent),
+    "path": Json::string(path),
+  }
+  (src.call)("file.peek", Json::object(params), fn(answer) {
+    guard named_open_serial.val == serial && @sfbase.app.nav.top() == page && @sfbase.viewer.get() is None else { return }
+    match answer {
+      Ok(Object(_) as file) if text(Some(file), "kind") != "" && text(Some(file), "kind") != "dir" => {
+        let a = attachment_of({ "name": Json::string(stored_name(path)), "path": Json::string(path) })
+        open_preview(station, agent, a, named=true)
+      }
+      // (not opened is said, as the web's FileRef says a failed open: the press is not left without an answer)
+      Ok(_) => toast_later(@sf.t("web-main.preview.openFailed", args=[("name", stored_name(path)), ("error", @sf.t("web-main.preview.openFolder"))]))
+      Err(e) => toast_later(@sf.t("web-main.preview.openFailed", args=[("name", stored_name(path)), ("error", text(Some(e), "message"))]))
+    }
+  })
 }
 
 ///|
@@ -863,6 +885,7 @@ let reveals : Map[String, @motion.Anim?] = {}
 ///|
 /// What the messages keep of their own, let go (the package's reset).
 fn message_reset() -> Unit {
+  named_open_serial.val += 1
   reveals.clear()
   notices_open.clear()
 }

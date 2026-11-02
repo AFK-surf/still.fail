@@ -21,6 +21,7 @@ pub fn reset() -> Unit {
   screen_uis.clear()
   screens_made.val = 0
   hover_reset()
+  hovered_file.val = None
   message_reset()
   rows_reset()
   login_cards_reset()

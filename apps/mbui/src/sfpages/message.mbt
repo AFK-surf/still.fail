@@ -592,7 +592,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             match @sf.path_of_link(h) {
               // a file its path names: itself, as it is now, in the preview (its card is the pointer's, or a finger's
               // as it holds the chip)
-              Some((path, _)) => open_named(here, m.by.agent, path)
+              Some((path, _)) => open_named(src, here.station, m.by.agent, path)
               None => open_link(h)
             }
         }

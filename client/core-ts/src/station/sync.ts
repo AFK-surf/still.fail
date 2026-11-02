@@ -496,7 +496,9 @@ export class StationsSync {
         link.errors.delete(key);
         link.memory.set(kept, answer.success);
         this.onChange(address, "log", key);
-      } else if (answer.failure.status !== undefined && !link.memory.has(kept)) {
+      } else if (answer.failure.status !== undefined && (topic.topic === "filePeek" || !link.memory.has(kept))) {
+        // A path may no longer exist (or be readable). Its previous preview must not conceal the station's answer.
+        if (topic.topic === "filePeek") link.memory.delete(kept);
         link.errors.set(key, answer.failure);
         this.onChange(address, "errors", key);
       }
