@@ -833,7 +833,7 @@ fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Jso
 // ── how it runs ─────────────────────────────────────────────────────────
 
 ///|
-/// Its models: how many it runs, one row (2026-11-02 用户「既然这样就不要平铺展示了」), all of them a press away in a panel
+/// Its models: how many it runs, one row (2026-11-02 用户「既然这样就不要平铺展示了」), all of them a press away in a dialog
 /// of their own (profile_models_panel). A provider that answers the automatic decisions alone: the models its probe
 /// found.
 fn profile_models(c : @ui.Ctx, core : Core, here : Here, address : String, p : Json?) -> Unit {
@@ -882,7 +882,8 @@ fn profile_models(c : @ui.Ctx, core : Core, here : Here, address : String, p : J
               }
               profile_models_panel(c, core, address, now)
             },
-            from=Of(c.id(row)),
+            // (a dialog of its own, not beside its row: 2026-11-02 用户「用弹窗」)
+            from=Unanchored,
             lists=true,
           )
         }
