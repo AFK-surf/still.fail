@@ -526,6 +526,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   ProfileCheck: struct([
     ["decision", opt("DecisionCapability")],
+    ["plan", opt("String"), { doc: "The subscription tier reported by its login; absent when unknown or on older stations." }],
     ["modelEfforts", opt(map(map(vec("String")))), { doc: "Runtime → model → supported reasoning levels; absent on older stations." }],
     ["state", "String", { doc: "ok | login | failed | unknown" }],
     ["detail", "String", { said: true }],
@@ -556,6 +557,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   Quota: struct([
     ["credits", opt("QuotaCredits")],
+    ["plan", opt("String"), { doc: "The subscription tier, when reported with the allowance." }],
     ["resetCount", opt("u64"), { client: opt("I54") }],
     ["creditsText", opt("String")],
     ["resetText", opt("String")],
@@ -624,6 +626,7 @@ export const SHAPES: Record<string, Shape> = {
     ["workspaces", vec("String"), { default: true, doc: "The workspaces the station joined whose chats may run on it too (docs/multi-workspace.md; none: its home's\nonly), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one." }],
     ["serves", opt("bool"), { doc: "The chats of the viewer's workspace may run on it (absent: a station of before it, which says so in `workspaces`\nof joined ones only): a copy of another station's serves only the workspaces that station shares it in." }],
     ["kindText", "String", { default: true, doc: "What it is, in a word: the machine's own login (终端里的登录), its provider, else its kind of account." }],
+    ["planText", "String", { said: true, default: true, doc: "The subscription tier as a name (Pro 200, Max); empty when unknown." }],
     ["signInProvider", "String", { default: true, doc: "Who signing it in goes to: OpenCode, Kimi, Claude, Grok, Cursor, Devin, ChatGPT." }],
     ["checkLine", "String", { said: true, default: true, doc: "Its last check in a line: its detail (without the 可用 a working one starts with), or that it has none yet." }],
   ], { doc: "A profile, with its last check in words and its models' makers." }),
@@ -2606,6 +2609,7 @@ export const SHAPES: Record<string, Shape> = {
     ["turns", vec("TurnRecord")],
     ["threads", vec("ChatThread")],
     ["jobs", vec("Job"), { doc: "Its background jobs, newest first; those with a port are web services, shown by their names." }],
+    ["hasJobs", opt("bool"), { skipNone: true, doc: "On a compact chat, whether it has jobs; their details are in chatJobs." }],
   ], { doc: "An agent of a chat: its session, the connect that started it, its profile, and what it can move to." }),
   AgentCardView: struct([
     ["work", opt("String"), { doc: "Its turns, and how long the finished ones took: 8 轮 · 共干了 1 小时 12 分." }],
@@ -2753,6 +2757,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A thing of a chat's (`chatThings`)." }),
   ChatJobsView: struct([
     ["jobs", vec("Job")],
+    ["hasJobs", opt("bool"), { skipNone: true, doc: "On a summary, whether there are jobs; their details are read separately." }],
     ["alarm", opt("String"), { doc: "fail: one died lately; restart: a service is being started again." }],
     ["servicesNote", "String", { doc: "2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say)." }],
     ["jobsNote", "String"],
@@ -3035,6 +3040,9 @@ export const SHAPES: Record<string, Shape> = {
     ["cells", vec("i64"), { client: vec("I54"), doc: "The year's 364 days, a week of seven a column, Sunday first, the last week today's: each its level of the\nmost of a day, 0 none to 4 (Codex's graded levels); -1 a day after today." }],
     ["weekly", vec("i64"), { client: vec("I54"), doc: "Each of the 52 weeks' tokens as how many of seven rows its bar fills, of the tallest." }],
     ["cumulative", vec("i64"), { client: vec("I54"), doc: "The weeks' running total as the same." }],
+    ["tips", vec("String"), { doc: "Each of `cells` said as the pointer rests on it: its date and tokens; \"\" a day after today." }],
+    ["weekTips", vec("String"), { doc: "Each of the 52 weeks said so: its first day and tokens." }],
+    ["runningTips", vec("String"), { doc: "Each week's running total said so: as of its last day so far." }],
     ["less", "String"],
     ["more", "String"],
     ["captions", vec("String"), { doc: "Under each view: none under the days (their legend instead), what a column is under the others." }],

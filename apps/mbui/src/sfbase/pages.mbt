@@ -139,10 +139,9 @@ pub let left_said : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 pub fn new_nav() -> @ui.Nav[Page] {
-  // settings are to the left of the list, as the gear is at its top left: they come in from the left and go back
-  // that way (App.kt transition, swipe)
+  // Settings comes from its gear: at Home's right edge, or at the left edge of the other places' bars.
   // what its own back comes to, back's in the history (app_history.mbt went_back)
-  @ui.Nav::new(Home, from_left=fn(p) { p is Settings }, went_back~, on_leave=fn(p) {
+  @ui.Nav::new(Home, from_left=fn(p, under) { p is Settings && !(under is Some(Home)) }, went_back~, on_leave=fn(p) {
     left_pages.push(p)
     left_said.set(@signals.untracked(fn() { left_said.get() }) + 1)
     match p {

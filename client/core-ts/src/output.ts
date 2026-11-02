@@ -23,7 +23,8 @@ export class Output {
     const minute = Math.floor(c.now / 60_000);
     const next = new Map<string, Memo>();
     try {
-      const skeleton = spec ? this.#build(topic, raw, spec, ty, "", "", c, minute, next) : raw;
+      const input = topic.topic === "chat" && topic.compact === true ? compactChat(raw) : raw;
+      const skeleton = spec ? this.#build(topic, input, spec, ty, "", "", c, minute, next) : input;
       const v = present.decorate(topic, copy(skeleton), c);
       const out = ty === undefined ? { ok: v } : conformTy(ty, v);
       if ("ok" in out) {
@@ -78,6 +79,23 @@ export class Output {
 }
 
 class ItemWrong extends Error {}
+
+/// A page needs its agents' identities and status, not their full histories. A client that asks for the compact chat
+/// reads the histories and jobs through their own topics; the full value stays available inside the core and to older
+/// clients. Invalid fields are left for the normal shape check to report.
+function compactChat(value: unknown): unknown {
+  if (!isObject(value) || !Array.isArray(value.agents)) return value;
+  return {
+    ...value,
+    agents: value.agents.map((agent: unknown) => {
+      if (!isObject(agent)) return agent;
+      const out = { ...agent };
+      for (const field of ["turns", "threads", "jobs"]) if (Array.isArray(agent[field])) out[field] = [];
+      if (Array.isArray(agent.jobs)) out.hasJobs = agent.jobs.length > 0;
+      return out;
+    }),
+  };
+}
 
 /// A copy to decorate, sharing what already went out.
 function copy(v: unknown): unknown {

@@ -643,12 +643,12 @@ fn size_uncached(
   if !known(h) && known(b.min_h) && b.min_h == b.max_h {
     h = b.min_h
   }
-  // aspect ratio fills in the missing side
+  // aspect ratio fills in the missing side, from the other as its min and max leave it (as CSS's)
   if s.aspect > 0.0 {
     if known(w) && !known(h) {
-      h = w / s.aspect
+      h = clamp_size(w, soft_floor(node.style, b.min_w), b.max_w) / s.aspect
     } else if known(h) && !known(w) {
-      w = h * s.aspect
+      w = clamp_size(h, b.min_h, b.max_h) * s.aspect
     }
   }
   if known(w) {

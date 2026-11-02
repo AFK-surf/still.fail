@@ -134,10 +134,12 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
   t.run_for(@kit.presence_in_ms)
   // the confirm's own 上报: its words alone on their node (the notice's is in a rich line of its own)
   let (x, y) = words_node(t, "上报").unwrap()
+  let felt = t.haptics().length()
   t.tap(x, y)
   t.frame()
   let sent = named(calls, "chat.report")
   assert_eq(sent.length(), 1)
+  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
   assert_eq(number(Some(sent[0].params), "seq"), 9.0)
   assert_eq(number(Some(sent[0].params), "thread"), 7.0)
   assert_eq(text(Some(sent[0].params), "station"), "ws1/st1")
@@ -312,22 +314,25 @@ test "a Slack user's name in a history: 这是我 binds them to the viewer (slac
 }
 
 ///|
-test "the chat's sheet: one from Slack or Feishu opens there" {
-  let calls : Array[Made] = []
-  let t = edited_core(calls, "chat-info", fn(name, v) {
-    if name == "chat" {
-      with_fields(v, [
-        ("slackUrl", "https://example.slack.com/archives/C1/p1"),
-        ("feishuUrl", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
-      ])
-    } else {
-      v
-    }
-  })
-  t.tap_text("在飞书中打开")
-  assert_true(t.opened().contains("https://example.feishu.cn/client/chat/open?openChatId=oc_1"))
-  t.tap_text("在 Slack 中打开")
-  assert_true(t.opened().contains("https://example.slack.com/archives/C1/p1"))
+test "the chat's menu: one from Slack or Feishu opens there" {
+  for (words, url) in [
+    ("在飞书中打开", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
+    ("在 Slack 中打开", "https://example.slack.com/archives/C1/p1"),
+  ] {
+    let calls : Array[Made] = []
+    let t = edited_core(calls, "chat-actions", fn(name, v) {
+      if name == "chat" {
+        with_fields(v, [
+          ("slackUrl", "https://example.slack.com/archives/C1/p1"),
+          ("feishuUrl", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
+        ])
+      } else {
+        v
+      }
+    })
+    t.tap_text(words)
+    assert_true(t.opened().contains(url), msg=words)
+  }
 }
 
 ///|

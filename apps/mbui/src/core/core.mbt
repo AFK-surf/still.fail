@@ -200,6 +200,12 @@ pub fn unsubscribe(s : Sub) -> Unit {
 }
 
 ///|
+/// Ends a topic if it was asked, without starting a new subscription for it.
+pub fn unsubscribe_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
+  client.unsubscribe_topic(topic, params~)
+}
+
+///|
 /// The core's reason when it has failed and was not started again.
 pub fn fatal() -> String? {
   client.fatal_said.get() |> ignore

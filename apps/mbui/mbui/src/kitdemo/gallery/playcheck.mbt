@@ -6,9 +6,11 @@
 // drawn, the middle of its picture as the canvas drew it (`PLAYCHECK drawn red`, else its colour: `PLAYCHECK drawn r g
 // b`); where the host reads its frames' times (MBUI_PLAYCHECK_FRAMES=1: Linux's), how many and the first's and last's
 // start (`PLAYCHECK frames 10 0 900`); played, said once it has played to its end (`PLAYCHECK ended`); a frame at 500
-// ms grabbed, said once it is a PNG (`PLAYCHECK grabbed`); then the app's end. `PLAYCHECK none` where the host has no
-// player, `PLAYCHECK failed` where it could not play it. The host asks for a frame as what it does changes: each
-// frame's build only asks.
+// ms grabbed, said once it is a PNG (`PLAYCHECK grabbed`); then the app's end. With MBUI_PLAYCHECK_BEHIND=1, played
+// at a tenth of its speed instead, said once it plays (`PLAYCHECK playing`), and once it stops: paused (`PLAYCHECK paused
+// at MS`, the app sent behind and back meanwhile) or at its end (`PLAYCHECK ended behind`, failed). `PLAYCHECK none`
+// where the host has no player, `PLAYCHECK failed` where it could not play it. The host asks for a frame as what it
+// does changes: each frame's build only asks.
 
 ///|
 // kept across runs: the check's one run (kitdemo run with MBUI_PLAYCHECK), never reset
@@ -89,9 +91,29 @@ fn play_check_next(c : @ui.Ctx, v : @ui.NativeView) -> Bool {
         }
         None => return false
       }
+    // (MBUI_PLAYCHECK_BEHIND=1: at a tenth of its speed, ten seconds, for the app to be sent behind as it plays)
     3 => {
+      let behind = @ui.env("MBUI_PLAYCHECK_BEHIND") == "1"
+      if behind {
+        v.rate(0.1)
+      }
       v.play()
-      play_check_said.val = 4
+      play_check_said.val = if behind { 6 } else { 4 }
+    }
+    6 if v.playing() => {
+      @hostapi.log("PLAYCHECK playing")
+      play_check_said.val = 7
+    }
+    // (back on the screen: paused as the app went behind, or played on there to its end)
+    7 if v.ended() => {
+      @hostapi.log("PLAYCHECK ended behind")
+      @hostapi.exit(1)
+      return false
+    }
+    7 if !v.playing() && !v.buffering() => {
+      @hostapi.log("PLAYCHECK paused at \{v.position().round().to_int()}")
+      @hostapi.exit(0)
+      return false
     }
     4 if v.ended() => {
       @hostapi.log("PLAYCHECK ended")

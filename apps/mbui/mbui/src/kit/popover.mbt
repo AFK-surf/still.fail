@@ -215,6 +215,44 @@ fn latest(at : Array[Double]) -> Double {
 let tip_closed : Int = @ui.stable_hash("kit/tooltip closed").to_int()
 
 ///|
+/// A tooltip in an old view or at a node of the window's tree. Both share the same visible slot.
+pub(all) enum TipOwner {
+  Built(Int)
+  Node(Int)
+} derive(Eq, Debug)
+
+///|
+/// A fresh identity for a tooltip made with a node. Two tips may name the same anchor.
+pub fn tip_node_owner() -> TipOwner {
+  install()
+  kit.val.tip_next = kit.val.tip_next + 1
+  Node(kit.val.tip_next)
+}
+
+///|
+/// Give the window's tooltip slot to `owner` as it is newly shown. The views and nodes that read it follow the signal.
+pub fn tip_claim(owner : TipOwner) -> Unit {
+  install()
+  if @signals.untracked(fn() { kit.val.tip_owner.get() }) != Some(owner) {
+    kit.val.tip_owner.set(Some(owner))
+  }
+}
+
+///|
+/// Whether `owner` holds the window's tooltip slot (followed by a node drawing its tooltip).
+pub fn tip_owns(owner : TipOwner) -> Bool {
+  install()
+  kit.val.tip_owner.get() == Some(owner)
+}
+
+///|
+/// An old view's last opening causes and the build that still held it (kept parts mark it used as they are put back).
+priv struct TipReady {
+  mut causes : (Bool, Bool, Bool, Bool)
+  mut build : Int
+}
+
+///|
 /// How long a mouse rests on a tooltip's trigger before it shows (ms), and how soon after another tooltip closed one
 /// shows at once: `tooltip`'s defaults.
 pub let tooltip_delay_ms : Double = 700.0
@@ -284,15 +322,38 @@ pub fn tooltip(
   let soon = c.within(tip_closed, skip)
   // (a pointer carrying a press, a drag across the trigger, rests on nothing: as for a hover card)
   let rested = after(c, key + "/in", hovered && !c.press().down, if soon { 0.0 } else { delay })
-  let mut open = shown || held || (!shut && (focused || rested || (was && hovered)))
+  // A focused trigger can remain eligible while the pointer opens another tooltip. Claim only on a new cause, not on
+  // every build while it remains eligible, so the displaced tip cannot immediately take the slot back.
+  let ready = (!shut && focused, !shut && rested, held, shown)
+  let state = match kit.val.tip_ready.get(id) {
+    Some(s) if s.build >= c.build_number() - 1 => s
+    _ => {
+      let s = { causes: (false, false, false, false), build: c.build_number() }
+      kit.val.tip_ready[id] = s
+      s
+    }
+  }
+  state.build = c.build_number()
+  @ui.built_used(fn() { state.build = @ui.current().build_number() })
+  let (old_focus, old_rest, old_held, old_shown) = state.causes
+  let (by_focus, by_rest, by_hand, by_app) = ready
+  if (by_focus && !old_focus) || (by_rest && !old_rest) || (by_hand && !old_held) || (by_app && !old_shown) {
+    tip_claim(Built(id))
+  }
+  state.causes = ready
+  let owner = Built(id)
+  let mut open = (shown || held || (!shut && (focused || rested || (was && hovered)))) && tip_owns(owner)
   if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter=tip_in, exit=pop_out) is Some(shows) {
-    let o = c.overlay(key, anchor=trigger, outside=false, initial_focus=0, inert=!open, fn() {
-      beside(c, key, trigger, side, along, offset, shows, Tooltip, text, fn(c, s, _) { look(c, s, text) }, fn() {  }, at?=at)
-    })
-    if o.dismissed is Some(_) {
-      kit.val.shut[id] = true
-      kit.val.held_tips.remove(id)
-      open = false
+    // A previous tooltip may finish its exit only until another claims the slot: never paint two at once.
+    if tip_owns(owner) {
+      let o = c.overlay(key, anchor=trigger, outside=false, initial_focus=0, inert=!open, fn() {
+        beside(c, key, trigger, side, along, offset, shows, Tooltip, text, fn(c, s, _) { look(c, s, text) }, fn() {  }, at?=at)
+      })
+      if o.dismissed is Some(_) {
+        kit.val.shut[id] = true
+        kit.val.held_tips.remove(id)
+        open = false
+      }
     }
   }
   if was && !open {

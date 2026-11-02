@@ -1,7 +1,7 @@
 // An execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's screenshots).
 // MBUI_FIXTURE: "history" (an agent's steps, a few opened), "history-reading" (the
 // steps not read yet: their bones), "history-details", the chat
-// with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid" (an agent's card that knows
+// with a sheet open over it: "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid" (an agent's card that knows
 // no figure of it, as a station from before tells none of an agent at rest), "chat-peek" (its station's card), "chat-jobs",
 // "chat-job"; "chat-letters-many" (their sheet, more chats written with than it holds at its share: its list
 // scrolling in it); "chat-letters-info" (the chat's sheet with its row for what its agents and other chats' wrote each
@@ -22,7 +22,7 @@
 pub fn decide_mode(mode : String) -> Bool {
   [
     "history", "history-reading", "history-details",
-    "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
+    "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-things", "chat-things-side", "chat-info-pulls",
     "chat-jobs-side", "chat-history-side", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
@@ -374,7 +374,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
       let base = if f.mode.has_prefix("chat-letters") { base.map(fix_with_letters) } else { base }
       if session == "s-c1" && f.mode == "chat-agent-unsaid" {
         Some(base.map(fn(b) { fix_context_actions(fix_detailed_chat(b)) }))
-      } else if session == "s-c1" && f.mode == "chat-station-tag" {
+      } else if session == "s-c1" && (f.mode == "chat-station-tag" || f.mode == "chat-actions") {
         // no agent in it yet: its station's tag in its bar (pressed by the film's step: its card beside it)
         Some(base.map(fn(b) { fix_no_agent(fix_detailed_chat(b)) }))
       } else if session == "s-c1" {
@@ -573,6 +573,27 @@ pub fn fix_preview() -> Json {
     "files": Json::array(files),
     "hidden": 1,
     "hiddenText": "共隐藏 1 处疑似机密",
+  }
+}
+
+///|
+/// What a picture of a chat would hold (fix_preview) where an agent's words place a page of HTML (the chat's release.html).
+pub fn fix_preview_viz() -> Json {
+  let file : Json = { "name": "release.html", "path": "/w/release.html", "size": 1200 }
+  {
+    "upto": 3,
+    "title": "发布节奏",
+    "list": [
+      msg(3, "agent", by_agent("anthropic", "claude", "s-c1"), "这周的发布节奏：\n\n[发布节奏](release.html)\n", "", {
+        "attachments": [file],
+        "placed": ["release.html"],
+        "md": [["p", [[0, 8]]], ["p", [["a", [[11, 15]], { "href": "release.html" }]]]],
+        "time": { "createdAt": { "ago": "1 分钟前", "full": "10月15日 10:00" } },
+      }),
+    ],
+    "messages": [],
+    "files": [{ "k": "f0", "name": "release.html", "size": 1200, "sizeText": "1.2 KB", "type": "text/html", "n": 3, "file": file }],
+    "hidden": 0,
   }
 }
 

@@ -866,6 +866,18 @@ final class NativeViews {
         }
     }
 
+    /**
+     * The app off the screen (MainActivity, the main thread): each video playing paused, as an iPhone's AVPlayer is as
+     * its app goes to the background; it stays paused once back (the app sees it so: info's 2), played again by a tap.
+     */
+    static void behind() {
+        for (NView v : views.values()) {
+            if (v.closed || !(v instanceof Video)) continue;
+            ExoPlayer p = ((Video) v).player;
+            if (p != null && p.getPlayWhenReady()) p.pause();
+        }
+    }
+
     static void close(int id) {
         NView v = views.remove(id);
         if (v == null) {

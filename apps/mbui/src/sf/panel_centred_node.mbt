@@ -27,7 +27,7 @@ fn panel_centred_node(
 ) -> Unit {
   // (one that goes in steps: Escape and back a step back first, its steps' own)
   let within = fn() { steps_escape(keyed) }
-  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
+  dialog_layer_node(parent, open, cancel, outside=true, first_stop=keyed.steps is None, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
     // (one that goes in steps: each its own head and foot, sliding in whole; the dialog untitled round them)
     let steps = keyed.steps
@@ -76,6 +76,8 @@ fn panel_centred_node(
             let held = c.box(style=dialog_close_row, fn() {
               c.box(style=dialog_close_corner(), fn() {
                 if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
+                  // (its field let go of first, as the old frame has it: field_let_go)
+                  field_let_go(keyed)
                   cancel()
                 }
               })
@@ -99,6 +101,8 @@ fn panel_centred_node(
                   c.text(x.title, style=dialog_title) |> ignore
                   c.box(style=dialog_close_at(), fn() {
                     if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
+                      // (its field let go of first, as the old frame has it: field_let_go)
+                      field_let_go(keyed)
                       cancel()
                     }
                   })
@@ -116,10 +120,11 @@ fn panel_centred_node(
         .margin(Is((-dialog_pad, -dialog_pad, -dialog_pad, 0.0)))
         |> ignore
       }
-      // (a share of the window tall: what it holds as tall as its lists say they would be, up to that share, filling it
-      // where none says (measured_body's, capped_want's); no taller than the dialog leaves it, laid out in that, its
-      // lists giving way and scrolling in themselves (old's `gives`), nothing of it scrolling past it)
-      if x.tall > 0.0 && steps is None {
+      // (a share of the window tall, not a form (one as tall as what it holds, whatever its share): what it holds as tall
+      // as its lists say they would be, up to that share, filling it where none says (measured_body's, capped_want's); no
+      // taller than the dialog leaves it, laid out in that, its lists giving way and scrolling in themselves (old's
+      // `gives`), nothing of it scrolling past it)
+      if x.tall > 0.0 && !x.form && steps is None {
         // (whether a list in it says how tall it would be, as it was last built: what it holds as tall as that then)
         let says = @signals.signal(false)
         // (the old view itself held shorter where the dialog is short of room: what it asks its own node's height)
@@ -265,7 +270,9 @@ fn panel_centred_node(
       d.box(fn(v) { v.over(Is(true)).radius(Is(dialog_r)).ground(By(veil)) |> ignore }) |> ignore
     })
     |> ignore
-    // (the focus on its own ground as it opens, as kit's dialog's: back to what had it as it goes)
+    // (the focus on its own ground as it opens, the first of what it holds that takes it once that is built
+    // (first_stop; not one in steps, whose steps keep it on its ground as they come), as kit's dialog's: back to what
+    // had it as it goes)
     layer
   })
 }

@@ -1649,6 +1649,68 @@ test("an_agents_need_let_go_stays_at_the_chats_end_said_as_let_go", async () => 
   assert.deepEqual(v.asks, []);
 });
 
+test("a_chat_agent_shares_its_unchanged_frozen_session_details", () => {
+  const t = setup();
+  const topic = sessionOf("ws/a", "k");
+  t.set(topic, { session: fullSession("k"), threads: [thread(7, ["k"], 1)], turns: [turn("t1")], jobs: [{ id: "j1" }] });
+  const held = t.data.shared(topic) as J;
+  const first = t.views.agent("ws/a", "k");
+  for (const key of ["turns", "threads", "jobs"]) {
+    assert.ok(Object.isFrozen(held[key]));
+    assert.strictEqual(first[key], held[key], `${key} is shared rather than copied for every chat view`);
+  }
+  t.set(topic, { session: fullSession("k"), threads: [thread(7, ["k"], 1)], turns: [turn("t2")], jobs: [{ id: "j2" }] });
+  const next = t.views.agent("ws/a", "k");
+  assert.equal(next.turns[0].id, "t2");
+  assert.equal(next.jobs[0].id, "j2");
+  assert.equal(first.turns[0].id, "t1", "a later update does not change a shared earlier value");
+});
+
+test("compact_chat_jobs_reuses_the_chat_read_by_the_page", async () => {
+  const t = setup();
+  const topic = chatTopic("ws/a", 7);
+  t.subscribe(1, { ...topic, compact: true });
+  t.subscribe(2, { topic: "chatJobs", station: "ws/a", thread: 7, session: null, compact: true });
+  await t.host.time.pass(100);
+  assert.equal(hasTopic(t.store.liveTopics(), topic), false, "the jobs view does not start a second full chat");
+  assert.equal(hasTopic(t.store.liveTopics(), { ...topic, compact: true }), true);
+});
+
+test("a_compact_chat_keeps_the_page_and_its_jobs_available_separately", async () => {
+  const t = setup();
+  const full = ui();
+  const compact = ui();
+  const jobs = ui();
+  const summary = ui();
+  const topic = chatTopic("ws/a", 7);
+  t.subscribe(1, topic);
+  t.subscribe(2, { ...topic, compact: true });
+  t.subscribe(3, { topic: "chatJobs", station: "ws/a", thread: 7, session: null, compact: true });
+  t.subscribe(4, { topic: "chatJobs", station: "ws/a", thread: 7, session: null, compact: true, summary: true });
+  await t.readAll([[full, 1], [compact, 2], [jobs, 3], [summary, 4]]);
+  const chat = thread(7, ["k"], t.host.nowMs());
+  t.set(threads("ws/a"), [chat]);
+  t.set(pageOf("ws/a", 7), page(1, ["hello"], chat));
+  t.set(rows("ws/a"), [{ ...row("k", t.host.nowMs()), thread: 7 }]);
+  const job = { id: "j1", session: "k", name: "job", state: "running", port: null, exitCode: null, startedAt: 1, endedAt: null, command: "", restarts: 0, notices: [] };
+  const detail = { session: fullSession("k"), threads: [chat], turns: [turn("t1")], jobs: [job] };
+  t.set(sessionOf("ws/a", "k"), detail);
+  await t.readAll([[full, 1], [compact, 2], [jobs, 3], [summary, 4]]);
+  assert.equal(full.value.agents[0].turns[0].id, "t1");
+  assert.equal(full.value.agents[0].jobs[0].id, "j1");
+  assert.deepEqual(compact.value.messages, full.value.messages);
+  assert.equal(compact.value.agents[0].hasJobs, true);
+  assert.deepEqual([compact.value.agents[0].turns, compact.value.agents[0].threads, compact.value.agents[0].jobs], [[], [], []]);
+  assert.equal(jobs.value.jobs[0].id, "j1");
+  assert.equal(summary.value.hasJobs, true);
+  assert.deepEqual(summary.value.jobs, []);
+  t.set(sessionOf("ws/a", "k"), { ...detail, jobs: [] });
+  await t.readAll([[full, 1], [compact, 2], [jobs, 3], [summary, 4]]);
+  assert.equal(compact.value.agents[0].hasJobs, false);
+  assert.deepEqual(jobs.value.jobs, []);
+  assert.equal(summary.value.hasJobs, false);
+});
+
 test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   const t = setup();
   const u = ui();
@@ -2486,6 +2548,32 @@ test("a_profile_says_what_it_is_who_signs_it_in_and_its_last_check_in_the_cores_
   // the station's detail in English starts with its Works, as the Chinese with 可用
   const en = presentProfile(profile("p5", { check: { state: "ok", detail: "Works, 3 models", models: [] } }));
   assert.equal(en.checkLine, "3 models");
+});
+
+test("subscription tiers are presented from the check or allowance, and never guessed", () => {
+  const checked = presentProfile(profile("sub", { name: "a@example.com", check: { state: "ok", detail: "已登录，a@example.com，max", models: [], plan: "max" } }));
+  assert.equal(checked.planText, "Max");
+  assert.equal(checked.checkLine, "已登录");
+  const machineUltra = presentProfile(profile("machine", { runtime: "claude", check: { state: "ok", detail: "已登录，max", models: [], plan: "ultra" } }));
+  assert.deepEqual([machineUltra.planText, machineUltra.checkLine], ["Ultra", "已登录"]);
+  const quota = presentProfile(profile("sub", { runtime: "grok", check: { state: "ok", detail: "已登录", models: [] }, quota: { state: "ok", windows: [], plan: "SuperGrok Heavy" } }));
+  assert.equal(quota.planText, "SuperGrok Heavy");
+  const noWindows = presentProfile(profile("sub", { check: { state: "ok", detail: "", models: [] }, quota: { state: "unavailable", windows: [], plan: "pro" } }));
+  assert.equal(noWindows.planText, "Pro");
+  const shared = presentProfile(profile("sub", { share: { role: "user" }, check: { state: "ok", plan: "ultra", detail: "", models: [] } }));
+  assert.equal(shared.planText, "Ultra");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "promax", detail: "", models: [] } })).planText, "Pro Max");
+  for (const [plan, name] of [["prolite", "Pro 100"], ["pro", "Pro 200"], ["promax", "Pro 500"]]) {
+    assert.equal(presentProfile(profile("codex", { runtime: "codex", runtimes: ["codex"], check: { state: "ok", plan, detail: "", models: [] } })).planText, name);
+  }
+  assert.equal(presentProfile(profile("claude", { check: { state: "ok", plan: "pro", detail: "", models: [] } })).planText, "Pro");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "unknown", detail: "", models: [] } })).planText, "");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "unknown", detail: "", models: [] }, quota: { state: "ok", windows: [], plan: "pro" } })).planText, "Pro");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "plus", checkedAt: 10, detail: "", models: [] }, quota: { state: "ok", windows: [], plan: "pro", checkedAt: 20 } })).planText, "Pro");
+  assert.equal(presentProfile(profile("sub", { check: { state: "ok", plan: "pro", checkedAt: 20, detail: "", models: [] }, quota: { state: "ok", windows: [], plan: "plus", checkedAt: 10 } })).planText, "Pro");
+  assert.equal(presentProfile(profile("old", { check: { state: "ok", detail: "已登录", models: [] } })).planText, "");
+  assert.equal(presentProfile(profile("key", { access: { kind: "api-provider", key: "" }, check: { state: "ok", plan: "pro", detail: "", models: [] } })).planText, "");
+  assert.equal(presentProfile(profile("out", { check: { state: "login", detail: "未登录", models: [] }, quota: { state: "ok", windows: [], plan: "pro" } })).planText, "");
 });
 
 test("still.fail's notice is shown as a line: a failure's mark taken off, no closing 。, a profile's link after its ：", () => {

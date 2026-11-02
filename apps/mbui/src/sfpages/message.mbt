@@ -574,6 +574,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       bleed=here.gutter,
       // (none of its tables' copy keys in a picture of the chat)
       copy=picturing.val is None,
+      fit_tables=picturing.val is Some((_, true)),
       on_link=fn(h) {
         match placed.get(@sf.file_name_of(h)) {
           Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here.session, linked=true)
@@ -594,7 +595,14 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       paths=m.by.agent != "",
       files=fn(name) {
         match placed.get(name) {
-          // (a page drawn live is not in a picture of the chat: its card is, to tick)
+          // (in a picture of the chat being shared: its own way, publish.mbt, or its card, to tick)
+          Some(a) if is_viz(a.name) && picturing.val is Some((seq, taking)) && publish_viz_drawn(seq, taking, a) =>
+            Some({
+              draw: fn() {
+                publish_viz(c, src, here, seq, taking, a, fn() { message_files(c, src, here, [a], false, by=Some(by)) })
+              },
+              image: None,
+            })
           Some(a) if is_viz(a.name) && picturing.val is None =>
             Some({
               draw: fn() {
@@ -781,6 +789,7 @@ fn report_action(c : @ui.Ctx, src : Source, station : String, m : Message, ink :
           "chat.report",
           { "station": Json::string(station), "thread": Json::number(m.thread), "seq": Json::number(m.seq) },
           ok=fn(v) {
+            @ui.haptic(Confirm)
             let number = match field(Some(v), "number") {
               Some(Number(n, ..)) => n.to_int().to_string()
               _ => "?"

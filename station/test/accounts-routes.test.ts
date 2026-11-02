@@ -390,6 +390,8 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await s.call("PUT", "/profiles/machine-claude", { name: "renamed", models: ["claude-x"], access: { kind: "opencode-go", key: "k" } }))[0], 200);
     assert.deepEqual([profile().name, profile().models, (profile().access as any).kind, profile().machine], ["b@x.com", ["claude-x"], "subscription", true]);
     assert.equal(s.view("machine-claude")!.machine, true);
+    await s.call("POST", "/profiles/machine-claude/check");
+    assert.equal(s.view("machine-claude")!.check.plan, "pro", "the machine's login supplies a tier missing from the check");
     // Its account, as the same one signed in on another station is: the workspace's list makes them one row.
     assert.equal(s.view("machine-claude")!.email, "b@x.com");
     // And how it runs: on by default, turned off and on here; other edits keep it.
@@ -414,7 +416,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     writeFileSync(join(m.home, ".claude/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "fake-access", expiresAt: Date.now() + 3_600_000 } }));
     const machine = new MachineLogins(m.env, undefined, () => "zh");
     const checked: string[] = [];
-    const s = await rig({ machine, check: async (o) => (checked.push(o.home), { state: "ok", detail: "fake", models: [], checkedAt: Date.now() }) });
+    const s = await rig({ machine, check: async (o) => (checked.push(o.home), { state: "ok", detail: "fake", models: [], plan: "max", checkedAt: Date.now() }) });
     assert.equal((await s.call("POST", "/profiles/machine", { runtime: "claude" }))[0], 200);
     // Its home holds no login: the command is the machine's own.
     assert.equal(s.view("machine-claude")!.loginCommand, "claude auth login");
@@ -423,10 +425,41 @@ describe("the accounts routes", { concurrency: true }, () => {
     // Read again with nothing changed: not checked again.
     await machine.refresh();
     assert.equal(checked.length, made);
+    // The account stayed the same but its tier changed: its profile must be checked again too.
+    script(join(m.bin, "claude"), `#!/bin/sh\necho '{"loggedIn": true, "email": "b@x.com", "subscriptionType": "max"}'\n`);
+    await machine.refresh();
+    await until(() => s.view("machine-claude")?.check?.plan === "max", "the changed tier is shown");
+    // The token-only check still says max; the machine's own login can identify the former 20x as Ultra.
+    writeFileSync(join(m.home, ".claude/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "fake-access", expiresAt: Date.now() + 3_600_000, rateLimitTier: "default_claude_max_20x" } }));
+    await machine.refresh();
+    await until(() => s.view("machine-claude")?.check?.plan === "ultra", "the Ultra tier is shown");
+    const afterPlan = checked.length;
     // Signed out in a terminal: checked again.
     script(join(m.bin, "claude"), `#!/bin/sh\necho '{"loggedIn": false}'\nexit 1\n`);
     await machine.refresh();
-    await until(() => checked.length > made, "checked again");
+    await until(() => checked.length > afterPlan, "checked again");
+    await s.close();
+  });
+
+  test("the first machine login reading updates a profile checked before its tier was known", async () => {
+    const m = fakeMachine({ claude: `echo '{"loggedIn":true,"subscriptionType":"max"}'` });
+    mkdirSync(join(m.home, ".claude"));
+    writeFileSync(join(m.home, ".claude/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "fake", expiresAt: Date.now() + 3_600_000, rateLimitTier: "default_claude_max_20x" } }));
+    const data = temp("machine-tier-first");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "machine-claude", name: "Claude", runtime: "claude", home: "homes/machine-claude", access: { kind: "subscription" }, machine: true }], connects: [] }));
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const machine = new MachineLogins(m.env, async (runtime) => {
+      if (runtime === "claude") { entered.resolve(); await release.promise; }
+      return null;
+    }, () => "zh");
+    const s = await rig({ data, machine, check: async () => ({ state: "ok", detail: "已登录，max", models: [], plan: "max", checkedAt: 0 }) });
+    await entered.promise;
+    await s.call("POST", "/profiles/machine-claude/check");
+    assert.equal(s.view("machine-claude")!.check.plan, "max");
+    const updated = upon((wake) => s.accounts.onChange(wake), () => s.view("machine-claude")?.check?.plan === "ultra", "the machine's first tier reading");
+    release.resolve();
+    assert.equal(await updated, true);
     await s.close();
   });
 
@@ -495,7 +528,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     const shared = {
       status: async () => {
         hosts.n++;
-        return { check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: { state: "ok", windows: [{ label: "每周", usedPercent: 96, resetsAt: null }], detail: null, checkedAt: hosts.at } };
+        return { check: { state: "ok", detail: "host", models: null, checkedAt: 1, plan: "pro" }, quota: { state: "ok", windows: [{ label: "每周", usedPercent: 96, resetsAt: null }], detail: null, checkedAt: hosts.at } };
       },
       view: () => null,
     };
@@ -507,6 +540,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     // The host's check does not put its older allowance back.
     assert.equal((await t.call("POST", "/profiles/bx/check"))[0], 200);
     assert.equal(hosts.n, 1);
+    assert.equal(t.view("bx")!.check.plan, "pro", "the borrowed profile carries the host's tier");
     assert.equal(t.view("bx")!.quota.windows[0].usedPercent, 40);
     // Run out: the host's, once it is newer than the one read here.
     lend(Date.now() - 1000);

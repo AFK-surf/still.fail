@@ -600,6 +600,8 @@ export interface QuotaWindow {
 /** An allowance: its windows shortest first. */
 export interface Quota {
 	credits?: QuotaCredits;
+	/** The subscription tier, when reported with the allowance. */
+	plan?: string;
 	resetCount?: number;
 	creditsText?: string;
 	resetText?: string;
@@ -1265,6 +1267,8 @@ export interface DecisionCapability {
 
 export interface ProfileCheck {
 	decision?: DecisionCapability;
+	/** The subscription tier reported by its login; absent when unknown or on older stations. */
+	plan?: string;
 	/** Runtime → model → supported reasoning levels; absent on older stations. */
 	modelEfforts?: Record<string, Record<string, string[]>>;
 	/** ok | login | failed | unknown */
@@ -1432,6 +1436,8 @@ export interface Profile {
 	serves?: boolean;
 	/** What it is, in a word: the machine's own login (终端里的登录), its provider, else its kind of account. */
 	kindText?: string;
+	/** The subscription tier as a name (Pro 200, Max); empty when unknown. */
+	planText?: string;
 	/** Who signing it in goes to: OpenCode, Kimi, Claude, Grok, Cursor, Devin, ChatGPT. */
 	signInProvider?: string;
 	/** Its last check in a line: its detail (without the 可用 a working one starts with), or that it has none yet. */
@@ -1630,6 +1636,8 @@ export interface ChatAgent {
 	threads: ChatThread[];
 	/** Its background jobs, newest first; those with a port are web services, shown by their names. */
 	jobs: Job[];
+	/** On a compact chat, whether it has jobs; their details are in chatJobs. */
+	hasJobs?: boolean;
 }
 
 /** A decision waiting in a chat (`ChatView.asks`). */
@@ -2114,6 +2122,8 @@ export interface ChatDay {
  */
 export interface ChatJobsView {
 	jobs: Job[];
+	/** On a summary, whether there are jobs; their details are read separately. */
+	hasJobs?: boolean;
 	/** fail: one died lately; restart: a service is being started again. */
 	alarm?: string;
 	/** 2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say). */
@@ -7004,6 +7014,12 @@ export interface UsageActivity {
 	weekly: number[];
 	/** The weeks' running total as the same. */
 	cumulative: number[];
+	/** Each of `cells` said as the pointer rests on it: its date and tokens; "" a day after today. */
+	tips: string[];
+	/** Each of the 52 weeks said so: its first day and tokens. */
+	weekTips: string[];
+	/** Each week's running total said so: as of its last day so far. */
+	runningTips: string[];
 	less: string;
 	more: string;
 	/** Under each view: none under the days (their legend instead), what a column is under the others. */

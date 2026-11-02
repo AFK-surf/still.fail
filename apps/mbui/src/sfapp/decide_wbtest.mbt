@@ -92,8 +92,10 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
     }
     t.wheel(195.0, 400.0, -300.0)
   }
+  let felt = t.haptics().length()
   t.tap_text("忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
+  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
   // let go at once (what it showed only drawn as it closes up)
   t.frame()
   assert_eq(@sfpages.dismissed.length(), 1)
@@ -101,15 +103,23 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
 }
 
 ///|
-test "the chat's own sheet: its agents, pinning it, and on to the agent's card and its history" {
+test "the chat's \"…\": the menu a row has, pinning it from it" {
   let calls : Array[Made] = []
-  let t = decide_core(calls, "chat-info")
+  let t = decide_core(calls, "chat-actions")
   assert_true(t.find("复制会话链接") is Some(_))
-  assert_true(t.find("Claude · Opus 5.5") is Some(_))
-  t.tap_text("固定到列表顶部")
+  assert_true(t.find("重命名") is Some(_))
+  t.tap_text("固定")
   let pinned = named(calls, "chat.pin")
   assert_eq(pinned.length(), 1)
   assert_true(flag(Some(pinned[0].params), "pinned"))
+}
+
+///|
+test "the chat's own sheet: its agents, and on to the agent's card and its history; what is done with it is not in it" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  assert_true(t.find("复制会话链接") is None)
+  assert_true(t.find("Claude · Opus 5.5") is Some(_))
   t.tap_text("Claude · Opus 5.5")
   assert_true(t.find("费用估算") is Some(_))
   assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
@@ -254,7 +264,7 @@ test "the history's post: where it went with its platform's mark, in the accent'
 test "接力到频道 on a phone: the pages' relay as a sheet, the places the bots are in, one picked, relayed there (chat.relay)" {
   new_run()
   let calls : Array[Made] = []
-  let base = fixture("chat-info")
+  let base = fixture("chat-actions")
   let places : Json = {
     "connects": [
       {
@@ -282,12 +292,12 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
       }
     },
   }
-  open_fixture_over("chat-info", src)
+  open_fixture_over("chat-actions", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
-  // (the info sheet goes, the relay's sheet comes up, to where it rests: the presenters')
+  // (the chat's menu goes, the relay's sheet comes up, to where it rests: the presenters')
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   // (with touch nothing takes the keyboard's focus as it opens: the keyboard would come up over the places)
   assert_true(!t.ctx().field_focused(), msg="a field focused as the relay opened on a phone")

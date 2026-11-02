@@ -94,6 +94,18 @@ pub(all) struct Source {
 }
 
 ///|
+/// The chat page asks for its agents' identities and state. Their full histories and jobs are read by their own
+/// pages; older cores ignore the extra parameter and still return the full chat.
+pub fn core_topic_params(name : String, params : Map[String, Json]) -> Map[String, Json] {
+  if name != "chat" && name != "chatJobs" {
+    return params
+  }
+  let out = params.copy()
+  out["compact"] = Json::boolean(true)
+  out
+}
+
+///|
 /// Bind the client's core once when it starts: Markdown read and code coloured by it (`markdown`, `code.ink`). Static
 /// fixtures have no core (the real core's answers kept instead: src/sfkept); a recorded client binds its replay of the
 /// same operations. The live renderer never interprets Markdown, TeX or code while an answer is coming.

@@ -956,9 +956,14 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         // (what stands in for it till it is decoded for the pixels it is drawn at, now, or for the room it is judged
         // ready for where that is said (View::image_for): asked for then, whatever stands in)
         let (w, h) = (c.w * s, c.h * s)
+        // (its picture where it lies in it, as big, a matte round it: View::image_in)
+        let (pw, ph) = match c.image_in {
+          Some(((_, _, iw, ih), _)) => (iw * s, ih * s)
+          None => (w, h)
+        }
         let (fw, fh) = c.image_for
         let judged = fw > 0.0 || fh > 0.0
-        let room = if judged { dmax(fw, fh) * s } else { dmax(w, h) }
+        let room = if judged { dmax(fw, fh) * s } else { dmax(pw, ph) }
         let shown = if stand_in == "" && !judged {
           src
         } else if self.image_ready(src, dmin(room * self.scale, most.to_double())) || stand_in == "" {
@@ -966,7 +971,19 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         } else {
           stand_in
         }
-        self.draw_image(shown, x, y, w, h, FitFill, c.radius * s, a, fade=false, max_px=most)
+        match c.image_in {
+          // (the picture and its matte as one, cut once at the node's edge, as Ctx::picture's matte is)
+          Some(((ix, iy, iw, ih), matte)) => {
+            let before = self.ninst
+            self.draw_image(shown, x + ix * s, y + iy * s, iw * s, ih * s, FitFill, c.radius * s, a, fade=false, max_px=most, ground=matte, matte=true, frame=Some((x, y, w, h)))
+            // (its corners each, where it says them (View::corners), as big as it is drawn: the frame's)
+            match c.corners {
+              Some((tl, tr, br, bl)) if self.ninst > before => self.corners_last_each(tl * s, tr * s, br * s, bl * s)
+              _ => ()
+            }
+          }
+          None => self.draw_image(shown, x, y, w, h, FitFill, c.radius * s, a, fade=false, max_px=most)
+        }
         inst_owners.painting = was
         inst_owners.tree_painting = was_tree
       }
@@ -3815,6 +3832,8 @@ priv struct LayerFocus {
   /// opened since the last frame ended: what under it asks for the focus as that frame builds it (a page first drawn
   /// under it) is what had it as it opened, as an old overlay built after the page has it (view_focus_kept_for)
   mut fresh : Bool
+  /// to give the focus to the first of what it holds that takes it, once that is built (View::focus_opens_first)
+  mut first : Bool
 }
 
 ///|
@@ -3916,8 +3935,9 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
         layer_focus_open[i].back = had
         layer_focus_open[i].back_in = had_in
         layer_focus_open[i].fresh = true
+        layer_focus_open[i].first = t.opens_first(layer)
       }
-      None => layer_focus_open.push({ layer, back: had, back_in: had_in, fresh: true })
+      None => layer_focus_open.push({ layer, back: had, back_in: had_in, fresh: true, first: t.opens_first(layer) })
     }
     // (one that gives the focus nothing as it opens (View::focus_returns): what had it before it still what had it, for
     // what opens over it)
@@ -4285,4 +4305,64 @@ pub fn old_anchor(parent : @view.View, id : Int, nowhere : (Double, Double, Doub
     })
     |> ignore
   })
+}
+
+///|
+/// Each layer of the tree's that gives the focus to the first of what it holds that takes it (View::focus_opens_first)
+/// and has not yet, as a pass that built what it holds ends, with the old frame's layers (Ctx::layers_focus: before
+/// the frame is drawn and the keyboard told): where the focus is still on its own ground (given it as it opened, which
+/// takes it: View::focusable; nothing since moved it), to the first in it as Tab goes (its nodes that Tab stops on and
+/// can take it, what the old views it hosts took as this pass built them, in a layer of their own or not), once; the
+/// pass built again from it. None in it: its own ground keeps it, once the frame it opened in has ended.
+fn view_layers_first(c : Ctx) -> Unit {
+  guard view_app.val is Some(t) else { return }
+  for l in layer_focus_open {
+    if !l.first {
+      continue
+    }
+    if c.focus != tree_said_id(l.layer) {
+      // (under another layer opened over it, the focus there: its own still to give as that goes and gives it back
+      // to this one's ground; else the person's or the app's, given it elsewhere)
+      if !layer_focus_open.iter().any(fn(o) { o.layer != l.layer && tree_layer_focused(c, t, o.layer) }) {
+        l.first = false
+      }
+      continue
+    }
+    let mut first = 0
+    for at in t.focus_order() {
+      if first != 0 || !t.holds(l.layer, at.id) {
+        continue
+      }
+      if at.hosted {
+        for f in c.focusables {
+          if first == 0 && f.island == Some(at.id) && !c.layer_inert(f.layer) {
+            first = f.id
+          }
+        }
+      } else if at.id != l.layer && t.can_focus(at.id) {
+        first = tree_said_id(at.id)
+      }
+    }
+    if first != 0 {
+      l.first = false
+      c.focus_moved(first)
+      c.read_changed("the focus, into the first a layer of the tree's holds")
+    } else if !l.fresh {
+      l.first = false
+    }
+  }
+}
+
+///|
+/// Whether the focus is on layer `layer` of tree `t` or on what it holds: a node of it, or what an old view it hosts
+/// took.
+fn tree_layer_focused(c : Ctx, t : @view.Tree, layer : @view.NodeId) -> Bool {
+  match focus_node_of(c.focus) {
+    Some(n) => n == layer || t.holds(layer, n)
+    None =>
+      match c.focusables.iter().find_first(fn(f) { f.id == c.focus }) {
+        Some({ island: Some(isl), .. }) => t.holds(layer, isl)
+        _ => false
+      }
+  }
 }

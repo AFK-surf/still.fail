@@ -8,11 +8,11 @@ test "89-run-settings" {
     f.tap("端到端测试")
     f.run_to(@ui.nav_rest())
     f.see("=studio")
-    f.tap("icon:more")
+    f.tap("icon:info")
     // the chat's own sheet (decide.mbt's)
     f.run_to(@kit.sheet_rest("sf-present"))
     // the agent's part of the same sheet
-    // (its first row's: under it, the public links' and the sharing's have one too)
+    // (its first row's: under it, the pull requests' and the public links' have one too)
     f.tap("icon:chevron-right", top=true)
     f.tap("=历史")
     f.run_to(@ui.nav_rest())

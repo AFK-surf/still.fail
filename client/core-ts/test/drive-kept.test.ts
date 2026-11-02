@@ -5,8 +5,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect, Fiber } from "effect";
 import type { Inner } from "../src/core.ts";
+import { Core } from "../src/core.ts";
 import { DriveKept, chatKeptId, keptId, outboxKeptId, sentKeptId } from "../src/drive-kept.ts";
 import { keptFirst } from "../src/station/calls.ts";
+import { HostWire } from "../src/station/wire.ts";
 import { FakeHost } from "../src/testing.ts";
 import { answers, call } from "./helpers.ts";
 import { Raw, started, stationReplies, status } from "./station-fixture.ts";
@@ -371,6 +373,36 @@ test("a chat's file opened is kept with its chat: read again from the device, li
   await whole(10);
   assert.equal(asked(), 5);
   t.core.close();
+});
+
+test("a chat picture opened again after the core restarts is read from the device", async () => {
+  const t = await started();
+  const picture = bytesOf(40, 7);
+  const params = { station: ST, key: "k1", name: "picture.png", keep: true, size: picture.length };
+  stationReplies(t.host, (req) => {
+    if (!new URL(req.url).pathname.endsWith("/sessions/k1/parts")) return undefined;
+    return new Raw({ status: 200, headers: [["content-type", "image/png"], ["stillfail-total", String(picture.length)]], body: picture });
+  });
+  const asked = () => t.host.requests.filter((r) => r.url.includes("/sessions/k1/parts")).length;
+  const ui = t.core.connect();
+  call(t.core, ui, 1, "station.file", params);
+  await t.host.settle();
+  const first = answers(t.host.takeEmitted(), 1) as { bytes: Uint8Array };
+  assert.deepEqual(first.bytes, picture);
+  assert.equal(asked(), 1);
+  t.core.close();
+  // The station has gone away; the copy remains in the host's storage across a new core.
+  stationReplies(t.host, (req) => new URL(req.url).pathname.endsWith("/sessions/k1/parts") ? status(503, { error: "offline" }) : undefined);
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    call(again, again.connect(), 2, "station.file", params);
+    await t.host.settle();
+    const reopened = answers(t.host.takeEmitted(), 2) as { bytes: Uint8Array };
+    assert.deepEqual(reopened.bytes, picture);
+    assert.equal(asked(), 1, "the reopened picture did not ask the station again");
+  } finally {
+    again.close();
+  }
 });
 
 test("a chat's video streamed to a page that takes its bytes away (the web's worker moves them to the page): played, and kept all the same", async () => {

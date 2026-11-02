@@ -347,6 +347,28 @@ pub fn View::focus_opens(self : View, to : View) -> View {
 }
 
 ///|
+/// A layer that gives the focus, as it opens, to the first of what it holds that takes it (as Tab goes: its nodes and
+/// what the old views it hosts take, as those are built), as the old frame's trapping layers do (Ctx::overlay's
+/// initial_focus, by default); to its own ground while none does; given back as it goes (View::focus_opens's). Given
+/// once: what the person or the app does with the focus after that its own. Its ground takes the focus (View::focusable,
+/// no keys, no Tab stop: a dialog's), given it as it opens.
+pub fn View::focus_opens_first(self : View) -> View {
+  guard self.live() is Some(_) else { return self }
+  let layer = self.id()
+  let tree = self.tree
+  tree.focus_firsts.add(layer)
+  self.owns(fn() { tree.focus_firsts.remove(layer) }) |> ignore
+  self.layer_focus(Some(layer))
+}
+
+///|
+/// Whether layer `layer` gives the focus to the first of what it holds that takes it as it opens
+/// (View::focus_opens_first).
+pub fn Tree::opens_first(self : Tree, layer : NodeId) -> Bool {
+  self.focus_firsts.contains(layer)
+}
+
+///|
 /// A layer that gives back the focus as it goes (View::focus_opens's), giving it nothing as it opens: the focus left
 /// where it is (a field a finger opened a menu beside: kit's dropdown_menu's initial focus none), what had it as it
 /// opened, or what that one under it gives back, given it back as it goes where the focus is in it then or nowhere;

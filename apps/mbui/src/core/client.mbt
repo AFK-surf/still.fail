@@ -266,6 +266,20 @@ pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
 }
 
 ///|
+/// Ends a topic if it was asked, without asking the core for a topic the page never read.
+pub fn Client::unsubscribe_topic(
+  self : Client,
+  topic : String,
+  params? : Map[String, Json] = {},
+) -> Unit {
+  let key = topic_json(topic, params).stringify()
+  match self.by_key.get(key) {
+    Some(s) => self.unsubscribe(s)
+    None => ()
+  }
+}
+
+///|
 /// Calls `name` with `params`; `on_done` gets its answer (`ok`) or the core's error (`{code, message, status?}`).
 /// Returns the call's id. A value the call sends before its answer (how far it has got) is passed on only to a
 /// `stream`'s `on_value`.

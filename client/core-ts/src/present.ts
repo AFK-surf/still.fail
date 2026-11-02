@@ -739,6 +739,15 @@ export function profile(p: J): J {
   }
   o.uses = usesList;
   const kind = get(o.access, "kind");
+  // Only subscriptions have a plan. A check may report it, or an allowance (e.g. Grok's billing).
+  const checkPlan = get(o.check, "state") === "ok" ? knownPlan(get(o.check, "plan")) : undefined;
+  const canShowQuotaPlan = !isObject(o.check) || ["ok", "unknown"].includes(String(get(o.check, "state")));
+  const quotaPlan = canShowQuotaPlan && get(o.quota, "state") !== "blocked" ? knownPlan(get(o.quota, "plan")) : undefined;
+  const checkAt = get(o.check, "checkedAt");
+  const quotaAt = get(o.quota, "checkedAt");
+  const newerQuota = typeof checkAt === "number" && typeof quotaAt === "number" && quotaAt > checkAt;
+  const plan = kind === "subscription" ? (newerQuota ? quotaPlan || checkPlan || "" : checkPlan || quotaPlan || "") : "";
+  o.planText = planName(plan, str(o.runtime));
   const plain = (kind === "subscription" || kind === "env") && !usesList.includes("decision");
   o.usesText = plain ? "" : usesText(usesList);
   if (provider) {
@@ -761,8 +770,10 @@ export function profile(p: J): J {
   // address it signed in as where that is its name: its head says it), or that it has none yet.
   const detailOf = str(get(o.check, "detail"));
   const named = str(o.name) ?? "";
+  const detail = withoutPart(withoutPart((detailOf ?? "").replace(/^(可用[，,]|Works,)\s*/, ""), named), kind === "subscription" ? (checkPlan ?? "") : "");
+  // A machine's token-only check may have said `max` while its own login identifies that plan as Ultra.
   o.checkLine = isObject(o.check)
-    ? withoutPart((detailOf ?? "").replace(/^(可用[，,]|Works,)\s*/, ""), named)
+    ? withoutPart(detail, o.runtime === "claude" && checkPlan?.toLowerCase() === "ultra" ? "max" : "")
     : t("core-views.present.profile.never_checked");
   return o;
 }
@@ -1153,7 +1164,7 @@ function overview(value: J, c: Clock, station: string | null): J {
   const logins = arr(v.machineLogins);
   if (logins) {
     v.machineLogins = logins.map((l) => {
-      const plan = get(l, "plan");
+      const plan = knownPlan(get(l, "plan"));
       const email = str(get(l, "email"));
       const offered =
         get(l, "loggedIn") === true &&
@@ -1161,19 +1172,28 @@ function overview(value: J, c: Clock, station: string | null): J {
         plan !== "" &&
         !(get(l, "runtime") !== undefined && taken.some((r) => equal(r, get(l, "runtime")))) &&
         !(email !== undefined && subscriptions.some(([runtime, bound]) => equal(get(l, "runtime"), runtime) && email.trim().toLowerCase() === bound));
-      const planText = typeof plan === "string" ? planName(plan) : "";
+      const planText = typeof plan === "string" ? planName(plan, str(get(l, "runtime"))) : "";
       return isObject(l) ? { ...l, offered, planText } : l;
     });
   }
   return v;
 }
 
-/// A subscription's plan as its vendor names it, from the word its login keeps (Claude's `max`, ChatGPT's `plus`,
-/// `prolite`, `free_workspace`): those not plain words as said, the rest each word capitalized.
-const PLAN_NAMES: Record<string, string> = { prolite: "Pro Lite" };
+/// A subscription's plan as its vendor names it. Codex's `prolite`, `pro` and `promax` distinguish the three ChatGPT
+/// Pro tiers; the same word `pro` for another runtime need not mean the ChatGPT plan. The numbers name the plans,
+/// rather than stating what this person was billed.
+const PLAN_NAMES: Record<string, string> = { prolite: "Pro Lite", promax: "Pro Max" };
+const CODEX_PLAN_NAMES: Record<string, string> = { prolite: "Pro 100", pro: "Pro 200", promax: "Pro 500" };
 
-function planName(plan: string): string {
-  return PLAN_NAMES[plan.toLowerCase()] ?? plan.split(/[_\s]+/).filter((w) => w !== "").map((w) => `${w[0]!.toUpperCase()}${w.slice(1)}`).join(" ");
+/// An unknown tier is a provider's sentinel, not the name of a plan.
+function knownPlan(value: unknown): string | undefined {
+  const plan = str(value)?.trim();
+  return plan && plan.toLowerCase() !== "unknown" ? plan : undefined;
+}
+
+function planName(plan: string, runtime?: string): string {
+  const name = plan.toLowerCase();
+  return (runtime === "codex" ? CODEX_PLAN_NAMES[name] : undefined) ?? PLAN_NAMES[name] ?? plan.split(/[_\s]+/).filter((w) => w !== "").map((w) => `${w[0]!.toUpperCase()}${w.slice(1)}`).join(" ");
 }
 
 /// The days a station's automatic archiving offers to wait (设置 › 归档): once idle, and heard only in Slack (0: never).

@@ -2,10 +2,10 @@
 // chat that keeps watch from its sheet (ChatInfo.kt: asked first), over the fixture's chat.
 
 ///|
-/// The chat's sheet over the fixture's chat, its `chat` topic as `over` makes it; calls kept and answered with nothing.
+/// The chat's menu over the fixture's chat, its `chat` topic as `over` makes it; calls kept and answered with nothing.
 fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @ui.Tester {
   new_run()
-  let base = fixture("chat-info")
+  let base = fixture("chat-actions")
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
@@ -21,7 +21,7 @@ fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @u
       }
     },
   }
-  open_fixture_over("chat-info", src)
+  open_fixture_over("chat-actions", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t
@@ -31,7 +31,6 @@ fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @u
 test "分享给其他 workspace: its row says where; the sheet ticks another and lets their agents send, 完成 says so" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
-  assert_true(t.find("开源 · 只读") is Some(_))
   t.tap_text("分享给其他 workspace")
   // (the chat's sheet put down, the presenters' sheet up: its own end)
   t.frame()
@@ -72,29 +71,6 @@ test "分享给其他 workspace: none ticked, their agents cannot be let send" {
     Some(Array(to)) => assert_eq(to.length(), 0)
     _ => fail("no workspaces said")
   }
-}
-
-///|
-test "归档对话 from the sheet: a chat keeping watch is archived only once asked" {
-  let calls : Array[Made] = []
-  let t = sheet_core(calls, over=fn(v) {
-    match v {
-      Some(Object(m)) => {
-        let o = m.copy()
-        o["watch"] = { "ask": "它还在盯着 CI，归档后会继续盯。" }
-        Some(Json::object(o))
-      }
-      v => v
-    }
-  })
-  t.tap_text("归档对话")
-  assert_eq(named(calls, "chat.archive").length(), 0)
-  assert_true(t.find("它还在盯着 CI，归档后会继续盯。") is Some(_))
-  assert_true(t.find("归档「整理发布清单」？") is Some(_))
-  // its 归档, beside 取消
-  let (cx, cy, cw, ch) = t.rect_of("取消").unwrap()
-  t.tap(cx + cw + 40.0, cy + ch / 2.0)
-  assert_eq(named(calls, "chat.archive").length(), 1)
 }
 
 ///|

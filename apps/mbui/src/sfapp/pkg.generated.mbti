@@ -94,6 +94,8 @@ pub fn by_of(Json?) -> @sfbase.By
 
 pub fn chat_item(Json) -> @sfbase.ChatItem
 
+pub fn chat_jobs_summary_params(@sfbase.ChatRef) -> Map[String, Json]
+
 pub fn chat_kept(@sfbase.ChatRef) -> @sfbase.ChatView?
 
 pub fn chat_link(String, String) -> String
@@ -327,8 +329,6 @@ pub fn file_seed(String, String, Bytes) -> String
 pub fn file_serve(@sfbase.FilePage, @ui.SiteRequest, @ui.SiteReply) -> Unit
 
 pub fn file_type(String) -> String
-
-pub fn file_viewer(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn files_can_lend(@sfbase.Source, @sfbase.Workspace) -> Bool
 
@@ -568,7 +568,7 @@ pub fn note_list(@ui.Ctx, Int32, String, Double, Double) -> Unit
 
 pub let note_pop_ms : Double
 
-pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, top_crop? : Bool, list? : String, over? : (Double) -> Unit) -> Unit
+pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, top_crop? : Bool, list? : String, over? : (Double) -> Unit, said? : String) -> Unit
 
 pub let notice_host : @ref.Ref[@sfbase.NoticeHost]
 
@@ -718,7 +718,7 @@ pub fn pv_fill(String, Array[(String, String)]) -> String
 
 pub let pv_frames : Map[String, (String, Double)]
 
-pub let pv_hidden : @ref.Ref[String]
+pub let pv_hidden : @signals.Signal[String]
 
 pub let pv_leaving : @signals.Signal[@sfbase.Viewer?]
 

@@ -241,24 +241,15 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
 // ── the chat's own sheet (ChatInfo.kt) ──────────────────────────────────
 
 ///|
-/// The chat itself, from "…" (ChatInfo.kt openChatInfo): its name (with a way to change it) over who started it, how
+/// The chat itself, from ⓘ (ChatInfo.kt openChatInfo): its name (with a way to change it) over who started it, how
 /// many take part and when it was last written in; its agents, each where it stands (a tap opens its card); then what
-/// can be done with it: what its agents and other chats' wrote each other, pin it, copy its link, its sharing, archive
-/// it. As tall as what it shows.
+/// is in it: its pull requests, what else was said, what its agents and other chats' wrote each other, its public
+/// links. What is done with it is the "…"'s menu, a row of the list's. As tall as what it shows.
 fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let chat = (src.topic)("chat", chat_params(r)).value
   let (view, _, _) = view_of_chat(src, r)
   let agents = items(chat, "agents")
-  let pinned = match field(chat, "pinned") {
-    Some(True) => Some(true)
-    Some(False) => Some(false)
-    _ => None
-  }
-  let slack = text(chat, "slackUrl")
-  let slack_app = text(chat, "slackApp")
-  let feishu = text(chat, "feishuUrl")
-  let xshare = field(chat, "xshare")
   let (archived, offline) = match view {
     Some(v) => (v.archived, v.offline)
     None => (false, false)
@@ -266,7 +257,6 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
   // archived or offline it is only read: no name to change, nothing to archive
   let open = view is Some(_) && !archived && !offline
   let thread = field(chat, "thread")
-  let link = if view is Some(_) { chat_link(r.station, r.session) } else { "" }
   let title = text(chat, "title")
   c.box(w=Fill(1.0), fn() {
     // (clear of an untitled dialog's close button over its end: @sf.untitled_clear)
@@ -505,121 +495,10 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
       })
       c.box(style=info_lists_gap, fn() {  }) |> ignore
     }
-    if open || link != "" || slack != "" || xshare is Some(_) {
-      info_list(c, fn() {
-        // a station from before pins says nothing of them: its chats are not pinned from here
-        match pinned {
-          Some(p) if open => {
-            let pkey = "pin/" + r.station + "/" + r.session
-            let busy = doing(pkey)
-            if info_row(c, if busy { "" } else { "info/pin" }, fn() {
-                @sf.icon(c, "pin", size=16.0, color=t.p.text) |> ignore
-                c.box(w=Fill(1.0), fn() {
-                  c.text(
-                    tr(if p { "android-chat.unpin" } else { "android-chat.info.pinTop" }),
-                    size=t.t.ui,
-                    color=t.p.text,
-                    wrap=false,
-                  )
-                  |> ignore
-                })
-                |> ignore
-                if busy {
-                  @sf.spinner(c, size=12.0) |> ignore
-                }
-              }) {
-              act(
-                src,
-                tr(if p { "android-chat.unpin.verb" } else { "android-chat.pin.verb" }),
-                pkey,
-                "chat.pin",
-                {
-                  "station": Json::string(r.station),
-                  "session": Json::string(r.session),
-                  "pinned": Json::boolean(!p),
-                },
-              )
-            }
-          }
-          _ => ()
-        }
-        if link != "" &&
-          info_row(c, "info/link", fn() {
-            @sf.icon(c, "copy", size=16.0, color=t.p.text) |> ignore
-            c.box(w=Fill(1.0), fn() {
-              c.text(tr("web-main.chat.copyLink"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
-            })
-            |> ignore
-          }) {
-          copy_chat_link(c, title, link)
-        }
-        // relayed to a channel (docs/relay.md, Relay.kt): a chat with an agent to go on there
-        match opt_number(thread, "id") {
-          Some(th) if open && agents.length() > 0 =>
-            if info_row(c, "info/relay", fn() {
-                @sf.icon(c, "arrow-up-right", size=16.0, color=t.p.text) |> ignore
-                c.box(style=@sf.full_width, fn() { c.text(tr("web-main.relay.action"), style=info_words) |> ignore })
-                |> ignore
-                chevron(c)
-              }) {
-              // (the chat's sheet put down, the picking up in its place)
-              close()
-              @sfpages.open_relay(src, r, th, from=Unanchored)
-            }
-          _ => ()
-        }
-        match xshare {
-          Some(Object(_)) => xshare_row(c, src, r, opt_number(thread, "id"), xshare, close)
-          _ => ()
-        }
-        // where it came from, opened there (the system's app for its link)
-        if slack != "" &&
-          info_row(c, "info/slack", fn() {
-            @sf.slack_mark(c, 16.0) |> ignore
-            c.box(style=@sf.full_width, fn() { c.text(tr("android-chat.info.slack.open"), style=info_words) |> ignore })
-            |> ignore
-            chevron(c)
-          }) {
-          if !@sfbase.open_slack(slack_app, slack) {
-            toast_later(tr("android-chat.link.failed"))
-          }
-        }
-        if feishu != "" &&
-          info_row(c, "info/feishu", fn() {
-            @sf.feishu_mark(c, 16.0) |> ignore
-            c.box(style=@sf.full_width, fn() { c.text(tr("web-mobile.chat.openFeishu"), style=info_words) |> ignore })
-            |> ignore
-            chevron(c)
-          }) {
-          open_outside(feishu)
-        }
-        // into the archive, back to the list at once
-        if open &&
-          info_row(c, "info/archive", fn() {
-            @sf.icon(c, "archive", size=16.0, color=t.p.text) |> ignore
-            c.box(w=Fill(1.0), fn() {
-              c.text(tr("android-chat.info.archive"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
-            })
-            |> ignore
-          }) {
-          // a chat keeping watch is archived only once asked, in the core's words
-          match (view, text(field(chat, "watch"), "ask")) {
-            (Some(v), "") => archive_chat(src, r, v)
-            (Some(v), ask) => {
-              close()
-              @sf.confirm(fill("android-chat.archive.ask", [("title", title)]), ask, tr("android-chat.archive"), fn() {
-                archive_chat(src, r, v)
-              })
-            }
-            (None, _) => ()
-          }
-        }
-      })
-    }
-    // making it public, a card of its own (publish.mbt)
+    // the public links it has (making one is the menu's: 分享图片), a card of its own (publish.mbt)
     match shown_publish(chat) {
-      Some(_) as p => publish_list(c, src, r, number(thread, "id"), p, close)
-      None => ()
+      Some(_) as p if items(p, "links").length() > 0 => publish_list(c, src, r, number(thread, "id"), p, close)
+      _ => ()
     }
   })
   |> ignore
@@ -793,7 +672,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
           }
         _ => ()
       }
-      if jobs.length() > 0 &&
+      if (jobs.length() > 0 || flag(a, "hasJobs")) &&
         agent_row(
           c,
           "agent/jobs",
@@ -1249,6 +1128,7 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
           |> ignore
         }) &&
         !doing(clear_key) {
+        @ui.haptic(Confirm)
         for session in items(view, "clear") {
           match session {
             String(s) =>
@@ -1476,6 +1356,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
       let busy = doing(skey)
       let sid = c.id("job/stop")
       if !busy && c.clicked(sid) {
+        @ui.haptic(Confirm)
         act(
           src,
           fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]),
@@ -1586,6 +1467,7 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let skey = "job-stop/" + station + "/" + id
   let stop = c.id("open-job-stop/" + station + "/" + id)
   if !doing(skey) && c.clicked(stop) {
+    @ui.haptic(Confirm)
     act(
       src,
       fill("android-misc.jobs.stopWhat", [("name", text(job, "name"))]),
@@ -1639,14 +1521,6 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
 /// An info row's words (14, the ink, on one line).
 // kept across runs: a value (no field of it changes)
 let info_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
-
-///|
-/// A link opened in the system's app for it (ChatInfo.kt: ACTION_VIEW), said when there is none.
-fn open_outside(url : String) -> Unit {
-  if !@ui.open_url(url) {
-    toast_later(tr("android-chat.link.failed"))
-  }
-}
 
 ///|
 /// Opens the chat's letters at their list (the library's panel, most of the window tall, dragged between half and nearly

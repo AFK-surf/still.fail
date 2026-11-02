@@ -53,6 +53,63 @@ fn composer_shown(t : @ui.Tester) -> Bool {
 }
 
 ///|
+/// Home with the chat reads and releases made by its rows kept for a test.
+fn chat_prefetch_tester(asked : Array[String], left : Array[String]) -> @ui.Tester {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "chat" {
+        asked.push(Json::object(params).stringify())
+      }
+      (base.topic)(name, params)
+    },
+    leave: fn(name, params) {
+      if name == "chat" {
+        left.push(Json::object(params).stringify())
+      }
+      (base.leave)(name, params)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(first_page_ms + @ui.move_most_ms)
+  asked.clear()
+  left.clear()
+  t
+}
+
+///|
+test "a finger starts reading a chat as it goes down, before a quick tap is let go" {
+  let asked : Array[String] = []
+  let left : Array[String] = []
+  let t = chat_prefetch_tester(asked, left)
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.press_at(x, y)
+  assert_true(asked.any(fn(p) { p.contains("s-c1") }), msg="the chat is read on finger down")
+  assert_false(app.nav.top() is Chat(_), msg="the press has not opened it yet")
+  t.release(x, y)
+  assert_true(app.nav.top() is Chat(_), msg="a quick tap opens the chat")
+  assert_false(left.any(fn(p) { p.contains("s-c1") }), msg="the opened chat keeps its read")
+}
+
+///|
+test "a finger that starts reading a chat and then scrolls releases the read" {
+  let asked : Array[String] = []
+  let left : Array[String] = []
+  let t = chat_prefetch_tester(asked, left)
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.press_at(x, y)
+  assert_true(asked.any(fn(p) { p.contains("s-c1") }), msg="the chat is read on finger down")
+  t.touch(1, x, y - 40.0)
+  t.frame()
+  assert_true(left.any(fn(p) { p.contains("s-c1") }), msg="scrolling releases the read")
+  t.touch(2, x, y - 40.0)
+  t.frame()
+  assert_false(app.nav.top() is Chat(_), msg="scrolling does not open the chat")
+}
+
+///|
 test "a chat whose view the core reads slower than LOCAL_MS slides in with its messages, never as their bones first" {
   let slow = Ref(false)
   let waiting = Ref(false)

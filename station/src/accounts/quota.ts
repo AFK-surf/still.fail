@@ -188,7 +188,9 @@ function withCodexCredits(q: ProfileQuota, limits: Json, resets: Json): ProfileQ
 /// A ChatGPT subscription's allowance as the app-server reports it.
 export function codexQuota(result: Json, lang: Lang = stationLang()): ProfileQuota {
   const limits = isObject(result?.rateLimits) ? result.rateLimits : result;
-  return withCodexCredits(okOrUnavailable(codexWindows(result), tr(lang, "station.quota.chatgptNoWindows")), limits, result?.rateLimitResetCredits);
+  const q = withCodexCredits(okOrUnavailable(codexWindows(result), tr(lang, "station.quota.chatgptNoWindows")), limits, result?.rateLimitResetCredits);
+  if (typeof limits?.planType === "string" && limits.planType.trim() !== "") q.plan = limits.planType.trim();
+  return q;
 }
 
 /// Reaches a profile's codex app-server for its account/rateLimits/read.
@@ -293,15 +295,18 @@ async function grokQuota(profile: Profile, env: Env, lang: Lang): Promise<Profil
 export function grokQuotaOf(said: Json, lang: Lang = stationLang()): ProfileQuota {
   const config = said?.config;
   const period = config?.currentPeriod;
+  const plan = typeof said?.subscription_tier === "string" ? said.subscription_tier.trim() : "";
   // Its answer leaves zero out (proto3 JSON): a period with no percentage is one nothing of was used yet.
   const used = typeof config?.creditUsagePercent === "number" ? config.creditUsagePercent : isObject(period) ? 0 : null;
-  if (used === null) return quota("unavailable", [], tr(lang, "station.quota.grokNoWindows"));
+  if (used === null) return { ...quota("unavailable", [], tr(lang, "station.quota.grokNoWindows")), ...(plan !== "" ? { plan } : {}) };
   const start = at(period?.start ?? config?.billingPeriodStart);
   const end = at(period?.end ?? config?.billingPeriodEnd);
   const type = String(period?.type ?? "");
   const minutes = start !== null && end !== null && end > start ? (end - start) / 60_000 : type.includes("WEEKLY") ? WEEK_MINUTES : type.includes("MONTHLY") ? 30 * DAY_MINUTES : null;
   const window: QuotaWindow = { label: windowLabel(minutes, type.includes("WEEKLY") ? "每周" : "每月"), usedPercent: percent(used), resetsAt: end, minutes };
-  return quota("ok", [window], typeof said?.subscription_tier === "string" ? said.subscription_tier : null);
+  const q = quota("ok", [window], typeof said?.subscription_tier === "string" ? said.subscription_tier : null);
+  if (plan !== "") q.plan = plan;
+  return q;
 }
 
 /// Asks a Grok Build started for it (ACP over stdio) for its billing: initialize, then `x.ai/billing`.
@@ -372,7 +377,9 @@ export async function codexUsage(authFile: string, urls: Urls = URLS, lang: Lang
     const minutes = seconds !== null ? seconds / 60 : key === "primary_window" ? 300 : WEEK_MINUTES;
     return [{ label: windowLabel(minutes, fallback), usedPercent: percent(w.used_percent), resetsAt: at(w.reset_at), minutes }];
   });
-  return withCodexCredits(okOrUnavailable(windows, tr(lang, "station.quota.chatgptNoWindows")), body, body?.rate_limit_reset_credits);
+  const q = withCodexCredits(okOrUnavailable(windows, tr(lang, "station.quota.chatgptNoWindows")), body, body?.rate_limit_reset_credits);
+  if (typeof body?.plan_type === "string" && body.plan_type.trim() !== "") q.plan = body.plan_type.trim();
+  return q;
 }
 
 /// A borrowed Codex subscription's allowance, read with the login its host lent (kept in its home's auth.json) while that

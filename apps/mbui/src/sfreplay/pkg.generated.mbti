@@ -30,6 +30,8 @@ pub fn source() -> @sfbase.Source
 
 pub fn trace(String) -> String
 
+pub fn use_recorded_jobs(@core.Replay) -> Unit
+
 // Errors
 
 // Types and methods

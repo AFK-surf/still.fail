@@ -398,8 +398,10 @@ describe("what a profile runs Grok Build on", () => {
   test("its allowance is the included credits used of the current period", () => {
     const q = grokQuotaOf({ config: { creditUsagePercent: 37.4, currentPeriod: { type: "USAGE_PERIOD_TYPE_WEEKLY", start: "2026-10-13T00:00:00Z", end: "2026-10-20T00:00:00Z" } }, subscription_tier: "SuperGrok" }, "zh");
     assert.equal(q.state, "ok");
+    assert.equal(q.plan, "SuperGrok");
     assert.deepEqual(q.windows, [{ label: "每周", usedPercent: 37, resetsAt: Date.parse("2026-10-20T00:00:00Z"), minutes: 7 * 24 * 60 }]);
     assert.equal(grokQuotaOf({ config: {} }, "zh").state, "unavailable");
+    assert.equal(grokQuotaOf({ config: {}, subscription_tier: "SuperGrok Heavy" }, "zh").plan, "SuperGrok Heavy");
     // Nothing used yet: Grok Build's answer leaves the zero out.
     const fresh = grokQuotaOf({ config: { currentPeriod: { type: "USAGE_PERIOD_TYPE_WEEKLY", start: "2026-10-17T12:19:48.162200+00:00", end: "2026-10-24T12:19:48.162200+00:00" } }, subscription_tier: "SuperGrok Heavy" }, "zh");
     assert.deepEqual([fresh.state, fresh.windows[0]?.usedPercent, fresh.windows[0]?.label, fresh.detail], ["ok", 0, "每周", "SuperGrok Heavy"]);

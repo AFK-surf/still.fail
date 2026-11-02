@@ -180,6 +180,22 @@ test "unsubscribe tells the core and forgets the subscription" {
 }
 
 ///|
+test "leaving an unasked topic does not start it" {
+  let (c, sent) = recorder()
+  let summary : Map[String, Json] = { "station": "ws/s", "summary": true }
+  let full : Map[String, Json] = { "station": "ws/s" }
+  let held = c.subscribe("chatJobs", params=summary)
+  c.unsubscribe_topic("chatJobs", params=full)
+  assert_eq(sent.length(), 1, msg="an unopened jobs page is not asked just to leave it")
+  c.unsubscribe_topic("chatJobs", params=summary)
+  assert_eq(sent.length(), 2)
+  assert_eq(sent[1].stringify(), ({ "id": 1, "unsubscribe": true } : Json).stringify())
+  c.unsubscribe_topic("chatJobs", params=summary)
+  assert_eq(sent.length(), 2)
+  assert_true(c.subscribe("chatJobs", params=summary).id != held.id)
+}
+
+///|
 test "what is not a message is let be" {
   let (c, _) = recorder()
   assert_false(c.receive("not json"))

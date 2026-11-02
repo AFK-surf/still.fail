@@ -282,6 +282,13 @@ fn usage_year(c : @ui.Ctx, av : Json?, weeks : Int) -> Unit {
     |> ignore
     let cells = numbers(av, "cells")
     let bars = numbers(av, if shown == 1 { "weekly" } else { "cumulative" })
+    let tips = strings(av, if shown == 0 {
+      "tips"
+    } else if shown == 1 {
+      "weekTips"
+    } else {
+      "runningTips"
+    })
     let palette = @sf.theme().p
     let faint = @sf.alpha(palette.text, if @sf.theme().dark { 0.14 } else { 0.18 })
     let ink = fn(level : Int) -> Int64 {
@@ -313,7 +320,9 @@ fn usage_year(c : @ui.Ctx, av : Json?, weeks : Int) -> Unit {
             None => 52
           }
           c.box(style=ug_months.then(@ui.style(w=Grow((until - from).to_double()))), fn() {
-            c.text(text(Some(m), "label"), style=ug_grid_label) |> ignore
+            // (none where its weeks have not the room for it: the year's last month, its first week only; Codex's
+            // month_labels leaves out one that does not fit)
+            c.text(text(Some(m), "label"), style=ug_grid_label, shorter=[""]) |> ignore
           })
           |> ignore
         }
@@ -336,10 +345,15 @@ fn usage_year(c : @ui.Ctx, av : Json?, weeks : Int) -> Unit {
               let h = if w < bars.length() { bars[w].to_int() } else { 0 }
               if 7 - row <= h { Some(palette.accent) } else { None }
             }
+            // what it is, said as the pointer rests on it (a day's date and tokens; by week, its week's, the whole column)
+            let k = if shown == 0 { w * 7 + row } else { w }
+            let tip = if k < tips.length() { tips[k] } else { "" }
+            let id = c.id("usage-year/" + w.to_string() + "/" + row.to_string())
             match fill {
-              Some(color) => c.box(style=ug_cell.then(@ui.style(bg=Data(color))), aspect=1.0, fn() {  }) |> ignore
-              None => c.box(style=ug_cell, aspect=1.0, fn() {  }) |> ignore
+              Some(color) => c.box(style=ug_cell.then(@ui.style(bg=Data(color))), id~, aspect=1.0, fn() {  }) |> ignore
+              None => c.box(style=ug_cell, id~, aspect=1.0, fn() {  }) |> ignore
             }
+            @sf.tip(c, "usage-year/" + w.to_string() + "/" + row.to_string(), id, tip, side=Top)
           }
         })
         |> ignore

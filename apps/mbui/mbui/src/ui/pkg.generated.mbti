@@ -1828,6 +1828,7 @@ pub fn NativeView::grab_frame(Self, Double) -> Unit
 pub fn NativeView::grab_shown(Self, Double) -> Unit
 pub fn NativeView::grabbed(Self) -> Bytes?
 pub fn NativeView::grabbing(Self) -> Bool
+pub fn NativeView::grabs_told(Self) -> Int32
 pub fn NativeView::here(Self) -> Bool
 pub fn NativeView::host_done(Self) -> Bool
 pub fn NativeView::id(Self) -> Int32
@@ -1862,7 +1863,7 @@ pub fn[P] Nav::flat_keep(Self[P], (Int32, Int32)?) -> Unit
 pub fn[P] Nav::flat_owned(Self[P], Bool) -> Unit
 pub fn[P] Nav::held_over(Self[P], @view.View, (P) -> Bool, Double) -> Unit
 pub fn[P] Nav::moving(Self[P]) -> Bool
-pub fn[P] Nav::new(P, on_leave? : (P) -> Unit, went_back? : (P, Bool, Bool, Array[P]) -> Unit, from_left? : (P) -> Bool) -> Self[P]
+pub fn[P] Nav::new(P, on_leave? : (P) -> Unit, went_back? : (P, Bool, Bool, Array[P]) -> Unit, from_left? : (P, P?) -> Bool) -> Self[P]
 pub fn[P] Nav::offset(Self[P]) -> Double
 pub fn[P] Nav::pages(Self[P]) -> Array[P]
 pub fn[P] Nav::pop(Self[P]) -> Bool

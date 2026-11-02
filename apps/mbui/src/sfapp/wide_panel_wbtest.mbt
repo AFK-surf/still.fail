@@ -327,7 +327,11 @@ test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its
   t.frame()
   t.frame()
   assert_true(t.find("Slack · #ops") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
-  assert_true(t.find("在 Slack 中打开") is Some(_))
   // (what only a chat of its own here has: who started it, when)
   assert_true(t.find("发起") is None)
+  // the way to it in Slack is what is done with it: its "…"'s
+  assert_true(t.find("在 Slack 中打开") is None)
+  t.click(Button, label="更多")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("在 Slack 中打开") is Some(_))
 }

@@ -26,9 +26,14 @@ test "a video taken down fast (its finger's events 20 ms apart) and let go past 
     held: false,
   }
   let t = @ui.Tester::new(
-    fn(c) {
-      chat_file(c, src, a)
-      preview(c, src)
+    fn(c) { @ui.old_views_here(c) },
+    tree=fn(root) {
+      root.box(fn(v) {
+        v.grow(Is(1.0)) |> ignore
+        @ui.old(v, fn(c) { chat_file(c, src, a) }).over(Is(true)) |> ignore
+        @sfbase.viewer_node(v, src, fn() { v.window() })
+      })
+      |> ignore
     },
     w=390.0,
     h=844.0,

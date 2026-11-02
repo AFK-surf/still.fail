@@ -141,6 +141,26 @@ test "narrow: no frequent combination left on the new chat's page" {
 }
 
 ///|
+test "narrow, a short window, models starred and used most: they scroll, how it runs and who runs it under them, none over another" {
+  // (2026-11-02 the person's phone: its keyboard up, 账号 over a model; down, over 速度)
+  let t = crowded("newchat-providers-model-liked", h=crowded_short)
+  run_to_sheet_rest(t)
+  let sheet = t.get(@ui.Role::Dialog).rect
+  assert_true(sheet.3 <= crowded_short * @sf.sheet_most + 1.0, msg="the sheet is \{sheet.3} high")
+  let who = t.boxes().iter().find_first(fn(b) { b.kind == "text" && b.text == "账号" && b.y >= sheet.1 })
+  guard who is Some(who) else { fail("no 账号 in the sheet") }
+  assert_true(who.y + who.h <= sheet.1 + sheet.3, msg="账号 \{who.y} past the sheet \{sheet}")
+  let effort = t.get(Radio, label="高").rect
+  let runtime = t.get(Button, label="DeepSeek Harness").rect
+  assert_true(runtime.1 >= effort.1 + effort.3 && runtime.1 + runtime.3 <= who.y, msg="\{effort} \{runtime} 账号 at \{who.y}")
+  // the models in what is left over how it runs, the first of them at the sheet's top, scrolling
+  let all = t.get(Button, label="全部模型").rect
+  assert_true(all.1 >= sheet.1, msg="全部模型 \{all} over the sheet \{sheet}")
+  let models = t.get(Button, label="GPT-6 Astra").rect
+  assert_true(models.1 < effort.1, msg="\{models} \{effort}")
+}
+
+///|
 /// The rectangle of the words `name` drawn in the sheet (`sheet`), whole (as wide as they advance).
 fn words_whole(t : @ui.Tester, name : String, sheet : (Double, Double, Double, Double)) -> (Double, Double, Double, Double)? {
   let (sx, sy, sw, sh) = sheet

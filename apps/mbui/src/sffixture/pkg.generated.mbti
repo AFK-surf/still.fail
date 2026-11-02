@@ -205,6 +205,8 @@ pub fn fix_presets_say() -> Unit
 
 pub fn fix_preview() -> Json
 
+pub fn fix_preview_viz() -> Json
+
 pub let fix_providers : Array[(String, String, String, String)]
 
 pub let fix_put_up : Map[String, String]

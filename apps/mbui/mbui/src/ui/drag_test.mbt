@@ -35,6 +35,16 @@ fn swipe_view(moved : Ref[Double], tapped : Ref[Bool]) -> @ui.Tester {
 }
 
 ///|
+test "a wheel over a drag area scrolls the list containing it" {
+  let t = swipe_view(Ref::new(0.0), Ref::new(false))
+  t.draw()
+  let (_, y, _, _) = t.rect_of("swipe me").unwrap()
+  t.wheel(150.0, y + 5.0, 80.0)
+  t.draw()
+  assert_true(t.list_offset() > 0.0)
+}
+
+///|
 test "a drag area in a list: across first, it is the drag's and the list holds still; up or down first, the list's" {
   let moved = Ref::new(0.0)
   let tapped = Ref::new(false)
