@@ -691,6 +691,146 @@ test("what_was_said_is_found_by_its_words_as_its_entries_change", async () => {
   runner.shutdown();
 });
 
+test("refreshing_open_jobs_does_not_read_the_stations_closed_jobs", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  class JobsRead extends Counted {
+    jobIds: string[] = [];
+    override all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+      const rows = super.all(sql, params);
+      if (sql.startsWith("SELECT id, ord, json, chat, open FROM job WHERE station")) this.jobIds.push(...rows.map((r) => String(r[0])));
+      return rows;
+    }
+  }
+  const sql = new JobsRead(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  sql.exec("BEGIN");
+  for (let i = 0; i < 1000; i++) {
+    sql.run("INSERT INTO job (station, id, open, ord, json) VALUES (?, ?, 0, 0, ?)", ["w/a", `closed${i}`, JSON.stringify({ id: `closed${i}` })]);
+  }
+  sql.run("INSERT INTO job (station, id, open, ord, json) VALUES (?, ?, 1, 0, ?)", ["w/a", "live", JSON.stringify({ id: "live", state: "running" })]);
+  sql.exec("COMMIT");
+  data.set({ topic: "jobs", station: "w/a" }, [{ id: "live", state: "running" }, { id: "closed5", state: "running" }, { id: "new", state: "running" }]);
+  assert.equal(sql.jobIds.length, 1, "only the already open jobs need to be compared");
+  assert.deepEqual(sql.jobIds, ["live"], "only the already open jobs need to be compared");
+  await run(data.written);
+  assert.deepEqual(sql.all("SELECT id FROM job WHERE station = ? AND open = 1 ORDER BY id", ["w/a"]).map((r) => r[0]), ["closed5", "live", "new"]);
+  assert.equal(sql.all("SELECT count(*) FROM job WHERE station = ? AND open = 0", ["w/a"])[0][0], 999, "unrelated closed jobs remain available");
+  runner.shutdown();
+});
+
+test("transcripts_for_cleanup_are_ordered_by_their_latest_use_across_stations", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  const account = data.db("s1")!;
+  const sql = db();
+  assert.deepEqual(account.transcriptsByUse(50), []);
+  for (const [station, session] of [["w/b", "last"], ["w/a", "first"], ["w/c", "unknown"], ["w/a", "late"], ["w/b", "first"], ["w/a", "unknown"]] as [string, string][]) {
+    for (const i of [2, 5, 8]) sql.run("INSERT INTO transcript (station, session, i, json) VALUES (?, ?, ?, ?)", [station, session, i, "{}"]);
+  }
+  for (const [station, id, opened] of [["w/a", "first", 10], ["w/b", "first", 3], ["w/a", "late", 15]] as [string, string, number][]) {
+    sql.run("INSERT INTO log_use (kind, station, id, opened) VALUES ('transcript', ?, ?, ?)", [station, id, opened]);
+  }
+  for (const [station, key, active] of [["w/a", "first", 2], ["w/b", "first", 10], ["w/a", "late", 20], ["w/b", "last", 30]] as [string, string, number][]) {
+    sql.run("INSERT INTO session (station, key, last_active) VALUES (?, ?, ?)", [station, key, active]);
+  }
+  const ordered = [
+    { station: "w/a", id: "unknown" }, { station: "w/c", id: "unknown" },
+    { station: "w/a", id: "first" }, { station: "w/b", id: "first" },
+    { station: "w/a", id: "late" }, { station: "w/b", id: "last" },
+  ];
+  assert.deepEqual(account.transcriptsByUse(0), []);
+  assert.deepEqual(account.transcriptsByUse(3), ordered.slice(0, 3));
+  assert.deepEqual(account.transcriptsByUse(50), ordered);
+  sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", ["w/a", "unknown"]);
+  assert.deepEqual(account.transcriptsByUse(50), ordered.slice(1));
+  runner.shutdown();
+});
+
+test("opening_a_chat_during_history_cleanup_keeps_its_history", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  class OnEvict extends Counted {
+    onDelete: (id: string) => void = () => {};
+    override run(sql: string, params?: readonly SqlValue[]): number {
+      if (sql.startsWith("DELETE FROM transcript WHERE")) this.onDelete(String(params?.[1]));
+      return super.run(sql, params);
+    }
+  }
+  const sql = new OnEvict(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1", kept: 256 * 1024 });
+  await run(data.open(["s1"]));
+  const text = "字".repeat(10_000);
+  for (const id of ["k1", "k2", "k3"]) data.putItems("transcript", "w/a", id, [[0, { text }]]);
+  data.putItems("entry", "w/a", "1", Array.from({ length: 20 }, (_, i) => [i + 1, { n: i + 1, kind: "message", text, at: i }] as [number, J]));
+  const events: string[] = [];
+  let opened!: () => void;
+  let removedLast!: () => void;
+  const didOpen = new Promise<void>((resolve) => { opened = resolve; });
+  const didRemoveLast = new Promise<void>((resolve) => { removedLast = resolve; });
+  sql.onDelete = (id) => {
+    events.push(id);
+    if (id === "k3") removedLast();
+    if (events.length === 1) setImmediate(() => {
+      events.push("opened");
+      data.opened("transcript", "w/a", "k2", true);
+      opened();
+    });
+  };
+  await run(data.written);
+  await Promise.all([didOpen, didRemoveLast]);
+  assert.ok(events.includes("opened"), "the chat was opened while cleanup was in progress");
+  assert.ok(!events.slice(0, events.indexOf("opened")).includes("k2"), "another chat can open before the next history is removed");
+  assert.deepEqual(data.logRange("transcript", "w/a", "k2", 0, 0).get(0), { text }, "cleanup keeps the history that was opened");
+  runner.shutdown();
+});
+
+test("signing_out_during_history_cleanup_stops_using_the_closed_database", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  const defects: unknown[] = [];
+  runner.onDefect = (error) => defects.push(error);
+  class ClosingDb extends Counted {
+    closed = false;
+    afterClose = 0;
+    deleted: string[] = [];
+    signOut: () => void = () => {};
+    override all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+      if (this.closed) this.afterClose++;
+      return super.all(sql, params);
+    }
+    override run(sql: string, params?: readonly SqlValue[]): number {
+      if (this.closed) this.afterClose++;
+      if (sql.startsWith("DELETE FROM transcript WHERE")) {
+        this.deleted.push(String(params?.[1]));
+        if (this.deleted.length === 1) setImmediate(this.signOut);
+      }
+      return super.run(sql, params);
+    }
+    override close(): void { this.closed = true; }
+  }
+  const sql = new ClosingDb(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1", kept: 256 * 1024 });
+  await run(data.open(["s1"]));
+  const text = "字".repeat(10_000);
+  for (const id of ["k1", "k2", "k3"]) data.putItems("transcript", "w/a", id, [[0, { text }]]);
+  data.putItems("entry", "w/a", "1", Array.from({ length: 20 }, (_, i) => [i + 1, { n: i + 1, kind: "message", text, at: i }] as [number, J]));
+  const signedOut = new Promise<void>((resolve, reject) => {
+    sql.signOut = () => { void run(data.accounts([])).then(resolve, reject); };
+  });
+  await signedOut;
+  await flush();
+  assert.deepEqual(sql.deleted, ["k1"], "cleanup yields before removing the next transcript");
+  assert.equal(sql.closed, true);
+  assert.equal(sql.afterClose, 0, "cleanup does not query the signed-out account");
+  assert.deepEqual(defects, []);
+  runner.shutdown();
+});
+
 test("past_its_room_agents_transcripts_least_recently_used_go_and_a_chats_messages_stay", async () => {
   const host = new FakeHost();
   const runner = new Runner(host.time.clock);
