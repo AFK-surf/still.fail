@@ -608,7 +608,32 @@ fn Ctx::draw_image(
   // small if it has no size yet at all
   let px = dmin(self.image_px(src, bw, bh, fit), max_px.to_double())
   let px = if px <= 0.0 { 256.0 } else { px }
-  let e = match self.image_for(src, px) {
+  let found = self.image_for(src, px)
+  // A Tester records only the failed pictures this frame actually needed. A good decode at the requested size makes
+  // an older failed decode irrelevant; a smaller fallback does not stand in for the requested resolution.
+  if !shooting.val {
+    match fake.val {
+      Some(f) => {
+        let needs_decode = match found {
+          Some(e) => e.px < bucket(px)
+          None => true
+        }
+        if needs_decode {
+          match image_cache.get(src) {
+            Some(list) =>
+              for e in list {
+                if e.state < 0 && !f.frame_failed_images.contains(e.id) {
+                  f.frame_failed_images.push(e.id)
+                }
+              }
+            None => ()
+          }
+        }
+      }
+      None => ()
+    }
+  }
+  let e = match found {
     Some(e) => e
     None => {
       if shooting.val && image_awaited(src, px) {

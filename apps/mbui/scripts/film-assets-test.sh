@@ -53,4 +53,13 @@ for mode in missing late-missing native; do
 done
 MBUI_FILM_ALLOW_INCOMPLETE=1 media native
 jq -e '.settings.allow_incomplete == "1"' "$take/media.mp4.scene.json" >/dev/null
-echo 'film-assets-test: incomplete frames fail without replacing the film or sidecars; explicit omission is recorded'
+
+# A failed image from preparation that is no longer in the scene must not block the captured frame.
+printf 'tap Hide\nexit\n' > "$take/prepare"
+printf 'exit\n' > "$take/drive"
+for kind in picture film; do
+  case "$kind" in picture) ext=png ;; film) ext=mp4 ;; esac
+  env MBUI_MEDIA_APP=sffilmcheck MBUI_FILM_CHECK_RUN=1 MBUI_FILM_CHECK_MODE=unused-missing \
+    MBUI_WIN=128x128 MBUI_FILM_SCALE=1 bash scripts/media.sh "$kind" "$take/unused.$ext" "$take/drive" "$take/prepare"
+done
+echo 'film-assets-test: incomplete frames fail without replacing outputs; removed failures do not block export'

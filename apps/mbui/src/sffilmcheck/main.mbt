@@ -7,12 +7,12 @@ fn main {
   let native : Ref[@ui.NativeView?] = Ref(None)
   let reveal = Ref(false)
   let scene = fn(c : @ui.Ctx) {
-    if mode == "late-missing" {
+    if mode == "late-missing" || mode == "unused-missing" {
       let button = c.id("reveal")
-      c.box(id=button, w=Px(64.0), h=Px(32.0), fn() { c.text("Reveal") |> ignore }) |> ignore
+      c.box(id=button, w=Px(64.0), h=Px(32.0), fn() { c.text(if mode == "late-missing" { "Reveal" } else { "Hide" }) |> ignore }) |> ignore
       if c.clicked(button) { reveal.val = true }
     }
-    if mode == "missing" || mode == "late-missing" && reveal.val {
+    if mode == "missing" || mode == "late-missing" && reveal.val || mode == "unused-missing" && !reveal.val {
       c.image_bytes("mem:broken", b"not an image")
       c.image("mem:broken", w=Px(64.0), h=Px(64.0), fade=false) |> ignore
     } else if mode == "native" {

@@ -330,6 +330,7 @@ pub fn Tester::new(
     image_loads: [],
     image_srcs: {},
     images: {},
+    frame_failed_images: [],
     bold: 0.0,
     ui_face: 0.0,
     tabular: 0.0,
@@ -522,6 +523,13 @@ pub fn Tester::failed_images(self : Tester) -> Array[Int] {
       None => false
     }
   })
+}
+
+///|
+/// Failed decodes needed to draw the last painted frame, by the host's image id. A failure kept in the cache for a
+/// picture no longer in the frame is not one of these. `image_src` gives the source of each id.
+pub fn Tester::failed_images_drawn(self : Tester) -> Array[Int] {
+  self.fake.frame_failed_images.copy()
 }
 
 ///|

@@ -463,6 +463,10 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // what is placed by the clock placed where it is now (Ctx::moved_by: a page sliding), read as it is painted
   c.moved_place()
   c.ninst = 0
+  match fake.val {
+    Some(f) => f.frame_failed_images.clear()
+    None => ()
+  }
   cycle_looks_begin()
   dr.tops.clear()
   c.segs.clear()
