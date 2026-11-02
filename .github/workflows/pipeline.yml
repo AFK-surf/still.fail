@@ -662,6 +662,7 @@ jobs:
             !apps/mbui/_build/**/*.mbc
           key: mbui-mac-moon-${{ github.sha }}
           restore-keys: mbui-mac-moon-
+      - run: bash apps/mbui/scripts/moon-mtimes.sh
       - if: steps.shell.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:

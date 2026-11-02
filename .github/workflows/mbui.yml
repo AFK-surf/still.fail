@@ -389,6 +389,8 @@ jobs:
             !apps/mbui/_build/**/*.mbc
           key: mbui-mac-moon-${{ github.sha }}
           restore-keys: mbui-mac-moon-
+      # (each file an mtime of its content: moon builds again only what changed since that build)
+      - run: bash apps/mbui/scripts/moon-mtimes.sh
       # (no Rust target: nothing is built with cargo here; native.ts adds one itself if a part must be built)
       - name: Tools
         run: |
@@ -524,6 +526,7 @@ jobs:
             !apps/mbui/out/ios-device/_build/**/*.mbc
           key: mbui-ios-moon-${{ github.sha }}
           restore-keys: mbui-ios-moon-
+      - run: bash apps/mbui/scripts/moon-mtimes.sh
       - run: touch "$RUNNER_TEMP/start"
       # Always unsigned. TestFlight signing/upload is a separate manual workflow.
       # (the shell's cargo build, its dependencies kept, as main's newest that built it left it: a shell changed is built
