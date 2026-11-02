@@ -32,7 +32,8 @@ pub fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -
 }
 
 ///|
-/// 记忆 made once as nodes (memories_page's, narrow: page_node) in node `v`: what it is for over its list, a row to each
+/// 记忆 made once as nodes (memories_page's: page_node, laid out by the `width` its frame gives it, narrow where none
+/// is given) in node `v`: what it is for over its list, a row to each
 /// station's memory (its name, opening it), one offline saying so, followed as the core says them; while the stations
 /// are read the first time, the list in its bones (waiting_node: three made up, the core asked nothing for them), what
 /// could not be read said over them. `here`: who and where, as that changes.
@@ -43,6 +44,7 @@ pub fn memories_node(
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
   said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
 ) -> Unit {
   let topic = fn() { @settings.stations_of(core, here()) }
   @sf.page_node(
@@ -51,6 +53,7 @@ pub fn memories_node(
     on_back~,
     frame~,
     said?,
+    width?,
     lead=fn() { @sf.t("android-misc.memory.note") },
     fn() { ["list"] },
     fn(b, _) {

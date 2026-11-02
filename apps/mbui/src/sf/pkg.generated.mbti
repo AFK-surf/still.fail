@@ -702,7 +702,7 @@ pub fn group(@ui.Ctx, () -> Unit, card? : Bool) -> Unit
 
 pub let group_corner : Double
 
-pub fn group_node(@view.View, (@view.View) -> Unit) -> Unit
+pub fn group_node(@view.View, (@view.View) -> Unit, card? : Bool) -> Unit
 
 pub fn group_row(@ui.Ctx, Bool, Bool, () -> Unit, id? : Int32) -> Unit
 
@@ -957,6 +957,8 @@ pub let login_card_most : @ui.Len
 pub fn look() -> Look
 
 pub fn look_for(Double) -> Look
+
+pub fn look_node(@view.View) -> Look
 
 pub fn loose(@ui.Ctx, () -> Unit) -> Unit
 
@@ -1304,7 +1306,7 @@ pub let page_list_opened : @ref.Ref[(@ui.Ctx, String, Int32) -> Unit]
 
 pub let page_narrow_most : Double
 
-pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit) -> Unit
+pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn page_note(@ui.Ctx, String, bad? : Bool) -> Unit
 
@@ -1773,6 +1775,8 @@ pub let search_ground : @ui.Color
 pub let secondary : @ui.TextStyle
 
 pub fn section(@ui.Ctx, String, () -> Unit, heads? : Bool, note? : String, actions? : () -> Unit, title_after? : () -> Unit) -> Unit
+
+pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String) -> Unit
 
 pub let section_note_gap : Double
 

@@ -13,7 +13,7 @@ import {
 }
 
 // Values
-pub fn about_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit) -> Unit
+pub fn about_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn about_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
@@ -331,7 +331,7 @@ pub fn me_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
 pub let mem_narrow_title : @ui.TextStyle
 
-pub fn memories_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit) -> Unit
+pub fn memories_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn memories_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 

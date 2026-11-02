@@ -344,36 +344,42 @@ fn page_words_made(t : @ui.Tester, words : String) -> Int {
 }
 
 ///|
-test "on the tape 关于 made once under the tape's bar where its page is narrow: its rows the tree's, its title the bar's alone; where its page is wider, its old view" {
-  // (600 across: its page 530, narrow; 839: wider than a narrow page is, its old view till the library's are made wide)
-  for win in [(600.0, true), (839.0, false)] {
-    let t = tape_bar_in("settings-about", Ref(""), w=win.0, h=900.0)
+test "on the tape 关于 made once under the tape's bar, its page narrow or wider: its rows the tree's, its title the bar's alone" {
+  // (600 across: its page 530, narrow; 839: wider than a narrow page is, laid out wide)
+  for win in [600.0, 839.0] {
+    let t = tape_bar_in("settings-about", Ref(""), w=win, h=900.0)
     assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
-    assert_eq(page_words_made(t, "更新日志"), if win.1 { 1 } else { 0 }, msg="\{win.0}: its rows the tree's")
-    assert_true(t.find("更新日志") is Some(_), msg="\{win.0}: its rows")
-    assert_eq(bar_words_drawn(t, "关于").length(), 1, msg="\{win.0}: the bar's title")
-    assert_eq(bar_words_old(t, "关于").length(), 0, msg="\{win.0}: no old bar")
+    assert_eq(page_words_made(t, "更新日志"), 1, msg="\{win}: its rows the tree's")
+    assert_eq(bar_words_drawn(t, "关于").length(), 1, msg="\{win}: the bar's title")
+    assert_eq(bar_words_old(t, "关于").length(), 0, msg="\{win}: no old bar")
   }
 }
 
 ///|
-test "on the tape 关于 as the window is made wider and narrower, its page told nothing: its old view where its page is wide, made again where it is narrow, kept while it stays so" {
+test "on the tape 关于 as the window is made wider and narrower, its page told nothing: the same nodes while its arrangement stays, laid out again only as it changes (narrow, wide, narrow)" {
   let t = tape_bar_in("settings-about", Ref(""), w=600.0, h=900.0)
+  let rows = fn() { @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == "更新日志" }).map(fn(d) { d.id }) }
   assert_eq(page_words_made(t, "更新日志"), 1)
-  let rows = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == "更新日志" }).map(fn(d) { d.id })
+  let narrow = rows()
   // (wider, its page still narrow: the same nodes; 590 would be no tape at all, a small screen's)
   t.resize(620.0, 900.0)
   t.run_for(@ui.move_most_ms)
-  assert_eq(@ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == "更新日志" }).map(fn(d) { d.id }), rows)
-  // (wide: its old view)
+  assert_true(rows() == narrow)
+  // (wide, its page 650: laid out again, wide)
+  t.resize(720.0, 900.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(page_words_made(t, "更新日志"), 1)
+  let wide = rows()
+  assert_true(wide != narrow)
+  // (wider still, as wide as a tape is: the same nodes)
   t.resize(839.0, 900.0)
   t.run_for(@ui.move_most_ms)
-  assert_eq(page_words_made(t, "更新日志"), 0)
-  assert_true(t.find("更新日志") is Some(_))
-  // (narrow again: made anew)
+  assert_true(rows() == wide)
+  // (narrow again: laid out again, narrow)
   t.resize(600.0, 900.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(page_words_made(t, "更新日志"), 1)
+  assert_true(rows() != wide)
 }
 
 ///|

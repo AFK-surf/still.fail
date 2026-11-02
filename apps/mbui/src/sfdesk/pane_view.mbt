@@ -299,6 +299,11 @@ priv struct FoldGoes {
   /// its row, the column, the page's pane, as made (for what is asked of them: pane_seen)
   parts : Array[@view.View]
   mut page_id : Int
+  /// the pages made once in the pane (pane_made: nodes of the tree's, not old views), by their entries, while they are;
+  /// and the entries that show, as the stack told them whole (nav_flat_view's `shown`): what the one shown shows across
+  /// read of it (fold_peek_shift), what it hands the system's bars (none)
+  made : Map[Int, @view.View]
+  mut shown : Array[Int]
   /// whether the core has given what the page shows of a page (sfapp's pane_ready), waited for that long at most
   mut ready : (Page) -> Bool
   mut most : Double
@@ -317,6 +322,8 @@ let fold_goes : FoldGoes = {
   node: None,
   parts: [],
   page_id: 0,
+  made: {},
+  shown: [],
   ready: fn(_) { true },
   most: 0.0,
 }
@@ -332,6 +339,8 @@ fn fold_goes_reset() -> Unit {
   fold_goes.left_tape = None
   fold_goes.node = None
   fold_goes.page_id = 0
+  fold_goes.made.clear()
+  fold_goes.shown = []
 }
 
 ///|
@@ -657,11 +666,34 @@ pub fn pane_node() -> @view.View? {
 }
 
 ///|
+/// The page made once in the pane that shows (an entry the stack told shown: fold_goes' `shown`), if one is.
+fn pane_made_shown() -> @view.View? {
+  for k in fold_goes.shown {
+    match fold_goes.made.get(k) {
+      Some(v) if v.alive() => return Some(v)
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+/// The page made once in the pane that shows, for a test: who it is (None: none shows).
+pub fn pane_made_seen() -> @view.NodeId? {
+  pane_made_shown().map(fn(v) { v.id() })
+}
+
+///|
 /// How far the page moves aside for the folded sidebar shown a while, worked out once as it is shown (frame.mbt
-/// peek_shift: what the page showed across as the last frame laid it out), the block where it is (`at`).
+/// peek_shift: what the page showed across as the last frame laid it out: an old view's page, or one made once of the
+/// tree's), the block where it is (`at`).
 fn fold_peek_shift(at : FoldLook) -> Double {
   let c = @ui.current()
-  let shown = c.shown_across(fold_goes.page_id, but="page-bar")
+  // (a page made once: what its tree's parts show across; else the old view's page)
+  let shown = match pane_made_shown() {
+    Some(p) => p.shown_across()
+    None => c.shown_across(fold_goes.page_id, but="page-bar")
+  }
   match fold_goes.node {
     Some(v) => {
       let s = wide.side_w.get()

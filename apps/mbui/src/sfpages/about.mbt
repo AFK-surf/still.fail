@@ -90,7 +90,8 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
 }
 
 ///|
-/// 关于 made once as nodes (about_page's, narrow: page_node) in node `v`: this build and the way to a newer one (how it
+/// 关于 made once as nodes (about_page's: page_node, laid out by the `width` its frame gives it, narrow where none is
+/// given) in node `v`: this build and the way to a newer one (how it
 /// stands as the core's update says it, its bar coming and going with what is under way, the row growing and closing
 /// round it), what changed; whether this device sends usage statistics and error reports (where the build sends any:
 /// the switch as the host has it, told as it is turned); still.fail's terms and privacy policy on its site; last, where
@@ -102,6 +103,7 @@ pub fn about_node(
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
   said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
 ) -> Unit {
   // (its blocks: the version's; the statistics' where the build sends any; the terms'; the performance record's where
   // the device keeps one)
@@ -116,58 +118,70 @@ pub fn about_node(
     }
     out
   }
-  @sf.page_node(v, fn() { @sf.t("web-pages.settings.nav.about") }, on_back~, frame~, said?, blocks, fn(b, key) {
+  @sf.page_node(v, fn() { @sf.t("web-pages.settings.nav.about") }, on_back~, frame~, said?, width?, blocks, fn(b, key) {
+    // (each a section of its own, its title shown on a wide page alone: about_page's heads=false)
+    let section = fn(title : String, body : (@view.View) -> Unit) {
+      @sf.section_node(b, fn() { @sf.t(title) }, heads=false, body)
+    }
     match key {
       // this build, and what changed
       "version" =>
-        @sf.group_node(b, fn(g) {
-          version_rows_node(g, core)
-          @sf.link_row_node(g, fn() { @sf.t("web-pages.settings.nav.changelog") }, fn() { (core.push)(Changelog) })
+        section("web-pages.settings.nav.version", fn(s) {
+          @sf.group_node(s, fn(g) {
+            version_rows_node(g, core)
+            @sf.link_row_node(g, fn() { @sf.t("web-pages.settings.nav.changelog") }, fn() { (core.push)(Changelog) })
+          })
         })
-      // a build that sends nothing has nothing to turn off
+      // a build that sends nothing has nothing to turn off (a card of words on a wide page: about_page's)
       "reporting" =>
-        @sf.group_node(b, fn(g) {
-          @sf.switch_row_node(
-            g,
-            fn() { @sf.t("common.telemetry.title") },
-            fn() { (core.reporting)().unwrap_or(false) },
-            fn(on) { (core.set_reporting)(on) },
-            note=fn() { @sf.t("common.telemetry.note", args=[("name", "still.fail")]) },
-          )
+        section("web-pages.about.privacy", fn(s) {
+          @sf.group_node(s, card=true, fn(g) {
+            @sf.switch_row_node(
+              g,
+              fn() { @sf.t("common.telemetry.title") },
+              fn() { (core.reporting)().unwrap_or(false) },
+              fn(on) { (core.set_reporting)(on) },
+              note=fn() { @sf.t("common.telemetry.note", args=[("name", "still.fail")]) },
+            )
+          })
         })
       // on still.fail's site, in the browser
       "legal" =>
-        @sf.group_node(b, fn(g) {
-          for l in [("terms", "common.legal.terms"), ("privacy", "common.legal.privacy")] {
-            @sf.link_row_node(g, fn() { @sf.t(l.1) }, fn() { (core.open_link)(@settings.legal_url(l.0)) }, out=true)
-          }
+        section("web-pages.about.legal", fn(s) {
+          @sf.group_node(s, fn(g) {
+            for l in [("terms", "common.legal.terms"), ("privacy", "common.legal.privacy")] {
+              @sf.link_row_node(g, fn() { @sf.t(l.1) }, fn() { (core.open_link)(@settings.legal_url(l.0)) }, out=true)
+            }
+          })
         })
       // this device's performance record, last and out of the way (where the device keeps one: iOS)
       _ =>
-        @sf.group_node(b, fn(g) {
-          let on = fn() {
-            perf_turned.get() |> ignore
-            @hostapi.perf_state() == 1
-          }
-          let size = fn() {
-            perf_turned.get() |> ignore
-            @hostapi.perf_size()
-          }
-          @sf.switch_row_node(
-            g,
-            fn() { @sf.t("web-pages.about.perf.title") },
-            on,
-            fn(now) {
-              @hostapi.set_perf(now)
-              perf_turned.set(@signals.untracked(fn() { perf_turned.get() }) + 1)
-            },
-            note=fn() {
-              @sf.t("web-pages.about.perf.note", args=[("where", @hostapi.perf_where()), ("size", @sf.file_size(size()))])
-            },
-          )
-          g.show(fn() { size() > 0.0 }, fn(r) {
-            @sf.link_row_node(r, fn() { @sf.t("web-pages.about.perf.share") }, acts=true, fn() {
-              @hostapi.share("", "still.fail-perf.log", "text/plain", @hostapi.perf_read()) |> ignore
+        section("web-pages.about.diagnostics", fn(s) {
+          @sf.group_node(s, fn(g) {
+            let on = fn() {
+              perf_turned.get() |> ignore
+              @hostapi.perf_state() == 1
+            }
+            let size = fn() {
+              perf_turned.get() |> ignore
+              @hostapi.perf_size()
+            }
+            @sf.switch_row_node(
+              g,
+              fn() { @sf.t("web-pages.about.perf.title") },
+              on,
+              fn(now) {
+                @hostapi.set_perf(now)
+                perf_turned.set(@signals.untracked(fn() { perf_turned.get() }) + 1)
+              },
+              note=fn() {
+                @sf.t("web-pages.about.perf.note", args=[("where", @hostapi.perf_where()), ("size", @sf.file_size(size()))])
+              },
+            )
+            g.show(fn() { size() > 0.0 }, fn(r) {
+              @sf.link_row_node(r, fn() { @sf.t("web-pages.about.perf.share") }, acts=true, fn() {
+                @hostapi.share("", "still.fail-perf.log", "text/plain", @hostapi.perf_read()) |> ignore
+              })
             })
           })
         })
