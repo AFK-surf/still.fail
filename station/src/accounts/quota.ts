@@ -379,7 +379,10 @@ export async function codexUsage(authFile: string, urls: Urls = URLS, lang: Lang
   const headers: Record<string, string> = { authorization: `Bearer ${access}`, "user-agent": "codex_cli_rs" };
   if (typeof tokens.account_id === "string") headers["chatgpt-account-id"] = tokens.account_id;
   const response = await get(`${urls.chatgpt}/backend-api/wham/usage`, headers);
-  if (!response.ok) return refused("ChatGPT ", response, lang);
+  if (!response.ok) {
+    const result = await refused("ChatGPT ", response, lang);
+    return response.status === 401 ? { ...result, signedOut: true } : result;
+  }
   const body: Json = await response.json();
   const windows = (
     [

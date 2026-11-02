@@ -55,6 +55,20 @@ test("the newest successful allowance belongs to the account, even if another pr
   });
 });
 
+test("a revoked login check remains specific when another profile shares its account's allowance", async () => {
+  await withSharedAccount(async (r) => {
+    r.hub.accounts.setHealth((id) => ({
+      account: id === "other" ? "account-b" : "account-a",
+      check: { state: id === "borrowed" ? "login" : "ok" },
+      quota: id === "borrowed" ? { state: "unavailable", windows: [], checkedAt: 3 } : { state: "ok", checkedAt: 4, windows: [{ usedPercent: 10 }] },
+    }));
+    const health = r.hub.accounts.healthOf("borrowed");
+    assert.equal(health.check.state, "login");
+    const profiles = r.config.profiles.filter((p) => ["borrowed", "other"].includes(p.id));
+    assert.equal(r.hub.accounts.pick(profiles, null, true).id, "other");
+  });
+});
+
 test("two profiles on the same account do not win two successive picks while neither has started", async () => {
   const r = new Rig();
   try {
