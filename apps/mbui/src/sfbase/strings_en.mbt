@@ -1207,7 +1207,6 @@ let en : Map[String, String] = {
   "web-main.resources.grouped": "Grouped",
   "web-main.resources.none": "Nothing to show yet",
   "web-main.resources.show": "Show",
-  "web-main.shareIn.startOn": "Start the new chat on",
   "web-main.shortcuts.change": "Edit shortcuts",
   "web-main.shortcuts.fitActual": "Fit/actual size",
   "web-main.shortcuts.group.composer": "Composer",

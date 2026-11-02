@@ -106,3 +106,10 @@ fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
 ///|
 /// What another app shares, its panel's width with a wide window (ShareIn.css.ts panel: 520).
 let share_panel_w : Double = 520.0
+
+///|
+/// Whether the window is laid out Small, where what is presented is a sheet (as the library's presenters have it):
+/// what is shared shows in a sheet there, in its wide panel otherwise (share.mbt).
+fn sheet_small(c : @ui.Ctx) -> Bool {
+  @sf.layout(c.window_size().0) is Small
+}

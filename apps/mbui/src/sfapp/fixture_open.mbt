@@ -662,7 +662,9 @@ fn open_share_fixture(mode : String) -> Unit {
       share_over.set(mode == "share-in-over")
       share_in.shared.set(Some(@sffixture.fix_shared))
       share_in.env_taken.set(true)
-      raise_sheet(ShareSheet)
+      if !share_inline() {
+        raise_sheet(ShareSheet)
+      }
       share_in.raised.set(true)
       share_in.choosing.set(mode == "share-in-stations")
     }

@@ -1188,7 +1188,6 @@ let zh : Map[String, String] = {
   "web-main.resources.grouped": "分组",
   "web-main.resources.none": "还没有可看的数据",
   "web-main.resources.show": "显示方式",
-  "web-main.shareIn.startOn": "新 chat 开在",
   "web-main.shortcuts.change": "修改快捷键",
   "web-main.shortcuts.fitActual": "适应窗口/原始大小",
   "web-main.shortcuts.group.composer": "输入框",
