@@ -59,7 +59,7 @@ runner → 客户端：
 `run` 时：
 1. 解析 `--data`（缺省同 Rust：`$STILLFAIL_DATA`，否则 `$EMBER_DATA`，否则 `~/.stillfail`）。`flock` 住 `<data>/run/station.lock`；拿不到就退出码 3（桌面 app 靠它）。
 2. 自己先 bind 两个 TCP 监听：MCP 端口（`config.json` 的端口或 4750，被占用时规则同 `mesh/app/src/ports.rs`）和本机回环口（`--port` 或 4760，规则同 `mesh/station/src/local.rs`），把它们作为继承的 fd 传给 Node（fd 3、4），这样新旧 Node 交接时端口不空档。MCP 端口记在 `<data>/run/mcp.json`，下次启动（stop 之后重启、崩溃后重启）先绑它：留着没重启的 agent 只认得这个地址；绑不上时，Node 打开工具入口后让拿着旧地址的 agent 进程重启并 resume。数据目录不是 `~/.stillfail` 的 station（测试、开发用）不占 4750/4760，没指定端口就用随机端口。
-3. 起 Node：`node <app>/station/main.js run --app … --data … --launcher-fds 3,4,5 --launcher-carries`，fd 5 是控制管道（双向，一行一个 JSON）；`--launcher-carries` 说这个启动器会把交接时 Node 交出的内存转给新 Node（见下）。
+3. 起 Node：`node <app>/station/main.js run --app … --data … --launcher-fds 3,4,5 --launcher-carries`，fd 5 是控制管道（双向，一行一个 JSON）；`--launcher-carries` 说这个启动器会把交接时 Node 交出的内存转给新 Node（见下）。 macOS 上带环境变量 `MallocSpaceEfficient=1`：malloc 把释放的内存当场还给系统，不留着（默认留着的那些在内存紧时被压缩、换出，照样算 station 的；ccvm 上 900 MB 里有约 300 MB 是这种）。Node 起来就把它从自己的环境里删掉，agent 和工具不继承。
 4. 写 `<data>/run/station.json`（一行、字段与 Rust 版相同：`{"pid":<启动器 pid>,"startedAt":<ms>,"version":…,"handoff":1,"drain":1,"channel":1}`，Unix 上末尾多一个 `"renew":1`（见下「启动器自己换新」）；version 由 Node 在控制管道上告诉启动器；安装器用 sed 读，格式不能变）。
 5. 信号：
    - SIGUSR2（交接）：起一个新 Node（同样的 fd），等它在控制管道上说 `{"ready":true}`（超时 60 秒算失败：杀掉新的，写 `run/handoff-failed`，旧的照常）；然后告诉旧的 `{"op":"handover"}`，等它退出（最多 30 秒，超时 SIGKILL）；新的**接管之后**（见下）才更新 `station.json` 的 `startedAt`（pid 不变——安装器靠这个判断交接成功）。
