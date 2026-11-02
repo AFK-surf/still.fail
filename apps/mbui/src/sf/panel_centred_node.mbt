@@ -25,9 +25,13 @@ fn panel_centred_node(
   dims? : () -> Bool = fn() { true },
   covered? : () -> Bool = fn() { false },
 ) -> Unit {
-  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, covered~, fn(across, layer, look, veil) {
+  // (one that goes in steps: Escape and back a step back first, its steps' own)
+  let within = fn() { steps_escape(keyed) }
+  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
-    let untitled = x.title == ""
+    // (one that goes in steps: each its own head and foot, sliding in whole; the dialog untitled round them)
+    let steps = keyed.steps
+    let untitled = x.title == "" || steps is Some(_)
     let w = fn() { dmin(if x.wide { dialog_wide_w } else { dialog_w }, layer.window().0 - dialog_margin) }
     // (its old views' words as far in as its look says, as kit's dialog's look gives them: read as they are painted)
     let words_look = fn(c : @ui.Ctx, held : Int) {
@@ -65,7 +69,7 @@ fn panel_centred_node(
       |> ignore
       // (untitled: its close button alone over its top corner, concentric with it: built first, as dialog builds its
       // layer before what it holds: read out first, drawn under what comes after it)
-      if untitled {
+      if untitled && steps is None {
         d.box(fn(o) {
           o.over(Is(true)).width(By(fn() { Some(w()) }))|> ignore
           @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
@@ -85,7 +89,7 @@ fn panel_centred_node(
       }
       // (its head: its title and its close button at its end where it has a title, what it says under them where it says
       // something: dialog's)
-      if !untitled || x.description != "" {
+      if steps is None && (!untitled || x.description != "") {
         @ui.old(d, natural=true, key=fn() { key + "/head" }, fn(c) {
           let held = c.box(style=centred_part_in(dialog_pad, 0.0), fn() {
             in_words(fn() {
@@ -121,7 +125,11 @@ fn panel_centred_node(
           @ui.old(s, natural=true, key=fn() { key + "/body" }, fn(c) {
             let column = @ui.style(px=room(words_in))
             let top = if untitled { dialog_untitled_top } else { no_style }
-            let at = (if x.foot is None { dialog_body_end } else { dialog_body }).then(column).then(top)
+            let at = if steps is Some(_) {
+              full_width.then(column).then(top)
+            } else {
+              (if x.foot is None { dialog_body_end } else { dialog_body }).then(column).then(top)
+            }
             let held = c.box(style=centred_part_in(0.0, 0.0), fn() {
               c.box(style=at, gone_empty=true, fn() {
                 // (what it holds in a column on its words' line, its rows' grounds reaching out across that to the
@@ -134,9 +142,22 @@ fn panel_centred_node(
                 column_in_now.val = words_in
                 in_dialog.val = true
                 untitled_clear_now.val = if untitled { dialog_close_clear() } else { 0.0 }
-                panel_whole_now.val += 1
-                draw_panel_body(x, c, close, keyed~)
-                panel_whole_now.val -= 1
+                match steps {
+                  // (its steps a stack, out to the dialog's edges, each whole: steps_centred's)
+                  Some(nav) => {
+                    // (each step's own head and foot on the words' line, as steps_centred has them)
+                    words_in_now.val = words_in
+                    steps_shown(c, keyed, nav, false, dialog_pad + words_in, fn(st, back) {
+                      dialog_page(c, key, keyed, { ..x, body: st.body, foot: st.foot }, st, close, back)
+                    })
+                    words_in_now.val = 0.0
+                  }
+                  None => {
+                    panel_whole_now.val += 1
+                    draw_panel_body(x, c, close, keyed~)
+                    panel_whole_now.val -= 1
+                  }
+                }
                 panel_sides_in.val = was.0
                 rows_out.val = was.1
                 words_in_now.val = was.2
@@ -159,7 +180,7 @@ fn panel_centred_node(
       |> ignore
       // (its foot: its buttons at its end in its foot corner)
       match x.foot {
-        Some(f) =>
+        Some(f) if steps is None =>
           @ui.old(d, natural=true, key=fn() { key + "/foot" }, fn(c) {
             let held = c.box(style=centred_part_in(0.0, 0.0), fn() {
               in_words(fn() { c.box(style=dialog_foot.then(dialog_corner_foot(dialog_pad)), fn() { f(c, close) }) |> ignore })
@@ -168,7 +189,26 @@ fn panel_centred_node(
           })
           .margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0)))
           |> ignore
-        None => ()
+        _ => ()
+      }
+      // (one that goes in steps: its close button over its steps, laid after them, a step sliding in or away under it)
+      if steps is Some(_) {
+        d.box(fn(o) {
+          o.over(Is(true)).width(By(fn() { Some(w()) }))|> ignore
+          @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
+            let held = c.box(style=dialog_close_row, fn() {
+              c.box(style=dialog_close_corner(), fn() {
+                if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
+                  cancel()
+                }
+              })
+              |> ignore
+            })
+            words_look(c, held)
+          })
+          |> ignore
+        })
+        |> ignore
       }
       // (another dialog over it: dimmed over all of itself, its corners its own)
       d.box(fn(v) { v.over(Is(true)).radius(Is(dialog_r)).ground(By(veil)) |> ignore }) |> ignore
