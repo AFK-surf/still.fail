@@ -142,33 +142,59 @@ fn panel_node(
         // (each part of it out to the panel's edges it stands by, the panel's padding round what it holds inside it: what
         // reaches into that padding on purpose (a head's search in its top corner, a foot's buttons in its foot corner, a
         // row out to its sides) drawn and pressed there, cut by the panel alone, as small_panel's are)
-        let headed = !x.heads_itself && (x.title != "" || x.head_end is Some(_))
+        // (its title as it is now, `live`'s first (small_panel's: its step and what it says not drawn beside what opened
+        // it); headed as it is, told only as that changes: what stands by its top built again then, not as the title's
+        // words change)
+        let title = fn() {
+          match x.live {
+            Some(f) => f().0
+            None => x.title
+          }
+        }
+        // (a live one headed only while it has a title, what stands at its head's end with it, as small_panel heads it;
+        // what it is presented with headed by a head's end alone too)
+        let headed_now : @signals.Computed[Bool] = @signals.computed(
+          fn(_) { !x.heads_itself && (title() != "" || (x.live is None && x.head_end is Some(_))) },
+          same=fn(a, b) { a == b },
+        )
+        let headed = fn() { headed_now.get() }
         let footed = x.foot is Some(_)
         // (ruled, the room over the line its body's, not the foot's: a line of what it holds going down to meet it reaches
         // it, its body cutting nothing of it: panel_rule_over)
         let ruled_foot = x.ruled && footed
-        let (over, under) = (if headed { 0.0 } else { panel_pad }, if !footed || ruled_foot { panel_pad } else { 0.0 })
+        let over = fn() { if headed() { 0.0 } else { panel_pad } }
+        let under = if !footed || ruled_foot { panel_pad } else { 0.0 }
         // (out to the panel's edge under it where nothing is under it; over a ruled foot, the room its own, in it)
         let out_under = if footed { 0.0 } else { panel_pad }
-        // (its title, panel_head's)
-        if headed {
-          @ui.old(p, natural=true, fits?=fits(0), key=fn() { key + "/head" }, fn(c) {
+        // (its title, panel_head's: out to the panel's edges over it, on `v`'s node)
+        let head = fn(v : @view.View) {
+          @ui.old(v, natural=true, fits?=fits(0), key=fn() { key + "/head" }, fn(c) {
             let was = opened()
-            let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, x.title, end?=x.head_end) })
+            let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, title(), end?=x.head_end) })
             beside_given.val = was
             words_look(c, held)
           })
-          .margin(Is((-panel_pad, -panel_pad, -panel_pad, 0.0)))
-          |> ignore
+        }
+        match x.live {
+          // (there while it has a title as it is now, what holds what it holds the same as it comes and goes)
+          Some(_) =>
+            p.show(headed, fn(h) {
+              h.margin(Is((-panel_pad, -panel_pad, -panel_pad, 0.0))) |> ignore
+              head(h) |> ignore
+            })
+          None =>
+            if headed() {
+              head(p).margin(Is((-panel_pad, -panel_pad, -panel_pad, 0.0))) |> ignore
+            }
         }
         // (`tall`: what it holds fills the room it is given, laid out in it, scrolling as it does itself: panel_grows)
         if x.tall > 0.0 {
           p.box(fn(b) {
-            b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(Is((-panel_pad, -over, -panel_pad, -out_under))).focusable(Is(x.focus), keys=0, tab=false) |> ignore
+            b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(By(fn() { (-panel_pad, -over(), -panel_pad, -out_under) })).focusable(Is(x.focus), keys=0, tab=false) |> ignore
             body_box.val = Some(b)
             @ui.old(b, key=fn() { key + "/body" }, fn(c) {
               let was = opened()
-              let held = c.box(style=panel_grows.then(panel_part_in(over, under)), fn() {
+              let held = c.box(style=panel_grows.then(panel_part_in(over(), under)), fn() {
                 panel_sides_in.val = panel_pad
                 small_panel_now.val = true
                 words_in_now.val = text_in
@@ -202,7 +228,7 @@ fn panel_node(
             b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
               @ui.old(s, natural=true, fits?=fits(1), key=fn() { key + "/body" }, fn(c) {
               let was = opened()
-                let held = c.box(style=held_in().then(@ui.style(pt=room(over), pb=room(under))), fn() {
+                let held = c.box(style=held_in().then(@ui.style(pt=room(over()), pb=room(under))), fn() {
                   // (held shorter than what it holds: what would scroll in itself there laid out whole, panel_held)
                   panel_held_now.val = scroll.goes()
                   panel_sides_in.val = panel_pad
@@ -219,7 +245,7 @@ fn panel_node(
                 beside_given.val = was
                 words_look(c, held)
               })
-              .margin(Is((0.0, -over, 0.0, -out_under)))
+              .margin(By(fn() { (0.0, -over(), 0.0, -out_under) }))
               |> ignore
             })
             // (cut at its box while what it holds is taller than it, as @kit.in_room's held list (pick_node's): else what
