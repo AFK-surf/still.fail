@@ -183,7 +183,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
 /// with all it had; its process ends so the change takes: at once when idle, else when the running turn is over, before
 /// the next one starts (nobody waits for the turn to end to change it). Another model starts over
 /// what went with the old one: its effort back to the runtime's default, its profile back to the station's choice
-/// (picked here, among those with the model enabled), unless given with it. Given back to the station to pick again
+/// (picked here, among those that run the model), unless given with it. Given back to the station to pick again
 /// (`repick`), its account is picked now as a new session's would be. Whether it goes on afresh once its prompt cache is
 /// over (`afresh`, null: as the station is set) is read as its next turn starts: its process goes on.
 export async function configure(hub: Hub, key: string, change: SessionChange, lang: Lang = stationLang()) {
@@ -448,7 +448,7 @@ export async function continueMachineSession(hub: Hub, roots: Roots, found: Mach
   // On the profiles the chat's workspace runs on.
   const profiles = hub.profilesIn(ws).filter((p) => p.runtimes.includes(runtime));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfile", { runtime: runtimeTitle(runtime) }));
-  // The model it ran, where a profile has it enabled; else the one picked runs its own.
+  // The model it ran, where a profile runs it; else the one picked runs its own.
   const keptModel = found.model !== null && profiles.some((p) => p.models.includes(found.model!)) ? found.model : null;
   const profile = hub.accounts.pick(profiles, keptModel, false);
   const model = keptModel ?? profile.model ?? profile.models[0] ?? null;

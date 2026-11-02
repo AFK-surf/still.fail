@@ -42,7 +42,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_))) {
+  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_))) {
     return false
   }
   let core = settings_core(src, w)
@@ -70,8 +70,6 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Archiving => @sfpages.archiving_page(c, core, here, frame)
     StationArchiving(st) => @sfpages.station_archiving_page(c, core, here, frame, st)
     Notifications => @sfpages.notify_page(c, core, here, frame)
-    PickModels(a, id) => @sfpages.pick_models_page(c, core, here, frame, a, id)
-    ProfileModels(a, id) => @sfpages.profile_models_page(c, core, here, frame, a, id)
     Shortcuts => @sfpages.shortcuts_page(c, core, frame)
     Me => @sfpages.me_page(c, core, here, frame)
     Workspace => @sfpages.workspace_page(c, core, here, frame)
@@ -104,7 +102,6 @@ let settings_deep : Ref[Bool] = Ref(false)
 fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
     "policy-text" => @sfpages.fx_policy_up.val = "text"
-    "profile-spread" => @sfpages.fx_spread_up.val = true
     "policy-option" => @sfpages.fx_policy_up.val = "option"
     "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")

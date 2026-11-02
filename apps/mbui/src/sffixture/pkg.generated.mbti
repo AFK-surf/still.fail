@@ -205,6 +205,8 @@ pub fn fix_presets_say() -> Unit
 
 pub fn fix_preview() -> Json
 
+pub let fix_providers : Array[(String, String, String, String)]
+
 pub let fix_put_up : Map[String, String]
 
 pub let fix_reads : Array[Json]
@@ -664,6 +666,8 @@ pub(all) struct NewFix {
   mut preset : String
   presets : Array[Json]
   mut presets_late : Bool
+  liked : Array[String]
+  mut providers : Bool
 }
 
 // Type aliases

@@ -30,6 +30,10 @@ pub(all) struct NewFix {
   presets : Array[Json]
   /// The first station's presets not said yet (their topic as a station still to answer has it)
   mut presets_late : Bool
+  /// The models starred in the model control (`pick.like`), the first starred first
+  liked : Array[String]
+  /// MBUI_FIXTURE=newchat-providers…: as crowded, with keys of many providers besides (fix_providers)
+  mut providers : Bool
 }
 
 ///|
@@ -49,6 +53,8 @@ pub let new_fix : NewFix = {
   preset: "",
   presets_late: false,
   presets: [fix_preset_design(), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")],
+  liked: [],
+  providers: false,
 }
 
 ///|
@@ -249,12 +255,45 @@ pub fn fix_crowded_model(model : String, name : String, family : String, maker :
     "model": Json::string(model),
     "name": Json::string(name),
     "family": Json::string(family),
-    "maker": { "id": Json::string(maker), "name": Json::string(maker) },
+    "maker": { "id": Json::string(maker), "name": Json::string(fix_maker_name(maker)) },
     "runtimes": Json::array(runtimes.map(Json::string(_))),
     "ids": [Json::string(model)],
     "efforts": {},
     "accounts": {},
     "availability": "here",
+  }
+}
+
+///|
+/// The models of newchat-providers besides newchat-crowded's (2026-11-02 用户「我 20 个 provider 你怎么排」, 「分组应该是
+/// 模型厂商」): each its id, name, and maker (its id, as format.ts names it, and its name), many makers among them.
+// kept across runs: a table, never written
+pub let fix_providers : Array[(String, String, String, String)] = [
+  ("gemini-3-pro", "Gemini 3 Pro", "gemini", "Google"),
+  ("devstral-3", "Devstral 3", "mistral", "Mistral"),
+  ("qwen3-8-coder", "Qwen3.8 Coder", "qwen", "Qwen"),
+  ("glm-5-3", "GLM-5.3", "zhipu", "Z.ai"),
+  ("minimax-m3", "MiniMax M3", "minimax", "MiniMax"),
+  ("mimo-3", "MiMo 3", "xiaomi", "Xiaomi"),
+  ("nemotron-4", "Nemotron 4", "nvidia", "NVIDIA"),
+  ("gpt-oss-2", "gpt-oss 2", "openai", "OpenAI"),
+]
+
+///|
+/// The makers' names, by id.
+fn fix_maker_name(id : String) -> String {
+  match id {
+    "anthropic" => "Anthropic"
+    "openai" => "OpenAI"
+    "deepseek" => "DeepSeek"
+    "xai" => "xAI"
+    "kimi" => "Moonshot AI"
+    "devin" => "Cognition"
+    other =>
+      match fix_providers.iter().find_first(fn(p) { p.2 == other }) {
+        Some(p) => p.3
+        None => other
+      }
   }
 }
 
@@ -268,12 +307,16 @@ pub fn fix_model(model : String) -> Json {
     "swe-2" => fix_crowded_model(model, "SWE-2", "SWE", "devin", ["devin"])
     "gpt-6-1-sol" => fix_crowded_model(model, "GPT-6.1 Sol", "Sol", "openai", ["codex"])
     "gpt-6-1-terra" => fix_crowded_model(model, "GPT-6.1 Terra", "GPT", "openai", ["codex"])
+    m if fix_providers.iter().any(fn(p) { p.0 == m }) => {
+      let p = fix_providers.iter().find_first(fn(p) { p.0 == m }).unwrap()
+      fix_crowded_model(m, p.1, p.1, p.2, ["claude"])
+    }
     "claude-sonnet-5" =>
       {
         "model": "claude-sonnet-5",
         "name": "Sonnet 5",
         "family": "Sonnet",
-        "maker": { "id": "anthropic", "name": "anthropic" },
+        "maker": { "id": "anthropic", "name": "Anthropic" },
         "runtimes": ["claude"],
         "ids": ["claude-sonnet-5"],
         "efforts": {},
@@ -285,7 +328,7 @@ pub fn fix_model(model : String) -> Json {
         "model": "gpt-6",
         "name": "GPT-6",
         "family": "GPT",
-        "maker": { "id": "openai", "name": "openai" },
+        "maker": { "id": "openai", "name": "OpenAI" },
         "runtimes": ["codex"],
         "ids": ["gpt-6"],
         "efforts": {},
@@ -297,7 +340,7 @@ pub fn fix_model(model : String) -> Json {
         "model": "claude-opus-5-5",
         "name": "Opus 5.5",
         "family": "Opus",
-        "maker": { "id": "anthropic", "name": "anthropic" },
+        "maker": { "id": "anthropic", "name": "Anthropic" },
         "runtimes": ["claude"],
         "ids": ["claude-opus-5-5"],
         "efforts": {},
@@ -312,6 +355,31 @@ pub fn fix_runtime_of(model : String) -> String {
   match items(Some(fix_model(model)), "runtimes").get(0) {
     Some(String(r)) => r
     _ => "claude"
+  }
+}
+
+///|
+/// The models the model control offers, in the core's order.
+fn fix_shown_models() -> Array[Json] {
+  let n = new_fix
+  if n.tall {
+    fix_crowded_models.map(fix_model) + fix_tall_models.map(fix_model)
+  } else if n.providers {
+    fix_crowded_models.map(fix_model) + fix_providers.map(fn(p) { fix_model(p.0) })
+  } else if n.crowded {
+    fix_crowded_models.map(fix_model)
+  } else {
+    [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
+  }
+}
+
+///|
+/// The models new chats here started on most, most first.
+fn fix_near() -> Array[String] {
+  if new_fix.crowded {
+    ["gpt-6-astra", "deepseek-v4-1-flash", "swe-2"]
+  } else {
+    ["claude-opus-5-5", "gpt-6"]
   }
 }
 
@@ -333,16 +401,22 @@ pub fn fix_pick() -> Json {
     Json::object(o)
   }
   {
-    "options": fix_pick_options(
-      if n.tall {
-        fix_crowded_models.map(fix_model) + fix_tall_models.map(fix_model)
-      } else if n.crowded {
-        fix_crowded_models.map(fix_model)
-      } else {
-        [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
-      },
-    ),
-    "near": if n.crowded { ["gpt-6-astra", "deepseek-v4-1-flash", "swe-2"] } else { ["claude-opus-5-5", "gpt-6"] },
+    "options": fix_pick_options(fix_shown_models()),
+    "near": Json::array(fix_near().map(Json::string(_))),
+    // (those starred, those used most left out)
+    "liked": Json::array(n.liked.filter(fn(m) { !fix_near().contains(m) }).map(Json::string(_))),
+    // (the makers of its models, in their order, as the core says them)
+    "makers": {
+      let makers : Array[(String, String, Int)] = []
+      for o in fix_shown_models() {
+        let id = text(field(Some(o), "maker"), "id")
+        match makers.search_by(fn(m) { m.0 == id }) {
+          Some(i) => makers[i] = (id, makers[i].1, makers[i].2 + 1)
+          None => makers.push((id, text(field(Some(o), "maker"), "name"), 1))
+        }
+      }
+      Json::array(makers.map(fn(m) { { "id": Json::string(m.0), "title": Json::string(m.1), "count": Json::number(m.2.to_double()) } }))
+    },
     "runtimeFixed": false,
     "value": picked(n.model, n.runtime, n.effort, ""),
     "valueOption": fix_model(n.model),
@@ -418,6 +492,7 @@ fn fix_pick_options(all : Array[Json]) -> Json {
         Object(m) => {
           let m = m.copy()
           let model = text(Some(o), "model")
+          m["liked"] = Json::boolean(n.liked.contains(model))
           let many = items(Some(o), "runtimes").length() > 1
           let ran = if model == n.d_model {
             Some((n.d_runtime, n.d_effort, used.get(model).map(fn(u) { u.2 }).unwrap_or(0)))
@@ -755,6 +830,16 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       take("runtime", fn(s) { n.d_runtime = s })
       take("effort", fn(s) { n.d_effort = s })
       take("profile", fn(s) { n.d_profile = s })
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
+    "pick.like" => {
+      take("model", fn(s) {
+        n.liked.retain(fn(m) { m != s })
+        if flag(p, "liked") {
+          n.liked.push(s)
+        }
+      })
       f.changed()
       Some(Ok(Json::object({})))
     }

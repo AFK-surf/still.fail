@@ -104,16 +104,17 @@ fn in_line(a : Double, b : Double, c : Double) -> Bool {
 }
 
 ///|
-test "wide: the models used most between the rest and how hard it thinks, the most used nearest it, each saying how it runs; one pressed is made what it runs on and the panel closes" {
+test "wide: the models used most between the way to all of them and how hard it thinks, the most used nearest it, each saying how it runs; one pressed is made what it runs on and the panel closes" {
   let t = model_pop("newchat-model")
-  let (opus, gpt, sonnet) = (
+  let (opus, gpt, all) = (
     t.get(Button, label="Opus 5.5").rect,
     t.get(Button, label="GPT-6").rect,
-    t.get(Button, label="Sonnet 5").rect,
+    t.get(Button, label="全部模型").rect,
   )
   let effort = t.get(Radio, label="高").rect
   // (2026-11-01 用户「那它就不应该跑到离按钮很远的最顶上去啊」)
-  assert_true(in_line(sonnet.1, gpt.1, opus.1) && in_line(gpt.1, opus.1, effort.1), msg="\{sonnet} \{gpt} \{opus} \{effort}")
+  assert_true(in_line(all.1, gpt.1, opus.1) && in_line(gpt.1, opus.1, effort.1), msg="\{all} \{gpt} \{opus} \{effort}")
+  assert_true(t.query(Button, label="Sonnet 5") is None, msg="the rest a step further")
   // how it last ran, at its row's end
   assert_true(
     t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "中" && b.y >= gpt.1 && b.y + b.h <= gpt.1 + gpt.3 }),
@@ -123,6 +124,55 @@ test "wide: the models used most between the rest and how hard it thinks, the mo
   t.run_for(@kit.presence_in_ms)
   assert_true(t.query(@ui.Role::Dialog) is None, msg="its panel closed")
   assert_eq((new_fix.model, new_fix.runtime, new_fix.effort), ("gpt-6", "codex", "medium"))
+}
+
+///|
+test "wide: two levels: those used most, those starred, the way to all of them; there, a maker's models, each starred by the box before it" {
+  let t = model_pop("newchat-model")
+  assert_true(t.query(Button, label="Sonnet 5") is None, msg="neither used most nor starred: a step further")
+  assert_true(t.query(Checkbox, label="喜欢 Opus 5.5") is None, msg="no box among those used most")
+  t.click(Button, label="全部模型")
+  t.run_for(@kit.presence_in_ms)
+  // the makers beside a maker's models: the picked model's, Anthropic's
+  assert_true(t.query(Button, label="Anthropic") is Some(_) && t.query(Button, label="OpenAI") is Some(_))
+  assert_true(t.query(Button, label="Opus 5.5") is Some(_) && t.query(Button, label="GPT-6") is None, msg="Anthropic's alone")
+  // its box ticked: starred
+  t.click(Checkbox, label="喜欢 Sonnet 5")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(new_fix.liked, ["claude-sonnet-5"])
+  assert_true(t.query(@ui.Role::Dialog) is Some(_), msg="the panel stays open")
+  // another maker's
+  t.click(Button, label="OpenAI")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.query(Button, label="GPT-6") is Some(_) && t.query(Button, label="Sonnet 5") is None)
+  // back: Sonnet past those used most, no head of its own
+  t.click(Button, label="全部模型")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.find("喜欢") is None, msg="no head")
+  let (opus, gpt, sonnet) = (t.get(Button, label="Opus 5.5").rect.1, t.get(Button, label="GPT-6").rect.1, t.get(Button, label="Sonnet 5").rect.1)
+  assert_true(in_line(sonnet, gpt, opus), msg="\{sonnet} \{gpt} \{opus}")
+  // its box unticked there: gone from 喜欢
+  t.click(Button, label="全部模型")
+  t.run_for(@kit.presence_in_ms)
+  t.click(Button, label="Anthropic")
+  t.run_for(@kit.presence_in_ms)
+  t.click(Checkbox, label="喜欢 Sonnet 5")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(new_fix.liked, [])
+}
+
+///|
+test "wide, models of many makers: each a row of its own in the list of them, none cut short" {
+  let t = model_pop("newchat-providers-model")
+  t.click(Button, label="全部模型")
+  t.run_for(@kit.presence_in_ms)
+  for k in ["Anthropic", "OpenAI", "DeepSeek", "Google"] {
+    assert_true(t.query(Button, label=k) is Some(_), msg=k)
+  }
+  t.click(Button, label="Google")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.query(Button, label="Gemini 3 Pro") is Some(_) && t.query(Button, label="Opus 5.5") is None)
+  assert_eq(t.squeeze_faults(), [])
 }
 
 ///|
@@ -167,7 +217,7 @@ test "wide: another effort picked, its thumb slides there, one thumb all the way
 test "wide, many models and Codex's efforts and speeds: the models, how hard it thinks on a line of its own, the runtime and how fast a row each, in the panel" {
   let t = model_pop("newchat-tall-model")
   let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
-  let last = t.get(Button, label="GPT-6.1 Terra").rect
+  let last = t.get(Button, label="全部模型").rect
   // how hard it thinks, its levels on one line under the models
   let levels = ["默认", "最低", "低", "中", "高", "很高", "最高", "Ultra"].map(fn(l) { t.get(Radio, label=l).rect })
   for r in levels {

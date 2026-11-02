@@ -51,8 +51,6 @@ priv struct SettingsFixture {
   mut resets_used : Int
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
-  /// the profiles given ChatGPT 团队's GPT-6 mini from its page (`profile.addModel` on another one), by id
-  models_given : Array[String]
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
   mut pairing : Bool
@@ -103,7 +101,6 @@ let fx : SettingsFixture = {
   skills_shared: {},
   resets_used: 0,
   models_added: [],
-  models_given: [],
   pairing: false,
   pair_ended: "",
   mba_online: false,
@@ -173,7 +170,6 @@ fn fixture_reset() -> Unit {
   fx.kept_cleared.clear()
   fx.resets_used = 0
   fx.models_added.clear()
-  fx.models_given.clear()
   fx.version = 0
   fx.marks.clear()
   fx.auto = false
@@ -380,11 +376,6 @@ pub fn fixture_page(mode : String) -> String {
       fx.profile_pending = m == "settings-profile-hosts-pending"
       up("", "settings/profile/ws1/st1/cc", 3)
     }
-    // ChatGPT 团队's page at its models: GPT-6 mini to be given to 备用 key too
-    "settings-profile-spread" => up("", "settings/profile/ws1/st1/cx", 3)
-    "settings-profile-spread-dialog" => fixture_open.desk = "profile-spread"
-    // ChatGPT 团队's models on their page (many, a filter, one to name by hand)
-    "settings-profile-models" => up("", "settings/profile-models/ws1/st1/cx", 0)
     "settings-profile-login" => {
       fx.login = "needs_code"
       up("", "settings/profile/ws1/st1/cc", 0)
@@ -494,8 +485,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
-    "settings-profile-quota" | "settings-profile-spread" | "settings-profile-spread-dialog" => "profile:ws1/st1#cx"
-    "settings-profile-models" => "profile-models:ws1/st1#cx"
+    "settings-profile-quota" => "profile:ws1/st1#cx"
     "settings-me-reading" => "me"
     "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
     "settings-connect" => "connect:ws1/st1#k1"
@@ -546,7 +536,8 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
     "access": obj([("kind", str(kind)), ("key", str(if kind == "subscription" { "" } else { "sk-…a41f" }))]),
     "home": "",
     "homeExists": true,
-    "models": ["claude-opus-5-5", "claude-sonnet-5"],
+    "models": ["claude-opus-5-5", "claude-sonnet-5", "claude-haiku-5"],
+    "named": [],
     "env": [],
     "usedBy": ["k1"],
     "loginCommand": "",
@@ -563,7 +554,7 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
       obj([("name", str("Sonnet")), ("models", ["claude-sonnet-5"])]),
       obj([("name", str("Haiku")), ("models", ["claude-haiku-5"])]),
     ],
-    "modelsText": "2 个模型",
+    "modelsText": "3 个模型",
     "available": ["claude-opus-5-5", "claude-sonnet-5", "claude-haiku-5"],
     "usesText": "Claude Code",
     "check": obj([("state", str("ok")), ("detail", str("可用，订阅有效")), ("checkedAt", Json::number(0.0)), ("time", obj([("checkedAt", stamp_of("5 分钟前"))]))]),
@@ -669,7 +660,7 @@ fn fx_profile_hosts() -> Array[Json] {
       ("station", str("ws1/" + station)), ("stationId", str(station)), ("stationName", str(name)),
       ("profileId", str(id)), ("profileName", str(id)), ("role", str(role)), ("title", str(title)),
       ("about", str(about)), ("online", Json::boolean(true)), ("usable", Json::boolean(true)),
-      ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(0.0)), ("spread", []),
+      ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(0.0)),
     ])
   }
   let members = [
@@ -744,34 +735,8 @@ fn fx_cc_with(more : Array[(String, Json)]) -> Array[(String, Json)] {
 }
 
 ///|
-/// A profile's models the others could have too (views/profiles.ts spread): ChatGPT 团队's GPT-6 mini, which 备用 key
-/// and MBA's 团队 key list, each until given it.
-fn fx_spread(id : String) -> Json {
-  let targets = [("ws1/st1", "Studio", "k2", "备用 key"), ("ws1/st2", "MBA", "team", "团队 key")].filter(fn(x) {
-    !fx.models_given.contains(x.2)
-  })
-  if id != "cx" || targets.is_empty() {
-    return Json::array([])
-  }
-  [
-    obj([
-      ("model", str("gpt-6-mini")),
-      ("name", str("GPT-6-MINI")),
-      (
-        "targets",
-        Json::array(
-          targets.map(fn(x) {
-            obj([("station", str(x.0)), ("stationName", str(x.1)), ("profileId", str(x.2)), ("profileName", str(x.3)), ("title", str(x.3)), ("model", str("gpt-6-mini"))])
-          }),
-        ),
-      ),
-      ("targetsText", str(targets.map(fn(x) { x.3 }).join("、"))),
-    ]),
-  ]
-}
-
-///|
-/// ChatGPT 团队's own: more models than a filter is over (one named by hand once added), a reset of its quota left.
+/// ChatGPT 团队's own: more models than its page shows at first (one named by hand once added, which can be taken off
+/// again), a reset of its quota left.
 fn fx_cx_more() -> Array[(String, Json)] {
   let ids = [
     "gpt-6", "gpt-6-mini", "gpt-6-nano", "gpt-6-codex", "gpt-6-codex-mini", "gpt-5.5", "gpt-5.5-mini", "gpt-5.5-codex", "gpt-5",
@@ -783,8 +748,10 @@ fn fx_cx_more() -> Array[(String, Json)] {
   }
   let left = 2 - fx.resets_used
   [
-    ("modelsText", str("1 个模型")),
-    ("models", ["gpt-6-mini"]),
+    ("modelsText", str("\{ids.length()} 个模型")),
+    ("models", Json::array(ids.map(str))),
+    ("named", Json::array(fx.models_added.map(str))),
+    ("added", Json::array(fx.models_added.map(str))),
     ("available", Json::array(ids.map(str))),
     ("names", Json::object(names)),
     ("series", fx_cx_series(ids)),
@@ -2153,7 +2120,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "members",
             if fx.profile_hosts && text(pv, "id") == "cc" { Json::array(fx_profile_hosts().filter(fn(m) { !fx.profile_pending || text(Some(m), "stationId") != "st2" })) } else { [
-              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Studio")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0)), ("spread", fx_spread(text(Some(p), "id")))]),
+              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Studio")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0))]),
             ] },
           ),
           (
@@ -2430,6 +2397,13 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     "software.check" | "software.update" | "software.channel" | "search.setPersonal" | "permissions.request" =>
       Some(Ok(obj([])))
     "agentEnv.form.open" | "agentEnv.form.edit" | "agentEnv.form.drop" | "agentEnv.form.save" => Some(Ok(obj([])))
+    // ChatGPT 团队's models named by hand, one taken off
+    "profile.put" if text(p, "id") == "cx" && field(field(p, "input"), "models") is Some(Array(_)) => {
+      let named = items(field(p, "input"), "models").filter_map(fn(m) { if m is String(m) { Some(m) } else { None } })
+      fx.models_added.retain(fn(m) { named.contains(m) })
+      fx_changed()
+      Some(Ok(obj([])))
+    }
     "profile.quota" | "profile.check" | "profile.put" => Some(Ok(obj([])))
     // the subscription's sign-in begun: as settings-profile-login has it, waiting on the code
     "profile.login" => {
@@ -2445,8 +2419,6 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     "profile.addModel" => {
       if text(p, "id") == "cx" {
         fx.models_added.push(text(p, "model"))
-      } else {
-        fx.models_given.push(text(p, "id"))
       }
       fx_changed()
       Some(Ok(obj([])))

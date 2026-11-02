@@ -58,22 +58,6 @@ test "wide: the station's Hermes profile can be selected from its custom variabl
 }
 
 ///|
-test "wide: a new profile's models chosen on a page of their own, then on to its page" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls, mode="settings")
-  t.draw()
-  app.nav.push(Setting(@settings.Route::PickModels("ws1/st1", "cc")))
-  t.run_for(@ui.move_most_ms)
-  assert_true(t.find("Opus 5.5") is Some(_) && t.find("Haiku 5") is Some(_), msg="its whole list to tick")
-  match t.find("完成") {
-    Some((x, y)) => t.tap(x, y)
-    None => abort("no 完成")
-  }
-  t.run_for(@ui.move_most_ms)
-  assert_true(app.nav.top() is Setting(@settings.Route::Profile("ws1/st1", "cc")), msg="on to its page")
-}
-
-///|
 test "wide: a secret's page says what it is, how agents may get it and when they did, its content masked until opened" {
   let t = wide_tester([], mode="settings")
   t.draw()

@@ -500,7 +500,7 @@ thread is called by the first line of the first thing a person said in it
   "link": { "state": "online", "message": null },
   "overview": { … } | null,                                      // null while offline or not yet read
   "host": { … } | null,
-  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // claude, codex, dsh, grok, cursor if a profile has models enabled; those models, distinct and sorted
+  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // claude, codex, dsh, grok, cursor if a profile runs models; those models, distinct and sorted
 }]
 
 // chat
@@ -629,6 +629,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `shareIn.open` | `scope`, `source`, `station`, `id?`, `title?`, `key?` (a new chat's composer key, when not `new:<workspace>`) | `{ station, key, session?, thread?, title? }`: what is shared put after what the composer of the chat (`id`, its row) or of the workspace's new chat (to start on `station`) holds, once; nothing is sent, the page opens the chat; the chat is kept as where that site's things go |
 | `pick.set` / `pick.save` | `station`, `of` (`new`, `session:<key>`, `connect:<id>`, `connect-new`), and for `set` any of `model`, `runtime`, `effort`, `profile`, `fast`, `open`, `clear` (for `save` any of the first five too: picked first, a frequent combination's one press) | a model control's picks until saved (the `pick` topic); `save` makes them what it runs on (`session.settings`, `connect.put`, the new chat's choice), `{ saved }` |
 | `pick.repick` | `station`, `of` (`session:<key>`) | beside 自动 in its panel (`PickView.repick`, when another account could run it): the chat's account given back to the station and picked again now, as a new chat's would be (`session.settings` with `repick`; the account drafted gives way, the rest stays drafted), `{ profile, said }`: the account picked and, said, whether it stayed or moved (`said` null from a station that cannot pick again) |
+| `pick.like` | `station`, `of`, `model`, `liked` | stars a model (or not) for the station's workspace, kept on this device: every model control there lists it after those used most (`PickView.liked`, `ModelOption.liked`) |
 | `pick.borrow` | `station`, `of` | the picked model is one another station of the workspace offers (`ModelOption.availability` `borrowable`): that station shares the profile with this one (`profile.share`, its allow list with this station added; managers only), `{ borrowed }`; the copy comes as any share does (docs/station-share.md) |
 | `adb.share` | `station`, `connect?`, `pair?` (adbd's ports, as the app found them), `device`, `android`, `package`, `minutes?` (60) | — ; lends this phone's adb to the station's agents (native cores only), or the offer as it is now; another station's in place of one before (docs/adb-share.md) |
 | `adb.stop` | — | — ; lent no longer |

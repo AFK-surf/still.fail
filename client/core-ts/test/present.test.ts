@@ -239,7 +239,7 @@ test("the_last_speaker_is_named_and_an_agents_state_rides_on_it", () => {
 });
 
 test("a_profiles_models_come_by_series", () => {
-  let q: J = { models: ["claude-opus-5-5"], check: { models: ["claude-sonnet-5", "claude-opus-4-8", "claude-opus-5-5", "my-model", "claude-fable-5-1"] } };
+  let q: J = { models: ["claude-opus-5-5", "claude-sonnet-5", "claude-opus-4-8", "my-model", "claude-fable-5-1"], check: { models: ["claude-sonnet-5", "claude-opus-4-8", "claude-opus-5-5", "claude-fable-5-1"] } };
   q = p.profile(q);
   assert.deepEqual(q.series, [
     { name: "Fable", models: ["claude-fable-5-1"] },
@@ -389,10 +389,14 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.deepEqual([watching.statusText, watching.statusLead, watching.statusRest], ["监控中", "watch", "监控中"]);
 });
 
-test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
-  let q: J = { models: ["mine", "b"], check: { models: ["a", "b"] } };
+test("what_a_profile_runs_what_can_be_taken_off_and_which_machine_logins_are_offered", () => {
+  // all it runs (the station's: those named, then the rest its check found); of those named, the one its provider does
+  // not list can be taken off
+  let q: J = { models: ["mine", "b", "a"], named: ["mine", "b"], check: { models: ["a", "b"] } };
   q = p.profile(q);
-  assert.deepEqual(q.available, ["a", "b", "mine"]);
+  assert.deepEqual(q.available, ["mine", "b", "a"]);
+  assert.deepEqual(q.added, ["mine"]);
+  assert.equal(q.modelsText, "3 个模型");
   const c = { now: 0, offsetMin: 0 };
   let o: J = {
     profiles: [{ runtime: "claude", machine: true, models: [] }],

@@ -297,7 +297,7 @@
   "core-views.vault.field.content": "内容",
   "core-views.vault.field.cookies": "Cookie",
   "core-views.vault.binary": "二进制 · {size}",
-  "core-views.present.profile.models": "已启用 {enabled} / {n} 个模型",
+  "core-views.present.profile.models": "{n} 个模型",
   "core-views.present.profile.no_models": "尚未列出模型",
   "core-views.present.resets_left": "剩余 {n} 次",
   "core-views.present.started_by": "{name} 发起",

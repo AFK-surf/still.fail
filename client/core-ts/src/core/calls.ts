@@ -638,6 +638,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     case "newChat.create":
     case "newChat.migrate":
     case "pick.set":
+    case "pick.like":
     case "pick.save":
     case "pick.repick":
     case "pick.borrow": {

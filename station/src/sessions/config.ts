@@ -15,8 +15,11 @@ export type Profile = RuntimeProfile & {
   name: string;
   /// The runtimes it can run.
   runtimes: Runtime[];
-  /// Models it may be used for, chosen by hand from what its check found (trimmed, each once).
+  /// Models it runs: those named by hand (`named`), then the rest its check found (each once, in either spelling).
   models: string[];
+  /// Models named in config.json (trimmed, each once): by hand where its provider lists none, or ticked on before every
+  /// model its check found ran.
+  named: string[];
   model?: string;
   /// A message that reaches a running Claude Code turn first moves what it waits on to the background (absent: on).
   backgroundOnMessage: boolean;
@@ -85,8 +88,10 @@ const under = (dataDir: string, path: string) => (isAbsolute(path) ? path : join
 const machineName = (name: string | undefined) => name?.replace(/（本机）$| \(local\)$/, "").replace(/^本机 |^Local /, "");
 
 /// config.json (parsed) as the hub reads it: parse_config's defaults and derivations, without its checks (the config
-/// module refuses a config that does not pass them before anything reads it).
-export function hubConfig(raw: any, dataDir: string): HubConfig {
+/// module refuses a config that does not pass them before anything reads it). `found`: the models a profile's last check
+/// found (accounts/index.ts), which it runs besides those config.json names; none for one that runs no runtime (a
+/// provider of the automatic decisions alone: its models are not chat models).
+export function hubConfig(raw: any, dataDir: string, found: (id: string) => readonly string[] | null = () => null): HubConfig {
   const profiles: Profile[] = (Array.isArray(raw?.profiles) ? raw.profiles : []).map((p: any): Profile => {
     const seen = new Set<string>();
     const models = (Array.isArray(p.models) ? p.models : [])
@@ -94,6 +99,15 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
       .filter((m: string) => m !== "" && !seen.has(m) && (seen.add(m), true));
     const base: RuntimeProfile = { ...p, home: under(dataDir, String(p.home ?? "")) };
     const runtimes = profileRuntimes(base);
+    const runs = [...models];
+    if (runtimes.length > 0) {
+      const has = new Set(models.map(modelKey));
+      for (const m of found(String(p.id)) ?? []) {
+        if (m === "" || has.has(modelKey(m))) continue;
+        has.add(modelKey(m));
+        runs.push(m);
+      }
+    }
     return {
       ...base,
       id: p.id,
@@ -101,7 +115,8 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
       // One that runs neither runtime (a provider of chat completions only) is Claude's in name.
       runtime: runtimes[0] ?? "claude",
       runtimes,
-      models,
+      models: runs,
+      named: models,
       model: nonEmpty(p.model),
       backgroundOnMessage: p.backgroundOnMessage !== false,
       ...(Array.isArray(p.withheld) ? { withheld: p.withheld.filter((w: unknown): w is string => typeof w === "string" && w !== "") } : {}),
@@ -140,13 +155,13 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
   };
 }
 
-/// Its own spelling of a model it has enabled, however the model is spelled (gpt-6-astra here may be
+/// Its own spelling of a model it runs, however the model is spelled (gpt-6-astra here may be
 /// openai/gpt-6-astra there).
 export function spelling(profile: Profile, model: string): string | null {
   return profile.models.find((m) => m === model) ?? profile.models.find((m) => sameModel(m, model)) ?? null;
 }
 
-/// Whether it has a model enabled, in any spelling.
+/// Whether it runs a model, in any spelling.
 export const runs = (profile: Profile, model: string): boolean => spelling(profile, model) !== null;
 
 /// shapes model.rs `same`: two spellings are one model.

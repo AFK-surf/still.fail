@@ -217,7 +217,7 @@ export class Accounts {
     if (row.profilePinned) return null;
     const runtime = runtimeNamed(row.runtime);
     if (!runtime) return null;
-    // As the pool: those with its model enabled, or, when none has (a connect's binding from before models were
+    // As the pool: those that run its model, or, when none does (a connect's binding from before models were
     // enabled), all of its runtime's.
     const all = config.profiles.filter((p) => p.runtimes.includes(runtime) && this.allows(key, p));
     const strict = all.some((p) => serves(p, row.model));

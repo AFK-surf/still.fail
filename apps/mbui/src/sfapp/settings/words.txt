@@ -521,10 +521,6 @@ android-settings.models.filter
 android-settings.models.header
 android-settings.models.headerSaving
 android-settings.models.noneFiltered
-android-settings.models.note
-android-settings.models.refresh
-android-settings.models.refreshWhat
-android-settings.models.refreshed
 android-settings.none
 android-settings.notify.title
 android-settings.open
@@ -572,7 +568,6 @@ android-settings.profile.pasteKey
 android-settings.profile.pickModels.lead
 android-settings.profile.pickModels.none
 android-settings.profile.pickModels.reading
-android-settings.profile.pickModels.selected
 android-settings.profile.pickModels.skip
 android-settings.profile.pickModels.title
 android-settings.profile.recheck
@@ -606,7 +601,6 @@ android-settings.quota.resets
 android-settings.quota.title
 android-settings.quota.unavailable
 android-settings.quota.updated
-android-settings.refreshing
 android-settings.relays.add
 android-settings.relays.addAction
 android-settings.relays.added

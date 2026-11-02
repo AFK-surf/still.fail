@@ -190,7 +190,7 @@
   "android-chat.new.machine.text": "Claude Code and Codex sessions run in a terminal. Preview one, then continue it in its original folder; the terminal session is left as it was.",
   "android-chat.new.machine.title": "Continue a session on {station}",
   "android-chat.new.model": "Model",
-  "android-chat.new.noModels": "No models · Enable some",
+  "android-chat.new.noModels": "No models · View profiles",
   "android-chat.new.offline.text": "Open {app} on a machine and it will connect to this workspace.",
   "android-chat.new.offline.title": "No station online",
   "android-chat.new.placeholder": "Do anything",

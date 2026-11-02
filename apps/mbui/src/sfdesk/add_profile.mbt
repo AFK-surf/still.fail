@@ -96,12 +96,12 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
     @settings.drop_login(core, station, n)
   }
   let pending = if n.login.get() == "" { None } else { @settings.pending_login(core, station, n.login.get()) }
-  // the sign-in made its profile: on to choosing its models (PickModels), in this page's place
+  // the sign-in made its profile: on to its page, in this page's place
   match opt_text(pending, "created") {
     Some(id) => {
       n.login.set("")
       (core.say)(@sf.t("web-pages.profiles.signedInAdded"))
-      (core.in_place)(PickModels(station, id))
+      (core.in_place)(Profile(station, id))
     }
     None => ()
   }
@@ -331,7 +331,7 @@ fn connect_form(
         match r {
           Ok(v) => {
             (core.say)(@sf.t("web-pages.profiles.verifiedAdded"))
-            (core.in_place)(PickModels(station, text(Some(v), "id")))
+            (core.in_place)(Profile(station, text(Some(v), "id")))
           }
           // (what is wrong is the draft's own `error`, under the key)
           Err(_) => ()
@@ -531,7 +531,7 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
                 match r {
                   Ok(v) => {
                     (core.say)(@sf.t("web-pages.profiles.machineAdded"))
-                    (core.in_place)(PickModels(station, text(Some(v), "id")))
+                    (core.in_place)(Profile(station, text(Some(v), "id")))
                   }
                   Err(e) => (core.say)(@settings.error_text(e))
                 }

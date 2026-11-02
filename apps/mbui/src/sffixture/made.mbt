@@ -25,6 +25,8 @@ pub fn fixture_reset() -> Unit {
   new_fix.tall = false
   new_fix.preset = ""
   new_fix.presets_late = false
+  new_fix.liked.clear()
+  new_fix.providers = false
   fix_presets_said.val = 0
   new_fix.presets.clear()
   new_fix.presets.push_iter([fix_preset_design(), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")].iter())

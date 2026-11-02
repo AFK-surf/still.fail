@@ -864,6 +864,37 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   core.close();
 });
 
+test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_by_its_maker", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const option = (model: string) => v(values, 1).options.find((o: J) => o.model === model);
+  assert.deepEqual(v(values, 1).liked, [], "none starred yet");
+  // the makers of its models, in their models' order, each with how many
+  assert.deepEqual(v(values, 1).makers.map((k: J) => [k.id, k.title, k.count]), [["anthropic", "Anthropic", 2], ["openai", "OpenAI", 1]]);
+  // starred, in the order starred; one used most is not listed again
+  await ask(host, core, ui, 2, "pick.like", { station: "ws/st", of: "new", model: "claude-sonnet-5", liked: true });
+  await ask(host, core, ui, 3, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: true });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5", "gpt-6-astra"]);
+  assert.equal(option("gpt-6-astra").liked, true);
+  assert.equal(option("claude-opus-5-5").liked, false);
+  core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: null });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).near, ["gpt-6-astra"]);
+  assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5"]);
+  // unstarred
+  await ask(host, core, ui, 4, "pick.like", { station: "ws/st", of: "new", model: "claude-sonnet-5", liked: false });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).liked, []);
+  assert.equal(option("gpt-6-astra").liked, true, "still starred, listed among those used most");
+  core.close();
+});
+
 test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_has_it", async () => {
   const { host, core } = await choosing();
   let ui = core.connect();
@@ -954,7 +985,7 @@ test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", a
   p = v(values, 1);
   assert.equal(p.draft.profile ?? null, null);
   assert.ok(String(p.dropped).includes("已改为自动分配"), JSON.stringify(p));
-  assert.ok(String(p.force).startsWith("所选账号「p2」未启用"), JSON.stringify(p));
+  assert.ok(String(p.force).startsWith("所选账号「p2」无法运行"), JSON.stringify(p));
   assert.equal(p.whoLevel, "amber");
   assert.equal(p.becomes[1], "high");
   assert.equal(p.changed, true);

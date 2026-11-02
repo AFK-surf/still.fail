@@ -99,7 +99,7 @@ test "narrow: the models used most nearest how hard it thinks, at the sheet's fo
   let (sx, _, sw, _) = t.get(@ui.Role::Dialog).rect
   let effort = t.get(Radio, label="高").rect
   // (a sheet risen from the screen's foot: what is used most lowest, the most used of all nearest how hard it thinks)
-  let rows = ["Opus 5.5", "SWE-2", "DeepSeek V4.1 Flash", "GPT-6 Astra"].map(fn(l) { t.get(Button, label=l) })
+  let rows = ["全部模型", "SWE-2", "DeepSeek V4.1 Flash", "GPT-6 Astra"].map(fn(l) { t.get(Button, label=l) })
   for i in 1..<rows.length() {
     assert_true(rows[i].rect.1 > rows[i - 1].rect.1, msg="\{rows[i - 1].label} \{rows[i].label}")
   }
@@ -160,37 +160,45 @@ fn words_whole(t : @ui.Tester, name : String, sheet : (Double, Double, Double, D
 }
 
 ///|
-test "narrow: the model's panel has the models across it, every name whole, how hard it thinks and the runtime under them, in view as they scroll" {
-  // (a window too short for all of it)
-  let t = crowded("newchat-crowded-model", h=crowded_short)
+test "narrow: the model's panel has those used most across it, every name whole, how hard it thinks and the runtime under them; all the models a maker at a time, a step further each" {
+  // (a window too short for all of them)
+  let t = crowded("newchat-providers-model", h=crowded_short)
   run_to_sheet_rest(t)
   let sheet = t.get(@ui.Role::Dialog).rect
-  let (_, _, _, sh) = sheet
-  // more than the window has room for: the sheet as tall as its most
-  assert_true((sh - crowded_short * @sf.sheet_most).abs() < 1.0, msg="the sheet is \{sh} high")
-  // the models' names whole
-  for name in ["Opus 5.5", "GPT-6 Astra", "DeepSeek V4.1 Flash", "Grok 4.7 Build Fast"] {
+  for name in ["GPT-6 Astra", "DeepSeek V4.1 Flash", "SWE-2"] {
     assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
   }
   // how hard it thinks, its levels on one line under the models; the runtime a pill under them, saying the one picked,
   // the others a pick away; their words whole, in the sheet
   let runtime = t.get(Button, label="DeepSeek Harness").rect
   let effort = t.get(Radio, label="高").rect
-  let model = t.get(Button, label="Opus 5.5").rect
+  let model = t.get(Button, label="GPT-6 Astra").rect
   assert_true(effort.1 > model.1 && runtime.1 > effort.1 + effort.3, msg="\{model} \{effort} \{runtime}")
   assert_true(t.query(Radio, label="Claude Code") is None, msg="the runtimes not picked laid out")
   assert_true(t.get(Radio, label="默认").rect.1 == effort.1, msg="how hard it thinks not on one line")
-  assert_true(runtime.1 + runtime.3 <= sheet.1 + sh && runtime.0 + runtime.2 <= sheet.0 + sheet.2)
+  assert_true(runtime.1 + runtime.3 <= sheet.1 + sheet.3 && runtime.0 + runtime.2 <= sheet.0 + sheet.2)
   for name in ["DeepSeek Harness", "高", "最高"] {
     assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole")
   }
-  // the models scrolled: the choices where they were
-  let mx = model.0 + model.2 / 2.0
-  t.drag(mx, model.1 + 1.5 * model.3, mx, model.1 - model.3)
+  // all of them: the kinds, more than the sheet has room for, scrolling; one pressed, its models
+  t.click(Button, label="全部模型")
   t.run_for(@kit.presence_in_ms)
-  assert_true(t.get(Button, label="DeepSeek Harness").rect == runtime, msg="the runtime moved with the models")
-  assert_true(t.get(Radio, label="高").rect == effort, msg="how hard it thinks moved with the models")
-  assert_true(t.get(Button, label="Opus 5.5").rect.1 < model.1, msg="the models did not scroll")
+  let sheet = t.get(@ui.Role::Dialog).rect
+  assert_true((sheet.3 - crowded_short * @sf.sheet_most).abs() < 1.0, msg="the sheet is \{sheet.3} high")
+  for name in ["Anthropic", "OpenAI", "DeepSeek"] {
+    assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
+  }
+  t.click(Button, label="Anthropic")
+  t.run_for(@kit.presence_in_ms)
+  let sheet = t.get(@ui.Role::Dialog).rect
+  for name in ["Opus 5.5", "Sonnet 5"] {
+    assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
+  }
+  assert_true(t.query(Button, label="GPT-6 Astra") is None, msg="Anthropic's alone")
+  // back: the makers again
+  t.click(Button, label="Anthropic")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.query(Button, label="DeepSeek") is Some(_))
 }
 
 ///|
@@ -201,7 +209,7 @@ test "narrow, few models: the same panel; one runtime, nothing to choose of it" 
   let model = t.get(Button, label="GPT-6").rect
   assert_true(t.query(Button, label="Claude Code") is None)
   assert_true(t.get(Radio, label="高").rect.1 > model.1)
-  for name in ["Opus 5.5", "Sonnet 5", "GPT-6", "默认", "高"] {
+  for name in ["Opus 5.5", "全部模型", "GPT-6", "默认", "高"] {
     assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
   }
 }
@@ -212,7 +220,7 @@ test "wide: the model's panel beside its control has the models, how hard it thi
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(squeeze_opening)
   // (the models used most nearest how it runs, the rest past them: whichever way it opened)
-  let model = t.get(Button, label="Opus 5.5").rect
+  let model = t.get(Button, label="全部模型").rect
   let used = t.get(Button, label="SWE-2").rect
   let runtime = t.get(Button, label="DeepSeek Harness").rect
   let effort = t.get(Radio, label="高").rect

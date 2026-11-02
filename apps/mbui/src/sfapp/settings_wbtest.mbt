@@ -821,17 +821,14 @@ test "a profile's page: who it is and whether it works, then its allowance, what
   assert_true(y("5 小时") > y("额度") && t.find("本周") is Some(_))
   assert_true(y("近 7 天") > y("5 小时"))
   assert_true(y("使用它的连接") > y("近 7 天"))
-  assert_true(y("选择模型（2 / 3）") > y("使用它的连接"))
-  assert_true(y("默认 Fast") > y("选择模型（2 / 3）"))
+  assert_true(y("Haiku 5") > y("使用它的连接"))
+  assert_true(y("默认 Fast") > y("Haiku 5"))
   assert_true(y("分享给其他 station") > y("默认 Fast"))
   assert_true(y("同时用于 个人") > y("分享给其他 station"))
   assert_true(y("重新登录") > y("同时用于 个人"))
-  // its models chosen in place: the whole list under it, the one off too
-  assert_true(t.find("Haiku 5") is None)
-  t.tap_text("选择模型（2 / 3）")
-  t.draw()
-  assert_true(t.find("收起") is Some(_))
-  assert_true(t.find("Haiku 5") is Some(_))
+  // its models all listed, none to tick
+  assert_true(t.find("Opus 5.5") is Some(_) && t.find("Sonnet 5") is Some(_))
+  assert_true(t.find("收起") is None)
 }
 
 ///|

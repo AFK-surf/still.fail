@@ -6,7 +6,7 @@ import { apply, call, subscribe, v } from "./helpers.ts";
 test("Hermes models survive profile edits and reach the new-chat picker through the core", async () => {
   const profile = {
     id: "hm", name: "Hermes", runtime: "hermes", runtimes: ["hermes"], access: { kind: "env", key: "" },
-    home: "/profiles/hm", homeExists: true, model: null, models: [] as string[], env: [], usedBy: [], loginCommand: "",
+    home: "/profiles/hm", homeExists: true, model: null, models: ["openai-api:local-model"], named: [] as string[], env: [], usedBy: [], loginCommand: "",
     check: { state: "ok", detail: "", checkedAt: 1, models: ["openai-api:local-model"] }, quota: null,
   };
   const raw = { ...overview, profiles: [profile] };
@@ -25,16 +25,16 @@ test("Hermes models survive profile edits and reach the new-chat picker through 
       if (req.method !== "PUT" || !req.url.endsWith("/profiles/hm")) return undefined;
       assert.ok(req.headers.some(([name, value]) => name === "stillfail-runtimes" && value.split(",").includes("hermes")));
       const input = JSON.parse(new TextDecoder().decode(req.body!)); writes.push(input);
-      profile.models = input.addModel ? [...profile.models, input.addModel] : input.models;
+      // (as the station has it: those named, then the rest its check found)
+      profile.named = input.addModel ? [...profile.named, input.addModel] : input.models;
+      profile.models = [...profile.named, ...profile.check.models.filter((m) => !profile.named.includes(m))];
       return structuredClone(raw);
     });
-    call(core, ui, 3, "profile.put", { station: "ws/st", id: "hm", input: { models: ["openai-api:local-model"] } });
-    await host.settle(); apply(host, values);
-    assert.deepEqual(v(values, 1).profiles[0].models, ["openai-api:local-model"]);
     call(core, ui, 4, "profile.addModel", { station: "ws/st", id: "hm", model: "custom:manual-model" });
     await host.settle(); apply(host, values);
-    assert.deepEqual(writes, [{ models: ["openai-api:local-model"] }, { addModel: "custom:manual-model" }]);
-    assert.deepEqual(v(values, 1).profiles[0].models, ["openai-api:local-model", "custom:manual-model"]);
+    assert.deepEqual(writes, [{ addModel: "custom:manual-model" }]);
+    assert.deepEqual(v(values, 1).profiles[0].models, ["custom:manual-model", "openai-api:local-model"]);
+    assert.deepEqual(v(values, 1).profiles[0].added, ["custom:manual-model"], "named by hand, not listed: can be taken off");
     call(core, ui, 5, "newChat.pick", { scope: "ws", runtime: "hermes", model: "custom:manual-model" });
     await host.settle(); apply(host, values);
     assert.equal(v(values, 2).model.model, "custom:manual-model");

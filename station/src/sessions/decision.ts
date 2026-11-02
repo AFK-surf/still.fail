@@ -286,7 +286,7 @@ function connection(profile: Profile): Connection | undefined {
 /// the capability stale. Stays station-side; never holds a credential in the clear.
 export function fingerprint(profile: Profile): string {
   const c = connection(profile);
-  const value = [profile.id, accessKind(profile), profile.home, profile.models, profile.model ?? null, c ? [c.base, c.key, c.provider] : null];
+  const value = [profile.id, accessKind(profile), profile.home, profile.named, profile.model ?? null, c ? [c.base, c.key, c.provider] : null];
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 

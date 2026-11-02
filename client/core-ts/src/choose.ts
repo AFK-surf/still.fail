@@ -679,6 +679,7 @@ export class Choose implements Owner {
     // panel (`near`): a chat's or a new chat's, of the station's own models.
     const scope = ofAddress(station);
     const history = arr(this.#record(`ws:${scope}:frequent`));
+    const likedKeys = this.#liked(scope);
     const uses = new Map<string, number>();
     for (const h of history) {
       const found = optionOf(options, text(get(h, "model")));
@@ -695,11 +696,18 @@ export class Choose implements Owner {
         if (r.fast === true) parts.push("Fast");
       }
       const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast };
-      return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, uses: uses.get(id) ?? 0 };
+      return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, uses: uses.get(id) ?? 0, liked: likedKeys.includes(model.key(id)) };
     });
     const near = o.kind === "new" || o.kind === "session"
       ? annotated.filter((x: J) => x.uses > 0 && x.availability !== "borrowable").sort((a: J, b: J) => b.uses - a.uses).slice(0, NEAR).map((x: J) => x.model)
       : [];
+    // The starred, in the order they were starred, past those used most (not twice); then every model, by its maker
+    // (`makers`).
+    const liked = likedKeys.flatMap((k) => {
+      const found = annotated.find((x: J) => model.key(x.model) === k);
+      return found !== undefined && !near.includes(found.model) ? [found.model] : [];
+    });
+    const makers = this.#makers(annotated);
     let saveText = changed ? t("core-logic.choose.save", { model: modelName ?? t("core-logic.format.default_model"), effort: effortText, account: chosenText }) : t("core-logic.choose.save.unchanged");
     if (changed && fastAvailable) saveText = `${saveText} · ${speedText(fast)}`;
     return {
@@ -708,6 +716,8 @@ export class Choose implements Owner {
         fastText: effectiveFast ? "Fast" : null,
         options: annotated,
         near,
+        liked,
+        makers,
         runtimeFixed: fixed,
         value,
         valueOption: valueOption ?? null,
@@ -736,6 +746,38 @@ export class Choose implements Owner {
         borrow,
       },
     };
+  }
+
+  /// The makers of `options` (their `maker`; none, 其他), in the order their models come (the newest of Claude's first,
+  /// format.ts's order), each with how many of them it makes: what the panel lists all of them by (2026-11-02 用户
+  /// 「分组应该是模型厂商，而不是供应商」).
+  #makers(options: J[]): J[] {
+    const out = new Map<string, J>();
+    for (const o of options) {
+      const id = typeof get(o.maker, "id") === "string" ? o.maker.id : "";
+      const had = out.get(id);
+      if (had !== undefined) had.count += 1;
+      else out.set(id, { id, title: id === "" ? t("core-logic.choose.maker.other") : String(get(o.maker, "name") ?? id), count: 1 });
+    }
+    // (none known last)
+    return [...out.values()].sort((a, b) => Number(a.id === "") - Number(b.id === ""));
+  }
+
+  /// The models starred in `scope` (`ws:<scope>:liked`, kept on this device), by key, the first starred first.
+  #liked(scope: string): string[] {
+    return arr(this.#record(`ws:${scope}:liked`)).filter((k): k is string => typeof k === "string");
+  }
+
+  /// `pick.like`: model `model` starred (`liked`) or not in the workspace of the control's station: listed in every
+  /// model control's panel there after those used most.
+  like(station: string, m: string, liked: boolean): void {
+    if (m === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "model" }));
+    const scope = ofAddress(station);
+    const key = model.key(m);
+    const now = this.#liked(scope).filter((k) => k !== key);
+    if (liked) now.push(key);
+    this.#env.data.put(TABLE, `ws:${scope}:liked`, now, false);
+    this.#changed();
   }
 
   /// `pick.set`: picks in a control's panel. `open`: from what it runs on now again; `clear`: starts over too.

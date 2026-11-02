@@ -178,7 +178,7 @@
   "android-chat.new.machine.text": "在终端里用 Claude Code 或 Codex 跑过的会话。先看内容，再决定是否在原目录继续；终端里的原会话不受影响。",
   "android-chat.new.machine.title": "继续 {station} 上的会话",
   "android-chat.new.model": "模型",
-  "android-chat.new.noModels": "没有可用模型 · 前往勾选",
+  "android-chat.new.noModels": "没有可用模型 · 查看 Profile",
   "android-chat.new.offline.text": "在任一机器上打开 {app}，即可连接到此 workspace。",
   "android-chat.new.offline.title": "没有在线的 station",
   "android-chat.new.placeholder": "做任何事",

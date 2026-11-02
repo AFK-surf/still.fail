@@ -65,7 +65,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     // one page for every frame (src/sfpages about.mbt; the list, sfpages' settings_list.mbt), drawn by the frame's
     // setting_route
-    Home | Appearance | Fonts | BarSettings | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | PickModels(_, _) | ProfileModels(_, _) | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) => ()
+    Home | Appearance | Fonts | BarSettings | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) => ()
     // the web's desktop pages, one for every frame (src/sfpages), drawn by the frame's setting_route too
     Shortcuts | Notifications | Permissions | Archiving | StationArchiving(_) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) => ()
     RunSettings(s, key) => run_settings_page(c, core, s, key)
