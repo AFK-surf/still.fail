@@ -760,6 +760,22 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
 }
 
 ///|
+/// A quiet rule between a group's main control and the rows that depend on it, aligned with their words.
+pub fn group_rule(c : @ui.Ctx) -> Unit {
+  c.box(style=group_rule_room, fn() {
+    c.box(style=group_rule_line, fn() {  }) |> ignore
+  }) |> ignore
+}
+
+///|
+// kept across runs: values of tokens alone
+let group_rule_room : @ui.Style = @ui.css("w=Full py=S1").then(@ui.style(px=list_words_room))
+
+///|
+// kept across runs: a value of tokens alone
+let group_rule_line : @ui.Style = @ui.css("w=Full bg=Line").then(@ui.style(h=hairline))
+
+///|
 /// A group's rows while they are read the first time (docs/ui-panels.md 等待: a list's first read, a section's as
 /// well): its card with `rows` in it (its own rows, drawn by what draws them, of made-up words) in their bones,
 /// breathing, `text` what it waits on said to a screen reader. Its card as it will be, its rows where they will be:
@@ -1117,6 +1133,7 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// which would want a corner of 24, on no step of the ladder (docs/ui-panels.md 圆角阶梯); a mark (an icon, a dot) is
 /// by its first line.
 /// `title_style` overrides a wide row's title (a setting's title follows the other settings' titles).
+/// `value_primary` makes the current value stand out over its label, for rows summarising a setting.
 /// `title_after` after its title on its line (a pill: 你, 当前; a team's name), dropped before the title where
 /// the line has not the room for both; `control` at its
 /// end, last (a button, a switch, a choice: what is done here, no chevron), a button of words alone there with its
@@ -1151,6 +1168,7 @@ pub fn link_row(
   note_cut? : Bool = false,
   face? : Bool = false,
   title_style? : @ui.TextStyle,
+  value_primary? : Bool = false,
   title_cut? : Bool = false,
   value_cut? : Bool = false,
 ) -> Bool {
@@ -1219,7 +1237,8 @@ pub fn link_row(
         }
         let said = fn() {
           let words = fn() {
-            let style = if value_bad { pg_value.then(bad) } else { pg_value }
+            let style = if value_primary { pg_value.then(row_primary_value) } else { pg_value }
+            let style = if value_bad { style.then(bad) } else { style }
             c.text(value, style=if value_cut { style.then(cut_words) } else { style }, color?=if value_lit {
               Some(link_ink())
             } else {
@@ -1242,6 +1261,7 @@ pub fn link_row(
           (true, false) => pg_row_title.then(row_strong)
           (false, false) => pg_row_title
         }
+        let titled = if value_primary { titled.then(row_secondary_label) } else { titled }
         // its end: what follows what it says, its chevron
         let end = fn() {
           match tail {
@@ -1292,6 +1312,7 @@ pub fn link_row(
                     // (what is after its title beside it, one piece: the line's ends are its title's and what it says)
                     let named = fn() {
                       let style = if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in }
+                      let style = if value_primary { style.then(row_secondary_label) } else { style }
                       c.text(title, style=if title_cut { style.then(cut_words) } else { style })
                       |> ignore
                       after()
@@ -1339,6 +1360,7 @@ pub fn link_row(
             (true, false) => title_style.then(row_strong)
             (false, false) => title_style
           }
+          let style = if value_primary { style.then(row_secondary_label) } else { style }
           if title_after is Some(_) {
             c.box(style=title_line, keep=true, fn() {
               c.text(title, style=style.then(cut_words), color?=ink, allow_ellipsis=title_cut) |> ignore
@@ -1353,7 +1375,8 @@ pub fn link_row(
         let end = fn() {
           if value != "" {
             let words = fn() {
-              let style = if value_bad { wide_value.then(bad) } else { wide_value }
+              let style = if value_primary { wide_value.then(row_primary_value) } else { wide_value }
+              let style = if value_bad { style.then(bad) } else { style }
               c.text(value, style=if value_cut { style.then(cut_words) } else { style }, color?=if value_lit {
                 Some(th.p.accent_text)
               } else {
@@ -1457,6 +1480,13 @@ pub fn at_row_end() -> Bool {
 /// A row's title said strongly (`strong`: who or what a row is, the account's, the workspace's).
 // kept across runs: a value (no field of it changes)
 let row_strong : @ui.TextStyle = @ui.text_style(weight=Bold)
+
+///|
+// A setting's summary: the current value is what one looks for; its label supplies the context.
+let row_primary_value : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg)
+
+///|
+let row_secondary_label : @ui.TextStyle = @ui.text_style(weight=Normal, color=Muted)
 
 ///|
 /// What a row says at its end with its dot before it, 6 apart, across its middle.
@@ -1746,7 +1776,7 @@ let choice_label_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 /// end across their middle (a round control stays out of the row's corners: docs/ui-panels.md 放不下的时候); the switch
 /// alone takes the press, at every width (its reach a finger's least however small it is drawn), its words none. `busy`: what it set is on its
 /// way (not turned again meanwhile). `lead`: what goes before its title on its line (a workspace's mark:
-/// workspace_badge). Answers whether it is on now.
+/// workspace_badge). `strong` marks the main control in a group. Answers whether it is on now.
 pub fn switch_row(
   c : @ui.Ctx,
   key : String,
@@ -1756,18 +1786,21 @@ pub fn switch_row(
   disabled? : Bool = false,
   busy? : Bool = false,
   lead? : (@ui.Ctx) -> Unit,
+  strong? : Bool = false,
 ) -> Bool {
+  let narrow_title = if strong { pg_switch_title.then(row_strong) } else { pg_switch_title }
+  let wide_title = if strong { theme().rows.title.then(row_strong) } else { theme().rows.title }
   match look() {
     // (on a narrow page in the words of its narrow rows)
     Narrow if in_words.val > 0 && in_card.val == 0 =>
-      wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words), lead?)
+      wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=narrow_title, note_style=meta.then(full_words), lead?)
     Wide =>
       if in_list.val > 0 {
         let mut now = on
-        c.box(style=wide_in_list(), fn() { now = wide_switch_row(c, key, title, on, note~, disabled~, busy~, lead?) }) |> ignore
+        c.box(style=wide_in_list(), fn() { now = wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=wide_title, lead?) }) |> ignore
         now
       } else {
-        wide_switch_row(c, key, title, on, note~, disabled~, busy~, lead?)
+        wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=wide_title, lead?)
       }
     Narrow => {
       // (the switch alone answers: the row is its words, not a press of its own; 2026-10-27 用户「只有开关响应」)
@@ -1776,7 +1809,7 @@ pub fn switch_row(
         // (its switch across the middle of its words: on its title's line it stood in the row's corner, not
         // concentric with it; a switch is narrow, its note keeps most of the row)
         c.box(style=pg_row_words, fn() {
-          led_title(c, title, pg_switch_title, lead)
+          led_title(c, title, narrow_title, lead)
           if note != "" {
             c.text(note, style=meta.then(full_words)) |> ignore
           }
