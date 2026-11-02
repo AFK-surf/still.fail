@@ -192,12 +192,12 @@ async function formerRows(): Promise<Rows> {
 }
 
 async function openDatabase(): Promise<IDBDatabase> {
-  if (typeof indexedDB === "undefined") throw new HostError(t("core-misc.host.idb.missing"));
+  if (typeof indexedDB === "undefined") throw HostError.said(t("core-misc.host.idb.missing"));
   // The first open under the new name fills it with what the former one has (read first: the upgrade that makes the
   // stores puts the rows in the same transaction, so no other tab sees it made and empty).
   let db = await openAt(DATABASE, VERSION, [], false);
   if (!db) db = await openAt(DATABASE, VERSION, await formerRows(), true);
-  if (!db) throw new HostError(t("core-misc.host.idb.unopened"));
+  if (!db) throw HostError.said(t("core-misc.host.idb.unopened"));
   // Another tab upgrading the schema later must not be blocked by us.
   const opened = db;
   opened.onversionchange = () => opened.close();

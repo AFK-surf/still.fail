@@ -98,7 +98,7 @@ function plainHere(reply: WireReply, partial: boolean): Pull<Uint8Array> {
       } catch (error) {
         // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
         if (ended && partial) continue;
-        return yield* Effect.fail(new HostError(t("core-logic.mesh.read_failed", { error: (error as Error).message })));
+        return yield* Effect.fail(Object.assign(HostError.said(t("core-logic.mesh.read_failed")), { cause: (error as Error).message }));
       }
     }
   });
@@ -116,7 +116,7 @@ function plainBy(z: Unzstd, reply: WireReply, partial: boolean): Pull<Uint8Array
       if (chunk === null) {
         ended = true;
         // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
-        if (!whole && !partial) return yield* Effect.fail(new HostError(t("core-logic.mesh.cut")));
+        if (!whole && !partial) return yield* Effect.fail(HostError.said(t("core-logic.mesh.cut")));
         return null;
       }
       if (chunk.length === 0) continue;

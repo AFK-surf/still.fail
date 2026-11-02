@@ -764,7 +764,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
               try {
                 frame = reader.next();
               } catch (e) {
-                return { failed: new CoreError("screen", t("core-misc.screen.garbled", { error: (e as Error).message })) } as Outcome;
+                return { failed: CoreError.plainly("screen", e, t("core-misc.screen.garbled")) } as Outcome;
               }
               if (frame === null) break;
               if ("config" in frame) {

@@ -25,7 +25,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { Deferred, Effect, Queue } from "effect";
 import type { Inner } from "../core.ts";
 import { hooks } from "../core/execute.ts";
-import { CoreError } from "../error.ts";
+import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import type { IrohConnection, IrohStream } from "../iroh.ts";
 import { Signer, WEB_DEVICE_SECS } from "../lock.ts";
@@ -61,7 +61,7 @@ export type Duplex = { send(message: J): Effect.Effect<void, CoreError>; next():
 export function streamDuplex(stream: IrohStream, close: () => void): Duplex {
   const lines = new Lines(stream);
   return {
-    send: (m) => Effect.mapError(stream.write(utf8(`${JSON.stringify(m)}\n`)), (e) => new CoreError("pair", e.message)),
+    send: (m) => Effect.mapError(stream.write(utf8(`${JSON.stringify(m)}\n`)), (e) => CoreError.plainly("pair", e)),
     next: () => Effect.map(lines.next(), (l) => (l === null ? null : (parseJson(l) ?? null))),
     close,
   };
@@ -338,7 +338,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
       const c = yield* Effect.result(inner.cloudSync.credential(ws, base, false, base, mesh.lockClaim(ws, base)));
       if (c._tag === "Success") credentials.push({ ws, credential: c.success.credential });
     }
-    const signer = inner.host.appKeys ? yield* Effect.mapError(Signer.make(inner.host), (e) => new CoreError("lock_key", t("core-misc.lock.keyNotKept", { error: e.message }))) : null;
+    const signer = inner.host.appKeys ? yield* Effect.mapError(Signer.make(inner.host), (e) => CoreError.plainly("lock_key", e, t("core-misc.lock.keyNotKept", { error: asCoreError(e).message }))) : null;
     if (signer) signerKnown(inner, signer.id);
     const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
@@ -358,8 +358,8 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
 function dial(inner: Inner, y: Trying, id: string, relays: string[], hello: J): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
     const endpoint = (yield* inner.mesh()).endpoint();
-    const connection = yield* Effect.mapError(endpoint.connect({ id, relays }, PAIR_ALPN, []), (e) => new CoreError("pair", e.message));
-    const stream = yield* Effect.mapError(connection.openBi(), (e) => new CoreError("pair", e.message));
+    const connection = yield* Effect.mapError(endpoint.connect({ id, relays }, PAIR_ALPN, []), (e) => CoreError.plainly("pair", e));
+    const stream = yield* Effect.mapError(connection.openBi(), (e) => CoreError.plainly("pair", e));
     const d = streamDuplex(stream, () => connection.close(0, "done"));
     yield* d.send(hello);
     const answer = yield* d.next();

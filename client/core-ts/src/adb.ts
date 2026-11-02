@@ -72,7 +72,7 @@ function readLine(stream: IrohStream, carry: { bytes: Uint8Array }): Effect.Effe
         carry.bytes = carry.bytes.slice(at + 1);
         return line;
       }
-      const chunk = yield* Effect.mapError(stream.read(), (e) => new CoreError("mesh", e.message));
+      const chunk = yield* Effect.mapError(stream.read(), (e) => CoreError.plainly("mesh", e, t("core-logic.mesh.cut")));
       if (chunk === null) return null;
       const next = new Uint8Array(carry.bytes.length + chunk.length);
       next.set(carry.bytes, 0);
@@ -438,7 +438,7 @@ class Lend {
       const reply = yield* link.adb(head(), { ...ask, phone: mesh.deviceId() });
       const parts: Uint8Array[] = [];
       for (;;) {
-        const chunk = yield* Effect.mapError(reply.body.take, (e) => new CoreError("mesh", e.message));
+        const chunk = yield* Effect.mapError(reply.body.take, (e) => CoreError.plainly("mesh", e, t("core-logic.mesh.cut")));
         if (chunk === null) break;
         parts.push(chunk);
       }
