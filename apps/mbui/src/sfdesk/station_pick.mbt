@@ -18,20 +18,21 @@ pub(all) struct PickAt {
 }
 
 ///|
-/// The picker: where it is, what is ticked (by station and path), in the order ticked.
+/// The picker: where it is, what is ticked (by station and path), in the order ticked. Signals: read as its body and its
+/// foot are built (each of the window's tree's dialog an old view of its own, built again as what it read changes).
 priv struct StationPick {
-  mut at : PickAt?
-  ticked : Array[Dragged]
+  at : @signals.Signal[PickAt?]
+  ticked : @signals.Signal[Array[Dragged]]
 }
 
 ///|
 // kept across runs: the picker's state (station_pick_reset puts it back)
-let spick : StationPick = { at: None, ticked: [] }
+let spick : StationPick = { at: @signals.signal(None), ticked: @signals.signal([]) }
 
 ///|
 fn station_pick_reset() -> Unit {
-  spick.at = None
-  spick.ticked.clear()
+  spick.at.set(None)
+  spick.ticked.set([])
 }
 
 ///|
@@ -61,9 +62,8 @@ pub fn station_files_pick(src : Source, key : String) -> Unit {
 ///|
 /// The picker at `at`, `ticked` ticked (a screen's fixture).
 pub fn station_pick_set(at : PickAt, ticked : Array[Dragged]) -> Unit {
-  spick.at = Some(at)
-  spick.ticked.clear()
-  spick.ticked.push_iter(ticked.iter())
+  spick.at.set(Some(at))
+  spick.ticked.set(ticked.copy())
 }
 
 ///|
@@ -79,17 +79,18 @@ fn draft_workspace(key : String) -> String {
 ///|
 /// 添加 (添加 n 个 once something is ticked): pressed, what is ticked goes into the message of chat `key`. Whether it was.
 fn station_pick_add(c : @ui.Ctx, key : String) -> Bool {
-  let n = spick.ticked.length()
+  let ticked = spick.ticked.get()
+  let n = ticked.length()
   let label = if n == 0 {
     @sf.t("web-mobile.files.add")
   } else {
     @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
   }
   if @sf.button(c, label, key="station-pick/add", tone=Primary, disabled=n == 0) {
-    for d in spick.ticked {
+    for d in ticked {
       files_into(key, d)
     }
-    spick.ticked.clear()
+    spick.ticked.set([])
     true
   } else {
     false
@@ -102,7 +103,7 @@ fn station_pick_add(c : @ui.Ctx, key : String) -> Bool {
 /// sheet its share wherever it is (`fills`), not taller and shorter from folder to folder.
 fn station_pick(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   station_pick_way(c)
-  match spick.at {
+  match spick.at.get() {
     None => station_pick_places(c, src, ws)
     Some(at) => station_pick_folder(c, src, at)
   }
@@ -113,7 +114,7 @@ fn station_pick(c : @ui.Ctx, src : Source, ws : String) -> Unit {
 /// Its words on the panel's words' line.
 fn station_pick_way(c : @ui.Ctx) -> Unit {
   let steps : Array[(String, PickAt?)] = [(@sf.t("web-mobile.files.places"), None)]
-  match spick.at {
+  match spick.at.get() {
     Some(at) => {
       steps.push((at.station_name + " · " + at.root_name, Some({ ..at, path: "" })))
       let mut so_far = ""
@@ -127,7 +128,7 @@ fn station_pick_way(c : @ui.Ctx) -> Unit {
     None => ()
   }
   let look = { ..narrow_way(), line: @sf.panel_words_out_by(pick_crumb_in).then(pick_crumbs_row) }
-  @sf.way_line(c, "station-pick/way", steps.map(fn(s) { s.0 }), look, fn(i) { spick.at = steps[i].1 })
+  @sf.way_line(c, "station-pick/way", steps.map(fn(s) { s.0 }), look, fn(i) { spick.at.set(steps[i].1) })
 }
 
 ///|
@@ -186,7 +187,7 @@ fn place_line(c : @ui.Ctx, rows : Array[(DvStation, String, String, String, Bool
       @sf.icon(c, if home { "server" } else { "folder" }, size=pick_mark, color=t.p.muted) |> ignore
     }) {
     let root_name = if path == "" { name } else { dv_root_label(s.roots, root) }
-    spick.at = Some({ station: s.station, station_name: s.name, root, root_name, path })
+    spick.at.set(Some({ station: s.station, station_name: s.name, root, root_name, path }))
   }
 }
 
@@ -223,12 +224,12 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
     size: 0.0,
     dir: true,
   }
-  let ticked = fn(d : Dragged) { spick.ticked.iter().any(fn(x) { x.station == d.station && x.abs == d.abs }) }
+  let ticked = fn(d : Dragged) { spick.ticked.get().iter().any(fn(x) { x.station == d.station && x.abs == d.abs }) }
   let toggle = fn(d : Dragged) {
     if ticked(d) {
-      spick.ticked.retain(fn(x) { !(x.station == d.station && x.abs == d.abs) })
+      spick.ticked.set(spick.ticked.get().filter(fn(x) { !(x.station == d.station && x.abs == d.abs) }))
     } else {
-      spick.ticked.push(d)
+      spick.ticked.set([..spick.ticked.get(), d])
     }
   }
   // its mark
@@ -268,7 +269,7 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
           if e.dir {
             // (a folder: entered)
             if @sf.link_row(c, "station-pick/row/e/" + e.name, e.name, note=e.time_text, lead=mark(icon)) {
-              spick.at = Some({ ..at, path })
+              spick.at.set(Some({ ..at, path }))
             }
           } else {
             let d : Dragged = {
@@ -303,7 +304,8 @@ let pick_mark : Double = 20.0
 let pick_crumb_in : Double = 4.0
 
 ///|
-/// The way's line in the panel: its own room over and under it, its sides the panel's.
+/// The way's line in the panel: its own room over and under it, its sides the panel's. Under it, room enough for a
+/// finger's press on a step (26 tall: 9 over and under it, the first row's room as far again: rooms.mbt) before the list.
 // kept across runs: a value (no field of it changes)
 let pick_crumbs_row : @ui.Style = @ui.css("row pt=S0_5 pb=S1 align=ACenter")
 
