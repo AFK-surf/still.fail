@@ -125,6 +125,29 @@ test("a chat's file downloaded a part at a time, ready for the page that takes i
   r.core.close();
 });
 
+test("a chat file without a recorded size is read before it is ready, including an empty or missing file", async () => {
+  const content = bytesOf(5 * MB, 7);
+  const r = await rig(new Map([["old.zip", content], ["empty.zip", new Uint8Array()]]));
+  const id = (await r.ask("download.start", { station: ST, key: "k1", name: "old.zip", size: 0 })).ok.download.id;
+  const [d] = await r.view();
+  assert.deepEqual([d.state, d.size, d.loaded], ["ready", content.length, content.length]);
+  assert.equal(r.parts("old.zip"), 2);
+  await r.ask("download.take", { id });
+  const read = await r.ask("download.read", { id, offset: 0, length: 4 * MB });
+  assert.deepEqual(read.bytes, content.subarray(0, 4 * MB));
+  assert.equal(r.parts("old.zip"), 2, "the first part was kept, not fetched twice");
+
+  await r.ask("download.start", { station: ST, key: "k1", name: "empty.zip", size: 0 });
+  const empty = (await r.view()).find((entry) => entry.name === "empty.zip");
+  assert.deepEqual([empty.state, empty.size], ["ready", 0]);
+  assert.equal(r.parts("empty.zip"), 1);
+
+  await r.ask("download.start", { station: ST, key: "k1", name: "missing.zip", size: 0 });
+  const missing = (await r.view()).find((entry) => entry.name === "missing.zip");
+  assert.equal(missing.state, "failed");
+  r.core.close();
+});
+
 test("a file sent up is called as its sender named it, not as the station keeps it", () => {
   assert.equal(titleOf("2026-10-24T21-59-13-dc7ed5-e2e-tune.m4a"), "e2e-tune.m4a");
   assert.equal(titleOf("build.zip"), "build.zip");
