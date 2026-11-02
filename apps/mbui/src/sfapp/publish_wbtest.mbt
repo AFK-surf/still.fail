@@ -6,7 +6,7 @@
 /// The chat's sheet open over the fixture's chat; `chat.publishPreview` answered with fix_preview, `chat.publish` with
 /// its link, the rest with nothing; `preview` in its place, where given; `finish` false: what is asked of the host (a
 /// picture decoded) done only as the test says (Tester::finish).
-fn publish_core(calls : Array[Made], preview? : () -> Json = fix_preview, finish? : Bool = true) -> @ui.Tester {
+fn publish_core(calls : Array[Made], preview? : () -> Json = fix_preview, finish? : Bool = true, width? : Double = 390.0) -> @ui.Tester {
   new_run()
   let base = fixture("chat-info")
   let src : Source = {
@@ -30,9 +30,50 @@ fn publish_core(calls : Array[Made], preview? : () -> Json = fix_preview, finish
     },
   }
   open_fixture_over("chat-info", src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, finish~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0, platform=2, finish~)
   t.run_for(@ui.move_most_ms)
   t
+}
+
+///|
+test "sharing a chat on a small screen: a table wider than the screen and the usual chat column fits in the saved picture" {
+  let sentence = "A long cell of words that needs room to remain readable"
+  let cell = fn(tag : String, words : String) -> Json { [Json::string(tag), [Json::string(words)]] }
+  let heads = ["First", "Second", "Third", "Fourth", "Fifth", "Last"]
+  let tree : Json = [["table", [
+    ["tr", Json::array(heads.map(fn(s) { cell("th", s) }))],
+    ["tr", Json::array(heads.map(fn(s) { cell("td", s + " " + sentence) }))],
+  ]]]
+  let preview = fn() -> Json {
+    let p = fix_preview()
+    guard p is Object(o) else { abort("missing preview") }
+    let copy = o.copy()
+    let list = items(Some(p), "list").copy()
+    guard list[1] is Object(m) else { abort("missing agent message") }
+    let message = m.copy()
+    message["text"] = "A wide table"
+    message["md"] = tree
+    list[1] = Json::object(message)
+    copy["list"] = Json::array(list)
+    Json::object(copy)
+  }
+  let mut previous_height = 0
+  for width in [320.0, 390.0] {
+    let calls : Array[Made] = []
+    let t = publish_core(calls, preview~, width~)
+    t.tap_text("分享图片")
+    t.frame()
+    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.click(Button, label="保存到相册")
+    t.run_for(@kit.presence_in_ms)
+    let (pw, ph) = png_size(t.kept()[0].2).unwrap()
+    // Its width is the chat's widest column at two pixels a point, independent of the small screen's width.
+    assert_eq(pw, 1520, msg="the picture should keep the chat's maximum width")
+    if previous_height > 0 { assert_eq(ph, previous_height, msg="the screen's width changed the message layout") }
+    previous_height = ph
+    let words = t.shots()[0].join("|")
+    assert_true(words.contains("First") && words.contains("Last"), msg=words)
+  }
 }
 
 ///|
@@ -108,11 +149,10 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
   assert_true(words.contains("10月15日 10:00") && !words.contains("分钟前"), msg=words)
   assert_true(!words.contains(".log") && !words.contains(".tar") && !words.contains("已隐藏 1 处"), msg=words)
   assert_true(words.contains("still.fail"), msg=words)
-  // kept in the photo album, a PNG as wide as the picture on the page (the screen's 390, less the column of its boxes
-  // to tick: a finger's 22 and 12) at the screen's scale, said once it is
+  // kept in the photo album, at the usual chat column's width and the screen's scale, said once it is
   assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
   match png_size(t.kept()[0].2) {
-    Some((pw, ph)) => assert_true(pw == 712 && ph > 600, msg="\{(pw, ph)}")
+    Some((pw, ph)) => assert_true(pw == 1520 && ph > 600, msg="\{(pw, ph)}")
     None => fail("not a PNG")
   }
   assert_true(t.find("已保存到相册") is Some(_))
