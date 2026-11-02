@@ -3,7 +3,7 @@
 // few files picked (a press picks a file, goes into a folder; the folder shown picked as a whole from the top of its
 // list), then 添加 n at its foot puts them into the message; what a file is, seen by its row's menu (打开) or the
 // preview under the list; the files themselves kept on the files' page. It starts at the chat's station's home for one who browses every folder,
-// else at its one folder pinned, else at the places (each station's home and the folders it pins); the way up is a
+// else at its one folder pinned, else at the places (个人收藏, each station's home, disks and pinned folders); the way up is a
 // trail of folders over the list, the first of them the places. A list of names and sizes, the folder as a whole at
 // its top: picking needs no other way of showing (the files' page has its columns and its tree); its preview under the
 // list (`driveViews.tabPreview`). A row's menu
@@ -161,12 +161,12 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
   c.box(style=ftab_box, fn() {
     c.box(style=ftab_body, fn() {
       match place {
-        None => ftab_places(c, stations)
-        Some(at) if at.root is None => ftab_places(c, stations)
+        None => ftab_places(c, src, ws, stations)
+        Some(at) if at.root is None => ftab_places(c, src, ws, stations)
         Some(at) =>
           match stations.iter().find_first(fn(s) { s.station == at.station }) {
             Some(st) => ftab_folder(c, src, ws, st, at)
-            None => ftab_places(c, stations)
+            None => ftab_places(c, src, ws, stations)
           }
       }
     })
@@ -180,14 +180,32 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
 }
 
 ///|
-/// The places (Places): each station a section (its name, 离线 by it while away), its home for one who browses every
-/// folder, then its folders pinned, a row each going there (where it is under its name; what is wrong with one in red):
-/// the library's parts, so its headings and rows stand in one line as a page's do.
-fn ftab_places(c : @ui.Ctx, stations : Array[DvStation]) -> Unit {
+/// The places (Places), as the files' sidebar has them (files_places): the person's own folders kept at hand (个人收藏,
+/// of the stations shown, while there are any), then each station a section (its name, 离线 by it while away), the
+/// places its drive offers one who browses every folder (its home, the home's own folders, its disks; its home alone
+/// while they are read), then its folders pinned not among those; a row each going there (where it is under its name;
+/// what is wrong with one in red), keyed by its path so a row read late is the same row: the library's parts, so its
+/// headings and rows stand in one line as a page's do.
+fn ftab_places(c : @ui.Ctx, src : Source, ws : String, stations : Array[DvStation]) -> Unit {
   let t = @sf.theme()
+  let favs = favorites(src, ws).filter(fn(f) { stations.iter().any(fn(s) { s.station == f.station }) })
   c.box(style=ftab_list, fn() {
     if stations.length() == 0 {
       @sf.page_note(c, @sf.t("web-main.rail.filesNone"))
+    }
+    if favs.length() > 0 {
+      @sf.section(c, @sf.t("web-pages.files.favorites"), fn() {
+        @sf.group(c, fn() {
+          for f in favs {
+            let name = stations.iter().find_first(fn(s) { s.station == f.station }).map(fn(s) { s.name }).unwrap_or("")
+            if @sf.link_row(c, "files-tab/fav/" + f.station + "/" + f.root + "/" + f.path, f.name, note=name, lead=fn() {
+                @sf.icon(c, "folder", size=tab_icon, color=t.p.muted) |> ignore
+              }) {
+              ftab_go(f.station, f.root, f.path)
+            }
+          }
+        })
+      })
     }
     for s in stations {
       @sf.section(c, s.name, note=if s.online { "" } else { @sf.t("web-pages.stations.offline") }, fn() {
@@ -199,17 +217,31 @@ fn ftab_places(c : @ui.Ctx, stations : Array[DvStation]) -> Unit {
               ftab_go(s.station, root, "")
             }
           }
-          if s.anywhere && s.home != "" {
-            row("home", "server", @sf.t("web-pages.drive.home"), s.home, "", s.home)
+          let shown : Array[String] = []
+          if s.anywhere {
+            match station_places_read(c, src, s) {
+              Some(places) if places.length() > 0 =>
+                for i, p in places {
+                  let (name, path, disk) = p
+                  let icon = if disk { "disk" } else if i == 0 && path == s.home { "server" } else { "folder" }
+                  shown.push(path)
+                  row(path, icon, name, path, "", path)
+                }
+              _ =>
+                if s.home != "" {
+                  row(s.home, "server", @sf.t("web-pages.drive.home"), s.home, "", s.home)
+                }
+            }
           }
-          for r in s.roots {
+          // (a folder pinned that is among them already: once)
+          for r in s.roots.filter(fn(r) { !shown.contains(r.path) }) {
             let trouble = match r.state {
               "ok" => ""
               "missing" => @sf.t("web-pages.drive.root.missing")
               "not_a_directory" => @sf.t("web-pages.drive.root.notFolder")
               _ => @sf.t("web-pages.drive.root.unreadable")
             }
-            row("root/" + r.path, "folder", r.name, r.path, trouble, r.path)
+            row(r.path, "folder", r.name, r.path, trouble, r.path)
           }
         })
       })
