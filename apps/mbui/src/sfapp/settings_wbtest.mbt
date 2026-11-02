@@ -79,7 +79,7 @@ test "settings from another place come from its gear at the bar's right edge and
     let (gx, gy, gw, gh) = t.query(Button, label="设置").unwrap().rect
     // the gear right of the place's name, at the bar's right edge as Home's is
     let tx = bar_title_x(t, place_label(place))
-    assert_true(tx >= 0.0 && tx < gx && gx + gw <= 390.0 && gx + gw >= 390.0 - 16.0 - 1.0, msg="\{place}: \{tx}, \{gx}")
+    assert_true(tx < gx && gx + gw <= 390.0 && gx + gw >= 390.0 - 16.0 - 1.0, msg="\{place}: \{tx}, \{gx}")
     t.tap(gx + gw / 2.0, gy + gh / 2.0)
     t.draw()
     t.draw()

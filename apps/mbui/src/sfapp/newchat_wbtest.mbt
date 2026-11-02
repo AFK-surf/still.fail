@@ -44,12 +44,12 @@ test "the bar: 文件 tapped is its page in place of the chats', back is the cha
 }
 
 ///|
-/// Where the words `title` are drawn in the top bar's band, the rightmost (a page's own title, the page beside it to its
-/// left).
+/// Where the words `title` are drawn in the top bar's band, the leftmost (a page's own title, not the back of the page
+/// coming in beside it to its right, which names it too).
 fn bar_title_x(t : @ui.Tester, title : String) -> Double {
   t
   .words()
-  .fold(init=-1.0e9, fn(a, w) { if w.0 == title && w.2 < status_top() + top_bar_h() && w.1 > a { w.1 } else { a } })
+  .fold(init=1.0e9, fn(a, w) { if w.0 == title && w.2 < status_top() + top_bar_h() && w.1 < a { w.1 } else { a } })
 }
 
 ///|
