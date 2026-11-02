@@ -622,19 +622,19 @@ pub fn vault_foot(
       let words = if scope == "once" { tr("android-settings.vault.scope.once") } else {
         let hours = minutes % 60 == 0
         let duration = fill(if hours { "android-settings.vault.timeout.nHours" } else { "android-settings.vault.timeout.nMinutes" }, [("n", (if hours { minutes / 60 } else { minutes }).to_string())])
-        fill("android-settings.vault.timeout.button", [("time", duration)])
+        fill("android-settings.vault.timeout.button." + scope, [("time", duration)])
       }
       if @sf.button(c, words, key="vault/" + request + "/timeout-button", tone=Ghost, disabled=under) {
         let unit : Ref[String] = Ref(if minutes % 60 == 0 { "hours" } else { "minutes" })
         let field = @ui.Field::new(text=(if unit.val == "hours" { minutes / 60 } else { minutes }).to_string())
         let chosen : Ref[String] = Ref(scope)
         @sf.panel(tr("android-settings.vault.timeout.title"), from=Unanchored, form=true, fn(pc, close) {
-          pc.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() {
+          pc.box(style=@sf.panel_words_in(), w=Fill(1.0), gap=16.0, fn() {
             let selected = if chosen.val == "once" { 0 } else if chosen.val == "fixed" { 2 } else { 1 }
             let picked = @sf.segmented(pc, "vault-timeout-kind", [tr("android-settings.vault.scope.once"), tr("android-settings.vault.timeout.idle"), tr("android-settings.vault.timeout.fixed")], selected)
             chosen.val = if picked == 0 { "once" } else if picked == 2 { "fixed" } else { "idle" }
             if chosen.val != "once" {
-              @sf.field(pc, tr("android-settings.vault.timeout.title"), aside=fn() {
+              @sf.field(pc, tr("android-settings.vault.timeout.duration"), aside=fn() {
                 let id = "vault/" + request + "/panel-unit"
                 let entries = ["hours", "minutes"].map(fn(u) { @kit.menu_radio(u, u == unit.val, label=tr("android-settings.vault.timeout." + u)) })
                 let menu = @sf.chooser(pc, id, tr("android-settings.vault.timeout." + unit.val), entries, fn() { vault_menu.val == id }, fn(on) { vault_menu_set(id, on) })

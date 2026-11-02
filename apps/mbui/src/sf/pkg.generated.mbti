@@ -2136,6 +2136,8 @@ pub let updating_rise_ms : Double
 
 pub let usage_bar_max : @ui.Len
 
+pub let usage_level_side : @ui.Len
+
 pub let usage_part_r : Double
 
 pub let usage_part_r_many : Double
@@ -2145,6 +2147,8 @@ pub let usage_plot : Double
 pub let usage_plot_h : @ui.Len
 
 pub fn usage_series(Int32) -> Int64
+
+pub let usage_summary_w : @ui.Len
 
 pub let usage_tick_rise : Double
 

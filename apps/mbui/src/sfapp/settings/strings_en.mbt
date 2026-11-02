@@ -1732,7 +1732,9 @@ let en : Map[String, String] = {
   "web-pages.drive.viewAll": "View all files",
   "web-pages.drive.pinnedFolders": "Available folders",
   "web-pages.screen.none": "No screens yet",
-  "android-settings.vault.timeout.button": "Expires after {time}",
+  "android-settings.vault.timeout.button.idle": "Expires after {time} idle",
+  "android-settings.vault.timeout.button.fixed": "Expires after {time}",
   "android-settings.vault.timeout.title": "Access duration",
   "android-settings.vault.timeout.done": "Done",
+  "android-settings.vault.timeout.duration": "Duration",
 }

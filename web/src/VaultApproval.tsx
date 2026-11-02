@@ -116,7 +116,7 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
     </Dialog><div className={pagesCss.cardFoot}>
       <Button variant="primary" busy={busy(true)} disabled={under || empty || !validTime} onClick={() => answer(true)}>{t(save ? "web-pages.vault.act.save" : "web-pages.vault.act.allow")}</Button>
       {no}
-      {timed && maxMinutes > 0 ? <Button variant="ghost" onClick={() => setTimeoutOpen(true)}>{kindPicked === "once" ? t("web-pages.vault.scope.once") : t("web-pages.vault.timeout.button", { time: durationLabel(minutes) })}</Button> : !save && scopes.length > 1 && (
+      {timed && maxMinutes > 0 ? <Button variant="ghost" onClick={() => setTimeoutOpen(true)}>{kindPicked === "once" ? t("web-pages.vault.scope.once") : t(`web-pages.vault.timeout.button.${kindPicked}`, { time: durationLabel(minutes) })}</Button> : !save && scopes.length > 1 && (
         <Chooser label={scopeName(scope)}>
           {scopes.map((s) => <ChooserItem key={s} checked={s === scope} onSelect={() => setPicked(s)}>{scopeName(s)}</ChooserItem>)}
         </Chooser>

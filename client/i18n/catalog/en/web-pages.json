@@ -2133,7 +2133,8 @@
   "web-pages.drive.viewAll": "View all files",
   "web-pages.drive.pinnedFolders": "Available folders",
   "web-pages.screen.none": "No screens yet",
-  "web-pages.vault.timeout.button": "Expires after {time}",
   "web-pages.vault.timeout.title": "Access duration",
-  "web-pages.vault.timeout.done": "Done"
+  "web-pages.vault.timeout.done": "Done",
+  "web-pages.vault.timeout.button.idle": "Expires after {time} idle",
+  "web-pages.vault.timeout.button.fixed": "Expires after {time}"
 }

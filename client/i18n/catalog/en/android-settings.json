@@ -827,7 +827,9 @@
   "android-settings.profile.pickModels.selected": "{n} selected",
   "android-settings.profile.pickModels.skip": "Skip",
   "android-settings.profile.pickModels.none": "This profile lists no models; you can add them later on its page",
-  "android-settings.vault.timeout.button": "Expires after {time}",
   "android-settings.vault.timeout.title": "Access duration",
-  "android-settings.vault.timeout.done": "Done"
+  "android-settings.vault.timeout.done": "Done",
+  "android-settings.vault.timeout.button.idle": "Expires after {time} idle",
+  "android-settings.vault.timeout.button.fixed": "Expires after {time}",
+  "android-settings.vault.timeout.duration": "Duration"
 }
