@@ -29,6 +29,26 @@ export type Tool = {
 
 export type Reply = { status: number; body?: unknown };
 
+/// The arguments as the tool's schema types them now. A session whose tool list is older than a parameter (it is told to
+/// pass new ones anyway) sends it untyped, as text: `done: "true"` (2026-11-03: phone_use {done: true} from such a
+/// session was read as not given). A boolean or number parameter given as its text is read as the value it says.
+export function typed(args: Record<string, unknown>, schema: unknown): Record<string, unknown> {
+  const properties = (schema as { properties?: Record<string, { type?: unknown }> } | null)?.properties;
+  if (properties === undefined || properties === null) return args;
+  let out: Record<string, unknown> | null = null;
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value !== "string") continue;
+    const type = properties[key]?.type;
+    const t = value.trim();
+    const read = type === "boolean" ? (t === "true" ? true : t === "false" ? false : undefined)
+      : (type === "number" || type === "integer") && /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : undefined;
+    if (read === undefined) continue;
+    out ??= { ...args };
+    out[key] = read;
+  }
+  return out ?? args;
+}
+
 export class McpEndpoint {
   /// The tools as they are now: the agents' own and the station's parts' (parts.ts), which say theirs as they are made.
   private tools: () => readonly Tool[];
@@ -81,7 +101,8 @@ export class McpEndpoint {
             return reply({ result: { content: [{ type: "text", text: why }], isError: true } });
           }
         }
-        const args = params?.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments) ? params.arguments : {};
+        const given = params?.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments) ? params.arguments : {};
+        const args = typed(given, tool.inputSchema);
         try {
           if (tool.content) {
             const { content, isError } = await tool.content(session, args);
