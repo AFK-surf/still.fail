@@ -1,8 +1,8 @@
 // What a right click in the desktop's window offers, as the desktop app's own (ember apps/desktop/src/context-menu.mts:
 // Electron shows none of its own): a link's (在浏览器中打开链接 and 复制链接), an image's (复制图片), then the words: a
 // field's editing (剪切, 复制, 粘贴, 全选, each as it can be done now), elsewhere the words picked (复制); a line between
-// them; nothing where there is none of these (the page's ground). A message of a chat's list right clicked, 复制消息链接
-// and 分享这一轮 at its end (its link, its turn shared as a picture: sfbase's share_offered, the same two its ⋯ offers).
+// them; nothing where there is none of these (the page's ground). A message of a chat's list right clicked offers its
+// words, link and turn's picture at the end (sfbase's share_offered, the same actions its ⋯ offers).
 // The library's menu (@sf.dropdown) at the pointer.
 
 ///|
@@ -23,6 +23,7 @@ pub struct ContextMenu {
   mut copying : String
   mut share : (() -> Unit)?
   mut share_link : String
+  mut share_words : String
 }
 
 ///|
@@ -38,6 +39,7 @@ pub let context : ContextMenu = {
   copying: "",
   share: None,
   share_link: "",
+  share_words: "",
 }
 
 ///|
@@ -60,6 +62,7 @@ fn context_reset() -> Unit {
   context.copying = ""
   context.share = None
   context.share_link = ""
+  context.share_words = ""
 }
 
 ///|
@@ -96,6 +99,7 @@ fn context_at(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? :
   context.frame = c.frame_number()
   context.share = None
   context.share_link = ""
+  context.share_words = ""
 }
 
 ///|
@@ -128,6 +132,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       context.frame = c.frame_number()
       context.share = None
       context.share_link = ""
+      context.share_words = ""
     }
     None => ()
   }
@@ -135,7 +140,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
   // the menu in the same frame), or alone. (A chat's list is built after the frame's overlays: an offer of the frame
   // before is taken as it comes.)
   match @sfbase.share_offered.val {
-    Some((at, x, y, go, link)) => {
+    Some((at, x, y, go, link, words)) => {
       @sfbase.share_offered.val = None
       // (not over a field right clicked)
       if (at == c.frame_number() || at == c.frame_number() - 1) && !(context.frame == at && context.field != 0) {
@@ -144,6 +149,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
         }
         context.share = Some(go)
         context.share_link = link
+        context.share_words = words
       }
     }
     None => ()
@@ -184,6 +190,9 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     }
     if context.share is Some(_) {
       group()
+      if context.share_words.trim(chars=" \n\t") != "" {
+        entries.push(@kit.menu_item("copy-message", label=@sf.t("web-main.chat.copyMessage")))
+      }
       if context.share_link != "" {
         entries.push(@kit.menu_item("copy-message-link", label=@sf.t("web-main.chat.copyMessageLink")))
       }
@@ -212,6 +221,10 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       c.tell("context-open", fn() { @ui.open_url(href) |> ignore })
     }
     Some("copy-link") => c.copy_text(context.link)
+    Some("copy-message") => {
+      c.copy_text(context.share_words)
+      @sfbase.say(c, @sf.t("common.copied"))
+    }
     Some("copy-message-link") => {
       c.copy_text(context.share_link)
       @sfbase.say(c, @sf.t("common.link.copied"))
@@ -260,6 +273,7 @@ let context_icons : Map[String, String] = {
   "copy-link": "link",
   "copy-image": "copy",
   "copy": "copy",
+  "copy-message": "copy",
   "copy-message-link": "link",
   "share-turn": "photo",
 }
