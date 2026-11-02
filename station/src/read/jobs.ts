@@ -51,18 +51,19 @@ export function tail(path: string, lines: number): string {
   }
   let bytes: Buffer;
   try {
-    let size = 0;
+    let size = LOG_BYTES;
     try {
       size = fstatSync(file).size;
     } catch {
-      // metadata failing: from the start.
+      // Metadata failing: read a bounded portion from the start.
     }
     const from = Math.max(0, size - LOG_BYTES);
     const chunks: Buffer[] = [];
     const piece = Buffer.alloc(64 * 1024);
     try {
-      for (let at = from; ; ) {
-        const n = readSync(file, piece, 0, piece.length, at);
+      // The job may keep writing while this is read. Stop at the end seen above; later writes are read next time.
+      for (let at = from; at < size; ) {
+        const n = readSync(file, piece, 0, Math.min(piece.length, size - at), at);
         if (n === 0) break;
         chunks.push(Buffer.from(piece.subarray(0, n)));
         at += n;
