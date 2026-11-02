@@ -1,0 +1,11 @@
+# A confirm over the preset's dialog (sf presenters.mbt scrim_owner, recede_look): 删除 asks 删除预设？ over it, then
+# back closes the confirm. MBUI_FIXTURE=newchat-preset-edit; a phone's window (MBUI_FILM_PLATFORM=2) or, with
+# MBUI_WIN=1280x800 MBUI_FILM_PLATFORM=0, a wide one (back is Escape there too).
+timeout 20000
+until 名字
+wait 800
+tap 删除
+wait 1000
+back
+wait 1000
+exit

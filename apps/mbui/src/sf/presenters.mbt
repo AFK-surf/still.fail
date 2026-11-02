@@ -160,6 +160,14 @@ priv struct Presented {
   mut steps_made : Int
   step_h : @motion.Anim
   mut step_h_of : Int
+  /// as a sheet: how tall it is drawn (its sheet's height, as present_sheet works it out), how far it has gone up out
+  /// of the way of a sheet over it (0 … 1 of `pushed`: @kit.sheet's `raised`), whether one is, and how far up that takes it
+  sheet_h : @signals.Signal[Double]
+  recede : @motion.Anim
+  mut receded : Bool
+  pushed : @signals.Signal[Double]
+  /// as a sheet closing, how far it sinks at least: as far as every sheet closing with it, sinking as one with them
+  mut sinks : Double
 }
 
 ///|
@@ -252,6 +260,11 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     steps_made: 0,
     step_h: @motion.Anim::new(0.0),
     step_h_of: -1,
+    sheet_h: @signals.signal(0.0),
+    recede: @motion.Anim::new(0.0),
+    receded: false,
+    pushed: @signals.signal(0.0),
+    sinks: 0.0,
   })
   @signals.start_batch()
   presented_told()
@@ -1007,6 +1020,62 @@ fn dismissed_now(serial : Int) -> Unit {
 }
 
 ///|
+/// Which one presented dims what is under it (its serial; 0 none): one scrim however many are over one another (the
+/// person's 2026-11-02: no darker for each). The lowest of those that dim (a sheet; a dialog in the middle, not a
+/// stage, whose night is its own) open now, so what is over it is no darker and, it closed under one still open, the
+/// one over it dims at once as it goes; none open, the lowest still drawn as it goes, its scrim fading with it. Read
+/// as one is presented, closed or let go (`sheet`: whether they are drawn as sheets, the window Small).
+fn scrim_owner(sheet : Bool) -> Int {
+  presented_said.get() |> ignore
+  let dims = fn(p : Presented) {
+    match p.shows {
+      Panel(x) if x.stage => false
+      _ => how_of(p.shows, p.from, sheet) != AsPopover
+    }
+  }
+  for p in presented_now {
+    if p.open && dims(p) {
+      return p.serial
+    }
+  }
+  for p in presented_now {
+    // (still drawn: told as it is let go)
+    if dims(p) && presented_drawn_said.has(p.serial) {
+      return p.serial
+    }
+  }
+  0
+}
+
+///|
+/// What `p` dims what is under it with, where it is not the one that does (scrim_owner): nothing; where it is, the
+/// theme's (None).
+fn scrim_of(p : Presented, sheet : Bool) -> Int64? {
+  if scrim_owner(sheet) == p.serial {
+    None
+  } else {
+    Some(0L)
+  }
+}
+
+///|
+/// The dimming over a sheet pushed up under another (present_sheet): all of it.
+// kept across runs: a value (no field of it changes)
+let sheet_veil_at : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// How far apart a sheet pushed up and the sheet over it that pushed it stand (the scrim between them).
+let pushed_gap : Double = 8.0
+
+///|
+/// How far up a sheet goes for a sheet `over` tall risen under it (the person's 2026-11-02: 「把上一层整个挤上去」,
+/// 「往上推到上面被遮盖」, 「为啥叠着」): its foot, which reaches on under the window's (sheet_under), all of it over that
+/// one, `pushed_gap` apart, its own foot's corners shown; what of it that takes past the window's top is cut off there.
+fn push_of(over : Double) -> Double {
+  over + sheet_under + pushed_gap
+}
+
+///|
 /// The host (see the file's head): what is presented, drawn over everything the app shows. Called by the shell once a
 /// frame, at the window's top level, after the pages: it is sized by the window (a sheet spans it whichever pane
 /// opened it), and anchored to what opened it wherever that is.
@@ -1019,7 +1088,46 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
   // a sheet on Small, the web's otherwise (docs/architecture.md, rule 3): by the screen, never the hand
   let sheet = layout(ww) is Small
   let gone : Array[Int] = []
+  // (sheets closing at once, one pushed up under another (a confirm's 删除 closing what it was asked from): all as far
+  // as the furthest of them goes, sinking as one, none over another on their way)
+  let sinks = if sheet {
+    presented_now.fold(init=0.0, fn(most, q) {
+      if q.open || how_of(q.shows, q.from, true) != AsSheet {
+        most
+      } else {
+        @signals.untracked(fn() { dmax(most, q.sheet_h.get() + q.recede.get() * q.pushed.get()) })
+      }
+    })
+  } else {
+    0.0
+  }
   for i, p in presented_now.copy() {
+    p.sinks = sinks
+    // (a sheet with another sheet open over it steps back, coming forward again as that one goes: its cause the one
+    // over it opened or closed)
+    let covered = sheet &&
+      p.open &&
+      presented_now[i + 1:].iter().any(fn(q) { q.open && how_of(q.shows, q.from, true) == AsSheet })
+    // (how far up: by the topmost sheet over it as tall as it is now; once none is, as far as it went, to come down
+    // from there)
+    if covered {
+      let over = presented_now[i + 1:].iter().filter(fn(q) { q.open && how_of(q.shows, q.from, true) == AsSheet }).last()
+      match over {
+        Some(q) =>
+          p.pushed.set(push_of(@signals.untracked(fn() { q.sheet_h.get() })))
+        None => ()
+      }
+    }
+    // (one closing goes from where it is: pushed up still where it closes with the one over it, both going down; where
+    // the one over it closed first that same moment, held where it had got to as it closes too)
+    if !p.open && !p.recede.over() {
+      p.recede.snap(@signals.untracked(fn() { p.recede.get() }))
+    }
+    if p.open && covered != p.receded {
+      p.receded = covered
+      let way = dmax(@signals.untracked(fn() { p.pushed.get() }), 1.0)
+      p.recede.animate(if covered { 1.0 } else { 0.0 }, @motion.move(points=way))
+    }
     let was = p.open
     let mut open = false
     let mut built = false
@@ -1493,6 +1601,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     close_label=t("common.close"),
     step~,
     column_in=card_pad - corner_inset,
+    scrim?=scrim_of(p, false),
   )
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
@@ -1529,6 +1638,7 @@ fn steps_centred(
     column_in=column,
     bare=true,
     on_escape=fn() { steps_escape(p) },
+    scrim?=scrim_of(p, false),
   )
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
@@ -1707,7 +1817,7 @@ fn confirm_centred(
   danger : Bool,
   run : () -> Unit,
 ) -> (Bool, Bool) {
-  let r = confirm_dialog(c, key, p.open, title, words, action, cancel=t("common.cancel"), danger~)
+  let r = confirm_dialog(c, key, p.open, title, words, action, cancel=t("common.cancel"), danger~, scrim?=scrim_of(p, false))
   if r.confirmed {
     done_with(c, p, run)
   }
@@ -1756,6 +1866,7 @@ fn ask_centred(
         said = true
       }
     },
+    scrim?=scrim_of(p, false),
   )
   if said {
     let line = words.val
@@ -1828,18 +1939,13 @@ let panel_empty : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mu
 
 ///|
 /// How much of the window a sheet takes at most: nearly all of it, up to just under the status bar (Sheet.kt's
-/// largest detent), what it holds past that scrolling in it; and a long pick's (the run picker's: 66%), a confirm's
-/// (36%) and a question's (42%: PageParts.kt confirm, ask).
+/// largest detent), what it holds past that scrolling in it; and a long pick's (the run picker's: 66%). A confirm and a
+/// question are as tall as what they hold, their buttons straight under their words (the person's 2026-11-02: 「为啥弹出
+/// 的面板按钮跑那么高」, under a share of the window, PageParts.kt's 36% and 42%, they stood high over empty room).
 pub let sheet_most : Double = 0.94
 
 ///|
 let sheet_long_pick : Double = 0.66
-
-///|
-let sheet_confirm : Double = 0.36
-
-///|
-let sheet_ask : Double = 0.42
 
 ///|
 /// `p` as a sheet: as tall as what it shows (measured as it is laid out), or its share of the window; the scrim (black
@@ -1875,8 +1981,6 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   let over = p.over
   let share = match p.shows {
     Pick(_, choices, _, _, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
-    Confirm(_, _, _, _, _) => Some(sheet_confirm)
-    Ask(_, _, _, _, _, _, _, _) => Some(sheet_ask)
     Panel(x) if x.tall > 0.0 && !x.form => Some(x.tall)
     Panel(_) if over => Some(sheet_most)
     _ => None
@@ -1895,7 +1999,20 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     // (before what it holds is first laid out: built again at once, as tall as it is)
     (None, None) => wh * 0.5
   }
-  let look = if presented_alone.val { sheet_look(ground=theme().p.bg) } else { sheet_look() }
+  // (how tall it is, for a sheet under it pushed up out of its way: presented)
+  p.sheet_h.set(h)
+  let base = if presented_alone.val { sheet_look(ground=theme().p.bg) } else { sheet_look() }
+  // (pushed up under a sheet over it, it takes nothing (a press on it closes that one): dimmed as the window under it
+  // is, as far as it has gone up, the person's 2026-11-02 「是不是应该遮罩一下」; what is under them all dimmed once)
+  let look = fn(c : @ui.Ctx, st : @kit.SheetState, body : () -> Unit) {
+    base(c, st, fn() {
+      body()
+      let veil = @ui.alpha(sheet_scrim, p.recede.get())
+      if (veil & 0xFFL) != 0L {
+        c.layer(fn() { c.box(style=sheet_veil_at.then(@ui.style(bg=Data(veil))), fn() {  }) |> ignore }) |> ignore
+      }
+    })
+  }
   // (dragged between half and nearly all of the window; one its share caps, only where what it holds comes to that)
   let grows = grows &&
     (match want {
@@ -1904,7 +2021,10 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     })
   // (Escape in one that goes in steps: back a step first)
   let on_escape = if p.steps is Some(_) { Some(fn() { steps_escape(p) }) } else { None }
-  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim=sheet_scrim, look~, on_escape?, fn() {
+  // (dimming what is under it only where nothing under it does: scrim_owner; pushed up out of the way of a sheet over
+  // it, as far as it has gone, closing from there)
+  let scrim = scrim_of(p, true).unwrap_or(sheet_scrim)
+  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim~, look~, on_escape?, raised=p.recede.get() * p.pushed.get(), sinks=p.sinks, fn() {
     match share {
       Some(_) =>
         c.box(style=sheet_whole, id=whole_id, fn() {

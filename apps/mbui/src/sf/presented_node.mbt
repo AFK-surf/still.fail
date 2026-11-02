@@ -83,6 +83,9 @@ pub fn presented_nodes(root : @view.View) -> Unit {
         tree_presented.remove(serial)
         presented_told()
       }
+      // (dimming what is under it only where nothing presented under it does: one scrim however many are over one
+      // another, scrim_owner)
+      let dims = fn() { scrim_owner(false) == serial }
       // (said: it closes, and what is over it, then what it says goes on, at that moment)
       let done = fn(f : () -> Unit) {
         p.ended = true
@@ -102,6 +105,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             fn() { done(run) },
             shown~,
             gone~,
+            dims~,
           )
         Ask(title, value, placeholder, action, hint, secret, empty, run) =>
           ask_node(
@@ -120,6 +124,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             fn(line) { done(fn() { run(line) }) },
             shown~,
             gone~,
+            dims~,
           )
         Menu(items, title, along) => {
           // (beside what opened it, where it was drawn as it opened; opened by the keyboard where that showed its focus:
@@ -157,6 +162,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             p,
             shown~,
             gone~,
+            dims~,
           )
         Panel(x) => {
           // (beside what opened it, where it is drawn: as a menu's)

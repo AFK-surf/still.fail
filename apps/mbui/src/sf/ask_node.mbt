@@ -29,6 +29,7 @@ pub fn ask_node(
   say : (String) -> Unit,
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
+  dims? : () -> Bool = fn() { true },
 ) -> Unit {
   // (the line as it is now, trimmed: followed as it changes)
   let words = fn() { line.text().trim(chars=" \t\n").to_string() }
@@ -43,7 +44,7 @@ pub fn ask_node(
       say(@signals.untracked(words))
     }
   }
-  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, fn(across, layer, look) {
+  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, fn(across, layer, look) {
     let theme = fn() { @ui.tree_theme() }
     let first : Ref[@view.View?] = Ref(None)
     across.box(fn(d) {

@@ -22,8 +22,9 @@ fn panel_centred_node(
   keyed : Presented,
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
+  dims? : () -> Bool = fn() { true },
 ) -> Unit {
-  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, fn(across, layer, look) {
+  dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, fn(across, layer, look) {
     let theme = fn() { @ui.tree_theme() }
     let untitled = x.title == ""
     let w = fn() { dmin(if x.wide { dialog_wide_w } else { dialog_w }, layer.window().0 - dialog_margin) }

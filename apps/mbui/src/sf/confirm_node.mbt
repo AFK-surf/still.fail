@@ -24,9 +24,10 @@ pub fn confirm_node(
   confirm : () -> Unit,
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
+  dims? : () -> Bool = fn() { true },
 ) -> Unit {
   // (a press outside an alert does not close it: confirm_dialog's outside=false)
-  dialog_layer_node(parent, open, cancel, shown~, gone~, fn(across, layer, look) {
+  dialog_layer_node(parent, open, cancel, shown~, gone~, dims~, fn(across, layer, look) {
     confirm_panel(across, layer, look, title, words, action, danger, cancel, confirm) |> ignore
     // (the focus on its own ground as it opens, as confirm_dialog's (an overlay that traps it, with no stop of its own:
     // the layer's own), Enter and Space doing nothing there; back to what had it as it goes)
@@ -40,7 +41,8 @@ pub fn confirm_node(
 /// in the row across the window's middle, looking as the look it is given says; the node given the focus as it opens)
 /// in its middle, coming in by @kit.dialog_in and going by @kit.pop_out; Escape and back close it (`cancel`), and a
 /// press outside its panel where `outside` (a dialog's; an alert's not). `shown` as its layer is made, `gone` once its
-/// way out is over.
+/// way out is over. What is under it dimmed only while `dims` (read as it changes: one presented under it that dims
+/// already, presenters' scrim_owner, and its ground clear).
 fn dialog_layer_node(
   parent : @view.View,
   open : () -> Bool,
@@ -49,6 +51,7 @@ fn dialog_layer_node(
   outside? : Bool = false,
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
+  dims? : () -> Bool = fn() { true },
 ) -> Unit {
   parent.show(
     open,
@@ -83,7 +86,7 @@ fn dialog_layer_node(
       // (a back gesture under way as it opens goes on to what it began on, as the old frame's layers let it: chosen as
       // it began; the next its)
       .held_back_goes_on()
-      .ground(By(fn() { confirm_faded(@ui.tree_theme().scrim, dim.shown(layer)) }))
+      .ground(By(fn() { if dims() { confirm_faded(@ui.tree_theme().scrim, dim.shown(layer)) } else { 0L } }))
       // (a press outside its panel its own, nothing under it pressed: closing it as it goes down where it is a dialog's,
       // as the old frame's layer is dismissed then (Ctx::overlay's outside), whatever the finger does after; nothing
       // where an alert's)

@@ -78,7 +78,10 @@ priv struct SheetKept {
 /// `key`'s sheet (see the file's head), `open` or not, what `body` builds in it: `h` high (or, when it is not given,
 /// `share` of the window), its top `drag_h` high dragging it, its scrim `scrim` (the theme's) at its fullest, named
 /// `label` for the semantics tree; an Escape `on_escape` says it took a step back within it (Ctx::overlay's), not
-/// closing it. Whether it is open now, whether it is drawn, what a drag came to.
+/// closing it. `raised`: how far over its place it is drawn (up out of the way of another over it); closed so, it
+/// sinks from there, as far as takes it out of sight. `sinks`: closed, how far it sinks at least (with others closing
+/// at once over it, as far as they all do, sinking as one with them). Whether it is open now, whether it is drawn,
+/// what a drag came to.
 pub fn sheet(
   c : @ui.Ctx,
   key : String,
@@ -93,6 +96,8 @@ pub fn sheet(
   label? : String = "",
   look? : (@ui.Ctx, SheetState, () -> Unit) -> Unit = sheet_look,
   on_escape? : () -> Bool,
+  raised? : Double = 0.0,
+  sinks? : Double = 0.0,
 ) -> Sheet {
   install()
   let th = c.theme()
@@ -207,8 +212,11 @@ pub fn sheet(
     s.held = -1.0
     let at = s.h.value_at(c)
     s.h.put(at)
-    s.below.go_at(c, at)
+    s.below.go_at(c, dmax(at + raised, sinks))
     s.fade.animate(0.0, scrim_fade())
+  } else if !now && sinks > s.below.target() {
+    // (told how far after it closed, as one under it closed with it: on as far as that, as fast as it goes)
+    s.below.go_at(c, sinks)
   }
   // (the springs and the fade say themselves that they move, as they set out: Ctx::moving)
   if c.still() {
@@ -220,7 +228,7 @@ pub fn sheet(
   let scrim_t = s.fade.get()
   // (logic on a motion's end, to be told at once instead: shown is false only once it has sunk away and its scrim
   // faded, the sheet drawn until then from what it is)
-  if !now && bx >= hx - 0.5 && !s.fade.moving() {
+  if !now && bx >= dmax(hx + raised, sinks) - 0.5 && !s.fade.moving() {
     // sunk away
     s.shown = false
     s.fade.snap(0.0)
@@ -230,11 +238,12 @@ pub fn sheet(
   // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
   // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself)
   let o = c.overlay(key, modal=true, initial_focus=0, on_escape?, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
-    let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx, fn() {
+    let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx - raised, fn() {
       look(c, { t: scrim_t, h: hx, below: bx }, fn() {
         // behind what it shows (its buttons take their taps), over the sheet (it takes the drags): what lies on it
-        // (its title, its grabber) pressed through it, while it takes presses (not as it sinks away)
-        if now {
+        // (its title, its grabber) pressed through it, while it takes presses (not as it sinks away, nor raised under
+        // another, which takes them: its top may be past the window's then)
+        if now && raised <= 0.0 {
           c.presses_to(top_id)
         }
         c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
@@ -249,7 +258,7 @@ pub fn sheet(
     now = false
     s.held = -1.0
     s.h.put(hx)
-    s.below.go_at(c, hx)
+    s.below.go_at(c, dmax(hx + raised, sinks))
     s.fade.animate(0.0, scrim_fade())
   }
   s.was_open = now

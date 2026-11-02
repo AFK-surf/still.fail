@@ -2263,6 +2263,8 @@ pub fn dialog_body_most(c : @ui.Ctx, key : String, inner : Int) -> Double? {
 /// words' line, panel_centred). `bare`: what it holds has its head and its buttons of its own (a step of a panel that
 /// goes in steps, each sliding in whole: panel_centred), untitled, none of the room round a body (its close button in
 /// its corner, over it: untitled_clear). An Escape `on_escape` says it took is a step back within it, not closing it.
+/// `scrim`: what the page under it is dimmed with (the theme's where not said; none, 0, where what is under it is
+/// dimmed already: presenters' scrim_owner).
 /// Whether it is open now (closed by its close button too).
 pub fn dialog(
   c : @ui.Ctx,
@@ -2279,6 +2281,7 @@ pub fn dialog(
   column_in? : Double = 0.0,
   bare? : Bool = false,
   on_escape? : () -> Bool,
+  scrim? : Int64,
 ) -> Bool {
   let closed = Ref(false)
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
@@ -2291,6 +2294,7 @@ pub fn dialog(
     w=dmin(w, c.window_size().0 - dialog_margin),
     close_label="",
     on_escape?,
+    scrim?,
     look=fn(c, s, inner) {
       c.box(
         style=dialog_box,
@@ -3095,6 +3099,7 @@ pub(all) struct Confirmed {
 /// it): 420 wide, 28 over its title, 24 in; its title (22, 600) and `description` (13, muted), what went wrong (`error`:
 /// 13 red, 12 over the buttons, it stays open), then `cancel` (its words alone) and `action` (solid red, the primary's
 /// when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back and `cancel` close it.
+/// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already).
 pub fn confirm_dialog(
   c : @ui.Ctx,
   key : String,
@@ -3106,6 +3111,7 @@ pub fn confirm_dialog(
   busy? : Bool = false,
   error? : String = "",
   danger? : Bool = true,
+  scrim? : Int64,
 ) -> Confirmed {
   let mut confirmed = false
   let mut closed = false
@@ -3118,6 +3124,7 @@ pub fn confirm_dialog(
     w=dmin(confirm_w, c.window_size().0 - dialog_margin),
     outside=false,
     close_label="",
+    scrim?,
     look=fn(c, s, inner) {
       c.box(
         style=confirm_box,
