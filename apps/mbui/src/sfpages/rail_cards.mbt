@@ -44,7 +44,7 @@ pub fn rail_card(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Un
         share_card_open(src, w)
       }
       c.box(style=rc_share, id~, label=@sf.t("web-main.stations.shareCard"), fn() {
-        @sf.icon(c, "photo", size=16.0, color=@sf.theme().p.text) |> ignore
+        @sf.icon(c, "share", size=16.0, color=@sf.theme().p.text) |> ignore
         c.text(@sf.t("web-main.stations.shareCard"), style=rc_share_words) |> ignore
       })
       |> ignore

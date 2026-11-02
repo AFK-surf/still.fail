@@ -80,7 +80,9 @@ priv struct ScreenUi {
   mut bps : Double?
   /// how many times 复制诊断 was pressed (已复制 said a moment after each)
   mut diag_copies : Int
-  /// 控制中心 ("center") or the view's figures ("net") to open from the bar as it is next built (a fixture's: as if
+  /// a simulator's log as far as it was read (screen_debug.mbt)
+  logs : DebugLogs
+  /// 控制中心 ("center"), the view's figures ("net") or a simulator's 日志 ("logs") or 重启 App ("apps") to open from the bar as it is next built (a fixture's: as if
   /// pressed); "" none
   mut asked_panel : String
   mut native_panel : (String, Int)?
@@ -134,6 +136,7 @@ fn screen_ui(key : String) -> ScreenUi {
         fps: None,
         bps: None,
         diag_copies: 0,
+        logs: debug_logs_new(),
         asked_panel: "",
         native_panel: None,
       }
@@ -281,7 +284,7 @@ pub fn screen_page(
   c.box(style=within, fn() { c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
     if native {
       c.box(style=screen_fill, fn() {
-        screen_stage(c, s, u, key)
+        screen_content(c, s, u, key)
         if s.can_take_over() {
           c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore }) |> ignore
         }
@@ -312,12 +315,12 @@ pub fn screen_page(
       // keyboard and mouse: the viewer's bar across the window's top, always there, the picture under it (what is at
       // the top of the screen, its windows' title bars, never under the bar); the keyboard and the mouse its own
       screen_viewer_bar(c, s, u, title, close)
-      screen_stage(c, s, u, key)
+      screen_content(c, s, u, key)
     } else if sideways {
       c.box(style=screen_row, fn() {
         screen_rail(c, s, u, typing, catcher, close)
         c.box(style=screen_fill, fn() {
-          screen_stage(c, s, u, key)
+          screen_content(c, s, u, key)
           // sideways the frame takes the height: who drives it floats over its top, while it does
           if s.can_take_over() {
             c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore })
@@ -351,9 +354,10 @@ pub fn screen_page(
       if s.can_take_over() {
         c.box(style=take_over_place, fn() { take_over(c, s) }) |> ignore
       }
-      screen_stage(c, s, u, key)
-      // upright, under the frame: trackpad or direct, the keys a phone's keyboard has not, the keyboard
-      if s.driving() {
+      screen_content(c, s, u, key)
+      // upright, under the frame: trackpad or direct, the keys a phone's keyboard has not, the keyboard (a simulator's
+      // only while typing: it has a keyboard of its own, and buttons of its own under the frame)
+      if s.driving() && (!s.simulator() || typing) {
         foot(c, s, u, typing, catcher)
       }
     }
@@ -400,7 +404,9 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
       if on { "eye" } else { "cursor" }, fn() { control_chosen(c, s, !s.controlling()) })
   }
   if s.driving() {
-    @sf.native_over_act("screen-pad", @sf.t("android-misc.screen.trackpad"), "trackpad", fn() { pad_chosen(c, s, !s.pad(s.src)) })
+    if !s.simulator() {
+      @sf.native_over_act("screen-pad", @sf.t("android-misc.screen.trackpad"), "trackpad", fn() { pad_chosen(c, s, !s.pad(s.src)) })
+    }
     @sf.native_over_act("screen-keyboard", @sf.t("android-misc.screen.keyboard"), "keyboard", fn() { keyboard_toggled(c, catcher, typing) })
   }
   if s.pastes() {
@@ -819,6 +825,9 @@ fn full_button(c : @ui.Ctx, u : ScreenUi) -> Unit {
 ///|
 /// Trackpad (on) or direct, as a round button that is on while it is a trackpad.
 fn pad_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
+  if s.simulator() {
+    return
+  }
   let on = s.pad(s.src)
   if round_button(c, "screen-pad", "trackpad", @sf.t("android-misc.screen.trackpad"), on~) {
     pad_chosen(c, s, !on)
@@ -1113,6 +1122,7 @@ fn button_felt(c : @ui.Ctx, u : ScreenUi, id : Int, button : Int, clicked : Bool
 /// their floating pair in 全屏 and sideways.
 fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
   s.driving() &&
+  !s.simulator() &&
   (match u.mouse_set {
     Some(on) => on
     None => text((s.src.topic)("prefs", {}).value, "screenMouse") != "off"

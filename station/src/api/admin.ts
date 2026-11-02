@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { ConfigFile } from "../ops/config.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type ScreenHub, ScreenRefused } from "../screens/hub.ts";
+import type { SimDebug } from "../screens/sim-debug.ts";
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
 import { type Answer, type Request, error, json, queryPairs } from "./request.ts";
@@ -186,6 +187,31 @@ export class Admin {
             { method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) },
             // A person closes one (a tab of the browser): it leaves the list as it goes (`screens` on the event stream).
             { method: "POST", pattern: /^\/screens\/([^/]+)\/close$/, handle: async (r: Request, [raw]: string[]) => closeScreen(deps.screens!, r, raw!) },
+            // A person debugging an app on a simulator: its apps' logs (a poll, `after` from the last answer's `next`) and restart.
+            { method: "GET", pattern: /^\/screens\/([^/]+)\/logs$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => d.logs(Math.max(0, Number(r.query.find(([k]) => k === "after")?.[1]) || 0))) },
+            { method: "GET", pattern: /^\/screens\/([^/]+)\/apps$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => ({ apps: await d.apps() })) },
+            { method: "GET", pattern: /^\/screens\/([^/]+)\/settings$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => d.settings()) },
+            {
+              method: "POST",
+              pattern: /^\/screens\/([^/]+)\/settings$/,
+              handle: async (r: Request, [raw]: string[]) =>
+                screenDebug(deps.screens!, r, raw!, async (d) => {
+                  const { name, value } = JSON.parse(r.body.toString("utf8") || "{}") as { name?: unknown; value?: unknown };
+                  if (typeof name !== "string" || typeof value !== "string" || !(await d.setSetting(name, value))) throw new ScreenRefused(400, "station.screen.noSetting");
+                  return d.settings();
+                }),
+            },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/screenshot$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => ({ png: (await d.screenshot()).toString("base64") })) },
+            {
+              method: "POST",
+              pattern: /^\/screens\/([^/]+)\/relaunch$/,
+              handle: async (r: Request, [raw]: string[]) =>
+                screenDebug(deps.screens!, r, raw!, async (d) => {
+                  const app = (JSON.parse(r.body.toString("utf8") || "{}") as { app?: unknown }).app;
+                  if (typeof app !== "string" || !(await d.relaunch(app))) throw new ScreenRefused(404, "station.screen.noApp");
+                  return {};
+                }),
+            },
           ]
         : []),
       // The agents' side's own (sessions/agents.ts says them as a part in the station; given whole, a test's).
@@ -336,6 +362,24 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
       : []),
     ...(agents.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await agents.overview(r.viewer, r.lang))) }] : []),
   ];
+}
+
+/// A simulator's logs, apps and restart: only for those who may drive it (what apps log may be private; a read-only
+/// member only sees the screen). 404 no such screen, 405 nothing to debug on it, 502 simctl failed.
+async function screenDebug(screens: ScreenHub, r: Request, raw: string, answer: (debug: SimDebug) => Promise<unknown>): Promise<Answer> {
+  if (readOnly(r.viewer)) return error(403, "a read-only member does not read an app's logs");
+  let id: string;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {
+    return error(404, tr(r.lang, "station.screen.notFound"));
+  }
+  try {
+    return json(200, JSON.stringify(await answer(screens.debugOf(id))));
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
+  }
 }
 
 /// POST /screens/<id>/close: 404 no such screen, 405 one not closed from here (the desktop), 502 the browser refused.

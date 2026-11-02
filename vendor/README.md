@@ -25,6 +25,8 @@ the same.
   - Shared.swift: what FrameCapture takes from upstream's files left out (PixelConsumerCount, isoTimestamp,
     jsonString), as they are there.
   - FrameCapture and HIDInjector, and the methods the helper calls, are public (another module uses them).
+  - DTUHIDKeys.swift is ours (the wire format Meta idb's, MIT): keys and the home and lock buttons through the guest's
+    `dtuhidd` from CoreSimulator 1155.4, where it drops Indigo's; HIDInjector tries it first.
   - FrameCapture re-emits a still screen's picture at its 5 fps idle floor only when asked (`setReemitsIdle`): the
     helper encodes a picture only when it is new.
 

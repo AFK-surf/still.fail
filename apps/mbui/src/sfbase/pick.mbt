@@ -137,7 +137,7 @@ fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.Me
   }
   items.push(
     Some(
-      @sf.menu_item_of(@sf.t("web-main.chat.shareTurn"), icon="photo", fn() {
+      @sf.menu_item_of(@sf.t("web-main.chat.shareTurn"), icon="share", fn() {
         pick_clear()
         go()
       }),
@@ -488,7 +488,7 @@ pub fn pick_layer(
               c.box(style=pick_bar_rule, fn() {  }) |> ignore
             }
             if pk.share is Some(_) {
-              mark(share, @sf.t("web-main.chat.shareTurn"), "photo")
+              mark(share, @sf.t("web-main.chat.shareTurn"), "share")
             }
             if pk.link != "" {
               mark(link, @sf.t("common.link.copy"), "link")

@@ -1,0 +1,188 @@
+// What a person debugging an app on an iOS Simulator has beside its picture (docs/remote-screens.md "Simulators"): the
+// logs of the apps installed on it and their restart, all simctl's. The log is `log stream` inside the device, started
+// as it is first asked for and left running a while after (so what happens between two looks is there), its newest
+// lines held here. Only apps a person installed log into it (their image is in the device's Containers), which leaves
+// out the system's thousands of lines a second, and of those only what the app's own code says, Foundation's for it
+// (NSLog) and any error: the frameworks inside it say hundreds of lines a second more. `print` goes to an app's stdout,
+// not to the log, so it is not here.
+import { type ChildProcess, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { wall } from "../ops/fibers.ts";
+import { log } from "../ops/log.ts";
+
+/// One line of an app's log, `seq` counting from the first this device's stream held.
+export type SimLog = { seq: number; at: string; level: string; app: string; text: string };
+/// An app a person installed on the device.
+export type SimApp = { id: string; name: string; running: boolean };
+
+/// What can be set of the device from a person's app, each as `simctl ui` calls it.
+export type SimSettings = { appearance: string; textSize: string };
+const APPEARANCES = ["light", "dark"];
+const TEXT_SIZES = ["extra-small", "small", "medium", "large", "extra-large", "extra-extra-large", "extra-extra-extra-large", "accessibility-medium", "accessibility-large", "accessibility-extra-large", "accessibility-extra-extra-large", "accessibility-extra-extra-extra-large"];
+
+export type Run = (file: string, args: string[]) => Promise<string>;
+/// `log stream`'s process, its stdout read line by line.
+export type LogStream = (args: string[], line: (text: string) => void, ended: () => void) => { stop: () => void };
+
+const HELD = 2000;
+const SENT = 500;
+/// How long the stream goes on after the last time it was asked for.
+const IDLE_MS = 10 * 60_000;
+const INSTALLED = '"/Containers/Bundle/Application/"';
+const PREDICATE = `processImagePath CONTAINS ${INSTALLED} AND (senderImagePath CONTAINS ${INSTALLED} OR senderImagePath ENDSWITH "/Foundation" OR messageType == error OR messageType == fault)`;
+const BUNDLE_ID = /^[A-Za-z0-9][A-Za-z0-9.-]*$/;
+
+/// A line of `log stream --style ndjson` as a person reads it; null for what is not one (its own words at its start).
+export function logOf(line: string): Omit<SimLog, "seq"> | null {
+  let e: any;
+  try {
+    e = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (typeof e?.eventMessage !== "string") return null;
+  const image = typeof e.processImagePath === "string" ? e.processImagePath : "";
+  return {
+    at: typeof e.timestamp === "string" ? e.timestamp : "",
+    level: typeof e.messageType === "string" ? e.messageType : "",
+    app: image.slice(image.lastIndexOf("/") + 1),
+    text: e.eventMessage,
+  };
+}
+
+/// The apps a person installed, from `simctl listapps` (as JSON) and what `launchctl list` inside the device runs.
+export function appsOf(installed: unknown, launchctl: string): SimApp[] {
+  const running = new Set([...launchctl.matchAll(/UIKitApplication:([^\[\s]+)\[/g)].map((m) => m[1]!));
+  const apps: SimApp[] = [];
+  for (const [id, app] of Object.entries((installed ?? {}) as Record<string, any>)) {
+    if (app?.ApplicationType !== "User") continue;
+    const name = [app.CFBundleDisplayName, app.CFBundleName].find((n) => typeof n === "string" && n !== "");
+    apps.push({ id, name: name ?? id, running: running.has(id) });
+  }
+  return apps.sort((a, b) => Number(b.running) - Number(a.running) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
+const logStream: LogStream = (args, line, ended) => {
+  const child: ChildProcess = spawn(args[0]!, args.slice(1), { stdio: ["ignore", "pipe", "ignore"] });
+  let rest = "";
+  child.stdout!.setEncoding("utf8");
+  child.stdout!.on("data", (chunk: string) => {
+    const parts = (rest + chunk).split("\n");
+    rest = parts.pop()!;
+    for (const part of parts) line(part);
+  });
+  child.on("error", ended);
+  child.on("close", ended);
+  return { stop: () => void child.kill() };
+};
+
+/// One booted device's logs and apps.
+export class SimDebug {
+  readonly #simctl: string;
+  readonly #udid: string;
+  readonly #run: Run;
+  readonly #stream: LogStream;
+  readonly #picture: () => Promise<Uint8Array>;
+  readonly #held: SimLog[] = [];
+  #next = 0;
+  #running: { stop: () => void } | null = null;
+  #idle: (() => void) | null = null;
+  #closed = false;
+
+  /// `picture`: the device's screen as a view has it (a JPEG): not `simctl io`'s, which of a foldable's screens it picks
+  /// is not the one in use (an iPhone Duo's: black).
+  constructor(simctl: string, udid: string, run: Run, picture: () => Promise<Uint8Array>, stream: LogStream = logStream) {
+    this.#simctl = simctl;
+    this.#udid = udid;
+    this.#run = run;
+    this.#picture = picture;
+    this.#stream = stream;
+  }
+
+  /// The lines after `after` (the newest of them if there are more than go at once), and where to ask from next.
+  logs(after: number): { next: number; lines: SimLog[] } {
+    this.#follow();
+    const lines = this.#held.filter((l) => l.seq >= after);
+    return { next: this.#next, lines: lines.slice(-SENT) };
+  }
+
+  async apps(): Promise<SimApp[]> {
+    const [installed, launchctl] = await Promise.all([
+      // listapps says an old-style plist, which only plutil reads, from its stdin here.
+      this.#run("/bin/sh", ["-c", '"$0" listapps "$1" | plutil -convert json -o - -', this.#simctl, this.#udid]),
+      this.#run(this.#simctl, ["spawn", this.#udid, "launchctl", "list"]),
+    ]);
+    return appsOf(JSON.parse(installed), launchctl);
+  }
+
+  /// Ends `app` if it runs, and starts it; false when it is no app a person installed here.
+  async relaunch(app: string): Promise<boolean> {
+    if (!BUNDLE_ID.test(app) || !(await this.apps()).some((a) => a.id === app)) return false;
+    this.#follow();
+    await this.#run(this.#simctl, ["launch", "--terminate-running-process", this.#udid, app]);
+    return true;
+  }
+
+  async settings(): Promise<SimSettings> {
+    const [appearance, textSize] = await Promise.all([
+      this.#run(this.#simctl, ["ui", this.#udid, "appearance"]),
+      this.#run(this.#simctl, ["ui", this.#udid, "content_size"]),
+    ]);
+    return { appearance: appearance.trim(), textSize: textSize.trim() };
+  }
+
+  /// Sets one of them; false when it is no such setting or value.
+  async setSetting(name: string, value: string): Promise<boolean> {
+    const allowed = name === "appearance" ? APPEARANCES : name === "textSize" ? TEXT_SIZES : [];
+    if (!allowed.includes(value)) return false;
+    await this.#run(this.#simctl, ["ui", this.#udid, name === "appearance" ? "appearance" : "content_size", value]);
+    return true;
+  }
+
+  /// The device's screen as a PNG, in its own pixels.
+  async screenshot(): Promise<Buffer> {
+    const base = join(tmpdir(), `stillfail-sim-${randomBytes(8).toString("hex")}`);
+    try {
+      await writeFile(`${base}.jpg`, await this.#picture());
+      await this.#run("sips", ["-s", "format", "png", `${base}.jpg`, "--out", `${base}.png`]);
+      return await readFile(`${base}.png`);
+    } finally {
+      await Promise.all([rm(`${base}.jpg`, { force: true }), rm(`${base}.png`, { force: true })]);
+    }
+  }
+
+  /// The device shut down (or the station stops).
+  close() {
+    this.#closed = true;
+    this.#idle?.();
+    this.#running?.stop();
+    this.#running = null;
+  }
+
+  #follow() {
+    if (this.#closed) return;
+    this.#idle?.();
+    this.#idle = wall.after(IDLE_MS, () => {
+      this.#running?.stop();
+      this.#running = null;
+    });
+    if (this.#running !== null) return;
+    const args = [this.#simctl, "spawn", this.#udid, "log", "stream", "--style", "ndjson", "--level", "debug", "--predicate", PREDICATE];
+    const running = this.#stream(args, (line) => this.#line(line), () => {
+      // Its own end, not one asked for: the next look starts it again.
+      if (this.#running === running) this.#running = null;
+    });
+    this.#running = running;
+    log.info("screens", "a simulator's log followed", { udid: this.#udid });
+  }
+
+  #line(line: string) {
+    const said = logOf(line);
+    if (said === null) return;
+    this.#held.push({ seq: this.#next++, ...said });
+    if (this.#held.length > HELD) this.#held.splice(0, this.#held.length - HELD);
+  }
+}

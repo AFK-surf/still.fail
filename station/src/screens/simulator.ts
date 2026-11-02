@@ -15,6 +15,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
+import { SimDebug } from "./sim-debug.ts";
 import { SimInput } from "./sim-input.ts";
 import type { Codec, ScreenSource, ScreenView, Screens, ViewOptions } from "./source.ts";
 
@@ -138,7 +139,7 @@ export class Simulators {
     }
     for (const b of booted) {
       if (this.#listed.has(b.udid)) continue;
-      const source = new Simulator(b, this.#o.helper!, await this.#size(b.type));
+      const source = new Simulator(b, this.#o.helper!, await this.#size(b.type), this.#run);
       if (this.#closed || this.#listed.has(b.udid)) continue;
       this.#listed.set(b.udid, { source, remove: this.#o.screens.add(source) });
     }
@@ -219,13 +220,16 @@ export class Simulator implements ScreenSource {
   readonly kind = "simulator" as const;
   /// A preview opens as any view does: nothing to wake.
   readonly peek = true;
+  /// Its apps' logs and their restart, for a person debugging one.
+  readonly debug: SimDebug;
   readonly #device: Booted;
   readonly #helper: HelperApp;
   #size: { width: number; height: number };
   readonly #views = new Set<HelperView>();
 
-  constructor(device: Booted, helper: HelperApp, size: { width: number; height: number }) {
+  constructor(device: Booted, helper: HelperApp, size: { width: number; height: number }, simctl: Run = run) {
     this.id = `simulator:${device.udid}`;
+    this.debug = new SimDebug(SIMCTL, device.udid, simctl, () => this.#picture());
     this.#device = device;
     this.#helper = helper;
     this.#size = size;
@@ -256,8 +260,22 @@ export class Simulator implements ScreenSource {
     }
   }
 
+  /// Its screen as a view has it, as large as the device's own: a view of its own for one picture.
+  async #picture(): Promise<Uint8Array> {
+    const { width, height } = this.#size;
+    const view = await this.open({ maxWidth: width || 4096, maxHeight: height || 4096, codecs: ["jpeg"] });
+    try {
+      const frame = await view.next();
+      if (frame === null) throw new Error("the simulator's view ended");
+      return frame.data;
+    } finally {
+      view.close();
+    }
+  }
+
   /// It shut down (or the station stops): its views end.
   gone() {
+    this.debug.close();
     for (const view of [...this.#views]) view.close();
   }
 }

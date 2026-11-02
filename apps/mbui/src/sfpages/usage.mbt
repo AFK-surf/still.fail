@@ -75,7 +75,7 @@ pub fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
       // 2026-10-26 用户「分享放到 usage 的 hover 卡片上」), before the days (they stand in the bar's corner, as they did):
       // its mark alone, named in its tip, beside the days on a phone's line too
       if v is Some(_) && !flag(v, "empty") &&
-        @sf.icon_button(c, "photo", key="usage-share", label=@sf.t("web-main.stations.shareCard")) {
+        @sf.icon_button(c, "share", key="usage-share", label=@sf.t("web-main.stations.shareCard")) {
         (core.share_card)()
       }
       let at = if days == 30 { 1 } else { 0 }

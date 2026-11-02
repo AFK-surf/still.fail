@@ -1234,6 +1234,34 @@ pub fn fixture(mode : String) -> Source {
         }
         // a screen's preview's frame taken (chat-screens): the fixture sends no other
         "screen.ack" => done(Ok(Json::object({})))
+        // what a simulator's 日志 and 重启 App read (screen-simulator)
+        "screen.logs" => {
+          let line = fn(at : String, level : String, words : String) -> Json {
+            { "at": "2026-11-02 " + at + ".000000+0800", "level": Json::string(level), "app": "Demo", "text": Json::string(words) }
+          }
+          let after = if params is Object(o) && o.get("after") is Some(Number(n, ..)) { n } else { 0.0 }
+          done(Ok(if after > 0.0 {
+            { "next": 3.0, "lines": [] }
+          } else {
+            {
+              "next": 3.0,
+              "lines": [
+                line("13:23:09", "Default", "Loaded 12 workouts"),
+                line("13:23:10", "Debug", "HealthKit authorized: true"),
+                line("13:23:11", "Error", "Sync failed: The network connection was lost."),
+              ],
+            }
+          }))
+        }
+        "screen.apps" =>
+          done(Ok({
+            "apps": [
+              { "id": "fail.still.demo", "name": "Demo", "running": true },
+              { "id": "fail.still.other", "name": "Other", "running": false },
+            ],
+          }))
+        "screen.relaunch" => done(Ok(Json::object({})))
+        "screen.settings" | "screen.setSetting" => done(Ok({ "appearance": "light", "textSize": "large" }))
         "chat.tabs.open" | "chat.tabs.close" | "chat.tabs.front" | "chat.tabs.clear" =>
           done(fixture_tabs_call(f, name, params))
         "decision.show" => done(Ok(Json::null()))
