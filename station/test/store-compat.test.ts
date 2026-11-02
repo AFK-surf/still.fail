@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import * as read from "../src/read/store.ts";
+import { cardOf } from "../src/store/rows.ts";
 import { SCHEMA } from "../src/store/schema.ts";
 import { MANUAL, Store, newMessage, turnSummaryJson } from "../src/store/store.ts";
 
@@ -54,7 +55,7 @@ const MERGED_ADDS = [", m.letter"];
 /// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`, `addUsageQuarters`): each with its columns,
 /// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes
 /// (`addUsageColumns`).
-const MADE = ["usage_totals", "usage_compactions", "usage_quarters", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries"];
+const MADE = ["usage_totals", "usage_compactions", "usage_quarters", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries", "card_outcomes"];
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {
@@ -135,6 +136,16 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
         rows("SELECT thread, author, first_n FROM thread_people ORDER BY thread, author"),
         rows("SELECT thread, author, MIN(n) AS first_n FROM entries WHERE kind = 'message' AND author_kind = 'person' GROUP BY thread, author ORDER BY thread, author"),
       );
+      // The decision cards (schema.ts CARD_OUTCOMES), as each card's next message and its close say.
+      const next = store.db.prepare("SELECT text FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person' ORDER BY n LIMIT 1");
+      const cards = (store.db.prepare("SELECT thread, n, card, options FROM entries WHERE kind = 'message' AND author_kind = 'agent' AND (card IS NOT NULL OR options IS NOT NULL) ORDER BY thread, n").all() as any[]).flatMap((r) => {
+        const card = cardOf(r.card ?? null, r.options ?? null);
+        if (card?.type !== "options" || !Array.isArray(card.options)) return [];
+        const labels = new Set(card.options.map((o: any) => (typeof o?.label === "string" ? o.label.trim() : "")).filter((l: string) => l !== ""));
+        const said = next.get(r.thread, r.n) as any;
+        return [JSON.stringify([r.thread, r.n, said !== undefined, said !== undefined && typeof said.text === "string" && labels.has(said.text.trim())])];
+      });
+      assert.deepEqual((store.db.prepare("SELECT thread, n, answered, said FROM card_outcomes ORDER BY thread, n").all() as any[]).map((r) => JSON.stringify([r.thread, r.n, r.answered === 1, r.said === 1])), cards);
       assert.deepEqual(
         rows("SELECT session, thread, n FROM session_first ORDER BY session"),
         rows("SELECT d.session, d.thread, d.n FROM deliveries d WHERE d.rowid = (SELECT MIN(rowid) FROM deliveries x WHERE x.session = d.session) ORDER BY d.session"),

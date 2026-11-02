@@ -876,6 +876,83 @@ export function addLetters(db: DatabaseSync): void {
   }
 }
 
+/// What JavaScript's trim() takes off a string's ends (WhiteSpace and LineTerminator), for SQLite's trim(X, Y).
+const TRIMMED = "char(9, 10, 11, 12, 13, 32, 160, 5760, 8192, 8193, 8194, 8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202, 8232, 8233, 8239, 8287, 12288, 65279)";
+
+/// The options of an entry's card as rows.ts `cardOf` reads it (its own card when that reads as JSON, else its options
+/// from before cards, as an options card), as JSON: NULL when it is no options card with a list of them.
+const cardOptions = (card: string, options: string) => `CASE
+  WHEN json_valid(${card}) THEN CASE WHEN json_extract(${card}, '$.type') = 'options' AND json_type(${card}, '$.options') = 'array' THEN json_extract(${card}, '$.options') END
+  WHEN json_valid(${options}) AND json_type(${options}) = 'array' THEN ${options} END`;
+
+/// The labels of those options (`cardOptions`), each trimmed, the empty left out, as a JSON array.
+const cardLabels = (optionsJson: string) => `(SELECT json_group_array(label) FROM (
+  SELECT trim(CASE WHEN o.type = 'object' THEN CASE WHEN json_type(o.value, '$.label') = 'text' THEN json_extract(o.value, '$.label') END END, ${TRIMMED}) AS label
+  FROM json_each(${optionsJson}) o) WHERE label IS NOT NULL AND label != '')`;
+
+/// Whether `text` (a person's words) is, trimmed, one of `labels` (`cardLabels`).
+const saidLabel = (labels: string, text: string) => `(${text} IS NOT NULL AND EXISTS (SELECT 1 FROM json_each(${labels}) l WHERE l.value = trim(${text}, ${TRIMMED})))`;
+
+/// The decision cards agents asked with (an options card, or options from before cards) and how each was answered,
+/// kept by the database as messages are written, as the lists' state is (LIST_STATE): what the usage page's 决策点击率
+/// counts (read/store.ts `decisionCards`). Worked out from every card each time it was read, each looking up the next
+/// thing a person said: 30 to 98 seconds a read on ccvm short of memory (2026-11-02), every minute while a page showed
+/// usage, one of the readers held by it all along.
+/// - labels: its options' labels, trimmed (`cardLabels`).
+/// - answered: a person has said something in its chat since; `said`: the first such message was one of its labels.
+/// Whether a person closed it with an option is closed_cards' (by a viewer not its author), read as it is counted.
+/// Entries only grow, a thread's going all together: what a person said decides the cards before it still open.
+const CARD_OUTCOMES = `
+CREATE TABLE card_outcomes (
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  author TEXT NOT NULL,
+  labels TEXT NOT NULL,
+  answered INTEGER NOT NULL,
+  said INTEGER NOT NULL,
+  PRIMARY KEY (thread, n)
+) WITHOUT ROWID;
+INSERT INTO card_outcomes
+  SELECT c.thread, c.n, c.author, c.labels, c.next IS NOT NULL,
+    c.next IS NOT NULL AND ${saidLabel("c.labels", "(SELECT p.text FROM entries p WHERE p.thread = c.thread AND p.n = c.next)")}
+  FROM (
+    SELECT thread, n, author, author_kind, CASE WHEN author_kind = 'agent' THEN ${cardLabels(cardOptions("card", "options"))} END AS labels,
+      CASE WHEN author_kind = 'agent' THEN ${cardOptions("card", "options")} END IS NOT NULL AS asked,
+      MIN(CASE WHEN author_kind = 'person' THEN n END) OVER (PARTITION BY thread ORDER BY n DESC ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS next
+    FROM entries WHERE kind = 'message'
+  ) c
+  WHERE c.asked;
+CREATE TRIGGER card_outcomes_asked AFTER INSERT ON entries
+  WHEN NEW.kind = 'message' AND NEW.author_kind = 'agent' AND (NEW.card IS NOT NULL OR NEW.options IS NOT NULL) BEGIN
+  INSERT OR REPLACE INTO card_outcomes
+    SELECT NEW.thread, NEW.n, NEW.author, ${cardLabels("o.options")}, 0, 0 FROM (SELECT ${cardOptions("NEW.card", "NEW.options")} AS options) o
+    WHERE o.options IS NOT NULL;
+END;
+CREATE TRIGGER card_outcomes_answered AFTER INSERT ON entries WHEN NEW.kind = 'message' AND NEW.author_kind = 'person' BEGIN
+  UPDATE card_outcomes SET answered = 1, said = ${saidLabel("card_outcomes.labels", "NEW.text")}
+  WHERE thread = NEW.thread AND n < NEW.n AND answered = 0;
+END;
+CREATE TRIGGER card_outcomes_dropped AFTER DELETE ON entries WHEN OLD.kind = 'message' AND OLD.author_kind = 'agent' BEGIN
+  DELETE FROM card_outcomes WHERE thread = OLD.thread AND n = OLD.n;
+END;
+`;
+
+/// The decision cards' outcomes (CARD_OUTCOMES), made once from the messages written before, in the same transaction as
+/// the triggers that keep them from then on (as addUsageQuarters): one pass over a thread's messages, not a look-up a
+/// card.
+export function addCardOutcomes(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'card_outcomes'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(CARD_OUTCOMES);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 /// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
 export function addListState(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thread_state'").get() !== undefined;
