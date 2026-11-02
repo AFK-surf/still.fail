@@ -14,6 +14,7 @@ import {
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM, USAGE_GROUPS } from "../src/store/usage.ts";
+import { backfillUsageCompactions } from "../src/store/usage-compactions.ts";
 import * as read from "../src/read/store.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -1182,6 +1183,8 @@ test("usage: a row is the calls it says, and a database from before says each wa
   // As a station from before the columns kept it: its triggers too.
   const before = new DatabaseSync(path);
   before.exec(`DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_drop; DROP TRIGGER usage_compactions_add;
+    DROP TRIGGER usage_main_calls_usage_drop; DROP TRIGGER usage_main_calls_usage_change; DROP TRIGGER usage_main_calls_add; DROP TRIGGER usage_main_calls_drop;
+    DROP TABLE usage_main_calls; DROP TABLE usage_compaction_events; DROP TABLE usage_compaction_backfill;
     DROP TRIGGER usage_quarters_add; DROP TRIGGER usage_quarters_drop; DROP TRIGGER usage_quarters_grow; DROP TABLE usage_quarters;
     DROP TRIGGER usage_minute_add; DROP TRIGGER usage_minute_drop; DROP TRIGGER usage_minute_grow;
     DROP TRIGGER usage_minute_session_add; DROP TRIGGER usage_minute_session_move; DROP TRIGGER usage_minute_session_drop;
@@ -1202,6 +1205,7 @@ test("usage: a row is the calls it says, and a database from before says each wa
   assert.deepEqual(store.usageOfSession("a").map((g) => [g.calls, g.input]), [[5, 420_007]]);
   assert.deepEqual(store.usageGroups(0, 3000, 0).reduce((n, g) => n + g.calls, 0), 5);
   assert.deepEqual(store.lastContexts("a", 1).map((c) => [c.context, c.window]), [[20_000, 200_000]]);
+  while (!backfillUsageCompactions(store.db).done) { /* old calls are filled by the worker in a running station */ }
   assert.deepEqual([...store.compactionPoints(0)], [["m", 120_000]]);
   store.close();
 });

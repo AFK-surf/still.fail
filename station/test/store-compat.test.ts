@@ -55,7 +55,7 @@ const MERGED_ADDS = [", m.letter"];
 /// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`, `addUsageQuarters`): each with its columns,
 /// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes
 /// (`addUsageColumns`).
-const MADE = ["usage_totals", "usage_compactions", "usage_quarters", "usage_day_quarters", "usage_minute", "usage_minute_scope", "usage_minute_sessions", "usage_minute_seen", "usage_minute_all", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries", "card_outcomes", "session_turns"];
+const MADE = ["usage_totals", "usage_compactions", "usage_main_calls", "usage_compaction_events", "usage_compaction_backfill", "usage_quarters", "usage_day_quarters", "usage_minute", "usage_minute_scope", "usage_minute_sessions", "usage_minute_seen", "usage_minute_all", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries", "card_outcomes", "session_turns"];
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {

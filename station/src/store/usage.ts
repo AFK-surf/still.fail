@@ -2,6 +2,7 @@
 // turn it was in, whom that turn worked for, in which thread and on which profile. The Store's usage methods call these.
 import type { DatabaseSync } from "node:sqlite";
 import { type Json, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
+import { usageCompactionsReady } from "./usage-compactions.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
 /// them. `context`: of a main-thread call, what its session's context held after it (null: not told); `window`: the
@@ -133,9 +134,12 @@ export type ContextCall = {
 };
 
 /// A session's last `limit` main-thread calls, oldest first.
+export const LAST_CONTEXTS = `SELECT u.turn, u.profile, u.model, u.context, u.context_window, u.at, u.fast, u.cache_write, u.cache_write_long
+  FROM usage_main_calls m JOIN usage u ON u.id = m.id WHERE m.session = ?1 ORDER BY m.at DESC, m.id DESC LIMIT ?2`;
 export function lastContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {
-  const rows = db
-    .prepare("SELECT turn, profile, model, context, context_window, at, fast, cache_write, cache_write_long FROM usage WHERE session = ?1 AND subagent = 0 ORDER BY at DESC LIMIT ?2")
+  const rows = (usageCompactionsReady(db)
+    ? db.prepare(LAST_CONTEXTS)
+    : db.prepare("SELECT turn, profile, model, context, context_window, at, fast, cache_write, cache_write_long FROM usage WHERE session = ?1 AND subagent = 0 ORDER BY at DESC, id DESC LIMIT ?2"))
     .all(session, limit) as Json[];
   return rows.reverse().map((r) => ({
     turn: r.turn, profile: r.profile, model: r.model, context: r.context, window: r.context_window,
@@ -147,7 +151,8 @@ export function lastContexts(db: DatabaseSync, session: string, limit: number): 
 /// the next, on the same account and model, sent under half of it (at least COMPACTED_FROM before), as the database
 /// keeps them (schema.ts USAGE_COMPACTIONS): a few rows, by their time's index.
 export function compactionPoints(db: DatabaseSync, since: number): Map<string, number> {
-  const rows = db.prepare("SELECT model, MAX(point) AS point FROM usage_compactions WHERE at >= ? GROUP BY model").all(since) as Json[];
+  if (!usageCompactionsReady(db)) return new Map();
+  const rows = db.prepare("SELECT model, MAX(point) AS point FROM usage_compaction_events WHERE at >= ? GROUP BY model").all(since) as Json[];
   return new Map(rows.map((r) => [r.model, r.point]));
 }
 
