@@ -721,7 +721,8 @@ pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
 /// unsaid, the way the words come in decides (enter_sends_by): a keyboard's Enter gives them up (Shift+Enter a new
 /// line); a finger's keyboard's Enter is a new line where the field holds more than one and the keyboard has no key of
 /// its own for it (`ime_action`), else that key, giving them up. `placeholder`: what it shows while nothing is typed in
-/// it, on one line; `shorter`, other ways to say that where the field has less room, each shorter than the one before
+/// it, without soft wrapping; `min_lines`, the least lines it holds even while empty, up to `max_lines`; `shorter`, other ways to
+/// say the placeholder where the field has less room, each shorter than the one before
 /// (搜索全部内容, then 搜索): the longest of them all that fits is shown whole, the shortest cut with an ellipsis only
 /// where none does, as Ctx::text's words (Node::hint_shown).
 pub fn Ctx::editor(
@@ -731,6 +732,7 @@ pub fn Ctx::editor(
   shorter? : Array[String] = no_words,
   w? : Size = Fill(1.0),
   font_size? : Double = 15.0,
+  min_lines? : Int = 1,
   max_lines? : Int = 5,
   plain? : Bool = false,
   line? : Double = 0.0,
@@ -894,7 +896,8 @@ pub fn Ctx::editor(
   n.pad_r = z.pad_x
   n.pad_t = z.pad_y
   n.pad_b = z.pad_y
-  n.min_h = z.min_h
+  let least = if min_lines < 1 || max_lines < 1 { 1 } else if min_lines > max_lines { max_lines } else { min_lines }
+  n.min_h = z.min_h + (least - 1).to_double() * (z.min_h - 2.0 * z.pad_y)
   n.max_h = z.max_h
   if !plain {
     n.bg = 0xFFFFFFFFL
@@ -1142,14 +1145,14 @@ fn EditorState::caret_box(
 
 ///|
 /// What the field `n` shows while nothing is typed in it, laid out on its line as its words are (FieldBox's line_h, the
-/// system's size of words applied): its placeholder on one line, as words that do not wrap, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
+/// system's size of words applied): its placeholder without soft wrapping, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
 /// shortest cut with an ellipsis where none does; never cut by the field's edge.
 fn Node::hint_shown(self : Node) -> TextLayout {
   self.field_box().hint_shown()
 }
 
 ///|
-/// How the field `n` lays its placeholder out on one line, on its line (FieldBox::hint_lay).
+/// How the field `n` lays its placeholder out without soft wrapping (FieldBox::hint_lay).
 fn Node::hint_lay(self : Node) -> (String) -> TextLayout {
   self.field_box().hint_lay()
 }
@@ -1162,7 +1165,7 @@ fn FieldBox::hint_shown(self : FieldBox) -> TextLayout {
 }
 
 ///|
-/// How the field placed as `b` lays its placeholder out on one line: on the line its words are laid out on (line_h, as
+/// How the field placed as `b` lays its placeholder out without soft wrapping: on the line its words are laid out on (line_h, as
 /// the system's size of words makes it), so that it stands where they would, not on the line as it was asked for.
 fn FieldBox::hint_lay(self : FieldBox) -> (String) -> TextLayout {
   fn(s) { layout_text(s, self.font_size, 400, 1.0e9, false, line=self.line_h, trim=self.trim) }
