@@ -1791,6 +1791,32 @@ fn plain_path(p : Bytes) -> Bytes {
 }
 
 ///|
+///|
+/// MSVC's compile of the program's C on its own (cmd_wrap): split and compiled in parallel, then `obj` a placeholder
+/// and `obj`.mbc-units the units, for the link after
+fn msvc_core_obj(real : Array[Bytes], wargs : Array[Bytes], c_file : Bytes, obj : Bytes) -> Unit {
+  let objdir = cat([sub(obj, 0, obj.length() - 4), b".mbc"])
+  makedirs(objdir)
+  let flags = msvc_compile_flags(wargs[:])
+  let j = match getenv("MBC_JOBS") {
+    Some(v) if parse_int(strip(v)) > 0 => parse_int(strip(v))
+    _ => cpus()
+  }
+  let (jobs, _) = split_jobs(c_file, objdir, real, flags, [], default_init_flags(true), true, false)
+  let objs = run_jobs_c(jobs, j, basename(c_file))
+  if !write_file(cat([obj, b".mbc-units"]), join_words(objs, b"\n")) {
+    fatal("cannot write \{str(obj)}.mbc-units")
+  }
+  let ph = path_join(objdir, b"placeholder.c")
+  let _ = write_file(ph, b"int mbc_link_core_placeholder;\n")
+  let cmd = real.copy()
+  for x in [b"/nologo", b"/c", cat([b"/Fo", obj]), ph] {
+    cmd.push(x)
+  }
+  c_exit(run_inherit(cmd))
+}
+
+///|
 fn cmd_wrap(args : Array[String]) -> Unit {
   let a = parse_args(args, ["--real"])
   let real_s = a.need("--real")
@@ -1841,6 +1867,53 @@ fn cmd_wrap(args : Array[String]) -> Unit {
       Some(o) => ends(o, b".o") && contains(o, b"/__moonbit_link_core__/")
       None => false
     })
+  // (MSVC's the same: `/c /Fo…\__moonbit_link_core__\<program>.obj`, linked after through cl. MSVC has no `-r`: the
+  // units compiled in its place, the object left a placeholder with the units' list beside it
+  // (<object>.mbc-units), and the link after given the units in its place. Windows of main and every branch from
+  // MoonBit 0.1.20261029 on: the whole program at /O2 in one, as long as the job, 41391826323, 2026-11-02)
+  if msvc && !env_set_to("MBC_SPLIT", "0") {
+    if !links && cs.length() == 1 {
+      let mut fo : Bytes? = None
+      for x in wargs {
+        if x.length() > 3 && (x[0] == b'/' || x[0] == b'-') && x[1] == b'F' && x[2] == b'o' {
+          fo = Some(plain_path(sub(x, 3, x.length())))
+        }
+      }
+      match fo {
+        Some(o) if ends(lower(o), b".obj") && contains(o, b"__moonbit_link_core__") => {
+          msvc_core_obj(real, wargs, wargs[cs[0]], o)
+          return
+        }
+        _ => ()
+      }
+    }
+    if links {
+      let largs = []
+      let mut swapped = false
+      for x in wargs {
+        let units = cat([plain_path(x), b".mbc-units"])
+        match (if ends(lower(x), b".obj") { read_file(units) } else { None }) {
+          Some(list) => {
+            swapped = true
+            for u in lines(list) {
+              if u.length() > 0 {
+                largs.push(u)
+              }
+            }
+          }
+          None => largs.push(x)
+        }
+      }
+      if swapped && out is Some(o) {
+        let cmd = real.copy()
+        for x in largs {
+          cmd.push(x)
+        }
+        c_exit(link(cmd, o, [], None))
+        return
+      }
+    }
+  }
   let pass = env_set_to("MBC_SPLIT", "0") ||
     (!links && !core_obj) ||
     (match out {

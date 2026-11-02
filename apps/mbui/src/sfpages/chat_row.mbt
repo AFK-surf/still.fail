@@ -640,6 +640,7 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
       items.push(
         Some(
           @sf.menu_item_of(@sf.t(if p { "web-main.chat.unpin" } else { "web-main.chat.pin" }), icon="pin", fn() {
+            @ui.haptic(Confirm)
             act(
               src,
               @sf.t(if p { "android-chat.unpin.verb" } else { "android-chat.pin.verb" }),

@@ -1235,6 +1235,7 @@ fn only_shown_list(lists : Array[(String, String, Array[(String, String, String,
 /// and weekends quieter, today Friday 10/2 (a Saturday after it).
 fn fx_usage_summary() -> Json {
   let cells : Array[Json] = []
+  let levels : Array[Int] = []
   for i in 0..<(52 * 7) {
     let week = i / 7
     let wd = i % 7
@@ -1252,6 +1253,38 @@ fn fx_usage_summary() -> Json {
       }
     }
     cells.push(Json::number(level.to_double()))
+    levels.push(level)
+  }
+  // each day's date from 2025-10-05 (2026 no leap year), as the core says it under the pointer
+  let lengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  let date = fn(n : Int) {
+    let mut m = 9
+    let mut d = 5 + n
+    while d > lengths[m] {
+      d = d - lengths[m]
+      m = (m + 1) % 12
+    }
+    "\{m + 1}月\{d}日"
+  }
+  let tips : Array[Json] = []
+  let week_tips : Array[Json] = []
+  let running_tips : Array[Json] = []
+  for i, level in levels {
+    tips.push(
+      str(
+        if level < 0 {
+          ""
+        } else if level == 0 {
+          date(i) + " · 没有用 token"
+        } else {
+          date(i) + " · \{level * 1200} 万 token"
+        },
+      ),
+    )
+  }
+  for w in 0..<52 {
+    week_tips.push(str(date(w * 7) + "起一周 · " + (if w < 22 { "没有用 token" } else { "\{(w * 5 % 4) + 3} 千万 token" })))
+    running_tips.push(str("截至" + date(@cmp.minimum(w * 7 + 6, 51 * 7 + 5)) + " · 共 \{w} 亿 token"))
   }
   let weekly : Array[Json] = []
   let cumulative : Array[Json] = []
@@ -1282,6 +1315,9 @@ fn fx_usage_summary() -> Json {
         ("cells", Json::array(cells)),
         ("weekly", Json::array(weekly)),
         ("cumulative", Json::array(cumulative)),
+        ("tips", Json::array(tips)),
+        ("weekTips", Json::array(week_tips)),
+        ("runningTips", Json::array(running_tips)),
         ("less", str("少")),
         ("more", str("多")),
         ("captions", [str(""), str("每列一周 · 最高 1.1 亿"), str("累计 · 共 18.3 亿")]),

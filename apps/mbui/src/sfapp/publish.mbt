@@ -104,6 +104,7 @@ fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l
         tr("web-pages.chat.publish.revokeNote"),
         tr("web-pages.chat.publish.revoke"),
         fn() {
+          @ui.haptic(Confirm)
           act(src, tr("web-pages.chat.publish.revokeVerb"), "", "chat.unpublish", {
             "station": Json::string(station),
             "thread": Json::number(thread),
