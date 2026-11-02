@@ -79,13 +79,15 @@ export class Search {
     const worker = this.#worker ?? this.#spawn();
     if (!worker) return Promise.reject(new Error("the search is stopped"));
     const id = this.#next++;
+    const cancel = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
     return new Promise<Found>((resolve, reject) => {
       const timer = wall.after(QUERY_MS, () => {
+        Atomics.store(new Int32Array(cancel), 0, 1);
         this.#waiting.delete(id);
         reject(new Error("the search took too long"));
       });
       this.#waiting.set(id, { resolve, reject, timer });
-      worker.postMessage({ type: "query", id, query, asker, ...options } satisfies Told);
+      worker.postMessage({ type: "query", id, query, asker, ...options, cancel } satisfies Told);
     });
   }
 

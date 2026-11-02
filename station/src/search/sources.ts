@@ -38,38 +38,71 @@ export function chatOf(s: Store, thread: number): { ws: Ws; chat: string | null;
 }
 
 
-/// A thread's documents: its chat, and its messages (an archived one's read from its file).
-export function threadDocs(s: Store, id: number): Doc[] {
+const MESSAGE_BATCH = 256;
+
+/// A thread's documents, with a yield after each batch even when none of its messages is searchable.
+function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string> | null = null): Generator<Doc | undefined> {
   const row = store.getThread(s, id);
-  if (row === null) return [];
+  if (row === null) return;
   const { ws, chat, sessions } = chatOf(s, id);
+  if (asker && !sees({ ws }, asker)) return;
   // Filed away (its entries in its archive file), or archived as people see it (by hand, or idle): out of the lists.
   const filed = store.isArchived(s, id);
   const archived = filed || row.hiddenAt !== null || (sessions.length > 0 && sessions.every((x) => x.archivedAt !== null));
   const surface = row.surface === STILLFAIL_SURFACE ? "stillfail" : "slack";
-  const messages: MessageRow[] = filed ? store.messagesBefore(s, id, null, 1_000_000) : all(s, "SELECT * FROM merged WHERE thread = ? ORDER BY n", id).map(toMessage);
+  const archivedMessages = filed ? store.messagesBefore(s, id, null, 1_000_000) : null;
+  const firstText = archivedMessages !== null
+    ? archivedMessages.find((m) => m.authorKind === "person")?.text ?? null
+    : (s.db.prepare("SELECT m.text FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?").get(id) as { text: string | null } | undefined)?.text ?? null;
   // As the chat list calls it (read/views.ts titleOf).
-  const title = titleOf(row, messages.find((m) => m.authorKind === "person")?.text ?? null, null);
-  const lastAt = messages.length > 0 ? Math.max(...messages.map((m) => m.createdAt ?? 0)) : null;
+  const title = titleOf(row, firstText, null);
   const ref = { thread: id, chat, surface, archived, ...(row.channel ? { channel: row.channel } : {}) };
-  const docs: Doc[] = [];
-  docs.push({
+  let lastAt: number | null = null;
+  const wantsMessages = kinds === null || kinds.has("message");
+  const wantsChat = kinds === null || kinds.has("chat");
+  const end = archivedMessages === null
+    ? (s.db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread = ?").get(id) as { n: number | null }).n
+    : null;
+  let after: number | null = null;
+  let archivedAt = 0;
+  for (;;) {
+    const messages: MessageRow[] = archivedMessages !== null
+      ? archivedMessages.slice(archivedAt, archivedAt + MESSAGE_BATCH)
+      : end === null ? [] : (after === null
+        ? all(s, "SELECT * FROM merged WHERE thread = ? AND n <= ? ORDER BY n LIMIT ?", id, end, MESSAGE_BATCH)
+        : all(s, "SELECT * FROM merged WHERE thread = ? AND n > ? AND n <= ? ORDER BY n LIMIT ?", id, after, end, MESSAGE_BATCH)).map(toMessage);
+    if (messages.length === 0) break;
+    for (const m of messages) {
+      const at = m.createdAt ?? 0;
+      lastAt = lastAt === null ? at : Math.max(lastAt, at);
+      if (!wantsMessages) continue;
+      const text = m.text ?? "";
+      const files = m.attachments.map((a: any) => (typeof a?.name === "string" ? a.name : "")).filter((n: string) => n !== "");
+      if (text.trim() === "" && files.length === 0) continue;
+      yield {
+        key: `m:${id}:${m.n}`, kind: "message", ws, title: "",
+        body: files.length > 0 ? `${text}\n${files.join("\n")}` : text,
+        at: m.createdAt ?? null,
+        ref: { thread: id, seq: m.n, chat, chatTitle: title, surface, archived, authorKind: m.authorKind, author: m.author, ...(m.agentIdentity ? { agentIdentity: m.agentIdentity } : {}) },
+      };
+    }
+    after = messages.at(-1)!.n;
+    archivedAt += messages.length;
+    yield undefined;
+    if (messages.length < MESSAGE_BATCH) break;
+  }
+  if (wantsChat) yield {
     key: `c:${id}`, kind: "chat", ws, title,
     body: [...sessions.map((x) => x.title ?? ""), ...sessions.map((x) => x.model ?? "")].filter((w) => w !== "").join("\n"),
     at: lastAt ?? row.createdAt ?? null, ref,
-  });
-  for (const m of messages) {
-    const text = m.text ?? "";
-    const files = m.attachments.map((a: any) => (typeof a?.name === "string" ? a.name : "")).filter((n: string) => n !== "");
-    if (text.trim() === "" && files.length === 0) continue;
-    docs.push({
-      key: `m:${id}:${m.n}`, kind: "message", ws, title: "",
-      body: files.length > 0 ? `${text}\n${files.join("\n")}` : text,
-      at: m.createdAt ?? null,
-      ref: { thread: id, seq: m.n, chat, chatTitle: title, surface, archived, authorKind: m.authorKind, author: m.author, ...(m.agentIdentity ? { agentIdentity: m.agentIdentity } : {}) },
-    });
-  }
-  return docs;
+  };
+}
+
+/// A thread's documents: its chat, then its messages (an archived one's read from its file).
+export function threadDocs(s: Store, id: number): Doc[] {
+  const docs = [...threadDocSteps(s, id)].filter((d): d is Doc => d !== undefined);
+  const chat = docs.pop();
+  return chat === undefined ? docs : [chat, ...docs];
 }
 
 /// A row of `merged` as the readers read it.
@@ -344,22 +377,45 @@ export function profileDocs(profiles: Profiles): Doc[] {
 
 // ── all of them ──
 
-/// The documents of the kinds asked for (all but the execution history's), as the station's data is now.
-export function* stationDocs(s: Store, data: string, config: unknown, kinds: Set<string> | null): Generator<Doc> {
+/// The documents of the kinds asked for; undefined gives the worker a chance to handle another request.
+export function* stationDocSteps(s: Store, data: string, config: unknown, kinds: Set<string> | null, asker?: Asker): Generator<Doc | undefined> {
   const wants = (k: string) => kinds === null || kinds.has(k);
   if (wants("chat") || wants("message")) {
-    for (const id of threadIds(s)) {
-      try {
-        for (const d of threadDocs(s, id)) if (wants(d.kind)) yield d;
-      } catch (error) {
-        // A thread moved to the archive while it was read: found the next time.
-        if (!(error instanceof Error && /no such|archive|ENOENT/.test(error.message))) throw error;
+    const end = (s.db.prepare("SELECT MAX(id) AS id FROM threads").get() as { id: number | null }).id;
+    let after: number | null = null;
+    while (end !== null) {
+      const rows = after === null
+        ? all(s, "SELECT id FROM threads WHERE id <= ? ORDER BY id LIMIT ?", end, MESSAGE_BATCH)
+        : all(s, "SELECT id FROM threads WHERE id > ? AND id <= ? ORDER BY id LIMIT ?", after, end, MESSAGE_BATCH);
+      if (rows.length === 0) break;
+      for (const r of rows) {
+        try {
+          yield* threadDocSteps(s, r.id, asker, kinds);
+        } catch (error) {
+          // A thread moved to the archive while it was read: found the next time.
+          if (!(error instanceof Error && /no such|archive|ENOENT/.test(error.message))) throw error;
+        }
       }
+      after = rows.at(-1)!.id as number;
+      yield undefined;
+      if (rows.length < MESSAGE_BATCH) break;
     }
   }
-  if (wants("job")) for (const key of sessionKeys(s)) yield* jobDocs(s, key);
+  if (wants("job")) for (const key of sessionKeys(s)) {
+    const session = store.getSession(s, key);
+    if (!asker || sees({ ws: session?.ws ?? null }, asker)) yield* jobDocs(s, key);
+    yield undefined;
+  }
   if (wants("skill") || wants("memory")) {
-    for (const ws of [null, ...memoryWorkspaces(agentHomeOf(data))]) for (const d of memoryDocs(data, ws)) if (wants(d.kind)) yield d;
+    for (const ws of [null, ...memoryWorkspaces(agentHomeOf(data))]) {
+      if (!asker || sees({ ws }, asker)) for (const d of memoryDocs(data, ws)) if (wants(d.kind)) yield d;
+      yield undefined;
+    }
   }
   if (wants("profile")) yield* profileDocs(profilesOf(config, data));
+}
+
+/// The same documents for synchronous callers.
+export function* stationDocs(s: Store, data: string, config: unknown, kinds: Set<string> | null, asker?: Asker): Generator<Doc> {
+  for (const d of stationDocSteps(s, data, config, kinds, asker)) if (d !== undefined) yield d;
 }
