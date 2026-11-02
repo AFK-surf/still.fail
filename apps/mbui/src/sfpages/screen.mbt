@@ -612,12 +612,19 @@ fn ScreenSess::frame_size(self : ScreenSess) -> (Int, Int)? {
 }
 
 ///|
+/// An iOS Simulator: a touchscreen, a finger on it where it touches (no trackpad to choose, no mouse's buttons).
+fn ScreenSess::simulator(self : ScreenSess) -> Bool {
+  text(self.state, "kind") == "simulator"
+}
+
+///|
 /// A finger drives it as a trackpad (it moves the pointer, a tap clicks where that points), or directly (a tap clicks
-/// where it is): as chosen here, else directly on a page laid out for this device (`fit`: a tap is where it is, as in
-/// the device's own browser), else as this device keeps it (`prefs.screenTouch`).
+/// where it is): as chosen here, else directly on a simulator (a touchscreen) or a page laid out for this device (`fit`:
+/// a tap is where it is, as in the device's own browser), else as this device keeps it (`prefs.screenTouch`).
 fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
   match self.pad_set {
     Some(on) => on
+    None if self.simulator() => false
     None if self.fit is Some(_) && text(self.state, "kind") == "browser" => false
     None => text((src.topic)("prefs", {}).value, "screenTouch") != "direct"
   }

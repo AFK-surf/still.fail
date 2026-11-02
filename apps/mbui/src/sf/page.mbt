@@ -72,6 +72,16 @@ pub fn look_for(w : Double) -> Look {
 }
 
 ///|
+/// A page that takes no frame's arrangement (a remote screen's, whole in what it is given), drawn as a page `w` wide is
+/// arranged.
+pub fn arranged(w : Double, wide~ : () -> Unit, narrow~ : () -> Unit) -> Unit {
+  match look_for(w) {
+    Wide => wide()
+    Narrow => narrow()
+  }
+}
+
+///|
 /// The widest a page is laid out as the narrow app is (the web's: max-width 640, where its narrow app takes over).
 pub let narrow_most : Double = 640.0
 

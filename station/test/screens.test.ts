@@ -22,6 +22,7 @@ import { dropFolder } from "../src/drive/drive.ts";
 import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
 import { USAGES, SimInput } from "../src/screens/sim-input.ts";
+import type { SimDebug } from "../src/screens/sim-debug.ts";
 import { SIMCTL, Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "../src/screens/win-desktop.ts";
 import { KEYS, WinInput } from "../src/screens/win-input.ts";
@@ -1807,6 +1808,19 @@ test("the simulators booted, as simctl lists them: their runtime's name, their s
   assert.equal(runtimeName("something else"), "something else");
   assert.deepEqual(screenOf({ capabilities: { ScreenDimensionsCapability: { "main-screen-width": 1206, "main-screen-height": 2622 } } }), { width: 1206, height: 2622 });
   assert.deepEqual(screenOf({}), { width: 0, height: 0 });
+});
+
+test("a simulator says it can be debugged; other screens neither say so nor answer", () => {
+  const hub = new ScreenHub();
+  const debug = {} as SimDebug;
+  hub.add({ id: "simulator:U", kind: "simulator", title: () => "iPhone", size: () => ({ width: 1, height: 1 }), open: () => Promise.reject(new Error("no")), debug });
+  hub.add({ id: "browser:T", kind: "browser", title: () => "tab", size: () => ({ width: 1, height: 1 }), open: () => Promise.reject(new Error("no")) });
+  const [sim, tab] = hub.listed("en").screens;
+  assert.equal(sim!.debug, true);
+  assert.equal("debug" in tab!, false);
+  assert.equal(hub.debugOf("simulator:U"), debug);
+  assert.throws(() => hub.debugOf("browser:T"), (e: ScreenRefused) => e.status === 405);
+  assert.throws(() => hub.debugOf("simulator:gone"), (e: ScreenRefused) => e.status === 404);
 });
 
 test("a simulator a screen while it is booted: listed with its device's name and size, a view the helper's simulator.view, input as the device takes it; gone as it shuts down", { skip: WINDOWS }, async () => {

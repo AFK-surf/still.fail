@@ -6524,6 +6524,8 @@ export interface ScreenItem {
 	peek?: boolean;
 	/** The viewer may close it (`screen.close`): a tab of the station's browser, for a member who may drive it; none from a station before it. */
 	closable?: boolean;
+	/** The viewer may read its apps' logs and restart them (`screen.logs`, `screen.apps`, `screen.relaunch`): a simulator's, for a member who may drive it. */
+	debug?: boolean;
 	/** The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station. */
 	chat?: ScreenChat;
 	/**
@@ -6614,6 +6616,8 @@ export interface ScreenViewState {
 	message?: string;
 	title: string;
 	kind?: string;
+	/** May read its apps' logs and restart them (`ScreenItem.debug`). */
+	debug?: boolean;
 	/** Driving it now: input goes to the station (else only seen). */
 	control: boolean;
 	/** May drive it (not a read-only member). */

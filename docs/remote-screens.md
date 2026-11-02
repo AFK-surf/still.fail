@@ -88,7 +88,7 @@ JPEG frames are all key frames and their config has no `description`.
 ### Wire (member link, ALPN `stillfail/admin/1`)
 
 - **List**: `GET /admin/api/screens` →
-  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?, closable?, openedBy?}]}`; changes come on
+  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?, closable?, debug?, openedBy?}]}`; changes come on
   the station's event stream as `screens` (same shape). `viewers`: the names of those with a view of it open;
   `controlledBy`: those of them whose input is taken. `access`, only when something is missing:
   `{capture, control, message, app?, path?}` (`message` in the asker's language says what to turn on where; the desktop
@@ -373,6 +373,39 @@ a simulator directly on a phone (no trackpad to choose), a finger held being the
 drives it as any screen for now (its 触控板 switched off for direct touch). No clipboard,
 cursor or dropped files yet. `station/side/screen-simulator.test.ts` makes and boots a simulator of its own, views it
 through the real helper and says how soon a picture follows a finger and the frames a second.
+
+
+**Debugging an app on it** (station/src/screens/sim-debug.ts; the app: sfpages/screen_debug.mbt, from 控制中心). The list
+says `debug: true` of a simulator; only those who may drive it read or do this (what an app logs may be private):
+
+- **Logs**: `GET /admin/api/screens/<id>/logs?after=<n>` → `{next, lines: [{seq, at, level, app, text}]}`, what came from
+  `after` on (at most the newest 500), `next` where to ask from next; the app's 日志 asks every 1.5 s while it is open. It is
+  `log stream` inside the device, of the apps a person installed only (their image in the device's Containers; the
+  system's are thousands of lines a second), and of those what the app's own code says, Foundation's for it (`NSLog`) and
+  any error (the frameworks inside an app say hundreds more a second): started at the first ask, going on for 10 minutes after the last, the newest
+  2000 lines held. So it has what goes to the unified log (`Logger`, `os_log`, `NSLog`), not an app's stdout (`print`).
+- **Apps**: `GET /admin/api/screens/<id>/apps` → `{apps: [{id, name, running}]}`, those a person installed (`simctl
+  listapps`), running ones first (`launchctl list` inside the device, which does not say which is in front).
+- **Restart**: `POST /admin/api/screens/<id>/relaunch` `{app}` → `{}` (`simctl launch --terminate-running-process`), 404
+  for what is not an app a person installed there. Building it again is the agent's: the station does not know the project.
+
+- **Settings**: `GET /admin/api/screens/<id>/settings` → `{appearance, textSize}`; `POST` `{name, value}` sets one and says
+  them again (`simctl ui`: `appearance` light or dark, `textSize` a `content_size`), 400 for any other.
+- **Screenshot**: `POST /admin/api/screens/<id>/screenshot` → `{png}` (base64), in the device's own pixels: a view's own
+  picture, not `simctl io`'s, which of a foldable's screens it picks is not the one in use (an iPhone Duo's: black).
+
+404 no such screen, 405 nothing to debug on it, 403 a read-only member, 502 simctl failed.
+
+**The keys on iOS 27** (seen 2026-11-02 on Xcode 27.2, iOS 27.1, station/side/screen-simulator-keys.test.ts): touches reach it,
+its own keyboard typed on by touch included (one run of two: in the other its first-use tip stayed up); keys and pasted text sent through the helper did not reach an app, with or
+without a Device Hub window (the guest takes no legacy keys, and the route through Device Hub needs a focused window of it
+and Accessibility, neither of which a person away from the Mac can see to), and a key sent puts the device in a hardware
+keyboard's mode, its own keyboard hidden, and 软键盘 did not bring it back. The device's panel says so on iOS 27.
+
+The app's viewer treats a simulator as the touchscreen it is (a finger where it touches, no trackpad to choose, no mouse's
+buttons), and its page is about the device and the app rather than the link: its buttons (主屏幕, 多任务, 锁屏, 软键盘) and
+重启 App beside the picture, and 日志 kept beside the device on a wide page (in a panel, from a button under the picture, on a
+narrow one). 控制中心 has only what the view does (画质, 帧率, 全屏, 断开).
 
 ### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
 

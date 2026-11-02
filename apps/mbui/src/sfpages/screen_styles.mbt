@@ -559,6 +559,36 @@ let net_panel_w : Double = 280.0
 
 ///|
 // kept across runs: a value (no field of it changes)
+let debug_body : @ui.Style = @ui.css("w=Full px=S3 py=S2 gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg)
+
+///|
+/// The picture's side of a simulator's page: what is left beside what debugs its app.
+// kept across runs: a value (no field of it changes)
+let debug_stage_side : @ui.Style = @ui.style(w=@sf.grow, h=@sf.grow)
+
+///|
+/// The device's buttons in a row over or under the picture, as near it as they can be.
+// kept across runs: a value (no field of it changes)
+let debug_tools_bar : @ui.Style = @ui.css("row w=Full py=S2 gap=S2 justify=JCenter align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_pane_box : @ui.Style = @ui.css("bg=Surface px=S3 py=S3 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_pane_head : @ui.Style = @ui.css("row w=Full align=ACenter justify=JBetween")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_pane_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, weight=Semibold)
+
+///|
+// kept across runs: a value (no field of it changes)
 let net_panel_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S2 gap=S2_5")
 
 ///|

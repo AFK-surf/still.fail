@@ -415,3 +415,53 @@ test "bits a second as a link's speed is said" {
   assert_eq(bitrate_words(4200000.0), "4.2 Mbps")
   assert_eq(bitrate_words(12000000.0), "12 Mbps")
 }
+
+///|
+/// Live on a simulator this member may debug.
+fn simulator_live(r : ScreenRig) -> Unit {
+  r.state("live", more={ "kind": Json::string("simulator"), "debug": Json::boolean(true) })
+  r.config()
+  r.frame(1.0)
+  r.t.draw()
+}
+
+///|
+test "a simulator's page: its device's buttons by the picture, a finger where it touches; 控制中心 only the link's" {
+  let r = screen_rig()
+  simulator_live(r)
+  assert_false(r.sess().pad(r.sess().src))
+  r.tap_label(tr("web-pages.screen.device.home"))
+  r.t.draw()
+  let ins = r.inputs()
+  assert_eq(ins.length(), 2)
+  assert_eq(text(Some(ins[0]), "code"), "KeyH")
+  assert_eq(number(Some(ins[0]), "mods"), (mod_meta | mod_shift).to_double())
+  open_center(r)
+  assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
+  assert_true(r.t.find(tr("web-pages.screen.commonKeys")) is None)
+  assert_true(r.t.find(tr("web-pages.screen.mouseButtons")) is None)
+  assert_true(r.t.find(tr("web-pages.screen.quality")) is Some(_))
+  shut(r)
+  screen_done(r.t)
+}
+
+///|
+test "日志 asks for what came since while it shows; a member who may not debug has neither it nor 重启 App" {
+  let r = screen_rig()
+  r.state("live", more={ "kind": Json::string("simulator") })
+  r.config()
+  r.frame(1.0)
+  r.t.draw()
+  assert_true(r.labelled(tr("web-pages.screen.debug.logs")) is None)
+  assert_true(r.labelled(tr("web-pages.screen.debug.relaunch")) is None)
+  simulator_live(r)
+  assert_true(r.labelled(tr("web-pages.screen.debug.relaunch")) is Some(_))
+  r.tap_label(tr("web-pages.screen.debug.logs"))
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  r.t.draw()
+  r.t.run_for(debug_logs_ms)
+  assert_true(r.told("screen.logs").length() >= 1)
+  assert_eq(text(Some(r.told("screen.logs")[0]), "screen"), r.sess().screen)
+  screen_done(r.t)
+}
