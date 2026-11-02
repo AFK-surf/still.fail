@@ -34,6 +34,7 @@ import { detailed, summary } from "./load.ts";
 import { type Inbox, MESH_WAIT_MS, NoBytes, type PeerCall, PeerBus, Refused, bytesOf, withBytes } from "../mesh/bus.ts";
 import { fileBytes, readBytes, stopBytes, writeBytes } from "../mesh/files.ts";
 import { Bulk, LINK, PACKED, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
+import { DEFAULT_LIMIT, WorkspaceReader } from "./workspace-size.ts";
 
 // The requests between stations are the platform's bus (mesh/bus.ts); its types, here as they always were.
 export { type Inbox, MESH_WAIT_MS, type PeerCall, Refused } from "../mesh/bus.ts";
@@ -104,7 +105,7 @@ const SYNC_KEPT_MS = 10 * 60_000;
 type Syncing = { key: string; result: Promise<Synced | null>; endedAt: number | null };
 
 /// The requests about tasks that only read what is here: answered as they come, never after another one (`lanes`).
-const READS = new Set(["task.get", "task.gets", "task.log", "task.list"]);
+const READS = new Set(["task.get", "task.gets", "task.log", "task.list", "session.size"]);
 /// The tasks a source asks about at once (`task.gets`), at most.
 export const GETS_MAX = 200;
 
@@ -200,6 +201,8 @@ const ARCH = ({ arm64: "aarch64", x64: "x86_64", ia32: "x86", arm: "arm" } as Re
 export class Remote {
   readonly root: string;
   readonly store: Store;
+  /// One bounded queue for both this station's workspaces and those of other stations' tasks.
+  readonly workspaceReader: WorkspaceReader;
   private data: string;
   private jobs: Jobs;
   private notify: RemoteNotify;
@@ -237,6 +240,7 @@ export class Remote {
   constructor(options: RemoteOptions) {
     this.data = options.data;
     this.store = options.store;
+    this.workspaceReader = new WorkspaceReader(() => this.store.now());
     this.jobs = options.jobs;
     this.notify = options.notify;
     this.places = options.places ?? new Places();
@@ -402,6 +406,7 @@ export class Remote {
   /// Its schedules end (the station stops).
   async close(): Promise<void> {
     this.stopped = true;
+    this.workspaceReader.close();
     await Effect.runPromise(Scope.close(this.scope, Exit.void));
   }
 
@@ -745,6 +750,44 @@ export class Remote {
     return join(this.root, "used", `${hash(session)}.json`);
   }
 
+  /// Stations on which this session has a remote workspace, within the workspace it still belongs to.
+  workspaceTargets(session: string): { workspace: string; stations: string[] } | null {
+    const row = this.store.getSession(session);
+    if (!row || row.archivedAt !== null) return null;
+    try {
+      const workspace = this.workspace(row.ws ?? null);
+      const record = readJson(this.usedPath(session));
+      if (record.closing === true || record.workspace !== workspace || !Array.isArray(record.stations)) return null;
+      return { workspace, stations: record.stations.filter((s: unknown): s is string => typeof s === "string" && s !== "") };
+    } catch {
+      return null;
+    }
+  }
+
+  /// Resolve only a station this chat has used; the empty id names its own station.
+  async workspaceStation(session: string, named: string): Promise<string> {
+    if (!this.store.getSession(session)) throw new Error("unknown session");
+    if (named === "" || named === this.ownId()) return "";
+    const targets = this.workspaceTargets(session);
+    if (targets === null) throw new Error("this chat has no remote workspace on that station");
+    const station = targets.stations.includes(named) ? named : await this.stationNamed(targets.workspace, named);
+    if (station === this.ownId()) return "";
+    if (!targets.stations.includes(station)) throw new Error("this chat has no remote workspace on that station");
+    return station;
+  }
+
+  /// The target answers immediately while its size is measured off the station's thread. Older or offline stations
+  /// simply supply no reading; the next look tries again without treating the missing answer as an empty workspace.
+  async workspaceSize(session: string, station: string, limit = DEFAULT_LIMIT): Promise<{ path: string; bytes: number; complete: boolean } | null> {
+    const targets = this.workspaceTargets(session);
+    if (!targets || !targets.stations.includes(station)) return null;
+    const answer = await this.bounded(this.ask(station, { method: "session.size", workspace: targets.workspace, session, limit }), LIST_WAIT_MS);
+    if (!answer || "error" in answer) return null;
+    const value = answer.ok;
+    if (value?.present !== true || value.pending === true || typeof value.path !== "string" || !Number.isSafeInteger(value.bytes) || value.bytes < 0 || typeof value.complete !== "boolean") return null;
+    return { path: value.path, bytes: value.bytes, complete: value.complete };
+  }
+
   /// The source remembers which stations a session ran tasks on, to ask them to clean up when it closes.
   recordUse(workspace: string, session: string, station: string): void {
     const path = this.usedPath(session);
@@ -995,6 +1038,16 @@ export class Remote {
       return { tasks };
     }
     const session = text(request, "session");
+    if (method === "session.size") {
+      if (session === "" || bytes(session) > 256) throw new Error("session is required");
+      const room = this.room(workspace, peer, session);
+      if (!existsSync(join(room, "session.json"))) return { present: false };
+      const path = join(room, "work");
+      const cutoff = field(request, "limit") ?? DEFAULT_LIMIT;
+      if (!Number.isSafeInteger(cutoff) || cutoff < 1) throw new Error("limit must be a positive whole number of bytes");
+      const size = this.workspaceReader.size(path, cutoff);
+      return size === null ? { present: true, pending: true, path } : { present: true, pending: false, path, ...size };
+    }
     if (method === "task.list") {
       if (session === "" || bytes(session) > 256) throw new Error("session is required");
       const tasks: Json[] = [];

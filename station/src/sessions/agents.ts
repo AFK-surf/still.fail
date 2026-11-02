@@ -18,6 +18,7 @@ import { HermesDriver } from "../agents/hermes.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
+import { WorkspaceWatch, type WorkspaceReading } from "../jobs/workspace-size.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
@@ -47,6 +48,7 @@ import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
+import { workspaceSizeTools } from "../tools/workspace-size.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
@@ -62,6 +64,7 @@ import { hubConfig } from "./config.ts";
 import type { TailState } from "../read/tail.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
+import { roomOf } from "./footprint.ts";
 import { InternalChat } from "./internal.ts";
 import { autoArchive, expireArchived, relieveArchived } from "./lifecycle.ts";
 import { fromPeer, sender } from "./messages.ts";
@@ -253,6 +256,41 @@ export const AgentsLive = (control: Control) =>
         },
       });
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places, bus: yield* Peers });
+      // Measure only working chats, and only station-owned workspaces. A chat's remote workspaces are measured on the
+      // machines that hold them; an offline or older station supplies no reading until it can answer.
+      const workingRow = (row: NonNullable<ReturnType<typeof store.getSession>>, jobsRunning: Set<string>): boolean =>
+        row.archivedAt === null && (row.running || hub.processState(row.key) === "running" || jobsRunning.has(row.key) || store.lastTurn(row.key)?.declared === "waiting");
+      const working = (key: string): boolean => {
+        const row = store.getSession(key);
+        return row !== null && workingRow(row, new Set(store.jobsRunning().map((j) => j.sessionKey)));
+      };
+      const workspaceWatch: WorkspaceWatch = new WorkspaceWatch({
+        data,
+        clock: hub.clock,
+        working,
+        notify: (session, text) => hub.notify(session, text),
+        readings: async () => {
+          const jobsRunning = new Set(store.jobsRunning().map((j) => j.sessionKey));
+          return (await Promise.all(store.liveSessions().filter((s) => workingRow(s, jobsRunning)).map(async (s) => {
+            const found: WorkspaceReading[] = [];
+            if (roomOf(data, s.workspace) !== null) {
+              const size = remote.workspaceReader.size(s.workspace, workspaceWatch.limit(s.key, ""));
+              if (size !== null) found.push({ session: s.key, station: "", name: "this station", path: s.workspace, ...size });
+            }
+            const targets = remote.workspaceTargets(s.key);
+            if (targets) {
+              const others = await Promise.all(targets.stations.map(async (station): Promise<WorkspaceReading | null> => {
+                const size = await remote.workspaceSize(s.key, station, workspaceWatch.limit(s.key, station)).catch(() => null);
+                return size ? { session: s.key, station, name: nameOf(cloud, station), ...size } : null;
+              }));
+              found.push(...others.filter((r): r is WorkspaceReading => r !== null));
+            }
+            return found;
+          }))).flat();
+        },
+      });
+      workspaceWatch.start();
+      yield* Effect.addFinalizer(() => Effect.promise(() => workspaceWatch.close()));
       // What the agents run here, watched for the machine's memory (jobs/memory.ts): their agents told when it is much,
       // the largest stopped only when the machine is about to run out.
       const memory = liveMemory({ data, store, jobs, notify: (session, text) => hub.notify(session, text), clock: hub.clock });
@@ -287,6 +325,7 @@ export const AgentsLive = (control: Control) =>
       });
       hub.onClose((session) => {
         remote.closeSession(session);
+        if (!store.getSession(session)) workspaceWatch.forget(session);
         computer.closeSession(session);
         forwards.closeSession(session);
         parts.endSession(session);
@@ -375,6 +414,7 @@ export const AgentsLive = (control: Control) =>
         ...chatTools(hub),
         ...archiveTools(hub),
         ...remoteTools(remote),
+        ...workspaceSizeTools(workspaceWatch, remote),
         ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null, hub.places),
         ...screenTools(screens, () => {
           const s = place();
