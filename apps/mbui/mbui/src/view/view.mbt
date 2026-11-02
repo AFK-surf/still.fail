@@ -421,6 +421,10 @@ pub struct Tree {
   clock : @signals.Signal[Double]
   /// the same moment, for what draws a wait by it (a cycle: View::cycle): what never ends, read apart from what moves
   beat : @signals.Signal[Double]
+  /// told each time what the root holds is put at another place in the window's stack of layers (View::stacked,
+  /// View::over_all): what orders things by those places as it is built (an old frame's layers opened in its nodes:
+  /// Tree::places_read) built again
+  places : @signals.Signal[Int]
   /// the time now, as a change is told (the host's: an event's moment, before a frame takes it); none: the clock's
   time : (() -> Double)?
   /// the moment the change a queued binding works out was told, while it is (-1: none)
@@ -637,6 +641,7 @@ pub fn Tree::new(
   let t : Tree = {
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
+    places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
@@ -2500,6 +2505,7 @@ pub fn View::over_all(self : View, on : Live[Bool]) -> View {
     guard self.live() is Some(n) else { return }
     n.over_all = on
     self.tree.top_last()
+    self.tree.places_told()
     self.tree.hits = self.tree.hits + 1
     self.tree.modals_told()
   }
@@ -2558,6 +2564,7 @@ pub fn View::stacked(self : View, stack : Live[Int]) -> View {
   self.bind(Stacked, stack, Layout, fn(k) {
     self.tree.nodes[self.at].stack = k
     self.tree.top_last()
+    self.tree.places_told()
     self.tree.hits = self.tree.hits + 1
     self.tree.modals_told()
   })
@@ -2638,6 +2645,20 @@ fn Tree::stack_at(self : Tree, at : Int) -> Int {
 fn Tree::top_last(self : Tree) -> Unit {
   // (the order they are drawn, found and read out in is worked out again: Tree::root_layers)
   self.order_marked()
+}
+
+///|
+/// What the root holds put at another place in the window's stack of layers: told to what read where they are
+/// (Tree::places_read).
+fn Tree::places_told(self : Tree) -> Unit {
+  self.places.set(@signals.untracked(fn() { self.places.get() }) + 1)
+}
+
+///|
+/// Where what the root holds is in the window's stack of layers (Tree::stack_of) followed by what reads it here: told
+/// as any is put at another place (View::stacked, View::over_all).
+pub fn Tree::places_read(self : Tree) -> Unit {
+  self.places.get() |> ignore
 }
 
 ///|

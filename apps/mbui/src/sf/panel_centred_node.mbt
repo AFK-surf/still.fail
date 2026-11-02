@@ -31,7 +31,20 @@ fn panel_centred_node(
     let theme = fn() { @ui.tree_theme() }
     // (one that goes in steps: each its own head and foot, sliding in whole; the dialog untitled round them)
     let steps = keyed.steps
-    let untitled = x.title == "" || steps is Some(_)
+    // (its title, step and what it says as they are now: `live`'s, read where each is used and followed as it changes;
+    // its head there or not as they say, what holds what it holds the same)
+    let now = fn() {
+      match x.live {
+        Some(f) => f()
+        None => (x.title, "", x.description)
+      }
+    }
+    let untitled = fn() {
+      steps is Some(_) || {
+        let (title, step, _) = now()
+        title == "" && step == ""
+      }
+    }
     let w = fn() { dmin(if x.wide { dialog_wide_w } else { dialog_w }, layer.window().0 - dialog_margin) }
     // (its old views' words as far in as its look says, as kit's dialog's look gives them: read as they are painted)
     let words_look = fn(c : @ui.Ctx, held : Int) {
@@ -65,13 +78,19 @@ fn panel_centred_node(
       // (a press on it its own: not outside it)
       .presses(Is(true))
       .on_press(fn() {  })
-      .says(Is(Some(@view.said(Dialog, label=x.title, description=x.description))))
+      // (one that goes in steps read out by its own title still: what its steps say is theirs)
+      .says(By(fn() {
+        let (title, _, description) = if steps is Some(_) { (x.title, "", x.description) } else { now() }
+        Some(@view.said(Dialog, label=title, description~))
+      }))
       |> ignore
-      // (untitled: its close button alone over its top corner, concentric with it: built first, as dialog builds its
-      // layer before what it holds: read out first, drawn under what comes after it)
-      if untitled && steps is None {
-        d.box(fn(o) {
-          o.over(Is(true)).width(By(fn() { Some(w()) }))|> ignore
+      // (untitled: its close button alone over its top corner, concentric with it, there while it is untitled: built
+      // first, as dialog built its layer before what it holds (read out first, drawn under what comes after it); one
+      // whose title is as it is now (`live`) built after what it holds and its foot, as the old frame builds it now (read
+      // out last, drawn over them))
+      let corner = fn() {
+        d.show(fn() { steps is None && untitled() }, fn(o) {
+          o.over(Is(true)).width(By(fn() { Some(w()) })) |> ignore
           @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
             let held = c.box(style=dialog_close_row, fn() {
               c.box(style=dialog_close_corner(), fn() {
@@ -87,18 +106,31 @@ fn panel_centred_node(
           })
           |> ignore
         })
-        |> ignore
       }
-      // (its head: its title and its close button at its end where it has a title, what it says under them where it says
-      // something: dialog's)
-      if steps is None && (!untitled || x.description != "") {
-        @ui.old(d, natural=true, key=fn() { key + "/head" }, fn(c) {
+      if x.live is None {
+        corner()
+      }
+      // (its head: its title (its step beside it) and its close button at its end where it has a title, what it says
+      // under them where it says something: dialog's, as they are now)
+      d.show(fn() { steps is None && (!untitled() || now().2 != "") }, fn(h) {
+        h.margin(Is((-dialog_pad, -dialog_pad, -dialog_pad, 0.0))) |> ignore
+        @ui.old(h, natural=true, key=fn() { key + "/head" }, fn(c) {
+          let (title, step, description) = now()
           let held = c.box(style=centred_part_in(dialog_pad, 0.0), fn() {
             in_words(fn() {
               let words_at = @ui.style(pl=room(words_in_now.val))
-              if !untitled {
+              if !untitled() {
                 c.box(style=dialog_head.then(words_at), fn() {
-                  c.text(x.title, style=dialog_title) |> ignore
+                  // (a step's count beside the title: dialog's)
+                  if step != "" {
+                    c.box(style=dialog_title_line, fn() {
+                      c.text(title, style=dialog_title_one) |> ignore
+                      c.text(step, style=dialog_step) |> ignore
+                    })
+                    |> ignore
+                  } else {
+                    c.text(title, style=dialog_title) |> ignore
+                  }
                   c.box(style=dialog_close_at(), fn() {
                     if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
                       // (its field let go of first, as the old frame has it: field_let_go)
@@ -110,16 +142,15 @@ fn panel_centred_node(
                 })
                 |> ignore
               }
-              if x.description != "" {
-                c.box(style=dialog_lead_at.then(words_at), fn() { c.text(x.description, style=dialog_lead) |> ignore }) |> ignore
+              if description != "" {
+                c.box(style=dialog_lead_at.then(words_at), fn() { c.text(description, style=dialog_lead) |> ignore }) |> ignore
               }
             })
           })
           words_look(c, held)
         })
-        .margin(Is((-dialog_pad, -dialog_pad, -dialog_pad, 0.0)))
         |> ignore
-      }
+      })
       // (a share of the window tall, not a form (one as tall as what it holds, whatever its share): what it holds as tall
       // as its lists say they would be, up to that share, filling it where none says (measured_body's, capped_want's); no
       // taller than the dialog leaves it, laid out in that, its lists giving way and scrolling in themselves (old's
@@ -131,7 +162,7 @@ fn panel_centred_node(
         @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
           let share = dmax(0.0, x.tall * c.window_size().1 - dialog_frame_h)
           let column = @ui.style(px=room(words_in))
-          let top = if untitled { dialog_untitled_top } else { no_style }
+          let top = if untitled() { dialog_untitled_top } else { no_style }
           let at = (if x.foot is None { dialog_body_end } else { dialog_body }).then(column).then(top)
           let whole = if says.get() { @ui.style(w=Full, max_h=Fixed(share)) } else { @ui.style(w=Full, h=Fixed(share)) }
           let id = c.id("sf-present/capped/\{keyed.serial}")
@@ -144,7 +175,7 @@ fn panel_centred_node(
               column_given.val = true
               column_in_now.val = words_in
               in_dialog.val = true
-              untitled_clear_now.val = if untitled { dialog_close_clear() } else { 0.0 }
+              untitled_clear_now.val = if untitled() { dialog_close_clear() } else { 0.0 }
               lists_sized_now.val = true
               // (what holds what it holds giving way to the height the dialog leaves it)
               c.gives_way(measured_body(c, keyed.serial, id, whole, fn() { draw_panel_body(x, c, close, keyed~) }))
@@ -179,7 +210,7 @@ fn panel_centred_node(
           b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
             @ui.old(s, natural=true, key=fn() { key + "/body" }, fn(c) {
               let column = @ui.style(px=room(words_in))
-              let top = if untitled { dialog_untitled_top } else { no_style }
+              let top = if untitled() { dialog_untitled_top } else { no_style }
               let at = if steps is Some(_) {
                 full_width.then(column).then(top)
               } else {
@@ -196,7 +227,7 @@ fn panel_centred_node(
                   column_given.val = true
                   column_in_now.val = words_in
                   in_dialog.val = true
-                  untitled_clear_now.val = if untitled { dialog_close_clear() } else { 0.0 }
+                  untitled_clear_now.val = if untitled() { dialog_close_clear() } else { 0.0 }
                   match steps {
                     // (its steps a stack, out to the dialog's edges, each whole: steps_centred's)
                     Some(nav) => {
@@ -246,6 +277,9 @@ fn panel_centred_node(
           .margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0)))
           |> ignore
         _ => ()
+      }
+      if x.live is Some(_) {
+        corner()
       }
       // (one that goes in steps: its close button over its steps, laid after them, a step sliding in or away under it)
       if steps is Some(_) {

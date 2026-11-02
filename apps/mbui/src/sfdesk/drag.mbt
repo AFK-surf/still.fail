@@ -92,6 +92,7 @@ fn drag_reset() -> Unit {
   fdrag.later = []
   fdrag.frame = -1
   fclash_shown.val = 0
+  clash_changed()
 }
 
 ///|
@@ -471,7 +472,7 @@ fn fdrag_transfer(
     }
   }
   match entries.iter().find_first(fn(e) { e.name.to_lower() == item.name.to_lower() }) {
-    Some(e) =>
+    Some(e) => {
       fdrag.asking = Some({
         into,
         into_name,
@@ -481,6 +482,8 @@ fn fdrag_transfer(
         all: false,
         done: go,
       })
+      clash_changed()
+    }
     None => go({})
   }
   true
@@ -524,6 +527,7 @@ fn clash_dialog(c : @ui.Ctx) -> Unit {
         gone=fn() {
           fdrag.asking = None
           fclash_shown.val = 0
+          clash_changed()
         },
       )
       fclash_shown.val = @sf.last_presented()
@@ -538,6 +542,18 @@ fn clash_dialog(c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// What is asked, told as it changes (fdrag.asking set or let go, a name answered, all the rest chosen the same way):
+/// what reads it (clash_now: the dialog's title and what it says, what it holds, its foot) follows it.
+// kept across runs: only ever told; read by clash_now
+let clash_told : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// What is asked changed: told (clash_told).
+fn clash_changed() -> Unit {
+  clash_told.set(@signals.untracked(fn() { clash_told.get() }) + 1)
+}
+
+///|
 /// The asking's dialog as presented (@sf.last_presented; 0 none).
 // kept across runs: put back by drag_reset
 let fclash_shown : Ref[Int] = Ref(0)
@@ -545,6 +561,7 @@ let fclash_shown : Ref[Int] = Ref(0)
 ///|
 /// What is asked now, and the name asked about (the first not answered).
 fn clash_now() -> (Asking?, Clash?) {
+  clash_told.get() |> ignore
   match fdrag.asking {
     Some(a) =>
       match a.clashes.iter().find_first(fn(x) { !a.answers.contains(x.name) }) {
@@ -566,8 +583,10 @@ fn clash_answer(a : Asking, n : Clash, said : String) -> Unit {
   } else {
     a.answers[n.name] = said
   }
+  clash_changed()
   if a.clashes.iter().all(fn(x) { a.answers.contains(x.name) }) {
     fdrag.asking = None
+    clash_changed()
     (a.done)(a.answers)
   }
 }
@@ -600,6 +619,7 @@ fn clash_body(c : @ui.Ctx) -> Unit {
         let id = c.id("files-clash/all")
         if c.clicked(id) {
           a.all = !a.all
+          clash_changed()
         }
         c.box(style=fclash_all, id~, fn() {
           @sf.icon(c, if a.all { "check-circle" } else { "square" }, size=drag_icon, color=if a.all { t.p.accent } else { t.p.muted })
@@ -772,6 +792,7 @@ pub fn dragged() -> Dragged? {
 /// A name already where files go asked about, as a drop does (a page shown at that moment: the fixture's).
 pub fn drag_ask(a : Asking) -> Unit {
   fdrag.asking = Some(a)
+  clash_changed()
 }
 ///|
 /// The clash's facts (DrivePane.css.ts facts: two columns, 4 by 12 between; what is said muted).

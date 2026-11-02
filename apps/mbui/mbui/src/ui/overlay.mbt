@@ -164,6 +164,8 @@ pub fn Ctx::overlay(
   n.portal = true
   n.portal_id = id
   n.stack = self.stack_cur
+  // (said at no place, opened by an old view of the window's tree: at that view's node's, as it is now)
+  n.stack_in = if self.stack_cur < 0 { island_building.val } else { None }
   self.layers.push({
     id,
     node: i,
@@ -518,10 +520,11 @@ fn Ctx::raise_layers(self : Ctx) -> Unit {
   let key = Map([])
   let mut at = -1
   for i in tops {
-    if self.nodes[i].stack >= 0 {
-      at = self.nodes[i].stack
+    let s = self.node_stack(i)
+    if s >= 0 {
+      at = s
     }
-    key[i] = if self.nodes[i].stack >= 0 { self.nodes[i].stack } else { at }
+    key[i] = if s >= 0 { s } else { at }
   }
   let sorted = stack_sorted(tops, fn(i) { key.get(i).unwrap_or(-1) })
   root.first = -1
@@ -545,7 +548,7 @@ fn Ctx::raise_layers(self : Ctx) -> Unit {
   // (what takes back, each layer's opening at its place as the layers are put (one said at none where the one built
   // before it is, kept or built anew) and where it is among them; the rest at the place said, under the layers there,
   // in the order said; what takes it now the topmost)
-  let gens : Map[Int, (Int, Int)] = Map([])
+  let gens : Map[Int, (Int, Int, @view.NodeId?)] = Map([])
   for rank, l in self.layers {
     match self.layer_gen.get(l.id) {
       Some(g) => {
@@ -553,7 +556,8 @@ fn Ctx::raise_layers(self : Ctx) -> Unit {
         while r >= 0 && r < self.count && self.nodes[r].parent > 0 {
           r = self.nodes[r].parent
         }
-        gens[g] = (key.get(r).unwrap_or(-1), rank)
+        let stack_in = if r >= 0 && r < self.count && self.nodes[r].stack < 0 { self.nodes[r].stack_in } else { None }
+        gens[g] = (key.get(r).unwrap_or(-1), rank, stack_in)
       }
       None => ()
     }
@@ -565,7 +569,7 @@ fn Ctx::raise_layers(self : Ctx) -> Unit {
     // (a layer's close and what was said in it at that layer's place and rank, those said later over those before)
     let of = if e.layer != 0 { e.layer } else { e.within }
     match gens.get(of) {
-      Some((at, rank)) if of != 0 => entries.push(({ ..e, stack: at }, at, rank, said))
+      Some((at, rank, stack_in)) if of != 0 => entries.push(({ ..e, stack: at, stack_in }, at, rank, said))
       _ => entries.push((e, e.stack, -1, said))
     }
     said = said + 1
@@ -828,6 +832,9 @@ struct BackEntry {
   layer : Int
   /// where what said it is in the window's stack of layers (Ctx::stacked; -1 in none)
   stack : Int
+  /// a layer's opening at no place said, opened by an old view of the window's tree: that view's node, at whose place
+  /// it stands as it is now (Ctx::back_stack)
+  stack_in : @view.NodeId?
   /// the layer's opening it was said in (Ctx::overlay's body; 0: none's): it stands with that layer, over what the
   /// layer said before it (its close), as it was said after it
   within : Int
@@ -856,6 +863,7 @@ fn Ctx::back_says(self : Ctx) -> Unit {
           island: self.back_island_next,
           layer: self.back_layer_next,
           stack: self.back_stack_said(),
+          stack_in: None,
           within: self.back_within,
         },
         self.back_chain_next,
@@ -1111,13 +1119,11 @@ fn Ctx::back_layer_spent(self : Ctx) -> Unit {
         self.back_node = e.node
         self.back_edge = e.edge
         self.back_island = e.island
-        self.back_stack = e.stack
       }
       Unsaid => {
         self.back = None
         self.back_node = -1
         self.back_island = None
-        self.back_stack = -3
       }
     }
   }

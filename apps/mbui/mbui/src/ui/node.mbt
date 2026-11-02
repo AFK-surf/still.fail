@@ -266,6 +266,9 @@ struct Node {
   // a layer's own node: where it is in the window's stack of layers, the old frame's and the tree's (Ctx::stacked);
   // -1 none said (where the old frame built it among its own)
   mut stack : Int
+  // a layer's own node said at no place, opened by an old view of the window's tree: that view's node, at whose place
+  // it is (Ctx::node_stack: as that is now)
+  mut stack_in : @view.NodeId?
   // the stratum it starts over what is put off under it (strata.mbt: 0 none, its bar's or its cover's)
   mut mark : Int
   // a shot's layer (shot.mbt): drawn not on the screen but into the shot's own instances
@@ -501,6 +504,7 @@ fn Node::new() -> Node {
     portal: false,
     portal_id: 0,
     stack: -1,
+    stack_in: None,
     mark: 0,
     shot: false,
     paints: None,
@@ -625,6 +629,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.portal = false
   self.portal_id = 0
   self.stack = -1
+  self.stack_in = None
   self.mark = 0
   self.shot = false
   self.paints = None

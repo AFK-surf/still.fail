@@ -957,7 +957,6 @@ pub struct Ctx {
   mut back_next : ((Int32, Double, Double, Double, Double) -> Unit)?
   mut back_layer_next : Int32
   mut back_within : Int32
-  mut back_stack : Int32
   mut back_node_next : Int32
   mut back_edge_next : Double
   mut back_island : @view.NodeId?

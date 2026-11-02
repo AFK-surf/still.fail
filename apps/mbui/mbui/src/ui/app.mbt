@@ -314,7 +314,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     layout_coming.val = true
     c.read_back_moved = false
     c.read_back_whole = false
-    old_built.val = false
     building.val = true
     c.build_no = next_build()
     // (a hold handed an old view: the frame it comes to, as its build begins; gone once that frame is)
@@ -522,10 +521,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_island = c.back_island_next
   c.back_edge = c.back_edge_next
   c.back_chain = c.back_chain_next
-  c.back_stack = match c.back_chain {
-    Said(e, _) => e.stack
-    Unsaid => -3
-  }
   // (a layer's that took back already, said again as it was kept: what it was said over, in its place)
   c.back_layer_spent()
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
