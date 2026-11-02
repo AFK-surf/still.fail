@@ -328,7 +328,6 @@
   "core-logic.format.status.running": "Running",
   "core-logic.format.status.unexpected": "Stopped unexpectedly",
   "core-logic.format.status.unexpected.what": "Stopped unexpectedly",
-  "core-logic.format.thread.dm": "DM",
   "core-logic.format.thread.feishu": "Feishu chat",
   "core-logic.format.until.days": {
     "one": "in 1 day",

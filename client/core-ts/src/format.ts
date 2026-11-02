@@ -321,7 +321,62 @@ export function splitWhitespace(text: string): string[] {
   return text.split(/[\s\u0085]+/u).filter((w) => w !== "");
 }
 
-/// A thread named for people: where (its channel by name, 私信, or a still.fail chat's title) and when it began.
+/// Text without Slack's `<@U123>` mentions.
+function withoutMentions(text: string): string {
+  let out = "";
+  let rest = text;
+  for (;;) {
+    const at = rest.indexOf("<@");
+    if (at < 0) break;
+    out += rest.slice(0, at);
+    const after = rest.slice(at + 2);
+    const end = after.indexOf(">");
+    if (end > 0 && /^[A-Z0-9]+$/.test(after.slice(0, end))) rest = after.slice(end + 1);
+    else {
+      out += "<@";
+      rest = after;
+    }
+  }
+  return out + rest;
+}
+
+/// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
+export function placeName(surface: string, channel: string, channelName: string): string | null {
+  const feishu = surface.startsWith("feishu:") || isFeishuChat(channel);
+  if (feishu) return channelName || tr(current(), "core-logic.format.thread.feishu");
+  if (surface === "ember" || surface === "stillfail" || surface === "") return null;
+  return channel.startsWith("D") ? tr(current(), "core-views.direct_message") : `#${channelName || channel}`;
+}
+
+/// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
+/// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
+/// thread the first line a person wrote in it, else its channel.
+export function chatTitle(thread: unknown): string {
+  const text = (name: string): string | null => {
+    const v = get(thread, name);
+    return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+  };
+  const title = text("title") ?? text("autoTitle");
+  if (title !== null) return title;
+  const surface = get(thread, "surface");
+  if (surface === "ember" || surface === "stillfail") return tr(current(), "core-views.new_chat");
+  const firstText = text("firstText");
+  if (firstText !== null) {
+    const first = withoutMentions(firstText)
+      .split("\n")
+      .map((l) => splitWhitespace(l).join(" "))
+      .find((l) => l !== "");
+    if (first !== undefined) return first;
+  }
+  const channel = text("channelName");
+  // A Feishu chat is named as it is there (no #).
+  if (channel !== null) return typeof surface === "string" && surface.startsWith("feishu:") ? channel : `#${channel}`;
+  if (text("channel")?.startsWith("D")) return tr(current(), "core-views.direct_message");
+  return tr(current(), "core-views.new_chat");
+}
+
+/// A thread named for people: where (a still.fail chat by its title, chatTitle; a Slack or Feishu thread by its place,
+/// placeName) and when it began.
 export function threadName(threads: unknown[], channel: string, threadTs: string, offsetMin: number): [string, string] {
   const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === threadTs);
   const parsed = Number(threadTs);
@@ -330,21 +385,9 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   const started = Number.isFinite(parsed) && threadTs.trim() !== "" ? parsed * 1000 : typeof made === "number" ? made : 0;
   const [, month, day] = local(started, offsetMin);
   const when = tr(current(), "core-logic.format.date_time", { date: monthDay(current(), month, day), time: clock(started, offsetMin) });
-  const text = (k: string) => str(get(thread, k)) ?? "";
-  let where: string;
-  if (channel === "EMBER" || channel === "STILLFAIL") {
-    // Its title as the station's titleOf takes it: a person's, else the agent's (autoTitle), else 新对话, never its first
-    // message.
-    where = [text("title"), text("autoTitle")].map((t) => t.trim()).find((t) => t !== "") ?? tr(current(), "core-views.new_chat");
-  } else if (isFeishuChat(channel) || str(get(thread, "surface"))?.startsWith("feishu:")) {
-    // A Feishu chat (群, 私聊) by its name, as its station read it.
-    const n = text("channelName");
-    where = n === "" ? tr(current(), "core-logic.format.thread.feishu") : n;
-  } else if (channel.startsWith("D")) where = tr(current(), "core-logic.format.thread.dm");
-  else {
-    const n = text("channelName");
-    where = `#${n === "" ? channel : n}`;
-  }
+  const own = channel === "EMBER" || channel === "STILLFAIL";
+  // (a thread its station has not told of is a Slack one by its channel)
+  const where = own ? chatTitle({ ...(thread as object), surface: "ember" }) : placeName(str(get(thread, "surface")) || "slack", channel, str(get(thread, "channelName")) ?? "") ?? `#${channel}`;
   return [where, when];
 }
 
