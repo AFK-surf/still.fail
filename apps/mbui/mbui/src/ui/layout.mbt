@@ -1012,6 +1012,23 @@ fn Ctx::layout(
 }
 
 ///|
+/// Box `i` (Ctx::box's) in a column shorter than it says where the column has less room left, down to none (CSS's
+/// flex-shrink): a list as tall as its rows in what is laid out shorter than it asks (old's `gives`), scrolling in itself
+/// there.
+pub fn Ctx::gives_way(self : Ctx, i : Int) -> Unit {
+  self.nodes[i].shrinks = true
+}
+
+///|
+/// How tall node `i`, as laid out, asks to be: measured at the width it was laid out at with no bound on its height (what
+/// in it gave way to the height it was given as tall as it asks), as the layout just done left it, nothing of that laid
+/// out again (@flex.measured_height). An old view laid out in the height its node is given (old's `gives`) asks its
+/// node for this.
+fn Ctx::asked_height(self : Ctx, i : Int) -> Double {
+  @flex.measured_height(self.nodes[i].fl, self.nodes[i].fw)
+}
+
+///|
 /// A node placed by its own size (Ctx::place_by_size): its offset worked out from the size it is laid out at.
 fn Node::by_size(self : Node, w : Double, h : Double) -> Unit {
   match self.place {

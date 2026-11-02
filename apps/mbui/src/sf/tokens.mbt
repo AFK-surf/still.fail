@@ -1527,7 +1527,7 @@ pub let group_row_end_radius : @ui.Radius = rounded(inner_corner(group_corner, l
 pub let seg_card_radius : @ui.Radius = surface(card_pad, 10.0).radius()
 
 ///|
-/// The usage page's days (Usage.kt Days): the plot 150 high (PLOT), a bar 16 wide at most (BAR), how far a line of the
+/// The usage page's days (Usage.kt Days): the plot 150 high (PLOT), a bar 24 wide at most (BAR), how far a line of the
 /// scale's words stand over it (their line, Xs3's 14, and 2), and a part's corner (4; 2 with many days: Base, Sm).
 pub let usage_plot : Double = 150.0
 
@@ -1535,7 +1535,14 @@ pub let usage_plot : Double = 150.0
 pub let usage_plot_h : @ui.Len = Fixed(usage_plot)
 
 ///|
-pub let usage_bar_max : @ui.Len = Fixed(16.0)
+pub let usage_bar_max : @ui.Len = Fixed(24.0)
+
+///|
+/// The usage page's summary: 760 across at most (Codex keeps it 110 columns), its year's legend 10 a level.
+pub let usage_summary_w : @ui.Len = Fixed(760.0)
+
+///|
+pub let usage_level_side : @ui.Len = Fixed(10.0)
 
 ///|
 pub let usage_tick_rise : Double = 16.0

@@ -107,8 +107,39 @@ pub fn read_exact_at(file: &File, buf: &mut [u8], at: u64) -> io::Result<()> {
 
 /// Whether a process of this pid lives (one of another user's, too).
 pub fn alive(pid: i32) -> bool {
-    // SAFETY: signal 0 only checks the process exists.
-    pid > 0 && (unsafe { libc::kill(pid, 0) } == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM))
+    // SAFETY: signal 0 only checks the process exists. One not ours to signal (EPERM) is no runner of this user's.
+    pid > 0 && unsafe { libc::kill(pid, 0) } == 0
+}
+
+/// When a process started, in ms since the epoch, if that can be told.
+#[cfg(target_os = "macos")]
+pub fn started_ms(pid: i32) -> Option<u64> {
+    let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+    // SAFETY: an all-zero proc_bsdinfo is valid (plain integers and bytes), and the call writes at most `size` bytes.
+    let info = unsafe {
+        let mut info: libc::proc_bsdinfo = std::mem::zeroed();
+        (libc::proc_pidinfo(pid, libc::PROC_PIDTBSDINFO, 0, (&raw mut info).cast(), size) == size).then_some(info)?
+    };
+    Some(info.pbi_start_tvsec * 1000 + info.pbi_start_tvusec / 1000)
+}
+
+/// When a process started, in ms since the epoch, if that can be told.
+#[cfg(target_os = "linux")]
+pub fn started_ms(pid: i32) -> Option<u64> {
+    // Its start in clock ticks since boot: the 20th field after the name, which may hold anything up to its last ')'.
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let ticks: u64 = stat.rsplit_once(')')?.1.split_whitespace().nth(19)?.parse().ok()?;
+    let boot = std::fs::read_to_string("/proc/stat").ok()?;
+    let boot: u64 = boot.lines().find_map(|line| line.strip_prefix("btime "))?.trim().parse().ok()?;
+    // SAFETY: sysconf only reads a setting.
+    let per_second = u64::try_from(unsafe { libc::sysconf(libc::_SC_CLK_TCK) }).ok().filter(|hz| *hz > 0)?;
+    Some(boot * 1000 + ticks * 1000 / per_second)
+}
+
+/// When a process started: not known on this system.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub fn started_ms(_pid: i32) -> Option<u64> {
+    None
 }
 
 /// Lets go of the starter's stdio: stdout closes (it reads the ready line to its end), and nothing it holds is

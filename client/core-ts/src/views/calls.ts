@@ -142,9 +142,7 @@ export class ViewCalls {
     const tried = this.#local.pendingTry(key);
     if (tried === null) return;
     const [station, ask] = tried;
-    // Its station down as it was asked for: asked once it is reached again (`stationBack`), not tried and failed. Not
-    // after it was asked: a station may have made it whose answer did not come, and a chat is not made once whatever
-    // the times it is asked.
+    // Its station down as it was asked for: asked once it is reached again (`stationBack`).
     if (!this.#inner.stations.reachable(station)) {
       this.#local.pendingFailed(key, t("core-misc.call.waitingStation"), true);
       return;
@@ -164,7 +162,9 @@ export class ViewCalls {
           }),
         );
         if (made._tag === "Failure") {
-          this.#local.pendingFailed(key, made.failure.message);
+          // The station may have made the chat before its connection went away. It recognizes this request by its
+          // client key, so the first message can continue to that same chat when the station comes back.
+          this.#local.pendingFailed(key, made.failure.message, made.failure.status === undefined && unreachedCode(made.failure));
           return;
         }
         const [session, thread, answer] = made.success;

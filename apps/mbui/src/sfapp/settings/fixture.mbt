@@ -1231,6 +1231,69 @@ fn only_shown_list(lists : Array[(String, String, Array[(String, String, String,
 }
 
 ///|
+/// 用量's summary as the core says it (views/usage-summary.ts), its year from 2025-10-05: a workspace counted since March, most days busy
+/// and weekends quieter, today Friday 10/2 (a Saturday after it).
+fn fx_usage_summary() -> Json {
+  let cells : Array[Json] = []
+  for i in 0..<(52 * 7) {
+    let week = i / 7
+    let wd = i % 7
+    let level = if i == 51 * 7 + 6 {
+      -1
+    } else if week < 22 {
+      0
+    } else {
+      // (a made-up mix: weekdays busier, a quiet day now and then)
+      let h = (i * 7919 + week * 104729 + wd * 31) % 997
+      if wd == 0 || wd == 6 {
+        h % 3
+      } else {
+        h % 5
+      }
+    }
+    cells.push(Json::number(level.to_double()))
+  }
+  let weekly : Array[Json] = []
+  let cumulative : Array[Json] = []
+  for w in 0..<52 {
+    weekly.push(Json::number((if w < 22 { 0 } else { (w * 5 % 4) + 3 }).to_double()))
+    cumulative.push(Json::number((if w < 22 { 0 } else { (w - 21) * 7 / 30 + 1 }).to_double()))
+  }
+  let months = [(4, "11月"), (9, "12月"), (13, "1月"), (17, "2月"), (21, "3月"), (26, "4月"), (30, "5月"), (35, "6月"), (39, "7月"), (43, "8月"), (48, "9月")]
+  let named = fn(title : String, key : String, rows : Array[(String, String)]) {
+    obj([("title", str(title)), ("items", Json::array(rows.map(fn(r) { obj([(key, str(r.0)), ("value", str(r.1))]) })))])
+  }
+  obj([
+    ("title", str("星火工作室")),
+    (
+      "figures",
+      Json::array([("累计 token", "18.3 亿"), ("归档的对话", "1,358"), ("跨设备任务", "312"), ("决策点击率", "48%"), ("一起干活的设备", "3")].map(fn(f) {
+        obj([("label", str(f.0)), ("value", str(f.1))])
+      })),
+    ),
+    (
+      "activity",
+      obj([
+        ("title", str("Token 活跃度")),
+        ("sub", str("近 12 个月")),
+        ("views", [str("按天"), str("按周"), str("累计")]),
+        ("weekdays", Json::array(["日", "一", "二", "三", "四", "五", "六"].map(str))),
+        ("months", Json::array(months.map(fn(m) { obj([("week", Json::number(m.0.to_double())), ("label", str(m.1))]) }))),
+        ("cells", Json::array(cells)),
+        ("weekly", Json::array(weekly)),
+        ("cumulative", Json::array(cumulative)),
+        ("less", str("少")),
+        ("more", str("多")),
+        ("captions", [str(""), str("每列一周 · 最高 1.1 亿"), str("累计 · 共 18.3 亿")]),
+      ]),
+    ),
+    ("stations", named("各设备的工作量", "name", [("Studio", "12.6 亿 token · 69%"), ("MBA", "4.1 亿 token · 22%"), ("ccvm", "1.6 亿 token · 9%")])),
+    ("places", named("对话来自", "name", [("still.fail", "1,212 个对话"), ("Slack", "184 个对话"), ("飞书", "34 个对话")])),
+    ("asOf", str("统计截至 10月2日")),
+  ])
+}
+
+///|
 /// What the core's `usage` view says (views/usage.ts) of a made-up workspace: its days split by the list `split`
 /// asks for, of the one person, account or model `only` names (its key) alone.
 fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : String = "") -> Json {
@@ -1382,6 +1445,7 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
         ]),
       ],
     ),
+    ("summary", fx_usage_summary()),
     ("series", Json::array(series.map(fn(x) { obj([("key", str(x.0)), ("name", str(x.1))]) }))),
     ("daily", Json::array(daily)),
     ("many", Json::boolean(days > 10)),

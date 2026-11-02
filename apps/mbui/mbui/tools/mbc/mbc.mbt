@@ -1829,10 +1829,22 @@ fn cmd_wrap(args : Array[String]) -> Unit {
   for x in wargs {
     whole.push(x)
   }
-  let pass = env_set_to("MBC_SPLIT", "0") ||
-    !links ||
+  // (moon 0.1.20261029 compiles the program's C on its own, `-c -o …/__moonbit_link_core__/<program>.o`, and links
+  // that object after: the one compile split as the whole program's was, its units made one object again (`-r`), the
+  // link as moon does it. Passed through, it was one clang of the whole program at -O2 that did not end in the job's
+  // 5 minutes, every Linux and Mac build of main from 41388708830, 2026-11-02)
+  let core_obj = !links &&
+    !msvc &&
+    cs.length() == 1 &&
+    wargs.iter().any(fn(x) { x == b"-c" }) &&
     (match out {
-      Some(o) => !ends(o, b".exe")
+      Some(o) => ends(o, b".o") && contains(o, b"/__moonbit_link_core__/")
+      None => false
+    })
+  let pass = env_set_to("MBC_SPLIT", "0") ||
+    (!links && !core_obj) ||
+    (match out {
+      Some(o) => !ends(o, b".exe") && !core_obj
       None => true
     }) ||
     cs.length() != 1
@@ -1844,12 +1856,20 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     return
   }
   let out = out.unwrap()
+  // (the program the core object is for, as the names below say it: …/<pkg>/<program>.exe)
+  let prog = if core_obj {
+    let dir = dirname(dirname(out))
+    let b = basename(out)
+    cat([dir, b"/", sub(b, 0, b.length() - 2), b".exe"])
+  } else {
+    out
+  }
   // a test program its build said has no tests (MBC_EMPTY_TESTS: "pkg/name.kind …", apps/mbui/scripts/test.sh): moon
   // builds a package's internal, blackbox and whitebox programs whatever it has, each the whole app, and runs only
   // those with tests. Not compiled: in its place a file that is no program, so that one run anyway fails, said
   // (sfapp's two empty ones were 27 s of the app part's compile, sfreplay's 29 s of the replay part's, 2026-10-24)
   match getenv("MBC_EMPTY_TESTS") {
-    Some(list) =>
+    Some(list) if !core_obj =>
       for e in split_words(list) {
         if ends(out, cat([b"/", e, b".exe"])) {
           let _ = write_file(out, b"mbc: a test program with no tests (MBC_EMPTY_TESTS), not built\n")
@@ -1858,10 +1878,10 @@ fn cmd_wrap(args : Array[String]) -> Unit {
           return
         }
       }
-    None => ()
+    _ => ()
   }
   let c_file = wargs[cs[0]]
-  let objdir = cat([sub(out, 0, out.length() - 4), b".mbc"])
+  let objdir = cat([sub(out, 0, out.length() - (if core_obj { 2 } else { 4 })), b".mbc"])
   makedirs(objdir)
   let flags0 = if msvc {
     msvc_compile_flags(wargs[:])
@@ -1875,7 +1895,7 @@ fn cmd_wrap(args : Array[String]) -> Unit {
   match getenv("MBC_LIGHT_TESTS") {
     Some(list) if !msvc =>
       for e in split_words(list) {
-        if ends(out, cat([b"/", e, b".exe"])) {
+        if ends(prog, cat([b"/", e, b".exe"])) {
           light = true
         }
       }
@@ -1893,9 +1913,35 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     Some(v) if parse_int(strip(v)) > 0 => parse_int(strip(v))
     _ => cpus()
   }
-  let lto = lto_for(real, j)
+  let lto = if core_obj { None } else { lto_for(real, j) }
   let (jobs, _) = split_jobs(c_file, objdir, real, flags, [], init_flags, msvc, lto is Some(_))
   let objs = run_jobs_c(jobs, j, basename(c_file))
+  if core_obj {
+    let cmd = real.copy()
+    // (for the same machine as the units: -arch, -target, -isysroot, -m…)
+    let mut k = 0
+    while k < flags0.length() {
+      let x = flags0[k]
+      if (x == b"-arch" || x == b"-target" || x == b"-isysroot") && k + 1 < flags0.length() {
+        cmd.push(x)
+        cmd.push(flags0[k + 1])
+        k += 2
+        continue
+      }
+      if starts(x, b"-target=") || starts(x, b"-m") {
+        cmd.push(x)
+      }
+      k += 1
+    }
+    for x in [b"-r", b"-nostdlib", b"-o", out] {
+      cmd.push(x)
+    }
+    for o in objs {
+      cmd.push(o)
+    }
+    c_exit(link(cmd, out, [], None))
+    return
+  }
   let largs = wargs[0:cs[0]].to_array()
   for o in objs {
     largs.push(o)

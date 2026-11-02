@@ -1,4 +1,7 @@
 import {
+  "moonbitlang/core/math",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/double",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
   "mbui/ui",

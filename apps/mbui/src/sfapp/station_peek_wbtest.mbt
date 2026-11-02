@@ -3,6 +3,33 @@
 // opens how it runs (RunSettingsScreen).
 
 ///|
+test "an agent's labels and values stay in columns in both languages, including at a larger text size" {
+  for lang in ["zh", "en"] {
+    for mode in ["chat-agent", "chat-agent-unsaid"] {
+      let t = screen_in(mode, ("phone", 360.0, 844.0, 2, ""), lang)
+      for scale in [1.0, 1.3] {
+        t.set_font_scale(scale)
+        t.frame()
+        let station = t.words().filter(fn(w) { w.0 == "Station" && w.5 > 0.5 })
+        assert_true(!station.is_empty(), msg="\{lang} \{mode} \{scale}: Station")
+        let station_x = station[station.length() - 1].1
+        let labels = if lang == "zh" { ["账号", "历史"] } else { ["Account", "History"] }
+        for label in labels {
+          let words = t.words().filter(fn(w) { w.0 == label && w.5 > 0.5 })
+          assert_true(!words.is_empty(), msg="\{lang} \{mode} \{scale}: \{label}")
+          let x = words[words.length() - 1].1
+          assert_true((x - station_x).abs() < 0.6, msg="\{lang} \{mode} \{scale}: \{label} and Station")
+        }
+        let account = if lang == "zh" { "林的 Max · 自动" } else { "林的 Max · auto" }
+        let (account_x, _, _, _) = t.rect_of(account).unwrap()
+        let (history_x, _, _, _) = t.rect_of("8 轮 · 共干了 1 小时 12 分").unwrap()
+        assert_true((account_x - history_x).abs() < 0.6, msg="\{lang} \{mode} \{scale}: the values")
+      }
+    }
+  }
+}
+
+///|
 /// The agent's sheet over the fixture's chat, its station's row tapped: the station's card in its place.
 fn peek_from_agent(calls : Array[Made]) -> @ui.Tester raise {
   let t = decide_core(calls, "chat-agent")

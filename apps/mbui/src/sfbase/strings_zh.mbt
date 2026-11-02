@@ -1740,7 +1740,6 @@ let zh : Map[String, String] = {
   "web-pages.profiles.backgroundOff": "新消息需等正在执行的命令或 subagent 结束后才会被读取。",
   "web-pages.profiles.backgroundOn": "Claude Code 等待命令或 subagent 时，新消息会将它们转到后台继续运行（类似按 Ctrl+B）。agent 会立即读取消息，并在它们运行结束后处理结果。",
   "web-pages.profiles.checkedAt": "{time}检查",
-  "web-pages.profiles.allModels": "全部 {n} 个",
   "web-pages.profiles.collapse": "收起",
   "web-pages.profiles.removeModel": "移除 {model}",
   "web-pages.profiles.copiedReopen": "已复制，重新打开登录页",

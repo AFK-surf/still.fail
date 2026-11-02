@@ -16,6 +16,8 @@ pub fn computes() -> Int32
 
 pub let counters : FixedArray[Int32]
 
+pub fn measured_height(Node, Double) -> Double
+
 // Errors
 
 // Types and methods

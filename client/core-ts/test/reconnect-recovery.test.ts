@@ -387,6 +387,45 @@ test("messages_that_failed_as_their_station_was_down_go_in_order_once_it_is_reac
   }
 });
 
+test("a_new_chat_whose_answer_was_lost_is_retried_with_its_first_message", async () => {
+  const s = await started();
+  let first = true;
+  let created = 0;
+  const messages: string[] = [];
+  stationLater(s.host, (req) => {
+    if (first && req.method === "POST" && req.url.endsWith("/admin/api/sessions")) {
+      first = false;
+      return Promise.reject(new HostError("connection lost after creation"));
+    }
+    return undefined;
+  });
+  stationReplies(s.host, (req) => {
+    if (req.method === "POST" && req.url.endsWith("/admin/api/sessions")) {
+      created++;
+      return { key: "ember:c-9", thread: threadView(9, 0) };
+    }
+    if (req.method === "POST" && req.url.endsWith("/admin/api/threads/9/messages")) {
+      messages.push(JSON.parse(new TextDecoder().decode(req.body!)).text);
+      return { n: 1 };
+    }
+    return undefined;
+  });
+  try {
+    const local = s.core.inner.views.local;
+    const key = local.pendingNew(ST, { runtime: "claude" });
+    local.pendingQueue(key, { text: "first message" });
+    s.core.inner.viewCalls.makeChat(key);
+    await s.host.time.pass(1000, 250);
+    assert.equal(local.unreached(ST).chats.includes(key), true);
+    s.core.inner.viewCalls.stationBack(ST);
+    await s.host.time.pass(2000, 250);
+    assert.equal(created, 1);
+    assert.deepEqual(messages, ["first message"]);
+  } finally {
+    s.core.close();
+  }
+});
+
 test("a_new_chat_whose_station_went_down_stays_said_down_and_is_asked_for_once_the_station_is_reached", async () => {
   const s = await started();
   const asked: string[] = [];

@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/core/cmp",
+  "moonbitlang/core/double",
   "mbui/pixels",
   "mbui/codec",
   "mbui/ui",

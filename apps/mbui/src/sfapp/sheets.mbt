@@ -700,11 +700,22 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
     agent_tiles(c, card, 14.0, entry~)
     agent_notes(c, card, 10.0)
     c.box(h=Px(12.0), fn() {  }) |> ignore
+    let screens = match view_of_chat(src, r).0 {
+      Some(v) => v.screens
+      None => []
+    }
+    // All visible rows share a column wide enough for their labels in this language and at this text size.
+    let labels = [tr("android-chat.agent.account"), tr("android-chat.agent.history")]
+    if station is Some(_) { labels.push(tr("android-chat.agent.station")) }
+    if screens.length() > 0 { labels.push(tr("android-chat.agent.screen")) }
+    if entry is Some(_) && !(field(card, "context") is Some(Object(_))) { labels.push(tr("android-chat.agent.context")) }
+    if jobs.length() > 0 { labels.push(tr("android-chat.agent.jobs")) }
+    let label_w = labels.fold(init=0.0, fn(w, label) { dmax(w, c.words_across(label, agent_row_label).ceil()) })
     info_list(c, fn() {
       match station {
         Some(st) =>
           if info_row(c, "agent/station", fn() {
-              c.text(tr("android-chat.agent.station"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+              agent_label(c, tr("android-chat.agent.station"), label_w)
               c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
                 if @sf.has_station_mark(st.emoji, st.icon) {
                   @sf.station_mark(c, st.emoji, st.icon, 15.0, t.p.text)
@@ -722,17 +733,13 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       }
       // the screens of that station a tap away (chat_screens.mbt): its own display named, or that an agent drives one;
       // the one alone opened, more a menu of them, this card gone first
-      let screens = match view_of_chat(src, r).0 {
-        Some(v) => v.screens
-        None => []
-      }
       if screens.length() > 0 {
         let value = if chat_screens_driven(screens) {
           tr("web-pages.chat.screenAgent")
         } else {
           screens[0].title
         }
-        if agent_row(c, "agent/screen", tr("android-chat.agent.screen"), value, fn() {  }) {
+        if agent_row(c, "agent/screen", tr("android-chat.agent.screen"), value, label_w, fn() {  }) {
           close()
           chat_screens_open(r, screens, from=Of(c.id("agent/screen")))
         }
@@ -750,7 +757,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
         fill("android-chat.agent.account.auto", [("name", name)])
       }
       // changing how it runs is a page of its own (History.kt RunSettingsScreen)
-      if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, fn() {  }, under=fn() {
+      if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, label_w, fn() {  }, under=fn() {
           allowance_line(c, field(account, "quota"))
         }) {
         close()
@@ -765,6 +772,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
             "" => tr("android-chat.agent.history.none")
             w => w
           },
+          label_w,
           fn() {  },
         ) {
         close()
@@ -775,7 +783,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       // none of an agent at rest)
       match entry {
         Some(e) if !(field(card, "context") is Some(Object(_))) =>
-          if agent_row(c, "agent/context", tr("android-chat.agent.context"), "", fn() {
+          if agent_row(c, "agent/context", tr("android-chat.agent.context"), "", label_w, fn() {
               if e.busy || e.failed {
                 @settings.doing_mark(c, e.busy, if e.failed { Some("") } else { None })
               }
@@ -794,6 +802,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
             "" => tr("android-chat.agent.jobs.idle")
             j => j
           },
+          label_w,
           fn() {  },
         ) {
         dui.jobs_all = false
@@ -820,12 +829,12 @@ fn agent_row(
   key : String,
   label : String,
   value : String,
+  label_w : Double,
   trailing : () -> Unit,
   under? : () -> Unit,
 ) -> Bool {
-  let t = @sf.theme()
   info_row(c, key, fn() {
-    c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+    agent_label(c, label, label_w)
     c.box(w=Fill(1.0), keep=true, fn() {
       c.text(value, style=agent_row_value, keep=true) |> ignore
       match under {
@@ -838,6 +847,16 @@ fn agent_row(
     chevron(c)
   })
 }
+
+///|
+/// Labels sit in one left-aligned column, so the values beside them line up as well.
+fn agent_label(c : @ui.Ctx, label : String, width : Double) -> Unit {
+  c.box(w=Px(width), align=AStart, fn() { c.text(label, style=agent_row_label) |> ignore }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_row_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// An account's allowance (its chips) on a line of its own under what names it, 4 under it; nothing where it says none.
@@ -1713,9 +1732,9 @@ let letters_none : @ui.TextStyle = @ui.text_style(size=Body, color=Muted)
 
 ///|
 /// One opened, its head: back (a round 36, pressed a shade, its chevron on the panel's words' line: letters_back_in),
-/// then its title.
+/// then its title; 10 under it, so that back and the first letter's name each have a touch's 44 to be pressed in.
 // kept across runs: a value (no field of it changes)
-let letters_head : @ui.Style = @ui.css("row w=Full pb=S1_5 gap=S1 align=ACenter")
+let letters_head : @ui.Style = @ui.css("row w=Full pb=S2_5 gap=S1 align=ACenter")
 
 ///|
 /// How far its back's chevron is in from its round ground's start (its 36's middle less half the chevron's 16), the

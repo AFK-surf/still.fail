@@ -8,7 +8,7 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, remoteRunsSince, seenBy, sessionThreads, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, decisionCards, remoteRunsSince, seenBy, threadsByPlace, sessionThreads, usageByDay, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
@@ -236,7 +236,7 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
-export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null): Json {
+export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false): Json {
   const seen = seenBy(s, viewer);
   const rows = summary(s, from, to, utcOffsetMin).filter((r) => seen(r.session));
   const wanted = [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))];
@@ -263,6 +263,45 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     // the tasks the viewer's workspace's chats on other stations ran here since `from` (the card's 跨设备执行): the
     // workspace their key names (`remote:<workspace>:…`)
     remoteRuns: remoteRunsSince(s, from).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? "")),
+    ...(history ? { history: usageHistory(s, utcOffsetMin, viewer) } : {}),
+  };
+}
+
+/// What the viewer's chats did on this station since it began counting (the usage page's summary): the tokens by day
+/// in the asker's time zone, runtime and model (the year, as Codex's usage summary has it); the chats of each place
+/// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's chat
+/// working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
+export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null): Json {
+  const seen = seenBy(s, viewer);
+  const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
+  for (const r of usageByDay(s, utcOffsetMin)) {
+    if (!seen(r.session)) continue;
+    const key = `${r.day}\n${r.runtime}\n${r.model ?? ""}`;
+    const d = days.get(key) ?? { day: r.day, runtime: r.runtime, model: r.model, tokens: 0, calls: 0 };
+    d.tokens += r.tokens;
+    d.calls += r.calls;
+    days.set(key, d);
+  }
+  // the chats of each place (still.fail's own, a Slack workspace's, a Feishu one's), and those archived
+  const places: Record<string, number> = {};
+  let archived = 0;
+  for (const t of threadsByPlace(s)) {
+    if (t.home !== null && !seen(t.home)) continue;
+    const place = t.surface.split(":")[0] ?? t.surface;
+    places[place] = (places[place] ?? 0) + 1;
+    if (t.archived) archived++;
+  }
+  // the tasks the viewer's chats on other stations ran here, as long as they are kept (remote_runs: 90 days)
+  const remoteRuns = remoteRunsSince(s, 0n).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? "")).length;
+  // the decision cards the viewer's chats were asked with, and those answered by an option pressed
+  const cards = decisionCards(s).filter((c) => c.home === null || seen(c.home));
+  return {
+    days: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),
+    cards: cards.length,
+    picked: cards.filter((c) => c.picked).length,
+    places,
+    archived,
+    remoteRuns,
   };
 }
 

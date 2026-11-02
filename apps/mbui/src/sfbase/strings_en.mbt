@@ -1764,7 +1764,6 @@ let en : Map[String, String] = {
   "web-pages.profiles.backgroundOff": "New messages wait until the running command or subagent finishes",
   "web-pages.profiles.backgroundOn": "While Claude Code waits on a command or subagent, a new message moves it to the background (like Ctrl+B). The agent reads the message immediately and handles the results when they finish.",
   "web-pages.profiles.checkedAt": "Checked {time}",
-  "web-pages.profiles.allModels": "All {n}",
   "web-pages.profiles.collapse": "Hide",
   "web-pages.profiles.removeModel": "Remove {model}",
   "web-pages.profiles.copiedReopen": "Copied · Reopen sign-in page",

@@ -251,11 +251,18 @@ fn start(args: &Args) -> Result<(Arc<Shared>, Listener), String> {
     Ok((shared, listener))
 }
 
+/// How far a process's start as the system tells it may be past the `startedAt` it wrote then: clocks read two ways.
+const STARTED_SLACK_MS: u64 = 60_000;
+
 /// The pid of a runner still alive for this id, from the json it left.
 fn live_runner(json: &Path) -> Option<i32> {
     let info: Value = serde_json::from_slice(&fs::read(json).ok()?).ok()?;
     let pid = info["runner"].as_i64()? as i32;
-    let alive = pid as u32 != std::process::id() && sys::alive(pid);
+    // The pid alone is not the runner: one gone long ago left it to whatever came next (a svchost on the Windows
+    // station, 2026-11-01, and its chat could not start while that ran). A process started after the runner said it had
+    // started is another one.
+    let started = info["startedAt"].as_u64().unwrap_or(u64::MAX).saturating_add(STARTED_SLACK_MS);
+    let alive = pid as u32 != std::process::id() && sys::alive(pid) && sys::started_ms(pid).is_none_or(|at| at <= started);
     alive.then_some(pid)
 }
 

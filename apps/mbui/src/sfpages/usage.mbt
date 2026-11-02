@@ -1,20 +1,24 @@
 // 用量, one page in every frame (ember web/src/cloud/settings.tsx UsageSettings; the narrow app's mobile/Usage.tsx;
 // Usage.tsx; Usage.css.ts): what the agents spent over the last 7 or 30 days (picked at the page's head), as the core's
 // `usage` view says it, laid out by what someone opening it wants to know, most first:
-// - whether the spending is as it should be: the cost of the days large, against the days before as many, the days'
-//   bars (one pressed seen alone), and what it is made of (a bar of who spent it, or of the models with one person),
-//   all on a card in the page's theme;
-// - whether the subscriptions last: each one's allowance (what is left, when it fills) beside what it spent;
-// - what the money went to: the chats that cost the most, each with who it was for and its model, opened from there;
-// - who, which models and which accounts: the three side by side, the first few and the rest, one pressed seen alone;
-// - the calls and tokens, under the rest.
-// Everything shown is the core's: the page only picks the days, the one alone and the day.
+// as Codex's usage history:
+// - how much the agents used, and on what: the cost of the days large (the one figure the models' tokens add up to),
+//   against the days before as many; the days' bars, each split by who spent it or by model (as picked; by model
+//   where one person did), the parts named, one pressed seen alone; a day pressed seen alone;
+// - what it went to: the chats that cost the most, each with who it was for and its model and its share, opened from
+//   there (what can be done about it is done in a chat: one idling, one on too dear a model).
+// Not here: the subscriptions' allowances (the profiles' page says them, now), nor the calls and tokens (no model's
+// tokens are another's: nothing to decide by).
+// Everything shown is the core's: the page only picks the days, the split, the one alone and the day.
 
 ///|
-/// What the page picked: its days, the day seen alone ("" all), whether all the chats are shown, and the one seen
-/// alone (its list and key; "" none).
+/// What the page picked: its days, how the summary's year is drawn (0 by day, 1 by week, 2 their running total), what
+/// the days' bars are split by ("" the core's choice), the day seen alone ("" all),
+/// whether all the chats are shown, and the one seen alone (its list and key; "" none).
 priv struct UsagePick {
   days : @signals.Signal[Int]
+  year : @signals.Signal[Int]
+  split : @signals.Signal[String]
   day : @signals.Signal[String]
   all : @signals.Signal[Bool]
   only : @signals.Signal[(String, String)]
@@ -24,6 +28,8 @@ priv struct UsagePick {
 // kept across runs: said by the page's picks; usage_reset puts it back
 let usage_pick : UsagePick = {
   days: @signals.signal(7, same=fn(a, b) { a == b }),
+  year: @signals.signal(0, same=fn(a, b) { a == b }),
+  split: @signals.signal("", same=fn(a, b) { a == b }),
   day: @signals.signal("", same=fn(a, b) { a == b }),
   all: @signals.signal(false, same=fn(a, b) { a == b }),
   only: @signals.signal(("", ""), same=fn(a, b) { a == b }),
@@ -32,6 +38,8 @@ let usage_pick : UsagePick = {
 ///|
 fn usage_reset() -> Unit {
   usage_pick.days.set(7)
+  usage_pick.year.set(0)
+  usage_pick.split.set("")
   usage_pick.day.set("")
   usage_pick.all.set(false)
   usage_pick.only.set(("", ""))
@@ -83,12 +91,16 @@ pub fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
 }
 
 ///|
-/// What the page asks the core's `usage` view for: its workspace's `days`, of the one picked alone, of the day picked.
+/// What the page asks the core's `usage` view for: its workspace's `days`, split as picked, of the one picked alone, of
+/// the day picked.
 fn usage_args(here : Here, days : Int) -> Map[String, Json] {
   let args : Map[String, Json] = { "scope": str(here.workspace), "days": Json::number(days.to_double()) }
   let (only_list, only_key) = usage_pick.only.get()
   if only_list != "" {
     args["only"] = { "list": str(only_list), "key": str(only_key) }
+  }
+  if usage_pick.split.get() != "" {
+    args["split"] = str(usage_pick.split.get())
   }
   if usage_pick.day.get() != "" {
     args["day"] = str(usage_pick.day.get())
@@ -102,21 +114,23 @@ fn usage_args(here : Here, days : Int) -> Map[String, Json] {
 /// on; how it is counted last.
 fn usage_body(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   c.box(style=ug_body, fn() {
+    usage_summary(c, v)
     usage_overview(c, core, v)
     if flag(v, "empty") {
       let wait = field(v, "wait")
       let failing = failing_of(wait)
-      if flag(wait, "reading") || failing.length() > 0 {
-        @sf.waiting(c, fn() { usage_shown(c, core.quiet(), Some(usage_sample())) }, note={
-          reading: flag(wait, "reading"),
-          text: "",
-          failing,
-        })
-      } else {
+      // (nothing yet while it is still read: the card that says none, in its bones, so the page stays as tall when
+      // it turns out none was spent: a page of a few chats' bones went down a third of a screen at once there)
+      let none = fn() {
         c.box(style=ug_card, fn() {
           c.box(style=ug_empty_box, fn() { c.text(@sf.t("web-main.usage.none"), style=ug_empty) |> ignore }) |> ignore
         })
         |> ignore
+      }
+      if flag(wait, "reading") || failing.length() > 0 {
+        @sf.waiting(c, none, note={ reading: flag(wait, "reading"), text: "", failing })
+      } else {
+        none()
       }
     } else {
       usage_shown(c, core, v)
@@ -127,13 +141,9 @@ fn usage_body(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
 }
 
 ///|
-/// What was spent (`v`), under the overview (the days' bars are on it): the allowances (where any), the chats, what it
-/// is made of, the calls and tokens.
+/// What was spent (`v`), under the overview (the days' bars and what they are made of are on it): the chats it went to.
 fn usage_shown(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
-  usage_accounts(c, v)
   usage_chats(c, core, v)
-  usage_makeup(c, v)
-  usage_details(c, v)
 }
 
 ///|
@@ -182,10 +192,203 @@ fn usage_sample() -> Json {
 }
 
 ///|
-/// What was spent in all: the cost of the days large against the days before, the way to the prices at its head's end;
-/// the days' bars under it in the theme's accent, one pressed seen alone; a bar of what it
-/// is made of (who spent it, or the models where one person did) with each part named under it; what the page is
-/// narrowed to (one alone, a day) said last, each taken off there.
+/// What the workspace's agents did since counting began (the core's `summary`; after Codex's usage summary,
+/// codex-rs/tui/src/analytics/summary_panel.rs), none where no station told it: whose it is over five figures (the
+/// tokens in all, the chats archived, the tasks run across devices, the decisions answered by a tap, the devices at
+/// work); the year (activity); each device's work and where the chats came from, side by side on a wide page; when it
+/// is as of. 760 across at most, in the
+/// card's middle, as Codex keeps it 110 columns.
+fn usage_summary(c : @ui.Ctx, v : Json?) -> Unit {
+  let sv = field(v, "summary")
+  if !(sv is Some(Object(_))) {
+    return
+  }
+  c.box(style=ug_card, fn() {
+    c.box(style=ug_sum, fn() {
+      if text(sv, "title") != "" {
+        c.text(text(sv, "title"), style=ug_sum_title) |> ignore
+      }
+      c.box(style=ug_figures, flow=true, fn() {
+        for f in items(sv, "figures") {
+          c.box(style=ug_figure, fn() {
+            c.text(text(Some(f), "value"), style=ug_figure_value) |> ignore
+            c.text(text(Some(f), "label"), style=ug_figure_label) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+      // (half the year where the page is a phone's: its weeks as many as stay big enough to see)
+      usage_year(c, field(sv, "activity"), if c.width < 600.0 { 26 } else { 52 })
+      c.box(style=ug_lists, flow=true, fn() {
+        usage_named(c, field(sv, "stations"))
+        if field(sv, "places") is Some(Object(_)) {
+          usage_named(c, field(sv, "places"))
+        }
+      })
+      |> ignore
+      c.text(text(sv, "asOf"), style=ug_note) |> ignore
+      if text(sv, "partial") != "" {
+        c.text(text(sv, "partial"), style=ug_note) |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A list of the summary's (each device's work, where the chats came from): its title, each its name muted at the
+/// line's start (cut short where its line has not the room) and its value at its end (Codex's columns).
+fn usage_named(c : @ui.Ctx, lv : Json?) -> Unit {
+  c.box(style=ug_named, fn() {
+    c.text(text(lv, "title"), style=ug_named_title) |> ignore
+    for it in items(lv, "items") {
+      c.box(style=ug_line, fn() {
+        c.text(text(Some(it), "name"), style=ug_named_name) |> ignore
+        c.text(text(Some(it), "value"), style=ug_named_value) |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The year (Codex's token activity, activity_chart.rs): its title and how long over it, how it is drawn at the title's
+/// end (by day, by week, their running total); the last `weeks` of its 52 a column each, Sunday's row first, each row
+/// its day's name first; by day each a square in its level's colour (Codex's palette: the words' ink faint where none,
+/// the accent at 22, 42, 68 and 100% by level), a day after today none; by week or their running total each week a bar
+/// of its rows from the foot; each month's name over the week its first days are in; under it the levels from less to
+/// more, or what a column is.
+fn usage_year(c : @ui.Ctx, av : Json?, weeks : Int) -> Unit {
+  let views = strings(av, "views")
+  let shown = if usage_pick.year.get() < views.length() { usage_pick.year.get() } else { 0 }
+  let first = 52 - weeks
+  c.box(style=ug_year, fn() {
+    c.box(style=ug_line, fn() {
+      c.box(style=ug_year_head, fn() {
+        c.text(text(av, "title"), style=ug_named_title) |> ignore
+        c.text(text(av, "sub"), style=ug_named_name) |> ignore
+      })
+      |> ignore
+      if views.length() > 1 {
+        let picked = @sf.segmented(c, "usage-year", views, shown)
+        if picked != shown {
+          usage_pick.year.set(picked)
+        }
+      }
+    })
+    |> ignore
+    let cells = numbers(av, "cells")
+    let bars = numbers(av, if shown == 1 { "weekly" } else { "cumulative" })
+    let palette = @sf.theme().p
+    let faint = @sf.alpha(palette.text, if @sf.theme().dark { 0.14 } else { 0.18 })
+    let ink = fn(level : Int) -> Int64 {
+      match level {
+        0 => faint
+        1 => @sf.alpha(palette.accent, 0.22)
+        2 => @sf.alpha(palette.accent, 0.42)
+        3 => @sf.alpha(palette.accent, 0.68)
+        _ => palette.accent
+      }
+    }
+    c.box(style=ug_grid, fn() {
+      // the months' names over their weeks: each over its weeks until the next's (Codex's month_labels), the first's
+      // from the first week shown
+      c.box(style=ug_grid_row, fn() {
+        c.box(style=ug_grid_lead, fn() {  }) |> ignore
+        let starts = items(av, "months").filter(fn(m) { number(Some(m), "week").to_int() >= first })
+        let lead = match starts.get(0) {
+          Some(m) => number(Some(m), "week").to_int() - first
+          None => 52 - first
+        }
+        if lead > 0 {
+          c.box(style=ug_months.then(@ui.style(w=Grow(lead.to_double()))), fn() {  }) |> ignore
+        }
+        for i, m in starts {
+          let from = number(Some(m), "week").to_int()
+          let until = match starts.get(i + 1) {
+            Some(n) => number(Some(n), "week").to_int()
+            None => 52
+          }
+          c.box(style=ug_months.then(@ui.style(w=Grow((until - from).to_double()))), fn() {
+            c.text(text(Some(m), "label"), style=ug_grid_label) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+      let weekdays = strings(av, "weekdays")
+      for row in 0..<7 {
+        c.box(style=ug_grid_row, fn() {
+          c.box(style=ug_grid_lead, fn() {
+            // (Monday's, Wednesday's and Friday's, as GitHub's: a name a row is taller than the rows)
+            c.text(if shown == 0 && row % 2 == 1 && row < weekdays.length() { weekdays[row] } else { "" }, style=ug_grid_label) |> ignore
+          })
+          |> ignore
+          for w in first..<52 {
+            let fill = if shown == 0 {
+              let k = w * 7 + row
+              let l = if k < cells.length() { cells[k].to_int() } else { -1 }
+              if l < 0 { None } else { Some(ink(l)) }
+            } else {
+              let h = if w < bars.length() { bars[w].to_int() } else { 0 }
+              if 7 - row <= h { Some(palette.accent) } else { None }
+            }
+            match fill {
+              Some(color) => c.box(style=ug_cell.then(@ui.style(bg=Data(color))), aspect=1.0, fn() {  }) |> ignore
+              None => c.box(style=ug_cell, aspect=1.0, fn() {  }) |> ignore
+            }
+          }
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+    if shown == 0 {
+      c.box(style=ug_legend_line, fn() {
+        c.text(text(av, "less"), style=ug_grid_label) |> ignore
+        for l in 0..<5 {
+          c.box(style=ug_legend_cell.then(@ui.style(bg=Data(ink(l)))), fn() {  }) |> ignore
+        }
+        c.text(text(av, "more"), style=ug_grid_label) |> ignore
+      })
+      |> ignore
+      let none = strings(av, "captions")
+      if none.length() > 0 && none[0] != "" {
+        c.text(none[0], style=ug_grid_label) |> ignore
+      }
+    } else {
+      let captions = strings(av, "captions")
+      if shown < captions.length() {
+        c.text(captions[shown], style=ug_grid_label) |> ignore
+      }
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A list of numbers of `v`'s at `key` (none where it is not one).
+fn numbers(v : Json?, key : String) -> Array[Double] {
+  match field(v, key) {
+    Some(Array(xs)) =>
+      xs.map(fn(x) {
+        match x {
+          Number(n, ..) => n
+          _ => 0.0
+        }
+      })
+    _ => []
+  }
+}
+
+///|
+/// What was spent in all (Codex's usage history): the cost of the days large and its change against the days before
+/// after it, the way to the prices at its head's end; what the days' bars are split by, each part named in its colour,
+/// and the choice of by whom or by which model; the days' bars, each its parts stacked, one pressed seen alone; what
+/// the page is narrowed to (one alone, a day) said last, each taken off there.
 fn usage_overview(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let tiles = items(v, "tiles")
   if tiles.length() == 0 {
@@ -206,17 +409,72 @@ fn usage_overview(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
     })
     |> ignore
     if !flag(v, "empty") && items(v, "daily").length() > 0 {
+      usage_split(c, v)
       usage_chart(c, v)
-    }
-    // what it is made of: the list the core splits by (people where several spent, else models)
-    let lists = items(v, "lists")
-    match lists.search_by(fn(l) { text(Some(l), "key") == text(v, "split") }) {
-      Some(i) if !flag(v, "empty") => usage_split_bar(c, Some(lists[i]))
-      _ => ()
     }
     usage_narrowed(c, v)
   })
   |> ignore
+}
+
+///|
+/// The days' bars' parts named (the core's `series`, each a dot of its colour; one pressed seen alone, not the rest), and
+/// at the line's end what they are split by, 按人 or 按模型 (按人 only where several spent: a list of one has no parts).
+fn usage_split(c : @ui.Ctx, v : Json?) -> Unit {
+  let lists = items(v, "lists")
+  let choices = ["people", "models"].filter(fn(k) {
+    lists.iter().any(fn(l) { text(Some(l), "key") == k && items(Some(l), "parts").length() > 0 })
+  })
+  let split = text(v, "split")
+  c.box(style=ug_split_line, flow=true, fn() {
+    c.box(style=ug_legend, flow=true, fn() {
+      let series = items(v, "series")
+      for i, sv in series {
+        let pv = Some(sv)
+        let key = text(pv, "key")
+        let alone = key != "" && usage_pick.only.get() != (split, key)
+        let id = if alone { c.id("usage-series/" + split + "/" + key) } else { 0 }
+        if alone && c.clicked(id) {
+          usage_pick.only.set((split, key))
+          usage_pick.all.set(false)
+        }
+        let lit = alone && c.lit(id)
+        let b = c.box(style=ug_legend_item, id~, fn() {
+          c.box(style=ug_dot.then(@ui.style(bg=Data(usage_series_ink(series, i)))), fn() {  }) |> ignore
+          c.text(text(pv, "name"), style=if lit { ug_legend_lit } else { ug_legend_words }) |> ignore
+        })
+        if alone {
+          c.semantics(b, Button, id~, label=@sf.t("web-main.usage.only", args=[("name", text(pv, "name"))]))
+        }
+      }
+    })
+    |> ignore
+    if choices.length() > 1 {
+      let labels = choices.map(fn(k) {
+        match lists.search_by(fn(l) { text(Some(l), "key") == k }) {
+          Some(i) => text(Some(lists[i]), "title")
+          None => k
+        }
+      })
+      let at = choices.search(split).unwrap_or(0)
+      let picked = @sf.segmented(c, "usage-split", labels, at)
+      if picked != at {
+        usage_pick.split.set(choices[picked])
+        usage_pick.only.set(("", ""))
+      }
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A part's colour: the first four's own, the rest's (其他, no key) the theme's grey.
+fn usage_series_ink(series : Array[Json], i : Int) -> Int64 {
+  if i < series.length() && text(Some(series[i]), "key") == "" {
+    @sf.theme().p.subtle
+  } else {
+    @sf.usage_series(i)
+  }
 }
 
 ///|
@@ -230,68 +488,6 @@ fn usage_prices_link(c : @ui.Ctx, core : Core) -> Unit {
     c.text(@sf.t("web-main.usage.seePrices"), style=if c.lit(id) { ug_prices_lit } else { ug_prices_words }) |> ignore
   })
   c.semantics(b, Link, id~, label=@sf.t("web-main.usage.costPrices"))
-}
-
-///|
-/// A list's first few and the rest as one bar, each its share of it in its colour 2 apart, and under it each named
-/// with what it spent (a dot of its colour first); one pressed is seen alone (not a chat's, nor the rest).
-fn usage_split_bar(c : @ui.Ctx, list : Json?) -> Unit {
-  let kind = text(list, "key")
-  let parts = items(list, "parts")
-  if parts.length() == 0 {
-    return
-  }
-  c.box(style=ug_split, fn() {
-    c.box(style=ug_split_bar, fn() {
-      for i, p in parts {
-        let share = number(Some(p), "share")
-        if share > 0.0 {
-          c.box(style=ug_split_part.then(@ui.style(w=Grow(share), bg=Data(usage_part_ink(parts, i)))), fn() {  })
-          |> ignore
-        }
-      }
-    })
-    |> ignore
-    c.box(style=ug_split_names, flow=true, fn() {
-      for i, p in parts {
-        let pv = Some(p)
-        usage_part_name(c, kind, pv, usage_part_ink(parts, i), "usage-split/")
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// A part's colour: the first four's own, the rest's (其他, no key) the theme's grey.
-fn usage_part_ink(parts : Array[Json], i : Int) -> Int64 {
-  if i < parts.length() && text(Some(parts[i]), "key") == "" {
-    @sf.theme().p.subtle
-  } else {
-    @sf.usage_series(i)
-  }
-}
-
-///|
-/// A part named: a dot of its colour, its name, what it spent; pressed, seen
-/// alone (a person, account or model; not the rest), its name lit under the pointer.
-fn usage_part_name(c : @ui.Ctx, kind : String, pv : Json?, ink : Int64, key : String) -> Unit {
-  let alone = kind != "chats" && text(pv, "key") != "" && usage_pick.only.get() != (kind, text(pv, "key"))
-  let id = if alone { c.id(key + kind + "/" + text(pv, "key")) } else { 0 }
-  if alone && c.clicked(id) {
-    usage_pick.only.set((kind, text(pv, "key")))
-    usage_pick.all.set(false)
-  }
-  let lit = alone && c.lit(id)
-  let b = c.box(style=ug_name, id~, fn() {
-    c.box(style=ug_dot.then(@ui.style(bg=Data(ink))), fn() {  }) |> ignore
-    c.text(text(pv, "title"), style=if lit { ug_name_lit } else { ug_name_words }) |> ignore
-    c.text(text(pv, "costText"), style=ug_name_cost) |> ignore
-  })
-  if alone {
-    c.semantics(b, Button, id~, label=@sf.t("web-main.usage.only", args=[("name", text(pv, "title"))]))
-  }
 }
 
 ///|
@@ -328,63 +524,8 @@ fn usage_card_title(c : @ui.Ctx, words : String) -> Unit {
 }
 
 ///|
-/// The subscriptions with an allowance the core can read (none: no card): each its windows as rings one inside
-/// another (Activity's, as the card shared of the week draws the subscriptions'), each as full as what is left of it,
-/// the first window outside; beside them its name and what it spent in the days, and each window in its ring's colour:
-/// its name, what is left (in the warning's ink where it runs low) and when it fills.
-fn usage_accounts(c : @ui.Ctx, v : Json?) -> Unit {
-  let accounts = items(v, "accounts")
-  if accounts.length() == 0 {
-    return
-  }
-  c.box(style=ug_card, fn() {
-    usage_card_title(c, @sf.t("web-main.usage.accounts"))
-    c.box(style=ug_accounts, fn() {
-      for a in accounts {
-        let av = Some(a)
-        let quota = field(av, "quota")
-        let windows = if @sf.has_quota(quota) { items(quota, "windows") } else { [] }
-        c.box(style=ug_account, fn() {
-          if windows.length() > 0 {
-            let rings = windows.mapi(fn(i, w) { (number(Some(w), "left") / 100.0, @sf.usage_series(i)) })
-            @sf.rings(c, rings, ug_ring_side, ug_ring_track, most=windows.length()) |> ignore
-          }
-          c.box(style=ug_account_text, fn() {
-            // (what it spent under its name where their line has not the room)
-            c.box(style=ug_account_head, flow=true, fn() {
-              c.text(text(av, "title"), style=ug_account_title) |> ignore
-              c.text(@sf.t("web-main.usage.spent", args=[("cost", text(av, "costText"))]), style=ug_name_cost) |> ignore
-            })
-            |> ignore
-            for i, w in windows {
-              let wv = Some(w)
-              let left = number(wv, "left").to_int().to_string()
-              let low = text(wv, "level") is ("amber" | "red")
-              c.box(style=ug_window, flow=true, fn() {
-                c.box(style=ug_dot.then(@ui.style(bg=Data(@sf.usage_series(i)))), fn() {  }) |> ignore
-                c.text(text(wv, "label"), style=ug_name_cost) |> ignore
-                c.text(@sf.t("web-main.quota.figure", args=[("left", left)]), style=if low { ug_window_low } else { ug_window_left })
-                |> ignore
-                if text(wv, "refills") != "" {
-                  c.text(text(wv, "refills"), style=ug_window_refills) |> ignore
-                }
-              })
-              |> ignore
-            }
-          })
-          |> ignore
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The chats that cost the most (the first 8 until all are asked for), each its name, who it was for and its model,
-/// what it spent and its share; one pressed opens it.
+/// The chats that cost the most (the first 8 until all are asked for), each its name and what it spent, who it was for,
+/// its model and where it is and its share, a bar of its share under them; one pressed opens it.
 fn usage_chats(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let list = match items(v, "lists").search_by(fn(l) { text(Some(l), "key") == "chats" }) {
     Some(i) => Some(items(v, "lists")[i])
@@ -394,12 +535,12 @@ fn usage_chats(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   if all_items.length() == 0 {
     return
   }
-  c.box(style=ug_card, fn() {
+  c.box(style=ug_card_rows, fn() {
     usage_card_title(c, @sf.t("web-main.usage.topChats"))
     c.box(style=ug_rows, fn() {
       for i, it in all_items {
         if usage_pick.all.get() || i < ug_first {
-          usage_chat_row(c, core, it, i + 1)
+          usage_chat_row(c, core, it)
         }
       }
       if all_items.length() > ug_first {
@@ -424,122 +565,26 @@ fn usage_chats(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
 }
 
 ///|
-/// What it is made of, the people, the models and the accounts side by side (under each other where they have not the
-/// room): each a ring of its parts (a donut, the first's share in its middle) and beside it its first few and the rest,
-/// a dot of its colour, its name, what it spent and its share; one pressed is seen alone.
-fn usage_makeup(c : @ui.Ctx, v : Json?) -> Unit {
-  let lists = items(v, "lists").filter(fn(l) { text(Some(l), "key") != "chats" && items(Some(l), "parts").length() > 0 })
-  if lists.length() == 0 {
-    return
-  }
-  c.box(style=ug_card, fn() {
-    usage_card_title(c, @sf.t("web-main.usage.makeup"))
-    c.box(style=ug_makeup, flow=true, fn() {
-      for l in lists {
-        let lv = Some(l)
-        let kind = text(lv, "key")
-        let parts = items(lv, "parts")
-        c.box(style=ug_makeup_list, fn() {
-          c.text(text(lv, "title"), style=ug_makeup_title) |> ignore
-          c.box(style=ug_makeup_body, flow=true, fn() {
-            c.box(style=ug_donut, fn() {
-              let shares = parts.mapi(fn(i, p) { (number(Some(p), "share"), usage_part_ink(parts, i)) })
-              @sf.donut(c, shares, ug_donut_side, ug_donut_width, @sf.theme().p.line) |> ignore
-              c.layer(fn() {
-                c.box(style=ug_donut_mid, fn() { c.text(text(Some(parts[0]), "shareText"), style=ug_donut_figure) |> ignore })
-                |> ignore
-              })
-              |> ignore
-            })
-            |> ignore
-            c.box(style=ug_makeup_legend, fn() {
-              for i, p in parts {
-                let pv = Some(p)
-                c.box(style=ug_legend_row, fn() {
-                  usage_part_name(c, kind, pv, usage_part_ink(parts, i), "usage-makeup/")
-                  c.box(style=ug_grow, fn() {  }) |> ignore
-                  c.text(text(pv, "shareText"), style=ug_row_share_words) |> ignore
-                })
-                |> ignore
-              }
-            })
-            |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-
-
-///|
-/// The calls and tokens (明细), side by side, each against the days before, in lines where they have not the room.
-fn usage_details(c : @ui.Ctx, v : Json?) -> Unit {
-  let tiles = items(v, "tiles")
-  if tiles.length() < 2 {
-    return
-  }
-  c.box(style=ug_card, fn() {
-    usage_card_title(c, @sf.t("web-main.usage.details"))
-    c.box(style=ug_stats, flow=true, fn() {
-      for i in 1..<tiles.length() {
-        let tv = Some(tiles[i])
-        c.box(style=ug_stat, fn() {
-          c.text(text(tv, "label"), style=ug_stat_label) |> ignore
-          c.text(text(tv, "value"), style=ug_stat_value) |> ignore
-          if text(tv, "change") != "" {
-            c.text(text(tv, "change") + " " + text(v, "versus"), style=usage_trend_words(tv)) |> ignore
-          }
-          c.text(text(tv, "sub"), style=ug_stat_sub) |> ignore
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// A total's change against the days before (↑18% on the orange thinned, 比前 7 天 after it), on the figure's baseline;
-/// none where the core says none.
+/// The cost's change against the days before (↑18% in the words' ink, 比前 7 天 muted after it), on its foot; none
+/// where the core says none. Not coloured: a change is not a fault.
 fn usage_change(c : @ui.Ctx, v : Json?, tv : Json?) -> Unit {
   if text(tv, "change") == "" {
     return
   }
-  let words = match text(tv, "trend") {
-    "up" => ug_hero_up
-    "down" => ug_hero_down
-    _ => ug_hero_same
-  }
   c.box(style=ug_change_line, fn() {
-    c.box(style=ug_change_pill, fn() { c.text(text(tv, "change"), style=words) |> ignore }) |> ignore
+    c.text(text(tv, "change"), style=ug_change) |> ignore
     c.text(text(v, "versus"), style=ug_change_versus) |> ignore
   })
   |> ignore
 }
 
 ///|
-/// A change's words: up in the accent's words, down in the words' ink, the same in the muted.
-fn usage_trend_words(tv : Json?) -> @ui.TextStyle {
-  match text(tv, "trend") {
-    "up" => ug_trend_up
-    "down" => ug_trend_down
-    _ => ug_trend_same
-  }
-}
-
-///|
-/// Each day's cost as a bar on the scale's lines (DaysChart), the day seen alone in full and the others faded (all in
+/// Each day's cost as a bar on the days' foot (DaysChart), the day seen alone in full and the others faded (all in
 /// full with none). A day pressed is seen alone, pressed again all of them again; a finger slid across the days lets
 /// go on the one it ends on.
 fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
   let daily = items(v, "daily")
+  let series = items(v, "series")
   let top = number(v, "top")
   let many = flag(v, "many")
   let shown = usage_pick.day.get()
@@ -596,20 +641,6 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
   let said = if shown != "" { shown } else { peak }
   c.drag_area(area, axis=Horizontal, w=Fill(1.0), fn() {
     c.box(style=ug_plot, fn() {
-      // the scale's lines across under the bars, each said at the right just over it
-      if top > 0.0 {
-        for k in items(v, "ticks") {
-          let y = @sf.usage_plot * (1.0 - number(Some(k), "value") / top)
-          c.layer(fn() { c.box(style=ug_tick, ty=y, fn() {  }) |> ignore }) |> ignore
-          c.layer(fn() {
-            c.box(style=ug_tick_line, ty=y - @sf.usage_tick_rise, fn() {
-              c.text(text(Some(k), "label"), style=ug_tick_words) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        }
-      }
       // a day: its whole column is what is clicked, its bar at its foot
       c.box(style=if many { ug_days_many } else { ug_days }, fn() {
         for d in daily {
@@ -620,7 +651,7 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
             press(key)
           }
           let b = c.box(style=ug_day, id~, fn() {
-            usage_bar(c, number(dv, "cost"), top, many, shown == "" || key == shown, if key == said {
+            usage_bar(c, dv, series, top, many, shown == "" || key == shown, if key == said {
               text(dv, "costText")
             } else {
               ""
@@ -650,17 +681,17 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
   |> ignore
 }
 
-
-
 ///|
 /// The first of the chats shown until all are asked for (Ranking's `first`).
 let ug_first : Int = 8
 
 ///|
-/// A day's bar, as high as its share of the scale's top, 16 wide at most (as wide as its day with many days), round at
-/// its ends: the theme's accent running thinner to its foot; a day other than the one shown in the theme's line. `said`
-/// over it: what the most spent day spent (the one shown's, with one).
-fn usage_bar(c : @ui.Ctx, cost : Double, top : Double, many : Bool, on : Bool, said : String) -> Unit {
+/// A day's bar (`d`), as high as its share of the scale's top, as wide as @sf.usage_bar_max at most (as wide as its day
+/// with many days), round at its top: its parts stacked in their colours, the first at its foot; a day other than the
+/// one shown on the tint. `said` over it: what
+/// the most spent day spent (the one shown's, with one).
+fn usage_bar(c : @ui.Ctx, d : Json?, series : Array[Json], top : Double, many : Bool, on : Bool, said : String) -> Unit {
+  let cost = number(d, "cost")
   if top <= 0.0 || cost <= 0.0 {
     return
   }
@@ -668,22 +699,40 @@ fn usage_bar(c : @ui.Ctx, cost : Double, top : Double, many : Bool, on : Bool, s
   if said != "" {
     c.text(said, style=ug_peak) |> ignore
   }
-  c.box(style=(if many { ug_bar_many } else { ug_bar }).then(@ui.style(h=Fixed(h))), fn() {
-    if on {
-      let accent = @sf.theme().p.accent
-      @sf.gradient(c, ug_bar_w, h, 180.0, accent, @sf.alpha(accent, 0.3))
-    } else {
-      c.box(style=ug_bar_off, fn() {  }) |> ignore
+  let style = if many { ug_bar_many } else { ug_bar }
+  if !on {
+    c.box(style=style.then(@ui.style(h=Fixed(h), bg=TintStrong)), fn() {  }) |> ignore
+    return
+  }
+  // its parts, the first at its foot (a day of none of them: the accent's whole)
+  let shares = match field(d, "shares") {
+    Some(Array(xs)) =>
+      xs.map(fn(x) {
+        match x {
+          Number(n, ..) => n
+          _ => 0.0
+        }
+      })
+    _ => []
+  }
+  c.box(style=style.then(@ui.style(h=Fixed(h))), fn() {
+    if shares.length() == 0 {
+      c.box(style=ug_bar_part.then(@ui.style(h=@sf.grow, bg=Accent)), fn() {  }) |> ignore
+    }
+    for k = shares.length() - 1; k >= 0; k = k - 1 {
+      if shares[k] > 0.0 {
+        c.box(style=ug_bar_part.then(@ui.style(h=Grow(shares[k]), bg=Data(usage_series_ink(series, k)))), fn() {  })
+        |> ignore
+      }
     }
   })
   |> ignore
 }
 
 ///|
-/// A chat and what it spent (Row): its rank; its name and its cost in bold on a line, who it was for, its model and
-/// where it is under them; a bar of its share under them, from its words on, its share in words at its end. Pressed, it
-/// opens (the hover's ground under the pointer).
-fn usage_chat_row(c : @ui.Ctx, core : Core, it : Json, rank : Int) -> Unit {
+/// A chat and what it spent (Row): its name and its cost on a line, who it was for, its model and where it is and its
+/// share under them, a bar of its share last. Pressed, it opens (the hover's ground under the pointer).
+fn usage_chat_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
   let iv = Some(it)
   let chat = field(iv, "chat")
   let opens = chat is Some(Object(_))
@@ -691,53 +740,38 @@ fn usage_chat_row(c : @ui.Ctx, core : Core, it : Json, rank : Int) -> Unit {
   if opens && c.clicked(id) {
     (core.open_chat)(text(chat, "station"), text(chat, "session"), text(iv, "title"))
   }
+  let lit = opens && c.lit(id)
   c.box(style=if opens { ug_row_link } else { ug_row }, id~, fn() {
-    c.box(style=ug_row_line, fn() {
-      // (the first three on a badge: the first in the accent, the next two on the tint)
-      let (badge, figure) = if rank == 1 {
-        (ug_rank_first, ug_rank_first_words)
-      } else if rank <= 3 {
-        (ug_rank_top, ug_rank_top_words)
-      } else {
-        (ug_rank_box, ug_rank)
-      }
-      c.box(style=badge, fn() { c.text(rank.to_string(), style=figure) |> ignore }) |> ignore
-      // (its name and cost on a line, what it is on the next, alone: the room of large words on a phone)
-      c.box(style=ug_row_text, fn() {
-        // (its cost under it where their line has not the room)
-        c.box(style=ug_row_pair, flow=true, fn() {
-          c.text(text(iv, "title"), style=ug_row_title) |> ignore
-          c.text(text(iv, "costText"), style=ug_cost) |> ignore
-        })
-        |> ignore
-        if text(iv, "sub") != "" {
-          c.text(text(iv, "sub"), style=ug_row_sub) |> ignore
-        }
-      })
-      |> ignore
+    // (its name and cost on a line, what it is on the next with its share at its end)
+    c.box(style=ug_line, fn() {
+      c.text(text(iv, "title"), style=if lit { ug_row_title_lit } else { ug_row_title }) |> ignore
+      c.text(text(iv, "costText"), style=ug_cost) |> ignore
     })
     |> ignore
-    c.box(style=ug_row_share_room, fn() { usage_share_bar(c, number(iv, "share"), text(iv, "shareText"), @sf.theme().p.accent) })
+    c.box(style=ug_line, fn() {
+      c.text(text(iv, "sub"), style=ug_row_sub) |> ignore
+      c.text(text(iv, "shareText"), style=ug_line_end) |> ignore
+    })
     |> ignore
+    usage_track(c, number(iv, "share"))
   })
   |> ignore
 }
 
 ///|
-/// A share's bar in `ink` (1% at least for one spent at all), its share in words at its end.
-fn usage_share_bar(c : @ui.Ctx, share : Double, words : String, ink : Int64) -> Unit {
-  c.box(style=ug_share, fn() {
+/// A share's bar in the accent on the tint (1% at least for one spent at all).
+fn usage_track(c : @ui.Ctx, share : Double) -> Unit {
+  c.box(style=ug_track, fn() {
     let k = if share <= 0.0 { 0.0 } else { @cmp.minimum(1.0, @cmp.maximum(0.01, share)) }
     if k > 0.0 {
-      c.box(style=ug_share_part.then(@ui.style(w=Grow(k), bg=Data(ink))), fn() {  }) |> ignore
+      c.box(style=ug_track_part.then(@ui.style(w=Grow(k), bg=Accent)), fn() {  }) |> ignore
     }
     let rest = 1.0 - k
     if rest > 0.0 {
-      c.box(style=ug_share_rest.then(@ui.style(w=Grow(rest))), fn() {  }) |> ignore
+      c.box(style=ug_track_rest.then(@ui.style(w=Grow(rest))), fn() {  }) |> ignore
     }
   })
   |> ignore
-  c.box(style=ug_row_share_box, fn() { c.text(words, style=ug_row_share_words) |> ignore }) |> ignore
 }
 
 ///|
@@ -763,10 +797,16 @@ fn usage_notes(c : @ui.Ctx, v : Json?) -> Unit {
 let ug_body : @ui.Style = @ui.css("w=Full gap=S4")
 
 ///|
-/// A card of the page: its words 20 in, 16 apart, the ladder's corner (what lies in its corners, a share's bar, the
-/// lists' choice, round by the ladder's there: mbui works it out).
+/// A card of the page: its words 20 in, 20 apart, the ladder's corner (what lies in its corners round by the ladder's
+/// there: mbui works it out).
 // kept across runs: a value (no field of it changes)
-let ug_card : @ui.Style = @ui.css("w=Full p=S5 gap=S4 radius=Xl3 bg=Card")
+let ug_card : @ui.Style = @ui.css("w=Full p=S5 gap=S5 radius=Xl3 bg=Card")
+
+///|
+/// A card whose rows reach its foot (the allowances, the chats, the makeup): its last row's ground as far from its
+/// foot as from its sides (@sf.corner_inset), so that ground stands concentric in the card's corners.
+// kept across runs: a value (no field of it changes)
+let ug_card_rows : @ui.Style = ug_card.then(@ui.style(pb=@sf.room_of(@sf.corner_inset)))
 
 ///|
 /// The overview's head: what its figure is (折合费用 · 近 7 天) and, at its end, the way to the prices.
@@ -801,68 +841,130 @@ let ug_hero_figures : @ui.Style = @ui.css("row w=Full gap=S3 align=AEnd")
 let ug_hero_value : @ui.TextStyle = @ui.text_style(size=Xl5, weight=Bold, tracking=Tight, color=Fg, wrap=false)
 
 ///|
-/// ↑18% on a tint, then 比前 7 天 (6 by 2 in, round), on the figure's foot.
+/// ↑18% 比前 7 天 on the cost's foot, 4 apart.
 // kept across runs: a value (no field of it changes)
-let ug_change_line : @ui.Style = @ui.css("row gap=S2 pb=S1_5 align=ACenter")
+let ug_change_line : @ui.Style = @ui.css("row gap=S1 pb=S1_5 align=ACenter")
 
 ///|
+/// A change: its figure in the words' ink, what it is against muted.
 // kept across runs: a value (no field of it changes)
-let ug_change_pill : @ui.Style = @ui.css("px=S2 py=S0_5 radius=Full bg=AccentBg")
+let ug_change : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let ug_change_versus : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
-/// A change's words: up in the accent's (more spent), down in the words' ink, the same muted.
+/// The summary's column: 760 across at most, in its card's middle, its parts 24 apart.
 // kept across runs: a value (no field of it changes)
-let ug_trend_up : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=AccentText)
+let ug_sum : @ui.Style = @ui.style(w=Full, max_w=@sf.usage_summary_w, gap=S6, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_trend_down : @ui.TextStyle = ug_trend_up.then(@ui.text_style(color=Fg))
+let ug_sum_title : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, weight=Semibold, color=Fg, wrap=false, w=Cut)
+
+///|
+/// The five figures side by side, as many to a line as have 96 across, 16 apart.
+// kept across runs: a value (no field of it changes)
+let ug_figures : @ui.Style = @ui.css("row w=Full gap=S4 justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_trend_same : @ui.TextStyle = ug_trend_up.then(@ui.text_style(color=Muted))
+let ug_figure : @ui.Style = @ui.style(w=@sf.grow, min_w=S24, gap=S0_5, align=ACenter)
 
 ///|
-/// The overview's change: up in the accent's words, down in the words' ink, the same muted.
+/// A figure: its value large and bold, what it is muted under it (Codex's bold over secondary), both in the middle.
 // kept across runs: a value (no field of it changes)
-let ug_hero_up : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=AccentText, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_hero_down : @ui.TextStyle = ug_hero_up.then(@ui.text_style(color=Fg))
+let ug_figure_value : @ui.TextStyle = @ui.text_style(size=Xl2, leading=L8, weight=Bold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_hero_same : @ui.TextStyle = ug_hero_up.then(@ui.text_style(color=Muted))
+let ug_figure_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
-/// What the cost is made of: its bar (8 high, round, its parts 2 apart), the parts named under it, 10 apart.
+/// The year: its head, its grid, what is under it, 12 apart.
 // kept across runs: a value (no field of it changes)
-let ug_split : @ui.Style = @ui.css("w=Full gap=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_split_bar : @ui.Style = @ui.css("row w=Full h=S2 gap=S0_5 radius=Full clip")
+let ug_year : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_split_part : @ui.Style = @ui.css("h=Full")
+let ug_year_head : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 
 ///|
-/// The parts named, in lines where they have not the room, 4 apart and 16 across.
+/// The grid: a row of the months' names, then a row a weekday, 2 apart; each row its name 20 across, then its weeks
+/// (the months' row its months, one room each across their weeks).
 // kept across runs: a value (no field of it changes)
-let ug_split_names : @ui.Style = @ui.css("row w=Full gap=S1")
+let ug_grid : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
-/// A part named: a dot 8, its name (cut short where its line has not the room), what it spent, 6 apart (pressed: its
+// kept across runs: a value (no field of it changes)
+let ug_grid_row : @ui.Style = @ui.css("row w=Full gap=S0_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_grid_lead : @ui.Style = @ui.css("w=S5")
+
+///|
+/// A month's room in the months' row: as wide as its weeks (with their gaps), its name at its start, cut at its end.
+// kept across runs: a value (no field of it changes)
+let ug_months : @ui.Style = @ui.css("h=S3_5 clip")
+
+///|
+/// A day: as wide as its week's share of the row, as high. own corner: a cell of a chart, not a box in a corner
+// kept across runs: a value (no field of it changes)
+let ug_cell : @ui.Style = @ui.style(w=@sf.grow, radius=Sm)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_grid_label : @ui.TextStyle = @ui.text_style(size=Caption, leading=L3, color=Muted, wrap=false)
+
+///|
+/// 少 □■■■■ 多: the levels 10 across, 2 apart.
+// kept across runs: a value (no field of it changes)
+let ug_legend_line : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
+
+///|
+/// A level of the legend. own corner: as a day's
+// kept across runs: a value (no field of it changes)
+let ug_legend_cell : @ui.Style = @ui.style(w=@sf.usage_level_side, h=@sf.usage_level_side, radius=Sm)
+
+///|
+/// Each device's work and where the chats came from: side by side, 32 apart, each 240 at least (under each other where
+/// they have not the room).
+// kept across runs: a value (no field of it changes)
+let ug_lists : @ui.Style = @ui.css("row w=Full gap=S8 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_named : @ui.Style = @ui.style(w=@sf.grow, min_w=S60, gap=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_named_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_named_name : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_named_value : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false)
+
+///|
+/// The bars' parts named and what they are split by, at the line's end (under the names where they have not the room).
+// kept across runs: a value (no field of it changes)
+let ug_split_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
+
+///|
+/// The parts named, 12 apart, in lines where they have not the room.
+// kept across runs: a value (no field of it changes)
+let ug_legend : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S3, align=ACenter)
+
+///|
+/// A part named: a dot 8 of its colour, its name (cut short where its line has not the room), 6 apart (pressed: its
 /// name in the accent's words under the pointer).
 // kept across runs: a value (no field of it changes)
-let ug_name : @ui.Style = @ui.css("row w=Cut gap=S1_5 py=S0_5 mr=S3 align=ACenter")
-
+let ug_legend_item : @ui.Style = @ui.css("row w=Cut gap=S1_5 py=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -870,15 +972,11 @@ let ug_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_name_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
+let ug_legend_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_name_lit : @ui.TextStyle = ug_name_words.then(@ui.text_style(color=AccentText))
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_name_cost : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+let ug_legend_lit : @ui.TextStyle = ug_legend_words.then(@ui.text_style(color=Fg))
 
 ///|
 /// What the page is narrowed to: its chips, 8 apart, in lines where they have not the room.
@@ -886,124 +984,37 @@ let ug_name_cost : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=M
 let ug_chips : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
-/// The allowances, 16 apart: each its name and what it spent on a line, its windows' chips under them, 8 apart.
+/// A line of a row: its words at its start (cut short where it has not the room), its figures at its end, 12 apart.
 // kept across runs: a value (no field of it changes)
-let ug_accounts : @ui.Style = @ui.css("w=Full gap=S4")
+let ug_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
+/// A figure at a line's end (what it spent, a share): muted.
 // kept across runs: a value (no field of it changes)
-let ug_account : @ui.Style = @ui.css("row w=Full gap=S4 align=ACenter")
+let ug_line_end : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
-/// Beside an account's rings: its name and what it spent, each window under them.
+/// A chat's row: its lines, its bar 6 under them, its words in line with the card's title (pressed: the hover's ground
+/// under the pointer).
 // kept across runs: a value (no field of it changes)
-let ug_account_text : @ui.Style = @ui.style(w=@sf.grow, gap=S1)
-
-///|
-/// An account's rings: 72 across, their track the ring's colour at 16%.
-let ug_ring_side : Double = 72.0
-
-///|
-let ug_ring_track : Int64 = 40L
-
-///|
-/// A window: its ring's dot, its name, what is left (semibold; the warning's ink running low), when it fills.
-// kept across runs: a value (no field of it changes)
-let ug_window : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
+let ug_row : @ui.Style = @ui.style(w=Full, px=@sf.room_of(@sf.card_pad - @sf.corner_inset), py=S2, gap=S1_5, radius=InnerOr(Xl2))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_window_left : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg, wrap=false)
+let ug_row_link : @ui.Style = ug_row.then(@ui.css("hovered{bg=Hover}"))
+
+///|
+/// A share's bar: 4 high, round, on the tint.
+// kept across runs: a value (no field of it changes)
+let ug_track : @ui.Style = @ui.css("row w=Full h=S1 radius=Full bg=TintStrong clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_window_low : @ui.TextStyle = ug_window_left.then(@ui.text_style(color=WarnInk))
+let ug_track_part : @ui.Style = @ui.css("h=Full radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_window_refills : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_account_head : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_account_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false, w=@sf.grow)
-
-///|
-/// What it is made of: the people, the models and the accounts side by side, each 200 at least, 24 apart (under each
-/// other where they have not the room).
-// kept across runs: a value (no field of it changes)
-let ug_makeup : @ui.Style = @ui.css("row w=Full gap=S6")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_makeup_list : @ui.Style = @ui.style(w=@sf.grow, min_w=S56, gap=S3)
-
-///|
-/// A list's donut and its parts beside it, 16 apart, in the middle of each other; its parts under it where they have
-/// not 176 beside it (three lists side by side).
-// kept across runs: a value (no field of it changes)
-let ug_makeup_body : @ui.Style = @ui.css("row w=Full gap=S4 align=ACenter")
-
-///|
-/// The donut: 76 across, 10 wide; the first part's share in its middle, semibold.
-let ug_donut_side : Double = 76.0
-
-///|
-let ug_donut_width : Double = 10.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_donut : @ui.Style = @ui.style(w=Fixed(ug_donut_side), h=Fixed(ug_donut_side))
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_donut_mid : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_donut_figure : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
-
-///|
-/// Beside the donut: each part on a line, its share at the line's end.
-// kept across runs: a value (no field of it changes)
-let ug_makeup_legend : @ui.Style = @ui.style(w=@sf.grow, min_w=S44, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_legend_row : @ui.Style = @ui.css("row w=Full align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_grow : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_makeup_title : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false, w=Full)
-
-///|
-/// The other totals side by side, each 96 at least, in lines where three have not the room.
-// kept across runs: a value (no field of it changes)
-let ug_stats : @ui.Style = @ui.css("row w=Full gap=S4")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_stat : @ui.Style = @ui.style(w=@sf.grow, min_w=S24, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_stat_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_stat_value : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false, w=Full)
-
-///|
-/// What it is made of (日均 202 次), in lines where the total is narrower than it: none of it cut.
-// kept across runs: a value (no field of it changes)
-let ug_stat_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, w=Full)
+let ug_track_rest : @ui.Style = @ui.css("h=Full")
 
 ///|
 /// A card's title: the ui's size, semibold, in the words' ink.
@@ -1011,26 +1022,14 @@ let ug_stat_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Su
 let ug_card_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, w=Full)
 
 ///|
-/// The plot (150 high), its scale's lines across it, said at the right just over each in the caption's 11 subtle.
+/// The plot (150 high).
 // kept across runs: a value (no field of it changes)
 let ug_plot : @ui.Style = @ui.style(w=Full, h=@sf.usage_plot_h)
 
 ///|
+/// The days side by side, 6 apart (2 with many).
 // kept across runs: a value (no field of it changes)
-let ug_tick : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_tick_line : @ui.Style = @ui.css("row w=Full justify=JEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_tick_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
-
-///|
-/// The days side by side, 6 apart (2 with many), clear of the scale's words at the right (24).
-// kept across runs: a value (no field of it changes)
-let ug_days : @ui.Style = @ui.css("row w=Full h=Full pr=S6 gap=S1_5")
+let ug_days : @ui.Style = @ui.css("row w=Full h=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1041,13 +1040,10 @@ let ug_days_many : @ui.Style = ug_days.then(@ui.css("gap=S0_5"))
 let ug_day : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JEnd")
 
 ///|
-/// A bar: 16 wide at most (as wide as its day with many), its parts 1 apart, round 4 (2 with many).
+/// A bar: @sf.usage_bar_max wide at most (as wide as its day with many), round 4, its parts clipped to it. own corner: a
+/// bar of a chart, not a box in a corner of the ladder's
 // kept across runs: a value (no field of it changes)
-let ug_bar : @ui.Style = @ui.style(w=Full, max_w=@sf.usage_bar_max, radius=Full, clip=true)
-
-///|
-/// A bar's gradient: drawn for a bar 16 wide (stretched to its width), its foot the accent at 30%.
-let ug_bar_w : Double = 16.0
+let ug_bar : @ui.Style = @ui.style(w=Full, max_w=@sf.usage_bar_max, radius=Base, clip=true)
 
 ///|
 /// What the most spent day spent, over its bar (the caption's, semibold).
@@ -1055,13 +1051,14 @@ let ug_bar_w : Double = 16.0
 let ug_peak : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Semibold, color=Fg, wrap=false)
 
 ///|
+/// With many days: as wide as its day, round 2. own corner: as a bar's
 // kept across runs: a value (no field of it changes)
-let ug_bar_many : @ui.Style = @ui.css("w=Full radius=Full clip")
+let ug_bar_many : @ui.Style = @ui.css("w=Full radius=Sm clip")
 
 ///|
-/// A day's bar but the one shown: faded.
+/// A part of a bar: as wide as it, as high as its share of it.
 // kept across runs: a value (no field of it changes)
-let ug_bar_off : @ui.Style = @ui.css("w=Full h=Full bg=Line")
+let ug_bar_part : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// The plot's foot (its border-bottom).
@@ -1069,10 +1066,11 @@ let ug_bar_off : @ui.Style = @ui.css("w=Full h=Full bg=Line")
 let ug_base : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
-/// Each day's name under its bar (labels: 6 under the plot, as far apart as the days), the one shown in the words' ink
-/// in 500; whole, past its day's width on either side when the days are narrow (30 of them on a phone: a date a week).
+/// Each day's name under its bar (labels: 6 under the plot, as far apart as the days), the one shown in the accent's
+/// words in 500; whole, past its day's width on either side when the days are narrow (30 of them on a phone: a date a
+/// week).
 // kept across runs: a value (no field of it changes)
-let ug_labels : @ui.Style = @ui.css("row w=Full pt=S1_5 pr=S6 gap=S1_5")
+let ug_labels : @ui.Style = @ui.css("row w=Full pt=S1_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1096,98 +1094,33 @@ let ug_label : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Mu
 let ug_label_on : @ui.TextStyle = ug_label.then(@ui.text_style(weight=Medium, color=AccentText))
 
 ///|
+/// A card's rows: out across its room to @sf.corner_inset from its edges (their grounds there), their words in line
+/// with its title.
 // kept across runs: a value (no field of it changes)
-let ug_share : @ui.Style = @ui.style(row=true, w=@sf.grow, h=S1, radius=Full, bg=TintStrong, clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_share_part : @ui.Style = @ui.css("h=Full radius=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_share_rest : @ui.Style = @ui.css("h=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_rows : @ui.Style = @ui.css("w=Full")
-
-///|
-/// A row (row: 10 by 12 in, the field's corner, 12 apart in a line; its share's bar 6 under).
-// kept across runs: a value (no field of it changes)
-let ug_row : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 gap=S1_5 radius=Inner")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_row_link : @ui.Style = ug_row.then(@ui.css("hovered{bg=Hover}"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_row_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_rank_box : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
-
-///|
-/// The first three's badges: round, the first on the accent's ground in its words' ink, the next two on the tint.
-// kept across runs: a value (no field of it changes)
-let ug_rank_first : @ui.Style = ug_rank_box.then(@ui.css("radius=Full bg=AccentBg"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_rank_top : @ui.Style = ug_rank_box.then(@ui.css("radius=Full bg=TintStrong"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_rank : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_rank_first_words : @ui.TextStyle = ug_rank.then(@ui.text_style(weight=Bold, color=AccentText))
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_rank_top_words : @ui.TextStyle = ug_rank.then(@ui.text_style(weight=Bold, color=Fg))
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_row_text : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_row_pair : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
+let ug_rows : @ui.Style = @ui.style(mx=@sf.room_of(@sf.corner_inset - @sf.card_pad))
 
 ///|
 // kept across runs: a value (no field of it changes)
 let ug_row_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
-/// What it is (its calls and tokens), in lines where the row is narrower than it: none of it cut.
 // kept across runs: a value (no field of it changes)
-let ug_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=@sf.grow)
+let ug_row_title_lit : @ui.TextStyle = ug_row_title.then(@ui.text_style(color=AccentText))
+
+///|
+/// What it is (who it was for, its model, where), cut short where its line has not the room.
+// kept across runs: a value (no field of it changes)
+let ug_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_cost : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Bold, color=Fg, wrap=false)
+let ug_cost : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let ug_row_share_box : @ui.Style = @ui.css("w=S10 align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ug_row_share_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
-
-///|
-/// The share's bar from the row's words on (its lead's 20 and the 12 after it), its share's words after it.
-// kept across runs: a value (no field of it changes)
-let ug_row_share_room : @ui.Style = @ui.css("row w=Full pl=S9 gap=S3 align=ACenter")
-
-///|
-/// 显示全部 / 收起 (more: 4 under the rows, 6 by 12 in, the field's corner; the hover's ground and the words' ink
+/// 显示全部 / 收起 (more: its words in line with the rows', a row's corner; the hover's ground and the words' ink
 /// under the pointer).
 // kept across runs: a value (no field of it changes)
-let ug_more : @ui.Style = @ui.css("mt=S1 px=S3 py=S1_5 radius=Xl hovered{bg=Hover}")
+let ug_more : @ui.Style = @ui.style(px=@sf.room_of(@sf.card_pad - @sf.corner_inset), py=S2, radius=InnerOr(Xl2)).then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 // kept across runs: a value (no field of it changes)

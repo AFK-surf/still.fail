@@ -439,6 +439,21 @@ fn a_start_that_fails_says_why_and_leaves_nothing() {
 }
 
 #[test]
+fn a_pid_taken_by_a_later_process_does_not_hold_the_id() {
+    let dir = tmpdir("reused");
+    fs::create_dir_all(&dir).unwrap();
+    let mut later = Command::new("cmd").args(["/c", "pause"]).stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap();
+    // As a runner gone long ago left it, its pid given to a process started since.
+    fs::write(dir.join("a.json"), json!({ "id": "a", "runner": later.id(), "startedAt": 1 }).to_string()).unwrap();
+    let mut child = Command::new(BIN).args(["--dir", dir.to_str().unwrap(), "--id", "a", "--"]).args(cmd("set /p x=")).stdout(Stdio::piped()).spawn().unwrap();
+    let info = ready_line(child.stdout.take().unwrap());
+    let runner = Runner { dir, info, child: Some(child) };
+    assert_ne!(runner.pid("runner"), i64::from(later.id()));
+    later.kill().unwrap();
+    later.wait().unwrap();
+}
+
+#[test]
 fn a_second_runner_for_a_live_id_is_refused() {
     let runner = Runner::start("twice", "set /p x=");
     let out = Command::new(BIN).args(["--dir", runner.dir.to_str().unwrap(), "--id", "a", "--", "cmd", "/c", "exit"]).output().unwrap();

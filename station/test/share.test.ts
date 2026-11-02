@@ -253,6 +253,30 @@ test("a shared subscription: the other borrows tokens from its host, with no log
   await assert.rejects(b.sharing.lendClaude({ ...copy, id: "never-lent" }), /did not lend/);
 });
 
+test("a login wanted before the cloud has said the workspace's stations waits for them; one kept to go on with does not", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const a = station(cloud, A, () => all, [SUB]);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  await a.sharing.shareProfile("max", true, null);
+  await settle(a, b);
+  const copy = b.config.raw().profiles[0];
+  const own = (b.sharing as any).deps.cloud;
+  await b.sharing.lendClaude(copy);
+  a.lent.length = 0;
+  own.peersCurrent = false;
+  assert.equal((await b.sharing.lendClaude(copy)).token, "token-of-max", "kept: no wait");
+  a.lent.length = 0;
+  const waited = b.sharing.lendClaude({ ...copy, id: "just-started" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(a.lent, [], "its host not asked yet");
+  own.peersCurrent = true;
+  for (const f of cloud.listeners) f();
+  assert.equal((await waited).token, "token-of-max");
+  assert.deepEqual(a.lent, ["max"]);
+});
+
 test("a borrowed Codex subscription's login is written in its home, the profile as the runtime has it (its home resolved)", async () => {
   const cloud = new FakeCloud();
   const all = new Map<string, Station>();

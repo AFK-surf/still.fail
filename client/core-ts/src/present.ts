@@ -269,7 +269,7 @@ export function archivable(row: J): boolean {
   return get(row, "archiveReviewed") !== true || get(row, "archiveRecommended") === true;
 }
 
-/// Offered to archive as the viewer's `archiveHint` says (prefs.ts archiveHintOf): faded, below the rest of its day.
+/// Offered to archive as the viewer's `archiveHint` says (prefs.ts archiveHintOf): faded.
 /// off: never; reviewed: only once its station's archive review recommended it; done: as
 /// it is archivable.
 export function offered(row: J, hint: prefsMod.ArchiveHint): boolean {
