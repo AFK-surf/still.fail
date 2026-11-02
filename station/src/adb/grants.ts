@@ -346,13 +346,22 @@ export class PhoneGrants {
     return null;
   }
 
-  #end(r: PhoneRequest, why: string, workspace?: string | null) {
-    if (r.status !== "granted" && r.status !== "pending") return;
-    r.why = why;
-    this.#settle(r, r.status === "pending" ? "denied" : "ended", workspace);
+  /// The chat's agent is done with the phone (`phone_use {done: true}`): its grant, or a request still asked, ends as
+  /// one taken back does, and its phone stops being lent for this chat. The ended requests; the agent is not told of
+  /// them again, the tool's answer says so.
+  release(session: string): PhoneRequest[] {
+    const ended = this.#bySession(session).filter((r) => this.#live(r));
+    for (const r of ended) this.#end(r, "agent 已交还", undefined, false);
+    return ended;
   }
 
-  #settle(r: PhoneRequest, status: Status, workspace?: string | null) {
+  #end(r: PhoneRequest, why: string, workspace?: string | null, notify = true) {
+    if (r.status !== "granted" && r.status !== "pending") return;
+    r.why = why;
+    this.#settle(r, r.status === "pending" ? "denied" : "ended", workspace, notify);
+  }
+
+  #settle(r: PhoneRequest, status: Status, workspace?: string | null, notify = true) {
     r.status = status;
     // Last use is only needed while the grant can appear in the person's list.
     if (status === "ended" || status === "denied") delete r.lastUsedAt;
@@ -361,7 +370,7 @@ export class PhoneGrants {
       this.#d.hub.store.withdrawCard(r.session, r.thread, r.cardTs);
       this.#restate(r);
     }
-    if (status !== "pending") {
+    if (status !== "pending" && notify) {
       try {
         this.#d.hub.notify(r.session, said(r));
       } catch {

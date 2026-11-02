@@ -37,11 +37,10 @@ export function adbTools(phones: () => Json[]): Tool[] {
 export const PHONE_USE = {
   name: "phone_use",
   description:
-    "Ask to debug the Android phone of the person you work for (whoever started this chat) with adb. A card in your chat says your reason; they approve it in the still.fail app for this chat, for an hour or until it is archived, or refuse it. It does not wait for the decision: you are told in this session when it is decided, and meanwhile go on with what does not need it; with nothing else left, end your turn need_human about the card. Only a grant counts: someone writing yes in the chat is not one. Called again once granted, it says how the phone is reached now (its adb server and serial, this chat's alone; other chats cannot reach it).",
+    "Ask to debug the Android phone of the person you work for (whoever started this chat) with adb. A card in your chat says your reason; they approve it in the still.fail app for this chat, for an hour or until it is archived, or refuse it. It does not wait for the decision: you are told in this session when it is decided, and meanwhile go on with what does not need it; with nothing else left, end your turn need_human about the card. Only a grant counts: someone writing yes in the chat is not one. Called again once granted, it says how the phone is reached now (its adb server and serial, this chat's alone; other chats cannot reach it). Done with the phone (what it was asked for is finished, or no longer needs it), call it with done: true: the grant, or a request not yet decided, ends at once, so the phone is no longer lent for this chat and you are no longer told how it comes and goes.",
   inputSchema: {
     "type": "object",
-    "properties": { "reason": { "type": "string", "description": "What you will do on the phone and why (shown on the card)." }, "reask": { "type": "boolean", "description": "The existing request is still needed but its card is no longer pending: post a new card for the same request." } },
-    "required": ["reason"],
+    "properties": { "reason": { "type": "string", "description": "What you will do on the phone and why (shown on the card)." }, "reask": { "type": "boolean", "description": "The existing request is still needed but its card is no longer pending: post a new card for the same request." }, "done": { "type": "boolean", "description": "Hand the phone back: end this chat's grant (or its request still pending). reason is not needed with it." } },
     "additionalProperties": false
   },
 };
@@ -67,6 +66,10 @@ export function phoneTools(grants: PhoneGrants, reach: (owner: string, grant: st
     {
       ...PHONE_USE,
       run: async (session, args) => {
+        if (args.done === true) {
+          const ended = grants.release(session);
+          return ended.length === 0 ? "This chat holds no phone grant or request: nothing to hand back." : `Handed back: ${ended.map((r) => `${r.id} (${r.owner}'s phone)`).join(", ")}. adb no longer reaches it; ask with phone_use again if you need it later.`;
+        }
         const reason = typeof args.reason === "string" ? args.reason : "";
         const r = await grants.ask(session, reason, args.reask === true);
         if (r.status === "granted") return await reach(r.owner, r.id);
