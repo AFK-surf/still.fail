@@ -115,7 +115,7 @@ test "wide: the models used most between the way to all of them and how hard it 
   // (2026-11-01 用户「那它就不应该跑到离按钮很远的最顶上去啊」)
   assert_true(in_line(all.1, gpt.1, opus.1) && in_line(gpt.1, opus.1, effort.1), msg="\{all} \{gpt} \{opus} \{effort}")
   assert_true(t.query(Button, label="Sonnet 5") is None, msg="the rest a step further")
-  // how it last ran, at its row's end
+  // how it last ran, under its name
   assert_true(
     t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "中" && b.y >= gpt.1 && b.y + b.h <= gpt.1 + gpt.3 }),
     msg="GPT-6's 中",

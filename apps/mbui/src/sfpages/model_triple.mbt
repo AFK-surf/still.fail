@@ -434,14 +434,10 @@ fn triple_body(
     }
     pick_save(src, station, of, { "fast": fv })
   }
-  // each column's words as wide as the widest of them picked (the models' of all of them, whatever the filter leaves):
-  // the panel, as wide as what it holds, as wide whichever is picked and whatever is typed (as a segmented choice's)
-  let names_w = options.fold(init=0.0, fn(m, o) {
-    let o = Some(o)
-    dmax(dmax(m, c.words_across(text(o, "name"), triple_row_picked)), c.words_across(text(field(o, "spent"), "text"), triple_note))
-  }).ceil()
-  // what each says of how it runs at its row's end, as wide as the widest of it, the one picked's at whatever it is
-  // picked to: the panel as wide whatever is picked in it (its widest kept: a depth picked wider, it would grow)
+  // what each says of how it runs with its name (2026-11-02 用户「常用模型的信息分两边很难读」): under it beside what
+  // opened the panel (「竖着放」), right after it in a sheet (「移动端…跟在模型后面」); as wide as the widest of it, the
+  // one picked's at whatever it is picked to: the panel as wide whatever is picked in it (its widest kept: a depth
+  // picked wider, it would grow)
   let picked = text(v, "option")
   let many = options
     .search_by(fn(o) { text(Some(o), "model") == picked })
@@ -460,10 +456,19 @@ fn triple_body(
     }
     parts.join(" · ")
   }
-  let usual_w = options.fold(init=0.0, fn(m, o) { dmax(m, c.words_across(text(Some(o), "usualText"), triple_usual)) })
+  let usual_w = options.fold(init=0.0, fn(m, o) { dmax(m, c.words_across(text(Some(o), "usualText"), triple_note)) })
   let usual_w = all_efforts.fold(init=usual_w, fn(m, e) {
-    dmax(dmax(m, c.words_across(said_as(e.0, false), triple_usual)), if fast { c.words_across(said_as(e.0, true), triple_usual) } else { 0.0 })
-  }).ceil()
+    dmax(dmax(m, c.words_across(said_as(e.0, false), triple_note)), if fast { c.words_across(said_as(e.0, true), triple_note) } else { 0.0 })
+  })
+  // each column's words as wide as the widest of them picked (the models' of all of them, whatever the filter leaves):
+  // the panel, as wide as what it holds, as wide whichever is picked and whatever is typed (as a segmented choice's)
+  let names_w = options.fold(init=0.0, fn(m, o) {
+    let o = Some(o)
+    let name = c.words_across(text(o, "name"), triple_row_picked)
+    let name = if sheet && usual_w > 0.0 { name + @ui.Space::px(S1_5) + usual_w } else { name }
+    dmax(dmax(m, name), c.words_across(text(field(o, "spent"), "text"), triple_note))
+  })
+  let names_w = (if sheet { names_w } else { dmax(names_w, usual_w) }).ceil()
   // each as what it is (2026-10-30 用户「思考这些选项各自的特点」): the models many, their names long, each its maker's
   // mark: a list, scrolling by itself, every name whole (「看不出是什么模型怎么办」). Beside it, in view whatever model
   // is picked (「用户选完模型根本看不到下面的 runtime 和思考深度」), the rest as the few they are, each a segmented
@@ -478,7 +483,7 @@ fn triple_body(
   // (the panel at least as wide as a row with the widest name and the widest of how it runs, where it has the room:
   // as wide whatever depth is picked in it)
   // (and the box before it where all of them are listed)
-  let row_least = names_w + usual_w + 14.0 + triple_box_side + 4.0 * @ui.Space::px(S1_5) + 2.0 * @ui.Space::px(S2_5) +
+  let row_least = names_w + 14.0 + triple_box_side + 4.0 * @ui.Space::px(S1_5) + 2.0 * @ui.Space::px(S2_5) +
     @ui.Space::px(S3_5)
   c.box(style=@ui.style(min_w=Within(row_least)), fn() {  }) |> ignore
   let up = @sf.panel_opens_up()
@@ -492,7 +497,7 @@ fn triple_body(
           triple_column_head(c, s.0)
         }
         for o in s.1 {
-          triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close, likes=true)
+          triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close, likes=true, after=sheet)
         }
       }
       if listed.length() == 0 {
@@ -578,7 +583,7 @@ fn triple_body(
         triple_column_head(c, head)
       }
       for o in if up { rows.rev() } else { rows } {
-        triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close, star=head == "")
+        triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close, star=head == "", after=sheet)
       }
     })
     |> ignore
@@ -774,7 +779,8 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
 
 ///|
 /// A model's row: its maker's mark, its name (what it has spent under it) `names_w` wide (the widest of the models'),
-/// at its end how it runs picked (cut short first where the row is short), the station it comes from; with `likes`,
+/// how it runs picked under its name (with `after`, right after it, cut short first where the row is short), at its end
+/// the station it comes from; with `likes`,
 /// a box before it, ticked while it is starred (`pick.like`); with `star`, a star at its end (one of those starred).
 fn triple_model_row(
   c : @ui.Ctx,
@@ -788,6 +794,7 @@ fn triple_model_row(
   close : () -> Unit,
   likes? : Bool = false,
   star? : Bool = false,
+  after? : Bool = false,
 ) -> Unit {
   let t = @sf.theme()
   let model = text(o, "model")
@@ -814,15 +821,8 @@ fn triple_model_row(
       })
     _ => None
   }
-  // (at its end how it runs picked: as it last ran here, the one picked as it runs now; then where it comes from)
+  // (at its end where it comes from)
   let trail = fn() {
-    if usual != "" {
-      // (giving way to the name where the row is short: cut short, left out once it would keep too little)
-      c.box(style=triple_usual_room, drop=1, fn() {
-        c.text(usual, style=triple_usual) |> ignore
-      })
-      |> ignore
-    }
     match from_station {
       Some(f) => f()
       None => ()
@@ -860,7 +860,24 @@ fn triple_model_row(
       // (all of its name in the room its column leaves it, on a second line where one is not enough: what goes with
       // the model picked beside the models takes the room its words need first)
       c.box(style=triple_name_column.then(@ui.style(w=Fixed(names_w))), fn() {
-        c.text(text(o, "name"), style=if picked { triple_row_picked } else { triple_row_name }) |> ignore
+        let name = fn() {
+          c.text(text(o, "name"), style=if picked { triple_row_picked } else { triple_row_name }) |> ignore
+        }
+        // (how it runs picked: as it last ran here, the one picked as it runs now)
+        if usual == "" {
+          name()
+        } else if after {
+          c.box(style=triple_name_line, fn() {
+            // (the name as wide as its words, how it runs right after it rather than at the row's end)
+            c.box(name) |> ignore
+            // (giving way to the name where the row is short: what the name leaves of it, cut short)
+            c.box(style=triple_usual_room, fn() { c.text(usual, style=triple_usual) |> ignore }) |> ignore
+          })
+          |> ignore
+        } else {
+          name()
+          c.text(usual, style=triple_note) |> ignore
+        }
         match text(field(o, "spent"), "text") {
           "" => ()
           sp => c.text(sp, style=triple_note) |> ignore
@@ -1499,14 +1516,19 @@ let triple_rule_v : @ui.Style = @ui.css("w=SPx bg=Line")
 let triple_kind_mark : @ui.Style = @ui.css("w=S3_5 align=ACenter justify=JCenter")
 
 ///|
-/// How a model runs picked, at its row's end: Meta, muted, on one line.
+/// How a model runs picked, right after its name: Meta, muted, on one line.
 // kept across runs: a value (no field of it changes)
 let triple_usual : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// Its room: its words at its end.
+/// Its room: right after the name, what the name leaves of the row.
 // kept across runs: a value (no field of it changes)
-let triple_usual_room : @ui.Style = @ui.css("row w=Cut justify=JEnd")
+let triple_usual_room : @ui.Style = @ui.css("row w=Grow(1.0)")
+
+///|
+/// A model's name with how it runs right after it, on its words' line.
+// kept across runs: a value (no field of it changes)
+let triple_name_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
