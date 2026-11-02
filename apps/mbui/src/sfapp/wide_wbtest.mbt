@@ -2321,10 +2321,11 @@ test "wide: the station a chat's agent runs on, beside its mark in the bar, has 
 }
 
 ///|
-test "wide: a working agent's card has its stop at the end of where it stands, under its label (the corner rule sees it)" {
+/// A working agent's card in the chat of fixture `chat-agent-card` (its agents at work, as a turn under way has them:
+/// chat_fixture.mbt), opened over its latest message's name; where it stands said in `stands` where given.
+fn working_agent_card(stands? : String) -> @ui.Tester {
   new_run()
   let base = fixture("chat-agent-card")
-  // (its agents at work, as a turn under way has them: chat_fixture.mbt)
   let src : Source = {
     ..base,
     topic: fn(name, params) {
@@ -2338,6 +2339,14 @@ test "wide: a working agent's card has its stop at the end of where it stands, u
                 Object(am) => {
                   let w = am.copy()
                   w["status"] = Json::string("running")
+                  match (stands, w.get("session")) {
+                    (Some(words), Some(Object(sm))) => {
+                      let ss = sm.copy()
+                      ss["statusText"] = Json::string(words)
+                      w["session"] = Json::object(ss)
+                    }
+                    _ => ()
+                  }
                   Json::object(w)
                 }
                 _ => a
@@ -2352,22 +2361,55 @@ test "wide: a working agent's card has its stop at the end of where it stands, u
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
-  let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
-    match acc {
-      Some(a) if a.2 >= w.2 => acc
-      _ => Some(w)
-    }
-  })
-  guard last is Some(name) else { fail("no agent's message") }
+  let last = t
+    .words()
+    .filter(fn(w) { w.0 == "Claude" && w.5 > 0.5 })
+    .iter()
+    .fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
+      match acc {
+        Some(a) if a.2 >= w.2 => acc
+        _ => Some(w)
+      }
+    })
+  guard last is Some(name) else { abort("no agent's message") }
   t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
+  t
+}
+
+///|
+test "wide: a working agent's card has its stop at the end of where it stands, under its label (the corner rule sees it)" {
+  let t = working_agent_card()
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // its stop shown on the line under its label's, not beside it (the label's line its own); nothing in the card's
   // corners (nor anywhere) breaks the rule
   let stop = word("停止当前任务")
   let label = word("Claude · Opus 5.5")
   assert_true(stop.length() == 1 && label.length() == 1, msg="\{(stop, label)}")
   assert_true(stop[0].2 >= label[0].2 + label[0].4, msg="its stop under its label: \{(stop, label)}")
+  // where it stands short (做完了), the stop on its line, after it
+  let stands = t.words().filter(fn(w) { w.0.has_prefix("做完了") && w.5 > 0.5 && w.2 > label[0].2 && w.2 < stop[0].2 + stop[0].4 })
+  assert_true(stands.length() == 1, msg="\{(stands, stop)}")
+  assert_true(stop[0].1 > stands[0].1 + stands[0].3 && stop[0].2 < stands[0].2 + stands[0].4, msg="\{(stands, stop)}")
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "wide: a working agent's card whose standing needs its line (what it waits for) has its stop on a line under it" {
+  let waits = "等待：最新主线与读取修复的合并验证；之后验证分页和读取调度"
+  let t = working_agent_card(stands=waits)
+  let shown = t.words().filter(fn(w) { w.5 > 0.5 })
+  let stop = shown.filter(fn(w) { w.0 == "停止当前任务" })
+  let stands = shown.filter(fn(w) { w.0.has_prefix("等待：") })
+  let label = shown.filter(fn(w) { w.0 == "Claude · Opus 5.5" })
+  assert_true(stop.length() == 1 && stands.length() == 1 && label.length() == 1, msg="\{(stop, stands, label)}")
+  // its words the whole line (two lines, not squeezed into three beside the stop), the stop under them, at their
+  // start
+  let (s, w) = (stands[0], stop[0])
+  assert_true(s.4 < 2.5 * label[0].4, msg="its words on two lines: \{(s, label)}")
+  assert_true(w.2 >= s.2 + s.4, msg="its stop under its words: \{(w, s)}")
+  // (its words 26 into it: 10 in, its mark 11, 5 after that)
+  assert_true(w.1 > s.1 && w.1 < s.1 + 30.0, msg="its stop at its words' start: \{(w, s)}")
   assert_eq(t.corner_faults(), [])
 }
 

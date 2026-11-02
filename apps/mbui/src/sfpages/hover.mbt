@@ -230,9 +230,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
       |> ignore
     })
     c.semantics(w, Button, id=who, label=text(s, "agentText"))
-    // where it stands, after a dot in its tone, and for how long (three lines at most); a stop at its end while it
-    // works, what stopping is of (its working said short then: 进行中, 排队中)
-    c.box(style=agent_card_stands, fn() {
+    // where it stands, after a dot in its tone, and for how long (three lines at most); a stop at its line's end while
+    // it works, or, where its words need the line (what it waits for), on a line of its own under them, at their start
+    c.box(style=agent_card_stands, flow=true, line_gap=agent_card_stands_lines.px(), fn() {
       c.box(style=agent_card_status, fn() {
         c.box(style=agent_card_dot_room, fn() {
           c.box(style=agent_card_dot.then(@ui.style(bg=tone_token(text(s, "tone")))), fn() {  }) |> ignore
@@ -788,14 +788,20 @@ let agent_card_name_room : @ui.Style = @ui.style(w=@sf.grow)
 let agent_card_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
-/// Where it stands and its stop, on one line: its words what the stop leaves.
+/// Where it stands and its stop: on one line, the stop at its end, where its words leave it room; else the stop on the
+/// next line, 8 under (the card's gap).
 // kept across runs: a value (no field of it changes)
-let agent_card_stands : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+let agent_card_stands : @ui.Style = @ui.css("row w=Full align=ACenter justify=JBetween")
 
 ///|
-/// Where it stands: 14 in, its dot (6, in its tone) at the first line's middle.
 // kept across runs: a value (no field of it changes)
-let agent_card_status : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=AStart, pl=S0_5)
+let agent_card_stands_lines : @ui.Space = S2
+
+///|
+/// Where it stands: as wide as its words on one line, as the line where they are wider; 14 in, its dot (6, in its
+/// tone) at the first line's middle.
+// kept across runs: a value (no field of it changes)
+let agent_card_status : @ui.Style = @ui.css("row gap=S1_5 align=AStart pl=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -807,7 +813,7 @@ let agent_card_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full, max_lines=3)
+let agent_card_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, max_lines=3)
 
 ///|
 /// Its latest lines: 14 in, 2 apart, 12, muted; what it does now in the words' colour; each one line.
@@ -915,10 +921,11 @@ let agent_card_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=
 let agent_card_notes : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
-/// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground.
+/// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground; 14 after where it stands's
+/// start (under its words' start on a line of its own; at least that after them on theirs).
 // kept across runs: a value (no field of it changes)
 let agent_card_stop_pill : @ui.Style = @ui.css(
-  #|row h=S6 px=S2_5 gap=S1_25 radius=Full align=ACenter bg=DangerBg hovered{bg=Hover}
+  #|row h=S6 px=S2_5 gap=S1_25 radius=Full align=ACenter ml=S3_5 bg=DangerBg hovered{bg=Hover}
 )
 
 ///|
