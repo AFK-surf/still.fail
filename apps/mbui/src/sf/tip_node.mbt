@@ -60,6 +60,7 @@ pub fn tip_node(
   // had gone), whether it is in whole yet, and the moment that says so: this showing's own, let go as it goes)
   let fade = TipFade::new()
   let anchor_id = anchor.id()
+  let owner = @kit.tip_node_owner()
   // (made in its layer as it is first shown where there is one then (none yet: shown the next time it is, as there is
   // one), held there for its control, let go with it)
   let made = Ref(false)
@@ -69,7 +70,7 @@ pub fn tip_node(
     guard (tips.layer)() is Some(l) else { return false }
     let holder = l.box(fn(h) { h.over(Is(true)) |> ignore }).lives_with(anchor)
     holder.on_key(fn(k) {
-      if k.code == @ui.key_escape && @signals.untracked(fn() { open.get() }) {
+      if k.code == @ui.key_escape && @signals.untracked(fn() { open.get() && @kit.tip_owns(owner) }) {
         (escaped.val)()
         true
       } else {
@@ -78,7 +79,7 @@ pub fn tip_node(
     })
     |> ignore
     holder.show(fn() { open.get() }, leave=@kit.pop_out_ms, fn(t) {
-      tip_look_node(t, anchor_id, side, label, fade, gap, at_pointer)
+      tip_look_node(t, anchor_id, side, label, fade, gap, at_pointer, owner)
     })
     true
   }
@@ -97,6 +98,9 @@ pub fn tip_node(
     if on {
       if !made.val {
         made.val = make()
+      }
+      if made.val {
+        @kit.tip_claim(owner)
       }
       // (in, as kit's tip_in: from where it is at this moment, eased out)
       fade.go(anchor, 1.0, at, tip_in_ms, Out)
@@ -119,8 +123,16 @@ pub fn tip_node(
       hand.get(),
     )
   }
+  let before = Ref((false, false, Free))
   anchor.reacts(state, fn(s) {
     let (over, pressed, focused, takes, says, held) = s
+    let (was_over, was_focused, was_held) = before.val
+    before.val = (over, focused, held)
+    if made.val && @signals.untracked(fn() { open.get() }) && takes && says &&
+      (held != Free || (!pressed && !shut.val)) &&
+      ((over && !was_over) || (focused && !was_focused) || (held != Free && was_held == Free)) {
+      @kit.tip_claim(owner)
+    }
     let at = anchor.cause_at()
     stop_rest()
     // (held open by a finger: shown at once, as long as there is something to say and it takes input; taking none, this
@@ -293,6 +305,7 @@ fn tip_look_node(
   fade : TipFade,
   gap : Double,
   at_pointer : Bool,
+  owner : @kit.TipOwner,
 ) -> Unit {
   let theme = fn() { @ui.tree_theme() }
   let px = @ui.Space::px(S2_5)
@@ -310,7 +323,7 @@ fn tip_look_node(
   // (its ground in first, its words after, as kit's tip_in and pop_out have them (ground_first): the ground the first
   // half of the way in, the words the second; going, the other way round)
   .alpha(By(fn() {
-    let a = fade.shown(t)
+    let a = if @kit.tip_owns(owner) { fade.shown(t) } else { 0.0 }
     if a * 2.0 < 1.0 {
       a * 2.0
     } else {
@@ -331,6 +344,7 @@ fn tip_look_node(
     about=@view.FromBeside,
   )
   .says(By(fn() { Some(@view.said(Tooltip, label=label())) }))
+  .hides(By(fn() { !@kit.tip_owns(owner) }))
   |> ignore
   t.box(fn(w) {
     w

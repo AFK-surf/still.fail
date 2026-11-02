@@ -410,6 +410,52 @@ test "tooltip: one shown soon after another closed skips the wait" {
 }
 
 ///|
+test "tooltip: a newly hovered trigger replaces a focused trigger's tip" {
+  let t = @ui.Tester::new(fn(c) {
+    c.row(gap=40.0, pad=80.0, fn() {
+      let a = button(c, "A", key="a")
+      tooltip(c, "ta", a.id, "First tip") |> ignore
+      let b = button(c, "B", key="b")
+      tooltip(c, "tb", b.id, "Second tip") |> ignore
+    }) |> ignore
+  })
+  let visible = fn() { t.semantics().filter(fn(s) { s.role == Tooltip && !s.hidden }).map(fn(s) { s.label }) }
+  t.tab()
+  assert_eq(visible(), ["First tip"])
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="B").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(tooltip_delay_ms)
+  assert_eq(visible(), ["Second tip"])
+  t.run_for(@kit.pop_out_ms)
+  assert_eq(visible(), ["Second tip"])
+}
+
+///|
+test "tooltip: a shown tip made again can take the slot back" {
+  let first = Ref(true)
+  let second = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.row(gap=40.0, pad=80.0, fn() {
+      let a = button(c, "A", key="a")
+      if first.val { tooltip(c, "ta", a.id, "First tip", shown=true) |> ignore }
+      let b = button(c, "B", key="b")
+      if second.val { tooltip(c, "tb", b.id, "Second tip", shown=true) |> ignore }
+    }) |> ignore
+  })
+  let visible = fn() { t.semantics().filter(fn(s) { s.role == Tooltip && !s.hidden }).map(fn(s) { s.label }) }
+  t.draw()
+  assert_eq(visible(), ["First tip"])
+  second.val = true
+  t.draw()
+  assert_eq(visible(), ["Second tip"])
+  first.val = false
+  t.draw()
+  first.val = true
+  t.draw()
+  assert_eq(visible(), ["First tip"])
+}
+
+///|
 test "hover card: opened once the pointer rests on its trigger, kept while over it or the card, closed after" {
   let open = Ref(false)
   let t = @ui.Tester::new(fn(c) {
