@@ -154,7 +154,7 @@
   "web-pages.appearance.drop.path": "Path",
   "web-pages.appearance.drop.file": "File",
   "web-pages.appearance.archive.title": "Archive suggestions",
-  "web-pages.appearance.archive.description": "Whether a finished chat suggests archiving it: faded in the sidebar and moved to the end of its day. Only on this device; the archive button in the bar, its shortcut and the context menu stay either way.",
+  "web-pages.appearance.archive.description": "Whether a finished chat suggests archiving it: faded in the sidebar. Only on this device; the archive button in the bar, its shortcut and the context menu stay either way.",
   "web-pages.appearance.archive.off": "Off",
   "web-pages.appearance.archive.done": "When done",
   "web-pages.appearance.archive.reviewed": "After review",
