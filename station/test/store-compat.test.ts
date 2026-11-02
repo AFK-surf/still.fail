@@ -44,7 +44,7 @@ function shape(path: string): string[] {
 /// Columns the TS station adds to tables the Rust station made (schema.ts), by table: a station's in several workspaces
 /// (docs/multi-workspace.md). A table's latest first: each is taken off the end of its table's SQL in turn.
 const ADDED: [string, string][] = [
-  ["turns", "wait_watch"], ["sessions", "ws"], ["sessions", "afresh"], ["archive_policy", "ws"], ["entries", "letter"], ["entries", "runtime"], ["jobs", "size"], ["jobs", "screen"], ["jobs", "queued"],
+  ["turns", "wait_watch"], ["sessions", "ws"], ["sessions", "afresh"], ["archive_policy", "ws"], ["entries", "letter"], ["entries", "runtime"], ["jobs", "small"], ["jobs", "size"], ["jobs", "screen"], ["jobs", "queued"],
   ["usage", "context_window"], ["usage", "context"], ["usage", "calls"], ["opened_chats", "opener_title"],
 ];
 /// What those columns bring with them: an index of its own (letters; the sessions counted by connect and workspace; the

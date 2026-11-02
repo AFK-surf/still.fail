@@ -467,6 +467,30 @@ describe("remote", { concurrency: true }, () => {
     return { a, b, home, clock, use, asked, back };
   }
 
+  test("a small offscreen task reaches the target's small slot", async () => {
+    const { b, use, asked } = pair();
+    await use("station_task", { station: "B", key: "build", action: "prepare", command: FOREVER });
+    const build = (await use("station_task", { station: "B", key: "build", action: "start" })).job;
+    await use("station_task", { station: "B", key: "picture", action: "prepare", command: FOREVER, small: true });
+    const picture = (await use("station_task", { station: "B", key: "picture", action: "start" })).job;
+    assert.equal(picture.small, true);
+    assert.notEqual(picture.queued, true);
+    assert.equal(b.store.getJob(picture.id)!.small, true);
+    assert.equal(b.store.getJob(build.id)!.state, "running");
+    assert.ok(asked.some((request) => request.method === "describe"), "checks the target supports small tasks");
+    await assert.rejects(use("station_task", { station: "B", key: "bad", action: "prepare", command: "true", small: true, screen: true }), /small task cannot use the screen/);
+    await assert.rejects(b.remote.handle("ws", "A", { method: "task.prepare", session: "s1", key: "bad", spec: { command: "true", small: "yes" } }), /small must be a boolean/);
+  });
+
+  test("a target from before small tasks is not silently used as a fast queue", async () => {
+    const { a, use } = pair();
+    a.remote.attach(async (_target, _workspace, request) => {
+      assert.equal(request.method, "describe");
+      return { protocol: 1, sync: 1 };
+    });
+    await assert.rejects(use("station_task", { station: "B", key: "picture", action: "prepare", command: "true", small: true }), /cannot run small tasks/);
+  });
+
   test("a chat can ask the target station to remove its own unused mirror while a busy one stays", async () => {
     const { b, home, use } = pair();
     const idle = join(home, "idle");

@@ -189,8 +189,8 @@ function rig(state: { busy: number; pressure: Pressure; idle?: number }, store?:
   const told: string[] = [];
   const jobs = new Jobs({ store: s, data: dir, notify: (_s, t) => void told.push(t), link: () => null, clock, machine: machine(state) });
   all.push(jobs);
-  const start = (id: string, session: string, command: string, screen = false) =>
-    jobs.startId(`remote:${session}`, id, command, work, null, false, `remote_${id}`, false, { screen });
+  const start = (id: string, session: string, command: string, screen = false, small = false) =>
+    jobs.startId(`remote:${session}`, id, command, work, null, false, `remote_${id}`, false, { screen, small });
   return { jobs, store: s, clock, start, dir, told };
 }
 
@@ -217,6 +217,23 @@ async function looks(clock: { move: (ms: number) => Promise<void> }, check: () =
 const FOREVER = "tail -f /dev/null";
 
 describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
+  test("one small picture starts beside a busy build; the next waits for its own slot", async () => {
+    const r = rig({ busy: 1, pressure: "normal" });
+    const build = r.start("build", "a", FOREVER);
+    const first = r.start("picture-1", "b", FOREVER, false, true);
+    assert.notEqual(build.queued, true);
+    assert.notEqual(first.queued, true);
+    assert.equal(r.store.getJob(first.id)!.small, true);
+    const second = r.start("picture-2", "c", `printf '%s' "$STILLFAIL_CPUS" > small-cpus`, false, true);
+    assert.equal(second.queued, true);
+    assert.equal(r.jobs.queueOf(second.id)!.cause, "small");
+    assert.throws(() => r.start("screen-small", "d", "true", true, true), /small task cannot use the screen/);
+    await stop(r, first.id);
+    await until("the next small task starts and ends", () => r.store.getJob(second.id)!.state === "exited");
+    assert.equal(readFileSync(join(r.dir, "work", "small-cpus"), "utf8"), "1");
+    assert.equal(r.store.getJob(build.id)!.state, "running");
+  });
+
   test("a task that comes while another runs waits, and starts once that one ends", async () => {
     const state = { busy: 1, pressure: "normal" as Pressure };
     const r = rig(state);

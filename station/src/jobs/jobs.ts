@@ -188,6 +188,7 @@ export function jobJson(j: JobRow): Json {
     // Said only when so: what a station from before the queue answered has neither.
     ...(j.queued === true ? { queued: true } : {}),
     ...(j.screen === true ? { screen: true } : {}),
+    ...(j.small === true ? { small: true } : {}),
   };
 }
 
@@ -399,13 +400,14 @@ export class Jobs {
   /// screen, one such at a time. `size`: it runs in a sandbox of its own of that size (agents/sandbox.ts).
   startId(
     session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null, checked = false,
-    queue: { screen: boolean } | null = null, size: string | null = null,
+    queue: { screen: boolean; small?: boolean } | null = null, size: string | null = null,
   ): JobRow {
     if (id !== null) {
       const job = this.store.getJob(id);
       if (job) return job;
     }
     if (command.trim() === "") throw new Error("command is empty");
+    if (queue?.screen && queue.small) throw new Error("a small task cannot use the screen");
     let isDir = checked;
     try {
       isDir ||= statSync(cwd).isDirectory();
@@ -443,6 +445,7 @@ export class Jobs {
       restarts: 0,
       watch,
       ...(queue !== null ? { queued: true, screen: queue.screen } : {}),
+      ...(queue?.small === true ? { small: true } : {}),
       ...(size !== null ? { size } : {}),
     };
     this.store.insertJob(job);
@@ -471,8 +474,8 @@ export class Jobs {
     const running: Started[] = [];
     for (const j of this.store.jobsRunning()) {
       if (!queues(j)) continue;
-      if (j.queued === true) waiting.push({ id: j.id, session: j.sessionKey, screen: j.screen === true, queuedAt: j.startedAt });
-      else running.push({ id: j.id, screen: j.screen === true });
+      if (j.queued === true) waiting.push({ id: j.id, session: j.sessionKey, screen: j.screen === true, queuedAt: j.startedAt, ...(j.small ? { small: true } : {}) });
+      else running.push({ id: j.id, screen: j.screen === true, ...(j.small ? { small: true } : {}) });
     }
     waiting.sort((a, b) => a.queuedAt - b.queuedAt);
     return { waiting, running };
@@ -492,9 +495,12 @@ export class Jobs {
   private admitted(job: JobRow): Record<string, string> {
     const alone = this.line().running.length === 0;
     const now = this.queueNow();
-    this.lastStart = now;
-    this.lastStarted = job.id;
+    if (!job.small) {
+      this.lastStart = now;
+      this.lastStarted = job.id;
+    }
     this.lastOf.set(job.sessionKey, now);
+    if (job.small) return { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" };
     return cpusFor(startEnv(), this.machine.cpus(), this.busy.share(), alone);
   }
 
@@ -527,12 +533,14 @@ export class Jobs {
     ).catch(() => undefined);
   }
 
-  /// Starts what the queue picks now (one at most: the next waits for its ramp); while others wait, the queue watched.
+  /// Starts what the queue picks now. A small task has its own slot and does not have to wait for a build's ramp.
   /// Then the screen given out to the commands that ask for it, if no task has it now.
   private startNext(): void {
     if (this.closing) return;
     this.prune();
     this.admitNext();
+    const { waiting, running } = this.line();
+    if (waiting.some((w) => w.small) && !running.some((r) => r.small)) this.admitNext();
     this.serve();
     this.tellLong();
   }
@@ -594,9 +602,10 @@ export class Jobs {
     const job = this.store.getJob(id);
     if (!job || job.state !== "running" || job.queued !== true) return null;
     const { waiting, running } = this.line();
-    const p = place(waiting, id, (s) => this.lastOf.get(s) ?? null);
     const task = waiting.find((w) => w.id === id);
-    if (p === null || task === undefined) return null;
+    if (task === undefined) return null;
+    const p = place(waiting.filter((w) => !!w.small === !!task.small), id, (s) => this.lastOf.get(s) ?? null);
+    if (p === null) return null;
     const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
     const cpuBusy = this.busy.sample(ramp);
     const selected = pick([task], running, { busy: cpuBusy?.share ?? null, pressure: this.pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
