@@ -177,8 +177,8 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
   let failed = o.state == "failed"
   c.box(style=mine_column, fn() {
     c.box(style=outbox_words, fn() {
-      quotes(c, src, here, o.quotes, o.attachments, mine=true)
-      message_files(c, src, here, beside_quotes(o.quotes, o.attachments), true)
+      quotes(c, src, here, o.quotes, o.attachments, mine=true, at="o:" + o.id)
+      message_files(c, src, here, beside_quotes(o.quotes, o.attachments), true, at="o:" + o.id + "/f")
       for i, u in o.uploads {
         let (name, size, sent) = u
         @sf.file_card(

@@ -129,7 +129,8 @@ pub struct Media {
   priv mut subtitle : Bool
   priv mut cues : Array[@codec.Cue]
   priv mut fill : Bool
-  priv mut sideways : Bool
+  // (turned sideways or not, as it is told: what reads it follows it, a frame round the player laid out by it)
+  priv sideways : @signals.Signal[Bool]
   priv mut awake : Bool
   /// a mouse's pointer over where its controls or its bar are (Media::near): they show while it is
   priv mut near : Bool
@@ -206,7 +207,7 @@ pub fn Media::new(
     subtitle: false,
     cues: [],
     fill: false,
-    sideways: false,
+    sideways: @signals.signal(false, same=fn(a, b) { a == b }),
     awake: true,
     near: false,
     poke: 0,
@@ -341,14 +342,14 @@ pub fn Media::started(self : Media) -> Bool {
 ///|
 /// Whether it is sideways (back turns it upright first).
 pub fn Media::is_sideways(self : Media) -> Bool {
-  self.sideways
+  self.sideways.get()
 }
 
 ///|
 /// Upright again (back while sideways).
 pub fn Media::upright(self : Media) -> Unit {
-  if self.sideways {
-    self.sideways = false
+  if @signals.untracked(fn() { self.sideways.get() }) {
+    self.sideways.set(false)
     @hostapi.set_sideways(false)
   }
 }
@@ -567,8 +568,9 @@ pub fn Media::toggle_fill(self : Media) -> Unit {
 ///|
 /// Turned sideways, or upright again.
 pub fn Media::toggle_sideways(self : Media) -> Unit {
-  self.sideways = !self.sideways
-  @hostapi.set_sideways(self.sideways)
+  let on = !@signals.untracked(fn() { self.sideways.get() })
+  self.sideways.set(on)
+  @hostapi.set_sideways(on)
 }
 
 ///|
@@ -836,7 +838,7 @@ pub fn Media::picture_rect(self : Media, s : MediaStatus, bw : Double, bh : Doub
   if s.width > 0.0 && s.height > 0.0 {
     let kx = bw / s.width
     let ky = bh / s.height
-    let k = if self.fill && self.sideways {
+    let k = if self.fill && self.sideways.get() {
       if kx > ky {
         kx
       } else {

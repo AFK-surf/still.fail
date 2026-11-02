@@ -1378,7 +1378,7 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   // (beside the system's action at the column's foot, the cards' foot corners the one the composer stands concentric in
   // on its line: said before any of them is built; another than the last frame's, what was kept of them drawn anew, as
   // for the screen's corner: rail_native.mbt native_frame)
-  if @sf.native_foot_set(r.panel_top + r.panel_h) {
+  if @sf.native_foot_set(r.panel_top + r.panel_h, keyboard=c.ime_inset()) {
     c.forget_parts()
   }
   // (the window's buttons' row under all of the frame, where nothing of it is: title_row)

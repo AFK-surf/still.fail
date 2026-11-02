@@ -137,6 +137,39 @@ test "a paragraph of only the message's images: side by side as one row's height
 }
 
 ///|
+test "a table in a shared picture fits whole inside the message and leaves room for the following paragraph" {
+  let cell = fn(tag : String, value : String) -> Json { [Json::string(tag), [Json::string(value)]] }
+  for (cols, unbroken, font_scale) in [(6, false, 1.0), (6, true, 1.0), (20, false, 1.0), (20, false, 1.8)] {
+    let names = Array::makei(cols, fn(i) { if i == 0 { "First" } else if i == cols - 1 { "Last" } else { "Column\{i}" } })
+    let words = if unbroken { "unbrokenword".repeat(12) } else { "a long cell of words that needs room to remain readable" }
+    let tree : Json = [
+      ["table", [
+        ["tr", Json::array(names.map(fn(s) { cell("th", s) }))],
+        ["tr", Json::array(names.map(fn(s) { cell("td", s + " " + words) }))],
+      ]],
+      ["p", ["After the table"]],
+    ]
+    let t = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      c.column(w=Fill(1.0), pad=16.0, fn() {
+        @sf.markdown(c, "wide table \{cols} \{font_scale} " + words, tree=Some(tree), copy=false, fit_tables=true) |> ignore
+      }) |> ignore
+    }, w=760.0, h=844.0)
+    t.set_font_scale(font_scale)
+    t.draw()
+    let (_, _, _, first_h) = t.rect_of("First").unwrap()
+    let last = if unbroken { "Last unbrokenword" } else { "Last a long" }
+    let (last_x, last_y, last_w, last_h) = t.rect_of(last).unwrap()
+    let (_, after_y, _, _) = t.rect_of("After the table").unwrap()
+    // Text, including a long unbroken word, wraps at normal size. Many columns are laid out at a smaller size.
+    assert_true(if cols == 20 { first_h < 16.0 } else { first_h >= 16.0 }, msg="table header height \{first_h}")
+    if unbroken { assert_true(t.lines_of(last).length() > 1, msg="the long word did not wrap") }
+    assert_true(last_x + last_w <= 744.001, msg="the last column extends past the picture: \{last_x + last_w}")
+    assert_true(after_y >= last_y + last_h - 0.001, msg="the paragraph overlaps the table")
+  }
+}
+
+///|
 test "a table too wide for the message: its columns 14em, not squeezed; scrolled out over the page's margin to its end, its key's in line with the words" {
   let long = "a long cell of words that would wrap to a word or two if squeezed into the message"
   let t = @ui.Tester::new(

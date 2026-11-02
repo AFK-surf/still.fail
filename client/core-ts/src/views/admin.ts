@@ -682,7 +682,8 @@ export function admin(view: Topic, read: (account: string, list: string) => Valu
     try {
       return { ok: f() };
     } catch (e) {
-      return { err: e as CoreError };
+      if (!(e instanceof CoreError)) throw e;
+      return { err: e };
     }
   };
   const both = (a: Value | undefined, b: Value | undefined, f: (x: J, y: J) => J): Value | undefined => {

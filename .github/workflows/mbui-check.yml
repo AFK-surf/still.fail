@@ -12,9 +12,10 @@ on:
   schedule:
     - cron: "53 3 * * *"
 # main: one run at a time, the newest waiting (a red one seen, as every commit's was in the pipeline); called, the
-# pipeline's own (a branch's newest push stops its run before).
+# caller's own (a branch's newest push stops its run before). A call from main (mbui-testflight.yml) keeps its own too:
+# in main's group the next push's run, waiting, cancelled the release's waiting tests (2026-11-02).
 concurrency:
-  group: ${{ github.ref == 'refs/heads/main' && format('mbui-check-{0}', github.ref) || format('mbui-check-call-{0}-{1}', github.run_id, github.run_attempt) }}
+  group: ${{ github.workflow == 'mbui-check' && github.ref == 'refs/heads/main' && format('mbui-check-{0}', github.ref) || format('mbui-check-call-{0}-{1}', github.run_id, github.run_attempt) }}
   cancel-in-progress: false
 permissions:
   contents: read

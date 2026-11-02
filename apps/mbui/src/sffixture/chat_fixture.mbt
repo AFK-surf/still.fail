@@ -431,8 +431,10 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
       } else if f.mode == "chat-long" {
         Some(kept_chat("long", fn() { long_chat(3000) }))
       } else if session == "s-c1" {
-        let base = kept_chat("rich/\{f.older}/\{f.mode}", fn() {
-          let v = if f.mode == "chat-md" {
+        let base = kept_chat("rich/\{f.older}/\{f.mode}/\{f.step}", fn() {
+          let v = if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
+            with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
+          } else if f.mode == "chat-md" {
             with_md_message(rich_chat(f.older))
           } else if f.mode == "chat-viz" {
             with_viz_message(rich_chat(f.older))
@@ -1296,7 +1298,7 @@ pub let fix_vault : Ref[String] = Ref("")
 ///|
 /// chat-vault's last post: an agent asking to keep a password (`typed`: a token the person types in; `file`: a file
 /// they pick), or `use_secret` for an already answered request to use a token; its card as the core says it.
-pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false) -> Json {
+pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false, timed? : Bool = false) -> Json {
   let ask : Map[String, Json] = if use_secret {
     { "name": "Axiom 查询 token", "reason": "查询中继连接日志，定位拨号失败的原因", "mode": "proxy", "hosts": ["api.axiom.co"], "howText": "代理 · 限 api.axiom.co", "command": "curl -s https://api.axiom.co/v1/datasets/_apl", "answer": "approve", "scope": "chat" }
   } else if file {
@@ -1305,6 +1307,10 @@ pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false
     { "name": "OpenCode Go", "mode": "proxy", "hosts": ["opencode.ai"], "save": { "kind": "token", "typed": true }, "answer": "approve" }
   } else {
     { "name": "UniFi UX7", "reason": "把路由器密码安全保存，方便以后排查网络", "mode": "env", "save": { "kind": "login", "username": "zzj" }, "answer": "approve" }
+  }
+  if timed {
+    ask["timeoutKind"] = "idle"
+    ask["timeoutSeconds"] = 129600
   }
   if fix_vault.val != "" {
     ask["status"] = Json::string(fix_vault.val)
@@ -1398,7 +1404,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let ask_end = f.mode == "chat-ask-end"
   // (chat-locked: its card's first option closes it, and its agent is in a turn till fix_turn_over)
   let locked = f.mode == "chat-locked"
-  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use"
+  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before"
   let linked = f.mode.has_prefix("chat-phone-linked-")
   let signin = f.mode.has_prefix("chat-signin")
   let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
@@ -1474,7 +1480,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       }
       // chat-vault's request to keep a password, last
       if vault {
-        all.push(vault_post(f.mode == "chat-vault-typed", file=f.mode == "chat-vault-file", use_secret=f.mode == "chat-vault-use"))
+        all.push(vault_post(f.mode == "chat-vault-typed", file=f.mode == "chat-vault-file", use_secret=f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before", timed=f.mode == "chat-vault-timeout"))
       }
       // chat-phone's request for the person's phone, last
       if phone {
@@ -1733,6 +1739,40 @@ pub fn with_message(v : Json, words : String) -> Json {
         }),
       )
       o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The same capacity notice before and after its retry can be cancelled from the chat.
+fn with_overload_notice(v : Json, after : Bool, canceled : Bool) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let words = if @sf.language() == "en" {
+        if after {
+          "Model busy; retrying (not quota)"
+        } else {
+          "The model is at capacity right now; this is not your account's limit. Retrying automatically after a while. Stop to cancel"
+        }
+      } else if after {
+        "模型满载，自动重试，与额度无关"
+      } else {
+        "模型暂时满载，与账号额度无关；稍后自动重试，点停止可取消"
+      }
+      let notice : Map[String, Json] = { "failed": true, "words": Json::string(words) }
+      if after && !canceled {
+        notice["retrySession"] = "s-c1"
+      }
+      o["messages"] = [
+        msg(1, "person", by_person("林"), "请继续处理这个任务", "刚刚", { "mine": true }),
+        msg(2, "ember", { "name": "still.fail" }, "⚠️ " + words, "刚刚", { "notice": Json::object(notice) }),
+      ]
+      o["asks"] = []
+      o["askClear"] = false
+      o["more"] = false
       Json::object(o)
     }
     _ => v

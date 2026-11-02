@@ -8,6 +8,9 @@ fn init {
   // checker still reports every other overlap, and even this pair outside a closing layer.
   @ui.words_over_closing_expected([
     ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "Opus 5.5"),
+    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "中"),
+    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "GPT-6 Astra"),
+    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Studio 上使用所选模型新建会话。", "全部模型"),
   ])
   @ui.words_over_known([
     ("src/sfapp/composer_wbtest.mbt", 2),

@@ -230,6 +230,8 @@ pub(all) struct Viewer {
   mut pinned : @kit.MediaStatus?
   /// what it steps through (an image): its chat's images, a folder's
   steps : Stepping
+  /// Where this occurrence is in its chat, distinct from the file shared by other messages or quotes.
+  at : String
   /// a finger moving it sideways to the one before or after (fitted, not zoomed)
   mut swiping : Bool
   /// where the finger went down (in the window's terms; on the stage, `down_lx`, `down_ly`: the canvas's own)
@@ -266,6 +268,8 @@ pub(all) struct Viewer {
   /// it was then
   mut leaving_grab : Bool
   mut left_at : Double
+  /// told as leaving_grab changes (Viewer::grab_set): what is done at its going's end follows it
+  grab_told : @signals.Signal[Int]
   /// a desktop's song: played in the player a drive's is (play_desk.mbt), not the phone's strip
   mut media : @kit.Media?
   /// a desktop's image put on the clipboard: how many times (its check shown a while after each)
@@ -330,10 +334,12 @@ pub(all) struct ThumbLook {
   list : String
   /// what it draws over its picture (Thumb's)
   over : (Double) -> Unit
+  /// what decides how that looks, as its chat said it (note_thumb's `said`): told as it changes (thumbs_said)
+  said : String
 }
 
 ///|
-/// The chat's thumbnails by the file each shows (Viewer::id), as last built.
+/// The chat's thumbnails by their place (Viewer::thumb_id), as last built.
 pub let pv_thumbs : Map[String, ThumbLook] = Map([])
 
 ///|
@@ -452,13 +458,16 @@ fn grab_first(c : @ui.Ctx, id : String, name : String, open : () -> @ui.NativeVi
 }
 
 ///|
-/// The thumbnail hidden while the viewer is its picture (one picture on the screen, never two), by its file's id.
-pub let pv_hidden : Ref[String] = { val: "" }
+/// The thumbnail hidden while the viewer is its picture (one picture on the screen, never two), by its file's id: told
+/// as it changes, what draws the thumbnail (its chat's view, kept as it is unless told) shown or hidden again then.
+// kept across runs: put back by file_viewer_reset
+pub let pv_hidden : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 /// A thumbnail of the chat built this frame as node `node`, showing `picture` (FilePreview.kt viewerThumb): where it is
 /// laid out kept as it moves (@motion.measure), under the viewer too, for the viewer to fly from and back into; in
-/// chat list `list` (note_list), if it is in one. `over`: what it draws over its picture, at an opacity (Thumb's).
+/// chat list `list` (note_list), if it is in one. `over`: what it draws over its picture, at an opacity (Thumb's);
+/// `said`: what decides how that looks (what draws it in flight is told as it changes: thumbs_said).
 pub fn note_thumb(
   c : @ui.Ctx,
   id : String,
@@ -469,9 +478,45 @@ pub fn note_thumb(
   top_crop? : Bool = false,
   list? : String = "",
   over? : (Double) -> Unit = fn(_) {  },
+  said? : String = "",
 ) -> Unit {
   @motion.measure(c, node, "pv-thumb/" + id)
-  pv_thumbs[id] = { radius, letterbox, top_crop, picture, id: c.node_id(node), list, over }
+  let changed = match pv_thumbs.get(id) {
+    Some(was) => was.said != said
+    None => said != ""
+  }
+  pv_thumbs[id] = { radius, letterbox, top_crop, picture, id: c.node_id(node), list, over, said }
+  if changed {
+    thumbs_told.set(@signals.untracked(fn() { thumbs_told.get() }) + 1)
+  }
+}
+
+///|
+/// What its thumbnail draws over its picture (ThumbLook's over), as its chat said it last, followed as what decides
+/// how that looks changes (thumbs_said); its chat's not drawn any more, the one it flew from (fly_from's); else none.
+/// Its place read none.
+pub fn Viewer::thumb_over(self : Viewer) -> (Double) -> Unit {
+  thumbs_said()
+  match pv_thumbs.get(self.thumb_id()) {
+    Some(l) => l.over
+    None =>
+      match self.fly_from {
+        Some(t) => t.over
+        None => fn(_) {  }
+      }
+  }
+}
+
+///|
+/// How many times what decides a thumbnail's look over its picture changed (note_thumb's `said`).
+// kept across runs: a count, read for its changes alone
+let thumbs_told : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// Followed: what reads it is told as what a thumbnail draws over its picture changes (its capsule's length, how far it
+/// is brought, as its chat says it).
+pub fn thumbs_said() -> Unit {
+  thumbs_told.get() |> ignore
 }
 
 ///|
@@ -491,7 +536,7 @@ pub fn note_list(c : @ui.Ctx, node : Int, key : String, bar : Double, room : Dou
 ///|
 /// How much of the chat's thumbnail `id` shows: none while the viewer is its picture, else all of it.
 pub fn thumb_shows(id : String) -> Double {
-  if pv_hidden.val == id {
+  if pv_hidden.get() == id {
     0.0
   } else {
     1.0
@@ -671,10 +716,11 @@ pub fn open_preview(
   drive? : DriveFile? = None,
   steps? : Stepping = NoSteps,
   named? : Bool = false,
+  at? : String = "",
 ) -> Unit {
   close_now()
   pv_strip.leaving = None
-  viewer.set(Some(new_viewer(station, key, a, drive, steps, named~)))
+  viewer.set(Some(new_viewer(station, key, a, drive, steps, named~, at~)))
 }
 
 ///|
@@ -686,6 +732,7 @@ pub fn new_viewer(
   drive : DriveFile?,
   steps : Stepping,
   named? : Bool = false,
+  at? : String = "",
 ) -> Viewer {
   let (kind, mime, _) = preview_kind(a.name)
   let v : Viewer = {
@@ -713,7 +760,7 @@ pub fn new_viewer(
     near_bar: false,
     zoom: @kit.Zoom::new(),
     // (a film edge to edge, enlarged, as the player puts it: what it flies to and from)
-    vzoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true),
+    vzoom: video_zoom(),
     source: false,
     source_told: @signals.signal(0),
     flow_told: @signals.signal(0),
@@ -741,6 +788,7 @@ pub fn new_viewer(
     reads: @signals.signal(0),
     pinned: None,
     steps,
+    at,
     swiping: false,
     down_x: 0.0,
     down_y: 0.0,
@@ -764,6 +812,7 @@ pub fn new_viewer(
     },
     leaving_grab: false,
     left_at: 0.0,
+    grab_told: @signals.signal(0),
     media: None,
     copied: 0,
     head_w: 0.0,
@@ -796,6 +845,80 @@ pub fn Viewer::id(self : Viewer) -> String {
   match self.drive {
     Some(d) => self.station + "/drive:" + d.root + "/" + d.path
     None => self.station + "/" + self.key + "/" + self.file.path
+  }
+}
+
+///|
+/// The row in an occurrence's place and the file or quote within it.
+fn place_parts(at : String) -> (String, String) {
+  match at.rev_find("/") {
+    Some(i) => (at.view(end_offset=i).to_owned(), at.view(start_offset=i).to_owned())
+    None => (at, "")
+  }
+}
+
+///|
+/// The chat's row keeps the identity it had before the core took it over (Reading::sent_as).
+fn placed_row(station : String, session : String, row : String) -> String {
+  match readings.get(station + "\u{1}" + session) {
+    Some(r) => {
+      r.sent_as_told.get() |> ignore
+      r.sent_as.get(row).unwrap_or(row)
+    }
+    None => row
+  }
+}
+
+///|
+/// The occurrence as its list knows it, including a row that went from local to the core's outbox.
+pub fn thumb_occurrence(station : String, session : String, at : String) -> String {
+  if at == "" {
+    ""
+  } else {
+    let (row, part) = place_parts(at)
+    placed_row(station, session, row) + part
+  }
+}
+
+///|
+/// A file can be drawn in several messages or quotes. Its thumbnail's place is separate from the file's identity,
+/// which still names the shared bytes and video frame. The list's row identity survives the outbox handoff.
+pub fn thumb_place(file : String, station : String, session : String, at : String) -> String {
+  if at == "" {
+    file
+  } else {
+    let place = thumb_occurrence(station, session, at)
+    Json::array([Json::string(file), Json::string(session), Json::string(place)]).stringify()
+  }
+}
+
+///|
+pub fn Viewer::thumb_id(self : Viewer) -> String {
+  match self.steps {
+    InChat(_, session) => thumb_place(self.id(), self.station, session, self.at)
+    _ => self.id()
+  }
+}
+
+///|
+/// What the core now calls an occurrence opened before its local row was handed over.
+fn Viewer::gallery_at(self : Viewer) -> String {
+  match self.steps {
+    InChat(_, session) =>
+      match readings.get(self.station + "\u{1}" + session) {
+        Some(r) => {
+          r.sent_as_told.get() |> ignore
+          let (row, part) = place_parts(self.at)
+          for source, local in r.sent_as {
+            if local == row {
+              return source + part
+            }
+          }
+          self.at
+        }
+        None => self.at
+      }
+    _ => self.at
   }
 }
 
@@ -1152,12 +1275,12 @@ pub fn chat_keep(p : Map[String, Json], size : Double) -> Unit {
 }
 
 ///|
-/// Whether a chat's file read whole is kept with its chat: what Android's viewers read off the disk (a PDF, a video,
-/// a song) and a big one (FilePreview.kt: OnDisk, toDisk past BIG_FILE); others are held in memory only.
+/// Whether a chat's file read whole is kept with its chat: pictures as well as PDFs, videos, songs and big files.
+/// A file named by its path may change and is always read as it is now.
 pub fn Viewer::kept_whole(self : Viewer) -> Bool {
   guard !self.named else { return false }
   match self.shown_kind() {
-    Some(KPdf) | Some(KVideo) | Some(KAudio) => true
+    Some(KImage) | Some(KPdf) | Some(KVideo) | Some(KAudio) => true
     _ => self.file.size > big_file
   }
 }
@@ -1389,27 +1512,6 @@ pub fn upper(s : String) -> String {
 // ── the viewer ─────────────────────────────────────────────────────────
 
 ///|
-/// The viewer opened since the last build, set out (growing from its thumbnail, or fading in): before the pages are
-/// built, which read how it goes (the bar and the composer over a picture going out from under them: over_flight; its
-/// thumbnail hidden while it is out: thumb_shows) and would else build this frame as if it had not (the user,
-/// 2026-10-30: the picture over the chat's bar its first frame, 「它在挪出来前就盖在了顶栏上面」). Called first in each
-/// frame's build, and again by the viewer's layer (a viewer opened as the pages were built).
-pub fn viewer_set_out(c : @ui.Ctx, src : Source) -> Unit {
-  let v = match viewer.get() {
-    Some(v) => v
-    None =>
-      match pv_leaving.get() {
-        Some(v) => v
-        None => return
-      }
-  }
-  // (one the window's tree draws is set out as its node is made, whether or not that node is made yet: viewer_tree.mbt)
-  if !v.tree_draws() {
-    v.set_out(c, src, c.moment())
-  }
-}
-
-///|
 /// Viewer `v` set out at the moment `at` (its cause's: where it is a node of the window's tree, as that node is made,
 /// viewer_tree.mbt), once: growing from its thumbnail, or fading in.
 pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) -> Unit {
@@ -1421,7 +1523,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
     // an image grows from its thumbnail when the chat shows it and its size is known here (FilePreview.kt ViewerLayer)
     match v.flight_target(c, src) {
       Some(to) =>
-        match thumb_of(c, v.id()) {
+        match thumb_of(c, v.thumb_id()) {
           Some(t) => {
             v.flies = true
             v.fly_back = false
@@ -1437,7 +1539,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
             v.fly_lift = lift
             v.fly.put(0.0)
             v.fly.go(1.0, @motion.move(points=far), at~)
-            pv_hidden.val = v.id()
+            pv_hidden.set(v.thumb_id())
           }
           None => ()
         }
@@ -1453,118 +1555,6 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
 }
 
 ///|
-/// The viewer over the pages, if one is open, in its frame (viewer_frame.mbt): call after the pages are drawn.
-pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
-  let v = match viewer.get() {
-    Some(v) => v
-    None =>
-      match pv_leaving.get() {
-        Some(v) => v
-        None => return
-      }
-  }
-  // (one the window's tree draws drawn by its node, as what takes the hand there, whether or not that node is made yet:
-  // viewer_tree.mbt)
-  if v.tree_draws() {
-    return
-  }
-  viewer_set_out(c, src)
-  src_now.val = src.now
-  let p = v.flying()
-  // (the motions ask for their frames, said once as they set out: the flight, the fade)
-  let landed = v.flies && v.fly_back && !v.fly.goes_at(c.moment())
-  // (landed by the frame's time, the same in each build of the frame; what is let go is the viewer going, built
-  // no more)
-  if landed {
-    // landed in its thumbnail: drawn there this once (where the thumbnail is, hidden this frame), then gone
-    leaving_done()
-    pv_hidden.val = ""
-  }
-  if v.flies && !v.fly_back && !v.fly.goes_at(c.moment()) {
-    v.flies = false
-    pv_hidden.val = ""
-  }
-  let faded = if v.flies { 1.0 } else { v.fade.get() }
-  // (faded by the frame's time: the same in each build of the frame)
-  // a video closing into its thumbnail: the frame it shows, once grabbed, kept and gone back with
-  if v.leaving_grab {
-    v.left_with_frame(c, src)
-  }
-  if v.closing && !v.flies && !v.leaving_grab && !v.fade.goes_at(c.moment()) {
-    // faded out: gone
-    leaving_done()
-    return
-  }
-  // the ground and the bars: with the flight, or fading
-  let shown = if v.flies { p } else { faded }
-  v.fetch(c, src)
-  // asked for to be saved, and come: saved
-  if v.save_after && v.bytes.get() is Some(_) {
-    v.save_after = false
-    v.ask_save(c)
-  }
-  if v.install_after && v.bytes.get() is Some(_) {
-    v.install_after = false
-    v.ask_install(c)
-  }
-  // (the old frame draws a film or a song alone, the player's own page: its bars, its controls, what a finger does on
-  // it; all else is the window's tree's, viewer_tree.mbt)
-  let ground = if v.dark() { 0x000000FFL } else { @sf.theme().p.canvas }
-  // over the window, a modal layer (the web's preview is a dialog): the keys its, what is under it reads none (the
-  // chat's Space taking its composer, its Esc closing its panel); its own Esc and back, what it shows closed first;
-  // going, inert (the page's again as it fades)
-  let body = fn() {
-    c.layer(fn() {
-      let stage = c.id("preview/stage")
-      c.cursor(stage, Arrow)
-      c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(ground, shown), opacity=faded, id=stage, fn() {
-        v.player_stage(c, src, stage)
-      })
-      |> ignore
-      // (its actions in the system's bars, an iPhone Duo's, as a picture's: its keys the player's)
-      if @sf.native_on() {
-        vf_bar(v, c, src)
-      }
-    })
-    |> ignore
-  }
-  // (beside the column of the system's bars down the window's side, an iPhone Duo's on its side: the file laid out
-  // clear of it, its ground on under it, the user 2026-10-27)
-  // (a film filling the window beside them: the bars put away, edge to edge: @sf.player_full_native)
-  let clear = if @sf.player_fills_native(c.width) { 0.0 } else { @sf.native_clear() }
-  c.overlay("preview-layer", modal=true, escape=false, outside=false, initial_focus=0, inert=v.closing, fn() {
-    if clear > 0.0 {
-      c.layer(fn() {
-        c.box(style=viewer_under.then(@ui.style(bg=Data(@sf.alpha(ground, shown * faded)))), fn() {  }) |> ignore
-      })
-      |> ignore
-      let w = dmax(0.0, c.width - clear)
-      c.layer(fn() { c.box(style=@ui.style(w=Fixed(w), h=Full), fn() { c.sized(w, c.height, body) }) |> ignore })
-      |> ignore
-    } else {
-      body()
-    }
-  })
-  |> ignore
-  // 下载 tapped (on the page or its bar, just built): asked of the core, on by itself whatever becomes of this viewer
-  // (told once the frame's builds are over, as the tap is the build's that took it)
-  if v.download_asked {
-    v.download_asked = false
-    let (station, key, name, size, from) = (v.station, v.key, v.name, v.file.size, v.opened_from())
-    c.tell("download/" + name, fn() { download_start(src, station, key, name, size, from~) })
-  }
-  // (one going takes back no more: it is the page's)
-  if !v.closing {
-    c.take_back(fn() { v.shut(c) })
-  }
-}
-
-///|
-/// The viewer's ground under the column of the system's bars (viewer_layer).
-// kept across runs: a value (no field of it changes)
-let viewer_under : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
 pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
   if !self.closing {
     self.closing = true
@@ -1573,12 +1563,12 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     leaving_done()
     // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to), else
     // it fades out
-    match (thumb_of(c, self.id()), self.shown_kind(), self.zoom.rect_at(viewer_moment(c))) {
+    match (thumb_of(c, self.thumb_id()), self.shown_kind(), self.zoom.rect_at(viewer_moment(c))) {
       (Some(t), Some(KImage), Some(r)) => {
         self.fly_from = Some(t)
         self.fly_back = true
         self.fly_home_from(t, Some(r))
-        pv_hidden.val = self.id()
+        pv_hidden.set(self.thumb_id())
       }
       // a video, its thumbnail on the screen: back into it with the frame it shows (grabbed first: the thumbnail keeps
       // it, and where it was), else with its still (FilePreview.kt close: flight.frame())
@@ -1590,7 +1580,7 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
         }
         match self.view() {
           Some(n) if n.here() && n.shown() && !n.grabbing() => {
-            self.leaving_grab = true
+            self.grab_set(true)
             self.left_at = n.position()
             c.tell("preview-grab", fn() { n.grab_shown(kept_frame_side) })
           }
@@ -1629,7 +1619,7 @@ pub fn Viewer::fly_home(self : Viewer, picture : String) -> Unit {
     Some(t) => self.fly_home_from(t, self.fly_to)
     None => ()
   }
-  pv_hidden.val = self.id()
+  pv_hidden.set(self.thumb_id())
 }
 
 ///|
@@ -1667,14 +1657,14 @@ pub fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit
   let n = match self.view() {
     Some(n) => n
     None => {
-      self.leaving_grab = false
+      self.grab_set(false)
       self.fly_home(self.still(src))
       return
     }
   }
   match n.grabbed() {
     Some(jpeg) => {
-      self.leaving_grab = false
+      self.grab_set(false)
       if jpeg.length() > 0 {
         pv_frames_n.val += 1
         let key = "mem:pv-frame/\{pv_frames_n.val}/\{self.name}"
@@ -1688,6 +1678,16 @@ pub fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit
     None => ()
   }
   ignore(c)
+}
+
+///|
+/// Whether a video closing into its thumbnail waits for the frame it shows to be grabbed (leaving_grab), told
+/// (grab_told).
+fn Viewer::grab_set(self : Viewer, on : Bool) -> Unit {
+  if self.leaving_grab != on {
+    self.leaving_grab = on
+    self.grab_told.set(@signals.untracked(fn() { self.grab_told.get() }) + 1)
+  }
 }
 
 ///|
@@ -1804,7 +1804,7 @@ pub fn Viewer::coming(self : Viewer) -> Bool {
 ///|
 /// The stage: what the file shows as, as the window's tree hosts it (viewer_tree.mbt's viewer_hosted, its outer stage
 /// Hosted: read whole, not told of, nothing failed): words read as they come, words in the reader, a PDF, a page, a
-/// table, code. (A film or a song is the player's: viewer_layer.)
+/// table, code. (A film or a song is the player's: viewer_tree.mbt's viewer_player.)
 pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
   let v = self
   // (预览 or 源码, as it is told: Viewer::set_source)
@@ -1973,19 +1973,7 @@ pub fn Viewer::flight_target(self : Viewer, c : @ui.Ctx, src : Source) -> (Doubl
   // a video: where its picture will be, by its size as sent, else its still's (FilePreview.kt: known from the still
   // before the player is ready); none known, it fades in
   if self.shown_kind() == Some(KVideo) {
-    let still = self.still(src)
-    let (nw, nh) = if self.file.width > 0.0 && self.file.height > 0.0 {
-      (self.file.width, self.file.height)
-    } else if still != "" {
-      @ui.image_natural(still).unwrap_or((0.0, 0.0))
-    } else {
-      (0.0, 0.0)
-    }
-    let (top, foot) = @sf.player_room(c.width)
-    return match self.video_rect(c) {
-      Some(r) => Some(r)
-      None => fitted_rect(nw, nh, c.width, c.height - top - foot).map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
-    }
+    return self.video_target(src, c.width, c.height)
   }
   if self.shown_kind() != Some(KImage) {
     return None
@@ -2025,11 +2013,11 @@ pub fn Viewer::shown_picture(self : Viewer, c : @ui.Ctx, src : Source, r : (Doub
 }
 
 ///|
-/// Where the picture in flight is drawn (Viewer::draw_flight): `cut`, what shows of it, on the window (from what showed
-/// of the thumbnail, cut by what it is in, to the whole stage); `box`, the box it is cut to, its corners `radius` round
-/// (from the thumbnail's box and corners, each as the thumbnail resolves it, to the picture's place and none);
-/// `picture`, the picture in it (from where it lies in the box, covering it or fitted inside it, to its place), at its
-/// own proportions all the way.
+/// Where the picture in flight is drawn (viewer_tree.mbt's flight nodes, an image's and a film's): `cut`, what shows
+/// of it, on the window (from what showed of the thumbnail, cut by what it is in, to the whole stage); `box`, the box
+/// it is cut to, its corners `radius` round (from the thumbnail's box and corners, each as the thumbnail resolves it,
+/// to the picture's place and none); `picture`, the picture in it (from where it lies in the box, covering it or fitted
+/// inside it, to its place), at its own proportions all the way.
 struct FlightBox {
   cut : (Double, Double, Double, Double)
   box : (Double, Double, Double, Double)
@@ -2091,61 +2079,13 @@ fn flight_box(
 /// with it where it is drawn nowhere now (hidden while the picture is out); where it is not on the screen, where it was
 /// last (Viewer's fly_from). Read only.
 pub fn Viewer::flight_from(self : Viewer, c : @ui.Ctx) -> Thumb? {
-  match (thumb_of(c, self.id()), self.fly_from) {
+  match (thumb_of(c, self.thumb_id()), self.fly_from) {
     // (hidden while the picture is out, it is drawn nowhere: what showed of it as it was last drawn, moved with it)
     (Some(t), Some({ seen: Some((sx, sy, sw, sh)), x, y, .. })) if t.seen is None =>
       Some({ ..t, seen: Some((sx + t.x - x, sy + t.y - y, sw, sh)) })
     (Some(t), _) => Some(t)
     (None, last) => last
   }
-}
-
-///|
-/// The picture in flight (FilePreview.kt viewerFlying): at the start as the chat draws its thumbnail (its box, its
-/// corners, the picture covering the box or letterboxed in it, cut by it), at the end where the stage draws it. One
-/// value takes the box to the picture's place and its corners to none, and the picture from where it lies in the box
-/// to there, at its own proportions all the way (flight_box). From the thumbnail where the chat lays it out now, else
-/// where it was last (Viewer::flight_from, kept as it is drawn). `ground`: under the picture in the box (a film's
-/// black).
-pub fn Viewer::draw_flight(
-  self : Viewer,
-  c : @ui.Ctx,
-  picture : String,
-  to : (Double, Double, Double, Double),
-  p : Double,
-  ground? : Int64 = 0L,
-) -> Unit {
-  self.fly_from = self.flight_from(c)
-  let from = match self.fly_from {
-    Some(t) => t
-    None => return
-  }
-  let f = match flight_box(from, self.lifted(), to, p, c.width, c.height) {
-    Some(f) => f
-    None => return
-  }
-  let (cx, cy, cw, ch) = f.cut
-  let (bx, by, bw, bh) = f.box
-  let (px, py, pw, ph) = f.picture
-  // The film's black and its picture share the box's cut, with black around a letterboxed picture or while it decodes.
-  let flight_ground = if picture == "" { ground } else { 0L }
-  // (the thumbnail's corners as measured, as round as the flight leaves them)
-  let corners = from.corners.scaled(1.0 - p)
-  c.layer(fn() {
-    c.box(style=@ui.style(w=Fixed(cw), h=Fixed(ch), clip=true), tx=cx, ty=cy, fn() {
-      c.box(style=@ui.style(radius=corners, clip=true), w=Px(bw), h=Px(bh), tx=bx - cx, ty=by - cy, bg=flight_ground, fn() {
-        if picture != "" {
-          c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px, bg=ground, matte=ground != 0L) |> ignore
-        }
-        // what the thumbnail draws over its picture (a film's play mark, its name's band), with it in its box: gone by
-        // halfway out, back from halfway in, as a row's content goes with its room (@ui.row_held_look)
-        (from.over)(dmax(0.0, 1.0 - flight_over_gone * p))
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|
@@ -2195,6 +2135,10 @@ fn[T] Viewer::near_by(self : Viewer, src : Source, made : (String, () -> Viewer)
     NoSteps => (None, None)
     InChat(thread, session) => {
       let p : Map[String, Json] = { "station": Json::string(self.station), "path": Json::string(self.file.path) }
+      let at = self.gallery_at()
+      if at != "" {
+        p["at"] = Json::string(at)
+      }
       match thread {
         Some(th) => p["thread"] = Json::number(th)
         None => p["session"] = Json::string(session)
@@ -2206,7 +2150,9 @@ fn[T] Viewer::near_by(self : Viewer, src : Source, made : (String, () -> Viewer)
           Some(Object(_) as j) => {
             let a = attachment_of(j)
             let key = if a.owner != "" { a.owner } else { self.key }
-            Some(made(self.station + "/" + key + "/" + a.path, fn() { new_viewer(self.station, key, a, None, self.steps) }))
+            let at = text(told, k + "At")
+            let file = self.station + "/" + key + "/" + a.path
+            Some(made(thumb_place(file, self.station, session, at), fn() { new_viewer(self.station, key, a, None, self.steps, at~) }))
           }
           _ => None
         }
@@ -2290,7 +2236,7 @@ pub fn Viewer::picture(self : Viewer, src : Source) -> String {
 /// shows (the same picture, decoded already: it flies out as the chat drew it, one sent from here the picture picked),
 /// else the station's thumbnail of it, else its likeness; "" none.
 pub fn Viewer::stand_in(self : Viewer, src : Source) -> String {
-  match pv_thumbs.get(self.id()) {
+  match pv_thumbs.get(self.thumb_id()) {
     Some(l) if l.picture != "" => return l.picture
     _ => ()
   }
@@ -2310,7 +2256,7 @@ pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : 
   for n in [before, after] {
     match n {
       Some(n) => {
-        ids.push(n.id())
+        ids.push(n.thumb_id())
         if n.bytes.get() is None && !n.fetching.get() && n.error.get() is None && n.file.size <= big_file {
           n.fetching.set(true)
           n.read_whole(src, fn(r) {
@@ -2329,7 +2275,7 @@ pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : 
     }
   }
   let gone = []
-  pv_strip.near.each(fn(id, _) { if !ids.contains(id) && id != self.id() { gone.push(id) } })
+  pv_strip.near.each(fn(id, _) { if !ids.contains(id) && id != self.thumb_id() { gone.push(id) } })
   for id in gone {
     pv_strip.near.remove(id)
   }
@@ -2386,7 +2332,7 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
       n.awake = self.awake
       n.awake_said()
       viewer.set(Some(n))
-      pv_strip.near.remove(n.id())
+      pv_strip.near.remove(n.thumb_id())
       strip.put(from + dir.to_double() * width)
       strip.go(0.0, @motion.sheet_spring, at~, velocity~)
       // the frame built again from the one it stepped to: a swipe let go steps in the middle of the stage's build,
@@ -2505,7 +2451,7 @@ pub fn Viewer::still(self : Viewer, src : Source) -> String {
     None => ()
   }
   // what its thumbnail in the chat shows (video_still: one sent from here, the host's picture of it as it was picked)
-  match pv_thumbs.get(self.id()) {
+  match pv_thumbs.get(self.thumb_id()) {
     Some(l) if l.picture != "" => return l.picture
     _ => ()
   }
@@ -2523,8 +2469,58 @@ pub fn Viewer::still(self : Viewer, src : Source) -> String {
 ///|
 /// Where a film's picture is fitted in the viewer (vzoom), clear of the player's bar and controls (@sf.player_room).
 fn Viewer::video_rect(self : Viewer, c : @ui.Ctx) -> (Double, Double, Double, Double)? {
-  let top = @sf.player_room(c.width).0
+  self.video_rect_in(c.width)
+}
+
+///|
+/// The same, its player laid out `width` wide.
+fn Viewer::video_rect_in(self : Viewer, width : Double) -> (Double, Double, Double, Double)? {
+  let top = @sf.player_room(width).0
   self.vzoom.rect().map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
+}
+
+///|
+/// How a film's picture is fitted on the stage (Viewer's vzoom, and where it flies to before that is fitted): edge to
+/// edge, no margin, made bigger where it is smaller than the stage.
+fn video_zoom() -> @kit.Zoom {
+  @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true)
+}
+
+///|
+/// How big a film's picture is (what the player fits it by, Viewer::player_stage, and what its flight goes to before
+/// that): as its player says, else as it was sent, else as its still is; none known, (0, 0).
+fn Viewer::video_natural(self : Viewer, src : Source) -> (Double, Double) {
+  match self.view().map(fn(n) { n.natural() }) {
+    Some((nw, nh)) if nw > 0.0 && nh > 0.0 => return (nw, nh)
+    _ => ()
+  }
+  if self.file.width > 0.0 && self.file.height > 0.0 {
+    return (self.file.width, self.file.height)
+  }
+  let still = if self.shown_kind() == Some(KVideo) { self.still(src) } else { "" }
+  match @ui.image_natural(still) {
+    Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => (sw, sh)
+    _ => (0.0, 0.0)
+  }
+}
+
+///|
+/// Where a film's picture is, its player laid out `width` by `height`: where the player fitted it (Viewer::video_rect_in);
+/// before it has (its first frame: the flight in setting out as it opens), where it will, by the same size
+/// (Viewer::video_natural), in the room the player leaves it. None, its size not known.
+fn Viewer::video_target(self : Viewer, src : Source, width : Double, height : Double) -> (Double, Double, Double, Double)? {
+  match self.video_rect_in(width) {
+    Some(r) => Some(r)
+    None => {
+      let (nw, nh) = self.video_natural(src)
+      let (top, foot) = @sf.player_room(width)
+      // (fitted as the player fits it: its zoom's way, edge to edge, made bigger where it is smaller)
+      let z = video_zoom()
+      z.boxed(width, height - top - foot)
+      z.natural(nw, nh)
+      z.rect().map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
+    }
+  }
 }
 
 ///|
@@ -2571,34 +2567,17 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
   // (clear of the bar and the controls as the player fits it: player_room)
   let (top, foot) = @sf.player_room(c.width)
   z.boxed(c.width, c.height - top - foot)
-  let (nw, nh) = match m.native() {
-    Some(n) => n.natural()
-    None => (0.0, 0.0)
-  }
+  // (as big as its player says, else as sent, else as its still: Viewer::video_natural, what its flight goes to too)
+  let (nw, nh) = v.video_natural(src)
   if nw > 0.0 && nh > 0.0 {
     z.natural(nw, nh)
-  } else if v.file.width > 0.0 && v.file.height > 0.0 {
-    z.natural(v.file.width, v.file.height)
-  } else {
-    match @ui.image_natural(still) {
-      Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh)
-      _ => ()
-    }
   }
   z.step()
-  // flying: from the thumbnail's box to the picture's place, or back from where the player last drew it, on the black
-  // the chat's box has; the player's bars and controls over it as far as it has come (as an image's bars are)
+  // flying (from the thumbnail's box to the picture's place, or back from where the player last drew it: the window's
+  // tree's, viewer_tree.mbt's viewer_player, its bars coming with it there): the player not up yet, drawing no ground
+  // of its own, its Esc not read: the viewer's, as it is over an image in flight
   let flying = v.flies && (!v.closing || !v.leaving_grab)
   if flying {
-    let to = match v.fly_to {
-      Some(r) if v.fly_back => Some(r)
-      _ => v.video_rect(c)
-    }
-    match to {
-      Some(r) => v.draw_flight(c, if v.fly_pic != "" { v.fly_pic } else { still }, r, v.flying(), ground=0x000000FFL)
-      None => ()
-    }
-    // (the player not up yet, its Esc not read: the viewer's, as it is over an image in flight)
     v.shut_on_escape(c)
   }
   let file : @sf.ViewerFile = {
@@ -2619,26 +2598,18 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     save: fn() { v.ask_save(c) },
     facts: { width: v.file.width, height: v.file.height, duration: v.file.duration, frames: v.file.frames },
   }
-  let player = fn() {
-    @sf.player_view(
-      c,
-      m,
-      file,
-      [],
-      back_label=v.desk_back(src),
-      on_back=fn() { v.shut(c) },
-      on_go=fn(_) {  },
-      // (the chat's still where its picture will be, until its first frame shows)
-      still~,
-      flying~,
-    )
-  }
-  if flying {
-    let over = c.layer(player)
-    c.look(over, @ui.look(alpha=bars_share(v.flying())))
-  } else {
-    player()
-  }
+  @sf.player_view(
+    c,
+    m,
+    file,
+    [],
+    back_label=v.desk_back(src),
+    on_back=fn() { v.shut(c) },
+    on_go=fn(_) {  },
+    // (the chat's still where its picture will be, until its first frame shows)
+    still~,
+    flying~,
+  )
 }
 
 ///|
@@ -3090,7 +3061,7 @@ pub fn file_viewer_reset() -> Unit {
   pv_frames.clear()
   pv_frames_n.val = 0
   pv_first.clear()
-  pv_hidden.val = ""
+  pv_hidden.set("")
   pv_read.clear()
   pv_strip.leaving = None
   pv_strip.way.put(0.0)

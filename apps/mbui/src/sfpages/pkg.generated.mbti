@@ -65,6 +65,8 @@ pub fn changelog_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn chat_composer(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, apart? : Bool) -> Unit
 
+pub fn chat_extra_items(@sfbase.Source, @sfbase.ChatRef, Json?) -> Array[@sf.MenuItem?]
+
 pub fn chat_find_list(@sfbase.ChatRef) -> FindList
 
 pub fn chat_key(@sfbase.ChatRef) -> String
@@ -329,7 +331,7 @@ pub fn memory_doc_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, S
 
 pub fn memory_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
 
-pub fn message_files(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Attachment], Bool, by? : (String, String, String)?, landing_key? : String, corner? : Double) -> Unit
+pub fn message_files(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Attachment], Bool, by? : (String, String, String)?, landing_key? : String, corner? : Double, at? : String) -> Unit
 
 pub fn message_row(@ui.Ctx, @sfbase.Source, MessageHere, @sfbase.Message) -> Unit
 
@@ -365,6 +367,8 @@ pub fn notify_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Un
 
 pub fn offered_image() -> String
 
+pub fn open_chat_menu(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?], from~ : @sf.Beside) -> Unit
+
 pub fn open_context_actions(@sfbase.Source, String, String, Json?, @sf.Beside) -> Unit
 
 pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) -> Unit, description? : String, wide? : Bool, live? : () -> (String, String, String), on_gone? : () -> Unit, steps? : Bool, back? : () -> Unit) -> Unit
@@ -391,7 +395,7 @@ pub fn opened_icon(@sfbase.OpenedChat) -> String
 
 pub fn opened_items(Array[@sfbase.OpenedChat], then? : () -> Unit) -> Array[@sf.MenuItem?]
 
-pub fn others_message(@ui.Ctx, Bool, String, @sfbase.Stamp?, emits? : (@sfbase.Emits, String, Double)?, share? : (() -> Unit)?, share_link? : String, () -> Unit, () -> Unit, (() -> Unit)?, () -> Unit) -> Unit
+pub fn others_message(@ui.Ctx, Bool, String, @sfbase.Stamp?, emits? : (@sfbase.Emits, String, Double)?, share? : (() -> Unit)?, share_link? : String, share_words? : String, () -> Unit, () -> Unit, (() -> Unit)?, () -> Unit) -> Unit
 
 pub fn pair_steps(@ui.Ctx, @settings.Core, String, in_card? : Bool) -> Unit
 
@@ -463,7 +467,7 @@ pub fn pull_title(Json?) -> String
 
 pub fn quota_dials(@ui.Ctx, Array[Json]) -> Unit
 
-pub fn quotes(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Quote], Array[@sfbase.Attachment], mine? : Bool) -> Unit
+pub fn quotes(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Quote], Array[@sfbase.Attachment], mine? : Bool, at? : String) -> Unit
 
 pub fn rail_card(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, String) -> Unit
 
@@ -508,6 +512,8 @@ pub let row_last : @ui.Style
 pub fn row_mark(@ui.Ctx, String, String) -> Unit
 
 pub let row_more : @ui.Style
+
+pub fn rows_frame(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
 

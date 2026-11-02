@@ -112,12 +112,12 @@ function listFiltersOf(v: unknown): Map_ {
   return isObject(v) ? Object.fromEntries(Object.entries(v).filter(([, f]) => LIST_FILTERS.includes(f as string))) : {};
 }
 
-/// The prefs as they go out: the reader's settings whole, the bottom bars (each workspace's too), the faces, and the
-/// keymap and the rail.
+/// The prefs as they go out: the current product name, the reader's settings whole, the bottom bars (each workspace's
+/// too), the faces, and the keymap and the rail.
 export function shown(v: unknown): unknown {
   if (!isObject(v)) return v;
   const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
-  return { ...v, listFilter: listFiltersOf(v.listFilter), reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
+  return { ...v, productName: brand.name(), listFilter: listFiltersOf(v.listFilter), reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
 }
 
 /// What is kept, as kept (no defaults filled in).
@@ -297,12 +297,12 @@ export function device(data: Data, facts: unknown): void {
   if (locale !== "") told.locale = locale;
   prefs.device = told;
   const lang = withLang(prefs);
-  // `client`: an app of its own that runs this core, named so (still.fail mbui), told apart from still.fail's own
-  // where devices are listed and approved; else the brand's
+  // `client` also identifies an app of its own for its update channel. The legacy per-commit app identity is still
+  // sent by installed builds, but its device is named for the product.
   const client = said("client").slice(0, 40);
   if (client !== "") told.client = client;
   brand.setOwnApp(client === "");
-  const name = client !== "" ? client : brand.name();
+  const name = client !== "" ? brand.clientName(client) : brand.name();
   // which machine it is where it says (the person's several Macs, their phone as they named it), else what kind
   let deviceName: string;
   if (app === "android") deviceName = tr(lang, "core-misc.device.android", { brand: name, more: withMore(machine || model) });
@@ -337,8 +337,8 @@ export function deviceParts(label: string): { group: string | null; app: string 
     }
   }
   if (found === null || label.slice(0, found.at).includes(" · ")) return { group: null, app: null, machine: label };
-  const brand = label.slice(0, found.at);
-  return { group: `${found.app} ${brand}`, app: brand + appWords(current(), found.app), machine: label.slice(found.at + found.words.length + 3) };
+  const appBrand = brand.clientName(label.slice(0, found.at));
+  return { group: `${found.app} ${appBrand}`, app: appBrand + appWords(current(), found.app), machine: label.slice(found.at + found.words.length + 3) };
 }
 
 /// The language things are said in (`lang`): as chosen, else as the device is; the core says its words in it.

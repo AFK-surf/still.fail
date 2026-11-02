@@ -40,7 +40,7 @@ fn paned_shell(v : @view.View, src : Source) -> Unit {
 /// An image opened over the wide frame, over all of it (as narrow_shell's over its pages and bar): nodes of the
 /// tree's of its own (sfbase's viewer_tree.mbt), its stage the whole window but for the column of the system's bars
 /// down its trailing edge (an iPhone Duo's on its side: @sf.native_clear), followed; what is opened otherwise the old
-/// view's over the panels (sfdesk's overlays.mbt, file_viewer).
+/// view's over the panels (sfdesk's overlays.mbt).
 fn wide_viewer(v : @view.View, src : Source) -> Unit {
   @sfbase.viewer_node(v, src, fn() {
     let (w, h) = v.window()

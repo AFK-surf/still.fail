@@ -332,6 +332,31 @@ test "an iPhone Duo, folded or on its side: the cards as far from the screen's f
 }
 
 ///|
+test "an iPhone Duo: a chat's rows as wide as they were with the keyboard up, the composer alone widening" {
+  // (narrow: the outer screen, the page brought over; beside the system's action, whose foot corner the keyboard ends)
+  let (w, h, side, a) = (466.0, 678.0, 70.0, 48.67)
+  let t = native_chat(w, h, true, side~, corner=59.0)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}},\"nav_action\":{\"x\":\{w - 24.0 - a},\"y\":\{h - 24.0 - a},\"w\":\{a},\"h\":\{a}}}")
+  t.run_for(@ui.move_most_ms)
+  t.drag(400.0, 330.0, 140.0, 330.0)
+  t.run_for(@ui.move_most_ms * 2.0)
+  let row = fn() {
+    t.semantics().filter(fn(s) { s.label.contains("推送截图前要先登录") }).map(fn(s) { (s.rect.0, s.rect.2) })
+  }
+  let shut = row()
+  assert_eq(shut.length(), 1)
+  guard composer_and_page(t) is Some((before, _)) else { fail("no composer in a page") }
+  t.tap_text("发消息")
+  let kb = 314.0
+  t.set_ime_inset(kb)
+  t.resize(w, h - kb)
+  t.run_for(@ui.move_most_ms * 2.0)
+  guard composer_and_page(t) is Some((up, _)) else { fail("no composer in a page") }
+  assert_true(up.w > before.w, msg="the composer \{before.w} wide, then \{up.w}")
+  assert_eq(row(), shut)
+}
+
+///|
 test "an iPhone Duo folded, its outer screen on its side: the cards' corners each the screen's there, square along its hinge, round on the other side" {
   // (the outer screen's corners as the Duo's iOS 27.1 says them: 8 along the hinge, at its left, 59 at its right)
   let t = native_chat(466.0, 678.0, true, side=70.0, corners=[8.0, 59.0, 59.0, 8.0])

@@ -47,8 +47,12 @@ test("a_link_copied_says_its_title_on_one_line_as_a_reference_is_sent", () => {
 });
 
 test("the_chat_station_screen_or_shared_debugging_a_link_names", () => {
-  assert.deepEqual(chatOfLink("https://app.still.fail/o/ws/st/ds%3Ak?history=k2&entry=5"), { station: "ws/st", id: "ds:k", history: "?history=k2&entry=5" });
-  assert.deepEqual(chatOfLink("https://app.still.fail/w/ws/s/st/chats/7/"), { station: "ws/st", id: "7", history: "" });
+  assert.deepEqual(chatOfLink("https://app.still.fail/o/ws/st/ds%3Ak?history=k2&entry=5"), { station: "ws/st", id: "ds:k", history: "?history=k2&entry=5", message: "" });
+  assert.deepEqual(chatOfLink("https://app.still.fail/w/ws/s/st/chats/7/"), { station: "ws/st", id: "7", history: "", message: "" });
+  // One of its messages, as a notification and 复制消息链接 link it: still the chat, so a chip with its title.
+  assert.deepEqual(chatOfLink("https://app.still.fail/o/ws/st/ds%3Ak?message=2"), { station: "ws/st", id: "ds:k", history: "", message: "?message=2" });
+  assert.deepEqual(chatOfLink("https://app.still.fail/w/ws/s/st/chats/7/?message=11"), { station: "ws/st", id: "7", history: "", message: "?message=11" });
+  assert.equal(chatOfLink("https://app.still.fail/o/ws/st/k?message=0"), null);
   assert.equal(chatOfLink("https://x.com/chats/7"), null);
   assert.equal(chatOfLink("/w/ws/s/st/chats/%E0%A4%A"), null);
   assert.equal(stationOfLink("https://app.still.fail/o/ws/st/k"), "ws/st");

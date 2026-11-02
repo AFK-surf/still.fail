@@ -294,14 +294,12 @@ fn narrow_page(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
 }
 
 ///|
-/// Over the pages laid out Small: the bottom bar, a file open, the chat being made public, a visualization over the whole
-/// screen.
+/// Over the pages laid out Small: the bottom bar, the chat being made public, a visualization over the whole screen (a
+/// file open over them is the window's tree's: sfbase viewer_tree.mbt).
 fn narrow_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in the
   // workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
   bottom_bar(c, src, w, place_of(app.nav.top()), narrow_bar_shown(src, w))
-  // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
-  preview(c, src)
   // the chat being made public (sfpages' publish.mbt)
   @sfpages.publish_layer(c, src)
   // a visualization over the whole screen (viz.mbt)

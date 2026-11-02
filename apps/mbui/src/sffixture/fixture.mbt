@@ -417,7 +417,7 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     }),
   ]
   // home-pins: rows from a station that knows pins, for their menus' 固定 and 保留
-  let today = if f.mode == "home-pins" { today.map(fix_pins) } else { today }
+  let today = if f.mode == "home-pins" || f.mode == "chat-actions" { today.map(fix_pins) } else { today }
   // chat-opener: the first row's chat and 夜里的构建 opened by 和 Ana 一起看新版的引导页's agent (chat_create)
   let today = if f.mode.has_prefix("chat-opener") {
     today.mapi(fn(i, r) { if i == 0 || i == 2 { with_opener(Some(r)).unwrap_or(r) } else { r } })
@@ -1211,6 +1211,13 @@ pub fn fixture(mode : String) -> Source {
         None => ()
       }
       match name {
+        "session.cancelRetry" => {
+          if f.mode == "chat-overload-after" {
+            f.step += 1
+            f.changed()
+          }
+          done(Ok(Json::object({})))
+        }
         "chat.archive" => {
           let session = text(Some(params), "session")
           f.archived[session.view(start_offset=2).to_owned()] = true

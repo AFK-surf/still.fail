@@ -354,25 +354,25 @@ priv struct PlayerView {
 /// actions), its picture edge to edge, its controls over it as anywhere; 全屏 among the bars' actions and the controls,
 /// back leaving it first.
 // kept across runs: the player over the window is one at a time; put back as another file is shown in it
-let native_full : Ref[Bool] = Ref(false)
+let native_full : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// Whether the player fills the window beside the system's bars (native_full).
 pub fn player_full_native() -> Bool {
-  native_full.val
+  native_full.get()
 }
 
 ///|
 /// The player filling the window beside the system's bars, or not (native_full).
 pub fn player_full_native_set(on : Bool) -> Unit {
-  native_full.val = on
+  native_full.set(on)
 }
 
 ///|
 /// Whether the player drawn `width` wide fills the window beside the system's bars: a phone's player (laid out Small)
 /// turns sideways instead, the bars as they were.
 pub fn player_fills_native(width : Double) -> Bool {
-  native_full.val && !(layout(width) is Small)
+  native_full.get() && !(layout(width) is Small)
 }
 
 ///|
@@ -388,7 +388,7 @@ pub fn player_full_act(p : @kit.Media, width : Double) -> (String, Bool, () -> U
     })
   } else {
     (t("android-misc.drive.player.full"), false, fn() {
-      native_full.val = true
+      native_full.set(true)
       p.wake()
     })
   }
@@ -696,7 +696,7 @@ pub fn player_room(width : Double) -> (Double, Double) {
   let said = if desk_narrow(width) { desk_time_over - media_bar_top + desk_time_h } else { 0.0 }
   // (beside the system's bars, an iPhone Duo's: its bar's actions in them, none of its own over the film; filling the
   // window, nothing of them either)
-  let top = if native_on() && native_full.val {
+  let top = if native_on() && native_full.get() {
     0.0
   } else if native_on() {
     top
@@ -947,7 +947,7 @@ pub fn player_view(
   let v = view_for(p.key())
   if v.file != file.key {
     v.file = file.key
-    native_full.val = false
+    native_full.set(false)
     v.zoom.fit_now()
     v.grabbing = false
     v.ended_off = ""
@@ -1018,7 +1018,7 @@ fn desk_player(
   let full = fn() {
     // (beside the system's bars, an iPhone Duo's: the window filled, the bars put away: native_full)
     if native_on() {
-      native_full.val = !native_full.val
+      native_full.set(!@signals.untracked(fn() { native_full.get() }))
       p.wake()
       return
     }
@@ -1027,8 +1027,8 @@ fn desk_player(
     v.fulled = !on
     p.wake()
   }
-  if native_on() && native_full.val {
-    c.on_back(fn() { native_full.val = false })
+  if native_on() && native_full.get() {
+    c.on_back(fn() { native_full.set(false) })
   }
   let z = v.zoom
   let (room_top, room_foot) = player_room(c.width)
@@ -1227,7 +1227,7 @@ fn desk_player(
 ///|
 /// Back from a player (`go_back`), the window as it was if the player made it fill the screen.
 fn desk_leave(c : @ui.Ctx, v : PlayerView, go_back : () -> Unit) -> Unit {
-  native_full.val = false
+  native_full.set(false)
   if v.fulled {
     v.fulled = false
     if @ui.full_screen() {
@@ -1387,7 +1387,7 @@ fn desk_play_controls(
       // 全屏: the window filling the screen (macOS's), back as it was (and as the player is left); beside the system's
       // bars, the window filled, the bars put away (native_full)
       if picture && (@ui.platform() == 0 || native_on()) {
-        let is_full = if native_on() { native_full.val } else { @ui.full_screen() }
+        let is_full = if native_on() { native_full.get() } else { @ui.full_screen() }
         if media_key(c, key + "/full", if is_full { "shrink" } else { "expand" }, t(if is_full { "web-pages.drive.player.unfull" } else { "web-pages.drive.player.full" }), on, small=true, ink~) {
           full()
         }

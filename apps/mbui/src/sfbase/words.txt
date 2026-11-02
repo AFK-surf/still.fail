@@ -817,6 +817,7 @@ web-main.chat.asks.dismiss
 web-main.chat.asks.go
 web-main.chat.copyFailed
 web-main.chat.copyLink
+web-main.chat.copyMessage
 web-main.chat.copyMessageLink
 web-main.chat.copyTranscript
 web-main.chat.deleteFailed
@@ -864,7 +865,6 @@ web-main.chatRef.previewHistory
 web-main.chatRef.title
 web-main.chatRef.update
 web-main.combos.label
-web-main.combos.short
 web-main.composer.attach
 web-main.composer.ccLabel
 web-main.composer.dropHere
@@ -1014,7 +1014,6 @@ web-main.menu.more
 web-main.model.account
 web-main.model.auto
 web-main.model.borrowed
-web-main.model.default
 web-main.model.defaultEffort
 web-main.model.effort
 web-main.model.effortLevel.high
@@ -1024,7 +1023,6 @@ web-main.model.effortLevel.medium
 web-main.model.effortLevel.minimal
 web-main.model.effortLevel.xhigh
 web-main.model.fastNote
-web-main.model.fastSubscription
 web-main.model.models
 web-main.model.allModels
 web-main.model.likeModel

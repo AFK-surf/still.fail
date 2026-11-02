@@ -675,6 +675,7 @@ test("the_language_is_as_chosen_else_as_the_device_is", async () => {
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).lang, "en");
+  assert.equal(v(values, 1).productName, "still.fail");
   assert.equal(prefs.deviceName(core.inner.data), "still.fail Web · Chrome · macOS");
   const set = (n: number, params: unknown) => call(core, ui, n, "prefs.set", params);
   set(3, { language: "zh" });
@@ -713,10 +714,17 @@ test("a_devices_name_comes_apart_as_its_app_and_its_machine_whichever_language_n
   };
   for (const locale of ["zh-CN", "en-US"]) {
     assert.deepEqual(await parts({ app: "desktop", userAgent: "Macintosh; Mac OS X", machine: "林的 MacBook Air", client: "still.fail mbui", locale }),
-      { group: "desktop still.fail mbui", app: "still.fail mbui 桌面版", machine: "林的 MacBook Air" }, locale);
+      { group: "desktop still.fail", app: "still.fail 桌面版", machine: "林的 MacBook Air" }, locale);
     assert.deepEqual(await parts({ app: "web", userAgent: phone, locale }), { group: "web still.fail", app: "still.fail 网页版", machine: "Chrome · Android" }, locale);
     assert.deepEqual(await parts({ app: "android", model: "", locale }), { group: "android still.fail", app: "still.fail Android", machine: "" }, locale);
   }
+  // Names already signed into the workspace keep their historical bytes, but group with newly named devices.
+  assert.deepEqual(prefs.deviceParts("still.fail mbui Android · OPPO Find N6"),
+    { group: "android still.fail", app: "still.fail Android", machine: "OPPO Find N6" });
+  assert.deepEqual(prefs.deviceParts("still.fail Android · OPPO Find N6"),
+    { group: "android still.fail", app: "still.fail Android", machine: "OPPO Find N6" });
+  assert.deepEqual(prefs.deviceParts("someone else's mbui Android · Phone"),
+    { group: "android someone else's mbui", app: "someone else's mbui Android", machine: "Phone" });
   assert.deepEqual(prefs.deviceParts("这台手机"), { group: null, app: null, machine: "这台手机" });
   core.close();
 });

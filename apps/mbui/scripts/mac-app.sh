@@ -1,5 +1,5 @@
 #!/bin/bash
-# still.fail mbui on macOS as an app: out/mac/still.fail mbui.app (fail.still.mbui; arm64, as still.fail's desktop app
+# still.fail preview on macOS as an app: out/mac/still.fail preview.app (fail.still.mbui; arm64, as still.fail's desktop app
 # ships), its zip beside it. The app is APP=stillfail's release build (scripts/mac.sh) with what it carries: the core's
 # bytecode (Resources/core.hbc, which the core host finds in the app: src/host/apple_core.mm) and Hermes
 # (Frameworks/hermes.framework, React Native 0.81.4's, as Android's; scripts/core.sh hermes-apple), its icon
@@ -20,20 +20,23 @@
 # apple's: the shell as still.fail's natives have it for its sources (shell-apple), the engine and core.hbc made when
 # stale.
 set -eo pipefail
+# (a command that fails with nothing said, said by where it was: main 199e1d03's desktop stopped between the build and
+# the signing with no word, 41399442984, 2026-11-02)
+trap 'echo "mac-app.sh: line $LINENO failed ($?): $BASH_COMMAND" >&2' ERR
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
 now() { python3 -c 'import time;print(time.time())'; }
 secs() { python3 -c "print(f'{$(now)-$1:.1f}')"; }
 N=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
-# MBUI_VARIANT, which app it is built as (as Android's apk.json variants are): mbui (the default) still.fail mbui, an app
+# MBUI_VARIANT, which app it is built as (as Android's apk.json variants are): mbui (the default) still.fail preview, an app
 # beside still.fail's desktop app (fail.still.mbui, its feed mac/mbui); stable and beta still.fail's desktop app itself,
 # to take its place: Electron's ids, names and links (apps/desktop/package.json, build.sh), so that app's updater takes
 # it and it keeps that app's data, sign-in and sealed keys where they were (src/sfcore/apple_engine.m, src/host/
 # apple_core.mm electron_sealed); their feed mac (the beta's core asks mac/beta, as still.fail's beta builds do). The
-# beta's core and still.fail mbui's are a beta's (MBUI_BETA): builds of every commit, the test channel's.
+# beta's core and still.fail preview's are a beta's (MBUI_BETA): builds of every commit, the test channel's.
 case "${MBUI_VARIANT:-mbui}" in
-  mbui) ID=fail.still.mbui NAME="still.fail mbui" FEED=mac/mbui OWN= BETA=1 SCHEMES=() ZIP_NAME=stillfail-mbui ;;
+  mbui) ID=fail.still.mbui NAME="still.fail preview" FEED=mac/mbui OWN= BETA=1 SCHEMES=() ZIP_NAME=stillfail-mbui ;;
   stable) ID=fail.still.desktop NAME=still.fail FEED=mac OWN=1 BETA= SCHEMES=(stillfail ember) ZIP_NAME=stillfail ;;
   beta) ID=fail.still.desktop.beta NAME=youdid.wtf FEED=mac OWN=1 BETA=1 SCHEMES=(stillfail-beta) ZIP_NAME=stillfail-beta ;;
   *) echo "mac-app.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; exit 1 ;;
@@ -155,14 +158,28 @@ cp out/core/core.hbc "$APPDIR/Contents/Resources/core.hbc"
 cp "$ICON.icns" "$APPDIR/Contents/Resources/AppIcon.icns"
 cp "$ICON.assets/Assets.car" "$APPDIR/Contents/Resources/Assets.car"
 # the oldest macOS the program runs on, as it was linked: the one asked for
-MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" { print $2; exit }')
+# (awk reads otool's output to its end: one that stopped at the first minos left otool writing into a closed pipe,
+# which pipefail took for a failure now and then: main 199e1d03 and 40c02d09's desktop, 41408771483, 2026-11-02)
+MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" && m == "" { m = $2 } END { print m }')
 [ "$MINOS" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "mac-app.sh: linked for macOS $MINOS, not $MACOSX_DEPLOYMENT_TARGET" >&2; exit 1; }
 PLIST=$APPDIR/Contents/Info.plist
 plutil -create xml1 "$PLIST"
 put() { plutil -insert "$1" "$2" "$3" "$PLIST"; }
 put CFBundleIdentifier -string "$ID"
 put CFBundleName -string "$NAME"
-put CFBundleDisplayName -string "$NAME"
+# The updater replaces an installed bundle in place, preserving its old filename and its Dock links. Finder uses the
+# localized display name only when the unlocalized one matches that filename. Keep the old name in the plist solely
+# for that match; both newly downloaded and existing bundles display the new name in every supported localization.
+if [ "$VARIANT" = mbui ]; then
+  put CFBundleDisplayName -string "still.fail mbui"
+  for locale in en zh-Hans zh_CN; do
+    mkdir -p "$APPDIR/Contents/Resources/$locale.lproj"
+    printf '"CFBundleName" = "%s";\n"CFBundleDisplayName" = "%s";\n' "$NAME" "$NAME" \
+      > "$APPDIR/Contents/Resources/$locale.lproj/InfoPlist.strings"
+  done
+else
+  put CFBundleDisplayName -string "$NAME"
+fi
 put CFBundleExecutable -string "$EXE"
 put CFBundleIconFile -string AppIcon
 put CFBundleIconName -string AppIcon

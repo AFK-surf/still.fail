@@ -59,8 +59,11 @@ const scopeName = (scope: string | undefined): string => t(`web-pages.vault.scop
 /** How it ended, in a line: 已存入密码 …, 已允许使用 … · 本对话内, 已拒绝使用 …, 已过期 (the name in the strong ink). */
 function Outcome({ ask }: { ask: Ask }) {
   const kind = ask.save ? t(`web-pages.vault.ask.kind.${ask.save.kind}`) : "";
+  const seconds = ask.approvedTimeoutSeconds ?? 0;
+  const amount = seconds % 3600 === 0 ? t("web-pages.vault.timeout.nHours", { n: String(seconds / 3600) }) : t("web-pages.vault.timeout.nMinutes", { n: String(seconds / 60) });
+  const approved = seconds > 0 && (ask.approvedTimeoutKind === "idle" || ask.approvedTimeoutKind === "fixed") ? t(`web-pages.vault.timeout.approved.${ask.approvedTimeoutKind}`, { time: amount }) : null;
   const words = ask.status === "granted"
-    ? ask.save ? named("web-pages.vault.ask.kept", { kind }, ask.name, css.name) : named("web-pages.vault.ask.granted", { scope: scopeName(ask.scope) }, ask.name, css.name)
+    ? ask.save ? named("web-pages.vault.ask.kept", { kind }, ask.name, css.name) : approved ? named("web-pages.vault.ask.granted", { scope: approved }, ask.name, css.name) : ask.timeoutSeconds && ask.scope !== "once" ? named("web-pages.vault.ask.timedGranted", {}, ask.name, css.name) : named("web-pages.vault.ask.granted", { scope: scopeName(ask.scope) }, ask.name, css.name)
     : ask.status === "denied" ? named(ask.save ? "web-pages.vault.ask.notKept" : "web-pages.vault.ask.denied", {}, ask.name, css.name)
     : t("web-pages.vault.ask.expired");
   return <div className={css.outcome}><span className={css.dot} data-tone={ask.status} aria-hidden="true" /><span>{words}</span></div>;

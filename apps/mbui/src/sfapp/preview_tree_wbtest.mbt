@@ -3853,12 +3853,12 @@ test "viewer on the tree: closed, the chat moved under it on the way back, then 
   assert_true(v.flies && v.fly_back, msg="flying back")
   let end = v.fly.end()
   t.frame_at(t.time() + (end - t.time()) / 3.0)
-  let was = thumb_of(t.ctx(), id).unwrap()
+  let was = thumb_of(t.ctx(), v.thumb_id()).unwrap()
   // (the chat moved under it: a row along)
   let (first, _) = t.visible()
   t.scroll_to(if first > 0 { first - 1 } else { first + 1 })
   t.frame_at(t.time() + @ui.frame_period_default)
-  let moved = thumb_of(t.ctx(), id).unwrap()
+  let moved = thumb_of(t.ctx(), v.thumb_id()).unwrap()
   assert_true((moved.y - was.y).abs() > 1.0, msg="moved: \{was.y} to \{moved.y}")
   // (kept as where it flies from in the frame it moved: where it is now, not where it was)
   let kept = v.fly_from.map(fn(f) { (f.x, f.y, f.w, f.h) })
@@ -3870,17 +3870,17 @@ test "viewer on the tree: closed, the chat moved under it on the way back, then 
   // (its thumbnail off the screen: the chat scrolled far)
   let mut tries = 0
   let mut last = moved
-  while thumb_of(t.ctx(), id) is Some(_) && tries < 6 {
-    last = thumb_of(t.ctx(), id).unwrap()
+  while thumb_of(t.ctx(), v.thumb_id()) is Some(_) && tries < 6 {
+    last = thumb_of(t.ctx(), v.thumb_id()).unwrap()
     t.scroll_to(if tries % 2 == 0 { 0 } else { 1000 })
     t.frame_at(t.time() + @ui.frame_period_default)
-    match thumb_of(t.ctx(), id) {
+    match thumb_of(t.ctx(), v.thumb_id()) {
       Some(now) => last = now
       None => ()
     }
     tries += 1
   }
-  assert_true(thumb_of(t.ctx(), id) is None, msg="off the screen")
+  assert_true(thumb_of(t.ctx(), v.thumb_id()) is None, msg="off the screen")
   for at in [t.time() + @ui.frame_period_default, end - @ui.frame_period_default] {
     t.frame_at(at)
     assert_eq(v.fly_from.map(fn(f) { (f.x, f.y, f.w, f.h) }), Some((last.x, last.y, last.w, last.h)), msg="\{at}: where it was last seen")
@@ -4010,7 +4010,7 @@ test "viewer on the tree: its picture flying in, a frame drawn for a moment late
     let lift = v.fly_lift
     let p = if e <= lift { 0.0 } else { (e - lift) / (1.0 - lift) }
     let lifted = if lift <= 0.0 { 1.0 } else { dmin(e / lift, 1.0) }
-    flight_picture_at(thumb_of(t.ctx(), id).unwrap(), lifted, v.zoom.rect().unwrap(), p)
+    flight_picture_at(thumb_of(t.ctx(), v.thumb_id()).unwrap(), lifted, v.zoom.rect().unwrap(), p)
   }
   let flying = fn() {
     t.drawn_instances().filter(fn(i) { i[5] == 4.0 && (t.image_src(i[20].to_int()).has_prefix(main) || (thumb != "" && t.image_src(i[20].to_int()).has_prefix(thumb))) }).map(fn(i) { (i[0], i[1], i[2], i[3]) })
@@ -4030,12 +4030,11 @@ test "viewer on the tree: its picture flying in, a frame drawn for a moment late
 test "viewer on the tree: its picture flying in cut to the thumbnail's own corners, each as its container resolves it, as round as the flight leaves them: the box its node's, the picture cut so" {
   let t = opening()
   let v = viewer.get().unwrap()
-  let id = v.id()
   let main = "mem:preview/" + v.id()
   let thumb = v.fly_from.map(fn(f) { f.picture }).unwrap_or("")
   let end = v.fly.end()
   t.frame_at(t.time() + (end - t.time()) / 4.0)
-  let (tl, tr, br, bl) = thumb_of(t.ctx(), id).unwrap().corners.each()
+  let (tl, tr, br, bl) = thumb_of(t.ctx(), v.thumb_id()).unwrap().corners.each()
   let k = 1.0 - v.flying()
   let want = (tl * k, tr * k, br * k, bl * k)
   let boxes = @ui.view_tree().unwrap().drawn().filter(fn(d) { d.corners is Some(_) })
@@ -4190,17 +4189,16 @@ test "viewer on the tree, from a card: its corners changed as the picture flies 
   let v = viewer.get().unwrap()
   assert_true(v.in_tree, msg="the window's tree's viewer")
   t.run_for(@ui.move_most_ms)
-  let id = v.id()
   t.back()
   let end = v.fly.end()
   t.frame_at(t.time() + (end - t.time()) / 3.0)
   assert_eq(flight_nodes(v, src).length(), 1, msg="flying back, its node's")
-  let was = thumb_of(t.ctx(), id).unwrap()
+  let was = thumb_of(t.ctx(), v.thumb_id()).unwrap()
   assert_eq(v.fly_from.map(fn(f) { f.corners.each() }), Some((40.0, 10.0, 30.0, 20.0)), msg="kept as they are")
   // (its corners changed, nothing else of it)
   corners.set((5.0, 25.0, 15.0, 35.0))
   t.frame_at(t.time() + @ui.frame_period_default)
-  let now = thumb_of(t.ctx(), id).unwrap()
+  let now = thumb_of(t.ctx(), v.thumb_id()).unwrap()
   assert_eq((now.x, now.y, now.w, now.h), (was.x, was.y, was.w, was.h), msg="where it was, as big")
   assert_eq(now.corners.each(), (5.0, 25.0, 15.0, 35.0), msg="its corners as they are now")
   assert_eq(v.fly_from.map(fn(f) { f.corners.each() }), Some((5.0, 25.0, 15.0, 35.0)), msg="kept as they are now, in the frame they change")
@@ -4208,11 +4206,11 @@ test "viewer on the tree, from a card: its corners changed as the picture flies 
   shown.set(false)
   // (its measure the frame it was last laid out in's till a frame has passed without it: measured_rect)
   let mut frames = 0
-  while thumb_of(t.ctx(), id) is Some(_) && frames < 3 {
+  while thumb_of(t.ctx(), v.thumb_id()) is Some(_) && frames < 3 {
     t.frame_at(t.time() + @ui.frame_period_default)
     frames += 1
   }
-  assert_true(thumb_of(t.ctx(), id) is None, msg="gone, \{frames} frames on")
+  assert_true(thumb_of(t.ctx(), v.thumb_id()) is None, msg="gone, \{frames} frames on")
   t.frame_at(t.time() + @ui.frame_period_default)
   assert_eq(v.fly_from.map(fn(f) { f.corners.each() }), Some((5.0, 25.0, 15.0, 35.0)), msg="kept as they were last")
   let k = 1.0 - v.flying()

@@ -10,12 +10,6 @@
 // what it shows otherwise is laid out as the web's, narrower under 640 (viewer.mbt).
 
 ///|
-/// The viewer over the window, if one is open: drawn after what is under it.
-pub fn file_viewer(c : @ui.Ctx, src : Source) -> Unit {
-  viewer_layer(c, src)
-}
-
-///|
 /// Where it is among those it steps through and how many they are (an image's: its chat's, as the core tells them,
 /// imageNear's index and count; a folder's); (-1, 0) when it steps through none.
 pub fn viewer_place(vw : Viewer, src : Source) -> (Int, Int) {
@@ -26,6 +20,10 @@ pub fn viewer_place(vw : Viewer, src : Source) -> (Int, Int) {
     NoSteps => (-1, 0)
     InChat(thread, session) => {
       let p : Map[String, Json] = { "station": Json::string(vw.station), "path": Json::string(vw.file.path) }
+      let at = vw.gallery_at()
+      if at != "" {
+        p["at"] = Json::string(at)
+      }
       match thread {
         Some(th) => p["thread"] = Json::number(th)
         None => p["session"] = Json::string(session)
@@ -96,29 +94,6 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
 }
 
 ///|
-/// A film's or a song's bar where the system has bars of its own (an iPhone Duo's), in its place in the preview's
-/// layer: its title and actions in them (vf_native_media), none while a film fills the window; handed back as it goes.
-/// Elsewhere the player draws its own; what the window's tree draws (a picture, a page, words read) has its bars there
-/// (viewer_tree.mbt: image_head, image_bar, vf_native).
-pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source) -> Unit {
-  let v = vw
-  // going: the page's tabs handed back to them as it goes, not once it is gone, so that the system's change of them is
-  // under way as it goes (the page's own bars coming back over it the while: @sfbase.over_flight)
-  if v.closing {
-    return
-  }
-  // (its tabs put away while a file is looked at, the user 2026-10-27; while this one is open and not closing, its
-  // bars' part kept or built again)
-  // (a film filling the window: the bars put away, no title, no actions: @sf.player_full_native)
-  let full = @sf.player_fills_native(c.width)
-  let native = @sf.native_over_up(if full { "" } else { v.file.name }, alive=fn() { v.up_still() }, owner="viewer", over=2)
-  // (the player draws no bar of its own there: @sf.player_room)
-  if native && !full {
-    vf_native_media(v, c, src)
-  }
-}
-
-///|
 /// A picture's bar where the system has bars of its own (an iPhone Duo's): its actions in them, the system's glass
 /// (the user, 2026-10-27: as Slack's), gone with the rest as a tap hides them: close at their lead; fitted again or as
 /// it is (the zoom between by the fingers); marked, copied, downloaded as the bar's tools are (viewer_tree.mbt's image_tools).
@@ -168,8 +143,9 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// A film's or a song's actions where the system has bars of its own (an iPhone Duo's): close at their lead (a film
 /// turned on its side by the player upright again first, as its own back did), download as a file's; its controls
-/// over its foot as anywhere.
-fn vf_native_media(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
+/// over its foot as anywhere. `width`: how wide the player is laid out (its 全屏 by that: turned sideways laid out
+/// Small, else the window filled).
+fn vf_native_media(v : Viewer, c : @ui.Ctx, src : Source, width : Double) -> Unit {
   if v.closing {
     return
   }
@@ -186,7 +162,7 @@ fn vf_native_media(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   // 全屏, a film's (its controls have it too: @sf.player_full_act)
   match v.media {
     Some(m) if v.shown_kind() == Some(KVideo) => {
-      let (words, on, act) = @sf.player_full_act(m, c.width)
+      let (words, on, act) = @sf.player_full_act(m, width)
       @sf.native_over_act("full", words, "landscape", act, active=on)
     }
     _ => ()

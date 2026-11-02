@@ -1381,10 +1381,12 @@ test("a_message_says_the_chats_it_links_to_their_titles_and_which_are_archived",
   const live = "https://app.still.fail/o/ws/a/c-live";
   const old = "https://app.still.fail/o/ws/a/c-old";
   // One linked bare, one archived in a reference, one no list has; a message with none says none.
-  t.set(pageOf("ws/a", 7), page(1, [`看 ${live} 和 [那个](${old})，还有 https://app.still.fail/o/ws/a/c-none`, "没有链接"], null));
+  // One to a message of the chat is the chat's too.
+  const atMessage = `${live}?message=2`;
+  t.set(pageOf("ws/a", 7), page(1, [`看 ${live} 和 [那个](${old})，还有 https://app.still.fail/o/ws/a/c-none`, "没有链接", `第二条 ${atMessage}`], null));
   t.set(overview("ws/a"), overviewOf([], []));
   await t.read(u, 1);
-  assert.deepEqual(u.value.messages.map((m: J) => m.chats), [[{ href: old, title: "旧的", archived: true, note: "已归档" }, { href: live, title: "c-live 的标题" }], undefined]);
+  assert.deepEqual(u.value.messages.map((m: J) => m.chats), [[{ href: old, title: "旧的", archived: true, note: "已归档" }, { href: live, title: "c-live 的标题" }], undefined, [{ href: atMessage, title: "c-live 的标题" }]]);
 });
 
 test("a_chat_an_agent_opened_has_the_way_back_to_its_opener_over_its_messages", async () => {
@@ -1709,6 +1711,37 @@ test("a_compact_chat_keeps_the_page_and_its_jobs_available_separately", async ()
   assert.equal(compact.value.agents[0].hasJobs, false);
   assert.deepEqual(jobs.value.jobs, []);
   assert.equal(summary.value.hasJobs, false);
+});
+
+test("only the overload notice belonging to a waiting retry offers its cancellation", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const chat = thread(7, ["k", "j"], t.host.nowMs());
+  t.set(threads("ws/a"), [chat]);
+  const entries = [1, 2].map((n) => ({
+    ...entry(n, "⚠️ 模型满载，自动重试，与额度无关"), authorKind: "ember", author: "ember",
+  }));
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries, end: false, thread: chat });
+  const waiting = {
+    kind: "resume", outcome: "failed", declared: "waiting", detail: "overloaded: at capacity",
+    about: { thread: 7, seq: 2, ts: "2.0" }, startedAt: 10, endedAt: 11,
+  };
+  t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { lastTurn: waiting }), threads: [chat], turns: [] });
+  t.set(sessionOf("ws/a", "j"), { session: fullSession("j"), threads: [chat], turns: [] });
+  await t.read(u, 1);
+  assert.equal(u.value.messages[0].notice.retrySession, undefined);
+  assert.equal(u.value.messages[1].notice.retrySession, "k");
+  // A new turn, or an unrelated wait, cannot be cancelled through that old notice.
+  for (const lastTurn of [
+    { ...waiting, outcome: "aborted", declared: null },
+    { ...waiting, outcome: "completed", detail: null },
+    { ...waiting, about: { ...waiting.about, thread: 8 } },
+  ]) {
+    t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { lastTurn }), threads: [chat], turns: [] });
+    await t.read(u, 1);
+    assert.equal(u.value.messages[1].notice.retrySession, undefined);
+  }
 });
 
 test("chat_is_a_thread_its_messages_and_its_agents", async () => {
@@ -2362,6 +2395,30 @@ test("a_chats_page_is_told_which_files_its_agents_words_place_and_an_open_image_
   assert.deepEqual(await shown("d.png", 5), [["b.png", "k"], null, 3]);
   // One not among them (gone meanwhile): none beside it.
   assert.deepEqual(await shown("x.png", 6), [null, null, null]);
+});
+
+test("imageNear identifies the particular message or quote that opened the same file", async () => {
+  const t = setup();
+  const chat = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const photo = { name: "photo.png", path: "ws/k/photo.png", size: 1 };
+  const original = { ...entry(1, ""), attachments: [photo] };
+  const quoted = { ...entry(2, "."), attachments: [photo], quotes: [{ author: "Ana", text: "photo.png", comment: "", ts: "1.0", file: "photo.png" }] };
+  t.views.local.remember("ws/a", 7, 2, "sent-1");
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [original, quoted], thread: null });
+  t.set(rows("ws/a"), [{ ...row("k", now), thread: 7 }]);
+  await t.read(chat, 1);
+  for (const [id, at, index, other] of [[2, "m:1.0/f", 0, "o:sent-1/q:0"], [3, "o:sent-1/q:0", 1, "m:1.0/f"]] as const) {
+    const shown = ui();
+    t.subscribe(id, { topic: "imageNear", station: "ws/a", thread: 7, session: null, path: photo.path, at });
+    await t.read(shown, id);
+    assert.equal(shown.value.count, 2);
+    assert.equal(shown.value.index, index);
+    assert.equal(index === 0 ? shown.value.afterAt : shown.value.beforeAt, other);
+  }
 });
 
 test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () => {

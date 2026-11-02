@@ -136,6 +136,24 @@ function profileEfforts(profile: J, runtime: string, m: string | null): string[]
   return reasoning.available(runtime, m ?? str(get(profile, "model")), catalog ?? null);
 }
 
+/// The model's own reasoning level on `runtime` (its account's, `profile`, else the first account's that says one),
+/// where the runtime says one.
+export function effortDefault(overview: J, runtime: string, m: string | null, profile: string | null): string | null {
+  if (m === null) return null;
+  const said = (p: J): string | null => {
+    const levels = get(get(get(p, "check"), "modelEffortDefaults"), runtime);
+    if (levels === undefined || levels === null || typeof levels !== "object") return null;
+    const found = Object.entries(levels as Record<string, unknown>).find(([id]) => model.same(id, m));
+    return found !== undefined && typeof found[1] === "string" ? found[1] : null;
+  };
+  const profiles = profilesOf(overview).filter((p) => runs(p, runtime) && (profile === null || get(p, "id") === profile));
+  for (const p of profiles) {
+    const level = said(p);
+    if (level !== null) return level;
+  }
+  return null;
+}
+
 function commonEfforts(profiles: J[], runtime: string, m: string | null): string[] {
   return reasoning.common(profiles.map((p) => profileEfforts(p, runtime, m)), runtime);
 }

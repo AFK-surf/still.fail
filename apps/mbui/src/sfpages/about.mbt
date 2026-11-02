@@ -108,7 +108,8 @@ let perf_turned : @signals.Signal[Int] = @signals.signal(0)
 /// button at the row's end took what its words left: the name cut to 「still.fail…」 on a phone, 2026-10-26.)
 fn version_rows(c : @ui.Ctx, core : Core) -> Unit {
   let v = (core.version_now)()
-  @sf.link_row(c, "", "still.fail mbui " + build_version(), goes=false) |> ignore
+  let product = text((core.topic)("prefs", Map::new()).value, "productName")
+  @sf.link_row(c, "", (if product == "" { "still.fail" } else { product }) + " " + build_version(), goes=false) |> ignore
   if !v.asks {
     return
   }

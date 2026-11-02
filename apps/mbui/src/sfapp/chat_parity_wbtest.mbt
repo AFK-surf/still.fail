@@ -148,6 +148,48 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
 }
 
 ///|
+test "an overload notice offers to cancel its retry at the notice" {
+  let calls : Array[Made] = []
+  let retrying = Ref::new(true)
+  let epoch = Ref::new(0)
+  let t = edited_core(
+    calls,
+    "chat",
+    fn(name, v) {
+      if name == "chat" {
+        let notice : Json = if retrying.val {
+          { "failed": true, "words": "模型满载，自动重试，与额度无关", "retrySession": "agent-a" }
+        } else {
+          { "failed": true, "words": "模型满载，自动重试，与额度无关" }
+        }
+        with_chat_message(v, 9.0, [("notice", notice), ("reportable", false)])
+      } else {
+        v
+      }
+    },
+    epoch~,
+  )
+  for _ in 0..<6 {
+    if t.find("模型满载") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  t.tap_text("取消")
+  let sent = named(calls, "session.cancelRetry")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "station"), "ws1/st1")
+  assert_eq(text(Some(sent[0].params), "key"), "agent-a")
+  assert_eq(number(Some(sent[0].params), "thread"), 7.0)
+  assert_eq(number(Some(sent[0].params), "seq"), 9.0)
+  retrying.val = false
+  epoch.val += 1
+  t.frame()
+  t.run_for(@ui.row_size_ms)
+  assert_true(t.find("取消") is None, msg="the action leaves once the retry is over")
+}
+
+///|
 test "a notice that a runtime is missing: its word installs it (software.update)" {
   let calls : Array[Made] = []
   let t = edited_core(calls, "chat", fn(name, v) {
@@ -278,6 +320,27 @@ test "an agent's link to an archived chat written bare: its title as the core sa
 }
 
 ///|
+test "a link to one message of a chat written bare: the chat's title, not its address" {
+  let calls : Array[Made] = []
+  let link = "https://app.still.fail/o/ws1/st1/c-old?message=2"
+  let words = "看 \{link}"
+  let t = edited_core(calls, "chat", fn(name, v) {
+    if name == "chat" {
+      with_chat_message(v, 11.0, [
+        ("text", Json::string(words)),
+        ("md", [["p", [[0, 2], ["a", [[2, 50]], { "href": Json::string(link) }]]]]),
+        ("chats", [{ "href": Json::string(link), "title": "旧的对话" }]),
+      ])
+    } else {
+      v
+    }
+  })
+  assert_true(@sf.is_chat_link(link))
+  assert_true(t.find("看 @旧的对话") is Some(_), msg="its title, not its link")
+  assert_true(t.find(link) is None)
+}
+
+///|
 test "a Slack user's name in a history: 这是我 binds them to the viewer (slack.identity)" {
   let calls : Array[Made] = []
   // the history's first item (what it received): from a Slack user
@@ -314,22 +377,25 @@ test "a Slack user's name in a history: 这是我 binds them to the viewer (slac
 }
 
 ///|
-test "the chat's sheet: one from Slack or Feishu opens there" {
-  let calls : Array[Made] = []
-  let t = edited_core(calls, "chat-info", fn(name, v) {
-    if name == "chat" {
-      with_fields(v, [
-        ("slackUrl", "https://example.slack.com/archives/C1/p1"),
-        ("feishuUrl", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
-      ])
-    } else {
-      v
-    }
-  })
-  t.tap_text("在飞书中打开")
-  assert_true(t.opened().contains("https://example.feishu.cn/client/chat/open?openChatId=oc_1"))
-  t.tap_text("在 Slack 中打开")
-  assert_true(t.opened().contains("https://example.slack.com/archives/C1/p1"))
+test "the chat's menu: one from Slack or Feishu opens there" {
+  for (words, url) in [
+    ("在飞书中打开", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
+    ("在 Slack 中打开", "https://example.slack.com/archives/C1/p1"),
+  ] {
+    let calls : Array[Made] = []
+    let t = edited_core(calls, "chat-actions", fn(name, v) {
+      if name == "chat" {
+        with_fields(v, [
+          ("slackUrl", "https://example.slack.com/archives/C1/p1"),
+          ("feishuUrl", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
+        ])
+      } else {
+        v
+      }
+    })
+    t.tap_text(words)
+    assert_true(t.opened().contains(url), msg=words)
+  }
 }
 
 ///|

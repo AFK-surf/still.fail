@@ -75,7 +75,7 @@ SHARE=$APPDIR/PlugIns/Share.appex
 for kind in app share; do
   bundle=$APPDIR; bid=fail.still.iphone
   if [ "$kind" = share ]; then bundle=$SHARE; bid=$bid.share; fi
-  for pair in "CFBundleIdentifier=$bid" "CFBundleVersion=$RELEASE_BUILD" "CFBundleShortVersionString=$RELEASE_VERSION" "MBUIAppGroup=$IOS_APP_GROUP"; do
+  for pair in "CFBundleIdentifier=$bid" "CFBundleName=still.fail" "CFBundleDisplayName=still.fail" "CFBundleVersion=$RELEASE_BUILD" "CFBundleShortVersionString=$RELEASE_VERSION" "MBUIAppGroup=$IOS_APP_GROUP"; do
     [ "$(/usr/libexec/PlistBuddy -c "Print :${pair%%=*}" "$bundle/Info.plist")" = "${pair#*=}" ] || fail "built $kind ${pair%%=*} mismatch"
   done
   cp "$T/$kind.mobileprovision" "$bundle/embedded.mobileprovision"

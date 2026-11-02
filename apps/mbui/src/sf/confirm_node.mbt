@@ -10,8 +10,8 @@
 
 ///|
 /// A confirm in `parent` while `open()` (going over pop_out_ms once not): `title`, its `words`, `action` (solid red
-/// when `danger`, the primary's otherwise) beside the library's cancel. Where it is in the window's stack of layers is
-/// what holds it's (View::stacked on the root's node it is in: presented_nodes).
+/// when `danger`, the primary's otherwise) beside the library's cancel, with an optional red `warning`. Where it is in
+/// the window's stack of layers is what holds it's (View::stacked on the root's node it is in: presented_nodes).
 /// `shown`: as its layer is made (it opens); `gone`: once its way out is over (let go).
 pub fn confirm_node(
   parent : @view.View,
@@ -22,6 +22,7 @@ pub fn confirm_node(
   danger : Bool,
   cancel : () -> Unit,
   confirm : () -> Unit,
+  warning? : String = "",
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
   dims? : () -> Bool = fn() { true },
@@ -29,7 +30,7 @@ pub fn confirm_node(
 ) -> Unit {
   // (a press outside an alert does not close it: confirm_dialog's outside=false)
   dialog_layer_node(parent, open, cancel, shown~, gone~, dims~, covered~, fn(across, layer, look, veil) {
-    confirm_panel(across, layer, look, veil, title, words, action, danger, cancel, confirm) |> ignore
+    confirm_panel(across, layer, look, veil, title, words, warning, action, danger, cancel, confirm) |> ignore
     // (the focus on its own ground as it opens, as confirm_dialog's (an overlay that traps it, with no stop of its own:
     // the layer's own), Enter and Space doing nothing there; back to what had it as it goes)
     layer
@@ -159,6 +160,7 @@ fn confirm_panel(
   veil : () -> Int64,
   title : () -> String,
   words : () -> String,
+  warning : String,
   action : () -> String,
   danger : Bool,
   cancel : () -> Unit,
@@ -179,7 +181,7 @@ fn confirm_panel(
     .alpha(By(fn() { look().alpha }))
     .scale(By(fn() { look().sx }))
     .offset(By(fn() { (look().dx, look().dy) }))
-    .says(By(fn() { Some(@view.said(Dialog, label=title(), description=words())) }))
+    .says(By(fn() { Some(@view.said(Dialog, label=title(), description=if warning == "" { words() } else { words() + "\n" + warning })) }))
     |> ignore
     let words_in = fn() { look().words }
     d.box(fn(t) {
@@ -198,6 +200,16 @@ fn confirm_panel(
       |> ignore
     })
     |> ignore
+    if warning != "" {
+      d.box(fn(t) {
+        t
+        .words(Is(warning), look=toast_words_look(Meta, L6, 400, true))
+        .ink(By(fn() { theme().color(Danger) }))
+        .alpha(By(words_in))
+        |> ignore
+      })
+      |> ignore
+    }
     // (its foot: its buttons at its end, 8 apart, 8 over them; as far from its foot and sides as its corner has them:
     // dialog_corner_foot)
     d.box(fn(f) {

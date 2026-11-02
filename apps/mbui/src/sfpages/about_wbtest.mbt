@@ -7,7 +7,7 @@ test "关于, at each width and with either hand: this build, 更新日志, the 
     let (w, platform) = case
     let t = setting_tester(About, w, platform~)
     let at = "\{w} platform \{platform}"
-    assert_true(t.find("still.fail mbui 0.1") is Some(_), msg=at)
+    assert_true(t.find("still.fail 0.1") is Some(_), msg=at)
     assert_true(t.find("更新日志") is Some(_), msg=at)
     assert_true(t.find("服务条款") is Some(_), msg=at)
     // its sections' titles laid out wide alone (the narrow app has none)
@@ -18,6 +18,25 @@ test "关于, at each width and with either hand: this build, 更新日志, the 
     t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(Changelog), msg=at)
     assert_true(t.find("当前版本 0.1.1300") is Some(_), msg=at)
+  }
+}
+
+///|
+test "关于 names the build for its channel" {
+  for product in ["still.fail", "youdid.wtf"] {
+    let t = setting_tester(About, 390.0, platform=2, over=fn(s) {
+      {
+        ..s,
+        topic: fn(name, params) {
+          if name == "prefs" {
+            { value: Some(Json::object({ "productName": Json::string(product) })), error: None, version: 1 }
+          } else {
+            (s.topic)(name, params)
+          }
+        },
+      }
+    })
+    assert_true(t.find(product + " 0.1") is Some(_), msg=product)
   }
 }
 
@@ -103,7 +122,7 @@ test "关于's version rows, at each width and with either hand: this build alon
 ///|
 test "关于 where newer builds are not asked for (no source, as on iOS; no version, run from the sources): this build, no 检查更新" {
   let t = setting_tester(About, 390.0, platform=2)
-  assert_true(t.find("still.fail mbui 0.1") is Some(_))
+  assert_true(t.find("still.fail 0.1") is Some(_))
   assert_true(t.find("检查更新") is None)
   @sffixture.fixture_updates()
   @sfbase.update_version.val = 0

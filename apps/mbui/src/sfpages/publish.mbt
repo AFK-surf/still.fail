@@ -36,8 +36,8 @@ priv struct Publishing {
   viz_boxes : Map[String, String]
   /// those of them whose file could not be read: their cards
   viz_failed : Map[String, Bool]
-  /// what each was grabbed as for the picture, by its `k`: its image and how tall it is drawn
-  stills : Map[String, (String, Double)]
+  /// what each was grabbed as for the picture, by its `k`: its image and the size it was drawn at
+  stills : Map[String, (String, Double, Double)]
   /// the going through them as its picture is asked for, and how many times it was asked
   mut walk : PublishWalk?
   mut walks : Int
@@ -290,7 +290,7 @@ fn publish_walk(c : @ui.Ctx, list : String, node : Int) -> Unit {
             (Some((pw, ph)), Some((_, _, bw, bh))) if ((ph * bw / pw - bh).abs() <= 2.0) => {
               let src = "mem:publish/\{publishing.walks}/\{k}"
               @ui.add_image(src, png)
-              publishing.stills[k] = (src, bh)
+              publishing.stills[k] = (src, bw, bh)
             }
             _ => ()
           }
@@ -344,9 +344,9 @@ pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// The page that shares it (PublishDialog): over the whole window on the canvas, the picture as it would be at the
-/// chat's width, what it is for over it (viewer_frame_act: the bar a file opened has, or 取消 and 保存到相册 at the
-/// foot); Esc closes it. While its picture is taken, the picture drawn whole off the screen.
+/// The page that shares it (PublishDialog): over the whole window on the canvas, a preview at the page's width, what
+/// it is for over it (viewer_frame_act: the bar a file opened has, or 取消 and 保存到相册 at the foot); Esc closes it.
+/// The picture is taken whole off the screen at the chat's maximum column width, with each table fitted to it.
 fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : @ui.Look, leaving : Bool) -> Unit {
   let p = publishing.preview.get()
   let messages = items(p, "list")
@@ -422,9 +422,11 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
       })
       c.look(page, look)
       publish_walk(c, list_key, list_node.val)
-      // the picture itself, while it is taken: the same, all of it, off the screen
+      // The image uses the chat's usual maximum column width, independent of the screen's width. Tables fit inside it.
       if messages.length() > 0 {
-        c.shot(publish_shot, column, fn() { publish_picture(c, src, here, p, column, true) })
+        c.shot(publish_shot, publish_page_w, fn() {
+          c.sized(publish_page_w, c.height, fn() { publish_picture(c, src, here, p, publish_page_w, true) })
+        })
       }
     })
     |> ignore
@@ -658,9 +660,11 @@ fn publish_viz(c : @ui.Ctx, src : Source, here : MessageHere, seq : Double, taki
   let k = file_k(seq, a)
   if taking {
     match publishing.stills.get(k) {
-      Some((image, h)) =>
+      Some((image, w, h)) =>
         c.box(style=@sfbase.viz_file_box, fn() {
-          c.image(image, w=Fill(1.0), h=Px(h), fit=FitCover, bg=0L, fade=false) |> ignore
+          // Its grab is as it appeared on the page; keeping that size also keeps its text and proportions intact in
+          // a wider shared picture.
+          c.image(image, w=Px(w), h=Px(h), fit=FitCover, bg=0L, fade=false) |> ignore
         })
         |> ignore
       None => card()

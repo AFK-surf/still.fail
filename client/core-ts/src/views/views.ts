@@ -657,6 +657,7 @@ export class Views implements Owner {
     if (done !== undefined && shown.status === undefined) {
       shown.status = done.status;
       if (done.scope !== undefined) shown.scope = done.scope;
+      if (done.timeout !== undefined) { shown.approvedTimeoutKind = done.timeout.kind; shown.approvedTimeoutSeconds = done.timeout.seconds; }
     }
     return { ...card, vaultAsk: shown };
   }
@@ -1293,7 +1294,12 @@ export class Views implements Owner {
         if (chat === undefined || !("ok" in chat)) return chat;
         // All of the chat's held, where it has a thread (its page holds a window of it); the outbox's after them.
         const whole = typeof view.thread === "number" ? this.#things(view.station as string, view.thread) : null;
-        return { ok: near(whole === null ? chat.ok : { messages: whole.messages, outbox: get(chat.ok, "outbox") }, view.path as string) };
+        const messages = whole?.messages.map((m) => {
+          const seq = u64(m.seq);
+          const outgoing = seq === null ? undefined : this.local.outgoing(view.station as string, view.thread as number, seq);
+          return outgoing === undefined ? m : { ...m, outgoing };
+        });
+        return { ok: near(whole === null ? chat.ok : { messages, outbox: get(chat.ok, "outbox") }, view.path as string, view.at as string | undefined) };
       }
       case "workspaceWays": {
         const ways = this.#core.ways?.(view.workspace as string);
@@ -1966,6 +1972,18 @@ export class Views implements Owner {
     const waits = peopleSeqs.slice(Math.max(peopleSeqs.length - waiting, 0));
     const written = said.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [[m.seq as number, str(m.text) ?? ""] as [number, string]] : []));
     let messages = timed("chat.shown", () => this.#shown(station, thread, agents, said, waits));
+    // The station binds a capacity retry to the notice that announced it. Only that notice offers cancellation, and
+    // only while that agent is still waiting: an old notice must never stop later work in the same chat.
+    for (const agent of agents) {
+      const session = get(agent, "session");
+      const turn = get(session, "lastTurn");
+      const about = get(turn, "about");
+      const key = str(get(session, "key"));
+      const detail = str(get(turn, "detail")) ?? "";
+      if (key === undefined || get(turn, "outcome") !== "failed" || !detail.startsWith("overloaded:") || present.waiting(session) === null || get(about, "thread") !== id) continue;
+      const notice = messages.find((m) => m.system === true && m.seq === get(about, "seq") && m.ts === get(about, "ts"));
+      if (notice && isObject(notice.notice)) notice.notice = { ...notice.notice, retrySession: key };
+    }
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
     // with its seq, it is the viewer's first message since it was sent with the same words.
     const newest = u64(page.last);

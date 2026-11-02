@@ -38,10 +38,11 @@ function stations() {
     notify: (_k: string, text: string) => void told.push(text),
   };
   const rooms: string[] = [];
+  const clock = { now: 1_000_000 };
   const made = (name: string, peer: (given: string) => { id: string; name: string } | null, ask: (station: string, request: Json) => Promise<Json>) => {
     const db = new DatabaseSync(":memory:");
     return new Secrets({
-      db, vaults: new VaultStore(db), plain: new PlainStore(db), home: () => WS, hub: hub as never, data: join(dir, name), lock: () => null, now: () => 1_000_000,
+      db, vaults: new VaultStore(db), plain: new PlainStore(db), home: () => WS, hub: hub as never, data: join(dir, name), lock: () => null, now: () => clock.now,
       peer, ask, workOf: (ws, from, session) => (rooms.push(`${ws}/${from}/${session}`), join(dir, name, "room")),
     });
   };
@@ -61,7 +62,7 @@ function stations() {
       return there.heard("st-ccvm", WS, request);
     },
   );
-  return { dir, cards, told, rooms, here, there };
+  return { dir, cards, told, rooms, here, there, clock };
 }
 
 test("a grant asked for another station: its commands run there, in the chat's directory, the value hidden; nowhere else", async () => {
@@ -81,16 +82,18 @@ test("a grant asked for another station: its commands run there, in the chat's d
     assert.deepEqual(r!.runOn, { id: "st-studio", name: "Studio" });
     assert.match(s.cards.at(-1)!.text, /运行在：Studio/);
     assert.equal(s.cards.at(-1)!.card.vault.station, "Studio");
-    assert.equal(s.here.grantPlain(WS, null, "bob@x.com", { request: r!.id, scope: "chat" }), null);
+    assert.equal(s.here.grantPlain(WS, null, "bob@x.com", { request: r!.id, scope: "hour", timeout: { kind: "idle", seconds: 3600 } }), null);
     await asked;
     assert.match(s.told.at(-1)!, /Its commands run on Studio/);
 
     // Run there: in the chat's directory on Studio, the value in its variable, hidden in what comes back.
+    s.clock.now += 3000_000;
     const out = await s.here.run("s1", { grant: r!.id, command: 'pwd; echo "token=$ROUTER_TOKEN"', cwd: join(s.dir, "here"), timeoutMs: 60_000 });
     assert.match(out, /^exit code 0/);
     assert.ok(out.includes(join(s.dir, "there", "room")), out);
     assert.ok(out.includes("token=[已隐藏]") && !out.includes(TOKEN), out);
     assert.deepEqual(s.rooms, [`${WS}/st-ccvm/s1`]);
+    assert.equal((s.here.keeper.usable("s1", r!.id) as { until: number }).until, 7600, "the remote use renewed the source grant");
     // A directory under it; never above it.
     const sub = await s.here.run("s1", { grant: r!.id, command: "pwd", cwd: join(s.dir, "here", "logs"), under: "logs", timeoutMs: 60_000 });
     assert.ok(sub.includes(join(s.dir, "there", "room", "logs")), sub);
@@ -103,7 +106,7 @@ test("a grant asked for another station: its commands run there, in the chat's d
     const local = s.here.ask("s1", { item: "Router", reason: "here" });
     await tick();
     const [mine] = s.here.pending(WS, null, { sub: "bob", email: "bob@x.com" });
-    assert.equal(s.here.grantPlain(WS, null, "bob@x.com", { request: mine!.id, scope: "chat" }), null);
+    assert.equal(s.here.grantPlain(WS, null, "bob@x.com", { request: mine!.id, scope: "hour", timeout: { kind: "idle", seconds: 3600 } }), null);
     await local;
     await assert.rejects(s.here.run("s1", { grant: mine!.id, command: "true", cwd: s.dir, station: "Studio" }), /ask again with secret_use \{station: "Studio"\}/);
 

@@ -109,7 +109,7 @@ export const TOPICS: Record<string, Spec> = {
   chatJobs: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], compact: ["bool", "skipFalse"], summary: ["bool", "skipFalse"] },
   chatLetters: { station: S, thread: ["u64", "req"] },
   chatThings: { station: S, thread: ["u64", "req"], q: ["string", "skip"] },
-  imageNear: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], path: S },
+  imageNear: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], path: S, at: ["string", "skip"] },
   longJobs: { scope: S },
   stationUsage: { station: S },
   usage: { scope: S, days: ["u32", "skip"] },

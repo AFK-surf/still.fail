@@ -143,6 +143,43 @@ fn inks_of(t : @ui.Tester, words : String) -> Array[Int64] raise {
 }
 
 ///|
+test "a confirmation warning is red in both a sheet and a dialog" {
+  for at in [phone, desk] {
+    let t = presenting_tester(at, fn(from) {
+      confirm("分享账号？", "其他 station 会发送请求", "分享账号", fn() {  }, warning="请确认安全访问", from~)
+    })
+    open_it(t)
+    t.run_for(@ui.move_most_ms)
+    t.draw()
+    let warning_ink = inks_of(t, "请确认安全访问")
+    let words_ink = inks_of(t, "其他 station 会发送请求")
+    assert_true(warning_ink == [light_palette.red] || warning_ink == [web_light.red], msg="warning at \{at}")
+    assert_true(words_ink == [light_palette.muted] || words_ink == [web_light.muted], msg="description at \{at}")
+  }
+}
+
+///|
+test "a confirmation drawn in the window's tree shows its warning in red" {
+  presenters_reset()
+  let t = @ui.Tester::new(fn(_c) {  }, w=1280.0, h=800.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    @ui.old(root, fn(c) {
+      begin(c) |> ignore
+      c.with_theme(ui_theme(), fn() { presented(c) })
+    }).over(Is(true)) |> @ui.old_takes_own |> ignore
+    presented_nodes(root)
+  })
+  t.draw()
+  confirm("分享账号？", "其他 station 会发送请求", "分享账号", fn() {  }, warning="请确认安全访问")
+  t.run_for(@ui.move_most_ms)
+  t.draw()
+  assert_eq(inks_of(t, "请确认安全访问"), [@ui.tree_theme().color(Danger)])
+  assert_eq(inks_of(t, "其他 station 会发送请求"), [@ui.tree_theme().color(Muted)])
+}
+
+///|
 test "a menu with a mouse at Large: an item not to be chosen now in the subtle ink (it is never lit), clicked does nothing" {
   let said : Array[String] = []
   let items = [

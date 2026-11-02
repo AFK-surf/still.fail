@@ -6,6 +6,12 @@
 export const STABLE = "still.fail";
 export const TEST = "youdid.wtf";
 
+/// The old per-commit app identity is still sent by installed builds and kept in signed device records. It names
+/// this product too; other clients' names are their own.
+export function clientName(client: string): string {
+  return client === "still.fail mbui" ? STABLE : client;
+}
+
 let testChannel = false;
 let ownApp = true;
 

@@ -92,12 +92,13 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
   };
   const dir = mkdtempSync(join(tmpdir(), "vault-save-"));
   // The chats' browsers: the cookies each was asked for (`jar`, as JSON) and the sign-ins put in.
-  const browser = { jar: "[]", asked: [] as [string, string[], boolean][], signedIn: [] as [string, { request: string; sites: string[]; cookies: string; until: number }][] };
+  const browser = { jar: "[]", at: 1_000_000, asked: [] as [string, string[], boolean][], signedIn: [] as [string, { request: string; sites: string[]; cookies: string; until: number }][], extended: [] as [string, string, number][] };
   const browsers = {
     cookies: async (session: string, sites: string[], station: boolean) => (browser.asked.push([session, sites, station]), browser.jar),
     signIn: async (session: string, d: { request: string; sites: string[]; cookies: string; until: number }) => void browser.signedIn.push([session, d]),
+    extendSignIn: (session: string, request: string, until: number) => void browser.extended.push([session, request, until]),
   };
-  const make = () => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => 1_000_000, browsers });
+  const make = () => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers });
   return { db, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; } };
 }
 
@@ -338,7 +339,7 @@ test("a secret to keep without security mode: written into the owner's plain lib
     assert.deepEqual([kept.id, kept.owner, kept.fields, kept.listing], [r.item, "bob@x.com", { value: "xoxb-1" }, { name: "Slack", kind: "token", modes: ["proxy"], hosts: ["slack.com"] }]);
     assert.match(await decided(h, asked), /Kept: 「Slack」.*This chat may use it now/);
     assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["Slack"]);
-    assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.grant.hosts]), [[r.id, "chat", ["slack.com"]]]);
+    assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.grant.hosts]), [[r.id, "hour", ["slack.com"]]]);
 
     // Waiting through a restart: gone, so let go.
     void h.secrets.save("s1", { name: "Other", kind: "token", reason: "x", value: "v", cwd: h.dir });
@@ -492,7 +493,7 @@ test("a sign-in to keep: its sites' cookies read from the chat's browser (or the
     const [use] = pendingOf(h.secrets, null, "bob@x.com");
     assert.ok(use && use.mode === "browser");
     assert.match(h.cards.at(-1)!.text, /放进这个对话的浏览器（限 github.com/);
-    assert.equal(h.secrets.grantPlain(WS, null, "bob@x.com", { request: use.id, scope: "hour" }), null);
+    assert.equal(h.secrets.grantPlain(WS, null, "bob@x.com", { request: use.id, scope: "hour", timeout: { kind: "idle", seconds: 3600 } }), null);
     assert.equal(h.browser.signedIn.length, 2);
     assert.equal(h.browser.signedIn[1]![1].until, 1000 + 3600);
     // Taken out with new cookies: the item keeps them; the same again is no new version.
@@ -522,7 +523,7 @@ test("a sign-in in a vault: its newer cookies, which the station cannot write, s
     assert.deepEqual(opened(r!, w.alice), { cookies: h.browser.jar });
     h.vaults.putItem(written(r!, w.alice, { cookies: h.browser.jar }));
     const grantOf = (req: Request, cookies: string, scope: "hour" | "chat") => signed(
-      { v: 1 as const, ws: WS, request: req.id, vault: VAULT, item: req.item, mode: "browser" as const, hosts: ["github.com"], scope, exp: 1000 + 3600, secret: seal(req.box, Buffer.from(JSON.stringify({ kind: "browser", name: "GitHub", fields: { cookies } })), grantContext(WS, req.id)), at: 1000 },
+      { v: 1 as const, ws: WS, request: req.id, vault: VAULT, item: req.item, mode: "browser" as const, hosts: ["github.com"], scope, exp: 1000 + 3600, ...(req.timeout ? { timeout: { kind: "idle" as const, seconds: 3600 } } : {}), secret: seal(req.box, Buffer.from(JSON.stringify({ kind: "browser", name: "GitHub", fields: { cookies } })), grantContext(WS, req.id)), at: 1000 },
       TAG.grant, w.alice.signer,
     );
     assert.equal(h.secrets.saved(w.state, "alice", { request: r!.id, vault: VAULT, grant: grantOf(r!, h.browser.jar, "hour") }), null);
@@ -541,6 +542,12 @@ test("a sign-in in a vault: its newer cookies, which the station cannot write, s
     assert.deepEqual(JSON.parse(Buffer.from(openSeal(w.alice.box.priv, next.renewal.sealed[0]!.secret, saveContext(WS, next.renewal.id))).toString()), { cookies: renewed });
     // Granted with the cookies it had (an app from before renewals): they stay for the next.
     assert.equal(h.secrets.grant(w.state, "alice", grantOf(next, h.browser.jar, "hour")), null);
+    h.browser.at += 3000_000;
+    h.secrets.browserUsed("s1", "notgithub.com");
+    assert.deepEqual(h.browser.extended, []);
+    h.secrets.browserUsed("s1", "github.com");
+    assert.deepEqual(h.browser.extended, [["s1", next.id, 7600]]);
+    h.browser.at -= 3000_000;
     const after = await ask();
     assert.equal(after.renewal?.id, next.renewal.id);
     // Granted with them (the app wrote them as the item's next version): kept no longer.

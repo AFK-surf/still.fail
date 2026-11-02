@@ -767,6 +767,10 @@ export interface ModelMaker {
  */
 export interface PickView {
 	fastAvailable?: boolean;
+	/** The model's own reasoning level where none is picked (the draft's `effort` null), where its runtime says one. */
+	effortDefault?: string;
+	/** How fast it runs where none is picked (the draft's `fast` null): its account's own, true Fast. */
+	fastPlan?: boolean;
 	fastText?: string;
 	options: ModelOption[];
 	runtimeFixed: boolean;
@@ -1271,6 +1275,8 @@ export interface ProfileCheck {
 	plan?: string;
 	/** Runtime → model → supported reasoning levels; absent on older stations. */
 	modelEfforts?: Record<string, Record<string, string[]>>;
+	/** Runtime → model → its own reasoning level, where the runtime says one (Codex); absent on older stations. */
+	modelEffortDefaults?: Record<string, Record<string, string>>;
 	/** ok | login | failed | unknown */
 	state: string;
 	detail: string;
@@ -1821,6 +1827,10 @@ export interface VaultAsk {
 	/** The item's name. */
 	name: string;
 	reason: string;
+	timeoutKind?: string;
+	timeoutSeconds?: number;
+	approvedTimeoutKind?: string;
+	approvedTimeoutSeconds?: number;
 	command?: string;
 	/** proxy | env | ssh | file */
 	mode: string;
@@ -2174,6 +2184,8 @@ export interface NoticeShown {
 	failed: boolean;
 	/** What it says, ⚠️ and a closing 。 left out. */
 	words: string;
+	/** The session waiting to retry at capacity, while this exact notice can cancel its retry. */
+	retrySession?: string;
 	/**
 	 * One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that
 	 * profile's page. Absent otherwise.
@@ -4379,13 +4391,17 @@ export interface Host {
 
 /**
  * An image of a chat opened in the preview (the `imageNear` view): the ones beside it in the order its page shows them
- * (each message's placed ones first, then those below it; the outbox's last), to step to (arrows, a swipe).
+ * (quotes, placed ones, then those below; the outbox's last), to step to (arrows, a swipe).
  */
 export interface ImageNear {
 	/** The image shown just before it, with its `owner`. Absent for the first (or one not among them). */
 	before?: Attachment;
 	/** The one just after it. Absent for the last. */
 	after?: Attachment;
+	/** The previous image's place in its message, when a place was requested. */
+	beforeAt?: string;
+	/** The next image's place in its message, when a place was requested. */
+	afterAt?: string;
 	/** Where it is among them (0: the first), for `2 / 5`. Absent when it is not among them. */
 	index?: number;
 	/** How many images the chat shows. */
@@ -5967,6 +5983,8 @@ export interface PrefsView {
 	/** The most a file opened and let go is brought whole by itself on this device, in bytes: 0 any; none: 1 GB. */
 	fillMax?: number;
 	device?: DeviceView;
+	/** The product's name on this app's channel: still.fail or youdid.wtf. */
+	productName?: string;
 	/** How the drive's reader lays text out (always whole: the core fills in what is not kept). */
 	reader?: ReaderPrefs;
 	/**
@@ -7327,6 +7345,8 @@ export interface VaultRequest {
 	/** `proxy`, `ssh` or `env`. */
 	mode: string;
 	reason: string;
+	timeoutKind?: string;
+	timeoutSeconds?: number;
 	command?: string;
 	hosts: string[];
 	at: number;

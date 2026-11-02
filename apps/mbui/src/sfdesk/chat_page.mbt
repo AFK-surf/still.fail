@@ -322,8 +322,14 @@ fn chat_bar(
             let archive = fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) }) }
             // (a chat of a Slack or Feishu thread alone too: where it is and its agents, chat_info)
             let info = fn() { chat_own.info_open.set(!@signals.untracked(fn() { chat_own.info_open.get() })) }
+            // its "…": what is done with it, the menu a row of the sidebar has (from the mark where it was chosen in the
+            // system's bars, rail_native.mbt bar_anchor)
+            let more = fn() {
+              let (at, _, _) = bar_anchor(c.id("chat-more"), Bottom, End)
+              @sfpages.open_chat_menu(src, w.id, r, @sfpages.chat_extra_items(src, r, chat), from=Of(at))
+            }
             // (each its own in the system's bars where it has them: rail_native.mbt bar_chat)
-            let in_bars = bar_chat(src, r, view.agents, info, if archivable { Some(archive) } else { None })
+            let in_bars = bar_chat(src, r, view.agents, info, more, if archivable { Some(archive) } else { None })
             if !in_bars &&
               archivable &&
               @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
@@ -332,10 +338,13 @@ fn chat_bar(
             jobs_trigger(c, src, r)
             screen_trigger(c, r, view)
             if !in_bars {
-              @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info"))
+              @sf.icon_button(c, "info", key="chat-info", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info"))
               |> ignore
               // (pressed: opened or closed as it is let go, as it is then)
-              c.on_press(c.id("chat-more"), info)
+              c.on_press(c.id("chat-info"), info)
+              if @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("common.more")) {
+                more()
+              }
             }
             // the side panel's switch while it is closed: the first agent's history in it (none where the chat's actions
             // are in the system's bars: its history's switch there)
@@ -671,7 +680,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
     chat_own.jobs_open.set(false)
   }
   // (its ⋯ in the system's bars: from the mark where it was chosen, rail_native.mbt)
-  let (info_at, info_side, info_along) = bar_anchor(c.id("chat-more"), Bottom, End)
+  let (info_at, info_side, info_along) = bar_anchor(c.id("chat-info"), Bottom, End)
   // (closed by what was pressed in it; dismissed by the hand, Escape or a press outside it and its button, at that
   // moment)
   c.with_dismissed(fn(_) { chat_own.info_open.set(false) }, fn() {
@@ -724,11 +733,10 @@ let chat_info_w : Double = 320.0
 let jobs_pop_w : Double = 360.0
 
 ///|
-/// What the chat's info says (ChatInfoBody), in three groups apart: what it is (where it came from if not here, who
+/// What the chat's info says (ChatInfoBody), in two groups apart: what it is (where it came from if not here, who
 /// started it, who else takes part, when it was made and last written in) and who works in it (its agents,
 /// AgentLine); what is in it (its pull requests, what else was said, the stations' files beside it, what its agents
-/// and other chats' wrote each other, it in Slack or Feishu); what is done with it (relaying it, sharing it, a picture
-/// of it).
+/// and other chats' wrote each other). What is done with it is the "…"'s menu, a row of the sidebar's.
 fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   let thread = field(chat, "thread")
   // (a chat of a Slack or Feishu thread alone has none here: where it is, its agents and the way there, no more)
@@ -909,18 +917,8 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   }
   // the stations' files beside the chat, where they lend them (ChatPage.tsx onFiles: useStationDrive)
   let files = dv_stations(src, scope_of(r.station)).0.unwrap_or([]).iter().any(fn(s) { s.drive })
-  let relayable = th is Some(_) && !v.archived && !v.offline && v.agents.length() > 0
-  let slack = text(chat, "slackUrl")
-  let feishu = text(chat, "feishuUrl")
-  let share = field(chat, "xshare")
-  let publish = match field(chat, "publish") {
-    Some(Object(_)) as p if flag(p, "may") || items(p, "links").length() > 0 => p
-    _ => None
-  }
-  // then what is done with it, last: relaying it, sharing it, a picture of it
-  let outward = th is Some(_) && (relayable || share is Some(Object(_)) || publish is Some(_))
-  if pulls.length() > 0 || said > 0 || files || v.letters > 0 || slack != "" || feishu != "" {
-    c.box(style=info_tools(!outward), fn() {
+  if pulls.length() > 0 || said > 0 || files || v.letters > 0 {
+    c.box(style=info_tools(true), fn() {
       // (beside the system's tabs, a phone's room: none of them by itself, 全部 N 个 alone, the user 2026-11-01)
       let named = if @sf.native_on() { 0 } else { info_pulls_most }
       for i, p in pulls {
@@ -960,37 +958,6 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         chat_own.info_open.set(false)
         letters_to_list(r)
         side_toggle(src, r, "letters")
-      }
-      if slack != "" && info_row(c, "info-pop/slack", "external", @sf.t("web-pages.chat.openInSlack"), "") {
-        chat_own.info_open.set(false)
-        @sfbase.open_slack(text(chat, "slackApp"), slack) |> ignore
-      }
-      if feishu != "" && info_row(c, "info-pop/feishu", "external", @sf.t("web-pages.chat.openInFeishu"), "") {
-        chat_own.info_open.set(false)
-        @ui.open_url(feishu) |> ignore
-      }
-    })
-    |> ignore
-  }
-  guard th is Some(id) else { return }
-  if outward {
-    c.box(style=info_tools(true), fn() {
-      if relayable && info_row(c, "info-pop/relay", "arrow-up-right", @sf.t("web-main.relay.action"), "") {
-        chat_own.info_open.set(false)
-        @sfpages.open_relay(src, r, id, from=Unanchored)
-      }
-      if share is Some(Object(_)) &&
-        info_row(c, "info-pop/xshare", "users", @sf.t("web-pages.chat.xshare"), text(share, "text")) &&
-        flag(share, "may") {
-        chat_own.info_open.set(false)
-        @sfpages.open_xshare(src, r, Some(id), from=Unanchored)
-      }
-      // (a picture going out: not the photo of 图片、文件和链接 above it)
-      if publish is Some(_) &&
-        info_row(c, "info-pop/publish", "image-upload", @sf.t("web-pages.chat.shareImage"), "") &&
-        flag(publish, "may") {
-        chat_own.info_open.set(false)
-        @sfpages.open_publish(src, r, id)
       }
     })
     |> ignore

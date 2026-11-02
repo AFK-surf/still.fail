@@ -32,6 +32,8 @@ test("a_chats_link_pasted_as_copied_is_a_reference_when_it_is_of_this_workspace"
   assert.deepEqual(pastedRefs(text, "ws/st9"), [{ start: 2, end: 42, title: "修登录", station: "ws/st", id: "k1", history: "" }]);
   // A station of no workspace takes none.
   assert.deepEqual(pastedRefs(text, "st9"), []);
+  // One to a message keeps which: what follows its link is put back on the reference.
+  assert.deepEqual(pastedRefs("[修登录](https://a/o/ws/st/k1?message=2)", "ws/st9"), [{ start: 0, end: 37, title: "修登录", station: "ws/st", id: "k1", history: "?message=2" }]);
 });
 
 test("clients_without_the_js_ask_the_same_reading_and_the_bound_a_paste_goes_as_a_file_from", () => {

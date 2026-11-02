@@ -3115,8 +3115,9 @@ pub(all) struct Confirmed {
 ///|
 /// Asks before something that cannot be undone (parts.tsx Confirm: an alert dialog, a press outside does not close
 /// it): 420 wide, 28 over its title, 24 in; its title (22, 600) and `description` (13, muted), what went wrong (`error`:
-/// 13 red, 12 over the buttons, it stays open), then `cancel` (its words alone) and `action` (solid red, the primary's
-/// when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back and `cancel` close it.
+/// 13 red, 12 over the buttons, it stays open), an optional red `warning`, then `cancel` (its words alone) and `action`
+/// (solid red, the primary's when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back
+/// and `cancel` close it.
 /// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already); `veil`:
 /// how far another over it dims it over itself (0 … 1: dialog_veil).
 pub fn confirm_dialog(
@@ -3130,6 +3131,7 @@ pub fn confirm_dialog(
   busy? : Bool = false,
   error? : String = "",
   danger? : Bool = true,
+  warning? : String = "",
   scrim? : Int64,
   veil? : Double = 0.0,
 ) -> Confirmed {
@@ -3157,6 +3159,9 @@ pub fn confirm_dialog(
         fn() {
           c.text(s.title, style=dialog_title) |> ignore
           c.text(s.description, style=dialog_lead) |> ignore
+          if warning != "" {
+            c.text(warning, style=confirm_warning) |> ignore
+          }
           inner()
           dialog_veil(c, veil)
         },
@@ -3194,6 +3199,10 @@ let confirm_error_at : @ui.Style = @ui.css("w=Full pt=S1")
 ///|
 // kept across runs: a value (no field of it changes)
 let confirm_error : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger)
+
+///|
+// kept across runs: a value (no field of it changes)
+let confirm_warning : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Danger)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -55,6 +55,76 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
 }
 
 ///|
+/// A picture waiting in an existing chat or a new one's composer, opened and closed as a host takes a pointer's events.
+fn waiting_picture_return(new_chat : Bool) -> Unit raise {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.keep_parts(true)
+  t.drawn_again(true)
+  t.check_looks(false)
+  t.run_for(@ui.move_most_ms)
+  if new_chat {
+    t.tap_text("新建对话")
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() == NewChat)
+  }
+  let w = @sfbase.writing(src, if new_chat { "new:ws1" } else { "ws1/st1:s-c1" })
+  @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let id = text(Some(w.files[0]), "id")
+  let picture = @sfbase.writing_pictures[id]
+  let tile = thumb_of(t.ctx(), "ws1/st1//draft:" + id).unwrap()
+  let visible = fn() {
+    t.drawn_instances().iter().any(fn(a) {
+      a[5] == 4.0 && t.image_src(a[20].to_int()) == picture && a[11] > 0.99 &&
+      (a[0] - tile.x).abs() < 1.0 && (a[1] - tile.y).abs() < 1.0
+    })
+  }
+  assert_true(visible(), msg="the picture is visible before opening")
+  let (x, y) = (tile.x + tile.w / 2.0, tile.y + tile.h / 2.0)
+  t.touch(0, x, y)
+  t.touch(2, x, y)
+  t.frames_owed()
+  let v = viewer.get().unwrap()
+  assert_true(v.flies, msg="the preview opens from the tile")
+  while t.time() + @ui.frame_period_default < v.fly.end() {
+    t.frame_at(t.time() + @ui.frame_period_default)
+  }
+  t.frame_at(v.fly.end() + @ui.frame_period_default)
+  let (cx, cy, cw, ch) = t.get(Button, label=@sf.t("common.close")).rect
+  let (cx, cy) = (cx + cw / 2.0, cy + ch / 2.0)
+  t.move(cx, cy)
+  t.touch(0, cx, cy)
+  t.touch(2, cx, cy)
+  t.frames_owed()
+  let closing = pv_leaving.get().unwrap()
+  assert_true(closing.flies && closing.fly_back, msg="the preview returns to the tile")
+  let end = closing.fly.end()
+  t.frame_at((t.time() + end) / 2.0)
+  assert_false(visible(), msg="the tile is hidden while the picture returns")
+  while t.time() + @ui.frame_period_default < end {
+    t.frame_at(t.time() + @ui.frame_period_default)
+  }
+  t.frame_at(end)
+  t.frame_at(end + @ui.frame_period_default)
+  assert_true(viewer.get() is None && pv_leaving.get() is None, msg="the preview has returned")
+  assert_true(visible(), msg="the picture is visible again without another input")
+}
+
+///|
+test "a picture waiting in an existing chat is visible as soon as its preview returns" {
+  waiting_picture_return(false)
+}
+
+///|
+test "a picture waiting in a new chat is visible as soon as its preview returns" {
+  waiting_picture_return(true)
+}
+
+///|
 test "a film waiting in the composer, opened, plays from the bytes picked: none asked of the station" {
   // (the user, 2026-11-01: 我自己上传到 composer 的视频，自己不能预览？ the player asked the station for `draft:<id>`,
   // which only this device has, and said 无法播放此视频)
@@ -433,6 +503,38 @@ test "its agent's cache over, in the wide frame: said over the composer, 换新�
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "key"), "s-c1")
   assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
+}
+
+///|
+test "an empty focused composer and its cache choice stay in place while the menu has focus" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  assert_true(t.ctx().field_focused(), msg="the composer's field has focus before the choice opens")
+  let (_, before_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  t.click(Button, label="接着聊")
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_))
+  // Beyond the empty composer's focus-loss delay and its shape's transition, the choice is still under the pointer.
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms)
+  let (_, after_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  assert_true((after_y - before_y).abs() < 1.0, msg="the open choice moved from \{before_y} to \{after_y}")
+  t.click(MenuItemRadio, label="换新上下文")
+  t.draw()
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
+}
+
+///|
+test "a cache choice opened over a collapsed composer leaves it collapsed" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  t.ctx().blur()
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms)
+  let (_, before_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  t.click(Button, label="接着聊")
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms)
+  let (_, after_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  assert_true((after_y - before_y).abs() < 1.0, msg="the collapsed composer moved from \{before_y} to \{after_y}")
 }
 
 ///|

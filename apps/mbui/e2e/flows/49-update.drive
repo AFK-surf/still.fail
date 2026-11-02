@@ -15,7 +15,7 @@ dragon 0 -500 400 此设备
 until 更新到 0.1.1
 shot 1-settings
 tap 关于
-until still.fail mbui
+until still.fail
 # the runner asked first to wait for the system's installer in front (the activity manager's top activity), keep its
 # page and decline it: once the update is handed over, the installer's page covers the app, which draws no frame till
 # it is back in front, so no step of the app's waits through that time

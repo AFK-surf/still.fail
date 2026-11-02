@@ -330,8 +330,6 @@ pub fn file_serve(@sfbase.FilePage, @ui.SiteRequest, @ui.SiteReply) -> Unit
 
 pub fn file_type(String) -> String
 
-pub fn file_viewer(@ui.Ctx, @sfbase.Source) -> Unit
-
 pub fn files_can_lend(@sfbase.Source, @sfbase.Workspace) -> Bool
 
 pub fn files_into(String, @sfbase.Dragged) -> Unit
@@ -570,7 +568,7 @@ pub fn note_list(@ui.Ctx, Int32, String, Double, Double) -> Unit
 
 pub let note_pop_ms : Double
 
-pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, top_crop? : Bool, list? : String, over? : (Double) -> Unit) -> Unit
+pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, top_crop? : Bool, list? : String, over? : (Double) -> Unit, said? : String) -> Unit
 
 pub let notice_host : @ref.Ref[@sfbase.NoticeHost]
 
@@ -616,7 +614,7 @@ pub fn open_mode(String) -> Unit
 
 pub fn open_page(@sfbase.Page) -> Unit
 
-pub fn open_preview(String, String, @sfbase.Attachment, drive? : @sfbase.DriveFile?, steps? : @sfbase.Stepping, named? : Bool) -> Unit
+pub fn open_preview(String, String, @sfbase.Attachment, drive? : @sfbase.DriveFile?, steps? : @sfbase.Stepping, named? : Bool, at? : String) -> Unit
 
 pub fn open_screen(String, String, String?) -> Unit
 
@@ -720,7 +718,7 @@ pub fn pv_fill(String, Array[(String, String)]) -> String
 
 pub let pv_frames : Map[String, (String, Double)]
 
-pub let pv_hidden : @ref.Ref[String]
+pub let pv_hidden : @signals.Signal[String]
 
 pub let pv_leaving : @signals.Signal[@sfbase.Viewer?]
 

@@ -38,7 +38,7 @@ test "wide, short names: the model's panel as wide as what it holds, not as wide
 test "choosing a frequent model fades the model words with the panel" {
   let t = model_pop("newchat-crowded-model")
   let (x, y, w, h) = t.get(@ui.Role::Dialog).rect
-  let heading = t.words().filter(fn(item) { item.0 == "常用" }).last().unwrap()
+  let heading = t.words().filter(fn(item) { item.0 == "全部模型" }).last().unwrap()
   let surfaces = t.drawn_rects().filter(fn(r) {
     (r.0 - x).abs() < 0.1 && (r.1 - y).abs() < 0.1 &&
     (r.2 - w).abs() < 0.1 && (r.3 - h).abs() < 0.1 && (r.4 & 0xFFL) > 0L
@@ -50,7 +50,7 @@ test "choosing a frequent model fades the model words with the panel" {
     g.1 >= heading.2 - 2.0 && g.1 < heading.2 + heading.4 + 2.0
   }
   let before = t.drawn_glyphs().filter(in_heading)
-  assert_true(!before.is_empty(), msg="the frequent-model heading is drawn")
+  assert_true(!before.is_empty(), msg="the way to all of them is drawn")
   let ink = before.last().unwrap().2
   t.click(Button, label="GPT-6 Astra")
   t.run_for(@kit.pop_out_ms / 2.0)
@@ -61,7 +61,7 @@ test "choosing a frequent model fades the model words with the panel" {
   })
   let words = t.drawn_glyphs().filter(fn(g) { in_heading(g) && g.2 >> 8 == ink >> 8 })
   assert_eq(faded.length(), 1, msg="the model panel remains during its fade")
-  assert_true(!words.is_empty(), msg="the frequent-model heading remains during its fade")
+  assert_true(!words.is_empty(), msg="the way to all of them remains during its fade")
   let surface_alpha = faded[0].4 & 0xFFL
   let word_alpha = words.last().unwrap().2 & 0xFFL
   assert_true(surface_alpha > 0L && surface_alpha < 255L, msg="the surface is fading")
@@ -72,19 +72,19 @@ test "choosing a frequent model fades the model words with the panel" {
 ///|
 test "a frequent model with a different runtime is applied as its panel leaves without the contents jumping" {
   let t = model_pop("newchat-crowded-model")
-  let before = t.find("常用").unwrap()
+  let before = t.find("全部模型").unwrap()
   let words = fn(name : String) { t.words().filter(fn(w) { w.0 == name }).last().unwrap() }
-  let heading = words("常用")
+  let heading = words("全部模型")
   let row = words("SWE-2")
   let other = words("DeepSeek V4.1 Flash")
   assert_true(t.find("DeepSeek Harness") is Some(_))
   t.click(Button, label="GPT-6 Astra")
   assert_eq(new_fix.model, "gpt-6-astra")
-  assert_eq(t.find("常用"), Some(before), msg="the model rows stay where they were as the panel starts to close")
+  assert_eq(t.find("全部模型"), Some(before), msg="the model rows stay where they were as the panel starts to close")
   assert_true(t.find("DeepSeek Harness") is Some(_), msg="the leaving panel keeps the runtime that was shown")
   t.run_for(@kit.pop_out_ms / 2.0)
   // The rows' layout stays fixed while the panel fades and shrinks.
-  let heading_out = words("常用")
+  let heading_out = words("全部模型")
   let row_out = words("SWE-2")
   let other_out = words("DeepSeek V4.1 Flash")
   assert_true(((row_out.2 - heading_out.2) - (row.2 - heading.2)).abs() < 1.0, msg="the model rows keep their layout")
@@ -104,7 +104,7 @@ fn in_line(a : Double, b : Double, c : Double) -> Bool {
 }
 
 ///|
-test "wide: the models used most between the way to all of them and how hard it thinks, the most used nearest it, each saying how it runs; one pressed is made what it runs on and the panel closes" {
+test "wide: the models used most, the way to all of them under them, how hard it thinks beside them, each saying how it runs; one pressed is made what it runs on and the panel closes" {
   let t = model_pop("newchat-model")
   let (opus, gpt, all) = (
     t.get(Button, label="Opus 5.5").rect,
@@ -112,10 +112,10 @@ test "wide: the models used most between the way to all of them and how hard it 
     t.get(Button, label="全部模型").rect,
   )
   let effort = t.get(Radio, label="高").rect
-  // (2026-11-01 用户「那它就不应该跑到离按钮很远的最顶上去啊」)
-  assert_true(in_line(all.1, gpt.1, opus.1) && in_line(gpt.1, opus.1, effort.1), msg="\{all} \{gpt} \{opus} \{effort}")
+  // (the way to all of them at the foot of the models' column: 2026-11-02 用户「全部模型的位置需要讲究一下」)
+  assert_true(all.1 > gpt.1 && all.1 > opus.1 && effort.0 >= opus.0 + opus.2, msg="\{all} \{gpt} \{opus} \{effort}")
   assert_true(t.query(Button, label="Sonnet 5") is None, msg="the rest a step further")
-  // how it last ran, at its row's end
+  // how it last ran, right after its name
   assert_true(
     t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "中" && b.y >= gpt.1 && b.y + b.h <= gpt.1 + gpt.3 }),
     msg="GPT-6's 中",
@@ -145,12 +145,12 @@ test "wide: two levels: those used most, those starred, the way to all of them; 
   t.click(Button, label="OpenAI")
   t.run_for(@kit.presence_in_ms)
   assert_true(t.query(Button, label="GPT-6") is Some(_) && t.query(Button, label="Sonnet 5") is None)
-  // back: Sonnet past those used most, no head of its own
+  // back: Sonnet under those used most (what it runs on in view first), no head of its own
   t.click(Button, label="全部模型")
   t.run_for(@kit.presence_in_ms)
   assert_true(t.find("喜欢") is None, msg="no head")
   let (opus, gpt, sonnet) = (t.get(Button, label="Opus 5.5").rect.1, t.get(Button, label="GPT-6").rect.1, t.get(Button, label="Sonnet 5").rect.1)
-  assert_true(in_line(sonnet, gpt, opus), msg="\{sonnet} \{gpt} \{opus}")
+  assert_true(sonnet > gpt && sonnet > opus, msg="\{sonnet} \{gpt} \{opus}")
   // its box unticked there: gone from 喜欢
   t.click(Button, label="全部模型")
   t.run_for(@kit.presence_in_ms)
@@ -176,59 +176,28 @@ test "wide, models of many makers: each a row of its own in the list of them, no
 }
 
 ///|
-/// The thumbs drawn in how hard it thinks (lifted out of its track: the boxes there with a line round them) as they
-/// show, their left edges.
-fn meter_thumbs(t : @ui.Tester) -> Array[Double] raise {
-  let (x0, y0, _, h0) = t.get(Radio, label="默认").rect
-  let (x1, _, w1, _) = t.get(Radio, label="高").rect
-  t
-  .boxes()
-  .filter(fn(b) {
-    b.kind != "text" &&
-    b.border_w > 0.0 &&
-    b.opacity > 0.01 &&
-    b.x >= x0 - 1.0 &&
-    b.x + b.w <= x1 + w1 + 1.0 &&
-    b.y >= y0 - 1.0 &&
-    b.y + b.h <= y0 + h0 + 1.0
-  })
-  .map(fn(b) { b.x })
-}
-
-///|
-test "wide: another effort picked, its thumb slides there, one thumb all the way (2026-10-31 用户「思考深度的滑块动效有点拉鸡」)" {
-  let t = model_pop("newchat-model")
-  let from = t.get(Radio, label="高").rect.0
-  let to = t.get(Radio, label="默认").rect.0
-  assert_eq(meter_thumbs(t).length(), 1)
-  t.click(Radio, label="默认")
-  // (half its way: one thumb, between where it was and where it goes, not one fading out over another fading in)
-  t.run_for(@ui.move_ms(from - to) / 2.0)
-  let mid = meter_thumbs(t)
-  assert_eq(mid.length(), 1, msg="\{mid}")
-  assert_true(mid[0] > to + 1.0 && mid[0] < from - 1.0, msg="\{mid} \{to} \{from}")
-  t.run_for(@ui.move_ms(from - to))
-  let end = meter_thumbs(t)
-  assert_eq(end.length(), 1, msg="\{end}")
-  assert_true((end[0] - to).abs() < 1.0, msg="\{end} \{to}")
-}
-
-///|
-test "wide, many models and Codex's efforts and speeds: the models, how hard it thinks on a line of its own, the runtime and how fast a row each, in the panel" {
+test "wide, many models and Codex's efforts and speeds: the models, how hard it thinks a column beside them, the runtime and how fast at the foot" {
   let t = model_pop("newchat-tall-model")
   let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
-  let last = t.get(Button, label="全部模型").rect
-  // how hard it thinks, its levels on one line under the models
-  let levels = ["默认", "最低", "低", "中", "高", "很高", "最高", "Ultra"].map(fn(l) { t.get(Radio, label=l).rect })
-  for r in levels {
-    assert_true(r.1 == levels[0].1 && r.1 >= last.1 + last.3, msg="\{levels}, under \{last}")
-    assert_true(r.0 >= px && r.0 + r.2 <= px + pw, msg="\{r} past the panel")
+  let all = t.get(Button, label="全部模型").rect
+  // how hard it thinks, its levels one under another at the panel's right, beside the models (2026-11-02 用户「思考深度
+  // 放在整个面板的右边」「模型跟思考深度的并排的」)
+  let levels = ["最低", "低", "中", "高", "很高", "最高", "Ultra"].map(fn(l) { t.get(Radio, label=l).rect })
+  for i, r in levels {
+    assert_true(r.0 == levels[0].0 && r.0 >= all.0 + all.2, msg="\{levels}, beside \{all}")
+    assert_true(i == 0 || r.1 > levels[i - 1].1, msg="\{levels}")
+    assert_true(r.0 + r.2 <= px + pw && r.1 + r.3 <= py + ph, msg="\{r} past the panel")
   }
-  // the runtime, then how fast, each a row of the panel's under them, in the panel
+  // the runtime and how fast at the foot, by who runs it, how fast saying how fast it runs (its account's standard: no
+  // 跟随订阅), pressed the two ways in a pick (「速度放在面板下面，跟账号差不多的位置」「运行时不应该放那个位置吧」)
   let runtime = t.get(Button, label="DeepSeek Harness").rect
-  let speed = t.get(Button, label="跟随订阅").rect
-  assert_true(runtime.1 >= levels[0].1 + levels[0].3 && speed.1 >= runtime.1 + runtime.3, msg="\{runtime} \{speed}")
-  assert_true(speed.0 >= px && speed.0 + speed.2 <= px + pw && speed.1 + speed.3 <= py + ph, msg="\{speed}")
+  let speed = t.get(Button, label="标准").rect
+  assert_true(runtime.1 == speed.1, msg="\{runtime} \{speed}")
+  assert_true(speed.1 >= levels[levels.length() - 1].1 + levels[levels.length() - 1].3, msg="\{speed}")
+  assert_true(t.words().iter().all(fn(w) { w.0 != "跟随订阅" }), msg="跟随订阅 said")
+  t.click(Button, label="标准")
+  t.run_for(squeeze_opening)
+  assert_true(t.words().iter().any(fn(w) { w.0 == "Fast" }), msg="no pick of how fast")
 }
 
 ///|

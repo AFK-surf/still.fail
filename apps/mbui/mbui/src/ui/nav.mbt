@@ -2,8 +2,7 @@
 // (app/App.kt Pages): a page pushed comes in whole from the right as the one
 // under it goes out whole to the left, side by side, 300 ms on the standard
 // curve (.4, 0, .2, 1), nothing fading; back, the other way. A page the
-// stack says comes from the left (`from_left`: still.fail's settings, its
-// gear at the top left) comes in from there, the one under it going out to
+// stack says comes from the left (`from_left`) comes in from there, the one under it going out to
 // the right, and goes back that way. Swiped back
 // (from the left edge with a finger or a mouse here; on Android, the system's
 // back gesture, its predictive back, and no edge of mbui's), the page follows
@@ -124,8 +123,8 @@ struct Nav[P] {
   // told of a page back took off (its own back: the edge's swipe, the system's, Ctx::back): the page, whether it was
   // pushed over the one under it, whether it rose from the foot, and the pages left
   went_back : (P, Bool, Bool, Array[P]) -> Unit
-  // the pages that come in from the left and go back that way
-  from_left : (P) -> Bool
+  // a page and the page under it as it was pushed: whether it comes from the left and goes back that way
+  from_left : (P, P?) -> Bool
   /// what its motion is said to move by (Ctx::moving), and the frame it was told to move in
   mover : Mover
   mut asked : Int
@@ -166,14 +165,14 @@ struct Nav[P] {
 ///|
 /// A stack of pages, `root` at the bottom. `on_leave` is told of each page
 /// that leaves it for good (popped, once it has slid away); a page
-/// `from_left` says yes to slides in from the left and back out that way
-/// (App.kt transition: Settings), swiped back too. `went_back` is told of each page its own back takes off (the edge's
+/// `from_left` says yes to slides in from the left and back out that way, swiped back too. It is given the page and
+/// the page under it as it was pushed. `went_back` is told of each page its own back takes off (the edge's
 /// swipe, the system's back, Ctx::back), as it goes: what a forward puts back.
 pub fn[P] Nav::new(
   root : P,
   on_leave? : (P) -> Unit = fn(_) {  },
   went_back? : (P, Bool, Bool, Array[P]) -> Unit = fn(_, _, _, _) {  },
-  from_left? : (P) -> Bool = fn(_) { false },
+  from_left? : (P, P?) -> Bool = fn(_, _) { false },
 ) -> Nav[P] {
   {
     pages: [nav_page(root, None)],
@@ -922,7 +921,7 @@ pub fn[P] Ctx::nav(
   // a page that rose goes up and down over the one under it, which stays
   let rising = top.rise
   // the side the top page is off to (one from the left goes back left, the page under it coming from the right)
-  let way = if (nav.from_left)(top.page) { -1.0 } else { 1.0 }
+  let way = if (nav.from_left)(top.page, top.under) { -1.0 } else { 1.0 }
   // back as it was before the stack, for when neither its top page nor it takes it
   let before = self.back_next
   let before_node = self.back_node_next
