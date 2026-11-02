@@ -583,8 +583,10 @@ export function badgeText(b: string): string {
   return b === "block" ? t("core-views.present.badge.block") : b === "run" ? t("core-views.present.badge.run") : t("core-views.present.badge.failed");
 }
 
-export function maker(m: string | null | undefined): J {
-  const found = m ? format.makerOf(m) : null;
+/// Who made model `m`: as the model catalog says (`said`, the station's `modelMakers` entry for it), else by its name.
+export function maker(m: string | null | undefined, said?: J): J {
+  const lab = str(get(said, "maker"));
+  const found = lab ? format.labMaker(lab, str(get(said, "makerName")) ?? null) : m ? format.makerOf(m) : null;
   return found ? { id: found[0], name: found[1] } : null;
 }
 

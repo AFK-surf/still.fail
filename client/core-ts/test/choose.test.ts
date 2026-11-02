@@ -108,6 +108,35 @@ test("the_runtimes_a_chat_starts_on_are_offered_claude_codex_then_deepseek_harne
   assert.deepEqual([old.folder, old.day, old.when, old.own], ["workspace", "昨天", "13:05", true]);
 });
 
+test("a models maker and series are the catalogs the station says, else known by its name", () => {
+  const overview = {
+    profiles: [{ id: "p", runtimes: ["claude"], models: ["muse-spark-1.3", "step-5-preview", "anthropic/claude-opus-5-5", "kimi-k3", "gemini-4-pro", "my-model"] }],
+    modelMakers: {
+      "muse-spark-1.3": { maker: "meta", makerName: "Meta", family: "Muse" },
+      "step-5-preview": { maker: "stepfun", makerName: "StepFun" },
+      "anthropic/claude-opus-5-5": { maker: "anthropic", makerName: "Anthropic", family: "Claude Opus" },
+      // A lab models.dev names otherwise than the marks do: the marks'.
+      "kimi-k3": { maker: "moonshotai", makerName: "Moonshot AI", family: "Kimi K3" },
+      "gemini-4-pro": { maker: "google", makerName: "Google" },
+    },
+  };
+  const said = Object.fromEntries(models(overview, 0).map((m: J) => [m.model, [m.maker?.id ?? null, m.maker?.name ?? null, m.family]]));
+  assert.deepEqual(said, {
+    "muse-spark-1.3": ["meta", "Meta", "Muse"],
+    "step-5-preview": ["stepfun", "阶跃星辰", null],
+    // Its series as still.fail names it.
+    "anthropic/claude-opus-5-5": ["anthropic", "Anthropic", "Opus"],
+    "kimi-k3": ["kimi", "Kimi", "Kimi"],
+    "gemini-4-pro": ["gemini", "Google", "Gemini"],
+    // None in the catalog: by its name, none known.
+    "my-model": [null, null, null],
+  });
+  // A station older than the catalog's word: by the names alone.
+  const old = models({ profiles: overview.profiles }, 0);
+  assert.equal(old.find((m: J) => m.model === "muse-spark-1.3").maker, null);
+  assert.equal(old.find((m: J) => m.model === "kimi-k3").maker.id, "kimi");
+});
+
 test("model_options_read_each_accounts_model_list_once_even_when_it_offers_many_models", () => {
   let reads = 0;
   const names = Array.from({ length: 48 }, (_, i) => `gpt-6-sol-${i}`);

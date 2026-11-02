@@ -21,6 +21,15 @@ export const RUNTIMES = format.RUNTIMES;
 
 const profilesOf = (overview: J): J[] => arr(get(overview, "profiles"));
 const runs = (p: J, runtime: string) => arr(get(p, "runtimes")).some((r) => r === runtime);
+/// What the station's model catalog says of a model it lists as any of `ids` (its `modelMakers`: who made it, its
+/// series); none from a station older than it, or for a model the catalog does not name.
+const madeBy = (overview: J, ids: Iterable<string>): J => {
+  const said = get(overview, "modelMakers");
+  for (const id of ids) if (get(said, id) !== undefined) return get(said, id);
+  return null;
+};
+/// A model's maker and series: as the catalog says, its series as still.fail names it first (Opus, not Claude Opus).
+const makerFamily = (m: string, said: J) => ({ family: model.family(m) ?? str(get(said, "family")), maker: present.maker(m, said) });
 const sortedSet = (set: Set<string>) => [...set].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /// The item of `list` whose `id` is `id`, or null.
@@ -121,9 +130,8 @@ export function choices(overview: J, session: J, now: number): J[] {
     return {
       model: m,
       name: model.name(m),
-      family: model.family(m),
       ids,
-      maker: present.maker(m),
+      ...makerFamily(m, madeBy(overview, ids)),
       runtimes: [runtime],
       efforts: { [runtime]: commonEfforts(offered.profiles, runtime, m) },
       accounts: { [runtime]: profileLines(offered.profiles, runtime, m, current, now) },
@@ -242,7 +250,7 @@ export function models(overview: J, now: number): J[] {
       efforts[r] = commonEfforts(offered, r, m);
       accounts[r] = profileLines(offered, r, m, null, now);
     }
-    return { model: m, name: model.name(m), family: model.family(m), ids: spelled, runtimes: rts, maker: present.maker(m), efforts, accounts, spent: spent !== null ? spentView(spent, now) : null };
+    return { model: m, name: model.name(m), ids: spelled, runtimes: rts, ...makerFamily(m, madeBy(overview, spelled)), efforts, accounts, spent: spent !== null ? spentView(spent, now) : null };
   });
 }
 

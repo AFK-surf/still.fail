@@ -9,6 +9,7 @@ import { facts, learn } from "../src/accounts/catalog.ts";
 import { seesImages } from "../src/accounts/models.ts";
 import { price, priceTable } from "../src/read/usage.ts";
 import { ModelCatalog } from "../src/models/module.ts";
+import { modelMakers } from "../src/api/overview.ts";
 
 const MODELS = {
   "claude-haiku-5-5": { name: "Claude Haiku 5.5", input: ["text", "image"], cost: { input: 0.1, output: 0.5, cacheRead: 0.005 } },
@@ -40,6 +41,27 @@ test("prices and the image check take the catalog's word, and the station's own 
     assert.ok(rows.some((r: any) => r.model === "claude-haiku-5-5" && r.input === 0.1 && r.cacheWrite === 0.125));
     assert.ok(rows.some((r: any) => r.model === "claude-opus-5-5"));
     assert.ok(!rows.some((r: any) => r.model === "unknown-model"));
+  } finally {
+    learn(null);
+  }
+});
+
+test("the overview says who made each model its profiles run, as the catalog says", () => {
+  try {
+    learn({
+      "muse-spark-1.3": { name: "Muse Spark 1.3", maker: "meta", makerName: "Meta", family: "Muse" },
+      "step-5-preview": { maker: "stepfun" },
+      "claude-opus-5-5": { maker: "anthropic", makerName: "Anthropic", family: "Claude Opus" },
+      odd: { maker: 3, family: "" },
+    });
+    const profiles = [{ models: ["muse-spark-1.3", "step-5-preview", "my-own-model"] }, { models: ["anthropic/claude-opus-5-5[1m]", "odd", "step-5-preview"] }, {}];
+    assert.deepEqual(modelMakers(profiles), {
+      "muse-spark-1.3": { maker: "meta", makerName: "Meta", family: "Muse" },
+      "step-5-preview": { maker: "stepfun" },
+      // However a profile spells it.
+      "anthropic/claude-opus-5-5[1m]": { maker: "anthropic", makerName: "Anthropic", family: "Claude Opus" },
+      // One the catalog does not name, or names no maker of: none (the clients go by its name).
+    });
   } finally {
     learn(null);
   }

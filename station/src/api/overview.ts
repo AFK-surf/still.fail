@@ -4,6 +4,7 @@
 import { statfsSync } from "node:fs";
 import { homedir } from "node:os";
 import type { Accounts } from "../accounts/index.ts";
+import { facts } from "../accounts/catalog.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type Viewer, managesStation, readOnly } from "../mesh/credential.ts";
 import { platform } from "../platform/index.ts";
@@ -123,13 +124,17 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     const own = d.connectKinds?.get(kind);
     return own === undefined ? shown : { ...shown, ...own.shown(c), connection: own.connection(c) ?? shown.connection };
   });
+  const profiles = d.accounts?.profilesView(viewer) ?? [];
   return {
     automaticDecisions: d.accounts ? decisionsView(d, viewer) : null,
     archiving: archivingView(raw, viewer),
     viewer: { via: "mesh", ...viewer },
     mesh: meshStatus(d.cloud, viewer),
     connects,
-    profiles: d.accounts?.profilesView(viewer) ?? [],
+    profiles,
+    // Who made each model its profiles run, and its series, as the model catalog says (accounts/catalog.ts): the
+    // clients group and mark models by them, and by the names alone where it says none.
+    modelMakers: modelMakers(profiles),
     footprint: null,
     processes: processes.map((p) => {
       const kb = memory.get(p.pgid);
@@ -165,6 +170,16 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // The modules beside it (docs/station-modules.md), for clients to show theirs: said only where there is one.
     ...withModules(d),
   };
+}
+
+export function modelMakers(profiles: { models?: unknown }[]): Record<string, { maker: string; makerName?: string; family?: string }> {
+  const out: Record<string, { maker: string; makerName?: string; family?: string }> = {};
+  for (const m of profiles.flatMap((p) => (Array.isArray(p.models) ? p.models : []))) {
+    const f = typeof m === "string" && !(m in out) ? facts(m) : null;
+    if (f?.maker === undefined) continue;
+    out[m] = { maker: f.maker, ...(f.makerName !== undefined ? { makerName: f.makerName } : {}), ...(f.family !== undefined ? { family: f.family } : {}) };
+  }
+  return out;
 }
 
 function withModules(d: OverviewDeps): { modules?: { id: string; running: boolean }[] } {

@@ -106,7 +106,7 @@ const stationOnline = (v: Value | undefined): boolean => !down(linkValue(v));
 const profileOverview = (v: Value | undefined): J => v && "ok" in v ? v.ok : undefined;
 const sameProfileOverview = (a: J, b: J): boolean => {
   if (!isObject(a) || !isObject(b)) return equal(a, b);
-  return equal(get(a, "profiles"), get(b, "profiles")) && equal(get(a, "sharing"), get(b, "sharing"));
+  return equal(get(a, "profiles"), get(b, "profiles")) && equal(get(a, "sharing"), get(b, "sharing")) && equal(get(a, "modelMakers"), get(b, "modelMakers"));
 };
 
 /// A station taken for down, in words, as its link says why (link.ts DownCause): the device's network, the station, or

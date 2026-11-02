@@ -37,7 +37,7 @@ type DecisionDraft = { owner: ClientId; value: J; pickedModel: string | null; pe
 function modelPick(overview: J, value: J, pickedModel: string | null): J {
   const options = arr(get(get(overview, "automaticDecisions"), "models"))
     .filter((m) => typeof get(m, "id") === "string")
-    .map((m) => ({ model: m.id, name: m.name ?? null, ids: [m.id], family: model.family(m.id), maker: present.maker(m.id), runtimes: [], efforts: {}, accounts: {} }))
+    .map((m) => ({ model: m.id, name: m.name ?? null, ids: [m.id], family: model.family(m.id), maker: present.maker(m.id, get(get(overview, "modelMakers"), m.id)), runtimes: [], efforts: {}, accounts: {} }))
     .sort((a, b) => model.compareOrder(a.model, b.model));
   const m = str(value.model);
   const picked = pickedModel ?? m;
