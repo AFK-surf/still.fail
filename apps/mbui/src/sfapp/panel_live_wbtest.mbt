@@ -40,8 +40,9 @@ test "panel live, 大屏 keyboard and mouse: in the middle, a share of the windo
       // (frames as the display draws them: nothing said changed but what it reads)
       live_frames(t, 30)
       out.push("\{kind} \{s}: \{live_said(t)}")
-      // (drawn by the window's tree in the middle; beside what opened it, the host's still)
-      drawn.push(tree_said(Dialog, s.0) is Some(_))
+      // (drawn by the window's tree: in the middle titled as it is now; beside what opened it, as it was presented,
+      // read out by its title and what it holds as the host had it)
+      drawn.push(tree_said(Dialog, if kind == "beside" { "" } else { s.0 }) is Some(_))
     }
   }
   // (as main has it)
@@ -62,7 +63,7 @@ test "panel live, 大屏 keyboard and mouse: in the middle, a share of the windo
     "beside (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 65.8))) title [] step [] says [] close [] words [(616, 112, 248, 22)]",
   ])
   assert_eq(drawn, [
-    true, true, true, true, true, true, true, true, true, true, false, false, false, false,
+    true, true, true, true, true, true, true, true, true, true, true, true, true, true,
   ])
 }
 
