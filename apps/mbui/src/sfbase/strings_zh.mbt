@@ -1232,6 +1232,7 @@ let zh : Map[String, String] = {
   "web-main.stations.shareLook.poster": "大字报",
   "web-main.stations.shareLook.receipt": "小票",
   "web-main.stations.shareLook.terminal": "终端",
+  "web-main.stations.sharePalette": "终端配色",
   "web-main.stations.shareTagline": "一生万物，万物归一",
   "web-main.status.done": "已完成",
   "web-main.status.waiting": "等待",

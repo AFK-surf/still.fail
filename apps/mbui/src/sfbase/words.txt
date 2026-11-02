@@ -1223,6 +1223,7 @@ web-main.stations.shareLook.night
 web-main.stations.shareLook.poster
 web-main.stations.shareLook.receipt
 web-main.stations.shareLook.terminal
+web-main.stations.sharePalette
 web-main.stations.shareTagline
 web-main.status.done
 web-main.status.waiting
