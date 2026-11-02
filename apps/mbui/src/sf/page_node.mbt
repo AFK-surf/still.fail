@@ -1,9 +1,10 @@
 // A page's parts (page.mbt) as nodes of the window's tree, made once: its frame (back over its large title, what it is
 // for, its blocks in the page's room, all of it scrolling), a heading, a group's card and the rows on it that go
-// somewhere (link_row's), each as page.mbt draws it narrow, its styles the same (their words through @ui.style_words),
-// what changes bound to what it is told: the frame's back and room, the words, the language, the theme. What a page
-// made so holds is laid out as the page's look has it as it is made (look_for its width then: Narrow); the parts read
-// it as they are made, never as they are drawn.
+// somewhere (link_row's), each as page.mbt draws it, its styles the same (their words through @ui.style_words), what
+// changes bound to what it is told: the frame's back and room, the words, the language, the theme. A page made so is
+// laid out as wide as its frame gives it (look_for that width), made again only as that arrangement changes; it lends
+// it to all it holds (View::lends), and each part reads it from where it is made (look_node, part_of), never as it is
+// drawn: narrow here, wide in page_wide_node.mbt.
 
 ///|
 /// Whether the hand is on `v` as the theme answers it: a mouse over it or pressing it, a finger pressing it; the
@@ -93,15 +94,16 @@ priv enum PageItem {
 } derive(Eq, Hash)
 
 ///|
-/// A page titled `title` in node `v` (page's, narrow: page.mbt narrow_page), as nodes: under what stands over it as the
-/// frame says (`frame`'s top), back where the frame says it goes (TopBack: its chevron and its words, `on_back` as it
-/// is pressed), its large title (as far down as a wide page's head where nothing is over it), what it is for (`lead`)
-/// under it (`actions`: what it does, made in its title's line after the title, at its end, scrolling with it), then its blocks, those `blocks`
-/// names now by their keys, each made by `block` in the page's room
-/// (page_block), and 30 under the last, then the frame's room at its foot; all of it scrolling in the page, each part
-/// made only while it shows (View::scrolls_window, as narrow_list's old list builds only the rows in view). What the
-/// frame says is followed as it changes. What it says of itself told `said` as that changes (a frame's bar that names
-/// it: its title, and what it is for by a mark beside it, `about`: said there alone, nothing of it drawn here).
+/// A page titled `title` in node `v` (page's, as nodes), laid out as a page as wide as its frame gives it is (`width`:
+/// look_for that width, never what it holds as last laid out; none given, narrow): narrow (narrow_page_node) or wide
+/// (wide_page_node), made again only as the arrangement changes, what it shows in either bound to what it is told.
+/// Its arrangement lent to all of it, what comes to be shown in it later as well (look_node, part_of): its parts take
+/// their form from where they are made, nothing said round their making. In either: back where the frame says it goes
+/// (`on_back` as it is pressed), its title, what it is for (`lead`) under it, what it does (`actions`) at its title's
+/// line's end, then its blocks, those `blocks` names now by their keys, each made by `block`, then the frame's room at
+/// its foot; all of it scrolling in the page, each part made only while it shows (View::scrolls_window). What it says
+/// of itself told `said` as that changes (a frame's bar that names it: its title, and what it is for by a mark beside
+/// it, `about`).
 pub fn page_node(
   v : @view.View,
   title : () -> String,
@@ -113,15 +115,72 @@ pub fn page_node(
   about? : () -> String = fn() { "" },
   actions? : (@view.View) -> Unit,
   said? : (PageSaid) -> Unit,
+  width? : () -> Double,
 ) -> Unit {
   // (what it says of itself to the frame's bar that names it, as that changes, whole: the frame's own to keep)
   match said {
     Some(f) => v.reacts(fn() { { title: title(), about: about() } }, f)
     None => ()
   }
+  v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  let look = match width {
+    Some(w) => fn() { look_for(w()) }
+    None => fn() { Narrow }
+  }
+  v.pick(look, fn(p, l) {
+    p.grow(Is(1.0)).min_height(Is(Some(0.0))).lends(part_at, { look: l, section: false, list: false }) |> ignore
+    match l {
+      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions)
+      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions)
+    }
+  })
+}
+
+///|
+/// Where a part of a page made once is (page_node's, lent to all of it): how the page is laid out, whether it is in a
+/// section of a wide page (wide_alone's), and whether on a list's card (its rows a wide list's: wide_in_list's).
+priv struct PartAt {
+  look : Look
+  section : Bool
+  list : Bool
+}
+
+///|
+// kept across runs: what each page made once lends (View::lends), let go with it
+let part_at : @view.Lent[PartAt] = @view.Lent::new()
+
+///|
+/// Where node `v` of a page made once is (page_node's: lent it); narrow, in nothing, outside one.
+fn part_of(v : @view.View) -> PartAt {
+  v.lent(part_at).unwrap_or({ look: Narrow, section: false, list: false })
+}
+
+///|
+/// How the page node `v` is in is laid out (page_node's), narrow outside one: what a part made in it reads as it is
+/// made, however late.
+pub fn look_node(v : @view.View) -> Look {
+  part_of(v).look
+}
+
+///|
+/// A narrow page made once (narrow_page's) in node `v`: under what stands over it as the frame says (`frame`'s top),
+/// back where the frame says it goes (TopBack: its chevron and its words), its large title (as far down as a wide
+/// page's head where nothing is over it), what it is for under it, what it does in its title's line after the title,
+/// at its end, scrolling with it, then its blocks in the page's room (page_block), and 30 under the last, then the
+/// frame's room at its foot; each part made only while it shows (as narrow_list's old list builds only the rows in
+/// view).
+fn narrow_page_node(
+  v : @view.View,
+  title : () -> String,
+  blocks : () -> Array[String],
+  block : (@view.View, String) -> Unit,
+  on_back : () -> Unit,
+  frame : () -> PageFrame,
+  lead : () -> String,
+  actions : ((@view.View) -> Unit)?,
+) -> Unit {
   // (a page's list: it moves as the platform's lists do, its slop the host's)
   let scroll = @view.Scroll::list()
-  v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
   let items = fn() -> Array[PageItem] {
     let f = frame()
     let out = []
@@ -303,9 +362,14 @@ pub fn heading_node(parent : @view.View, title : () -> String) -> Unit {
 }
 
 ///|
-/// Rows together on a list card (group's, narrow: ListCard, 10 under it, its rows `list_pad` in, its corner the list
-/// card's), `rows` made in it.
-pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit) -> Unit {
+/// Rows together on a list card (group's), `rows` made in it: narrow, ListCard (10 under it, its rows `list_pad` in, its
+/// corner the list card's); wide, wide_group_node's (a list card, or a `card` of words).
+pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool = false) -> Unit {
+  let at = part_of(parent)
+  if at.look is Wide {
+    wide_group_node(parent, at, rows, card)
+    return
+  }
   parent.box(fn(room) {
     room.padding(Is((0.0, 0.0, 0.0, 10.0))) |> ignore
     room.box(fn(card) {
@@ -358,13 +422,18 @@ pub fn link_row_node(
   below? : (@view.View) -> Unit,
   below_open? : () -> Double = fn() { 0.0 },
 ) -> Unit {
-  let below_shown = fn() { below is Some(_) && below_open() > 0.0 }
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
   let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
   let titled_in = if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in }
   let mark = if out { "arrow-up-right" } else { "chevron-right" }
   let ends = goes && (out || (chevron && !acts))
+  if look_node(parent) is Wide {
+    wide_link_row_node(
+      parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
+    )
+    return
+  }
   parent.box(fn(r) {
     r
     .row(Is(true))
@@ -455,22 +524,28 @@ pub fn link_row_node(
       // (what is wrong, in red under it: link_row's `trouble`)
       words.show(fn() { trouble() != "" }, fn(n) { styled_words(n, trouble, fn() { pg_link_note.then(bad) }) |> ignore })
       match below {
-        Some(f) =>
-          words.show(below_shown, fn(room) {
-            // (cut by nothing of its own as it opens, as @motion.reveal's room is not: by the card it is on)
-            room.opens(By(fn() { Some(dmin(1.0, below_open())) })) |> ignore
-            room.box(fn(b) {
-              b.row(Is(true)).padding(Is((0.0, 6.0, 0.0, 0.0))).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
-              f(b)
-            })
-            |> ignore
-          })
+        Some(f) => row_below_node(words, f, below_open)
         None => ()
       }
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What a row has below its note (row_below's: 6 under it, as wide as its words, what is in it 6 apart), `make` making
+/// it, there while `open` says it is any of the way open, its room opening with it (@motion.reveal's).
+fn row_below_node(words : @view.View, make : (@view.View) -> Unit, open : () -> Double) -> Unit {
+  words.show(fn() { open() > 0.0 }, fn(room) {
+    // (cut by nothing of its own as it opens, as @motion.reveal's room is not: by the card it is on)
+    room.opens(By(fn() { Some(dmin(1.0, open())) })) |> ignore
+    room.box(fn(b) {
+      b.row(Is(true)).padding(Is((0.0, 6.0, 0.0, 0.0))).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
+      make(b)
+    })
+    |> ignore
+  })
 }
 
 ///|
@@ -616,8 +691,9 @@ pub fn switch_node(parent : @view.View, on : () -> Bool, turn : (Bool) -> Unit, 
 let switch_lens_w : Double = 1.45
 
 ///|
-/// A row on a group's card that turns something on or off (switch_row's, narrow, in a card): its title, `note` quieter
-/// under it, its switch at its end across their middle; the switch alone answers. `on`, `turn`: switch_node's.
+/// A row on a group's card that turns something on or off (switch_row's; narrow, in a card: its title, `note` quieter
+/// under it, its switch at its end across their middle; wide: wide_switch_row_node's); the switch alone answers. `on`,
+/// `turn`: switch_node's.
 pub fn switch_row_node(
   parent : @view.View,
   title : () -> String,
@@ -625,6 +701,10 @@ pub fn switch_row_node(
   turn : (Bool) -> Unit,
   note? : () -> String = fn() { "" },
 ) -> Unit {
+  if look_node(parent) is Wide {
+    wide_switch_row_node(parent, title, on, turn, note)
+    return
+  }
   parent.box(fn(r) {
     r
     .row(Is(true))

@@ -83,7 +83,8 @@ fn[P] Nav::flat_entries(self : Nav[P]) -> Array[Int] {
 /// laid over it (a panel's bar: the page leaving its room), the stack's back over the whole of both (Nav::backs_over);
 /// what was kept for it let go by `gone` as its entry is (not as it stops showing: shown again, as it was). `made`: a
 /// page made once as nodes of the tree's in the place of its old view, as nav_view's (Nav::made: what `head` makes in
-/// its flow over it, the page in the room left under it).
+/// its flow over it, the page in the room left under it). `shown`: told the entries that show (by their numbers) as
+/// the stack stands whole after a change (never the half between a change and its owner's keeping), and as it is made.
 pub fn[P] nav_flat_view(
   v : @view.View,
   nav : Nav[P],
@@ -98,6 +99,7 @@ pub fn[P] nav_flat_view(
   head? : (@view.View, Int, Bool) -> Unit,
   gone? : (Int) -> Unit = fn(_) {  },
   made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int, Int) -> Unit)? = fn(_) { None },
+  shown? : (Array[Int]) -> Unit = fn(_) {  },
 ) -> @view.View {
   // (what shows pushed over the page in place, where what is pushed over is so here)
   let stacked = fn() { stacks() && nav.stacked() }
@@ -157,6 +159,8 @@ pub fn[P] nav_flat_view(
       })
     }
     let seen = @signals.signal(seen_now(), same=fn(a, b) { a == b })
+    // (which entries show, told the frame as the stack stands whole: what is kept for one shown is that one's)
+    s.reacts(fn() { seen.get().shown }, shown)
     // (what left the stack held by no node of it, not kept shown: let go of now, as the stack stands whole, once —
     // left while no node held it: the stack not shown, or before it was)
     let gone_free = fn() {

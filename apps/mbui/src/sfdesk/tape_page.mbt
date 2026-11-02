@@ -233,15 +233,18 @@ fn tape_bar_collected(c : @ui.Ctx, build : () -> Unit) -> Unit {
 ///|
 /// The pages of the library's made once as nodes in the page's panel, in the place of their old view (nav_flat_view's
 /// `made`), by what each is: 关于, 记忆, 归档 and 自动决策, as the settings' list opens them; a station's own archiving, as 归档
-/// opens it. Made only where the page is narrow (look_for the
-/// stack's width in the panel at rest, as the tape lays it out now; none while that is not known): a gate between the
-/// page's two makings for now, the library's pages made once being narrow ones (@sf.page_node), no arrangement of the
-/// page's own; wider, its old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
+/// opens it. 关于 and 记忆 laid out by the page's width (the stack's in the panel at rest, as the tape lays it out now: page_node
+/// narrow or wide; narrow while that is not known), a right click in it copying what is picked; the others made only
+/// where the page is narrow (look_for that width), a gate between their two makings for now (no wide arrangement of
+/// theirs yet); wider, their old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
 /// its own, nothing over it in its room.
 fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
-  let r = tape_room_now()
-  let width = r.main_to - (if tape_shown_side() is None { r.under } else { 0.0 })
-  guard width > 0.0 && @sf.look_for(width) is Narrow else { return None }
+  // (as wide as the stack in the panel at rest, as the tape lays it out now: the page's width, 0 while not known)
+  let width = fn() {
+    let r = tape_room_now()
+    r.main_to - (if tape_shown_side() is None { r.under } else { 0.0 })
+  }
+  let narrow = width() > 0.0 && @sf.look_for(width()) is Narrow
   // (made in the workspace in view, its settings' core; what it says of itself kept with its entry, `k`)
   let made = fn(
     kind : String,
@@ -268,14 +271,19 @@ fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
     )
   }
   match page {
-    Setting(About) =>
+    // (laid out by the page's width, narrow or wide: page_node's)
+    Setting(About) if pane_makes.val =>
       made("about", fn(p, core, _here, _stint, told) {
-        @sfpages.about_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told)
+        context_node(p)
+        @sfpages.about_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
-    Setting(Memories) =>
+    Setting(Memories) if pane_makes.val =>
       made("memories", fn(p, core, here, _stint, told) {
-        @sfpages.memories_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told)
+        context_node(p)
+        @sfpages.memories_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
+    // (the others narrow ones alone: wider, their old view)
+    _ if !narrow => None
     Setting(Archiving) =>
       made("archiving", fn(p, core, here, stint, told) {
         @sfpages.archiving_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told)

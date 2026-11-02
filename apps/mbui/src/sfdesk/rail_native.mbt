@@ -348,7 +348,9 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   // (the page come not drawn yet, the one before it still shown in its place: that one's actions kept in the bars as
   // they were, not taken away for a frame and brought back made anew, faded in: the user, 2026-10-31, 按钮没变也会闪)
   histories_ticked()
-  let handed = if !top_drawn.val && nav_page.is_empty() { nav_page_before.copy() } else { nav_page.copy() }
+  // (one made once in the pane shows, built by no frame: what it hands, none)
+  let made_top = pane_made_shown() is Some(_)
+  let handed = if !top_drawn.val && !made_top && nav_page.is_empty() { nav_page_before.copy() } else { nav_page.copy() }
   nav_page_before.clear()
   nav_page_before.append(handed)
   // (a chat's own as it handed them, not one on its way out handing none, nor what was kept for it)
