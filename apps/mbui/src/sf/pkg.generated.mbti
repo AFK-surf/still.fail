@@ -87,7 +87,7 @@ pub fn ask_line_start(Double) -> @ui.Style
 
 pub fn ask_line_words(@ui.TextStyle) -> @ui.TextStyle
 
-pub fn ask_node(@view.View, String, () -> Bool, String, @ui.Field, String, String, String, String, Bool, Bool, () -> Unit, (String) -> Unit, shown? : () -> Unit, gone? : () -> Unit, dims? : () -> Bool, covered? : () -> Bool) -> Unit
+pub fn ask_node(@view.View, () -> Bool, String, @ui.Field, String, String, String, String, Bool, Bool, () -> Unit, (String) -> Unit, shown? : () -> Unit, gone? : () -> Unit, dims? : () -> Bool, covered? : () -> Bool) -> Unit
 
 pub let ask_note : @ui.TextStyle
 
@@ -811,6 +811,8 @@ pub fn input(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], s
 
 pub fn input_height() -> Double
 
+pub fn input_node(@view.View, @ui.Field, placeholder? : String, shorter? : Array[String], secret? : Bool, placeholder_by? : () -> String, disabled? : () -> Bool, small? : Bool, leaves? : Array[Int32], submitted? : (String) -> Unit) -> @view.View
+
 pub let inset_room : @ui.Space
 
 pub fn into_column(Double) -> @ui.Style
@@ -1483,7 +1485,7 @@ pub let pick_line_y : @ui.Space
 
 pub let pick_list_most : Double
 
-pub fn pick_node(@view.View, String, () -> Bool, (@view.View) -> @view.View, String, Array[Choice], String, @ui.Field, @view.Along, Double, (String) -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit) -> Unit
+pub fn pick_node(@view.View, () -> Bool, (@view.View) -> @view.View, String, Array[Choice], String, @ui.Field, @view.Along, Double, (String) -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit) -> Unit
 
 pub let pick_raised : Raised
 
@@ -2084,6 +2086,8 @@ pub let text_in : Double
 pub let text_scale : @ui.TextScale
 
 pub fn textarea(@ui.Ctx, String, rows? : Int32, most? : Int32, placeholder? : String, field? : @ui.Field, corner? : Double, solid? : Bool) -> String
+
+pub fn textarea_node(@view.View, @ui.Field, rows? : Int32, most? : Int32, placeholder? : String, corner? : Double, placeholder_by? : () -> String, disabled? : () -> Bool) -> @view.View
 
 pub fn theme() -> Theme
 

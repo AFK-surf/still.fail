@@ -1495,3 +1495,52 @@ test "a field of the tree's and words of the tree's in its place: its node off t
     assert_true(alike, msg="\{p}: the field's glyphs where the words' are: \{fields[k]}, the words' \{words[k]}")
   }
 }
+
+///|
+test "a field of the tree's as an old view's: the pointer on its words an I-beam, off it the arrow" {
+  let got = []
+  for tree in [false, true] {
+    let s = @signals.signal(1.0, same=fn(a, b) { a == b })
+    let t = one_field(tree, s, Field::new(text="abc"), [])
+    t.move(60.0, 30.0)
+    let on = t.cursor()
+    t.move(260.0, 150.0)
+    got.push((on, t.cursor()))
+  }
+  assert_eq(got, [(IBeam, Arrow), (IBeam, Arrow)])
+}
+
+///|
+test "a field written in: one in an old view, nothing over it, is a field focused here; one in a modal layer of the tree's over that old view is focused, but not here (what the old view asks is kept for the layer)" {
+  let open = @signals.signal(false)
+  let seen : Ref[(Bool, Bool)] = Ref((false, false))
+  let asked = Ref(true)
+  let f = Field::new()
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0, platform=0)
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      c.editor("e", placeholder="底下", max_lines=1) |> ignore
+      if asked.val {
+        asked.val = false
+        c.focus_editor("e")
+      }
+      seen.val = (c.field_focused(), c.field_focused_here())
+    })
+    .grow(Is(1.0))
+    |> ignore
+    root.show(fn() { open.get() }, fn(layer) {
+      layer.over(Is(true)).modal(Is(true)).width(Is(Some(300.0))).height(Is(Some(200.0))) |> ignore
+      let v = field(layer, f, placeholder="上面", max_lines=1)
+      layer.focus_opens(v) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.draw()
+  let under_alone = (t.focused().map(fn(s) { s.label }), seen.val)
+  open.set(true)
+  t.draw()
+  t.draw()
+  let covered = (t.focused().map(fn(s) { s.label }), seen.val)
+  assert_eq((under_alone, covered), ((Some("底下"), (true, true)), (Some("上面"), (true, false))))
+}

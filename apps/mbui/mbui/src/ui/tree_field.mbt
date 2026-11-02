@@ -18,7 +18,8 @@ priv struct TreeField {
   font_size : () -> Double
   line : Double
   max_lines : Int
-  hint : String
+  /// what it says it is while empty, as it is now (followed: its paint and what it says read it)
+  hint : () -> String
   shorter : Array[String]
   trim : Bool
   submitted : (String) -> Unit
@@ -65,7 +66,8 @@ let tree_fields : Map[@view.NodeId, TreeField] = Map([])
 /// Ctx::field_files), as tall as
 /// its words lay out between a line and `max_lines` (Field::laid), read out as a field of its words. `submitted`: what
 /// is told its words as they are given up (Enter, where it gives them up), once, at that key's moment; `pasted`, a
-/// paste of `paste_limit` characters or more, not put in, once, at that paste's. The node made.
+/// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
+/// is now, followed (in place of `placeholder`). The node made.
 pub fn field(
   parent : @view.View,
   field : Field,
@@ -90,12 +92,19 @@ pub fn field(
   files? : (Array[(String, Bytes)]) -> Unit,
   size_by? : () -> Double,
   colors_by? : () -> (Int64, Int64, Int64),
+  placeholder_by? : () -> String,
 ) -> @view.View {
   // (its size and its colours as said once, or followed as they change (`size_by`; `colors_by`: its words', its
   // placeholder's, its caret's): words written over a picture, as big as the picture is drawn, in the colour picked)
   let size = match size_by {
     Some(f) => f
     None => fn() { font_size }
+  }
+  // (what it says it is while empty as said once, or followed as it changes (`placeholder_by`: in the words as they
+  // are now), its node and its editor kept
+  let hint = match placeholder_by {
+    Some(f) => f
+    None => fn() { placeholder }
   }
   parent.box(fn(f) {
     let id = f.id()
@@ -137,7 +146,7 @@ pub fn field(
       font_size: size,
       line,
       max_lines,
-      hint: placeholder,
+      hint,
       shorter,
       trim,
       submitted,
@@ -183,10 +192,12 @@ pub fn field(
       fn(k, w) { k.0.size(w) },
     )
     .focusable(Is(true), keys=0)
+    // (the pointer an I-beam over it, as over an old view's editor: Ctx's pointer shape, desktop.mbt)
+    .cursor(Is(Some(IBeam)))
     // (its words read out, a secret's none: as an old view's editor says them)
     .says(By(fn() {
       let value = field.composed_said()
-      Some(@view.said(TextField, label=placeholder, value=if secret { "" } else { value }, actions=[SetText("")]))
+      Some(@view.said(TextField, label=hint(), value=if secret { "" } else { value }, actions=[SetText("")]))
     }))
     // (a press on it: taken as it goes down where the field takes it so, else a tap's as it is let go: tree_field_down)
     .on_press(fn() { tree_field_tapped(id) })
@@ -855,7 +866,7 @@ fn Ctx::paint_tree_field(
     line_h: z.line,
     wrap: z.wrap,
     trim: tf.trim,
-    hint: tf.hint,
+    hint: (tf.hint)(),
     shorter: tf.shorter,
   }
   let st = tf.st

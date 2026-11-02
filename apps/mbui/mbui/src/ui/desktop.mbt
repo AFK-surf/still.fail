@@ -633,6 +633,18 @@ pub fn Ctx::field_focused(self : Ctx) -> Bool {
 }
 
 ///|
+/// Whether a field has the keyboard's focus that what is being built now would take it from: not one in a modal layer
+/// of the tree's that keeps this old view from input (a question over a chat its composer is first drawn under): what
+/// it asks then is kept for that layer to give back as it goes (view_focus_kept_for), taken from no one.
+pub fn Ctx::field_focused_here(self : Ctx) -> Bool {
+  self.field_focused() &&
+  (match (view_app.val, self.island_said()) {
+    (Some(t), Some(island)) => @signals.untracked(fn() { t.allows_as_its_own(island) })
+    _ => true
+  })
+}
+
+///|
 /// A secondary press at (x, y) (on_pointer's button 2): recorded for Ctx::right_clicked, nothing pressed. It is on
 /// what a press there would be: the topmost target under it and what holds that one (Ctx::hovered's), innermost
 /// first; never on what only lies under them (the page under a menu, a dialog or a file open over the window, a

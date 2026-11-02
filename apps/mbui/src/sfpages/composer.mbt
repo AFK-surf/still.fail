@@ -202,8 +202,9 @@ pub fn composer(
   composing.same_draft = whose == composing.draft_before
   if whose != composing.draft {
     composing.draft = whose
-    // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat)
-    if !@sf.soft_keyboard() && !c.field_focused() {
+    // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat; not taken from
+    // a field written in, but asked under a modal layer over it all the same: kept for that layer to give back)
+    if !@sf.soft_keyboard() && !c.field_focused_here() {
       c.focus_editor(composer_field_key)
       composing.taking.set(true)
       // (this frame's alone: what reads it built again the frame after, as it has the cursor)
