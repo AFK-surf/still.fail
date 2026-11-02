@@ -55,13 +55,16 @@ export function copiedRef(title: string, link: string): { shown: string; plain: 
 
 /// The chat a link names, when it is one of a workspace's chats: a still.fail link (`…/o/<workspace>/<station>/<session>`)
 /// or its page (`…/w/<workspace>/s/<station>/chats/<id>`), and what follows it when that is its agent's execution
-/// history (`?history=<session>`, maybe `&entry=<n>`; else ""). Null otherwise.
-export function chatOfLink(href: string): { station: string; id: string; history: string } | null {
-  const m = /\/o\/([^/?#\s]+)\/([^/?#\s]+)\/([^/?#\s]+)\/?(\?history=[^&#\s]+(?:&entry=\d+)?)?$/.exec(href)
-    ?? /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\/([^/?#\s]+)\/?(\?history=[^&#\s]+(?:&entry=\d+)?)?$/.exec(href);
+/// history (`?history=<session>`, maybe `&entry=<n>`; else "") or one of its messages (`?message=<seq>`; else ""). Null
+/// otherwise.
+export function chatOfLink(href: string): { station: string; id: string; history: string; message: string } | null {
+  const m = /\/o\/([^/?#\s]+)\/([^/?#\s]+)\/([^/?#\s]+)\/?(\?history=[^&#\s]+(?:&entry=\d+)?|\?message=[1-9]\d{0,14})?$/.exec(href)
+    ?? /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\/([^/?#\s]+)\/?(\?history=[^&#\s]+(?:&entry=\d+)?|\?message=[1-9]\d{0,14})?$/.exec(href);
   if (!m) return null;
   try {
-    return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!), history: m[4] ?? "" };
+    const after = m[4] ?? "";
+    const message = after.startsWith("?message=");
+    return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!), history: message ? "" : after, message: message ? after : "" };
   } catch {
     return null;
   }
@@ -143,12 +146,13 @@ export function marksIn(text: string): { start: number; end: number; title: stri
 
 /// The chats' links in what is pasted as a chat's link is copied (`[its title](its link)`) that name a chat of the
 /// workspace of the station `here` is (a station of no workspace: none): where each is in `pasted`, its title, its
-/// chat (its station, its key) and what follows its link when it is its agent's execution history.
+/// chat (its station, its key) and what follows its link when it is its agent's execution history or one of its
+/// messages (`history`: the composer puts it back on the link it keeps).
 export function pastedRefs(pasted: string, here: string): { start: number; end: number; title: string; station: string; id: string; history: string }[] {
   const scope = (station: string) => station.split("/")[0]!;
   if (!here.includes("/")) return [];
   return [...pasted.matchAll(/\[([^\]\n]{1,120})\]\((\S+?)\)/g)].flatMap((m) => {
     const chat = chatOfLink(m[2]!);
-    return chat && scope(chat.station) === scope(here) ? [{ start: m.index, end: m.index + m[0].length, title: m[1]!, ...chat }] : [];
+    return chat && scope(chat.station) === scope(here) ? [{ start: m.index, end: m.index + m[0].length, title: m[1]!, station: chat.station, id: chat.id, history: chat.history || chat.message }] : [];
   });
 }

@@ -1381,10 +1381,12 @@ test("a_message_says_the_chats_it_links_to_their_titles_and_which_are_archived",
   const live = "https://app.still.fail/o/ws/a/c-live";
   const old = "https://app.still.fail/o/ws/a/c-old";
   // One linked bare, one archived in a reference, one no list has; a message with none says none.
-  t.set(pageOf("ws/a", 7), page(1, [`看 ${live} 和 [那个](${old})，还有 https://app.still.fail/o/ws/a/c-none`, "没有链接"], null));
+  // One to a message of the chat is the chat's too.
+  const atMessage = `${live}?message=2`;
+  t.set(pageOf("ws/a", 7), page(1, [`看 ${live} 和 [那个](${old})，还有 https://app.still.fail/o/ws/a/c-none`, "没有链接", `第二条 ${atMessage}`], null));
   t.set(overview("ws/a"), overviewOf([], []));
   await t.read(u, 1);
-  assert.deepEqual(u.value.messages.map((m: J) => m.chats), [[{ href: old, title: "旧的", archived: true, note: "已归档" }, { href: live, title: "c-live 的标题" }], undefined]);
+  assert.deepEqual(u.value.messages.map((m: J) => m.chats), [[{ href: old, title: "旧的", archived: true, note: "已归档" }, { href: live, title: "c-live 的标题" }], undefined, [{ href: atMessage, title: "c-live 的标题" }]]);
 });
 
 test("a_chat_an_agent_opened_has_the_way_back_to_its_opener_over_its_messages", async () => {
