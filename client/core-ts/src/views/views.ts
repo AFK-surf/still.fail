@@ -134,59 +134,6 @@ export function members(thread: J): string[] {
   return arr(get(thread, "sessions")).flatMap((m) => (typeof get(m, "session") === "string" ? [m.session] : []));
 }
 
-/// Text without Slack's `<@U123>` mentions.
-function withoutMentions(text: string): string {
-  let out = "";
-  let rest = text;
-  for (;;) {
-    const at = rest.indexOf("<@");
-    if (at < 0) break;
-    out += rest.slice(0, at);
-    const after = rest.slice(at + 2);
-    const end = after.indexOf(">");
-    if (end > 0 && /^[A-Z0-9]+$/.test(after.slice(0, end))) rest = after.slice(end + 1);
-    else {
-      out += "<@";
-      rest = after;
-    }
-  }
-  return out + rest;
-}
-
-/// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
-/// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
-/// thread the first line a person wrote in it, else its channel.
-/// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
-function placeName(surface: string, channel: string, channelName: string): string | null {
-  const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
-  if (feishu) return channelName || t("core-logic.format.thread.feishu");
-  if (surface === "ember" || surface === "stillfail" || surface === "") return null;
-  return channel.startsWith("D") ? t("core-views.direct_message") : `#${channelName || channel}`;
-}
-
-export function chatTitle(thread: J): string {
-  const text = (name: string): string | null => {
-    const v = get(thread, name);
-    return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
-  };
-  const title = text("title") ?? text("autoTitle");
-  if (title !== null) return title;
-  const surface = get(thread, "surface");
-  if (surface === "ember" || surface === "stillfail") return t("core-views.new_chat");
-  const firstText = text("firstText");
-  if (firstText !== null) {
-    const first = withoutMentions(firstText)
-      .split("\n")
-      .map((l) => format.splitWhitespace(l).join(" "))
-      .find((l) => l !== "");
-    if (first !== undefined) return first;
-  }
-  const channel = text("channelName");
-  // A Feishu chat is named as it is there (no #).
-  if (channel !== null) return typeof surface === "string" && surface.startsWith("feishu:") ? channel : `#${channel}`;
-  if (text("channel")?.startsWith("D")) return t("core-views.direct_message");
-  return t("core-views.new_chat");
-}
 
 /// What a message another chat's agent sent (session_send, or the first of a chat it opened with chat_create) is headed
 /// with: its chat's title and link, and the message.
@@ -2054,7 +2001,7 @@ export class Views implements Owner {
     }
     messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed"), atWork));
     const elsewhere = timed("chat.elsewhere", () => this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots }));
-    const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
+    const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : format.chatTitle(thread);
     const view: J = {
       me: this.me(scope),
       place,
@@ -2139,7 +2086,7 @@ export class Views implements Owner {
     // Its Slack and Feishu threads, where what is sent can be copied (`chat.cc`), each ticked or not.
     const ccTo = arr(get(thread, "cc")).flatMap((o) => {
       const to = u64(get(o, "thread"));
-      const place = placeName(strOf(o, "surface"), strOf(o, "channel"), strOf(o, "channelName"));
+      const place = format.placeName(strOf(o, "surface"), strOf(o, "channel"), strOf(o, "channelName"));
       if (to === null || place === null) return [];
       const via = strOf(o, "surface").startsWith("feishu:") || format.isFeishuChat(strOf(o, "channel")) ? "feishu" : "slack";
       return [{ thread: to, place, via, on: this.ccOn(station, id, to) }];
@@ -2483,7 +2430,7 @@ export class Views implements Owner {
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
     const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
-    const place = placeName(surface, channel, channelName);
+    const place = format.placeName(surface, channel, channelName);
     // A Feishu chat opens in Feishu (Lark's own app for its connect's).
     const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
     const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;

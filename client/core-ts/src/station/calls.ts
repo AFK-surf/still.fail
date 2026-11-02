@@ -5,6 +5,7 @@ import type { Inner, Progress } from "../core.ts";
 import { handlers } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
 import { CoreError, asCoreError } from "../error.ts";
+import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import { base64, fromBase64 } from "../util.ts";
 import { Beside } from "../protocol.ts";
@@ -12,7 +13,6 @@ import { chatKeptId, keptId, sentKeptId } from "../drive-kept.ts";
 import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
-import { chatTitle } from "../views/views.ts";
 import { StationAddr } from "./addr.ts";
 import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wire.ts";
 import type { SpanContext } from "../trace.ts";
@@ -511,7 +511,7 @@ export function install(): void {
     Effect.gen(function* () {
       const drive = yield* inner.driveKept.usage();
       const kept = yield* inner.driveKept.chatFiles();
-      const chats = inner.data.cacheUsage().map(({ view, ...chat }) => ({ ...chat, title: view === null ? null : chatTitle(view), files: [] as { bytes: number }[] }));
+      const chats = inner.data.cacheUsage().map(({ view, ...chat }) => ({ ...chat, title: view === null ? null : format.chatTitle(view), files: [] as { bytes: number }[] }));
       const loose: unknown[] = [];
       for (const f of kept) {
         const shown = { key: f.key, name: f.name, size: f.size, bytes: f.bytes, opened: f.used };
