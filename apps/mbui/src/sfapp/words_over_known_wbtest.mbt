@@ -12,14 +12,8 @@ fn init {
     ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "GPT-6 Astra"),
     ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "上下文"),
     ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "完整 · 1M"),
-    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "500K"),
-    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "300K"),
-    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "200K"),
     ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Studio 上使用所选模型新建会话。", "上下文"),
     ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Studio 上使用所选模型新建会话。", "完整 · 1M"),
-    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Studio 上使用所选模型新建会话。", "500K"),
-    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Studio 上使用所选模型新建会话。", "300K"),
-    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Studio 上使用所选模型新建会话。", "200K"),
     ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Studio 上使用所选模型新建会话。", "全部模型"),
     // (the card to share's stage fading as it closes, the picture a line higher since its looks are in sets: a day's
     // date under its bar over the new chat's words)

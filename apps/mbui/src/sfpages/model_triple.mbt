@@ -409,18 +409,13 @@ fn triple_body(
       }
     }
   }
-  // how much context it is kept to (2026-11-03 用户「把 opus5.5 上下文长度限制在 500k 或者 300k」): its whole window
-  // first, then less of it, as the core offers them (none where its runtime cannot)
   let all_contexts : Array[(String, String)] = items(v, "contexts").map(fn(o) { (text(Some(o), "id"), text(Some(o), "text")) })
-  let context_now = text(v, "contextNow")
   // (each made what it runs on at once, the panel staying open: kept for the model too, as it runs next time it is
   // picked)
   let pick_effort = fn(e : String) {
     pick_save(src, station, of, { "effort": if e == "" { Json::null() } else { Json::string(e) } })
   }
-  let pick_context = fn(id : String) {
-    pick_save(src, station, of, { "context": if id == "" { Json::null() } else { Json::string(id) } })
-  }
+
   // what each says of how it runs right after its name, on its line (2026-11-02 用户「常用模型的信息分两边很难读」,
   // 「移动端…跟在模型后面」; under it, two lines, rejected: 「到底为什么要两行」); as wide as the widest of it, the one
   // picked's at whatever it is picked to: the panel as wide whatever is picked in it (its widest kept: a depth picked
@@ -614,30 +609,16 @@ fn triple_body(
     "" => text(v, "effortDefault")
     e => e
   }
-  let h_context = @sf.t("web-main.model.context")
-  // (how much context under how hard it thinks, in the same column: under its own head where both are, as the models'
-  // series are under theirs)
   let effort_column = fn() {
     triple_choices(c, "triple/effort", "", all_efforts, effort_now, pick_effort)
-    if !all_contexts.is_empty() {
-      if all_efforts.is_empty() {
-        triple_choices(c, "triple/context", "", all_contexts, context_now, pick_context)
-      } else {
-        // (a part of its own past the levels, the room between them the panel's parts' room)
-        c.box(style=triple_part_under.then(triple_effort_column), fn() {
-          triple_choices(c, "triple/context", h_context, all_contexts, context_now, pick_context)
-        })
-        |> ignore
-      }
-    }
   }
   // (in a sheet the runtime a pick under how hard it thinks, as it is, the foot only who runs it and how fast; beside
   // what opened it, at the foot)
   let runs_on = if flag(v, "runtimeFixed") { [] } else { items(v, "runtimes").filter_map(fn(r) { if r is String(r) { Some(r) } else { None } }) }
   let how = fn() {
-    if sheet && (all_efforts.length() > 0 || all_contexts.length() > 0 || runs_on.length() > 1) {
+    if sheet && (all_efforts.length() > 0 || runs_on.length() > 1) {
       let h_runtime = @sf.t("web-main.model.runtime")
-      let head_w = [h_effort, h_context, h_runtime].fold(init=0.0, fn(m, h) { dmax(m, c.words_across(h, triple_head)) }).ceil()
+      let head_w = [h_effort, h_runtime].fold(init=0.0, fn(m, h) { dmax(m, c.words_across(h, triple_head)) }).ceil()
       c.box(style=if up { triple_tray } else { triple_tray_first }, fn() {
         if all_efforts.length() > 0 {
           triple_pick_row(
@@ -648,17 +629,6 @@ fn triple_body(
             all_efforts.map(fn(o) { @sf.choice(o.0, o.1) }),
             effort_now,
             pick_effort,
-          )
-        }
-        if all_contexts.length() > 0 {
-          triple_pick_row(
-            c,
-            "triple/context",
-            h_context,
-            head_w,
-            all_contexts.map(fn(o) { @sf.choice(o.0, o.1) }),
-            context_now,
-            pick_context,
           )
         }
         if runs_on.length() > 1 {
@@ -729,7 +699,7 @@ fn triple_body(
         apart()
       }
     }
-    if sheet || (all_efforts.length() == 0 && all_contexts.length() == 0) {
+    if sheet || all_efforts.length() == 0 {
       models_head()
       first()
     } else {
@@ -767,7 +737,7 @@ fn triple_body(
           // down to the line over its foot, meeting it: 「竖的那根怎么没跟横的接起来呢」)
           c.box(style=triple_rule_v, left=-triple_between_rule, top=-@sf.panel_pad, bottom=-@sf.panel_rule_over(), fn() {  })
           |> ignore
-          @sf.panel_head(c, if all_efforts.is_empty() { h_context } else { h_effort })
+          @sf.panel_head(c, h_effort)
           effort_column()
         })
         |> ignore
@@ -910,6 +880,33 @@ fn triple_speed(c : @ui.Ctx, src : Source, station : String, of : String, v : Js
 }
 
 ///|
+/// How much context it is kept to, at the foot after how fast (2026-11-03 用户「把 opus5.5 上下文长度限制在 500k 或者
+/// 300k」「直接放最下面跟速度一样吧」): its name and the step picked; pressed, the steps in a pick, its whole window first,
+/// as the core offers them (none where its runtime cannot).
+fn triple_context(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
+  let head = @sf.t("web-main.model.context")
+  let now = text(v, "contextNow")
+  let choices = items(v, "contexts").map(fn(o) { @sf.choice(text(Some(o), "id"), text(Some(o), "text")) })
+  let id = c.id("triple/context")
+  if c.clicked(id) {
+    @sf.pick(
+      head,
+      choices,
+      now,
+      fn(k) { pick_save(src, station, of, { "context": if k == "" { Json::null() } else { Json::string(k) } }) },
+      from=Of(id),
+      search=false,
+    )
+  }
+  let words = choices.search_by(fn(ch) { ch.key == now }).map(fn(i) { choices[i].label }).unwrap_or("")
+  let b = c.box(style=triple_who(), id~, fn() {
+    c.text(head, style=triple_who_lead) |> ignore
+    c.text(words, style=triple_who_name) |> ignore
+  })
+  c.semantics(b, Button, id~, label=words)
+}
+
+///|
 /// Its foot (the presenter's, where every panel's foot stands): who runs it, and where the model picked is another
 /// station's, borrowing it (asked first). Nothing to confirm: each pick is made what it runs on as it is picked
 /// (2026-11-01 用户「从第一性原理出发重新思考这个组件的使用场景」).
@@ -931,6 +928,10 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
     if flag(v, "fastAvailable") {
       apart()
       triple_speed(c, src, station, of, v)
+    }
+    if !items(v, "contexts").is_empty() {
+      apart()
+      triple_context(c, src, station, of, v)
     }
   })
   |> ignore

@@ -214,25 +214,20 @@ test "wide: how hard it thinks picked in the panel is made what it runs on at on
 }
 
 ///|
-test "wide: how much context, under how hard it thinks in its column, picked is made what it runs on at once" {
+test "wide: how much context at the foot after who runs it, as how fast is; its steps in a pick, one picked made what it runs on at once" {
   let t = model_pop("newchat-model")
   let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
   let high = t.get(Radio, label="高").rect
-  // (its whole window first, then less of it, one under another under the levels, as they are: 2026-11-03 用户「把
-  // opus5.5 上下文长度限制在 500k 或者 300k」)
-  let levels = ["完整 · 1M", "500K", "300K", "200K"].map(fn(l) { t.get(Radio, label=l).rect })
-  for i, r in levels {
-    assert_true(r.0 == high.0 && r.1 > high.1, msg="\{levels}, under \{high}")
-    assert_true(i == 0 || r.1 > levels[i - 1].1, msg="\{levels}")
-    assert_true(r.0 + r.2 <= px + pw && r.1 + r.3 <= py + ph, msg="\{r} past the panel")
-  }
-  assert_true(t.words().iter().any(fn(w) { w.0 == "上下文" }), msg="no head over them")
-  let opened = t.get(@ui.Role::Dialog).rect
-  for (label, context) in [("300K", "300000"), ("完整 · 1M", "")] {
-    t.click(Radio, label~)
-    t.run_for(squeeze_opening)
-    assert_eq(new_fix.context, context)
-    let now = t.get(@ui.Role::Dialog).rect
-    assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{label} picked: \{now}, opened \{opened}")
-  }
+  // (at the foot, with who runs it: 2026-11-03 用户「直接放最下面跟速度一样吧」)
+  let context = t.get(Button, label="完整 · 1M").rect
+  assert_true(context.1 > high.1 + high.3 && context.1 + context.3 <= py + ph && context.0 + context.2 <= px + pw, msg="\{context}, the panel \{(px, py, pw, ph)}")
+  assert_true(t.words().iter().any(fn(w) { w.0 == "上下文" }), msg="no name before it")
+  t.click(Button, label="完整 · 1M")
+  t.run_for(@ui.move_most_ms)
+  let steps = t.all(MenuItemRadio).map(fn(s) { (s.label, s.check) })
+  assert_eq(steps, [("完整 · 1M", Some(On)), ("500K", Some(Off)), ("300K", Some(Off)), ("200K", Some(Off))])
+  t.tap_text("300K")
+  t.run_for(squeeze_opening)
+  assert_eq(new_fix.context, "300000")
+  assert_true(t.query(Button, label="300K") is Some(_), msg="the foot says the step picked")
 }
