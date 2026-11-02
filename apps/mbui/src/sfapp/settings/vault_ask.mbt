@@ -93,7 +93,7 @@ let vault_picked : Map[String, String] = {}
 
 ///|
 /// The unit chosen for each requested timeout.
-let vault_timeout_units : Map[String, String] = {}
+let vault_timeout_minutes : Map[String, Int] = {}
 
 ///|
 /// What was tapped on each request while the core has it (`true`: the yes, `false`: the no), till it answers
@@ -116,7 +116,7 @@ let vault_file_picks : Map[String, @ui.Pick] = {}
 ///|
 fn vault_ask_reset() -> Unit {
   vault_menu.val = ""
-  vault_timeout_units.clear()
+  vault_timeout_minutes.clear()
   vault_picked.clear()
   vault_pending.clear()
   vault_typed.clear()
@@ -498,37 +498,28 @@ pub fn vault_foot(
   let under = pending is Some(_) || is_doing(core, ["vault.approve", "vault.deny"], on)
   let max_minutes = if lasts == "hour" { 60 } else { 43200 }
   let asked_minutes = (timeout_seconds + 59) / 60
-  let mut minutes = if asked_minutes < max_minutes { asked_minutes } else { max_minutes }
+  let initial_minutes = if asked_minutes < max_minutes { asked_minutes } else { max_minutes }
+  let minutes = vault_timeout_minutes.get(request).unwrap_or(initial_minutes)
   if timed && scope != "once" {
     let key = request + "/timeout"
-    let unit = vault_timeout_units.get(request).unwrap_or(if minutes % 60 == 0 { "hours" } else { "minutes" })
-    let factor = if unit == "hours" { 60 } else { 1 }
-    let f = match vault_typed.get(key) {
-      Some(f) => f
-      None => {
-        let f = @ui.Field::new(text=(minutes / factor).to_string())
-        vault_typed[key] = f
-        f
-      }
+    let choices = [60, 360, 720, 1440, 2160, 4320, 10080, 20160, 43200]
+    let available = choices.filter(fn(n) { n <= max_minutes && n != initial_minutes })
+    available.push(initial_minutes)
+    available.sort()
+    let duration_label = fn(n : Int) -> String {
+      let hours = n % 60 == 0
+      fill(if hours { "android-settings.vault.timeout.nHours" } else { "android-settings.vault.timeout.nMinutes" }, [("n", (if hours { n / 60 } else { n }).to_string())])
     }
     @sf.card_foot_words(on=foot, fn() {
-      @sf.field(c, tr(if lasts == "hour" { "android-settings.vault.timeout.limitHour" } else { "android-settings.vault.timeout.limitMonth" }), aside=fn() {
-        let entries = ["hours", "minutes"].map(fn(u) { @kit.menu_radio(u, u == unit, label=tr("android-settings.vault.timeout." + u)) })
-        let menu = @sf.chooser(c, "vault/" + request + "/unit", tr("android-settings.vault.timeout." + unit), entries, fn() { vault_menu.val == key }, fn(on) { vault_menu_set(key, on) })
-        match menu.chosen {
-          Some(u) if u != unit => {
-            vault_timeout_units[request] = u
-            let current = if f.text().length() > 5 { 0 } else { int_of(f.text(), 0) * factor }
-            let next = if u == "hours" { if current % 60 == 0 { (current / 60).to_string() } else { "" } } else { current.to_string() }
-            f.set(next)
-            vault_menu.val = ""
-          }
-          _ => ()
+      let entries = available.map(fn(n) { @kit.menu_radio(n.to_string(), n == minutes, label=duration_label(n)) })
+      let menu = @sf.chooser(c, "vault/" + key, duration_label(minutes), entries, fn() { vault_menu.val == key }, fn(on) { vault_menu_set(key, on) })
+      match menu.chosen {
+        Some(n) => {
+          vault_timeout_minutes[request] = int_of(n, initial_minutes)
+          vault_menu.val = ""
         }
-      }, fn() {
-        let entered = @sf.input(c, "vault/" + key, disabled=under, solid=true, field=f).text
-        minutes = if entered.length() > 5 { 0 } else { int_of(entered, 0) * factor }
-      })
+        None => ()
+      }
     })
   }
   let valid_time = !timed || scope == "once" || (minutes > 0 && minutes <= max_minutes)

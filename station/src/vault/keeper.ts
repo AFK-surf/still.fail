@@ -7,6 +7,7 @@
 // Whether a grant may be taken is decided here, from the grant itself: who signed it (a member of the vault, by a
 // device in the lock), that it answers the request as asked, and that it stays within what the item allows.
 import type { LockState } from "../cloud/lock.ts";
+import { wall } from "../ops/fibers.ts";
 import { type Grant, type Item, type Mode, type Request, type Scope, type Vault, TAG, allows, grantContext, newBoxPair, openSeal, signedOk, signerOf } from "./crypto.ts";
 
 /// The longest a grant may last, by its scope (seconds), with a minute's slack for the clocks of phone and station. A
@@ -50,7 +51,7 @@ export function accountOf(secret: Secret): string | null {
 export class Keeper {
   readonly #boxes = new Map<string, Uint8Array>();
   readonly #held = new Map<string, Held>();
-  readonly #timers = new Map<string, ReturnType<typeof setTimeout>>();
+  readonly #timers = new Map<string, () => void>();
   /// Unix seconds.
   readonly #now: () => number;
   readonly #d: KeeperDeps;
@@ -69,21 +70,20 @@ export class Keeper {
   #schedule(h: Held) {
     const id = h.request.id;
     const old = this.#timers.get(id);
-    if (old !== undefined) clearTimeout(old);
-    const ms = Math.min(Math.max(0, ((h.until ?? h.grant.exp) - this.#now()) * 1000), 2_147_483_647);
-    const timer = setTimeout(() => {
+    if (old !== undefined) old();
+    const ms = Math.max(0, ((h.until ?? h.grant.exp) - this.#now()) * 1000);
+    const timer = wall.after(ms, () => {
       const current = this.#held.get(id);
       if (current === undefined) return;
       if ((current.until ?? current.grant.exp) <= this.#now()) this.#forget(id);
       else this.#schedule(current);
-    }, ms);
-    timer.unref();
+    });
     this.#timers.set(id, timer);
   }
 
   #forget(id: string) {
     const timer = this.#timers.get(id);
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer !== undefined) timer();
     this.#timers.delete(id);
     if (this.#held.delete(id)) this.#d.kept?.forget(id);
   }
