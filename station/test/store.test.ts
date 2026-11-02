@@ -9,7 +9,7 @@ import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS,
-  MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
+  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
@@ -87,6 +87,32 @@ test("a database from before the index on turns gets it as it is opened", () => 
   const plan = db.prepare("EXPLAIN QUERY PLAN SELECT COUNT(*) FROM turns WHERE session_key = ?").all("k") as { detail: string }[];
   assert.ok(plan.some((p) => p.detail.includes("turns_by_session")), JSON.stringify(plan));
   db.close();
+});
+
+test("counting people for a title stops at the threshold even in a long conversation", () => {
+  const store = memory();
+  const thread = store.openThread("ember", "EMBER", "many", null, null).id;
+  const insert = store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, ?, 'message', 'person', 'p', 'hello', ?)");
+  store.db.exec("BEGIN");
+  for (let n = 1; n <= 2_000; n++) insert.run(thread, n, n);
+  store.db.exec("COMMIT");
+  const count = store.peopleSaidAfter.bind(store);
+  assert.equal(count(thread, 0, 5), 5);
+  assert.equal(count(thread, 1_998, 5), 2);
+  assert.equal(count(thread, 2_000, 5), 0);
+  assert.equal(count(thread, 0, 2), 2);
+  assert.equal(count(thread, 0, 0), 0);
+  const plan = store.db.prepare(`EXPLAIN QUERY PLAN ${PEOPLE_SAID_AFTER}`).all(thread, 0, 5) as { detail: string }[];
+  assert.match(plan.map((p) => p.detail).join(" | "), /SEARCH entries USING (?:COVERING )?INDEX entries_people_by_n \(thread=\? AND n>\?\)/);
+  let examined = 0;
+  store.db.function("count_examined", (n) => { examined++; return n; });
+  const probed = PEOPLE_SAID_AFTER.replace("n > ?", "n > ? AND count_examined(n) IS NOT NULL");
+  const query = store.db.prepare(probed);
+  assert.equal((query.get(thread, 0, 5) as { c: number }).c, 5);
+  assert.equal(examined, 5, "only the messages needed for the decision are visited");
+  examined = 0;
+  assert.equal((query.get(thread, 1_000, 5) as { c: number }).c, 5);
+  assert.equal(examined, 5, "more matching history does not increase the work");
 });
 
 test("a message is recorded once and delivered to every session in its thread", () => {

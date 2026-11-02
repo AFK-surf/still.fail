@@ -48,7 +48,7 @@ function mayName(hub: Hub, thread: number, title: string): boolean | string {
   if (given.title === title) return false;
   if (given.changes >= CHANGES) return "it has been changed as often as it may be";
   // A watch started since: the name may say so at once (job_start's watch), not only once the talk moved on.
-  if (hub.store.peopleSaidAfter(thread, given.n) < SAID_BEFORE_CHANGE && !watchingIn(hub, thread)) {
+  if (hub.store.peopleSaidAfter(thread, given.n, SAID_BEFORE_CHANGE) < SAID_BEFORE_CHANGE && !watchingIn(hub, thread)) {
     return "people have said too little since it was given; change it only when it no longer says what the chat is about";
   }
   return true;

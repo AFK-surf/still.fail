@@ -70,6 +70,48 @@ function write(store: Store) {
   store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, 101, 'message', 'person', 'p@x', 'fix', 1)").run(b);
 }
 
+test("answering new cards seeks past old answered cards, including after upgrading an old database", () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-answers-scale-"));
+  const path = join(dir, "stillfail.db");
+  try {
+    let store = Store.open(path, join(dir, "archive"));
+    // An existing station's trigger, before the bounded range; opening it must update the trigger without a rebuild.
+    store.db.exec(`DROP TRIGGER card_outcomes_answered;
+      CREATE TRIGGER card_outcomes_answered AFTER INSERT ON entries WHEN NEW.kind = 'message' AND NEW.author_kind = 'person' BEGIN
+        UPDATE card_outcomes SET answered = 1, said = NEW.text IS NOT NULL AND EXISTS (SELECT 1 FROM json_each(labels) l WHERE l.value = trim(NEW.text))
+        WHERE thread = NEW.thread AND n < NEW.n AND answered = 0;
+      END;`);
+    store.close();
+    store = Store.open(path, join(dir, "archive"));
+    const thread = store.openThread("ember", "EMBER", "scale", null, null).id;
+    const old = store.db.prepare("INSERT INTO card_outcomes (thread, n, author, labels, answered, said) VALUES (?, ?, 'agent', '[]', 1, 0)");
+    store.db.exec("BEGIN");
+    for (let n = 1; n <= 2_000; n++) old.run(thread, n);
+    store.db.exec("COMMIT");
+    const person = store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, ?, 'message', 'person', 'person', ?, ?)");
+    const card = store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at, card) VALUES (?, ?, 'message', 'agent', 'agent', 'pick', ?, ?)");
+    person.run(thread, 2_001, "before", 2_001);
+    card.run(thread, 2_002, 2_002, JSON.stringify({ type: "options", options: [{ label: "yes" }] }));
+    card.run(thread, 2_003, 2_003, JSON.stringify({ type: "options", options: [{ label: "no" }] }));
+    person.run(thread, 2_004, "yes", 2_004);
+    const outcomes = store.db.prepare("SELECT n, answered, said FROM card_outcomes WHERE thread = ? AND n >= 2002 ORDER BY n").all(thread) as { n: number; answered: number; said: number }[];
+    assert.deepEqual(outcomes.map((r) => [r.n, r.answered, r.said]), [[2_002, 1, 1], [2_003, 1, 0]]);
+
+    // Explain the actual installed trigger's UPDATE. Its lower bound is the previous person's message, so the
+    // primary-key range excludes all 2,000 old cards; both that lookup and the previous-person lookup are indexed.
+    const trigger = store.db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'card_outcomes_answered'").get() as { sql: string };
+    const update = trigger.sql.match(/UPDATE card_outcomes SET[\s\S]+?;/)?.[0];
+    assert.ok(update);
+    const sql = update.replaceAll("NEW.thread", "?1").replaceAll("NEW.n", "?2").replaceAll("NEW.text", "?3");
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(thread, 2_004, "yes") as { detail: string }[]).map((r) => r.detail).join(" | ");
+    assert.match(plan, /SEARCH card_outcomes USING PRIMARY KEY \(thread=\? AND n>\? AND n<\?\)/);
+    assert.match(plan, /entries_people_by_n/);
+    store.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the decision cards are kept as they are answered, the same as worked out from every card's next message", () => {
   const dir = mkdtempSync(join(tmpdir(), "card-outcomes-"));
   const path = join(dir, "stillfail.db");

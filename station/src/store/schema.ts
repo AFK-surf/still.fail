@@ -893,6 +893,16 @@ const cardLabels = (optionsJson: string) => `(SELECT json_group_array(label) FRO
 /// Whether `text` (a person's words) is, trimmed, one of `labels` (`cardLabels`).
 const saidLabel = (labels: string, text: string) => `(${text} IS NOT NULL AND EXISTS (SELECT 1 FROM json_each(${labels}) l WHERE l.value = trim(${text}, ${TRIMMED})))`;
 
+/// Only cards since the preceding person's message are still awaiting that person's next message. The preceding
+/// message and the cards after it are both located by their existing (thread, n) indexes.
+const CARD_OUTCOMES_ANSWERED = `CREATE TRIGGER card_outcomes_answered AFTER INSERT ON entries WHEN NEW.kind = 'message' AND NEW.author_kind = 'person' BEGIN
+  UPDATE card_outcomes SET answered = 1, said = ${saidLabel("card_outcomes.labels", "NEW.text")}
+  WHERE thread = NEW.thread AND n < NEW.n AND n > COALESCE((
+    SELECT p.n FROM entries p INDEXED BY entries_people_by_n
+    WHERE p.thread = NEW.thread AND p.kind = 'message' AND p.author_kind = 'person' AND p.n < NEW.n
+    ORDER BY p.n DESC LIMIT 1), -1) AND answered = 0;
+END;`;
+
 /// The decision cards agents asked with (an options card, or options from before cards) and how each was answered,
 /// kept by the database as messages are written, as the lists' state is (LIST_STATE): what the usage page's 决策点击率
 /// counts (read/store.ts `decisionCards`). Worked out from every card each time it was read, each looking up the next
@@ -928,10 +938,7 @@ CREATE TRIGGER card_outcomes_asked AFTER INSERT ON entries
     SELECT NEW.thread, NEW.n, NEW.author, ${cardLabels("o.options")}, 0, 0 FROM (SELECT ${cardOptions("NEW.card", "NEW.options")} AS options) o
     WHERE o.options IS NOT NULL;
 END;
-CREATE TRIGGER card_outcomes_answered AFTER INSERT ON entries WHEN NEW.kind = 'message' AND NEW.author_kind = 'person' BEGIN
-  UPDATE card_outcomes SET answered = 1, said = ${saidLabel("card_outcomes.labels", "NEW.text")}
-  WHERE thread = NEW.thread AND n < NEW.n AND answered = 0;
-END;
+${CARD_OUTCOMES_ANSWERED}
 CREATE TRIGGER card_outcomes_dropped AFTER DELETE ON entries WHEN OLD.kind = 'message' AND OLD.author_kind = 'agent' BEGIN
   DELETE FROM card_outcomes WHERE thread = OLD.thread AND n = OLD.n;
 END;
@@ -942,14 +949,27 @@ END;
 /// card.
 export function addCardOutcomes(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'card_outcomes'").get() !== undefined;
-  if (made()) return;
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    if (!made()) db.exec(CARD_OUTCOMES);
-    db.exec("COMMIT");
-  } catch (e) {
-    db.exec("ROLLBACK");
-    throw e;
+  if (!made()) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      if (!made()) db.exec(CARD_OUTCOMES);
+      db.exec("COMMIT");
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+  const bounded = () => ((db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'card_outcomes_answered'").get() as { sql: string } | undefined)?.sql ?? "").includes("INDEXED BY entries_people_by_n");
+  if (!bounded()) {
+    // Replace just the trigger on older databases; the outcomes themselves need no scan or rebuild.
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      if (!bounded()) db.exec(`DROP TRIGGER IF EXISTS card_outcomes_answered; ${CARD_OUTCOMES_ANSWERED}`);
+      db.exec("COMMIT");
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
+    }
   }
 }
 
