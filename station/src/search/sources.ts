@@ -5,7 +5,8 @@
 // - a session's transcript: its execution history (`h:<key>:<i>`, `i` as GET /sessions/:key/timeline numbers them),
 //   what the agent said and thought, the calls it made and what they gave, its files looked through newest first.
 // - a session's jobs (`j:<id>`), a workspace's memory and skills, the profiles.
-import { closeSync, createReadStream, existsSync, openSync, readSync, readdirSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync } from "node:fs";
+import { open } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { createZstdDecompress } from "node:zlib";
 import { segmentsFrom } from "../read/packed.ts";
@@ -17,7 +18,7 @@ import { agentHomeOf, memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
 import { given, titleOf } from "../read/views.ts";
-import { type Asker, type Doc, type Hit, has, hitOf, sees } from "./match.ts";
+import { type Asker, type Doc, type Group, type Hit, excerpt, has, sees } from "./match.ts";
 
 /// The workspace documents of nothing in particular are in (`ws` null: the station's home one).
 type Ws = string | null;
@@ -168,10 +169,11 @@ export function transcriptFiles(s: Store, session: SessionRow, profiles: Profile
 
 /// A transcript's entries, each given to `each` as it is read: in parts (a file put away decompressed as a stream), never
 /// the whole of it at once.
-async function entriesOf(runtime: NonNullable<ReturnType<typeof runtimeKind>>, path: string, state: ReadState, each: (e: TimelineEntry) => void): Promise<void> {
+async function entriesOf(runtime: NonNullable<ReturnType<typeof runtimeKind>>, path: string, state: ReadState, each: (e: TimelineEntry) => void, keep: () => boolean): Promise<void> {
   const out: TimelineEntry[] = [];
-  for await (const part of readFrom(path, 0)) {
+  for await (const part of readFrom(path, 0, keep)) {
     for (let line of part.text.split("\n")) {
+      if (!keep()) return;
       if (line.endsWith("\r")) line = line.slice(0, -1);
       if (line === "") continue;
       let record: unknown;
@@ -181,7 +183,10 @@ async function entriesOf(runtime: NonNullable<ReturnType<typeof runtimeKind>>, p
         continue;
       }
       timelineOf(runtime, record, state, out);
-      for (const e of out) each(e);
+      for (const e of out) {
+        if (!keep()) return;
+        each(e);
+      }
       out.length = 0;
     }
   }
@@ -207,39 +212,49 @@ function finder(word: string): (bytes: Buffer) => boolean {
 
 /// Whether a transcript file has every word anywhere in it (its entries are read only then): looked through as bytes,
 /// a file put away decompressed as a stream.
-export async function mentions(path: string, words: string[]): Promise<boolean> {
+export async function mentions(path: string, words: string[], keep: () => boolean = () => true): Promise<boolean> {
   const finds = words.map(finder);
   const left = new Set(finds);
   const look = (bytes: Buffer) => {
     for (const f of left) if (f(bytes)) left.delete(f);
     return left.size === 0;
   };
+  if (!keep()) return false;
   if (existsSync(path)) {
     const buf = Buffer.allocUnsafe(CHUNK + OVERLAP);
-    const fd = openSync(path, "r");
+    const file = await open(path, "r");
     try {
       let pos = 0;
       let kept = 0;
       for (;;) {
-        const n = readSync(fd, buf, kept, CHUNK, pos);
+        if (!keep()) return false;
+        const { bytesRead: n } = await file.read(buf, kept, CHUNK, pos);
+        if (!keep()) return false;
         if (n <= 0) return false;
         const view = buf.subarray(0, kept + n);
-        if (look(view)) return true;
+        const found = look(view);
+        if (!keep()) return false;
+        if (found) return true;
         pos += n;
         kept = Math.min(OVERLAP, view.length);
         view.copy(buf, 0, view.length - kept);
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
     } finally {
-      closeSync(fd);
+      await file.close();
     }
   }
   if (!existsSync(`${path}.zst`)) return false;
   let tail: Buffer = Buffer.alloc(0);
   const through = async (chunks: AsyncIterable<Buffer>): Promise<boolean> => {
     for await (const chunk of chunks) {
+      if (!keep()) return false;
       const view = tail.length > 0 ? Buffer.concat([tail, chunk]) : chunk;
-      if (look(view)) return true;
+      const found = look(view);
+      if (!keep()) return false;
+      if (found) return true;
       tail = Buffer.from(view.subarray(Math.max(0, view.length - OVERLAP)));
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     return false;
   };
@@ -270,53 +285,81 @@ export async function mentions(path: string, words: string[]): Promise<boolean> 
 
 export type HistoryFound = { hits: Hit[]; more: boolean; /** Sessions not looked through, the time being up. */ left: number };
 
+/// Even with no hits, a stopped search must tell its caller that some histories were not searched.
+export function historyGroup(found: HistoryFound): Group | null {
+  if (!found.hits.length && !found.left) return null;
+  return { kind: "history", hits: found.hits, more: found.more, ...(found.left > 0 ? { left: found.left } : {}) };
+}
+
 /**
  * What the words find in the execution histories `asker` may see, the most recently active sessions first and each one's
  * latest steps first, until `offset + limit` and one more are found or `ms` is up. A session's files are read (its
  * entries numbered as its history page numbers them) only when they have every word.
  */
-export async function historyHits(s: Store, profiles: Profiles, words: string[], asker: Asker, options: { limit: number; offset: number; ms: number; now: () => number }): Promise<HistoryFound> {
+export async function historyHits(s: Store, profiles: Profiles, words: string[], asker: Asker, options: { limit: number; offset: number; ms: number; now: () => number; cancelled?: () => boolean }): Promise<HistoryFound> {
   const want = options.offset + options.limit + 1;
   const until = options.now() + options.ms;
   const found: Hit[] = [];
   const sessions = store.listSessions(s).filter((x) => sees({ ws: x.ws }, asker));
   let looked = 0;
+  let cancelled = false;
+  let expired = false;
+  const keep = () => {
+    if (cancelled || expired) return false;
+    if (options.cancelled?.()) cancelled = true;
+    else if (options.now() > until) expired = true;
+    return !cancelled && !expired;
+  };
+  const partial = (): HistoryFound => {
+    if (cancelled) throw new Error("the search took too long");
+    return { hits: found.slice(options.offset, options.offset + options.limit), more: true, left: sessions.length - looked };
+  };
   for (const session of sessions) {
     if (found.length >= want) break;
-    if (options.now() > until) return { hits: found.slice(options.offset, options.offset + options.limit), more: true, left: sessions.length - looked };
-    looked++;
+    if (!keep()) return partial();
     // Let through: a search asked meanwhile is answered between sessions.
     await new Promise<void>((resolve) => setImmediate(resolve));
+    if (!keep()) return partial();
     const files = transcriptFiles(s, session, profiles);
-    if (files === null) continue;
+    if (!keep()) return partial();
+    if (files === null) { looked++; continue; }
     let any = false;
-    for (const p of files.paths) if (await mentions(p, words)) any = true;
-    if (!any) continue;
+    for (const p of files.paths) {
+      if (await mentions(p, words, keep)) any = true;
+      if (!keep()) return partial();
+      if (any) break;
+    }
+    if (!any) { looked++; continue; }
     // Its latest steps that have the words, as many as may still be wanted (numbered as they are read).
     const state: ReadState = { inner: new Map() };
     const room = want - found.length;
-    const latest: { i: number; e: TimelineEntry; text: string }[] = [];
+    // Keep excerpts, not entire matching entries: one history step can itself contain a very large tool result.
+    const latest: { i: number; entry: TimelineEntry["kind"]; tool: TimelineEntry["tool"]; at: number | null; text: string }[] = [];
+    let oldest = 0;
     let i = 0;
     for (const p of files.paths) {
       await entriesOf(files.runtime, p, state, (e) => {
         const text = historyText(e);
         if (text !== null && has(text, words)) {
-          latest.push({ i, e, text });
-          if (latest.length > room) latest.shift();
+          const time = e.at === null ? null : Date.parse(e.at);
+          const item = { i, entry: e.kind, tool: e.tool, at: time !== null && Number.isFinite(time) ? time : null, text: excerpt(text, words) };
+          if (latest.length < room) latest.push(item);
+          else { latest[oldest] = item; oldest = (oldest + 1) % room; }
         }
         i++;
-      });
+      }, keep);
+      if (!keep()) return partial();
     }
     const thread = store.sessionThreads(s, session.key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
     const chatTitle = (thread !== null ? given(thread) : null) ?? (session.title?.trim() || "");
-    for (const { i, e, text } of latest.reverse()) {
-      const at = e.at === null ? null : Date.parse(e.at);
-      found.push(hitOf({
-        key: `h:${session.key}:${i}`, kind: "history", ws: session.ws, title: "", body: text,
-        at: at !== null && Number.isFinite(at) ? at : null,
-        ref: { session: session.key, index: i, entry: e.kind, ...(e.tool ? { tool: e.tool } : {}), chat: session.key, chatTitle, ...(thread ? { thread: thread.id } : {}) },
-      }, words));
+    const ordered = latest.length < room ? latest : [...latest.slice(oldest), ...latest.slice(0, oldest)];
+    for (const { i, entry, tool, at, text } of ordered.reverse()) {
+      found.push({
+        session: session.key, index: i, entry, ...(tool ? { tool } : {}), chat: session.key, chatTitle, ...(thread ? { thread: thread.id } : {}),
+        key: `h:${session.key}:${i}`, kind: "history", title: "", text, at,
+      });
     }
+    looked++;
   }
   return { hits: found.slice(options.offset, options.offset + options.limit), more: found.length > options.offset + options.limit, left: 0 };
 }

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { openStore } from "../read/store.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Asker, type Group, pickAsync, terms } from "./match.ts";
-import { historyHits, profilesOf, stationDocSteps } from "./sources.ts";
+import { historyGroup, historyHits, profilesOf, stationDocSteps } from "./sources.ts";
 
 export type Told = { type: "query"; id: number; query: string; asker: Asker; kinds?: string[]; limit?: number; offset?: number; cancel?: SharedArrayBuffer };
 
@@ -37,8 +37,9 @@ async function answer(told: Told): Promise<Group[]> {
   const cancelled = told.cancel ? new Int32Array(told.cancel) : null;
   const groups = await pickAsync(stationDocSteps(s, data, config(), kinds, told.asker), words, told.asker, { limit, offset }, () => cancelled !== null && Atomics.load(cancelled, 0) !== 0);
   if (kinds?.has("history")) {
-    const found = await historyHits(s, profilesOf(config(), data), words, told.asker, { limit, offset, ms: HISTORY_MS, now: () => wall.now() });
-    if (found.hits.length > 0) groups.push({ kind: "history", hits: found.hits, more: found.more, ...(found.left > 0 ? { left: found.left } : {}) });
+    const found = await historyHits(s, profilesOf(config(), data), words, told.asker, { limit, offset, ms: HISTORY_MS, now: () => wall.now(), cancelled: () => cancelled !== null && Atomics.load(cancelled, 0) !== 0 });
+    const group = historyGroup(found);
+    if (group !== null) groups.push(group);
   }
   return groups;
 }
