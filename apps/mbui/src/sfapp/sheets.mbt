@@ -1713,9 +1713,9 @@ let letters_none : @ui.TextStyle = @ui.text_style(size=Body, color=Muted)
 
 ///|
 /// One opened, its head: back (a round 36, pressed a shade, its chevron on the panel's words' line: letters_back_in),
-/// then its title.
+/// then its title; 10 under it, so that back and the first letter's name each have a touch's 44 to be pressed in.
 // kept across runs: a value (no field of it changes)
-let letters_head : @ui.Style = @ui.css("row w=Full pb=S1_5 gap=S1 align=ACenter")
+let letters_head : @ui.Style = @ui.css("row w=Full pb=S2_5 gap=S1 align=ACenter")
 
 ///|
 /// How far its back's chevron is in from its round ground's start (its 36's middle less half the chevron's 16), the
