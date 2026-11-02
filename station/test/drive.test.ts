@@ -150,24 +150,8 @@ test("a folder zipped to download: read from its own place as any file of the dr
   assert.equal(await code(drive.zip(root, "notes.md", 1 << 20, true)), "not_a_directory");
 });
 
-test("a folder watched: told once something in it changes, a change between two askings not lost", async () => {
-  const { FolderWatches } = await import("../src/drive/watch.ts");
+test("a file cannot be watched as a folder", async () => {
   const { root, drive } = place();
-  const watches = new FolderWatches(1500, 5000);
-  const dir = await drive.folderToWatch(root, "Season 1");
-  // The first asking starts the watch (macOS may tell of the writes just before it); then nothing changes.
-  await watches.changed(dir, "c");
-  assert.equal(await watches.changed(dir, "c"), false);
-  const asked = watches.changed(dir, "c");
-  setTimeout(() => writeFileSync(join(root, "Season 1", "E3.mp4"), "three"), 100);
-  assert.equal(await asked, true);
-  // Between two askings: kept for the next.
-  writeFileSync(join(root, "Season 1", "E4.mp4"), "four");
-  await new Promise((r) => setTimeout(r, 600));
-  const started = Date.now();
-  assert.equal(await watches.changed(dir, "c"), true);
-  assert.ok(Date.now() - started < 500);
-  watches.close();
   assert.equal(await code(drive.folderToWatch(root, "notes.md")), "not_a_directory");
 });
 

@@ -564,7 +564,6 @@ export function stationApi(t: StationCall) {
     /** Stops a job from the page (its agent is told who did); the core puts it in place as it is now. */
     stopJob: (id: string) => ops.jobStop<Job>({ id }),
     /** Takes a session's jobs that are over off its record; the core reads the session again. */
-    clearEndedJobs: (session: string) => ops.jobClearEnded<{ removed: string[] }>({ session }),
     /** What the station's agents remember (their memory and skills). */
     memory: <T,>() => ops.memoryGet<T>(),
     /** Brings a piece of the station's software up to date, or checks what is new. */

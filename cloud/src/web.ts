@@ -75,6 +75,11 @@ function fileOf(request: Request): Request {
 export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, assets: (request: Request) => Promise<Response> | Response): Promise<Response> {
   const redirect = moved(request, env);
   if (redirect) return redirect;
+  return hardened(await page(request, env, assets));
+}
+
+/** The page or file `request` asks for: the app's own, or on the test channel's host, the test channel's. */
+async function page(request: Request, env: Omit<WebEnv, "ASSETS">, assets: (request: Request) => Promise<Response> | Response): Promise<Response> {
   const files = (r: Request) => assets(fileOf(r));
   if (new URL(request.url).origin !== betaOrigin(env)) return unkept(await files(request));
   if (new URL(request.url).pathname === "/robots.txt") {
@@ -103,6 +108,24 @@ export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, as
       if (betaNamed(content) !== content) tag.setAttribute("content", betaNamed(content));
     } })
     .transform(answer);
+}
+
+/**
+ * What every answer of the app's host says besides its file: it may not be framed (a click in the app reaches a
+ * station), it sends no referrer (an address here names a chat or a station), and it is what it says it is. The CSP
+ * names no script source: the page's first scripts are inline (index.html), and the agent-written HTML a chat draws in
+ * frames of its own runs inline scripts from public CDNs (web/src/Viz.tsx) — a script-src that lets those in lets an
+ * injected one in just as well. What it does say holds however a script comes to be there: no plugins, no <base>, and
+ * forms only to this host or Google's sign-in.
+ */
+const APP_CSP = ["object-src 'none'", "base-uri 'none'", "form-action 'self' https://accounts.google.com", "frame-ancestors 'none'"].join("; ");
+
+function hardened(answer: Response): Response {
+  const headers = new Headers(answer.headers);
+  headers.set("content-security-policy", APP_CSP);
+  headers.set("referrer-policy", "no-referrer");
+  headers.set("x-content-type-options", "nosniff");
+  return new Response(answer.body, { status: answer.status, statusText: answer.statusText, headers });
 }
 
 export default {

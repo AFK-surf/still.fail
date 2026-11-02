@@ -10,7 +10,7 @@
 // "chat-jobs-side", "chat-history-side", "chat-service-side" (what is opened beside it: its web service's page, its bar
 // at the panel's width), "chat-tabs-side" (two of them: the history behind
 // 任务), "chat-model-pop" (its agent's model control's panel
-// open), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
+// open), "chat-model-accounts" (its accounts open over it), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
 // what its card over its picture says); "home-jobs"
 // (Home with the jobs left up a long while at its top); "home-attention" (the wide frame's 待处理 open: a decision to let
 // go, a failure looked at, a station offline); "home-syncing" (Home catching up on what changed while away: the line
@@ -25,7 +25,7 @@ pub fn decide_mode(mode : String) -> Bool {
     "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-things", "chat-things-side", "chat-info-pulls",
-    "chat-jobs-side", "chat-history-side", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
+    "chat-jobs-side", "chat-history-side", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-model-accounts", "chat-find", "chat-agent-card",
     "chat-station-tag", "home-attention", "home-syncing",
   ].contains(mode)
 }
@@ -83,7 +83,6 @@ pub fn fix_job(id : String) -> Json {
         "tone": "up",
         "service": true,
         "open": true,
-        "current": true,
         "word": "在线",
         "meta": [{ "text": "在线", "kind": "word" }, { "text": " · 3 小时" }],
         "notices": [],
@@ -98,7 +97,6 @@ pub fn fix_job(id : String) -> Json {
         "command": "gh run watch 4821 --exit-status",
         "tone": "live",
         "watch": true,
-        "current": true,
         "meta": [
           { "text": "在盯着", "kind": "word" },
           { "text": " · " },
@@ -119,8 +117,6 @@ pub fn fix_job(id : String) -> Json {
         "startedAt": 0,
         "command": "scripts/android.sh build",
         "tone": "off",
-        "ended": true,
-        "current": false,
         "meta": [{ "text": "已结束", "kind": "word" }, { "text": " · 20 分钟前" }],
         "notices": [],
       }
@@ -346,15 +342,10 @@ pub fn fix_history() -> Json {
 ///|
 pub fn fix_chat_jobs() -> Json {
   {
-    "jobs": [fix_job("j-web"), fix_job("j-ci"), fix_job("j-build")],
+    "jobs": [fix_job("j-web"), fix_job("j-ci")],
     "servicesNote": "1 个在线",
     "jobsNote": "1 个在盯着",
-    "current": 2,
-    "ended": 1,
-    "clear": ["s-c1"],
-    "allText": "全部 3 个",
-    "clearText": "清掉 1 个已结束的",
-    "hiddenText": "另有 1 个已停止或结束",
+    "allText": "全部 2 个",
   }
 }
 
@@ -601,7 +592,7 @@ pub fn fix_preview_viz() -> Json {
 /// This slice's calls in the fixture: taken as a station would.
 pub fn decide_fixture_call(name : String) -> Result[Json, Json]? {
   match name {
-    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "job.clearEnded" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
+    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
       Some(Ok(Json::object({})))
     "chat.publishPreview" => Some(Ok(fix_preview()))
     _ => None

@@ -165,7 +165,6 @@ export const PARAMS: Record<string, string> = {
   "signin.fill": "id:string login:json keep?:boolean",
   "signin.self": "id:string done?:boolean",
   "signin.deny": "id:string",
-  "job.clearEnded": "session:string",
   "memory.get": "",
   "outflow.revoke": "id:string",
   "outflow.answer": "id:string allow:boolean scopes?:strings workspace?:boolean",
@@ -598,8 +597,6 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/browser/sign-ins/${p.at("id")}/self`, { done: p.bool("done") }, NONE);
     case "signin.deny":
       return op("POST", () => `/browser/sign-ins/${p.at("id")}/deny`, null, NONE);
-    case "job.clearEnded":
-      return op("DELETE", () => `/sessions/${p.at("session")}/jobs`, null, session("session"));
     case "memory.get":
       return op("GET", () => "/memory", null, NONE);
     // A program's grant of the station's data revoked (docs/data-outflow.md): its next read is refused.

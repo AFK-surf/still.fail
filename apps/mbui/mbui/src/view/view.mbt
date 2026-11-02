@@ -97,6 +97,8 @@ pub(all) struct Look {
   mut turn_drawn : Bool
   /// how far before its edges what it holds fades out towards them (start, top, end, foot; 0 none): View::fades
   mut fades : (Double, Double, Double, Double)
+  /// Android's stretch of what it holds (View::stretches): from its top positive, from its foot negative; 0 none
+  mut stretch : Double
   /// how far it and what it holds are drawn off where they are laid out, drawn only (View::drawn_off); how far its own
   /// ground is drawn off and how much bigger than it is laid out (View::ground_drawn)
   mut drawn_off : (Double, Double)
@@ -320,8 +322,8 @@ struct Node {
   mut went_cell : @signals.Signal[Side?]?
   /// what it holds is found by a finger or the pointer within it alone (View::bounds_input)
   mut bounds_input : Bool
-  /// what it and what it holds are drawn clear of the fading of (View::fades_clear_of)
-  mut fades_clear : NodeId?
+  /// what it and what it holds are drawn clear of the fading and stretching of (View::drawn_clear_of)
+  mut drawn_clear : NodeId?
   /// how far in from its right edge the pointer brings its bar out (View::bar_near; 0 none), and whether it does now
   mut bar_near : Double
   mut bar_near_cell : @signals.Signal[Bool]?
@@ -332,6 +334,9 @@ struct Node {
   mut claims : ((Double, Double) -> Bool)?
   /// how many times it was said to take over holds (View::claims): a hold asks it as it was said as it went down
   mut claims_said : Int
+  /// a hold on it is one what holds it may take over as it moves (View::claims), the hold not its own yet: a gesture
+  /// waiting on a tap, a hold of the finger or its own slop (View::gesture)
+  mut yields : Bool
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
@@ -514,6 +519,14 @@ pub struct Tree {
   /// what the host says takes a finger at a point instead of what the tree found there (Tree::on_target), given what
   /// takes it there in the order they are drawn
   mut retarget : (Target, Array[Target], Double, Double) -> Target
+  /// what hosts the tree is told as a column it holds glides on by itself, let go (Tree::on_glides): which column and
+  /// when its glide ends as it is asked (none: at rest); and as that column is let go
+  mut glides : (Int, () -> Double?) -> Unit
+  mut glides_gone : (Int) -> Unit
+  /// how a page's list moves where it is drawn, and how many pixels a point is there (Tree::lists_feel)
+  mut list_feel : () -> (ListFeel, Double)
+  /// what waits on all of it laid out as it is next, whatever came out otherwise (Tree::once_laid_out)
+  laid_waits : Array[() -> Unit]
   /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
@@ -686,6 +699,10 @@ pub fn Tree::new(
     on_through: fn(_, _, _, _, _) {  },
     hosts_at: fn(_, _, _) { None },
     retarget: fn(t, _, _, _) { t },
+    glides: fn(_, _) {  },
+    glides_gone: fn(_) {  },
+    list_feel: fn() { (Desktop, 1.0) },
+    laid_waits: [],
     pressing: None,
     pointed: None,
     lit_every: false,
@@ -804,6 +821,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.turn = 0.0
       n.look.turn_drawn = false
       n.look.fades = (0.0, 0.0, 0.0, 0.0)
+      n.look.stretch = 0.0
       n.look.drawn_off = (0.0, 0.0)
       n.look.ground_drawn = (0.0, 0.0, 0.0, 0.0)
       n.look.cut_soft = false
@@ -839,12 +857,13 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.size_cell = None
       n.went_cell = None
       n.bounds_input = false
-      n.fades_clear = None
+      n.drawn_clear = None
       n.bar_near = 0.0
       n.bar_near_cell = None
       n.shows = None
       n.claims = None
       n.claims_said = 0
+      n.yields = false
       n.claims_scroll = false
       n.scroll_held = -1
       n.focus_shown_cell = None
@@ -878,7 +897,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), stretch: 0.0, drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -915,12 +934,13 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         size_cell: None,
         went_cell: None,
         bounds_input: false,
-        fades_clear: None,
+        drawn_clear: None,
         bar_near: 0.0,
         bar_near_cell: None,
         shows: None,
         claims: None,
         claims_said: 0,
+        yields: false,
         claims_scroll: false,
         scroll_held: -1,
         focus_shown_cell: None,
@@ -1553,6 +1573,7 @@ priv enum Prop {
   Turn
   Lines
   Fades
+  Stretch
   Opens
   CutsSoftly
   DrawnOff
@@ -1830,6 +1851,14 @@ pub fn View::claims(self : View, f : (Double, Double) -> Bool, scrolls? : Bool =
 /// there (an old view a press goes on to under an empty one over it); `there`: whether one hosting an old view has
 /// something of its own there (one with nothing there passed, as though it were not there: Tree::wheel_at's). Asked
 /// again as the hold moves (Tree::claimer_of).
+/// Whether the hold on node `id` may be taken over by what holds it as it moves (a gesture of its waiting on a tap, a
+/// hold or its own slop: View::gesture), as a press of a node's may (Tree::claimer_of); one of its own (its drag begun,
+/// a hold come; a node's raw on_drag: a slider, a picture zoomed, words picked), not.
+pub fn Tree::yields(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].yields
+}
+
+///|
 pub fn Tree::claimers_at(
   self : Tree,
   x : Double,
@@ -1895,24 +1924,25 @@ pub fn Tree::claimer_of(self : Tree, chain : Array[(NodeId, Int)], dx : Double, 
 }
 
 ///|
-/// It, and what it holds, drawn clear of `by` (what holds it) fading what it holds out towards its edges (View::fades,
-/// View::cuts_softly), and of that alone: what lies over what fades and is no part of it (a column's bar over what it
-/// holds, faded at its ends), faded as ever by what holds both. Paint's.
-pub fn View::fades_clear_of(self : View, by : View) -> View {
+/// It, and what it holds, drawn clear of how `by` (what holds it) draws what it holds: fading it out towards its edges
+/// (View::fades, View::cuts_softly), stretching it (View::stretches); and of that alone: what lies over what is so drawn
+/// and is no part of it (a column's bar over what it holds, faded at its ends, stretched past them), drawn as ever by
+/// what holds both. Paint's.
+pub fn View::drawn_clear_of(self : View, by : View) -> View {
   guard self.live() is Some(n) else { return self }
-  n.fades_clear = Some(by.id())
+  n.drawn_clear = Some(by.id())
   self.tree.marked()
   self
 }
 
 ///|
-/// Whether node `id` is drawn clear of node `by`'s fading what it holds (View::fades_clear_of: it, or what holds it
+/// Whether node `id` is drawn clear of how node `by` draws what it holds (View::drawn_clear_of: it, or what holds it
 /// under `by`, said clear of `by`'s).
-pub fn Tree::fades_clear_of(self : Tree, id : NodeId, by : NodeId) -> Bool {
+pub fn Tree::drawn_clear_of(self : Tree, id : NodeId, by : NodeId) -> Bool {
   guard self.alive_id(id) else { return false }
   let mut i = id.at
   while i >= 0 && i != by.at {
-    if self.nodes[i].fades_clear == Some(by) {
+    if self.nodes[i].drawn_clear == Some(by) {
       return true
     }
     i = self.nodes[i].parent
@@ -2107,6 +2137,26 @@ pub fn View::turn(self : View, r : Live[Double], drawn? : Bool = false) -> View 
 pub fn View::fades(self : View, f : Live[(Double, Double, Double, Double)]) -> View {
   self.bind(Fades, f, Place, fn(f) { self.tree.nodes[self.at].look.fades = f })
   self
+}
+
+///|
+/// What it holds drawn stretched as Android's list is at an end as that changes (EdgeEffect's intensity `ov`, from its
+/// top positive, from its foot negative; 0 none: HWUI's StretchEffect, each point of it where @view.stretch_map puts
+/// it, its clips and fades inside it with it), as what draws it says; placement's (a scrolling page's list's:
+/// Scroll::list).
+pub fn View::stretches(self : View, ov : Live[Double]) -> View {
+  self.bind(Stretch, ov, Place, fn(ov) { self.tree.nodes[self.at].look.stretch = ov })
+  self
+}
+
+///|
+/// How node `id` draws what it holds stretched (View::stretches; 0 for one let go).
+pub fn Tree::stretch_of(self : Tree, id : NodeId) -> Double {
+  if self.alive_id(id) {
+    self.nodes[id.at].look.stretch
+  } else {
+    0.0
+  }
 }
 
 ///|
@@ -3599,9 +3649,10 @@ fn Tree::takes_off(self : Tree, n : Node) -> Unit {
 }
 
 ///|
-/// What its on_drag set going ended (said anew, let go).
+/// What its on_drag set going ended (said anew, let go): a hold on it its own again (Tree::yields), whatever said it.
 fn View::drag_ended(self : View) -> Unit {
   let n = self.tree.nodes[self.at]
+  n.yields = false
   match n.drag_end {
     Some(end) => {
       n.drag_end = None
@@ -3960,6 +4011,12 @@ pub fn View::gesture(
           Some(f) => hold_ms is Some(_) && f(d)
           None => false
         }
+        // (waiting on a tap, a hold or its own slop: the hold what holds it may take over as it moves, as a press's:
+        // Tree::yields; its own once it is a drag or a hold)
+        match self.live() {
+          Some(n) => n.yields = true
+          None => ()
+        }
         match press {
           Some(f) => word(f, d, d)
           None => ()
@@ -3991,6 +4048,11 @@ pub fn View::gesture(
                 match hold {
                   Some((_, f)) => {
                     held.val = true
+                    // (held: the hold its own from now)
+                    match self.live() {
+                      Some(n) => n.yields = false
+                      None => ()
+                    }
                     word(f, { ..o, at: due }, o)
                   }
                   // (handed through: its own hold ended by it, Off, the finger what lies under it's; nothing there to take
@@ -4009,6 +4071,10 @@ pub fn View::gesture(
             // (past the slop by how far the finger itself went: the drag begins where it is now)
             if !moved.val && ((d.wx - o.wx).abs() > slop || (d.wy - o.wy).abs() > slop) {
               moved.val = true
+              match self.live() {
+                Some(n) => n.yields = false
+                None => ()
+              }
               (cancel_hold.val)()
               cancel_hold.val = fn() {  }
               // (dragging it only once held, moved before: its press called off, once (Off), then what lies under it's,
@@ -4038,6 +4104,10 @@ pub fn View::gesture(
           None => ()
         }
       Up | Off => {
+        match self.live() {
+          Some(n) => n.yields = false
+          None => ()
+        }
         let was = down.val
         let went = moved.val
         let was_held = held.val
@@ -4205,7 +4275,7 @@ fn View::let_go(self : View) -> Unit {
   n.shows = None
   n.claims = None
   n.bounds_input = false
-  n.fades_clear = None
+  n.drawn_clear = None
   n.bar_near = 0.0
   n.bar_near_cell = None
   self.drag_ended()
@@ -5253,6 +5323,18 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if self.sized.length() > 0 && self.sizes_told() && self.due {
     self.laid_out(upto)
   }
+  // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
+  // tells laid out in this same pass)
+  if self.laid_waits.length() > 0 {
+    let waits = self.laid_waits.copy()
+    self.laid_waits.clear()
+    for f in waits {
+      @signals.untracked(f)
+    }
+    if self.due {
+      self.laid_out(upto)
+    }
+  }
   // (what is to be brought into sight, where all of it is laid out, before it is drawn; what that moves laid out in
   // this same pass)
   if self.shows_due.length() > 0 {
@@ -6152,6 +6234,33 @@ fn Tree::chosen(self : Tree, found : Array[Target], x : Double, y : Double) -> T
 /// hosted said of another (that it yields a point to what that one hosts takes there). Not said: what was found.
 pub fn Tree::on_target(self : Tree, f : (Target, Array[Target], Double, Double) -> Target) -> Unit {
   self.retarget = f
+}
+
+///|
+/// What hosts the tree is told as a column of it gliding on by itself sets out (View::scrolls' fling: let go at a
+/// speed), `glides`: which column (its own number) and how to ask when its glide ends as it is then (none: at rest,
+/// held again, stopped), what waits on what moves (a test's run to rest) reading it as an old view's list's glide; and,
+/// `gone`, as that column is let go.
+pub fn Tree::on_glides(self : Tree, glides : (Int, () -> Double?) -> Unit, gone : (Int) -> Unit) -> Unit {
+  self.glides = glides
+  self.glides_gone = gone
+}
+
+///|
+/// `f` done once all of it is laid out as it is next (sizes told: View::laid_size_told), as one with that layout, whether
+/// anything it follows came out otherwise or not: what waits on where a change it made leaves things (a page's list's
+/// fling toward its foot as what is above it grew, Scroll::grew_above).
+fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
+  self.laid_waits.push(f)
+  self.marked()
+}
+
+///|
+/// How a page's list (Scroll::list) moves where what hosts the tree draws it, as it is asked (as the platform's own
+/// lists: an old view's list's way there), and how many pixels a point is there (Android's fling and stretch are in
+/// them); none said, the desktop's, at 1.
+pub fn Tree::lists_feel(self : Tree, f : () -> (ListFeel, Double)) -> Unit {
+  self.list_feel = f
 }
 
 ///|

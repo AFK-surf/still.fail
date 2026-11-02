@@ -40,11 +40,6 @@ export function isWatch(job: J): boolean {
   return get(job, "watch") === true;
 }
 
-export function isEnded(job: J): boolean {
-  const state = strOf(job, "state");
-  return state === "stopped" || state === "failed" || (state === "exited" && !isService(job));
-}
-
 function isCurrent(job: J, now: number): boolean {
   const tn = tone(job);
   if (tn === "off") return false;
@@ -161,8 +156,6 @@ export function shown(input: J, c: Clock): J {
   job.tone = tn;
   job.service = service;
   job.open = service && (state === "running" || state === "exited");
-  job.ended = isEnded(job);
-  job.current = isCurrent(job, now);
   job.word = w;
   job.meta = meta;
   job.detail = `${w} · ${when}${told}`;
@@ -183,14 +176,16 @@ export function shown(input: J, c: Clock): J {
 /// A chat's services and jobs as its pages show them (`ChatJobsView`), and in how many ms what it says changes.
 export function chatJobs(chat: J, c: Clock, summary = false): [J, number] {
   if (summary) {
-    // The chat's bar needs only whether the button exists and its alarm. Preparing and copying every job is left for
-    // the jobs page. A recent failure can cease to be news even when the station sends no change.
+    // The chat's bar needs only whether the button exists (a job that matters now) and its alarm. Preparing and
+    // copying every job is left for the jobs page. A recent failure can cease to be news even when the station sends
+    // no change.
     let hasJobs = false;
     let alarm: string | null = null;
     let next = Infinity;
     for (const agent of arr(get(chat, "agents"))) for (const job of arr(get(agent, "jobs"))) {
-      hasJobs = true;
       const tn = tone(job);
+      if (!isCurrent(job, c.now)) continue;
+      hasJobs = true;
       if (tn === "fail") {
         const until = (msOf(job, "endedAt") ?? msOf(job, "startedAt") ?? 0) + NEWS - c.now;
         if (until > 0) {
@@ -199,14 +194,15 @@ export function chatJobs(chat: J, c: Clock, summary = false): [J, number] {
         }
       } else if (tn === "restart" && alarm === null) alarm = "restart";
     }
-    return [{ jobs: [], hasJobs, alarm, servicesNote: "", jobsNote: "", current: 0, ended: 0, clear: [], allText: "", clearText: "", hiddenText: "" }, next];
+    return [{ jobs: [], hasJobs, alarm, servicesNote: "", jobsNote: "", allText: "" }, next];
   }
-  const jobs: J[] = arr(get(chat, "agents")).flatMap((a) => arr(get(a, "jobs")));
-  const next = jobs.reduce((m, j) => Math.min(m, jobChanges(j, c.now)), Infinity);
+  // Only what matters now: a job that is over (stopped, done, died over a day ago) is not shown at all.
+  const all: J[] = arr(get(chat, "agents")).flatMap((a) => arr(get(a, "jobs")));
+  const next = all.reduce((m, j) => Math.min(m, jobChanges(j, c.now)), Infinity);
+  const jobs = all.filter((j) => isCurrent(j, c.now));
   jobs.sort((a, b) => rank(tone(a)) - rank(tone(b)) || (msOf(b, "startedAt") ?? 0) - (msOf(a, "startedAt") ?? 0));
-  const current = jobs.filter((j) => isCurrent(j, c.now));
-  const count = (service: boolean, tn: string) => current.filter((j) => isService(j) === service && tone(j) === tn).length;
-  const alarm = current.some((j) => tone(j) === "fail") ? "fail" : current.some((j) => tone(j) === "restart") ? "restart" : null;
+  const count = (service: boolean, tn: string) => jobs.filter((j) => isService(j) === service && tone(j) === tn).length;
+  const alarm = jobs.some((j) => tone(j) === "fail") ? "fail" : jobs.some((j) => tone(j) === "restart") ? "restart" : null;
   const servicesNote = (
     [
       [count(true, "up"), "core-logic.jobs.services.up"],
@@ -218,20 +214,12 @@ export function chatJobs(chat: J, c: Clock, summary = false): [J, number] {
     .join(t("core-logic.jobs.list_sep"));
   const live = count(false, "live");
   const jobsNote = live === 0 ? "" : t("core-logic.jobs.live_count", { n: live });
-  const ended = jobs.filter(isEnded);
-  const clear: string[] = [];
-  for (const s of ended.map((j) => strOf(j, "session")).filter((s) => s !== "")) if (!clear.includes(s)) clear.push(s);
   return [
     {
       alarm,
       servicesNote,
       jobsNote,
-      current: current.length,
-      ended: ended.length,
-      clear,
       allText: t("core-logic.jobs.all", { n: jobs.length }),
-      clearText: t("core-logic.jobs.clear", { n: ended.length }),
-      hiddenText: t("core-logic.jobs.hidden", { n: jobs.length - current.length }),
       jobs: jobs.map((j) => shown(j, c)),
     },
     next,

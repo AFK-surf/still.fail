@@ -74,8 +74,21 @@ fn pick_told_gone() -> Unit {
 }
 
 ///|
-/// A message right clicked: the frame, where, its share, link and complete text, for the window's menu. None once taken.
-pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String, String)?] = Ref(None)
+/// A message right clicked: the frame, where, its share, link and complete text, and its row's key, for the window's
+/// menu. None once taken.
+pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String, String, String)?] = Ref(None)
+
+///|
+/// The message whose right click's menu is open (its row's key, as share_offered says it; "" none), told by what shows
+/// that menu: its row lit meanwhile (message_menu_on).
+// kept across runs: none as a run begins (pick_reset)
+pub let message_menu : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+
+///|
+/// Whether message `key`'s menu is open: its right click's, or its ⋯'s (share_turn_tool).
+pub fn message_menu_on(key : String) -> Bool {
+  message_menu.get() == key || @sf.menu_shown(key + "/message-menu")
+}
 
 ///|
 /// Told as a message offers its turn (share_offered): what shows the menu, built apart from the message (another old
@@ -85,8 +98,8 @@ pub let share_offered_told : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// The turn of a message right clicked offered (share_offered), told.
-fn share_offer(at : Int, x : Double, y : Double, go : () -> Unit, link : String, words : String) -> Unit {
-  share_offered.val = Some((at, x, y, go, link, words))
+fn share_offer(at : Int, x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
+  share_offered.val = Some((at, x, y, go, link, words, key))
   share_offered_told.set(@signals.untracked(fn() { share_offered_told.get() }) + 1)
 }
 
@@ -97,7 +110,7 @@ fn share_offer(at : Int, x : Double, y : Double, go : () -> Unit, link : String,
 /// bar over its selection instead (pick_layer), not from every message's head.
 pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, words : String, go : () -> Unit) -> Unit {
   match c.menu_asked(row) {
-    Some((x, y)) => share_offer(c.frame_number(), x, y, go, link, words)
+    Some((x, y)) => share_offer(c.frame_number(), x, y, go, link, words, key)
     None => ()
   }
   let menu = key + "/message-menu"
@@ -175,6 +188,7 @@ pub fn pick_reset() -> Unit {
   pk.share = None
   pk.link = ""
   share_offered.val = None
+  message_menu.set("")
   pk.taken_at = -1
   pk.sel.reset()
   picked.set(picked_none)
@@ -268,11 +282,12 @@ pub fn pickable(
       None => ()
     }
     // right clicked: its turn offered the window's right click menu (sfdesk's context_menu.mbt); not where something
-    // in it has a menu of its own (a file's: the innermost asker's, Ctx::menu_asked)
+    // in it has a menu of its own (a file's: the innermost asker's, Ctx::menu_asked); its row's key the message's
+    // (others_message's "m:" and its ts)
     match share {
       Some(go) =>
         match c.menu_asked(id) {
-          Some((x, y)) => share_offer(c.frame_number(), x, y, go, link, words)
+          Some((x, y)) => share_offer(c.frame_number(), x, y, go, link, words, "m:" + ts)
           None => ()
         }
       None => ()

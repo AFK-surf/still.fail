@@ -174,16 +174,6 @@ export const mJobsAlarm = style({
 export const mJobsEmpty = style({
   display: "flex", flexDirection: "column", gap: "4px", padding: "12px 2px", fontSize: vars.textMeta, color: "var(--m-muted)",
 });
-export const mJobsAll = style({
-  display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "2px", marginTop: "14px",
-  padding: "6px 2px", border: "0", background: "none", color: "var(--m-accent)", font: "inherit", fontSize: vars.textUi,
-  textAlign: "left", cursor: "pointer",
-  selectors: { "&:disabled": { cursor: "default" } },
-});
-/** Its words with a spinner before them while it is under way. */
-export const mJobsAllLine = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
-// Not the small note under it (./Connects.css.ts): the button's own words.
-globalStyle(`${mJobsAll} ${mJobsAllLine}`, { fontSize: "inherit", color: "inherit" });
 // The dot on the name's 21px line, half a pixel up for CJK ink (rounded to a whole pixel).
 globalStyle(`${mJob} > ${jobDot}`, { marginTop: "6px" });
 globalStyle(`${mJobHead} span > span`, {

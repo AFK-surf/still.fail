@@ -42,12 +42,12 @@ import { AgentMark, ElsewhereLogo } from "../ui.tsx";
 import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideShare.tsx";
 import { useAction } from "../action.ts";
 import { PeopleStack, PersonNamed } from "../components.tsx";
-import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
+import { JobDot, metaOf, NO_JOBS, useJobLog, useStopJob } from "../Jobs.tsx";
 import { Letters } from "../Letters.tsx";
 import { PullMark, pullTitle, ThingMenu, Things, useChatThings } from "../Things.tsx";
 import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
-import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
+import { useDoing, useDoingFailed } from "../doing.ts";
 import type { ChatCcTo, ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
 import { keptCount, PublishPicture, savePicture, takePicture, usePublishPreview, useTicking } from "../Publish.tsx";
 import * as chatCss from "./styles/chat.css.ts";
@@ -615,29 +615,13 @@ function openJobs(app: MobileApp, here: Here) {
 function JobsNow({ here }: { here: Here }) {
   const view = useChatJobs(here.station, { session: here.key }).value ?? NO_JOBS;
   const { jobs } = view;
-  const [all, setAll] = useState(false);
-  const shown = all ? jobs : jobs.filter((j) => j.current);
-  const clear = useClearEnded(here.station);
-  // Clearing: under way while any of its sessions' is.
-  const clearing = useDoingList().some((d) => !failed(d) && view.clear.some((session) => doingMatches(d, "job.clearEnded", { station: here.station, session })));
   return (
     <>
       <SheetGrab />
       <SheetHead title={t("web-mobile.chat.jobs")} />
       <div className={`${sheetsCss.mSheetScroll} ${partsCss.mPad18}`}>
         {jobs.length === 0 && <div className={css.mJobsEmpty}><b>{t("web-mobile.chat.jobsNone")}</b><span>{t("web-mobile.chat.jobsNoneNote")}</span></div>}
-        {jobs.length > 0 && shown.length === 0 && <p className={homeCss.mNote}>{t("web-mobile.chat.jobsIdle")}</p>}
-        <JobGroups here={here} view={view} jobs={shown} notes />
-        {jobs.length > view.current && (
-          <button type="button" className={css.mJobsAll} onClick={() => setAll(!all)}>
-            {all ? t("web-mobile.chat.jobsCurrent") : <>{view.allText}<span>{view.hiddenText}</span></>}
-          </button>
-        )}
-        {view.ended > 0 && (
-          <button type="button" className={css.mJobsAll} data-busy={clearing || undefined} disabled={clearing} onClick={() => clear(view.clear)}>
-            <span className={css.mJobsAllLine}>{clearing && <Spinner inline />}{view.clearText}</span>
-          </button>
-        )}
+        <JobGroups here={here} view={view} jobs={jobs} notes />
       </div>
     </>
   );

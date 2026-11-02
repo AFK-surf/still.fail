@@ -229,32 +229,6 @@ fn job_stop(src : Source, station : String, job : Json?) -> Unit {
 }
 
 ///|
-/// Clearing a chat's jobs that are over (ClearEnded): the button says how many, turning while they go (a red mark a
-/// moment if not).
-fn jobs_clear(c : @ui.Ctx, src : Source, station : String, view : Json?, inset? : Bool = false) -> Unit {
-  let on = [("station", station)]
-  let clearing = core_doing(src, ["job.clearEnded"], on)
-  let id = c.id("jobs/clear")
-  if !clearing && c.clicked(id) {
-    for session in items(view, "clear") {
-      match session {
-        String(s) =>
-          act(src, @sf.t("web-main.jobs.clearWhat"), "", "job.clearEnded", {
-            "station": Json::string(station),
-            "session": Json::string(s),
-          })
-        _ => ()
-      }
-    }
-  }
-  let b = c.box(style=if inset { jobs_clear_inset } else { jobs_clear_style }, id~, fn() {
-    @settings.doing_mark(c, clearing, core_failed(src, ["job.clearEnded"], on), inline=true)
-    c.text(text(view, "clearText"), style=if inset { jobs_clear_words_sm } else { jobs_clear_words }) |> ignore
-  })
-  c.semantics(b, Button, id~, label=text(view, "clearText"))
-}
-
-///|
 /// A group's head (jobsHead): its name, what the core notes of it lighter after it; in the popover (`inset`) where its
 /// rows' words are, a small panel's heading.
 fn jobs_head(c : @ui.Ctx, name : String, note : String, inset? : Bool = false) -> Unit {
@@ -271,7 +245,7 @@ fn jobs_head(c : @ui.Ctx, name : String, note : String, inset? : Bool = false) -
 /// The chat bar's popover's body (JobsPopover): what matters now (services up or restarting, jobs alive, what died
 /// lately); a service pressed opens its tab (`service`), one that failed and the rest the 任务 tab at it (`tab`); a job
 /// opens in place to its last few notices and last output, with its stop and 在面板中查看. At its foot all of them in
-/// the 任务 tab, and clearing what is over.
+/// the 任务 tab.
 pub fn jobs_popover(
   c : @ui.Ctx,
   src : Source,
@@ -289,9 +263,8 @@ pub fn jobs_popover(
     |> ignore
     return
   }
-  let shown = jobs.filter(fn(j) { flag(Some(j), "current") })
-  let services = shown.filter(fn(j) { flag(Some(j), "service") })
-  let plain = shown.filter(fn(j) { !flag(Some(j), "service") })
+  let services = jobs.filter(fn(j) { flag(Some(j), "service") })
+  let plain = jobs.filter(fn(j) { !flag(Some(j), "service") })
   c.box(style=jobs_list, fn() {
     if services.length() > 0 {
       c.box(style=jobs_group, fn() {
@@ -365,9 +338,6 @@ pub fn jobs_popover(
     }
   })
   |> ignore
-  if shown.length() == 0 {
-    c.box(style=jobs_quiet_at, fn() { c.text(@sf.t("web-main.jobs.quiet"), style=jobs_quiet) |> ignore }) |> ignore
-  }
   c.box(style=jobs_foot, fn() {
     let all = c.id("jobs-pop/all")
     if c.clicked(all) {
@@ -378,10 +348,6 @@ pub fn jobs_popover(
       c.text(words, style=if c.lit(all) { jobs_all_hot } else { jobs_all_words }) |> ignore
     })
     c.semantics(b, Button, id=all, label=words)
-    // what the popover leaves out is all over: the button to clear them says how many
-    if number(view, "ended") > 0.0 {
-      jobs_clear(c, src, station, view, inset=true)
-    }
   })
   |> ignore
 }
@@ -400,7 +366,7 @@ fn job_action(c : @ui.Ctx, key : String, mark : () -> Unit, words : String, on :
 }
 
 ///|
-/// The 任务 tab beside the chat (JobsTab): every service and job (those over faded, last); a service up or restarting
+/// The 任务 tab beside the chat (JobsTab): every service and job that matters now; a service up or restarting
 /// opens its tab (`service`); a job picked (the first while none is) shows what it said, or its output as it grows,
 /// under its name, state and command.
 pub fn jobs_tab(c : @ui.Ctx, src : Source, station : String, chat : String, view : Json?, service : (String) -> Unit) -> Unit {
@@ -421,8 +387,7 @@ pub fn jobs_tab(c : @ui.Ctx, src : Source, station : String, chat : String, view
     let heads = (if services.length() > 0 { 1 } else { 0 }) + (if plain.length() > 0 { 1 } else { 0 })
     let tall = (services.length() + plain.length()).to_double() * job_row_h +
       heads.to_double() * jobs_head_h +
-      jobs_list_room +
-      (if number(view, "ended") > 0.0 { jobs_clear_h } else { 0.0 })
+      jobs_list_room
     let h = if tall < most { tall } else { most }
     c.box(style=jobs_tab_list_room.then(@ui.style(h=Fixed(h))), fn() {
       c.list("jobs-tab/" + chat, 1, 200.0, fn(_) {
@@ -456,9 +421,6 @@ pub fn jobs_tab(c : @ui.Ctx, src : Source, station : String, chat : String, view
               }
             })
             |> ignore
-          }
-          if number(view, "ended") > 0.0 {
-            jobs_clear(c, src, station, view)
           }
         })
         |> ignore
@@ -582,9 +544,6 @@ let jobs_head_h : Double = 30.0
 
 ///|
 let jobs_list_room : Double = 18.0
-
-///|
-let jobs_clear_h : Double = 38.0
 
 ///|
 /// A job's dot (jobDot): 8 across, round.
@@ -791,15 +750,6 @@ let jobs_fold_open : @ui.Style = @ui.css("w=Full mb=S1 bg=Hover radius=Inner")
 let jobs_fold_body : @ui.Style = @ui.style(w=Full, pt=S1, pr=S2, pb=S2, pl=@sf.room_of(jobs_names_in))
 
 ///|
-/// Nothing now (jobsQuiet): 8 over, in the names' column (as the foot's words: jobs_all), 13 muted.
-// kept across runs: a value (no field of it changes)
-let jobs_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let jobs_quiet_at : @ui.Style = @ui.style(w=Full, pt=S2, pl=@sf.room_of(jobs_names_in))
-
-///|
 /// The names' column in the popover: a row's padding, a job's dot (8) and the 12 after it (job_row_inset, job_row_on).
 let jobs_names_in : Double = @sf.text_in + job_dot_w + job_dot_gap
 
@@ -812,7 +762,7 @@ let job_dot_gap : Double = 12.0
 ///|
 /// The popover's foot (jobsFoot): 6 under its groups, 4 apart; all of them a row 38 high, its words in the names'
 /// column (a row's padding, its dot's 8 and the 12 after it: job_row_inset, job_row_on), muted, the words' ink on the
-/// pointer's ground; clearing beside it.
+/// pointer's ground.
 // kept across runs: a value (no field of it changes)
 let jobs_foot : @ui.Style = @ui.css("row w=Full mt=S1_5 gap=S1 align=ACenter")
 
@@ -837,40 +787,6 @@ let jobs_all_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap
 ///|
 // kept across runs: a value (no field of it changes)
 let jobs_all_hot : @ui.TextStyle = jobs_all_words.then(@ui.text_style(color=Fg))
-
-///|
-/// Clearing what is over (jobsClear): 38 high, 12 in, its turning mark and words 6 apart, the pointer's ground on it;
-/// in the popover in by the panel's words, 12.
-// kept across runs: a value (no field of it changes)
-let jobs_clear_style : @ui.Style = @ui.style(
-  row=true,
-  h=@sf.jobs_row_h,
-  px=S3,
-  gap=S1_5,
-  align=ACenter,
-  radius=Xl,
-  hovered=@ui.patch(bg=Hover),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let jobs_clear_inset : @ui.Style = @ui.style(
-  row=true,
-  h=@sf.jobs_row_h,
-  px=S2_5,
-  gap=S1_5,
-  align=ACenter,
-  radius=Inner,
-  hovered=@ui.patch(bg=Hover),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let jobs_clear_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let jobs_clear_words_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// None at all (jobsEmpty): 26 by 20 in, in the middle, 4 apart; its title 13 in 500.

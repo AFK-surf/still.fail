@@ -22,7 +22,7 @@ import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 // together, what matters first, is its `chatJobs` view.
 
 /** A chat's jobs before the core has said (or from a core that does not know them): none. */
-export const NO_JOBS: ChatJobsView = { jobs: [], servicesNote: "", jobsNote: "", current: 0, ended: 0, clear: [], allText: "", clearText: "", hiddenText: "" };
+export const NO_JOBS: ChatJobsView = { jobs: [], servicesNote: "", jobsNote: "", allText: "" };
 
 /** The line under a job's name: what it is up to, in a few words (its state's word coloured as its dot). */
 export function metaOf(job: Job): ReactNode {
@@ -65,15 +65,6 @@ export function useStopJob(station: string): (job: Job) => void {
   return (job) => act(stationApi(call).stopJob(job.id), t("web-main.jobs.stopWhat", { name: job.name }));
 }
 
-/** Clears a chat's jobs that are over from the page (each session's, as the station keeps them: `clear`). */
-export function useClearEnded(station: string): (sessions: string[]) => void {
-  const call = useStationCall(station);
-  const act = useAct();
-  return (sessions) => {
-    act(Promise.all(sessions.map((s) => stationApi(call).clearEndedJobs(s))), t("web-main.jobs.clearWhat"));
-  };
-}
-
 /**
  * A job's stop button (`children` after its icon): turning in its icon's place, not pressed again, while the job is
  * being stopped, wherever that was asked (the core's `doing`); a red mark there a few seconds when that failed.
@@ -85,17 +76,6 @@ export function JobStop({ station, job, stop, className, label, size = 14, child
   return (
     <button type="button" className={className} aria-label={label} disabled={stopping} aria-busy={stopping || undefined} onClick={() => stop(job)}>
       <DoingShown state={state} inline={children !== undefined} idle={<Stop size={size} />} />{children}
-    </button>
-  );
-}
-
-/** Clearing a chat's jobs that are over: the button says how many, turning while they go (a red mark a moment if not). */
-function ClearEnded({ station, view, clear }: { station: string; view: ChatJobsView; clear: (sessions: string[]) => void }) {
-  const state = useDoingState("job.clearEnded", { station });
-  const clearing = state.running;
-  return (
-    <button type="button" className={css.jobsClear} disabled={clearing} aria-busy={clearing || undefined} onClick={() => clear(view.clear)}>
-      <DoingShown state={state} inline />{view.clearText}
     </button>
   );
 }
@@ -131,15 +111,13 @@ function Notices({ job, limit, clockTimes = false }: { job: Job; limit?: number;
 export function JobsPopover({ station, view, onService, onTab }:
   { station: string; view: ChatJobsView; onService: (id: string) => void; onTab: (id?: string) => void }) {
   const stop = useStopJob(station);
-  const clear = useClearEnded(station);
   const [open, setOpen] = useState<string | null>(null);
   const { jobs } = view;
   if (jobs.length === 0) {
     return <div className={css.jobsEmpty}><b>{t("web-main.jobs.none")}</b><span>{t("web-main.jobs.noneNote")}</span></div>;
   }
-  const shown = jobs.filter((j) => j.current);
-  const services = shown.filter((j) => j.service);
-  const plain = shown.filter((j) => !j.service);
+  const services = jobs.filter((j) => j.service);
+  const plain = jobs.filter((j) => !j.service);
   return (
     <>
       {/* Many of them scroll here, between the popover's top and its foot, which stays in sight. */}
@@ -175,20 +153,17 @@ export function JobsPopover({ station, view, onService, onTab }:
         </section>
       )}
       </div>
-      {shown.length === 0 && <p className={css.jobsQuiet}>{t("web-main.jobs.quiet")}</p>}
       <div className={css.jobsFoot}>
         <button type="button" className={css.jobsAll} onClick={() => onTab()}>
           {view.allText} · {t("web-main.jobs.inPanel")}
         </button>
-        {/* What the popover leaves out is all over: the button to clear them says how many. */}
-        {view.ended > 0 && <ClearEnded station={station} view={view} clear={clear} />}
       </div>
     </>
   );
 }
 
 /**
- * The 任务 tab beside the chat: every service and job (those over faded, last); a job picked shows what it said, or
+ * The 任务 tab beside the chat: every service and job that matters now; a job picked shows what it said, or
  * its output as it grows, under its name, state and command.
  */
 export function JobsTab({ station, view, picked, onPick, chat }:
@@ -196,7 +171,6 @@ export function JobsTab({ station, view, picked, onPick, chat }:
     /** Its chat's key: a service's row opens the service's tab on its page (chatPage.ts). */
     chat: string }) {
   const stop = useStopJob(station);
-  const clear = useClearEnded(station);
   const [tab, setTab] = useState<"notices" | "output">("notices");
   const all = view.jobs;
   const services = all.filter((j) => j.service);
@@ -221,7 +195,6 @@ export function JobsTab({ station, view, picked, onPick, chat }:
             {plain.map((j) => <JobRow key={j.id} job={j} selected={j.id === job?.id} onClick={() => onPick(j.id)} />)}
           </section>
         )}
-        {view.ended > 0 && <ClearEnded station={station} view={view} clear={clear} />}
       </div>
       {job && (
         <div className={css.jobDetail}>

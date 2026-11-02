@@ -120,12 +120,8 @@ fn Ctx::scroll_list(self : Ctx, id : Int, d : Double) -> Unit {
 }
 
 ///|
-/// A wheel's notch's ease (ms): the time constant of the follow its notches are eased in by, critically damped, as a
-/// browser eases one (Chromium's smooth scroll, ~200 ms a notch): one from rest sets out slowly, half of it come by
-/// 1.7 of these (71 ms), 95 in 100 by 4.7 (200 ms). A notch turned while another is coming carries on from where the
-/// list is and how fast it moves then, so a wheel turned on scrolls at its pace, not in a burst a notch (an ease out of
-/// 36 ms from each notch, 2026-10-26: a notch every 80 ms moved the list eight times faster at it than between).
-pub let wheel_ease_ms : Double = 42.0
+/// A wheel's notch's ease (ms): @view's (list_motion.mbt), one with the window's tree's page's lists'.
+pub let wheel_ease_ms : Double = @view.wheel_ease_ms
 
 ///|
 /// A wheel's notch on list `id`, turned at `at` (the event's moment, not before the last frame): scrolled by `d` over
@@ -174,46 +170,6 @@ fn ListState::wheel_moves(self : ListState, dy : Double) -> Bool {
     !self.at_end
   } else {
     self.anchor > 0 || self.anchor_off > 0.001
-  }
-}
-
-///|
-/// How much of a wheel's ease of `total` has come `t` ms after it set out at `v0` (px a ms, the way `total` goes when
-/// positive): solved for the time (critically damped, wheel_ease_ms: what is left (total + (total / τ - v0) t)
-/// e^(-t / τ)), in whole 1/64 px, all of it from ease_end on. The same at any time whatever frames it went by.
-fn ease_come(total : Double, v0 : Double, t : Double) -> Double {
-  if t >= ease_end(total, v0) {
-    total
-  } else {
-    let left = (total + (total / wheel_ease_ms - v0) * t) * @dmath.exp(-t / wheel_ease_ms)
-    ((total - left) * 64.0).round() / 64.0
-  }
-}
-
-///|
-/// Where an ease (ease_come) is `t` ms after it set out, and how fast it moves then (px a ms): what a notch turned then
-/// takes over (Ctx::ease_list).
-fn ease_state(total : Double, v0 : Double, t : Double) -> (Double, Double) {
-  let t = dmax(0.0, t)
-  if t >= ease_end(total, v0) {
-    (total, 0.0)
-  } else {
-    let k = total / wheel_ease_ms - v0
-    (ease_come(total, v0, t), (v0 + k * t / wheel_ease_ms) * @dmath.exp(-t / wheel_ease_ms))
-  }
-}
-
-///|
-/// When an ease of `total` set out at `v0` has all come (ms after it set out): what is left under 1/128 px from then on.
-/// What is left is at most (|total| + |k| t) e^(-t / τ) (k = total / τ - v0), and t e^(-t / 4τ) at most 4τ / e: so at
-/// most (|total| + 4 |k| τ / e) e^(-3t / 4τ), under 1/128 from the time solved here (a little after the least).
-fn ease_end(total : Double, v0 : Double) -> Double {
-  let k = (total / wheel_ease_ms - v0).abs()
-  let most = (total.abs() + 4.0 * k * wheel_ease_ms / @dmath.exp(1.0)) * 128.0
-  if most <= 1.0 {
-    0.0
-  } else {
-    wheel_ease_ms * 4.0 / 3.0 * @dmath.ln(most)
   }
 }
 
@@ -278,7 +234,7 @@ fn Ctx::app_scrolled(self : Ctx, id : Int, st : ListState, put? : Bool = true) -
 
 ///|
 /// What moves of a list by itself: a wheel's ease (at rest at its end), its fling and its overscroll going back (at
-/// their ends: scroll_path.mbt) and its scroll bar (gone once faded).
+/// their ends: @view's list_motion.mbt) and its scroll bar (gone once faded).
 impl Moving for ListState with rest_at(self, now, frame) {
   // not built this frame: nothing shows it, at rest (shown again, it says so again: Ctx::list)
   if self.built != frame {

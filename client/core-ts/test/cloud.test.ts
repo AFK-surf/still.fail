@@ -188,8 +188,6 @@ const req = (name: string, params: unknown) => request(name, params)!;
 test("operations_make_their_requests", () => {
   let r = req("job.stop", { station: "w/s", id: "job 1" });
   assert.deepEqual([r.target, r.method, r.path, r.body], [{ station: "w/s" }, "POST", "/jobs/job%201/stop", null]);
-  r = req("job.clearEnded", { station: "ws/st", session: "ember:c-1" });
-  assert.deepEqual([r.method, r.path], ["DELETE", "/sessions/ember%3Ac-1/jobs"]);
   r = req("session.settings", { station: "ws/st", key: "k", model: "m", profile: null });
   assert.deepEqual(r.body, { model: "m", profile: null });
   r = req("workspace.setRole", { account: "a", workspace: "w1", member: "x@y.z", role: "admin" });

@@ -22,11 +22,13 @@ export class FolderWatches {
   readonly #held: number;
   readonly #kept: number;
   readonly #time: Fibers;
+  readonly #open: (dir: string) => FSWatcher;
 
-  constructor(held = HELD_MS, kept = KEPT_MS, clock?: Clock.Clock) {
+  constructor(held = HELD_MS, kept = KEPT_MS, clock?: Clock.Clock, open: (dir: string) => FSWatcher = (dir) => watch(dir, { persistent: false })) {
     this.#held = held;
     this.#kept = kept;
     this.#time = new Fibers("drive watches", clock);
+    this.#open = open;
   }
 
   /// Whether the folder at `dir` changed since `id` last asked (at once if it did), else as soon as it does, `held` at
@@ -75,7 +77,7 @@ export class FolderWatches {
     }
     let watcher: FSWatcher;
     try {
-      watcher = watch(dir, { persistent: false });
+      watcher = this.#open(dir);
     } catch {
       return null;
     }

@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mGrow, mLink } from "./styles/parts.css.ts";
-import { mJobHead, mJobText, mJobsAll, mJobsEmpty } from "./Chat.css.ts";
+import { mJobHead, mJobText, mJobsEmpty } from "./Chat.css.ts";
 
 export const mChoices = style({ display: "flex", flexDirection: "column", gap: "8px" });
 export const mChoice = style({
@@ -55,7 +55,5 @@ globalStyle(`${mJobText} > span`, {
 globalStyle(`${mJobHead} b`, { fontSize: vars.textTitle, fontWeight: "600", lineHeight: "23px" });
 /** Here rather than with its class: it comes after .m-switch-row b, and wins over it. */
 globalStyle(`${mJobsEmpty} b`, { fontSize: vars.textBody, fontWeight: "600", color: "var(--m-ink)" });
-/** Here rather than with its class: it comes after .m-choice span, and wins over it. */
-globalStyle(`${mJobsAll} span`, { fontSize: vars.textCaption, color: "var(--m-muted)" });
 /** 全部 or 我建的, over the list of every station's connects. */
 export const mListSeg = style({ padding: "4px 16px 2px" });

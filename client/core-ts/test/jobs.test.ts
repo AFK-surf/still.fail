@@ -31,29 +31,28 @@ test("a_job_is_shown_by_its_dot_its_word_and_its_line", () => {
   const quiet = shown(job("w", { outputAt: NOW - 20_000 }), c());
   assert.deepEqual([texts(quiet), quiet.outputSaid], ["暂无通知 · 最后输出 20 秒前", "最后输出 · 20 秒前"]);
   const died = shown(job("w", { state: "exited", exitCode: 2, endedAt: NOW - 7_200_000 }), c());
-  assert.deepEqual([died.tone, texts(died), died.ended, died.current], ["fail", "意外退出 · 退出码 2 · 2 小时前", true, true]);
+  assert.deepEqual([died.tone, texts(died)], ["fail", "意外退出 · 退出码 2 · 2 小时前"]);
   const old = shown(job("w", { state: "exited", endedAt: NOW - 2 * NEWS }), c());
-  assert.deepEqual([texts(old), old.current], ["意外退出 · 被信号结束 · 2 天前", false]);
+  assert.equal(texts(old), "意外退出 · 被信号结束 · 2 天前");
   const done = shown(job("w", { state: "exited", exitCode: 0, endedAt: NOW - 10_000 }), c());
   assert.deepEqual([done.tone, texts(done)], ["off", "已结束 · 10 秒前"]);
   const up = shown(job("s", { port: 4817, startedAt: NOW - 7_200_000 }), c());
-  assert.deepEqual([up.tone, texts(up), up.open, up.ended], ["up", "在线 · 2 小时", true, false]);
+  assert.deepEqual([up.tone, texts(up), up.open], ["up", "在线 · 2 小时", true]);
   const again = shown(job("s", { port: 4817, state: "exited", restarts: 2 }), c());
-  assert.deepEqual([again.tone, texts(again), again.ended], ["restart", "正在重启 · 第 2 次", false]);
+  assert.deepEqual([again.tone, texts(again)], ["restart", "正在重启 · 第 2 次"]);
 });
 
-test("a_chats_jobs_put_what_matters_first_and_say_how_many", () => {
+test("a_chats_jobs_put_what_matters_first_and_leave_out_those_over", () => {
   const chat = {
     agents: [
-      { jobs: [job("old", { state: "stopped", startedAt: NOW - 90_000, endedAt: NOW - 80_000 }), job("w")] },
-      { jobs: [job("s", { session: "b", port: 1, startedAt: NOW - 5_000 }), job("r", { session: "b", port: 2, state: "exited" }), job("x", { session: "b", state: "failed", endedAt: NOW - 1_000 })] },
+      { jobs: [job("old", { state: "stopped", startedAt: NOW - 90_000, endedAt: NOW - 80_000 }), job("w"), job("done", { state: "exited", exitCode: 0, endedAt: NOW - 1_000 })] },
+      { jobs: [job("s", { session: "b", port: 1, startedAt: NOW - 5_000 }), job("r", { session: "b", port: 2, state: "exited" }), job("x", { session: "b", state: "failed", endedAt: NOW - 1_000 }), job("y", { session: "b", state: "failed", startedAt: NOW - 2 * NEWS, endedAt: NOW - NEWS - 1 })] },
     ],
   };
   const [v, next] = chatJobs(chat, c());
-  assert.deepEqual(v.jobs.map((j: J) => j.id), ["x", "r", "w", "s", "old"]);
+  assert.deepEqual(v.jobs.map((j: J) => j.id), ["x", "r", "w", "s"], "stopped, done and died over a day ago are left out");
   assert.deepEqual([v.alarm, v.servicesNote, v.jobsNote], ["fail", "1 个在线，1 个在重启", "1 个运行中"]);
-  assert.deepEqual([v.current, v.ended, v.clear], [4, 2, ["b", "a"]]);
-  assert.deepEqual([v.allText, v.clearText, v.hiddenText], ["全部 5 个", "清除 2 个已结束的", "另有 1 个已停止或结束"]);
+  assert.equal(v.allText, "全部 4 个");
   assert.ok(next <= 1000);
   const [none, next2] = chatJobs({ agents: [] }, c());
   assert.deepEqual([none.alarm, none.jobs, next2], [null, [], Infinity]);
@@ -73,6 +72,8 @@ test("a_chat_jobs_summary_keeps_the_button_and_alarm_without_preparing_the_jobs_
   assert.equal(next, 5_000, "the alarm is checked again when the failure is no longer recent");
   const [later] = chatJobs(chat, { ...c(), now: NOW + 5_000 }, true);
   assert.equal(later.alarm, "restart");
+  const [over] = chatJobs({ agents: [{ jobs: [job("old", { state: "stopped" }), job("done", { state: "exited", exitCode: 0 })] }] }, c(), true);
+  assert.equal(over.hasJobs, false, "no button for jobs that are all over");
   const [empty, never] = chatJobs({ agents: [] }, c(), true);
   assert.deepEqual([empty.hasJobs, empty.alarm, never], [false, null, Infinity]);
 });
