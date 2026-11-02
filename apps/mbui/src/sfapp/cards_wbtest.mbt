@@ -3,6 +3,10 @@
 // (sfbase's list_turns.mbt Turns::in_turn; the user, 2026-10-29: what is answered moves nothing in the list).
 
 ///|
+/// The made-up core cards_core's Tester was last given (what a test calls it with).
+let cards_src : Ref[Source?] = Ref(None)
+
+///|
 /// The fixture's chat open (the first row's), its calls kept in `calls` and answered by the fixture.
 fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2) -> @ui.Tester {
   new_run()
@@ -14,6 +18,7 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
       (base.call)(name, params, done)
     },
   }
+  cards_src.val = Some(src)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_cards_fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
@@ -244,4 +249,34 @@ test "words sent at the chat's end under a card waiting: nothing over them steps
       fail("what is over the card stepped \{ys[i] - ys[i - 1]} at once at \{ts[i] - from} ms (\{step(i - 1)} and \{step(i + 1)} round it)")
     }
   }
+}
+
+///|
+test "a card's closing option waits while its agent is in a turn, says why, and answers once it ends; the other answers all along" {
+  for platform in [0, 2] {
+    let calls : Array[Made] = []
+    let t = cards_core(calls, mode="chat-locked", platform~)
+    scroll_to_words(t, "这次只改列表，截图下次再说")
+    assert_true(t.find("助手正忙，忙完才能选") is Some(_))
+    tap_now(t, "这次只改列表，截图下次再说")
+    t.run_for(turn_most_ms)
+    assert_eq(named(calls, "decision.answer").length(), 0)
+    assert_true(t.find("助手正忙，忙完才能选") is Some(_))
+    // its turn over: it says nothing more, and answers
+    (cards_src.val.unwrap().call)("fix.turn_over", Json::object({}), fn(_) {  })
+    t.run_for(turn_most_ms)
+    assert_true(t.find("助手正忙，忙完才能选") is None)
+    tap_now(t, "这次只改列表，截图下次再说")
+    assert_eq(named(calls, "decision.answer").length(), 1)
+    assert_eq(text(Some(named(calls, "decision.answer")[0].params), "option"), "先不换")
+  }
+}
+
+///|
+test "a card locked answers by the option that does not close it" {
+  let calls : Array[Made] = []
+  let t = cards_core(calls, mode="chat-locked")
+  scroll_to_words(t, "把首页和聊天页的截图都更新")
+  tap_now(t, "把首页和聊天页的截图都更新")
+  assert_eq(text(Some(named(calls, "decision.answer")[0].params), "option"), "一起换")
 }

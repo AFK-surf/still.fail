@@ -2020,7 +2020,15 @@ export class Views implements Owner {
       const d = row !== undefined ? decisions.ofRow(row) : null;
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
-    messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed")));
+    // The chat's agents in a turn: a card one of them asked is locked until it ends (the station refuses closing one
+    // meanwhile: station/src/store/store.ts closeCard). Its `since` is the turn's, once it has not ended (not the status,
+    // which also reads running for an agent that ended waiting on work it started).
+    const atWork = new Set<string>();
+    for (const a of agents) {
+      const key = get(a.session, "key");
+      if (u64(get(a, "since")) !== null && typeof key === "string") atWork.add(key);
+    }
+    messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed"), atWork));
     const elsewhere = timed("chat.elsewhere", () => this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots }));
     const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
     const view: J = {

@@ -249,6 +249,7 @@
   "web-main.decisions.answerWhat": "回复「{option}」",
   "web-main.decisions.dismiss": "不再提醒",
   "web-main.decisions.dismissWhat": "不再提醒",
+  "web-main.decisions.locked": "助手正忙，忙完才能选",
   "web-main.decisions.options": "选项",
   "web-main.demoReal.dismiss": "知道了",
   "web-main.demoReal.open": "打开 still.fail",

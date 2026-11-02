@@ -2110,6 +2110,7 @@ pub(all) struct Chosen {
 pub(all) struct Decision {
   resolved : Bool
   dismissed : Bool
+  locked : Bool
   text : String?
   chosen : String?
 }

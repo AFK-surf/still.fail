@@ -3937,11 +3937,11 @@ let options_least_wide : Double = 460.0
 /// web's `width: fit-content; min-width: min(100%, 460px)`), where it is at most as its layout gives it (the card fills
 /// where it is up to this: never its room read back from a frame before, which a chat's first frame has not, the card
 /// laid out none wide there and the list again in the next); on a phone where it is's (none).
-fn options_most(options : Array[(String, String, Bool)], ot : OptionType, wide : Bool) -> Double {
+fn options_most(options : Array[(String, String, Bool)], ot : OptionType, wide : Bool, why : String) -> Double {
   if !wide {
     return 1.0e9
   }
-  let mut words = 0.0
+  let mut words = @ui.text_advance(why, size=ot.detail, weight=400)
   for o in options {
     words = dmax(words, @ui.text_advance(o.0, size=ot.label, weight=500))
     words = dmax(words, @ui.text_advance(o.1, size=ot.detail, weight=400))
@@ -4081,14 +4081,23 @@ let ask_line_row : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart")
 let ask_line_column : @ui.Style = @ui.css("w=Full align=AStart")
 
 ///|
+// kept across runs: a value (no field of it changes)
+let option_words : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let option_waits : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
+
+///|
 /// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger list_pad
 /// in from the card's edge, as a list card's, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
 /// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole); its measures the theme's for the
 /// screen (option_type). Under a post as the web's (`wide`: as wide as what it says, where it is at most, on the
 /// text at 5%); its row's ground under the pointer. `history` keeps the original choices fully legible and read-only,
-/// with a check beside the chosen one; its presenter supplies the only ground and padding. The option tapped,
-/// on the frame after.
+/// with a check beside the chosen one; its presenter supplies the only ground and padding. `waits`: the ones not to be
+/// pressed yet (by index; none when shorter), faded and saying why under them (`waits_why`, whole: it is what they say
+/// now). The option tapped, on the frame after.
 pub fn options_card(
   c : @ui.Ctx,
   key : String,
@@ -4098,6 +4107,8 @@ pub fn options_card(
   chosen? : Int? = None,
   wide? : Bool = false,
   history? : Bool = false,
+  waits? : Array[Bool] = [],
+  waits_why? : String = "",
 ) -> Int? {
   let t = theme()
   let free = enabled && busy is None && !history
@@ -4107,11 +4118,13 @@ pub fn options_card(
   let padding = if history { 0.0 } else { options_card_pad }
   // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
   c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
-    let across = @ui.style(w=Full, max_w=Fixed(options_most(options, ot, wide)))
+    let across = @ui.style(w=Full, max_w=Fixed(options_most(options, ot, wide, if waits.contains(true) { waits_why } else { "" })))
     c.box(style=across, radius=options_card_radius, bg=ground, pad=padding, fn() {
       // (nothing drawn between two: SettingParts.kt DecisionOptions)
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())
+        let waiting = waits.get(i) == Some(true)
+        let free = free && !waiting
         if free && c.clicked(id) {
           picked = Some(i)
         }
@@ -4126,6 +4139,7 @@ pub fn options_card(
         let there = @motion.animate(c, "options-seen/" + k, if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 }, spec=ease)
         let ticked = @motion.animate(c, "options-ticked/" + k, if picked_here { 1.0 } else { 0.0 }, spec=ease)
         let turning = @motion.animate(c, "options-turning/" + k, if busy == Some(i) { 1.0 } else { 0.0 }, spec=ease)
+        let woken = @motion.animate(c, "options-woken/" + k, if waiting { 0.5 } else { 1.0 }, spec=ease)
         c.box(
           dir=Row,
           w=Fill(1.0),
@@ -4145,6 +4159,7 @@ pub fn options_card(
               h=Px(ot.disc),
               radius=ot.disc / 2.0,
               bg=if o.2 { t.p.accent } else { mix_seen(t.p.accent, ticked, alpha(t.p.text, 0.09)) },
+              opacity=woken,
               align=ACenter,
               justify=JCenter,
               fn() {
@@ -4168,9 +4183,15 @@ pub fn options_card(
             )
             |> ignore
             c.box(w=Fill(1.0), fn() {
-              c.text(o.0, size=ot.label, weight=500, color=t.p.text, line=ot.label_line) |> ignore
-              if o.1 != "" {
-                c.text(o.1, size=ot.detail, color=t.p.muted, line=ot.detail_line) |> ignore
+              let words = c.box(style=option_words, fn() {
+                c.text(o.0, size=ot.label, weight=500, color=t.p.text, line=ot.label_line) |> ignore
+                if o.1 != "" {
+                  c.text(o.1, size=ot.detail, color=t.p.muted, line=ot.detail_line) |> ignore
+                }
+              })
+              c.look(words, @ui.look(alpha=woken))
+              if waiting {
+                c.text(waits_why, style=option_waits) |> ignore
               }
             })
             |> ignore

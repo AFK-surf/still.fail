@@ -1592,6 +1592,20 @@ test("a_chats_decisions_show_their_options_and_where_they_stand", async () => {
   assert.deepEqual(m.map((x: J) => x.asked ?? false), [false, false, false, true]);
   // The last post, nothing after it: no room kept for the bell at the end.
   assert.equal(v.askClear, undefined);
+  // Its agent still in the turn that asked ("k" saying this as it goes on): an option that closes the card is refused
+  // by the station meanwhile, so the page says the card is locked; its turn over, it is answerable again.
+  const k = (endedAt: number | null) => ({ session: fullSession("k", { connect: "ember" }), turns: [{ ...turn("t1"), endedAt }], jobs: [], threads: [] });
+  t.set({ topic: "session", station: "ws/a", key: "k" }, k(null));
+  const busy = t.views.compute(chatTopic("ws/a", 7)) as J;
+  assert.deepEqual(busy.ok.messages[3].decision, { resolved: false, locked: true });
+  t.set({ topic: "session", station: "ws/a", key: "k" }, k(5));
+  const over = t.views.compute(chatTopic("ws/a", 7)) as J;
+  assert.deepEqual(over.ok.messages[3].decision, { resolved: false });
+  // Ended waiting on work it started: its turn is over, so a card it left is answerable (though it reads as running).
+  t.set({ topic: "session", station: "ws/a", key: "k" }, { ...k(5), session: fullSession("k", { connect: "ember", lastTurn: { ...turn("t1"), endedAt: 5, declared: "waiting" } }) });
+  const waiting = t.views.compute(chatTopic("ws/a", 7)) as J;
+  assert.deepEqual(waiting.ok.messages[3].decision, { resolved: false });
+  assert.equal((waiting.ok.agents[0] as J).status, "running");
 });
 
 test("an_agents_need_without_a_card_is_let_go_where_the_chats_end_says_it", async () => {

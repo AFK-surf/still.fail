@@ -1210,6 +1210,14 @@ export const stories: Story[] = [
       ]} />
     </div>),
   },
+  {
+    id: "card-decision-locked", group: "页面卡片", title: "决策选项 · 等这一轮写完", render: () => stage(<div style={{ padding: 32, width: 560 }}>
+      <DecisionOptions station="demo/local" thread={1} seq={1} locked options={[
+        { label: "先不做，留着分支", detail: "改动保持未提交状态，留在本地工作区", closes: true },
+        { label: "继续开 PR", detail: "先补截图核对，再提交并开 PR", recommended: true },
+      ]} />
+    </div>),
+  },
   { id: "panel-bubble", group: "小面板", title: "通知气泡", news: true, render: () => stage(<SystemBubbles scope="demo" />) },
   { id: "panel-bubble-hover", group: "小面板", title: "通知气泡 · 悬停按钮", news: true, render: () => stage(<SystemBubbles scope="demo" />), steps: [{ hover: "text=查看" }] },
 

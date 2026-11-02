@@ -25,10 +25,13 @@ import { Spinner } from "@stillfail/ui/waiting.tsx";
 const DIGITS = [Option1, Option2, Option3, Option4, Option5, Option6];
 
 /** The options of one decision, in one card, numbered; pressing one answers with it (its label, quoting the post). */
-export function DecisionOptions({ station, thread, seq, options, settled, className }: {
+export function DecisionOptions({ station, thread, seq, options, settled, locked = false, className }: {
   station: string; thread: number; seq: number; options: DecisionOption[];
   /** Answered, still drawn till they close (in a chat): none pressed any more, the one picked (its label) as it was. */
   settled?: string | null | undefined;
+  /** Waiting, and its agent in a turn (the core's `locked`): an option that closes the card is not answerable until
+   * that turn ends (the station refuses it meanwhile), so it is drawn so and says why. */
+  locked?: boolean;
   className?: string;
 }) {
   const call = useCall();
@@ -36,7 +39,7 @@ export function DecisionOptions({ station, thread, seq, options, settled, classN
   const doing = useDoingList();
   const sending = doing.find((d) => !failed(d) && doingMatches(d, "decision.answer", { station, thread, seq }));
   const pick = (o: DecisionOption, button: HTMLElement) => {
-    if (sending || settled !== undefined) return;
+    if (sending || settled !== undefined || (locked && o.closes)) return;
     // The answer (its row, in the outbox) comes in first, in the turn taken now, the options closing after it; the
     // list follows its end for it, as for words sent (Chat.tsx useToEnd).
     reserveRow(button, motionMs(ENTER.duration));
@@ -50,14 +53,18 @@ export function DecisionOptions({ station, thread, seq, options, settled, classN
         const Digit = DIGITS[i];
         // (the one picked, answered: a check in its disc where its number was)
         const chosen = settled !== undefined && settled === o.label;
+        // Its agent in a turn: closing the card waits for it (a pick answering in the chat does not).
+        const shut = locked && o.closes === true;
         return (
           <button key={o.label} type="button" className={css.choice} data-recommended={o.recommended || undefined} data-busy={busy || undefined}
-            data-chosen={chosen || undefined}
-            disabled={!!sending || settled !== undefined} aria-busy={busy || undefined} aria-description={o.recommended ? t("common.recommended") : undefined}
+            data-chosen={chosen || undefined} data-locked={shut || undefined}
+            disabled={!!sending || settled !== undefined || shut} aria-busy={busy || undefined}
+            aria-description={[o.recommended && t("common.recommended"), shut && t("web-main.decisions.locked")].filter(Boolean).join(" ") || undefined}
             onClick={(e) => pick(o, e.currentTarget)}>
             <span className={css.choiceNumber} aria-hidden="true">{chosen ? <Check size={12} /> : Digit ? <Digit size={20} /> : i + 1}</span>
             <span className={css.choiceLabel}>{o.label}</span>
             {o.detail && <span className={css.choiceDetail}>{o.detail}</span>}
+            {shut && <span className={css.choiceLocked}>{t("web-main.decisions.locked")}</span>}
             {busy && <Spinner inline className={css.choiceSpinner} />}
           </button>
         );
@@ -107,7 +114,7 @@ export function MessageDecision({ message: m, thread, children }: { message: Cha
         {/* An agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words. */}
         {m.card?.vault ? <VaultCard address={station} id={m.card.vault} />
           : thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
-          <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} settled={open ? undefined : d?.chosen ?? null} />}
+          <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} settled={open ? undefined : d?.chosen ?? null} locked={open && d?.locked === true} />}
         {children}
       </> : d?.text ? <p className={css.settledLine}>{d.text}</p> : null}
     </div>
