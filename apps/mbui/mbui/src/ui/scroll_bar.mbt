@@ -184,15 +184,8 @@ fn bar_track(
   start : Double,
   end : Double,
 ) -> (Double, Double, Double) {
-  let (s, track) = if len - start - end < scroll_bar_least * 2.0 {
-    (0.0, len)
-  } else {
-    (start, len - start - end)
-  }
-  let long = dmin(track, dmax(scroll_bar_least, track * size / content)) - scroll_bar_inset * 2.0
-  let room = track - scroll_bar_inset * 2.0 - long
-  let p = dclamp(off / (content - size), 0.0, 1.0)
-  (at + s + scroll_bar_inset + p * room, long, (content - size) / dmax(room, 1.0))
+  // (the one way a node's bar works it out too: @view.bar_track_of)
+  @view.bar_track_of(at, len, size, content, off, start, end, scroll_bar_least, scroll_bar_inset)
 }
 
 ///|

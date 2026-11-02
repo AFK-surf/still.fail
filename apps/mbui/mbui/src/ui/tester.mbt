@@ -430,6 +430,8 @@ pub fn Tester::new(
     live,
     live_images: {},
     shots: [],
+    shot_sizes: [],
+    shot_drawn: [],
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -2549,6 +2551,17 @@ pub fn Tester::click(self : Tester, role : Role, label? : String = "") -> Unit r
 /// `action` asked of the node of `role` labelled `label` (as a screen reader asks it), settled.
 pub fn Tester::act(self : Tester, role : Role, action : Action, label? : String = "") -> Unit raise {
   let s = self.get(role, label~)
+  if s.id == 0 {
+    fail("\{s.describe()} takes no action")
+  }
+  g().ask_action(s.id, action)
+  self.draw()
+}
+
+///|
+/// Asks `s` (one of what the semantics tree says, Tester::all's: of several alike, the one a test means) to do `action`,
+/// as Tester::act asks the one of its role and label.
+pub fn Tester::act_on(self : Tester, s : SemNode, action : Action) -> Unit raise {
   if s.id == 0 {
     fail("\{s.describe()} takes no action")
   }

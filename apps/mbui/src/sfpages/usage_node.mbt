@@ -960,3 +960,128 @@ fn ug_centered_words(parent : @view.View, words : () -> String, style : @ui.Text
   |> ignore
 }
 
+
+///|
+/// 价目表 made once (usage_prices_page's, narrow) as nodes of the window's tree: each station's prices on a card of its
+/// own, its name, what its prices are, and a table of its models and their rates (@sf.table_node, as a message's
+/// table is drawn), 20 past the card's words either side to its corner's inset; none, said; while they are read, a
+/// made-up station's card in its bones (no core asked for it); the core's `usage` view at `days` read as it changes.
+pub fn usage_prices_node(
+  v : @view.View,
+  core : Core,
+  here : () -> Here,
+  days : Int,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+) -> Unit {
+  let topic = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(days.to_double()) }) }
+  let tables = fn() { items(topic().value, "prices") }
+  let wait = fn() { field(topic().value, "wait") }
+  let blocks = fn() {
+    match topic().value {
+      None => ["waiting"]
+      Some(_) =>
+        if tables().length() == 0 && (flag(wait(), "reading") || failing_of(wait()).length() > 0) {
+          ["read"]
+        } else if tables().length() == 0 {
+          ["none"]
+        } else {
+          tables().mapi(fn(i, _) { "card/\{i}" })
+        }
+    }
+  }
+  @sf.page_node(
+    v,
+    fn() { @sf.t("web-pages.settings.prices.title") },
+    blocks,
+    fn(b, key) {
+      match key {
+        "waiting" =>
+          @sf.waiting_node(b, fn(s) { up_card_node(s, fn() { Some(up_sample()) }, tree=fn() { Some(up_sample_tree()) }) }, error=fn() {
+            match topic().error {
+              Some(e) => @sf.t("web-pages.settings.prices.failed", args=[("error", @settings.error_text(e))])
+              None => ""
+            }
+          })
+        "read" =>
+          @sf.waiting_node(b, fn(s) { up_card_node(s, fn() { Some(up_sample()) }, tree=fn() { Some(up_sample_tree()) }) }, note=fn() {
+            let failing = failing_of(wait())
+            { reading: failing.length() == 0, text: "", failing }
+          })
+        "none" =>
+          b.box(fn(n) {
+            n.padding(Is((12.0, 0.0, 12.0, 10.0))) |> ignore
+            @sf.words_node(n, fn() { @sf.t("web-main.usage.noPrices") }, fn() { @sf.pg_lead }) |> ignore
+          })
+          |> ignore
+        _ => {
+          let i = @string.parse_int(key[5:]) catch { _ => 0 }
+          up_card_node(b, fn() { tables().get(i) })
+        }
+      }
+    },
+    on_back~,
+    frame~,
+    lead=fn() { @sf.t("web-pages.settings.prices.lead") },
+  )
+}
+
+///|
+/// A station's prices (`tv`) on a card of its own (price_card's): its name, what its prices are, and a table of its
+/// models and their rates, as a message's table is drawn; none of its models used, said.
+fn up_card_node(parent : @view.View, tv : () -> Json?, tree? : () -> Json? = fn() { None }) -> Unit {
+  @sf.page_card_node(parent, fn(k) {
+    @sf.words_node(k, fn() { text(tv(), "station") }, fn() { up_station }) |> ignore
+    @sf.words_node(k, fn() { text(tv(), "note") }, fn() { @sf.wide_list_note }) |> ignore
+    k.show(fn() { items(tv(), "rows").length() == 0 }, fn(n) {
+      @sf.words_node(n, fn() { @sf.t("web-main.usage.noModelUsage") }, fn() { @sf.wide_list_note }) |> ignore
+    })
+    k.show(fn() { items(tv(), "rows").length() > 0 }, fn(t) {
+      // (at the card's foot: as far past the card's words under it as its scroll reaches to either side,
+      // up_table_across)
+      t.margin(Is((0.0, 0.0, 0.0, @sf.corner_inset - @sf.card_pad))) |> ignore
+      @sf.table_node(t, fn() { up_markdown(tv()) }, bleed=@sf.card_pad - @sf.corner_inset, tree~)
+    })
+  })
+}
+
+///|
+/// A station's prices' table as Markdown (price_card's): its model, then each rate; the head the first row's rates'
+/// labels.
+fn up_markdown(tv : Json?) -> String {
+  let rows = items(tv, "rows")
+  if rows.length() == 0 {
+    return ""
+  }
+  let head = [@sf.t("web-main.model.models")]
+  head.append(items(Some(rows[0]), "rates").map(fn(r) { text(Some(r), "label") }))
+  let line = fn(cells : Array[String]) { "| " + cells.map(fn(x) { x.replace_all(old="|", new="\\|") }).join(" | ") + " |" }
+  let md = [line(head), line(head.map(fn(_) { "---" }))]
+  for r in rows {
+    let cells = [text(Some(r), "model")]
+    cells.append(items(Some(r), "rates").map(fn(x) { text(Some(x), "value") }))
+    md.push(line(cells))
+  }
+  md.join("\n")
+}
+
+///|
+/// A made-up station's table as the core would read it (prices_sample's): its head and its four rows, each cell's words
+/// made up, for its card in a page's bones (nothing asked of the core).
+fn up_sample_tree() -> Json {
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  let cell = fn(n : Int) { Json::array([Json::string("td"), Json::array([w(n)])]) }
+  let row = fn(first : Int) { Json::array([Json::string("tr"), Json::array([cell(first), cell(3), cell(3), cell(3)])]) }
+  let table = Json::array([Json::string("table"), Json::array([row(3)] + [6, 8, 5, 7].map(row))])
+  Json::array([table])
+}
+
+///|
+/// A made-up station's prices (prices_sample's), for its card in a page's bones.
+fn up_sample() -> Json {
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  let rows = [6, 8, 5, 7].map(fn(n) {
+    Json::object({ "model": w(n), "rates": Json::array([0, 1, 2].map(fn(_) { Json::object({ "label": w(3), "value": w(4) }) })) })
+  })
+  { "station": w(4), "note": w(18), "rows": Json::array(rows) }
+}

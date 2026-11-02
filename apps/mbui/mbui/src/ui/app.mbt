@@ -680,7 +680,11 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.nodes[root].w = Px(w)
   c.nodes[root].h = Px(h)
   // (under a change of theme spreading from where it was asked, while it does: reveal.mbt)
-  c.with_parent(root, fn() { c.revealed(w, h, fn() { (g_view.val)(c) }) })
+  c.with_parent(root, fn() {
+    c.revealed(w, h, fn() { (g_view.val)(c) })
+    // (and the pictures asked apart from any build: shot.mbt take_picture)
+    c.pictures_built()
+  })
   // what lies over the page over everything else (overlay.mbt)
   c.raise_layers()
   root

@@ -14,6 +14,7 @@ pub fn icon_button_node(
   tips? : TipLayer,
   size? : Double = icon_button_side,
   icon_size? : Double = 16.0,
+  icon_now? : () -> String,
 ) -> @view.View {
   parent.box(fn(v) {
     // (the hand on it: a mouse over it or pressing it, a finger pressing it; the keyboard's focus shown on it)
@@ -39,7 +40,7 @@ pub fn icon_button_node(
     .says(By(fn() { Some(@view.said(Button, label=label())) }))
     .on_press(press)
     |> ignore
-    icon_node(v, icon, icon_size, By(fn() { if hand.shown(v) > 0.5 { theme().p.text } else { theme().p.muted } }))
+    icon_node(v, icon, icon_size, By(fn() { if hand.shown(v) > 0.5 { theme().p.text } else { theme().p.muted } }), name_now?=icon_now)
     |> ignore
     let tip = match tips {
       Some(t) => Some(tip_node(t, v, label, side=Bottom))

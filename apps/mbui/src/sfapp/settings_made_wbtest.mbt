@@ -687,6 +687,116 @@ test "用量 made once: every instance drawn as its old view's, with a finger an
 
 
 ///|
+/// 用量's 价目表 reached by its link (查看价目表 →), an old view's (`tree` false) or made once, at `platform`'s hand and
+/// the system's size of words `scale`; its usage as `state` says once there (prices_said).
+fn prices_tester(
+  tree : Bool,
+  platform : Int,
+  scale : Double,
+  state? : @signals.Signal[String] = @signals.signal(""),
+) -> @ui.Tester {
+  let t = memories_tester(tree, platform, scale~, mode="settings-usage", wrap=fn(base) { prices_said(base, state) })
+  t.tap_text("查看价目表 →")
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// `base` with its usage as `state` says, as it changes: "" as it is; "held" not read yet; "failed" failing to be read;
+/// "reading" read with no prices, the stations' still reading; "failing" so, a station failing; "none" no prices.
+fn prices_said(base : Source, state : @signals.Signal[String]) -> Source {
+  {
+    ..base,
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      if name != "usage" {
+        return t
+      }
+      let read_as = fn(wait : Json?) -> Topic {
+        let m : Map[String, Json] = match t.value {
+          Some(Object(o)) => o.copy()
+          _ => {}
+        }
+        m["prices"] = Json::array([])
+        match wait {
+          Some(w) => m["wait"] = w
+          None => m.remove("wait")
+        }
+        { ..t, value: Some(Json::object(m)) }
+      }
+      match state.get() {
+        "held" => ({ value: None, error: None, version: -1 } : Topic)
+        "failed" => ({ value: None, error: Some({ "message": Json::string("网络连接失败") }), version: 1 } : Topic)
+        "reading" => read_as(Some({ "reading": Json::boolean(true) }))
+        "failing" => read_as(Some({ "failing": Json::array([{ "text": Json::string("Studio 离线") }]) }))
+        "none" => read_as(None)
+        _ => t
+      }
+    },
+  }
+}
+
+///|
+test "价目表 made once while its usage is not read yet, fails to be read, is read with no prices (its stations still reading, one failing, none): every instance drawn as its old view's" {
+  for case in [(2, 1.0), (0, 1.0)] {
+    let (platform, scale) = case
+    for state in ["held", "failed", "reading", "failing", "none"] {
+      let at = fn(tree : Bool) {
+        let said = @signals.signal("")
+        let t = prices_tester(tree, platform, scale, state=said)
+        said.set(state)
+        t.run_for(@ui.move_most_ms)
+        t
+      }
+      let old = at(false)
+      let old_drawn = instances_sorted(old)
+      let old_words = words_where(old)
+      let made = at(true)
+      assert_true(app.nav.top() is Setting(@settings.Route::UsagePrices(_)), msg="\{case} \{state}")
+      same_drawn(words_where(made), old_words, "words at \{case} \{state}")
+      same_drawn(instances_sorted(made), old_drawn, "instances at \{case} \{state}")
+      assert_true(old_drawn.length() > 0)
+    }
+  }
+}
+
+///|
+test "价目表 made once in a window made narrower and wider as it shows: every instance drawn as its old view's at each width" {
+  for case in [(2, 1.0), (0, 1.0)] {
+    let (platform, scale) = case
+    for w in [300.0, 240.0, 520.0] {
+      // (each shown at 390 first, then the window made `w` wide; read as it is: what a Tester draws and finds is the
+      // one made last's)
+      let old = prices_tester(false, platform, scale)
+      old.resize(w, 2400.0)
+      old.run_for(@ui.move_most_ms)
+      let old_drawn = instances_sorted(old)
+      let old_words = words_where(old)
+      let made = prices_tester(true, platform, scale)
+      made.resize(w, 2400.0)
+      made.run_for(@ui.move_most_ms)
+      same_drawn(words_where(made), old_words, "words at \{case} \{w}")
+      same_drawn(instances_sorted(made), old_drawn, "instances at \{case} \{w}")
+    }
+  }
+}
+
+///|
+test "价目表 made once: every instance drawn as its old view's, its stations' cards and their tables, with a finger and with keyboard and mouse, at the system's larger words" {
+  for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
+    let (platform, scale) = case
+    let old = prices_tester(false, platform, scale)
+    let old_drawn = instances_sorted(old)
+    let old_words = words_where(old)
+    let made = prices_tester(true, platform, scale)
+    assert_true(app.nav.top() is Setting(@settings.Route::UsagePrices(_)), msg="\{case}")
+    same_drawn(words_where(made), old_words, "words at \{case}")
+    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
+    assert_true(old_drawn.length() > 0)
+  }
+}
+
+///|
 test "用量 made once in a window 220 wide at words twice as large, as it is reached: its title on its line and 分享 with its days under it at the line's end, each within the window and over none, 分享 opening its card and 30 天 chosen; what is under them as the old view's, all of it as far down as the title's line is taller (the old view's title ran over its days: not kept)" {
   // (words over words as it comes in, frame by frame: the old view's read here (its title's line drawing its words
   // over its days), the nodes' none but the old view's at the same moments as far down: usage_over_same)

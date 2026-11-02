@@ -160,6 +160,8 @@ fn blocks_of(text : String, tree : Json?) -> Array[MdBlock] {
     parsed_order.remove(0) |> ignore
     if old != text { parsed_used.val -= parsed_cost.get(old).unwrap_or(0) }
     parsed.remove(old); parsed_cost.remove(old); core_parsed.remove(old); markdown_asked.remove(old)
+    // (what follows its answer gone with it, where nothing of the window's tree reads it now: md_let_go)
+    md_forgotten(old)
   }
   if !parsed.contains(text) { parsed_order.push(text) }
   parsed[text] = b
@@ -581,11 +583,8 @@ pub fn markdown(
       c.tell("markdown/" + text, fn() { read(text, fn(value) {
         // Only publish content with its parsed hit regions. Showing raw Markdown first made a visible link
         // accept a tap on the unparsed paragraph before the core's answer supplied its link target.
-        let ready = match value {
-          Some(Array(_)) => value
-          _ => Some(Json::array([["p", [Json::string(text)]]]))
-        }
-        blocks_of(text,ready) |> ignore
+        // (kept, and told to whatever of the window's tree reads the same words: md_answered)
+        md_answered_now(text, value)
       }) })
     }
   }
@@ -1470,54 +1469,37 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
 }
 
 ///|
-/// A table as the web draws it (Markdown.kt Table): in the message, no card round it, its first column's words in line
-/// with the message's, small type (13), the head told by its words, muted (12, medium), rows ruled between them only,
-/// each cell 12 and 7 in (none past the first's and last's outer words), middle-aligned, at least 4em wide. Columns are as wide as their content until the message is
-/// full (the browser's automatic layout), then share what is left by how much more they would take, none narrower than
-/// its words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
-/// lines, not a word or two to each. Wider than the message, it scrolls sideways, the frame with it, out to `bleed`
-/// past the message either side (a chat's margin, to the screen's edges): at rest in line with the words, scrolled to
-/// its end its key's room in line with theirs; its bar runs under the message's words only, not out in that margin. Its
-/// copy key hangs past its right edge, in what scrolls (table_copy.mbt): beside it where the message has room, out in
-/// `bleed` where that has the key's whole room (a wide chat's margin), else past its end, scrolled to.
-fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
-  let c = self.c
-  let cols = t.head.length()
-  if cols == 0 {
-    return
-  }
-  let rows = [t.head]
-  rows.append(t.rows)
-  self.n = self.n + 1
-  let key = "sf-md/table\{self.n}"
-  let id = c.id(key)
-  // as wide as the message lays it out: its box less the margin it reaches over either side, not what of it shows (a
-  // page sliding in shows part of it, which had the columns squeezed)
-  let room = match c.laid_size(id) {
-    Some((rw, _)) => rw - 2.0 * bleed
-    None => c.width
-  }
-  let avail = room
+/// How narrow a table's cell (its words, `head` the head's: 12 medium, else 13) may be and its width on one line, at the
+/// system's size of words (`sp`): cell_widths of its words as they are set.
+fn table_words_extent(cell : Array[MdInline], head : Bool, sp : (Double) -> Double) -> (Double, Double) {
+  let (size, weight) = if head { (12.0, 500) } else { (13.0, 400) }
+  cell_widths(md_plain(cell), sp(size), weight)
+}
+
+///|
+/// A table's columns' widths and all of them together, its cells' extents `extents` (each row's, the head's first: how
+/// narrow it may be, its width on one line, whether it is images that keep their width) in `avail` (Md::table's rule,
+/// the one its frame and a node's table both lay out by): each at least 4em and its sides, as wide as its content
+/// until the room is full, then sharing what is left by how much more each would take, none narrower than its words
+/// on one line or 14em of them (`fit`: 4em, its words wrapping first, a picture's), whichever is less (its longest word
+/// if wider; images their width).
+fn table_widths(
+  extents : Array[Array[(Double, Double, Bool)]],
+  avail : Double,
+  fit : Bool,
+  sp : (Double) -> Double,
+) -> (Array[Double], Double) {
+  let cols = if extents.length() > 0 { extents[0].length() } else { 0 }
   let least = 4.0 * 13.0 + 24.0
   // In a picture, let words wrap into narrower columns first; only a table that still cannot fit is scaled down.
-  let readable = (if self.fit_tables { 4.0 } else { 14.0 }) * c.sp(13.0)
+  let readable = (if fit { 4.0 } else { 14.0 }) * sp(13.0)
   let mins = Array::make(cols, least)
   let maxs = Array::make(cols, least)
-  for r, row in rows {
+  for row in extents {
     for k in 0..<cols {
-      let (size, weight) = if r == 0 { (12.0, 500) } else { (13.0, 400) }
-      let images = self.cell_images(row[k])
-      let (lo, hi) = match images {
-        // a cell of only images: as wide as their row
-        Some(images) => {
-          let w = cell_images_width(images)
-          (w, w)
-        }
-        // (measured as they are set: at the system's size of words)
-        None => cell_widths(md_plain(row[k]), c.sp(size), weight)
-      }
+      let (lo, hi, images) = row[k]
       // Rich text can break an otherwise unbroken word when a cell is too narrow. Images must keep their width.
-      let floor = if self.fit_tables && images is None { dmin(hi, readable) } else { dmax(lo, dmin(hi, readable)) }
+      let floor = if fit && !images { dmin(hi, readable) } else { dmax(lo, dmin(hi, readable)) }
       let pad = table_cell_pad(k, cols)
       if floor + pad.0 + pad.1 > mins[k] {
         mins[k] = floor + pad.0 + pad.1
@@ -1553,6 +1535,55 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   for x in widths {
     total = total + x
   }
+  (widths, total)
+}
+
+///|
+/// A table as the web draws it (Markdown.kt Table): in the message, no card round it, its first column's words in line
+/// with the message's, small type (13), the head told by its words, muted (12, medium), rows ruled between them only,
+/// each cell 12 and 7 in (none past the first's and last's outer words), middle-aligned, at least 4em wide. Columns are as wide as their content until the message is
+/// full (the browser's automatic layout), then share what is left by how much more they would take, none narrower than
+/// its words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
+/// lines, not a word or two to each. Wider than the message, it scrolls sideways, the frame with it, out to `bleed`
+/// past the message either side (a chat's margin, to the screen's edges): at rest in line with the words, scrolled to
+/// its end its key's room in line with theirs; its bar runs under the message's words only, not out in that margin. Its
+/// copy key hangs past its right edge, in what scrolls (table_copy.mbt): beside it where the message has room, out in
+/// `bleed` where that has the key's whole room (a wide chat's margin), else past its end, scrolled to.
+fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
+  let c = self.c
+  let cols = t.head.length()
+  if cols == 0 {
+    return
+  }
+  let rows = [t.head]
+  rows.append(t.rows)
+  self.n = self.n + 1
+  let key = "sf-md/table\{self.n}"
+  let id = c.id(key)
+  // as wide as the message lays it out: its box less the margin it reaches over either side, not what of it shows (a
+  // page sliding in shows part of it, which had the columns squeezed)
+  let room = match c.laid_size(id) {
+    Some((rw, _)) => rw - 2.0 * bleed
+    None => c.width
+  }
+  let avail = room
+  // (each cell's extent: a cell of only images as wide as their row; else its words as they are set, at the system's
+  // size of words)
+  let extents = rows.mapi(fn(r, row) {
+    Array::makei(cols, fn(k) {
+      match self.cell_images(row[k]) {
+        Some(images) => {
+          let w = cell_images_width(images)
+          (w, w, true)
+        }
+        None => {
+          let (lo, hi) = table_words_extent(row[k], r == 0, fn(x) { c.sp(x) })
+          (lo, hi, false)
+        }
+      }
+    })
+  })
+  let (widths, total) = table_widths(extents, avail, self.fit_tables, fn(x) { c.sp(x) })
   if self.fit_tables && total > avail && avail > 0.0 {
     // Too many columns (or images that cannot wrap): size every part down before layout, so the table's own height
     // holds the next block below it even on the first frame.
