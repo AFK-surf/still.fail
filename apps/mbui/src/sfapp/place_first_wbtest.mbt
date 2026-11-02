@@ -2,7 +2,7 @@
 
 ///|
 test "each place comes in the same way the first time and again" {
-  for place in ["files", "profiles", "stations", "usage", "connects", "archive"] {
+  for place in ["files", "profiles", "stations", "usage", "connects", "archive", "vault"] {
     let t = tester("home")
     bars_picked.set(Some(([["chats", place]], 0)))
     t.frame()

@@ -325,6 +325,7 @@ let en : Map[String, String] = {
   "android-misc.bar.place.profiles": "Profiles",
   "android-misc.bar.place.stations": "Stations",
   "android-misc.bar.place.usage": "Usage",
+  "android-misc.bar.place.vault": "Secrets",
   "android-misc.core.restarted": "Core restarted. Try again.",
   "android-misc.drive.add": "Add",
   "android-misc.drive.choose": "Choose a folder",

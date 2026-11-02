@@ -467,6 +467,7 @@
   "android-misc.bar.place.connects": "Connects",
   "android-misc.bar.place.usage": "Usage",
   "android-misc.bar.place.archive": "Archived",
+  "android-misc.bar.place.vault": "Secrets",
   "android-misc.bar.action.stations": "Add station",
   "android-misc.bar.action.profiles": "Add profile",
   "android-misc.bar.action.connects": "Add connect",

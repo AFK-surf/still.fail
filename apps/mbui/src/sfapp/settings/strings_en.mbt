@@ -183,6 +183,7 @@ let en : Map[String, String] = {
   "android-misc.bar.place.profiles": "Profiles",
   "android-misc.bar.place.stations": "Stations",
   "android-misc.bar.place.usage": "Usage",
+  "android-misc.bar.place.vault": "Secrets",
   "android-misc.bar.remove": "Remove {name} from this bar",
   "android-misc.bar.sep": ", ",
   "android-misc.bar.set": "Bar {n}",

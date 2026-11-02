@@ -440,6 +440,7 @@
   "android-misc.bar.place.connects": "连接",
   "android-misc.bar.place.usage": "用量",
   "android-misc.bar.place.archive": "已归档",
+  "android-misc.bar.place.vault": "密钥",
   "android-misc.bar.action.stations": "添加 station",
   "android-misc.bar.action.profiles": "添加 Profile",
   "android-misc.bar.action.connects": "添加连接",

@@ -181,6 +181,7 @@ let zh : Map[String, String] = {
   "android-misc.bar.place.profiles": "Profile",
   "android-misc.bar.place.stations": "Station",
   "android-misc.bar.place.usage": "用量",
+  "android-misc.bar.place.vault": "密钥",
   "android-misc.bar.remove": "从此栏移除{name}",
   "android-misc.bar.sep": "、",
   "android-misc.bar.set": "第 {n} 栏",
