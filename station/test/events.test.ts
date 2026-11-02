@@ -29,6 +29,9 @@ function setup(clock?: Clock.Clock, handover?: EventsDeps["handover"], db?: { ro
       if (op === "chatRows") return JSON.stringify({ rows: rows[args.viewer.email] ?? [], scope: [...(args.sessions as string[]), ...(rows[args.viewer.email] ?? []).map((r) => r.id)] });
       if (op === "summary") return JSON.stringify({ key: args.key });
       if (op === "thread") return JSON.stringify({ id: args.id, last: 1, unread: 1, for: args.viewer.email });
+      // The same for several viewers in one read (read/ops.ts chatRowsOf, read/ops-sessions.ts threadViews).
+      if (op === "chatRowsOf") return JSON.stringify(args.viewers.map((v: any) => ({ rows: rows[v.viewer.email] ?? [], scope: [...(args.sessions as string[]), ...(rows[v.viewer.email] ?? []).map((r) => r.id)] })));
+      if (op === "threadViews") return JSON.stringify(args.viewers.map((v: any) => ({ id: args.id, last: 1, unread: 1, for: v.viewer.email, lang: v.lang })));
       throw new Error(op);
     },
   };
@@ -230,7 +233,7 @@ test("a stream that comes back has read only what changed of its sidebar meanwhi
   const time = testClock();
   const file = join(mkdtempSync(join(tmpdir(), "events-")), "run", "events.json");
   const before = setup(time.clock, { file, previous: previous() });
-  const sidebar = (reads: string[]) => reads.filter((r) => r === "chats" || r === "chatRows");
+  const sidebar = (reads: string[]) => reads.filter((r) => r === "chats" || r === "chatRowsOf");
   const first = await opened(before.events);
   before.change({ type: "session", key: "s1" });
   await settle();
@@ -249,7 +252,7 @@ test("a stream that comes back has read only what changed of its sidebar meanwhi
   before.reads.length = 0;
   const changed = await opened(before.events, quiet.got.findLast((e) => e.id)?.id ?? first.got.findLast((e) => e.id)!.id!);
   await settle();
-  assert.deepEqual(sidebar(before.reads), ["chatRows"], "no sidebar read whole");
+  assert.deepEqual(sidebar(before.reads), ["chatRowsOf"], "no sidebar read whole");
   assert.deepEqual(changed.got.filter((e) => e.event === "chat").map((e) => e.data), [{ id: "1", title: "one, renamed" }]);
   // An update with its stream here: back at the next process, nothing changed since, nothing read there.
   const heard = changed.got.findLast((e) => e.id)!.id!;
@@ -548,6 +551,23 @@ test("a stream from before asked nothing new: the sessions it names, as before",
   reader(answer.body as AsyncIterable<Buffer>).close();
 });
 
+test("one person's streams in two languages are read for together: once a change, the sidebar and the thread alike", async () => {
+  // One a viewer, the same chats were read again for each language and workspace a person's devices follow in (four on
+  // ccvm, 2026-11-02), each from the disk while memory was short, after every message.
+  const { events, change, reads } = setup(testClock().clock);
+  const zh = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  const en = reader((await events.open(viewer("a@x"), "en", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  reads.length = 0;
+  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
+  await settle();
+  assert.deepEqual(reads.filter((r) => r !== "summary"), ["threadViews", "chatRowsOf"], "one read of each, not one a viewer");
+  const views = (s: typeof zh) => s.got.filter((e) => e.event === "thread-view").map((e) => [e.data.id, e.data.lang]);
+  assert.deepEqual([views(zh), views(en)], [[[4, "zh"]], [[4, "en"]]], "each told its own");
+  await zh.close();
+  await en.close();
+});
+
 test("a change of a session or a thread reads again only the sidebar items it can touch, an item gone told so", async () => {
   const { events, rows, change, reads } = setup(testClock().clock);
   const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
@@ -557,7 +577,7 @@ test("a change of a session or a thread reads again only the sidebar items it ca
   change({ type: "session", key: "1" });
   change({ type: "thread", id: 7, entries: [] });
   await settle();
-  assert.deepEqual(reads.filter((r) => r === "chats" || r === "chatRows"), ["chatRows"], "no sidebar read whole");
+  assert.deepEqual(reads.filter((r) => r === "chats" || r === "chatRowsOf"), ["chatRowsOf"], "no sidebar read whole");
   assert.deepEqual(a.got.filter((e) => e.event === "chat").map((e) => e.data), [{ id: "1", title: "renamed" }]);
   // Gone from the sidebar: told so, as one the change could touch.
   rows["a@x"] = [];

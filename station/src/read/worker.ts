@@ -40,7 +40,16 @@ parentPort!.on("message", (ask: Ask) => {
     store.clientKeys = new Map(ask.clientKeys);
     const op = ops[ask.op];
     if (!op) throw new HttpError(500, `no read ${ask.op}`);
-    answer = { id: ask.id, text: JSON.stringify(op(store, ask.args)) };
+    // One snapshot for the whole read: its statements see the same database, and what the first of them read in serves
+    // the rest. Each statement began on its own before, and as the station writes all the while (each model call, each
+    // message), SQLite let go of all this reader held at nearly every one (a connection's pages are dropped whenever the
+    // database changed since it last read): each was read again, from the disk while memory was short.
+    store.db.exec("BEGIN");
+    try {
+      answer = { id: ask.id, text: JSON.stringify(op(store, ask.args)) };
+    } finally {
+      store.db.exec("COMMIT");
+    }
   } catch (error) {
     answer = { id: ask.id, status: error instanceof HttpError ? error.status : 500, error: (error as Error).message };
   }
