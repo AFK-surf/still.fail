@@ -330,8 +330,6 @@ pub fn file_serve(@sfbase.FilePage, @ui.SiteRequest, @ui.SiteReply) -> Unit
 
 pub fn file_type(String) -> String
 
-pub fn file_viewer(@ui.Ctx, @sfbase.Source) -> Unit
-
 pub fn files_can_lend(@sfbase.Source, @sfbase.Workspace) -> Bool
 
 pub fn files_into(String, @sfbase.Dragged) -> Unit

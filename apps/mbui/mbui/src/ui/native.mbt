@@ -520,6 +520,14 @@ pub fn NativeView::grabbing(self : NativeView) -> Bool {
 }
 
 ///|
+/// How many answers the host has told of frames grabbed, any view's, followed (a signal: what reads it is told as each
+/// comes), taking none of them: what takes its own (NativeView::grabbed) at that moment, not each frame.
+pub fn NativeView::grabs_told(self : NativeView) -> Int {
+  ignore(self)
+  answers_told[outside_grab].get()
+}
+
+///|
 /// A frame grabbed: None while it is grabbed (or none was asked), Some(png) once here (taken once), Some(empty) when it
 /// could not be.
 pub fn NativeView::grabbed(self : NativeView) -> Bytes? {

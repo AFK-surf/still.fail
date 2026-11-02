@@ -14,7 +14,6 @@ using @sfbase {
   app_in_front,
   open_link,
   screen_links,
-  file_viewer,
   followed_into,
   viz_close_full,
   viz_file_of,

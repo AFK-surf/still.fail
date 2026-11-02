@@ -471,8 +471,6 @@ pub fn file_serve(FilePage, @ui.SiteRequest, @ui.SiteReply) -> Unit
 
 pub fn file_type(String) -> String
 
-pub fn file_viewer(@ui.Ctx, Source) -> Unit
-
 pub fn file_viewer_reset() -> Unit
 
 pub fn files_into(String, Dragged) -> Unit
@@ -1631,8 +1629,6 @@ pub fn utf8_whole(Bytes) -> Int32
 
 pub fn vector_faces(Bytes) -> Array[Bytes]
 
-pub fn vf_bar(Viewer, @ui.Ctx, Source) -> Unit
-
 pub fn vf_kind_label(PKind?) -> String
 
 pub fn vf_meta(Viewer, Source) -> String
@@ -1649,15 +1645,11 @@ pub let viewer : @signals.Signal[Viewer?]
 
 pub fn viewer_folder_label(Source, String, String, String) -> String
 
-pub fn viewer_layer(@ui.Ctx, Source) -> Unit
-
 pub fn viewer_moved(String, Array[ChatDay]) -> Bool
 
 pub fn viewer_node(@view.View, Source, () -> (Double, Double)) -> Unit
 
 pub fn viewer_place(Viewer, Source) -> (Int32, Int32)
-
-pub fn viewer_set_out(@ui.Ctx, Source) -> Unit
 
 pub fn viz_base_name(String) -> String
 
@@ -3374,6 +3366,7 @@ pub(all) struct Viewer {
   mut start_at : Double
   mut leaving_grab : Bool
   mut left_at : Double
+  grab_told : @signals.Signal[Int32]
   mut media : @kit.Media?
   mut copied : Int32
   mut head_w : Double
@@ -3429,6 +3422,7 @@ pub fn Viewer::pdf_stage(Self, @ui.Ctx, Bytes, Int32) -> Unit
 pub fn Viewer::picture(Self, Source) -> String
 pub fn Viewer::picture_failed(Self) -> Bool
 pub fn Viewer::picture_flat(Self) -> Bool
+pub fn Viewer::played(Self) -> Bool
 pub fn Viewer::player_stage(Self, @ui.Ctx, Source, Int32) -> Unit
 pub fn Viewer::read_near(Self, Source, Self?, Self?) -> Unit
 pub fn Viewer::read_on(Self, Source) -> Unit
@@ -3444,7 +3438,6 @@ pub fn Viewer::still(Self, Source) -> String
 pub fn Viewer::text_stage(Self, @ui.Ctx, PKind, Bytes, Int32) -> Unit
 pub fn Viewer::toggle(Self) -> Unit
 pub fn Viewer::told_of(Self) -> Bool
-pub fn Viewer::tree_draws(Self) -> Bool
 pub fn Viewer::up_still(Self) -> Bool
 pub fn Viewer::view(Self) -> @ui.NativeView?
 pub fn Viewer::wake(Self) -> Unit

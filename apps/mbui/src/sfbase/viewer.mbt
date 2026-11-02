@@ -266,6 +266,8 @@ pub(all) struct Viewer {
   /// it was then
   mut leaving_grab : Bool
   mut left_at : Double
+  /// told as leaving_grab changes (Viewer::grab_set): what is done at its going's end follows it
+  grab_told : @signals.Signal[Int]
   /// a desktop's song: played in the player a drive's is (play_desk.mbt), not the phone's strip
   mut media : @kit.Media?
   /// a desktop's image put on the clipboard: how many times (its check shown a while after each)
@@ -764,6 +766,7 @@ pub fn new_viewer(
     },
     leaving_grab: false,
     left_at: 0.0,
+    grab_told: @signals.signal(0),
     media: None,
     copied: 0,
     head_w: 0.0,
@@ -1389,27 +1392,6 @@ pub fn upper(s : String) -> String {
 // ── the viewer ─────────────────────────────────────────────────────────
 
 ///|
-/// The viewer opened since the last build, set out (growing from its thumbnail, or fading in): before the pages are
-/// built, which read how it goes (the bar and the composer over a picture going out from under them: over_flight; its
-/// thumbnail hidden while it is out: thumb_shows) and would else build this frame as if it had not (the user,
-/// 2026-10-30: the picture over the chat's bar its first frame, 「它在挪出来前就盖在了顶栏上面」). Called first in each
-/// frame's build, and again by the viewer's layer (a viewer opened as the pages were built).
-pub fn viewer_set_out(c : @ui.Ctx, src : Source) -> Unit {
-  let v = match viewer.get() {
-    Some(v) => v
-    None =>
-      match pv_leaving.get() {
-        Some(v) => v
-        None => return
-      }
-  }
-  // (one the window's tree draws is set out as its node is made, whether or not that node is made yet: viewer_tree.mbt)
-  if !v.tree_draws() {
-    v.set_out(c, src, c.moment())
-  }
-}
-
-///|
 /// Viewer `v` set out at the moment `at` (its cause's: where it is a node of the window's tree, as that node is made,
 /// viewer_tree.mbt), once: growing from its thumbnail, or fading in.
 pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) -> Unit {
@@ -1453,118 +1435,6 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
 }
 
 ///|
-/// The viewer over the pages, if one is open, in its frame (viewer_frame.mbt): call after the pages are drawn.
-pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
-  let v = match viewer.get() {
-    Some(v) => v
-    None =>
-      match pv_leaving.get() {
-        Some(v) => v
-        None => return
-      }
-  }
-  // (one the window's tree draws drawn by its node, as what takes the hand there, whether or not that node is made yet:
-  // viewer_tree.mbt)
-  if v.tree_draws() {
-    return
-  }
-  viewer_set_out(c, src)
-  src_now.val = src.now
-  let p = v.flying()
-  // (the motions ask for their frames, said once as they set out: the flight, the fade)
-  let landed = v.flies && v.fly_back && !v.fly.goes_at(c.moment())
-  // (landed by the frame's time, the same in each build of the frame; what is let go is the viewer going, built
-  // no more)
-  if landed {
-    // landed in its thumbnail: drawn there this once (where the thumbnail is, hidden this frame), then gone
-    leaving_done()
-    pv_hidden.val = ""
-  }
-  if v.flies && !v.fly_back && !v.fly.goes_at(c.moment()) {
-    v.flies = false
-    pv_hidden.val = ""
-  }
-  let faded = if v.flies { 1.0 } else { v.fade.get() }
-  // (faded by the frame's time: the same in each build of the frame)
-  // a video closing into its thumbnail: the frame it shows, once grabbed, kept and gone back with
-  if v.leaving_grab {
-    v.left_with_frame(c, src)
-  }
-  if v.closing && !v.flies && !v.leaving_grab && !v.fade.goes_at(c.moment()) {
-    // faded out: gone
-    leaving_done()
-    return
-  }
-  // the ground and the bars: with the flight, or fading
-  let shown = if v.flies { p } else { faded }
-  v.fetch(c, src)
-  // asked for to be saved, and come: saved
-  if v.save_after && v.bytes.get() is Some(_) {
-    v.save_after = false
-    v.ask_save(c)
-  }
-  if v.install_after && v.bytes.get() is Some(_) {
-    v.install_after = false
-    v.ask_install(c)
-  }
-  // (the old frame draws a film or a song alone, the player's own page: its bars, its controls, what a finger does on
-  // it; all else is the window's tree's, viewer_tree.mbt)
-  let ground = if v.dark() { 0x000000FFL } else { @sf.theme().p.canvas }
-  // over the window, a modal layer (the web's preview is a dialog): the keys its, what is under it reads none (the
-  // chat's Space taking its composer, its Esc closing its panel); its own Esc and back, what it shows closed first;
-  // going, inert (the page's again as it fades)
-  let body = fn() {
-    c.layer(fn() {
-      let stage = c.id("preview/stage")
-      c.cursor(stage, Arrow)
-      c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(ground, shown), opacity=faded, id=stage, fn() {
-        v.player_stage(c, src, stage)
-      })
-      |> ignore
-      // (its actions in the system's bars, an iPhone Duo's, as a picture's: its keys the player's)
-      if @sf.native_on() {
-        vf_bar(v, c, src)
-      }
-    })
-    |> ignore
-  }
-  // (beside the column of the system's bars down the window's side, an iPhone Duo's on its side: the file laid out
-  // clear of it, its ground on under it, the user 2026-10-27)
-  // (a film filling the window beside them: the bars put away, edge to edge: @sf.player_full_native)
-  let clear = if @sf.player_fills_native(c.width) { 0.0 } else { @sf.native_clear() }
-  c.overlay("preview-layer", modal=true, escape=false, outside=false, initial_focus=0, inert=v.closing, fn() {
-    if clear > 0.0 {
-      c.layer(fn() {
-        c.box(style=viewer_under.then(@ui.style(bg=Data(@sf.alpha(ground, shown * faded)))), fn() {  }) |> ignore
-      })
-      |> ignore
-      let w = dmax(0.0, c.width - clear)
-      c.layer(fn() { c.box(style=@ui.style(w=Fixed(w), h=Full), fn() { c.sized(w, c.height, body) }) |> ignore })
-      |> ignore
-    } else {
-      body()
-    }
-  })
-  |> ignore
-  // 下载 tapped (on the page or its bar, just built): asked of the core, on by itself whatever becomes of this viewer
-  // (told once the frame's builds are over, as the tap is the build's that took it)
-  if v.download_asked {
-    v.download_asked = false
-    let (station, key, name, size, from) = (v.station, v.key, v.name, v.file.size, v.opened_from())
-    c.tell("download/" + name, fn() { download_start(src, station, key, name, size, from~) })
-  }
-  // (one going takes back no more: it is the page's)
-  if !v.closing {
-    c.take_back(fn() { v.shut(c) })
-  }
-}
-
-///|
-/// The viewer's ground under the column of the system's bars (viewer_layer).
-// kept across runs: a value (no field of it changes)
-let viewer_under : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
 pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
   if !self.closing {
     self.closing = true
@@ -1590,7 +1460,7 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
         }
         match self.view() {
           Some(n) if n.here() && n.shown() && !n.grabbing() => {
-            self.leaving_grab = true
+            self.grab_set(true)
             self.left_at = n.position()
             c.tell("preview-grab", fn() { n.grab_shown(kept_frame_side) })
           }
@@ -1667,14 +1537,14 @@ pub fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit
   let n = match self.view() {
     Some(n) => n
     None => {
-      self.leaving_grab = false
+      self.grab_set(false)
       self.fly_home(self.still(src))
       return
     }
   }
   match n.grabbed() {
     Some(jpeg) => {
-      self.leaving_grab = false
+      self.grab_set(false)
       if jpeg.length() > 0 {
         pv_frames_n.val += 1
         let key = "mem:pv-frame/\{pv_frames_n.val}/\{self.name}"
@@ -1688,6 +1558,16 @@ pub fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit
     None => ()
   }
   ignore(c)
+}
+
+///|
+/// Whether a video closing into its thumbnail waits for the frame it shows to be grabbed (leaving_grab), told
+/// (grab_told).
+fn Viewer::grab_set(self : Viewer, on : Bool) -> Unit {
+  if self.leaving_grab != on {
+    self.leaving_grab = on
+    self.grab_told.set(@signals.untracked(fn() { self.grab_told.get() }) + 1)
+  }
 }
 
 ///|
@@ -1804,7 +1684,7 @@ pub fn Viewer::coming(self : Viewer) -> Bool {
 ///|
 /// The stage: what the file shows as, as the window's tree hosts it (viewer_tree.mbt's viewer_hosted, its outer stage
 /// Hosted: read whole, not told of, nothing failed): words read as they come, words in the reader, a PDF, a page, a
-/// table, code. (A film or a song is the player's: viewer_layer.)
+/// table, code. (A film or a song is the player's: viewer_tree.mbt's viewer_player.)
 pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
   let v = self
   // (预览 or 源码, as it is told: Viewer::set_source)

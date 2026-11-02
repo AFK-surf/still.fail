@@ -32,25 +32,19 @@
 
 
 ///|
-/// The viewer the window's tree draws: the one open, else the one going, when what it shows is an image it shows (not
-/// one too big to show).
+/// The viewer the window's tree draws: the one open, else the one going (all of them: a film's and a song's too, its
+/// player hosted on its stage, viewer_player).
 fn tree_viewer() -> Viewer? {
-  let v = match viewer.get() {
+  match viewer.get() {
     Some(v) => Some(v)
     None => pv_leaving.get()
-  }
-  match v {
-    Some(v) if v.tree_draws() => Some(v)
-    _ => None
   }
 }
 
 ///|
-/// Whether the window's tree draws this viewer: all but a film or a song (the player's), as its name says it from the
-/// start, whatever it is found to be (a file of no kind sniffed as words) and its node made or not yet: the old frame's
-/// viewer_layer none of it.
-pub fn Viewer::tree_draws(self : Viewer) -> Bool {
-  !(self.kind == Some(KVideo) || self.kind == Some(KAudio))
+/// Whether it is a film or a song, played in the player (@sf.player_view): as its name says it from the start.
+pub fn Viewer::played(self : Viewer) -> Bool {
+  self.kind == Some(KVideo) || self.kind == Some(KAudio)
 }
 
 ///|
@@ -126,7 +120,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   vw.set_out(@ui.current(), src, n.cause_at())
   // (what marking stamps what it makes by: this source's clock, as the old view's said it each frame)
   src_now.val = src.now
-  image_ends(n, vw)
+  image_ends(n, vw, src)
   // what marking made, taken as the host says it is drawn (MarkedImage::ready, its answers' signal): kept, or into the
   // chat's draft, once (Viewer::marks_frame takes it), by this viewer while it is the one open and its layer here; a
   // drawing another by its id, whatever it drew
@@ -240,7 +234,10 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       vw.fade.said()
       let now = g.logic_at()
       let t = if vw.fly.goes_at(now) || vw.fade.goes_at(now) { g.drawn_at() } else { @double.infinity }
-      @sf.alpha(vw.ground_ink(), vw.ground_share(vw.in_at(t)))
+      // (a film's or a song's under its player's fade too, as the old frame's preview layer laid its ground in the box
+      // it faded: its fade twice where it does not fly)
+      let under = if vw.played() { vw.fade.value_at(t) } else { 1.0 }
+      @sf.alpha(vw.ground_ink(), vw.ground_share(vw.in_at(t)) * under)
     }))
     |> ignore
   })
@@ -248,12 +245,25 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // (the rest clear of the column of the system's bars down the window's trailing edge, an iPhone Duo's on its side
   // (@sf.native_clear), its ground on under it, as the old frame's preview layer laid it out)
   let room = n.box(fn(r) {
-    r.over(Is(true)).row(Is(true)).padding(By(fn() { (0.0, 0.0, @sf.native_clear(), 0.0) })) |> ignore
+    // (a film filling the window beside them: the bars put away, edge to edge: @sf.player_full_native)
+    r
+    .over(Is(true))
+    .row(Is(true))
+    .padding(By(fn() {
+      if vw.played() && @sf.player_fills_native(player_width(r.window().0)) {
+        (0.0, 0.0, 0.0, 0.0)
+      } else {
+        (0.0, 0.0, @sf.native_clear(), 0.0)
+      }
+    }))
+    |> ignore
   })
   let n = room.box(fn(m) { m.grow(Is(1.0)) |> ignore })
   // what it shows of anything but a picture of its own, its bars and what steps it, its old views hosted here
   // (viewer_hosted)
-  if !vw.markable() {
+  if vw.played() {
+    viewer_player(n, src, vw)
+  } else if !vw.markable() {
     viewer_hosted(n, src, vw)
   } else {
     // the canvas: what a finger does on it, the picture drawn in it, as far in as its fade has come (as its ground is; a
@@ -520,8 +530,15 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // (and, not marking, its actions in their bars in place of its own bar: vf_native's), at the moment what it says
   // changes; kept as said while it is the one open (Viewer::up_still), handed over as each frame ends
   // (@sf.native_over_up)
-  n.reacts(fn() { native_said(vw, src) }, fn(said) {
+  n.reacts(fn() { native_said(vw, src, player_width(n.window().0)) }, fn(said) {
     match said {
+      // (a film's or a song's: its name and its actions there, close, 全屏 and download (vf_native_media), as wide as
+      // its player is laid out; filling the window, none: the bars put away, its name none either)
+      Some({ full, width, .. }) if vw.played() =>
+        if @sf.native_over_up(if full { "" } else { vw.file.name }, alive=fn() { vw.up_still() }, owner="viewer", over=2) &&
+          !full {
+          vf_native_media(vw, @ui.current(), src, width)
+        }
       Some(_) =>
         // (a picture's actions and a page's there; anything else its own bar still, its name and tabs theirs)
         if @sf.native_over_up(vw.file.name, alive=fn() { vw.up_still() }, owner="viewer", over=2) &&
@@ -582,7 +599,7 @@ fn Viewer::flight_share_at(self : Viewer, t : Double) -> Double {
 }
 
 ///|
-/// The canvas's colour under what it shows (viewer_layer's ground).
+/// The canvas's colour under what it shows (its ground's).
 fn Viewer::ground_ink(self : Viewer) -> Int64 {
   if self.dark() {
     0x000000FFL
@@ -596,8 +613,10 @@ fn Viewer::ground_ink(self : Viewer) -> Int64 {
 
 ///|
 /// What is done at the ends of `vw`'s ways, on node `n`'s timeline: landed from its thumbnail, the thumbnail shown
-/// again (one picture on the screen, never two); gone (back into its thumbnail, or faded out), let go of.
-fn image_ends(n : @view.View, vw : Viewer) -> Unit {
+/// again (one picture on the screen, never two); gone (back into its thumbnail, or faded out), let go of. A video
+/// closing into its thumbnail waits first for the frame it shows to be grabbed (leaving_grab: its player's picture
+/// where it was meanwhile), its way back said once that is answered: its end the one it goes then.
+fn image_ends(n : @view.View, vw : Viewer, src : Source) -> Unit {
   if vw.flies && !vw.fly_back {
     n.at_moment(vw.fly.end(), fn() {
       if vw.flies && !vw.fly_back {
@@ -611,15 +630,19 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
   let ends : Ref[() -> Unit] = Ref(fn() {  })
   n.reacts(
     fn() {
+      // (its way as it is said: the grab answered, a flight back set out; followed so)
+      vw.grab_told.get() |> ignore
+      vw.fly.said()
+      vw.fade.said()
       match pv_leaving.get() {
-        Some(l) => physical_equal(l, vw)
-        None => false
+        Some(l) if physical_equal(l, vw) && !vw.leaving_grab => Some(if vw.flies { vw.fly.end() } else { vw.fade.end() })
+        _ => None
       }
     },
     fn(going) {
       (ends.val)()
-      if going {
-        let end = if vw.flies { vw.fly.end() } else { vw.fade.end() }
+      ends.val = fn() {  }
+      if going is Some(end) {
         ends.val = n.at_moment(end, fn() {
           match pv_leaving.get() {
             Some(l) if physical_equal(l, vw) => {
@@ -632,13 +655,32 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
       }
     },
   )
+  // (a video closing into its thumbnail: the frame it shows taken as the host answers the grab, at that moment, once;
+  // none to be had, back with its still: Viewer::left_with_frame. Followed by the host's answers as they are told, not
+  // asked each frame)
+  n.reacts(
+    fn() {
+      vw.grab_told.get() |> ignore
+      if vw.leaving_grab {
+        Some(vw.view().map(fn(v) { v.grabs_told() }))
+      } else {
+        None
+      }
+    },
+    fn(waiting) {
+      if waiting is Some(_) && vw.leaving_grab {
+        vw.left_with_frame(@ui.current(), src)
+      }
+    },
+  )
 }
 
 ///|
 /// What viewer `vw` says to the system's bars beside the window (an iPhone Duo's; None where there are none, or it is
 /// going): what of it decides what it says there (marking, its bar shown or its picture coming, its zoom
-/// fitted or not, its whole picture here, its download, the words its actions are said in), as each is told.
-fn native_said(vw : Viewer, src : Source) -> NativeSaid? {
+/// fitted or not, its whole picture here, its download, the words its actions are said in; a film's, filling the
+/// window `width` wide or not, turned sideways or not), as each is told.
+fn native_said(vw : Viewer, src : Source, width : Double) -> NativeSaid? {
   marks_said()
   vw.zoom.told()
   pv_leaving.get() |> ignore
@@ -659,10 +701,17 @@ fn native_said(vw : Viewer, src : Source) -> NativeSaid? {
       vw.source_told.get() |> ignore
       vw.source
     },
+    full: vw.played() && @sf.player_fills_native(width),
+    width,
+    sideways: match vw.media {
+      Some(m) => m.is_sideways()
+      None => false
+    },
     // (the words its actions are said in there, in the language as it is: said again as that changes)
     words: [
       "common.close", "web-main.preview.fitKey", "web-main.preview.actualKey", "web-main.annotate.image", "common.copy",
       "web-main.stations.saveToPhotos", "android-chat.file.download", "web-main.preview.rendered", "web-main.preview.source",
+      "android-misc.drive.player.full", "android-misc.drive.player.unfull",
     ].map(fn(k) { @sf.t(k) }),
   })
 }
@@ -680,6 +729,13 @@ struct NativeSaid {
   downloading : Bool
   /// a page's 源码 shown (Viewer::set_source): its action there says the other
   source : Bool
+  /// a film filling the window beside them (@sf.player_fills_native): its name and actions none there
+  full : Bool
+  /// how wide its player is laid out (player_width): its 全屏 there turns it sideways where that is laid out Small,
+  /// else fills the window (@sf.player_full_act)
+  width : Double
+  /// a film turned sideways (its 全屏 there says so)
+  sideways : Bool
   words : Array[String]
 } derive(Eq)
 
@@ -1038,6 +1094,12 @@ fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
   if vf_reads(v) {
     return false
   }
+  // (played: its keys the player's, hosted, Escape among them, its speeds and its list closed by it first (as the
+  // player's own Escape leaves them before it leaves); in flight, before the player reads keys, Escape the viewer's
+  // there too: Viewer::player_stage)
+  if v.played() {
+    return false
+  }
   if k.code == @ui.key_escape && k.mods == 0 {
     if marking.on {
       marks_back(c)
@@ -1083,7 +1145,7 @@ fn Viewer::own_bar(self : Viewer) -> Bool {
   let theirs = @sf.native_on() &&
     (self.shown_kind() == Some(KImage) || self.shown_kind() == Some(KHtml)) &&
     !marking.on
-  !vf_reads(self) && !theirs
+  !vf_reads(self) && !self.played() && !theirs
 }
 
 ///|
@@ -1544,7 +1606,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
         // (a ground: a click round what it shows closes it, the bars come and go on a tap)
         c.cursor(stage, Arrow)
         @ui.capture(c, stage)
-        c.box(style=viewer_under, id=stage, fn() { vw.content(c, src, stage) }) |> ignore
+        c.box(style=stage_whole, id=stage, fn() { vw.content(c, src, stage) }) |> ignore
       })
       .over(Is(true))
       |> ignore
@@ -1589,6 +1651,62 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
     }
   })
 }
+
+///|
+/// What viewer `vw` shows of a film or a song, in node `n`: the player (@sf.player_view: its picture, its bars and
+/// controls, its keys, the full screen and turning sideways), an old view hosted on the stage as the old frame's preview
+/// layer drew it (Viewer::player_stage: in flight, its still flying there from the thumbnail and back, the player's bars
+/// coming as its ground is whole; Escape in flight the viewer's), as far in as its fade has come (a flight's fade is
+/// put in whole: the flight its own); going, the page's presses theirs. Back is the player's first (its 全屏 left,
+/// beside the system's bars), then the viewer's: the viewer's said before the player's, the last said taking it.
+fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
+  n.box(fn(s) {
+    s
+    .over(Is(true))
+    .alpha(By(fn() {
+      vw.fade.said()
+      let now = s.logic_at()
+      vw.fade.value_at(if vw.fade.goes_at(now) { s.drawn_at() } else { @double.infinity })
+    }))
+    .presses(By(fn() {
+      match pv_leaving.get() {
+        Some(l) => !physical_equal(l, vw)
+        None => true
+      }
+    }))
+    |> ignore
+    @ui.old(s, fn(c) {
+      // (back the viewer's, said first: what the player says takes it after (its 全屏 left beside the system's bars),
+      // the last said its; one going takes back no more: it is the page's)
+      if !vw.closing {
+        c.take_back(fn() { vw.shut(c) })
+      }
+      let stage = c.id("preview/stage")
+      c.cursor(stage, Arrow)
+      c.box(style=stage_whole, id=stage, fn() { vw.player_stage(c, src, stage) }) |> ignore
+    })
+    .over(Is(true))
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// How wide a film's player is laid out in a window `w` wide: all of it where it fills the window beside the system's
+/// bars (@sf.player_fills_native), else clear of their column (@sf.native_clear), as the old frame's preview layer laid
+/// it out.
+fn player_width(w : Double) -> Double {
+  if @sf.player_fills_native(w) {
+    w
+  } else {
+    dmax(0.0, w - @sf.native_clear())
+  }
+}
+
+///|
+/// What an old view hosted on the stage draws in: all of it.
+// kept across runs: a value (no field of it changes)
+let stage_whole : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// What is told of a file shown no other way (FilePreview.tsx fpNote, toldOf: its mark, its name, its size and kind, why
@@ -1693,7 +1811,7 @@ fn Viewer::in_at(self : Viewer, t : Double) -> Double {
 /// `ground_first`): its ground whole by halfway, its words after it coming in and before it going out, so that no frame
 /// shows its words over the page's, both seen (words_over.mbt).
 fn Viewer::way_at(self : Viewer, p : Double) -> (Double, Double) {
-  if self.markable() {
+  if self.markable() || self.played() {
     (p, p)
   } else {
     let look = @motion.trans(fade=0.0, ground_first=true).at(p, 1.0)

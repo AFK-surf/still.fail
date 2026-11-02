@@ -1,7 +1,8 @@
 // A picture under a chat's bar opened (the user, 2026-10-30: 「它在挪出来前就盖在了顶栏上面」, a recording of its first
 // frame over the bar): the bar over it every frame till it is out from under it, the first the flight is drawn in too.
 // A picture seen before asks the core nothing as it opens, so the frame it sets out in is built once: built before it
-// set out, the pages had built that frame as if it had not, the bar under the picture (sfbase viewer_set_out).
+// set out, the pages had built that frame as if it had not, the bar under the picture (set out as its node is made: sfbase
+// viewer_tree.mbt's image_layer).
 
 ///|
 /// What is drawn last at (`x`, `y`) in the frame just drawn: its kind (4 a picture), -1 nothing.

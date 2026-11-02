@@ -76,7 +76,6 @@ fn photo_sent(
       })
       over_flight(c, foot)
     }
-    preview(c, src)
   }
   let t = @ui.Tester::new(
     fn(c) { @ui.old_views_here(c) },

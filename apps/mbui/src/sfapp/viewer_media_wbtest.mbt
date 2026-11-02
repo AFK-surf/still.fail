@@ -29,7 +29,6 @@ fn media_tree(w? : Double = 390.0, platform? : Int = 0) -> @ui.Tester {
         v.grow(Is(1.0)) |> ignore
         @ui.old(v, fn(c) {
           c.box(style=@ui.style(w=Full, h=Full), fn() { chat_file(c, src, a) }) |> ignore
-          preview(c, src)
         })
         .over(Is(true))
         |> ignore
@@ -162,4 +161,21 @@ test "a desktop's video over its chat, its speeds opened: Escape closes them, th
   t.key(@ui.key_escape)
   t.draw()
   assert_true(viewer.get() is None, msg="the viewer closing")
+}
+
+///|
+test "a film played on an iPhone Duo, the window from wide to Small with its actions in the system's bars: 全屏 there then turns it sideways (a phone's), the window not filled" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-preview-video")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.nav_said().contains("over/full"), msg="wide: its 全屏 there: \{t.nav_said()}")
+  // (laid out Small now: its 全屏 a phone's, turning it sideways)
+  t.resize(390.0, 844.0)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.nav_said().contains("over/full"), msg="Small: its 全屏 there: \{t.nav_said()}")
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/full\"}")
+  t.run_for(@ui.move_most_ms)
+  let m = viewer.get().unwrap().media.unwrap()
+  assert_true(m.is_sideways() && !@sf.player_full_native(), msg="turned sideways, the window not filled")
+  m.upright()
 }
