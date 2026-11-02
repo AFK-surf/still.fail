@@ -27,6 +27,7 @@ test("a turn is told by how it ended", () => {
   assert.equal(turnNotice(turn("final", "completed"), old, "k", "file", true), null);
   assert.equal(turnNotice(turn(null, "failed"), old, "k", "file", true), null);
   assert.equal(wentWrong("⚠️ 无法启动 agent：没有 claude"), "无法启动 agent：没有 claude");
+  assert.equal(wentWrong("⚠️ 模型服务出错，回复即可重试\n\n```\nAPI Error: 500\n```"), "模型服务出错，回复即可重试");
   assert.equal(wentWrong("已停止当前任务"), null);
   assert.equal(turnNotice(turn("final", "completed"), said("person", "a@b.c", 150), "k", "file", true), null);
   assert.equal(turnNotice(turn(null, "completed"), mine, "k", "file", true), null);

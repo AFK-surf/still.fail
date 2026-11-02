@@ -318,7 +318,8 @@ test("a turn that fails after it said it would wait ends failed, not waiting: no
   await settle();
   const last = () => r.store.lastTurn(key)!;
   assert.deepEqual([last().outcome, last().declared, last().waitSeconds], ["failed", null, null], "shown failed, not waiting");
-  assert.equal(r.chat.lastText(), "⚠️ 模型服务出错，回复即可重试");
+  // What it means on the first line; what the runtime said under it, as it said it (opened, the notice shows it).
+  assert.equal(r.chat.lastText(), "⚠️ 模型服务出错，回复即可重试\n\n```\nAPI Error: Connection dropped (ECONNRESET)\n```");
   // As a station from before recorded it: waiting. The next station, started without a handover, puts it right.
   r.store.endTurn(r.store.listTurns(key).at(-1)!.id, "failed", "model: API Error: Connection dropped (ECONNRESET)", "waiting", 60);
   await r.hub.shutdown();
@@ -506,7 +507,7 @@ test("a turn that cannot start is not left starting, and stop clears what is sti
   assert.equal(phase(), null, "the failed start ended what was said to be starting");
   assert.equal(r.hub.processState(key), "cold");
   // What the station said of it is its own, in English: not said; that it could not start is.
-  assert.equal(r.chat.lastText(), "⚠️ 无法启动 agent");
+  assert.equal(r.chat.lastText(), "⚠️ 无法启动 agent\n\n```\nthe station this subscription is signed in on did not lend it: station mesh is not ready\n```");
   // Said to be under way some other way: stop, with nothing running, clears it.
   r.hub.live.event(key, { kind: "phase", phase: "starting" });
   assert.notEqual(phase(), null);
@@ -556,7 +557,7 @@ test("claude auth retries once, then reports the profile and does not loop", asy
   await settle();
   assert.equal(r.claude.count(), 2, "a persistent auth failure must stop, not loop");
   // Said as what it means and what to do, not in the runtime's words (those go with the turn, for a report).
-  assert.equal(r.chat.lastText(), "⚠️ 账号认证失败：在 Profile 中重新登录");
+  assert.equal(r.chat.lastText(), "⚠️ 账号认证失败：在 Profile 中重新登录\n\n```\n401 Missing API key\n```");
   assert.equal(r.claude.last().prompts.length, 1);
   // The notice says whose sign-in failed, for the clients to link that profile's page; another failure is no profile's.
   const thread = r.thread("C1", m.threadTs);
@@ -648,7 +649,8 @@ test("a turn whose sandbox connection was lost goes on once from its transcript,
   retry.end(lost);
   await settle();
   assert.equal(r.claude.count(), 2);
-  assert.equal(r.chat.lastText(), "⚠️ agent 进程意外退出，回复即可恢复");
+  assert.equal(r.chat.lastText().split("\n\n")[0], "⚠️ agent 进程意外退出，回复即可恢复");
+  assert.ok(r.chat.lastText().includes(CONNECTION_LOST));
   // A runtime that exited by itself is not started again.
   await r.accept(reply(m, "9999.2", "<@UBOT> again", { addressed: true }));
   await settle();
@@ -2228,7 +2230,7 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   second.end(spent("usage limit reached"));
   await settle();
   assert.equal(r.claude.count(), 2, "no account left to go on with");
-  assert.equal(r.chat.lastText(), "⚠️ 额度已用完，恢复后自动继续");
+  assert.equal(r.chat.lastText(), "⚠️ 额度已用完，恢复后自动继续\n\n```\nusage limit reached\n```");
   // Changed by hand (here: kept to the first again): it goes on by itself.
   await configure(r.hub, key, { profile: on });
   await settle();
@@ -2263,7 +2265,7 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   agent.end(spent);
   await settle();
   assert.equal(said().length, 1);
-  assert.equal(said()[0], "⚠️ 额度已用完，恢复后自动继续");
+  assert.equal(said()[0]!.split("\n\n")[0], "⚠️ 额度已用完，恢复后自动继续");
   // Jobs' notices meanwhile: no turn for them (it would run into the allowance again), nothing said again.
   r.hub.notify(key, "a job ended");
   r.hub.notify(key, "another job ended");

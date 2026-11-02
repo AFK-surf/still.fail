@@ -192,7 +192,11 @@ function noticed(row: J, thenSeen: Seen | undefined, me: J, slackUsers: string[]
   }
   const fresh = now.seq > then.seq;
   const kind = get(by, "kind");
-  if (fresh && (kind === "ember" || kind === "stillfail") && text.startsWith("⚠️")) return ["failed", body("failed", "", text.slice("⚠️".length).trim())];
+  // A failure's first paragraph: what it means (what failed said, under it, is for the chat).
+  if (fresh && (kind === "ember" || kind === "stillfail") && text.startsWith("⚠️")) {
+    const first = format.cleanText(format.plainText(String(last.text).split("\n\n")[0]!));
+    return ["failed", body("failed", "", first.slice("⚠️".length).trim())];
+  }
   const unread = get(row, "unread") === true;
   if (!unread || !(fresh || then.pending) || mine || now.state === "run" || !hasLast) return null;
   const k = kind === "agent" ? "done" : kind === "person" ? "message" : null;

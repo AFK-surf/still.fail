@@ -662,7 +662,7 @@ export class SessionActor {
       log.warn("session", "compaction failed", { session: this.key, reason: outcome.reason, error: outcome.message });
       // Claude Code's own reason for compacting nothing is one people can act on.
       const why = /not enough messages/i.test(outcome.message) ? t("station.context.tooShort") : failureWords(outcome.reason);
-      await this.notice(`⚠️ ${t("station.notice.compactFailed", { why })}`, outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null);
+      await this.notice(`⚠️ ${withSaid(t("station.notice.compactFailed", { why }), outcome.message)}`, outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null);
     }
     else if (stopRequested) await this.notice(t("station.notice.stopped"));
     if (this.archived()) {
@@ -1646,12 +1646,19 @@ const SPENT_BEFORE = ["⚠️ 已达到额度或速率限制", "⚠️ Hit a usa
 /// That the provider had no room for it: its words, about no account, are of no use to people.
 const OVERLOADED_NOTICE = () => `⚠️ ${t("station.notice.overloaded")}`;
 
-/// A failed turn as its chat is told it: what it means and what to do, by its reason. What the runtime said is kept
-/// with the turn (its `detail`) for the logs and a report, not said: it is the provider's or the process's, in English.
+/// A failed turn as its chat is told it: what it means and what to do, by its reason, on its first line (what a
+/// notice shows closed, and a push says); what the runtime said after it, as it said it (`withSaid`).
 function failureNotice(outcome: TurnOutcome): string {
   if (outcome.kind !== "failed") return "";
   const key = outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "other" ? "failed" : outcome.reason;
-  return `⚠️ ${t(`station.notice.${key}`)}`;
+  return `⚠️ ${withSaid(t(`station.notice.${key}`), outcome.message)}`;
+}
+
+/// `words`, and under them what failed said itself (a provider's, a process's, in its own words), as a code block: a
+/// notice opened shows it, for whoever wants to see the error as it was (2026-11-03).
+function withSaid(words: string, said: string): string {
+  const raw = said.trim().replace(/```/g, "ʼʼʼ");
+  return raw === "" ? words : `${words}\n\n\`\`\`\n${raw}\n\`\`\``;
 }
 
 /// A failure's reason in a few words, after what failed ("Couldn't compact the context: …").
@@ -1662,7 +1669,8 @@ const failureWords = (reason: FailureReason) => t(`station.failure.${reason === 
 function cannotStartWords(error: unknown): string {
   if (error instanceof Said) return t("station.notice.cannotStartWhy", { why: error.message });
   const reason = failureOf((error as Error)?.message ?? "");
-  return reason === "auth" || reason === "refused" || reason === "blocked" || reason === "network" ? t("station.notice.cannotStartWhy", { why: failureWords(reason) }) : t("station.notice.cannotStart");
+  const words = reason === "auth" || reason === "refused" || reason === "blocked" || reason === "network" ? t("station.notice.cannotStartWhy", { why: failureWords(reason) }) : t("station.notice.cannotStart");
+  return withSaid(words, (error as Error)?.message ?? "");
 }
 
 /// Compaction that could not begin, in words: the station's own as they are, else what kind of failure it was.

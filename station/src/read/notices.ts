@@ -32,7 +32,8 @@ export function turnNotice(turn: TurnSummary, last: MessageRow | null, key: stri
 
 /// The station's word in a chat that something went wrong (⚠️ first, as the session posts it): what went wrong.
 export function wentWrong(text: string): string | null {
-  return text.startsWith("⚠️") ? text.slice("⚠️".length).trim() : null;
+  // Its first paragraph: what it means; what failed said, under it, is for the chat.
+  return text.startsWith("⚠️") ? text.slice("⚠️".length).split("\n\n")[0]!.trim() : null;
 }
 
 /// The emails of a chat's people: who made it, who said something in it, who started its agents; but `except`.
