@@ -175,7 +175,7 @@ test("desktop_files_reach_upload_and_release_on_success_or_removal_after_failure
   send(102);
   page.close();
   await t.settle();
-  assert.match(v(t.values, 1).files[1].error, /no longer available/);
+  assert.match(v(t.values, 1).files[1].error, /^image\.png 的上传源已丢失/);
   assert.equal(v(t.values, 1).uploading, false);
   assert.deepEqual(released, [1]);
   await t.ask("remove", { key: "ws/st:k", id: "f102" });

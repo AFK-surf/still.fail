@@ -149,7 +149,7 @@ export function stationHost(answers: Answers) {
         yield* Effect.addFinalizer(() => Effect.sync(() => feed.queues.delete(queue)));
         return { status: 200, headers: [["content-type", "text/event-stream"]] as [string, string][], body: { take: Queue.take(queue) } };
       }
-      if (gate.stream === "fail") return yield* Effect.fail(new HostError("连不上"));
+      if (gate.stream === "fail") return yield* Effect.fail(new HostError("connection refused"));
       if (gate.stream instanceof CoreError) return yield* Effect.fail(gate.stream);
       if (gate.stream === "hang") return yield* Effect.never;
       if (typeof gate.stream === "number") {

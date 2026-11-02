@@ -267,7 +267,8 @@ test("approved but signed in nowhere (the trusted device's key not read back): n
   m.host.secureGet = () => Effect.fail(new HostError("the keystore said no"));
   const done = await m.prove(code);
   assert.ok("err" in done && done.err.code === "pair_unsigned", JSON.stringify(done));
-  assert.match(done.err.message, /the keystore said no/);
+  // What the keystore said is its own: what kind of failure it was is told.
+  assert.match(done.err.message, /此设备上的操作失败/);
   assert.deepEqual(m.cloud.posted, []);
 });
 
