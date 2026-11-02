@@ -13,6 +13,7 @@ import {
   "mbui/signals",
   "mbui/view",
   "stillfail/gallery",
+  "moonbitlang/core/double",
 }
 
 import { "stillfail/sffixture" } for "wbtest"

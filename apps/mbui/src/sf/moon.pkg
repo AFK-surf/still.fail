@@ -11,6 +11,7 @@ import {
   "moonbitlang/core/json",
   "mbui/dmath",
   "mbui/zip",
+  "moonbitlang/core/double",
 }
 
 import {

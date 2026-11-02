@@ -8,3 +8,5 @@ import {
   "mbui/ui",
   "mbui/kit",
 }
+
+import { "moonbitlang/core/double" } for "test"

@@ -20,6 +20,7 @@ import {
   "stillfail/sfdesk",
   "stillfail/sfpages",
   "stillfail/sffixture",
+  "moonbitlang/core/double",
 }
 
 import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"
