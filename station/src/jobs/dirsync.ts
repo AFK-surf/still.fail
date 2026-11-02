@@ -20,7 +20,7 @@ import {
   chmodSync, closeSync, copyFileSync, createReadStream, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readlinkSync,
   renameSync, rmSync, rmdirSync, statSync, symlinkSync, writeFileSync, writeSync,
 } from "node:fs";
-import { lstat, open, readdir, readlink } from "node:fs/promises";
+import { lstat, open, readdir, readlink, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { zstdCompress, zstdDecompress } from "node:zlib";
@@ -134,7 +134,7 @@ async function pool<T>(items: T[], f: (item: T) => Promise<void>): Promise<void>
 
 /// What of `dir` is synced: Git's files in a work tree, a walk without IGNORED elsewhere.
 export async function listLocal(dir: string): Promise<Listing> {
-  if (!statSync(dir).isDirectory()) throw new Error(`${dir} is not a directory`);
+  if (!(await stat(dir)).isDirectory()) throw new Error(`${dir} is not a directory`);
   let tree: string[] | null = null;
   try {
     tree = (await git(dir, ["rev-parse", "--is-inside-work-tree", "--show-prefix"])).split("\n");
@@ -158,6 +158,7 @@ export async function listLocal(dir: string): Promise<Listing> {
     const modified = new Set(entries(await git(dir, ["ls-files", "-z", "-m"])));
     const seen = new Set<string>();
     const hash: string[] = [];
+    const clean: { path: string; id: string; mode: string }[] = [];
     for (const line of entries(await git(dir, ["ls-files", "-z", "-s"]))) {
       const tab = line.indexOf("\t");
       const [mode, id, stage] = line.slice(0, tab).split(" ");
@@ -177,20 +178,18 @@ export async function listLocal(dir: string): Promise<Listing> {
         hash.push(path);
         continue;
       }
-      let size = 0;
-      try {
-        const st = lstatSync(join(dir, ...path.split("/")));
-        if (!st.isFile()) {
-          hash.push(path);
-          continue;
-        }
-        size = st.size;
-      } catch {
-        continue;
-      }
-      files.push({ path, hash: id!, mode: mode!, size, indexed: true });
-      more();
+      clean.push({ path, id: id!, mode: mode! });
+      if (clean.length > MAX_FILES) throw new Error(`${dir} has more than ${MAX_FILES} files to sync`);
     }
+    // Each one's size, off the station's main thread: one at a time there, a repository's thousands of files held every
+    // device for seconds on ccvm short of memory (2026-11-02, 24 s in six hours).
+    await pool(clean, async ({ path, id, mode }) => {
+      const st = await lstat(join(dir, ...path.split("/"))).catch(() => null);
+      if (st === null) return;
+      if (!st.isFile()) hash.push(path);
+      else files.push({ path, hash: id, mode, size: st.size, indexed: true });
+    });
+    more();
     for (const path of entries(await git(dir, ["ls-files", "-z", "-o", "--exclude-standard"]))) {
       if (path.endsWith("/")) skipped.push({ path: path.slice(0, -1), why: "nested repository" });
       else hash.push(path);

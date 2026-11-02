@@ -4,14 +4,14 @@
 // keeps in station storage are packed (archive.ts); they are restored before its runtime starts again, or when it is
 // shown again. The hub calls it (ColdStorage) from the session's queue, so no turn starts halfway through.
 import { existsSync, realpathSync, statSync } from "node:fs";
-import { readdir, unlink, writeFile } from "node:fs/promises";
+import { access, readdir, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { log } from "../ops/log.ts";
 import { realOutside } from "../ops/places.ts";
 import { homesFirst, sessionPlaces, transcriptPaths } from "../read/transcript.ts";
 import * as archive from "./archive.ts";
 import { runtimeNamed } from "./config.ts";
-import { measureRoom, roomOf, safeToRemove, within } from "./footprint.ts";
+import { measureRoom, roomOf, roomOfSoon, safeToRemove, within } from "./footprint.ts";
 import type { ColdStorage, Hub } from "./hub.ts";
 
 /// Links followed, never into a folder macOS protects (a session continued there, a job's directory: ops/places.ts).
@@ -164,11 +164,13 @@ export class ColdRooms implements ColdStorage {
     });
   }
 
-  /// Whether an archived session's directory holds more than its chat's files.
+  /// Whether an archived session's directory holds more than its chat's files. Asked of every archived session in turn
+  /// (lifecycle.ts expireArchived, relieveArchived): its paths followed off the main thread, where on ccvm short of
+  /// memory (2026-11-02) they held every device for seconds at a time, 47 s in six hours.
   async holdsMore(key: string): Promise<boolean> {
     const row = this.hub().store.getSession(key);
-    const room = row ? roomOf(this.dataDir(), row.workspace) : null;
-    return room !== null && existsSync(join(room, "cold")) && (await archive.holdsMore(room));
+    const room = row ? await roomOfSoon(this.dataDir(), row.workspace) : null;
+    return room !== null && (await access(join(room, "cold")).then(() => true, () => false)) && (await archive.holdsMore(room));
   }
 
   async pack(key: string): Promise<void> {
