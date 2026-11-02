@@ -871,9 +871,10 @@ test "a profile's page: who it is and whether it works, then its allowance, what
   assert_true(y("全部模型") > y("使用它的连接"))
   assert_true(y("默认 Fast") > y("全部模型"))
   assert_true(y("分享给其他 station") > y("默认 Fast"))
-  // a workspace's row named by the workspace, its mark before its name (not before 同时用于: 「个 同时用于 个人」)
+  // A workspace without its own mark is named once, without a repeated initial beside it.
   let ws = "个人 中的对话可使用此账号运行 agent"
   assert_true(y(ws) > y("分享给其他 station") && t.find("同时用于 个人") is None)
+  assert_true(t.boxes().filter(fn(b) { b.text == "个" }).is_empty())
   assert_true(y("重新登录") > y(ws))
   // its models one row, how many; all of them a press away
   assert_true(t.find("3 个模型") is Some(_) && t.find("Sonnet 5") is None)

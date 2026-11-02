@@ -1269,6 +1269,8 @@ fn profile_workspaces(c : @ui.Ctx, core : Core, address : String, p : Json?) -> 
         let wv = Some(w)
         let ws = text(wv, "workspace")
         let name = text(wv, "name")
+        let emoji = text(wv, "emoji")
+        let icon = text(wv, "icon")
         let on = now.contains(ws)
         let next = @sf.switch_row(
           c,
@@ -1277,9 +1279,12 @@ fn profile_workspaces(c : @ui.Ctx, core : Core, address : String, p : Json?) -> 
           on,
           note=@sf.t(if on { "web-pages.profiles.workspaces.on" } else { "web-pages.profiles.workspaces.off" }, args=[("name", name)]),
           busy~,
-          // named by the workspace, its mark before its name as everywhere (notifications' rows too): before a sentence
-          // about it the mark read as a word of it (「个 同时用于 个人」)
-          lead=fn(c) { @sf.workspace_badge(c, name, text(wv, "emoji"), text(wv, "icon"), profile_ws_mark) },
+          // With no mark of its own, the name is enough (a bare initial reads as another word: 「个 个人」).
+          lead?=if @sf.has_station_mark(emoji, icon) {
+            Some(fn(c) { @sf.workspace_badge(c, name, emoji, icon, profile_ws_mark) })
+          } else {
+            None
+          },
         )
         if next != on {
           let list = if next { now.copy() } else { now.filter(fn(x) { x != ws }) }

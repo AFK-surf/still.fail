@@ -1155,8 +1155,12 @@ fn station_workspaces(c : @ui.Ctx, core : Core, address : String) -> Unit {
       for w in ws {
         let wv = Some(w)
         let name = text(wv, "name")
-        @sf.said_row(c, name, text(wv, "line"), lead=fn(c) {
-          @sf.workspace_badge(c, name, text(wv, "emoji"), text(wv, "icon"), st_ws_mark)
+        let emoji = text(wv, "emoji")
+        let icon = text(wv, "icon")
+        @sf.said_row(c, name, text(wv, "line"), lead?=if @sf.has_station_mark(emoji, icon) {
+          Some(fn(c) { @sf.workspace_badge(c, name, emoji, icon, st_ws_mark) })
+        } else {
+          None
         })
       }
     })
