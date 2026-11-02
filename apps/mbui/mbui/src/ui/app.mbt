@@ -1662,6 +1662,22 @@ fn wheel_scrolls(c : Ctx, island : @view.NodeId?) -> (Array[Int], Array[Double])
 }
 
 ///|
+/// The wheel passes drag-only targets: they take a press, but do nothing with a wheel.
+fn wheel_target(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
+  let mut k = ids.length() - 1
+  while k >= 0 {
+    let id = ids[k]
+    let r = k * 4
+    if x >= rects[r] && x < rects[r + 2] && y >= rects[r + 1] && y < rects[r + 3] &&
+      (!drags.contains(id) || captures.contains(id) || sideways.contains(id) || g().lists.contains(id)) {
+      return id
+    }
+    k = k - 1
+  }
+  0
+}
+
+///|
 /// Whether what of the old frame's is at (x, y) takes a wheel turned `dy` down (old_wheel's): what scrolls there
 /// sideways or up and down not at its end that way (sideways_wheel_moves; else the list it lies in), takes the pointer,
 /// or a pinch, or a list not at its end that way (ListState::wheel_moves), or what a modal layer of the window's tree
@@ -1677,7 +1693,7 @@ fn old_wheel_takes(
 ) -> Bool {
   let c = g()
   let (ids, rects) = wheel_scrolls(c, island)
-  let mut target = hit_in(ids, rects, x, y)
+  let mut target = wheel_target(ids, rects, x, y)
   if target == 0 {
     return false
   }
@@ -1718,7 +1734,7 @@ fn old_wheel(
   let phase = phase % 16
   let c = g()
   let (ids, rects) = wheel_scrolls(c, island)
-  let mut target = hit_in(ids, rects, x, y)
+  let mut target = wheel_target(ids, rects, x, y)
   // (what scrolls there in an old view a modal layer of the window's tree keeps from input: nothing scrolls, the wheel
   // taken: island_allows)
   if target != 0 && !island_allows(c.island_of_id(target)) {
