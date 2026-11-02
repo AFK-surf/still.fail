@@ -307,6 +307,13 @@ fn Ctx::insts_replay(self : Ctx, insts : FixedArray[Double], floats : Int, segs 
     }
   }
   self.ninst = i0 + count
+  // A saved frame is painted by this node, as a kept drawing is. The instance slots can have belonged to different
+  // nodes in the previous frame; leaving their owners there assigns the saved glyphs to unrelated current words.
+  if inst_owners_kept() {
+    for k in i0..<self.ninst {
+      inst_owned(k)
+    }
+  }
 }
 
 ///|
