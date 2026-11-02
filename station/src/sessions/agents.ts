@@ -189,8 +189,12 @@ export const AgentsLive = (control: Control) =>
       // subscription's is (agents/sandbox.ts).
       const lentToSandbox = (p: any) => !borrowed(p) && p?.access?.kind === "subscription" && sandboxed(data);
       const hermes = new HermesDriver({ data });
+      // What the station before this one left, taken up (`start`): until then the codex app-servers its runners keep are
+      // the sessions' that ran on them (agents/codex.ts `takenUp`).
+      const takenUp = Promise.withResolvers<void>();
       const codex = new CodexDriver({
         data,
+        takenUp: takenUp.promise,
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
         lent: {
           borrowed: (p) => borrowed(p) || lentToSandbox(p),
@@ -603,7 +607,11 @@ export const AgentsLive = (control: Control) =>
         mkdirSync(run, { recursive: true });
         writeFileSync(join(run, "hub.json"), JSON.stringify({ pid: process.pid }) + "\n");
         if (!inWorkspace) hub.hold("unbound");
-        await hub.takeUp();
+        try {
+          await hub.takeUp();
+        } finally {
+          takenUp.resolve();
+        }
         // The launcher's socket; on its own, as the launcher's ports.rs would: the port config.json names; else the one
         // remembered (the agents left running know it), 4750 on the machine's own data directory, any free one.
         const named = config.raw()?.http?.port;

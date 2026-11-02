@@ -502,6 +502,39 @@ describe("the Codex driver", { concurrency: true }, () => {
     });
   }
 
+  // On ccvm (2026-11-02) a next station asked a profile's quota as it started: it took the app-server up as after a
+  // crash, from the station still handing over, which let go of the turn running on it.
+  test("a next driver takes no app-server up before the station before it is taken up: that one hears its turn to the end", { timeout: 60_000 }, async () => {
+    const first = driver();
+    const p = profile();
+    const a = listen();
+    const one = await first.open(options(p), a.push);
+    const gate = gates(p.dump, "early");
+    await one.prompt("gate:6:3:early");
+    await a.until((e) => deltas(e).length >= 3);
+    // The next station asks the profile's quota as it starts, before what the one before left is taken up.
+    const taken = Promise.withResolvers<void>();
+    const next = driver({ takenUp: taken.promise });
+    const quota = next.rateLimits(p);
+    await gate.open("a");
+    await eventually(gate.said);
+    await gate.open("b");
+    await a.until(ended(1));
+    assert.deepEqual(deltas(a.events), Array.from({ length: 6 }, (_, i) => `d${i} `), "all of its turn, to the station before");
+    // That one hands over: its snapshot, its runner let go; the next takes the session up from it, then the rest.
+    const snapshot = JSON.parse(JSON.stringify(one.snapshot()));
+    first.detach();
+    await allLeft();
+    const b = listen();
+    const again = await next.adopt(options(p, { resume: one.id() }), snapshot, b.push);
+    taken.resolve();
+    assert.deepEqual(await quota, { rateLimits: { primary: { usedPercent: 5 } } });
+    await again.prompt("say:after");
+    await b.until(ended(1));
+    assert.deepEqual(outcome(b.events), { kind: "completed" });
+    assert.equal(starts(p.dump).length, 1, "the same app-server");
+  });
+
   test("shutdown ends the app-servers and their runners", async () => {
     const d = new CodexDriver({ data, hostSkills: skills, caBundle: bundle });
     const p = profile();
