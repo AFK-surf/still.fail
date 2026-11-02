@@ -465,6 +465,10 @@ export function Settings(props: IconProps) {
   return <Svg {...props}><path d="M10.5000 5.0000L10.5000 3.0000L13.5000 3.0000L13.5000 5.0000L15.8891 5.9896L17.3033 4.5754L19.4246 6.6967L18.0104 8.1109L19.0000 10.5000L21.0000 10.5000L21.0000 13.5000L19.0000 13.5000L18.0104 15.8891L19.4246 17.3033L17.3033 19.4246L15.8891 18.0104L13.5000 19.0000L13.5000 21.0000L10.5000 21.0000L10.5000 19.0000L8.1109 18.0104L6.6967 19.4246L4.5754 17.3033L5.9896 15.8891L5.0000 13.5000L3.0000 13.5000L3.0000 10.5000L5.0000 10.5000L5.9896 8.1109L4.5754 6.6967L6.6967 4.5754L8.1109 5.9896Z" /><circle cx="12" cy="12" r="3" /></Svg>;
 }
 
+export function Share(props: IconProps) {
+  return <Svg {...props}><path d="M12 14V3.5 M8 7.5L12 3.5L16 7.5 M9 10H8Q5 10 5 13V17.5Q5 20.5 8 20.5H16Q19 20.5 19 17.5V13Q19 10 16 10H15" /></Svg>;
+}
+
 export function ShieldCheck(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5Q16 6 20 6V12C20 16.5 16.5 19 12 20.5C7.5 19 4 16.5 4 12V6Q8 6 12 3.5Z M8 12L10.5 14.5L16 9" /></Svg>;
 }
@@ -716,6 +720,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "send": Send,
   "server": Server,
   "settings": Settings,
+  "share": Share,
   "shield-check": ShieldCheck,
   "shrink": Shrink,
   "skip-back": SkipBack,
