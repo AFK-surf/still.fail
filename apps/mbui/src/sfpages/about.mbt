@@ -90,6 +90,131 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
 }
 
 ///|
+/// 关于 made once as nodes (about_page's, narrow: page_node) in node `v`: this build and the way to a newer one (how it
+/// stands as the core's update says it, its bar coming and going with what is under way, the row growing and closing
+/// round it), what changed; whether this device sends usage statistics and error reports (where the build sends any:
+/// the switch as the host has it, told as it is turned); still.fail's terms and privacy policy on its site; last, where
+/// the device keeps one, its performance record (its switch and its size as the host says them as it is turned here,
+/// the host telling nothing of them otherwise: perf_turned; 分享记录 while it holds anything).
+pub fn about_node(v : @view.View, core : Core, on_back~ : () -> Unit, frame~ : () -> PageFrame) -> Unit {
+  // (its blocks: the version's; the statistics' where the build sends any; the terms'; the performance record's where
+  // the device keeps one)
+  let blocks = fn() {
+    let out = ["version"]
+    if (core.reporting)() is Some(_) {
+      out.push("reporting")
+    }
+    out.push("legal")
+    if @hostapi.perf_state() >= 0 {
+      out.push("perf")
+    }
+    out
+  }
+  @sf.page_node(v, fn() { @sf.t("web-pages.settings.nav.about") }, on_back~, frame~, blocks, fn(b, key) {
+    match key {
+      // this build, and what changed
+      "version" =>
+        @sf.group_node(b, fn(g) {
+          version_rows_node(g, core)
+          @sf.link_row_node(g, fn() { @sf.t("web-pages.settings.nav.changelog") }, fn() { (core.push)(Changelog) })
+        })
+      // a build that sends nothing has nothing to turn off
+      "reporting" =>
+        @sf.group_node(b, fn(g) {
+          @sf.switch_row_node(
+            g,
+            fn() { @sf.t("common.telemetry.title") },
+            fn() { (core.reporting)().unwrap_or(false) },
+            fn(on) { (core.set_reporting)(on) },
+            note=fn() { @sf.t("common.telemetry.note", args=[("name", "still.fail")]) },
+          )
+        })
+      // on still.fail's site, in the browser
+      "legal" =>
+        @sf.group_node(b, fn(g) {
+          for l in [("terms", "common.legal.terms"), ("privacy", "common.legal.privacy")] {
+            @sf.link_row_node(g, fn() { @sf.t(l.1) }, fn() { (core.open_link)(@settings.legal_url(l.0)) }, out=true)
+          }
+        })
+      // this device's performance record, last and out of the way (where the device keeps one: iOS)
+      _ =>
+        @sf.group_node(b, fn(g) {
+          let on = fn() {
+            perf_turned.get() |> ignore
+            @hostapi.perf_state() == 1
+          }
+          let size = fn() {
+            perf_turned.get() |> ignore
+            @hostapi.perf_size()
+          }
+          @sf.switch_row_node(
+            g,
+            fn() { @sf.t("web-pages.about.perf.title") },
+            on,
+            fn(now) {
+              @hostapi.set_perf(now)
+              perf_turned.set(@signals.untracked(fn() { perf_turned.get() }) + 1)
+            },
+            note=fn() {
+              @sf.t("web-pages.about.perf.note", args=[("where", @hostapi.perf_where()), ("size", @sf.file_size(size()))])
+            },
+          )
+          g.show(fn() { size() > 0.0 }, fn(r) {
+            @sf.link_row_node(r, fn() { @sf.t("web-pages.about.perf.share") }, acts=true, fn() {
+              @hostapi.share("", "still.fail-perf.log", "text/plain", @hostapi.perf_read()) |> ignore
+            })
+          })
+        })
+    }
+  })
+}
+
+///|
+/// This build and the way to a newer one as nodes (version_rows'): its name and version, a row going nowhere; then,
+/// where newer builds are asked for here, how the update stands (its words, the line under them), pressed to do what
+/// is the person's to do; under them the bar while something is under way, its room opening and closing as that
+/// begins and ends (a move as far as the bar's room, from where it is then: version_rows' @motion.reveal).
+fn version_rows_node(g : @view.View, core : Core) -> Unit {
+  // (its name as the core's preferences say it, still.fail where they say none)
+  @sf.link_row_node(g, fn() {
+    let product = text((core.topic)("prefs", Map::new()).value, "productName")
+    (if product == "" { "still.fail" } else { product }) + " " + build_version()
+  }, fn() {  }, goes=false)
+  let v = fn() { (core.version_now)() }
+  g.show(fn() { v().asks }, fn(r) {
+    let open = @motion.Way::new(if @signals.untracked(fn() { v().going }) { 1.0 } else { 0.0 })
+    r.reacts(fn() { v().going }, fn(going) {
+      let to = if going { 1.0 } else { 0.0 }
+      open.go(to, @motion.move().per_unit(version_bar_room), at=r.cause_at())
+    })
+    let share = fn() {
+      open.said()
+      let now = r.logic_at()
+      open.value_at(if open.goes_at(now) { r.drawn_at() } else { @double.infinity })
+    }
+    @sf.link_row_node(
+      r,
+      fn() { v().label },
+      fn() { (core.version_tap)() },
+      note=fn() { v().note },
+      chevron=false,
+      below=fn(b) {
+        b.box(fn(bar) {
+          bar.grow(Is(1.0)) |> ignore
+          @sf.progress_node(bar, fn() { v().part }, fn() { @ui.tree_theme().line }, fn() { @sf.theme().p.accent }) |> ignore
+        })
+        |> ignore
+      },
+      below_open=share,
+    )
+  })
+}
+
+///|
+/// How tall the room the update's bar opens is (row_below's 6 over it, the bar's 3): how far its opening moves.
+let version_bar_room : Double = 9.0
+
+///|
 /// How many times 性能记录 was turned here: what its row reads, so it is built again as it is (the host's state is no
 /// signal).
 // kept across runs: only counts on

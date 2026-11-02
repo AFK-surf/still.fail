@@ -74,12 +74,15 @@ test "styles: how many values of each kind the app's screens use" {
   }
   // Two fractional spaces are derived from the card's corner for a button and a shorter chooser in its foot; they
   // follow that corner and the controls' heights, rather than adding independent spacing tokens.
+  // The settings' list and 关于 on the window's tree keep their list's scroll bar's thumb as a node while at rest (unseen
+  // then), so its existing look is counted where the old list built none at rest: a corner of 1.5 and the bar's two inks
+  // (24272B42, ECECED42), no token of its own.
   inspect(counts.to_string(), content=(
     #|text 37
     #|weight 4
     #|space 26
-    #|radius 21
-    #|color 70
+    #|radius 22
+    #|color 72
     #|
 
 

@@ -125,7 +125,7 @@ pub fn button_node(
     }
     let words = v.box(fn(w) {
       w
-      .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false })
+      .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own })
       .ink(By(fn() { looks().2 }))
       |> ignore
     })

@@ -385,3 +385,4 @@ fn png_of(w : Int, h : Int, rgba : FixedArray[Byte]) -> Bytes {
   chunk("IEND", [])
   Bytes::from_array(out)
 }
+

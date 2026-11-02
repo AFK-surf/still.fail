@@ -87,7 +87,14 @@ pub fn Tester::census(self : Tester) -> Census {
     Some(tree) =>
       for n in tree.styled() {
         if n.words {
-          text[census_num(n.size) + "/" + census_num(n.line)] = true
+          // (its size, line and letters' spacing as it is drawn, as an old view's text says them: view_line's and
+          // view_spacing's, at the system's size of words)
+          let look : @view.WordsLook = { size: n.size, weight: 400, line: n.line, wrap: true, tracking: n.tracking }
+          let spacing = view_spacing(c, look)
+          text[census_num(c.sp(n.size)) +
+            "/" +
+            census_num(view_line(c, look)) +
+            (if spacing != 0.0 { " " + census_num(spacing) } else { "" })] = true
           for w in n.weights {
             weight[w.to_string()] = true
           }

@@ -361,9 +361,10 @@ test "settings: notifications switched off on 通知's page, the core keeps it; 
   open_setting("home")
   t.draw()
   t.run_for(@ui.move_most_ms)
-  // the list's row (below the fold on a 844 high screen: the page at its end) opens their page
-  t.scroll_to_end()
-  t.draw()
+  // the list's row (below the fold on a 844 high screen: the page at its end, the wheel turned down past it, as long as
+  // its notches take to come) opens their page
+  t.wheel(195.0, 400.0, 2000.0)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("通知")
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::Notifications))
@@ -405,16 +406,18 @@ test "settings: usage statistics and error reports switched off on this device, 
   open_setting("about")
   t.draw()
   t.run_for(@ui.move_most_ms)
-  t.scroll_to_end()
-  t.draw()
+  // (关于's foot, the wheel turned down past it)
+  t.wheel(195.0, 400.0, 2000.0)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("发送使用统计和错误报告") is None)
   // Android's (Crashes.reporting, kept in the app's prefs): on until turned off
   let on = Ref(true)
   let told : Array[Bool] = []
   reporting_host.set(Some({ get: fn() { on.val }, set: fn(v) { told.push(v); on.val = v } }))
   t.draw()
-  t.scroll_to_end()
-  t.draw()
+  // (关于's foot, the wheel turned down past it)
+  t.wheel(195.0, 400.0, 2000.0)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("不会包含你的聊天内容") is Some(_))
   t.click(Switch, label="发送使用统计和错误报告")
   // off: what Crashes.send then sends is nothing (Crashes.java: !reporting, no batch goes)

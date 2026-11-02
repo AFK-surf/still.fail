@@ -99,6 +99,8 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
         None => ""
       }
     },
+    // (the pages made once as nodes: narrow_made)
+    made=fn(page) { narrow_made(src, page) },
   )
   |> ignore
   // the bottom bar told what the app's state and the window say of it as that changes, at the moment of what changed it
@@ -136,6 +138,8 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     }
   })
   .over(Is(true))
+  // (a press where it has nothing of its own its pages', a page made once as nodes among them: entry_tree's over's)
+  |> @ui.old_takes_own
   |> ignore
   // the bottom bar's glass, where the bar is laid out: a finger on it the bar's at each event's moment (drawn by the old
   // view over the pages; what the old frame puts over all of it at its root, its notch's key, menus and sheets, first)
@@ -339,4 +343,69 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   @sf.presented(c)
   toast(c)
   finger_loupe(c)
+}
+
+///|
+/// The pages of the stack made once as nodes of the tree's in the narrow shell (nav_view's `made`), by their kind, the
+/// rest old views (narrow_page_held): the settings' list (the gear's) and 关于. Each in the workspace in view, made
+/// again as that changes; its frame what the shell gives a page (back to the one under it, under the status bar, over
+/// the navigation bar: setting_page's) as that changes; under the status bar the page's ground over it, and a window's
+/// band its buttons are in dragging it, as page_view puts them over a page that has no top of its own.
+fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int) -> Unit)? {
+  let made = fn(kind : String, f : (@view.View, @settings.Core, () -> @settings.Here, () -> PageFrame, () -> Int) -> Unit) {
+    Some(
+      (
+        kind,
+        fn(v : @view.View, _page : () -> Page, under : Page?, stint : () -> Int) {
+          let frame = fn() -> PageFrame {
+            // (under the status bar as the window it is in is now: status_top_now, by its width as it changes)
+            { back: under.map(@sfbase.back_label), top: status_top_now(v.window().0), foot: nav_foot(), named: false }
+          }
+          v.pick(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
+            match @signals.untracked(fn() { workspace_in_view(src).0 }) {
+              Some(w) => {
+                let core = settings_core(src, w)
+                let here = fn() { @settings.here_of(core, w.id, w.name) }
+                @settings.frame(core, @signals.untracked(here))
+                f(p, core, here, frame, stint)
+              }
+              None => ()
+            }
+          })
+          narrow_made_top(v)
+        },
+      ),
+    )
+  }
+  match page {
+    Settings =>
+      made("settings", fn(p, core, here, frame, stint) {
+        @sfpages.settings_home_node(p, core, here, fn(r) { (core.push)(r) }, on_back=core.pop, frame~, stint~, bars=fn() {
+          @sf.layout(p.window().0) is Small
+        })
+      })
+    Setting(About) => made("about", fn(p, core, _here, frame, _stint) { @sfpages.about_node(p, core, on_back=core.pop, frame~) })
+    _ => None
+  }
+}
+
+///|
+/// Over a page made once that has no top of its own (narrow_made's): the page's ground under the status bar, and the
+/// band a window's buttons are in dragging it where it has them (page_view's, an old view's).
+fn narrow_made_top(v : @view.View) -> Unit {
+  v.box(fn(o) {
+    o.over(Is(true)) |> ignore
+    o.show(fn() { status_top_now(v.window().0) > 0.0 }, fn(paper) {
+      paper.height(By(fn() { Some(status_top_now(v.window().0)) })).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+    })
+  })
+  |> ignore
+  v.box(fn(o) {
+    o.over(Is(true)) |> ignore
+    // (where the frame is not wide: is_wide, by the window as it is)
+    o.show(fn() { @ui.window_inset_now() && @sf.layout(v.window().0) is Small && !@sf.native_able() }, fn(band) {
+      band.height(By(fn() { Some(window_band_now()) })).moves_window(Is(true)) |> ignore
+    })
+  })
+  |> ignore
 }

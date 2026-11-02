@@ -843,6 +843,7 @@ test "a list's running sums are its rows' heights added up" {
         sel: false,
         theme: Theme::light(),
         direction: Ltr,
+        stint: 0,
         layer: 0,
         causes: None,
         sizes: {},

@@ -40,7 +40,7 @@ fn tree_words(center : @signals.Signal[Bool], width : @signals.Signal[Double]) -
     root.box(fn(v) {
       v
       .width(By(fn() { Some(width.get()) }))
-      .words(Is(centred_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true })
+      .words(Is(centred_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own })
       .words_centered(By(fn() { center.get() }))
       |> ignore
     })
@@ -98,7 +98,7 @@ let spaced_words : String = "Reading your workspaces   \nstill.fail's core waits
 fn centred_spaced(runs : Bool) -> (Array[(Double, Double)], Array[(Double, Double)]) {
   let center = @signals.signal(true, same=fn(a, b) { a == b })
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
-  let look : @view.WordsLook = { size: 13.0, weight: 400, line: 18.0, wrap: true }
+  let look : @view.WordsLook = { size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own }
   set_view_app(fn(root) {
     root.box(fn(v) {
       v.width(Is(Some(200.0))) |> ignore
