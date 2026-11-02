@@ -431,12 +431,18 @@ let bones_box : @ui.Style = @ui.css("")
 let wait_pills : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1 gap=S2 align=ACenter")
 
 ///|
-/// A wait as nodes of the window's tree (wait_line's): nothing for a moment (later_ms from as it is made: a wait that
-/// ends sooner shows none), then a spinner and `words` in the muted ink, 8 apart, 18 high.
+/// A wait as nodes of the window's tree (wait_line's): nothing for a moment but its room, 18 high (later_ms from as it
+/// is made: a wait that ends sooner shows none), then a spinner and `words` in the muted ink, 8 apart, as high as they
+/// are (wait_words: the Ui size, L5's line, both as the system's size of words makes them).
 pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
   let long = @signals.signal(false)
   parent.box(fn(l) {
-    l.row(Is(true)).gap(Is(8.0)).lines_up(Is(Some(Middle))).height(Is(Some(18.0))) |> ignore
+    l
+    .row(Is(true))
+    .gap(Is(8.0))
+    .lines_up(Is(Some(Middle)))
+    .height(By(fn() { if long.get() { None } else { Some(18.0) } }))
+    |> ignore
     l.at_moment(l.cause_at() + later_ms, fn() { long.set(true) }) |> ignore
     l.show(fn() { long.get() }, fn(s) { spinner_node(s, size=12.0) |> ignore })
     l.show(fn() { long.get() }, fn(s) {
@@ -444,8 +450,9 @@ pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
         w
         .words(By(words))
         .words_look(By(fn() {
-          let (size, line) = @ui.tree_theme().text_size(Ui)
-          { size, weight: 400, line, wrap: false }
+          let th = @ui.tree_theme()
+          let (size, own) = th.text_size(Ui)
+          { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: false }
         }))
         .ink(By(fn() { theme().p.muted }))
         |> ignore

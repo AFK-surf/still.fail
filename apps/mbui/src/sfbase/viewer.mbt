@@ -1864,14 +1864,6 @@ pub let reading_pill_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Mut
 pub let reading_spinner : Double = 12.0
 
 ///|
-// kept across runs: a value (no field of it changes)
-pub let file_progress_card : @ui.Style = @ui.style(w=@sf.file_progress_w, px=S3_5, py=S3, gap=S2, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let file_progress_words : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, center=true)
-
-///|
 pub let file_progress_corner : Double = 14.0
 
 ///|

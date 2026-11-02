@@ -455,13 +455,9 @@ pub fn file_key(Attachment) -> String
 
 pub fn file_params(Viewer) -> Map[String, Json]
 
-pub let file_progress_card : @ui.Style
-
 pub let file_progress_corner : Double
 
 pub fn file_progress_node(@view.View, () -> (Double, Double?), () -> Double, said? : () -> String?) -> @view.View
-
-pub let file_progress_words : @ui.TextStyle
 
 pub fn file_said(Source, FilePage, String) -> Unit
 
