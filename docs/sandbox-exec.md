@@ -11,12 +11,15 @@ deployment of [l4h-sandbox](https://github.com/AFK-surf/l4h-sandbox), reached ov
 `sandbox` in config.json, edited by the workspace's owners and admins with `PUT /admin/api/sandbox`:
 
 ```json
-{ "sandbox": { "ssh": "{name}.WORKSPACE@l4es.afk.surf", "identity": "/path/to/key", "knownHosts": "/path/to/known_hosts", "persist": "/mnt/sf/stations/NAME", "idleMinutes": 10 } }
+{ "sandbox": { "ssh": "{name}.WORKSPACE@l4es.afk.surf", "identity": "/path/to/key", "knownHosts": "/path/to/known_hosts", "persist": "/mnt/sf/stations/NAME", "labels": ["lax2"], "idleMinutes": 10 } }
 ```
 
 `{name}` is the sandbox's name; `identity` a key linked to an account that is a member of the l4es workspace;
 `persist` a directory on storage the sandboxes keep (an l4es managed NFS mount), where the station's files there live,
-so that a session's outlive its sandbox (without it they are on each sandbox's own disk, gone when it is deleted).
+so that a session's outlive its sandbox (without it they are on each sandbox's own disk, gone when it is deleted);
+`labels` the node labels every sandbox the station makes requires, e.g. the nodes that NFS server can be reached from:
+each sandbox is then made with the front door's `create NAME LABEL ...` before it is connected to (one made earlier
+with other labels must be deleted first).
 `"enabled": false` switches it off and keeps the rest. Switching on is refused unless a sandbox can be had and the
 station's data directory made there at its own path (`checkReach`).
 

@@ -146,6 +146,11 @@ describe("the setting", () => {
     assert.throws(() => checkSandbox({ sandbox: { ssh: "host" } }), /\{name\}/);
     assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}@host", enabled: "yes" } }), /enabled/);
     checkSandbox({ sandbox: { ssh: "{name}.ws@l4es.afk.surf", enabled: false } });
+    assert.deepEqual(sandboxConfig({ sandbox: { ssh: "{name}.ws@host", labels: ["lax2"] } })?.labels, ["lax2"]);
+    assert.equal(sandboxConfig({ sandbox: { ssh: "{name}.ws@host", labels: [] } })?.labels, undefined);
+    checkSandbox({ sandbox: { ssh: "{name}.ws@host", labels: ["lax2", "fast"] } });
+    assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}.ws@host", labels: "lax2" } }), /labels/);
+    assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}.ws@host", labels: ["LAX 2"] } }), /labels/);
   });
 
   test("ssh is asked for the sandbox by name, with the key and host keys given", () => {
@@ -359,6 +364,31 @@ describe("jobs", () => {
     assert.deepEqual(readFileSync(join(dir, "made"), "utf8").trim().split("\n"), [`_.ws@host create ${name} --size large`]);
     assert.deepEqual(destinations(dir), [`${name}.ws@host`]);
     assert.equal(readFileSync(store.getJob(job.id)!.log, "utf8").trim(), "big");
+  });
+
+  test("with labels set, every sandbox is made first on a node that has them, a sized one too", async () => {
+    const dir = tempdir();
+    fakeSsh(dir);
+    const path = process.env.PATH;
+    process.env.PATH = `${dir}:${path}`;
+    cleanups.push(() => (process.env.PATH = path));
+    const store = Store.open(":memory:");
+    cleanups.push(() => store.close());
+    const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null });
+    cleanups.push(() => jobs.shutdown().catch(() => undefined));
+    const work = join(dir, "work");
+    mkdirSync(work);
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", labels: ["lax2"] } }), () => []));
+
+    const plain = jobs.start("s1", "build", "echo small", work, null, false, false);
+    await until("it ends", () => store.getJob(plain.id)!.state === "exited");
+    const sized = jobs.start("s1", "build", "echo big", work, null, false, false, "large");
+    await until("it ends", () => store.getJob(sized.id)!.state === "exited");
+    const name = sandboxName(keyOfRunner(runnerId("claude", "s1")));
+    const big = sandboxName(`${keyOfRunner(runnerId("claude", "s1"))}|large`);
+    assert.deepEqual(readFileSync(join(dir, "made"), "utf8").trim().split("\n"), [`_.ws@host create ${name} lax2`, `_.ws@host create ${big} --size large lax2`]);
+    assert.deepEqual(destinations(dir), [`${name}.ws@host`, `${big}.ws@host`]);
+    assert.equal(readFileSync(store.getJob(plain.id)!.log, "utf8").trim(), "small");
   });
 
   test("nothing goes to a sandbox for a station that has not placed itself, or has it off", () => {
