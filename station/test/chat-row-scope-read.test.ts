@@ -1,8 +1,14 @@
-// A change to one chat must not read the viewer's marks and answers for every other chat.
+// A change to one chat must not read the viewer's marks and answers, nor any chat's shares, openers or snapshots, for
+// every other chat.
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { answersSince, dismissed, keptChats, makeStore } from "../src/read/store.ts";
+import { ops } from "../src/read/ops.ts";
+import { answersSince, dismissed, keptChats, makeStore, openStore } from "../src/read/store.ts";
+import { Store, newMessage } from "../src/store/store.ts";
 
 test("a scoped chat update reads marks and answers only for those chats", () => {
   const db = new DatabaseSync(":memory:");
@@ -39,5 +45,69 @@ test("a scoped chat update reads marks and answers only for those chats", () => 
     assert.deepEqual(counts, { dismissed: 1, kept_chats: 1, closed_cards: 0 });
   } finally {
     db.close();
+  }
+});
+
+test("a change's sidebar items and a chat's view read their own shares, openers and snapshots, not every chat's", () => {
+  // Each read every chat ever shared, opened by an agent or published: at every sidebar change, and every chat told.
+  const dir = mkdtempSync(join(tmpdir(), "chat-row-scope-"));
+  const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"));
+  try {
+    store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
+    const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
+    store.joinThread(chat.id, "k", "ember");
+    store.insertMessage(newMessage(chat.id, "1.2", "person", "ada@x.com", "看一下"));
+    const shared = JSON.stringify([{ workspace: "w2", name: "W2", used: Date.now() }]);
+    const share = store.db.prepare("INSERT INTO chat_shares (session, shared, write, by, at) VALUES (?, ?, 0, 'ada@x.com', ?)");
+    const open = store.db.prepare("INSERT INTO opened_chats (child_station, child, parent_station, parent, key, created_at) VALUES ('', ?, '', ?, ?, 1)");
+    const publish = store.db.prepare("INSERT INTO published (id, thread, key, title, created_by, by_name, created_at, upto, size) VALUES (?, ?, 'k', 't', 'ada@x.com', 'Ada', 1, 1, 1)");
+    share.run("k", shared, Date.now());
+    open.run("k", "p", "o");
+    publish.run("mine", chat.id);
+    for (let i = 0; i < 500; i++) {
+      share.run(`s${i}`, shared, Date.now());
+      open.run(`c${i}`, `p${i}`, `o${i}`);
+      open.run(`d${i}`, "k2", `q${i}`);
+      publish.run(`x${i}`, 1000 + i);
+    }
+    const reader = openStore(dir);
+    const counts: Record<string, number> = {};
+    const db = reader.db;
+    (reader as any).db = new Proxy(db, {
+      get: (target, property) => {
+        if (property !== "prepare") {
+          const value = Reflect.get(target, property, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        }
+        return (sql: string) => {
+          const statement = target.prepare(sql);
+          const table = /\bFROM (chat_shares|opened_chats|published)\b/i.exec(sql)?.[1];
+          return new Proxy(statement, {
+            get: (s, p) => {
+              const v = Reflect.get(s, p, s);
+              if (p !== "all" && p !== "get") return typeof v === "function" ? v.bind(s) : v;
+              return (...args: any[]) => {
+                const rows = v.apply(s, args);
+                if (table) counts[table] = (counts[table] ?? 0) + (Array.isArray(rows) ? rows.length : rows ? 1 : 0);
+                return rows;
+              };
+            },
+          });
+        };
+      },
+    });
+    try {
+      const viewer = { sub: "ada@x.com", email: "ada@x.com", name: "Ada", role: "member", workspace: "w", device: "d" };
+      const rows = (ops.chatRows!(reader, { viewer, sessions: ["k"], threads: [chat.id] }) as any).rows;
+      assert.deepEqual(rows.map((r: any) => [r.id, r.opener?.session, r.xshare?.to]), [["k", "p", ["w2"]]]);
+      const view = ops.thread!(reader, { viewer, id: String(chat.id), lang: "zh" }) as any;
+      assert.deepEqual([view.xshare?.to.map((t: any) => t.workspace), view.published?.map((p: any) => p.id)], [["w2"], ["mine"]]);
+      assert.deepEqual(counts, { chat_shares: 2, opened_chats: 1, published: 1 });
+    } finally {
+      db.close();
+    }
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });

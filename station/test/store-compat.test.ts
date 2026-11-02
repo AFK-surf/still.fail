@@ -50,12 +50,12 @@ const ADDED: [string, string][] = [
 ];
 /// What those columns bring with them: an index of its own (letters; the sessions counted by connect and workspace; the
 /// threads' homes), and the `merged` view saying the column (letters).
-const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home", "threads_own"];
+const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home", "threads_own", "entries_said", "entries_agent_at"];
 const MERGED_ADDS = [", m.letter"];
 /// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`, `addUsageQuarters`): each with its columns,
 /// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes
 /// (`addUsageColumns`).
-const MADE = ["usage_totals", "usage_compactions", "usage_quarters", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries", "card_outcomes"];
+const MADE = ["usage_totals", "usage_compactions", "usage_quarters", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries", "card_outcomes", "session_turns"];
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {
@@ -146,6 +146,8 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
         return [JSON.stringify([r.thread, r.n, said !== undefined, said !== undefined && typeof said.text === "string" && labels.has(said.text.trim())])];
       });
       assert.deepEqual((store.db.prepare("SELECT thread, n, answered, said FROM card_outcomes ORDER BY thread, n").all() as any[]).map((r) => JSON.stringify([r.thread, r.n, r.answered === 1, r.said === 1])), cards);
+      // Each session's turns, counted (schema.ts SESSION_TURNS), as its turns are.
+      assert.deepEqual(rows("SELECT session, n FROM session_turns ORDER BY session"), rows("SELECT session_key AS session, COUNT(*) AS n FROM turns GROUP BY session_key ORDER BY session_key"));
       assert.deepEqual(
         rows("SELECT session, thread, n FROM session_first ORDER BY session"),
         rows("SELECT d.session, d.thread, d.n FROM deliveries d WHERE d.rowid = (SELECT MIN(rowid) FROM deliveries x WHERE x.session = d.session) ORDER BY d.session"),

@@ -15,7 +15,7 @@ import { USAGE_GROUPS, type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import { QUARTER_MS } from "../store/rows.ts";
 import {
-  CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LETTER_SQL, type Membership, type MessageRow, OPTIONS_BEFORE,
+  CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, type Membership, type MessageRow, OPTIONS_BEFORE,
   PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, isLetter, liveShare, mergeEntries,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -371,18 +371,16 @@ function unreadCount(s: Store, viewer: string, thread: number, read: number): nu
 function unreadOf(s: Store, thread: number, read: number, selves: string[], at?: number | null): number {
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.messages.filter((m) => m.n > read && !m.letter && !(m.authorKind === "person" && selves.includes(m.author))).length;
-  return one(
-    s,
-    `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
-     AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?))) AND NOT ${LETTER_SQL}`,
-    thread,
-    read,
-    JSON.stringify(selves),
-  ).c;
+  return one(s, UNREAD, thread, read, JSON.stringify(selves)).c;
 }
 
+/// A chat's messages after where a viewer read (`?2`) but their own (`?3`, a JSON list) and letters, counted from the
+/// index of its messages alone (store/schema.ts entries_said): from the messages themselves, each was a page read.
+export const UNREAD = `SELECT COUNT(*) AS c FROM entries WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND letter IS NULL
+  AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?3)))`;
+
 /// Everyone who wrote in a thread, as creator references (a Slack user through a connect in it), earliest first.
-function threadPeople(s: Store, thread: number, surface: string, at?: number | null): string[] {
+export function threadPeople(s: Store, thread: number, surface: string, at?: number | null): string[] {
   const connect: string | null = one(s, "SELECT MIN(connect) AS c FROM thread_sessions WHERE thread = ?", thread).c;
   let authors: string[];
   const archived = archivedSummary(s, thread, at);
@@ -396,7 +394,7 @@ function threadPeople(s: Store, thread: number, surface: string, at?: number | n
 }
 
 /// The first thing a person said in it (up to 300 characters).
-function firstText(s: Store, thread: number, at?: number | null): string | null {
+export function firstText(s: Store, thread: number, at?: number | null): string | null {
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.firstText;
   const r = one(s, "SELECT substr(m.text, 1, 300) AS t FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?", thread);
@@ -466,12 +464,22 @@ export function archiveVerdict(s: Store, thread: number): Json | null {
 
 // ── chats shared with other workspaces (chat_shares) ──
 
+// What a sidebar's items a change touched, or a chat, are read by: theirs alone, each by its key (`?`: a JSON list of
+// them). The rows of every chat ever shared, opened or published were read at each sidebar change and each chat told.
+export const SHARES_OF = "SELECT * FROM chat_shares WHERE session IN (SELECT value FROM json_each(?))";
+const OPENERS = "SELECT o.child, o.parent_station, o.parent, o.opener_title, p.title AS parent_title FROM opened_chats o LEFT JOIN sessions p ON o.parent_station = '' AND p.key = o.parent";
+export const OPENERS_OF = `${OPENERS} WHERE o.child_station = '' AND o.child IN (SELECT value FROM json_each(?))`;
+const OPENED = "SELECT o.parent, o.child_station, o.child, o.title, c.title AS child_title FROM opened_chats o LEFT JOIN sessions c ON o.child_station = '' AND c.key = o.child";
+export const OPENED_OF = `${OPENED} WHERE o.parent_station = '' AND o.parent IN (SELECT value FROM json_each(?)) ORDER BY o.created_at, o.rowid`;
+export const PUBLISHED_OF = "SELECT * FROM published WHERE thread IN (SELECT value FROM json_each(?)) ORDER BY created_at DESC, id";
+
 /// What each chat shared with other workspaces is shared with now (its shares not lapsed, store/rows.ts), by the
-/// session key its link names (none on a database from before the table).
-export function chatShares(s: Store): Map<string, { to: { workspace: string; name: string }[]; write: boolean; by: string; at: number }> {
+/// session key its link names (none on a database from before the table): of those `sessions` name alone (a sidebar's
+/// items a change touched, a chat), or of all.
+export function chatShares(s: Store, sessions: string[] | null = null): Map<string, { to: { workspace: string; name: string }[]; write: boolean; by: string; at: number }> {
   let rows: Json[];
   try {
-    rows = all(s, "SELECT * FROM chat_shares");
+    rows = sessions === null ? all(s, "SELECT * FROM chat_shares") : all(s, SHARES_OF, JSON.stringify(sessions));
   } catch {
     return new Map();
   }
@@ -489,10 +497,11 @@ export function chatShares(s: Store): Map<string, { to: { workspace: string; nam
 /// The chats of this station another agent opened (chat_create), by their session's key: the session that opened each,
 /// on its station (null: this one), and what it was called then, else (one of this station's, opened before that was
 /// kept) its session's title. None on a database from before the table or the column.
-export function openers(s: Store): Map<string, { station: string | null; session: string; title: string | null }> {
+/// Of those `children` name alone (a sidebar's items a change touched), or of all.
+export function openers(s: Store, children: string[] | null = null): Map<string, { station: string | null; session: string; title: string | null }> {
   let rows: Json[];
   try {
-    rows = all(s, "SELECT o.child, o.parent_station, o.parent, o.opener_title, p.title AS parent_title FROM opened_chats o LEFT JOIN sessions p ON o.parent_station = '' AND p.key = o.parent WHERE o.child_station = ''");
+    rows = children === null ? all(s, `${OPENERS} WHERE o.child_station = ''`) : all(s, OPENERS_OF, JSON.stringify(children));
   } catch {
     return new Map();
   }
@@ -506,10 +515,11 @@ export function openers(s: Store): Map<string, { station: string | null; session
 
 /// The chats each session of this station opened (chat_create), by its key, the first first: each on its station
 /// (null: this one), its session, and its title as given then, else (one of this station's) its session's.
-export function openedChats(s: Store): Map<string, { station: string | null; session: string; title: string | null }[]> {
+/// Of those `parents` name alone (a sidebar's items a change touched), or of all.
+export function openedChats(s: Store, parents: string[] | null = null): Map<string, { station: string | null; session: string; title: string | null }[]> {
   let rows: Json[];
   try {
-    rows = all(s, "SELECT o.parent, o.child_station, o.child, o.title, c.title AS child_title FROM opened_chats o LEFT JOIN sessions c ON o.child_station = '' AND c.key = o.child WHERE o.parent_station = '' ORDER BY o.created_at, o.rowid");
+    rows = parents === null ? all(s, `${OPENED} WHERE o.parent_station = '' ORDER BY o.created_at, o.rowid`) : all(s, OPENED_OF, JSON.stringify(parents));
   } catch {
     return new Map();
   }
@@ -524,11 +534,12 @@ export function openedChats(s: Store): Map<string, { station: string | null; ses
 
 // ── chats published as snapshots (published) ──
 
-/// Each chat's published snapshots, the latest first, by thread (none on a database from before the table).
-export function publishedByThread(s: Store): Map<number, { id: string; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number }[]> {
+/// Each chat's published snapshots, the latest first, by thread (none on a database from before the table): of those
+/// `threads` name alone (a chat), or of all.
+export function publishedByThread(s: Store, threads: number[] | null = null): Map<number, { id: string; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number }[]> {
   let rows: Json[];
   try {
-    rows = all(s, "SELECT * FROM published ORDER BY created_at DESC, id");
+    rows = threads === null ? all(s, "SELECT * FROM published ORDER BY created_at DESC, id") : all(s, PUBLISHED_OF, JSON.stringify(threads));
   } catch {
     return new Map();
   }
@@ -579,12 +590,15 @@ export function pendingCard(s: Store, thread: number): [MessageRow, Json] | null
   return m ? [toMessage(m), card] : null;
 }
 
+/// An agent's latest message in a chat during a turn (`?2` to `?3`, ms), by the index of agents' messages by time (store/
+/// schema.ts entries_agent_at): by the chat alone, all it had was read for it.
+export const ASKED_DURING = "SELECT max(n) AS n FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?";
+
 /// The message an agent's need without a card asks with, while no person has written after it: the one its turn is
 /// about (`about`), else the agent's latest message during the turn; with the two messages before it.
 export function askingMessage(s: Store, thread: number, about: number | null, during: [number, number | bigint]): [MessageRow, MessageRow[]] | null {
   if (isArchived(s, thread)) return null;
-  const n: number | null =
-    about ?? one(s, "SELECT max(n) AS n FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?", thread, during[0], during[1]).n;
+  const n: number | null = about ?? one(s, ASKED_DURING, thread, during[0], during[1]).n;
   if (n === null) return null;
   const answered = one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
   // A post with a card is pending_card's: one no longer pending was answered, closed or withdrawn.
@@ -699,19 +713,29 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
   return v;
 }
 
+/// Each session's counts and last turn (`sessionStats`), each by a lookup the size of what it finds: its turns as the
+/// database keeps them counted (store/schema.ts SESSION_TURNS), its messages not delivered yet by the index of those
+/// alone (as store.ts STATS_OF), its first words and its latest turn. Its every turn counted and its every delivery read
+/// (the deliveries by session and thread), each summary of a long session read some 65 pages, from the disk on ccvm
+/// short of memory (2026-11-02), as often as the session changed.
+export const SESSION_STATS = `SELECT s.key,
+       COALESCE((SELECT c.n FROM session_turns c WHERE c.session = s.key), 0) AS turns,
+       ((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
+         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
+       (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
+       l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
+     FROM sessions s
+     LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)`;
+
+/// A session's latest turn, as `sessionStats` has it, by the index of its turns alone.
+export const LAST_TURN = "SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1";
+
 /// Per session (or for one): turn count, the latest turn (with its id: a client holding the turns puts it in place
 /// rather than read them all again), undelivered messages and the first one it heard.
 /// Each session's counts and last turn: one's, those named (`keys`), or all (null).
 export function sessionStats(s: Store, key: string | string[] | null): Map<string, SessionStats> {
   if (Array.isArray(key) && key.length === 0) return new Map();
-  const sql = `SELECT s.key,
-       (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
-       ((SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) +
-         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
-       (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
-       l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
-     FROM sessions s
-     LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
+  const sql = `${SESSION_STATS}
      ${Array.isArray(key) ? `WHERE s.key IN (${key.map(() => "?").join(", ")})` : key !== null ? "WHERE s.key = ?" : ""}`;
   const rows = Array.isArray(key) ? all(s, sql, ...key) : key !== null ? all(s, sql, key) : all(s, sql);
   return new Map(
@@ -720,6 +744,13 @@ export function sessionStats(s: Store, key: string | string[] | null): Map<strin
       { turns: r.turns, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id } },
     ]),
   );
+}
+
+/// A session's latest turn (as `sessionStats` has it, with its id), without the counts: what a notice of how it ended
+/// needs.
+export function lastTurn(s: Store, key: string): TurnSummary | null {
+  const r = one(s, LAST_TURN, key);
+  return r ? { ...turnSummary(r, r.started_at), id: r.id } : null;
 }
 
 // ── jobs ──

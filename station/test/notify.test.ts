@@ -78,6 +78,40 @@ test("a blocked turn's ask is told once, while it waits", () => {
   assert.equal(kinds("t5")?.fresh, true);
 });
 
+test("a notice reads its chat's name and whom to tell, nothing counted over the chat or the session", () => {
+  // As lists have the chat, a notice counted all its messages (its unread, for no one) and all its session's turns:
+  // 479 pages of a chat of 534 messages on ccvm short of memory (2026-11-02), 3 to 16 s a notice, every other telling
+  // waiting behind it.
+  const dir = mkdtempSync(join(tmpdir(), "notify-"));
+  let now = 1000;
+  const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"), { currentTimeMillisUnsafe: () => now++ } as never);
+  const reader = openStore(dir);
+  const asked: string[] = [];
+  const db = reader.db;
+  (reader as any).db = new Proxy(db, {
+    get: (target, property) => {
+      if (property === "prepare") return (sql: string) => (asked.push(sql), target.prepare(sql));
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
+  const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
+  store.joinThread(chat.id, "k", "ember");
+  for (let i = 0; i < 20; i++) {
+    store.insertMessage(newMessage(chat.id, `1.${2 * i + 2}`, "person", "bob@x.com", "再看看"));
+    store.startTurn(`t${i}`, "k", "input");
+    store.insertMessage(newMessage(chat.id, `1.${2 * i + 3}`, "agent", "k", "要不要改？"));
+    store.endTurn(`t${i}`, "completed", null, "block", null);
+  }
+  const told = ops.turnNotices!(reader, { key: "k", since: 0, ended: null, lang: "zh" }) as any;
+  assert.deepEqual(told.notices.map((n: any) => [n.kind, n.to.join(","), n.text]), [["block", "ada@x.com,bob@x.com", "要不要改？"]]);
+  const entries = store.entriesBefore(chat.id, null, 1);
+  const heard = ops.saidNotices!(reader, { thread: chat.id, entries: entries.map((e) => ({ ...e, kind: "message", authorKind: "person", author: "bob@x.com", text: "在吗" })), since: 0, lang: "zh" }) as any[];
+  assert.deepEqual(heard.map((n) => [n.kind, n.to.join(","), n.text]), [["message", "ada@x.com", "在吗"]]);
+  assert.deepEqual(asked.filter((sql) => /\bCOUNT\(/i.test(sql)), []);
+});
+
 test("a chat's people hear of its turns and of each other, once, gathered", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "notify-"));
   const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"));

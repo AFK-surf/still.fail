@@ -134,12 +134,13 @@ export const LETTER_SQL = "(letter IS NOT NULL)";
 
 /// The Slack and Feishu threads a still.fail chat can copy what people send to when they ask (`cc`, docs/relay.md
 /// "抄送"): every one its agents are in, the one said in last first, at most 20; with a connect that posts there. One
-/// `?`: the chat's thread id.
+/// `?`: the chat's thread id. When each was said in last is its last entry's time (schema.ts thread_state): as the
+/// latest of all its entries, each thread's every entry was read, at each telling of the chat.
 export const CC_THREADS_SQL = `SELECT t.*, o.connect FROM thread_sessions m
   JOIN thread_sessions o ON o.session = m.session JOIN threads t ON t.id = o.thread
   WHERE m.thread = ? AND t.surface != '${STILLFAIL_SURFACE}'
   GROUP BY t.id
-  ORDER BY (SELECT MAX(e.at) FROM entries e WHERE e.thread = t.id) DESC, t.created_at DESC, t.id DESC
+  ORDER BY (SELECT e.at FROM thread_state st JOIN entries e ON e.thread = st.thread AND e.n = st.last_n WHERE st.thread = t.id) DESC, t.created_at DESC, t.id DESC
   LIMIT 20`;
 
 /// The letter an entry's `letter` column (or an archive file's entry) holds (absent: none, or one not read).
