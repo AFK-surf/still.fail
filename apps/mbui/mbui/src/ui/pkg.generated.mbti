@@ -2449,6 +2449,7 @@ pub fn Tester::end_run(Self, &@hostapi.Host) -> Unit
 pub fn Tester::enter(Self) -> Unit
 pub fn Tester::face_wider(Self, Int32, Double) -> Unit
 pub fn Tester::failed_images(Self) -> Array[Int32]
+pub fn Tester::failed_images_drawn(Self) -> Array[Int32]
 pub fn Tester::family_given(Self, Int32) -> String
 pub fn Tester::field_words(Self) -> String
 pub fn Tester::film(Self, String, fps? : Double, max? : Int32, draw~ : (Self) -> Bool, put~ : (Int32) -> Bool) -> FilmRun

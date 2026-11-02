@@ -64,3 +64,26 @@ fn scene_tester(
   }
   t
 }
+
+///|
+/// What the captured scene cannot draw. A film may show an image while it is still loading, whereas a still must
+/// wait for its pending images; a failed decode needed in the frame or a native view's contents cannot be drawn.
+fn scene_drawable(t : @ui.Tester, kind : String, pending_ok : Bool) -> Bool {
+  if !pending_ok && !t.pending().is_empty() {
+    say("\{kind}: images or native views are still pending")
+    return false
+  }
+  let failed = t.failed_images_drawn()
+  if !failed.is_empty() {
+    for id in failed {
+      say("\{kind}: image could not be decoded: \{t.image_src(id)}")
+    }
+    return false
+  }
+  // A native web or video view is a hole in mbui's canvas, not content this renderer can draw.
+  if !t.holes().is_empty() {
+    say("\{kind}: native view content cannot be drawn offscreen")
+    return false
+  }
+  true
+}

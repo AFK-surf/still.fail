@@ -68,6 +68,8 @@ struct FakeHost {
   /// what each decode asked for is of: its source (bytes handed over, the source they were handed for)
   image_srcs : Map[Int, String]
   images : Map[Int, FakeImage]
+  /// Failed decodes of pictures the last painted frame needed, not every failed decode still in the cache.
+  frame_failed_images : Array[Int]
   // what bold adds to a cluster's advance, in ems (0 by default: weight
   // changes nothing)
   mut bold : Double
