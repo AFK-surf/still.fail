@@ -61,6 +61,8 @@ export function launcher(args: string[]): Control {
     for (let at = carry.indexOf("\n"); at >= 0; at = carry.indexOf("\n")) {
       const line = carry.slice(0, at);
       carry = carry.slice(at + 1);
+      // A launcher taking over from one before it ends with a newline what that one may have left halfway (run.rs).
+      if (line === "") continue;
       try {
         const said = JSON.parse(line);
         if (said.op === "carried") {

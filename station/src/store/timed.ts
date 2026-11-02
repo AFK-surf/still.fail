@@ -17,11 +17,12 @@ export function shortSql(sql: string): string {
   return one.length > 300 ? `${one.slice(0, 300)}…` : one;
 }
 
-/// Says a statement that took `ms` (null rows: one that answers none, or one), and who asked it (`askedBy`).
-export type Said = (sql: string, ms: number, rows: number | null, by: string) => void;
+/// Says a statement that took `ms` (null rows: one that answers none, or one), and who asked it (`askedBy`); `failed`:
+/// what it failed with, if it did.
+export type Said = (sql: string, ms: number, rows: number | null, by: string, failed?: string) => void;
 
-const inLog: Said = (sql, ms, rows, by) =>
-  log.warn("store", "a slow query on the main thread", { ms: Math.round(ms), ...(rows !== null ? { rows } : {}), by, sql: shortSql(sql) });
+const inLog: Said = (sql, ms, rows, by, failed) =>
+  log.warn("store", "a slow query on the main thread", { ms: Math.round(ms), ...(rows !== null ? { rows } : {}), ...(failed !== undefined ? { failed } : {}), by, sql: shortSql(sql) });
 
 /// What the main thread's statements took since `takeQueries` was last asked: many of a few milliseconds each, none
 /// slow, hold it as long as one that is (a page read from the disk at each, on a machine short of memory).
@@ -39,18 +40,28 @@ export function timed(db: DatabaseSync, said: Said | null = isMainThread ? inLog
   if (said === null) return db;
   const time = <T>(sql: () => string, run: () => T): T => {
     const at = now();
-    const answer = run();
-    const ms = now() - at;
-    let by: string | null = null;
-    const who = () => {
-      if (by !== null) return by;
-      const where: { stack?: string } = {};
-      Error.captureStackTrace(where, time);
-      return (by = askedBy(where.stack));
-    };
-    waited(queried, ms, who);
-    if (ms >= SLOW_MS) said(sql(), ms, Array.isArray(answer) ? answer.length : null, who());
-    return answer;
+    let answer: T | undefined;
+    // One that fails is said too: a write waiting for another connection's lock fails once the busy time is out (5 s,
+    // store.ts), as on ccvm while another process wrote (2026-11-02), and none of those waits was said.
+    let failed: string | undefined;
+    try {
+      answer = run();
+      return answer;
+    } catch (error) {
+      failed = error instanceof Error ? error.message : String(error);
+      throw error;
+    } finally {
+      const ms = now() - at;
+      let by: string | null = null;
+      const who = () => {
+        if (by !== null) return by;
+        const where: { stack?: string } = {};
+        Error.captureStackTrace(where, time);
+        return (by = askedBy(where.stack));
+      };
+      waited(queried, ms, who);
+      if (ms >= SLOW_MS) said(sql(), ms, Array.isArray(answer) ? answer.length : null, who(), failed);
+    }
   };
   const statement = (s: StatementSync): StatementSync =>
     new Proxy(s, {
