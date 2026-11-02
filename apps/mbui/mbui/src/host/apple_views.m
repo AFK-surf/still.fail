@@ -1580,11 +1580,13 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
   out[4] = s.height;
   out[5] = v.answered;
   out[6] = v.playerLayer.readyForDisplay ? 1 : 0;
-  // buffering only while a read of the app's bytes is under way: a seek within what the player has already (a finger
-  // along the timeline over what has played) waits on its own decoding, not on the network
+  // buffering only while the player waits and a read of the app's bytes is under way: a seek within what the player
+  // has already (a finger along the timeline over what has played) waits on its own decoding, not on the network; and
+  // one playing what came (playWhatCame) goes on though it reckons it may not keep up (playbackLikelyToKeepUp), its
+  // picture moving on, the next bytes read meanwhile: not buffering until it stops to wait for them
   BOOL waiting = v.player.timeControlStatus == AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate;
   BOOL reading = v.pending.count > 0 || v.taken.count > 0;
-  out[7] = ((waiting || (v.player.rate > 0 && !it.playbackLikelyToKeepUp)) && reading) ? 1 : 0;
+  out[7] = (waiting && reading) ? 1 : 0;
   // how far on it has what it needs: the end of the loaded range the playhead is in
   double now = out[1];
   for (NSValue *r in it.loadedTimeRanges) {

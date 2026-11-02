@@ -210,6 +210,77 @@ static void video_steps(NSString *file, NSString *mime, double dur, double vw, d
   }];
 }
 
+// A video whose bytes come slower than it plays (as over a slow network): it plays what came (playWhatCame), stops
+// where that runs out and plays again once the next has come; while its picture moves on it is not buffering, though
+// the player reckons it will not keep up.
+static void slow_steps(NSString *file, NSString *mime, double rate) {
+  NSData *data = [NSData dataWithContentsOfFile:file];
+  __block int32_t vid = 0;
+  double *info = calloc(10, sizeof(double));
+  NSString *tag = [@"slow " stringByAppendingString:file.lastPathComponent];
+  // the reads asked and not yet answered in full, each its id, where it is up to and where it ends
+  NSMutableArray<NSArray<NSNumber *> *> *open = [NSMutableArray new];
+  __block double began = 0, sent = 0;
+  void (^pump)(void) = ^{
+    double o[2];
+    int32_t rid;
+    while ((rid = mb_host_view_read_next(vid, o)) != 0) {
+      if (rid < 0) {
+        for (NSUInteger i = 0; i < open.count; i++)
+          if (open[i][0].intValue == -rid) { [open removeObjectAtIndex:i]; break; }
+        continue;
+      }
+      long long off = (long long)o[0], end = MIN((long long)data.length, off + MIN((long long)o[1], 1 << 20));
+      [open addObject:@[@(rid), @(off), @(end)]];
+    }
+    // what the rate has brought since it began (by the clock: ticks slow on a busy machine), to the oldest read first
+    if (began == 0) began = CACurrentMediaTime();
+    long long budget = (long long)(rate * (CACurrentMediaTime() - began) - sent);
+    while (budget > 0 && open.count) {
+      int32_t r = open[0][0].intValue;
+      long long at = open[0][1].longLongValue, end = open[0][2].longLongValue, k = MIN(budget, end - at);
+      if (k > 0) mb_host_view_read_answer(vid, r, mbytes((const uint8_t *)data.bytes + at, (size_t)k), (double)data.length, 1);
+      budget -= k;
+      sent += k;
+      if (at + k >= end) {
+        mb_host_view_read_answer(vid, r, mbytes(data.bytes, 0), (double)data.length, 0);
+        [open removeObjectAtIndex:0];
+      } else {
+        open[0] = @[@(r), @(at + k), @(end)];
+      }
+    }
+    mb_host_view_info(vid, info);
+  };
+  [steps addObject:^BOOL(int t) {
+    vid = mb_host_view_open(1, mb_string_from_ns(mime));
+    check(vid > 0, [NSString stringWithFormat:@"%@: opened (id %d)", tag, vid]);
+    mb_host_view_place(vid, 40, 30, 320, 240, 40, 30, 360, 270, 0, 0, 0, 0, 1);
+    mb_host_view_control(vid, 1, 0);
+    return YES;
+  }];
+  __block int moving = 0, said = 0;
+  __block BOOL moved_before = NO;
+  __block double last = -1;
+  __block double t0 = 0;
+  [steps addObject:^BOOL(int t) {
+    pump();
+    if (t == 0) t0 = CACurrentMediaTime();
+    // its picture moving on over this tick and the one before
+    BOOL moved = last >= 0 && info[1] > last;
+    if (moved && moved_before) {
+      moving++;
+      if (info[7] != 0) said++;
+    }
+    moved_before = moved;
+    last = info[1];
+    if (info[1] < 4000 && CACurrentMediaTime() - t0 < 40) return NO;
+    check(info[1] >= 4000 && moving > 0, [NSString stringWithFormat:@"%@: played to %.0f ms", tag, info[1]]);
+    check(said <= 3, [NSString stringWithFormat:@"%@: buffering said in %d of the %d ticks it played on", tag, said, moving]);
+    mb_host_view_close(vid);
+    return YES;
+  }];
+}
+
 // The same host reads: a valid WebM, a damaged MP4, and a read that fails. The first may become playable on a future
 // system, so compare it to the same system opening the file directly instead of assuming a particular codec set.
 static void failure_steps(NSString *file, NSString *mime, int kind) {
@@ -395,6 +466,8 @@ int main(int argc, char **argv) {
     win.contentView = box;
     [win orderFrontRegardless];
     steps = [NSMutableArray new];
+    // test.mp4 is some 1.5 MB a second
+    slow_steps([out_dir stringByAppendingPathComponent:@"test.mp4"], @"video/mp4", 0.75e6);
     for (int i = 3; i < argc; i++) {
       NSArray<NSString *> *a = [@(argv[i]) componentsSeparatedByString:@"|"];
       video_steps(a[0], a[1], a[2].doubleValue, a[3].doubleValue, a[4].doubleValue);
@@ -409,7 +482,7 @@ int main(int argc, char **argv) {
     [NSTimer scheduledTimerWithTimeInterval:1.0 / 60
                                     repeats:YES
                                       block:^(NSTimer *tm) {
-                                        if (steps.count == 0 || CACurrentMediaTime() - start > 120) {
+                                        if (steps.count == 0 || CACurrentMediaTime() - start > 180) {
                                           if (steps.count) check(NO, @"timed out");
                                           printf("SELFTEST %s (%d failed; frames asked %d)\n", fails ? "FAIL" : "PASS",
                                                  fails, frames_asked);
