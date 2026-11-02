@@ -320,6 +320,27 @@ test "an agent's link to an archived chat written bare: its title as the core sa
 }
 
 ///|
+test "a link to one message of a chat written bare: the chat's title, not its address" {
+  let calls : Array[Made] = []
+  let link = "https://app.still.fail/o/ws1/st1/c-old?message=2"
+  let words = "看 \{link}"
+  let t = edited_core(calls, "chat", fn(name, v) {
+    if name == "chat" {
+      with_chat_message(v, 11.0, [
+        ("text", Json::string(words)),
+        ("md", [["p", [[0, 2], ["a", [[2, 50]], { "href": Json::string(link) }]]]]),
+        ("chats", [{ "href": Json::string(link), "title": "旧的对话" }]),
+      ])
+    } else {
+      v
+    }
+  })
+  assert_true(@sf.is_chat_link(link))
+  assert_true(t.find("看 @旧的对话") is Some(_), msg="its title, not its link")
+  assert_true(t.find(link) is None)
+}
+
+///|
 test "a Slack user's name in a history: 这是我 binds them to the viewer (slack.identity)" {
   let calls : Array[Made] = []
   // the history's first item (what it received): from a Slack user
