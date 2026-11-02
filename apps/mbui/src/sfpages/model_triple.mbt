@@ -660,15 +660,33 @@ fn triple_body(
     if !liked.is_empty() {
       parts.push(starred)
     }
-    if !near.is_empty() {
+    // (in a sheet the way to all of them and those starred scroll by themselves in what the rest leaves, those used
+    // most staying put by how it runs, as a kind's models do: a sheet held to its most, a short window's or one the
+    // keyboard has risen into, has no room for all of them; 2026-11-02 the person's phone, 账号 over 速度 and over a
+    // model)
+    let kept = sheet && !near.is_empty()
+    if !near.is_empty() && !kept {
       parts.push(used)
     }
-    let apart = fn() { c.box(style=triple_parts, fn() { for part in parts { part() } }) |> ignore }
+    let apart = fn() {
+      if sheet {
+        @sf.panel_column(c, "triple/first", triple_list_h, triple_parts, fn() { for part in parts { part() } })
+      } else {
+        c.box(style=triple_parts, fn() { for part in parts { part() } }) |> ignore
+      }
+    }
+    let used_kept = fn() { c.box(style=if up { triple_part_under } else { triple_part_over }, used) |> ignore }
     if up {
       apart()
+      if kept {
+        used_kept()
+      }
       how()
     } else {
       how()
+      if kept {
+        used_kept()
+      }
       parts.rev_in_place()
       apart()
     }
@@ -1458,6 +1476,16 @@ let triple_check_room : @ui.Style = @ui.css("w=S3_5")
 /// The parts of the panel's first level, apart: those starred, those used most, the way to all of them.
 // kept across runs: a value (no field of it changes)
 let triple_parts : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+/// Those used most kept out of what scrolls in a sheet, as far from it as triple_parts' parts are apart: under it
+/// (opening up), over it (opening down).
+// kept across runs: a value (no field of it changes)
+let triple_part_under : @ui.Style = @ui.css("w=Full mt=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_part_over : @ui.Style = @ui.css("w=Full mb=S3")
 
 ///|
 /// The star at the end of one of those starred.
