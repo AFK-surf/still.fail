@@ -55,7 +55,7 @@ pub fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
     "chat-things-side" => { "ws1/st1:s-c1": kept("things") }
     "chat-jobs-side" => { "ws1/st1:s-c1": kept("jobs") }
     "chat-service-side" => { "ws1/st1:s-c1": kept("service:j-web") }
-    "chat-history-side" | "chat-model-pop" => { "ws1/st1:s-c1": kept("s-c1") }
+    "chat-history-side" | "chat-model-pop" | "chat-model-accounts" => { "ws1/st1:s-c1": kept("s-c1") }
     "chat-tabs-side" => { "ws1/st1:s-c1": { "tabs": ["s-c1", "jobs"], "active": "jobs" } }
     _ => {}
   }
