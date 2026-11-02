@@ -22,11 +22,17 @@ let presented_in_tree : Ref[Bool] = Ref(false)
 /// draws them.
 fn tree_draws(p : Presented, sheet : Bool) -> Bool {
   presented_in_tree.val &&
-  !sheet &&
   (
-    p.shows is (Confirm(_, _, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _)) ||
-    p.shows is Pick(_, _, _, _, _, _) ||
-    (p.shows is Panel(x) && (panel_popover_of(x, p.from) || panel_centred_of(x, p.from)))
+    // (a stage on every screen the same, never a sheet: stage_node)
+    (p.shows is Panel(x) && x.stage) ||
+    (
+      !sheet &&
+      (
+        p.shows is (Confirm(_, _, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _)) ||
+        p.shows is Pick(_, _, _, _, _, _) ||
+        (p.shows is Panel(x) && (panel_popover_of(x, p.from) || panel_centred_of(x, p.from)))
+      )
+    )
   )
 }
 
@@ -167,6 +173,19 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             gone~,
           )
         }
+        Panel(x) if x.stage =>
+          stage_node(
+            row,
+            "sf-present/\{serial}",
+            open,
+            x,
+            fn() { done(fn() {  }) },
+            fn() { dismissed_now(serial) },
+            p,
+            shown~,
+            gone~,
+            covered~,
+          )
         Panel(x) if p.from == Unanchored || x.form =>
           panel_centred_node(
             row,

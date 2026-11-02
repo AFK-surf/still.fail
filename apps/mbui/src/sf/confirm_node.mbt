@@ -47,7 +47,8 @@ pub fn confirm_node(
 /// is under it dimmed only while `dims` (read as it changes: one presented under it that dims
 /// already, presenters' scrim_owner, and its ground clear). `first_stop`: the focus given as it opens to the first of
 /// what it holds that takes it, where the panel names no node of its own for it (Ctx::overlay's initial_focus by
-/// default: a panel's, with its fields; a confirm's ground is its own).
+/// default: a panel's, with its fields; a confirm's ground is its own). `scrim`: what dims what is under it, as far as
+/// its ground has come (the theme's; a stage's its own night, stage_scrim).
 fn dialog_layer_node(
   parent : @view.View,
   open : () -> Bool,
@@ -60,6 +61,7 @@ fn dialog_layer_node(
   covered? : () -> Bool = fn() { false },
   within? : () -> Bool = fn() { false },
   first_stop? : Bool = false,
+  scrim? : () -> Int64 = fn() { @ui.tree_theme().scrim },
 ) -> Unit {
   parent.show(
     open,
@@ -99,7 +101,7 @@ fn dialog_layer_node(
       // (a back gesture under way as it opens goes on to what it began on, as the old frame's layers let it: chosen as
       // it began; the next its)
       .held_back_goes_on()
-      .ground(By(fn() { if dims() { confirm_faded(@ui.tree_theme().scrim, dim.shown(layer)) } else { 0L } }))
+      .ground(By(fn() { if dims() { confirm_faded(scrim(), dim.shown(layer)) } else { 0L } }))
       // (a press outside its panel its own, nothing under it pressed: closing it as it goes down where it is a dialog's,
       // as the old frame's layer is dismissed then (Ctx::overlay's outside), whatever the finger does after; nothing
       // where an alert's)

@@ -697,6 +697,18 @@ pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (
   // height, the room as large as it is drawn; else the room the panel gives it, laid out as wide as that up to `most`,
   // drawn smaller where it has not its height
   let (room, room_w, w, k) = match stage_room.val {
+    // (drawn by the window's tree, stage_gives: as tall as it is laid out at the stage's width, giving way to the room
+    // the stage's column leaves it under what is under it, drawn smaller to that room as the tree gave it its old view
+    // (stage_given): its own height measured as before, the room given it from outside, not read back from in it)
+    Some((sw, sh)) if stage_gives.val => {
+      let kw = dmin(1.0, sw / most)
+      let k = dmin(kw, if h > 0.0 { stage_given.val / h } else { 1.0 })
+      stage_drawn_w.val = most * k
+      stage_laid_w.val = most
+      // (as tall as it is laid out at the stage's width; before that is known, all the stage has)
+      let asks = if h > 0.0 { h * kw } else { sh }
+      (@ui.style(w=Fixed(most * k), h=Fixed(asks)), most * k, most, k)
+    }
     Some((sw, sh)) => {
       let k = dmin(1.0, dmin(sw / most, if h > 0.0 { sh / h } else { 1.0 }))
       let drawn_h = if h > 0.0 { h * k } else { sh }
@@ -723,10 +735,32 @@ pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (
     c.box(style=whole_box.then(@ui.style(w=Fixed(w * k), h=Fixed(h * k))), id~, left=(room_w - w * k) / 2.0, top=0.0, fn() {  })
     |> ignore
   })
-  if sized {
+  if sized || (stage_room.val is Some(_) && stage_gives.val) {
     c.gives_way(room_box)
   }
 }
+
+///|
+/// Whether the stage whole_fitted is drawn on is the window's tree's (stage_node): what it holds gives way to the room
+/// its column leaves it.
+// kept across runs: set only while a stage's body is built by the window's tree, and put back
+let stage_gives : Ref[Bool] = Ref(false)
+
+///|
+/// How wide what a stage the window's tree draws shows was drawn, as it was last built (stage_node's column as wide).
+// kept across runs: set as a stage's body is built, read just after
+let stage_drawn_w : Ref[Double] = Ref(0.0)
+
+///|
+/// How wide what that stage shows is laid out (whole_fitted's `most`, whatever it is drawn as): its old view as wide,
+/// what it holds cut by nothing at its sides.
+// kept across runs: set as a stage's body is built, read just after
+let stage_laid_w : Ref[Double] = Ref(0.0)
+
+///|
+/// The height the window's tree gave a stage's body as it last laid it out (its old view's node's: stage_node).
+// kept across runs: set as a stage's body is built, read in it
+let stage_given : Ref[Double] = Ref(0.0)
 
 ///|
 /// The room a stage gives what it shows (stage_centred), while it is drawn: as wide and as tall as that may be.
@@ -1285,7 +1319,7 @@ fn draw_presented(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
 fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   let key = "sf-present"
   match p.shows {
-    Panel(x) if x.stage => return stage_centred(c, key, p, x)
+    Panel(x) if x.stage && !tree_draws(p, sheet) => return stage_centred(c, key, p, x)
     _ => ()
   }
   // (a confirm the window's tree draws: its node's, open as said, drawn till its way out is over: presented_node.mbt)
