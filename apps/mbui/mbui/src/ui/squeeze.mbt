@@ -314,7 +314,7 @@ fn Ctx::view_squeeze_faults(self : Ctx) -> Array[String] {
         say(shown.shaped.starts.length() - 1, whole.w)
       }
     } else {
-      let rich = view_rich(c.runs, k)
+      let rich = view_rich(c.runs, k, c.runs_look)
       let whole = layout_rich(rich, 1.0e9)
       if whole.w > c.w + 0.5 {
         let cut = cut_rich({ ..rich, max_lines: 1 }, whole, c.w)

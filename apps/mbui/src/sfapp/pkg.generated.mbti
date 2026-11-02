@@ -7,6 +7,7 @@ import {
   "mbui/motion",
   "mbui/paint",
   "mbui/signals",
+  "mbui/text",
   "mbui/ui",
   "mbui/view",
   "moonbitlang/core/ref",
@@ -460,7 +461,7 @@ pub fn items(Json?, String) -> Array[Json]
 
 pub fn java_hash(String) -> Int32
 
-pub fn job_output_lines(@sfbase.Source, String, String, Double, Int64, Bool) -> Array[Array[@ui.Run]]?
+pub fn job_output_lines(@sfbase.Source, String, String, Double, Int64, Bool) -> Array[Array[@text.Run]]?
 
 pub fn keep_bytes(@ui.Ctx, String, String, Bytes, way? : @hostapi.KeepWay, saved? : String, failed? : String) -> Unit
 
@@ -546,7 +547,7 @@ pub fn menu_bar_json(Json?, Bool) -> String
 
 pub fn message_of(Json) -> @sfbase.Message
 
-pub fn message_runs(String, Int64, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Array[@ui.Run]
+pub fn message_runs(String, Int64, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Array[@text.Run]
 
 pub fn nav_home() -> Unit
 
@@ -770,7 +771,7 @@ pub fn row_tone(@sfbase.ChatItem) -> String
 
 pub let row_turn_ms : Double
 
-pub fn runs_by_line(Array[@ui.Run]) -> Array[Array[@ui.Run]]
+pub fn runs_by_line(Array[@text.Run]) -> Array[Array[@text.Run]]
 
 pub fn say(@ui.Ctx, String) -> Unit
 

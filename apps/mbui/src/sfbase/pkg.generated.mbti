@@ -7,6 +7,7 @@ import {
   "mbui/motion",
   "mbui/paint",
   "mbui/signals",
+  "mbui/text",
   "mbui/ui",
   "mbui/view",
   "moonbitlang/core/buffer",
@@ -705,7 +706,7 @@ pub fn items(Json?, String) -> Array[Json]
 
 pub fn java_hash(String) -> Int32
 
-pub fn job_output_lines(Source, String, String, Double, Int64, Bool) -> Array[Array[@ui.Run]]?
+pub fn job_output_lines(Source, String, String, Double, Int64, Bool) -> Array[Array[@text.Run]]?
 
 pub fn jobs_scope(String) -> String
 
@@ -921,7 +922,7 @@ pub fn message_menu_on(String) -> Bool
 
 pub fn message_of(Json) -> Message
 
-pub fn message_runs(String, Int64, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Array[@ui.Run]
+pub fn message_runs(String, Int64, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Array[@text.Run]
 
 pub let monitor_mark : LinkMark
 
@@ -1289,7 +1290,7 @@ pub fn refs_put(String, @ui.Field, String, caret? : Int32) -> Unit
 
 pub fn refs_reset() -> Unit
 
-pub fn refs_runs(String, Array[(Int32, Int32)], Int64) -> Array[@ui.Run]
+pub fn refs_runs(String, Array[(Int32, Int32)], Int64) -> Array[@text.Run]
 
 pub fn refs_search(Source, String, Map[String, Json]) -> Topic
 
@@ -1335,7 +1336,7 @@ pub fn row_tone(ChatItem) -> String
 
 pub let row_turn_ms : Double
 
-pub fn runs_by_line(Array[@ui.Run]) -> Array[Array[@ui.Run]]
+pub fn runs_by_line(Array[@text.Run]) -> Array[Array[@text.Run]]
 
 pub fn same_pane(DriveAt, DriveAt) -> Bool
 
@@ -1545,7 +1546,7 @@ pub fn tell_place(Source, ChatRef, ChatView, Reading) -> Unit
 
 pub fn term_color(String, Bool) -> Int64
 
-pub fn term_lines(Array[Json], Int64, Bool) -> Array[Array[@ui.Run]]
+pub fn term_lines(Array[Json], Int64, Bool) -> Array[Array[@text.Run]]
 
 pub fn text(Json?, String) -> String
 
@@ -2300,7 +2301,7 @@ pub(all) struct Flow {
   parts : @signals.Signal[Int32]
   failed : @signals.Signal[String?]
   pieces : Array[FlowPiece]
-  colored : Array[Array[@ui.Run]?]
+  colored : Array[Array[@text.Run]?]
   mut colored_dark : Bool
 }
 pub fn Flow::ink(Self, @ui.Ctx, String) -> Unit
@@ -3344,7 +3345,7 @@ pub(all) struct Viewer {
   mut page : @ui.NativeView?
   mut pdf : @ui.Pdf?
   mut text : String?
-  mut colored : Array[Array[@ui.Run]]?
+  mut colored : Array[Array[@text.Run]]?
   mut colored_dark : Bool
   mut flow : Flow?
   flow_told : @signals.Signal[Int32]
@@ -3425,7 +3426,7 @@ pub fn Viewer::kept_whole(Self) -> Bool
 pub fn Viewer::left_with_frame(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::let_go(Self) -> Unit
 pub fn Viewer::lifted(Self) -> Double
-pub fn Viewer::lines_stage(Self, @ui.Ctx, PKind, Int32, (Int32) -> String, (Int32) -> Array[@ui.Run]?, String?, markdown? : String?) -> Bool
+pub fn Viewer::lines_stage(Self, @ui.Ctx, PKind, Int32, (Int32) -> String, (Int32) -> Array[@text.Run]?, String?, markdown? : String?) -> Bool
 pub fn Viewer::listed_size(Self) -> Double
 pub fn Viewer::markable(Self) -> Bool
 pub fn Viewer::marks_frame(Self, @ui.Ctx) -> Unit

@@ -3,6 +3,7 @@ package "stillfail/sfapp/settings"
 
 import {
   "mbui/signals",
+  "mbui/text",
   "mbui/ui",
   "moonbitlang/core/ref",
   "stillfail/sf",
@@ -33,7 +34,7 @@ pub let all_places : Array[String]
 
 pub let answered_fade_ms : Double
 
-pub fn answered_in_place(@ui.Ctx, String, (Bool, Array[@ui.Run])?, () -> Unit) -> Unit
+pub fn answered_in_place(@ui.Ctx, String, (Bool, Array[@text.Run])?, () -> Unit) -> Unit
 
 pub fn appearance(Json?) -> String
 
@@ -41,7 +42,7 @@ pub fn ask(String, String, String, String, (String) -> Unit, hint? : String, sec
 
 pub fn ask_action(String) -> Unit
 
-pub fn ask_outcome(@ui.Ctx, Bool, Array[@ui.Run], inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
+pub fn ask_outcome(@ui.Ctx, Bool, Array[@text.Run], inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
 
 pub fn avatar(@ui.Ctx, Core, String, String, Double, picture? : String) -> Unit
 
@@ -350,7 +351,7 @@ pub fn vault_menu_open() -> String
 
 pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
 
-pub fn vault_outcome_words(Asked, String, String) -> Array[@ui.Run]
+pub fn vault_outcome_words(Asked, String, String) -> Array[@text.Run]
 
 pub fn vault_problem(String, Map[String, String], Bool, String) -> String
 

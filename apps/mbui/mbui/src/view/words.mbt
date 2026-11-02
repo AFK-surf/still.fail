@@ -35,23 +35,73 @@ pub let letters_own : Spacing = Ems(0.0)
 pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: letters_own }
 
 ///|
-/// A piece of a node's words set its own way (View::words_runs): its weight (0: the words' own, WordsLook's), its ink
-/// (0: the node's, View::ink); the rest as the words are set.
-pub(all) struct WordsRun {
-  text : String
-  weight : Int
-  ink : Int64
+/// How a node's words in pieces (View::words_runs) are set where a piece says nothing of it itself, as an old view's
+/// paragraph is (Ctx::rich's): a link's ink and its ground while it is pressed, code's ink and ground and its share of
+/// the words' size, and whether they are a person's words (in the face chosen for those). What changes how big they
+/// are (`code_scale`, `words`, whether code has a ground at all: its room either side, a label kept whole on its line)
+/// lays them out again; their inks (a ground's colour for another) draw them again alone.
+pub(all) struct RunsLook {
+  link : Int64
+  pressed : Int64
+  code_ink : Int64
+  code_ground : Int64
+  code_scale : Double
+  words : Bool
 } derive(Eq, Debug)
 
 ///|
-/// A piece of words, `text`, in `weight` (0: the words' own) and `ink` (0: the node's).
-pub fn words_run(text : String, weight? : Int = 0, ink? : Int64 = 0L) -> WordsRun {
-  { text, weight, ink }
+/// Pieces set as an old view's paragraph is where it says nothing of it (Ctx::rich's own).
+pub let runs_plain : RunsLook = {
+  link: 0x0A84FFFFL,
+  pressed: 0x0A84FF29L,
+  code_ink: 0L,
+  code_ground: 0x7676801FL,
+  code_scale: 0.9,
+  words: false,
+}
+
+///|
+/// How its words in pieces are set where a piece says nothing of it itself (RunsLook), as it changes: their sizes
+/// (code's share, a person's words' face) laid out again, their inks drawn again alone.
+pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
+  let tree = self.tree
+  let at = self.at
+  let (set, ink) = match look {
+    Is(l) => (Is((l.code_scale, l.words, l.code_ground != 0L)), Is((l.link, l.pressed, l.code_ink, l.code_ground)))
+    By(f) =>
+      (
+        By(fn() {
+          let l = f()
+          (l.code_scale, l.words, l.code_ground != 0L)
+        }),
+        By(fn() {
+          let l = f()
+          (l.link, l.pressed, l.code_ink, l.code_ground)
+        }),
+      )
+  }
+  self.bind(RunsSet, set, Both, fn(s) {
+    let l = tree.nodes[at].look.runs_look
+    tree.nodes[at].look.runs_look = { ..l, code_scale: s.0, words: s.1 }
+  })
+  self.bind(RunsInk, ink, Paint, fn(k) {
+    let l = tree.nodes[at].look.runs_look
+    tree.nodes[at].look.runs_look = { ..l, link: k.0, pressed: k.1, code_ink: k.2, code_ground: k.3 }
+  })
+  self
+}
+
+///|
+/// A piece of words, `text`, in `weight` (0: the words' own) and `ink` (0: the node's), the rest as the words are set
+/// (a run of mbui/text's: View::words_runs).
+pub fn words_run(text : String, weight? : Int = 0, ink? : Int64 = 0L) -> @text.Run {
+  @text.span(text, weight~, color=ink)
 }
 
 ///|
 /// Words in pieces measured as a test's are: as their words one after another (words_measure).
-pub fn runs_measure(runs : Array[WordsRun], look : WordsLook, width : Double) -> (Double, Double) {
+pub fn runs_measure(runs : Array[@text.Run], look : WordsLook, set : RunsLook, width : Double) -> (Double, Double) {
+  ignore(set)
   let words = StringBuilder()
   for r in runs {
     words.write_string(r.text)

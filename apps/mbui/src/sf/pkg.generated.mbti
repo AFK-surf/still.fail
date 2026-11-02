@@ -7,6 +7,7 @@ import {
   "mbui/paint",
   "mbui/pixels",
   "mbui/signals",
+  "mbui/text",
   "mbui/ui",
   "mbui/view",
   "moonbitlang/core/debug",
@@ -74,7 +75,7 @@ pub fn ask_foot_lines() -> Double
 
 pub fn ask_here(String, String, (String) -> Unit, () -> Unit, value? : String, placeholder? : String, hint? : String) -> Unit
 
-pub fn ask_history_trigger(@ui.Ctx, String, Array[@ui.Run], @ui.TextStyle, Double) -> Int32
+pub fn ask_history_trigger(@ui.Ctx, String, Array[@text.Run], @ui.TextStyle, Double) -> Int32
 
 pub fn ask_line_button(@ui.Ctx, String, key~ : String, mark~ : Double, disabled? : Bool) -> Bool
 
@@ -660,7 +661,7 @@ pub let found_row_short_h : @ui.Len
 
 pub let found_start : @ui.Space
 
-pub fn found_weight(Array[@ui.Run], Array[String]) -> Array[@ui.Run]
+pub fn found_weight(Array[@text.Run], Array[String]) -> Array[@text.Run]
 
 pub let full_width : @ui.Style
 
@@ -800,7 +801,7 @@ pub fn initial(String) -> String
 
 pub let ink_read : @ref.Ref[((String, String, (String?) -> Unit) -> Unit)?]
 
-pub fn ink_runs(String, String, Bool) -> Array[@ui.Run]
+pub fn ink_runs(String, String, Bool) -> Array[@text.Run]
 
 pub fn inner_corner(Double, Double) -> Double
 
@@ -1690,7 +1691,7 @@ pub let reader_search_ms : Double
 
 pub let reader_sizes : (Int32, Int32)
 
-pub fn reader_snippet(String, TextMatch, Int64) -> Array[@ui.Run]
+pub fn reader_snippet(String, TextMatch, Int64) -> Array[@text.Run]
 
 pub let reader_still_ms : Double
 

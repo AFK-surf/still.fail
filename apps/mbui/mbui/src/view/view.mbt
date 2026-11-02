@@ -54,8 +54,10 @@ pub(all) struct Look {
   mut words_drawn : String?
   /// how its words are set (View::words: their size, weight, line and whether they wrap)
   mut words_look : WordsLook
-  /// its words in pieces set their own way (View::words_runs: a weight, an ink; none: all of them as words_look says)
-  mut runs : Array[WordsRun]
+  /// its words in pieces set their own way (View::words_runs: a run's own look; none: all of them as words_look says)
+  mut runs : Array[@text.Run]
+  /// how its pieces are set where they say nothing of it themselves (View::runs_look: a link's ink, code's, faces)
+  mut runs_look : RunsLook
   /// the shadow it casts under its ground (blur, how far down, colour; 0 blur: none): View::shadow
   mut shadow : (Double, Double, Int64)
   /// the shapes it draws over its ground (their outlines, as said: what they come to drawn kept by them), and the one
@@ -138,7 +140,8 @@ pub(all) struct Content {
   /// what is drawn of its words (Look's words_drawn: shorter ones in their place; None: its words)
   words_drawn : String?
   words_look : WordsLook
-  runs : Array[WordsRun]
+  runs : Array[@text.Run]
+  runs_look : RunsLook
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
@@ -207,7 +210,8 @@ pub(all) struct Drawn {
   ink : Int64
   words : String
   words_look : WordsLook
-  runs : Array[WordsRun]
+  runs : Array[@text.Run]
+  runs_look : RunsLook
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
@@ -492,7 +496,7 @@ pub struct Tree {
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
   measure : (String, WordsLook, Double) -> (Double, Double)
   /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered)
-  measure_runs : (Array[WordsRun], WordsLook, Double) -> (Double, Double)
+  measure_runs : (Array[@text.Run], WordsLook, RunsLook, Double) -> (Double, Double)
   /// how wide words too wide for a width on one line are drawn where they say shorter ways (View::shorter): the first of
   /// those that fits, else the last cut with an ellipsis, as the host lays them out
   measure_shorter : (String, Array[String], WordsLook, Double) -> Double
@@ -710,7 +714,7 @@ pub struct View {
 pub fn Tree::new(
   make : (View) -> Unit,
   measure? : (String, WordsLook, Double) -> (Double, Double) = words_measure,
-  measure_runs? : (Array[WordsRun], WordsLook, Double) -> (Double, Double) = runs_measure,
+  measure_runs? : (Array[@text.Run], WordsLook, RunsLook, Double) -> (Double, Double) = runs_measure,
   measure_shorter? : (String, Array[String], WordsLook, Double) -> Double,
   time? : () -> Double,
 ) -> Tree {
@@ -874,6 +878,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.min_w_said = None
       n.max_w_said = None
       n.look.runs = []
+      n.look.runs_look = runs_plain
       n.look.shapes = []
       n.look.tint = 0L
       n.look.radius = 0.0
@@ -986,7 +991,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -1632,6 +1637,8 @@ priv enum Prop {
   Alpha
   Offset
   Words
+  RunsSet
+  RunsInk
   Over
   Shift
   Presses
@@ -3188,7 +3195,7 @@ pub fn View::words(
     let (mw, mh) = if look.runs.is_empty() {
       (tree.measure)(look.words, look.words_look, offered)
     } else {
-      (tree.measure_runs)(look.runs, look.words_look, offered)
+      (tree.measure_runs)(look.runs, look.words_look, look.runs_look, offered)
     }
     // (on one line wider than it may be, saying shorter ones: as wide as what of them would be drawn there, as an old
     // view's leaf_size has it; what is drawn chosen once it is laid out, Tree::shorter_in, not by this)
@@ -3300,11 +3307,11 @@ pub fn[K : Eq] View::measured(self : View, content : Live[K], size : (K, Double?
 }
 
 ///|
-/// The words it shows in pieces, each set its own way (a weight, an ink: WordsRun), one paragraph laid out as one
+/// The words it shows in pieces, each set its own way (a weight, an ink: @text.Run), one paragraph laid out as one
 /// (View::words otherwise: read out, found and measured as the pieces' words one after another), as they change.
 pub fn View::words_runs(
   self : View,
-  runs : Live[Array[WordsRun]],
+  runs : Live[Array[@text.Run]],
   ink? : Int64 = 0x000000FFL,
   look? : WordsLook = words_plain,
 ) -> View {
@@ -5962,6 +5969,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     glass: n.look.glass,
     words_look: n.look.words_look,
     runs: n.look.runs,
+    runs_look: n.look.runs_look,
     shadow: n.look.shadow,
     hosted: n.hosted,
     clips: n.look.clips,
@@ -6199,6 +6207,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     glass: c.glass,
     words_look: c.words_look,
     runs: c.runs,
+    runs_look: c.runs_look,
     shadow: c.shadow,
     hosted: c.hosted,
     clips: c.clips,
