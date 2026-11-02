@@ -39,12 +39,19 @@ fn panel_popover_of(x : PanelOf, from : Anchor) -> Bool {
 }
 
 ///|
-/// Whether panel `x` presented `from` is a panel opened by nothing, a dialog in the middle of the window, the window's
-/// tree draws (panel_centred_node): not a stage or a form, nor (yet) one whose title is as it is now (`live`) where it
-/// does not go in steps (one that does says its steps' words in them), nor (yet) one that goes in steps a share of the
-/// window tall.
+/// Whether panel `x` presented `from` is a dialog in the middle of the window the window's tree draws
+/// (panel_centred_node): one opened by nothing, or a form whatever opened it (as the host draws it: how_of); not a stage,
+/// nor (yet) one whose title is as it is now (`live`) where it does not go in steps (one that does says its steps' words
+/// in them), nor (yet) one that goes in steps a share of the window tall or a form.
 fn panel_centred_of(x : PanelOf, from : Anchor) -> Bool {
-  !x.stage && !x.form && from == Unanchored && (if x.steps { x.tall <= 0.0 } else { x.live is None })
+  !x.stage &&
+  (
+    if x.form {
+      !x.steps && x.live is None
+    } else {
+      from == Unanchored && (if x.steps { x.tall <= 0.0 } else { x.live is None })
+    }
+  )
 }
 
 ///|
@@ -90,6 +97,9 @@ pub fn presented_nodes(root : @view.View) -> Unit {
       let covered = fn() { dialog_covered(serial) }
       // (said: it closes, and what is over it, then what it says goes on, at that moment)
       let done = fn(f : () -> Unit) {
+        // (its field let go of first, none giving it back: before its layer goes and gives back the focus, and before
+        // what it says goes on)
+        field_let_go(p)
         p.ended = true
         close_from_serial(serial)
         f()
@@ -155,7 +165,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             gone~,
           )
         }
-        Panel(x) if p.from == Unanchored =>
+        Panel(x) if p.from == Unanchored || x.form =>
           panel_centred_node(
             row,
             "sf-present/\{serial}",
