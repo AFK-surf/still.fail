@@ -335,7 +335,7 @@ function publish() {
 
 // What the visitor sends is answered as an account its provider has banned would be: the turn fails, still.fail says why in
 // the chat, and the agent is marked failed — the station's own words (session.rs failure_notice, quota.rs).
-const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BAN_DETAIL}`;
+const BANNED = "⚠️ 账号认证失败：在 Profile 中重新登录";
 
 /** The prefs as the visitor set them here (the sidebar's list, …), kept for the page's life as a core keeps them. */
 const prefs: Record<string, unknown> = {};

@@ -888,6 +888,7 @@ fn message_reset() -> Unit {
   named_open_serial.val += 1
   reveals.clear()
   notices_open.clear()
+  notices_copied.clear()
 }
 
 ///|

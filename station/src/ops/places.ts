@@ -24,7 +24,7 @@ import { basename, join, resolve } from "node:path";
 import type { Fs, Grant } from "../drive/fs.ts";
 import { protectedPlace } from "../drive/fs.ts";
 import { platform } from "../platform/index.ts";
-import { type Lang, tr } from "./i18n.ts";
+import { type Lang, Said, tr } from "./i18n.ts";
 import { unreadableDir, unreadableDirMessage } from "./files.ts";
 import { log } from "./log.ts";
 
@@ -43,7 +43,7 @@ type Code = "gone" | "not_a_directory" | "not_a_file" | "too_large" | "denied" |
 
 /// Why a directory or file may not be used, in words for whoever asked (`code` for the callers that tell them apart;
 /// `grant` and `window` when still.fail Helper lacks the grant for it).
-export class PlaceRefused extends Error {
+export class PlaceRefused extends Said {
   readonly code: Code;
   readonly grant?: Grant;
   readonly window?: "up" | "closed" | "none";

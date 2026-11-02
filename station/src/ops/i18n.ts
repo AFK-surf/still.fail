@@ -36,3 +36,7 @@ function fill(text: string, args: Record<string, unknown>): string {
   if (Object.keys(args).length === 0 || !text.includes("{")) return text;
   return text.replace(/\{([A-Za-z0-9_]*)\}/g, (all, name) => (name in args ? String(args[name]) : all));
 }
+
+/// A failure whose message is for people, in their language (made with `tr`): said to them as it is. What any other
+/// error says (a process, the network, the OS) is for the logs and reports, and people are told what it means instead.
+export class Said extends Error {}

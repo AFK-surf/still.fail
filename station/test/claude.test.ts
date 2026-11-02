@@ -243,7 +243,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     }
     assert.deepEqual(outcome(events, 0), { kind: "failed", reason: "auth", message: "API Error: 401 invalid x-api-key" });
     assert.deepEqual(outcome(events, 1), { kind: "failed", reason: "rate_limit", message: "You've hit your weekly limit · resets Oct 8" });
-    assert.deepEqual(outcome(events, 2), { kind: "failed", reason: "model", message: "prompt is too long" });
+    assert.deepEqual(outcome(events, 2), { kind: "failed", reason: "context", message: "prompt is too long" });
     assert.deepEqual(outcome(events, 3), { kind: "completed" }, "a successful text saying a limit is no failure");
     assert.equal(classifyResult("Claude AI usage limit reached"), "rate_limit");
     assert.equal(classifyResult("session limit configuration is invalid"), "model");

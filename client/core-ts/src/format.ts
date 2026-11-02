@@ -528,10 +528,18 @@ export function failureText(detail: string): string {
       return said("core-logic.format.failure.rate_limit");
     case "overloaded":
       return said("core-logic.format.failure.overloaded");
+    case "network":
+      return said("core-logic.format.failure.network");
+    case "context":
+      return said("core-logic.format.failure.context");
     case "auth":
       return said("core-logic.format.failure.auth");
     case "refused":
       return said("core-logic.format.failure.refused");
+    case "blocked":
+      return said("core-logic.format.failure.blocked");
+    case "denied":
+      return said("core-logic.format.failure.denied");
     case "model":
       return said("core-logic.format.failure.model");
     case "exited":

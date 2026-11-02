@@ -378,6 +378,8 @@ pub(all) struct Message {
   notice_md : Json?
   /// the agent whose capacity retry this notice can cancel, while that retry waits
   notice_retry_session : String
+  /// a failure's own words, as what failed said them, shown under its words when the notice is opened
+  notice_detail : String
   /// the chats its words link to that their lists have (archived ones too)
   chats : Array[LinkedChat]
 }
@@ -507,6 +509,7 @@ pub fn message_of(m : Json) -> Message {
     },
     notice_md: field(field(s, "notice"), "md"),
     notice_retry_session: text(field(s, "notice"), "retrySession"),
+    notice_detail: text(field(s, "notice"), "detail"),
     chats: items(s, "chats").map(fn(c) -> LinkedChat {
       let c = Some(c)
       { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note"), thread: opt_number(c, "thread") }

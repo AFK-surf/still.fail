@@ -45,6 +45,7 @@ import { joinPath, portableName, relativeParts } from "../ops/paths.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 import { workspaceAgentHome } from "../sessions/agent-home.ts";
 import { allowedIn } from "../sessions/config.ts";
+import { Said, stationLang, tr } from "../ops/i18n.ts";
 
 type Json = any;
 
@@ -1030,7 +1031,8 @@ export class Sharing {
         log.warn("share", "the host did not lend a new token; the one lent before is used", { profile: profile.id, error: (e as Error).message });
         return kept;
       }
-      throw new Error(`the station this subscription is signed in on did not lend it: ${(e as Error).message}`);
+      log.warn("share", "the host did not lend it", { profile: profile.id, error: (e as Error).message });
+      throw new Said(tr(stationLang(), "station.share.notLent"));
     }
   }
 
@@ -1052,7 +1054,8 @@ export class Sharing {
         log.warn("share", "the host did not lend a new login; the one lent before is used", { profile: profile.id, error: (e as Error).message });
         return kept;
       }
-      throw new Error(`the station this subscription is signed in on did not lend it: ${(e as Error).message}`);
+      log.warn("share", "the host did not lend it", { profile: profile.id, error: (e as Error).message });
+      throw new Said(tr(stationLang(), "station.share.notLent"));
     }
     const auth = {
       auth_mode: "chatgpt",

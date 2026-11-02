@@ -13,7 +13,11 @@ export const runtimeKind = (v: unknown): RuntimeKind | undefined => (RUNTIME_KIN
 /// How a runtime is named to people.
 export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : r === "dsh" ? "DeepSeek Harness" : r === "grok" ? "Grok Build" : r === "cursor" ? "Cursor" : r === "hermes" ? "Hermes Agent" : "Devin");
 
-export type FailureReason = "auth" | "refused" | "rate_limit" | "overloaded" | "model" | "exited" | "other";
+/// What failed a turn, as people are told it (sessions/actor.ts `failureNotice`, the client's `failureText`): the account
+/// (`auth`), the provider turning away where the request comes from (`refused`: a region it does not serve, an address
+/// or `blocked`: its CDN's firewall turning the address away, said so in its answer), or turning it away without saying why (`denied`: a bare 403), a limit, the provider out of room, the way to it (`network`), the conversation grown past what the model takes
+/// (`context`), else the model's own error; the process gone (`exited`), or the station's (`other`).
+export type FailureReason = "auth" | "refused" | "blocked" | "denied" | "rate_limit" | "overloaded" | "network" | "context" | "model" | "exited" | "other";
 
 export type TurnOutcome = { kind: "completed" } | { kind: "aborted" } | { kind: "failed"; reason: FailureReason; message: string };
 
@@ -131,26 +135,50 @@ export type FailureWords = { authCodes?: string[]; auth?: string[]; limitCodes?:
 
 /// What its messages (any runtime's) say when it is the account: signed out, a key refused, not allowed.
 const AUTH = ["unauthorized", "authenticat", "not logged in", "sign in", "log in", "api key", "permission_denied", "invalid credential"];
+/// What they say when the provider turns away where the request comes from, whoever asks: its region. Only what says
+/// so: a 403 that does not is `denied`, its cause not known.
+const REFUSED = ["request not allowed", "unsupported_country", "unsupported country", "not available in your region", "region is not supported", "not authorized in this region"];
+/// What a 403 is answered with when the provider's CDN firewall blocks the address it comes from (its IP's reputation:
+/// a datacenter's, a shared proxy's, whatever region): its page (Cloudflare's, HTML where an API answer was due).
+const BLOCK_PAGE = ["<html", "<!doctype html", "attention required", "just a moment", "cloudflare"];
 /// What they say when it is a limit: of rate, quota or usage.
 const LIMIT = ["rate limit", "rate_limit", "quota", "usage limit", "limit reached", "resource_exhausted", "too many requests"];
 /// What they say when it is the provider: the model has no room for anyone just now (whatever account asks).
 export const OVERLOADED = ["overloaded", "at capacity"];
+/// What they say when the conversation no longer fits the model.
+const CONTEXT = ["context window", "context length", "context_length", "prompt is too long", "maximum context", "too many tokens", "input is too long"];
+/// What they say when the way to the provider broke: the request not sent, its answer cut off.
+const NETWORK = /stream disconnected|error sending request|connection (?:reset|refused|closed|error|failed)|network error|timed out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up|fetch failed|dns error|tls handshake/i;
 
-/// What failed a turn, from what the runtime said of it (its error's code first, where it gives one): the account, a
-/// limit, the provider out of room, or else the model.
+/// The rest of a failure, once neither the account, the provider nor a limit: the network, the conversation's size,
+/// else the model.
+export function failureRest(text: string): FailureReason {
+  const lower = text.toLowerCase();
+  if (CONTEXT.some((s) => lower.includes(s))) return "context";
+  if (NETWORK.test(text)) return "network";
+  return "model";
+}
+
+/// What failed a turn, from what the runtime said of it (its error's code first, where it gives one): the account, the
+/// provider refusing it, a limit, the provider out of room, else `failureRest`.
 export function failureOf(text: string, extra: FailureWords = {}): FailureReason {
   const lower = text.toLowerCase();
   const words = lower.split(/[^\p{L}\p{N}_]+/u);
   const word = (w: string) => words.includes(w);
   const says = (s: string) => lower.includes(s);
+  const account = (more: string[] = []) => [...AUTH, ...(extra.auth ?? []), ...more].some(says);
   // A code decides before any phrase: a limit's message may well mention the account ("upgrade your subscription").
-  if (["401", "403", ...(extra.authCodes ?? [])].some(word)) return "auth";
+  if (["401", ...(extra.authCodes ?? [])].some(word)) return "auth";
+  // A 403 is the account's where it says so, the request's origin where it says that; else not known.
+  if (word("403")) return account(["token", "scope"]) ? "auth" : REFUSED.some(says) ? "refused" : BLOCK_PAGE.some(says) ? "blocked" : "denied";
   if (["429", ...(extra.limitCodes ?? [])].some(word)) return "rate_limit";
   if (word("529")) return "overloaded";
-  if ([...AUTH, ...(extra.auth ?? [])].some(says)) return "auth";
+  if (REFUSED.some(says)) return "refused";
+  if (says("forbidden")) return "denied";
+  if (account()) return "auth";
   if ([...LIMIT, ...(extra.limit ?? [])].some(says)) return "rate_limit";
   if (OVERLOADED.some(says)) return "overloaded";
-  return "model";
+  return failureRest(text);
 }
 
 export interface AgentDriver {

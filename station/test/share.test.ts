@@ -250,7 +250,7 @@ test("a shared subscription: the other borrows tokens from its host, with no log
   all.delete(A);
   assert.equal((await b.sharing.lendClaude(copy)).token, "token-of-max", "the token lent before, while it lasts");
   assert.equal(b.sharing.profileView(copy)!.reachable, false);
-  await assert.rejects(b.sharing.lendClaude({ ...copy, id: "never-lent" }), /did not lend/);
+  await assert.rejects(b.sharing.lendClaude({ ...copy, id: "never-lent" }), /未能借出/);
 });
 
 test("a login wanted before the cloud has said the workspace's stations waits for them; one kept to go on with does not", async () => {
@@ -299,10 +299,10 @@ test("a borrowed Codex subscription's login is written in its home, the profile 
   // The host away: the login lent before is used while it has long enough, not once it runs out soon.
   all.delete(A);
   assert.ok((await b.sharing.lendCodex({ ...copy, home })) > Date.now() + 23 * 3600_000);
-  await assert.rejects(b.sharing.lendCodex({ ...copy, home }, true), /did not lend/, "a refused token must not be reused while the host is offline");
+  await assert.rejects(b.sharing.lendCodex({ ...copy, home }, true), /未能借出/, "a refused token must not be reused while the host is offline");
   auth.tokens.access_token = jwt({ exp: Math.floor(Date.now() / 1000) + 600 });
   writeFileSync(join(home, "auth.json"), JSON.stringify(auth));
-  await assert.rejects(b.sharing.lendCodex({ ...copy, home }), /did not lend/);
+  await assert.rejects(b.sharing.lendCodex({ ...copy, home }), /未能借出/);
 });
 
 test("a shared Codex login about to run out while a Codex runs on it here: that Codex is asked to renew it, then it is lent", async () => {
