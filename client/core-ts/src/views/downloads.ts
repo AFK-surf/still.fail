@@ -109,7 +109,7 @@ const unreached = (e: CoreError) => e.status === undefined && (e.code === "host"
 /// How long a part not answered while its station's link is up waits to be asked again.
 export const AGAIN_MS = 5_000;
 
-const percent = (d: Download) => (d.size > 0 ? Math.floor((d.loaded / d.size) * 100) : 100);
+const percent = (d: Download) => (d.size > 0 ? Math.floor((d.loaded / d.size) * 100) : d.state === "going" || d.state === "waiting" ? 0 : 100);
 
 /// What a file is called to people: a file sent up as its sender named it, without what the station put before it
 /// (station/src/api/routes/hub.ts uploadPath: the time and a mark).
@@ -209,6 +209,16 @@ export class Downloads {
         yield* self.#note(d);
       }
       const file = kept(d.station, from)!;
+      // Old messages can omit a file's size (represented as 0). Ask for its first part to find the real size before
+      // deciding it is ready: otherwise download.read would see a zero-length kept file even if it has contents.
+      if (from.kind === "chat" && d.size === 0) {
+        const first = yield* inner.stations.requests.filePart(addr, from.key, from.file, 0, DOWNLOAD_PART, null);
+        d.size = first.total;
+        if (first.bytes.length === 0 && d.size > 0) return yield* Effect.fail(new CoreError("io", t("station.core.fileUnreadable")));
+        if (first.bytes.length > 0) yield* inner.driveKept.keep(file.id, "chat", 0, d.size, first.type, 0, first.bytes);
+        yield* self.#note(d);
+        self.#moved(d, first.bytes.length);
+      }
       for (let at = 0; at < d.size;) {
         // what is kept from here on, however it came (a viewer's read, a player's ranges, what was loaded): taken
         // as it is, never asked again; only up to the next stretch kept asked of the station
