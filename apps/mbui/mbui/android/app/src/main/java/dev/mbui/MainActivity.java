@@ -226,6 +226,12 @@ public class MainActivity extends Activity {
      */
     static volatile long hiddenAt;
 
+    /**
+     * How many of the app's activities are started (main thread): it is off the screen once none is. One going over
+     * another (OverActivity coming and going) starts before the other stops.
+     */
+    private static int started;
+
     /** The Wi-Fi multicast lock held while on screen, when the manifest asks for it (src/hostapi/system.mbt). */
     private android.net.wifi.WifiManager.MulticastLock multicast;
 
@@ -241,6 +247,7 @@ public class MainActivity extends Activity {
             }
         }
         if (multicast != null) multicast.acquire();
+        started++;
         Streams.behind(false);
         // a newer build ready stays out while the app is in sight (Updates.started)
         Updates.started();
@@ -259,8 +266,11 @@ public class MainActivity extends Activity {
         // the drawing paused once the window is off the screen, not as it starts going: the system's animation of
         // the window going (into the launcher's icon, to the recent apps) moves what it last drew, as a View's
         mbView.onPause();
-        // a remote screen's sound stops with its picture (Streams.behind)
-        Streams.behind(true);
+        if (--started == 0) {
+            // a remote screen's sound stops with its picture (Streams.behind); a video playing pauses
+            Streams.behind(true);
+            NativeViews.behind();
+        }
         folds.stop();
         if (multicast != null) multicast.release();
         if (hiddenAt == 0) hiddenAt = android.os.SystemClock.elapsedRealtime();
