@@ -61,6 +61,9 @@ import { keepRunnerIn } from "./platform/processes.ts";
 // What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
 // otherwise (Windows: USERPROFILE).
 if (!process.env.HOME && platform.home(process.env)) process.env.HOME = platform.home(process.env);
+// The launcher's malloc setting (native/launcher/src/run.rs) is this process's: read by malloc as it started, it goes
+// no further, to the agents and their tools.
+delete process.env.MallocSpaceEfficient;
 
 const args = process.argv.slice(2);
 const data = dataDir(args);

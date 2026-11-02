@@ -186,6 +186,13 @@ impl Os for System {
             .args(["--launcher-fds", "3,4,5", "--launcher-carries"])
             .stdin(Stdio::null())
             .process_group(0);
+        // macOS's malloc keeps what is freed for the next allocation of its size, the pages still the process's: on a
+        // machine short of memory they are compressed or swapped out, and counted as its own. ccvm (8 GB), a station of
+        // 900 MB footprint with 50 MB of JS: 280 MB of it freed large blocks (answers' zstd contexts, file reads) and
+        // much of 280 MB of small. Set for space, malloc gives them back as they are freed; the Node takes it out of
+        // its environment for what it starts (main.ts).
+        #[cfg(target_os = "macos")]
+        command.env("MallocSpaceEfficient", "1");
         let given = [self.mcp.as_raw_fd(), self.admin.as_raw_fd(), theirs.as_raw_fd()];
         // SAFETY: only dup2 (async-signal-safe) between fork and exec. The sources are all at 10 and up, so none is
         // overwritten before it is copied; the copies are not close-on-exec.

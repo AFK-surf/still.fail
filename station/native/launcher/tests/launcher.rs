@@ -309,6 +309,19 @@ fn node_serves_the_launchers_ports_and_station_json_names_the_launcher() {
 }
 
 #[test]
+fn node_runs_with_malloc_set_for_space_on_macos() {
+    let mut station = Station::new("malloc");
+    station.start("");
+    station.up();
+    let node = station.started()[0];
+    until("node to say its malloc", || station.log().into_iter().any(|(_, p, w)| p == node && w.starts_with("malloc ")).then_some(()));
+    let set = if cfg!(target_os = "macos") { "malloc 1" } else { "malloc as it is" };
+    assert!(station.said(node, set), "{:?}", station.log());
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
+}
+
+#[test]
 fn sigusr2_hands_over_to_a_new_node() {
     let mut station = Station::new("handover");
     station.start("");
