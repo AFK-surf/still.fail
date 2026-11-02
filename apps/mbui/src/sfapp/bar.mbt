@@ -724,6 +724,11 @@ priv struct BarModel {
 let ball_down : Double = 300.0
 
 ///|
+/// The bar drawn up (bar_raise): its spring as stiff as the ball's going down, critically damped (it goes up and
+/// comes back without overshooting past where the bar rests).
+let raise_damping : Double = 2.0 * ball_down.sqrt()
+
+///|
 fn ball_damping(tension : Double) -> Double {
   2.0 * 0.635 * tension.sqrt()
 }
@@ -738,7 +743,7 @@ let bar : BarModel = {
   o: spr(0.0, 260.0, 17.0, "bar/o"),
   k: spr(1.0, 300.0, 30.0, "bar/k"),
   held: spr(0.0, 420.0, 16.0, "bar/held"),
-  up: spr(0.0, 260.0, 17.0, "bar/up"),
+  up: spr(0.0, ball_down, raise_damping, "bar/up"),
   vis: glide("vis", 0.0),
   ball_alpha: glide("ball-alpha", 1.0),
   ball_scale: glide("ball-scale", 1.0),
@@ -776,7 +781,7 @@ fn bar_reset() -> Unit {
   bar.o.back(0.0, 260.0, 17.0)
   bar.k.back(1.0, 300.0, 30.0)
   bar.held.back(0.0, 420.0, 16.0)
-  bar.up.back(0.0, 260.0, 17.0)
+  bar.up.back(0.0, ball_down, raise_damping)
   back_glide(bar.vis, 0.0)
   back_glide(bar.ball_alpha, 1.0)
   back_glide(bar.ball_scale, 1.0)
@@ -1458,7 +1463,7 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
   // held: the ball a lens
   m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0, at~)
   // the panel drawn up by a finger: all of it drawn up out from under the finger, back down as it lets go
-  m.up.go(if m.holds { 1.0 } else { 0.0 }, 260.0, 17.0, at~)
+  m.up.go(if m.holds { 1.0 } else { 0.0 }, ball_down, raise_damping, at~)
   // each place lit as it is the one under the finger, else the one shown, in the bar and in the panel's rows (300 ms,
   // CSS's ease); one come anew as it is; a bar chosen landing, its places as they will be as it lands
   let finger = if w > 0.0 {

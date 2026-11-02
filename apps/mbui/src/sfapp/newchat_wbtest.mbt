@@ -101,7 +101,8 @@ test "the panel drawn up by a finger: the bar and the panel drawn up clear of th
   let held = foot()
   // a finger's place is where the rows are laid out: let go over the other bar's row, that bar
   t.release(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
-  t.run_for(@ui.move_most_ms)
+  // (the test's end: all of the bar at rest, the bar chosen landed)
+  t.run_for(bar.rest() - t.time())
   assert_eq(((rest - held).round(), (rest - foot()).round()), (bar_raise, 0.0))
   assert_true(app.nav.top() == Place("archive"))
 }
