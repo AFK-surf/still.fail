@@ -105,6 +105,37 @@ test "an image quoted: its picture in its card in the composer; sent, it grows f
 }
 
 ///|
+/// The corners of the frame cutting the lowest picture drawn at rest (the newest message's: a quote sent's own), top
+/// left then round it.
+fn lowest_picture_corners(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
+  let images = t.drawn_images()
+  let clips = t.drawn_image_clips()
+  let mut at = -1
+  for i, im in images {
+    if im[2] > 56.5 && (at < 0 || im[1] > images[at][1]) {
+      at = i
+    }
+  }
+  assert_true(at >= 0, msg="no picture drawn: \{images}")
+  clips[at].1
+}
+
+///|
+test "an image quoted and sent: its picture in its card in the message concentric with the card, all four corners alike" {
+  // what was seen (2026-11-02): its picture as round as a message's file alone (26) in a card less round (18), 8 in
+  let (t, x, y) = image_in_chat("插画参考.png")
+  hold_quote(t, x, y)
+  t.run_for(@ui.move_most_ms)
+  tap_send(t)
+  t.run_for(@sfbase.flight_len(true) * 2.0 + @sf.hint_back_ms + @ui.move_most_ms)
+  t.draw()
+  let (a, b, c, d) = lowest_picture_corners(t)
+  for k in [a, b, c, d] {
+    assert_true((k - @sf.quote_picture_corner).abs() < 0.5, msg="corners \{(a, b, c, d)}, its card's \{@sf.quote_picture_corner}")
+  }
+}
+
+///|
 test "a quoted image sent while reading above the end does not jump the chat to its newest message" {
   let (t, x, y) = image_in_chat("compare.png")
   hold_quote(t, x, y)
@@ -418,6 +449,27 @@ test "a video quoted: its still in its card in the composer; sent, it grows from
   let rest = t.drawn_images().map(fn(i) { i[2] })
   let between = mid.filter(fn(w) { w > 56.5 && rest.iter().all(fn(r) { (r - w).abs() > 0.5 }) })
   assert_true(between.length() > 0, msg="drawn \{mid} on its way, at rest \{rest}")
+}
+
+///|
+test "a video quoted and sent: its still in its card in the message concentric with the card" {
+  new_run()
+  let src : Source = { ..fixture("chat-download"), poster: fn(_, _, name) { fixture_file(name) } }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_fixture_mode("chat-download")
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = t.reachable("演示录屏.mp4")[0]
+  t.right_click(x, y)
+  t.draw()
+  t.tap_text("引用")
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  tap_send(t)
+  t.run_for(@sfbase.flight_len(true) * 2.0 + @sf.hint_back_ms + @ui.move_most_ms)
+  t.draw()
+  let (a, b, c, d) = lowest_picture_corners(t)
+  for k in [a, b, c, d] {
+    assert_true((k - @sf.quote_picture_corner).abs() < 0.5, msg="corners \{(a, b, c, d)}, its card's \{@sf.quote_picture_corner}")
+  }
 }
 
 ///|

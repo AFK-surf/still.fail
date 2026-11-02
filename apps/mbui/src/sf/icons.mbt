@@ -111,14 +111,20 @@ pub fn play_mark(c : @ui.Ctx, side : Double, shade : @ui.Color) -> Int {
 }
 
 ///|
-/// A video's capsule over its picture, in its foot's start corner concentric with a message's file's corner (the
-/// chat's media tiles' and a message's video's): a small play mark and how long it is (`duration`, none where that is
+/// A video's capsule over its picture, in its foot's start corner concentric with its `corner` (a message's file's: the
+/// chat's media tiles' and a message's video's; a quote's picture's): a small play mark and how long it is (`duration`, none where that is
 /// not known) on the video's shade. `coming`: how far the core has brought it here, a ring of that share and the share
 /// in words in their place, the one going out before the other comes in (words never over words) as the capsule
 /// changes its width with them over dur_ms. `key` names
 /// its motion. Nothing else over the picture: what it shows is the picture (the user, 2026-11-01: a band with its name
 /// and a play mark in its middle left little of a wide one to see).
-pub fn video_capsule(c : @ui.Ctx, key : String, duration : Double, coming? : Double? = None) -> Unit {
+pub fn video_capsule(
+  c : @ui.Ctx,
+  key : String,
+  duration : Double,
+  coming? : Double? = None,
+  corner? : Double = message_file_corner,
+) -> Unit {
   let part = match coming {
     Some(p) => {
       video_capsule_last[key] = p
@@ -141,7 +147,12 @@ pub fn video_capsule(c : @ui.Ctx, key : String, duration : Double, coming? : Dou
   let width_way = if length_w >= share_w { dmax(0.0, 2.0 * k - 1.0) } else { dmin(1.0, 2.0 * k) }
   let across = length_w + (share_w - length_w) * @ui.Ease::Move.at(width_way)
   c.layer(fn() {
-    c.box(style=video_capsule_foot, fn() {
+    let foot = if corner == message_file_corner {
+      video_capsule_foot
+    } else {
+      video_capsule_foot.then(@ui.style(p=room_of(capsule_fit(corner, video_capsule_h, video_capsule_alone_in))))
+    }
+    c.box(style=foot, fn() {
       c.box(style=video_capsule_box.then(@ui.style(w=Fixed(across))), fn() {
         if k < 0.5 {
           let l = c.box(style=video_capsule_row, fn() {
@@ -186,6 +197,11 @@ let video_capsule_mark : Double = 10.0
 
 ///|
 let video_capsule_ring : Double = 14.0
+
+///|
+/// How far the capsule is from the picture's sides and foot where its corner is too square to lead it (a quote's
+/// picture's, quote_picture_corner).
+let video_capsule_alone_in : Double = 8.0
 
 ///|
 // kept across runs: a value (no field of it changes)

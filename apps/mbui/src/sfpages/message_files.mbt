@@ -98,6 +98,7 @@ pub fn message_files(
   mine : Bool,
   by? : (String, String, String)? = None,
   landing_key? : String = "",
+  corner? : Double = @sf.message_file_corner,
 ) -> Unit {
   if list.length() == 0 {
     return
@@ -148,7 +149,7 @@ pub fn message_files(
             "image" | "video" => Some(message_media(c, src, here.station, owner_of(here, a), a))
             _ => None
           }
-          let item = c.box(style=@ui.style(w=Fixed(widths[i] + hung)), fn() { file_item(c, src, here, a, widths[i], by~, landing_key=key, media~) })
+          let item = c.box(style=@ui.style(w=Fixed(widths[i] + hung)), fn() { file_item(c, src, here, a, widths[i], by~, landing_key=key, media~, corner~) })
           let paint = media.map(fn(p) { fn(w, h, fit, radius) { media_content(c, p, w, h, fit, radius) } })
           match flight_here(here) {
             Some(f) => flight_landing(
@@ -306,11 +307,11 @@ fn thumb_ratio(hash : String) -> Double? {
 
 ///|
 /// One of a message's files (FileItem), `w` wide.
-fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None) -> Unit {
+fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner) -> Unit {
   match picturing.val {
     // (in a picture of the chat being shared: to tick, publish.mbt)
     Some((seq, taking)) => publish_file(c, src, here, seq, taking, a, w, by~)
-    None => file_drawn(c, src, here, a, w, by~, landing_key~, media~)
+    None => file_drawn(c, src, here, a, w, by~, landing_key~, media~, corner~)
   }
 }
 
@@ -327,7 +328,7 @@ fn quote_of(here : MessageHere, a : Attachment, owner : String, by : (String, St
 
 ///|
 /// A message's file as the chat draws it, by its kind.
-fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None) -> Unit {
+fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner) -> Unit {
   match file_kind(a.name) {
     "image" | "video" => {
       let p = match media {
@@ -335,9 +336,9 @@ fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
         None => message_media(c, src, here.station, owner_of(here, a), a)
       }
       if p.kind == "image" {
-        image_item(c, src, here, a, w, p, by~)
+        image_item(c, src, here, a, w, p, by~, corner~)
       } else {
-        video_item(c, src, here, a, w, p, if landing_key == "" { @sfbase.file_key(a) } else { landing_key }, by~)
+        video_item(c, src, here, a, w, p, if landing_key == "" { @sfbase.file_key(a) } else { landing_key }, by~, corner~)
       }
     }
     _ => card_item(c, src, here, a, by~)
@@ -348,7 +349,7 @@ fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 /// An image (FileItem's image): in its box on the neutral ground, what it waits on until it is decoded (its ThumbHash's
 /// likeness), then brushed in from its top; one sent from here the picture it was picked as, there at once; one that
 /// cannot be had says so. Pressed, the preview; right-clicked, 复制图片.
-fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, by~ : (String, String, String)?) -> Unit {
+fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, by~ : (String, String, String)?, corner~ : Double) -> Unit {
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
@@ -395,7 +396,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // dur_ms once it is here
   let asked = key == "" && !going_up
   let breath = @motion.animate(c, "msg-breath/" + thumb, if asked { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
-  let b = c.box(style=image_box_style(w, h, key != "!" || letterbox), id=open, fn() {
+  let b = c.box(style=image_box_style(w, h, key != "!" || letterbox, corner), id=open, fn() {
     if key == "!" {
       media_content(c, p, w, h, fit, 0.0)
     } else {
@@ -411,11 +412,11 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     }
     // how far it has come, at its foot's end
     if asked {
-      image_coming(c, "msg-coming/" + thumb, src.images.coming(id))
+      image_coming(c, "msg-coming/" + thumb, src.images.coming(id), corner)
     }
   })
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
-  note_thumb(c, thumb, b, @sf.message_file_corner, picture=shows, letterbox~, top_crop~, list=list_of(here))
+  note_thumb(c, thumb, b, corner, picture=shows, letterbox~, top_crop~, list=list_of(here))
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)
   @sf.lift_over(c, b, "file/" + thumb, @sf.lift_of(c, "file/" + thumb, false, file_held_open(open)), file_lift_scale)
@@ -428,13 +429,18 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 /// pill on the video's shade with a ring of how much of it is here and that share in words (35%); its size not known, the spinner and the
 /// bytes here so far; nothing heard yet, nothing (its stand-in breathing says it waits). Shown only once it has waited
 /// 300 ms (fading in over 200), so one that comes at once never flashes it.
-fn image_coming(c : @ui.Ctx, key : String, coming : (Double, Double?)?) -> Unit {
+fn image_coming(c : @ui.Ctx, key : String, coming : (Double, Double?)?, corner : Double) -> Unit {
   let shown = @motion.animate(c, key, 1.0, spec=@motion.tween(coming_in_ms, ease=Linear, delay=coming_after_ms), from=0.0)
   if shown <= 0.0 || coming is None {
     return
   }
   c.layer(fn() {
-    c.box(style=coming_room, fn() {
+    let room = if corner == @sf.message_file_corner {
+      coming_room
+    } else {
+      coming_room.then(@ui.style(p=@sf.capsule_fit_room(corner, coming_pill_h, coming_alone_in)))
+    }
+    c.box(style=room, fn() {
       let pill = c.box(style=coming_pill, fn() {
         match coming {
           Some((n, Some(total))) => {
@@ -524,8 +530,8 @@ let file_lift_scale : Double = 1.04
 ///|
 /// An image's box (msgImage): `w` by `h`, rounded as a message's files are, the neutral ground while it waits (none
 /// once it shows, nor round a letterboxed one: `shown`).
-fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
-  (if shown { image_frame } else { image_frame_waiting }).then(@ui.style(w=Fixed(w), h=Fixed(h)))
+fn image_box_style(w : Double, h : Double, shown : Bool, corner : Double) -> @ui.Style {
+  (if shown { image_frame } else { image_frame_waiting }).then(@ui.style(w=Fixed(w), h=Fixed(h))).then(frame_corner(corner))
 }
 
 ///|
@@ -534,7 +540,7 @@ fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
 /// (loaded, or after everything else once opened and let go: fill.ts), how far there. Held or right clicked, its menu:
 /// 引用; 加载 (brought onto this device by the core before everything else, from what of it is here, whatever page
 /// shows, to play from here at once), 停止加载 while it is brought either way (what came stays).
-fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, landing_key : String, by~ : (String, String, String)?) -> Unit {
+fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, landing_key : String, by~ : (String, String, String)?, corner~ : Double) -> Unit {
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
@@ -599,7 +605,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let coming = if flag(dl, "active") || kept is Some(_) { Some(number(dl, "progress")) } else { None }
   let over = fn(alpha : Double) {
     c.layer(fn() {
-      let at = c.box(style=video_over, fn() { @sf.video_capsule(c, "video/" + @sfbase.file_key(a), a.duration, coming~) })
+      let at = c.box(style=video_over, fn() { @sf.video_capsule(c, "video/" + @sfbase.file_key(a), a.duration, coming~, corner~) })
       c.look(at, @ui.look(alpha~))
     })
     |> ignore
@@ -607,7 +613,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // The black and the still share one cut: drawing the black underneath a separately cut picture leaves a rim at
   // their rounded edge. The same ground fills the room around a letterboxed picture and while it is decoded.
   // (called by its name, as a scripted run finds it: nothing over it says it)
-  let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, label=a.name, fn() {
+  let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))).then(frame_corner(corner)), id=open, label=a.name, fn() {
     c.layer(fn() {
       media_content(c, p, w, h, if letterbox { FitContain } else { FitCover }, 0.0)
     })
@@ -615,7 +621,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     over(marks)
   })
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
-  note_thumb(c, thumb, b, @sf.message_file_corner, picture=if still == "!" { "" } else { still }, letterbox~, list=list_of(here), over=fn(
+  note_thumb(c, thumb, b, corner, picture=if still == "!" { "" } else { still }, letterbox~, list=list_of(here), over=fn(
     alpha,
   ) {
     over(alpha * marks)
@@ -900,6 +906,17 @@ let files_row : @ui.Style = @ui.css("row gap=S1_5 align=AStart")
 /// that one); the neutral ground while it waits.
 // kept across runs: a value (no field of it changes)
 let image_frame : @ui.Style = @ui.style(radius=InnerOr(@sf.message_file_radius), clip=true)
+
+///|
+/// A picture's box rounded `corner` (a message's file's, its frames' own; a quote's picture's, concentric with its
+/// card: @sf.quote_picture_corner), still following a corner it lies in all of.
+fn frame_corner(corner : Double) -> @ui.Style {
+  if corner == @sf.message_file_corner {
+    @ui.style()
+  } else {
+    @ui.style(radius=InnerOr(@sf.file_radius(corner)))
+  }
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
