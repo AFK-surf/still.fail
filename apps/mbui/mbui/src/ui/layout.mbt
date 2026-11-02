@@ -332,9 +332,12 @@ fn Ctx::inset_of(self : Ctx, v : Double, layer : Double, over : Bool, at : Bool,
 /// changed, moved by itself, or is placed anew every frame (lists,
 /// editors, pager pages).
 ///
-/// A child changes parents only with both parents' children changing (a
-/// slot is taken before the slots of what it holds, and every slot in use
-/// is reached here), so the parents lay out again as the engine needs.
+/// A child that changes parents lays both parents out again, as the engine
+/// needs: the one it left with its children changing (every slot in use is
+/// reached here), the one it is under now told by who held it when it was
+/// last laid out (Node's lk_up), though its children are the same nodes as
+/// when it last held it (the first box built in a scope is who it is
+/// wherever what holds it is: Ctx::node_known).
 fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let n = self.nodes[i]
   let f = n.fl
@@ -789,6 +792,13 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         }
       }
       if (r & 1) != 0 {
+        ch = true
+      }
+      // (held by another since it was last laid out here, as what holds it now, or the one before (a row's slot whose
+      // node is another's now, what it holds kept by who it is in its scope: Ctx::node_known): laid out anew, though the
+      // same node lies in the same slot as last time this one was laid out)
+      if cn.lk_up != n.ident {
+        cn.lk_up = n.ident
         ch = true
       }
       if (r & 2) != 0 ||
