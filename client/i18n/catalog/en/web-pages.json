@@ -2133,5 +2133,8 @@
   "web-pages.chat.contextManage": "Manage",
   "web-pages.drive.viewAll": "View all files",
   "web-pages.drive.pinnedFolders": "Available folders",
-  "web-pages.screen.none": "No screens yet"
+  "web-pages.screen.none": "No screens yet",
+  "web-pages.vault.timeout.button": "Expires after {time}",
+  "web-pages.vault.timeout.title": "Access duration",
+  "web-pages.vault.timeout.done": "Done"
 }

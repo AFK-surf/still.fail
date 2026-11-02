@@ -14,7 +14,7 @@ import { scopeOf } from "./station.tsx";
 import { useDoingList, doingMatches, failed } from "./doing.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { type Scope, fileSize, pickFile, scopesUpTo, useVaultCall, useVaultRequest } from "./vault.ts";
-import { Button, Chooser, ChooserItem } from "./ui.tsx";
+import { Button, Chooser, ChooserItem, Dialog } from "./ui.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./VaultAsk.css.ts";
@@ -35,6 +35,7 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
   const [picked, setPicked] = useState<Scope | null>(null);
   const [timeoutKind, setTimeoutKind] = useState<"once" | "idle" | "fixed" | null>(null);
   const [timeoutMinutes, setTimeoutMinutes] = useState<number | null>(null);
+  const [timeoutOpen, setTimeoutOpen] = useState(false);
   // What the person typed in, for a secret theirs to type: kept only here, till it goes.
   const [secret, setSecret] = useState("");
   const [username, setUsername] = useState("");
@@ -108,14 +109,14 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
     return <div className={pagesCss.cardFoot}><Button variant="primary" onClick={() => go(`/w/${workspace}/settings/vault`)}>{t("web-pages.vault.setUp")}</Button>{no}{extra}</div>;
   }
   return (
-    <>{fields}{timed && kindPicked !== "once" && maxMinutes > 0 && <Chooser label={durationLabel(minutes)}>
-      {durationChoices.map((n) => <ChooserItem key={n} checked={n === minutes} onSelect={() => setTimeoutMinutes(n)}>{durationLabel(n)}</ChooserItem>)}
-    </Chooser>}<div className={pagesCss.cardFoot}>
+    <>{fields}<Dialog open={timeoutOpen} onClose={() => setTimeoutOpen(false)} title={t("web-pages.vault.timeout.title")}>
+      <Chooser label={t(`web-pages.vault.timeout.${kindPicked}`)}>{(["once", "idle", "fixed"] as const).map((k) => <ChooserItem key={k} checked={k === kindPicked} onSelect={() => setTimeoutKind(k)}>{t(`web-pages.vault.timeout.${k}`)}</ChooserItem>)}</Chooser>
+      {kindPicked !== "once" && <Chooser label={durationLabel(minutes)}>{durationChoices.map((n) => <ChooserItem key={n} checked={n === minutes} onSelect={() => setTimeoutMinutes(n)}>{durationLabel(n)}</ChooserItem>)}</Chooser>}
+      <Button variant="primary" onClick={() => setTimeoutOpen(false)}>{t("web-pages.vault.timeout.done")}</Button>
+    </Dialog><div className={pagesCss.cardFoot}>
       <Button variant="primary" busy={busy(true)} disabled={under || empty || !validTime} onClick={() => answer(true)}>{t(save ? "web-pages.vault.act.save" : "web-pages.vault.act.allow")}</Button>
       {no}
-      {timed && maxMinutes > 0 ? <Chooser label={t(`web-pages.vault.timeout.${kindPicked}`)}>
-        {(["once", "idle", "fixed"] as const).map((k) => <ChooserItem key={k} checked={k === kindPicked} onSelect={() => setTimeoutKind(k)}>{t(`web-pages.vault.timeout.${k}`)}</ChooserItem>)}
-      </Chooser> : !save && scopes.length > 1 && (
+      {timed && maxMinutes > 0 ? <Button variant="ghost" onClick={() => setTimeoutOpen(true)}>{kindPicked === "once" ? t("web-pages.vault.scope.once") : t("web-pages.vault.timeout.button", { time: durationLabel(minutes) })}</Button> : !save && scopes.length > 1 && (
         <Chooser label={scopeName(scope)}>
           {scopes.map((s) => <ChooserItem key={s} checked={s === scope} onSelect={() => setPicked(s)}>{scopeName(s)}</ChooserItem>)}
         </Chooser>

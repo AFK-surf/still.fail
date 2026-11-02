@@ -1700,4 +1700,7 @@ let zh : Map[String, String] = {
   "web-pages.drive.viewAll": "查看所有文件",
   "web-pages.drive.pinnedFolders": "可访问的文件夹",
   "web-pages.screen.none": "暂无屏幕",
+  "android-settings.vault.timeout.button": "限制 {time}后失效",
+  "android-settings.vault.timeout.title": "授权时限",
+  "android-settings.vault.timeout.done": "完成",
 }

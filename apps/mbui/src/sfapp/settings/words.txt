@@ -1685,3 +1685,7 @@ web-pages.vault.vaults
 web-pages.drive.viewAll
 web-pages.drive.pinnedFolders
 web-pages.screen.none
+
+android-settings.vault.timeout.button
+android-settings.vault.timeout.title
+android-settings.vault.timeout.done

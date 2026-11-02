@@ -129,10 +129,32 @@ test "an idle timeout requested for a daily task is shown and approved as reques
   let src = vault_src(["r1"], true, calls)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, timeout_kind="idle", timeout_seconds=129600) }, w=390.0, h=844.0, platform=2)
   t.draw()
-  assert_true(t.find("闲置后到期") is Some(_))
+  assert_true(t.find("限制 36 小时后失效") is Some(_))
   t.tap_text("允许")
   t.draw()
   assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"chat\",\"timeout\":{\"kind\":\"idle\",\"seconds\":129600}}"])
+}
+
+///|
+test "the timeout button opens a panel for its mode and duration" {
+  new_run()
+  let calls = []
+  let src = vault_src(["r1"], true, calls)
+  let t = @ui.Tester::new(fn(c) {
+    ask_card(c, src, timeout_kind="idle", timeout_seconds=129600)
+    @sf.presented(c)
+  }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  t.tap_text("限制 36 小时后失效")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("授权时限") is Some(_))
+  assert_true(t.find("固定时间后到期") is Some(_))
+  t.tap_text("固定时间后到期")
+  t.tap_text("完成")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("允许")
+  t.draw()
+  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"chat\",\"timeout\":{\"kind\":\"fixed\",\"seconds\":129600}}"])
 }
 
 ///|

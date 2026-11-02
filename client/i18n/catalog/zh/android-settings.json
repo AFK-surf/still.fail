@@ -763,5 +763,8 @@
   "android-settings.profile.pickModels.reading": "正在读取可用模型",
   "android-settings.profile.pickModels.selected": "已选 {n} 项",
   "android-settings.profile.pickModels.skip": "跳过",
-  "android-settings.profile.pickModels.none": "此 Profile 未列出模型，可稍后在 Profile 页添加"
+  "android-settings.profile.pickModels.none": "此 Profile 未列出模型，可稍后在 Profile 页添加",
+  "android-settings.vault.timeout.button": "限制 {time}后失效",
+  "android-settings.vault.timeout.title": "授权时限",
+  "android-settings.vault.timeout.done": "完成"
 }
