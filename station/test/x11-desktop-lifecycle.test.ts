@@ -24,10 +24,21 @@ async function until(check: () => boolean | Promise<boolean>, what: string, time
 
 test("repeated X11 views close their capture processes and release pending reads", { skip: !enabled, timeout: 45_000 }, async () => {
   const env = { ...process.env };
+  // A desktop normally has a client connected. Without one, Xvfb resets as each capture closes and the next
+  // view can race that reset rather than exercising repeated views of the same live session.
+  const observer = spawn("xev", ["-event", "keyboard"], { env, stdio: "ignore" });
+  let observerError: Error | undefined;
+  observer.on("error", (error) => { observerError = error; });
   const desktop = new X11Desktop({ env, changed: () => {} });
   const initial = process.memoryUsage().rss;
   let peak = initial;
   try {
+    await until(async () => {
+      if (observerError) throw observerError;
+      if (observer.exitCode !== null || observer.signalCode !== null) throw new Error("the X11 observer ended");
+      try { await run("xdotool", ["search", "--name", "Event Tester"], { env }); return true; }
+      catch { return false; }
+    }, "the X11 observer to connect");
     for (const codec of ["jpeg", "h264"] as const) {
       for (let i = 0; i < 20; i++) {
         const view = await desktop.open({ maxWidth: 640, maxHeight: 400, codecs: [codec], fps: 15 });
@@ -49,7 +60,10 @@ test("repeated X11 views close their capture processes and release pending reads
     const growth = (peak - initial) / (1024 * 1024);
     console.log(`20 open/close cycles per codec: peak RSS grew ${growth.toFixed(1)} MiB; no ffmpeg processes remain`);
     assert.ok(growth < 256, `unexpected RSS growth: ${growth.toFixed(1)} MiB`);
-  } finally { await desktop.close(); }
+  } finally {
+    await desktop.close();
+    observer.kill();
+  }
 });
 
 test("an X server that exits ends JPEG and H.264 views and is reported unavailable", { skip: !enabled, timeout: 30_000 }, async () => {
@@ -62,8 +76,8 @@ test("an X server that exits ends JPEG and H.264 views and is reported unavailab
     await run("xauth", ["-f", auth, "add", display, ".", randomBytes(16).toString("hex")], { env });
     const xserver = process.env.STILLFAIL_TEST_XSERVER ?? "Xvfb";
     const args = xserver.endsWith("Xvnc")
-      ? [display, "-auth", auth, "-nolisten", "tcp", "-rfbport", "-1", "-geometry", "640x480", "-depth", "24"]
-      : [display, "-auth", auth, "-nolisten", "tcp", "-screen", "0", "640x480x24"];
+      ? [display, "-auth", auth, "-nolisten", "tcp", "-noreset", "-rfbport", "-1", "-geometry", "640x480", "-depth", "24"]
+      : [display, "-auth", auth, "-nolisten", "tcp", "-noreset", "-screen", "0", "640x480x24"];
     const server = spawn(xserver, args, { env, stdio: "ignore" });
     const desktop = new X11Desktop({ env, changed: () => {} });
     try {
