@@ -515,7 +515,7 @@ fn item_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : Str
         let more = next()
         ev(c, "bell", "", "", rail=more, rail_last=!more && rail, row=true, fn() {
           one_line(c, ik + "/note", fn() {
-            c.text(@sf.t("web-main.history.reminder", args=[("name", "still.fail")]), style=h_strong) |> ignore
+            c.text(@sf.t("web-main.history.reminder", args=[("name", "still.fail")]), style=h_reminder) |> ignore
           }, first_line(note), "", fn() { c.text(note, style=h_note_plain) |> ignore })
         })
       }
@@ -1409,6 +1409,11 @@ let h_label_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 ///|
 // kept across runs: a value (no field of it changes)
 let h_strong : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg)
+
+///|
+/// A reminder's label stays on one line; its preview gives way when the row is narrow.
+// kept across runs: a value (no field of it changes)
+let h_reminder : @ui.TextStyle = h_strong.then(@ui.text_style(wrap=false))
 
 ///|
 // kept across runs: a value (no field of it changes)
