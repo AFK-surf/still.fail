@@ -9,5 +9,3 @@ import {
   "mbui/dmath",
   "mbui/view",
 }
-
-import { "moonbitlang/core/double" } for "test"

@@ -15,8 +15,6 @@ import {
   "mbui/signals",
   "mbui/view",
   "stillfail/gallery",
-  "moonbitlang/core/double",
-  "moonbitlang/core/cmp",
 }
 
 import { "stillfail/sffixture" } for "wbtest"

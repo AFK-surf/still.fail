@@ -8,5 +8,4 @@ import {
   "stillfail/sf",
   "moonbitlang/core/json",
   "mbui/signals",
-  "moonbitlang/core/cmp",
 }
