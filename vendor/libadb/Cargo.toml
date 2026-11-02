@@ -453,5 +453,6 @@ features = [
 ]
 
 # ember: Android publishes private keys without hard links.
-[target.'cfg(target_os = "android")'.dependencies.libc]
-version = "0.2"
+[target.'cfg(target_os = "android")'.dependencies.rustix]
+version = "1"
+features = ["fs"]

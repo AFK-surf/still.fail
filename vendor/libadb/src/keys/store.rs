@@ -237,28 +237,9 @@ fn publish_new(path: &Path, bytes: &[u8]) -> Result<bool, StoreError> {
 // key another process may already have paired. Android 11 (our minimum) has it.
 #[cfg(target_os = "android")]
 fn publish_once(tmp: &Path, path: &Path) -> io::Result<()> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
+    use rustix::fs::{renameat_with, RenameFlags, CWD};
 
-    let tmp = CString::new(tmp.as_os_str().as_bytes())
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-    let path = CString::new(path.as_os_str().as_bytes())
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-    // SAFETY: both C strings are NUL-terminated and live through the call.
-    let result = unsafe {
-        libc::renameat2(
-            libc::AT_FDCWD,
-            tmp.as_ptr(),
-            libc::AT_FDCWD,
-            path.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+    renameat_with(CWD, tmp, CWD, path, RenameFlags::NOREPLACE).map_err(io::Error::from)
 }
 
 #[cfg(not(target_os = "android"))]
