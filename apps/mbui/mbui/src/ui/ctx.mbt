@@ -214,9 +214,7 @@ struct EditorState {
   mut leaves : Array[Int]
   /// the input method's action key for it (@hostapi.ime_action_*: a search field's)
   mut ime_action : Int
-  /// its look, as the last frame said it: the line's height (0: the font's), the words', the placeholder's, the
-  /// caret's and the selection's colours
-  mut line : Double
+  /// its look, as the last frame said it: the words', the placeholder's, the caret's and the selection's colours
   mut color : Int64
   mut ph_color : Int64
   mut caret_color : Int64

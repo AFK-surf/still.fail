@@ -1737,7 +1737,7 @@ fn Ctx::editor_drawn_across(self : Ctx, n : Node) -> (Double, Double)? {
       match st.tl {
         Some(tl) => {
           let w = if st.text.length() == 0 && (st.ph_color & 0xFFL) != 0L && n.text.length() > 0 {
-            n.hint_shown(st.line).w
+            n.hint_shown().w
           } else {
             tl.w
           }

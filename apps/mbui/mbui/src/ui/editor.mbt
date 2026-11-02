@@ -868,7 +868,6 @@ pub fn Ctx::editor(
     st.blink_again = false
     st.blink0 = self.clock
   }
-  st.line = line
   st.color = color
   st.ph_color = placeholder_color
   st.caret_color = caret_color
@@ -1142,30 +1141,31 @@ fn EditorState::caret_box(
 }
 
 ///|
-/// What the field `n` shows while nothing is typed in it, laid out in its `line` (EditorState's): its placeholder on one
-/// line, as words that do not wrap, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
+/// What the field `n` shows while nothing is typed in it, laid out on its line as its words are (FieldBox's line_h, the
+/// system's size of words applied): its placeholder on one line, as words that do not wrap, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
 /// shortest cut with an ellipsis where none does; never cut by the field's edge.
-fn Node::hint_shown(self : Node, line : Double) -> TextLayout {
-  self.field_box().hint_shown(line)
+fn Node::hint_shown(self : Node) -> TextLayout {
+  self.field_box().hint_shown()
 }
 
 ///|
-/// How the field `n` lays its placeholder out on one line, in its `line`.
-fn Node::hint_lay(self : Node, line : Double) -> (String) -> TextLayout {
-  self.field_box().hint_lay(line)
+/// How the field `n` lays its placeholder out on one line, on its line (FieldBox::hint_lay).
+fn Node::hint_lay(self : Node) -> (String) -> TextLayout {
+  self.field_box().hint_lay()
 }
 
 ///|
 /// What the field placed as `b` shows while nothing is typed in it (Node::hint_shown's).
-fn FieldBox::hint_shown(self : FieldBox, line : Double) -> TextLayout {
-  let lay = self.hint_lay(line)
+fn FieldBox::hint_shown(self : FieldBox) -> TextLayout {
+  let lay = self.hint_lay()
   said_in(self.hint, lay(self.hint), self.shorter, self.w - self.pad_l - self.pad_r, lay)
 }
 
 ///|
-/// How the field placed as `b` lays its placeholder out on one line, in its `line`.
-fn FieldBox::hint_lay(self : FieldBox, line : Double) -> (String) -> TextLayout {
-  fn(s) { layout_text(s, self.font_size, 400, 1.0e9, false, line~, trim=self.trim) }
+/// How the field placed as `b` lays its placeholder out on one line: on the line its words are laid out on (line_h, as
+/// the system's size of words makes it), so that it stands where they would, not on the line as it was asked for.
+fn FieldBox::hint_lay(self : FieldBox) -> (String) -> TextLayout {
+  fn(s) { layout_text(s, self.font_size, 400, 1.0e9, false, line=self.line_h, trim=self.trim) }
 }
 
 ///|
@@ -1289,7 +1289,7 @@ fn Ctx::paint_field(
   if st.text.length() == 0 && ml == 0 && fb.hint.length() > 0 {
     // (a placeholder in no ink at all, hidden for now, is not drawn: nothing there to be seen or read)
     if (st.ph_color & 0xFFL) != 0L {
-      self.emit_text(fb.hint_shown(st.line), st.ox, st.oy, st.ph_color, alpha)
+      self.emit_text(fb.hint_shown(), st.ox, st.oy, st.ph_color, alpha)
     }
   } else {
     let spans = if st.secret { [] } else { st.look_shown().1 }
@@ -1504,7 +1504,6 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     enter_sends: true,
     leaves: [],
     ime_action: 0,
-    line: 0.0,
     color: 0L,
     ph_color: 0L,
     caret_color: 0L,

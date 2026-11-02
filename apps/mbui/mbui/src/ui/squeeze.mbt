@@ -137,7 +137,7 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
     }
     // a field's placeholder cut down to nothing, said its shortest way (Node::hint_shown)
     if b.kind == kind_editor {
-      match self.editors.get(b.id).bind(st => b.hint_kept(st.line)) {
+      match self.editors.get(b.id).bind(_ => b.hint_kept()) {
         Some((kept, need)) if kept < squeeze_kept_chars =>
           out.push("\{self.named(i)}: its placeholder cut to \{kept} characters (it needs \{need.round()})")
         _ => ()
@@ -346,9 +346,9 @@ fn Node::squeeze_kept(self : Node) -> (Int, Double)? {
 }
 
 ///|
-/// A field's placeholder cut short with an ellipsis, laid out in its `line` (Node::hint_shown): how many characters of
+/// A field's placeholder cut short with an ellipsis, laid out as it shows (Node::hint_shown): how many characters of
 /// it show before it, and how wide it is said its shortest way; None where it is not cut, or the field has none.
-fn Node::hint_kept(self : Node, line : Double) -> (Int, Double)? {
+fn Node::hint_kept(self : Node) -> (Int, Double)? {
   if self.text == "" || self.fw <= 0.0 {
     return None
   }
@@ -356,11 +356,11 @@ fn Node::hint_kept(self : Node, line : Double) -> (Int, Double)? {
     [.., last] => last
     [] => self.text
   }
-  let need = self.hint_lay(line)(shortest).w
+  let need = self.hint_lay()(shortest).w
   if need <= self.fw - self.pad_l - self.pad_r + squeeze_slack {
     return None
   }
-  Some((self.hint_shown(line).shaped.starts.length() - 1, need))
+  Some((self.hint_shown().shaped.starts.length() - 1, need))
 }
 
 ///|
