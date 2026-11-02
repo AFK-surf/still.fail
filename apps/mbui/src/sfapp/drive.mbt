@@ -55,19 +55,20 @@ pub fn files_lend(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// 文件's top bar as a place's (PlacePage.kt TopGlassBar): settings, its name.
+/// 文件's top bar as a place's (PlacePage.kt TopGlassBar): its name, settings at the right edge.
 fn files_top_bar(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
-      if nav_button(c, "settings", 22.0, key="files-settings") {
-        open_page(Settings)
-      }
       c.box(w=Fill(1.0), h=Px(34.0), justify=JCenter, fn() {
         top_bar_title(c, tr("android-misc.bar.place.files")) |> ignore
       })
       |> ignore
+      // settings at the right edge, as at Home's
+      if nav_button(c, "settings", 22.0, key="files-settings", said=tr("android-chat.home.settings")) {
+        open_page(Settings)
+      }
     })
     |> ignore
   })

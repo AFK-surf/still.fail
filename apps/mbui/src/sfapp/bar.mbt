@@ -2479,8 +2479,8 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
 }
 
 ///|
-/// A place's top page other than the chats (PlacePage.kt, with the bar under it): Home's top bar over it (settings,
-/// the place's name), what it shows the settings' page of it (src/sfapp/settings).
+/// A place's top page other than the chats (PlacePage.kt, with the bar under it): Home's top bar over it (the
+/// place's name, settings), what it shows the settings' page of it (src/sfapp/settings).
 fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
   // what it shows runs under the top bar, frosted over it (PlacePage.kt: `bar + 8.dp` down, scrolling under it)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -2506,8 +2506,8 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 }
 
 ///|
-/// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): settings, the place's name, the page's actions
-/// (`@sf.named_actions`); frosted over what runs under it, no line under it.
+/// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): the place's name, the page's actions
+/// (`@sf.named_actions`), settings at the right edge; frosted over what runs under it, no line under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()
   let actions = @sf.named_actions.val
@@ -2515,10 +2515,6 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
-      if nav_button(c, "settings", 22.0, key="place-settings", said=tr("android-chat.home.settings")) {
-        @sfbase.history_push()
-        app.nav.push(Settings)
-      }
       // (its words whole: what the page does at its end gives way where the bar has not the room, @sf.head_end)
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), align=ACenter, keep=true, fn() {
         top_bar_title(c, place_label(place)) |> ignore
@@ -2527,6 +2523,11 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
       match actions {
         Some(a) => @sf.head_end(c, a)
         None => ()
+      }
+      // settings at the right edge, as at Home's
+      if nav_button(c, "settings", 22.0, key="place-settings", said=tr("android-chat.home.settings")) {
+        @sfbase.history_push()
+        app.nav.push(Settings)
       }
     })
     |> ignore

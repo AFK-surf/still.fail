@@ -44,21 +44,21 @@ test "the bar: 文件 tapped is its page in place of the chats', back is the cha
 }
 
 ///|
-/// Where the words `title` are drawn in the top bar's band, the rightmost (a page's own title, the page beside it to its
-/// left).
+/// Where the words `title` are drawn in the top bar's band, the leftmost (a page's own title, not the back of the page
+/// coming in beside it to its right, which names it too).
 fn bar_title_x(t : @ui.Tester, title : String) -> Double {
   t
   .words()
-  .fold(init=-1.0e9, fn(a, w) { if w.0 == title && w.2 < status_top() + top_bar_h() && w.1 > a { w.1 } else { a } })
+  .fold(init=1.0e9, fn(a, w) { if w.0 == title && w.2 < status_top() + top_bar_h() && w.1 < a { w.1 } else { a } })
 }
 
 ///|
-/// The words drawn in the top bar's band from `from` on, as (words, x − from, y): the page's there, not the one beside
-/// it to its left.
+/// The words drawn in the top bar's band of the page a width wide from `from` on, as (words, x − from, y): the page's
+/// there, not the one beside it.
 fn bar_words(t : @ui.Tester, from : Double) -> Array[(String, Double, Double)] {
   t
   .words()
-  .filter(fn(w) { w.2 < status_top() + top_bar_h() && w.1 >= from - 0.5 })
+  .filter(fn(w) { w.2 < status_top() + top_bar_h() && w.1 >= from - 0.5 && w.1 < from + 390.0 - 0.5 })
   .map(fn(w) { (w.0, (w.1 - from).round(), w.2.round()) })
 }
 
@@ -73,13 +73,15 @@ test "文件 and 用量 at the bar's top, their gear tapped: as 设置 comes in 
     let at_rest = bar_words(t, 0.0)
     let gear = t.locate("icon:settings")
     assert_eq(gear.length(), 1, msg=place)
+    // at the bar's right edge, right of the place's name, as Home's is
+    assert_true(gear[0].0 > rest_x && gear[0].0 > 390.0 - 16.0 - 34.0, msg="\{place}: \{gear[0].0}")
     t.tap(gear[0].0, gear[0].1)
     assert_true(app.nav.top() == Settings, msg=place)
-    // halfway through 设置's slide in from the left: the place's page going out to the right beside it is drawn as it
+    // halfway through 设置's slide in from the right: the place's page going out to the left beside it is drawn as it
     // was at rest, moved (the stack two deep, it is still its root: its gear, not a way back to 设置)
     t.run_for(@ui.move_most_ms / 2.0)
     let from = bar_title_x(t, title) - rest_x
-    assert_true(from > 0.0, msg=place)
+    assert_true(from < 0.0, msg=place)
     assert_eq(bar_words(t, from), at_rest, msg=place)
   }
 }
