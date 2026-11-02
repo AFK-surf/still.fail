@@ -34,8 +34,9 @@ const OPENED = new Set(["chat"]);
 /// sent in two hours, more than anything else it sent (2026-10-31).
 const FLUSH_HELD_MS = 50;
 const FLUSH_TOLD_EVERY_MS = 60_000;
-/// What an app acts on while none of its pages is in view (its notices, its icon's badge): these go out then too.
-const UNSEEN = new Set(["notify", "workspaceMarks"]);
+/// What an app acts on while none of its pages is in view (its notices, its icon's badge, a download ready saved, a
+/// copy between stations: the topics it watches whatever page shows): these go out then too.
+const UNSEEN = new Set(["notify", "workspaceMarks", "downloads", "driveTransfers"]);
 
 /// A value or the error a topic shows.
 export type Value = { ok: unknown } | { err: CoreError };
