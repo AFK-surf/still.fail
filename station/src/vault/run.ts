@@ -16,7 +16,7 @@ const HEAD = 4 * 1024;
 const TAIL = 28 * 1024;
 
 export type RunAsk = { command: string; cwd: string; env?: string; timeoutMs: number };
-export type Ran = { code: number | null; signal: string | null; output: string; cut: boolean; timedOut: boolean };
+export type Ran = { code: number | null; signal: string | null; output: string; cut: boolean; timedOut: boolean; used?: boolean };
 
 /// The variable every run has the secret (or its placeholder) in, besides the one the item or the agent names.
 export const SECRET_VAR = "STILLFAIL_SECRET";
@@ -45,7 +45,7 @@ class Kept {
 
 /// Runs `ask.command` (by sh -c) with grant `held`; `env`: the environment it starts from; `used` is told each use of
 /// the secret (a host the proxy put it in, an SSH signature, the start of a command given it in its environment).
-export async function runWith(held: Held, ask: RunAsk, proxy: Proxy, env: Record<string, string>, used: (detail: string) => void): Promise<Ran> {
+export async function runWith(held: Held, ask: RunAsk, proxy: Proxy, env: Record<string, string>, used: (detail: string) => void, allowed: () => boolean = () => true): Promise<Ran> {
   const value = valueOf(held.secret)!;
   const id = held.request.id;
   const vars: Record<string, string> = { ...env };
@@ -53,9 +53,10 @@ export async function runWith(held: Held, ask: RunAsk, proxy: Proxy, env: Record
   if (account !== null) vars[ACCOUNT_VAR] = account;
   const ends: (() => void)[] = [];
   try {
+    if (!allowed()) throw new Error("grant expired");
     if (held.grant.mode === "proxy") {
       await proxy.start();
-      const admitted = proxy.admit({ hosts: held.grant.hosts, placeholder: placeholder(id), value, used: (host) => used(host) });
+      const admitted = proxy.admit({ hosts: held.grant.hosts, placeholder: placeholder(id), value, used: (host) => used(host), allowed });
       ends.push(admitted.end);
       const stand = placeholder(id);
       Object.assign(vars, {
@@ -69,6 +70,7 @@ export async function runWith(held: Held, ask: RunAsk, proxy: Proxy, env: Record
       const dir = mkdtempSync(join(tmpdir(), "sf-ssh-"));
       const sock = join(dir, "agent.sock");
       const server = await serveAgent(sock, key, () => {
+        if (!allowed()) return false;
         used("ssh signature");
         return true;
       });

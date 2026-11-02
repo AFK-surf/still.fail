@@ -77,7 +77,7 @@ export type LocalChange =
   | { kind: "vault"; request: string };
 
 /// How a vault request decided here went, as its station restates its card (station/src/vault/secrets.ts #settle).
-export type VaultOutcome = { status: "granted" | "denied"; scope?: "once" | "hour" | "chat" };
+export type VaultOutcome = { status: "granted" | "denied"; scope?: "once" | "hour" | "chat"; timeout?: { kind: "idle" | "fixed"; seconds: number } };
 
 /// The name a station keeps an upload under: the last part of its path, wherever it is moved.
 const keptName = (path: string) => path.split("/").at(-1)!;

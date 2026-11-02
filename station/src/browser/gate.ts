@@ -65,6 +65,8 @@ export type GateParts = {
   contextOf(targetId: string): string | undefined;
   /// A tab the agent asked for, opened (its id).
   opened?(targetId: string): void;
+  /// A deliberate action on a tab (not page background traffic).
+  used?(targetId: string, url?: string): void;
 };
 
 /// What to do with a message: send these to Chrome, these back to the agent.
@@ -81,6 +83,7 @@ export class Gate {
   readonly #mine = new Set<string>();
   /// Target sessions of the agent's own targets, on this connection.
   readonly #sessions = new Set<string>();
+  readonly #targets = new Map<string, string>();
   /// Target sessions Chrome attached on its own to targets not the agent's: let go of, and nothing of them passed.
   readonly #foreign = new Set<string>();
   /// The agent's requests whose answers are looked at, by their id: what to do with each.
@@ -120,6 +123,13 @@ export class Gate {
     const params = m.params !== null && typeof m.params === "object" ? m.params : {};
     if (typeof m.sessionId === "string") {
       if (!this.#sessions.has(m.sessionId)) return { up: [], down: [error(m.id, m.sessionId, "No such session of this chat's.")] };
+      const target = this.#targets.get(m.sessionId);
+      if (target && typeof m.id === "number" && (m.method === "Page.navigate" || m.method === "Runtime.callFunctionOn" || (m.method === "Input.dispatchMouseEvent" && params.type === "mousePressed") || (m.method === "Input.dispatchKeyEvent" && params.type === "keyDown"))) {
+        this.#asked.set(`${m.sessionId}\0${m.id}`, (answer) => {
+          if (answer.error === undefined) this.#p.used?.(target, typeof params.url === "string" ? params.url : undefined);
+          return null;
+        });
+      }
       if (FRONT.has(m.method)) return { up: [], down: [JSON.stringify({ id: m.id, sessionId: m.sessionId, result: {} })] };
       // What reaches past the page (other targets, the browser, the cookies of a context) is gated as on the browser's
       // own target; a page's own auto-attach to its frames and workers goes as it is (what it attaches is told, and
@@ -147,7 +157,13 @@ export class Gate {
         // Without one, the browser's own target (Target.getTargetInfo): nothing of a chat's.
         if (params.targetId === undefined && m.method !== "Target.attachToTarget" && m.method !== "Target.closeTarget") return { up: [JSON.stringify(m)], down: [] };
         if (!this.#target(params.targetId)) return no("No such target of this chat's.");
-        if (m.method === "Target.attachToTarget") this.#asked.set(key, (a) => (typeof a.result?.sessionId === "string" && this.#sessions.add(a.result.sessionId), null));
+        if (m.method === "Target.attachToTarget") this.#asked.set(key, (a) => {
+          if (typeof a.result?.sessionId === "string") {
+            this.#sessions.add(a.result.sessionId);
+            this.#targets.set(a.result.sessionId, params.targetId);
+          }
+          return null;
+        });
         return { up: [JSON.stringify(m)], down: [] };
       case "own":
         if (typeof params.sessionId !== "string" || !this.#sessions.has(params.sessionId)) return no("No such session of this chat's.");
@@ -216,7 +232,7 @@ export class Gate {
     switch (m.method) {
       case "Target.attachedToTarget": {
         if (this.#target(p.targetInfo?.targetId, p.targetInfo)) {
-          if (typeof p.sessionId === "string") this.#sessions.add(p.sessionId);
+          if (typeof p.sessionId === "string") { this.#sessions.add(p.sessionId); this.#targets.set(p.sessionId, p.targetInfo.targetId); }
           return { up: [], down: [text] };
         }
         // Not the agent's: let go of at once (which lets it run on, if it waited for its debuggers), and never told.
@@ -231,7 +247,7 @@ export class Gate {
           if (m.method === "Target.detachedFromTarget") this.#foreign.delete(p.sessionId);
           return { up: [], down: [] };
         }
-        if (m.method === "Target.detachedFromTarget" && typeof p.sessionId === "string") this.#sessions.delete(p.sessionId);
+        if (m.method === "Target.detachedFromTarget" && typeof p.sessionId === "string") { this.#sessions.delete(p.sessionId); this.#targets.delete(p.sessionId); }
         return { up: [], down: [text] };
       case "Target.targetDestroyed":
       case "Target.targetCrashed":

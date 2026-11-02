@@ -33,6 +33,9 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
   // What was tapped while the core has it (and the system asks the person); the use's length, once picked.
   const [pending, setPending] = useState<"yes" | "no" | null>(null);
   const [picked, setPicked] = useState<Scope | null>(null);
+  const [timeoutKind, setTimeoutKind] = useState<"once" | "idle" | "fixed" | null>(null);
+  const [timeoutMinutes, setTimeoutMinutes] = useState<string | null>(null);
+  const [timeoutUnit, setTimeoutUnit] = useState<"hours" | "minutes" | null>(null);
   // What the person typed in, for a secret theirs to type: kept only here, till it goes.
   const [secret, setSecret] = useState("");
   const [username, setUsername] = useState("");
@@ -48,16 +51,24 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
   const kind = request.save?.kind ?? "token";
   const namesNone = typed && kind === "login" && !request.save?.username;
   const scopes = scopesUpTo(request.lasts);
-  const scope = picked ?? scopes.at(-1)!;
+  const timed = !save && request.timeoutSeconds !== undefined && request.timeoutSeconds > 0;
+  const maxMinutes = scopeOfLasts(request.lasts) === "once" ? 0 : scopeOfLasts(request.lasts) === "hour" ? 60 : 43200;
+  const kindPicked = maxMinutes === 0 ? "once" : timeoutKind ?? (request.timeoutKind === "fixed" ? "fixed" : "idle");
+  const requestedMinutes = Math.min(maxMinutes, Math.ceil((request.timeoutSeconds ?? 3600) / 60));
+  const unit = timeoutUnit ?? (requestedMinutes % 60 === 0 ? "hours" : "minutes");
+  const factor = unit === "hours" ? 60 : 1;
+  const minutes = Number(timeoutMinutes ?? String(requestedMinutes / factor)) * factor;
+  const validTime = !timed || kindPicked === "once" || (Number.isSafeInteger(minutes) && minutes > 0 && minutes <= maxMinutes);
+  const scope = timed ? (kindPicked === "once" || maxMinutes === 0 ? "once" : minutes <= 60 ? "hour" : "chat") : picked ?? scopes.at(-1)!;
   const under = pending !== null || doing.length > 0;
   const busy = (yes: boolean) => pending === (yes ? "yes" : "no") || doing.some((d) => d.call === (yes ? "vault.approve" : "vault.deny"));
   const empty = typed && secret.trim() === "";
   const answer = (yes: boolean) => {
-    if (under || (yes && empty)) return;
+    if (under || (yes && (empty || !validTime))) return;
     setPending(yes ? "yes" : "no");
     const given = typed ? { typed: { secret, ...(namesNone && username.trim() ? { username } : {}), ...(kind === "file" && filename ? { filename } : {}) } } : {};
     const asked = yes
-      ? run("vault.approve", { workspace, request: id, scope: save ? "once" : scope, ...given }, t(save ? "web-pages.vault.act.saveWhat" : "web-pages.vault.act.allowWhat"))
+      ? run("vault.approve", { workspace, request: id, scope: save ? "once" : scope, ...(timed && scope !== "once" ? { timeout: { kind: kindPicked, seconds: minutes * 60 } } : {}), ...given }, t(save ? "web-pages.vault.act.saveWhat" : "web-pages.vault.act.allowWhat"))
       : run("vault.deny", { workspace, request: id }, t("web-pages.vault.act.denyWhat"));
     void asked.then((v) => {
       setPending(null);
@@ -98,10 +109,15 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
     return <div className={pagesCss.cardFoot}><Button variant="primary" onClick={() => go(`/w/${workspace}/settings/vault`)}>{t("web-pages.vault.setUp")}</Button>{no}{extra}</div>;
   }
   return (
-    <>{fields}<div className={pagesCss.cardFoot}>
-      <Button variant="primary" busy={busy(true)} disabled={under || empty} onClick={() => answer(true)}>{t(save ? "web-pages.vault.act.save" : "web-pages.vault.act.allow")}</Button>
+    <>{fields}{timed && kindPicked !== "once" && maxMinutes > 0 && <label>{t(maxMinutes === 60 ? "web-pages.vault.timeout.limitHour" : "web-pages.vault.timeout.limitMonth")}
+      <input className={`${controlsCss.input} ${controlsCss.inputSolid}`} type="number" min={1} max={maxMinutes / factor} step={1} disabled={under} value={timeoutMinutes ?? String(minutes / factor)} onChange={(e) => setTimeoutMinutes(e.target.value)} />
+      <Chooser label={t(`web-pages.vault.timeout.${unit}`)}>{(["hours", "minutes"] as const).map((u) => <ChooserItem key={u} checked={u === unit} onSelect={() => { setTimeoutUnit(u); setTimeoutMinutes(u === "hours" && minutes % 60 !== 0 ? "" : String(u === "hours" ? minutes / 60 : minutes)); }}>{t(`web-pages.vault.timeout.${u}`)}</ChooserItem>)}</Chooser>
+    </label>}<div className={pagesCss.cardFoot}>
+      <Button variant="primary" busy={busy(true)} disabled={under || empty || !validTime} onClick={() => answer(true)}>{t(save ? "web-pages.vault.act.save" : "web-pages.vault.act.allow")}</Button>
       {no}
-      {!save && scopes.length > 1 && (
+      {timed && maxMinutes > 0 ? <Chooser label={t(`web-pages.vault.timeout.${kindPicked}`)}>
+        {(["once", "idle", "fixed"] as const).map((k) => <ChooserItem key={k} checked={k === kindPicked} onSelect={() => setTimeoutKind(k)}>{t(`web-pages.vault.timeout.${k}`)}</ChooserItem>)}
+      </Chooser> : !save && scopes.length > 1 && (
         <Chooser label={scopeName(scope)}>
           {scopes.map((s) => <ChooserItem key={s} checked={s === scope} onSelect={() => setPicked(s)}>{scopeName(s)}</ChooserItem>)}
         </Chooser>
@@ -110,6 +126,8 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
     </div></>
   );
 }
+
+const scopeOfLasts = (lasts: string | undefined | null): Scope => lasts === "once" || lasts === "hour" ? lasts : "chat";
 
 /** The answer under a card that names a vault request (`card.vault`), at a station's `address`. */
 export function VaultCard({ address, id, who }: { address: string; id: string; who?: string | undefined }) {

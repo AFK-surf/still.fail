@@ -85,6 +85,12 @@ function vaultAsk(v: J): J | null {
   if (name === null || mode === null) return null;
   const hosts = arr(get(v, "hosts")).filter((h): h is string => typeof h === "string");
   const out: J = { name, reason: str(get(v, "reason")) ?? "", mode, hosts };
+  const timeoutKind = get(get(v, "timeout"), "kind");
+  const timeoutSeconds = get(get(v, "timeout"), "seconds");
+  if ((timeoutKind === "idle" || timeoutKind === "fixed") && typeof timeoutSeconds === "number") {
+    out.timeoutKind = timeoutKind;
+    out.timeoutSeconds = timeoutSeconds;
+  }
   const command = trimmed(get(v, "command"));
   if (command !== null) out.command = command;
   // Another station its commands run on (or a secret to keep was read on), by name.
@@ -94,6 +100,11 @@ function vaultAsk(v: J): J | null {
   if (status !== null) out.status = status;
   const scope = trimmed(get(get(v, "outcome"), "scope"));
   if (scope !== null) out.scope = scope;
+  const approved = get(get(v, "outcome"), "timeout");
+  if ((get(approved, "kind") === "idle" || get(approved, "kind") === "fixed") && typeof get(approved, "seconds") === "number") {
+    out.approvedTimeoutKind = get(approved, "kind");
+    out.approvedTimeoutSeconds = get(approved, "seconds");
+  }
   // A request to keep a secret (secret_save): what kind, the account it is for, whether the person types it in.
   const kind = trimmed(get(get(v, "save"), "kind"));
   if (kind !== null) {

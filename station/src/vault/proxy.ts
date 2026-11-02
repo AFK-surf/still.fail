@@ -19,7 +19,7 @@ export const placeholder = (grant: string) => `stillfail-secret:${grant}`;
 
 /// A command's run through the proxy: the hosts its secret may go to, the placeholder and the value it stands for, and
 /// what is told each time it is put in (the host).
-export type Run = { hosts: string[]; placeholder: string; value: string; used: (host: string) => void };
+export type Run = { hosts: string[]; placeholder: string; value: string; used: (host: string) => void; allowed?: () => boolean };
 
 const CA_NAME = "still.fail station vault";
 /// Leaf certificates are made again a day before the week they are good for runs out.
@@ -152,6 +152,7 @@ export class Proxy {
 
   /// One request inside an opened HTTPS connection: sent on with the placeholder swapped in its headers.
   #forward(req: IncomingMessage, res: ServerResponse, host: string, port: number, run: Run) {
+    if (run.allowed?.() === false) { res.writeHead(403).end("grant expired"); return; }
     const headers: Record<string, string | string[]> = {};
     let swapped = false;
     for (const [name, value] of Object.entries(req.headers)) {

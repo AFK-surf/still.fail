@@ -17,7 +17,7 @@ const SLACK = 60;
 /// An item's secret as the app seals it into a grant: its kind, name and fields.
 export type Secret = { kind: string; name: string; fields: Record<string, string> };
 
-export type Held = { request: Request; grant: Grant; secret: Secret; uses: number };
+export type Held = { request: Request; grant: Grant; secret: Secret; uses: number; until?: number };
 
 /// What a keeper holds, as it goes over to the next station process at a handover: the boxes of the requests still
 /// waiting (their private halves, base64) and the grants held.
@@ -50,6 +50,7 @@ export function accountOf(secret: Secret): string | null {
 export class Keeper {
   readonly #boxes = new Map<string, Uint8Array>();
   readonly #held = new Map<string, Held>();
+  readonly #timers = new Map<string, ReturnType<typeof setTimeout>>();
   /// Unix seconds.
   readonly #now: () => number;
   readonly #d: KeeperDeps;
@@ -61,10 +62,29 @@ export class Keeper {
 
   #hold(h: Held) {
     this.#held.set(h.request.id, h);
+    this.#schedule(h);
     this.#d.kept?.save(h);
   }
 
+  #schedule(h: Held) {
+    const id = h.request.id;
+    const old = this.#timers.get(id);
+    if (old !== undefined) clearTimeout(old);
+    const ms = Math.min(Math.max(0, ((h.until ?? h.grant.exp) - this.#now()) * 1000), 2_147_483_647);
+    const timer = setTimeout(() => {
+      const current = this.#held.get(id);
+      if (current === undefined) return;
+      if ((current.until ?? current.grant.exp) <= this.#now()) this.#forget(id);
+      else this.#schedule(current);
+    }, ms);
+    timer.unref();
+    this.#timers.set(id, timer);
+  }
+
   #forget(id: string) {
+    const timer = this.#timers.get(id);
+    if (timer !== undefined) clearTimeout(timer);
+    this.#timers.delete(id);
     if (this.#held.delete(id)) this.#d.kept?.forget(id);
   }
 
@@ -83,7 +103,9 @@ export class Keeper {
     if (g.ws !== request.ws || g.request !== request.id || g.vault !== request.vault || g.item !== request.item || g.mode !== request.mode) return "the grant is not for this request as asked";
     if (vault.id !== request.vault || item.id !== request.item || item.deleted || item.listing === undefined) return "the item is not one agents may ask for";
     if (!item.listing.modes.includes(g.mode as Mode)) return `the item is not given by ${g.mode}`;
-    if (!(g.scope in LASTS)) return "scope is once, hour or chat";
+    if (typeof g.scope !== "string" || !Object.hasOwn(LASTS, g.scope)) return "scope is once, hour or chat";
+    if (request.timeout && g.scope !== "once" && g.timeout === undefined) return "this request needs an approval with its timeout; update the app";
+    if (g.timeout !== undefined && (g.timeout === null || typeof g.timeout !== "object" || !["idle", "fixed"].includes(g.timeout.kind) || !Number.isSafeInteger(g.timeout.seconds) || g.timeout.seconds < 1 || g.timeout.seconds > LASTS[g.scope as Scope] || g.scope === "once" || !Number.isSafeInteger(g.at) || g.exp !== g.at + g.timeout.seconds)) return "invalid grant timeout";
     const lasts = item.listing.lasts ?? vault.lasts;
     if (!allows(lasts, g.scope)) return `the item is granted for ${lasts} at most`;
     const now = this.#now();
@@ -113,17 +135,19 @@ export class Keeper {
   /// Holds an item of the plain library for `request`, as its owner decided (docs/vault.md 不加锁的库): no seal and no
   /// signature, the secret read from the station's own store; the same limits as a grant's otherwise.
   /// `lasts`: the longest grant it is given for (the item's own, else its owner's for the library; none: any).
-  hold(request: Request, d: { scope: Scope; hosts: string[]; listing: { modes: Mode[]; hosts: string[] }; lasts: Scope | null }, secret: Secret): string | null {
+  hold(request: Request, d: { scope: Scope; hosts: string[]; listing: { modes: Mode[]; hosts: string[] }; lasts: Scope | null; timeout?: { kind: "idle" | "fixed"; seconds: number } }, secret: Secret): string | null {
     if (request.status !== "pending") return `the request is ${request.status}`;
-    if (!(d.scope in LASTS)) return "scope is once, hour or chat";
+    if (!Object.hasOwn(LASTS, d.scope)) return "scope is once, hour or chat";
+    if (request.timeout && d.scope !== "once" && d.timeout === undefined) return "this request needs an approval with its timeout; update the app";
     if (!allows(d.lasts, d.scope)) return `the item is granted for ${d.lasts} at most`;
+    if (d.timeout !== undefined && (d.timeout === null || typeof d.timeout !== "object" || !["idle", "fixed"].includes(d.timeout.kind) || !Number.isSafeInteger(d.timeout.seconds) || d.timeout.seconds < 1 || d.timeout.seconds > LASTS[d.scope] || d.scope === "once")) return "invalid grant timeout";
     if (!d.listing.modes.includes(request.mode)) return `the item is not given by ${request.mode}`;
     if (!d.hosts.every((h) => d.listing.hosts.includes(h) || (!h.startsWith("*.") && hostAllowed(h, d.listing.hosts)))) return "the hosts are not all the item's";
     if (request.mode === "proxy" && d.hosts.length === 0) return "given through the proxy, it names its hosts";
     if (request.mode === "browser" && d.hosts.length === 0) return "a sign-in's grant names its sites";
     if (valueOf(secret) === null) return "the item has no value to use";
     const now = this.#now();
-    const grant = { v: 1, ws: request.ws, request: request.id, vault: request.vault, item: request.item, mode: request.mode, hosts: d.hosts, scope: d.scope, exp: now + LASTS[d.scope], secret: "", at: now } as unknown as Grant;
+    const grant = { v: 1, ws: request.ws, request: request.id, vault: request.vault, item: request.item, mode: request.mode, hosts: d.hosts, scope: d.scope, exp: now + (d.timeout?.seconds ?? LASTS[d.scope]), ...(d.timeout ? { timeout: d.timeout } : {}), secret: "", at: now } as unknown as Grant;
     this.#hold({ request: { ...request, status: "granted" }, grant, secret, uses: 0 });
     return null;
   }
@@ -131,6 +155,7 @@ export class Keeper {
   /// A grant kept from before a restart, given back.
   restore(h: Held) {
     this.#held.set(h.request.id, h);
+    this.#schedule(h);
   }
 
   /// All it holds, for the next process (a handover).
@@ -149,7 +174,7 @@ export class Keeper {
     const h = this.#held.get(id);
     if (h === undefined) return "no such grant here: secret_list shows the grants you hold (a restart of the station forgets them; ask again)";
     if (h.request.session !== session) return "this grant is another session's";
-    if (h.grant.exp <= this.#now()) {
+    if ((h.until ?? h.grant.exp) <= this.#now()) {
       this.#forget(id);
       return "this grant ran out: ask again";
     }
@@ -161,11 +186,28 @@ export class Keeper {
     return h;
   }
 
+  /// A command already admitted may use its one-use grant during that command, but not after expiry or archive.
+  active(session: string, id: string): boolean {
+    const h = this.#held.get(id);
+    if (h === undefined || h.request.session !== session) return false;
+    if ((h.until ?? h.grant.exp) <= this.#now() || this.#d.ended?.(session)) { this.#forget(id); return false; }
+    return true;
+  }
+
   /// One use of grant `id` begins (a command run with it).
   spend(id: string) {
     const h = this.#held.get(id);
     if (h === undefined) return;
     h.uses++;
+    this.#d.kept?.save(h);
+  }
+
+  /// A successful use extends an idle grant, provided it has not ended in the meantime.
+  renew(session: string, id: string) {
+    const h = this.usable(session, id);
+    if (typeof h === "string" || h.grant.timeout?.kind !== "idle") return;
+    h.until = this.#now() + h.grant.timeout.seconds;
+    this.#schedule(h);
     this.#d.kept?.save(h);
   }
 

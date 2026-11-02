@@ -3285,6 +3285,8 @@ pub(all) struct UpdateSource {
 pub(all) struct VaultAsk {
   name : String
   reason : String
+  timeout_kind : String
+  timeout_seconds : Int32
   mode : String
   command : String
   how_text : String

@@ -330,7 +330,7 @@ pub fn vault_ask_words(@ui.Ctx, Asked) -> Unit
 
 pub fn vault_card(@ui.Ctx, Core, String, String, Asked, Answer, ended? : (String, String)?) -> Unit
 
-pub fn vault_foot(@ui.Ctx, Core, String, String, Answer, Bool, typed? : Typed?, extra? : (() -> Unit)?, foot? : Bool) -> Unit
+pub fn vault_foot(@ui.Ctx, Core, String, String, Answer, Bool, typed? : Typed?, timeout_kind? : String, timeout_seconds? : Int32, extra? : (() -> Unit)?, foot? : Bool) -> Unit
 
 pub fn vault_hosts(Map[String, String]) -> Array[String]
 
@@ -395,6 +395,8 @@ pub(all) enum Answer {
 pub(all) struct Asked {
   name : String
   reason : String
+  timeout_kind : String
+  timeout_seconds : Int32
   mode : String
   command : String
   how_text : String

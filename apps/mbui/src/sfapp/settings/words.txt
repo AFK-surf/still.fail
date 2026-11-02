@@ -784,6 +784,7 @@ android-settings.vault.approve.what
 android-settings.vault.ask.denied
 android-settings.vault.ask.expired
 android-settings.vault.ask.granted
+android-settings.vault.ask.timedGranted
 android-settings.vault.ask.kept
 android-settings.vault.ask.kind.login
 android-settings.vault.ask.kind.ssh_key
@@ -895,6 +896,16 @@ android-settings.vault.save.what
 android-settings.vault.scope.chat
 android-settings.vault.scope.hour
 android-settings.vault.scope.once
+android-settings.vault.timeout.fixed
+android-settings.vault.timeout.approved.fixed
+android-settings.vault.timeout.approved.idle
+android-settings.vault.timeout.hours
+android-settings.vault.timeout.idle
+android-settings.vault.timeout.limitHour
+android-settings.vault.timeout.limitMonth
+android-settings.vault.timeout.minutes
+android-settings.vault.timeout.nHours
+android-settings.vault.timeout.nMinutes
 android-settings.vault.selfOnly
 android-settings.vault.sshNote
 android-settings.vault.fileTooBig

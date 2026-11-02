@@ -180,6 +180,10 @@ pub(all) struct PhoneAsk {
 pub(all) struct VaultAsk {
   name : String
   reason : String
+  timeout_kind : String
+  timeout_seconds : Int
+  approved_timeout_kind : String
+  approved_timeout_seconds : Int
   mode : String
   command : String
   /// How it is given, including the allowed hosts, as the core says it.
@@ -415,6 +419,10 @@ pub fn message_of(m : Json) -> Message {
               Some({
                 name: text(a, "name"),
                 reason: text(a, "reason"),
+                timeout_kind: text(a, "timeoutKind"),
+                timeout_seconds: count(a, "timeoutSeconds"),
+                approved_timeout_kind: text(a, "approvedTimeoutKind"),
+                approved_timeout_seconds: count(a, "approvedTimeoutSeconds"),
                 mode: text(a, "mode"),
                 command: text(a, "command"),
                 how_text: text(a, "howText"),

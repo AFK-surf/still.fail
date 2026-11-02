@@ -539,7 +539,7 @@ export function vaultsView(inner: Inner, ws: string): J {
   const plainItems = Object.values(h.plain).filter((i) => !i.deleted);
   const requestRow = (r: Request, itemName: string | null, vaultName: string, lasts: Scope) => ({
     id: r.id, vault: r.vault, vaultName, item: r.item, itemName, lasts,
-    session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at,
+    session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at, ...(r.timeout ? { timeoutKind: r.timeout.kind, timeoutSeconds: r.timeout.seconds } : {}),
     howText: howText(r.mode, r.hosts ?? []),
     // A secret an agent asks to keep: what kind, the account it is for, whether the person types it in.
     ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}), ...(r.save.filename ? { filename: r.save.filename } : {}), ...(r.save.typed ? { typed: true } : {}) } } : {}),
@@ -725,7 +725,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
     case "recover":
       return v.recover(p("words"));
     case "approve":
-      return v.approve(p("request"), (str(c.params.scope) ?? "once") as Scope, c.params.typed);
+      return v.approve(p("request"), (str(c.params.scope) ?? "once") as Scope, c.params.typed, c.params.timeout);
     case "deny":
       return v.deny(p("request"));
     case "setLasts":
@@ -1202,20 +1202,23 @@ class Vaults {
   /// An agent's request granted: the item's plaintext sealed to the keeper's key for this request, signed by this
   /// device (the person asked each time, whether the vault is unlocked or not). One to keep a secret: kept, with what
   /// the person `typed` where it is theirs to type in.
-  approve(id: string, scope: Scope, typed?: unknown): Effect.Effect<unknown, CoreError> {
+  approve(id: string, scope: Scope, typed?: unknown, timeoutValue?: unknown): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
       const inner = self.#inner;
       if (!["once", "hour", "chat"].includes(scope)) return yield* Effect.fail(CoreError.invalid("scope: once, hour or chat"));
+      const timeout = timeoutValue as { kind?: unknown; seconds?: unknown } | undefined;
+      if (timeout !== undefined && (timeout === null || typeof timeout !== "object" || (timeout.kind !== "idle" && timeout.kind !== "fixed") || !Number.isSafeInteger(timeout.seconds) || (timeout.seconds as number) < 1 || (timeout.seconds as number) > 30 * 86400 || scope === "once" || (timeout.seconds as number) > GRANT_SECS[scope])) return yield* Effect.fail(CoreError.invalid("invalid timeout"));
       // The plain library's: its owner says so, nothing to open or sign (the station holds the value).
       const asked = yield* self.#request(id);
       if (asked.r.save) return yield* self.#keepSaved(asked.r, asked.station, typed);
+      if (asked.r.timeout && scope !== "once" && !timeout) return yield* Effect.fail(CoreError.invalid("this request needs an approval with its timeout; update the app"));
       if (asked.r.vault === PLAIN) {
         const { r, station } = asked;
         const h = held(inner, self.ws);
         if (!allows(h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts, scope)) return yield* fail("vault_scope", t("core-misc.vault.scopeTooLong"));
-        yield* self.#station(station, "POST", "/vault/plain/grants", { request: r.id, scope });
-        self.#settled(r.id, { status: "granted", scope });
+        yield* self.#station(station, "POST", "/vault/plain/grants", { request: r.id, scope, ...(timeout ? { timeout } : {}) });
+        self.#settled(r.id, { status: "granted", scope, ...(timeout ? { timeout: timeout as { kind: "idle" | "fixed"; seconds: number } } : {}) });
         return { request: r.id, scope };
       }
       const { lock, signer, self: who } = yield* self.#ready();
@@ -1258,7 +1261,7 @@ class Vaults {
         inner.host.randomBytes(eph);
         const now = nowS(inner);
         return sign(
-          { v: 1 as const, ws: self.ws, request: r.id, vault: v.id, item: item.id, mode: r.mode, hosts: r.hosts ?? item.listing?.hosts ?? [], scope, exp: now + GRANT_SECS[scope], secret: sealWith(box, bytes, grantContext(self.ws, r.id), eph), at: now },
+          { v: 1 as const, ws: self.ws, request: r.id, vault: v.id, item: item.id, mode: r.mode, hosts: r.hosts ?? item.listing?.hosts ?? [], scope, exp: now + (timeout ? timeout.seconds as number : GRANT_SECS[scope]), ...(timeout ? { timeout: timeout as { kind: "idle" | "fixed"; seconds: number } } : {}), secret: sealWith(box, bytes, grantContext(self.ws, r.id), eph), at: now },
           TAG.grant,
           signer,
         );
@@ -1275,7 +1278,7 @@ class Vaults {
         grant = grantTo(again.box);
         yield* self.#station(station, "POST", "/vault/grants", grant);
       }
-      self.#settled(r.id, { status: "granted", scope });
+      self.#settled(r.id, { status: "granted", scope, ...(timeout ? { timeout: timeout as { kind: "idle" | "fixed"; seconds: number } } : {}) });
       return { request: r.id, scope, exp: grant.exp };
     });
   }
@@ -1347,13 +1350,13 @@ class Vaults {
       }
       // Keeping it lets the chat that asked use it, for as long as the vault's items are given: its grant sealed to the
       // request's box (a station from before boxes none: no grant then).
-      const scope = SCOPES.filter((x) => allows(body.listing?.lasts ?? vault.lasts, x)).at(-1)!;
+      const scope: Scope = allows(body.listing?.lasts ?? vault.lasts, "hour") ? "hour" : "once";
       const now = nowS(inner);
       const eph = new Uint8Array(32);
       inner.host.randomBytes(eph);
       const grant: Grant | null = r.box
         ? sign(
-            { v: 1 as const, ws: self.ws, request: r.id, vault: vault.id, item: r.item, mode: r.mode, hosts: r.mode === "proxy" || r.mode === "browser" ? (r.hosts ?? s.hosts) : [], scope, exp: now + GRANT_SECS[scope], secret: sealWith(r.box, utf8(JSON.stringify(body.plain)), grantContext(self.ws, r.id), eph), at: now },
+            { v: 1 as const, ws: self.ws, request: r.id, vault: vault.id, item: r.item, mode: r.mode, hosts: r.mode === "proxy" || r.mode === "browser" ? (r.hosts ?? s.hosts) : [], scope, exp: now + GRANT_SECS[scope], ...(scope === "hour" ? { timeout: { kind: "idle" as const, seconds: 3600 } } : {}), secret: sealWith(r.box, utf8(JSON.stringify(body.plain)), grantContext(self.ws, r.id), eph), at: now },
             TAG.grant,
             signer,
           )
