@@ -539,13 +539,13 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
 
 ///|
 /// How far it can go laid out anew as `most` at `t` (`laid`: all of it laid out as a change of what it holds left it,
-/// however far that is: Scroll::grew_above): a fling under way down toward its foot, short of it still, meets it
-/// where it is now, worked out again from where it set out (rows below measured anew, come or gone; what grew above,
-/// Scroll::grew_above), at rest then.
+/// however far that is: Scroll::grew_above): a fling under way down toward its foot, short of it still (or meeting it
+/// at this very moment), meets it where it is now, worked out again from where it set out (rows below measured anew,
+/// come or gone; what grew above, Scroll::grew_above), at rest then.
 fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? : Bool = false) -> Unit {
   guard @signals.untracked(fn() { self.fling.get() }) is Some({ way: Some(w), .. } as f) &&
     f.v0 > 0.0 &&
-    t < f.end_t &&
+    t <= f.end_t &&
     (laid || f.till != most) else {
     return
   }

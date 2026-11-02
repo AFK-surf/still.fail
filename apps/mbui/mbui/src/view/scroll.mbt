@@ -484,7 +484,11 @@ pub fn View::scrolls(
     if s.as_list {
       s.foot_moved(self, t, most)
     }
-    if @signals.untracked(fn() { s.fling.get() }) is Some(_) && @signals.untracked(fn() { s.where_at(t) }) >= most {
+    // (a box kept to a height's fling past how far it can go now: stopped there; a page's list's meets its foot instead,
+    // worked out just now)
+    if !s.as_list &&
+      @signals.untracked(fn() { s.fling.get() }) is Some(_) &&
+      @signals.untracked(fn() { s.where_at(t) }) >= most {
       s.stopped(t) |> ignore
     }
     if @signals.untracked(fn() { s.x.get() }) > most {

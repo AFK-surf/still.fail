@@ -430,3 +430,60 @@ test "a page's list flung down near its foot, as much grown above as gone under 
     assert_true(rest < t.time(), msg="\{platform}: at rest at \{rest}")
   }
 }
+
+///|
+/// How tall what is under a page's list's rows is before it is measured shorter.
+let shrunk_from : Double = 2000.0
+
+///|
+test "a page's list flung down, what is under it measured shorter as it is let go, its foot where it stands now: it meets it there, goes past it and back" {
+  for platform in [1, 2] {
+    let below = @signals.signal(shrunk_from)
+    let (t, s) = same_tree(20, platform, below~)
+    let tree = view_tree().unwrap()
+    // (flung from up_from; as it is let go, its foot where it stands)
+    t.wheel(200.0, 400.0, up_from)
+    t.draw()
+    swipe(t, 700.0, -24.0, 12)
+    let at = s.at(tree)
+    assert_true(s.most() - at < shrunk_from, msg="\{platform}: \{s.most() - at} to go")
+    below.set(shrunk_from - (s.most() - at))
+    t.draw()
+    let rest = s.glides_till()
+    assert_true(rest is Some(r) && r > t.time(), msg="\{platform}: at rest at \{rest}, now \{t.time()}")
+    let mut past = false
+    let end = t.time() + grown_rest_ms
+    while t.time() < end {
+      t.frame()
+      if s.past(tree) != 0.0 {
+        past = true
+      }
+    }
+    assert_true(past, msg="\{platform}: never past its foot")
+    assert_true((s.at(tree) - s.most()).abs() < 1.0e-6, msg="\{platform}: at rest at \{s.at(tree)} of \{s.most()}")
+  }
+}
+
+///|
+test "a page's list flung down, its foot laid out where it stands and back again in the moment it is let go: no meeting there, it goes on to its foot" {
+  for platform in [1, 2] {
+    let below = @signals.signal(shrunk_from)
+    let (t, s) = same_tree(20, platform, below~)
+    let tree = view_tree().unwrap()
+    t.wheel(200.0, 400.0, up_from)
+    t.draw()
+    swipe(t, 700.0, -24.0, 12)
+    let at = s.at(tree)
+    let most = s.most()
+    below.set(shrunk_from - (most - at))
+    t.draw()
+    below.set(shrunk_from)
+    t.draw()
+    let end = t.time() + grown_rest_ms
+    while t.time() < end {
+      t.frame()
+      assert_true(s.past(tree) == 0.0 || (s.at(tree) - s.most()).abs() < 1.0e-6, msg="\{platform}: past its end at \{s.at(tree)} of \{s.most()}")
+    }
+    assert_true(s.at(tree) > at + 100.0, msg="\{platform}: at rest at \{s.at(tree)}, let go at \{at}")
+  }
+}
