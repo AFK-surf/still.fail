@@ -1,6 +1,7 @@
 // Sessions and threads as the pages read them, ported from the Rust station's admin/views.rs (`summary`, `sessions`, `session`,
-// `threads`, `thread`, `thread_view`), admin/mod.rs (GET /sessions/:key/timeline, /widget-state) and admin/files.rs
-// (`session_file`), with the same JSON, field for field and in serde_json's order.
+// `threads`, `thread`, `thread_view`) and admin/mod.rs (GET /sessions/:key/timeline, /widget-state), with the same JSON,
+// field for field and in serde_json's order. A file sent in a chat is found by its route, not read here
+// (api/routes/sessions.ts `uploaded`).
 //
 // What the Rust station keeps outside the database is taken as views.ts takes it (a station with none of it):
 // - the hub: no session has a runtime process (`process` "cold"); no transcript is watched, so a timeline is read from
@@ -11,8 +12,8 @@
 import { knownChannel, knownPerson, slackCreator } from "./slack-known.ts";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { basename, dirname, join, isAbsolute } from "node:path";
-import { clean, cleanPosix, fileName, samePath, segments, within } from "../ops/paths.ts";
+import { basename, join, isAbsolute } from "node:path";
+import { clean, cleanPosix, within } from "../ops/paths.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
@@ -23,7 +24,6 @@ import { setLang, tr } from "./spoken.ts";
 import { homesFirst, sessionPlaces, transcriptPaths } from "./transcript.ts";
 import { chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
 import { HttpError, messageView } from "./views.ts";
-import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../drive/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
 import { agentHomeOf } from "./memory.ts";
 import { shown } from "./jobs.ts";
@@ -380,13 +380,6 @@ export function mime(path: string): string {
   return (ext !== null && Object.hasOwn(kinds, ext) ? kinds[ext] : undefined) ?? "application/octet-stream";
 }
 
-const isFile = (path: string) => {
-  try {
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
-};
 const canonical = (path: string): string | null => {
   try {
     return realpathSync(path);
@@ -394,39 +387,6 @@ const canonical = (path: string): string | null => {
     return null;
   }
 };
-/// footprint.rs `room_of`: a session's own directory, the one its workspace is in when the station made it
-/// (<data>/sessions/<connect>/<session>/workspace), else none.
-function roomOf(dataDir: string, workspace: string): string | null {
-  const sessions = canonical(join(dataDir, "sessions"));
-  if (sessions === null) return null;
-  let path = canonical(workspace);
-  if (path === null) {
-    if (fileName(workspace) !== "workspace") return null;
-    const parent = canonical(dirname(workspace));
-    if (parent === null) return null;
-    path = join(parent, "workspace");
-  }
-  if (!within(path, sessions) || samePath(path, sessions)) return null;
-  const relative = segments(path.slice(sessions.length)).filter((p) => p !== "");
-  if (relative.length !== 3 || fileName(path) !== "workspace") return null;
-  return dirname(path);
-}
-
-/// thumbs.rs `thumbnail`, as far as a reader goes: the image's thumbnail as kept; else whether one is to be made (an
-/// image by its name, over 24 KiB), which the route asks the image codecs for (drive/thumbs.ts: the addon is not
-/// loaded in the readers, and a reader is not held up decoding); else null, the image shown itself.
-function thumbnail(image: string, dataDir: string): Thumbnail | "make" | null {
-  const name = fileName(image);
-  if (name === null || !thumbWanted(name)) return null;
-  let len: number;
-  try {
-    len = statSync(image).size;
-  } catch {
-    return null;
-  }
-  if (len <= SMALL) return null;
-  return kept(thumbsDir(dataDir), idOf(image)) ?? "make";
-}
 
 /// std::io::Error as anyhow shows it.
 export function ioMessage(e: NodeJS.ErrnoException): string {
@@ -536,29 +496,4 @@ function touched(repo: string): number {
     }
   }
   return at;
-}
-
-/// GET /sessions/:key/files?name&thumb=1 (files.rs `session_file`): a file sent to the session, for previews: only from
-/// its upload directory, else from its archived workspace. `thumb`: an image as a chat shows it. Its path and its type,
-/// for the route to answer with (cache-control `private, max-age=3600`); or, for a thumbnail not made yet,
-/// `{contentType, image, thumbs}`: the route has it made (else answers the image itself, of that type).
-export function sessionFile(s: Store, key: string, name: string, thumb: boolean, lang: Lang): Json {
-  setLang(lang);
-  const row = sessionRow(s, key);
-  const room = roomOf(s.dataDir, row.workspace);
-  const uploads = clean(join(row.workspace, "uploads"));
-  const base = name.split(/[/\\]/).at(-1) ?? "";
-  const path = clean(`${uploads}/${base}`);
-  const notFound = () => new HttpError(404, tr("station.files.notFound"));
-  if (base === "" || !within(path, uploads) || samePath(path, uploads)) throw notFound();
-  if (!isFile(path)) {
-    // Packed with its archived workspace: the route reads it out of the archive (sessions/archive.ts), under its lock.
-    if (room === null || !existsSync(join(room, "workspace.tar.zst"))) throw notFound();
-    return { contentType: mime(path), archived: { room, path, relative: `uploads/${base}` }, notFound: tr("station.files.notFound") };
-  }
-  const small = thumb ? thumbnail(path, s.dataDir) : null;
-  if (small === "make") return { contentType: mime(path), image: path, thumbs: thumbsDir(s.dataDir) };
-  const [file, kind] = small !== null ? [small.path, small.type] : [path, mime(path)];
-  // Read by the route, as it goes out: a big file is never all in memory here, nor sent across as base64.
-  return { contentType: kind, file };
 }

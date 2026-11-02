@@ -41,6 +41,16 @@ export class HttpError extends Error {
 /// The language the request being answered asks in (one request at a time in a worker).
 let spokenLang: Lang = "zh";
 export const setSpoken = (lang: Lang) => (spokenLang = lang);
+/// What `make` makes with the words in `lang`, off the readers (each read sets its own): the words as they were after.
+export function spokenIn<T>(lang: Lang, make: () => T): T {
+  const was = spokenLang;
+  spokenLang = lang;
+  try {
+    return make();
+  } finally {
+    spokenLang = was;
+  }
+}
 const tr = (key: string, args: Record<string, string> = {}) => translate(spokenLang, key, args);
 
 /// What a chat with no name yet is called.

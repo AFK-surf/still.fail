@@ -2,7 +2,7 @@
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
 import { listThreads, messagesBefore } from "./store.ts";
-import { session, sessionFile, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
+import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
 export const sessionOps: Record<string, ReadOp> = {
   /// Every thread as lists have it, for no viewer: chat_list's (sessions/others.ts).
@@ -15,7 +15,6 @@ export const sessionOps: Record<string, ReadOp> = {
   session: (s, a) => session(s, a.key, a.viewer, a.lang),
   timeline: (s, a) => timeline(s, a.key, a.before, a.limit, a.lang, a.from, a.to, a.brief, a.after),
   transcriptState: (s, a) => transcriptState(s, a.key),
-  sessionFile: (s, a) => sessionFile(s, a.key, a.name, a.thumb, a.lang),
   transcriptFile: (s, a) => transcriptFile(s, a.key, a.lang),
   widgetState: (s, a) => widgetState(s, a.key, a.path, a.lang),
   sessionPlace: (s, a) => sessionPlace(s, a.key, a.path ?? "", a.lang),

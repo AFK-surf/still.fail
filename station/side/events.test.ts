@@ -19,6 +19,7 @@ test("a job's log is told as it grows, by its watch (before the 5 s look)", asyn
   const events = new Events({
     clock: time.clock,
     readers: { read: async () => "[]" } as any,
+    said: () => [],
     subscribe: () => () => {},
     host: async () => ({}),
     jobLog: (id) => (id === "j" ? join(dir, "j.log") : null),

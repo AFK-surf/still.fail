@@ -33,13 +33,18 @@
 //
 // Where the Rust re-read a job's log every second, a log is watched (fs.watch); the sidebar rows of a viewer are read
 // once per round for all their streams, off the main thread (the readers).
+//
+// What is said in a thread is told as the store wrote it: its entries come with the change, and are made into what the
+// pages show here (`said`), with nothing read first. What else a change touches (each viewer's thread, their sidebar,
+// a session's summary, a job) is read by the station's own reader (`told`: read/pool.ts), which nothing a device asks
+// takes: on ccvm (2026-11-02) both shared two readers, and a message just said was told 50 s late.
 import { type FSWatcher, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { type Viewer, readOnly } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Readers } from "../read/pool.ts";
-import { type StoreChange, sees } from "../store/rows.ts";
+import { type EntryRow, type StoreChange, sees } from "../store/rows.ts";
 import type { Answer } from "./request.ts";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
@@ -51,8 +56,7 @@ const HOST_MS = 10_000;
 /// changes with every model call, some seconds apart while agents work, and each telling has a page showing usage, and every
 /// client from before it is read only so, read all of it again (some 200 KB).
 const USAGE_EVERY_MS = 60_000;
-/// What the streams tell is read before the pages a device asked (read/pool.ts): a message just said is not held up
-/// behind a heavy read.
+/// What the streams tell is read by the station's own reader (read/pool.ts), never behind what a device asked.
 const TOLD = { told: true };
 /// A stream's answer when it was told first what came after `since` (the client then reads nothing again).
 export const RESUMED = "stillfail-resumed";
@@ -68,6 +72,9 @@ export const eventsHandoverFile = (dataDir: string) => join(dataDir, "run", "eve
 /// What the events need of the rest of the station.
 export type EventsDeps = {
   readers: Readers;
+  /// What was just said in a thread (its entries, or its letters, as the store wrote them), as the pages show it (read/
+  /// views.ts `entryViews`: with its authors' names), in `lang`: made on this thread, nothing waited on.
+  said(thread: number, entries: EntryRow[], lang: Lang): unknown[];
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
   subscribe(listener: (change: StoreChange) => void): () => void;
@@ -640,23 +647,12 @@ export class Events {
         this.itemsChanged({ sessions: [change.key] });
         break;
       case "thread": {
-        // Read as one who follows (or did last) would have it.
+        // Told as one who follows (or did last) would have it.
         const who = this.clients[0] ?? this.last;
         if (this.listening() && who && change.entries.length > 0) {
-          const first = change.entries[0].n;
-          const last = change.entries.at(-1)!.n;
-          // Entries as the pages show them (with their authors' names), read off the main thread.
-          this.whenRead(
-            this.deps.readers
-              .read("entries", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang, TOLD)
-              .then((text) => this.emit("thread", { id: change.id, entries: JSON.parse(text).entries }, { sees: { thread: change.id } }), (e) => log.warn("events", "thread event not sent", { error: (e as Error).message })),
-          );
-          // And to each viewer, the thread as GET /threads/:id has it for them (their read position, their unread count):
-          // a client puts it in place rather than read it again after every message (a phone did some two a minute).
-          for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: change.id }) ?? true)) {
-            const k = viewerKey(viewer, lang);
-            this.whenRead(this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang, TOLD).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${change.id}\0${k}`), () => {}));
-          }
+          // What was said, as GET /threads/:id/entries has it, at once.
+          this.tellSaid("thread", change.id, change.entries, who.lang);
+          this.tellThreadViews(change.id, who);
         }
         this.itemsChanged({ threads: [change.id] });
         break;
@@ -666,17 +662,8 @@ export class Events {
         // the thread as each viewer has it (how many letters, how far their log goes).
         const who = this.clients[0] ?? this.last;
         if (this.listening() && who && change.letters.length > 0) {
-          const first = change.letters[0]!.n;
-          const last = change.letters.at(-1)!.n;
-          this.whenRead(
-            this.deps.readers
-              .read("letters", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang, TOLD)
-              .then((text) => this.emit("letters", { id: change.id, letters: JSON.parse(text).letters }, { sees: { thread: change.id } }), (e) => log.warn("events", "letters event not sent", { error: (e as Error).message })),
-          );
-          for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: change.id }) ?? true)) {
-            const k = viewerKey(viewer, lang);
-            this.whenRead(this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang, TOLD).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${change.id}\0${k}`), () => {}));
-          }
+          this.tellSaid("letters", change.id, change.letters, who.lang);
+          this.tellThreadViews(change.id, who);
         }
         break;
       }
@@ -712,6 +699,27 @@ export class Events {
       case "decisionChecks":
         this.overviewChanged();
         break;
+    }
+  }
+
+  /// What was said in a thread (`entries` of `thread`, or its letters), told to every stream whose viewer sees it as the
+  /// pages show it (`said`): made from what the store wrote, never waiting on a read.
+  private tellSaid(event: "thread" | "letters", id: number, entries: EntryRow[], lang: Lang) {
+    let views: unknown[];
+    try {
+      views = this.deps.said(id, entries, lang);
+    } catch (error) {
+      return log.warn("events", `${event} event not sent`, { error: (error as Error).message });
+    }
+    this.emit(event, event === "thread" ? { id, entries: views } : { id, letters: views }, { sees: { thread: id } });
+  }
+
+  /// The thread as GET /threads/:id has it for each viewer (their read position, their unread count): a client puts it in
+  /// place rather than read it again after every message (a phone did some two a minute).
+  private tellThreadViews(id: number, who: { viewer: Viewer; lang: Lang }) {
+    for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: id }) ?? true)) {
+      const k = viewerKey(viewer, lang);
+      this.whenRead(this.deps.readers.read("thread", { viewer, id, lang }, lang, TOLD).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${id}\0${k}`), () => {}));
     }
   }
 

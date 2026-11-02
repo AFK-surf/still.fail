@@ -420,6 +420,20 @@ export const toSessionThread = (r: Json): SessionThread => ({ thread: toThread(r
 
 export const toMembership = (r: Json): Membership => ({ thread: r.thread, session: r.session, connect: r.connect, joinedAt: r.joined_at });
 
+/// An entry's columns as they are stored (store.ts `#insertEntry`).
+export function entryColumns(e: EntryRow): Json {
+  return {
+    thread: e.thread, n: e.n, kind: e.kind, target: e.target, ts: e.ts, author_kind: e.authorKind, author: e.author, text: e.text,
+    attachments: jsonList<Attachment>(e.attachments, attachment), quotes: jsonList<Quote>(e.quotes, quote), declared: e.declared,
+    client: e.client, profile: e.profile, runtime: e.runtime, options: e.options === undefined ? null : JSON.stringify(e.options),
+    card: e.card === undefined ? null : JSON.stringify(e.card), at: e.at,
+    agent_identity: e.agentIdentity === undefined ? null : JSON.stringify(e.agentIdentity), letter: e.letter === undefined ? null : JSON.stringify(e.letter),
+  };
+}
+
+/// An entry as a read of it gives it once it is stored: what is told of it as it is written is the same.
+export const stored = (e: EntryRow): EntryRow => toEntry(entryColumns(e));
+
 export function toEntry(r: Json): EntryRow {
   return {
     agentIdentity: parsed(r.agent_identity), thread: r.thread, n: r.n, kind: r.kind === "edit" ? "edit" : "message",

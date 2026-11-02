@@ -80,6 +80,8 @@ export type Tools = {
   sessionExists(key: string): boolean;
   /// The station's store, for what is written (on this thread); none while the station starts.
   store?: Store;
+  /// The station's data directory (stillfail.db, sessions/, thumbs/).
+  data?: string;
   /// The hub, the jobs and the rest of the agents' side, for what needs a session run, stopped or changed; none where
   /// there are no agents (tests of reads).
   agents?: AgentsParts;
@@ -148,6 +150,7 @@ export class Admin {
       events: deps.events,
       sessionExists: (key) => deps.store?.getSession(key) != null,
       store: deps.store,
+      data: data ?? readers.data,
       get agents() {
         return agentsNow();
       },
