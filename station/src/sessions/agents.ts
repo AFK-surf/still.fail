@@ -194,7 +194,7 @@ export const AgentsLive = (control: Control) =>
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
         lent: {
           borrowed: (p) => borrowed(p) || lentToSandbox(p),
-          write: (p) => (borrowed(p) ? sharing!.lendCodex(p) : sharing!.lendOwnCodex(p, lentFile(data, p.home))),
+          write: (p) => (borrowed(p) ? sharing!.lendCodex(p, false, sandboxed(data) ? lentFile(data, p.home) : undefined) : sharing!.lendOwnCodex(p, lentFile(data, p.home))),
         },
       });
       // What the parts of the agents' side add (slack/module.ts): the connects' chats, their overview, and what they do
@@ -465,7 +465,7 @@ export const AgentsLive = (control: Control) =>
       const accounts: Accounts = makeAccounts({
         data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
-        shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), view: (p) => sharing?.profileView(p) ?? null, hostName },
+        shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), quotaReset: (p, key) => sharing!.quotaReset(p.id, key), loginUpdated: () => { void sharing?.reconcile(); }, view: (p) => sharing?.profileView(p) ?? null, hostName },
       });
       found = accounts.found;
       accounts.start();
@@ -480,6 +480,8 @@ export const AgentsLive = (control: Control) =>
         status: async (id) => { const h = await accounts.lentHealth(id); return { check: h.check ?? null, quota: h.quota ?? null }; },
         changed: () => events.overviewChanged(),
         recheck: () => accounts.recheckBorrowed(),
+        profileChanged: (id, reset) => accounts.sharedChanged(id, reset),
+        quotaReset: (id) => accounts.sharedQuotaReset(id),
       });
       remote.setShares((peer, request, workspace) => sharing!.handle(peer, request, workspace));
       sharing.start();

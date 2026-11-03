@@ -54,7 +54,7 @@ export const STATS_OF = `SELECT
          (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
     l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
   FROM sessions s
-  LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
+  LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC, t2.rowid DESC LIMIT 1)
   WHERE s.key = ?`;
 
 // Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
@@ -1707,12 +1707,13 @@ export class Store {
 
   /// The session was stopped while it waited: its latest turn, if it ended waiting, is recorded as stopped instead
   /// (aborted, no longer waiting). Whether it was.
-  stopWait(session: string): boolean {
+  stopWait(session: string, refill = false): boolean {
     return this.#with((changes) => {
       const n = this.#run(
         `UPDATE turns SET outcome = 'aborted', declared = NULL, wait_seconds = NULL, detail = 'other: stopped while waiting'
-         WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1) AND declared = 'waiting' AND ended_at IS NOT NULL`,
-        session,
+         WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC, rowid DESC LIMIT 1) AND ended_at IS NOT NULL
+           AND (declared = 'waiting' OR (?2 AND outcome = 'failed' AND detail LIKE 'rate_limit:%'))`,
+        session, refill ? 1 : 0,
       );
       if (n > 0) changes.push({ type: "session", key: session });
       return n > 0;
