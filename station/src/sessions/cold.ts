@@ -248,9 +248,15 @@ export class ColdRooms implements ColdStorage {
   }
 
   /// Transcripts put away before they were in segments (read/packed.ts), each read whole for every page of its history
-  /// (150 MB for one): put away again in segments, one after another. Once all are, this finds none to do.
+  /// (150 MB for one): put away again in segments, one after another. Once every one is, said so on disk (SEGMENTED),
+  /// and none looked for again: each station start went through every archived session's
+  /// transcripts again, finding them on the station's thread (a Codex one by its sessions' tree), 1.2 s held at a time
+  /// on ccvm short of memory (2026-11-03), every 10 min that evening.
   async segmentHistories(): Promise<void> {
+    const said = join(this.dataDir(), SEGMENTED);
+    if (await access(said).then(() => true, () => false)) return;
     let done = 0;
+    let failed = false;
     for (const row of this.hub().store.listSessions()) {
       if (row.archivedAt === null) continue;
       let files: string[];
@@ -263,13 +269,20 @@ export class ColdRooms implements ColdStorage {
         try {
           if (await archive.segmentFile(path)) done++;
         } catch (error) {
+          failed = true;
           log.warn("hub", "a put-away transcript not put in segments", { session: row.key, error: (error as Error).message });
         }
       }
+      // Between sessions, the station's other work.
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     if (done > 0) log.info("hub", "put-away transcripts put in segments", { n: done });
+    if (!failed) await writeFile(said, "").catch(() => undefined);
   }
 }
+
+/// Said in the station's data once every transcript put away is in segments (`segmentHistories`).
+const SEGMENTED = "transcripts-segmented";
 
 /// The Rust station's copy of an archived session's transcript.
 const LEGACY = ".jsonl.zst";
