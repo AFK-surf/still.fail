@@ -136,6 +136,20 @@ export function readJson(path: string): Json {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+/// What chats used of other stations' workspaces (`usedPath`), as last written or read here: what `workspaceTargets`
+/// says of every chat shown, again and again, read from the disk each time on the station's thread, 16 of them held it
+/// 2.5 s on ccvm short of memory (2026-11-03). Written only by this station (`writeJson` keeps it current).
+const used = new Map<string, Json>();
+
+function readUsed(path: string): Json {
+  const kept = used.get(path);
+  if (kept !== undefined) return kept;
+  const read = readJson(path);
+  used.set(path, read);
+  if (used.size > 4096) used.delete(used.keys().next().value!);
+  return read;
+}
+
 /// readJson off the station's thread (fs/promises): what is read again on a schedule, or all the records at once.
 const readJsonSoon = async (path: string): Promise<Json> => JSON.parse(await readFile(path, "utf8"));
 
@@ -158,6 +172,7 @@ export function writeJson(path: string, value: Json): void {
     closeSync(fd);
   }
   renameSync(temp, path);
+  if (used.has(path)) used.set(path, JSON.parse(JSON.stringify(value)));
 }
 
 const isLink = (path: string): boolean => {
@@ -862,7 +877,7 @@ export class Remote {
     if (!row || row.archivedAt !== null) return null;
     try {
       const workspace = this.workspace(row.ws ?? null);
-      const record = readJson(this.usedPath(session));
+      const record = readUsed(this.usedPath(session));
       if (record.closing === true || record.workspace !== workspace || !Array.isArray(record.stations)) return null;
       return { workspace, stations: record.stations.filter((s: unknown): s is string => typeof s === "string" && s !== "") };
     } catch {
@@ -970,7 +985,10 @@ export class Remote {
       const pending: string[] = (Array.isArray(v.stations) ? v.stations : []).filter((s: Json) => !closed.includes(s) && typeof s === "string");
       if (pending.length === 0 || this.store.now() - (asI64(v.since) ?? 0) > CLOSE_FOR_MS) {
         try {
-          if (readJson(path).closing === true) rmSync(path, { force: true });
+          if (readJson(path).closing === true) {
+            rmSync(path, { force: true });
+            used.delete(path);
+          }
         } catch {}
         return true;
       }

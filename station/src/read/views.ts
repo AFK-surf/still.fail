@@ -442,7 +442,10 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   }
   stage("waiting");
   const answered: Json = {};
-  for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, own.map((t) => t.thread.id))) {
+  // Of the chats that ever had a card alone: each of the others' people's messages of the last day and a half was looked
+  // at with half a dozen lookups for a card it answered, 3.2 s for one busy chat on ccvm short of memory (2026-11-03).
+  const carded = store.threadsWithCards(s, own.map((t) => t.thread.id));
+  for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, carded)) {
     if (!mine(creator(a.by))) continue;
     (answered[a.question.thread] ??= []).push(answeredView(a));
   }
