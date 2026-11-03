@@ -728,14 +728,12 @@ export class CodexDriver implements AgentDriver {
       "mcp_servers.stillfail.http_headers": { Authorization: `Bearer ${options.mcpToken}` },
     };
     if (options.textOnly) {
-      // An empty table alone is merged with a profile's configured servers. Disable each one for this thread before
-      // opening it, then verify the effective inventory below before giving it any conversation text.
+      // An empty table is merged with the profile's configured servers. Read their names without config/read, whose
+      // reply can contain credentials and would be kept in the runner's output. The thread's inventory is checked too,
+      // since its working directory may add servers absent from this host-level inventory.
       try {
-        const read = await host.request("config/read", { cwd: options.cwd });
-        if (read?.config === null || typeof read?.config !== "object") throw new Error("missing config");
-        const servers = read.config.mcp_servers;
-        if (servers !== undefined && servers !== null && (typeof servers !== "object" || Array.isArray(servers))) throw new Error("invalid MCP config");
-        config.mcp_servers = Object.fromEntries(Object.keys(servers ?? {}).map((name) => [name, { enabled: false }]));
+        const servers = await mcpInventory(host);
+        config.mcp_servers = Object.fromEntries(servers.map((s) => [s.name, { enabled: false }]));
       } catch {
         throw new Error("cannot open a text-only Codex session");
       }
@@ -767,20 +765,24 @@ export class CodexDriver implements AgentDriver {
     } else {
       opened = await host.request("thread/start", common);
     }
-    const threadId = opened?.thread?.id;
+    let threadId = opened?.thread?.id;
     if (typeof threadId !== "string") throw new Error("codex gave no thread id");
     if (options.textOnly) {
-      // Profile-level MCP servers can be merged into a thread's config. Do not give untrusted chat text to a model
-      // with any of them available, even when an older app-server ignores the empty override above.
+      // A directory can add servers that were absent from the host's inventory. Open another thread with those
+      // disabled too; neither thread gets any conversation text until its effective inventory is entirely disabled.
       try {
-        let cursor: string | null = null;
-        do {
-          const inventory = await host.request("mcpServerStatus/list", { threadId, cursor, detail: "toolsAndAuthOnly" });
-          if (!Array.isArray(inventory?.data) || inventory.data.some((s: Json) => s?.runtimeStatus !== "disabled")) throw new Error("MCP servers are enabled");
-          cursor = typeof inventory.nextCursor === "string" ? inventory.nextCursor : null;
-        } while (cursor !== null);
+        const servers = await mcpInventory(host, threadId);
+        if (servers.some((s) => s.runtimeStatus !== "disabled")) {
+          if (options.resume !== undefined) throw new Error("cannot disable a resumed thread's MCP servers");
+          await host.request("thread/unsubscribe", { threadId });
+          config.mcp_servers = { ...config.mcp_servers, ...Object.fromEntries(servers.map((s) => [s.name, { enabled: false }])) };
+          opened = await host.request("thread/start", common);
+          threadId = opened?.thread?.id;
+          if (typeof threadId !== "string") throw new Error("codex gave no thread id");
+          if ((await mcpInventory(host, threadId)).some((s) => s.runtimeStatus !== "disabled")) throw new Error("MCP servers are enabled");
+        }
       } catch {
-        await host.request("thread/unsubscribe", { threadId }).catch(() => {});
+        if (typeof threadId === "string") await host.request("thread/unsubscribe", { threadId }).catch(() => {});
         throw new Error("cannot open a text-only Codex session");
       }
     }
@@ -874,6 +876,19 @@ export class CodexDriver implements AgentDriver {
     for (const host of this.hosts.values()) host.detach();
     this.hosts.clear();
   }
+}
+
+/// Names and runtime states only: unlike config/read this does not return configured MCP credentials.
+async function mcpInventory(host: Host, threadId?: string): Promise<{ name: string; runtimeStatus: unknown }[]> {
+  const servers: { name: string; runtimeStatus: unknown }[] = [];
+  let cursor: string | null = null;
+  do {
+    const inventory = await host.request("mcpServerStatus/list", { ...(threadId === undefined ? {} : { threadId }), cursor, detail: "toolsAndAuthOnly" });
+    if (!Array.isArray(inventory?.data) || inventory.data.some((s: Json) => typeof s?.name !== "string")) throw new Error("invalid MCP inventory");
+    servers.push(...inventory.data.map((s: Json) => ({ name: s.name, runtimeStatus: s.runtimeStatus })));
+    cursor = typeof inventory.nextCursor === "string" ? inventory.nextCursor : null;
+  } while (cursor !== null);
+  return servers;
 }
 
 /// Whether thread `threadId`'s connection to the station's MCP endpoint failed, as its app-server says (once its startup

@@ -94,6 +94,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(start.params.config["features.goals"], false);
     assert.deepEqual(start.params.config.mcp_servers, {});
     assert.ok(stdin(p.dump).some((m) => m.method === "mcpServerStatus/list"));
+    assert.ok(!stdin(p.dump).some((m) => m.method === "config/read"), "MCP credentials are not read into the runner log");
     await session.dispose();
   });
 
@@ -112,6 +113,20 @@ describe("the Codex driver", { concurrency: true }, () => {
     const session = await d.open(options(p, { textOnly: true }), listen().push);
     const start = stdin(p.dump).find((m) => m.method === "thread/start");
     assert.deepEqual(start.params.config.mcp_servers, { configured: { enabled: false } });
+    await session.dispose();
+  });
+
+  test("a text-only request disables servers added by the working directory before sending any text", async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_MCP_PROJECT: "1" };
+    const session = await d.open(options(p, { textOnly: true }), listen().push);
+    const requests = stdin(p.dump);
+    const starts = requests.filter((m) => m.method === "thread/start");
+    assert.equal(starts.length, 2);
+    assert.deepEqual(starts[1].params.config.mcp_servers, { configured: { enabled: false } });
+    assert.ok(requests.some((m) => m.method === "thread/unsubscribe"));
+    assert.ok(!requests.some((m) => m.method === "turn/start" || m.method === "config/read"));
     await session.dispose();
   });
 
