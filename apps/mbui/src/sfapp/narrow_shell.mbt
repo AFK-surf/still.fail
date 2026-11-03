@@ -333,6 +333,8 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
   // (App.kt LockPrompts): put up when no other sheet is
   @settings.lock_prompts(settings_core(src, w), !sheet_open())
+  // a device of the person's waiting on this one for a vault's key (settings/vault_prompts.mbt), the same way
+  @settings.vault_prompts(settings_core(src, w), !sheet_open())
   // (the core what the settings put up over a page draws with, put up by what has none at hand)
   @settings.panels_frame(settings_core(src, w))
   // what another app shares, in the wide window's panel (share.mbt; a sheet on Small, as ShareSheet)

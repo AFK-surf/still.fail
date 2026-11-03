@@ -592,20 +592,25 @@ fn vault_delete_row(c : @ui.Ctx, core : Core, ws : String, rv : Json?, many : Bo
 }
 
 ///|
-/// A vault this device has no key to (VaultSection's), under its name: that it has none, how to get one, and the
-/// recovery words typed where they can give it one.
+/// A vault this device has no key to (VaultSection's), under its name: that it has none, how to get one; 申请授权
+/// (`vault.ask`: this device's certificate published anew, so the owner's devices are prompted for the key, or give it
+/// at once where one holds it unsealed) and the recovery words typed where they can give it one.
 fn vault_no_key(c : @ui.Ctx, core : Core, ws : String, rv : Json?) -> Unit {
   let recoverable = flag(rv, "recoverable")
+  let id = text(rv, "id")
   @sf.section(c, text(rv, "name"), fn() {
-    @sf.page_card(c, footed=recoverable, fn() {
+    @sf.page_card(c, footed=true, fn() {
       @sf.card_lines(c, @sf.t("android-settings.vault.noKey"), note=@sf.t("android-settings.vault.noKeyHow"))
-      if recoverable {
-        @sf.card_foot(c, fn() {
-          if @sf.button(c, @sf.t("android-settings.vault.recover"), key="vault-recover/" + text(rv, "id"), tone=Primary) {
+      @sf.card_foot(c, fn() {
+        if @sf.button(c, @sf.t("web-pages.vault.ask"), key="vault-ask/" + id, tone=Primary, busy=is_doing(core, ["vault.ask"], [("workspace", ws)])) {
+          @settings.act(core, @sf.t("web-pages.vault.askWhat"), "vault.ask", obj([("workspace", str(ws))]), done=@sf.t("web-pages.vault.asked"))
+        }
+        if recoverable {
+          if @sf.button(c, @sf.t("android-settings.vault.recover"), key="vault-recover/" + id, tone=Ghost) {
             vault_recover_dialog(core, ws)
           }
-        })
-      }
+        }
+      })
     })
   })
 }
