@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import * as compact from "../src/store/usage-compact.ts";
 import { Store } from "../src/store/store.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
+import { watchCompactMoves } from "../src/usage/module.ts";
 
 test("recording calls does not rewrite the workspace total in every transaction", () => {
   const store = Store.open(":memory:");
@@ -33,4 +37,39 @@ test("recording calls does not rewrite the workspace total in every transaction"
     assert.equal(accounted, 3, "eight calls in three minutes need three bucket updates");
     assert.deepEqual(compact.compactTotal(store.db, { workspace: "A", home: false }), { calls: 8, tokens: 16 });
   } finally { store.close(); }
+});
+
+test("a worker completes pending totals after new calls and tells the page", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "compact-total-worker-"));
+  const store = Store.open(join(dir, "station.db"));
+  let mover: ReturnType<typeof watchCompactMoves> | null = null;
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A",
+      createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    mover = watchCompactMoves(store, Promise.resolve());
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string) => ({ id, at: 0, model: "m", subagent: true, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+    const ready = (calls: number) => new Promise<void>((resolve) => {
+      const unsubscribe = store.subscribe((change) => {
+        if (change.type !== "usage" || !change.sessions.includes("a")) return;
+        if (compact.compactTotal(store.db, { workspace: "A", home: false })?.calls !== calls) return;
+        unsubscribe();
+        resolve();
+      });
+    });
+    for (let n = 1; n <= 2; n++) {
+      const told = ready(n);
+      store.recordUsage("/a", { session: "a", offset: n, model: "m" }, "claude", [[call(`call-${n}`), owner]]);
+      store.usageChanged(["a"]);
+      await told;
+      assert.deepEqual(compact.compactTotal(store.db, { workspace: "A", home: false }), { calls: n, tokens: n * 2 });
+    }
+  } finally {
+    if (mover !== null) await mover.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
