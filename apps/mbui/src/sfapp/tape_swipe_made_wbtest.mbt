@@ -137,10 +137,15 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
     let (t, p, depth) = tape_changelog_made(made~)
     // (a finger across, as the swipe back above is made)
     let y = p.y + 20.0
+    let before = "panel \{p.x},\{p.y} \{p.w}x\{p.h} shows_left \{@sfdesk.tape_shows_left()} kind \{@sfbase.page_kind(app.nav.top())}"
     t.touch(0, p.x + 6.0, y)
     for i in 1..=10 {
       t.advance(@ui.input_step_ms)
       t.touch(1, p.x + 6.0 + 394.0 * i.to_double() / 10.0, y)
+      if i == 5 {
+        guard tape_page_panel(t) is Some(q) else { fail("no page midway") }
+        swiped_mid.val = "\{before}; midway panel \{q.x} tape_drag \{@signals.untracked(fn() { @sfdesk.wide.tape_drag.get() })}"
+      }
     }
     t.touch(2, p.x + 400.0, y)
     t.run_for(@ui.move_most_ms)
@@ -153,6 +158,14 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
   assert_eq(made_back, back(false))
   assert_eq(made_back, (false, 0, false, @sfdesk.TapePane::Page), msg="\{made_back}")
   let made = across(true)
-  assert_eq(made, across(false))
-  assert_eq(made, (-1, true, @sfdesk.TapePane::Page), msg="\{made}")
+  let made_mid = swiped_mid.val
+  let old_across = across(false)
+  swiped_mid.val = made_mid + " | old: " + swiped_mid.val
+  assert_eq(made, old_across, msg=swiped_mid.val)
+  assert_eq(made, (-1, true, @sfdesk.TapePane::Page), msg="\{made} \{swiped_mid.val}")
 }
+
+///|
+/// What the swipe across saw (tape_changelog_made's test), for its message.
+// kept across runs: a test's, said anew by each
+let swiped_mid : Ref[String] = Ref("")
