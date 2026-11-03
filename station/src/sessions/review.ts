@@ -5,7 +5,8 @@
 // unfinished, or cannot tell, is not. It never holds an agent back.
 import { Effect } from "effect";
 import type { MessageRow } from "../store/store.ts";
-import { type ArchivePolicy, archiveMass, currentPolicy, policyQuestion, recommends } from "./archive-policy.ts";
+import type { SessionRow } from "../store/rows.ts";
+import { type ArchivePolicy, archiveMass, currentPolicy, policyFrom, policyQuestion, recommends } from "./archive-policy.ts";
 import { type Capability, type ChoiceResult, decide, type DecisionConfig, resolvedModel } from "./decision.ts";
 import type { Hub } from "./hub.ts";
 import { usable } from "./pool.ts";
@@ -18,7 +19,7 @@ const ARCHIVE_REVIEW_BYTES = 80_000;
 
 /// Whose archive policy a session's chat is under (docs/multi-workspace.md): its workspace's, null for the station's home
 /// one (whose policy is kept as null).
-export function policyWs(hub: Hub, key: string): string | null {
+export function policyWs(hub: Hub, key: string | SessionRow): string | null {
   const ws = hub.wsOf(key);
   return ws === null || ws === hub.workspaces()[0] ? null : ws;
 }
@@ -58,8 +59,9 @@ export async function review(hub: Hub, key: string): Promise<void> {
       hub.store.recordDecision(key, detail);
     } catch {}
   };
-  const policy = policyOf(hub, key);
-  const policyAt = policyStamp(hub, key);
+  const saved = hub.store.archivePolicy(policyWs(hub, key));
+  const policy = policyFrom(saved);
+  const policyAt = saved?.change.id ?? 0;
   // What the chats look like to their pages: the option picked, or why none was, for each thread as it stands.
   const verdict = (versions: [number, number][], v: Json) => {
     for (const [id, version] of versions) {
@@ -160,14 +162,15 @@ export async function review(hub: Hub, key: string): Promise<void> {
 export function undecided(hub: Hub): string[] {
   const { store } = hub;
   const live = store.liveSessions();
-  const stats = store.statsOf(live.map((s) => s.key));
   const keys: string[] = [];
+  const policies = new Map<string | null, number>();
   for (const s of live) {
     if (s.running) continue;
-    const stat = stats.get(s.key);
-    const last = stat?.lastTurn ?? null;
-    if (!last || last.endedAt === null || last.ending !== "all_done" || (stat?.pending ?? 0) > 0) continue;
-    const policy = policyStamp(hub, s.key);
+    const last = store.lastTurn(s.key);
+    if (!last || last.endedAt === null || last.ending !== "all_done" || store.hasUndelivered(s.key)) continue;
+    const ws = policyWs(hub, s);
+    let policy = policies.get(ws);
+    if (policy === undefined) policies.set(ws, (policy = store.archivePolicy(ws)?.change.id ?? 0));
     const threads = store.sessionThreads(s.key).map((t) => t.thread.id);
     const decided = store.lastDecision(s.key);
     // Under another policy than now, it is asked again, the recommended ones too.
