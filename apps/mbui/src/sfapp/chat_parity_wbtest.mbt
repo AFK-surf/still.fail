@@ -301,7 +301,7 @@ test "an agent's link to an archived chat written bare: its title as the core sa
         // (the core's tree of its words, and the chats they link to as their lists have them: views.ts drawn)
         with_chat_message(v, 11.0, [
           ("text", Json::string(words)),
-          ("md", [["p", [[0, 2], ["a", [[2, 40]], { "href": Json::string(link), "to": { "chat": true } }]]]]),
+          ("md", [["p", [[0, 2], ["a", [[2, 40]], { "href": Json::string(link), "bare": true, "to": { "chat": true } }]]]]),
           ("chats", [{ "href": Json::string(link), "title": "旧的对话", "archived": true, "note": "已归档" }]),
         ])
       } else {
@@ -329,7 +329,7 @@ test "a link to one message of a chat written bare: the chat's title, not its ad
     if name == "chat" {
       with_chat_message(v, 11.0, [
         ("text", Json::string(words)),
-        ("md", [["p", [[0, 2], ["a", [[2, 50]], { "href": Json::string(link), "to": { "chat": true } }]]]]),
+        ("md", [["p", [[0, 2], ["a", [[2, 50]], { "href": Json::string(link), "bare": true, "to": { "chat": true } }]]]]),
         ("chats", [{ "href": Json::string(link), "title": "旧的对话" }]),
       ])
     } else {

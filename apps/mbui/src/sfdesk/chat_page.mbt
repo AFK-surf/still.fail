@@ -1009,7 +1009,7 @@ fn info_pull_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String, pull : Js
   c.semantics(b, Link, id~, label=title)
   let url = text(pull, "url")
   // (at the info's left: under it, it would cover the info's rows after it; the user, 2026-10-29: 显示到左边)
-  @sfpages.web_peek(c, src, r.station, url, title, id, side=Left)
+  @sfpages.web_peek(c, src, r.station, url, title, id, side=Left, peek=text(pull, "peek"))
   @sfpages.thing_menu(c, id, number(pull, "seq"), url, fn(seq) {
     chat_own.info_open.set(false)
     @sfbase.go_to(r, seq)

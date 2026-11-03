@@ -18,6 +18,7 @@ import { Bones, sampleWords } from "@stillfail/ui/waiting.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { PanelButton } from "./ui.tsx";
 import { chipPath, pathIn, shownPath } from "./paths.ts";
+import { githubOf } from "../../client/core-ts/src/refLinks.ts";
 
 export { pathIn };
 
@@ -82,8 +83,6 @@ function destination(href: string): string {
   }
 }
 
-/** Links whose cards are rich (read before shown, bars meanwhile); any other shows its tile at once. */
-const RICH = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|issues)\/\d+(?:[/?#]|$)/;
 
 /** A web link in a message, and its card: what the core reads of it (the `linkPreview` topic, kept), asked for as the
  *  pointer comes onto the link. */
@@ -91,7 +90,7 @@ export function LinkHover({ href, label, children, side }: { href: string; label
   /** Beside it, where under it the card would cover a list's next rows (a chat's things'). */
   side?: "left" | undefined }) {
   const station = useStation();
-  return <Hover side={side ?? "bottom"} tile={!RICH.test(href)} warm={() => prime({ topic: "linkPreview", station: station.address, url: href })} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
+  return <Hover side={side ?? "bottom"} tile={githubOf(href) === null} warm={() => prime({ topic: "linkPreview", station: station.address, url: href })} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
 }
 
 /** A web link's address to copy, on its card (the user, 2026-10-29: 快捷操作放 hover 的卡片上; 丑: a row of words of its
@@ -111,7 +110,9 @@ function LinkCard({ href, label }: { href: string; label: string }) {
   const station = useStation();
   const read = useTopic<LinkPreview | null>({ topic: "linkPreview", station: station.address, url: href });
   // (read first: the card it will be, made up, in its bones)
-  if (read.value === undefined && read.error === null && RICH.test(href)) return <Bones>{/\/pull\//.test(href) ? <PullRequestCard preview={SAMPLE_PR} /> : <IssueCard preview={SAMPLE_ISSUE} />}</Bones>;
+  // (links whose cards are rich, read before shown, bars meanwhile: the core's githubOf; any other shows its tile at once)
+  const rich = githubOf(href);
+  if (read.value === undefined && read.error === null && rich) return <Bones>{rich.kind === "pull" ? <PullRequestCard preview={SAMPLE_PR} /> : <IssueCard preview={SAMPLE_ISSUE} />}</Bones>;
   const preview = read.value ?? null;
   if (preview?.kind === "github_pull_request") return <PullRequestCard preview={preview} copy={<LinkCopy href={href} />} />;
   if (preview?.kind === "github_issue") return <IssueCard preview={preview} copy={<LinkCopy href={href} />} />;

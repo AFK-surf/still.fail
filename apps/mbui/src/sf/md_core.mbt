@@ -89,7 +89,7 @@ fn core_inlines(nodes : Array[Json], text : String) -> Array[MdInline] {
       "b" => out.push(Strong(core_inlines(kids,text)))
       "i" => out.push(Emph(core_inlines(kids,text)))
       "s" => out.push(Strike(core_inlines(kids,text)))
-      "a" => out.push(Link(words("href"),core_inlines(kids,text),link_to_of(math_field(a,"to"),text~)))
+      "a" => out.push(Link(words("href"),core_inlines(kids,text),link_to_of(math_field(a,"to"),text~,bare=math_field(a,"bare") == Json::boolean(true))))
       "img" => out.push(Image(words("src"),words("alt")))
       "br" => out.push(HardBreak)
       _ => out.append(core_inlines(kids,text))
@@ -190,23 +190,27 @@ pub fn md_node_depth(node : Json) -> Int? {
 /// What a link is to, as the core says (refLinks.ts linkTo, with each link of its Markdown and of a person's words):
 /// a chat's (`chat`: drawn as a reference to it), a screen's, a station's 共享调试 or a chat's web service's (`card`:
 /// "screen", "adb", "service"; a card alone in a paragraph, its title bare in a sentence), and what names it (`station`,
-/// `screen`, `job`). Nothing here reads a link's address for it.
+/// `screen`, `job`); a pull request's or an issue's (`peek`: "pull", "issue": its card over it that one's, bars while it
+/// is read). `bare`: its words are its address (a Markdown link's: it may read as what it names). Nothing here reads a
+/// link's address for it.
 pub(all) struct LinkTo {
   chat : Bool
   card : String
   station : String
   screen : String
   job : String
+  peek : String
+  bare : Bool
 } derive(Eq)
 
 ///|
 /// A link to none of those: a web page's, a file's.
-pub let no_link_to : LinkTo = { chat: false, card: "", station: "", screen: "", job: "" }
+pub let no_link_to : LinkTo = { chat: false, card: "", station: "", screen: "", job: "", peek: "", bare: false }
 
 ///|
-/// The core's `to` of a link (`text` the words its strings may be runs of).
-pub fn link_to_of(j : Json, text? : String = "") -> LinkTo {
-  guard j is Object(_) else { return no_link_to }
+/// The core's `to` of a link (`text` the words its strings may be runs of), and whether it is written `bare`.
+pub fn link_to_of(j : Json, text? : String = "", bare? : Bool = false) -> LinkTo {
+  guard j is Object(_) else { return { ..no_link_to, bare, } }
   let words = fn(key) { md_words(math_field(j, key), text).unwrap_or("") }
   {
     chat: math_field(j, "chat") == Json::boolean(true),
@@ -214,6 +218,8 @@ pub fn link_to_of(j : Json, text? : String = "") -> LinkTo {
     station: words("station"),
     screen: words("screen"),
     job: words("job"),
+    peek: words("peek"),
+    bare,
   }
 }
 

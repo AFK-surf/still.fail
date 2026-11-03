@@ -82,4 +82,8 @@ test("a person's words in runs: a chat referenced, a web address written bare, a
   assert.deepEqual(linkTo("/w/ws1/s/st1/adb"), { card: "adb", station: "ws1/st1" });
   assert.deepEqual(linkTo("https://app.still.fail/o/ws1/st1/c-1?service=job_1"), { chat: true, card: "service", station: "ws1/st1", job: "job_1" });
   assert.equal(linkTo("https://example.com/a"), null);
+  // a pull request's or an issue's: its card the rich one
+  assert.deepEqual(linkTo("https://github.com/a/b/pull/12?x=1"), { peek: "pull" });
+  assert.deepEqual(linkTo("https://github.com/a/b/issues/3#c"), { peek: "issue" });
+  assert.equal(linkTo("https://github.com/a/b/pulls"), null);
 });

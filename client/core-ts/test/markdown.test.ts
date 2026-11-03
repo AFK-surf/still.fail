@@ -97,18 +97,18 @@ test("markdown_a_table_says_itself_as_markdown_and_as_csv_to_copy", () => {
 
 test("markdown_links_as_written_and_bare_addresses_where_a_reader_sees_them_end", () => {
   assert.deepEqual(read("[PR](https://x.dev/1 \"它\") 和 <https://y.dev>"), [
-    ["p", [["a", ["PR"], { href: "https://x.dev/1", title: "它" }], " 和 ", ["a", ["https://y.dev"], { href: "https://y.dev" }]]],
+    ["p", [["a", ["PR"], { href: "https://x.dev/1", title: "它" }], " 和 ", ["a", ["https://y.dev"], { href: "https://y.dev", bare: true }]]],
   ]);
   // GFM's own finding would take `）已改到` with it.
   assert.deepEqual(read("（https://github.com/a/b/pull/2854）已改到"), [
-    ["p", ["（", ["a", ["https://github.com/a/b/pull/2854"], { href: "https://github.com/a/b/pull/2854" }], "）已改到"]],
+    ["p", ["（", ["a", ["https://github.com/a/b/pull/2854"], { href: "https://github.com/a/b/pull/2854", bare: true, to: { peek: "pull" } }], "）已改到"]],
   ]);
   assert.deepEqual(read("www.x.dev 和 a@b.dev"), [["p", ["www.x.dev 和 a@b.dev"]]]);
   // What a link is to, the same written bare as in brackets.
   const screen = "https://still.fail/w/ws1/s/st1/screen/browser%3AT0";
   const to = { card: "screen", station: "ws1/st1", screen: "browser:T0" };
   assert.deepEqual(read(`${screen}\n\n[标签页](${screen})`), [
-    ["p", [["a", [screen], { href: screen, to }]]],
+    ["p", [["a", [screen], { href: screen, bare: true, to }]]],
     ["p", [["a", ["标签页"], { href: screen, to }]]],
   ]);
   // Within a link's words an address is words.
@@ -170,9 +170,10 @@ test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_readin
     "行内 $x^2 + y_1$ 和 \\(\\frac{a}{b}\\)，\n\n$$\n\\sum_{i=0}^{n} i = \\frac{n(n+1)}{2}\n$$\n\n\\[ e^{i\\pi} + 1 = 0 \\]\n\n价格 $5 和 $10",
     "<b>不要</b> 原样\n第二行  \n硬换行 &amp; &lt; &#x4e2d;\n\n![图](a.png \"标题\") [引用][r]\n\n[r]: https://r.dev",
     "前面**“强调。”**后面，*斜体。*继续，~~删除。~~继续。",
+    "[对话](https://still.fail/o/ws1/st1/c-1) https://still.fail/w/ws1/s/st1/screen/desktop [https://github.com/a/b/pull/1](https://github.com/a/b/pull/1)",
   ];
   const digest = createHash("sha256").update(JSON.stringify(texts.map(parse))).digest("hex").slice(0, 16);
-  assert.equal(`${MD_READING}:${digest}`, "6:ebb30f81510c7bf3", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
+  assert.equal(`${MD_READING}:${digest}`, "7:b80ce24d3a263643", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
 });
 
 test("a_link_or_picture_alone_on_its_line_is_a_paragraph_of_its_own_with_no_blank_line_round_it", () => {
