@@ -58,6 +58,10 @@ pub fn bars_value(Core) -> String
 
 pub fn binding_of(Int32, Int32) -> String?
 
+pub fn builtin_open_of(String) -> Bool
+
+pub fn builtin_turn(String) -> Unit
+
 pub fn build_version() -> String
 
 pub let builtin_open : Map[String, Bool]

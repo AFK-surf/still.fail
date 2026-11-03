@@ -155,19 +155,21 @@ fn pane_made(
     Some(
       (
         kind,
-        fn(v : @view.View, _page : () -> Page, under : Page?, _stint : () -> Int, k : Int) {
+        fn(v : @view.View, page : () -> Page, under : Page?, _stint : () -> Int, k : Int) {
           v.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
             guard @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) is Some(w) else { return }
             let core = settings_core(src, w)
             let here = fn() { @settings.here_of(core, w.id, w.name) }
             @settings.frame(core, @signals.untracked(here))
             pane_made_host(p, src, k)
-            // (back over it only under another settings page or a place of the rail's: setting_page's; its words read
-            // as they are said, in the language now)
+            // (back over it only under another settings page or a place of the rail's: setting_page's; a place of the
+            // rail's itself, none, whatever is under it: place_page's; its words read as they are said, in the
+            // language now)
             let frame = fn() -> @sf.PageFrame {
               {
-                back: match under {
-                  Some(u) if u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
+                back: match (page(), under) {
+                  (Place(_), _) => None
+                  (_, Some(u)) if u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
                   _ => None
                 },
                 top: 0.0,

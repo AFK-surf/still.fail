@@ -67,3 +67,22 @@ test "一台 station 的记忆 as a place, become another station's in its place
     )
   }
 }
+
+///|
+test "一台 station 的记忆 as a place over another place, wide: no back over it (a place of the rail's has none, whatever is under it)" {
+  for w in [1280.0, 700.0] {
+    new_run()
+    let src = fixture("settings")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform=0)
+    t.draw()
+    let back = @sfbase.back_label(Place("memories"))
+    let backs = fn() { t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label.contains(back) && !s.hidden }).length() }
+    app.nav.replace(Place("memories"))
+    t.run_for(@ui.move_most_ms)
+    let alone = backs()
+    app.nav.push(Place("memory:ws1/st1"))
+    t.run_for(@ui.move_most_ms)
+    assert_true(tree_words_drawn().iter().any(fn(o) { o.contains("发布流程") }), msg="at \{w}: \{tree_words_drawn()}")
+    assert_eq(backs(), alone, msg="a back over it at \{w}")
+  }
+}
