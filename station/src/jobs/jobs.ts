@@ -418,7 +418,7 @@ export class Jobs {
     if (size !== null && (port !== null || queue !== null || !sandboxed(this.data))) {
       throw new Error("only a job this station runs in a sandbox has a size: not a service, not another station's task, and only while the station runs jobs in sandboxes");
     }
-    if (this.store.listJobs(session).filter((j) => j.state === "running").length >= MAX_RUNNING) {
+    if (this.store.runningJobsAtLeast(session, MAX_RUNNING)) {
       throw new Error(`this session runs ${MAX_RUNNING} jobs already; stop some first`);
     }
     if (port !== null) {

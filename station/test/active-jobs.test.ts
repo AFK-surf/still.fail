@@ -1,0 +1,64 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { test } from "node:test";
+import { OTHER_JOBS_AT_INSTALL, RUNNING_LIMIT, installOtherActiveJobs } from "../src/store/active-jobs.ts";
+import { HAS_ACTIVE_WATCH, installActiveWatches } from "../src/store/watch-jobs.ts";
+
+for (const recursive of [false, true]) test(`the running limit follows watches, ordinary jobs and older writers (recursive triggers ${recursive})`, () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"};
+      CREATE TABLE jobs (id TEXT PRIMARY KEY, session_key TEXT NOT NULL, state TEXT NOT NULL, watch INTEGER NOT NULL, token TEXT NOT NULL UNIQUE);
+      CREATE INDEX jobs_state ON jobs (state);
+      CREATE TABLE thread_sessions (thread INTEGER NOT NULL, session TEXT NOT NULL, PRIMARY KEY (thread, session));
+      INSERT INTO thread_sessions VALUES (1, 'a'), (2, 'b');`);
+    const add = (id: string, session: string, state: string, watch: number, token = `token-${id}`) =>
+      db.prepare("INSERT INTO jobs VALUES (?, ?, ?, ?, ?)").run(id, session, state, watch, token);
+    for (let i = 0; i < 200; i++) add(`old-${i}`, "a", "exited", 0);
+    add("a-watch", "a", "running", 1);
+    add("a-job", "a", "running", 0);
+    add("b-job", "b", "running", 0);
+    installActiveWatches(db);
+    const before = (db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
+    installOtherActiveJobs(db);
+    assert.equal((db.prepare("SELECT total_changes() AS n").get() as { n: number }).n - before, 2,
+      "upgrade copies only currently running ordinary jobs");
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${OTHER_JOBS_AT_INSTALL}`).all() as { detail: string }[]).map((r) => r.detail).join(" | ");
+    assert.match(plan, /jobs_state \(state=\?\)/);
+    const limitPlan = (db.prepare(`EXPLAIN QUERY PLAN ${RUNNING_LIMIT}`).all("a", 19) as { detail: string }[]).map((r) => r.detail).join(" | ");
+    assert.match(limitPlan, /active_watch_jobs_session \(session=\?\)/);
+    assert.match(limitPlan, /active_other_jobs_session \(session=\?\)/);
+    const atLeast = (session: string, count: number) => db.prepare(RUNNING_LIMIT).get(session, count - 1) !== undefined;
+    const watching = (thread: number) => db.prepare(HAS_ACTIVE_WATCH).get(thread) !== undefined;
+    assert.equal(atLeast("a", 2), true);
+    assert.equal(atLeast("a", 3), false);
+    assert.equal(watching(1), true);
+    db.prepare("UPDATE jobs SET watch = 1 WHERE id = ?").run("a-job");
+    assert.equal(atLeast("a", 2), true, "switching to watch does not count a job twice");
+    db.prepare("UPDATE jobs SET watch = 0 WHERE id = ?").run("a-watch");
+    assert.equal(atLeast("a", 2), true, "switching from watch keeps it counted");
+    db.prepare("UPDATE jobs SET session_key = 'b' WHERE id = ?").run("a-job");
+    assert.equal(watching(1), false);
+    assert.equal(watching(2), true);
+    assert.equal(atLeast("a", 2), false);
+    assert.equal(atLeast("b", 2), true);
+    db.prepare("INSERT OR IGNORE INTO jobs VALUES (?, ?, ?, ?, ?)").run("ignored", "a", "running", 0, "token-b-job");
+    assert.equal(atLeast("b", 2), true);
+    db.prepare("INSERT OR REPLACE INTO jobs VALUES (?, ?, ?, ?, ?)").run("replace", "a", "exited", 0, "token-b-job");
+    assert.equal(atLeast("b", 2), false, "replacing on the unique token removes the displaced job");
+    add("overwritten", "b", "running", 0);
+    db.prepare("UPDATE OR REPLACE jobs SET token = ? WHERE id = ?").run("token-overwritten", "replace");
+    assert.equal(atLeast("b", 2), false, "updating on the unique token removes the displaced job");
+    for (let i = 0; i < 50; i++) add(`other-${i}`, "b", "running", 0);
+    let inspected = 0;
+    db.function("inspected_active_job", (_job) => { inspected++; return 1; });
+    const measured = RUNNING_LIMIT.replaceAll("WHERE session = ?1", "WHERE session = ?1 AND inspected_active_job(job)");
+    assert.ok(db.prepare(measured).get("b", 19));
+    assert.equal(inspected, 20, "the limit reads only twenty jobs, even when more exist");
+    inspected = 0;
+    assert.equal(db.prepare(measured).get("a", 1), undefined);
+    assert.equal(inspected, 1, "other sessions' active jobs and completed history are not inspected");
+    installOtherActiveJobs(db);
+    assert.equal(atLeast("b", 20), true);
+  } finally { db.close(); }
+});

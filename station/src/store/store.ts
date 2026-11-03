@@ -39,6 +39,7 @@ import { retireDuplicateUsage } from "./usage-unified.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
+import { RUNNING_LIMIT, installOtherActiveJobs } from "./active-jobs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -215,6 +216,7 @@ export class Store {
       addAutoTitleColumns(db);
       addWatchColumn(db);
       installActiveWatches(db);
+      installOtherActiveJobs(db);
       addQueueColumns(db);
       addSizeColumn(db);
       addSmallJobColumn(db);
@@ -2083,6 +2085,11 @@ export class Store {
   /// each second a command waits for the screen, jobs/jobs.ts `line`).
   jobsRunning(): JobRow[] {
     return this.#all(JOBS_RUNNING).map(toJob);
+  }
+
+  /// Whether this session has at least `limit` jobs running. The lookup reads at most that many active jobs.
+  runningJobsAtLeast(session: string, limit: number): boolean {
+    return limit <= 0 || this.#one(RUNNING_LIMIT, session, limit - 1) !== undefined;
   }
 
   /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and
