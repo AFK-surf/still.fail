@@ -38,6 +38,7 @@ import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { retireDuplicateUsage } from "./usage-unified.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
+import { HAS_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -213,6 +214,7 @@ export class Store {
       addClientColumn(db);
       addAutoTitleColumns(db);
       addWatchColumn(db);
+      installActiveWatches(db);
       addQueueColumns(db);
       addSizeColumn(db);
       addSmallJobColumn(db);
@@ -1013,6 +1015,11 @@ export class Store {
 
   threadSessions(thread: number): Membership[] {
     return this.#all("SELECT * FROM thread_sessions WHERE thread = ? ORDER BY joined_at, rowid", thread).map(toMembership);
+  }
+
+  /// Whether an agent in this thread has a watch running, without reading its completed jobs.
+  hasActiveWatch(thread: number): boolean {
+    return this.#one(HAS_ACTIVE_WATCH, thread) !== undefined;
   }
 
   /// A thread of this session by the address the agent names it with, and how the session posts there.
