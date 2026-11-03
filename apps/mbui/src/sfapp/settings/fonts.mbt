@@ -14,7 +14,7 @@ pub let fonts_at : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a =
 /// A place's face chosen (None: back to the app's own), kept as the device's.
 pub fn set_font(core : Core, place : String, id : String?) -> Unit {
   let v = match id {
-    Some(s) => s.to_json()
+    Some(s) => Json::string(s)
     None => Json::null()
   }
   let fonts : Map[String, Json] = {}
