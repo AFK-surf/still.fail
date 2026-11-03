@@ -744,6 +744,28 @@ pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String
 }
 
 ///|
+/// A setting turned on or off. Wide: a switch row with its note; narrow: the switch at the end of the section's
+/// heading, with the note using the full width below it. Only the switch takes the press.
+pub fn setting_switch(c : @ui.Ctx, key : String, title : String, on : Bool, note? : String = "") -> Bool {
+  match look() {
+    Wide => {
+      let mut now = on
+      setting(c, title, note~, fn() { now = switch(c, key, on, label=title, small=true) })
+      now
+    }
+    Narrow => {
+      let mut now = on
+      section(c, title, actions=fn() { now = switch(c, key, on, label=title, small=true) }, fn() {
+        if note != "" {
+          page_note(c, note)
+        }
+      })
+      now
+    }
+  }
+}
+
+///|
 /// A narrow card's setting's control: between its title and its note, 8 from each.
 // kept across runs: a value (no field of it changes)
 let setting_in_card_control : @ui.Style = @ui.css("w=Full py=S2")
