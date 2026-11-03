@@ -25,6 +25,10 @@ priv struct SettingsFixture {
   mut outflow : Bool
   /// what an admin answered the program asking (`outflow.answer`'s params)
   mut outflow_answer : Json?
+  /// Studio's Tailcat link as an admin sees it (its overview's `outflowTailcat`), as a test sets it; none: not shown
+  mut outflow_link : Json?
+  /// what an admin turned the link to (`outflow.tailcat`'s `on`)
+  mut outflow_link_set : Bool?
   /// a Windows station's running as administrator, as the core shows it (its overview's `elevation`), as a test sets
   /// it; none: not a Windows station
   mut elevation : Json?
@@ -96,6 +100,8 @@ let fx : SettingsFixture = {
   logs: true,
   outflow: false,
   outflow_answer: None,
+  outflow_link: None,
+  outflow_link_set: None,
   elevation: None,
   gpus: false,
   more_gpus: false,
@@ -193,6 +199,8 @@ fn fixture_reset() -> Unit {
   fx.logs = true
   fx.outflow = false
   fx.outflow_answer = None
+  fx.outflow_link = None
+  fx.outflow_link_set = None
   fx.elevation = None
   fx.gpus = false
   fx.more_gpus = false
@@ -317,6 +325,19 @@ pub fn fixture_outflow(on : Bool) -> Unit {
 /// What an admin answered the program asking for Studio's data, if they did.
 pub fn fixture_outflow_answer() -> Json? {
   fx.outflow_answer
+}
+
+///|
+/// Studio's Tailcat link of data outflow as an admin sees it (the core's `OutflowTailcat`), or none.
+pub fn fixture_outflow_link(v : Json?) -> Unit {
+  fx.outflow_link = v
+  fx_changed()
+}
+
+///|
+/// What an admin turned Studio's Tailcat link to, if they did.
+pub fn fixture_outflow_link_set() -> Bool? {
+  fx.outflow_link_set
 }
 
 ///|
@@ -1234,6 +1255,7 @@ fn fx_station(address : String) -> Json {
           ("network", obj([("congestion", str(fx.congestion))])),
           ("outflowGrants", Json::number(if fx.outflow { 2.0 } else { 0.0 })),
           ("outflowAnswers", Json::boolean(true)),
+          ("outflowTailcat", fx.outflow_link.unwrap_or(Json::null())),
           ("elevation", fx.elevation.unwrap_or(Json::null())),
           ("sharing", Json::boolean(true)),
           (
@@ -2525,6 +2547,12 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           ]),
         ),
       )
+    // an admin turning Studio's Tailcat link on or off
+    "outflow.tailcat" => {
+      fx.outflow_link_set = Some(flag(Some(params), "on"))
+      fx_changed()
+      Some(Ok(obj([])))
+    }
     // an admin's answer to the program asking for Studio's data
     "outflow.answer" => {
       fx.outflow_answer = Some(params)

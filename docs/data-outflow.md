@@ -7,15 +7,34 @@
 
 | | 做法 |
 |---|---|
-| 谁能申请 | 只有和 station 同一台机器上的程序：station 的本机 socket（`<data>/run/outflow.sock`，指向当前进程自己的 `outflow-<pid>-<n>.sock`：station 自更新时新旧进程并存，旧进程停下时只删自己的），网络、mesh、cloud 都到不了 |
+| 谁能申请 | 只有和 station 同一台机器上的程序：station 的本机 socket（`<data>/run/outflow.sock`，指向当前进程自己的 `outflow-<pid>-<n>.sock`：station 自更新时新旧进程并存，旧进程停下时只删自己的），网络、mesh、cloud 都到不了；管理员打开 Tailcat 后，别的机器上拿到那个地址的程序也能来（见下面「经 Tailcat 从别的机器申请」） |
 | 申请方是谁 | station 自己核实，不信申请里自报的名字：socket 对端进程 → macOS 上是它的代码签名（Team ID 和签名标识）和可执行文件路径，Linux 上是可执行文件路径和它的 SHA-256 |
 | 怎么批准 | 申请出现在 still.fail app 里这台 station 的设置页「数据外流」，只有 home workspace 的 owner / admin 能答：逐项勾掉不给的数据和「整个 workspace」，点允许后再出一次摘要确认 |
-| 拿到什么 | 一个专用 token（`sfo_…`），不设有效期，只在这台机器的本机 socket 上有效；读数据只认 token，程序升级后照样能读 |
+| 拿到什么 | 一个专用 token（`sfo_…`），不设有效期，只在这台机器的本机 socket（和打开时的 Tailcat 端口）上有效；读数据只认 token，程序升级后照样能读 |
 | 能读什么 | 授权里勾了的几类：`usage`（token 用量和按价目的金额）、`chats`（chat 的标题、状态、创建人、时间）、`messages`（chat 里的消息原文，单独一项，写明对方能读到对话内容）；范围是这台 station，或整个 workspace 的所有 station |
 | 怎么收回 | 「数据外流」页列出每份授权、申请方、谁批准的、最近读了什么；取消后立即失效 |
 
 申请方不必在批准的人旁边：给每个客户一台默认设备（可能是没人守着的虚拟机），上面的程序申请，管理员在自己的设备上批准；授权「整个
 workspace」时，这台 station 经站间通道去读同一 workspace 的其他 station，员工的电脑上什么都不用装。
+
+## 经 Tailcat 从别的机器申请
+
+本机 socket 只给这台机器上的程序。别的机器上的程序（比如 Comma for Teams 的 agent）要来申请，由管理员在「数据外流」里打开
+「允许别的机器经 Tailcat 申请」（`POST /outflow/tailcat` `{ on }`，只有 home workspace 的 owner / admin 能开关；状态在 overview 的
+`outflowTailcat` 里，只给他们看）：
+
+- station 在本机回环地址上开一个 TCP 端口（先试 7480，被占就往后试），回答的请求和 socket 上完全一样（`/v1/request`、`/v1/*`）；
+  再起一个自己的 `tailcat serve <端口>`，把一个 Tailcat 地址转到这个端口。打开后页面上显示一行 `tailcat <地址> <端口>`，管理员
+  复制给对方。对方不用账号、不用开端口，拿到这行就能连。
+- 地址用 station 自己的 key（`<data>/tailcat/outflow.private.json`，第一次打开时生成），station 重启、更新后地址不变；关掉就停掉
+  tailcat、关掉端口。打开状态记在 `<data>/outflow-tailcat.json`。
+- 端口上的连接只认这个 tailcat 的：station 问系统连接对端是哪个进程（`platform.tcpPortPids`），不是 station 起的那个 tailcat 就
+  `403`。所以这台机器上的程序不能绕过 socket 的核实从端口进来。
+- 经 Tailcat 来的申请方，station 认不出是什么程序，只知道它拿到了这个地址：批准页上写「经 Tailcat 来自别的机器」，授权记在
+  `tailcat:` 下（`via: "tailcat"`），程序自述的名字照样只当它自己的话显示。批准、token、取消都和本机程序一样。拿到地址的程序
+  都能来申请，所以地址要当作凭证保管，不想要了就关掉开关。
+- 机器上没有 `tailcat` 时，station 第一次打开时下载固定版本（0.7.0：Linux、Windows 用 Tailcat 自己的发布，macOS arm64 用
+  Homebrew 的同版本 bottle），按写在代码里的 SHA-256 核对，放进 `<data>/tailcat/`。
 
 ## 不知道使用者
 
@@ -29,7 +48,7 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
 
 ## 防谁、不防谁
 
-- 防的是：别的机器、cloud、mesh 上的成员和 agent 拿到这些数据；一个程序冒充另一个程序（批准页上写的是系统核实的签名，不是申请方自报
+- 防的是：别的机器、cloud、mesh 上的成员和 agent 拿到这些数据（管理员打开 Tailcat 后，拿到那个地址的程序除外）；一个程序冒充另一个程序（批准页上写的是系统核实的签名，不是申请方自报
   的名字）；token 被抄到别的机器上用（它只在这台机器的本机 socket 上有效）。
 - 不防的是：同一系统用户下存心要拿数据的程序，包括抄走了 token 的程序。它本来就能直接读 `stillfail.db`（agent 也是同一个用户，docs/vault.md 说过同样的事）。
   这里做的是一条经过人同意、看得见、能收回、格式稳定的正式通道，让外面的程序不用去读 station 的库。

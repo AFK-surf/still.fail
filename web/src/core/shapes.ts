@@ -5491,6 +5491,20 @@ export interface StationElevation {
 	canChange: boolean;
 }
 
+/** A station's Tailcat link of data outflow (`Overview.outflowTailcat`). */
+export interface OutflowTailcat {
+	/** An admin turned it on (`outflow.tailcat`). */
+	on: boolean;
+	/** off | starting (getting tailcat, its key or its address) | running | failed (why in `error`) */
+	state: string;
+	/** Running: the Tailcat address to give the program on the other machine. */
+	address?: string;
+	/** Running: the port to ask at, at that address. */
+	port?: number;
+	/** Failed: why. */
+	error?: string;
+}
+
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
 	automaticDecisions?: AutomaticDecisionView;
@@ -5573,6 +5587,11 @@ export interface Overview {
 	 * that.
 	 */
 	outflowAnswers?: boolean;
+	/**
+	 * Its Tailcat link, which lets programs of other machines ask for its data (docs/data-outflow.md): for an
+	 * admin of its home workspace only. None for others, or from a station older than it.
+	 */
+	outflowTailcat?: OutflowTailcat;
 }
 
 export interface StationProfileGroup {
