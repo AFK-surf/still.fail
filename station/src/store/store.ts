@@ -32,6 +32,7 @@ import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 import { installUsageMinutes } from "./usage-minutes.ts";
 import { installUsageSpan } from "./usage-span.ts";
+import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
@@ -209,6 +210,7 @@ export class Store {
       addListState(db);
       addLetters(db);
       addCardOutcomes(db);
+      installUsageChatStats(db);
       addSessionTurns(db);
       addSessionWork(db, clock.currentTimeMillisUnsafe());
       addTellIndexes(db);
