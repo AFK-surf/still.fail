@@ -390,6 +390,11 @@ export function lastSaid(s: Store, thread: number): MessageRow | null {
   return r ? toMessage(r) : null;
 }
 
+/// When the latest message was written, without loading its text or edits.
+export function lastSaidAt(s: Store, thread: number): number | null {
+  return one(s, "SELECT e.at FROM thread_state t JOIN entries e ON e.thread = t.thread AND e.n = t.said_n AND e.kind = 'message' WHERE t.thread = ?", thread)?.at ?? null;
+}
+
 /// Messages after the read position that are not the viewer's own (nor of a Slack user they are).
 function unreadCount(s: Store, viewer: string, thread: number, read: number): number {
   const t = getThread(s, thread);

@@ -405,6 +405,53 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   assert.deepEqual(own.chats.map((c: any) => c.title).sort(), ["Fix the build", "From the app", "Ship it"]);
 });
 
+test("listing chats for a program does not count the chat's unread history", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/a", token: "a", createdAt: 1, lastActiveAt: 1 });
+    const thread = store.openThreadOf("ember", "EMBER", "100.1", "A chat", "ann@x", "a");
+    store.joinThread(thread.id, "a", "ember");
+    const entry = store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, ?, 'message', 'person', 'ann@x', 'body', ?)");
+    store.db.exec("BEGIN");
+    for (let n = 1; n <= 1_000; n++) entry.run(thread.id, n, n);
+    store.db.exec("COMMIT");
+    store.db.prepare("UPDATE threads SET created_at = 1 WHERE id = ?").run(thread.id);
+    store.db.prepare("INSERT INTO entries (thread, n, kind, target, author_kind, author, text, at) VALUES (?, 1001, 'edit', 1000, 'person', 'ann@x', 'edited', 999999)").run(thread.id);
+    const reader = read.makeStore(store.db, ".");
+    const expected = outflowChats(reader, 0, undefined, { limit: 1, before: null }) as any;
+    assert.equal(expected.chats[0].lastActiveAt, read.lastSaid(reader, thread.id)?.createdAt);
+    assert.equal(expected.chats[0].lastActiveAt, 1_000, "an edit does not replace the message's original activity time");
+    const db = reader.db;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql === read.UNREAD) throw new Error("counted unread history");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    try { assert.deepEqual(outflowChats(reader, 0, undefined, { limit: 1, before: null }), expected); }
+    finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+  } finally { store.close(); }
+});
+
+test("a shared chat's exported agents belong to the requested workspace", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws, runtime] of [["a", "A", "claude"], ["b", "B", "codex"], ["home", null, "gemini"]] as const) {
+      store.insertSession({ key, connect: "ember", runtime, profile: "p", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, ws });
+    }
+    const thread = store.openThreadOf("ember", "EMBER", "shared", "Shared", "ann@x", "a");
+    for (const key of ["a", "b", "home"]) store.joinThread(thread.id, key, "ember");
+    const reader = read.makeStore(store.db, ".");
+    const a = outflowChats(reader, 0, { workspace: "A", home: true }, { limit: 1, before: null }) as any;
+    const b = outflowChats(reader, 0, { workspace: "B", home: false }, { limit: 1, before: null }) as any;
+    assert.deepEqual(a.chats[0].agents.map((agent: any) => agent.runtime), ["claude", "gemini"]);
+    assert.deepEqual(b.chats[0].agents.map((agent: any) => agent.runtime), ["codex"]);
+  } finally { store.close(); }
+});
+
 test("messages: a chat's, a page at a time, to a program granted them", async () => {
   const r = await rig();
   const asking = (await asked(r, ["messages"])).answer;

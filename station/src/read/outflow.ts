@@ -5,7 +5,7 @@
 import type { Json, Store } from "./store.ts";
 import * as store from "./store.ts";
 import { ending, sees } from "../store/rows.ts";
-import { chatTitle } from "./views.ts";
+import { titleOf } from "./views.ts";
 import { slackCreator } from "./slack-known.ts";
 import { usage } from "./usage.ts";
 import type { Lang } from "../ops/i18n.ts";
@@ -59,26 +59,31 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
   const sessions = new Map(store.listSessions(s).filter((x) => sees(of, x.ws ?? null)).map((x) => [x.key, x]));
   // Only the workspace's threads with something new are summed up: the others cost nothing.
   const threads = store.threadsActiveSince(s, store.threadsOfSessions(s, [...sessions.keys()]), since);
-  const listed = store.listThreads(s, "", null, threads);
-  const stats = store.sessionStats(s, [...new Set(listed.flatMap((t) => t.sessions.map((m) => m.session)).filter((k) => sessions.has(k)))]);
+  // Outflow needs no viewer's unread count, people list, letters or message bodies. A sidebar summary computes those
+  // from the chat's messages, including an unread count that grows with its history.
+  const listed = threads.flatMap((id) => {
+    const thread = store.getThread(s, id);
+    if (thread === null) return [];
+    const members = store.threadSessions(s, id).filter((m) => sessions.has(m.session));
+    if (members.length === 0) return [];
+    const lastActiveAt = Math.max(thread.createdAt, store.lastSaidAt(s, id) ?? 0);
+    return lastActiveAt < since ? [] : [{ thread, members, lastActiveAt }];
+  });
+  const stats = store.sessionStats(s, [...new Set(listed.flatMap((t) => t.members.map((m) => m.session)))]);
   const chats: Json[] = [];
-  for (const t of listed) {
-    const members = t.sessions.filter((m) => sessions.has(m.session));
-    if (members.length === 0) continue;
-    const lastActiveAt = Math.max(t.thread.createdAt, t.lastMessage?.createdAt ?? 0);
-    if (lastActiveAt < since) continue;
+  for (const { thread, members, lastActiveAt } of listed) {
     const turns = members.map((m) => stats.get(m.session)?.lastTurn ?? null).filter((x): x is Json => x !== null);
     const latest = turns.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))[0] ?? null;
-    const creator = t.thread.createdBy ?? sessions.get(members[0]!.session)?.createdBy ?? null;
+    const creator = thread.createdBy ?? sessions.get(members[0]!.session)?.createdBy ?? null;
     chats.push({
-      thread: t.thread.id,
-      surface: t.thread.surface === store.STILLFAIL_SURFACE ? "stillfail" : t.thread.surface,
-      title: chatTitle(t, null),
+      thread: thread.id,
+      surface: thread.surface === store.STILLFAIL_SURFACE ? "stillfail" : thread.surface,
+      title: titleOf(thread, store.firstText(s, thread.id), null),
       state: state(latest),
       creator: creator === null ? null : { ref: creator, ...person(s, creator) },
-      createdAt: t.thread.createdAt,
+      createdAt: thread.createdAt,
       lastActiveAt,
-      archived: t.thread.hiddenAt !== null,
+      archived: thread.hiddenAt !== null,
       agents: members.map((m) => ({ runtime: sessions.get(m.session)!.runtime, model: sessions.get(m.session)!.model })),
     });
   }
