@@ -1,5 +1,6 @@
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
+import { Fibers } from "../ops/fibers.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 import { outflowChatScopes } from "../store/outflow-index.ts";
 import type { InWorkspace } from "../store/rows.ts";
@@ -15,9 +16,10 @@ export class OutflowChatIndex {
   #closed = false;
   #previousReady = false;
   #previousWaiting = false;
-  #retry: ReturnType<typeof setTimeout> | null = null;
-  #idle: ReturnType<typeof setTimeout> | null = null;
+  #retry: (() => void) | null = null;
+  #idle: (() => void) | null = null;
   #retryMs = 250;
+  readonly #timers = new Fibers("outflow chat index");
   readonly #path: string;
   readonly #options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer };
   readonly #workerFile: URL | undefined;
@@ -60,18 +62,17 @@ export class OutflowChatIndex {
     if (this.#waiting.size === 0) {
       if (this.#worker !== null && this.#idle === null) {
         const worker = this.#worker;
-        this.#idle = setTimeout(() => {
+        this.#idle = this.#timers.after(IDLE_MS, () => {
           this.#idle = null;
           if (this.#worker === worker && this.#current === null && this.#waiting.size === 0) {
             this.#worker = null;
             void worker.terminate();
           }
-        }, IDLE_MS);
-        this.#idle.unref();
+        });
       }
       return;
     }
-    if (this.#idle !== null) { clearTimeout(this.#idle); this.#idle = null; }
+    if (this.#idle !== null) { this.#idle(); this.#idle = null; }
     if (!this.#previousReady) {
       if (this.#previousWaiting) return;
       this.#previousWaiting = true;
@@ -111,12 +112,11 @@ export class OutflowChatIndex {
         if (this.#worker !== worker) return;
         this.#worker = null;
         this.#current = null;
-        if (this.#idle !== null) { clearTimeout(this.#idle); this.#idle = null; }
+        if (this.#idle !== null) { this.#idle(); this.#idle = null; }
         if (this.#closed || this.#waiting.size === 0) return;
         const ms = this.#retryMs;
         this.#retryMs = Math.min(ms * 2, 30_000);
-        this.#retry = setTimeout(() => { this.#retry = null; this.#pump(); }, ms);
-        this.#retry.unref();
+        this.#retry = this.#timers.after(ms, () => { this.#retry = null; this.#pump(); });
       });
     }
     const scope = this.#waiting.keys().next().value as string | undefined;
@@ -126,13 +126,14 @@ export class OutflowChatIndex {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
-    if (this.#retry !== null) clearTimeout(this.#retry);
+    if (this.#retry !== null) this.#retry();
     this.#retry = null;
-    if (this.#idle !== null) clearTimeout(this.#idle);
+    if (this.#idle !== null) this.#idle();
     this.#idle = null;
     this.#fail(new Error("station stopping"));
     const worker = this.#worker;
     this.#worker = null;
     if (worker !== null) await worker.terminate();
+    await this.#timers.close();
   }
 }

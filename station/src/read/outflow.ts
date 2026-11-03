@@ -93,10 +93,13 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
     if (members.length === 0) return [];
     return [{ thread, members, lastActiveAt }];
   });
-  const stats = store.sessionStats(s, [...new Set(listed.flatMap((t) => t.members.map((m) => m.session)))]);
+  // Outflow only uses the latest turn. A full session summary also counts pending deliveries, which may be unbounded.
+  const turnsBySession = new Map<string, ReturnType<typeof store.lastTurn>>();
+  for (const { members } of listed) for (const { session } of members)
+    if (!turnsBySession.has(session)) turnsBySession.set(session, store.lastTurn(s, session));
   const chats: Json[] = [];
   for (const { thread, members, lastActiveAt } of listed) {
-    const turns = members.map((m) => stats.get(m.session)?.lastTurn ?? null).filter((x): x is Json => x !== null);
+    const turns = members.map((m) => turnsBySession.get(m.session) ?? null).filter((x): x is NonNullable<typeof x> => x !== null);
     const latest = turns.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))[0] ?? null;
     const creator = thread.createdBy ?? sessions.get(members[0]!.session)?.createdBy ?? null;
     chats.push({

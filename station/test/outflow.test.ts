@@ -448,6 +448,34 @@ test("listing chats for a program does not count the chat's unread history", () 
   } finally { store.close(); }
 });
 
+test("a chat export reads its agents' state without counting pending deliveries", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", createdAt: 1, lastActiveAt: 1 });
+    const thread = store.openThreadOf("ember", "EMBER", "pending", "Chat", "ann@x", "a");
+    store.joinThread(thread.id, "a", "ember");
+    const insert = store.db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (?,?,'a')");
+    store.db.exec("BEGIN");
+    for (let n=1; n<=500; n++) insert.run(thread.id, n);
+    store.db.exec("COMMIT");
+    readyChats(store);
+    const reader = read.makeStore(store.db, ".");
+    const expected = outflowChats(reader, 0, undefined, { limit: 1, before: null });
+    const db = reader.db;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql.includes("FROM deliveries d INDEXED BY deliveries_pending")) throw new Error("counted pending deliveries");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    try { assert.deepEqual(outflowChats(reader, 0, undefined, { limit: 1, before: null }), expected); }
+    finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+  } finally { store.close(); }
+});
+
 test("a shared chat's exported agents belong to the requested workspace", () => {
   const store = Store.open(":memory:");
   try {
