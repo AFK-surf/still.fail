@@ -17,6 +17,7 @@ import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/
 import { detailQuery } from "../src/store/usage-detail.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import * as read from "../src/read/store.ts";
+import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
@@ -797,7 +798,7 @@ test("an options card is kept as options too, and a choice that closes it ends t
   assert.equal(store.closeCard("local", t2.id, k, "再看"), false, "a reply option does not close");
   const h = heard(store);
   assert.equal(store.closeCard("local", t2.id, k, "合并", "en"), true);
-  assert.deepEqual(h.changes, [{ type: "session", key: "a" }, { type: "thread", id: t2.id, entries: [] }]);
+  assert.deepEqual(h.changes, [{ type: "session", key: "a" }, { type: "thread", id: t2.id, entries: [], closed: k }]);
   const last = store.lastTurn("a")!;
   assert.deepEqual([last.declared, last.ending, last.need], ["final", "all_done", "Chose “合并”"]);
   assert.equal(store.pendingCard(t2.id), null);
@@ -837,6 +838,39 @@ test("an agent withdraws its own card only", () => {
   assert.equal(store.pendingCard(thread.id), null);
   assert.deepEqual(store.answersSince(0), [], "withdrawn is not answered");
   assert.ok(n > 0);
+});
+
+test("a card stops waiting as a person writes, a newer card comes, its agent withdraws it or someone closes it: each said once", () => {
+  const store = memory();
+  session(store, "a");
+  const thread = store.openThread("slack", "C1", "1.1", null, null);
+  const h = heard(store);
+  const ended = () => h.changes.splice(0).flatMap((c) => cardsEnded(store, c)).map((e) => [e.message.ts, e.end]);
+  const options = { type: "options", options: [{ label: "合并", action: "close" }, { label: "先不" }] };
+  store.insertMessage({ ...newMessage(thread.id, "1.2", "agent", "a", "合并吗？"), card: options });
+  assert.deepEqual(ended(), [], "a first card replaces nothing");
+  say(store, thread.id, "1.3", "person", "U1", "再想想");
+  assert.deepEqual(ended(), [["1.2", { why: "message", by: "U1", byTs: "1.3" }]]);
+  say(store, thread.id, "1.4", "person", "U2", "还有");
+  assert.deepEqual(ended(), [], "only the first message after it closes it");
+  store.insertMessage({ ...newMessage(thread.id, "1.5", "agent", "a", "那这样？"), card: options });
+  store.insertMessage({ ...newMessage(thread.id, "1.6", "agent", "a", "还是这样？"), card: { type: "text" } });
+  assert.deepEqual(ended(), [["1.5", { why: "replaced" }]]);
+  assert.equal(store.withdrawCard("a", thread.id, "1.6"), true);
+  assert.deepEqual(ended(), [["1.6", { why: "withdrawn" }]]);
+  store.insertMessage({ ...newMessage(thread.id, "1.7", "agent", "a", "那就？"), card: options });
+  assert.deepEqual(ended(), [], "one withdrawn before it is not replaced again");
+  assert.equal(store.closeCard("local", thread.id, store.messageAt(thread.id, "1.7")!.n, "合并"), true);
+  assert.deepEqual(ended(), [["1.7", { why: "closed" }]]);
+  say(store, thread.id, "1.8", "person", "U1", "好");
+  assert.deepEqual(ended(), [], "one closed is not closed again by a message");
+  store.insertMessage({ ...newMessage(thread.id, "1.9", "agent", "a", "最后？"), card: options });
+  say(store, thread.id, "1.10", "person", "U1", "嗯");
+  assert.deepEqual(ended().map(([, e]) => (e as CardEnd).why), ["message"]);
+  assert.equal(store.withdrawCard("a", thread.id, "1.9"), true);
+  assert.equal(store.withdrawCard("a", thread.id, "1.9"), true);
+  assert.deepEqual(ended(), [], "one answered and withdrawn after keeps its answer");
+  h.stop();
 });
 
 test("an agent restates its card on its post: an edit with the same words and the new card, its latest the base of the next", () => {

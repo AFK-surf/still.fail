@@ -12,6 +12,7 @@ import { Agents } from "../sessions/agents.ts";
 import type { ChatSurface } from "../sessions/chat.ts";
 import { INTERNAL_CONNECT } from "../sessions/internal.ts";
 import { ControlPlane, Events, Paths, StationConfig, Store } from "../services.ts";
+import { showEnded } from "./card-ends.ts";
 import type { ConnectState, Connection, EntryEdit } from "./connections.ts";
 import type { ConnectsOptions } from "./connects.ts";
 
@@ -95,7 +96,10 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
     yield* Effect.acquireRelease(
       Effect.sync(() =>
         store.subscribe((change) => {
-          if (change.type === "thread") learn(change.id, [...new Set(change.entries.filter((e) => e.authorKind === "person").map((e) => e.author))]);
+          if (change.type !== "thread") return;
+          learn(change.id, [...new Set(change.entries.filter((e) => e.authorKind === "person").map((e) => e.author))]);
+          // A card that stopped waiting changes where its platform shows it.
+          showEnded(store, (connect) => connects.chat(connect), change);
         }),
       ),
       (unsubscribe) => Effect.sync(unsubscribe),
