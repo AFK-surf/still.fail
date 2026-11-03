@@ -662,12 +662,19 @@ pub(all) struct OpDone {
   out : String
   err : String
 }
+pub fn OpDone::trouble(Self) -> OpTrouble?
 
 pub struct OpRun {
   // private fields
 }
 pub fn OpRun::done(Self) -> OpDone?
 pub fn OpRun::end(Self) -> Unit
+
+pub(all) enum OpTrouble {
+  NoTool
+  Unreached
+  Other(String)
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct PasskeyDone {
   code : Int32
