@@ -412,7 +412,10 @@ pub(all) enum RowLead {
 /// middle; `below` under that while `below_open` says it is any of the way open (a room opening on it, its row growing
 /// round it: @motion.reveal's). One that `acts` (does something at once where it is): its title in the link's ink, no
 /// chevron. Lit under the hand, rippling under a finger, `press` done as it is pressed; going nowhere where not `goes`
-/// (a value said: none of that). Its words as they are said.
+/// (a value said: none of that). `note_cut`: its note one line, cut short (what is in a memory). `title_after` after its
+/// title on its line (a tag: whose it is), its title cut short where the line has not the room for both. `folds`: it
+/// folds open what follows it, its chevron down, up while that is open (as it says), read out so. Its words as they are
+/// said.
 pub fn link_row_node(
   parent : @view.View,
   title : () -> String,
@@ -430,16 +433,27 @@ pub fn link_row_node(
   acts? : Bool = false,
   below? : (@view.View) -> Unit,
   below_open? : () -> Double = fn() { 0.0 },
+  note_cut? : Bool = false,
+  title_after? : (@view.View) -> Unit,
+  folds? : () -> Bool,
 ) -> Unit {
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
   let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
   let titled_in = if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in }
-  let mark = if out { "arrow-up-right" } else { "chevron-right" }
+  // (its chevron: down where it folds what follows it, up while that is open, as link_row's `folds`)
+  let mark = fn() {
+    match (out, folds) {
+      (true, _) => "arrow-up-right"
+      (false, Some(open)) => if open() { "chevron-up" } else { "chevron-down" }
+      (false, None) => "chevron-right"
+    }
+  }
   let ends = goes && (out || (chevron && !acts))
   if look_node(parent) is Wide {
     wide_link_row_node(
       parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
+      note_cut, title_after, folds,
     )
     return
   }
@@ -455,6 +469,7 @@ pub fn link_row_node(
     if goes {
       r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
       pressed_node(r, press, Is(row_corner), Link, title)
+      row_folds_said(r, title, folds)
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as that line at least, across its
     // middle)
@@ -505,10 +520,31 @@ pub fn link_row_node(
             // (giving way to what it says where the line has not the room, cut short, as link_row's title in a row does;
             // beside what it says, its words' own (pg_row_title_in), the line's room left between them: its line's ends
             // the title's and what it says')
-            styled_words(t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))), title, fn() {
-              if under() && value() != "" { titled_in } else { titled }
-            })
-            |> ignore
+            let words = match title_after {
+              // (what follows its title on its line, 8 apart across their middle: the title cut short where the line
+              // leaves it less, link_row's title_line)
+              Some(after) => {
+                t.row(Is(true)).gap(Is(8.0)).lines_up(Is(Some(Middle))) |> ignore
+                let w = t.box(fn(w) {
+                  styled_words(w, title, fn() {
+                    (if under() && value() != "" { titled_in } else { titled }).then(cut_words)
+                  })
+                  |> ignore
+                })
+                t.box(fn(a) { after(a) }) |> ignore
+                w
+              }
+              None => {
+                styled_words(t, title, fn() {
+                  let style = if under() && value() != "" { titled_in } else { titled }
+                  if note_cut && value() == "" { style.then(cut_words) } else { style }
+                })
+                |> ignore
+                t
+              }
+            }
+            t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+            words.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
             if acts {
               t.ink(By(fn() { link_ink() })) |> ignore
             }
@@ -525,11 +561,13 @@ pub fn link_row_node(
         })
         |> ignore
         if ends {
-          icon_node(first, mark, pg_chevron, By(fn() { theme().p.subtle })) |> ignore
+          icon_node(first, mark(), pg_chevron, By(fn() { theme().p.subtle }), name_now=mark) |> ignore
         }
       })
       |> ignore
-      words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { pg_link_note }) |> ignore })
+      words.show(fn() { note() != "" }, fn(n) {
+        styled_words(n, note, fn() { if note_cut { pg_link_note.then(cut_words) } else { pg_link_note } }) |> ignore
+      })
       // (what is wrong, in red under it: link_row's `trouble`)
       words.show(fn() { trouble() != "" }, fn(n) { styled_words(n, trouble, fn() { pg_link_note.then(bad) }) |> ignore })
       match below {
@@ -540,6 +578,15 @@ pub fn link_row_node(
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// A row that `folds` what follows it read out as open or not, as it says (link_row's `expanded`), named `title`.
+fn row_folds_said(r : @view.View, title : () -> String, folds : (() -> Bool)?) -> Unit {
+  match folds {
+    Some(open) => r.says(By(fn() { Some(@view.said(Link, label=title(), expanded=open())) })) |> ignore
+    None => ()
+  }
 }
 
 ///|
