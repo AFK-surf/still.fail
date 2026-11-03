@@ -1408,6 +1408,12 @@ export class Store {
     return this.#one(HAS_PENDING_MESSAGE, session) !== undefined || this.#one(HAS_PENDING_LETTER, session) !== undefined;
   }
 
+  /// Whether any delivery is undelivered, including an orphan: what statsOf's pending count tests, without counting it.
+  hasUndelivered(session: string): boolean {
+    return this.#one("SELECT 1 FROM deliveries INDEXED BY deliveries_pending WHERE session = ? AND delivered_at IS NULL LIMIT 1", session) !== undefined
+      || this.#one("SELECT 1 FROM letter_deliveries INDEXED BY letter_deliveries_pending WHERE session = ? AND delivered_at IS NULL LIMIT 1", session) !== undefined;
+  }
+
   /// Marks messages read by the session.
   markDelivered(session: string, messages: Handed[]): void {
     this.#with((changes) => {

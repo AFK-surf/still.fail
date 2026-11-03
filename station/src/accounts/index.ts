@@ -40,7 +40,7 @@ import type { Store } from "../store/store.ts";
 import { joinPath } from "../ops/paths.ts";
 import { modelName } from "../ops/model-name.ts";
 import { titleOf } from "../read/views.ts";
-import { currentPolicy, LEGACY_OPTIONS, savePolicy } from "../sessions/archive-policy.ts";
+import { LEGACY_OPTIONS, policyFrom, savePolicy } from "../sessions/archive-policy.ts";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
 import { CONSOLE_FILE, consoleIn, readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
@@ -1344,8 +1344,8 @@ export class Accounts {
   /// put there (by their latest check), who changed it last, and how many checks failed.
   private policyView(title: (session: string) => string): Json {
     const store = this.deps.store;
-    const policy = currentPolicy(store);
     const saved = store.archivePolicy();
+    const policy = policyFrom(saved);
     const latest = new Map<string, Json>();
     for (const row of store.latestDecisionsSince(store.now() - POLICY_DAYS * 86_400_000)) if (typeof row.session === "string") latest.set(row.session, row);
     const byOption = new Map<string, Json[]>();

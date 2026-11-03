@@ -971,10 +971,13 @@ test("an overview names only the visible chats once when it makes the archive po
 
     const named: string[] = [];
     let policies = 0;
+    let policyReads = 0;
     const sessionChat = t.store.sessionChat.bind(t.store);
     const latest = t.store.latestDecisionsSince.bind(t.store);
+    const archivePolicy = t.store.archivePolicy.bind(t.store);
     t.store.sessionChat = (session) => { named.push(session); return sessionChat(session); };
     t.store.latestDecisionsSince = (since) => { policies++; return latest(since); };
+    t.store.archivePolicy = (ws) => { policyReads++; return archivePolicy(ws); };
     const hub: any = { processes: () => new Map(), config: () => ({ dataDir: t.data }) };
     const cloud: any = { state: null };
     const of = async (as: typeof joined) => (await overview({ store: t.store, hub, cloud, config: () => t.config.raw(), accounts: t.accounts }, as, "en") as any).automaticDecisions;
@@ -985,17 +988,21 @@ test("an overview names only the visible chats once when it makes the archive po
     assert.deepEqual(view.policy.options.find((o: any) => o.id === "landed").chats.map((c: any) => c.title).sort(), ["title-b1", "title-b2"]);
     assert.equal(view.policy.change.by.title, "title-b2");
     assert.equal(policies, 1, "only the policy being returned is read");
+    assert.equal(policyReads, 1, "the policy and its change come from one read");
     assert.deepEqual(named.sort(), ["b1", "b2"], "invisible chats are not named, and each visible chat is named once");
     named.length = 0;
     policies = 0;
+    policyReads = 0;
     const again = await of(joined);
     assert.deepEqual(again, view);
     assert.deepEqual([policies, named], [0, []], "a repeated overview reuses its view");
+    assert.equal(policyReads, 0);
     const homeView = await of({ ...joined, workspace: "W", home: true });
     assert.equal(homeView.recent.length, 29);
     assert.ok(homeView.recent.every((r: any) => r.session === "w" && r.title === "title-w"));
     assert.deepEqual([homeView.policy.checked, homeView.policy.failed], [1, 0]);
     assert.deepEqual([policies, named], [1, ["w"]], "the home workspace's checks use their own policy and names");
+    assert.equal(policyReads, 1);
     named.length = 0;
     policies = 0;
     const memberView = await of({ ...joined, role: "member" });
