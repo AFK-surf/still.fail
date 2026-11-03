@@ -157,7 +157,7 @@ export type ScreenResolution = { width: number; height: number; modes: { width: 
 /// Whether a source can be seen and driven now, for one that may not be (the desktop: macOS's grants, a machine it is
 /// not supported on). `app` and `path`: what a person turns on in System Settings for it; `asking`: a window on the
 /// machine asks for it now.
-export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; reason?: "linuxNoDisplay" | "linuxWayland" | "linuxTools" | "linuxToolsPreparing" | "linuxToolsFailed" | "linuxUnavailable"; app?: string; path?: string; asking?: boolean };
+export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; reason?: "linuxNoDisplay" | "linuxWayland" | "linuxTools" | "linuxToolsPreparing" | "linuxToolsFailed" | "linuxUnavailable" | "linuxPortalConsent" | "linuxPortalUnavailable"; app?: string; path?: string; asking?: boolean };
 
 export interface ScreenSource {
   /// Stable while the source lasts: `desktop`, `browser:<targetId>`, `simulator:<udid>`.

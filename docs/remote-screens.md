@@ -330,10 +330,18 @@ and missing dependencies from the machine's configured repositories, and `dpkg-d
 is needed. The private pair's libraries are added to its own processes' environment only. Concurrent openings share a
 preparation; the directory appears after both commands have been checked, and a later opening retries a failure.
 Other Linux distributions need those two programs on the station's `PATH`. A display also needs the session's `DISPLAY`
-and, when used, `XAUTHORITY`. A station started outside the graphical session must be given that session's environment by its
-operator; a station running as another user cannot use the session without that user's own authorization. A Wayland
-session is reported as unsupported instead of sharing only its Xwayland windows. The list says when the display or
-tools are missing, when the pair is being prepared, and when preparation fails.
+and, when used, `XAUTHORITY`. Where logind is available, the station looks for its own user's active graphical session;
+otherwise it uses the environment it inherited. It does not borrow another user's desktop. The list says when the
+display or tools are missing, when the pair is being prepared, and when preparation fails.
+
+On Wayland the station uses the desktop's XDG RemoteDesktop and ScreenCast portals and a PipeWire stream
+(`screens/linux-portal.ts`, `linux-portal.py`). Opening a view asks the person at that desktop to select a display and
+allow remote interaction; while the system dialog is unanswered the viewer is told to allow it and reopen the view.
+The portal session belongs to that view and ends with it. This needs a working desktop portal backend, PipeWire,
+`/usr/bin/python3` with GObject introspection and GStreamer bindings, and GStreamer's PipeWire, video conversion and
+JPEG components. The station reports an unavailable screen when the portal or its components cannot be used; it does
+not install system packages. It sends JPEG pictures at no more than 15 fps and forwards pointer and keyboard events
+through the portal. Clipboard, system audio and resizing an open view are not implemented there.
 
 Each view captures the X11 root display (including its cursor) at at most 15 fps. For a client taking H.264, an ffmpeg
 with libx264 captures raw pictures up to 3840×2160, keeps the latest, and sends it to a second ffmpeg for encoding only
@@ -347,7 +355,7 @@ keeps its latest frame. The JPEG stream has no adaptive bitrate and can be slow 
 `xdotool` sends pointer, wheel and keyboard events to the same session; keys or buttons held by a view are released as
 it closes. Keyboard positions use Xorg's evdev keycodes; X servers with a different physical keycode map have not been
 tested. This version does not carry system audio or the clipboard, select individual monitors, or resize an open view.
-The encoders run in software; Wayland needs a portal-backed source of its own.
+The encoders run in software.
 
 The display's scale (Settings › Display › Scale) is a person's to change from the view, as UU Remote has it: on a phone
 the desktop's windows and text are made larger, readable at the phone's size. `stillfail-screen scale [percent]` reads

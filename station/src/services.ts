@@ -25,8 +25,7 @@ import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
 import { Simulators } from "./screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "./screens/win-desktop.ts";
-import { X11Desktop } from "./screens/x11-desktop.ts";
-import { LinuxScreenTools } from "./screens/linux-tools.ts";
+import { LinuxDesktop } from "./screens/linux-desktop.ts";
 import { uiBinary } from "./screens/ui.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
 import { ModuleSet } from "./modules/modules.ts";
@@ -179,12 +178,12 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
       const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub({ drop: () => dropFolder(homedir()) })), (hub) => Effect.sync(() => hub.close()));
       const helper = yield* Helper;
       const { data } = yield* Paths;
-      // Windows': stillfail-screen; macOS's: still.fail Helper; Linux's: the station user's X11 session.
-      const desktop: Desktop | WindowsDesktop | X11Desktop =
+      // Windows': stillfail-screen; macOS's: still.fail Helper; Linux's: the station user's desktop session.
+      const desktop: Desktop | WindowsDesktop | LinuxDesktop =
         platform.desktopScreen === "screen"
           ? new WindowsDesktop({ binary: screenBinary(), ui: uiBinary(), changed: () => hub.changed() })
           : platform.desktopScreen === "x11"
-          ? new X11Desktop({ tools: new LinuxScreenTools(data), changed: () => hub.changed() })
+          ? new LinuxDesktop({ data, changed: () => hub.changed() })
           : new Desktop({ supported: platform.desktopScreen === "helper", helper, grants: yield* Grants, changed: () => hub.changed() });
       // Back after it ended by itself: the desktop asks again for a grant still missing.
       if (desktop instanceof Desktop) helper?.onBack(() => void desktop.helperBack());
