@@ -16,6 +16,8 @@ import { cost, price, priceTable, sessionUsage, usageNow } from "../src/read/usa
 import { packFile } from "../src/sessions/archive.ts";
 import { iso, parseIso, rememberCodexRollout } from "../src/read/transcript.ts";
 import { type StoreChange, type UsageGroup, Store, newMessage } from "../src/store/store.ts";
+import { installCompactUsage } from "../src/store/usage-compact.ts";
+import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { type CallState, UsageCounter, callsOf, claudeFiles, claudeProject, readFrom } from "../src/usage/counter.ts";
 import type { UsageCall, UsageFor } from "../src/store/usage.ts";
 import { keepUsage } from "../src/usage/module.ts";
@@ -255,6 +257,30 @@ test("an already counted response can grow after the counter's starting time", a
   await r.usage.read(new Set(["active"]));
   assert.equal(changes.length, 1, "a repeated unchanged response is not told again");
   unsubscribe();
+});
+
+test("the compact counter grows known calls and counts new ones without filling an old transcript", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "compact-counter");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  const old = claudeLine("old-known", now - 60_000, "claude-opus-5-5", usage(4, 0, 0, 0, 1));
+  const previous = callsOf("claude", old, false, fresh())[0]!;
+  r.store.recordUsage(path, { session: "active", offset: 0, model: null }, "claude",
+    [[previous, { turn: null, person: null, thread: null, profile: "cc" }]]);
+  installCompactUsage(r.store.db, () => now);
+  retireUsageIndexes(r.store.db);
+  r.store.startTurn("compact-turn", "active", "input");
+  append(path, [claudeLine("old-known", now - 60_000, "claude-opus-5-5", usage(4, 0, 0, 0, 5)),
+    claudeLine("old-unseen", now - 30_000, "claude-opus-5-5", usage(10, 0, 0, 0, 1)),
+    claudeLine("new", now + 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id, output FROM usage ORDER BY id").all().map((row) => [row.id, row.output]),
+    [["new", 1], ["old-known", 5]]);
+  const compact = r.store.db.prepare("SELECT SUM(calls) AS calls, SUM(input) AS input FROM usage_compact").get() as { calls: number; input: number };
+  assert.deepEqual([compact.calls, compact.input], [1, 2]);
 });
 
 test("new usage is counted when its transcript was put away before the counter read it", async () => {

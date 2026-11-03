@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, usageTotalsComplete, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
 import { usageCompactionsReady } from "./usage-compactions.ts";
+import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage, noteCompactContexts, compactContexts, seedCompactContext } from "./usage-compact.ts";
 import { retiredUsage } from "./usage-retire.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
@@ -90,26 +91,32 @@ export type UsageWriteOptions = { minNewAt?: number; changed?: { from: number };
 /// its row (its output grown). How many were new. Run in a transaction by the caller.
 export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, runtime: string, calls: [UsageCall, UsageFor][], options?: UsageWriteOptions): number {
   let added = 0;
+  const compact = hasCompactUsage(db);
+  const recent: [UsageCall, UsageFor][] = [];
   if (file.session !== null) {
+    if (compact && calls.length > 0 && usageTotalsComplete(db, file.session)) seedCompactContext(db, file.session);
     const insert = db.prepare(
-      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
-       ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)`,
+      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window${compact ? ", compact_counted" : ""})
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19${compact ? ", 1" : ""})
+       ${compact ? "" : "ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)"}`,
     );
     const known = db.prepare("SELECT output FROM usage WHERE id = ?");
+    const grow = compact ? db.prepare("UPDATE usage SET output = ?1 WHERE id = ?2 AND output < ?1") : null;
     for (const [c, of] of calls) {
       const was = known.get(c.id) as { output: number } | undefined;
       // An old call may grow after the cutover, but an unseen old call is not historical work to fill in.
       if (was === undefined && options?.minNewAt !== undefined && c.at < options.minNewAt) continue;
       // The same response can occur in several transcript lines or be replayed after an interrupted read.
       if (was !== undefined && c.output <= was.output) continue;
-      insert.run(
+      if (was !== undefined && grow !== null) grow.run(c.output, c.id);
+      else insert.run(
         c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,
         c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
       );
-      if (was === undefined) added++;
+      if (was === undefined) { added++; if (compact && !c.subagent) recent.push([c, of]); }
       if (options?.changed !== undefined) options.changed.from = Math.min(options.changed.from, c.at);
     }
+    if (recent.length > 0) noteCompactContexts(db, file.session, runtime, recent);
   }
   db.prepare(
     `INSERT INTO usage_files (path, session, offset, model, counter_cutoff, counter_anchor) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -195,6 +202,7 @@ export type ContextCall = {
 export const LAST_CONTEXTS = `SELECT u.turn, u.profile, u.model, u.context, u.context_window, u.at, u.fast, u.cache_write, u.cache_write_long
   FROM usage_main_calls m JOIN usage u ON u.id = m.id WHERE m.session = ?1 ORDER BY m.at DESC, m.id DESC LIMIT ?2`;
 export function lastContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {
+  if (hasCompactUsage(db)) return compactContexts(db, session, limit);
   // A partially built index cannot prove which call was last. Do not scan the raw history or present an older call as
   // current; the context is unavailable until it can be maintained independently of the old index.
   if (!usageCompactionsReady(db)) return [];
@@ -226,6 +234,11 @@ export function usageGroupOf(r: Json): UsageGroup {
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and
 /// by thread, person, profile and model.
 export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffsetMin: number): UsageGroup[] {
+  if (hasCompactUsage(db)) {
+    if (!compactScopeReady(db, null)) throw new Error("usage statistics are moving between workspaces");
+    const query = compactQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null);
+    return (db.prepare(query.sql).all(...query.args) as Json[]).map(usageGroupOf);
+  }
   if (retiredUsage(db)) throw new Error("usage detail statistics are unavailable");
   const generation = usageDetailGeneration(db);
   if (!usageDetailReady(db, null, generation)) throw new Error(USAGE_DETAIL_PENDING);
@@ -250,6 +263,7 @@ export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] 
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(db: DatabaseSync): number | null {
+  if (hasCompactUsage(db)) return compactUsageSince(db);
   const first = (db.prepare("SELECT first_at FROM usage_span WHERE id = 1").get() as Json).first_at as number | null;
   const cutover = usageDetailSince(db);
   return cutover === null ? first : Math.max(first ?? cutover, cutover);

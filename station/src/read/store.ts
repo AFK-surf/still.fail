@@ -10,6 +10,7 @@ import { Refused } from "../api/request.ts";
 import { retiredUsage } from "../store/usage-retire.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
+import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
 import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
@@ -869,10 +870,38 @@ export function watching(s: Store, sessions: string[] | null = null): Map<string
 /// The calls of one day for one thread, person, profile and model, added up (store/usage.ts).
 export type { UsageGroup };
 
+/// A page of one session's original calls, newest first. Seek a timestamp tie by rowid before seeking older times:
+/// a tuple comparison alone can start at the range's end and revisit every call newer than the cursor.
+const USAGE_CALL_COLUMNS = `SELECT CAST(rowid AS TEXT) AS seq, id, CAST(at AS TEXT) AS at, session, turn, thread, person, profile, runtime, model, subagent, fast,
+  input, cache_read, cache_write, cache_write_long, output, calls, context, context_window FROM usage INDEXED BY usage_session`;
+export const USAGE_CALLS_SAME = `${USAGE_CALL_COLUMNS} WHERE session = ?1 AND at = ?2 AND rowid < ?3 ORDER BY rowid DESC LIMIT ?4`;
+export const USAGE_CALLS_EARLIER = `${USAGE_CALL_COLUMNS} WHERE session = ?1 AND at >= ?2 AND at < ?3 ORDER BY usage.at DESC, rowid DESC LIMIT ?4`;
+export function usageCallsPage(s: Store, session: string, from: bigint, to: bigint, before: [bigint, bigint], limit: number,
+  viewer: InWorkspace | null): { rows: Json[]; next: { at: string; seq: string } | null } {
+  const row = viewer === null ? undefined : one(s, "SELECT ws FROM sessions WHERE key = ?", session);
+  if (viewer !== null && (row === undefined || !sees(viewer, row.ws))) return { rows: [], next: null };
+  const size = Math.max(1, Math.min(limit, 200));
+  const page: Json[] = [];
+  if (before[0] >= from && before[0] < to) page.push(...all(s, USAGE_CALLS_SAME, session, before[0], before[1], size));
+  const end = before[0] < to ? before[0] : to;
+  if (page.length < size && end > from) page.push(...all(s, USAGE_CALLS_EARLIER, session, from, end, size - page.length));
+  const rows = page.map((r) => ({ id: r.id, at: Number(r.at), session: r.session, turn: r.turn, thread: r.thread,
+    person: r.person, profile: r.profile, runtime: r.runtime, model: r.model, subagent: r.subagent !== 0, fast: r.fast !== 0,
+    input: Number(r.input), cacheRead: Number(r.cache_read), cacheWrite: Number(r.cache_write), cacheWriteLong: Number(r.cache_write_long),
+    output: Number(r.output), calls: Number(r.calls), context: r.context, contextWindow: r.context_window }));
+  const last = page.at(-1);
+  return { rows, next: last === undefined || page.length < size ? null : { at: String(last.at), seq: String(last.seq) } };
+}
+
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and by
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export { USAGE_DETAIL_PENDING };
 export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
+  if (hasCompactUsage(s.db)) {
+    if (!compactScopeReady(s.db, viewer)) throw new Refused(503, "usage statistics are moving between workspaces");
+    const query = compactQuery(from, to, utcOffsetMin, viewer);
+    return all(s, query.sql, ...query.args).map(usageGroupOf);
+  }
   if (retiredUsage(s.db)) throw new Refused(503, "usage detail statistics are unavailable");
   const generation = usageDetailGeneration(s.db);
   if (!usageDetailReady(s.db, viewer, generation)) throw new Error(USAGE_DETAIL_PENDING);
@@ -966,7 +995,13 @@ export const USAGE_DETAIL_QUARTERS_SCOPED = quartersByDay(DETAIL_QUARTERS_SCOPED
 export const USAGE_DETAIL_QUARTERS_HOME = quartersByDay(DETAIL_QUARTERS_HOME, "1");
 
 /// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
-export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
+export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null, partial = false,
+  range?: { from: bigint; to: bigint }): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
+  if (hasCompactUsage(s.db)) {
+    const rows = compactHistory(s.db, utcOffsetMin, viewer, partial, range);
+    if (rows === null) throw new Error(USAGE_MINUTES_PENDING);
+    return rows;
+  }
   if (retiredUsage(s.db)) throw new Error(USAGE_MINUTES_PENDING);
   const fromDetail = one(s, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'") !== undefined;
   if (fromDetail) {
@@ -1054,6 +1089,7 @@ export function usageChatTotals(s: Store, viewer: InWorkspace | null): { places:
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(s: Store): number | null {
+  if (hasCompactUsage(s.db)) return compactUsageSince(s.db);
   const first = one(s, "SELECT first_at FROM usage_span WHERE id = 1").first_at as number | null;
   const cutover = usageDetailSince(s.db);
   return cutover === null ? first : Math.max(first ?? cutover, cutover);

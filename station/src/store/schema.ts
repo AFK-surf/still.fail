@@ -595,7 +595,8 @@ export function addSizeColumn(db: DatabaseSync): void {
 /// The triggers that add a call to its session's totals and take one away, each by the calls it is (usage.calls).
 const USAGE_TOTALS_KEPT = `
 CREATE TRIGGER usage_totals_add AFTER INSERT ON usage BEGIN
-  INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, NEW.calls, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+  INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output)
+  VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, NEW.calls, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
   ON CONFLICT (session, runtime, model, fast) DO UPDATE SET calls = calls + excluded.calls, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
     cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long, output = output + excluded.output;
 END;
@@ -725,6 +726,7 @@ ${USAGE_QUARTERS_KEPT}`;
 /// Keep an existing quarter index for older station processes. A fresh database can start one empty; current readers
 /// use usage_detail, so an older database without it does not need an incomplete replacement.
 export function addUsageQuarters(db: DatabaseSync): void {
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compact_since'").get()) return;
   if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'").get()) return;
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_quarters'").get() !== undefined;
   if (!made()) {

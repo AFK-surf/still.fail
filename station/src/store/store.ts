@@ -36,6 +36,7 @@ import { installIncrementalUsageTotals, installUsageDetail, usageTotalsComplete 
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { retireDuplicateUsage } from "./usage-unified.ts";
+import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
@@ -149,6 +150,7 @@ export class Store {
   /// archive directory).
   readonly publishedDir: string;
   #listeners: ((change: StoreChange) => void)[] = [];
+  #workspaceListeners = new Set<() => void>();
   #statements = new Map<string, StatementSync>();
   /// How many times the decision checks or the archive policy were written in this process (decisionsVersion).
   #decisions = 0;
@@ -271,6 +273,19 @@ export class Store {
     return () => {
       this.#listeners = this.#listeners.filter((l) => l !== listener);
     };
+  }
+
+  /// Tells internal workers when session ownership changes, after the database write has committed.
+  onSessionWorkspaceChange(listener: () => void): () => void {
+    this.#workspaceListeners.add(listener);
+    return () => { this.#workspaceListeners.delete(listener); };
+  }
+
+  #sessionWorkspaceChanged(): void {
+    for (const listener of this.#workspaceListeners) {
+      try { listener(); }
+      catch (error) { console.error("session workspace listener:", error); }
+    }
   }
 
   /// Where archived threads and transcript copies go (`threads/`, `transcripts/`).
@@ -409,6 +424,7 @@ export class Store {
       if (from === null) this.#run("UPDATE sessions SET ws = ? WHERE ws IS NULL", to);
       else this.#run("UPDATE sessions SET ws = ? WHERE ws = ?", to, from);
       for (const key of keys) changes.push({ type: "session", key });
+      if (keys.length > 0 && from !== to) this.#sessionWorkspaceChanged();
     });
   }
 
@@ -423,6 +439,7 @@ export class Store {
         latestNote(), optFlag(s.fast), s.ws ?? null, s.context ?? null,
       );
       changes.push({ type: "session", key: s.key });
+      this.#sessionWorkspaceChanged();
     });
   }
 
@@ -843,7 +860,8 @@ export class Store {
   deleteSession(key: string): void {
     this.#with((changes) => {
       // Which workspace's it was, for those its going is told to.
-      const ws: string | null = this.#one("SELECT ws FROM sessions WHERE key = ?", key)?.ws ?? null;
+      const session = this.#one("SELECT ws FROM sessions WHERE key = ?", key);
+      const ws: string | null = session?.ws ?? null;
       const kept: number[] = [];
       const removed: number[] = [];
       const unpublished: string[] = [];
@@ -883,6 +901,7 @@ export class Store {
           this.#run("DELETE FROM threads WHERE id = ?", thread);
         }
       });
+      if (session !== undefined) this.#sessionWorkspaceChanged();
       for (const id of unpublished) this.#removeSnapshot(id);
       changes.push({ type: "sessionRemoved", key, ws });
       // Clients drop what they keep of the threads that went with it.
@@ -2180,6 +2199,14 @@ export class Store {
     return usage.lastContexts(this.db, session, limit);
   }
 
+  recentlyCompacted(session: string): boolean {
+    return hasCompactUsage(this.db) && compactRecentlyCompacted(this.db, session);
+  }
+
+  savedCompactContext(session: string) {
+    return hasCompactUsage(this.db) ? savedCompactContext(this.db, session) : null;
+  }
+
   /// Where each model's context was compacted on this station since `since` (store/usage.ts).
   compactionPoints(since: number): Map<string, number> {
     return usage.compactionPoints(this.db, since);
@@ -2190,9 +2217,9 @@ export class Store {
     return usageCompactionsReady(this.db);
   }
 
-  /// Tells whoever follows the store that calls of `sessions` were recorded, the earliest made at `from` (ms).
-  usageChanged(sessions: string[], from?: number): void {
-    this.#send([{ type: "usage", sessions, ...(from !== undefined ? { from } : {}) }]);
+  /// Tell followers about new calls or completed statistics. The latter do not change a session's saved usage.
+  usageChanged(sessions: string[], from?: number, statisticsOnly = false): void {
+    this.#send([{ type: "usage", sessions, ...(from !== undefined ? { from } : {}), ...(statisticsOnly ? { statisticsOnly: true } : {}) }]);
   }
 
   /// Sessions whose transcripts may have grown since `since`: a turn running, or ended since then.

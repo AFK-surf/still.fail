@@ -4,12 +4,13 @@ import {
   "stillfail/sfapp",
   "stillfail/sffilmscene",
   "mbui/view",
+  "mbui/film",
 }
 
 options(
   "is-main": true,
   targets: { "main.mbt": [ "wasm" ], "other.mbt": [ "native", "js", "wasm-gc" ] },
   link: {
-    "wasm": { "exports": ["draw", "done", "item", "background", "text_length", "text_unit", "bytes_length", "bytes_unit"] },
+    "wasm": { "exports": ["draw", "done", "item", "background", "text_length", "text_unit", "bytes_length", "bytes_unit", "film", "film_text_length", "film_text_unit", "film_item"] },
   },
 )

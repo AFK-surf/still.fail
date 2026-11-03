@@ -2,7 +2,7 @@
 // the same as reading it all again would have given.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dayOf, holdsWhole, sameDetailCoverage, withPart } from "../src/station/usage-part.ts";
+import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "../src/station/usage-part.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -35,6 +35,14 @@ test("a day and when it began, in a time zone", () => {
   assert.deepEqual(dayOf(at, -300), { day: "2026-11-02", from: Date.UTC(2026, 10, 2, 5, 0) });
 });
 
+test("the requested history covers the year of chart days in the device's time zone", () => {
+  const at = Date.UTC(2026, 10, 2, 17, 30);
+  const range = usageHistoryRange(at, 480);
+  assert.equal(dayOf(range.from, 480).day, "2025-11-09");
+  assert.equal(dayOf(range.to, 480).day, "2026-11-04");
+  assert.equal(range.to, Date.UTC(2026, 10, 3, 16));
+});
+
 test("the days a change touched, read again, take the place of those held; the rest is as read whole", () => {
   const from = Date.UTC(2026, 8, 5, 16);
   const before = [row("2026-11-01", "s1", "m", 2), row("2026-11-02", "s1", "m", 1), row("2026-11-02", "s2", null, 4), row("2026-11-03", "s1", "m", 1)];
@@ -49,6 +57,7 @@ test("the days a change touched, read again, take the place of those held; the r
     history: { days: [{ day: "2026-09-30", runtime: "claude", model: "m", tokens: 7, calls: 1 }, ...daysOf(before)], cards: 3, picked: 1, places: { ember: 2 }, archived: 1, remoteRuns: 2 },
   };
   assert.equal(holdsWhole(held, from), true);
+  assert.equal(holdsWhole({ ...held, historyPending: true }, from), false, "an unfinished total needs a whole retry");
   assert.equal(holdsWhole(held, from + DAY), false, "another day's window");
   assert.equal(holdsWhole({ ...held, history: undefined }, from), false, "a read without the history");
   // Calls recorded from 2026-11-02 on (UTC+8): that day and the next read again.
@@ -102,4 +111,28 @@ test("refreshing new detail preserves a complete older daily total", () => {
   const updated: J = withPart(held, part, "2026-11-02", since);
   const nowNewDetail = daysOf(part.rows)[0];
   assert.deepEqual(updated.history.days, [{ ...nowNewDetail, calls: nowNewDetail.calls + 50, tokens: nowNewDetail.tokens + 5_000 }]);
+});
+
+test("refreshing details updates the available portion of an incomplete history", () => {
+  const from = Date.UTC(2026, 8, 5, 16), since = Date.UTC(2026, 10, 1, 16);
+  const old = row("2026-11-02", "s", "m", 1);
+  const held: J = { from, detailSince: since, rows: [old], historyUnavailable: true, partialHistory: { days: daysOf([old]), cards: 1 } };
+  const part: J = { detailSince: since, rows: [row("2026-11-02", "s", "m", 2)] };
+  const updated: J = withPart(held, part, "2026-11-02", since);
+  assert.equal(updated.historyUnavailable, true);
+  assert.equal(updated.history, undefined);
+  assert.deepEqual(updated.partialHistory.days, daysOf(part.rows));
+  assert.equal(updated.partialHistory.cards, 1);
+});
+
+test("refreshing a bounded history changes its lifetime total without counting tomorrow", () => {
+  const from = Date.UTC(2026, 8, 5, 16), since = Date.UTC(2026, 10, 1, 16);
+  const old = [row("2026-11-02", "s", "m", 1), row("2026-11-04", "s", "m", 10)];
+  const held: J = { from, detailSince: since, rows: old, historyUnavailable: true,
+    partialHistory: { days: daysOf([old[0]]), tokens: 1_106, beforeDay: "2026-11-03", cards: 1 } };
+  const part: J = { detailSince: since, rows: [row("2026-11-02", "s", "m", 2), row("2026-11-04", "s", "m", 20)] };
+  const updated: J = withPart(held, part, "2026-11-02", since);
+  assert.equal(updated.partialHistory.tokens, 1_212);
+  assert.equal(updated.partialHistory.beforeDay, "2026-11-03");
+  assert.deepEqual(updated.partialHistory.days.map((d: J) => d.day), ["2026-11-02"]);
 });

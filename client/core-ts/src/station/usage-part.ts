@@ -8,6 +8,7 @@ import { get, isObject } from "../util.ts";
 type J = Record<string, unknown>;
 
 const DAY_MS = 86_400_000;
+export const USAGE_WEEKS = 52;
 
 /// The day (YYYY-MM-DD, as the station names them) `at` (ms) is in, `offset` minutes east of UTC, and when it began.
 export function dayOf(at: number, offset: number): { day: string; from: number } {
@@ -16,11 +17,18 @@ export function dayOf(at: number, offset: number): { day: string; from: number }
   return { day: new Date(start).toISOString().slice(0, 10), from: start - offset * 60_000 };
 }
 
+/// The chart starts on Sunday, 51 weeks before this one, and ends at the next local midnight.
+export function usageHistoryRange(now: number, offset: number): { from: number; to: number } {
+  const today = dayOf(now, offset).from;
+  const weekday = new Date(today + offset * 60_000).getUTCDay();
+  return { from: today - (weekday + (USAGE_WEEKS - 1) * 7) * DAY_MS, to: today + DAY_MS };
+}
+
 /// Whether what is held is a whole read of the usage from `from` (the page's 60 days as they are now, in this time zone:
 /// another day or zone reads another `from`), with its history: what a part can be put into.
 export function holdsWhole(held: unknown, from: number): held is J {
   return isObject(held) && Number(get(held, "from")) === from && Array.isArray(get(held, "rows"))
-    && (isObject(get(held, "history")) || get(held, "historyUnavailable") === true);
+    && get(held, "historyPending") !== true && (isObject(get(held, "history")) || get(held, "historyUnavailable") === true);
 }
 
 const arr = (v: unknown): J[] => (Array.isArray(v) ? (v.filter(isObject) as J[]) : []);
@@ -53,7 +61,8 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     target.set(key, at);
   } };
   accumulate(days, rows, 1);
-  const history = get(held, "history");
+  const full = get(held, "history");
+  const history = isObject(full) ? full : get(held, "partialHistory");
   const historyDays = arr(get(history, "days"));
   let updatedDays: J[];
   if (typeof get(held, "detailSince") === "number") {
@@ -75,9 +84,18 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     const first = String(get(a, "day")), second = String(get(b, "day"));
     return first < second ? -1 : first > second ? 1 : 0;
   });
+  const beforeDay = get(history, "beforeDay");
+  const previousTotal = get(history, "tokens");
+  let total: number | undefined;
+  if (typeof beforeDay === "string" && typeof previousTotal === "number" && Number.isFinite(previousTotal)) {
+    const tokensOf = (records: J[]) => records.filter((r) => String(get(r, "day")) >= day && String(get(r, "day")) < beforeDay)
+      .reduce((sum, r) => sum + n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite")) + n(get(r, "output")), 0);
+    total = previousTotal - tokensOf(arr(get(held, "rows"))) + tokensOf(arr(get(part, "rows")));
+    updatedDays = updatedDays.filter((d) => String(get(d, "day")) < beforeDay);
+  }
   const priced = new Map<string, J>();
   for (const p of [...arr(get(get(held, "prices"), "rows")), ...arr(get(get(part, "prices"), "rows"))]) priced.set(String(get(p, "model")), p);
-  const { remoteRuns: _remoteRuns, history: _history, ...rest } = held;
+  const { remoteRuns: _remoteRuns, history: _history, partialHistory: _partialHistory, ...rest } = held;
   const detailSince = get(part, "detailSince") ?? get(held, "detailSince");
   const remoteRuns = Array.isArray(get(held, "remoteRuns")) && Array.isArray(get(part, "remoteRuns"))
     ? [...arr(get(held, "remoteRuns")).filter((r) => n(get(r, "at")) < since), ...arr(get(part, "remoteRuns"))] : undefined;
@@ -92,6 +110,6 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     people: { ...(get(held, "people") as J | undefined), ...(get(part, "people") as J | undefined) },
     profiles: get(part, "profiles") ?? get(held, "profiles"),
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
-    ...(isObject(history) ? { history: { ...history, days: updatedDays } } : {}),
+    ...(isObject(history) ? { [isObject(full) ? "history" : "partialHistory"]: { ...history, ...(total !== undefined ? { tokens: total } : {}), days: updatedDays } } : {}),
   };
 }
