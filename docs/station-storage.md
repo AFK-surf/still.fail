@@ -286,7 +286,11 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   user is them ("这是我"), or no longer ("不是我"); nothing checks it. The
   answer is the overview, whose `slackUsers` lists the viewer's Slack users.
 - `GET /sessions/:key` is the session row, its threads, and its turns — no
-  entries, no transcript. `GET /sessions` lists shown sessions;
+  entries, no transcript; `?turns=n` only its latest `n` turns (devices ask
+  `?turns=0`: how many turns it had and how long the ended ones ran are its
+  summary's `turns` and `workMs`, kept as each turn ends from when the station
+  began to keep it; `workMs` is null for a session with a turn that ended
+  before, which shows its turns alone). `GET /sessions` lists shown sessions;
   `?archived=1` lists the archived ones.
 
 ### The sidebar
