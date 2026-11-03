@@ -460,8 +460,10 @@ fn c_file(ds : Array[Decl]) -> String {
   for d in ds {
     let ps = d.params.map(fn(p) { w_kind(p.ty) })
     let rs = if d.ret == "Unit" { [] } else { [w_kind(d.ret)] }
+    // (an empty list's {0}: MSVC's C takes no empty initializer)
+    let kinds = fn(ks : Array[String]) { if ks.is_empty() { "0" } else { ks.join(", ") } }
     out.write_string(
-      "  {\"\{d.sym}\", t_\{d.sym}, \{ps.length()}, {\{ps.join(", ")}}, \{rs.length()}, {\{rs.join(", ")}}},\n",
+      "  {\"\{d.sym}\", t_\{d.sym}, \{ps.length()}, {\{kinds(ps)}}, \{rs.length()}, {\{kinds(rs)}}},\n",
     )
   }
   out.write_string("  {NULL, NULL, 0, {0}, 0, {0}},\n};\n")

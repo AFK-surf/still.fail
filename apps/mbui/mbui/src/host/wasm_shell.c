@@ -5,12 +5,35 @@
 // time, the process's arguments and environment). The program's main runs as the native program's does: the host's
 // run (mb_host_run) does not come back while the app is up, the program called into from inside it.
 //
-//     SHELL PROGRAM.wasm [ARGS…]      (MBUI_WASM_APP: PROGRAM.wasm, where no argument says)
+//     SHELL PROGRAM.wasm [ARGS…]      (MBUI_WASM_APP: PROGRAM.wasm, where no argument says; PROGRAM.cwasm: compiled
+//                                     ahead for this machine by wasmtime's command line, a device's)
 #include "wasmhost.h"
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#include <mach-o/dyld.h>
+#endif
+#ifdef __ANDROID__
+#include <android/log.h>
+// (Android's Java starts the program as it starts the native one: mbui_main, android_host.c's Native.start)
+#define main mbui_main
+#endif
+
+// A word of the shell's: on stderr, on Android the system's log (an app's process has no stderr)
+static void say(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+#ifdef __ANDROID__
+  __android_log_vprint(ANDROID_LOG_ERROR, "mbui", fmt, ap);
+#else
+  vfprintf(stderr, fmt, ap);
+#endif
+  va_end(ap);
+}
 
 static wasmtime_context_t *ctx;
 static wasmtime_memory_t memory;
@@ -19,12 +42,14 @@ static int has_string, has_bytes;
 static moonbit_string_t kept_string;
 static moonbit_bytes_t kept_bytes;
 static int shell_argc;
+// (the program's end: proc_exit)
+static int exiting, exit_code;
 static char **shell_argv;
 
 // What MoonBit's native runtime calls on an error of its own (moonc writes it into a native program; the shell is not
 // one of moonc's)
 void moonbit_panic(void) {
-  fprintf(stderr, "wasm shell: the native runtime panicked\n");
+  say("wasm shell: the native runtime panicked\n");
   abort();
 }
 
@@ -32,7 +57,7 @@ static void die(const char *what, wasmtime_error_t *err, wasm_trap_t *trap) {
   wasm_byte_vec_t msg = {0};
   if (err) wasmtime_error_message(err, &msg);
   else if (trap) wasm_trap_message(trap, &msg);
-  fprintf(stderr, "wasm shell: %s%s%.*s\n", what, msg.size ? ": " : "", (int)msg.size, msg.data ? msg.data : "");
+  say("wasm shell: %s%s%.*s\n", what, msg.size ? ": " : "", (int)msg.size, msg.data ? msg.data : "");
   exit(1);
 }
 
@@ -44,7 +69,7 @@ uint8_t *mbw_memory(wasmtime_caller_t *caller) {
   if (!has_memory) {
     wasmtime_extern_t item;
     if (!caller || !wasmtime_caller_export_get(caller, "memory", 6, &item) || item.kind != WASMTIME_EXTERN_MEMORY) {
-      fprintf(stderr, "wasm shell: the program exports no memory\n");
+      say("wasm shell: the program exports no memory\n");
       exit(1);
     }
     memory = item.of.memory;
@@ -62,6 +87,7 @@ int mbw_keep(wasmtime_func_t *slot, const wasmtime_val_t *v) {
 void mbw_call(const wasmtime_func_t *f, wasmtime_val_t *args, size_t n, wasmtime_val_t *res, size_t nr) {
   wasm_trap_t *trap = NULL;
   wasmtime_error_t *err = wasmtime_func_call(ctx, f, args, n, res, nr, &trap);
+  if (exiting) exit(exit_code);
   if (err || trap) die("the program trapped", err, trap);
 }
 
@@ -149,7 +175,11 @@ static wasm_trap_t *fd_write(void *env, wasmtime_caller_t *caller, const wasmtim
   int32_t fd = a[0].of.i32, iovs = a[1].of.i32, count = a[2].of.i32, written = a[3].of.i32, total = 0;
   for (int32_t i = 0; i < count; i++) {
     uint32_t ptr = *(uint32_t *)(m + iovs + i * 8), len = *(uint32_t *)(m + iovs + i * 8 + 4);
+#ifdef __ANDROID__
+    __android_log_print(fd == 2 ? ANDROID_LOG_ERROR : ANDROID_LOG_INFO, "mbui", "%.*s", (int)len, (const char *)(m + ptr));
+#else
     fwrite(m + ptr, 1, len, fd == 2 ? stderr : stdout);
+#endif
     total += (int32_t)len;
   }
   fflush(fd == 2 ? stderr : stdout);
@@ -159,10 +189,15 @@ static wasm_trap_t *fd_write(void *env, wasmtime_caller_t *caller, const wasmtim
   return NULL;
 }
 
+// (the program's end unwinds it, a trap of the shell's own, and is then the process's: its main's end, which MoonBit's
+// _start ends with as it ends, is no end of the app where the host's run came back with it up, Android's)
 static wasm_trap_t *proc_exit(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
                               wasmtime_val_t *r, size_t nr) {
   (void)env; (void)caller; (void)na; (void)r; (void)nr;
-  exit(a[0].of.i32);
+  exiting = 1;
+  exit_code = a[0].of.i32;
+  if (getenv("MBUI_WASM_TRACE")) say("wasm shell: the program ended (%d)\n", exit_code);
+  return wasmtime_trap_new("the program ended", 17);
 }
 
 // mbui/film's process needs on Wasm (src/film/film_wasm.mbt), for a scene's program run here (its preview): its
@@ -175,7 +210,7 @@ static size_t film_got_n;
 
 static char *film_text(void) {
   if (!has_film_text) {
-    fprintf(stderr, "wasm shell: the program exports no film_text_length, film_text_unit\n");
+    say("wasm shell: the program exports no film_text_length, film_text_unit\n");
     exit(1);
   }
   wasmtime_val_t res, arg = {.kind = WASMTIME_I32};
@@ -239,7 +274,7 @@ static wasm_trap_t *film_say(void *env, wasmtime_caller_t *caller, const wasmtim
                              wasmtime_val_t *r, size_t nr) {
   (void)env; (void)caller; (void)a; (void)na; (void)r; (void)nr;
   char *s = film_text();
-  fprintf(stderr, "%s\n", s);
+  say("%s\n", s);
   free(s);
   return NULL;
 }
@@ -248,8 +283,16 @@ static wasm_trap_t *film_say(void *env, wasmtime_caller_t *caller, const wasmtim
 static wasm_trap_t *missing(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
                             wasmtime_val_t *r, size_t nr) {
   (void)caller; (void)a; (void)na; (void)r; (void)nr;
-  fprintf(stderr, "wasm shell: the program called %s, which this shell has not\n", (const char *)env);
+  say("wasm shell: the program called %s, which this shell has not\n", (const char *)env);
   exit(1);
+}
+
+// (strndup's, which MSVC's C library has not)
+static char *copy_n(const char *s, size_t n) {
+  char *out = malloc(n + 1);
+  memcpy(out, s, n);
+  out[n] = 0;
+  return out;
 }
 
 static wasm_functype_t *functype(int np, const wasm_valkind_t *p, int nr, const wasm_valkind_t *r) {
@@ -274,7 +317,7 @@ static wasm_byte_vec_t read_file(const char *path) {
   wasm_byte_vec_t out = {0};
   FILE *f = fopen(path, "rb");
   if (!f) {
-    fprintf(stderr, "wasm shell: cannot read %s\n", path);
+    say("wasm shell: cannot read %s\n", path);
     exit(2);
   }
   fseek(f, 0, SEEK_END);
@@ -282,29 +325,85 @@ static wasm_byte_vec_t read_file(const char *path) {
   fseek(f, 0, SEEK_SET);
   wasm_byte_vec_new_uninitialized(&out, (size_t)n);
   if (fread(out.data, 1, (size_t)n, f) != (size_t)n) {
-    fprintf(stderr, "wasm shell: cannot read %s\n", path);
+    say("wasm shell: cannot read %s\n", path);
     exit(2);
   }
   fclose(f);
   return out;
 }
 
+#ifdef __ANDROID__
+// Where an Android app's program lies, unless MBUI_WASM_APP says: app.cwasm in its files (the package's, as the process
+// is named: scripts/wasm-app.sh compiles it for the device and puts it there)
+static const char *android_program(void) {
+  static char path[512];
+  char name[256] = {0};
+  FILE *f = fopen("/proc/self/cmdline", "rb");
+  if (!f) return NULL;
+  size_t n = fread(name, 1, sizeof name - 1, f);
+  fclose(f);
+  name[n] = 0;
+  // (a process of its own, "package:name", is the package's still)
+  char *colon = strchr(name, ':');
+  if (colon) *colon = 0;
+  snprintf(path, sizeof path, "/data/data/%s/files/app.cwasm", name);
+  return path;
+}
+#endif
+
+#ifdef __APPLE__
+// Where an iOS device's program lies, unless MBUI_WASM_APP says: app.cwasm beside the program, in its bundle
+static const char *beside_program(void) {
+  static char path[4096];
+  uint32_t n = sizeof path;
+  if (_NSGetExecutablePath(path, &n) != 0) return NULL;
+  char *slash = strrchr(path, '/');
+  if (!slash || (size_t)(slash - path) + 10 > sizeof path) return NULL;
+  strcpy(slash + 1, "app.cwasm");
+  return path;
+}
+#endif
+
 int main(int argc, char **argv) {
   const char *path = argc > 1 ? argv[1] : getenv("MBUI_WASM_APP");
+#ifdef __ANDROID__
+  if (!path || !*path) path = android_program();
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+  if (!path || !*path) path = beside_program();
+#endif
   if (!path || !*path) {
-    fprintf(stderr, "usage: %s PROGRAM.wasm [ARGS…]\n", argv[0]);
+    say("usage: %s PROGRAM.wasm [ARGS…]\n", argv[0]);
     return 2;
   }
   shell_argc = argc;
   shell_argv = argv;
-  wasm_engine_t *engine = wasm_engine_new();
+  wasm_config_t *config = wasm_config_new();
+  // (an iOS device runs no code an app made: the program run by Pulley, wasmtime's interpreter; MBUI_WASM_PULLEY=1
+  // the same on a simulator, whose wasmtime has it too, for what a device runs)
+  int pulley = getenv("MBUI_WASM_PULLEY") && *getenv("MBUI_WASM_PULLEY") == '1';
+#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+  pulley = 1;
+#endif
+  if (pulley) {
+    wasmtime_error_t *target_err = wasmtime_config_target_set(config, "pulley64");
+    if (target_err) die("no Pulley", target_err, NULL);
+  }
+  wasm_engine_t *engine = wasm_engine_new_with_config(config);
   wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   ctx = wasmtime_store_context(store);
-  wasm_byte_vec_t wasm = read_file(path);
   wasmtime_module_t *module = NULL;
-  wasmtime_error_t *err = wasmtime_module_new(engine, (const uint8_t *)wasm.data, wasm.size, &module);
-  wasm_byte_vec_delete(&wasm);
-  if (err) die("the program is not a module", err, NULL);
+  wasmtime_error_t *err;
+  size_t len = strlen(path);
+  if (len > 6 && strcmp(path + len - 6, ".cwasm") == 0) {
+    // (compiled ahead for this machine by wasmtime's command line, as this wasmtime would: a device's)
+    err = wasmtime_module_deserialize_file(engine, path, &module);
+    if (err) die("the program is not one compiled for this shell", err, NULL);
+  } else {
+    wasm_byte_vec_t wasm = read_file(path);
+    err = wasmtime_module_new(engine, (const uint8_t *)wasm.data, wasm.size, &module);
+    wasm_byte_vec_delete(&wasm);
+    if (err) die("the program is not a module", err, NULL);
+  }
   wasmtime_linker_t *linker = wasmtime_linker_new(engine);
   for (const mbw_import *i = mbw_imports; i->name; i++)
     define(linker, "mbhost", i->name, i->fn, NULL, functype(i->np, i->p, i->nr, i->r));
@@ -331,7 +430,7 @@ int main(int argc, char **argv) {
     if (!fty) continue;
     char *label = malloc(mod->size + name->size + 2);
     snprintf(label, mod->size + name->size + 2, "%.*s.%.*s", (int)mod->size, mod->data, (int)name->size, name->data);
-    char *n = strndup(name->data, name->size), *m = strndup(mod->data, mod->size);
+    char *n = copy_n(name->data, name->size), *m = copy_n(mod->data, mod->size);
     define(linker, m, n, missing, label, wasm_functype_copy(fty));
     free(n);
     free(m);
@@ -363,7 +462,13 @@ int main(int argc, char **argv) {
   }
   if (!wasmtime_instance_export_get(ctx, &instance, "_start", 6, &item) || item.kind != WASMTIME_EXTERN_FUNC)
     die("the program has no main (_start)", NULL, NULL);
-  if (getenv("MBUI_WASM_TRACE")) fprintf(stderr, "wasm shell: started %s\n", path);
-  mbw_call(&item.of.func, NULL, 0, NULL, 0);
+  if (getenv("MBUI_WASM_TRACE")) say("wasm shell: started %s\n", path);
+  trap = NULL;
+  err = wasmtime_func_call(ctx, &item.of.func, NULL, 0, NULL, 0, &trap);
+  // (its main's end: the app goes on where the host's run came back, as the native program's main returns)
+  if (getenv("MBUI_WASM_TRACE")) say("wasm shell: its main came back (%s %d)\n", exiting ? "ended" : "returned", exit_code);
+  if (exiting && exit_code == 0) return 0;
+  if (exiting) exit(exit_code);
+  if (err || trap) die("the program trapped", err, trap);
   return 0;
 }

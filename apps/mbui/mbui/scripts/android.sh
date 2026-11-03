@@ -4,7 +4,7 @@
 # emulator of our own (AVD mbui-avd, port 5580). APP=demo|textdiff picks the app (still.fail's apps: its
 # apps/mbui/scripts/android.sh, these scripts on its module);
 # ENV="K=V;K2=V2" gives `run` the app's environment variables (MainActivity sets them before the app starts).
-#   scripts/android.sh build | emu | run [script] | shown | uid | shot NAME | record NAME SECONDS [drive] | log | stop | delete
+#   scripts/android.sh build | emu | run [script] | install | put FILE NAME | shown | uid | shot NAME | record NAME SECONDS [drive] | log | stop | delete
 # moon.pkg cannot choose files per OS, so the build runs on a copy of the
 # module in out/android/mod, where an app's src/photos/pictures/android.mbt takes pictures_native.mbt's place.
 #
@@ -17,6 +17,9 @@
 #     (alongside the compile: .so files into $jni, before the link), app_assets (alongside: into $apk/assets, before
 #     Gradle) and app_cmd (commands of its own)
 # VARIANT=release builds the project's release build type (default debug).
+# MBUI_WASM_THUNKS=<thunks.c> builds an app's Wasm shell instead (still.fail's scripts/wasm-app.sh: no C of the app's,
+# its program a .wasm of its own): the host, the hook's C, src/host/wasm_shell.c, those thunks, MBUI_WASM_STUBS and
+# wasmtime; its APK packed again only when what it is made of changed. `put FILE NAME` puts a file in the app's files.
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -93,6 +96,27 @@ apk=$OUT/apk
 jni=$OUT/apk/jniLibs/$ABI
 [ -z "${MBUI_ANDROID_HOOK:-}" ] || . "$MBUI_ANDROID_HOOK"
 
+# wasmtime's C API for the ABI (Apache-2.0, a release of its own, fetched once by its checksum): its headers ($WT/include)
+# and libwasmtime.so into $jni
+WT_VERSION=50.0.1
+wasmtime_lib() {
+  local arch sha
+  case $ABI in
+    arm64-v8a) arch=aarch64 sha=611b6cd99939767684f48bd4cf3db559db4fde4992c949057be1e815ec2a9e70 ;;
+    x86_64) arch=x86_64 sha=637f68d80b613f476a7d367d81333fba494db3696d9258a5f6647b257101fbea ;;
+  esac
+  WT=$OUT/wasmtime-v$WT_VERSION-$arch-android-c-api
+  if [ ! -f $WT/lib/libwasmtime.so ]; then
+    curl -fsSL --retry 3 -o $OUT/wasmtime.tar.xz \
+      "https://github.com/bytecodealliance/wasmtime/releases/download/v$WT_VERSION/wasmtime-v$WT_VERSION-$arch-android-c-api.tar.xz"
+    [ "$(shasum -a 256 $OUT/wasmtime.tar.xz | awk '{print $1}')" = "$sha" ] \
+      || { echo "android.sh: wasmtime: not the release asked for" >&2; exit 1; }
+    tar xf $OUT/wasmtime.tar.xz -C $OUT
+    rm -f $OUT/wasmtime.tar.xz
+  fi
+  cp -p $WT/lib/libwasmtime.so $jni/
+}
+
 now() { python3 -c 'import time;print(time.time())'; }
 secs() { python3 -c "print(f'{$2-$1:.1f}')"; }
 
@@ -119,7 +143,8 @@ case "${1:-build}" in
     # needs nothing built here: begun now, beside moonc and cc, kept by what it is made of (scripts/apk); the APK's
     # build at the end finds it kept
     DEX=
-    if [ -f $PROJ/apk.json ]; then
+    # (a Wasm shell's APK is mostly the one before it: packed only when what it is made of changed, below)
+    if [ -f $PROJ/apk.json ] && [ -z "${MBUI_WASM_THUNKS:-}" ]; then
       n=${ORG_GRADLE_PROJECT_stillfailBuild:-1}
       "$D/apk" build $PROJ/apk.json --variant $VARIANT --version-code $n --version-name 0.1.$n --abi $ABI \
         --out $APK_FILE --dex-only > $OUT/apk-dex.log 2>&1 &
@@ -129,18 +154,35 @@ case "${1:-build}" in
     # build of an app without the core after one with it would still pack them: built anew when that changes.
     if [ "$(cat $OUT/apk-kind 2>/dev/null)" != "$APP_KIND" ]; then rm -rf "${PROJ:?}/app/build"; fi
     echo $APP_KIND > $OUT/apk-kind
-    GEN=$("$D/mbc" gen --dir $M src/$PKG 2>$OUT/moon.log) \
-      || { "$D/chk" errs < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
-    "$D/chk" errs < $OUT/moon.log | grep -v '^errors: 0' || true
+    EXTRA="--extra=$ROOT/src/host/android_host.c $APP_EXTRA"
+    if [ -n "${MBUI_WASM_THUNKS:-}" ]; then
+      # The app's Wasm shell (MBUI_WASM_THUNKS: the shell's side of the app's calls, tools/wasmhost's): the host, the
+      # app's C and wasmtime, with no C of moonc's; the app, a .wasm of its own, put beside it as it runs
+      # (still.fail's scripts/wasm-app.sh)
+      wasmtime_lib
+      EXTRA="$EXTRA --extra=$ROOT/src/host/wasm_shell.c --extra=$MBUI_WASM_THUNKS"
+      # (and the native stubs of the app's packages the thunks call: MBUI_WASM_STUBS, which moonc's C would bring)
+      for f in ${MBUI_WASM_STUBS:-}; do EXTRA="$EXTRA --extra=$f"; done
+      CFLAGS="$CFLAGS -I$WT/include"
+      APP_LINK="$APP_LINK -L$jni -lwasmtime"
+    else
+      GEN=$("$D/mbc" gen --dir $M src/$PKG 2>$OUT/moon.log) \
+        || { "$D/chk" errs < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
+      "$D/chk" errs < $OUT/moon.log | grep -v '^errors: 0' || true
+    fi
     T1=$(now)
     SO=$PROJ/app/src/main/jniLibs/$ABI/libmbui.so
     mkdir -p $OUT/obj $(dirname $SO)
     R=$MOON_HOME/lib/runtime
-    EXTRA="--extra=$ROOT/src/host/android_host.c $APP_EXTRA"
-    "$D/mbc" compile "--cc=$CC" "--cflags=$CFLAGS" --gen-flags=-Dmain=mbui_main --obj=$OUT/obj \
-      --link-flags=$OUT/link-flags.txt \
-      --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
-      $EXTRA "$GEN" > $OUT/objs.txt
+    if [ -n "${MBUI_WASM_THUNKS:-}" ]; then
+      : > $OUT/link-flags.txt
+      shell_objs $OUT/wobj "$CC" "$CFLAGS" "" ${EXTRA//--extra=/} $R/runtime.c > $OUT/objs.txt
+    else
+      "$D/mbc" compile "--cc=$CC" "--cflags=$CFLAGS" --gen-flags=-Dmain=mbui_main --obj=$OUT/obj \
+        --link-flags=$OUT/link-flags.txt \
+        --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
+        $EXTRA "$GEN" > $OUT/objs.txt
+    fi
     T2=$(now)
     if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/app-libs.log; exit 1; }; cat $OUT/app-libs.log; fi
     T3=$(now)
@@ -153,20 +195,33 @@ case "${1:-build}" in
     if [ -n "$HBC" ]; then wait $HBC || { cat $OUT/app-assets.log; exit 1; }; cat $OUT/app-assets.log; fi
     if [ -n "$DEX" ]; then wait $DEX || { cat $OUT/apk-dex.log; exit 1; }; cat $OUT/apk-dex.log; fi
     T5=$(now)
-    # (its failure is the build's: an APK of an earlier build must not pass for this one's)
-    rm -f "${APK_OUT:?}"/*.apk
-    if [ -f $PROJ/apk.json ]; then
+    # A Wasm shell's APK as it was, when all it is made of is (apk.json's Java, resources, assets and libraries, by
+    # content: libmbui.so, linked again only for a change of its own, is the same file): packing it again takes 30 s
+    KEY=
+    if [ -n "${MBUI_WASM_THUNKS:-}" ] && [ -f $PROJ/apk.json ]; then
+      KEY=$( (echo "$VARIANT $ABI ${ORG_GRADLE_PROJECT_stillfailBuild:-1}"
+        find $PROJ/apk.json $PROJ/apk.lock $PROJ/app/src $PROJ/app/proguard-rules.pro $ROOT/android/app/src $apk -type f \
+          -print0 | LC_ALL=C sort -z | xargs -0 shasum) | shasum | cut -c1-40)
+    fi
+    if [ -n "$KEY" ] && [ -f $APK_FILE ] && [ "$(cat $OUT/apk.key 2>/dev/null)" = "$KEY" ]; then
+      echo "android.sh: the APK as it was (what it is made of unchanged)"
+    elif [ -f $PROJ/apk.json ]; then
+      # (its failure is the build's: an APK of an earlier build must not pass for this one's)
+      rm -f "${APK_OUT:?}"/*.apk $OUT/apk.key
       # without Gradle (scripts/apk, tools/apk: R8's dex kept by what it is made of, the build's number in the manifest
       # alone); its number ORG_GRADLE_PROJECT_stillfailBuild, as Gradle's build took it
       mkdir -p $APK_OUT
       n=${ORG_GRADLE_PROJECT_stillfailBuild:-1}
       "$D/apk" build $PROJ/apk.json --variant $VARIANT --version-code $n --version-name 0.1.$n --abi $ABI \
         --out $APK_FILE
+      [ -z "$KEY" ] || echo "$KEY" > $OUT/apk.key
     # (on CI the tasks that ran, by name, the log's times between them what each took; quiet elsewhere)
     elif [ -n "${GITHUB_ACTIONS:-}" ]; then
+      rm -f "${APK_OUT:?}"/*.apk
       (cd $PROJ && set -o pipefail && ./gradlew --console=plain assemble$(echo ${VARIANT:0:1} | tr a-z A-Z)${VARIANT:1} 2>&1 |
         { grep -E '^> Task|^BUILD|actionable|^FAILURE|What went wrong|^e: |error:' | grep -vE 'UP-TO-DATE$|NO-SOURCE$|SKIPPED$' || true; })
     else
+      rm -f "${APK_OUT:?}"/*.apk
       (cd $PROJ && set -o pipefail && ./gradlew -q assemble$(echo ${VARIANT:0:1} | tr a-z A-Z)${VARIANT:1} 2>&1 | { grep -v '^$' || true; } | tail -20)
     fi
     T6=$(now)
@@ -195,7 +250,9 @@ case "${1:-build}" in
     echo "emulator ready"
     ;;
   run)
-    $ADB -s $SERIAL install -r ${APK:-$APK_FILE} >/dev/null
+    # (INSTALL=0: what is installed is run as it is: still.fail's scripts/wasm-app.sh, which installs the shell's APK
+    # only when it changed)
+    [ "${INSTALL:-1}" = 0 ] || $ADB -s $SERIAL install -r ${APK:-$APK_FILE} >/dev/null
     $ADB -s $SERIAL shell am force-stop $APP_ID
     if [ $PKG = photos ]; then photos; fi
     if [ -n "${2:-}" ]; then
@@ -203,6 +260,17 @@ case "${1:-build}" in
     else
       $ADB -s $SERIAL shell am start -n $APP_ID/dev.mbui.MainActivity ${BENCH:+--ei bench $BENCH} ${SHOT_AT:+--ei shot_at $SHOT_AT} ${ENV:+--es env "'$ENV'"} >/dev/null
     fi
+    ;;
+  install)
+    $ADB -s $SERIAL install -r ${APK:-$APK_FILE} >/dev/null
+    ;;
+  put)
+    # `put FILE NAME`: FILE as NAME in the app's own files (run-as: a debuggable build's), by way of the shell's
+    # /data/local/tmp (a pipe into run-as, exec-in, came back with a 18 MB file a third short)
+    $ADB -s $SERIAL push "$2" /data/local/tmp/mbui-put-$3 > /dev/null
+    $ADB -s $SERIAL shell "run-as $APP_ID sh -c 'mkdir -p files && cp /data/local/tmp/mbui-put-$3 files/$3.part && mv files/$3.part files/$3'; rm -f /data/local/tmp/mbui-put-$3"
+    [ "$($ADB -s $SERIAL shell run-as $APP_ID stat -c %s files/$3 | tr -d '\r')" = "$(size "$2")" ] \
+      || { echo "android.sh: $3 is not whole in $APP_ID's files" >&2; exit 1; }
     ;;
   fling-test)
     # Flings the app's first list (the app built already; still.fail's APP=sffix ENV=MBUI_FIXTURE=long shows a long Home) and
