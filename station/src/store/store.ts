@@ -879,7 +879,16 @@ export class Store {
 
   /// When anyone last read a thread (moved their read position), in ms; null if nobody has.
   lastReadAt(thread: number): number | null {
-    return this.#one("SELECT MAX(at) AS at FROM reads WHERE thread = ?", thread).at;
+    // Reads are keyed by (viewer, thread). Seek past each viewer's other chats and look up this chat once per viewer,
+    // rather than visit the station's entire read history. This still grows with viewers and adds no index writes.
+    return this.#one(`WITH RECURSIVE viewers(viewer) AS (
+      SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1)
+      UNION ALL
+      SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1)
+        FROM viewers v WHERE v.viewer IS NOT NULL
+    )
+    SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?)) AS at
+      FROM viewers v WHERE v.viewer IS NOT NULL`, thread).at;
   }
 
   /// A session's own chat on the page (ThreadRow.home), if it has one.
