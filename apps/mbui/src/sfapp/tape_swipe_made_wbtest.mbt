@@ -135,7 +135,14 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
   // (across: what is shown then, how deep)
   let across = fn(made : Bool) raise {
     let (t, p, depth) = tape_changelog_made(made~)
-    t.drag(p.x + 6.0, p.y + 20.0, p.x + 400.0, p.y + 20.0, steps=10)
+    // (a finger across, as the swipe back above is made)
+    let y = p.y + 20.0
+    t.touch(0, p.x + 6.0, y)
+    for i in 1..=10 {
+      t.advance(@ui.input_step_ms)
+      t.touch(1, p.x + 6.0 + 394.0 * i.to_double() / 10.0, y)
+    }
+    t.touch(2, p.x + 400.0, y)
     t.run_for(@ui.move_most_ms)
     @sfdesk.pane_makes.val = true
     (app.nav.depth() - depth, app.nav.top() == Setting(About), @sfdesk.wide.tape_at.get())
