@@ -10,6 +10,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
+import { Refused } from "../api/request.ts";
+import { retiredUsage } from "../store/usage-retire.ts";
 import { archiveEntries } from "../store/archive.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
@@ -909,6 +911,7 @@ export type { UsageGroup };
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export { USAGE_DETAIL_PENDING };
 export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
+  if (retiredUsage(s.db)) throw new Refused(503, "usage detail statistics are unavailable");
   const generation = usageDetailGeneration(s.db);
   if (!usageDetailReady(s.db, viewer, generation)) throw new Error(USAGE_DETAIL_PENDING);
   const query = detailQuery(from, to, utcOffsetMin, viewer, generation, usageDetailScopeBySession(s.db, viewer, generation));
@@ -1002,6 +1005,7 @@ export const USAGE_DETAIL_QUARTERS_HOME = quartersByDay(DETAIL_QUARTERS_HOME, "1
 
 /// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
 export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
+  if (retiredUsage(s.db)) throw new Error(USAGE_MINUTES_PENDING);
   const fromDetail = one(s, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'") !== undefined;
   if (fromDetail) {
     const generation = usageDetailGeneration(s.db);
