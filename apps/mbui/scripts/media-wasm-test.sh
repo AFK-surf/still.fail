@@ -1,5 +1,5 @@
 #!/bin/bash
-# A Wasm still carries its real inputs and a failed scene cannot replace a previous result.
+# A Wasm still and film carry their real inputs and a failed scene cannot replace a previous result.
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
 cd "$D/.."
@@ -40,4 +40,15 @@ for setting in MBUI_PICTURE_FRAME=-1 MBUI_PICTURE_FRAME=1.5 MBUI_FILM_FPS=0.5; d
   cmp "$take/home.png" "$take/previous.png"
   cmp "$take/home.png.scene.json" "$take/previous.json"
 done
-echo 'media-wasm-test: picture, source record and failure preservation passed'
+# A film in the same scene: mbui's own film, its frames, last picture and text as the native writer's
+env MBUI_FIXTURE=home MBUI_WIN=320x560 MBUI_FILM_SCALE=1 MBUI_NATIVE_INPUT=finger \
+  bash scripts/media.sh film "$take/home.mp4" "$take/pass.drive"
+[ -s "$take/home.mp4" ] && [ -s "$take/home.mp4.last.png" ] && [ -s "$take/home.mp4.textrec" ]
+jq -e --arg output "$(sha "$take/home.mp4")" --arg wasm "$(sha "$dir/scene.wasm")" \
+  '.kind == "film" and .output_sha256 == $output and .source.wasm_sha256 == $wasm' "$take/home.mp4.scene.json" >/dev/null
+cp "$take/home.mp4" "$take/previous.mp4"
+if env MBUI_FIXTURE=home bash scripts/media.sh film "$take/home.mp4" "$take/fail.drive" > "$take/failure.log" 2>&1; then
+  echo 'media-wasm-test: a failed film succeeded' >&2; exit 1
+fi
+cmp "$take/home.mp4" "$take/previous.mp4"
+echo 'media-wasm-test: picture, film, source record and failure preservation passed'

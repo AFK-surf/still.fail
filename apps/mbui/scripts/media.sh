@@ -71,8 +71,15 @@ cp "$drive" "$work/drive"
 if [ -n "$prepare" ]; then cp "$prepare" "$work/prepare"; else : > "$work/prepare"; fi
 
 if [ "$portable" = 0 ]; then
-  APP="$app" MODE=release bash "$D/mac.sh" build
-  exe="./_build/native/release/build/stillfail/$app/$app.exe"
+  if [ "$app" = sffilm ]; then
+    # (the scene in Wasm and the Mac's renderer and writer, as a prepared job's: no C of the app compiled, the user
+    # 2026-11-03; scripts/wasm-film-build.sh)
+    bash "$D/wasm-film-build.sh" "$A/out/wasm-film" >&2
+    exe="$A/out/wasm-film/sffilm"
+  else
+    APP="$app" MODE=release bash "$D/mac.sh" build
+    exe="./_build/native/release/build/stillfail/$app/$app.exe"
+  fi
 fi
 [ -x "$exe" ] || { echo "media: no executable for $app" >&2; exit 1; }
 if [ "$kind" = picture ]; then
