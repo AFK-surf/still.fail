@@ -234,21 +234,20 @@ type Of<K extends Call["kind"]> = Extract<Call, { kind: K }>;
 /// Messages a picture holds at most: a chat with more is drawn from its latest ones (as a station's snapshot is).
 const MOST = 5000;
 
-/// What looks like a secret hidden in every word `v[key]` says (a string, or all the strings in it), and how many.
-function hideIn(v: J, key: string, mark: string): number {
+/// What looks like a secret hidden in every word `x` says (a string, or all the strings in it), and how many.
+function hiddenIn(x: unknown, mark: string): { value: unknown; count: number } {
   let count = 0;
-  const walk = (x: unknown): unknown => {
-    if (typeof x === "string") {
-      const hidden = redact(x, mark);
-      count += hidden.count;
-      return hidden.text;
+  const walk = (y: unknown): unknown => {
+    if (typeof y === "string") {
+      const done = redact(y, mark);
+      count += done.count;
+      return done.text;
     }
-    if (Array.isArray(x)) return x.map(walk);
-    if (isObject(x)) return Object.fromEntries(Object.entries(x).map(([k, y]) => [k, walk(y)]));
-    return x;
+    if (Array.isArray(y)) return y.map(walk);
+    if (isObject(y)) return Object.fromEntries(Object.entries(y).map(([k, z]) => [k, walk(z)]));
+    return y;
   };
-  if (v[key] !== undefined) v[key] = walk(v[key]);
-  return count;
+  return { value: walk(x), count };
 }
 
 /// What a picture of chat `thread` holds, of the entries this device holds of it (as its page has them; none read for
@@ -267,9 +266,12 @@ export function heldPreview(inner: Inner, station: string, thread: number): J {
   // in each (as the station's `viewsOf` counts them).
   const counts = new Map<number, { words: number; card: number; text: string }>();
   const views = held.filter((e) => num(get(e, get(e, "kind") === "message" ? "n" : "target")) >= from && (get(e, "kind") !== "message" || num(get(e, "n")) <= upto)).map((e) => {
-    const v = structuredClone(e) as J;
-    const words = hideIn(v, "text", mark) + hideIn(v, "quotes", mark);
-    const card = hideIn(v, "card", mark);
+    const text = hiddenIn(get(e, "text"), mark);
+    const quotes = hiddenIn(get(e, "quotes"), mark);
+    const shownCard = hiddenIn(get(e, "card"), mark);
+    const v: J = { ...e, text: text.value, quotes: quotes.value, ...(get(e, "card") !== undefined ? { card: shownCard.value } : {}) };
+    const words = text.count + quotes.count;
+    const card = shownCard.count;
     const n = v.kind === "message" ? num(v.n) : num(v.target);
     const was = counts.get(n);
     if (v.kind === "message") counts.set(n, { words, card, text: str(v.text) ?? "" });
