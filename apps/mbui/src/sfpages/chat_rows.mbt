@@ -193,7 +193,7 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
         |> ignore
       }
       if o.text != "" {
-        mine_bubble(c, here, o.text, "o:" + o.id, runs=o.words)
+        mine_bubble(c, src, here, o.text, "o:" + o.id, "", o.seq, "o:" + o.id, runs=o.words)
       }
     })
     |> ignore
