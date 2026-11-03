@@ -180,7 +180,8 @@ export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
 
 /// Usage::summary: every day's calls from `from` until `to`, by thread, person, profile and model (UsageRow).
 function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null,
-  queryTime: (ms: number, diagnostics: { parts?: number; candidates?: number; selectedMs?: number; rests?: number; restMs?: number }) => void,
+  queryTime: (ms: number, diagnostics: { parts?: number; candidates?: number; selectedMs?: number; selectedRestMs?: number;
+    selectedCpuMs?: number; cpuMs?: number; rests?: number; restMs?: number }) => void,
   batched?: BatchedUsage): Json[] {
   const started = performance.now();
   const diagnostics: { parts?: number; candidates?: number; selectedMs?: number } = {};
@@ -274,6 +275,9 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   const groups = summary(s, from, to, utcOffsetMin, viewer, (ms, diagnostics) => {
     stages.summaryQuery = ms;
     if (diagnostics.selectedMs !== undefined) stages.summarySelected = diagnostics.selectedMs;
+    if (diagnostics.selectedRestMs !== undefined) stages.summarySelectedRestMs = diagnostics.selectedRestMs;
+    if (diagnostics.selectedCpuMs !== undefined) stages.summarySelectedCpuMs = diagnostics.selectedCpuMs;
+    if (diagnostics.cpuMs !== undefined) stages.summaryCpuMs = diagnostics.cpuMs;
     if (diagnostics.rests !== undefined) stages.summaryRests = diagnostics.rests;
     if (diagnostics.restMs !== undefined) stages.summaryRestMs = diagnostics.restMs;
     summaryParts = diagnostics.parts;

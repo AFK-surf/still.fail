@@ -99,7 +99,8 @@ function answer(groups: Part[]): UsageGroup[] {
 export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
   pause: (ms: number) => Promise<void> = (ms) => ms > 0 ? wall.sleep(ms) : new Promise((resolve) => setImmediate(resolve)),
   cache?: UsageSummaryCache, kind: "summary" | "history" = "summary"): Promise<{
-    groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; rests: number; restMs: number; cache: CacheStatus }; ms: number;
+    groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; selectedRestMs: number;
+      selectedCpuMs?: number; cpuMs?: number; rests: number; restMs: number; cache: CacheStatus }; ms: number;
   } | null> {
   const max = 9223372036854775807n;
   if (!hasCompactUsage(s.db) || (from < to && (from % 60_000n !== 0n || (to !== max && to % 60_000n !== 0n)))) return null;
@@ -108,7 +109,17 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   const end = from >= to ? 0n : to === max ? max : floorDiv(to, 60_000n);
   const queries = batchedUsageQueries(viewer);
   const started = performance.now();
+  // A wall-clock delay in a reader can be SQLite/CPU work, scheduling or our own deliberate rests. The thread's CPU
+  // time distinguishes those without inspecting another process or measuring the user's data.
+  let cpuStart: NodeJS.CpuUsage | undefined;
+  try { cpuStart = process.threadCpuUsage(); } catch { /* Some runtimes cannot report per-thread CPU. */ }
+  const cpuMs = (): number | undefined => {
+    if (cpuStart === undefined) return undefined;
+    try { const cpu = process.threadCpuUsage(cpuStart); return Math.round((cpu.user + cpu.system) / 1000); }
+    catch { return undefined; }
+  };
   let batchAt = started, steps = 0, rests = 0, restMs = 0, candidates = 0, parts = 0;
+  let selectedRestMs = 0, selectedCpuMs: number | undefined;
   const rest = async () => {
     const ms = Math.min(100, Math.floor(performance.now() - batchAt));
     const pausedAt = performance.now();
@@ -119,7 +130,8 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     batchAt = performance.now();
   };
   const result = (groups: Part[], selectedMs: number, cache: CacheStatus) => ({ groups: answer(groups),
-    diagnostics: { parts, candidates, selectedMs, rests, restMs: Math.round(restMs), cache }, ms: Math.round(performance.now() - started) });
+    diagnostics: { parts, candidates, selectedMs, selectedRestMs, selectedCpuMs, cpuMs: cpuMs(), rests,
+      restMs: Math.round(restMs), cache }, ms: Math.round(performance.now() - started) });
   const key = JSON.stringify([kind, from.toString(), to.toString(), utcOffsetMin.toString(), viewer?.workspace ?? null,
     viewer === null ? null : viewer.home !== false]);
   const journal = cache !== undefined && s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get() !== undefined;
@@ -318,6 +330,8 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       for (const [id, change] of pendingChanges) dirty.set(id, change);
     }
     const selectedMs = Math.round(performance.now() - started);
+    selectedRestMs = Math.round(restMs);
+    selectedCpuMs = cpuMs();
     if (whole.size) for (const [id, block] of blocks!) if (whole.has(block.session)) remove(id, block);
     for (const id of dirty.keys()) {
       const block = blocks!.get(id);
@@ -371,6 +385,8 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     if (++steps >= 64) await rest();
   }
   const selectedMs = Math.round(performance.now() - started);
+  selectedRestMs = Math.round(restMs);
+  selectedCpuMs = cpuMs();
   const groups: Part[] = [];
   for (const session of sessions) {
     const ofSession = new Map<string, Part>();
