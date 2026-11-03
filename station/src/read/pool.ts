@@ -63,12 +63,16 @@ const cancelled = () => new HttpError(503, "read cancelled");
 /// waited 7 s and a session opened 9 s on ccvm (2026-11-03), their own reads 0.2 s. And the machine's sample (api/host.ts,
 /// once in 10 s however many ask: a station's page, a task's start waiting on its queue), 0.3 to 0.9 s itself, that
 /// waited 2 to 6 s behind the usage page's reads.
-const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "host", "hostTicks"]);
+/// And a job, and the list of jobs up without their chats (GET /jobs?chats=0, a few rows: 9 on ccvm), read again by
+/// every device as a job starts, that waited up to 40 s behind the usage page's reads one after another (2026-11-03);
+/// with their chats (an older device's, the sidebar made for it), a bulk read.
+const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "host", "hostTicks", "job"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
 /// older clients, so it remains in the background until that request is paged end to end.
 function interactive(a: Asked): boolean {
   if (INTERACTIVE.has(a.ask.op)) return true;
+  if (a.ask.op === "openJobs") return a.ask.args?.chats === false;
   if (a.ask.op !== "entries" && a.ask.op !== "letters") return false;
   const params = a.ask.args?.params;
   const keys = Array.isArray(params) ? params.map((p: unknown) => Array.isArray(p) ? p[0] : null) : Object.keys(params ?? {});

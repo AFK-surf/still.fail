@@ -162,7 +162,7 @@ test("a stretch of a history filled in brief is read behind the rest; one read w
   assert.equal(Atomics.load(state, 0), 4);
 });
 
-test("the sidebar, a session's detail and the machine's sample are read beside a slow bulk read, before another waiting", { timeout: 30_000 }, async () => {
+test("the sidebar, a session's detail, the machine's sample and the jobs up are read beside a slow bulk read, before another waiting", { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);
   // A slow usage read holds one reader, another waits for the one left.
   const asked = [readers.read("usage", args(true), "en"), readers.read("usage", args(true), "en")];
@@ -172,7 +172,10 @@ test("the sidebar, a session's detail and the machine's sample are read beside a
     assert.equal(await readers.read("session", args(false), "en"), "{}");
     // The machine's sample too: it waited 2 to 6 s behind the usage page's reads on ccvm (2026-11-03).
     assert.equal(await readers.read("host", args(false), "en"), "{}");
-    assert.equal(Atomics.load(state, 0), 4, "the usage read waiting still waits");
+    // And the jobs up without their chats, read again by every device as a job starts: 40 s behind them on ccvm
+    // (2026-11-03). With their chats, a bulk read (below).
+    assert.equal(await readers.read("openJobs", { ...args(false), chats: false }, "en"), "{}");
+    assert.equal(Atomics.load(state, 0), 5, "the usage read waiting still waits");
   } finally {
     const settled = await open(asked);
     assert.ok(settled.every((s) => s.status === "fulfilled"));
