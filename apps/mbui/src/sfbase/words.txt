@@ -2448,6 +2448,7 @@ web-pages.settings.thisMac.failed
 web-pages.settings.thisMac.noAnswer
 web-pages.settings.thisPc.failed
 web-pages.settings.title
+web-pages.settings.search
 web-pages.settings.usage.failed
 web-pages.settings.usage.title
 web-pages.settings.workspace.name
