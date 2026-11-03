@@ -156,12 +156,12 @@ test("the auto-archive reads the state of sessions idle long enough alone", asyn
   const [r] = coldRig();
   const { key } = await idleSession(r);
   const read: string[] = [];
-  const statsOf = r.store.statsOf.bind(r.store);
-  r.store.statsOf = (keys: Iterable<string>) => (read.push(...keys), statsOf(keys));
+  const workOf = r.store.workOf.bind(r.store);
+  r.store.workOf = (session: string) => (read.push(session), workOf(session));
   autoArchive(r.hub, Date.now());
   assert.deepEqual(read, [], "none idle long enough: no state read");
   autoArchive(r.hub, Date.now() + 3 * 86_400_000);
-  assert.deepEqual([...new Set(read)], [key], "the one idle long enough, once");
+  assert.deepEqual(read, [key], "the one idle long enough, once");
   await r.close();
 });
 

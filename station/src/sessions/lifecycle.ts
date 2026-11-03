@@ -15,7 +15,7 @@ import { checkContext } from "./context-cap.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
 import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
-import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, type SessionBusy, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
+import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
@@ -351,9 +351,9 @@ export function autoArchive(hub: Hub, now: number): number | null {
   // Each session's undelivered messages and last turn, read for those idle long enough alone, once each: read for every
   // session shown and every member of their chats at each look, the station's thread was held 17 s on ccvm short of
   // memory (2026-11-03), what was said meanwhile waiting.
-  const statsRead = new Map<string, SessionBusy | undefined>();
+  const statsRead = new Map<string, ReturnType<typeof store.workOf>>();
   const statOf = (key: string) => {
-    if (!statsRead.has(key)) statsRead.set(key, store.statsOf([key]).get(key));
+    if (!statsRead.has(key)) statsRead.set(key, store.workOf(key));
     return statsRead.get(key);
   };
   const jobs = new Set(store.jobsUp().map((j) => j.sessionKey));
@@ -362,7 +362,7 @@ export function autoArchive(hub: Hub, now: number): number | null {
     if (!row) return true;
     const stat = statOf(key);
     const last = stat?.lastTurn ?? null;
-    return row.running || jobs.has(key) || hub.processState(key) === "running" || (stat?.pending ?? 0) > 0 || (last !== null && last.endedAt === null);
+    return row.running || jobs.has(key) || hub.processState(key) === "running" || stat?.pending === true || (last !== null && last.endedAt === null);
   };
   const busy = (key: string) => working(key) || statOf(key)?.lastTurn?.declared === "block";
   // A chat someone pinned stays in the lists until put away by hand.
