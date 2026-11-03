@@ -102,3 +102,22 @@ test("a zeroed compact bucket can later contribute to both its workspace and the
     assert.deepEqual(compact.compactTotal(store.db, null), { calls: 1, tokens: 4 });
   } finally { store.close(); }
 });
+
+test("compact totals begin empty on an older database and do not absorb old calls", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A",
+      createdAt: 0, lastActiveAt: 0 });
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "old", at: 0, model: "m", subagent: true, fast: false, input: 100, cacheRead: 0,
+      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    store.db.exec("CREATE TABLE usage_retired_detail (id INTEGER PRIMARY KEY); INSERT INTO usage_retired_detail VALUES (1)");
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    assert.deepEqual(compact.compactTotal(store.db, a), { calls: 0, tokens: 0 });
+    store.db.exec("UPDATE usage SET output = 9 WHERE id = 'old'");
+    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", input: 2 }, owner]]);
+    assert.deepEqual(compact.compactTotal(store.db, a), { calls: 1, tokens: 3 });
+  } finally { store.close(); }
+});
