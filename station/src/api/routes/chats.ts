@@ -15,7 +15,12 @@ export const routes = ({ read }: Tools): Route[] => [
   {
     method: "GET",
     pattern: /^\/chats$/,
-    handle: (r: Request) => (r.query.some(([k]) => k === "session" || k === "thread") ? read(r, "chatRows", scoped(r)) : read(r, "chats", chatsOf(r))),
+    handle: (r: Request) => {
+      const some = r.query.some(([k]) => k === "session" || k === "thread");
+      // `marks=1`: what a device that makes the sidebar itself cannot make of it (read/views.ts `chatMarks`).
+      if (param(r, "marks") === "1") return read(r, "chatMarks", { viewer: r.viewer, scope: some ? (({ sessions, threads }) => ({ sessions, threads }))(scoped(r)) : null });
+      return some ? read(r, "chatRows", scoped(r)) : read(r, "chats", chatsOf(r));
+    },
   },
   { method: "POST", pattern: /^\/changed\/chats$/, handle: (r: Request) => changed(read, r, "chats", chatsOf(r), "id") },
   {

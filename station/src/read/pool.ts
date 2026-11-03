@@ -58,7 +58,7 @@ const CHECKPOINT = "checkpoint";
 /// including new kinds not yet classified, leave room for these, and these go before them: a slow transcript or resource
 /// snapshot can block just as a slow aggregate can. Behind a usage read of 76 s and a history's pages, the sidebar
 /// waited 7 s and a session opened 9 s on ccvm (2026-11-03), their own reads 0.2 s.
-const INTERACTIVE = new Set(["thread", "chats", "session", "summary", "latestMessages"]);
+const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
 /// older clients, so it remains in the background until that request is paged end to end.

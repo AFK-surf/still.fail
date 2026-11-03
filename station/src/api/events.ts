@@ -501,7 +501,7 @@ export class Events {
     };
     push("retry: 3000\n\n");
     // Said first: it makes its rows from here on, and reads from this station what only the station can say of them.
-    if (rows) client.send("made", { rows: true });
+    if (rows) client.send("made", { rows: true, marks: true });
     // Coming back where all that was told since is kept (their sidebar told on this run too, or one that makes its rows
     // itself from what was told).
     const k = viewerKey(viewer, lang);
