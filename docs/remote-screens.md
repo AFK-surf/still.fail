@@ -483,6 +483,28 @@ buttons), and its page is about the device and the app rather than the link: its
 and 设备 beside the device on a wide page, put away with their button, in a panel on a narrow one. 控制中心 has only what the view
 does (画质, 帧率, 全屏, 断开).
 
+### Android (station/src/screens/android.ts, scrcpy-server)
+
+The emulators and phones on this machine's adb (the station's own server, `adb track-devices`), each a screen while it
+is there, on any station that has adb: `android:<ro.serialno>`, or `android:emulator-<port>` as emulators share theirs.
+Who may see and drive one is who may the desktop's. A phone lent to a chat is in its grant's server alone
+(docs/adb-share.md), not among these. Nor is one adb found on the network by itself (`adb-<serial>._adb-tls-connect._tcp`,
+any phone paired with this machine's key on the same network; 2026-11-03: nobody asked it to show): a phone over Wi-Fi
+shows once it is connected to by its address (`adb connect <host>:<port>`). A server the station starts for this has
+`ADB_MDNS_AUTO_CONNECT=0`: with it on, the default server takes a lent phone too (seen 2026-11-03: the same key).
+
+It is listed as kind `simulator`, a touchscreen with no trackpad, so every released app draws it so: its body from the
+`panels` of `dumpsys display`'s rounded corners, the device's buttons as Simulator.app's shortcuts (`KeyH` home, `KeyL`
+power; Escape is back). The apps' `debug`, `poses` are not said of it yet.
+
+A view is a run of scrcpy's server on the device (`stillfail-scrcpy-<id>.jar` in /data/local/tmp, removed once it runs,
+over an `adb forward` of its own): H.264 only, its protocol pinned to the file's version (scrcpy keeps no compatibility
+between releases: the version goes up only with the file). Its encoder takes no new size or rate while running, so a
+view has neither `bounds` nor `rate`: it opens at the larger of its bounds and 1280 on its long side; a slow link drops
+what it could not fetch up to a new key frame (`keyframe` starts a new capture). A preview does not turn the screen on,
+a view does; with the screen off no frame comes. Measured on 2026-11-03 at 1280 on the long side: first frame 180-240 ms,
+a finger to the picture changing 66-103 ms on an emulator on the same Mac, 88 ms once on a phone through its member link.
+
 ### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
 
 What macOS lets the helper do is one look the station keeps (the helper's `status`), shared by the desktop's screen, the
