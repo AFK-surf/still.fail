@@ -15,6 +15,6 @@ import {
 } for "wbtest"
 
 options(
-  targets: { "dl_print_js_wbtest.mbt": [ "js" ], "dl_print_native_wbtest.mbt": [ "native" ], "dl_print_wasm_wbtest.mbt": [ "wasm", "wasm-gc" ] },
+  targets: { "dl_print_js_wbtest.mbt": [ "js" ], "dl_print_native_wbtest.mbt": [ "native" ], "dl_print_wasm_wbtest.mbt": [ "wasm-gc" ] },
   "native-stub": [ "read_file.c" ],
 )
