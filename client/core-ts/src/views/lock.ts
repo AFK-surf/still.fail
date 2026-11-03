@@ -40,7 +40,7 @@ import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
 import { get, isObject } from "../util.ts";
 import { type Checked, checkLock, signerIn } from "../vault/lock-check.ts";
-import { unsealOwn, vaultCome, writePlain } from "./vault.ts";
+import { unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -590,9 +590,10 @@ export function lockView(inner: Inner, ws: string): J {
   };
 }
 
-/// The `lockPrompts` topic: the new devices showing a code of this one's to type (views/pair.ts), wherever the person is.
+/// The `lockPrompts` topic: the new devices showing a code of this one's to type (views/pair.ts), and the members'
+/// devices waiting on this one for a vault's key (views/vault.ts `vaultAsks`), wherever the person is.
 export function promptsView(inner: Inner): J {
-  return { pairing: pairs.shown(inner) };
+  return { pairing: pairs.shown(inner), asks: vaultAsks(inner) };
 }
 
 /// A `lockPrompt.*` call: `deny {device}`, a new device showing this one's code turned away (views/pair.ts); `hide

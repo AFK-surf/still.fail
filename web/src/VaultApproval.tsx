@@ -114,6 +114,10 @@ export function VaultActions({ workspace, id, who, extra }: { workspace: string;
   if (save && view.plain !== true && !view.setUp) {
     return <div className={pagesCss.cardFoot}><Button variant="primary" onClick={() => go(`/w/${workspace}/settings/vault`)}>{t("web-pages.vault.setUp")}</Button>{no}{extra}</div>;
   }
+  // Sealed by its station to the person's devices set up then, this one not among them: approved on one of those.
+  if (save && request.notHere === true) {
+    return <div className={pagesCss.cardFoot}><p className={css.note}>{t("web-pages.vault.approve.notHere")}</p>{no}{extra}</div>;
+  }
   const draftMinutes = draftDuration === "custom" ? Number(draftCustom) : Number(draftDuration);
   const draftValid = draftDuration === "once" || (Number.isSafeInteger(draftMinutes) && draftMinutes > 0 && draftMinutes <= maxMinutes);
   const openTimeout = () => {

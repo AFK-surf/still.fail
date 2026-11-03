@@ -8,7 +8,8 @@ import type { VaultField, VaultItemRow, VaultItemsView, VaultRequest, VaultsView
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { t } from "./i18n.ts";
 
-export type { VaultItemRow, VaultItemsView, VaultRequest, VaultRow, VaultsView, VaultUse, VaultUsesView } from "./core/shapes.ts";
+export type { VaultItemRow, VaultItemsView, VaultKeyAsk, VaultRequest, VaultRow, VaultsView, VaultUse, VaultUsesView } from "./core/shapes.ts";
+import type { LockPromptsView, VaultKeyAsk } from "./core/shapes.ts";
 
 export type Kind = "token" | "ssh_key" | "login" | "file";
 export type Mode = "proxy" | "env" | "ssh" | "file";
@@ -34,6 +35,14 @@ export interface Opened { vault: string; id: string; version: number; plain: Pla
 
 export function useVaults(workspace: string): VaultsView | undefined {
   return useTopic<VaultsView>({ topic: "vaults", workspace }).value;
+}
+
+/** The devices waiting on this one for a vault's key, in every workspace of the person's (the core's `lockPrompts`
+ * `asks`; none from a core of before). */
+export function useVaultPrompts(): { asks: VaultKeyAsk[] } | undefined {
+  // (null where a core says none of it, as the stories' does: as undefined)
+  const v = useTopic<LockPromptsView>({ topic: "lockPrompts" }).value;
+  return v === undefined || v === null ? undefined : { asks: v.asks ?? [] };
 }
 
 export function useVaultItems(workspace: string, vault: string): VaultItemsView | undefined {

@@ -541,6 +541,7 @@ pub fn reset() -> Unit {
   station_parts.clear()
   station_network_open.clear()
   lock_prompts_reset()
+  vault_prompts_reset()
   fonts_at.set(0)
   adb_reset()
   keyed_fields.clear()
