@@ -1,4 +1,4 @@
-// The running or pending sessions of a workspace, maintained by the database so older writers keep it too.
+// The running or pending sessions of an explicit workspace, maintained by the database so older writers keep it too.
 // Installation reads no session history. An older database's active keys are brought across in bounded steps.
 import type { DatabaseSync } from "node:sqlite";
 import { byBytes } from "./rows.ts";
@@ -6,25 +6,25 @@ import { byBytes } from "./rows.ts";
 const active = (key: string) => `EXISTS (SELECT 1 FROM sessions z WHERE z.key = ${key} AND (z.running = 1
   OR EXISTS (SELECT 1 FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = z.key AND d.delivered_at IS NULL)
   OR EXISTS (SELECT 1 FROM letter_deliveries d INDEXED BY letter_deliveries_pending WHERE d.session = z.key AND d.delivered_at IS NULL)))`;
-const identity = (key: string) => `SELECT s.ws IS NULL, COALESCE(s.ws, ''), s.key FROM sessions s WHERE s.key = ${key}`;
-const add = (key: string) => `INSERT OR IGNORE INTO workspace_activity (home, ws, session)
-  SELECT s.ws IS NULL, COALESCE(s.ws, ''), s.key FROM sessions s WHERE s.key = ${key} AND ${active("s.key")};`;
-const removeIdle = (key: string) => `DELETE FROM workspace_activity WHERE (home, ws, session) IN (${identity(key)}) AND NOT ${active(key)};`;
+const identity = (key: string) => `SELECT s.ws, s.key FROM sessions s WHERE s.key = ${key} AND s.ws IS NOT NULL`;
+const add = (key: string) => `INSERT OR IGNORE INTO workspace_activity (ws, session)
+  SELECT s.ws, s.key FROM sessions s WHERE s.key = ${key} AND s.ws IS NOT NULL AND ${active("s.key")};`;
+const removeIdle = (key: string) => `DELETE FROM workspace_activity WHERE (ws, session) IN (${identity(key)}) AND NOT ${active(key)};`;
 const cleanReplaced = `DELETE FROM workspace_activity
-  WHERE (home, ws, session) IN (SELECT home, ws, session FROM workspace_activity_replaced)
+  WHERE (ws, session) IN (SELECT ws, session FROM workspace_activity_replaced)
     AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.key = workspace_activity.session
-      AND (s.ws IS NULL) = workspace_activity.home AND COALESCE(s.ws, '') = workspace_activity.ws AND ${active("s.key")});
+      AND s.ws = workspace_activity.ws AND ${active("s.key")});
   DELETE FROM workspace_activity_replaced WHERE session IS NOT NULL;`;
 const stageReplaced = `DELETE FROM workspace_activity_replaced WHERE session IS NOT NULL;
   INSERT OR IGNORE INTO workspace_activity_replaced
-    SELECT a.home, a.ws, a.session FROM workspace_activity a
-    WHERE (a.home, a.ws, a.session) IN (
-      SELECT s.ws IS NULL, COALESCE(s.ws, ''), s.key FROM sessions s WHERE s.key = NEW.key OR s.token = NEW.token
+    SELECT a.ws, a.session FROM workspace_activity a
+    WHERE (a.ws, a.session) IN (
+      SELECT s.ws, s.key FROM sessions s WHERE s.ws IS NOT NULL AND (s.key = NEW.key OR s.token = NEW.token)
     );`;
 
 export const WORKSPACE_ACTIVITY = `SELECT s.* FROM workspace_activity a
   CROSS JOIN sessions s ON s.key = a.session
-  WHERE a.home = 0 AND a.ws = ? AND s.ws = a.ws`;
+  WHERE a.ws = ? AND s.ws = a.ws`;
 const FIRST_RUNNING = "SELECT key AS session FROM sessions INDEXED BY sessions_running WHERE running = 1 ORDER BY key LIMIT 1";
 const NEXT_RUNNING = "SELECT key AS session FROM sessions INDEXED BY sessions_running WHERE running = 1 AND key > ? ORDER BY key LIMIT 1";
 const FIRST_MESSAGE = "SELECT session FROM deliveries INDEXED BY deliveries_pending WHERE delivered_at IS NULL ORDER BY session LIMIT 1";
@@ -38,10 +38,10 @@ export function installWorkspaceActivity(db: DatabaseSync): void {
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!installed()) db.exec(`
-      CREATE TABLE workspace_activity (home INTEGER NOT NULL, ws TEXT NOT NULL, session TEXT NOT NULL,
-        PRIMARY KEY (home, ws, session)) WITHOUT ROWID;
-      CREATE TABLE workspace_activity_replaced (home INTEGER NOT NULL, ws TEXT NOT NULL, session TEXT NOT NULL,
-        PRIMARY KEY (home, ws, session)) WITHOUT ROWID;
+      CREATE TABLE workspace_activity (ws TEXT NOT NULL, session TEXT NOT NULL,
+        PRIMARY KEY (ws, session)) WITHOUT ROWID;
+      CREATE TABLE workspace_activity_replaced (ws TEXT NOT NULL, session TEXT NOT NULL,
+        PRIMARY KEY (ws, session)) WITHOUT ROWID;
       CREATE TABLE workspace_activity_meta (id INTEGER PRIMARY KEY CHECK (id = 1), cursor TEXT, complete INTEGER NOT NULL) WITHOUT ROWID;
       INSERT INTO workspace_activity_meta (id, cursor, complete) SELECT 1, NULL,
         NOT (EXISTS (${FIRST_RUNNING}) OR EXISTS (${FIRST_MESSAGE}) OR EXISTS (${FIRST_LETTER}));
@@ -56,12 +56,12 @@ export function installWorkspaceActivity(db: DatabaseSync): void {
       CREATE TRIGGER workspace_activity_session_change AFTER UPDATE OF key, token, ws, running ON sessions
         WHEN OLD.key IS NOT NEW.key OR OLD.token IS NOT NEW.token OR OLD.ws IS NOT NEW.ws OR OLD.running IS NOT NEW.running BEGIN
         ${cleanReplaced}
-        DELETE FROM workspace_activity WHERE home = (OLD.ws IS NULL) AND ws = COALESCE(OLD.ws, '') AND session = OLD.key
+        DELETE FROM workspace_activity WHERE ws = OLD.ws AND session = OLD.key
           AND (OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR NOT ${active("NEW.key")});
         ${add("NEW.key")}
       END;
       CREATE TRIGGER workspace_activity_session_drop AFTER DELETE ON sessions BEGIN
-        DELETE FROM workspace_activity WHERE home = (OLD.ws IS NULL) AND ws = COALESCE(OLD.ws, '') AND session = OLD.key;
+        DELETE FROM workspace_activity WHERE ws = OLD.ws AND session = OLD.key;
       END;
       ${["deliveries", "letter_deliveries"].map((table, i) => `
         CREATE TRIGGER workspace_activity_${i}_add AFTER INSERT ON ${table} BEGIN

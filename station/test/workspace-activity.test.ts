@@ -7,11 +7,11 @@ function fixture() {
   const store = Store.open(":memory:");
   const db = store.db;
   const add = (key: string, ws: string | null, token = key) => store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token, createdAt: 1, lastActiveAt: 1, ws });
-  const actual = () => (db.prepare("SELECT home, ws, session FROM workspace_activity ORDER BY home, ws, session").all() as any[]).map((r) => [r.home, r.ws, r.session]);
-  const expected = () => (db.prepare(`SELECT s.ws IS NULL AS home, COALESCE(s.ws, '') AS ws, s.key AS session FROM sessions s
-    WHERE s.running = 1 OR EXISTS (SELECT 1 FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)
-      OR EXISTS (SELECT 1 FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)
-    ORDER BY home, ws, session`).all() as any[]).map((r) => [r.home, r.ws, r.session]);
+  const actual = () => (db.prepare("SELECT ws, session FROM workspace_activity ORDER BY ws, session").all() as any[]).map((r) => [r.ws, r.session]);
+  const expected = () => (db.prepare(`SELECT s.ws AS ws, s.key AS session FROM sessions s
+    WHERE s.ws IS NOT NULL AND (s.running = 1 OR EXISTS (SELECT 1 FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)
+      OR EXISTS (SELECT 1 FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL))
+    ORDER BY ws, session`).all() as any[]).map((r) => [r.ws, r.session]);
   return { store, db, add, actual, expected };
 }
 
@@ -26,6 +26,8 @@ for (const recursive of [false, true]) test(`workspace activity follows older wr
     const same = () => assert.deepEqual(actual(), expected());
     insert.run(1, "message", null); insert.run(2, "message", null); letter.run(1, "letter", null);
     db.prepare("UPDATE sessions SET running=1 WHERE key='run'").run(); same();
+    db.prepare("UPDATE sessions SET ws='W3' WHERE key='run'").run(); same();
+    db.prepare("UPDATE sessions SET ws=NULL WHERE key='run'").run(); same();
     db.prepare("UPDATE deliveries SET delivered_at=2 WHERE n=1 AND session='message'").run(); same();
     db.prepare("UPDATE deliveries SET delivered_at=2 WHERE n=2 AND session='message'").run(); same();
     db.prepare("UPDATE deliveries SET delivered_at=NULL WHERE n=1 AND session='message'").run(); same();
@@ -45,6 +47,12 @@ for (const recursive of [false, true]) test(`workspace activity follows older wr
     db.prepare("INSERT OR REPLACE INTO sessions (key, connect, scope, runtime, profile, workspace, token, created_at, last_active_at, ws) VALUES ('replacement','ember','thread','claude','cc','/w','run',1,1,'W2')").run(); same();
     db.prepare("UPDATE sessions SET running=1 WHERE key IN ('replacement','idle')").run();
     db.prepare("INSERT OR REPLACE INTO sessions (key, connect, scope, runtime, profile, workspace, token, created_at, last_active_at, ws) VALUES ('idle','ember','thread','claude','cc','/w','run',1,1,'W1')").run(); same();
+    add("old-key", "W1", "old-token"); add("other-key", "W2", "other-token");
+    db.prepare("UPDATE sessions SET running=1 WHERE key IN ('old-key','other-key')").run();
+    db.prepare("UPDATE OR REPLACE sessions SET token='other-token' WHERE key='old-key'").run(); same();
+    add("target-key", "W2");
+    db.prepare("UPDATE sessions SET running=1 WHERE key='target-key'").run();
+    db.prepare("UPDATE OR REPLACE sessions SET key='target-key' WHERE key='old-key'").run(); same();
     db.prepare("DELETE FROM sessions WHERE key='message'").run(); same();
   } finally { store.close(); }
 });
@@ -94,7 +102,7 @@ test("workspace activity lookup visits only the selected workspace's active sess
     assert.deepEqual(rows.map((r) => r.key), ["target"]);
     assert.equal(visited, 1);
     const plan = (db.prepare(`EXPLAIN QUERY PLAN ${WORKSPACE_ACTIVITY}`).all("W2") as {detail:string}[]).map((r) => r.detail).join(" | ");
-    assert.match(plan, /SEARCH a USING PRIMARY KEY \(home=\? AND ws=\?\)/);
+    assert.match(plan, /SEARCH a USING PRIMARY KEY \(ws=\?\)/);
     assert.match(plan, /SEARCH s USING INDEX .* \(key=\?(?: AND ws=\?)?\)/);
   } finally { store.close(); }
 });
