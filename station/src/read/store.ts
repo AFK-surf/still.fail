@@ -168,10 +168,16 @@ export function sessionOfRuntime(s: Store, runtime: string, id: string): string 
         UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND COALESCE(r.runtime, s.runtime) = ?1
       ) ORDER BY last_active_at DESC LIMIT 1`, runtime, id)?.key ?? null;
     } catch {
-      return one(s, `SELECT key FROM (
-        SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
-        UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
-      ) ORDER BY last_active_at DESC LIMIT 1`, runtime, id)?.key ?? null;
+      try {
+        return one(s, `SELECT key FROM (
+          SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
+          UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+        ) ORDER BY last_active_at DESC LIMIT 1`, runtime, id)?.key ?? null;
+      } catch (error) {
+        // An older store may not have kept previous runtime sessions at all; its current one is still readable.
+        if (!/no such table: runtime_sessions/.test((error as Error).message)) throw error;
+        return one(s, "SELECT key FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1 ORDER BY last_active_at DESC LIMIT 1", runtime, id)?.key ?? null;
+      }
     }
   }
 }
