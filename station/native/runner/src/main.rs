@@ -44,6 +44,10 @@ const SETTLE: Duration = Duration::from_secs(1);
 /// Most bytes in one `out` message.
 const CHUNK: usize = 64 * 1024;
 const STREAMS: [&str; 2] = ["out", "err"];
+/// How much of a stream acknowledged is let go of at once: its file keeps its length (offsets stay as they were), the
+/// disk under what was acknowledged is given back (sys::punch). A Codex app-server's `.out`, kept whole as it ran for
+/// days, was 0.8 GB on ccvm with 1.3 GB left (2026-11-04).
+const PUNCH_EVERY: u64 = 32 * 1024 * 1024;
 
 struct Args {
     dir: PathBuf,
@@ -96,6 +100,8 @@ struct State {
     /// The agent has exited and its output has ended (or had its time to): the exit may be sent.
     settled: bool,
     acked: [u64; 2],
+    /// Up to where each stream's file was let go of (`PUNCH_EVERY`).
+    punched: [u64; 2],
     /// The current connection, by number; a new one closes the one before.
     conn: u64,
     current: Option<Conn>,
@@ -455,6 +461,13 @@ fn handle(shared: &Shared, line: &[u8]) -> Result<Next, String> {
                 acked[i] = acked[i].max(n);
             }
             st.acked = acked;
+            for (i, path) in [&shared.paths.out, &shared.paths.err].into_iter().enumerate() {
+                // What was acknowledged is never sent again: its blocks go, a whole block at a time.
+                let upto = acked[i] - acked[i] % (1024 * 1024);
+                if upto >= st.punched[i] + PUNCH_EVERY && sys::punch(path, st.punched[i], upto - st.punched[i]).is_ok() {
+                    st.punched[i] = upto;
+                }
+            }
         }
         "write" => {
             let data = message["data"].as_str().ok_or("write: no data")?;

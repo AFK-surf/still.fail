@@ -315,6 +315,28 @@ fn a_second_connection_attaching_resumes_from_the_ack() {
 }
 
 #[test]
+fn what_was_acknowledged_gives_its_disk_back_its_offsets_staying() {
+    use std::os::unix::fs::MetadataExt;
+    // 40 MiB written, then a line once stdin says so.
+    let runner = Runner::start("punch", "head -c 41943040 /dev/zero; read x; printf 'after\\n'");
+    let mut client = runner.connect();
+    client.send(json!({"op": "attach"}));
+    let (mut at, mut got) = ([0, 0], [vec![], vec![]]);
+    client.read_until(&mut at, &mut got, 0, 41943040);
+    let out = runner.info["out"].as_str().unwrap().to_string();
+    let before = fs::metadata(&out).unwrap();
+    client.send(json!({"op": "ack", "out": 41943040, "err": 0}));
+    client.handled();
+    let after = fs::metadata(&out).unwrap();
+    assert_eq!(after.len(), before.len(), "the file keeps its length: offsets stay as they were");
+    assert!(after.blocks() * 512 < before.blocks() * 512 / 2, "the disk under what was acknowledged is given back: {} then {}", before.blocks(), after.blocks());
+    client.write(b"go\n");
+    let ([more, _], exit) = client.until_exit([41943040, 0]);
+    assert_eq!(more, b"after\n", "what follows comes on from there");
+    assert_eq!(exit["code"], 0);
+}
+
+#[test]
 fn stdin_is_written_and_closed() {
     let runner = Runner::start("stdin", "cat; echo end");
     let mut client = runner.connect();
