@@ -1220,7 +1220,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   // a chat of 534 messages read 479 pages, 3 to 16 s on ccvm short of memory (2026-11-02), every telling after it waiting.
   const planned: [string, unknown[]][] = [
     [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
-    [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]],
+    [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]], [read.PINS_OF, ["a@x", '["a"]']],
     [`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, ['["a"]']], [read.TOLD_BLOCKED, ["a", 0, 9]], [read.RUNNING_OF, ['["a"]']],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
@@ -1252,6 +1252,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(read.OPENERS_OF, "o USING INDEX sqlite_autoindex_opened_chats_1 (child_station=? AND child=?)");
   has(read.OPENED_OF, "o USING INDEX opened_chats_by_key (parent_station=? AND parent=?)");
   has(read.PUBLISHED_OF, "published USING INDEX published_by_thread (thread=?)");
+  has(read.PINS_OF, "pins USING INDEX sqlite_autoindex_pins_1 (viewer=? AND session=?)");
   has(read.TOLD_BLOCKED, "turns_by_end (session_key=? AND ended_at>? AND ended_at<?)");
   // The jobs running of some sessions: by an index (of those running, or of their sessions' jobs), never every job.
   has(read.RUNNING_OF, "SEARCH jobs USING INDEX");

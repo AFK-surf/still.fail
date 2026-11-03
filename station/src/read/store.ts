@@ -570,9 +570,12 @@ export function publishedByThread(s: Store, threads: number[] | null = null): Ma
 
 // ── pins, kept chats ──
 
-/// The chats a viewer pinned (by their session's key), with when.
-export function pins(s: Store, viewer: string): Map<string, number> {
-  return new Map(all(s, "SELECT session, at FROM pins WHERE viewer = ?", viewer).map((r) => [r.session, r.at]));
+/// The chats a viewer pinned (by their session's key), with when. For an incremental read, seek only its keys.
+export const PINS_OF = "SELECT session, at FROM pins WHERE viewer = ?1 AND session IN (SELECT value FROM json_each(?2))";
+export function pins(s: Store, viewer: string, sessions: string[] | null = null): Map<string, number> {
+  const found = sessions === null ? all(s, "SELECT session, at FROM pins WHERE viewer = ?", viewer)
+    : sessions.length === 0 ? [] : all(s, PINS_OF, viewer, JSON.stringify(sessions));
+  return new Map(found.map((r) => [r.session, r.at]));
 }
 
 /// Chats kept instead of offered for archiving. Null selects every viewer.

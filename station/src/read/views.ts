@@ -451,7 +451,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   }
   stage("answered");
   const kept = [...store.keptChats(s, viewer.email, own.map((t) => t.thread.id))];
-  const pins = Object.fromEntries([...store.pins(s, viewer.email)].filter(([k]) => scope === null || keys.includes(k)));
+  const pins = Object.fromEntries(store.pins(s, viewer.email, scope === null ? null : keys));
   const named = (o: { station: string | null; session: string; title: string | null }) => ({ ...(o.station !== null ? { station: o.station } : {}), session: o.session, ...(o.title !== null ? { title: o.title } : {}) });
   const openers = Object.fromEntries([...store.openers(s, keys)].map(([k, o]) => [k, named(o)]));
   const opened = Object.fromEntries([...store.openedChats(s, keys)].map(([k, list]) => [k, list.map(named)]));
@@ -649,11 +649,11 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     if (archived) row.archived = archivedOf(x);
     rows.push(row);
   }
-  // When the viewer pinned each to the top of their list, or null.
-  const pins = store.pins(s, viewer.email);
-  for (const row of rows) row.pinned = typeof row.id === "string" ? (pins.get(row.id) ?? null) : null;
   // Of the items read alone (a change's), theirs alone.
   const ids = scope === null ? null : rows.flatMap((row) => (typeof row.id === "string" && scope.rows.has(row.id) ? [row.id as string] : []));
+  // When the viewer pinned each to the top of their list, or null.
+  const pins = store.pins(s, viewer.email, ids);
+  for (const row of rows) row.pinned = typeof row.id === "string" ? (pins.get(row.id) ?? null) : null;
   // The chat an agent opened it from (chat_create), for its way back there: that chat's station (left out: this one),
   // session and what it was called; only for those opened so. Nothing else of the list goes by it (its order, its
   // archiving): each chat stands on its own.
