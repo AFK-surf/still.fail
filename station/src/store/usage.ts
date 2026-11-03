@@ -94,7 +94,7 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
   const compact = hasCompactUsage(db);
   const recent: [UsageCall, UsageFor][] = [];
   if (file.session !== null) {
-    if (compact && calls.length > 0 && usageTotalsComplete(db, file.session)) seedCompactContext(db, file.session);
+    let seeded = false;
     const insert = db.prepare(
       `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window${compact ? ", compact_counted" : ""})
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19${compact ? ", 1" : ""})
@@ -108,6 +108,12 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
       if (was === undefined && options?.minNewAt !== undefined && c.at < options.minNewAt) continue;
       // The same response can occur in several transcript lines or be replayed after an interrupted read.
       if (was !== undefined && c.output <= was.output) continue;
+      // Seed from the saved summary before the first real change, including a subagent's. A replay that changes no
+      // call must neither read nor write the context, and seeding after a write could mistake the saved total for stale.
+      if (compact && !seeded) {
+        seeded = true;
+        if (usageTotalsComplete(db, file.session)) seedCompactContext(db, file.session);
+      }
       if (was !== undefined && grow !== null) grow.run(c.output, c.id);
       else insert.run(
         c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,

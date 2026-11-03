@@ -710,6 +710,31 @@ test("compact coverage keeps its own first call without reading or maintaining t
   } finally { store.close(); }
 });
 
+test("an unchanged old call does not seed or write context on replay", async () => {
+  const time = testClock();
+  await time.adjust(10_000);
+  const store = Store.open(":memory:", null, time.clock);
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A",
+      createdAt: 0, lastActiveAt: 0, runtimeSessionId: "r" });
+    store.ranIn("a", "r", "cc");
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "old", at: 11_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 2, cacheRead: 0,
+      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100_000, window: 200_000 };
+    const file = { session: "a", offset: 1, model: "m" };
+    store.recordUsage("/a", file, "claude", [[call, owner]]);
+    keepUsage(store, "a", true);
+    compactUsage(store);
+    const changes = () => (store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
+    const before = changes();
+    store.recordUsage("/a", file, "claude", [[call, owner]]);
+    assert.equal(changes(), before, "replaying a call and unchanged file position writes nothing");
+    store.recordUsage("/a", { ...file, offset: 2 }, "claude", [[{ ...call, id: "sub", at: 20_000, subagent: true }, owner]]);
+    keepUsage(store, "a", true);
+    assert.equal(store.sessionUsage("a").contextTokens, 100_000, "the first actual change can still preserve the saved context");
+  } finally { store.close(); }
+});
+
 test("a saved session context survives the first later subagent call", async () => {
   const time = testClock();
   await time.adjust(10_000);
