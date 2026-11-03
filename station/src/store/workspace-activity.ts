@@ -7,8 +7,11 @@ const active = (key: string) => `EXISTS (SELECT 1 FROM sessions z WHERE z.key = 
   OR EXISTS (SELECT 1 FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = z.key AND d.delivered_at IS NULL)
   OR EXISTS (SELECT 1 FROM letter_deliveries d INDEXED BY letter_deliveries_pending WHERE d.session = z.key AND d.delivered_at IS NULL)))`;
 const identity = (key: string) => `SELECT s.ws, s.key FROM sessions s WHERE s.key = ${key} AND s.ws IS NOT NULL`;
-const add = (key: string) => `INSERT OR IGNORE INTO workspace_activity (ws, session)
-  SELECT s.ws, s.key FROM sessions s WHERE s.key = ${key} AND s.ws IS NOT NULL AND ${active("s.key")};`;
+// An outer INSERT OR REPLACE or UPDATE OR FAIL overrides OR IGNORE inside a trigger. Avoid the conflicting insert
+// altogether, so old writers keep their own conflict policy and never replace an unchanged activity marker.
+const add = (key: string) => `INSERT INTO workspace_activity (ws, session)
+  SELECT s.ws, s.key FROM sessions s WHERE s.key = ${key} AND s.ws IS NOT NULL AND ${active("s.key")}
+    AND NOT EXISTS (SELECT 1 FROM workspace_activity a WHERE a.ws = s.ws AND a.session = s.key);`;
 const removeIdle = (key: string) => `DELETE FROM workspace_activity WHERE (ws, session) IN (${identity(key)}) AND NOT ${active(key)};`;
 const cleanReplaced = `DELETE FROM workspace_activity
   WHERE (ws, session) IN (SELECT ws, session FROM workspace_activity_replaced)
@@ -16,7 +19,7 @@ const cleanReplaced = `DELETE FROM workspace_activity
       AND s.ws = workspace_activity.ws AND ${active("s.key")});
   DELETE FROM workspace_activity_replaced WHERE session IS NOT NULL;`;
 const stageReplaced = `DELETE FROM workspace_activity_replaced WHERE session IS NOT NULL;
-  INSERT OR IGNORE INTO workspace_activity_replaced
+  INSERT INTO workspace_activity_replaced
     SELECT a.ws, a.session FROM workspace_activity a
     WHERE (a.ws, a.session) IN (
       SELECT s.ws, s.key FROM sessions s WHERE s.ws IS NOT NULL AND (s.key = NEW.key OR s.token = NEW.token)

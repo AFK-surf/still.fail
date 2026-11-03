@@ -57,6 +57,18 @@ for (const recursive of [false, true]) test(`workspace activity follows older wr
   } finally { store.close(); }
 });
 
+test("a writer's conflict policy does not make an already active session fail", () => {
+  const { store, db, add, actual, expected } = fixture();
+  try {
+    add("busy", "W1");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'busy')").run();
+    db.prepare("UPDATE OR FAIL sessions SET running=1 WHERE key='busy'").run();
+    db.prepare("INSERT OR ABORT INTO letter_deliveries (thread,n,session) VALUES (1,2,'busy')").run();
+    db.prepare("UPDATE OR FAIL deliveries SET delivered_at=1 WHERE session='busy' AND n=1").run();
+    assert.deepEqual(actual(), expected());
+  } finally { store.close(); }
+});
+
 test("an older store builds only active sessions in bounded steps while writes continue", () => {
   const { store, db, add, actual, expected } = fixture();
   try {
