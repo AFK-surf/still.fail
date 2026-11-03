@@ -11,6 +11,7 @@ import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
 import { OUTDATED } from "../src/accounts/models.ts";
 import { routes } from "../src/api/routes/accounts.ts";
+import { overview } from "../src/api/overview.ts";
 import type { Request } from "../src/api/request.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { profileEnv } from "../src/agents/profiles.ts";
@@ -951,6 +952,59 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(after.change.summary, "改了策略，删了「看不出来」");
     await t.close();
   });
+});
+
+test("an overview names only the visible chats once when it makes the archive policy", async () => {
+  const t = await rig();
+  try {
+    for (const [key, ws] of [["b1", "B"], ["b2", "B"], ["w", "W"]] as const) {
+      t.store.insertSession({ key, ws, connect: "ds", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1 });
+      const thread = t.store.openThread(`chat:${key}`, key, key, null, null);
+      t.store.joinThread(thread.id, key, "ds");
+      t.store.setThreadTitle(thread.id, `title-${key}`);
+    }
+    const decision = { purpose: "archive", accepted: true, result: { selected: "landed" } };
+    t.store.recordDecision("b1", decision);
+    for (let i = 0; i < 30; i++) t.store.recordDecision("w", decision);
+    t.store.recordDecision("b2", decision);
+    t.store.setArchivePolicy(DEFAULT_POLICY, { kind: "agent", session: "b2" }, "edit", "B");
+
+    const named: string[] = [];
+    let policies = 0;
+    const sessionChat = t.store.sessionChat.bind(t.store);
+    const latest = t.store.latestDecisionsSince.bind(t.store);
+    t.store.sessionChat = (session) => { named.push(session); return sessionChat(session); };
+    t.store.latestDecisionsSince = (since) => { policies++; return latest(since); };
+    const hub: any = { processes: () => new Map(), config: () => ({ dataDir: t.data }) };
+    const cloud: any = { state: null };
+    const of = async (as: typeof joined) => (await overview({ store: t.store, hub, cloud, config: () => t.config.raw(), accounts: t.accounts }, as, "en") as any).automaticDecisions;
+    const joined = { ...owner, workspace: "B", home: false };
+    const view = await of(joined);
+    assert.deepEqual(view.recent.map((r: any) => [r.session, r.title]), [["b2", "title-b2"]], "the global latest 30 checks are filtered to this workspace");
+    assert.deepEqual([view.policy.checked, view.policy.failed, view.canEditPolicy], [2, 0, true]);
+    assert.deepEqual(view.policy.options.find((o: any) => o.id === "landed").chats.map((c: any) => c.title).sort(), ["title-b1", "title-b2"]);
+    assert.equal(view.policy.change.by.title, "title-b2");
+    assert.equal(policies, 1, "only the policy being returned is read");
+    assert.deepEqual(named.sort(), ["b1", "b2"], "invisible chats are not named, and each visible chat is named once");
+    named.length = 0;
+    policies = 0;
+    const again = await of(joined);
+    assert.deepEqual(again, view);
+    assert.deepEqual([policies, named], [0, []], "a repeated overview reuses its view");
+    const homeView = await of({ ...joined, workspace: "W", home: true });
+    assert.equal(homeView.recent.length, 29);
+    assert.ok(homeView.recent.every((r: any) => r.session === "w" && r.title === "title-w"));
+    assert.deepEqual([homeView.policy.checked, homeView.policy.failed], [1, 0]);
+    assert.deepEqual([policies, named], [1, ["w"]], "the home workspace's checks use their own policy and names");
+    named.length = 0;
+    policies = 0;
+    const memberView = await of({ ...joined, role: "member" });
+    assert.deepEqual(memberView, { canEdit: false, settings: {}, models: [], recent: [] });
+    assert.deepEqual([policies, named], [0, []]);
+  } finally {
+    await t.close();
+    t.store.close();
+  }
 });
 
 test("a Hermes profile offers discovered models and keeps a manual selection when discovery fails", async () => {
