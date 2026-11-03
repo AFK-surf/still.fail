@@ -29,7 +29,10 @@ export type InboundFile = { id: string; name: string; size: number; url: string 
 export type ChatEvent =
   | { type: "message"; message: InboundMessage }
   | { type: "changed"; channel: string; threadTs: string; ts: string; text: string }
-  | { type: "stop"; channel: string; threadTs: string; ts: string; localAt?: number | null };
+  | { type: "stop"; channel: string; threadTs: string; ts: string; localAt?: number | null }
+  /// A login card's field answered (Slack): what its page gave (a code), for the login the card at `ts` is of. Never a
+  /// message of the thread: the code goes to the login's command alone. Throws what refused it, said to that person.
+  | { type: "loginCode"; channel: string; threadTs: string; ts: string; user: string; code: string };
 
 /// A channel or group a bot is in. `kind`: a Slack channel (a new thread in it); a Feishu topic group (a new topic); a
 /// Feishu group (the group's conversation, taken over: docs/feishu.md「会话怎么分」).
@@ -71,6 +74,9 @@ export interface ChatSurface {
   /// The answer cards it shows (options and text; Slack's and Feishu's buttons and fields): absent, none but the
   /// station's chats.
   cards?: boolean;
+  /// Whether it shows a login card whose page gives a code with a field for that code (Slack), answered as a
+  /// `loginCode` event; absent, none but the station's chats.
+  loginCards?: boolean;
   /// How a new session's link is said as it starts (null: it is not said: Feishu's status card has it); absent: Slack's
   /// `<url|label>`.
   sessionLink?(url: string, label: string): string | null;
