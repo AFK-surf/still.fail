@@ -8,7 +8,7 @@ let cards_src : Ref[Source?] = Ref(None)
 
 ///|
 /// The fixture's chat open (the first row's), its calls kept in `calls` and answered by the fixture.
-fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2) -> @ui.Tester {
+fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2, wide? : Bool = false) -> @ui.Tester {
   new_run()
   let base = fixture(mode)
   let src : Source = {
@@ -21,10 +21,92 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
   cards_src.val = Some(src)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_cards_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=if wide { 1280.0 } else { 390.0 }, h=if wide { 800.0 } else { 844.0 }, platform~)
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
   t
+}
+
+///|
+test "a text card shows its hint and sends a quoted reply on both screen sizes" {
+  for (platform, wide) in [(0, true), (2, false)] {
+    let calls : Array[Made] = []
+    let t = cards_core(calls, mode="chat-text-card", platform~, wide~)
+    assert_true(t.find("例如 example.com") is Some(_))
+    // The empty field cannot send an answer.
+    t.tap_text("发送")
+    assert_eq(named(calls, "decision.reply").length(), 0)
+    t.tap_text("例如 example.com")
+    t.type_text("example.org")
+    t.tap_text("发送")
+    let made = named(calls, "decision.reply")
+    assert_eq(made.length(), 1)
+    assert_eq(text(Some(made[0].params), "text"), "example.org")
+    assert_eq(text(Some(made[0].params), "station"), "ws1/st1")
+    assert_eq(number(Some(made[0].params), "thread"), 7.0)
+    assert_eq(number(Some(made[0].params), "seq"), 64.0)
+    t.run_for(turn_most_ms)
+    assert_true(t.find("你 回复了") is Some(_))
+  }
+}
+
+///|
+test "a text card keeps its answer after a failed send and can be dismissed" {
+  let calls : Array[Made] = []
+  let t = cards_core(calls, mode="chat-text-card")
+  t.tap_text("例如 example.com")
+  t.type_text("失败")
+  t.tap_text("发送")
+  assert_eq(named(calls, "decision.reply").length(), 1)
+  // The same value can be sent again without typing it a second time.
+  t.tap_text("发送")
+  let made = named(calls, "decision.reply")
+  assert_eq(made.length(), 2)
+  assert_eq(text(Some(made[1].params), "text"), "失败")
+  t.tap_text("忽略")
+  assert_eq(named(calls, "decision.dismiss").length(), 1)
+  t.run_for(turn_most_ms)
+  assert_true(t.find("例如 example.com") is None)
+}
+
+///|
+test "a text card without a hint has one, and Enter sends the answer" {
+  let calls : Array[Made] = []
+  let t = cards_core(calls, mode="chat-text-card-default", platform=0, wide=true)
+  t.tap_text("输入文字")
+  t.type_text("example.org")
+  t.enter()
+  let made = named(calls, "decision.reply")
+  assert_eq(made.length(), 1)
+  assert_eq(text(Some(made[0].params), "text"), "example.org")
+}
+
+///|
+test "a text card cannot send while its chat is offline" {
+  let calls : Array[Made] = []
+  let t = cards_core(calls, mode="chat-text-card-offline")
+  t.tap_text("例如 example.com")
+  t.type_text("example.org")
+  t.tap_text("发送")
+  assert_eq(named(calls, "decision.reply").length(), 0)
+}
+
+///|
+test "a text card on an A/B message shows its input and sends the written answer" {
+  for (platform, wide) in [(0, true), (2, false)] {
+    let calls : Array[Made] = []
+    let t = cards_core(calls, mode="chat-text-card-ab", platform~, wide~)
+    assert_true(t.find("A. 新装站点") is Some(_))
+    assert_true(t.find("B. 搬现有站点") is Some(_))
+    assert_true(t.find("「添加 station」生成的 token") is Some(_))
+    t.tap_text("「添加 station」生成的 token")
+    t.type_text("示例文字")
+    t.tap_text("发送")
+    let made = named(calls, "decision.reply")
+    assert_eq(made.length(), 1)
+    assert_eq(number(Some(made[0].params), "seq"), 65.0)
+    assert_eq(text(Some(made[0].params), "text"), "示例文字")
+  }
 }
 
 ///|

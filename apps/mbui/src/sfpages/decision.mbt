@@ -1,6 +1,6 @@
 // What a post asks, under it in its chat on the desktop (ember web/src/Decisions.tsx MessageDecision,
 // DecisionOptions; Chat.tsx AskDismiss; Decisions.css.ts decision, options, settledLine; Chat.css.ts askDismiss): who
-// decides, then the options while it waits for the viewer (numbered, pressing one answers with it: decision.answer);
+// decides, then its options or text field while it waits for the viewer (decision.answer or decision.reply);
 // once settled, how it went in one quiet line. A login card stays as its login goes; an agent's request about a vault
 // item is answered on its own card. 忽略 lets go what no one has decided (decision.dismiss). Answered on screen, a card
 // stays as it is, none of it pressed any more, and becomes its line once out of sight (sfbase's list_turns.mbt
@@ -119,6 +119,16 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                 Some(core) => @settings.vault_actions(c, core, workspace_of(here.station), vault, mine_to(here, assignee))
                 None => ()
               }
+            Some({ kind: "text", placeholder, .. }) =>
+              text_card(c, src, here, m, thread, placeholder, resolved, fn() {
+                match turns {
+                  Some(tu) => {
+                    tu.keep_turn(c)
+                    reading_of(here.station + "\u{1}" + here.session).end_asked = true
+                  }
+                  None => ()
+                }
+              })
             _ =>
               match (options, thread) {
                 (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved, on_pick=fn(i) {
@@ -192,6 +202,61 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         }
       },
     )
+  })
+  |> ignore
+}
+
+///|
+/// A text card's field belongs to its post, so leaving its row and returning keeps an unfinished answer.
+let text_card_fields : Map[String, @ui.Field] = {}
+
+///|
+fn text_cards_reset() -> Unit {
+  text_card_fields.clear()
+}
+
+///|
+fn text_card_field(key : String) -> @ui.Field {
+  match text_card_fields.get(key) {
+    Some(f) => f
+    None => {
+      let f = @ui.Field::new()
+      text_card_fields[key] = f
+      f
+    }
+  }
+}
+
+///|
+/// A value or name asked in a text card: the hint and field, with a button for either hand. The core quotes the
+/// question when it sends `decision.reply`; a failed send leaves the words in place for another try.
+fn text_card(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, thread : Double?, placeholder : String, resolved : Bool, on_send : () -> Unit) -> Unit {
+  let key = here.station + "/" + here.session + "/" + m.ts
+  let field = text_card_field(key)
+  let sending = doing("text-card/" + key)
+  let enabled = !resolved && !sending && thread is Some(_)
+  let hint = if placeholder == "" { @sf.t("android-chat.marks.write") } else { placeholder }
+  c.box(style=text_card_row, fn() {
+    let input = @sf.input(c, "text-card/" + key, placeholder=hint, field~, disabled=!enabled)
+    let words = input.text.trim().to_owned()
+    let pressed = @sf.button(c, @sf.t("android-chat.composer.send"), key="text-card-send/" + key, tone=Primary, busy=sending, disabled=!enabled || words == "")
+    if enabled && words != "" && (pressed || input.submitted) {
+      match thread {
+        Some(th) => {
+          on_send()
+          c.blur()
+          c.tell("text-card-send/" + key, fn() {
+            act(src, @sf.t("android-chat.composer.send"), "text-card/" + key, "decision.reply", {
+              "station": Json::string(here.station),
+              "thread": Json::number(th),
+              "seq": Json::number(m.seq),
+              "text": Json::string(words),
+            })
+          })
+        }
+        None => ()
+      }
+    }
   })
   |> ignore
 }
@@ -571,6 +636,13 @@ let decision_rooms : @ui.Style = @ui.css("w=Full align=AStart")
 /// The options (Decisions.css.ts options): 8 over them.
 // kept across runs: a value (no field of it changes)
 let options_room : @ui.Style = @ui.css("w=Full pt=S0_5 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let text_card_row : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter").then(@ui.style(max_w=Fixed(text_card_max)))
+
+///|
+let text_card_max : Double = 560.0
 
 ///|
 /// How it was settled, who decides (settledLine): 12 on 18, the subtle ink.

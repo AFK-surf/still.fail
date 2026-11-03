@@ -128,6 +128,8 @@ pub(all) struct Card {
   /// who is to decide (their email), where someone is
   assignee : String
   options : Array[Choice]?
+  /// A text card's hint for the value its field asks for.
+  placeholder : String
   login : String
   station : String
   vault : String
@@ -419,6 +421,7 @@ pub fn message_of(m : Json) -> Message {
           assignee_text: opt_text(c, "assigneeText"),
           assignee: text(c, "assignee"),
           options: choices_of(c, "options"),
+          placeholder: text(c, "placeholder"),
           login: text(c, "login"),
           station: text(c, "station"),
           vault: text(c, "vault"),

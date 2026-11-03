@@ -24,6 +24,7 @@ pub fn reset() -> Unit {
   hovered_file.val = None
   message_reset()
   rows_reset()
+  text_cards_reset()
   login_cards_reset()
   relay_focus_reset()
   publish_reset()

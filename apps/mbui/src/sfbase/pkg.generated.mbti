@@ -1929,6 +1929,7 @@ pub(all) struct Card {
   assignee_text : String?
   assignee : String
   options : Array[Choice]?
+  placeholder : String
   login : String
   station : String
   vault : String
