@@ -29,7 +29,8 @@ import { adbTools } from "../src/adb/tool.ts";
 import { archiveTools } from "../src/tools/archive.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { feedbackTools } from "../src/tools/feedback.ts";
-import { stationTools } from "../src/tools/stations.ts";
+import { remoteTools } from "../src/tools/remote.ts";
+import type { Remote } from "../src/jobs/remote.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { Rig, matches, message, reply, say, settle } from "./hub-fakes.ts";
@@ -40,7 +41,7 @@ type Json = any;
 
 test("every tool has a name, a description and an object's input schema; the chat tools in their order", () => {
   const r = new Rig();
-  const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...stationTools(() => null), ...adbTools(() => []), ...feedbackTools(r.store, () => null, () => null)];
+  const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...remoteTools({} as Remote), ...adbTools(() => []), ...feedbackTools(r.store, () => null, () => null)];
   assert.deepEqual(
     chatTools(r.hub).map((t) => t.name),
     ["chat_post", "slack_api", "chat_state", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "session_history"],
@@ -1460,17 +1461,14 @@ test("the archive policy decides by the option picked; an agent changing it is k
 
 test("station_* reach the transport, pretty-printed; adb_devices and feedback_send as the Rust says them", async () => {
   const calls: [string, string, Json][] = [];
-  const tools = stationTools(() => ({
-    tool: async (name, session, args) => {
+  const tools = remoteTools({
+    tool: async (name: string, session: string, args: Json) => {
       calls.push([name, session, args]);
       return { ok: true, stations: [] };
     },
-    ask: async () => ({}),
-    closeSession: () => {},
-  }));
+  } as unknown as Remote);
   assert.equal(await tools[0]!.run("s", {}), JSON.stringify({ ok: true, stations: [] }, null, 2));
   assert.deepEqual(calls, [["station_list", "s", {}]]);
-  await assert.rejects(stationTools(() => null)[1]!.run("s", { station: "x", action: "list" }), /cannot be reached/);
   const none = await adbTools(() => [])[0]!.run("s", {});
   assert.ok(none.startsWith("No phone is shared") && none.includes("phone_use") && !none.includes("http"));
   const one = await adbTools(() => [{ serial: "127.0.0.1:37123", adb: "connected" }])[0]!.run("s", {});

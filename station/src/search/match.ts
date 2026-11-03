@@ -68,8 +68,6 @@ export const has = (text: string, words: string[]): boolean => {
 
 /// A document as a hit, said around the words (a chat's from its title when that has them: a long one is cut where it is
 /// listed).
-export const hitOf = (d: Doc, words: string[]): Hit => ({ ...d.ref, kind: d.kind, key: d.key, title: d.title, text: excerpt(d.kind === "chat" && has(d.title, words) ? d.title : d.body, words), at: d.at });
-
 type Ranked = { titled: boolean; at: number | null; order: number; hit: Hit };
 
 // Negative when a belongs before b. The input order breaks ties, as a stable sort of the original documents did.

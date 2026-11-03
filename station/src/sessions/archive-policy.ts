@@ -9,7 +9,6 @@ export type ArchiveOption = { id: string; name: string; rubric: string; archive:
 export type ArchivePolicy = { policy: string; options: ArchiveOption[] };
 /// Who changed it: a person on the pages, or an agent (its session) with the tool.
 export type PolicyAuthor = { kind: "person"; email: string; name?: string | null } | { kind: "agent"; session: string };
-export type PolicyChange = { at: number; by: PolicyAuthor; summary: string };
 
 export const MAX_OPTIONS = 20;
 const MAX_POLICY = 4000;
