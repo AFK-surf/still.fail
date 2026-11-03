@@ -593,7 +593,6 @@ pub fn reset() -> Unit {
   vault_serial.val = 0
   // the drafts each page opened of the core (a form a station, a new connect's, a profile's, a Slack app's): a run
   // opens its own
-  decision_forms.clear()
   policy_forms.clear()
   // what this device keeps, asked of a run's own core
   kept.chats.set(None)

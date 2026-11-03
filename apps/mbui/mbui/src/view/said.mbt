@@ -139,6 +139,16 @@ pub fn Tree::said_label(self : Tree, id : NodeId) -> String {
 }
 
 ///|
+/// What node `id` says it is (View::says; None: nothing, or no live node).
+pub fn Tree::said_of(self : Tree, id : NodeId) -> Said? {
+  if self.alive_id(id) {
+    self.nodes[id.at].said
+  } else {
+    None
+  }
+}
+
+///|
 /// Whether node `id` says it is a picture (View::says: Role Image; no live node, not).
 pub fn Tree::says_picture(self : Tree, id : NodeId) -> Bool {
   self.alive_id(id) && self.nodes[id.at].said is Some({ role: Image, .. })

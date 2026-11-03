@@ -471,8 +471,8 @@ let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle
 /// (a value said: none of that). `note_cut`: its note one line, cut short (what is in a memory). `title_after` after its
 /// title on its line while `title_after_shown` says (a tag: whose it is), its title cut short where the line has not
 /// the room for both. `folds`: it
-/// folds open what follows it, its chevron down, up while that is open (as it says), read out so. Its words as they are
-/// said.
+/// folds open what follows it, its chevron down, up while that is open (as it says), read out so. `tail` after what it
+/// says, before its chevron while `tail_shown` says (a spinner, a mark: link_row's). Its words as they are said.
 pub fn link_row_node(
   parent : @view.View,
   title : () -> String,
@@ -495,6 +495,8 @@ pub fn link_row_node(
   title_after? : (@view.View) -> Unit,
   title_after_shown? : () -> Bool = fn() { true },
   folds? : () -> Bool,
+  tail? : (@view.View) -> Unit,
+  tail_shown? : () -> Bool = fn() { true },
 ) -> Unit {
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
@@ -517,7 +519,7 @@ pub fn link_row_node(
     }
     wide_link_row_node(
       parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
-      note_cut, title_after, title_after_shown, folds,
+      note_cut, title_after, title_after_shown, folds, tail, tail_shown,
     )
     return
   }
@@ -621,6 +623,7 @@ pub fn link_row_node(
           })
         })
         |> ignore
+        row_tail_node(first, tail, tail_shown)
         if ends {
           icon_node(first, mark(), pg_chevron, By(fn() { theme().p.subtle }), name_now=mark) |> ignore
         }
@@ -639,6 +642,20 @@ pub fn link_row_node(
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What follows what a row says on its first line (link_row's `tail`: a spinner, a mark), across its middle, while
+/// `shown` says: none of its room else.
+fn row_tail_node(first : @view.View, tail : ((@view.View) -> Unit)?, shown : () -> Bool) -> Unit {
+  match tail {
+    Some(f) =>
+      first.show(shown, fn(e) {
+        e.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+        f(e)
+      })
+    None => ()
+  }
 }
 
 ///|
@@ -890,6 +907,22 @@ fn led_title_node(parent : @view.View, title : () -> String, look : () -> @ui.Te
 ///|
 /// led_title_line's room between the lead and the title (gap=S1_5).
 let led_title_gap : Double = 6.0
+
+///|
+/// What a group holds that is not a row (block's: a section's button under its group): narrow, as far in as a card's
+/// rows' words, 12 over and under; wide, on the page as it is; what `make` makes in it 12 apart.
+pub fn block_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
+  let room = if look_node(parent) is Narrow { text_in } else { 0.0 }
+  parent.box(fn(b) {
+    b.gap(Is(block_gap)).padding(Is((room, room, room, room))) |> ignore
+    make(b)
+  })
+  |> ignore
+}
+
+///|
+/// pg_block's and wide_block's gap=S3.
+let block_gap : Double = 12.0
 
 ///|
 /// How wide a page's block is in a page `w` wide laid out `look` (what page_block and the wide column leave it): narrow,

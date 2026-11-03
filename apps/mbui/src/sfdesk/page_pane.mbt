@@ -235,7 +235,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -267,6 +267,10 @@ fn pane_made(
       // (a workspace's picture asked for again each time it is come back to: nav_flat_view's stint)
       made("notifications", fn(a, core, here, stint, frame, width) {
         @sfpages.notify_node(a, core, here, on_back=core.pop, frame~, stint~, width~)
+      })
+    Setting(AutoCompletion) =>
+      made("auto-completion", fn(a, core, here, _stint, frame, width) {
+        @sfpages.completion_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
       })
     Setting(Usage) =>
       made("usage", fn(a, core, here, _stint, frame, width) {

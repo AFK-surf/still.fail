@@ -396,6 +396,8 @@ fn wide_link_row_node(
   title_after : ((@view.View) -> Unit)?,
   title_after_shown : () -> Bool,
   folds : (() -> Bool)?,
+  tail : ((@view.View) -> Unit)?,
+  tail_shown : () -> Bool,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
@@ -473,6 +475,7 @@ fn wide_link_row_node(
           said.box(fn(w) { styled_words(w, value, fn() { if value_bad() { wide_value.then(bad) } else { wide_value } }) |> ignore })
           |> ignore
         })
+        row_tail_node(first, tail, tail_shown)
         if ends {
           icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore
         }
