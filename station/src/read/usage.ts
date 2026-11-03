@@ -179,8 +179,11 @@ export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
 }
 
 /// Usage::summary: every day's calls from `from` until `to`, by thread, person, profile and model (UsageRow).
-function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null): Json[] {
-  return usageGroups(s, from, to, utcOffsetMin, viewer).map((g) => ({
+function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null, queryTime: (ms: number) => void): Json[] {
+  const started = performance.now();
+  const groups = usageGroups(s, from, to, utcOffsetMin, viewer);
+  queryTime(Math.round(performance.now() - started));
+  return groups.map((g) => ({
     day: g.day, session: g.session, thread: g.thread, person: g.person, profile: g.profile, runtime: g.runtime, model: g.model,
     calls: g.calls, input: g.input, cacheRead: g.cacheRead, cacheWrite: g.cacheWrite + g.cacheWriteLong, output: g.output, cost: cost(g),
   }));
@@ -238,7 +241,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     stages[stage] = Math.round(now - last);
     last = now;
   };
-  const groups = summary(s, from, to, utcOffsetMin, viewer);
+  const groups = summary(s, from, to, utcOffsetMin, viewer, (ms) => { stages.summaryQuery = ms; });
   mark("summary");
   // Compact groups have already checked each session's current workspace in the same read snapshot. Looking them
   // up again here needlessly rereads the sessions index for every usage page, including on a cold database.
