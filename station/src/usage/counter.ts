@@ -20,7 +20,7 @@ import { log } from "../ops/log.ts";
 import { segmentsFrom, writtenLength } from "../read/packed.ts";
 import { parseIso, sharedTranscripts, transcriptDir, transcriptPaths } from "../read/transcript.ts";
 import type { SessionRow, Store, UsageCall, UsageFile, UsageFor } from "../store/store.ts";
-import type { RuntimeKind } from "../agents/runtime.ts";
+import { runtimeKind, type RuntimeKind } from "../agents/runtime.ts";
 
 /// Calls a little before a session was made (the runtime's clock against the station's) are still its own.
 export const SKEW_MS = 5_000;
@@ -647,6 +647,25 @@ export class UsageCounter {
     const claudeRoots = await distinct(ways("claude"));
     const codexRoots = await distinct(ways("codex"));
     const seenFiles = new Set<string>();
+    // A chat may have left a runtime while its final turn was still writing. Count each earlier segment with the
+    // runtime that wrote it, even when the session now runs on another one.
+    for (const s of sessions) {
+      if (wanted !== null && !wanted.has(s.key)) continue;
+      for (const source of store.runtimeSessionSources(s.key)) {
+        const runtime = runtimeKind(source.runtime);
+        if (!runtime || runtime === s.runtime) continue;
+        const transcript = transcriptPaths(runtime, config.dataDir, homes, [source.id]).paths[0];
+        if (!transcript) continue;
+        const files: [string, boolean][] = runtime === "claude" ? await claudeFiles(dirname(transcript), source.id) : [[runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript, false]];
+        for (const [path, subagent] of files) {
+          if (runtime === "grok" && !existsSync(path)) continue;
+          const real = await canonical(path);
+          if (seenFiles.has(real)) continue;
+          seenFiles.add(real);
+          added += await this.#readFile(path, runtime, subagent, s, readBefore(path, runtime));
+        }
+      }
+    }
     for (const s of sessions) {
       if (wanted !== null && !wanted.has(s.key)) continue;
       if (s.runtime !== "claude") continue;

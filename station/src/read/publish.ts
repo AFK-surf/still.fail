@@ -36,7 +36,7 @@ function authorOf(s: Store, m: MessageRow, names: Record<string, string>, known:
     if (model !== null) return modelName(model);
     const name = said("agent", m.author);
     if (name !== null && name !== m.author) return name;
-    return runtimeLabel(runtimeKind(store.getSession(s, m.author)?.runtime) ?? "claude");
+    return runtimeLabel(runtimeKind(m.agentIdentity?.runtime ?? store.originalRuntime(s, m.author) ?? store.getSession(s, m.author)?.runtime) ?? "claude");
   }
   return said(m.authorKind, m.author) ?? "still.fail";
 }
@@ -49,7 +49,8 @@ function whoDrawn(s: Store, m: MessageRow): { maker?: string; model?: string; ru
   const session = store.getSession(s, m.author);
   const model = typeof m.agentIdentity?.model === "string" && m.agentIdentity.model !== "" ? m.agentIdentity.model : (session?.model ?? null);
   const maker = model !== null ? makerOf(model) : null;
-  return { ...(maker !== null ? { maker } : {}), ...(model !== null ? { model } : {}), ...(session ? { runtime: session.runtime } : {}) };
+  const runtime = m.agentIdentity?.runtime ?? store.originalRuntime(s, m.author) ?? session?.runtime;
+  return { ...(maker !== null ? { maker } : {}), ...(model !== null ? { model } : {}), ...(runtime ? { runtime } : {}) };
 }
 
 /// The chat `thread` as published up to message n = `upto` (its latest without it), read by `viewer`.

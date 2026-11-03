@@ -844,6 +844,32 @@ test "a secret's longest grant: on its page its own or its vault's, in its edito
 }
 
 ///|
+test "a run can choose another runtime for a model available on both" {
+  new_run()
+  @settings.fixture_page("settings-run-runtime") |> ignore
+  let calls : Array[Made] = []
+  let base = fixture("settings-run-runtime")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("run:ws1/st1#s-c1")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("运行时") is Some(_))
+  t.tap_text("Claude Code")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("Codex") is Some(_))
+  t.tap_text("Codex")
+  t.draw()
+  assert_true(named(calls, "pick.set").iter().any(fn(c) { text(Some(c.params), "runtime") == "codex" }))
+}
+
+///|
 test "the run's 账号: what 自动分配 means, then 自动分配 and each account with its provider's mark and its allowance" {
   let t = settings_tester("run:ws1/st1#s-c1", mode="settings-run-accounts", shows="settings-run-accounts")
   t.draw()

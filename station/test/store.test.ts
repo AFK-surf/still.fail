@@ -669,6 +669,26 @@ test("a widget's state is kept by session and path, its model told once until it
   assert.equal(store.widgetState("a", path), null);
 });
 
+test("old transcript records keep their runtime when a chat changes runtime", () => {
+  const path = join(tempdir(), "ember.db");
+  let store = open(path);
+  session(store, "old");
+  store.setRuntimeSessionId("old", "earlier");
+  store.ranIn("old", "earlier", "cc");
+  store.close();
+  const db = new DatabaseSync(path);
+  db.exec("ALTER TABLE runtime_sessions DROP COLUMN runtime");
+  db.close();
+  store = open(path);
+  store.setSessionRuntime("old", "codex", "cx", false, null, null, null, null);
+  assert.deepEqual(store.runtimeSessionSources("old"), [{ id: "earlier", runtime: "claude", profile: "cc" }]);
+  assert.equal(store.sessionOfRuntime("claude", "earlier")?.key, "old");
+  assert.equal(store.sessionOfRuntime("codex", "earlier"), null);
+  store.close();
+  store = open(path);
+  assert.equal(store.runtimeSessionSources("old")[0]!.runtime, "claude");
+});
+
 test("session fast migrates old databases and survives restart", () => {
   const path = join(tempdir(), "ember.db");
   let store = open(path);
@@ -714,7 +734,7 @@ test("a message keeps its model after switching, editing and archiving", () => {
     const messages = store.messagesBefore(thread.id, null, 10);
     assert.equal(messages[0]!.agentIdentity.model, "gpt-6-sol");
     assert.equal(messages[0]!.agentIdentity.effort, "high");
-    assert.equal(messages[0]!.agentIdentity.runtime, undefined);
+    assert.equal(messages[0]!.agentIdentity.runtime, "claude");
     assert.equal(messages[1]!.agentIdentity.model, "gpt-6-astra");
     assert.equal(messages[0]!.text, "edited");
   };
@@ -1009,6 +1029,7 @@ test("what the station asks again and again is planned by an index, never a scan
   // login cards, or of the small one that counts sessions (or of what a subquery found); a table, or an index of every
   // turn, job or entry, never.
   const planned: [string, unknown[]][] = [
+    [read.ORIGINAL_RUNTIME, ["a"]],
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],

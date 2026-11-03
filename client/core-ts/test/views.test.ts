@@ -413,14 +413,22 @@ test("historical_messages_do_not_follow_the_current_model", () => {
   assert.equal(message.by.maker.id, "openai");
 });
 
+test("historical messages keep the runtime they were sent on", () => {
+  const agents = [{ session: { key: "k", runtime: "codex", agentText: "Codex" } }];
+  const old = shownMessage({ authorKind: "agent", author: "k", agentIdentity: { model: "claude-opus-5-5", runtime: "claude" } }, agents, null, [], [], [], undefined);
+  assert.equal(old.by.runtime, "claude");
+  const legacy = shownMessage({ authorKind: "agent", author: "k", authorRuntime: "claude" }, agents, null, [], [], [], undefined);
+  assert.equal(legacy.by.runtime, "claude");
+});
+
 test("an_agents_mark_is_drawn_from_what_its_message_says_before_its_session_is_read", () => {
   const message: J = { authorKind: "agent", author: "k", authorName: "Worker", authorModel: "gpt-5.5", authorRuntime: "codex", text: "hi" };
   const before = shownMessage(message, [], null, [], [], [], undefined);
   assert.deepEqual([before.by.name, before.by.maker?.id, before.by.runtime], ["Worker", "openai", "codex"]);
-  // Once read, the session says.
+  // Its author runtime remains the one given with the message after its session is read.
   const agents = [{ session: { key: "k", agentText: "Opus", model: "claude-opus-5-5", runtime: "claude", maker: { id: "anthropic", name: "Anthropic" } } }];
   const after = shownMessage(message, agents, null, [], [], [], undefined);
-  assert.deepEqual([after.by.maker.id, after.by.runtime], ["anthropic", "claude"]);
+  assert.deepEqual([after.by.maker.id, after.by.runtime], ["anthropic", "codex"]);
   // From a station that does not say: no mark yet.
   const old = shownMessage({ authorKind: "agent", author: "k", text: "hi" }, [], null, [], [], [], undefined);
   assert.deepEqual([old.by.maker, old.by.runtime], [null, null]);

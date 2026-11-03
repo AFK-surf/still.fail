@@ -15,7 +15,7 @@ import { threadId } from "node:worker_threads";
 import { zstdDecompressSync } from "node:zlib";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { readSegments } from "./packed.ts";
-import { type Mark, type TailState, TranscriptTail, recordOf } from "./tail.ts";
+import { type Mark, type TailState, type TranscriptRef, TranscriptTail, recordOf } from "./tail.ts";
 import { READING, type ReadState, type TimelineEntry, brief, storage, timelineOf, utf8 } from "./transcript.ts";
 
 /// The transcripts whose reading is kept in memory, the most recently read last (a reader's heap is small: one's reading
@@ -59,12 +59,13 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
   if (had === null && dir !== null) {
     try {
       const v = JSON.parse(readFileSync(fileOf(dir, path), "utf8")) as Marked;
-      if (v.reading === READING && v.state.path === path) {
+      if (v.reading === READING && v.state.path === path && (v.state.runtime ?? runtime) === runtime) {
         had = v;
         onDisk.set(path, v.state.offset);
       }
     } catch {}
   }
+  if (had !== null && (had.state.runtime ?? runtime) !== runtime) had = null;
   const tail = had === null ? new TranscriptTail(runtime, path, null, false, true) : TranscriptTail.from(runtime, had.state, had.marks);
   tail.read();
   const now: Marked = { reading: READING, state: tail.snapshot(), marks: tail.marks };
@@ -90,9 +91,9 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
 
 /// A session's transcripts read as one (those of the runtime sessions it ran in before first): each one's reading, read
 /// on to where it is written now.
-export function chainOf(runtime: RuntimeKind, paths: string[], dir: string | null): Marked[] {
-  if (unpacked !== null && !paths.includes(unpacked.path)) unpacked = null;
-  return paths.map((path) => markedOf(runtime, path, dir));
+export function chainOf(runtime: RuntimeKind, paths: TranscriptRef[], dir: string | null): Marked[] {
+  if (unpacked !== null && !paths.some((ref) => (typeof ref === "string" ? ref : ref.path) === unpacked!.path)) unpacked = null;
+  return paths.map((ref) => typeof ref === "string" ? markedOf(runtime, ref, dir) : markedOf(ref.runtime, ref.path, dir));
 }
 
 /// How many entries a chain of transcripts has.
@@ -100,7 +101,7 @@ export const lengthOf = (chain: Marked[]): number => chain.reduce((n, m) => n + 
 
 /// Where the reading of a chain of transcripts stands now (read/tail.ts `snapshot`): what the live view of a session
 /// goes on from on the main thread, which then reads none of what came before (sessions/live.ts).
-export function stateOf(runtime: RuntimeKind, paths: string[], dir: string | null): TailState[] {
+export function stateOf(runtime: RuntimeKind, paths: TranscriptRef[], dir: string | null): TailState[] {
   return chainOf(runtime, paths, dir).map((m) => m.state);
 }
 
@@ -116,7 +117,7 @@ export function entriesOf(runtime: RuntimeKind, chain: Marked[], from: number, t
   for (const m of chain) {
     const [a, b] = [Math.max(from, first), Math.min(to, first + m.state.count)];
     if (a < b) {
-      const got = readBetween(runtime, m, a - first, b - first, read);
+      const got = readBetween(m.state.runtime ?? runtime, m, a - first, b - first, read);
       for (const e of got) entries.push(inBrief ? brief(e) : e);
       if (got.length < b - a) break;
     }

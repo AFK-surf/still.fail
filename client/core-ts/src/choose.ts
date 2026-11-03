@@ -542,7 +542,12 @@ export class Choose implements Owner {
         const pinned = get(s, "profilePinned") === true;
         const value = { model: text(get(s, "model")), runtime: get(s, "runtime") ?? null, effort: text(get(s, "effort")), fast: get(s, "fast") ?? null, context: contextOf(get(s, "context")), profile: pinned ? text(get(s, "profile")) : null };
         const current = isObject(agent.account) ? agent.account : null;
-        return [arr(agent.choices), value, current, true, false, arr(agent.profiles).length];
+        const ov = overview();
+        const switchable = get(ov, "sessionRuntimeChange") === true;
+        const scope = ofAddress(station);
+        const stationView = arr(this.#env.store.get({ topic: "stations", scope })).find((s) => s.id === stationId(station));
+        const available = servingIn(ov, scope, get(stationView, "joined") === true);
+        return [switchable ? models(available, now) : arr(agent.choices), value, current, !switchable, false, arr(agent.profiles).length];
       }
     }
   }
@@ -661,9 +666,9 @@ export class Choose implements Owner {
     const who = drafted !== undefined && typeof drafted.name === "string" ? drafted.name.split("@")[0] : t("core-logic.choose.account");
     const whoLevel = dropped ? "amber" : profile === null && kept === null ? low : null;
     const currentName = typeof get(current, "name") === "string" ? current.name : "";
-    const autoNote = current !== null && kept === null ? t("core-logic.choose.account.now", { name: currentName }) : t("core-logic.choose.account.auto_note");
+    const autoNote = current !== null && kept === null && on === value.runtime ? t("core-logic.choose.account.now", { name: currentName }) : t("core-logic.choose.account.auto_note");
     // A chat's account picked again now (`pick.repick`), beside 自动: when another could take it.
-    const repick = current !== null && runnable > 1 ? t("core-logic.choose.account.repick") : null;
+    const repick = current !== null && runnable > 1 && on === value.runtime ? t("core-logic.choose.account.repick") : null;
     const optionName = option !== undefined && typeof option.name === "string" ? option.name : null;
     const nameOf = (x: string | null): string | null => {
       if (x === null) return null;
@@ -895,6 +900,7 @@ export class Choose implements Owner {
         break;
       case "session": {
         const params: J = { station, key: o.key, model: next.model, effort: next.effort, profile: next.profile };
+        if (next.runtime !== v.value.runtime) params.runtime = next.runtime;
         if (v.fastAvailable === true) params.fast = next.fast;
         if (arr(v.contexts).length > 0) params.context = next.context;
         const op = ops.request("session.settings", params);

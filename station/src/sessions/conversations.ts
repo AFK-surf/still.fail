@@ -212,6 +212,7 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
 
 /// chat_post: a message to one of the session's conversations, maybe with files and a card, maybe ending its turn.
 export async function chatPost(hub: Hub, key: string, args: Args): Promise<string> {
+  const identity = actorOf(hub, key)?.messageIdentity() ?? undefined;
   const { store } = hub;
   if (args.withdraw !== undefined) {
     if (Object.keys(args).some((k) => k !== "to" && k !== "withdraw")) throw new Error("withdraw uses only to and withdraw; post updates and record your ending separately");
@@ -301,7 +302,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
         text = kept;
       }
     } else posted = await chat.post(here, text, files, card);
-    [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card });
+    [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card, agentIdentity: identity });
   }
   const offered = card !== null ? `${cardSaid(card)} Card message ts: ${posted}.` : "";
   hub.shared(thread.thread.id, n, key, text);
@@ -493,6 +494,7 @@ export function slackConnectOf(hub: Hub, key: string, bot: string | null): strin
 /// threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own.
 export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null, bot: string | null = null): Promise<string> {
   const { store } = hub;
+  const identity = actorOf(hub, key)?.messageIdentity() ?? undefined;
   if (!isSlackMethod(method)) throw new Error(`not a Slack method: ${JSON.stringify(method)}`);
   if (["admin.", "apps.", "oauth."].some((p) => method.startsWith(p)) || method === "auth.revoke") throw new Error(`${method} is not for agents: it manages the Slack app itself`);
   const connect = via ?? slackConnectOf(hub, key, bot);
@@ -523,7 +525,7 @@ export async function slackApi(hub: Hub, key: string, method: string, params: Re
       const thread = store.openThread(surface, channel, root, null, key);
       if (store.joinThread(thread.id, key, connect)) log.info("hub", "session took part in a thread through slack_api", { session: key, channel, threadTs: root, method });
       if (resultTs !== null && method === "chat.postMessage") {
-        const [n] = store.insertMessage({ thread: thread.id, ts: resultTs, authorKind: "agent", author: key, text: postedText });
+        const [n] = store.insertMessage({ thread: thread.id, ts: resultTs, authorKind: "agent", author: key, text: postedText, agentIdentity: identity });
         hub.shared(thread.id, n, key, postedText);
       }
     }

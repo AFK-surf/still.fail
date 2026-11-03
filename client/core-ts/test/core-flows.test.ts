@@ -931,12 +931,13 @@ test("the profiles topic gives the app each station once when it has two copies"
 
 /// A core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex (core/tests.rs
 /// `choosing_core`); `speed`: its session on Codex with `fast` as given, p3 offering `fast` as `profileFast`.
-async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null) {
+async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null, switchRuntime = false) {
   const s = (key: string) => (speed ? { ...session(key), runtime: "codex", model: "gpt-6-astra", profile: "p3", fast: sessionFast } : session(key));
   return started({
     ...base(),
     "GET /overview": {
       ...overview,
+      sessionRuntimeChange: switchRuntime,
       profiles: [
         profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], false, 10),
         profile("p2", "claude", ["claude-opus-5-5"], true, 80),
@@ -1169,6 +1170,22 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   await assert.rejects(ask(host, again, ui, 9, "newChat.pick", { model: "x" }));
   await assert.rejects(ask(host, again, ui, 10, "pick.set", { station: "ws/st", of: "nothing" }));
   again.close();
+});
+
+test("a chat can switch runtime through its model control when its station supports it", async () => {
+  const { host, core } = await choosing(false, false, null, true);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).runtimeFixed, false);
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", model: "gpt-6-astra", runtime: "codex" });
+  apply(host, values);
+  assert.equal(v(values, 1).draft.runtime, "codex");
+  await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "session:k1" });
+  assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ runtime: "codex", model: "gpt-6-astra", effort: null, profile: null }]);
+  core.close();
 });
 
 test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", async () => {

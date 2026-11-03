@@ -160,6 +160,7 @@ export async function fromPeer(hub: Hub, peer: string, request: Json, ws: string
 /// `targets`. A letter (rows.ts Letter) is kept apart from what is said there and posted nowhere, not even in a Slack
 /// thread: only the first message of a chat an agent opened (`opened`) is said in it. Its address.
 export async function postFrom(hub: Hub, thread: SessionThread, author: string, title: string, link: string | null, text: string, targets: string[], given: Attachment[] = [], opened = false): Promise<string> {
+  const identity = hub.actors.get(author)?.messageIdentity() ?? undefined;
   const row = thread.thread;
   let said = `${header(row.surface, title, link, opened)}\n\n${text}`;
   const files = await keep(given, thumbsDir(hub.config().dataDir));
@@ -182,7 +183,7 @@ export async function postFrom(hub: Hub, thread: SessionThread, author: string, 
   }
   const hearing = targets.filter((t) => t !== author);
   if (opened) {
-    const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files });
+    const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files, agentIdentity: identity });
     hub.deliver(row.id, n, hearing, said);
   } else {
     // (in the chat's own log of letters, not among what is said in it: store/schema.ts LETTERS)

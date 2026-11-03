@@ -270,7 +270,7 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
         name: model !== null ? format.agentLabel(model, str(get(identity, "effort"))) : (str(get(session, "agentText")) ?? saidName ?? "agent"),
         agent: agent ? author : null,
         maker: model !== null ? present.maker(model) : session !== undefined ? (session.maker ?? null) : present.maker(said),
-        runtime: get(session, "runtime") ?? str(m.authorRuntime) ?? null,
+        runtime: str(get(identity, "runtime")) ?? str(m.authorRuntime) ?? get(session, "runtime") ?? null,
       };
     }
   } else if (kind === "ember" || kind === "stillfail") {

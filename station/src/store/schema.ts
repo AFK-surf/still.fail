@@ -318,11 +318,13 @@ CREATE TABLE IF NOT EXISTS runtime_sessions (
   id TEXT NOT NULL,
   profile TEXT,
   at INTEGER NOT NULL,
+  runtime TEXT,
   PRIMARY KEY (session_key, id)
 );
 -- The session that went on with a runtime's session, by its id (rows.ts SESSION_OF_RUNTIME: a machine's session gone
 -- on with, Codex's fast mode).
 CREATE INDEX IF NOT EXISTS runtime_sessions_by_id ON runtime_sessions (id);
+CREATE INDEX IF NOT EXISTS runtime_sessions_ordered ON runtime_sessions (session_key, at);
 CREATE INDEX IF NOT EXISTS sessions_by_runtime_id ON sessions (runtime_session_id) WHERE runtime_session_id IS NOT NULL;
 -- How far each transcript has been read for it.
 CREATE TABLE IF NOT EXISTS usage_files (
@@ -420,6 +422,13 @@ const has = (db: DatabaseSync, table: string, column: string): boolean =>
 
 /// add_archive_columns: columns archiving came with, added to a database made before them. When they come, each
 /// session's first chat on the page is taken as its own, and chats of sessions archived then as archived with them.
+/// Older records all belong to the session's original runtime; record that before it can be changed.
+export function addRuntimeSessionRuntime(db: DatabaseSync): void {
+  if (has(db, "runtime_sessions", "runtime")) return;
+  db.exec("ALTER TABLE runtime_sessions ADD COLUMN runtime TEXT");
+  db.exec("UPDATE runtime_sessions SET runtime = (SELECT runtime FROM sessions WHERE sessions.key = runtime_sessions.session_key)");
+}
+
 export function addArchiveColumns(db: DatabaseSync): void {
   for (const [column, kind] of [["archived_by", "TEXT"], ["shown_at", "INTEGER"], ["cwd", "TEXT"], ["fast", "INTEGER"], ["afresh", "INTEGER"], ["context", "INTEGER"]]) {
     if (!has(db, "sessions", column!)) db.exec(`ALTER TABLE sessions ADD COLUMN ${column} ${kind}`);

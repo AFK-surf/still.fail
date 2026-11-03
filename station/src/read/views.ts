@@ -710,6 +710,7 @@ export function letters(station: Store, _viewer: Viewer, thread: number, params:
 export function entryViews(api: Api, thread: number, entries: EntryRow[]): Json[] {
   const names = authorNames(api, thread);
   const sessions = new Map<string, SessionRow | null>();
+  const origins = new Map<string, string | null>();
   return entries.map((e) => {
     const v = entryJson(e);
     v.authorName = names(e.authorKind, e.author);
@@ -719,7 +720,11 @@ export function entryViews(api: Api, thread: number, entries: EntryRow[]): Json[
       const session = sessions.get(e.author)!;
       if (session !== null) {
         if (session.model !== null) v.authorModel = session.model;
-        v.authorRuntime = session.runtime;
+        if (typeof e.agentIdentity?.runtime === "string") v.authorRuntime = e.agentIdentity.runtime;
+        else {
+          if (!origins.has(e.author)) origins.set(e.author, store.originalRuntime(api.store, e.author));
+          v.authorRuntime = origins.get(e.author) ?? session.runtime;
+        }
       }
     }
     declaredView(v, e.declared);
