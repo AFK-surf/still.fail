@@ -64,7 +64,8 @@ const HISTORY_SLICE_MS = 8;
 const HISTORY_SESSION_GROUP = 32;
 /// A session's detail as the device reads it: without its turns. Its summary says how many it had, how long they ran and
 /// its latest (db/account.ts `counted`), what its every turn was read for; a station from before lists them all.
-const sessionPath = (key: string) => `/sessions/${encode(key)}?turns=0`;
+/// And its jobs that may matter now (`jobs=now`: those up, and its latest), what its list shows (jobs.ts `isCurrent`).
+const sessionPath = (key: string) => `/sessions/${encode(key)}?turns=0&jobs=now`;
 
 export const RECHECKING = "等它回来确认";
 /// The station's events that change what a search of it finds.

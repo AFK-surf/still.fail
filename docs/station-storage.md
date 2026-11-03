@@ -290,7 +290,8 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   `?turns=0`: how many turns it had and how long the ended ones ran are its
   summary's `turns` and `workMs`, kept as each turn ends from when the station
   began to keep it; `workMs` is null for a session with a turn that ended
-  before, which shows its turns alone). `GET /sessions` lists shown sessions;
+  before, which shows its turns alone); `?jobs=now` only its latest 50 jobs and
+  those still up. `GET /sessions` lists shown sessions;
   `?archived=1` lists the archived ones.
 
 ### The sidebar

@@ -118,7 +118,7 @@ export function stationHost(answers: Answers) {
     let key = `${req.method} ${path.replace("/admin/api", "")}`;
     // A session's detail with its latest turns alone (`?turns=`): as a station from before, which lists them all, unless
     // the test answers it as asked.
-    if (!(key in answers) && /^GET \/sessions\/[^/?]+\?turns=\d+$/.test(key)) key = key.split("?")[0]!;
+    if (!(key in answers) && /^GET \/sessions\/[^/?]+\?turns=\d+(&jobs=now)?$/.test(key)) key = key.split("?")[0]!;
     if (key in answers) return answers[key] instanceof Status ? jsonResponse((answers[key] as Status).code, (answers[key] as Status).body) : jsonResponse(200, answers[key]);
     if (path.startsWith("/admin/api/threads/") && path.includes("/entries")) return jsonResponse(200, { last: 0, entries: [] });
     return jsonResponse(404, { error: "no" });

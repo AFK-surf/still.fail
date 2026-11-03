@@ -785,6 +785,20 @@ export function upJobs(s: Store): JobRow[] {
   return all(s, rows.JOBS_UP).map(toJob);
 }
 
+/// How many of a session's latest jobs its detail lists for a device (`?jobs=now`, `jobsNow`).
+export const JOBS_NOW = 50;
+/// A session's latest jobs by when they were made (the index on their session, from its end), and those of it still up
+/// (running, or a service being started again: by the index of those up): what a device's list of them shows, those
+/// that matter now (client/core-ts jobs.ts `isCurrent`). Its every job was read for it, with each one's notices and
+/// log: 378 of one session on ccvm (2026-11-03).
+export const LATEST_JOBS = "SELECT * FROM jobs INDEXED BY jobs_by_session WHERE session_key = ? ORDER BY rowid DESC LIMIT ?";
+export const UP_JOBS_OF = "SELECT * FROM jobs INDEXED BY jobs_up WHERE state = 'running' AND session_key = ?1 UNION ALL SELECT * FROM jobs INDEXED BY jobs_up WHERE state = 'exited' AND port IS NOT NULL AND session_key = ?1";
+export function jobsNow(s: Store, session: string): JobRow[] {
+  const byId = new Map<string, Json>();
+  for (const r of [...all(s, LATEST_JOBS, session, JOBS_NOW), ...all(s, UP_JOBS_OF, session)]) byId.set(r.id, r);
+  return [...byId.values()].sort((a, b) => b.started_at - a.started_at).map(toJob);
+}
+
 /// A session's jobs (all sessions' with null), newest first.
 export function listJobs(s: Store, session: string | null): JobRow[] {
   return (session === null ? all(s, "SELECT * FROM jobs ORDER BY started_at DESC") : all(s, SESSION_JOBS, session)).map(toJob);
