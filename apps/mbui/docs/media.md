@@ -35,7 +35,10 @@ Rendering uses the Mac offscreen host. System keyboards, dialogs and native web 
 use a real system capture for a scene that needs them. Films fail when a frame needs an image that cannot be decoded or
 a native view is visible, instead of silently omitting it. A failed image no longer in the frame does not stop export.
 When deliberately filming only the parts mbui draws, set
-`MBUI_FILM_ALLOW_INCOMPLETE=1`; this choice is recorded in the scene metadata. Images that are still loading can be
+`MBUI_FILM_ALLOW_INCOMPLETE=1`; this choice is recorded in the scene metadata. A scene that breaks the theme's corner
+rule fails with each fault named; to show such a frame anyway (the before of a change to the rule or to a corner), set
+`MBUI_FILM_ALLOW_CORNER_FAULTS=1`, which still names every fault and is recorded too, rather than patching the checks
+and building another renderer. Images that are still loading can be
 filmed as loading; use the preparation script and `image_ready SRC` if they must be ready before filming begins.
 `docs/figures.md` describes building reusable graphics.
 
