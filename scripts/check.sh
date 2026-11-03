@@ -109,7 +109,13 @@ running() {
 }
 # Stopped (CI's time up, ^C): which steps were still running, and where each had got to, said before it ends (a
 # check stopped after 10 minutes said only the last step done, not the one it waited for: 39468530573).
-trap 'echo "stopped; still running:"; running tail; exit 1' INT TERM
+# And the test files still running under it, how long each had run: a step's output says only the tests that ended, and
+# the one that hung never does (the station's tests stopped at 5 minutes, feat/outflow-tailcat, 41570711413).
+below() { for c in $(pgrep -P "$1" 2>/dev/null); do echo "$c"; below "$c"; done; }
+open_tests() {
+  for p in $(below $$); do ps -o etime= -o args= -p "$p" 2>/dev/null; done | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") == 1' | cut -c1-200 | sed 's/^/  ◦ /'
+}
+trap 'echo "stopped; still running:"; running tail; open_tests; exit 1' INT TERM
 # Says each step, in order, as it is done; every minute spent waiting, the ones still running.
 report() {
   i=0
