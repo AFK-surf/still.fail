@@ -334,7 +334,10 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
   log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone, adbd: info.adbd, pair: info.pair, connect: info.connect });
   // adbd's port changing (Wireless debugging turned off and on) is said by phones from 2026-10-26 on.
   const moved = before !== undefined && before.connect !== null && info.connect !== null && before.connect !== info.connect;
-  if (before === undefined || before.adbd !== info.adbd || moved || share.state.adb === "failed" || share.state.adb === "missing") {
+  // A phone paired with its own adbd offers again without changing its ports. Retry if it was unpaired, and remember
+  // the offer if the previous connection is still under way (its unpaired refusal may arrive after the new offer).
+  const waitingForPhone = share.state.adb === "unpaired" || (share.state.adb === "connecting" && share.connecting !== null);
+  if (before === undefined || before.adbd !== info.adbd || moved || share.state.adb === "failed" || share.state.adb === "missing" || waitingForPhone) {
     share.failures = 0;
     void connect(shares, share).catch(() => {});
   }
