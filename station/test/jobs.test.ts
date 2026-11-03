@@ -140,6 +140,28 @@ function restarted(before: Rig): Rig {
 }
 
 describe("jobs", { concurrency: true }, () => {
+  test("starting a job checks the running limit without reading the session's job history", async () => {
+    const r = new Rig();
+    const recorded = (id: string, sessionKey: string, state: string) => ({ id, sessionKey, name: id,
+      command: "true", cwd: r.work, port: null, token: id, state, pgid: null, exitCode: 0,
+      startedAt: 1, endedAt: state === "running" ? null : 2, restarts: 0, log: "/dev/null", watch: false });
+    for (let i = 0; i < 200; i++) r.store.insertJob(recorded(`old-${i}`, "s1", "exited"));
+    const list = r.store.listJobs;
+    r.store.listJobs = function (session) {
+      if (session === "s1") throw new Error("job history was read");
+      return list.call(this, session);
+    };
+    try {
+      const job = r.jobs.start("s1", "run", FOREVER, r.work, null, false);
+      await r.jobs.stop(job.id);
+      for (let i = 0; i < 20; i++) r.store.insertJob(recorded(`active-${i}`, "s1", "running"));
+      r.store.insertJob(recorded("other", "s2", "running"));
+      assert.throws(() => r.jobs.start("s1", "over", FOREVER, r.work, null, false), /20 jobs already/);
+    } finally {
+      r.store.listJobs = list;
+    }
+  });
+
   test("a job runs apart, its output logged and its agent told how it ended", async () => {
     const r = new Rig();
     const job = r.jobs.start("s1", "build", "echo compiling; echo done >&2; exit 3", r.work, null, false);
