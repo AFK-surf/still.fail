@@ -298,23 +298,54 @@ pub fn settings_search_reset() -> Unit {
 }
 
 ///|
-/// The same field over the list in either frame. The clear button has its own accessible name and press room.
+/// The same field over the list in either frame, as the chats' search over their list is (search.mbt
+/// search_field_ground): a round ground of its own with the search mark, as tall as the theme's band, no outline.
+/// While it holds words, clearing them is a press at its end, inside it.
 pub fn settings_search(c : @ui.Ctx) -> Unit {
-  c.box(style=settings_search_row, fn() {
+  let t = @sf.theme()
+  let l = t.chat_list
+  let (size, line) = c.text_size(Ui)
+  // (its end's room the clear press's while it holds words: round in the round ground's end, concentric)
+  let held = settings_search_field.text() != ""
+  let end = if held { @sf.room_of(0.0) } else { @sf.room_of(l.band_pad) }
+  c.box(style=settings_search_ground.then(@ui.style(h=Fixed(l.band_h), pl=@sf.room_of(l.band_pad), pr=end)), fn() {
+    @sf.icon(c, "search", size=l.band_icon, color=t.p.muted) |> ignore
     c.box(style=settings_search_grow, fn() {
-      @sf.input(c, "settings/search", placeholder=@sf.t("web-pages.settings.search"), field=settings_search_field) |> ignore
-    }) |> ignore
-    if settings_search_field.text() != "" &&
-      @sf.icon_button(c, "close", key="settings/search/clear", round=true, label=@sf.t("android-misc.drive.pick.filterClear")) {
+      c.editor(
+        "settings/search",
+        placeholder=@sf.t("web-pages.settings.search"),
+        font_size=size,
+        max_lines=1,
+        plain=true,
+        line~,
+        color=t.p.text,
+        placeholder_color=t.p.subtle,
+        caret_color=t.p.accent,
+        field=settings_search_field,
+      )
+      |> ignore
+    })
+    |> ignore
+    if held &&
+      @sf.icon_button(
+        c,
+        "close",
+        key="settings/search/clear",
+        size=l.band_h,
+        icon_size=l.band_icon,
+        round=true,
+        label=@sf.t("android-misc.drive.pick.filterClear"),
+      ) {
       settings_search_field.set("")
       settings_search_field.focus()
     }
-  }) |> ignore
+  })
+  |> ignore
 }
 
 ///|
-// kept across runs: values (no field changes)
-let settings_search_row : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
+// kept across runs: a value (no field of it changes)
+let settings_search_ground : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter radius=Full").then(@ui.style(bg=@sf.search_ground))
 
 ///|
 // kept across runs: a value (no field of it changes)
