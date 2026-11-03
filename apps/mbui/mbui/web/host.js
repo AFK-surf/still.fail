@@ -2233,6 +2233,53 @@
   const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab', 'grabbing', 'crosshair', 'not-allowed'];
   H.setCursor = (k) => { canvas.style.cursor = cursors[k] || 'default'; };
   H.clipboardSet = (s) => { navigator.clipboard?.writeText(s).catch(() => {}); };
+  // The floating text menu over words picked by a finger (@hostapi.text_menu: a field's, or the page's words a finger
+  // held, as Android's ActionMode and iOS's edit menu): a small bar of the page's own over the rectangle given (under
+  // it where there is no room over it), offering what `can` says (1 cut, 2 copy, 4 paste, 8 select all), each done as
+  // the native hosts' menus do (the field's keys 14, 13, 12; the clipboard's words put in as typed), in the
+  // browser's language; put away when not shown, and as one of it is pressed.
+  let menuEl = null;
+  H.textMenu = (shown, x, y, w, h, can) => {
+    if (!shown) {
+      if (menuEl) { menuEl.remove(); menuEl = null; }
+      return;
+    }
+    if (!menuEl) {
+      menuEl = document.createElement('div');
+      menuEl.style.cssText = 'position:fixed;z-index:10;display:flex;gap:2px;padding:4px;border-radius:999px;' +
+        'background:#2c2c2e;box-shadow:0 4px 16px rgba(0,0,0,.25);font:500 14px system-ui,sans-serif;' +
+        'transform:translate(-50%,0);touch-action:none;user-select:none;-webkit-user-select:none';
+      for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'mouseup']) {
+        menuEl.addEventListener(ev, (e) => e.stopPropagation());
+      }
+      document.body.append(menuEl);
+    }
+    const zh = (navigator.language || '').toLowerCase().startsWith('zh');
+    const items = [
+      [1, zh ? '剪切' : 'Cut', () => cb.key(14, 0)],
+      [2, zh ? '复制' : 'Copy', () => cb.key(13, 0)],
+      [4, zh ? '粘贴' : 'Paste', () => navigator.clipboard?.readText().then((t) => { if (t) { cb.text(0, t, 0, 0); H.requestFrame(); } }).catch(() => {})],
+      [8, zh ? '全选' : 'Select all', () => cb.key(12, 0)],
+    ];
+    menuEl.replaceChildren();
+    for (const [bit, label, act] of items) {
+      if (!(can & bit)) continue;
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = 'border:0;background:none;color:#fff;font:inherit;padding:6px 12px;border-radius:999px;cursor:pointer';
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (menuEl) { menuEl.remove(); menuEl = null; }
+        act();
+        H.requestFrame();
+      });
+      menuEl.append(b);
+    }
+    const r = canvas.getBoundingClientRect();
+    const above = y - 48;
+    menuEl.style.left = (r.left + x + w / 2) + 'px';
+    menuEl.style.top = (r.top + (above >= 8 ? above : y + h + 12)) + 'px';
+  };
   // the word around a UTF-16 offset as the browser finds words (Intl.Segmenter: a dictionary's in Chinese), start × 2³²
   // + end; -1 without one
   const words = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'word' }) : null;

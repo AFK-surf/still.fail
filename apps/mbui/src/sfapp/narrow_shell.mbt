@@ -185,11 +185,7 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Un
     })
     @motion.scope(c, whole, bottom=true)
   }
-  if stack_by_finger() {
-    built()
-  } else {
-    c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), built)
-  }
+  c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), built)
   // what is the page's own and takes back before it (said with it, in its island: what it reads is what the page
   // writes): the player sideways turned upright first; words picked in a chat, a link's menu, let go first (pick.mbt)
   play_back(c)

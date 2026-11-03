@@ -4,8 +4,8 @@
 // list made by its key it is in and its place in that row: View::row_place), found where the tree lays it out and shows
 // it now (tree_sels: what holds it cutting it, as big as it is drawn), never as the frame before painted it; what of it
 // is picked drawn under its words (View::runs_picked, as each is made and as what is picked changes: picked_said). Its
-// plain words are picked by none, as an old view's plain words are not (Ctx::text). Only a mouse's: a finger's press
-// is what it presses.
+// plain words are picked by none, as an old view's plain words are not (Ctx::text). A finger's press is what it
+// presses; a finger held still on them a long press's time is the selection's (tree_finger_down, finger_select.mbt).
 
 ///|
 /// How many window's trees were made (set_view_app): the one now's number, what its paragraphs are known by.
@@ -63,10 +63,10 @@ fn words_picked_span(v : @view.View) -> @view.Live[(Int, Int)] {
 /// (words_picked), drawn (not clear, not laid out nowhere), taking input (none under a modal layer over it), each with
 /// the part of it seen (what holds it cutting it: Tree::seen_bounds), laid out in its own terms as it draws them
 /// (view_runs_laid), as big as it is drawn; none with a finger's pointing.
-fn tree_sels() -> Array[SelTarget] {
+fn tree_sels(finger? : Bool = false) -> Array[SelTarget] {
   tree_sels_made.val = tree_sels_made.val + 1
   let out : Array[SelTarget] = []
-  guard pointing() is Mouse else { return out }
+  guard pointing() is Mouse || picked.finger || finger else { return out }
   match view_app.val {
     Some(tree) => {
       // (laid out as of the moment it is asked: what an event finds)
@@ -139,8 +139,8 @@ fn sels_shown() -> Array[SelTarget] {
 
 ///|
 /// The paragraph of the window's tree that can be picked under (x, y), the topmost (tree_sels), if one is.
-fn tree_sel_at(x : Double, y : Double) -> SelTarget? {
-  let sels = tree_sels()
+fn tree_sel_at(x : Double, y : Double, finger? : Bool = false) -> SelTarget? {
+  let sels = tree_sels(finger~)
   let mut k = sels.length() - 1
   while k >= 0 {
     let t = sels[k]
@@ -240,4 +240,59 @@ fn tree_edge_stop() -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// A finger held on words of the window's tree that are picked with the pointer (words_picked): what is set going for
+/// its hold's moment (called off as the finger moves past the slop, is let go or called off, or another goes down).
+// kept across runs: let go as a run begins (view_forget's tree_finger_off)
+let tree_finger_hold : Ref[(() -> Unit)?] = Ref(None)
+
+///|
+/// A finger down at (x, y) at `at` on the window's tree: where words of its that are picked with the pointer are
+/// there, at a long press's moment after (the tree's timeline: whatever frames are drawn), held still on them all the
+/// while and nothing of the tree's having taken it for its own hold, what held it lets go of it (a column scrolled by
+/// it: called off) and it is the old frame's from then, the word there picked (Ctx::finger_pick), slid on from and let
+/// go as an old view's words a finger held are (finger_select.mbt).
+fn tree_finger_down(tree : @view.Tree, x : Double, y : Double, at : Double) -> Unit {
+  tree_finger_off()
+  // (what is under it looked for at the hold's moment alone, as the tree is then: nothing laid out for it as it goes
+  // down)
+  guard pointing() is Finger else { return }
+  // (this press's: downs_made counts it once the tree has routed it, pointer_in_now)
+  let down = downs_made.val + 1
+  tree_finger_hold.val = Some(
+    tree
+    .root()
+    .at_moment(at + long_press_ms, fn() {
+      tree_finger_hold.val = None
+      if downs_made.val != down {
+        return
+      }
+      match view_held.val {
+        // (a column it scrolls held it: called off, as a hold handed on calls its cover's off)
+        Some(Dragging(id)) if tree.claims_scroll(id) =>
+          tree.drag_at(id, Off, x, y, view_moment(), finger=view_fingers[0]) |> ignore
+        Some(Nowhere) => ()
+        // (a node's own press, its own hold: its)
+        _ => return
+      }
+      guard tree_sel_at(x, y, finger=true) is Some(t) else { return }
+      view_down.val = None
+      view_held.val = Some(Old(-1, None))
+      view_input_went(-1)
+      old_pointer_now(0, x, y, 0, 0, at)
+      g().finger_pick(t, x, y)
+    }),
+  )
+}
+
+///|
+/// What a finger's hold on words of the window's tree set going called off (tree_finger_down).
+fn tree_finger_off() -> Unit {
+  match tree_finger_hold.val {
+    Some(stop) => stop()
+    None => ()
+  }
+  tree_finger_hold.val = None
 }
