@@ -513,7 +513,6 @@ pub fn row_mark(@ui.Ctx, String, String) -> Unit
 
 pub let row_more : @ui.Style
 
-pub fn rows_frame(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
 

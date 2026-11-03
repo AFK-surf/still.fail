@@ -51,9 +51,10 @@ test "a row's menu at each width and with either hand: held by a finger, right c
     t.frame()
     // not opened by the hold
     assert_false(app.nav.top() is Chat({ title: "夜里的构建又失败了", .. }), msg=at)
-    for item in ["重命名", "复制会话链接", "复制 session 文件路径"] {
+    for item in ["重命名", "复制会话链接"] {
       assert_true(t.find(item) is Some(_), msg="\{at}: \{item}")
     }
+    assert_true(t.find("复制 session 文件路径") is None, msg=at)
     // 归档 with the chat's own state, not last (a sheet's last row is where a thumb going home lands)
     let (_, archive_y) = t.find("归档").unwrap()
     let (_, link_y) = t.find("复制会话链接").unwrap()
