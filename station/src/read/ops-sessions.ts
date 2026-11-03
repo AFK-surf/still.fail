@@ -33,7 +33,7 @@ export const sessionOps: Record<string, ReadOp> = {
         return null;
       }
     }),
-  openJobs: (s, a) => openJobs(s, a.viewer, a.lang),
+  openJobs: (s, a) => openJobs(s, a.viewer, a.lang, a.chats !== false),
   job: (s, a) => job(s, a.id),
   jobLog: (s, a) => jobLog(s, a.id, a.lines),
 };

@@ -173,7 +173,7 @@ test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_readin
     "[对话](https://still.fail/o/ws1/st1/c-1) https://still.fail/w/ws1/s/st1/screen/desktop [https://github.com/a/b/pull/1](https://github.com/a/b/pull/1)",
   ];
   const digest = createHash("sha256").update(JSON.stringify(texts.map(parse))).digest("hex").slice(0, 16);
-  assert.equal(`${MD_READING}:${digest}`, "8:b80ce24d3a263643", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
+  assert.equal(`${MD_READING}:${digest}`, "9:b80ce24d3a263643", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
 });
 
 test("a_link_or_picture_alone_on_its_line_is_a_paragraph_of_its_own_with_no_blank_line_round_it", () => {
@@ -210,6 +210,29 @@ test("math_leaves_escaped_dollars_code_and_unmatched_inline_delimiters_alone", (
   ]);
   assert.deepEqual(read("| 预测 |\n|---|\n| \\(x^2\\) |"), [
     ["table", [["tr", [["th", ["预测"]]]], ["tr", [["td", [["code", { content: "x^2", math: true }]]]]]], { align: [null], md: "| 预测 |\n| --- |\n| \\(x^2\\) |", csv: "预测\nx^2" }],
+  ]);
+});
+
+test("a_table_splits_its_cells_at_bars_outside_formulas", () => {
+  // as an agent wrote it: an absolute value in a formula, in the head and in a row
+  const text = String.raw`| \(|a|\) | 弹性 |
+|---|---|
+| 全部 | 4.3 |
+| \(|\Delta| \le 0.5\) | 4.1 |`;
+  const cell = (content: string) => ["code", { content, math: true }];
+  assert.deepEqual(read(text), [
+    ["table", [["tr", [["th", [cell("|a|")]], ["th", ["弹性"]]]], ["tr", [["td", ["全部"]], ["td", ["4.3"]]]], ["tr", [["td", [cell(String.raw`|\Delta| \le 0.5`)]], ["td", ["4.1"]]]]], {
+      align: [null, null],
+      md: String.raw`| \(\|a\|\) | 弹性 |
+| --- | --- |
+| 全部 | 4.3 |
+| \(\|\Delta\| \le 0.5\) | 4.1 |`,
+      csv: "|a|,弹性\n全部,4.3\n" + String.raw`|\Delta| \le 0.5,4.1`,
+    }],
+  ]);
+  // a bar outside one, or in one left open, still splits
+  assert.deepEqual(read("| a | b |\n|---|---|\n| \\(x | y |"), [
+    ["table", [["tr", [["th", ["a"]], ["th", ["b"]]]], ["tr", [["td", ["(x"]], ["td", ["y"]]]]], { align: [null, null], md: "| a | b |\n| --- | --- |\n| \\(x | y |", csv: "a,b\n(x,y" }],
   ]);
 });
 

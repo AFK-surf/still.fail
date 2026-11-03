@@ -94,7 +94,7 @@ test "protecting a station keeps its button and label, with the spinner inside a
     assert_true(busy.find("保护") is Some(_), msg=at)
     let (x, y, width, height) = button.rect
     assert_true(busy.drawn_rects().iter().any(fn(r) {
-      r.4 == @sf.theme().p.chip && r.0 <= x && r.1 <= y && r.0 + r.2 >= x + width && r.1 + r.3 >= y + height
+      r.4 == @sf.theme().p.hover && r.0 <= x && r.1 <= y && r.0 + r.2 >= x + width && r.1 + r.3 >= y + height
     }), msg="button ground: \{at}")
     assert_true(busy.drawn_instances().iter().any(fn(i) {
       i[5] == 10.0 && i[0] >= x && i[1] >= y && i[0] + i[2] <= x + width && i[1] + i[3] <= y + height

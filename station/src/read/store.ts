@@ -450,6 +450,14 @@ export function messagesBefore(s: Store, thread: number, n: number | null, limit
 // ── the archive review ──
 
 /// Whether the decision recommended the thread for the archive as it stands now (its last entry then is its last now).
+/// Of `threads`, those the archive review suggested or judged (archive_suggestions, archive_verdicts): what
+/// `archiveSuggested` and `archiveVerdict` say anything of.
+export function reviewedThreads(s: Store, threads: number[]): number[] {
+  const list = JSON.stringify(threads);
+  return all(s, `SELECT thread FROM archive_suggestions WHERE thread IN (SELECT value FROM json_each(?1))
+    UNION SELECT thread FROM archive_verdicts WHERE thread IN (SELECT value FROM json_each(?1))`, list).map((r) => r.thread as number);
+}
+
 export function archiveSuggested(s: Store, thread: number): boolean {
   const version = one(s, "SELECT version FROM archive_suggestions WHERE thread = ?", thread)?.version ?? null;
   return version !== null && version === lastEntry(s, thread);

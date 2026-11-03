@@ -465,6 +465,9 @@ test("open jobs name their chats: the session's own, listed or archived", async 
     const chatOf = (id: string) => open.find((j: any) => j.id === id)?.chat;
     assert.deepEqual([chatOf(a.id)?.id, chatOf(a.id)?.archived], [listed.key, false]);
     assert.deepEqual([chatOf(b.id)?.id, chatOf(b.id)?.archived], [gone.key, true]);
+    // For a device that names them from the sidebar it holds: the jobs alone, no chat made for them.
+    const [, alone] = await r.ask("GET", "/jobs", undefined, [["chats", "0"]]);
+    assert.deepEqual(alone.map((j: any) => [j.id, "chat" in j]).sort(), [[a.id, false], [b.id, false]].sort());
     await r.ask("POST", `/jobs/${a.id}/stop`);
     await r.ask("POST", `/jobs/${b.id}/stop`);
   } finally {

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { AndroidInput, KEYCODES, ScrcpyStream, adbEnv, avcCOf, avccOf, devicesOf, metaOf, nalsOf, panelsOf, shownDevice, sideOf, sizeOf } from "../src/screens/android.ts";
+import { makeScreens } from "../src/screens/source.ts";
+import { AndroidScreens, AndroidInput, KEYCODES, ScrcpyStream, adbEnv, avcCOf, avccOf, devicesOf, metaOf, nalsOf, panelsOf, shownDevice, sideOf, sizeOf } from "../src/screens/android.ts";
 
 const size = { width: 1000, height: 2000 };
 
@@ -123,5 +127,39 @@ test("the video socket's stream, however it is cut", () => {
     for (let at = 0; at < whole.length; at += cut) stream.heard(whole.subarray(at, at + cut));
     assert.deepEqual(sizes, [{ width: 556, height: 1280 }]);
     assert.deepEqual(packets, [[true, false, 0, [1, 2]], [false, true, 500, [3]], [false, false, 533, [4, 5, 6]]]);
+  }
+});
+
+test("an emulator that has not booted yet is listed once it has, adb saying nothing more", { skip: process.platform === "win32" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "android-screens-"));
+  const booted = join(dir, "booted");
+  const adb = join(dir, "adb");
+  writeFileSync(adb, `#!/bin/sh
+case "$*" in
+  track-devices*) printf '0015emulator-5554\\tdevice\\n'; exec sleep 60 ;;
+  *sys.boot_completed*) [ -e "${booted}" ] && echo 1 || echo 0 ;;
+  *ro.serialno*) printf 'EMU\\nsdk\\n16\\nnull\\n' ;;
+  *"emu avd name"*) printf 'pixel\\nOK\\n' ;;
+  *"wm size"*) echo 'Physical size: 1080x2400' ;;
+esac
+`);
+  chmodSync(adb, 0o755);
+  const screens = makeScreens();
+  const androids = new AndroidScreens({ screens, adb: () => adb, file: adb, lookAgain: 20 });
+  const until = async (what: () => boolean) => {
+    for (let i = 0; i < 500 && !what(); i++) await new Promise((r) => setTimeout(r, 10));
+    assert.ok(what());
+  };
+  try {
+    androids.start();
+    await new Promise((r) => setTimeout(r, 200));
+    assert.deepEqual(screens.list(), []);
+    writeFileSync(booted, "");
+    await until(() => screens.list().length === 1);
+    const [s] = screens.list();
+    assert.deepEqual([s!.id, s!.title(), s!.size()], ["android:emulator-5554", "pixel · Android 16", { width: 1080, height: 2400 }]);
+  } finally {
+    androids.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });

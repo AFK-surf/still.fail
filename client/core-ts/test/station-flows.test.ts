@@ -955,7 +955,7 @@ test("jobs_are_put_in_place_from_their_events_and_from_stopping_them", async () 
   await host.time.pass(EVENTS_COALESCE_MS + 100);
   assert.equal(sessionOf(core, "a").jobs[0].state, "running");
   assert.equal(open()[0].chat.id, "7");
-  assert.equal(gets(host, "/admin/api/jobs"), 2);
+  assert.equal(gets(host, "/admin/api/jobs?chats=0"), 2);
   // A new one goes in front of its session's; one listed keeps its chat as it changes.
   push("job", job("j2", "failed"));
   push("job", { ...job("j1", "exited"), restarts: 1 });
@@ -964,7 +964,7 @@ test("jobs_are_put_in_place_from_their_events_and_from_stopping_them", async () 
   assert.deepEqual([jobs[0].id, jobs[1].state], ["j2", "exited"]);
   assert.equal(open()[0].restarts, 1);
   assert.equal(open()[0].chat.id, "7");
-  assert.equal(gets(host, "/admin/api/jobs"), 2);
+  assert.equal(gets(host, "/admin/api/jobs?chats=0"), 2);
   // One that was over, cleared (here or on another device): out of its chat's.
   push("job-removed", { id: "j2", session: "a" });
   await host.time.pass(EVENTS_COALESCE_MS + 100);
@@ -1036,7 +1036,7 @@ test("requests_carry_the_trace_they_are_made_in", async () => {
   for (const [url, parent] of parents) {
     assert.ok(parent.startsWith("00-") && parent.endsWith("-01") && parent.length === 55, `${url}: ${parent}`);
   }
-  const snapshot = ["/events?running=1&views=1&rows=1", "/overview", "/sessions", "/threads", "/chats", "/jobs"].map((p) => parents.find(([u]) => u === `https://stillfail.test/admin/api${p}`)![1]);
+  const snapshot = ["/events?running=1&views=1&rows=1", "/overview", "/sessions", "/threads", "/chats", "/jobs?chats=0"].map((p) => parents.find(([u]) => u === `https://stillfail.test/admin/api${p}`)![1]);
   assert.ok(snapshot.every((p) => p.slice(3, 35) === trace), JSON.stringify(snapshot));
   // Each request is a span of its own.
   assert.equal(new Set(snapshot.map((p) => p.slice(36, 52))).size, snapshot.length);
@@ -2979,7 +2979,7 @@ test("a_core_started_again_takes_its_stations_up_from_the_last_event_kept_and_re
     await host.settle();
     const asked = host.requests.slice(before).map((r) => r.url.replace("https://stillfail.test/admin/api", "")).filter((u) => !u.startsWith("http"));
     assert.ok(asked.some((u) => u.startsWith("/events") && u.includes("since=1a.7")), JSON.stringify(asked));
-    const lists = asked.filter((u) => ["/overview", "/chats", "/sessions", "/threads", "/jobs"].includes(u) || u.startsWith("/changed/"));
+    const lists = asked.filter((u) => ["/overview", "/chats", "/sessions", "/threads", "/jobs?chats=0"].includes(u) || u.startsWith("/changed/"));
     // Told what came after it: nothing read again. Not told so (more than an hour later, the station started again):
     // everything is, as before.
     if (resumes) assert.deepEqual(lists, [], JSON.stringify(asked));

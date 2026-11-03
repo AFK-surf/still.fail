@@ -72,6 +72,9 @@ const sessionPath = (key: string) => `/sessions/${encode(key)}?turns=0&jobs=now`
 
 export const RECHECKING = "等它回来确认";
 /// The station's events that change what a search of it finds.
+/// The station's open jobs, without the chat each is in: named here from the sidebar held (views.ts `longJobs`); a
+/// station from before names them all the same.
+const JOBS = "/jobs?chats=0";
 const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
 /// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
 /// (retold.ts).
@@ -279,7 +282,7 @@ export class StationsSync {
       this.#enqueue(address, "threads", p, Effect.andThen(read({ topic: "threads", station: address }, "/threads"), Effect.sync(() => this.#historyStart(address)))),
       this.#enqueue(address, "chats", p, Effect.andThen(this.#chats(address, ctx, unread), Effect.sync(() => this.openEvents(address, false)))),
       ...this.#archivedChanged(address, ctx),
-      this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, "/jobs")),
+      this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, JOBS)),
       this.#enqueue(address, "footprint", Priority.background, read({ topic: "footprint", station: address }, "/footprint")),
       this.#enqueue(address, "screens", Priority.background, this.#screens(address, ctx)),
       this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address, ctx)),
@@ -1721,7 +1724,7 @@ export class StationsSync {
     const state = get(job, "state");
     const open = state === "running" || (state === "exited" && (get(job, "port") ?? null) !== null);
     // A new one: which chat it is in is the station's to say.
-    if (core.data.putJob(address, job, open)) this.#enqueue(address, "jobs", Priority.shown, this.#read(address, { topic: "jobs", station: address }, "/jobs"));
+    if (core.data.putJob(address, job, open)) this.#enqueue(address, "jobs", Priority.shown, this.#read(address, { topic: "jobs", station: address }, JOBS));
   }
 
   /// A thread's summary into the station's threads, and the details of the sessions taking part. It says how far the

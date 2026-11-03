@@ -400,9 +400,15 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   const need: Json = {};
   const suggested: number[] = [];
   const verdicts: Json = {};
+  // The review's marks of these chats, by its two small tables: a chat's last entry read only where one has any.
+  const ids = own.map((t) => t.thread.id);
+  const reviewed = ids.length === 0 ? new Set<number>() : new Set<number>(store.reviewedThreads(s, ids));
   for (const t of own) {
     const id = t.thread.id;
-    const names = authorNames(api, id);
+    // Who wrote in it, read only where something waits there to be shown with its authors.
+    let known: Names | null = null;
+    const namesOf = () => (known ??= authorNames(api, id));
+    const names = Object.assign((kind: AuthorKind, author: string) => namesOf()(kind, author), { picture: (kind: AuthorKind, author: string) => namesOf().picture?.(kind, author) ?? null });
     const c = cardView(api, id, dismissed, names);
     if (c !== null) card[id] = c;
     else {
@@ -411,6 +417,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
       const n = needView(api, id, agents, dismissed, names);
       if (n !== null) need[id] = n;
     }
+    if (!reviewed.has(id)) continue;
     if (store.archiveSuggested(s, id)) suggested.push(id);
     if (api.reviews) {
       const v = store.archiveVerdict(s, id);

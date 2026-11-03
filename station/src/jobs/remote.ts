@@ -17,7 +17,7 @@ import {
   appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync,
   readSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync, writeSync,
 } from "node:fs";
-import { link, mkdir, open, readFile, readdir, rename, rm, stat } from "node:fs/promises";
+import { link, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
 import { portableComponent, relativeParts } from "../ops/paths.ts";
@@ -1913,9 +1913,9 @@ export class Remote {
           note: "the command changed these synced files on that station; nothing here was changed",
         };
         if (made !== null && made.patch !== "") {
-          mkdirSync(dest, { recursive: true });
+          await mkdir(dest, { recursive: true });
           const file = join(dest, "changes.patch");
-          writeFileSync(file, made.patch);
+          await writeFile(file, made.patch);
           changed.patch = file;
           changed.apply = `review it, then git apply it in ${entry.dir} if wanted`;
         }
