@@ -383,6 +383,8 @@ priv struct RideFrom {
   o_end : Double
   k_to : Double
   k_end : Double
+  up_to : Double
+  up_end : Double
 }
 
 ///|
@@ -466,7 +468,9 @@ fn RideFrom::same(a : RideFrom, b : RideFrom) -> Bool {
   a.o_to == b.o_to &&
   a.o_end == b.o_end &&
   a.k_to == b.k_to &&
-  a.k_end == b.k_end
+  a.k_end == b.k_end &&
+  a.up_to == b.up_to &&
+  a.up_end == b.up_end
 }
 
 ///|
@@ -823,9 +827,9 @@ fn BarModel::open_panel(self : BarModel, open : Bool, at? : Double) -> Unit {
 }
 
 ///|
-/// The notch as drawn: as its place has it, closed as far as the panel is drawn up (fully by half open).
+/// The notch as drawn: as its place has it, closing while the panel opens or a finger lifts the bar.
 fn BarModel::k_now(self : BarModel) -> Double {
-  self.k.x * (1.0 - dclamp(2.0 * self.o.x, 0.0, 1.0))
+  self.k.x * (1.0 - dclamp(2.0 * self.o.x, 0.0, 1.0)) * (1.0 - dclamp(self.up.x, 0.0, 1.0))
 }
 
 ///|
@@ -1092,23 +1096,24 @@ fn notch_at(k : Double) -> (Double, Double) {
 }
 
 ///|
-/// A disc in the notch (令's, its ground under the glass) as the notch is `k_now` open: growing out of the bar's edge as
-/// it opens, there whole once open; `moves`: on its way, as each frame is painted (BarModel::k_painted).
-fn disc_look(c : @ui.Ctx, disc : Int, moves : Bool, k_now : Double) -> Unit {
-  let look = fn(k : Double) {
+/// A disc in the notch (令's, its ground under the glass): growing with the notch, and fading while a finger has the
+/// bar. The notch and its places close along with the bar's rise.
+fn disc_look(c : @ui.Ctx, disc : Int, moves : Bool, k_now : Double, up_now : Double) -> Unit {
+  let look = fn(k : Double, up : Double) {
+    let visible = 1.0 - dclamp(up, 0.0, 1.0)
     if k <= 0.001 {
       // (closed: not there)
       @ui.look(alpha=0.0)
     } else if k < 1.0 {
-      @ui.look(alpha=dmin(1.0, k * 3.0), scale=dmax(0.001, k), dy=lift * (1.0 - k))
+      @ui.look(alpha=dmin(1.0, k * 3.0) * visible, scale=dmax(0.001, k), dy=lift * (1.0 - k))
     } else {
-      @ui.look()
+      @ui.look(alpha=visible)
     }
   }
   if moves {
-    c.look_by(disc, fn() { look(bar.k_painted(@ui.current())) })
-  } else if k_now < 1.0 {
-    c.look(disc, look(k_now))
+    c.look_by(disc, fn() { look(bar.k_painted(@ui.current()), bar.up.value_at(@ui.current().moment())) })
+  } else if k_now < 1.0 || up_now > 0.0 {
+    c.look(disc, look(k_now, up_now))
   }
 }
 
@@ -1314,7 +1319,7 @@ fn bar_action_run(src : Source, ws : Workspace, t : Double) -> Unit {
     Some(told) => told
     None => return
   }
-  if !told.shown || bar.k_at(t) <= 0.9 {
+  if !told.shown || bar.drag >= 0.0 || bar.holds || bar.k_at(t) <= 0.9 {
     return
   }
   let c = @ui.current()
@@ -1405,7 +1410,7 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
   }
   // the notch's icon: another swaps in as the notch stays open (a short scale and fade); closed or none shown, at once
   if told.action != "" && told.action != m_face.val {
-    let k_then = m.k.value_at(at) * (1.0 - dclamp(2.0 * m.o.value_at(at), 0.0, 1.0))
+    let k_then = m.k_at(at)
     if m_face.val == "" || k_then <= 0.001 {
       m_face.val = told.action
       m.icon_was = ""
@@ -1430,6 +1435,9 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
   let w = told.width
   let row_top = bar_row_top(told.sets.length())
   let sliding = m.drag >= 0.0
+  // The bar rises and the notch closes together while a finger has it, returning together on release.
+  m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0, at~)
+  m.up.go(if m.holds || sliding { 1.0 } else { 0.0 }, ball_down, raise_damping, at~)
   if w > 0.0 {
     match m.swap_at(at) {
       Some({ key: Some(key), .. } as s) =>
@@ -1439,10 +1447,14 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
         }
       Some(_) => ()
       None => {
-        let final_cs = bar_centres(w, if notched && !m.mode.get() { 1.0 } else { 0.0 }, items.length())
-        let (goal_x, goal_y) = match bar_finger(told, final_cs, m.drag, m.drag_y) {
-          Some((cx, cy, _, _)) =>
-            (cx + (m.drag - cx) * lean, cy + ((if m.drag_y >= 0.0 { m.drag_y } else { row_top + bar_track / 2.0 }) - cy) * lean)
+        let final_cs = bar_centres(w, m.k_end(), items.length())
+        let now_cs = bar_centres(w, m.k_at(at), items.length())
+        let (goal_x, goal_y) = match bar_finger(told, now_cs, m.drag, m.drag_y) {
+          Some((cx, cy, set, key)) => {
+            // Keep the selected ball with the same place as the notch and its places move.
+            let target_x = if set == told.cur { final_cs[items.search(key).unwrap_or(0)] } else { cx }
+            (target_x + (m.drag - target_x) * lean, cy + ((if m.drag_y >= 0.0 { m.drag_y } else { row_top + bar_track / 2.0 }) - cy) * lean)
+          }
           None => (final_cs[if ai < 0 { 0 } else { ai }], row_top + bar_track / 2.0)
         }
         if !sliding && active_key != m.active_was {
@@ -1460,15 +1472,10 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
     }
     m.width = w
   }
-  // held: the ball a lens
-  m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0, at~)
-  // a finger that has the bar (sliding the ball, held, drawing the panel up, back down again): all of it drawn up out
-  // from under the finger as long as it has it, back down as it lets go
-  m.up.go(if m.holds || sliding { 1.0 } else { 0.0 }, ball_down, raise_damping, at~)
   // each place lit as it is the one under the finger, else the one shown, in the bar and in the panel's rows (300 ms,
   // CSS's ease); one come anew as it is; a bar chosen landing, its places as they will be as it lands
   let finger = if w > 0.0 {
-    bar_finger(told, bar_centres(w, if notched && !m.mode.get() { 1.0 } else { 0.0 }, items.length()), m.drag, m.drag_y)
+    bar_finger(told, bar_centres(w, m.k_at(at), items.length()), m.drag, m.drag_y)
   } else {
     None
   }
@@ -1565,13 +1572,17 @@ fn BarModel::ride(self : BarModel, s : Swap, j : Int, w : Double, row_top : Doub
     o_end: self.o.end(),
     k_to: self.k.to,
     k_end: self.k.end(),
+    up_to: self.up.to,
+    up_end: self.up.end(),
   }
-  let still = dmax(self.o.end(), self.k.end())
+  let still = dmax(self.up.end(), dmax(self.o.end(), self.k.end()))
   let o = self.o
   let k = self.k
+  let up = self.up
   let place_at = fn(t : Double) {
     let ot = o.value_at(t)
-    let (xs, y) = swap_at(s, ot, w, k.value_at(t) * (1.0 - dclamp(2.0 * ot, 0.0, 1.0)), row_top)
+    let kt = k.value_at(t) * (1.0 - dclamp(2.0 * ot, 0.0, 1.0)) * (1.0 - dclamp(up.value_at(t), 0.0, 1.0))
+    let (xs, y) = swap_at(s, ot, w, kt, row_top)
     (xs[j], y + s.drop * (1.0 - s.t(ot)))
   }
   self.ball_x.ride_on(300.0, fn(t) { place_at(t).0 }, still, from, at~)
@@ -1595,7 +1606,6 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   // (laid out as what it is told says: BarLaid, the same its glass takes a finger by, bar_glass_node)
   let place_add = bar_place_add(src, ws, active)
   let action = bar_action(src, ws, active, place_add)
-  let notched = action != ""
   let told_here : BarTold = {
     shown,
     action,
@@ -1653,7 +1663,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     now,
   )
   // (each as it ends, whichever ends first: what shows of each then is built at its own end)
-  let ends = [m.k.end(), m.o.end(), m.vis.end()]
+  let ends = [m.k.end(), m.o.end(), m.up.end(), m.vis.end()]
   for _, g in m.tints {
     ends.push(g.end())
   }
@@ -1665,7 +1675,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let swap = m.swap_at(now)
   let drag = m.drag
   let drag_y = m.drag_y
-  let final_cs = bar_centres(w, if notched && !m.mode.get() { 1.0 } else { 0.0 }, items.length())
+  let final_cs = bar_centres(w, m.k_now(), items.length())
   // the finger's place, and the place a let-go would choose (what is lit under it)
   let cand = bar_finger(told_here, final_cs, drag, drag_y)
   let active_key = active.unwrap_or("")
@@ -1686,6 +1696,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let k_now = m.k_now()
   // the notch on its way: drawn where it is as each frame is painted, laid out where it is now
   let k_moves = m.k_going(now)
+  let action_moves = k_moves || m.up.end() > now
   let clip_top = bar_glass_top(reach, m.o.x)
   let notch_r = (drop / 2.0 + notch_gap) * k_now
   let notch_y = -lift * k_now
@@ -1729,7 +1740,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
           radius=drop / 2.0,
           bg=@sf.over(t.p.bg, @sf.alpha(t.p.accent, action_ink)),
         )
-        disc_look(c, under, k_moves, k_now)
+        disc_look(c, under, action_moves, k_now, m.up.x)
       }
       bar_glass(c, w, clip_top, panel, notch_y, notch_r, k_moves)
       // 令 in the notch: accent glass, growing out of the bar as the notch opens about its middle, which comes up to
@@ -1778,7 +1789,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
             }
           },
         )
-        disc_look(c, disc, k_moves, k_now)
+        disc_look(c, disc, action_moves, k_now, m.up.x)
       }
       // the ball, under the places, stretched by its speed toward where it goes; its glass frosts what the bar's does
       let scale = (1.0 + 0.06 * m.held.x) * m.ball_scale.value
@@ -2058,21 +2069,21 @@ fn bar_glass_top(reach : Double, o : Double) -> Double {
 }
 
 ///|
-/// The notch as it is at `t`: as its place has it, closed as far as the panel is up (fully by half open).
+/// The notch as it is at `t`: as its place has it, closed with the panel or the bar's rise under a finger.
 fn BarModel::k_at(self : BarModel, t : Double) -> Double {
-  self.k.value_at(t) * (1.0 - dclamp(2.0 * self.o.value_at(t), 0.0, 1.0))
+  self.k.value_at(t) * (1.0 - dclamp(2.0 * self.o.value_at(t), 0.0, 1.0)) * (1.0 - dclamp(self.up.value_at(t), 0.0, 1.0))
 }
 
 ///|
-/// Where the notch as drawn (BarModel::k_now) is going: where its spring and the panel's are sent.
+/// Where the notch as drawn (BarModel::k_now) is going: where its spring, the panel and the rise are sent.
 fn BarModel::k_end(self : BarModel) -> Double {
-  self.k.to * (1.0 - dclamp(2.0 * self.o.to, 0.0, 1.0))
+  self.k.to * (1.0 - dclamp(2.0 * self.o.to, 0.0, 1.0)) * (1.0 - dclamp(self.up.to, 0.0, 1.0))
 }
 
 ///|
-/// Whether the notch as drawn (BarModel::k_now) is on its way at `now`: its own spring or the panel's going.
+/// Whether the notch as drawn (BarModel::k_now) is on its way at `now`.
 fn BarModel::k_going(self : BarModel, now : Double) -> Bool {
-  dmax(self.k.end(), self.o.end()) > now
+  dmax(self.up.end(), dmax(self.k.end(), self.o.end())) > now
 }
 
 ///|
@@ -2251,7 +2262,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
       }
     Ended => {
       let had = m.holds
-      let final_cs = bar_centres(l.w, if told.action != "" && !m.mode.get() { 1.0 } else { 0.0 }, l.items.length())
+      let final_cs = bar_centres(l.w, m.k_at(t), l.items.length())
       ended()
       if d.kind == Off {
         // called off: the panel where the finger left it, nothing chosen
@@ -2309,7 +2320,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
   // there. Let go, nothing more: what it chose was felt already (a tap on another place is felt as it is chosen).
   match how {
     Dragging | Held => {
-      let cs = bar_centres(l.w, if told.action != "" && !m.mode.get() { 1.0 } else { 0.0 }, l.items.length())
+      let cs = bar_centres(l.w, m.k_at(t), l.items.length())
       let under = match bar_finger(told, cs, m.drag, m.drag_y) {
         Some((_, _, i, key)) => "\{i}/\{key}"
         None => m.felt
@@ -2457,7 +2468,7 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
             }
           }))
           // (taken only where the notch is drawn open at its moment: closing, the panel up, what is under it the panel's)
-          .takes(fn(w, h, at) { if bar.k_at(at) > 0.9 { [(0.0, 0.0, w, h)] } else { [] } })
+          .takes(fn(w, h, at) { if bar.drag < 0.0 && !bar.holds && bar.k_at(at) > 0.9 { [(0.0, 0.0, w, h)] } else { [] } })
           .on_press(fn() {
             match ws() {
               Some(w) =>
