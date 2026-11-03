@@ -1812,12 +1812,14 @@ test("the simulators booted, as simctl lists them: their runtime's name, their s
 
 test("a simulator says it can be debugged; other screens neither say so nor answer", () => {
   const hub = new ScreenHub();
-  const debug = {} as SimDebug;
+  const debug = { installFolder: () => "/up" } as unknown as SimDebug;
   hub.add({ id: "simulator:U", kind: "simulator", title: () => "iPhone", size: () => ({ width: 1, height: 1 }), open: () => Promise.reject(new Error("no")), debug });
   hub.add({ id: "browser:T", kind: "browser", title: () => "tab", size: () => ({ width: 1, height: 1 }), open: () => Promise.reject(new Error("no")) });
   const [sim, tab] = hub.listed("en").screens;
   assert.equal(sim!.debug, true);
+  assert.equal(sim!.install, "/up");
   assert.equal("debug" in tab!, false);
+  assert.equal("install" in tab!, false);
   assert.equal(hub.debugOf("simulator:U"), debug);
   assert.throws(() => hub.debugOf("browser:T"), (e: ScreenRefused) => e.status === 405);
   assert.throws(() => hub.debugOf("simulator:gone"), (e: ScreenRefused) => e.status === 404);

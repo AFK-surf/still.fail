@@ -533,6 +533,10 @@ fn debug_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   if @sf.menu_item(c, label, key=other, panel=true, icon="refresh", end="chevron-right") {
     debug_apps_open(s, u, Of(c.id(other)))
   }
+  if text(s.state, "install") != "" &&
+    @sf.menu_item(c, @sf.t("web-pages.screen.debug.install"), key="screen-install", panel=true, icon="upload", note=@sf.t("web-pages.screen.debug.installKinds")) {
+    install_asked(c, s, u)
+  }
   debug_setting(c, s, d, @sf.t("web-pages.screen.debug.appearance"), "appearance", [
     ("light", "web-pages.screen.debug.light"),
     ("dark", "web-pages.screen.debug.dark"),

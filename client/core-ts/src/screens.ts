@@ -380,6 +380,8 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
       ...(get(s, "closable") === true && control ? { closable: true } : {}),
       // Its apps' logs and restart, for one who may drive it (a simulator's; docs/remote-screens.md).
       ...(get(s, "debug") === true && control ? { debug: true } : {}),
+      // Where a file to install on it goes up to (`screen.install`).
+      ...(typeof get(s, "install") === "string" && control ? { install: get(s, "install") } : {}),
       // It folds (an iPhone Duo): `screen.input` {t: "pose", name}.
       ...(get(s, "poses") === true && control ? { poses: true } : {}),
       // A simulator's panels, for the device body drawn round its picture.
@@ -558,6 +560,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       if (state.title === "" && typeof get(item, "title") === "string") state.title = get(item, "title");
       if (state.kind === undefined && typeof get(item, "kind") === "string") state.kind = get(item, "kind");
       state.debug = get(item, "debug") === true && may;
+      state.install = may && typeof get(item, "install") === "string" ? get(item, "install") : "";
       state.poses = get(item, "poses") === true && may;
       state.panels = get(item, "panels") ?? [];
       const others = othersOf(onIt ?? names(get(item, "viewers")), mine).map(personShown);

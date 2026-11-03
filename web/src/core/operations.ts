@@ -97,6 +97,7 @@ export interface OperationParams {
   "screen.settings": { screen: string };
   "screen.setSetting": { screen: string; name: string; value: string };
   "screen.screenshot": { screen: string };
+  "screen.install": { screen: string; path: string };
   "screen.openUrl": { screen: string; url: string };
   "screen.location": { screen: string; at?: string | null | undefined };
   "screen.statusBar": { screen: string; tidy: boolean };
@@ -264,6 +265,7 @@ export function bindStationOperations(call: Call) {
     screenSettings: <T = unknown>(params: OperationParams["screen.settings"]) => call("screen.settings", params) as Promise<T>,
     screenSetSetting: <T = unknown>(params: OperationParams["screen.setSetting"]) => call("screen.setSetting", params) as Promise<T>,
     screenScreenshot: <T = unknown>(params: OperationParams["screen.screenshot"]) => call("screen.screenshot", params) as Promise<T>,
+    screenInstall: <T = unknown>(params: OperationParams["screen.install"]) => call("screen.install", params) as Promise<T>,
     screenOpenUrl: <T = unknown>(params: OperationParams["screen.openUrl"]) => call("screen.openUrl", params) as Promise<T>,
     screenLocation: <T = unknown>(params: OperationParams["screen.location"]) => call("screen.location", params) as Promise<T>,
     screenStatusBar: <T = unknown>(params: OperationParams["screen.statusBar"]) => call("screen.statusBar", params) as Promise<T>,

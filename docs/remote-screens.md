@@ -416,6 +416,10 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
 - **What Device Hub does of a device**: `POST /admin/api/screens/<id>/open-url` `{url}` (`simctl openurl`), `.../location` `{at?}`
   ("latitude,longitude"; none: clears it), `.../status-bar` `{tidy}` (`simctl status_bar`: 9:41, full bars and battery, or as
   it is), `.../push` `{app, text}` (`simctl push`, to an app a person installed), each → `{}`, 400 for what is no such thing.
+- **Install**: the list says `install` of a simulator, a folder among the machine's temporary files (not Downloads, which macOS
+  may keep simctl from). The app puts a file picked there with the drive's upload, then `POST /admin/api/screens/<id>/install`
+  `{path}` → `{app}`: an .ipa, or a .zip with a .app in it, unpacked, `simctl install`ed and started, the file let go of. 400 when
+  there is no app in it; 502 what simctl said (built for a device, not a simulator).
 - **Restart**: `POST /admin/api/screens/<id>/relaunch` `{app}` → `{}` (`simctl launch --terminate-running-process`), 404
   for what is not an app a person installed there. Building it again is the agent's: the station does not know the project.
 

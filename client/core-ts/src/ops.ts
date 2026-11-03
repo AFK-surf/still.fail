@@ -162,6 +162,7 @@ export const PARAMS: Record<string, string> = {
   "screen.settings": "screen:string",
   "screen.setSetting": "screen:string name:string value:string",
   "screen.screenshot": "screen:string",
+  "screen.install": "screen:string path:string",
   "screen.openUrl": "screen:string url:string",
   "screen.location": "screen:string at?:string",
   "screen.statusBar": "screen:string tidy:boolean",
@@ -584,6 +585,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/screens/${p.at("screen")}/screenshot`, null, NONE);
     // What Device Hub does of a device besides its keys: a link opened in it, where it is (`at`; none: nowhere), its status
     // bar tidy, a notification to one of its apps.
+    case "screen.install":
+      return op("POST", () => `/screens/${p.at("screen")}/install`, p.pick(["path"]), NONE);
     case "screen.openUrl":
       return op("POST", () => `/screens/${p.at("screen")}/open-url`, p.pick(["url"]), NONE);
     case "screen.location":
