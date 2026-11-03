@@ -675,6 +675,7 @@ export const SHAPES: Record<string, Shape> = {
     ["workspace", opt("String")],
     ["workspaceId", opt("String")],
     ["name", opt("String"), { said: true }],
+    ["reached", opt("bool"), { doc: "Whether it knows the workspace's stations now, from still.fail cloud (false: cut off from it, it takes no shared\nProfile's copy). Absent from stations before it." }],
   ]),
   Viewer: struct([
     ["via", "String"],

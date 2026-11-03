@@ -4,7 +4,10 @@
 // scrubbed: no home directories, emails, things shaped like keys or tokens, or quoted text, and fields that can carry
 // what people wrote (a notice's text, a job's or skill's name) not at all. Batched every few seconds as OpenTelemetry
 // logs to the control plane (still.fail cloud's `/v1/telemetry/logs`, signed with the station's key; the cloud passes
-// them on to Axiom); a batch that cannot be sent is dropped, and lines past what is kept waiting are counted, not kept.
+// them on to Axiom). A batch that cannot get there waits for the next round: what goes wrong between a station and
+// still.fail cloud is said most while the way there is broken (2026-11-03: a station's 43 minutes without a presence
+// socket left no line of why). One the cloud refuses is dropped, and lines past what is kept waiting are counted, not
+// kept.
 import { Effect } from "effect";
 import { wall } from "./fibers.ts";
 import type { Level, Line } from "./log.ts";
@@ -66,6 +69,13 @@ export function record(line: Line, home: string) {
   };
 }
 
+/// Whether a batch was refused by the control plane (an answer other than too many, or its own trouble): sending it
+/// again would be refused again. Anything else (no answer, the network) is worth another try.
+function refused(error: unknown): boolean {
+  const status = (error as { status?: unknown })?.status;
+  return typeof status === "number" && status >= 400 && status < 500 && status !== 429;
+}
+
 export type LogExportOptions = {
   /// Read for every batch.
   enabled: () => boolean;
@@ -100,6 +110,10 @@ export class LogExport {
   add(line: Line) {
     if (this.closed || this.options === null || !this.options.enabled()) return;
     this.waiting.push(line);
+    this.trim();
+  }
+
+  private trim() {
     if (this.waiting.length > MAX_WAITING) {
       this.dropped += this.waiting.length - MAX_WAITING;
       this.waiting.splice(0, this.waiting.length - MAX_WAITING);
@@ -137,6 +151,12 @@ export class LogExport {
       try {
         await send(this.body(lines, station, dropped));
       } catch (error) {
+        // Not there: sent again next round, first, as far as what is kept waiting goes (the oldest go).
+        if (!refused(error)) {
+          this.waiting.unshift(...lines);
+          this.dropped += dropped;
+          this.trim();
+        }
         // Not through the log: that would send itself.
         if (wall.now() - this.saidFailed > SAY_FAILED_MS) {
           this.saidFailed = wall.now();

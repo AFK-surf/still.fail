@@ -48,28 +48,37 @@ async function enrolled(t: { after(f: () => unknown): void }, provider: "stillfa
   return { fake, origin, data, state, key, plane };
 }
 
-test("the roster stays current a while after its socket ends, until a fresh one or the station is removed", () => {
-  const s = new Cloud(mkdtempSync(join(tmpdir(), "roster-")));
+test("the roster is reached a while after its socket ends, and taken on past that until the station is removed", () => {
+  const data = mkdtempSync(join(tmpdir(), "roster-"));
+  const s = new Cloud(data);
   const timers: { ms: number; f: () => void }[] = [];
   const after = (ms: number, f: () => void) => timers.push({ ms, f });
   applyState(s, JSON.stringify({ type: "state", peers: [] }));
   assert.equal(s.peersCurrent, true);
-  // The socket ends: still current, until the grace is over with no roster since.
+  assert.equal(s.reached, true);
+  let told = 0;
+  const unlisten = s.listen(() => told++);
+  // The socket ends: reached until the grace is over with no roster since; the roster is still taken after it.
   lapse(s, after);
-  assert.equal(s.peersCurrent, true);
+  assert.equal(s.reached, true);
   assert.equal(timers[0]!.ms, ROSTER_GRACE_MS);
   timers.shift()!.f();
-  assert.equal(s.peersCurrent, false);
-  // Back within it: the fresh roster keeps it current past the old socket's grace.
+  assert.equal(s.reached, false);
+  assert.equal(s.peersCurrent, true);
+  // Told as a fresh roster is: the overview says the station is cut off.
+  assert.equal(told, 1);
+  unlisten();
+  // Back within it: the fresh roster keeps it reached past the old socket's grace.
   applyState(s, JSON.stringify({ type: "state", peers: [] }));
   lapse(s, after);
   applyState(s, JSON.stringify({ type: "state", peers: [] }));
   timers.shift()!.f();
-  assert.equal(s.peersCurrent, true);
-  // Removed: at once.
+  assert.equal(s.reached, true);
+  // Removed: not taken at all, at once.
   s.state = { removed_at: 1 } as any;
   lapse(s, after);
   assert.equal(s.peersCurrent, false);
+  assert.equal(s.reached, false);
   assert.equal(timers.length, 0);
   s.close();
 });
@@ -83,7 +92,11 @@ test("still.fail cloud: enrollment, presence, notices, traces and releases as th
   assert.deepEqual(Object.keys(file), ["origin", "station", "workspace", "workspace_name", "name", "relay_url", "relay_urls", "grant_keys", "peers", "revocations"]);
   assert.equal(state.provider(), "stillfail");
 
-  await until(() => state.peersCurrent);
+  await until(() => state.reached);
+  // Started again before the cloud is heard: the roster it said last is taken, not shown as reached.
+  const again = new Cloud(data);
+  assert.deepEqual([again.peersCurrent, again.reached], [true, false]);
+  again.close();
   const connected = fake.asked.find((a) => a.path === "/v1/stations/connect")!;
   // Signed under both names, each its own proof.
   assert.deepEqual(connected.verified, ["stillfail", "ember"]);
@@ -113,7 +126,7 @@ test("Comma: enrollment, presence with gateways, notices, no traces, releases un
   assert.deepEqual(file.gateway_keys, [gateway]);
   assert.equal(state.provider(), "comma");
 
-  await until(() => state.peersCurrent);
+  await until(() => state.reached);
   const connected = fake.asked.find((a) => a.path === "/v1/comma/stations/connect")!;
   assert.deepEqual(connected.verified, ["comma"]);
   assert.equal(connected.headers["x-ember-signature"], undefined, "Comma is sent the still.fail headers only");

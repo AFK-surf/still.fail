@@ -55,6 +55,9 @@ export function meshStatus(cloud: Cloud, viewer?: Viewer): Record<string, unknow
     workspace: m?.workspace_name ?? s.workspace_name ?? null,
     workspaceId: m?.workspace ?? s.workspace ?? null,
     name: m?.name ?? s.name ?? null,
+    // Whether it hears still.fail cloud now: cut off from it, it goes on with the stations it was told last, and the
+    // pages say so.
+    reached: cloud.reached,
   };
   if (s.removed_at !== undefined) v.removedAt = s.removed_at;
   return v;

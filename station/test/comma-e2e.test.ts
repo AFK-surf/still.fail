@@ -83,7 +83,7 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   const up = Effect.runSync(SubscriptionRef.make(true));
   const plane = makeControlPlane({ state, changes: Stream.never, key, up });
   const presence = Effect.runFork(plane.presence);
-  await until(() => state.peersCurrent && (state.state!.gateway_keys ?? []).includes(gateway.id()));
+  await until(() => state.reached && (state.state!.gateway_keys ?? []).includes(gateway.id()));
 
   // The station's own parts: its store, a hub with scripted runtimes, the admin API, the device tools.
   const config = new ConfigFile(data);
