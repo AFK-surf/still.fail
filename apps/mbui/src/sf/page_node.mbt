@@ -154,8 +154,12 @@ pub fn page_node(
       Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips)
     }
   })
+  // (its own layer only where it has what is for by a mark to say: nothing over a page that has none)
   if own_tips {
-    tips_at.val = Some(v.box(fn(t) { t.over(Is(true)) |> ignore }))
+    v.show(fn() { about() != "" }, fn(t) {
+      t.over(Is(true)) |> ignore
+      tips_at.val = Some(t)
+    })
   }
 }
 
