@@ -771,6 +771,8 @@ pub let history_rail_in : @ui.Space
 
 pub fn holds_least(Double) -> Double
 
+pub let home_workspace_title_look : @view.WordsLook
+
 pub let hover_card_w : @ui.Len
 
 pub let hover_tile_least : @ui.Len

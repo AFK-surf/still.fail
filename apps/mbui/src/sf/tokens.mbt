@@ -2982,3 +2982,13 @@ pub let top_bar_title_look : @view.WordsLook = {
   wrap: false,
   tracking: ScaledPoints(-0.4),
 }
+
+///|
+/// The workspace's name in Home's top bar: top_bar_title_look made smaller, 20 on 26, its mark's size (asked 2026-11-03).
+pub let home_workspace_title_look : @view.WordsLook = {
+  size: 20.0,
+  weight: 700,
+  line: 26.0,
+  wrap: false,
+  tracking: ScaledPoints(-0.4),
+}
