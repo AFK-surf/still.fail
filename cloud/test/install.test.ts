@@ -354,6 +354,43 @@ test("a station whose launcher would not become the new release's own is restart
   }
 });
 
+// Two at once (the station updating itself as CI's `stillfail update` ran, 2026-11-04) each put aside the app the other
+// had just put in, and the release that could not start was put back as the old one.
+test("an install waits for the one under way, and takes over one whose installer is gone", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    assert.equal(m.run().status, 0, "installed, with its service");
+    const lock = join(data, "run", "install.lock");
+
+    // Another install under way: this one does nothing until it has ended.
+    writeFileSync(join(data, "app", "VERSION"), "old\n");
+    writeFileSync(join(m.home, "said"), "");
+    mkdirSync(lock);
+    const other = execFileSync("sh", ["-c", `(sleep 1; echo "the other install ended" >> "${m.home}/said"; rm -rf "${lock}") </dev/null >/dev/null 2>&1 & echo $!`], { encoding: "utf8" });
+    writeFileSync(join(lock, "pid"), other);
+    let update = m.run();
+    assert.equal(update.status, 0, update.out);
+    const ended = update.said.indexOf("the other install ended");
+    assert.ok(ended >= 0 && ended < update.said.indexOf("launchctl bootout"), update.said);
+    assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "new\n");
+    assert.ok(!existsSync(lock), "and let go of when done");
+
+    // One whose installer is gone (killed mid-way): taken over.
+    writeFileSync(join(data, "app", "VERSION"), "old\n");
+    mkdirSync(lock);
+    writeFileSync(join(lock, "pid"), execFileSync("sh", ["-c", "sh -c 'exit 0' & echo $!; wait"], { encoding: "utf8" }));
+    update = m.run();
+    assert.equal(update.status, 0, update.out);
+    assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "new\n");
+    assert.ok(!existsSync(lock));
+  } finally {
+    m.done();
+  }
+});
+
 const sha256Of = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
 
 test("a station updating itself installs only the release its signed words name, by that release's own installer", () => {
