@@ -477,21 +477,22 @@ test "归档, 一台 station 的归档 and 自动决策 made once on a large scr
       same_drawn(words_where(made), old_words, "words, \{mode} at \{case}")
       // (one known apart: 一台 station 的归档 at 839 with a finger, 「30 天」's three glyphs, its words laid out at
       // 335.74999999999994 by the old view and at 335.75 by the node, snapped half a pixel apart at twice its pixels)
-      // (every difference collected, said at the end: what is apart, where)
-      let m = instances_sorted(made)
-      if m != old_drawn {
-        let left = old_drawn.filter(fn(o) { !m.contains(o) })
-        let extra = m.filter(fn(o) { !old_drawn.contains(o) })
-        apart_seen.push("\{mode} at \{case}: old \{left.map(fn(x) { x.split(",").to_array()[:6].to_array().map(fn(v) { v.to_string() }).join(",") })} made \{extra.map(fn(x) { x.split(",").to_array()[:6].to_array().map(fn(v) { v.to_string() }).join(",") })}")
+      // (apart, each listed: 一台 station 的归档's choices of days narrow on the tape, their digits laid out by the old
+      // view a hair short of a quarter pixel (…74999…, …24999…) and by the node on it, snapped half a pixel apart at
+      // twice its pixels; nothing else of any of them)
+      let apart : Array[(Double, Double, Double)] = match (mode, case) {
+        ("settings-archiving:ws1/st1", (2, 1.0, 600.0)) =>
+          [377.5, 391.5, 499.5, 506.5].map(fn(x) { [(x, x + 0.5, 314.0), (x, x + 0.5, 400.0)] }).flatten()
+        ("settings-archiving:ws1/st1", (0, 1.0, 700.0)) =>
+          [440.0, 454.0, 289.5, 303.5].map(fn(x) { [(x, x + 0.5, 296.0), (x, x + 0.5, 382.0)] }).flatten()
+        ("settings-archiving:ws1/st1", (0, 1.0, 760.0)) => [(317.0, 317.5, 410.5), (323.5, 324.0, 410.5), (336.5, 337.0, 410.5)]
+        ("settings-archiving:ws1/st1", (2, 1.0, 839.0)) => [(335.5, 336.0, 412.5), (343.0, 343.5, 412.5), (358.0, 358.5, 412.5)]
+        _ => []
       }
+      same_drawn_but(instances_sorted(made), old_drawn, apart, "instances, \{mode} at \{case}")
     }
   }
-  assert_eq(apart_seen, [], msg="\{apart_seen}")
 }
-
-///|
-// kept across runs: a test's
-let apart_seen : Array[String] = []
 
 ///|
 /// `made` drawn as `old` (same_drawn), but for the glyphs listed (`apart`: each one's place across in the old view's and
