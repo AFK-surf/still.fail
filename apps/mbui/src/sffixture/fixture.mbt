@@ -1057,7 +1057,13 @@ pub fn fixture(mode : String) -> Source {
     tabs_shown: fixture_tabs_shown(mode),
     sidebars: {},
     share_look: if mode.has_prefix("share-card-") && mode != "share-card-dark" {
-      mode.unsafe_substring(start="share-card-".length(), end=mode.length())
+      // (share-card-<key>-coming, -failed: its files of the looks on their way, not had)
+      let look = mode.unsafe_substring(start="share-card-".length(), end=mode.length())
+      if look.has_suffix("-coming") || look.has_suffix("-failed") {
+        look.unsafe_substring(start=0, end=look.length() - "-coming".length())
+      } else {
+        look
+      }
     } else {
       ""
     },
@@ -1134,8 +1140,21 @@ pub fn fixture(mode : String) -> Source {
       }
       None => ()
     }
+    // a file of the share card's looks held where a test holds them (fixture_looks_held)
+    if name == "fonts.share" && fixture_looks_held.val is Some(held) {
+      held.push((text(Some(params), "file"), done))
+      return
+    }
+    // (share-card-<key>-coming: never answered; -failed: not had)
+    if name == "fonts.share" && f.mode.has_prefix("share-card-") && f.mode.has_suffix("-coming") {
+      return
+    }
+    if name == "fonts.share" && f.mode.has_prefix("share-card-") && f.mode.has_suffix("-failed") {
+      done(Err({ "code": "fonts", "message": "下载返回 404" }))
+      return
+    }
     // the faces' files (fonts_fixture.mbt)
-    match fixture_fonts_read(f, name) {
+    match fixture_fonts_read(f, name, params~) {
       Some(r) => {
         done(r)
         return

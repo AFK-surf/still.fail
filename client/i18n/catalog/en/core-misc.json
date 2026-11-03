@@ -185,6 +185,7 @@
   "core-misc.params.push_registration": "Must be either {kind: \"web\", endpoint, keys: {p256dh, auth}} or {kind: \"fcm\" | \"apns\", token, sandbox?}",
   "core-misc.params.station": "Invalid params: station required",
   "core-misc.params.unknown_field": "Invalid params: no {field} field",
+  "core-misc.shareLooks.notTheFile": "The downloaded file is not the right one",
   "core-misc.pill.back": "Connected",
   "core-misc.pill.cloud_down": "Can't reach {brand} cloud",
   "core-misc.agentEnv.badName": "{name} isn't a valid variable name",

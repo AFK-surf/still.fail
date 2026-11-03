@@ -178,7 +178,7 @@ export class Core {
       // (the files kept for messages left behind a week)
       inner.runner.fork(inner.driveKept.dropOldUploads());
       brand.setTestChannel(inner.host.testChannel());
-      fonts.setOrigin(inner.host.cloudOrigin());
+      fonts.setOrigin(inner.host.cloudOrigin(), inner.host.testChannel());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
       spentClock(() => inner.host.monotonicMs());
       // A failure let go of is a span of its own: Axiom has it though nothing waited on it.

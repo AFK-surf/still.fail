@@ -4,20 +4,45 @@
 // novel《千恋＊万花》(2016), offered after still.fail's own in the looks' strip (share_looks). Each says the `fleet` view
 // in the game's things and its heroines' voices (the week's chats archived a fortune slip's number, the top model's
 // tokens a sword's length, the chats at work an inn's guests tonight), over a picture drawn for it: still.fail's own,
-// never the game's art, kept on still.fail's site (senren_art_url) and had as any picture by its address. Each look is
+// never the game's art, kept on still.fail's site and had through the core (senren_art_file), the card handed out once they are here. Each look is
 // its own function, in the file of its kind (share_senren_*.mbt), and a line of share_looks; what they share is here.
 
 ///|
-/// Where a look's picture is: still.fail's site (the buddies' address, @sf.avatars_base), each drawing under its number
-/// (an address once had is fetched never again: a picture drawn anew goes under the next); while the look is drawn
-/// small (the looks' strip, senren_small), its small one, a quarter as wide.
-fn senren_art_url(art : String) -> String {
-  @sf.avatars_base() +
-  "/share-looks/" +
-  senren_drawn.to_string() +
-  "/" +
-  art +
-  (if senren_small.val { ".small.webp" } else { ".webp" })
+/// A look's picture `art` as a file of the looks (@sfbase.looks_file: had from still.fail's site through the core, kept
+/// on the device), each drawing under its number (a file had is never had again: a picture drawn anew goes under the
+/// next); while the look is drawn small (the looks' strip, senren_small), its small one, a quarter as wide.
+fn senren_art_file(art : String) -> String {
+  senren_drawn.to_string() + "/" + art + (if senren_small.val { ".small.webp" } else { ".webp" })
+}
+
+///|
+/// The pictures a look drew as it was drawn last (senren_drawing), by file (senren_art_file): those it waits for.
+// kept across runs: set only while a look is drawn (senren_drawing), and put back
+let senren_drew : Ref[Array[String]?] = Ref(None)
+
+///|
+/// `draw` as it draws a look, and the files of the looks it needs (its pictures as it drew them: senren_drew; the
+/// whole share face's), each asked of the core the first time (@sfbase.looks_file), given as a picture once here.
+fn senren_drawing(src : Source, draw : () -> Int) -> (Int, Array[String]) {
+  let was = senren_drew.val
+  let drew : Array[String] = []
+  senren_drew.val = Some(drew)
+  let b = draw()
+  senren_drew.val = was
+  let files : Array[String] = []
+  for file in drew {
+    if !files.contains(file) {
+      files.push(file)
+      @sfbase.looks_file(src, file, fn(bytes) { @ui.add_image(senren_art_key(file), bytes) }) |> ignore
+    }
+  }
+  (b, files)
+}
+
+///|
+/// The key a file of the looks' pictures is shown by, once it is here (`mem:`: nothing until then).
+fn senren_art_key(file : String) -> String {
+  "mem:share-looks/" + file
 }
 
 ///|
@@ -101,7 +126,11 @@ let sr_box_flat : @ui.Style = sr_box_round.then(@ui.css("radius=Sharp border=B0"
 /// Picture `art` `w` by `h` points, cut to that with its vertical crop at `at` (0 its top, 1 its foot); nothing under
 /// it while it is on its way (the card's ground shows), no fade: a picture handed out is drawn whole (Ctx::shot waits).
 fn sr_art(c : @ui.Ctx, art : String, w : Double, h : Double, at? : Double = 0.5) -> Int {
-  c.image(senren_art_url(art), w=Px(w), h=Px(h), fit=FitCoverAt(at), bg=0L, fade=false)
+  let file = senren_art_file(art)
+  if senren_drew.val is Some(drew) {
+    drew.push(file)
+  }
+  c.image(senren_art_key(file), w=Px(w), h=Px(h), fit=FitCoverAt(at), bg=0L, fade=false)
 }
 
 ///|
