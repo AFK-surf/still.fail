@@ -237,3 +237,33 @@ test("the readers of what devices ask and of what streams tell are kept idle, st
     await open([]);
   }
 });
+
+test("a background read waiting while its line rests is read once it has rested, a timer firing early or not", { timeout: 30_000 }, async () => {
+  const { wall } = await import("../src/ops/fibers.ts");
+  const [now, after] = [wall.now, wall.after];
+  let clock = 1_000;
+  const due: (() => void)[] = [];
+  wall.now = () => clock;
+  wall.after = (_ms, f) => (due.push(f), () => {});
+  const { readers, state, args, open } = gated(2);
+  try {
+    const background = { background: true };
+    // The first page takes 50 ms (as the clock says): the line rests 50 ms before the second.
+    const first = readers.read("timeline", args(false), "en", background);
+    const second = readers.read("timeline", args(false), "en", background);
+    clock += 50;
+    await first;
+    assert.equal(Atomics.load(state, 0), 1, "the second waits while the line rests");
+    // A timer firing a moment before the rest is over: the line is looked at again later.
+    clock += 49;
+    for (const f of due.splice(0)) f();
+    assert.equal(Atomics.load(state, 0), 1);
+    assert.ok(due.length > 0, "looked at again once it has rested");
+    clock += 1;
+    for (const f of due.splice(0)) f();
+    assert.equal(await second, "{}");
+  } finally {
+    [wall.now, wall.after] = [now, after];
+    await open([]);
+  }
+});

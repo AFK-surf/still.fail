@@ -42,7 +42,8 @@ type Asked = {
 /// A line of reads and the readers that answer it, at most `size` of them, the first read first. `room`: bulk reads leave
 /// one of them for a chat read (what devices ask).
 /// `rested`: when a background read may be taken again (one just read rests as long as it took).
-type Line = { told: boolean; size: number; room: boolean; slots: Slot[]; waiting: Asked[]; rested?: number };
+/// `wake`: the line looked at again once it has rested (one at a time).
+type Line = { told: boolean; size: number; room: boolean; slots: Slot[]; waiting: Asked[]; rested?: number; wake?: () => void };
 
 /// How many sessions' readers are remembered (the most recently read).
 const HOMES = 4096;
@@ -160,10 +161,7 @@ export class Readers {
         // A background read rests its line as long as it took before the next: one after another, a history brought on
         // read 40 MB of a transcript in 10 s on ccvm short of memory (2026-11-03), every write and read waiting on the
         // disk meanwhile.
-        if (asked.background) {
-          line.rested = now + (now - asked.took);
-          wall.after(now - asked.took, () => this.pump(line));
-        }
+        if (asked.background) line.rested = now + (now - asked.took);
         if (answer.text !== undefined) asked.resolve(answer.text);
         else asked.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
       }
@@ -327,7 +325,17 @@ export class Readers {
       const behind = resting || line.slots.some((s) => s.held?.background === true) || (free < 2 && line.size > 1) ? -1 : line.waiting.findIndex((a) => a.background);
       const first = line.waiting.findIndex((a) => interactive(a) || a.ask.op === CHECKPOINT);
       const at = limited || first >= 0 ? first : foreground >= 0 ? foreground : behind;
-      if (at < 0) break;
+      if (at < 0) {
+        // A background read waiting while the line rests: looked at again once it has, however early a timer fires
+        // (one armed for as long as the read took woke a moment before it was over, the read left waiting for good).
+        if (resting && line.wake === undefined && line.waiting.some((a) => a.background)) {
+          line.wake = wall.after(Math.max(1, line.rested! - wall.now()), () => {
+            line.wake = undefined;
+            this.pump(line);
+          });
+        }
+        break;
+      }
       const asked = line.waiting[at]!;
       const home = asked.home !== null && asked.home.held === null && line.slots.includes(asked.home) ? asked.home : null;
       const slot = home ?? line.slots.find((s) => s.held === null) ?? (line.slots.length < line.size ? this.start(line) : null);
