@@ -588,6 +588,38 @@ test("one person's streams in two languages are read for together: once a change
   await en.close();
 });
 
+test("the sidebar's rows are left to clients that make them from what they are told (rows=1): none read for what is said, a session's summary, a read, a pin", async () => {
+  // Every change read every row it could touch again for every viewer: 3 to 5 s each on ccvm short of memory (2026-11-03).
+  const { events, change, reads } = setup(testClock().clock);
+  const theirs = reader((await events.open(viewer("a@x"), "zh", false, [], [], null, false, [], false, true, true)).body as AsyncIterable<Buffer>);
+  await settle();
+  assert.deepEqual(theirs.got.filter((e) => e.event === "made").map((e) => e.data), [{ rows: true }], "told it makes them, first");
+  const sidebar = () => reads.filter((r) => r === "chats" || r === "chatRowsOf");
+  reads.length = 0;
+  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
+  change({ type: "session", key: "s1" });
+  change({ type: "read", viewer: "a@x", thread: 4, n: 1 });
+  change({ type: "pins", viewer: "a@x", session: "s1", at: 5 });
+  change({ type: "dismissed", viewer: "a@x", card: { thread: 4, n: 1 } });
+  await settle();
+  assert.deepEqual(sidebar(), [], "none read");
+  assert.deepEqual(theirs.got.filter((e) => e.event === "pin").map((e) => e.data), [{ session: "s1", at: 5 }], "what it makes them of, told");
+  // What it is not told of (a chat's sessions changing): read for it as before.
+  change({ type: "thread", id: 4, entries: [] });
+  await settle();
+  assert.deepEqual(sidebar(), ["chatRowsOf"]);
+  // One of theirs from before (no `rows=1`) as well: read for it.
+  const before = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  reads.length = 0;
+  change({ type: "thread", id: 4, entries: [{ n: 2 } as any] });
+  await settle();
+  assert.deepEqual(sidebar(), ["chatRowsOf"]);
+  assert.deepEqual(before.got.filter((e) => e.event === "made"), [], "a stream from before is told nothing new");
+  await theirs.close();
+  await before.close();
+});
+
 test("a thread's summary is left to clients that make it from what is said (views=1): none read for a viewer all of whose streams do", async () => {
   // Read for each viewer after every message, it was read from the disk while memory was short (ccvm, 2026-11-02).
   const { events, change, reads } = setup(testClock().clock);

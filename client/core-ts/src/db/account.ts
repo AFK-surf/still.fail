@@ -822,6 +822,16 @@ export class AccountDb {
     return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
   }
 
+  /// The sidebar rows a thread's or an agent's session's changes touch: the thread's chat's; the rows the session is
+  /// among the agents of (its own, and the chats it takes part in).
+  chatsOf(station: string, of: { thread: number } | { session: string }): J[] {
+    const rows = "thread" in of
+      ? this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND thread = ?", [station, of.thread])
+      : this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND (session = ? OR instr(json, ?) > 0)", [station, of.session, JSON.stringify(of.session)]);
+    const out = rows.map((r) => this.#chatRow(station, 0, String(r[0]), r[1], r[2]));
+    return "thread" in of ? out : out.filter((row) => Array.isArray(get(row, "agents")) && (get(row, "agents") as J[]).some((a) => get(a, "key") === of.session));
+  }
+
   /// The sidebar row of an agent's session.
   chatOfSession(station: string, session: string): J {
     const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND session = ? ORDER BY ord LIMIT 1", [station, session])[0];

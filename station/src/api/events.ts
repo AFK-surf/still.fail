@@ -185,6 +185,9 @@ type Client = {
   /// Its client makes a thread's summary from what is said in it itself (`views=1`, client/core-ts/src/station/
   /// thread-after.ts): none is read and told for it.
   views: boolean;
+  /// Its client makes its sidebar's rows from what it is told itself (`rows=1`, client/core-ts/src/station/
+  /// rows-after.ts): what said, a session's summary, what its viewer pinned or dismissed reads no rows for it.
+  rows: boolean;
   send(event: string, data: unknown): void;
   raw(text: string): void;
   /// What it follows besides (live sessions, job logs): ended with it.
@@ -220,6 +223,8 @@ export class Events {
     return {
       sessions: new Set<string>(), rowsAll: false, rows: new Set<string>(), overview: false,
       items: { sessions: new Set<string>(), threads: new Set<number>() }, viewerItems: new Map<string, Set<number>>(),
+      /// What a device that makes its rows itself puts in place from what it is told (`rows=1`): read for the others alone.
+      made: { sessions: new Set<string>(), threads: new Set<number>() }, madeViewerItems: new Map<string, Set<number>>(), madeRows: new Set<string>(),
       /// By `viewerKey`: what changed of the sidebar of one come back while it was away (`cameBack`), read for it alone.
       back: new Map<string, { sessions: Set<string>; threads: Set<number> }>(),
     };
@@ -415,9 +420,9 @@ export class Events {
     const was = this.away.get(k);
     if (was?.whole) return;
     const back = dirty.back.get(k);
-    const sessions = new Set([...(was?.sessions ?? []), ...dirty.items.sessions, ...(back?.sessions ?? [])]);
-    const threads = new Set([...(was?.threads ?? []), ...dirty.items.threads, ...(dirty.viewerItems.get(email) ?? []), ...(back?.threads ?? [])]);
-    if (dirty.rowsAll || dirty.rows.has(email) || sessions.size + threads.size > AWAY_MOST) this.away.set(k, { whole: true, sessions: [], threads: [] });
+    const sessions = new Set([...(was?.sessions ?? []), ...dirty.items.sessions, ...dirty.made.sessions, ...(back?.sessions ?? [])]);
+    const threads = new Set([...(was?.threads ?? []), ...dirty.items.threads, ...dirty.made.threads, ...(dirty.viewerItems.get(email) ?? []), ...(dirty.madeViewerItems.get(email) ?? []), ...(back?.threads ?? [])]);
+    if (dirty.rowsAll || dirty.rows.has(email) || dirty.madeRows.has(email) || sessions.size + threads.size > AWAY_MOST) this.away.set(k, { whole: true, sessions: [], threads: [] });
     else if (was !== undefined || sessions.size + threads.size > 0) this.away.set(k, { whole: false, sessions: [...sessions], threads: [...threads] });
   }
 
@@ -433,23 +438,27 @@ export class Events {
     this.wake();
   }
 
-  /// The sidebar rows of `viewer` (everyone's when null) may have changed.
-  rowsChanged(viewer: string | null) {
+  /// The sidebar rows of `viewer` (everyone's when null) may have changed; `made`: by what a device that makes its rows
+  /// itself is told (`rows=1`): theirs are not read for it.
+  rowsChanged(viewer: string | null, made = false) {
     if (viewer === null) this.dirty.rowsAll = true;
-    else this.dirty.rows.add(viewer);
+    else (made ? this.dirty.madeRows : this.dirty.rows).add(viewer);
     this.wake();
   }
 
   /// The sidebar items a change of these sessions and threads can touch may have changed (read/views.ts `scopeOf`), for
   /// everyone or one viewer: only those are read again.
-  private itemsChanged(of: { sessions?: string[]; threads?: number[] }, viewer: string | null = null) {
+  /// `made`: by what a device that makes its rows itself is told (`rows=1`): read for the others alone.
+  private itemsChanged(of: { sessions?: string[]; threads?: number[] }, viewer: string | null = null, made = false) {
+    const items = made ? this.dirty.made : this.dirty.items;
+    const byViewer = made ? this.dirty.madeViewerItems : this.dirty.viewerItems;
     if (viewer === null) {
-      for (const key of of.sessions ?? []) this.dirty.items.sessions.add(key);
-      for (const id of of.threads ?? []) this.dirty.items.threads.add(id);
+      for (const key of of.sessions ?? []) items.sessions.add(key);
+      for (const id of of.threads ?? []) items.threads.add(id);
     } else {
-      const threads = this.dirty.viewerItems.get(viewer) ?? new Set<number>();
+      const threads = byViewer.get(viewer) ?? new Set<number>();
       for (const id of of.threads ?? []) threads.add(id);
-      this.dirty.viewerItems.set(viewer, threads);
+      byViewer.set(viewer, threads);
     }
     this.wake();
   }
@@ -459,7 +468,7 @@ export class Events {
   /// told after it is told first, and their sidebar and overview as they are now (RESUMED says so), or `missed`.
   /// `brief`: the sessions followed have their transcript entries in brief (read/transcript.ts `brief`).
   /// `logins`: those logins' terminals, each a `login-screen` event (all its rows first, then the rows that changed).
-  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false, logins: string[] = [], running = false, views = false): Promise<Answer> {
+  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false, logins: string[] = [], running = false, views = false, rows = false): Promise<Answer> {
     // Following the sessions at work itself, it follows none by name: a client that asks both is one that does not know
     // yet whether this station does (an older one follows those it names).
     const follows = running && this.deps.held !== undefined;
@@ -481,6 +490,7 @@ export class Events {
       host,
       running: follows,
       views,
+      rows,
       // Its own (a session's steps, a log, a host sample, `missed`): not of the log, and without an id (event-log.ts).
       send: (event, data) => push(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
       raw: push,
@@ -488,6 +498,8 @@ export class Events {
       end: () => remove(),
     };
     push("retry: 3000\n\n");
+    // Said first: it makes its rows from here on, and reads from this station what only the station can say of them.
+    if (rows) client.send("made", { rows: true });
     // Coming back where all that was told since is kept (their sidebar told on this run too).
     const k = viewerKey(viewer, lang);
     const resumes = since !== null && this.rowsTold.has(k) && this.log.has(since);
@@ -694,7 +706,8 @@ export class Events {
     switch (change.type) {
       case "session":
         this.dirty.sessions.add(change.key);
-        this.itemsChanged({ sessions: [change.key] });
+        // Its summary is told (`session`): a device that makes its rows puts it in them.
+        this.itemsChanged({ sessions: [change.key] }, null, true);
         break;
       case "sessionRemoved":
         this.dirty.sessions.delete(change.key);
@@ -711,7 +724,8 @@ export class Events {
           this.tellSaid("thread", change.id, change.entries, who.lang);
           this.tellThreadViews(change.id, who);
         }
-        this.itemsChanged({ threads: [change.id] });
+        // What was said is told (`thread`): a device that makes its rows puts it in them. Its sessions changing is not.
+        this.itemsChanged({ threads: [change.id] }, null, change.entries.length > 0);
         break;
       }
       case "letters": {
@@ -730,7 +744,7 @@ export class Events {
         break;
       case "read":
         this.emit("read", { viewer: change.viewer, thread: change.thread, n: change.n }, { email: change.viewer, sees: { thread: change.thread } });
-        this.itemsChanged({ threads: [change.thread] }, change.viewer);
+        this.itemsChanged({ threads: [change.thread] }, change.viewer, true);
         break;
       case "identities":
         // Who the viewer is on Slack: their overview says it, and their rows count it.
@@ -744,7 +758,7 @@ export class Events {
         if (change.type === "pins" && change.session !== undefined) this.emit("pin", { session: change.session, at: change.at ?? null }, { email: change.viewer });
         if (change.type === "dismissed" && change.card !== undefined) this.emit("dismiss", change.card, { email: change.viewer, sees: { thread: change.card.thread } });
         if (change.type === "dismissed" && change.kept !== undefined) this.emit("kept", change.kept, { email: change.viewer, sees: { thread: change.kept.thread } });
-        this.rowsChanged(change.viewer);
+        this.rowsChanged(change.viewer, (change.type === "pins" && change.session !== undefined) || (change.type === "dismissed" && (change.card !== undefined || change.kept !== undefined)));
         break;
       case "job":
         // A job as GET /jobs/:id answers it, so a client holding it puts it in place without reading anything again.
@@ -814,6 +828,13 @@ export class Events {
     const k = viewerKey(v.viewer, v.lang);
     const theirs = this.clients.filter((c) => viewerKey(c.viewer, c.lang) === k);
     return theirs.length > 0 && theirs.every((c) => c.views);
+  }
+
+  /// Whether every stream here of a viewer makes its sidebar's rows from what it is told itself (`rows=1`).
+  private makesRows(v: { viewer: Viewer; lang: Lang }): boolean {
+    const k = viewerKey(v.viewer, v.lang);
+    const theirs = this.clients.filter((c) => viewerKey(c.viewer, c.lang) === k);
+    return theirs.length > 0 && theirs.every((c) => c.rows);
   }
 
   /// Usage told, at most once a USAGE_EVERY_MS.
@@ -906,10 +927,12 @@ export class Events {
     // coming back to read that alone (`cameBack`).
     for (const k of this.rowsTold.keys()) if (!seen.has(k)) this.remember(k, dirty);
     const back = (v: { viewer: Viewer; lang: Lang }) => dirty.back.get(viewerKey(v.viewer, v.lang));
-    const itemsOf = (v: { viewer: Viewer; lang: Lang }) => new Set([...dirty.items.threads, ...(dirty.viewerItems.get(v.viewer.email) ?? []), ...(back(v)?.threads ?? [])]);
-    const sessionsOf = (v: { viewer: Viewer; lang: Lang }) => new Set([...dirty.items.sessions, ...(back(v)?.sessions ?? [])]);
+    // A device that makes its rows itself is told what it makes them of: none of that is read for it.
+    const readsMade = (v: { viewer: Viewer; lang: Lang }) => !this.makesRows(v);
+    const itemsOf = (v: { viewer: Viewer; lang: Lang }) => new Set([...dirty.items.threads, ...(dirty.viewerItems.get(v.viewer.email) ?? []), ...(back(v)?.threads ?? []), ...(readsMade(v) ? [...dirty.made.threads, ...(dirty.madeViewerItems.get(v.viewer.email) ?? [])] : [])]);
+    const sessionsOf = (v: { viewer: Viewer; lang: Lang }) => new Set([...dirty.items.sessions, ...(back(v)?.sessions ?? []), ...(readsMade(v) ? dirty.made.sessions : [])]);
     const touched = (v: { viewer: Viewer; lang: Lang }) => sessionsOf(v).size > 0 || itemsOf(v).size > 0;
-    const whole = (v: { viewer: Viewer; lang: Lang }) => dirty.rowsAll || dirty.rows.has(v.viewer.email) || (touched(v) && !this.rowsTold.has(viewerKey(v.viewer, v.lang)));
+    const whole = (v: { viewer: Viewer; lang: Lang }) => dirty.rowsAll || dirty.rows.has(v.viewer.email) || (readsMade(v) && dirty.madeRows.has(v.viewer.email)) || (touched(v) && !this.rowsTold.has(viewerKey(v.viewer, v.lang)));
     // The viewers the same changes touch alike are read together (read/ops.ts `chatRowsOf`): one read, what the first
     // read in serving the others. One a viewer, one person's devices in two languages or workspaces read the same chats
     // again each (four of them on ccvm, 2026-11-02), each from the disk while memory was short.

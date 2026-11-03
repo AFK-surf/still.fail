@@ -345,7 +345,11 @@ that only notifications change it:
   the last entry (else the thread is read again), and turns off `unread` of
   that thread's `chatRows` row when it covers the row's last message; `chat`
   puts a row into `chatRows` (replacing the one with its `id`), `chat-removed`
-  takes one out; `job` (a job as `GET /jobs/:id` answers it, whenever it
+  takes one out — a station that says `made` (the stream asks `rows=1`) tells
+  none for what is said, a session's summary, a read or what the viewer pinned,
+  dismissed or kept: those go into the rows here (station/rows-after.ts), and
+  what only it can say (a card, a need, a row new or gone) is read for those
+  rows alone, `GET /chats?session=&thread=`; `job` (a job as `GET /jobs/:id` answers it, whenever it
   starts, starts again, ends or says something) replaces it in its session's
   `jobs` (or goes in front), and in `jobs` while it is up (one not listed there
   yet reads `jobs` again, for its chat; one no longer up leaves); `overview`

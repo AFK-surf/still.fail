@@ -160,6 +160,10 @@ export class Link {
   /// Since the usage held was read: when the earliest call the station recorded since was made, as it said (what is
   /// read again of it, from that day on); null where it said a change without when (all of it), none where it said none.
   usageFrom: number | null | undefined = undefined;
+  /// Whether the station leaves its sidebar rows' changes to the device (`rows=1`, rows-after.ts: it said so as its
+  /// stream opened): what only it can say of them is read, the rows that change alone (`rowsWanted`).
+  makesRows = false;
+  readonly rowsWanted = { sessions: new Set<string>(), threads: new Set<number>() };
   /// Whether the archived chats held are as the station has them: read since anything could have changed them.
   archivedCurrent = false;
   /// When the station said it has no POST /changed/<list> (one from before): its lists are read whole a while.
@@ -491,8 +495,8 @@ export class Links {
   /// stream it takes over from gave (what was told after it comes first, else `missed`).
   #path(address: string, wants: EventsFor, since: string | null = null): string {
     // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS); a thread's
-    // summary made here from what is said in it (thread-after.ts), not told.
-    const query: string[] = ["running=1", "views=1"];
+    // summary made here from what is said in it (thread-after.ts), not told; and the sidebar's rows (rows-after.ts).
+    const query: string[] = ["running=1", "views=1", "rows=1"];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
       const held = this.#core.data.logSpan("transcript", address, key);

@@ -6,8 +6,17 @@ import { changed } from "./changed.ts";
 /// `page`: the archive a page at a time (read/views.ts `archivedPage`), from its first (`page=`) or on from where one ended.
 const chatsOf = (r: Request) => ({ viewer: r.viewer, archived: param(r, "archived") === "1", page: param(r, "page") ?? undefined });
 
+/// `session=<key>&thread=<id>`, repeated: only the items a change of those can touch (read/views.ts `chatRows`), and the
+/// ids of those (one not among the items now is gone from the list), for a device that makes its rows itself.
+const all = (r: Request, name: string) => r.query.filter(([k]) => k === name).map(([, v]) => v);
+const scoped = (r: Request) => ({ viewer: r.viewer, sessions: all(r, "session"), threads: all(r, "thread").filter((id) => /^\d+$/.test(id)).map(Number) });
+
 export const routes = ({ read }: Tools): Route[] => [
-  { method: "GET", pattern: /^\/chats$/, handle: (r: Request) => read(r, "chats", chatsOf(r)) },
+  {
+    method: "GET",
+    pattern: /^\/chats$/,
+    handle: (r: Request) => (r.query.some(([k]) => k === "session" || k === "thread") ? read(r, "chatRows", scoped(r)) : read(r, "chats", chatsOf(r))),
+  },
   { method: "POST", pattern: /^\/changed\/chats$/, handle: (r: Request) => changed(read, r, "chats", chatsOf(r), "id") },
   {
     method: "GET",
