@@ -3,6 +3,8 @@
 import type { Clock } from "effect";
 import assert from "node:assert/strict";
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
@@ -12,7 +14,7 @@ import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { SEGMENT } from "../src/read/packed.ts";
 import { cost, price, priceTable, sessionUsage, usageNow } from "../src/read/usage.ts";
 import { packFile } from "../src/sessions/archive.ts";
-import { iso, parseIso } from "../src/read/transcript.ts";
+import { iso, parseIso, rememberCodexRollout } from "../src/read/transcript.ts";
 import { type StoreChange, type UsageGroup, Store, newMessage } from "../src/store/store.ts";
 import { type CallState, UsageCounter, callsOf, claudeFiles, claudeProject, readFrom } from "../src/usage/counter.ts";
 import type { UsageCall, UsageFor } from "../src/store/usage.ts";
@@ -396,6 +398,81 @@ test("a turn ended before the counter began is not revisited within the safety m
   r.store.db.prepare("UPDATE usage_counter SET since = ?, through = ? WHERE id = 1").run(now + 1, now + 1);
   r.store.recordUsage = () => { throw new Error("an old idle transcript was read"); };
   assert.equal(await r.usage.read(), 0);
+});
+
+test("a running Codex call with a known path does not search old rollouts while its file has yet to appear", async () => {
+  const r = rig();
+  const key = "ember:c-pending-rollout";
+  const id = "pending-rollout";
+  const workspace = join(r.data, "workspace");
+  const home = join(r.data, "homes/cc");
+  const older = join(r.data, "transcripts/codex");
+  session(r.store, key, workspace, r.store.now());
+  r.store.setSessionRuntime(key, "codex", "cc", false, null, null, null, null);
+  r.store.setRuntimeSessionId(key, id);
+  r.store.ranIn(key, id, "cc");
+  r.store.setRunning(key, true);
+  for (let i = 0; i < 100; i++) mkdirSync(join(older, String(i)), { recursive: true });
+  const expected = join(home, "sessions/2026/11/03", `rollout-${id}.jsonl`);
+  assert.equal(rememberCodexRollout(home, id, expected), expected);
+  const listed: string[] = [];
+  const real = fs.readdirSync;
+  fs.readdirSync = ((dir: fs.PathLike, ...args: unknown[]) => (listed.push(String(dir)), (real as (...xs: unknown[]) => unknown)(dir, ...args))) as typeof real;
+  syncBuiltinESMExports();
+  try {
+    assert.equal(await r.usage.read(new Set([key])), 0);
+    const at = iso(r.store.now());
+    append(expected, [
+      JSON.stringify({ timestamp: at, type: "session_meta", payload: { id, cwd: workspace } }),
+      JSON.stringify({ timestamp: at, type: "turn_context", payload: { model: "gpt-6" } }),
+      JSON.stringify({ timestamp: at, type: "event_msg", payload: { type: "token_count", info: {
+        total_token_usage: { total_tokens: 3 }, last_token_usage: { input_tokens: 2, cached_input_tokens: 0, output_tokens: 1 },
+      } } }),
+    ]);
+    assert.equal(await r.usage.read(new Set([key])), 1, "the call is counted when the file appears");
+    assert.deepEqual(listed.filter((path) => path === older || path.startsWith(`${older}/`)), []);
+  } finally {
+    fs.readdirSync = real;
+    syncBuiltinESMExports();
+  }
+});
+
+test("a turn finishing after its chat switches runtime is counted on its original account", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const workspace = join(r.data, "sessions/ember/c-switch/workspace");
+  const key = "ember:c-switch";
+  session(r.store, key, workspace, r.store.now());
+  r.store.startTurnFor("t1", key, "input", { profile: "cc", person: "a@x", thread: null });
+  r.store.setRuntimeSessionId(key, "r1");
+  r.store.ranIn(key, "r1", "cc");
+  r.store.setSessionRuntime(key, "codex", "cx", false, null, null, null, null);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r1.jsonl");
+  append(path, [claudeLine("m1", r.store.now(), "claude-opus-5-5", usage(10, 0, 0, 0, 1))]);
+  r.store.endTurn("t1", "completed", null, null, null);
+  assert.equal(await r.usage.read(), 1);
+  const rows = r.store.usageGroups(0, MAX, 0);
+  assert.deepEqual(rows.map((g) => [g.input, g.profile]), [[10, "cc"]]);
+  assert.equal(await r.usage.read(), 0);
+});
+
+test("a switched runtime counts new calls without filling older calls from its transcript", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "sessions/ember/c-switch-old/workspace");
+  const key = "ember:c-switch-old";
+  session(r.store, key, workspace, now - 120_000);
+  r.store.startTurnFor("t1", key, "input", { profile: "cc", person: "a@x", thread: null });
+  r.store.setRuntimeSessionId(key, "r1");
+  r.store.ranIn(key, "r1", "cc");
+  r.store.setSessionRuntime(key, "codex", "cx", false, null, null, null, null);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r1.jsonl");
+  append(path, [claudeLine("old", now - 60_000, "claude-opus-5-5", usage(10, 0, 0, 0, 1)),
+    claudeLine("new", now + 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  r.store.endTurn("t1", "completed", null, null, null);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["new"]);
 });
 
 test("each call is counted once, for whom its turn worked, where and on what", async () => {

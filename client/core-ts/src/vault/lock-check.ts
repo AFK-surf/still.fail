@@ -9,7 +9,10 @@ import { utf8 } from "../util.ts";
 import { fromB64url } from "./crypto.ts";
 import { ed25519Ok, p256Ok } from "./verified.ts";
 
-export type Device = { id: string; sub: string; kind: "app" | "web"; sign_key?: string; exp?: number };
+/// `by`: whose signature put it in the lock (the entry's signer, a passkey's or a device's; the genesis's devices the
+/// owner's): a person's own device is one they added themselves, face to face (views/pair.ts); an admin may add one
+/// under any member's name, which a vault trusts with no key (views/vault.ts `certs` `own`).
+export type Device = { id: string; sub: string; kind: "app" | "web"; sign_key?: string; exp?: number; by?: string };
 /// `cloudKeys`: the keys the cloud signs member credentials with, as the lock names them (a JWKS).
 export type Checked = { ws: string; head: string; genesis: string; members: Map<string, string>; devices: Map<string, Device>; passkeys: Map<string, string>; origins: string[]; rp_id: string; disabled: boolean; cloudKeys: unknown };
 
@@ -90,7 +93,7 @@ export function checkLock(entries: Entry[], now: number): Checked {
   const head = entryHash(first);
   let s: Checked = { ws: first.ws, head, genesis: head, members: new Map(), devices: new Map(), passkeys: new Map(), origins: arr(b.origins).filter((o) => typeof o === "string"), rp_id: typeof b.rp_id === "string" ? b.rp_id : "", disabled: false, cloudKeys: b.cloud_keys ?? null };
   for (const m of arr(b.members)) if (typeof m?.sub === "string" && rank(m.role) >= 0) s.members.set(m.sub, m.role);
-  for (const d of arr(b.devices)) addDevice(s, device(d));
+  for (const d of arr(b.devices)) addDevice(s, { ...device(d), by: typeof b.owner === "string" ? b.owner : undefined });
   for (const p of arr(b.passkeys)) if (typeof p?.key === "string" && typeof p?.sub === "string") s.passkeys.set(p.key, p.sub);
   if (s.members.get(b.owner) !== "owner") refuse("the genesis names its owner");
   const by = signer(s, first.sig, first.at);
@@ -127,7 +130,7 @@ function apply(prev: Checked, e: Entry, now: number): Checked {
     case "device": {
       const d = device(b);
       need(managing || d.sub === by.sub);
-      addDevice(s, d);
+      addDevice(s, { ...d, by: by.sub });
       break;
     }
     case "device.remove": {

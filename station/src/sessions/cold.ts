@@ -95,28 +95,23 @@ export class ColdRooms implements ColdStorage {
     const hub = this.hub();
     const row = hub.store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
-    const id = row.runtimeSessionId;
-    if (hub.store.runtimeSessions(key).length === 0) return [];
-    if (
-      packing &&
-      id !== null &&
-      hub.store.sessionsInUse().some((s) => s.key !== key && s.runtime === row.runtime && s.runtimeSessionId === id)
-    )
+    const sources = hub.store.runtimeSessionSources(key);
+    if (sources.length === 0) return [];
+    if (packing && sources.some((source) => hub.store.transcriptInUse(source.runtime, source.id, key)))
       return [];
     const config = hub.config();
-    const runtime = runtimeNamed(row.runtime);
-    if (!runtime) return [];
     const root = realpathSync(config.dataDir);
     const files: string[] = [];
-    const homes = homesFirst(config.profiles, row.profile);
     // With those of the runtime sessions it ran in before (sessions/afresh.ts), each found as its history finds it.
-    for (const each of hub.store.runtimeSessions(key)) {
-      const path = transcriptPaths(runtime, config.dataDir, homes, [each], sessionPlaces(row)).paths[0];
+    for (const each of sources) {
+      const segmentRuntime = runtimeNamed(each.runtime);
+      if (!segmentRuntime) continue;
+      const path = transcriptPaths(segmentRuntime, config.dataDir, homesFirst(config.profiles, each.profile), [each.id], sessionPlaces(row)).paths[0];
       if (path === undefined) continue;
       const parent = realpathSync(dirname(path));
       if (!within(parent, root)) continue;
       files.push(join(parent, basename(path)));
-      if (runtime === "claude") archive.jsonlFiles(join(parent, each), files);
+      if (segmentRuntime === "claude") archive.jsonlFiles(join(parent, each.id), files);
     }
     return files;
   }

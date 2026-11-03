@@ -1,5 +1,8 @@
 # Station storage and change notifications
 
+> Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
+
+
 Two rules shape this:
 
 - **One place for every message.** Whatever is said in a conversation — by a
@@ -406,7 +409,7 @@ their whole thread (deleting a session removes threads left without one):
 
 A thread out of every list (archived itself, or every session of it archived)
 keeps its entries in the database, as one in a list does: entries are small
-(all of ccvm's 26,000 come to some 20 MB), and every list reads what it shows
+(all of test-c's 26,000 come to some 20 MB), and every list reads what it shows
 of every thread by an index, some 10 ms for all of a station's (2026-10-25).
 
 Stations before (the Rust station's database, version 12) wrote such a
@@ -422,7 +425,7 @@ those files after that.
 An archived, idle session's transcripts are packed in place (cold storage,
 under Housekeeping). The Rust station instead wrote a copy of them,
 `<data>/archive/transcripts/<session>.jsonl.zst`, and left them as they were,
-so both stayed on the disk (1.4 GB on ccvm); a station packs those sessions'
+so both stayed on the disk (1.4 GB on test-c); a station packs those sessions'
 transcripts and lets go of the copy three minutes after it starts
 (`ColdRooms.finishLegacyCopies`, their workspaces left as they are). Nothing
 reads the copies; showing the session again or deleting it removes one too.
@@ -514,7 +517,7 @@ crash leaves no file; a file older than an hour, one that does not read, or
 one by another process than the one `run/hub.json` named as it started (one
 that a process before it stopped waiting for after 40 s, written once that
 process had begun a run of its own) is not taken up but removed: a run of its
-own, and `missed`. (On ccvm, updated 32 times on 2026-10-24, every stream was told
+own, and `missed`. (On test-c, updated 32 times on 2026-10-24, every stream was told
 `missed` at each update, and every device read the whole station at once
 while the new process was starting.)
 

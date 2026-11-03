@@ -21,6 +21,8 @@ function messageOf(e: J): J {
     createdAt: e.at, editedAt: null,
   };
   if (e.authorPicture !== undefined) m.authorPicture = e.authorPicture;
+  if (e.authorModel !== undefined) m.authorModel = e.authorModel;
+  if (e.authorRuntime !== undefined) m.authorRuntime = e.authorRuntime;
   if (e.ending !== undefined) m.ending = e.ending;
   return m;
 }

@@ -396,6 +396,8 @@ fn wide_link_row_node(
   title_after : ((@view.View) -> Unit)?,
   title_after_shown : () -> Bool,
   folds : (() -> Bool)?,
+  tail : ((@view.View) -> Unit)?,
+  tail_shown : () -> Bool,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
@@ -473,6 +475,7 @@ fn wide_link_row_node(
           said.box(fn(w) { styled_words(w, value, fn() { if value_bad() { wide_value.then(bad) } else { wide_value } }) |> ignore })
           |> ignore
         })
+        row_tail_node(first, tail, tail_shown)
         if ends {
           icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore
         }
@@ -496,24 +499,31 @@ fn wide_link_row_node(
 /// A switch's row on a wide page (switch_row's, wide): its title, `note` quieter under it (the theme's rows'), the
 /// switch at its end across their middle, 16 apart; on a list's card (part_of) a row of it (wide_in_list: as far in as
 /// its rows' words, 10 over and under, as high as one at least, its corner concentric with the card's), its title as
-/// strong as the list's other rows' (setting_title). The switch alone answers.
+/// strong as the list's other rows' (setting_title); its words' looks `looks` where given. The switch alone answers.
 fn wide_switch_row_node(
   parent : @view.View,
   title : () -> String,
   on : () -> Bool,
   turn : (Bool) -> Unit,
   note : () -> String,
+  disabled : () -> Bool,
+  lead : ((@view.View) -> Unit)?,
+  looks? : (() -> @ui.TextStyle, () -> @ui.TextStyle),
 ) -> Unit {
   let at = part_of(parent)
+  let (title_look, note_look) = match looks {
+    Some(l) => l
+    None => (fn() { if at.list { setting_title() } else { theme().rows.title } }, fn() { theme().rows.note })
+  }
   let row = fn(r : @view.View) {
     r.row(Is(true)).gap(Is(16.0)).lines_up(Is(Some(Middle))) |> ignore
     r.box(fn(words) {
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(desk_list_gap)) |> ignore
-      words_node(words, title, fn() { if at.list { setting_title() } else { theme().rows.title } }) |> ignore
-      words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { theme().rows.note }) |> ignore })
+      led_title_node(words, title, title_look, lead)
+      words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, note_look) |> ignore })
     })
     |> ignore
-    switch_node(r, on, turn, title)
+    switch_node(r, on, turn, title, disabled~)
   }
   if at.list {
     parent.box(fn(cell) {

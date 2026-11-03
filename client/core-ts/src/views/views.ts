@@ -266,11 +266,13 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
     } else {
       // Before its session is read: the model and runtime the station gave with the message.
       const said = str(m.authorModel);
+      const runtime = str(get(identity, "runtime")) ?? str(m.authorRuntime) ?? get(session, "runtime") ?? null;
+      const otherRuntime = session !== undefined && str(m.authorRuntime) !== null && str(m.authorRuntime) !== str(get(session, "runtime"));
       m.by = {
-        name: model !== null ? format.agentLabel(model, str(get(identity, "effort"))) : (str(get(session, "agentText")) ?? saidName ?? "agent"),
+        name: identity !== null ? format.agentLabel(model, str(get(identity, "effort"))) : otherRuntime ? (saidName ?? (said !== null ? format.agentLabel(said, null) : format.runtimeLabel(runtime))) : (str(get(session, "agentText")) ?? saidName ?? "agent"),
         agent: agent ? author : null,
-        maker: model !== null ? present.maker(model) : session !== undefined ? (session.maker ?? null) : present.maker(said),
-        runtime: get(session, "runtime") ?? str(m.authorRuntime) ?? null,
+        maker: identity !== null ? present.maker(model) : otherRuntime || session === undefined ? present.maker(said) : (session.maker ?? null),
+        runtime,
       };
     }
   } else if (kind === "ember" || kind === "stillfail") {

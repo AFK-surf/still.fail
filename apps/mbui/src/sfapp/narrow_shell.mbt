@@ -185,11 +185,7 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Un
     })
     @motion.scope(c, whole, bottom=true)
   }
-  if stack_by_finger() {
-    built()
-  } else {
-    c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), built)
-  }
+  c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), built)
   // what is the page's own and takes back before it (said with it, in its island: what it reads is what the page
   // writes): the player sideways turned upright first; words picked in a chat, a link's menu, let go first (pick.mbt)
   play_back(c)
@@ -333,6 +329,8 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
   // (App.kt LockPrompts): put up when no other sheet is
   @settings.lock_prompts(settings_core(src, w), !sheet_open())
+  // a device of the person's waiting on this one for a vault's key (settings/vault_prompts.mbt), the same way
+  @settings.vault_prompts(settings_core(src, w), !sheet_open())
   // (the core what the settings put up over a page draws with, put up by what has none at hand)
   @settings.panels_frame(settings_core(src, w))
   // what another app shares, in the wide window's panel (share.mbt; a sheet on Small, as ShareSheet)
@@ -360,7 +358,7 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
           narrow_made_as(src, Setting(r), true).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -507,6 +505,11 @@ fn narrow_made_as(
       made("auto-decisions", fn(p, core, here, frame, _stint, _acts) {
         @sfpages.decisions_node(p, core, here, on_back=core.pop, frame~)
       })
+    Setting(AutoCompletion) =>
+      // (what it does in its place's top bar as a place; at its head as a page of the stack)
+      made("auto-completion", fn(p, core, here, frame, _stint, acts) {
+        @sfpages.completion_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
+      })
     Setting(Usage) =>
       // (what it does in its place's top bar as a place; at its head as a page of the stack)
       made("usage", fn(p, core, here, frame, _stint, acts) {
@@ -516,6 +519,10 @@ fn narrow_made_as(
       // (recording while it is the one on top of the stack: its stay there, stint's)
       made("shortcuts", fn(p, core, _here, frame, stint, _acts) {
         @sfpages.shortcuts_node(p, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stint() })
+      })
+    Setting(Notifications) =>
+      made("notifications", fn(p, core, here, frame, stint, _acts) {
+        @sfpages.notify_node(p, core, here, on_back=core.pop, frame~, stint~)
       })
     Setting(UsagePrices(days)) =>
       made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {

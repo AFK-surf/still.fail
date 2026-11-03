@@ -1582,6 +1582,10 @@ web-pages.vault.addKind.title
 web-pages.vault.addKind.token
 web-pages.vault.addKind.tokenDetail
 web-pages.vault.addedDevice
+web-pages.vault.ask
+web-pages.vault.approve.notHere
+web-pages.vault.askWhat
+web-pages.vault.asked
 web-pages.vault.agentMay
 web-pages.vault.all
 web-pages.vault.content
@@ -1666,6 +1670,11 @@ web-pages.vault.openChat
 web-pages.vault.opened
 web-pages.vault.personal
 web-pages.vault.private
+web-pages.vault.promptBody
+web-pages.vault.promptBy
+web-pages.vault.promptGive
+web-pages.vault.promptLater
+web-pages.vault.promptTitle
 web-pages.vault.recover
 web-pages.vault.recoverGo
 web-pages.vault.recoverLead

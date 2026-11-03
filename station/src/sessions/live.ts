@@ -10,7 +10,7 @@ import { existsSync, type FSWatcher, watch } from "node:fs";
 import type { BackgroundTask, LiveEvent, PlanItem } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { type PlanState, noPlan, planItems, readPlan, saysWhole } from "../read/plan.ts";
-import { ChainTail, type TailState } from "../read/tail.ts";
+import { ChainTail, type TailState, type TranscriptRef } from "../read/tail.ts";
 import { type TimelineEntry, brief } from "../read/transcript.ts";
 import { type SessionUsage, noUsage } from "../read/usage.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
@@ -100,7 +100,7 @@ export type History = {
 
 /// Where a session's transcripts are: of the runtime sessions it ran in, the first first, ending with its current one
 /// (`current`: whether that one's is among them; when not given, it is).
-export type Locate = (key: string) => { runtime: RuntimeKind; paths: string[]; current?: boolean } | null;
+export type Locate = (key: string) => { runtime: RuntimeKind; paths: TranscriptRef[]; current?: boolean } | null;
 
 export class LiveHub {
   private steps = new Map<string, LiveStep[]>();
@@ -603,7 +603,10 @@ export class LiveHub {
       begin(tail);
       return true;
     }
-    const same = (states: TailState[] | null): states is TailState[] => states !== null && states.length === at.paths.length && states.every((st, i) => st.path === at.paths[i]);
+    const same = (states: TailState[] | null): states is TailState[] => states !== null && states.length === at.paths.length && states.every((st, i) => {
+      const ref = at.paths[i]!;
+      return st.path === (typeof ref === "string" ? ref : ref.path) && (st.runtime ?? at.runtime) === (typeof ref === "string" ? at.runtime : ref.runtime);
+    });
     watched.ready = this.history
       .state(key)
       .then(

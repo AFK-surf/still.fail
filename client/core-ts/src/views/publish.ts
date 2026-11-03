@@ -1,6 +1,7 @@
 // A chat made public (docs/public-share.md): the snapshots its station keeps of it, as its "…" lists them
 // (`ChatView.publish`, each with its link put together here), and the calls that make and revoke one:
-// `chat.publishPreview` (what a snapshot would hold now, nothing kept), `chat.publish` (kept, with its link) and
+// `chat.publishPreview` (what a picture of it holds now, made here of what the device holds: its station is not
+// asked, so a busy one keeps nobody waiting), `chat.publish` (kept, with its link) and
 // `chat.unpublish`. Only people publish; the station keeps the snapshot and its key. Done, the thread as held says so
 // at once (as xshare.ts's). A revoke shows at once: what is being revoked is kept in the chat's workspace
 // (workspace.ts `part`) and left out of the list until its station answers (rule 4).
@@ -15,6 +16,7 @@ import { markdown } from "../markdown.ts";
 import { encode } from "../ops.ts";
 import { placeFiles } from "../placed.ts";
 import * as present from "../present.ts";
+import { redact } from "../redact.ts";
 import { StationAddr, stationId } from "../station/addr.ts";
 import { arr as arrU, base64url, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
@@ -229,6 +231,74 @@ export function turnShown(answer: J, n: number): J {
 
 type Of<K extends Call["kind"]> = Extract<Call, { kind: K }>;
 
+/// Messages a picture holds at most: a chat with more is drawn from its latest ones (as a station's snapshot is).
+const MOST = 5000;
+
+/// What looks like a secret hidden in every word `x` says (a string, or all the strings in it), and how many.
+function hiddenIn(x: unknown, mark: string): { value: unknown; count: number } {
+  let count = 0;
+  const walk = (y: unknown): unknown => {
+    if (typeof y === "string") {
+      const done = redact(y, mark);
+      count += done.count;
+      return done.text;
+    }
+    if (Array.isArray(y)) return y.map(walk);
+    if (isObject(y)) return Object.fromEntries(Object.entries(y).map(([k, z]) => [k, walk(z)]));
+    return y;
+  };
+  return { value: walk(x), count };
+}
+
+/// What a picture of chat `thread` holds, of the entries this device holds of it (as its page has them; none read for
+/// it), what looks like a secret hidden in all they say: shaped as a station answers a preview (`previewShown` reads
+/// it), so it is drawn at once whatever its station is doing. Its title as the chat's list says it.
+export function heldPreview(inner: Inner, station: string, thread: number): J {
+  const span = inner.data.logSpan("entry", station, String(thread));
+  const held = span === null ? [] : [...inner.data.logRange("entry", station, String(thread), span.min, span.max).values()].filter(isObject);
+  held.sort((a, b) => num(get(a, "n")) - num(get(b, "n")));
+  const said = held.filter((e) => get(e, "kind") === "message");
+  const kept = said.slice(Math.max(0, said.length - MOST));
+  const from = kept.length > 0 ? num(get(kept[0], "n")) : 0;
+  const upto = kept.length > 0 ? num(get(kept[kept.length - 1], "n")) : 0;
+  const mark = t("station.publish.hidden");
+  // Each message's words as its last edit has them and its card as the last that restated it, hidden alike: how many
+  // in each (as the station's `viewsOf` counts them).
+  const counts = new Map<number, { words: number; card: number; text: string }>();
+  const views = held.filter((e) => num(get(e, get(e, "kind") === "message" ? "n" : "target")) >= from && (get(e, "kind") !== "message" || num(get(e, "n")) <= upto)).map((e) => {
+    const text = hiddenIn(get(e, "text"), mark);
+    const quotes = hiddenIn(get(e, "quotes"), mark);
+    const shownCard = hiddenIn(get(e, "card"), mark);
+    const v: J = { ...e, text: text.value, quotes: quotes.value, ...(get(e, "card") !== undefined ? { card: shownCard.value } : {}) };
+    const words = text.count + quotes.count;
+    const card = shownCard.count;
+    const n = v.kind === "message" ? num(v.n) : num(v.target);
+    const was = counts.get(n);
+    if (v.kind === "message") counts.set(n, { words, card, text: str(v.text) ?? "" });
+    else if (was !== undefined) {
+      if (v.card !== undefined) was.card = card;
+      if (v.card === undefined || (str(v.text) ?? "") !== was.text) Object.assign(was, { words, text: str(v.text) ?? "" });
+    }
+    return v;
+  });
+  const hidden = [...counts].flatMap(([n, c]) => (c.words + c.card > 0 ? [{ n, count: c.words + c.card }] : []));
+  const files: J[] = [];
+  const entries = kept.map((e) => {
+    const own = arr(get(e, "attachments")).filter(isObject).map((f) => {
+      const k = `f${files.length}`;
+      files.push({ ...f, k, n: num(get(e, "n")), type: "" });
+      return k;
+    });
+    const person = get(e, "authorKind") === "person" && (str(get(e, "author")) ?? "").includes("@") ? { person: get(e, "author") } : {};
+    return {
+      n: num(get(e, "n")), at: num(get(e, "at")), authorKind: get(e, "authorKind"), author: str(get(e, "authorName")) ?? str(get(e, "author")) ?? "",
+      text: redact(str(get(e, "text")) ?? "", mark).text, files: own, model: get(e, "authorModel"), runtime: get(e, "authorRuntime"), ...person,
+    };
+  });
+  const title = redact(format.chatTitle(inner.data.listedThread(station, thread) ?? {}), mark).text;
+  return { upto, title, entries, redacted: hidden, files, views: { entries: views, hidden } };
+}
+
 /// A station from before publishing has none of its routes (an unknown chat is its own 404, said as the station says it).
 const oldStation = (e: CoreError) => (e.status === 404 && e.message.startsWith("no route ") ? new CoreError("http_404", t("core-misc.publish.oldStation"), 404) : e);
 
@@ -252,14 +322,10 @@ export function install(inner: Inner): void {
   };
   const addr = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: (e) => e as CoreError });
 
-  handlers.chatPublishPreview = (_inner, call, _progress, _at, ctx) => {
+  handlers.chatPublishPreview = (_inner, call) => {
     const c = call as Of<"chatPublishPreview">;
-    return Effect.gen(function* () {
-      const at = yield* addr(c.station);
-      const answer = yield* Effect.mapError(
-        inner.stations.requests.call(at, "POST", `/threads/${c.thread}/publish/preview`, { names: namesOf(inner, c.station) }, { ctx }),
-        oldStation,
-      );
+    return Effect.sync(() => {
+      const answer = heldPreview(inner, c.station, c.thread);
       const members = arr(get(inner.data.shared({ topic: "workspace", workspace: ofAddress(c.station) }), "members"));
       return previewShown(c.turn === null ? answer : turnShown(answer, c.turn), clock(), members, (entries) => inner.views.listed(c.station, c.thread, entries));
     });

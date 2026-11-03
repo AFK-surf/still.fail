@@ -21,7 +21,7 @@ import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { homesFirst, sessionPlaces, transcriptPaths } from "./transcript.ts";
+import { sessionPlaces, transcriptSources } from "./transcript.ts";
 import { type Read, chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
 import { log } from "../ops/log.ts";
 import { HttpError, apiOf, authorNames as authorNamesOf, creator as creatorOf, messageView, people as peopleOf, useNames } from "./views.ts";
@@ -197,7 +197,7 @@ function threadView(
   const v = threadJson(t.thread);
   v.sessions = t.sessions.map((m) => ({ thread: m.thread, session: m.session, connect: m.connect, joinedAt: m.joinedAt }));
   v.last = t.last;
-  v.lastMessage = t.lastMessage === null ? null : messageView(t.lastMessage, names);
+  v.lastMessage = t.lastMessage === null ? null : messageView(t.lastMessage, names, s);
   v.read = t.read;
   v.unread = t.unread;
   v.people = people(s, t.people);
@@ -303,11 +303,12 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
 /// A session's transcripts (hub.rs `locate`): those of the runtime sessions it ran in before first (sessions/afresh.ts),
 /// and none now (its context cleared) still reads those it ran in; found whatever profile it is on now, if any. Null:
 /// none found.
-function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: string[] } | null {
+function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: { path: string; runtime: RuntimeKind }[] } | null {
   const row = sessionRow(s, key);
   const runtime = runtimeKind(row.runtime) ?? null;
-  if (runtime === null || store.runtimeSessions(s, key).length === 0) return null;
-  return { runtime, paths: transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key), sessionPlaces(row)).paths };
+  const sources = store.runtimeSessionSources(s, key);
+  if (runtime === null || sources.length === 0) return null;
+  return { runtime, paths: transcriptSources(s.dataDir, configOf(s).profiles, sources, sessionPlaces(row)).paths };
 }
 
 /// Where the reading of a session's transcripts stands (read/transcripts.ts `stateOf`), for its live view to go on from
@@ -322,10 +323,11 @@ export function transcriptState(s: Store, key: string): Json {
 export function transcriptFile(s: Store, key: string, lang: Lang): Json {
   setLang(lang);
   const row = sessionRow(s, key);
-  const runtime = runtimeKind(row.runtime) ?? null;
-  if (runtime === null || row.runtimeSessionId === null) return { path: null };
-  const { paths, current } = transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key), sessionPlaces(row));
-  return { path: current ? paths.at(-1)! : null };
+  if (row.runtimeSessionId === null) return { path: null };
+  const source = store.runtimeSessionSources(s, key).find((s) => s.id === row.runtimeSessionId);
+  if (!source) return { path: null };
+  const { paths, current } = transcriptSources(s.dataDir, configOf(s).profiles, [source], sessionPlaces(row));
+  return { path: current ? paths.at(-1)!.path : null };
 }
 
 /// GET /sessions/:key/widget-state?path: what a widget in one of the session's messages holds, null when nothing or

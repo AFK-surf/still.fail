@@ -355,6 +355,7 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
     let os = screen_os(s.src, s.station).to_lower()
     let granting = !os.has_prefix("linux") && phase == "denied" &&
       (field(access, "capture") == Some(Json::boolean(false)) || field(access, "control") == Some(Json::boolean(false)))
+    let linux_setup = os.has_prefix("linux") && text(access, "help") == "linux-desktop"
     // a light capsule on the dark either way: the solid one in the dark theme, the soft one in the light
     if phase == "ended" || phase == "denied" || phase == "failed" {
       c.box(style=ended_keys, flow=true, line_gap=@ui.Space::S2.px(), fn() {
@@ -366,6 +367,11 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
           c.tell("screen-grants/" + s.view, fn() {
             @settings.station_parts[station] = "settings"
             open_page(Setting(@settings.Route::Station(station)))
+          })
+        }
+        if linux_setup && again_key(c, "screen-linux-setup/" + s.view, @sf.t("web-pages.screen.linuxSetup")) {
+          c.tell("screen-linux-setup/" + s.view, fn() {
+            @ui.open_url("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md") |> ignore
           })
         }
       })

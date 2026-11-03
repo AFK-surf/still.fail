@@ -2561,6 +2561,43 @@ test("taken up by the next station, a process runs on the account it was started
   await r.close();
 });
 
+test("changing runtime lets the running turn finish and the next reads back the same conversation", async () => {
+  const r = new Rig();
+  r.edit((raw) => { raw.profiles[1].models = ["gpt-5"]; });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const old = r.claude.last();
+  const key = old.options.route;
+  const path = join(r.config.profiles[0]!.home, "projects", claudeProject(r.session(key).workspace)!, `${old.id()}.jsonl`);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify({ type: "user", message: { role: "user", content: "earlier work" } }) + "\n");
+  await configure(r.hub, key, { runtime: "codex", model: "gpt-5" });
+  assert.equal(r.session(key).runtime, "codex");
+  assert.equal(old.disposed, false);
+  assert.equal(r.store.sessionOfRuntime("claude", old.id())?.key, key);
+  assert.equal(r.store.sessionOfRuntime("codex", old.id()), null);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  const sent = r.said(r.thread("C1", m.threadTs).id).find((x) => x.text === "done");
+  assert.deepEqual(sent?.agentIdentity, { runtime: "claude", model: "opus", effort: "high" });
+  old.complete();
+  await settle();
+  await r.accept(reply(m, "9999.9", "continue", { addressed: true }));
+  await settle();
+  const next = r.codex.last();
+  assert.equal(old.disposed, true);
+  assert.equal(next.options.resume, undefined);
+  assert.ok(matches(next.prompts[0]!, ["This is a new conversation", `session_history with chat ${key}`, "continue"]));
+  assert.equal(r.store.runtimeSessionSources(key)[0]!.runtime, "claude");
+  assert.ok(r.hub.live.before(key, 100, 100)![1].some((e) => e.text === "earlier work"));
+  const codexPath = join(r.config.profiles[1]!.home, "sessions", "2026", "11", "03", `rollout-${next.id()}.jsonl`);
+  mkdirSync(dirname(codexPath), { recursive: true });
+  writeFileSync(codexPath, JSON.stringify({ type: "response_item", timestamp: "2026-10-24T00:00:00Z", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "continued work" }] } }) + "\n");
+  const history = await r.call(key, "session_history", { chat: key });
+  assert.ok(matches(history, ["earlier work", "continued work"]), history);
+  await r.close();
+});
+
 test("on another account a conversation goes on in a new runtime session, its history read on; on its own it is taken up", async () => {
   const r = new Rig();
   r.edit((raw) => {

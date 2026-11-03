@@ -228,12 +228,19 @@ function pictureView(v: Json, names: Names, kind: AuthorKind, author: string) {
 // ---- messages ----
 
 /// A merged message as lists show it (a thread's latest), with its author's name.
-export function messageView(m: MessageRow, names: Names): Json {
+export function messageView(m: MessageRow, names: Names, s: Store): Json {
   const v: Json = {
     agentIdentity: m.agentIdentity, seq: m.n, thread: m.thread, ts: m.ts, authorKind: m.authorKind, author: m.author, authorName: names(m.authorKind, m.author),
     text: m.text, attachments: m.attachments, quotes: m.quotes, declared: m.declared, createdAt: m.createdAt, editedAt: m.editedAt,
   };
   pictureView(v, names, m.authorKind, m.author);
+  if (m.authorKind === "agent") {
+    const session = m.agentIdentity == null || typeof m.agentIdentity.runtime !== "string" ? store.getSession(s, m.author) : null;
+    const runtime = m.agentIdentity?.runtime ?? store.originalRuntime(s, m.author) ?? session?.runtime;
+    if (typeof runtime === "string") v.authorRuntime = runtime;
+    const model = m.agentIdentity != null ? m.agentIdentity.model : runtime === session?.runtime ? session?.model : null;
+    if (typeof model === "string") v.authorModel = model;
+  }
   declaredView(v, m.declared);
   return v;
 }
@@ -274,10 +281,10 @@ function cardView(api: Api, thread: number, dismissed: Set<string>, names: Names
   const pending = store.pendingCard(api.store, thread);
   if (pending === null) return null;
   const [m, card] = pending;
-  const message = messageView(m, names);
+  const message = messageView(m, names, api.store);
   if (field(card, "type") === "options") message.options = field(card, "options");
   message.card = card;
-  const before = store.messagesBefore(api.store, thread, m.n, 2).map((b) => messageView(b, names));
+  const before = store.messagesBefore(api.store, thread, m.n, 2).map((b) => messageView(b, names, api.store));
   const v: Json = { seq: m.n, card, message, before };
   if (dismissed.has(`${thread}:${m.n}`)) v.dismissed = true;
   return v;
@@ -306,8 +313,8 @@ function needView(api: Api, thread: number, agents: Json[], dismissed: Set<strin
   const asked = store.askingMessage(api.store, thread, seq, during);
   if (asked === null) return null;
   const [m, earlier] = asked;
-  const before = earlier.map((b) => messageView(b, names));
-  const v: Json = { seq: m.n, message: messageView(m, names), before };
+  const before = earlier.map((b) => messageView(b, names, api.store));
+  const v: Json = { seq: m.n, message: messageView(m, names, api.store), before };
   if (dismissed.has(`${thread}:${m.n}`)) v.dismissed = true;
   return v;
 }
@@ -370,8 +377,23 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   const shown = (scope === null ? store.shownSessions(s) : scope.sessions.flatMap((k) => store.getSession(s, k) ?? []).filter((x) => x.archivedAt === null)).filter((x) => sees(viewer, x.ws));
   const keys = shown.map((x) => x.key);
   const threadIds = [...new Set([...(scope?.threads ?? []), ...store.threadsOfSessions(s, keys)])];
-  const own = store.listThreads(s, viewer.email, null, threadIds).filter((t) => t.thread.surface === STILLFAIL_SURFACE && t.thread.hiddenAt === null);
-  const stats = store.sessionStats(s, [...new Set(own.flatMap((t) => t.sessions.map((m) => m.session)))]);
+  // The chats themselves and who is in them, by their keys alone: their summaries (latest message, unread, people) are
+  // the device's already, and read with them, this read took up to 73 s on ccvm short of memory (2026-11-03).
+  const own = threadIds.flatMap((id) => {
+    const thread = store.getThread(s, id);
+    return thread !== null && thread.surface === STILLFAIL_SURFACE && thread.hiddenAt === null ? [{ thread, sessions: store.threadSessions(s, id) }] : [];
+  });
+  const listed = new Set(keys);
+  const listedOne = (key: string) => {
+    if (scope === null) return listed.has(key);
+    const x = store.getSession(s, key);
+    return x !== null && x.archivedAt === null && sees(viewer, x.ws);
+  };
+  const lastTurns = new Map<string, Json>();
+  const lastTurnOf = (key: string) => {
+    if (!lastTurns.has(key)) lastTurns.set(key, store.lastTurn(s, key));
+    return lastTurns.get(key) ?? null;
+  };
   const dismissed = store.dismissed(s, viewer.email, own.map((t) => t.thread.id));
   const mine = isMine(api, viewer);
   const card: Json = {};
@@ -384,7 +406,8 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
     const c = cardView(api, id, dismissed, names);
     if (c !== null) card[id] = c;
     else {
-      const agents = t.sessions.filter((m) => stats.has(m.session)).map((m) => ({ lastTurn: stats.get(m.session)?.lastTurn ?? null }));
+      // its agents in lists, as its row has them (`chats`)
+      const agents = t.sessions.filter((m) => listedOne(m.session)).map((m) => ({ lastTurn: lastTurnOf(m.session) }));
       const n = needView(api, id, agents, dismissed, names);
       if (n !== null) need[id] = n;
     }
@@ -496,7 +519,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     const creator_ = creator(t.thread.createdBy);
     const people_ = people(t.people);
     const names = authorNames(api, t.thread.id);
-    const lastView = t.lastMessage === null ? null : messageView(t.lastMessage, names);
+    const lastView = t.lastMessage === null ? null : messageView(t.lastMessage, names, api.store);
     const starters = agents.map((a) => creator(all.get(a.key)?.createdBy ?? null));
     const key = agents[0].key;
     // with no name of its own, the Slack thread its agent came from names it
@@ -511,6 +534,9 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
         text: typeof lastView.text === "string" ? takeChars(text, LAST_CHARS) : null, createdAt: lastView.createdAt,
       };
       if (lastView.authorPicture !== undefined) last.authorPicture = lastView.authorPicture;
+      if (lastView.agentIdentity != null) last.agentIdentity = lastView.agentIdentity;
+      if (lastView.authorModel !== undefined) last.authorModel = lastView.authorModel;
+      if (lastView.authorRuntime !== undefined) last.authorRuntime = lastView.authorRuntime;
     }
     const isMineRow = mine(creator_) || people_.some((p) => mine(p)) || starters.some((x) => mine(x)) || agents.some((a) => spoke.has(a.key));
     const row: Json = {
@@ -710,6 +736,7 @@ export function letters(station: Store, _viewer: Viewer, thread: number, params:
 export function entryViews(api: Api, thread: number, entries: EntryRow[]): Json[] {
   const names = authorNames(api, thread);
   const sessions = new Map<string, SessionRow | null>();
+  const origins = new Map<string, string | null>();
   return entries.map((e) => {
     const v = entryJson(e);
     v.authorName = names(e.authorKind, e.author);
@@ -718,8 +745,13 @@ export function entryViews(api: Api, thread: number, entries: EntryRow[]): Json[
       if (!sessions.has(e.author)) sessions.set(e.author, store.getSession(api.store, e.author));
       const session = sessions.get(e.author)!;
       if (session !== null) {
-        if (session.model !== null) v.authorModel = session.model;
-        v.authorRuntime = session.runtime;
+        if (typeof e.agentIdentity?.runtime === "string") v.authorRuntime = e.agentIdentity.runtime;
+        else {
+          if (!origins.has(e.author)) origins.set(e.author, store.originalRuntime(api.store, e.author));
+          v.authorRuntime = origins.get(e.author) ?? session.runtime;
+        }
+        const model = e.agentIdentity != null ? e.agentIdentity.model : v.authorRuntime === session.runtime ? session.model : null;
+        if (typeof model === "string") v.authorModel = model;
       }
     }
     declaredView(v, e.declared);

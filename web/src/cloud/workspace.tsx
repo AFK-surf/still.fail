@@ -44,6 +44,7 @@ import { AddProfile } from "../pages/AddProfile.tsx";
 import { ProfilesNav } from "../ProfilesNav.tsx";
 import { NavAction, NavList, NavItem, NavSection, NavTop } from "../SidebarList.tsx";
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
+import { VaultPrompt } from "./Vault.tsx";
 import { VaultAll, VaultSettings } from "./Vault.tsx";
 import { VaultItemPage } from "./VaultItem.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, StationArchivingSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, MemoryStationSettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
@@ -125,11 +126,11 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
 
   // No station yet: nothing of the workspace's pages works, so none is shown; adding the first station is the page.
   // The devices waiting on this one (in any workspace of the person's) are put up on each of its pages.
-  if (known && known.length === 0 && !settings) return <><WorkspaceKept entry={entry} /><SecurityPrompt /><Onboarding entry={entry} /></>;
+  if (known && known.length === 0 && !settings) return <><WorkspaceKept entry={entry} /><SecurityPrompt /><VaultPrompt /><Onboarding entry={entry} /></>;
   // A device waiting to be confirmed into the workspace's lock: nothing of it is reached until it is (its settings are).
   if (waiting && !settings) {
     return (
-      <><WorkspaceKept entry={entry} /><SecurityPrompt />
+      <><WorkspaceKept entry={entry} /><SecurityPrompt /><VaultPrompt />
         <Bare entry={entry}><main>{lock && <SecurityWaiting entry={entry} lock={lock} />}</main></Bare>
       </>
     );
@@ -153,7 +154,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         </div>
         <SidebarEdge />
         <SystemBubbles scope={entry.id} />
-        <SecurityPrompt />
+        <SecurityPrompt /><VaultPrompt />
         {/* What another app shares (shareIn.ts), over whichever page is open. */}
         <ShareInPanel scope={entry.id} />
         <main className={shellCss.main}>

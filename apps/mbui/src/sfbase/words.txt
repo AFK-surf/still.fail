@@ -538,6 +538,7 @@ android-misc.screen.fill.pick
 android-misc.screen.fill.none
 android-misc.screen.fill.noOp
 android-misc.screen.fill.failed
+android-misc.screen.fill.unreached
 android-misc.screen.fill.empty
 android-misc.screen.fill.offerAuto
 android-misc.screen.fill.autoPick
@@ -2287,6 +2288,7 @@ web-pages.profiles.usedBy
 web-pages.profiles.verifiedAdded
 web-pages.profiles.workspaces.lead
 web-pages.screen.again
+web-pages.screen.linuxSetup
 web-pages.screen.debug.appRunning
 web-pages.screen.debug.appsLoading
 web-pages.screen.debug.appsNone
@@ -2567,6 +2569,11 @@ web-main.outflow.whereStation
 web-main.outflow.kind
 web-main.outflow.allowed
 web-main.outflow.refused
+web-main.outflow.link
+web-main.outflow.linkLine
+web-main.outflow.linkStarting
+web-main.outflow.linkRunning
+web-main.outflow.linkFailed
 web-main.preset.label
 web-main.preset.none
 web-main.preset.new

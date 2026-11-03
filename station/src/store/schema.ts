@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   archived_at INTEGER,
   archived_by TEXT,
   shown_at INTEGER,
-  cwd TEXT
+  cwd TEXT,
+  original_runtime TEXT
 );
 -- The sessions shown (store.ts LIVE_SESSIONS): what the station's own periodic work goes over; the archived ones only grow.
 CREATE INDEX IF NOT EXISTS sessions_live ON sessions (last_active_at) WHERE archived_at IS NULL;
@@ -318,6 +319,7 @@ CREATE TABLE IF NOT EXISTS runtime_sessions (
   id TEXT NOT NULL,
   profile TEXT,
   at INTEGER NOT NULL,
+  runtime TEXT,
   PRIMARY KEY (session_key, id)
 );
 -- The session that went on with a runtime's session, by its id (rows.ts SESSION_OF_RUNTIME: a machine's session gone
@@ -417,6 +419,27 @@ export const MERGED = `CREATE VIEW merged AS
 
 const has = (db: DatabaseSync, table: string, column: string): boolean =>
   db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(column) !== undefined;
+
+/// Older records with no runtime belong to the session's original runtime. Remember it on the session when it first
+/// changes, instead of rewriting every old transcript record while opening the database.
+export function addRuntimeSessionRuntime(db: DatabaseSync): void {
+  if (!has(db, "runtime_sessions", "runtime")) db.exec("ALTER TABLE runtime_sessions ADD COLUMN runtime TEXT");
+  if (!has(db, "sessions", "original_runtime")) db.exec("ALTER TABLE sessions ADD COLUMN original_runtime TEXT");
+  // A previous station can still change the runtime during handover. Remember the original for its writes too.
+  // The index exists only where a previous version could already have switched a session before this field was added.
+  const first = hasRuntimeOrderIndex(db)
+    ? "COALESCE((SELECT runtime FROM runtime_sessions INDEXED BY runtime_sessions_ordered WHERE session_key = OLD.key ORDER BY at, rowid LIMIT 1), OLD.runtime)" : "OLD.runtime";
+  db.exec(`CREATE TRIGGER IF NOT EXISTS sessions_original_runtime AFTER UPDATE OF runtime ON sessions
+    WHEN OLD.runtime IS NOT NEW.runtime AND OLD.original_runtime IS NULL AND NEW.original_runtime IS NULL BEGIN
+      UPDATE sessions SET original_runtime = ${first} WHERE key = NEW.key AND original_runtime IS NULL;
+    END`);
+}
+
+/// Some stations already built this index while adding per-transcript runtimes. It lets us recover a session's first
+/// runtime if it changed before original_runtime was introduced, without building an index over history at startup.
+export function hasRuntimeOrderIndex(db: DatabaseSync): boolean {
+  return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'runtime_sessions_ordered'").get() !== undefined;
+}
 
 /// add_archive_columns: columns archiving came with, added to a database made before them. When they come, each
 /// session's first chat on the page is taken as its own, and chats of sessions archived then as archived with them.

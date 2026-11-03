@@ -12,11 +12,11 @@
 // JSON is read with JSON.parse, so a value shows as JavaScript has it: a number written `1.0` shows `1`, a key that is
 // an integer comes first, a number past 2^53 rounds (serde_json keeps each as written). Transcripts rarely have them.
 import { closeSync, existsSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { isPlanTool } from "./plan.ts";
 import { tr } from "./spoken.ts";
 import type { Json } from "./store.ts";
-import type { RuntimeKind } from "../agents/runtime.ts";
+import { runtimeKind, type RuntimeKind } from "../agents/runtime.ts";
 import { unpackedWhole } from "./packed.ts";
 
 /// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none; `brief` when what it says is
@@ -249,6 +249,28 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = fa
 /// each was looked for through every day's directory at each read, seconds on the station's thread on ccvm.
 const rollouts = new Map<string, string>();
 
+/// A running Codex thread says its own rollout path. The file may not exist until its first turn: keep the path even
+/// then, so following it does not visit every older day's directory while waiting for that file to appear.
+const saidRollouts = new Map<string, { suffix: string; seen: boolean }>();
+
+export function rememberCodexRollout(home: string, id: string, path: unknown): string | null {
+  if (typeof path !== "string" || !isAbsolute(path) || /[\\/\0]/.test(id)) return null;
+  const name = basename(path);
+  if (!name.startsWith("rollout-") || !name.endsWith(`-${id}.jsonl`)) return null;
+  const dir = join(home, "sessions");
+  let real = dir;
+  try { real = realpathSync(dir); } catch {}
+  const within = (root: string) => {
+    const part = relative(root, path);
+    return part !== "" && part !== ".." && !part.startsWith(`..${sep}`) && !isAbsolute(part);
+  };
+  if (!within(dir) && !within(real)) return null;
+  const entry = { suffix: relative(within(dir) ? dir : real, path), seen: false };
+  saidRollouts.set(`${dir}\0${id}`, entry);
+  saidRollouts.set(`${real}\0${id}`, entry);
+  return path;
+}
+
 /// dsh's: the session's directory holds one file per format it was written in (session.v<N>.jsonl); the current is the
 /// highest N. Its directory is under one named for its working directory (any).
 function dshTranscript(root: string, id: string): string | null {
@@ -294,6 +316,7 @@ export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: st
   // out only once one is to be looked in: nearly every transcript is in the shared place, the first.
   const shared = sharedTranscripts(dataDir, runtime);
   const ways = homes.map((home) => join(home, transcriptDir(runtime)));
+  const saidDirs = runtime === "codex" ? [shared, ...ways] : [];
   const real = (dir: string): string | null => {
     try {
       return realpathSync(dir);
@@ -320,8 +343,38 @@ export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: st
     return null;
   };
   const placed = places.length > 0;
-  const found = ids.map((id) => inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id, placed, anywhere)));
+  const found = ids.map((id) => {
+    let reported: { suffix: string; seen: boolean } | undefined;
+    if (runtime === "codex") {
+      for (const dir of saidDirs) {
+        const said = saidRollouts.get(`${dir}\0${id}`) ?? saidRollouts.get(`${real(dir) ?? dir}\0${id}`);
+        if (!said) continue;
+        reported ??= said;
+        const path = join(dir, said.suffix);
+        if (isFile(storage(path))) { said.seen = true; return path; }
+        if (!said.seen && !anywhere) return null;
+        // History also looks elsewhere: a file may have moved before this process saw it at the reported path.
+      }
+    }
+    const path = inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id, placed, anywhere));
+    // If a history read found the file elsewhere, later live reads may use that cached location too.
+    if (path !== null && reported) reported.seen = true;
+    return path;
+  });
   return { paths: found.filter((p) => p !== null), current: found.at(-1) != null };
+}
+
+/// Resolve each segment with the runtime and account that wrote it, keeping their conversation order.
+export function transcriptSources(dataDir: string, profiles: readonly { id: string; home: string }[], sources: readonly { id: string; runtime: string; profile: string | null }[], places: readonly string[] = [], options: { anywhere?: boolean } = {}): { paths: { path: string; runtime: RuntimeKind }[]; current: boolean } {
+  const paths: { path: string; runtime: RuntimeKind }[] = [];
+  let current = false;
+  for (const source of sources) {
+    const runtime = runtimeKind(source.runtime);
+    const found = runtime ? transcriptPaths(runtime, dataDir, homesFirst(profiles, source.profile), [source.id], places, options) : null;
+    current = found?.current === true;
+    if (runtime && found?.paths[0]) paths.push({ path: found.paths[0], runtime });
+  }
+  return { paths, current };
 }
 
 /// Where a session works and worked, for `transcriptPaths`: the directory it was moved to, and its workspace.

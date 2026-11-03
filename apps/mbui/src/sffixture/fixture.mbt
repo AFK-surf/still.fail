@@ -900,7 +900,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
       Some({ "title": "共享调试", "line": "仅安卓 app 支持共享调试", "sharing": false, "lendable": false })
     "screenCard" | "adbCard" => fixture_link_card(name, params)
     // (a chat's agent's run settings, a settings page: the settings' own)
-    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" =>
+    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" || f.mode == "settings-run-runtime" =>
       @settings.fixture_topic(f.mode, name, params)
     "pick" if params.get("of") is Some(String(o)) && o.has_prefix("session:") => Some(fix_session_pick())
     "presets" =>
@@ -1229,10 +1229,10 @@ pub fn fixture(mode : String) -> Source {
         let code = text(Some(params), "code").replace_all(old="&", new="&amp;").replace_all(old="<", new="&lt;")
         done(
           Ok({
-            "svg": ("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 160\"><rect width=\"320\" height=\"160\" fill=\"#ffffff\"/>" +
-            "<text x=\"16\" y=\"80\">" + code + "</text></svg>").to_json(),
-            "width": 320.0.to_json(),
-            "height": 160.0.to_json(),
+            "svg": Json::string("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 160\"><rect width=\"320\" height=\"160\" fill=\"#ffffff\"/>" +
+            "<text x=\"16\" y=\"80\">" + code + "</text></svg>"),
+            "width": ToJson::to_json(320.0),
+            "height": ToJson::to_json(160.0),
           }),
         )
         return

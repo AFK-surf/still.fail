@@ -4,16 +4,21 @@
 /// when it asked; for an admin of the workspace (`answers`), each kind it asks for with what it gives away, a tick each,
 /// and 这个 workspace 的所有 station where it asks for that, then 不允许 and 允许, which asks once more, saying all
 /// that is given and to whom, before it is. A grant is a row naming it, who signed it, what it may read and how far,
-/// who allowed it and when, and when it last read, 取消授权 at its end, asked first. Nothing when there are none (or
-/// the station is from before them).
-fn station_outflow(c : @ui.Ctx, core : Core, station : String, answers : Bool) -> Unit {
-  let view = outflow_view(core, station)
+/// who allowed it and when, and when it last read, 取消授权 at its end, asked first. For an admin (`link`, the
+/// overview's), first the switch letting programs of other machines ask through Tailcat, and on, the address to give
+/// them. Nothing when there are none and no link (or the station is from before them); the grants are read only when
+/// the overview says there are some (`any`).
+fn station_outflow(c : @ui.Ctx, core : Core, station : String, answers : Bool, any : Bool, link : Json?) -> Unit {
+  let view = if any { outflow_view(core, station) } else { None }
   let requests = items(view, "requests")
   let grants = items(view, "grants")
-  if requests.length() == 0 && grants.length() == 0 {
+  if requests.length() == 0 && grants.length() == 0 && link is None {
     return
   }
   st_section(c, @sf.t("web-main.outflow.title"), description=@sf.t("web-main.outflow.lead"), fn() {
+    if link is Some(_) {
+      outflow_link(c, core, station, link)
+    }
     for q in requests {
       outflow_request(c, core, station, Some(q), answers)
     }
@@ -171,4 +176,43 @@ let outflow_answer : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justif
 fn outflow_view(core : Core, station : String) -> Json? {
   let view = (core.topic)("outflowGrants", { "station": str(station) }).value
   if flag(view, "supported") { view } else { None }
+}
+
+///|
+/// The Tailcat link (docs/data-outflow.md): a switch, its state in its note, and running, the address and port to give
+/// the program on the other machine, copied in one press.
+fn outflow_link(c : @ui.Ctx, core : Core, station : String, link : Json?) -> Unit {
+  @sf.group(c, fn() {
+    let busy = is_doing(core, ["outflow.tailcat"], [("station", station)])
+    let on = flag(link, "on")
+    let state = text(link, "state")
+    let note = match state {
+      "starting" => @sf.t("web-main.outflow.linkStarting")
+      "running" => @sf.t("web-main.outflow.linkRunning")
+      "failed" => @sf.t("web-main.outflow.linkFailed", args=[("error", text(link, "error"))])
+      _ => @sf.t("web-main.outflow.linkLine")
+    }
+    let now = @sf.switch_row(c, "outflow-link/" + station, @sf.t("web-main.outflow.link"), on, note~, busy~)
+    if now != on {
+      @settings.act(
+        core,
+        @sf.t("web-main.outflow.link"),
+        "outflow.tailcat",
+        obj([("station", str(station)), ("on", Json::boolean(now))]),
+      )
+    }
+  })
+  if text(link, "state") == "running" {
+    let port = match field(link, "port") {
+      Some(Number(n, ..)) => n.to_int().to_string()
+      _ => ""
+    }
+    @sf.copy_command(
+      c,
+      "outflow-link-address/" + station,
+      "tailcat " + text(link, "address") + " " + port,
+      copy=@sf.t("common.copy"),
+      copied=@sf.t("common.copied"),
+    )
+  }
 }

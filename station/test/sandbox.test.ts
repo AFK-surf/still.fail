@@ -236,8 +236,8 @@ describe("a connection lost", () => {
     fakeSsh(dir);
     const pidFile = join(dir, "pid");
     const lostFile = join(dir, "lost");
-    // The program says it runs on its stdout: the bridge here passes that on only after it heard the program started
-    // (the far side says so first, on the same stream), while its pid file is written before the bridge may have.
+    // The program says it runs on its stdout: the bridge here has heard the far side then, while its pid file is
+    // written before the bridge may have.
     const spec = { ssh: [join(dir, "ssh"), "s-x.ws@host"], program: "/bin/sh", args: ["-c", `echo $$ > ${pidFile}; echo runs; exec tail -f /dev/null`], cwd: dir, ports: [], lostFile };
     const child = spawn(process.execPath, [BRIDGE, "host", JSON.stringify(spec)], { stdio: ["pipe", "pipe", "pipe"] });
     let err = "";
@@ -252,6 +252,20 @@ describe("a connection lost", () => {
     assert.ok(err.includes(CONNECTION_LOST), err);
     assert.ok(existsSync(lostFile));
     await until("the program in the sandbox ends", () => !alive(pid));
+  });
+
+  test("lost once the far side answered, before it said the program started: a connection lost all the same", async () => {
+    // The program runs (and writes) while the far side's word that it started is on its way: lost then, it is started
+    // again like any other (a job's test waited on one said never reached, past CI's time). A stand-in for ssh: the far
+    // side's first frame (a ping), then gone.
+    const dir = tempdir();
+    const ssh = join(dir, "answers-then-dies");
+    writeFileSync(ssh, `#!${process.execPath}\nprocess.stdout.write(Buffer.from([4, 0, 0, 0, 0, 0, 0, 0, 0]), () => process.kill(process.pid, "SIGKILL"));\n`);
+    chmodSync(ssh, 0o755);
+    const ran = await bridge({ ssh: [ssh, "s-x.ws@host"], program: "/bin/true", args: [], cwd: dir, ports: [], lostFile: join(dir, "lost") }, "");
+    assert.equal(ran.code, LOST_EXIT);
+    assert.ok(ran.err.includes(CONNECTION_LOST), ran.err);
+    assert.ok(existsSync(join(dir, "lost")));
   });
 
   test("a sandbox that could not be reached is not a connection lost", async () => {

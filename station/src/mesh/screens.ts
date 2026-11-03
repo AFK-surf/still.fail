@@ -14,7 +14,7 @@
 import { type Clock, Duration, Effect } from "effect";
 import { langOfCore } from "../api/request.ts";
 import { liveClock } from "../ops/fibers.ts";
-import { tr } from "../ops/i18n.ts";
+import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "../screens/hub.ts";
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type LoginFill, type PasskeyAnswer, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
@@ -269,7 +269,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const pacer = new Pacer(now, START_RATE, ask.fps, stall.stalled);
   const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ask.quality);
   const sleep = (ms: number) => Effect.runPromise(clock.sleep(Duration.millis(ms)));
-  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, audio: ask.audio, access, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ...(ask.quality ? { quality: ask.quality } : {}), now, sleep })
+  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, audio: ask.audio, access, lang, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ...(ask.quality ? { quality: ask.quality } : {}), now, sleep })
     .run()
     .finally(stall.done);
 }
@@ -298,6 +298,7 @@ class ViewSession {
   #stillWait = false;
   readonly #now: () => number;
   readonly #sleep: (ms: number) => Promise<void>;
+  readonly #lang: Lang;
 
   readonly hub: ScreenHub;
   readonly id: string;
@@ -325,7 +326,7 @@ class ViewSession {
   readonly #own: { maxWidth: number; maxHeight: number };
   #region: Region | null = null;
 
-  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; audio?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer; bounds: { maxWidth: number; maxHeight: number }; quality?: Quality; now: () => number; sleep: (ms: number) => Promise<void> }) {
+  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; audio?: boolean; access: AccessShown | undefined; lang: Lang; pacer: Pacer; sizer: Sizer; bounds: { maxWidth: number; maxHeight: number }; quality?: Quality; now: () => number; sleep: (ms: number) => Promise<void> }) {
     this.hub = o.hub;
     this.id = o.id;
     this.source = o.source;
@@ -343,6 +344,7 @@ class ViewSession {
     this.#own = o.bounds;
     this.#now = o.now;
     this.#sleep = o.sleep;
+    this.#lang = o.lang;
     this.#title = o.source.title();
   }
 
@@ -535,6 +537,10 @@ class ViewSession {
       try {
         next = await this.view.next();
       } catch (error) {
+        if (error instanceof ScreenRefused) {
+          this.#stop(accessShown(error.access, this.#lang)?.message ?? tr(this.#lang, error.key, error.args));
+          return;
+        }
         log.warn("screens", "a screen's frame was not had", { screen: this.id, error: (error as Error).message });
         next = null;
       }

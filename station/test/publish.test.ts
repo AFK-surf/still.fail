@@ -166,6 +166,14 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     assert.deepEqual(p.views.hidden, [{ n: p.entries[0].n, count: 1 }]);
     const upto: number = p.upto;
 
+    // A later runtime and model do not rename or redraw an earlier message in a published preview.
+    store.db.prepare("UPDATE sessions SET runtime = ?, model = ? WHERE key = ?").run("codex", "gpt-5", made.key);
+    store.insertMessage({ ...newMessage(thread, "1.35", "agent", made.key, "default model"), agentIdentity: { model: null, effort: null, runtime: "claude" } });
+    const switched = (await ask(alice, "POST", `/threads/${thread}/publish/preview`, {})).body;
+    assert.deepEqual([switched.entries[1].author, switched.entries[1].maker, switched.entries[1].runtime], ["Opus 4.1", "anthropic", "claude"]);
+    assert.deepEqual([switched.entries[3].author, switched.entries[3].model ?? null, switched.entries[3].maker ?? null, switched.entries[3].runtime], ["Claude Code", null, null, "claude"]);
+    store.db.prepare("UPDATE sessions SET runtime = ?, model = ? WHERE key = ?").run("claude", "claude-opus-4-1", made.key);
+
     // Said after the preview: not in what is published.
     store.insertMessage(newMessage(thread, "1.4", "person", "alice@acme.dev", "a later word"));
     const done = await ask(alice, "POST", `/threads/${thread}/publish`, { upto, files: ["f0"], names: {} });

@@ -5,7 +5,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import fs from "node:fs";
 import { writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
@@ -14,6 +16,7 @@ import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
+import { transcriptPaths } from "../src/read/transcript.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
 process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
@@ -80,6 +83,65 @@ const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().spl
 
 // Each test has its own driver, profile and runners: they run side by side.
 describe("the Codex driver", { concurrency: true }, () => {
+  for (const resumed of [false, true]) test(`a ${resumed ? "resumed" : "new"} thread uses the transcript path Codex gave, before and after the file appears`, async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_ROLLOUT: "1" };
+    const other = join(data, `unrelated-${p.id}`, "transcripts", "codex");
+    for (let i = 0; i < 100; i++) mkdirSync(join(other, String(i)), { recursive: true });
+    const session = await d.open(options(p, resumed ? { resume: "th-existing" } : {}), listen().push);
+    const path = join(p.home, "sessions", "2026", "11", "03", `rollout-${session.id()}.jsonl`);
+    const listed: string[] = [];
+    const real = fs.readdirSync;
+    fs.readdirSync = ((dir: fs.PathLike, ...args: unknown[]) => (listed.push(String(dir)), (real as (...xs: unknown[]) => unknown)(dir, ...args))) as typeof real;
+    syncBuiltinESMExports();
+    try {
+      assert.deepEqual(transcriptPaths("codex", join(data, `unrelated-${p.id}`), [p.home], [session.id()], [], { anywhere: false }), { paths: [], current: false });
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, "");
+      assert.deepEqual(transcriptPaths("codex", join(data, `unrelated-${p.id}`), [p.home], [session.id()], [], { anywhere: false }), { paths: [path], current: true });
+      assert.deepEqual(listed, [], "unrelated rollout directories are not read");
+    } finally {
+      fs.readdirSync = real;
+      syncBuiltinESMExports();
+      await session.dispose();
+    }
+  });
+
+  test("a thread taken up from an older station learns its transcript path", async () => {
+    const first = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_ROLLOUT_ON_READ: "1" };
+    const dataDir = join(data, `old-station-${p.id}`);
+    const other = join(dataDir, "transcripts", "codex");
+    for (let i = 0; i < 100; i++) mkdirSync(join(other, String(i)), { recursive: true });
+    const one = await first.open(options(p), () => {});
+    const path = join(p.home, "sessions", "2026", "11", "03", `rollout-${one.id()}.jsonl`);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, "");
+    const snapshot = JSON.parse(JSON.stringify(one.snapshot()));
+    assert.equal(snapshot.transcriptPath, undefined);
+    first.detach();
+    await allLeft();
+    const next = driver();
+    const events = listen();
+    const taken = await next.adopt(options(p, { resume: one.id() }), snapshot, events.push);
+    await taken.prompt("say:after");
+    await events.until(ended(1));
+    const listed: string[] = [];
+    const real = fs.readdirSync;
+    fs.readdirSync = ((dir: fs.PathLike, ...args: unknown[]) => (listed.push(String(dir)), (real as (...xs: unknown[]) => unknown)(dir, ...args))) as typeof real;
+    syncBuiltinESMExports();
+    try {
+      assert.deepEqual(transcriptPaths("codex", dataDir, [p.home], [one.id()], [], { anywhere: false }), { paths: [path], current: true });
+      assert.deepEqual(listed, [], "taking up an existing thread does not scan unrelated rollouts");
+    } finally {
+      fs.readdirSync = real;
+      syncBuiltinESMExports();
+      await taken.dispose();
+    }
+  });
+
   test("a text-only request has no shell, MCP server or writable environment", async () => {
     const d = driver();
     const p = profile();
@@ -499,6 +561,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     test(`a next driver takes the threads up ${crashed ? "after a crash (no snapshot)" : "from their snapshots"}: each turn ends once, no live event twice`, async () => {
       const first = driver();
       const p = profile();
+      p.env = { ...(p.env as Record<string, string>), FAKE_ROLLOUT: "1" };
       const a = listen();
       const a2 = listen();
       const one = await first.open(options(p), a.push);
@@ -511,7 +574,10 @@ describe("the Codex driver", { concurrency: true }, () => {
       // A request in flight as it lets go: its reply goes to the next driver, which drops it.
       const steering = one.steer("late");
       let snapshots: unknown[] = [null, null];
-      if (!crashed) snapshots = JSON.parse(JSON.stringify([one.snapshot(), two.snapshot()]));
+      if (!crashed) {
+        snapshots = JSON.parse(JSON.stringify([one.snapshot(), two.snapshot()]));
+        assert.equal((snapshots[0] as { transcriptPath: string }).transcriptPath, join(p.home, "sessions", "2026", "11", "03", `rollout-${one.id()}.jsonl`));
+      }
       first.detach();
       // (the station let go before the next takes up, as the hub waits: every line handled acknowledged)
       await allLeft();

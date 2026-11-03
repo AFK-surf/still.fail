@@ -20,7 +20,7 @@ import { log } from "../ops/log.ts";
 import { segmentsFrom, writtenLength } from "../read/packed.ts";
 import { parseIso, sharedTranscripts, transcriptDir, transcriptPaths } from "../read/transcript.ts";
 import type { SessionRow, Store, UsageCall, UsageFile, UsageFor } from "../store/store.ts";
-import type { RuntimeKind } from "../agents/runtime.ts";
+import { runtimeKind, type RuntimeKind } from "../agents/runtime.ts";
 
 /// Calls a little before a session was made (the runtime's clock against the station's) are still its own.
 export const SKEW_MS = 5_000;
@@ -724,6 +724,25 @@ export class UsageCounter {
     };
     const claudeRoots = await distinct(ways("claude"));
     const seenFiles = new Set<string>();
+    // A chat may have left a runtime while its final turn was still writing. Count each earlier segment with the
+    // runtime that wrote it, even when the session now runs on another one.
+    for (const s of sessions) {
+      if (wanted !== null && !wanted.has(s.key)) continue;
+      for (const source of store.runtimeSessionSources(s.key)) {
+        const runtime = runtimeKind(source.runtime);
+        if (!runtime || runtime === s.runtime) continue;
+        const transcript = transcriptPaths(runtime, config.dataDir, homes, [source.id]).paths[0];
+        if (!transcript) continue;
+        const files: [string, boolean][] = runtime === "claude" ? await claudeFiles(dirname(transcript), source.id) : [[runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript, false]];
+        for (const [path, subagent] of files) {
+          if (runtime === "grok" && !existsSync(path)) continue;
+          const real = await canonical(path);
+          if (seenFiles.has(real)) continue;
+          seenFiles.add(real);
+          added += await this.#readFile(path, runtime, subagent, s, readBefore(path, runtime), cursor.since);
+        }
+      }
+    }
     for (const s of sessions) {
       if (s.runtime !== "claude") continue;
       const project = claudeProject(s.cwd ?? s.workspace);
@@ -743,12 +762,13 @@ export class UsageCounter {
     // runtime sessions, as read before or found by their ids.
     const codex = sessions.filter((s) => s.runtime === "codex");
     const found = new Map<string, SessionRow>();
-    for (const s of codex) for (const id of store.runtimeSessions(s.key)) {
+    for (const s of codex) for (const { id } of store.runtimeSessionSources(s.key).filter((source) => source.runtime === "codex")) {
       const paths = this.#codexPaths.get(s.key) ?? new Map<string, string>();
       this.#codexPaths.set(s.key, paths);
       let had = paths.get(id);
       if (had !== undefined && !(await isFile(had)) && !(await isFile(packed(had)))) { paths.delete(id); had = undefined; }
-      const path = had ?? transcriptPaths("codex", config.dataDir, homes, [id]).paths[0];
+      // A running thread can report its path before it creates the file; earlier threads can still search history.
+      const path = had ?? transcriptPaths("codex", config.dataDir, homes, [id], [], { anywhere: !(s.running && s.runtimeSessionId === id) }).paths[0];
       if (path !== undefined) { paths.set(id, path); found.set(path, s); }
     }
     for (const [path, s] of found) {
@@ -762,7 +782,7 @@ export class UsageCounter {
     for (const s of sessions) {
       if (s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes") continue;
       const runtime = s.runtime;
-      for (const id of store.runtimeSessions(s.key)) {
+      for (const { id } of store.runtimeSessionSources(s.key).filter((source) => source.runtime === runtime)) {
         const transcript = transcriptPaths(runtime, config.dataDir, homes, [id]).paths[0];
         const path = transcript !== undefined && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
         if (path === undefined || (runtime === "grok" && !existsSync(path))) continue;

@@ -161,6 +161,10 @@ pub fn block(@ui.Ctx, () -> Unit) -> Unit
 
 pub let block_across : @ui.Style
 
+pub fn block_node(@view.View, (@view.View) -> Unit) -> Unit
+
+pub fn block_width(Look, Double) -> Double
+
 pub let body : @ui.TextStyle
 
 pub fn bones(@ui.Ctx, () -> Unit, still? : Bool, fill? : Bool) -> Unit
@@ -703,6 +707,8 @@ pub fn glyph_color(String, Bool) -> Int64?
 
 pub fn gradient(@ui.Ctx, Double, Double, Double, Int64, Int64, radius? : Double) -> Unit
 
+pub fn gradient_key(Double, Double, Double, Int64, Int64) -> String
+
 pub fn group(@ui.Ctx, () -> Unit, card? : Bool) -> Unit
 
 pub let group_corner : Double
@@ -849,6 +855,10 @@ pub fn keys_rows_node(@view.View, (@view.View) -> Unit) -> Unit
 
 pub fn kind_icon(String) -> String
 
+pub fn kind_row_node(@view.View, () -> String, () -> String, () -> String, () -> Bool, () -> Unit, (@view.View) -> Unit) -> Unit
+
+pub fn kinds_card_node(@view.View, (@view.View) -> Unit) -> Unit
+
 pub let lacking : @ui.TextStyle
 
 pub fn language() -> String
@@ -913,7 +923,7 @@ pub fn link_menu(String, from~ : Beside, () -> Unit, () -> Unit) -> Unit
 
 pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, value_bad? : Bool, value_dot? : Bool, strong? : Bool, danger? : Bool, out? : Bool, chevron? : Bool, chevron_room? : Bool, folds? : Bool, note? : String, lacks? : Bool, trouble? : String, lead? : () -> Unit, tail? : () -> Unit, below? : () -> Unit, below_open? : Double, goes? : Bool, acts? : Bool, adds? : Bool, title_after? : () -> Unit, control? : () -> Unit, note_cut? : Bool, face? : Bool, title_style? : @ui.TextStyle, title_cut? : Bool, value_cut? : Bool) -> Bool
 
-pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, note? : () -> String, wide_note? : () -> String, trouble? : () -> String, strong? : Bool, lead? : RowLead, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool) -> Unit
+pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, note? : () -> String, wide_note? : () -> String, trouble? : () -> String, strong? : Bool, lead? : RowLead, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool, tail? : (@view.View) -> Unit, tail_shown? : () -> Bool) -> Unit
 
 pub fn link_to_of(Json, text? : String, bare? : Bool) -> LinkTo
 
@@ -1010,6 +1020,7 @@ pub let mark_said_h : @ui.Len
 pub let mark_yellow : Int64
 
 pub fn markdown(@ui.Ctx, String, key? : String, tree? : Json?, size? : Double, line? : Double, one_line? : Bool, ink? : Int64, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, files? : (String) -> Placed?, found? : Array[String], code? : (String, String) -> (() -> Unit)?, screens? : Screens?, chat_title? : (String) -> String?, document? : Bool, bleed? : Double, copy? : Bool, fit_tables? : Bool, paths? : Bool, text_face? : Int32?, code_face? : Int32?) -> Int32
+pub fn markdown_node(@view.View, () -> String, tree? : () -> Json?, size? : () -> Double, line? : Double, ink? : () -> Int64, document? : Bool, bleed? : Double, copy? : Bool, paths? : Bool, found? : () -> Array[String], on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, chat_title? : (String) -> String?, code? : (String) -> ((@view.View, () -> String) -> Unit)?, files? : (String) -> PlacedNode?, screens? : ScreensNode) -> @view.View
 
 pub fn markdown_part(@ui.Ctx, String, Array[Json], String, apart? : Bool, size? : Double, ink? : Int64, line? : Double, serif? : Bool, document? : Bool, found? : Array[String], on_link? : (String) -> Unit) -> Unit
 
@@ -1266,6 +1277,8 @@ pub let note : @ui.TextStyle
 pub fn note_link_node(@view.View, () -> String, () -> String, () -> Unit, inline? : Bool) -> Unit
 
 pub let notice_w : @ui.Len
+
+pub fn notify_preview_node(@view.View, NoticeLook, () -> Double, () -> Bool, () -> String, () -> String, () -> IconMark, String, () -> String) -> Unit
 
 pub fn on_corner(Double, Double, room? : Double) -> Double
 
@@ -2063,11 +2076,11 @@ pub let switch_in : Double
 
 pub fn switch_look(@ui.Ctx, String, Bool, small? : Bool, pressed? : Bool) -> Unit
 
-pub fn switch_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String) -> Unit
+pub fn switch_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String, small? : Bool, disabled? : () -> Bool) -> Unit
 
 pub fn switch_row(@ui.Ctx, String, String, Bool, note? : String, disabled? : Bool, busy? : Bool, lead? : (@ui.Ctx) -> Unit) -> Bool
 
-pub fn switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String) -> Unit
+pub fn switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String, disabled? : () -> Bool, lead? : (@view.View) -> Unit, in_words? : Bool) -> Unit
 
 pub let switch_small_h : Double
 
@@ -2399,6 +2412,12 @@ pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit, last_l
 
 pub let way_more : String
 
+pub fn way_row_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
+
+pub fn way_tile_node(@view.View, NoticeLook, WayPicture, () -> String, () -> String, () -> Bool, () -> String, () -> Bool, () -> Unit) -> Unit
+
+pub fn way_tiles_node(@view.View, (@view.View) -> Unit) -> Unit
+
 pub let white : Int64
 
 pub let white_ink : @ui.Color
@@ -2672,6 +2691,12 @@ pub(all) struct Got {
   total : Double
 }
 
+pub(all) enum IconMark {
+  Count(Int32)
+  Dot
+  Unmarked
+}
+
 pub(all) struct Items {
   least : Double
   name : @ui.TextStyle
@@ -2832,6 +2857,12 @@ pub(all) struct NativeOver {
   mut alive : () -> Bool
 }
 
+pub(all) enum NoticeLook {
+  MacOS
+  Windows
+  Phone(island~ : Bool)
+}
+
 pub(all) struct PageBar {
   back : (String, () -> Unit)?
   title : String
@@ -2918,6 +2949,11 @@ pub(all) enum PlaceNow {
 pub(all) struct Placed {
   draw : () -> Unit
   image : (Double, (Double) -> Unit)?
+}
+
+pub(all) struct PlacedNode {
+  draw : (@view.View) -> Unit
+  image : (Double, (@view.View, () -> Double) -> Unit)?
 }
 
 pub(all) struct Playing {
@@ -3049,6 +3085,11 @@ pub(all) struct Rows {
 
 pub(all) struct Screens {
   card : (String, LinkTo, String?) -> Unit
+  title : (String, LinkTo) -> String
+}
+
+pub(all) struct ScreensNode {
+  card : (@view.View, String, LinkTo, String?) -> Unit
   title : (String, LinkTo) -> String
 }
 
@@ -3220,6 +3261,11 @@ pub(all) struct WayLook {
   here : @ui.TextStyle
   chevron : Double
   chevron_ink : Int64
+}
+
+pub(all) enum WayPicture {
+  BannerWay
+  BadgeWay
 }
 
 // Type aliases

@@ -61,6 +61,9 @@ import { keepRunnerIn } from "./platform/processes.ts";
 // What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
 // otherwise (Windows: USERPROFILE).
 if (!process.env.HOME && platform.home(process.env)) process.env.HOME = platform.home(process.env);
+// An adb server anything here starts (a chat's grant's, one an agent's command brings up) connects by itself to no phone
+// it finds on the network: with this machine's key a phone lent to one chat would be in them all (docs/adb-share.md).
+process.env.ADB_MDNS_AUTO_CONNECT = "0";
 // The launcher's malloc setting (native/launcher/src/run.rs) is this process's: read by malloc as it started, it goes
 // no further, to the agents and their tools.
 delete process.env.MallocSpaceEfficient;

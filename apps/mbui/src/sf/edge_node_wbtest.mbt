@@ -4,11 +4,12 @@
 ///|
 /// A window 400 by 300, a mouse's: in it, at (`at`), a box drawn `scale` as big about its top left, holding an edge 20
 /// by 200 at its left; its tips over all of it. The pointer rested on the edge at (110, 100) a while, then what holds the
-/// edge moved down `by` (the pointer still on it), the frame it asks for drawn: where its tip was each time, in the
-/// window.
+/// edge moved down `by` (the pointer still on it), the frame it asks for drawn (`away`: the pointer gone off it, a
+/// moment into its tip's going, instead): where its tip was each time, in the window.
 fn edge_tip_rects(
   scale : Double,
   by : Double,
+  away? : Bool = false,
 ) -> ((Double, Double, Double, Double), (Double, Double, Double, Double)) raise {
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
   t.check_looks(false)
@@ -53,8 +54,14 @@ fn edge_tip_rects(
   t.move(110.0, 100.0)
   t.run_for(edge_tip_ms + tip_settled_ms)
   let first = tip()
-  shift.set(by)
-  t.frame()
+  if away {
+    // (the pointer off the edge: its tip going, a moment into it)
+    t.move(300.0, 250.0)
+    t.run_for(@kit.pop_out_ms / 2.0)
+  } else {
+    shift.set(by)
+    t.frame()
+  }
   (first, tip())
 }
 
@@ -276,4 +283,13 @@ test "an edge felt: a finger's hold taken (LongPress), then its most reached (Te
   // (held and let go where it went down: nothing felt but the hold; let go after a hold, a drag's end at its width)
   let (felt, widths) = edge_felt(2, [])
   assert_eq((felt, widths), ([LongPress], [240.0]))
+}
+
+///|
+test "an edge's tip by the pointer, the pointer gone off the edge: it goes where it was, not after the pointer nor to the edge's middle" {
+  let (first, going) = edge_tip_rects(1.0, 0.0, away=true)
+  // (drawn a little smaller as it goes, about its edge by the pointer's point: that edge and its middle where they were)
+  let (x, y, _, h) = first
+  let (gx, gy, _, gh) = going
+  assert_true((gx - x).abs() < 0.5 && (gy + gh / 2.0 - (y + h / 2.0)).abs() < 0.5, msg="going: \{going} from \{first}")
 }

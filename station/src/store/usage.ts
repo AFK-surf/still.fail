@@ -101,6 +101,7 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
       const was = known.get(c.id) as { output: number } | undefined;
       // An old call may grow after the cutover, but an unseen old call is not historical work to fill in.
       if (was === undefined && options?.minNewAt !== undefined && c.at < options.minNewAt) continue;
+      // The same response can occur in several transcript lines or be replayed after an interrupted read.
       if (was !== undefined && c.output <= was.output) continue;
       insert.run(
         c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,

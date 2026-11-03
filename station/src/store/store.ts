@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
@@ -45,6 +45,16 @@ export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL O
 export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+/// Whether another shown or running session can use a runtime transcript. Look up the id in the history and current
+/// id indexes, rather than checking every active session's transcripts while an archive is packed.
+export const TRANSCRIPT_IN_USE = `SELECT 1 FROM runtime_sessions r INDEXED BY runtime_sessions_by_id
+    CROSS JOIN sessions s ON s.key = r.session_key
+    WHERE r.id = ?1 AND COALESCE(r.runtime, s.original_runtime, s.runtime) = ?2 AND s.key <> ?3
+      AND (s.archived_at IS NULL OR s.running = 1)
+  UNION ALL SELECT 1 FROM sessions s INDEXED BY sessions_by_runtime_id
+    WHERE s.runtime_session_id = ?1 AND s.runtime = ?2 AND s.key <> ?3 AND (s.archived_at IS NULL OR s.running = 1)
+      AND NOT EXISTS (SELECT 1 FROM runtime_sessions r WHERE r.session_key = s.key AND r.id = ?1)
+  LIMIT 1`;
 /// A session's messages not delivered yet and its latest turn (`statsOf`): what is not delivered by the index of those
 /// alone. By (session, thread), SQLite went over every message the session was ever given, and every turn was counted
 /// besides, for no one: auto-archiving looked at each session shown so, on the main thread, 13 s and 22 s on ccvm short
@@ -113,6 +123,8 @@ const CACHE_KIB = 32 * 1024;
 /// How long the log may grow, in pages, before the main connection writes it into the database itself: well past what
 /// the readers' checkpoints let it come to.
 const WAL_PAGES = 10_000;
+/// How much of the log's file is kept once written into the database (`journal_size_limit`).
+const WAL_KEEP_BYTES = 64 << 20;
 /// How many of a job's notices are kept.
 const JOB_NOTICES = 50;
 /// How long a task another station's chat ran here is remembered (remote_runs): past the card's week and the usage
@@ -178,6 +190,9 @@ export class Store {
       // Left to SQLite, this connection did it itself at every thousandth page: one commit held every device for the
       // 6 s that took on ccvm (2026-10-25). Here only if the readers' fall behind, at WAL_PAGES.
       db.exec(`PRAGMA cache_size = -${CACHE_KIB}; PRAGMA wal_autocheckpoint = ${WAL_PAGES};`);
+      // The log's file cut back to WAL_KEEP_BYTES each time it is written into the database from its start: SQLite keeps
+      // it at the most it ever grew to otherwise, 520 MB on ccvm (2026-11-03) with 1 GB of its disk left.
+      db.exec(`PRAGMA journal_size_limit = ${WAL_KEEP_BYTES};`);
       const hasTables = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
       if (hasTables) {
         from = (db.prepare("PRAGMA user_version").get() as Json).user_version;
@@ -187,6 +202,7 @@ export class Store {
       }
       db.exec(SCHEMA);
       addArchiveColumns(db);
+      addRuntimeSessionRuntime(db);
       addThreadIndexes(db);
       addLetterColumn(db);
       addClientColumn(db);
@@ -344,6 +360,13 @@ export class Store {
   }
 
   /// Every session, most recently active first.
+  /// The archived sessions, the longest archived first, by the index of those archived alone (schema.ts
+  /// sessions_put_away): what the emptying of their workspaces goes over (sessions/lifecycle.ts). Every session read
+  /// whole for it held the station 8 to 13 s on ccvm short of memory (2026-11-03), each time the disk was low.
+  archivedSessions(): { key: string; archivedAt: number }[] {
+    return this.#all("SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL ORDER BY archived_at, key").map((r) => ({ key: r.key, archivedAt: r.archived_at }));
+  }
+
   listSessions(): SessionRow[] {
     return this.#all("SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
   }
@@ -405,6 +428,15 @@ export class Store {
   /// Moves a session to another profile (its transcripts are shared by its runtime's profiles); `pinned` keeps it there.
   setSessionProfile(key: string, profile: string, pinned: boolean): void {
     this.#updateSession(key, "UPDATE sessions SET profile = ?1, profile_pinned = ?2 WHERE key = ?3", profile, flag(pinned), key);
+  }
+
+  /// A runtime change is one setting: readers must never see a runtime paired with another's profile or model.
+  setSessionRuntime(key: string, runtime: string, profile: string, pinned: boolean, model: string | null, effort: string | null, fast: boolean | null, context: number | null): void {
+    // Before this field existed a station with the ordered index could already have changed runtime. Its first
+    // transcript recovers the original. Without the index no older station could have made such a change.
+    const first = hasRuntimeOrderIndex(this.db)
+      ? "(SELECT runtime FROM runtime_sessions INDEXED BY runtime_sessions_ordered WHERE session_key = ?8 ORDER BY at, rowid LIMIT 1), " : "";
+    this.#updateSession(key, `UPDATE sessions SET original_runtime = COALESCE(original_runtime, ${first}runtime), runtime = ?1, profile = ?2, profile_pinned = ?3, model = ?4, effort = ?5, fast = ?6, context = ?7 WHERE key = ?8`, runtime, profile, flag(pinned), model, effort, optFlag(fast), context, key);
   }
 
   /// A session's model and effort from its next start on (null: the runtime's default).
@@ -487,7 +519,7 @@ export class Store {
   /// A runtime session the session runs in, on `profile` (null: not known, a profile it had is kept).
   ranIn(key: string, id: string, profile: string | null): void {
     this.#run(
-      `INSERT INTO runtime_sessions (session_key, id, profile, at) VALUES (?1, ?2, ?3, ?4)
+      `INSERT INTO runtime_sessions (session_key, id, profile, at, runtime) VALUES (?1, ?2, ?3, ?4, (SELECT runtime FROM sessions WHERE key = ?1))
        ON CONFLICT (session_key, id) DO UPDATE SET profile = COALESCE(excluded.profile, profile)`,
       key, id, profile, this.now(),
     );
@@ -680,6 +712,24 @@ export class Store {
     const current = this.getSession(key)?.runtimeSessionId ?? null;
     const ids: string[] = this.#all("SELECT id FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key).map((r) => r.id);
     return current === null ? ids : [...ids.filter((id) => id !== current), current];
+  }
+
+  /// Each recorded transcript's runtime and profile, in conversation order.
+  runtimeSessionSources(key: string): { id: string; runtime: string; profile: string | null }[] {
+    const row = this.getSession(key);
+    if (!row) return [];
+    const sources = this.#all(`SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile
+      FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid`, key)
+      .map((r) => ({ id: r.id as string, runtime: r.runtime as string, profile: (r.profile ?? null) as string | null }));
+    const current = row.runtimeSessionId;
+    if (current === null) return sources;
+    const entry = sources.find((s) => s.id === current) ?? { id: current, runtime: row.runtime, profile: row.profile };
+    return [...sources.filter((s) => s.id !== current), entry];
+  }
+
+  /// A transcript is left unpacked while another shown or running session can still write it.
+  transcriptInUse(runtime: string, id: string, except: string): boolean {
+    return this.#one(TRANSCRIPT_IN_USE, id, runtime, except) !== undefined;
   }
 
   setRunning(key: string, running: boolean): void {
@@ -1040,7 +1090,7 @@ export class Store {
       const options = m.options ?? undefined;
       const entry = this.#append(
         {
-          agentIdentity: undefined, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
+          agentIdentity: m.agentIdentity, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
           author: m.author, text: m.text, attachments: m.attachments ?? [], quotes: m.quotes ?? [], declared: m.declared ?? null,
           client: m.client ?? null, profile: m.profile ?? null, runtime: m.runtime ?? null,
           // An options card is kept as options too (what stations and clients from before cards read).
@@ -2225,9 +2275,9 @@ export class Store {
 
   /// Appends an entry as the thread's next.
   #append(entry: EntryRow, changes: Changes): EntryRow {
-    if (entry.kind === "message" && entry.authorKind === "agent") {
-      const r = this.#one("SELECT model, effort FROM sessions WHERE key = ?", entry.author);
-      entry.agentIdentity = r ? { model: r.model, effort: r.effort } : undefined;
+    if (entry.kind === "message" && entry.authorKind === "agent" && entry.agentIdentity === undefined) {
+      const r = this.#one("SELECT s.model, s.effort, CASE WHEN r.session_key IS NULL THEN s.runtime ELSE COALESCE(r.runtime, s.original_runtime, s.runtime) END AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
+      entry.agentIdentity = r ? { model: r.model, effort: r.effort, runtime: r.runtime } : undefined;
     }
     this.#tx(() => {
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;

@@ -18,7 +18,7 @@ test("Linux desktop reports the reason when it cannot reach an X11 session", asy
   const desktop = new X11Desktop({ env, changed: () => {} });
   await desktop.refresh(true);
   assert.equal(desktop.access().reason, "linuxNoDisplay");
-  assert.match(accessShown(desktop.access(), "en")!.message, /no accessible X11 desktop/);
+  assert.match(accessShown(desktop.access(), "en")!.message, /no accessible desktop/);
   env.DISPLAY = ":99";
   env.WAYLAND_DISPLAY = "wayland-0";
   await desktop.refresh(true);

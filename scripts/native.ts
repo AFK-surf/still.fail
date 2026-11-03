@@ -68,7 +68,7 @@ const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
 /// still.fail cloud (install.ts releaseType) to anyone, as the release is by GitHub.
 const STORE = process.env.STILLFAIL_NATIVE_STORE ?? "https://app.still.fail/releases/natives";
 
-/// Mini1's CI may resolve the release store directly, just as release-put.sh does for Cloudflare's API. Keep the
+/// the CI Mac's CI may resolve the release store directly, just as release-put.sh does for Cloudflare's API. Keep the
 /// original Host and TLS name, and leave GitHub and any other store or redirect to the machine's usual routing.
 export async function fetchNative(at: string, init: RequestInit = {}, redirects = 0): Promise<Response> {
   const url = new URL(at), dns = process.env.STILLFAIL_DIRECT_DNS;
@@ -352,7 +352,7 @@ const PARTS: Record<string, Part> = {
       const target = targetDir(join(ROOT, "client/target"), "shell-apple");
       rustTarget(triple);
       // (macOS's oldest is rustc's own, no MACOSX_DEPLOYMENT_TARGET: that is the host's too, and Xcode 27's ld links
-      // the build's proc-macros for 12.0 so that dyld refuses them, "mis-aligned LINKEDIT string pool": E0463 on mini1.
+      // the build's proc-macros for 12.0 so that dyld refuses them, "mis-aligned LINKEDIT string pool": E0463 on the CI Mac.
       // The C its crates build (ring's assembly, sqlite) is told the same oldest for the target alone: left to the
       // SDK's own, it was for macOS 27.0, below which the linker warned, 2026-10-24)
       const env = rustEnv({ CARGO_TARGET_DIR: target, ...appleCOldest(t) });
@@ -610,7 +610,7 @@ function hermesSource(work: string): string {
   mkdirSync(work, { recursive: true });
   if (!existsSync(join(src, ".stillfail-tag")) || readFileSync(join(src, ".stillfail-tag"), "utf8") !== HERMES.tag) {
     rmSync(src, { recursive: true, force: true });
-    // the tag's tarball, tried again on the way (a clone over Studio's TLS broke off, 2026-10-19)
+    // the tag's tarball, tried again on the way (a clone over a test Mac's TLS broke off, 2026-10-19)
     mkdirSync(src, { recursive: true });
     const tgz = join(work, "hermes.tar.gz");
     run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", "--retry-delay", "5", "-o", tgz, `https://github.com/facebook/hermes/archive/refs/tags/${HERMES.tag}.tar.gz`]);
@@ -789,7 +789,7 @@ const CACHE = process.env.STILLFAIL_NATIVE_CACHE ??
 const cached = (part: string, target: Target, k: string) => join(CACHE, part, `${target}-${k}`);
 const log = (msg: string) => process.stderr.write(`native: ${msg}\n`);
 
-// A path handed to a caller may be used after native.ts exits. On mini1, CI sets a budget and only versions not
+// A path handed to a caller may be used after native.ts exits. On the CI Mac, CI sets a budget and only versions not
 // requested for six hours may be evicted (the renderer jobs time out after five minutes). A day's grace let hundreds of
 // renderer versions fill the disk. Older caches without a usage record are first marked now, so jobs started before
 // tracking was introduced get the same grace period. Records live outside artifacts: they must not become part of

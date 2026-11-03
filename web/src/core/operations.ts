@@ -18,7 +18,7 @@ export interface OperationParams {
   "session.compact": { key: string };
   "session.clear": { key: string; readBack?: boolean | null | undefined };
   "session.delete": { key: string };
-  "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; context?: number | null | undefined; repick?: boolean | null | undefined; afresh?: boolean | null | undefined };
+  "session.settings": { key: string; runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; context?: number | null | undefined; repick?: boolean | null | undefined; afresh?: boolean | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
   "chat.keep": { kept?: boolean | null | undefined; thread: number };
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
@@ -113,6 +113,7 @@ export interface OperationParams {
   "memory.get": {  };
   "outflow.revoke": { id: string };
   "outflow.answer": { id: string; allow: boolean; scopes?: string[] | null | undefined; workspace?: boolean | null | undefined };
+  "outflow.tailcat": { on: boolean };
   "process.end": { pid: number; session: string };
   "footprint.scan": {  };
   "footprint.rebuild": { keys?: string[] | null | undefined };
@@ -286,6 +287,7 @@ export function bindStationOperations(call: Call) {
     memoryGet: <T = unknown>(params: OperationParams["memory.get"] = {}) => call("memory.get", params) as Promise<T>,
     outflowRevoke: <T = unknown>(params: OperationParams["outflow.revoke"]) => call("outflow.revoke", params) as Promise<T>,
     outflowAnswer: <T = unknown>(params: OperationParams["outflow.answer"]) => call("outflow.answer", params) as Promise<T>,
+    outflowTailcat: <T = unknown>(params: OperationParams["outflow.tailcat"]) => call("outflow.tailcat", params) as Promise<T>,
     processEnd: <T = unknown>(params: OperationParams["process.end"]) => call("process.end", params) as Promise<T>,
     footprintScan: <T = unknown>(params: OperationParams["footprint.scan"] = {}) => call("footprint.scan", params) as Promise<T>,
     footprintRebuild: <T = unknown>(params: OperationParams["footprint.rebuild"] = {}) => call("footprint.rebuild", params) as Promise<T>,

@@ -358,6 +358,11 @@ struct Node {
   mut beside : Beside?
   /// the side it went on beside its anchor, as it was last placed there (none: not placed beside one yet)
   mut went : Side?
+  /// where it was last placed beside its anchor (its place in what holds it, and the point it is drawn bigger or
+  /// smaller about): where it stays once it is leaving or its anchor is drawn nowhere (View::beside)
+  mut beside_last : (Double, Double, Double, Double)?
+  /// the point of its anchor the pointer was last at, in the anchor's own terms (View::beside's `at_pointer`)
+  mut beside_point : (Double, Double)?
   mut focus_keys : Int
   /// whether Tab stops on it as it takes the focus (View::focusable's `tab`)
   mut focus_tab : Bool
@@ -993,6 +998,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.input_cell = None
       n.cursor = None
       n.beside = None
+      n.beside_last = None
+      n.beside_point = None
       n.focused_cell = None
       n.size_cell = None
       n.went_cell = None
@@ -1077,6 +1084,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         cursor: None,
         beside: None,
         went: None,
+        beside_last: None,
+        beside_point: None,
         focus_keys: 0,
         focus_tab: true,
         tab_by_stop: false,
@@ -3132,15 +3141,43 @@ fn Tree::modals_settled(self : Tree) -> Unit {
 /// (Tree::laid_now: what it told pulled in, laid out, placed; what is under the pointer told then, laid_out's), so what
 /// reads it has it as the change left it, no frame waited for. Nothing laid out where nothing reads it.
 fn Tree::withins_settled(self : Tree) -> Unit {
+  // A clock reaction can commit another structure while an immediate layout is standing. That layout will finish
+  // the work; entering it again here can alternate the drawn clock and exhaust the stack.
   if self.committing == 0 &&
+    !self.standing &&
     !self.withins_passing &&
     (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) &&
     (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
     self.laid_now()
+    self.withins_restored()
   }
   // (what takes input changed with nothing else to lay out: which column's bar the pointer is along told now, at the
   // change's end)
-  if self.committing == 0 && !self.withins_passing && self.bars_due {
+  if self.committing == 0 && !self.standing && !self.withins_passing && self.bars_due {
+    self.withins_passing = true
+    self.bars_near_told() |> ignore
+    self.withins_passing = false
+  }
+}
+
+///|
+/// Finish pointer work told as an immediate layout restored the drawn clock. The original layout was needed at the
+/// change's moment; this pass uses the restored clock without switching it back and recursively entering that layout.
+fn Tree::withins_restored(self : Tree) -> Unit {
+  if self.committing != 0 || self.withins_passing || self.last_w <= 0.0 {
+    return
+  }
+  if (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) &&
+    (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
+    let was_standing = self.standing
+    self.standing = true
+    @signals.untracked(fn() {
+      self.pull()
+      self.laid_out(self.clock.get())
+    })
+    self.standing = was_standing
+  }
+  if !self.withins_passing && self.bars_due {
     self.withins_passing = true
     self.bars_near_told() |> ignore
     self.withins_passing = false
@@ -4667,6 +4704,8 @@ fn View::let_go(self : View) -> Unit {
   n.input_cell = None
   n.cursor = None
   n.beside = None
+  n.beside_last = None
+  n.beside_point = None
   n.focused_cell = None
   n.focus_shown_cell = None
   n.size_cell = None
@@ -4998,6 +5037,10 @@ fn View::come_back(self : View, v : View) -> Unit {
   n.back_at = now
   n.left_at = -1.0
   told_going(n)
+  // (beside its anchor again, where that is now: View::beside)
+  if n.beside is Some(_) {
+    self.tree.place_marked_at(v.at)
+  }
   // (a modal layer back: over what is held again)
   self.tree.modals_told()
   self.tree.marked()
@@ -5303,6 +5346,7 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
     })
   }
   self.standing = false
+  self.withins_restored()
 }
 
 ///|

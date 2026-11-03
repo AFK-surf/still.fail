@@ -76,7 +76,9 @@ pub let connects_mine : @ref.Ref[Bool]
 
 pub fn dark(Json?, Bool) -> Bool
 
-pub fn decision_form(@ui.Ctx, Core, String) -> String
+pub fn decision_form_drop(Core, String, String) -> Unit
+
+pub fn decision_form_open(Core, String) -> String
 
 #callsite(autofill(loc))
 pub fn doing_mark(@ui.Ctx, Bool, String?, inline? : Bool, loc~ : SourceLoc) -> Unit
@@ -114,6 +116,10 @@ pub fn fixture_motion(Int32) -> Unit
 pub fn fixture_outflow(Bool) -> Unit
 
 pub fn fixture_outflow_answer() -> Json?
+
+pub fn fixture_outflow_link(Json?) -> Unit
+
+pub fn fixture_outflow_link_set() -> Bool?
 
 pub fn fixture_page(String) -> String
 
