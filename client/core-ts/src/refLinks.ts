@@ -131,10 +131,11 @@ export function adbOfLink(href: string): string | null {
 export function serviceOfLink(href: string): { station: string; job: string } | null {
   const m = /^(?:https?:\/\/[^/]+)?\/o\/([^/?#\s]+)\/([^/?#\s]+)\/[^/?#\s]+\/?\?([^#]*)/.exec(href);
   if (!m) return null;
-  const job = new URLSearchParams(m[3]!).get("service");
-  if (!job) return null;
+  // (by hand: Hermes on Android has no URLSearchParams, hermes-safe.test.ts)
+  const pair = m[3]!.split("&").find((kv) => kv.startsWith("service="));
+  if (!pair || pair.length === 8) return null;
   try {
-    return { station: `${decodeURIComponent(m[1]!)}/${decodeURIComponent(m[2]!)}`, job };
+    return { station: `${decodeURIComponent(m[1]!)}/${decodeURIComponent(m[2]!)}`, job: decodeURIComponent(pair.slice(8)) };
   } catch {
     return null;
   }
