@@ -2,6 +2,8 @@
 // read as a person reads them, what it says of its own left out, the stream started as it is first asked for and only
 // once, only an app a person installed started again. side/screen-simulator-debug.test.ts has the real one.
 import assert from "node:assert/strict";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 import { SimDebug, appsOf, logOf } from "../src/screens/sim-debug.ts";
 
@@ -139,6 +141,39 @@ test("a notification goes only to an app installed here, saying something", asyn
   const sent = runs.at(-1)!;
   assert.deepEqual(sent.slice(0, 4), ["simctl", "push", "U", "fail.still.a"]);
   assert.match(sent[4]!, /\.apns$/);
+  debug.close();
+});
+
+test("an app is installed and started from a file gone up, which is let go of", async () => {
+  const runs: string[][] = [];
+  const debug = new SimDebug(
+    "simctl",
+    "U",
+    async (file, args) => {
+      runs.push([file, ...args]);
+      if (file === "ditto") mkdirSync(join(args[3]!, "Payload", "Demo.app"), { recursive: true });
+      return file === "plutil" ? JSON.stringify({ CFBundleIdentifier: "fail.still.demo" }) : "";
+    },
+    async () => new Uint8Array(),
+    () => ({ stop: () => {} }),
+  );
+  const folder = debug.installFolder();
+  const put = (name: string) => {
+    const path = join(folder, name);
+    writeFileSync(path, "x");
+    return path;
+  };
+  assert.equal(await debug.install("/etc/passwd.ipa"), null);
+  assert.equal(await debug.install(put("notes.txt")), null);
+  assert.equal(runs.length, 0);
+  rmSync(join(folder, "notes.txt"));
+  const ipa = put("Demo.ipa");
+  assert.equal(await debug.install(ipa), "fail.still.demo");
+  assert.deepEqual(runs[0]!.slice(0, 3), ["ditto", "-x", "-k"]);
+  assert.deepEqual(runs[1]!.slice(0, 3), ["simctl", "install", "U"]);
+  assert.match(runs[1]![3]!, /Payload\/Demo\.app$/);
+  assert.deepEqual(runs.at(-1), ["simctl", "launch", "--terminate-running-process", "U", "fail.still.demo"]);
+  assert.equal(existsSync(ipa), false);
   debug.close();
 });
 

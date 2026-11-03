@@ -6616,6 +6616,8 @@ export interface ScreenItem {
 	closable?: boolean;
 	/** The viewer may read its apps' logs and restart them (`screen.logs`, `screen.apps`, `screen.relaunch`): a simulator's, for a member who may drive it. */
 	debug?: boolean;
+	/** Where a file to install on it goes up to (`screen.install`). */
+	install?: string;
 	/** It folds (an iPhone Duo's simulator): `screen.input` `{t: "pose", name}`, for a member who may drive it. */
 	poses?: boolean;
 	/** A simulator's panels (an iPhone Duo's two), for the device body drawn round its picture. */
@@ -6712,6 +6714,8 @@ export interface ScreenViewState {
 	kind?: string;
 	/** May read its apps' logs and restart them (`ScreenItem.debug`). */
 	debug?: boolean;
+	/** Its `ScreenItem.install`, empty for none. */
+	install?: string;
 	/** May fold it (`ScreenItem.poses`). */
 	poses?: boolean;
 	/** Its panels (`ScreenItem.panels`). */

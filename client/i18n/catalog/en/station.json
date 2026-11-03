@@ -44,6 +44,7 @@
   "station.screen.noApp": "That app isn't installed on this simulator",
   "station.screen.badUrl": "That isn't a link",
   "station.screen.badPlace": "That isn't a place: give a latitude and a longitude",
+  "station.screen.notAnApp": "There is no app in that file: give an .ipa, or a .zip with a .app in it, built for the simulator",
   "station.screen.noSetting": "That setting can't be changed",
   "station.screen.unsupported": "Only macOS and Windows stations' own screens can be viewed for now",
   "station.screen.noHelper": "This station's release has no screen helper (stillfail-screen); update the station",

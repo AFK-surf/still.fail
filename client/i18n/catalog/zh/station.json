@@ -44,6 +44,7 @@
   "station.screen.noApp": "这台模拟器上没有这个 App",
   "station.screen.badUrl": "这不是一个链接",
   "station.screen.badPlace": "这不是一个位置：请填纬度和经度",
+  "station.screen.notAnApp": "这个文件里没有 App：请用给模拟器编译的 .ipa，或含 .app 的 .zip",
   "station.screen.noSetting": "不能这样设置",
   "station.screen.unsupported": "目前仅支持查看 macOS 和 Windows station 的本机屏幕",
   "station.screen.noHelper": "此 station 版本不含屏幕助手（stillfail-screen），请更新 station",

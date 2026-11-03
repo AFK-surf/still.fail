@@ -7,9 +7,10 @@
 // not to the log, so it is not here.
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 
@@ -36,11 +37,25 @@ const PREDICATE = `processImagePath CONTAINS ${INSTALLED} AND (senderImagePath C
 const BUNDLE_ID = /^[A-Za-z0-9][A-Za-z0-9.-]*$/;
 const URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:\S*$/;
 const MAX_URL = 8192;
+const APP_DEPTH = 3;
 const TIDY_BAR = [
   "override",
   ...["--time", "9:41", "--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "3"],
   ...["--cellularMode", "active", "--cellularBars", "4", "--batteryState", "charged", "--batteryLevel", "100"],
 ];
+
+/// The first .app under `dir`, at most `depth` folders down (an .ipa's in Payload, a build's zip with a folder round it).
+async function appIn(dir: string, depth: number): Promise<string | null> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const e of entries) if (e.isDirectory() && e.name.endsWith(".app")) return join(dir, e.name);
+  if (depth <= 0) return null;
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name === "__MACOSX") continue;
+    const found = await appIn(join(dir, e.name), depth - 1);
+    if (found !== null) return found;
+  }
+  return null;
+}
 
 /// A line of `log stream --style ndjson` as a person reads it; null for what is not one (its own words at its start).
 export function logOf(line: string): Omit<SimLog, "seq"> | null {
@@ -184,6 +199,34 @@ export class SimDebug {
       await rm(file, { force: true });
     }
     return true;
+  }
+
+  /// Where a file to install on it goes up to (`install`): among the machine's temporary files, not Downloads, which macOS may
+  /// keep simctl from reading.
+  installFolder(): string {
+    const folder = join(tmpdir(), "stillfail-sim-install");
+    mkdirSync(folder, { recursive: true });
+    return folder;
+  }
+
+  /// The app in `path` (an .ipa, or a .zip with a .app in it, in `installFolder`) installed and started, the file let go of:
+  /// its bundle id; null when that is no such file or there is no app in it.
+  async install(path: string): Promise<string | null> {
+    if (dirname(resolve(path)) !== this.installFolder() || !/\.(ipa|zip)$/i.test(path) || basename(path).startsWith("-")) return null;
+    const out = await mkdtemp(join(tmpdir(), "stillfail-sim-app-"));
+    try {
+      // (what does not unpack is no such file either)
+      if (!(await this.#run("ditto", ["-x", "-k", path, out]).then(() => true, () => false))) return null;
+      const app = await appIn(out, APP_DEPTH);
+      if (app === null) return null;
+      await this.#run(this.#simctl, ["install", this.#udid, app]);
+      const id = JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(app, "Info.plist")])).CFBundleIdentifier;
+      if (typeof id !== "string" || !BUNDLE_ID.test(id)) return null;
+      await this.#run(this.#simctl, ["launch", "--terminate-running-process", this.#udid, id]);
+      return id;
+    } finally {
+      await Promise.all([rm(out, { recursive: true, force: true }), rm(path, { force: true })]);
+    }
   }
 
   /// The device's screen as a PNG, in its own pixels.

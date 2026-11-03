@@ -208,6 +208,17 @@ export class Admin {
             ...simActions(deps.screens),
             {
               method: "POST",
+              pattern: /^\/screens\/([^/]+)\/install$/,
+              handle: async (r: Request, [raw]: string[]) =>
+                screenDebug(deps.screens!, r, raw!, async (d) => {
+                  const path = (JSON.parse(r.body.toString("utf8") || "{}") as { path?: unknown }).path;
+                  const app = typeof path === "string" ? await d.install(path) : null;
+                  if (app === null) throw new ScreenRefused(400, "station.screen.notAnApp");
+                  return { app };
+                }),
+            },
+            {
+              method: "POST",
               pattern: /^\/screens\/([^/]+)\/relaunch$/,
               handle: async (r: Request, [raw]: string[]) =>
                 screenDebug(deps.screens!, r, raw!, async (d) => {
