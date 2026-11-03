@@ -262,11 +262,13 @@ export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null, befor
   const future = before === undefined ? null : viewer === null
     ? `FROM usage_compact INDEXED BY usage_compact_time WHERE minute >= ?1 AND records > 0`
     : `FROM usage_compact INDEXED BY usage_compact_scope_time WHERE ${scope} AND minute >= ?2 AND records > 0`;
-  const minus = (column: string) => future === null ? "" : ` - (SELECT COALESCE(SUM(${column}), 0) ${future})`;
+  const prefix = future === null ? "" : `WITH future AS MATERIALIZED (SELECT COALESCE(SUM(calls), 0) AS calls,
+    COALESCE(SUM(input + cache_read + cache_write + cache_write_long + output), 0) AS tokens ${future})`;
+  const minus = (column: string) => future === null ? "" : ` - (SELECT ${column} FROM future)`;
   // The readiness checks and value must share one SQLite snapshot, including when another connection is moving rows.
-  const row = db.prepare(`SELECT NOT EXISTS (${moving}) AND NOT EXISTS (${dirty}) AS ready,
+  const row = db.prepare(`${prefix} SELECT NOT EXISTS (${moving}) AND NOT EXISTS (${dirty}) AS ready,
     (SELECT COALESCE(SUM(calls), 0) FROM usage_compact_total WHERE ${scope})${minus("calls")} AS calls,
-    (SELECT COALESCE(SUM(tokens), 0) FROM usage_compact_total WHERE ${scope})${minus("input + cache_read + cache_write + cache_write_long + output")} AS tokens`)
+    (SELECT COALESCE(SUM(tokens), 0) FROM usage_compact_total WHERE ${scope})${minus("tokens")} AS tokens`)
     .get(...(viewer === null ? [] : [`W${viewer.workspace}`]), ...(before === undefined ? [] : [before])) as
     { ready: number; calls: number; tokens: number };
   return row.ready ? { calls: Number(row.calls), tokens: Number(row.tokens) } : null;
@@ -280,7 +282,7 @@ type PendingBucket = Bucket & { session: string; records: number; calls: number;
 
 // Called within an IMMEDIATE transaction. Each bucket keeps its previously applied contribution, so repeated writes
 // coalesce and a removed bucket remains as a tombstone until its contribution is subtracted.
-function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string): { count: number; sessions: string[] } {
+function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string): { count: number; sessions: string[]; from?: number } {
   const selected = session === undefined
     ? `INDEXED BY usage_compact_pending_scope WHERE pending = 1 LIMIT ?`
     : `INDEXED BY usage_compact_pending_session WHERE pending = 1 AND session = ? LIMIT ?`;
@@ -317,17 +319,19 @@ function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string
     if (delta.calls !== 0 || delta.tokens !== 0) put.run(scope, delta.calls, delta.tokens);
     clean.run(scope);
   }
-  return { count: rows.length, sessions: [...new Set(rows.map((row) => row.session))] };
+  const from = rows.length === 0 ? undefined : Math.min(...rows.map((row) => row.minute * 60_000));
+  return { count: rows.length, sessions: [...new Set(rows.map((row) => row.session))],
+    ...(from !== undefined && Number.isSafeInteger(from) ? { from } : {}) };
 }
 
 /// Apply at most one batch of new buckets; this never reads or reconstructs original calls.
-export function compactTotalsStep(db: DatabaseSync, batch = 256): { done: boolean; sessions: string[] } {
+export function compactTotalsStep(db: DatabaseSync, batch = 256): { done: boolean; sessions: string[]; from?: number } {
   if (!Number.isSafeInteger(batch) || batch < 1) throw new RangeError("compact totals batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
-    const { count, sessions } = accountCompactBuckets(db, batch);
+    const { count, sessions, from } = accountCompactBuckets(db, batch);
     db.exec("COMMIT");
-    return { done: count < batch, sessions };
+    return { done: count < batch, sessions, ...(from !== undefined ? { from } : {}) };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 

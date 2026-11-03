@@ -32,6 +32,9 @@ test("a year's usage view reads only its requested days but keeps the all-time t
       [call("old", -86_400_000, 10), owner], [call("new", 60_000, 19), owner], [call("future", 86_400_000, 6), owner],
     ]);
     store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [[call("other", 60_000, 999), owner]]);
+    const pending = usage(makeStore(store.db, "."), "en", 0n, 86_400_000n, 0n, false, a, true,
+      { historyRange: { from: 0n, to: 86_400_000n } });
+    assert.equal(pending.historyPending, true, "a page missing an unprocessed total knows to retry it");
     account(store);
     const limited = compact.compactHistory(store.db, 0n, a, false, { from: 0n, to: 1_440n });
     assert.deepEqual(limited?.map((d) => [d.day, d.tokens]), [["1970-01-01", 20]]);
@@ -42,6 +45,7 @@ test("a year's usage view reads only its requested days but keeps the all-time t
     assert.deepEqual(answer.history.days.map((d: { day: string; tokens: number }) => [d.day, d.tokens]), [["1970-01-01", 20]]);
     assert.equal(answer.history.tokens, 31, "the older day remains in the total, while tomorrow's call is not yet included");
     assert.equal(answer.history.beforeDay, "1970-01-02");
+    assert.equal(answer.historyPending, undefined);
     const oldClient = usage(makeStore(store.db, "."), "en", 0n, 86_400_000n, 0n, false, a, true);
     assert.deepEqual(oldClient.history.days.map((d: { day: string }) => d.day), ["1969-12-31", "1970-01-01", "1970-01-02"]);
     assert.equal(oldClient.history.tokens, undefined, "older clients keep the full history contract");

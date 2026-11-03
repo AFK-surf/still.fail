@@ -28,7 +28,7 @@ export function usageHistoryRange(now: number, offset: number): { from: number; 
 /// another day or zone reads another `from`), with its history: what a part can be put into.
 export function holdsWhole(held: unknown, from: number): held is J {
   return isObject(held) && Number(get(held, "from")) === from && Array.isArray(get(held, "rows"))
-    && (isObject(get(held, "history")) || get(held, "historyUnavailable") === true);
+    && get(held, "historyPending") !== true && (isObject(get(held, "history")) || get(held, "historyUnavailable") === true);
 }
 
 const arr = (v: unknown): J[] => (Array.isArray(v) ? (v.filter(isObject) as J[]) : []);

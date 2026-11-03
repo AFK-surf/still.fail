@@ -85,7 +85,7 @@ test("a worker completes pending totals after new calls and tells the page", asy
     const ready = (calls: number) => new Promise<void>((resolve, reject) => {
       const abort = () => { unsubscribe(); reject(t.signal.reason); };
       const unsubscribe = store.subscribe((change) => {
-        if (change.type !== "usage" || !change.sessions.includes("a")) return;
+        if (change.type !== "usage" || !change.sessions.includes("a") || change.from !== 0) return;
         if (compact.compactTotal(store.db, { workspace: "A", home: false })?.calls !== calls) return;
         unsubscribe();
         t.signal.removeEventListener("abort", abort);

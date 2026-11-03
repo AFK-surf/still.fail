@@ -272,6 +272,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   }
   let historyResult: Json | undefined;
   let partialHistory: Json | undefined;
+  let historyPending = false;
   if (history) {
     try { historyResult = usageHistory(s, utcOffsetMin, viewer, mark, false, options.historyRange); }
     catch (error) {
@@ -282,6 +283,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
         try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange); }
         catch (partialError) {
           if (!(partialError instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(partialError.message)) throw partialError;
+          historyPending = partialError.message === USAGE_MINUTES_PENDING && options.historyRange !== undefined && hasCompactUsage(s.db);
         }
       }
     }
@@ -304,6 +306,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     ...(historyResult !== undefined ? { history: historyResult } : {}),
     ...(history && historyResult === undefined ? { historyUnavailable: true } : {}),
     ...(partialHistory !== undefined ? { partialHistory } : {}),
+    ...(historyPending ? { historyPending: true } : {}),
   };
   mark("other");
   const ms = Math.round(performance.now() - started);

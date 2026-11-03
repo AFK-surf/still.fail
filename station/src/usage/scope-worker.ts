@@ -20,15 +20,18 @@ async function drain(): Promise<void> {
       if (!hasCompactUsage(db)) continue;
       let movesDone = false;
       for (;;) {
+        // An idle read request can wake us too; do not acquire the writer just to discover there is no work.
+        if (!movesDone && db.prepare("SELECT 1 FROM usage_compact_moving LIMIT 1").get() === undefined) movesDone = true;
+        if (movesDone && db.prepare("SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_session WHERE pending = 1 LIMIT 1").get() === undefined) break;
         if (!takeBackfill(priority, threadId)) { await wall.sleep(20); continue; }
-        let result: { done: boolean; session?: string; sessions?: string[] } | undefined;
+        let result: { done: boolean; session?: string; sessions?: string[]; from?: number } | undefined;
         try { result = movesDone ? compactTotalsStep(db) : moveCompactStep(db); }
         catch (error) {
           const code = (error as { errcode?: number }).errcode;
           if (code === undefined || ![5, 6].includes(code & 255)) throw error;
         } finally { giveBackfill(priority, threadId); }
         if (result?.session !== undefined) parentPort!.postMessage({ session: result.session });
-        if (result?.sessions?.length) parentPort!.postMessage({ sessions: result.sessions });
+        if (result?.sessions?.length) parentPort!.postMessage({ sessions: result.sessions, ...(result.from !== undefined ? { from: result.from } : {}) });
         if (result?.done) {
           if (movesDone) break;
           movesDone = true;

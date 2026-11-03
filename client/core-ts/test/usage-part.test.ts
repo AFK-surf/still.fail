@@ -57,6 +57,7 @@ test("the days a change touched, read again, take the place of those held; the r
     history: { days: [{ day: "2026-09-30", runtime: "claude", model: "m", tokens: 7, calls: 1 }, ...daysOf(before)], cards: 3, picked: 1, places: { ember: 2 }, archived: 1, remoteRuns: 2 },
   };
   assert.equal(holdsWhole(held, from), true);
+  assert.equal(holdsWhole({ ...held, historyPending: true }, from), false, "an unfinished total needs a whole retry");
   assert.equal(holdsWhole(held, from + DAY), false, "another day's window");
   assert.equal(holdsWhole({ ...held, history: undefined }, from), false, "a read without the history");
   // Calls recorded from 2026-11-02 on (UTC+8): that day and the next read again.

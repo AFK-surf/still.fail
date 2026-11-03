@@ -138,13 +138,13 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
     let failed = false;
     worker = current;
     current.unref();
-    current.on("message", (answer: { session?: string; sessions?: string[]; error?: string; idle?: boolean }) => {
+    current.on("message", (answer: { session?: string; sessions?: string[]; from?: number; error?: string; idle?: boolean }) => {
       if (closed) return;
       if (answer.error) { failed = true; log.warn("usage", "a usage workspace move stopped", { error: answer.error }); }
       const sessions = answer.session ? [answer.session] : answer.sessions;
       if (sessions?.length) {
         reporting = true;
-        try { store.usageChanged(sessions); } finally { reporting = false; }
+        try { store.usageChanged(sessions, answer.from); } finally { reporting = false; }
       }
       if (answer.idle) {
         outstanding = false;
