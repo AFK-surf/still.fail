@@ -1886,12 +1886,13 @@ fn view_claimed(tree : @view.Tree, x : Double, y : Double, at : Double) -> Bool 
 ///|
 /// A move of a hold on an old view, once the old view has taken it (old_pointer_now): where nothing of the old view's
 /// has made it its own (a list or a box of its own scrolling by it, a field's words picked or its caret moved, a handle
-/// or a bar dragged, a page's edge), taken over by what of the tree's holds it as it may be (view_claimed).
+/// or a bar dragged, a page's edge, the press the app's: Ctx::take_press, a hold that picked a message's words, a
+/// handle of them), taken over by what of the tree's holds it as it may be (view_claimed).
 fn view_old_moved(x : Double, y : Double) -> Unit {
   guard view_held.val is Some(Old(_, _)) && view_app.val is Some(tree) else { return }
   let c = g()
   if c.dragging || c.editor_drag || c.handle_drag != 0 || c.word_drag != 0 || c.bar_drag != 0 || c.edge > 0 ||
-    picked.dragging {
+    picked.dragging || (c.down && c.taken_at == c.press_at) {
     // (the old view's own now: nothing of the tree's takes it over after)
     view_down.val = None
     return
