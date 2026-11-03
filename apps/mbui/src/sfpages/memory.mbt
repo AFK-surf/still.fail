@@ -78,25 +78,6 @@ fn memories_list_node(v : @view.View, core : Core, stations : () -> Array[Json])
 }
 
 ///|
-/// One station's memory, on a page of its own (MemoryScreen; wide, a link to it): as 记忆 shows it, under its name.
-pub fn memory_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String) -> Unit {
-  let look = look_of(c)
-  let stations = match @settings.stations_of(core, here).value {
-    Some(Array(a)) => a
-    _ => []
-  }
-  let mut name = @settings.station_name(address)
-  for s in stations {
-    if text(Some(s), "station") == address {
-      name = text(Some(s), "name")
-    }
-  }
-  @sf.page(c, on_back=core.pop, frame~, "memory/" + address, name, about=@sf.t("web-pages.settings.memory.lead"), [
-    fn() { memory_view(c, core, look, address, station_names(stations)) },
-  ])
-}
-
-///|
 /// The stations' names by their ids (whose a shared skill is).
 fn station_names(stations : Array[Json]) -> Map[String, String] {
   let names : Map[String, String] = {}
@@ -107,126 +88,7 @@ fn station_names(stations : Array[Json]) -> Map[String, String] {
 }
 
 ///|
-/// A station's memory as a list (MemoryView): its sections, each a row that opens its page; a wait while it is read.
-fn memory_view(c : @ui.Ctx, core : Core, look : Look, address : String, names : Map[String, String]) -> Unit {
-  let read = memory_of(core, address)
-  // (read the first time: what it will show in its bones, made up)
-  guard read.value is Some(_) else {
-    block_waiting(c, fn() { memory_body(c, core.quiet(), look, "sample", names, Some(memory_sample())) }, error=if read.error == "" {
-      ""
-    } else {
-      @sf.t("web-main.memory.failed", args=[("error", read.error)])
-    })
-  }
-  memory_body(c, core, look, address, names, read.value)
-}
-
-///|
-/// A station's memory (`m`, as the core reads it) as a list: its sections, each a row that opens its page.
-fn memory_body(c : @ui.Ctx, core : Core, look : Look, address : String, names : Map[String, String], m : Json?) -> Unit {
-  let sections = sections_of(m)
-  let skills = items(m, "skills")
-  let part = fn(group : String) { skills.filter(fn(k) { text(Some(k), "group") == group }) }
-  let projects = part("project")
-  let others = part("skill")
-  let builtin = part("builtin")
-  let open = @settings.builtin_open_of(address)
-  let skill_row = fn(k : Json) {
-    let kv = Some(k)
-    // (the core's: when it is read, in a line)
-    if memory_row(c, "memory/" + address + "/skill/" + text(kv, "name"), text(kv, "name"), text(kv, "line"), text(kv, "size"), tag=skill_tag(kv, names)) {
-      (core.push)(MemoryDoc(address, text(kv, "name"), 0))
-    }
-  }
-  let none = fn(words : String) {
-    match look {
-      Narrow => c.box(style=mem_narrow_none, fn() { c.text(words, style=mem_narrow_none_words) |> ignore }) |> ignore
-      Wide => c.text(words, style=desk_muted) |> ignore
-    }
-  }
-  let global_said = join([@sf.t("web-main.memory.global.when"), text(field(m, "global"), "size")], " · ")
-  @sf.section(c, @sf.t("web-main.memory.global"), heads=true, note=global_said, fn() {
-    if sections.length() == 0 {
-      none(@sf.t("web-main.memory.empty"))
-    } else {
-      @sf.group(c, fn() {
-        for i, p in sections {
-          if memory_row(c, "memory/" + address + "/part/" + i.to_string(), p.0, "", p.2) {
-            (core.push)(MemoryDoc(address, "", i))
-          }
-        }
-      })
-    }
-  })
-  @sf.section(c, @sf.t("web-main.memory.projects"), heads=true, note=@sf.t("web-main.memory.projects.when"), fn() {
-    if projects.length() == 0 {
-      none(@sf.t("web-main.memory.projects.none"))
-    } else {
-      @sf.group(c, fn() {
-        for k in projects {
-          skill_row(k)
-        }
-      })
-    }
-  })
-  if others.length() + builtin.length() > 0 {
-    @sf.section(c, @sf.t("web-main.memory.others"), heads=true, fn() {
-      @sf.group(c, fn() {
-        for k in others {
-          skill_row(k)
-        }
-        if builtin.length() > 0 {
-          if memory_row(
-              c,
-              "memory/" + address + "/builtin",
-              @sf.t("web-main.memory.builtin"),
-              if open {
-                ""
-              } else {
-                join(builtin.map(fn(k) { text(Some(k), "name") }), @sf.t("web-main.list.separator"))
-              },
-              @sf.t("web-main.memory.count", args=[("n", builtin.length().to_string())]),
-              open~,
-            ) {
-            @settings.builtin_turn(address)
-          }
-          if open {
-            for k in builtin {
-              skill_row(k)
-            }
-          }
-        }
-      })
-    })
-  }
-}
-
-///|
-/// A row that opens a page, or folds a group open (MemoryRow): a library row, its name and whose after it, a line
-/// under it (cut short), how much is in it at its end. True on the frame it is pressed.
-fn memory_row(
-  c : @ui.Ctx,
-  key : String,
-  title : String,
-  sub : String,
-  value : String,
-  tag? : String = "",
-  open? : Bool = false,
-) -> Bool {
-  @sf.link_row(
-    c,
-    key,
-    title,
-    note=sub,
-    note_cut=true,
-    value~,
-    title_after?=if tag != "" { Some(fn() { c.text(tag, style=mem_tag) |> ignore }) } else { None },
-    folds?=if key.has_suffix("/builtin") { Some(open) } else { None },
-  )
-}
-
-///|
-/// One station's memory made once as nodes (memory_page's: page_node, laid out by the `width` its frame gives it,
+/// One station's memory (MemoryScreen; wide, a link to it) made once as nodes (page_node, laid out by the `width` its frame gives it,
 /// narrow where none is given) in node `v`, titled by the station's name as `here`'s stations say it: its global
 /// memory by its parts, its projects', the other skills (its built-in ones folded in a row, open as it was left), each
 /// row opening its page, followed as the core says them; while it is read the first time, all of it in its bones
@@ -416,27 +278,9 @@ fn memory_row_node(
 }
 
 ///|
-/// What a narrow page's section says where it has nothing (mMemoryNote: 24 from the page's sides, 12 in its room; 8
-/// under).
-// kept across runs: a value (no field of it changes)
-let mem_narrow_none : @ui.Style = @ui.css("w=Full px=S3 pb=S2")
-
-///|
+/// What a narrow page's section says where it has nothing (mMemoryNote: the meta's size, muted)
 // kept across runs: a value (no field of it changes)
 let mem_narrow_none_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let mem_narrow_title : @ui.TextStyle = @sf.body.then(@sf.one_line)
-
-///|
-// kept across runs: a value (no field of it changes)
-let mem_narrow_sub : @ui.TextStyle = @sf.secondary.then(@sf.one_line).then(@sf.full_words)
-
-///|
-/// (memoryRowTitle: its name and its tags in a line, 8 apart)
-// kept across runs: a value (no field of it changes)
-let mem_title_line : @ui.Style = @ui.css("row gap=S2 align=AEnd")
 
 ///|
 /// (memoryTag: the meta's size, subtle)
@@ -444,17 +288,7 @@ let mem_title_line : @ui.Style = @ui.css("row gap=S2 align=AEnd")
 let mem_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
-/// (memoryRowValue: the meta's size, muted)
-// kept across runs: a value (no field of it changes)
-let mem_tag_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
-
-///|
-/// (memoryRowSub: the meta's size, muted, on one line cut short)
-// kept across runs: a value (no field of it changes)
-let mem_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)
-
-///|
-/// A station's memory made up, for what is shown while it is read (memory_body in its bones): a few parts of the
+/// A station's memory made up, for what is shown while it is read (memory_body_node in its bones): a few parts of the
 /// global memory, a project's skill and two others.
 fn memory_sample() -> Json {
   let row = fn(name : Int, line : Int, group : String) -> Json {

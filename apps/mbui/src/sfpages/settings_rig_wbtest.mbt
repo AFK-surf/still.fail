@@ -38,7 +38,7 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
-  let made = route is (About | Changelog | Memories)
+  let made = route is (About | Changelog | Memories | Memory(_))
   let t = @ui.Tester::new(
     fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
@@ -58,7 +58,7 @@ fn setting_tester(
   )
   // (what the device's host says from the start: a performance record kept)
   host(t)
-  // (关于, 更新日志 and 记忆 made once, as every frame makes them: the page on top made in the window's tree, `w` wide,
+  // (关于, 更新日志, 记忆 and 一台 station 的记忆 made once, as every frame makes them: the page on top made in the window's tree, `w` wide,
   // the presenters around it)
   if made {
     @ui.set_view_app(
@@ -86,7 +86,7 @@ fn setting_tester(
 }
 
 ///|
-/// The page of `route` made once in node `p` (关于, 更新日志, 记忆: as the frames make them; another, its old view), `width`
+/// The page of `route` made once in node `p` (关于, 更新日志, 记忆, 一台 station 的记忆: as the frames make them; another, its old view), `width`
 /// wide, in the frame a page under another is given.
 fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : () -> Double) -> Unit {
   let core = @sfbase.settings_core(src, rig_workspace)
@@ -98,6 +98,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     About => about_node(p, core, on_back=core.pop, frame~, width~)
     Changelog => changelog_node(p, core, on_back=core.pop, frame~, width~)
     Memories => memories_node(p, core, here, on_back=core.pop, frame~, width~)
+    Memory(a) => memory_node(p, core, here, a, on_back=core.pop, frame~, width~)
     // (the pages opened from them not made once yet: their old view, hosted)
     _ =>
       @ui.old(p, fn(c) {
@@ -140,7 +141,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, here, frame, a, skill, at)
     AutoCompletion => completion_page(c, core, here, frame)
     AutoPolicy(st) => policy_page(c, core, here, frame, st)
-    Memory(a) => memory_page(c, core, here, frame, a)
     AutoDecisions => decisions_page(c, core, here, frame)
     Usage => usage_page(c, core, here, frame)
     UsagePrices(days) => usage_prices_page(c, core, here, frame, days)
