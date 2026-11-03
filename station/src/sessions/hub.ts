@@ -694,9 +694,9 @@ export class Hub {
     // again when it would have (or put right, SessionActor.takeWait). Over the sessions shown: an archived one waits on
     // nothing.
     const live = this.store.liveSessions();
-    const stats = this.store.statsOf(live.map((s) => s.key));
+    const turns = this.store.lastTurnsOf(live.map((s) => s.key));
     for (const row of live) {
-      const last = stats.get(row.key)?.lastTurn;
+      const last = turns.get(row.key);
       if (!this.online(row) || row.running || last?.endedAt === null) continue;
       if (last?.outcome === "failed" && last.detail?.startsWith("rate_limit:")) void this.actor(row).takeRefill();
       else if (last?.declared === "waiting") void this.actor(row).takeWait();
