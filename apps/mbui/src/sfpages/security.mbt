@@ -505,7 +505,7 @@ fn sec_station_row(c : @ui.Ctx, core : Core, look : Look, ws : String, sv : Json
         sec_end_words(c, look, @sf.t("web-pages.security.protected"))
       } else if can {
         // Keep the action recognisable as a button while its spinner is turning, at either page width.
-        if @sf.button(c, @sf.t("web-pages.security.join"), key="lock-station/" + id, busy=joining, reach~) {
+        if @sf.button(c, @sf.t("web-pages.security.join"), key="lock-station/" + id, tone=Ghost, busy=joining, reach~) {
           join_dialog(core, ws, id, text(sv, "name"))
         }
       } else {

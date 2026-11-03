@@ -28,14 +28,15 @@ pub fn button_node(
     // (the hand on it, or pressing it: how far its ground has gone towards its lit one; at work, how far its spinner is
     // in and how far its room is open; how faded it is)
     let lit = fn() {
-      live() &&
+      (busy() && (tone == Ghost || tone == GhostDanger)) ||
+      (live() &&
       (v.focus_shown() ||
       (match @ui.pointing() {
         Mouse => v.pointed() || v.pressed()
         Finger => v.pressed()
-      }))
+      })))
     }
-    let hand = EdgeWay::new(0.0)
+    let hand = EdgeWay::new(if @signals.untracked(lit) { 1.0 } else { 0.0 })
     let turning = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
     let open = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
     let seen = EdgeWay::new(if @signals.untracked(disabled) { 0.45 } else { 1.0 })
