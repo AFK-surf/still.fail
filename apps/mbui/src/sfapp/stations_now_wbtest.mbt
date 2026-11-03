@@ -172,6 +172,22 @@ test "the card to share on a phone: the picture as wide as its sheet lets it, no
 }
 
 ///|
+test "the card to share in a 千恋＊万花 look, kept on a phone: the whole card, as tall as it is laid out, not its tile in the looks' strip" {
+  // (the picture kept is drawn as box 0, as each look's tile in the strip is: the look's whole card is kept, not its
+  // picture alone in a tile's ground, 2026-11-03 用户「保存至相册，存下来之后只有蓝色背景，啥都没有」)
+  let src = fixture_app("share-card-senren-ledger")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@kit.presence_in_ms)
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  match png_size(t.kept()[0].2) {
+    // (a tile's is 360 by 480: 1080 by 1440; the ledger's card is taller, its every day's row under its picture)
+    Some((pw, ph)) => assert_true(pw == 1080 && ph > 2000, msg="\{(pw, ph)}")
+    None => fail("not a PNG")
+  }
+}
+
+///|
 /// The card to share as `t` shows it: laid out the one way.
 fn share_card_laid(t : @ui.Tester) -> Unit raise {
   t.run_for(@kit.presence_in_ms)
