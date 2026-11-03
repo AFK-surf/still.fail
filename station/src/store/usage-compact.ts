@@ -440,7 +440,8 @@ export function moveCompactStep(db: DatabaseSync, batch = 256, scope?: string): 
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null, countParts = false): { sql: string; args: (string | bigint)[] } {
+export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null, countParts = false,
+  trackSelection = false): { sql: string; args: (string | bigint)[] } {
   // Minute totals cannot answer a partial minute exactly. Read original calls only at those two edges, after the
   // statistics have identified which sessions have calls there; the complete minutes still use their totals.
   if (from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n))) {
@@ -459,10 +460,10 @@ export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: I
     WHERE ${viewer.home === false ? "sc.ws = ?5" : "(sc.ws = ?5 OR sc.ws IS NULL)"}`;
   // These callbacks touch no rows beyond those the query already reads. The marker runs once after selection, before
   // the first selected session's buckets; the counter sees candidates including buckets that later contribute nothing.
-  const countCandidate = countParts ? " AND usage_summary_candidate()" : "";
-  const marker = countParts ? ", selected_marker AS MATERIALIZED (SELECT usage_summary_selected() AS ready)" : "";
-  const markerJoin = countParts ? " CROSS JOIN selected_marker marker" : "";
-  const markerWhere = countParts ? "marker.ready = 1 AND " : "";
+  const countCandidate = trackSelection ? " AND usage_summary_candidate()" : "";
+  const marker = trackSelection ? ", selected_marker AS MATERIALIZED (SELECT usage_summary_selected() AS ready)" : "";
+  const markerJoin = trackSelection ? " CROSS JOIN selected_marker marker" : "";
+  const markerWhere = trackSelection ? "marker.ready = 1 AND " : "";
   // Find sessions through the covering time index, then read each session's buckets together in primary-key order.
   // Materializing the eligible sessions keeps the workspace check from being repeated for every minute.
   const sql = `WITH selected AS MATERIALIZED (

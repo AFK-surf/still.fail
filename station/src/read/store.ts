@@ -934,7 +934,7 @@ export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bi
   diagnostics?: { parts?: number; candidates?: number; selectedMs?: number }): UsageGroup[] {
   if (hasCompactUsage(s.db)) {
     if (!compactScopeReady(s.db, viewer)) throw new Refused(503, "usage statistics are moving between workspaces");
-    const query = compactQuery(from, to, utcOffsetMin, viewer, diagnostics !== undefined);
+    const query = compactQuery(from, to, utcOffsetMin, viewer, diagnostics !== undefined, diagnostics !== undefined);
     if (diagnostics !== undefined && query.sql.includes("usage_summary_candidate()")) {
       diagnostics.candidates = 0;
       const started = performance.now();

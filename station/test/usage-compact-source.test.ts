@@ -349,7 +349,7 @@ test("usage summary diagnostics distinguish candidates from contributing statist
         assert.equal(typeof diagnostics.selectedMs, "number", "the query records when selection finished");
       }
     }
-    const query = compactQuery(60_000n, 180_000n, 0n, viewer, true);
+    const query = compactQuery(60_000n, 180_000n, 0n, viewer, true, true);
     let candidates = 0;
     let whenSelected = -1;
     store.db.function("usage_summary_candidate", () => { candidates++; return 1; });
