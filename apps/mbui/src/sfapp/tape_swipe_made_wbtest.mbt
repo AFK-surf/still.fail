@@ -100,6 +100,8 @@ fn tape_changelog_made(made? : Bool = true) -> (@ui.Tester, @ui.Laid, Int) raise
   t.click(Link, label="关于")
   t.run_for(@ui.move_most_ms)
   guard app.nav.top() == Setting(About) else { fail("关于 not reached: \{@sfbase.page_kind(app.nav.top())}") }
+  // (its page brought over the sidebar, as a person brings it to press in it)
+  page_over(t, 600.0)
   t.click(Link, label="更新日志")
   t.run_for(@ui.move_most_ms)
   guard app.nav.top() == Setting(Changelog) else { fail("更新日志 not reached: \{@sfbase.page_kind(app.nav.top())}") }
