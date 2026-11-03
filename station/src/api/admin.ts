@@ -2,6 +2,7 @@
 // it, gathered from src/api/routes (one module a part of the API). Reads go to the readers (off the main thread); what
 // is not here answers 404 as an unknown route does.
 import { runtimeCompatible } from "./runtime-compat.ts";
+import { BUILD_HEADER, stationBuild } from "./oldest.ts";
 import { join } from "node:path";
 import type { ConfigFile } from "../ops/config.ts";
 import type { Cloud } from "../cloud/state.ts";
@@ -241,8 +242,9 @@ export class Admin {
     const key = Object.entries(r.headers).find(([k]) => k.toLowerCase() === ONCE_KEY)?.[1];
     const keyed = key !== undefined && key !== "" && key.length <= 200 && r.method !== "GET" && r.method !== "HEAD";
     const answer = keyed ? await this.once(`${r.viewer.email}\0${r.path}\0${key}`, () => this.answer(r)) : await this.answer(r);
-    // Every answer says this station keeps writes to once.
+    // Every answer says this station keeps writes to once, and its build (api/oldest.ts).
     answer.headers["stillfail-idempotent"] = "1";
+    answer.headers[BUILD_HEADER] = stationBuild();
     return runtimeCompatible(r, answer);
   }
 

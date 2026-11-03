@@ -5,6 +5,8 @@
 // JSON head line `{status, headers}` and the response body.
 import type { Admin } from "../api/admin.ts";
 import { type Answer, langOfCore, queryPairs } from "../api/request.ts";
+import { coreTooOld } from "../api/oldest.ts";
+import { tr } from "../ops/i18n.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
@@ -456,6 +458,9 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   if (!path.startsWith("/admin/api/") || path.includes("..")) {
     return answer(404, '{"error":"only the admin API is reachable over the mesh"}');
   }
+  // A core older than this station answers (api/oldest.ts): told to update, whatever it asks.
+  const asking: Record<string, unknown> = head.headers !== null && typeof head.headers === "object" ? head.headers : {};
+  if (coreTooOld(asking)) return answer(426, { error: tr(langOfCore(asking as Record<string, string>), "station.admin.updateApp"), update: true });
   // One a part answers itself (a phone lent to the agents, adb/link.ts): it says what the member may.
   const part = m.streams?.(head);
   if (part !== undefined) return part({ conn, viewer, head, stream, reader });
