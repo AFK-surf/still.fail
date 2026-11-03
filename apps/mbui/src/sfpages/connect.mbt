@@ -58,6 +58,15 @@ pub fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame :
 }
 
 ///|
+/// What a block of a page shows, said as its data (what it reads: its version on its page's list, @sf.page's `keys`).
+pub fn json_sign(v : Json?) -> String {
+  match v {
+    Some(j) => j.stringify()
+    None => ""
+  }
+}
+
+///|
 /// The page of a connect found (ConnectDetail), the same parts in the same order on every screen: who it is and whether
 /// it is up (its head); what its link needs first where it does (Slack's tokens, or why it fails); how it runs (its
 /// model, how its conversations become sessions, the one they go into); its app (a Feishu one's ID and secret, a Slack
@@ -68,23 +77,33 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : P
   let id = text(cv, "id")
   let feishu = text(cv, "kind") == "feishu"
   let blocks : Array[() -> Unit] = []
+  // (each block by what it is and what it shows: one come or gone opens or closes where it is, one showing another
+  // thing goes to its height, @sf.page's `keys`)
+  let keys : Array[(String, String)] = []
+  let sign = json_sign(cv)
   // what its link needs: Slack's tokens, or why it fails (a Feishu connect's only why)
   let state = text(field(cv, "connection"), "state")
   if !feishu && state == "no_tokens" {
     blocks.push(fn() { cd_slack_section(c, core, station, cv) })
+    keys.push(("tokens", sign))
   } else if cd_trouble(cv) != "" {
     blocks.push(fn() { cd_callout(c, cd_trouble(cv)) })
+    keys.push(("trouble", cd_trouble(cv)))
   }
   blocks.push(fn() { cd_run_section(c, src, core, here, station, item) })
+  keys.push(("run", json_sign(item)))
   if feishu {
     if field(cv, "feishu") is Some(Object(_)) {
       blocks.push(fn() { cd_feishu_section(c, core, station, cv) })
+      keys.push(("feishu", sign))
     }
   } else {
     blocks.push(fn() { slack_app_section(c, core, station, cv) })
+    keys.push(("app", sign))
   }
   blocks.push(fn() { cd_sessions(c, core, station, item) })
-  @sf.page(c, on_back=core.pop, frame~, "connect/" + station + "/" + id, text(cv, "name"), blocks, small=@sf.t("android-misc.bar.place.connects"), head=fn() {
+  keys.push(("sessions", json_sign(item)))
+  @sf.page(c, on_back=core.pop, frame~, "connect/" + station + "/" + id, text(cv, "name"), blocks, keys~, small=@sf.t("android-misc.bar.place.connects"), head=fn() {
     cd_identity(c, core, here, station, text(item, "stationName"), cv)
   })
 }

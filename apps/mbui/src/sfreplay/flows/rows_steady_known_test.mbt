@@ -17,7 +17,7 @@ fn init {
     ("src/sfreplay/flows/notify_off_test.mbt", 2),
     ("src/sfreplay/flows/offline_retry_test.mbt", 1),
     ("src/sfreplay/flows/settings_add_station_test.mbt", 1),
-    ("src/sfreplay/flows/settings_connect_test.mbt", 3),
+    ("src/sfreplay/flows/settings_connect_test.mbt", 1),
     ("src/sfreplay/flows/settings_decisions_test.mbt", 1),
     ("src/sfreplay/flows/settings_run_settings_test.mbt", 2),
     ("src/sfreplay/flows/settings_station_mark_test.mbt", 1),
