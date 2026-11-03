@@ -1,0 +1,97 @@
+//! Transport abstractions for ADB connections.
+//!
+//! A transport is any type implementing `embedded_io_async::{Read, Write}`.
+//! This module ships built-in TCP and USB transports and the [`Splittable`]
+//! trait that powers [`Connection::split`](crate::Connection::split) for
+//! concurrent read and write tasks on the same connection.
+//!
+//! # Submodules
+//!
+//! * [`tcp`] — `TokioTcp` / `SmolTcp` aliases (features `tokio` / `smol`).
+//! * `runtime` — the [`Runtime`](runtime::Runtime) trait and its `Tokio`
+//!   / `Smol` markers, so both runtimes can be compiled in at once.
+//! * `nusb` — `UsbTransport` and the [`UsbBackend`] marker `Nusb`
+//!   (feature `nusb`, also enabled by the `usb` convenience alias).
+//! * `rusb` — the same via libusb (feature `rusb`). Both backends can be
+//!   compiled in at once; pick one per call site through [`UsbBackend`].
+//! * [`common`] — [`common::Transport`], a TCP-or-USB enum parameterised
+//!   over both halves, and [`common::NoUsb`] for builds with no backend.
+//! * [`any`] — [`any::AnyTransport`] and [`any::connect`] for URI-based
+//!   dispatch between `tcp://` and `usb://` (features `tokio` or `smol`).
+//! * [`split`] — the [`Splittable`] trait itself.
+//! * `tls` — `MaybeTls`, a TCP transport that can start TLS when the
+//!   device sends `STLS`, and its split halves (feature `tls`).
+
+pub mod split;
+pub mod tcp;
+
+#[cfg(feature = "split")]
+pub mod runtime;
+
+#[cfg(feature = "nusb")]
+pub mod nusb;
+
+#[cfg(feature = "rusb")]
+pub mod rusb;
+
+#[cfg(feature = "split")]
+pub mod common;
+
+#[cfg(feature = "tls")]
+pub mod tls;
+
+#[cfg(any(feature = "tokio", feature = "smol"))]
+pub mod any;
+
+pub use split::Splittable;
+
+/// Whether dropping a pending read costs anything.
+///
+/// A socket read that is dropped leaves its bytes in the kernel buffer,
+/// so the next read picks them up. A USB bulk transfer is handed to the
+/// device: cancelling it discards whatever the device already wrote
+/// into it, which takes the middle out of a packet and leaves every
+/// frame boundary after it wrong.
+///
+/// [`Connection::select_channel`](crate::Connection::select_channel)
+/// asks before it lets `interrupt` race a read in flight: a transport
+/// that answers `false` gets the interrupt checked between reads
+/// instead, which is slower to react but never loses a byte.
+pub trait ReadCancelSafety {
+    /// `true` when dropping a pending read loses nothing.
+    fn read_cancel_safe(&self) -> bool;
+}
+
+/// A USB backend: the way to obtain a USB transport from a
+/// [`UsbSelector`](crate::uri::UsbSelector).
+///
+/// Implemented by the zero-sized markers `nusb::Nusb` and `rusb::Rusb`,
+/// and by [`common::NoUsb`] for builds without USB. Choosing a backend
+/// is a type argument rather than a feature, so enabling both features
+/// compiles and each call site says which one it wants.
+/// `R` is the runtime the resulting transport will run its blocking
+/// work on. A backend that has none — `nusb` does its own async IO —
+/// simply ignores it, while `rusb` uses it for every transfer. Because
+/// the runtime comes from the same place as the one dialling TCP, the
+/// two cannot drift apart.
+pub trait UsbBackend<R> {
+    /// Transport this backend produces on runtime `R`.
+    type Transport: embedded_io_async::Read + embedded_io_async::Write;
+    /// Why opening a device failed.
+    type Error: core::fmt::Display;
+
+    /// Enumerate, match `selector`, and claim the device's ADB interface.
+    ///
+    /// Blocking: enumeration and claiming are synchronous in both
+    /// backends. Callers on an async runtime should offload it.
+    fn connect_by_selector(
+        selector: crate::uri::UsbSelector<'_>,
+    ) -> Result<Self::Transport, Self::Error>;
+}
+
+/// ADB USB interface class (vendor-specific).
+pub const ADB_CLASS: u8 = 0xFF;
+/// ADB USB interface subclass.
+pub const ADB_SUBCLASS: u8 = 0x42;
+/// ADB USB interface protocol.
+pub const ADB_PROTOCOL: u8 = 0x01;

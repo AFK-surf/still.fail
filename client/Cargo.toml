@@ -26,6 +26,8 @@ codegen-units = 1
 
 # The LAN on a machine with several networks or addresses, and through a router reflecting mDNS (vendor/README.md).
 [patch.crates-io]
+# Android cannot publish the phone's adb key with a hard link (vendor/README.md).
+libadb = { path = "../vendor/libadb" }
 noq-proto = { git = "https://github.com/zzj3720/noq", rev = "d578f818ad7580c49691f26d5ccf8cc3afcc026a" }
 swarm-discovery = { path = "../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../vendor/iroh-mdns-address-lookup" }

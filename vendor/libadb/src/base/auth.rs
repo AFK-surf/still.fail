@@ -1,0 +1,65 @@
+use alloc::vec::Vec;
+
+/// Trait for ADB authentication.
+///
+/// The ADB handshake requires signing a device-provided token with an RSA private key
+/// (PKCS#1 v1.5 with SHA-1) and optionally sending the public key for on-device
+/// authorization.
+///
+/// Implement this trait to plug in any RSA library (e.g. `rsa`, `ring`, `openssl`,
+/// or a hardware security module). The `keys` feature ships a ready one,
+/// `keys::AdbKey`, which also generates a key when there is none.
+pub trait Authenticator {
+    /// Why signing failed. It is `Display` because the handshake has
+    /// nowhere to put the value itself: what reaches the caller of
+    /// `Connection::connect` is the text this renders to.
+    type Error: core::fmt::Display;
+
+    /// Sign the token received from the device.
+    ///
+    /// Must produce a PKCS#1 v1.5 / SHA-1 signature.
+    /// Returns the raw signature bytes.
+    fn sign(&mut self, token: &[u8]) -> impl Future<Output = Result<Vec<u8>, Self::Error>>;
+
+    /// Return the RSA public key in the ADB-specific format.
+    ///
+    /// Format: base64-encoded RSA public key followed by ` user@host\0`.
+    fn public_key(&self) -> &[u8];
+
+    /// Whether to send the public key when the device does not accept
+    /// the signature.
+    ///
+    /// Sending it is what puts the "Allow USB debugging?" dialog on the
+    /// device's screen. Return `false` to learn whether the device
+    /// already trusts this key without asking anyone: the handshake
+    /// then stops at the device's second token and fails with
+    /// [`AuthError::KeyNotTrusted`](crate::error::AuthError::KeyNotTrusted).
+    ///
+    /// TLS is unaffected: there the device judges the key by the
+    /// certificate and never shows a dialog.
+    fn offer_public_key(&self) -> bool {
+        true
+    }
+}
+
+/// A mutable borrow authenticates as whatever it points at, so one key
+/// can serve several connections in turn: pass `&mut key` where a
+/// connection wants an authenticator of its own, rather than rebuilding
+/// the key — or duplicating the secret — for each.
+impl<A: Authenticator + ?Sized> Authenticator for &mut A {
+    type Error = A::Error;
+
+    fn sign(&mut self, token: &[u8]) -> impl Future<Output = Result<Vec<u8>, Self::Error>> {
+        (**self).sign(token)
+    }
+
+    fn public_key(&self) -> &[u8] {
+        (**self).public_key()
+    }
+
+    fn offer_public_key(&self) -> bool {
+        (**self).offer_public_key()
+    }
+}
+
+use core::future::Future;
