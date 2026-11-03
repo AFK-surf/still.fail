@@ -28,6 +28,41 @@ function gated(size: number) {
   return { readers, state, args, started, open };
 }
 
+test("a read abandoned while waiting never reaches a reader", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(1);
+  const asked = [readers.read("thread", args(true), "en")];
+  let settled: PromiseSettledResult<string>[];
+  try {
+    await started(1);
+    const waiting = new AbortController();
+    asked.push(readers.read("thread", args(false), "en", { signal: waiting.signal }));
+    waiting.abort();
+    const already = new AbortController();
+    already.abort();
+    asked.push(readers.read("thread", args(false), "en", { signal: already.signal }));
+  } finally {
+    settled = await open(asked);
+  }
+  assert.deepEqual(settled.map((s) => s.status), ["fulfilled", "rejected", "rejected"]);
+  assert.equal(Atomics.load(state, 0), 1, "neither abandoned read started");
+});
+
+test("a read abandoned while running cannot return a late answer or hold the next read", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(1);
+  const controller = new AbortController();
+  const asked = [readers.read("thread", args(true), "en", { signal: controller.signal })];
+  let settled: PromiseSettledResult<string>[];
+  try {
+    await started(1);
+    controller.abort();
+    asked.push(readers.read("thread", args(false), "en"));
+  } finally {
+    settled = await open(asked);
+  }
+  assert.deepEqual(settled.map((s) => s.status), ["rejected", "fulfilled"]);
+  assert.equal(Atomics.load(state, 0), 2, "the next read was answered");
+});
+
 // On ccvm (2026-11-02 15:41 UTC) a usage read held one reader for 97 s and sidebar updates the other: what was told of
 // two messages just said waited 50 s and 31 s, a push notice 55 s.
 test("what the station tells is read while every reader of what devices ask is held", { timeout: 30_000 }, async () => {
