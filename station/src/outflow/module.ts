@@ -18,7 +18,7 @@ import { stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { ControlPlane, Events, Helper, Parts, Paths, Peers, Previous, Readers } from "../services.ts";
 import { type Identity, OutflowGrants } from "./grants.ts";
-import { READ, peerRead, textOf } from "./peer.ts";
+import { READ, homeRead, peerRead, textOf } from "./peer.ts";
 import { type Identify, OutflowServer, type StationEntry, fileHash, socketPath } from "./server.ts";
 import { TailcatLink } from "./tailcat.ts";
 
@@ -110,7 +110,7 @@ export const OutflowLive = Layer.effectDiscard(
     const peer = loadMesh().peerProcess;
     const identify = peer === undefined ? null : helper !== null ? helperIdentify(helper, peer) : platform.os === "linux" ? procIdentify(peer) : null;
     const server = new OutflowServer({
-      path: socketPath(data), grants, reads: (op, args, lang) => readers.read(op, args, lang), identify: identify ?? (async () => null), workspace, lang: stationLang,
+      path: socketPath(data), grants, reads: homeRead((op, args, lang) => readers.read(op, args, lang), () => cloud.home()), identify: identify ?? (async () => null), workspace, lang: stationLang,
     });
     // Programs of other machines, through Tailcat, when an admin turned it on (tailcat.ts): told to the admins' pages
     // by the overview.
