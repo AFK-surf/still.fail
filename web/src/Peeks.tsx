@@ -111,8 +111,8 @@ function LinkCard({ href, label }: { href: string; label: string }) {
   const read = useTopic<LinkPreview | null>({ topic: "linkPreview", station: station.address, url: href });
   // (read first: the card it will be, made up, in its bones)
   // (links whose cards are rich, read before shown, bars meanwhile: the core's githubOf; any other shows its tile at once)
-  const github = githubOf(href);
-  if (read.value === undefined && read.error === null && github) return <Bones>{github.kind === "pull" ? <PullRequestCard preview={SAMPLE_PR} /> : <IssueCard preview={SAMPLE_ISSUE} />}</Bones>;
+  const rich = githubOf(href);
+  if (read.value === undefined && read.error === null && rich) return <Bones>{rich.kind === "pull" ? <PullRequestCard preview={SAMPLE_PR} /> : <IssueCard preview={SAMPLE_ISSUE} />}</Bones>;
   const preview = read.value ?? null;
   if (preview?.kind === "github_pull_request") return <PullRequestCard preview={preview} copy={<LinkCopy href={href} />} />;
   if (preview?.kind === "github_issue") return <IssueCard preview={preview} copy={<LinkCopy href={href} />} />;
