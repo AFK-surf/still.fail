@@ -113,7 +113,7 @@ test("closing while detail statistics wait for handover rejects the request", as
   await pending;
 });
 
-test("a moved session does not expose stale details to either workspace", async () => {
+test("a moved session's details follow it without rewriting the old buckets", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-detail-move-"));
   const path = join(dir, "stillfail.db");
   const store = Store.open(path);
@@ -127,13 +127,15 @@ test("a moved session does not expose stale details to either workspace", async 
   const reader = new MinuteReader(path);
   try {
     await reader.readyDetail({ workspace: "A", home: false });
+    const original = store.db.prepare("SELECT COUNT(*) AS n FROM usage_detail_lookup WHERE session = 'a' AND scope = 'WA'").get();
     store.db.prepare("UPDATE sessions SET ws = 'B' WHERE key = 'a'").run();
+    assert.deepEqual(store.db.prepare("SELECT COUNT(*) AS n FROM usage_detail_lookup WHERE session = 'a' AND scope = 'WA'").get(), original);
     assert.deepEqual(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "C", home: false }), []);
-    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /detail.*unavailable/);
-    await assert.rejects(reader.readyDetail({ workspace: "B", home: false }), /detail.*unavailable/);
+    await reader.readyDetail({ workspace: "A", home: false });
+    await reader.readyDetail({ workspace: "B", home: false });
     await reader.readyDetail({ workspace: "C", home: false });
-    assert.throws(() => usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "A", home: false }), /detail statistics.*being filled/);
-    assert.throws(() => usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "B", home: false }), /detail statistics.*being filled/);
+    assert.deepEqual(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "A", home: false }), []);
+    assert.deepEqual(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "B", home: false }).map((g) => [g.calls, g.input]), [[1, 3]]);
   } finally { await reader.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -149,6 +149,7 @@ test("days before one station began keeping detail are unavailable rather than z
   assert.ok(v.notes.some((note: string) => note.includes("10 月 1 日")));
   const earlier = usageView(sources, 7, NOW, 480, {}, [], { day: "2026-09-30" });
   assert.ok(earlier.tiles.every((tile: J) => tile.value === "—"));
+  assert.equal(earlier.empty, false, "unavailable is not described as a period with no usage");
 });
 
 test("unknown_people_keep_their_usage_and_the_view_decodes", () => {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { backfillNextUsageDetail, backfillUsageDetail, backfillUsageDetailMove, detailQuery, installUsageDetail, removeReplacedStatements, usageDetailReady } from "../src/store/usage-detail.ts";
+import { backfillNextUsageDetail, backfillUsageDetail, detailQuery, installUsageDetail, removeReplacedStatements, usageDetailReady, usageDetailScopeBySession } from "../src/store/usage-detail.ts";
 
 function older(path = ":memory:") {
   const db = new DatabaseSync(path);
@@ -29,7 +29,7 @@ function expected(db: DatabaseSync, size: number) {
     FROM usage GROUP BY session, bucket ORDER BY session, bucket`).all();
 }
 
-test("a range seeks the workspace and time, and moving a session updates lookups in bounded batches", () => {
+test("a moved session's range is sought through its current workspace without rewriting buckets", () => {
   const db = older();
   try {
     installUsageDetail(db);
@@ -42,18 +42,19 @@ test("a range seeks the workspace and time, and moving a session updates lookups
     db.prepare("UPDATE sessions SET ws = 'B' WHERE key = 'a'").run();
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_detail_lookup WHERE session = 'a' AND scope = 'WA'").get() as { n: number }).n, before.n,
       "the move did not rewrite the session's history on the foreground connection");
-    assert.equal(usageDetailReady(db, { workspace: "A", home: false }), false);
-    assert.equal(usageDetailReady(db, { workspace: "B", home: false }), false);
-    assert.equal(usageDetailReady(db, { workspace: "C", home: false }), true);
-    for (let n = 0; ; n++) {
-      assert.ok(n < 200);
-      const step = backfillUsageDetailMove(db, 3);
-      assert.ok(step.processed <= 3);
-      if (step.done) break;
-    }
     assert.equal(usageDetailReady(db, { workspace: "A", home: false }), true);
     assert.equal(usageDetailReady(db, { workspace: "B", home: false }), true);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_detail_lookup WHERE session = 'a' AND scope = 'WB'").get() as { n: number }).n, before.n);
+    assert.equal(usageDetailScopeBySession(db, { workspace: "C", home: false }), false);
+    for (const [workspace, expectedCalls] of [["A", 0], ["B", 81]] as const) {
+      const viewer = { workspace, home: false };
+      const moved = detailQuery(0n, 90_000_000n, 0n, viewer, "legacy", usageDetailScopeBySession(db, viewer))!;
+      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${moved.sql}`).all(...moved.args) as { detail: string }[]).map((r) => r.detail).join(" | ");
+      assert.match(plan, /usage_detail_scope_ws.*ws=\?/);
+      assert.match(plan, /SEARCH l USING PRIMARY KEY \(session=\? AND level=\? AND bucket>\? AND bucket<\?\)/);
+      const rows = db.prepare(moved.sql).all(...moved.args) as { calls: number }[];
+      assert.equal(rows.reduce((n, row) => n + row.calls, 0), expectedCalls);
+    }
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_detail_lookup WHERE session = 'a' AND scope = 'WA'").get() as { n: number }).n, before.n);
   } finally { db.close(); }
 });
 
@@ -90,43 +91,43 @@ test("looking for a replaced call seeks its own buckets instead of scanning the 
   } finally { db.close(); }
 });
 
-test("detail totals follow repeated moves, replacements and writes while a move is unfinished", () => {
+test("detail totals follow repeated moves, replacements and writes without a history worker", () => {
   const db = older();
   try {
     installUsageDetail(db);
     for (let i = 0; i < 40; i++) add(db, `a${i}`, "a", i * 1000, i + 1);
     add(db, "b1", "b", 1, 2);
+    const check = () => {
+      for (const viewer of [null, { workspace: "A", home: false }, { workspace: "B", home: false },
+        { workspace: "C", home: false }, { workspace: "C", home: true }]) {
+        assert.equal(usageDetailReady(db, viewer), true);
+        const query = detailQuery(-2000n, 100_000n, 0n, viewer, "legacy", usageDetailScopeBySession(db, viewer))!;
+        const got = db.prepare(query.sql).all(...query.args) as { session: string; calls: number; input: number }[];
+        const sums = new Map<string, [number, number]>();
+        for (const row of got) {
+          const prior = sums.get(row.session) ?? [0, 0];
+          sums.set(row.session, [prior[0] + row.calls, prior[1] + row.input]);
+        }
+        const expected = db.prepare(`SELECT u.session, SUM(u.calls) AS calls, SUM(u.input) AS input FROM usage u
+          LEFT JOIN sessions s ON s.key = u.session WHERE u.at >= -2000 AND u.at < 100000
+          AND (?1 IS NULL OR s.ws = ?1 OR (?2 AND s.ws IS NULL)) GROUP BY u.session`)
+          .all(viewer?.workspace ?? null, viewer?.home === false ? 0 : 1) as { session: string; calls: number; input: number }[];
+        assert.deepEqual([...sums].sort(), expected.map((r) => [r.session, [r.calls, r.input]]).sort());
+      }
+    };
+    check();
     db.prepare("UPDATE sessions SET ws = 'B' WHERE key = 'a'").run();
-    assert.equal(backfillUsageDetailMove(db, 3, "a").processed, 3);
+    check();
     add(db, "late", "a", -1000, 6);
     db.prepare("DELETE FROM usage WHERE id = 'a5'").run();
     db.prepare("UPDATE sessions SET ws = 'C' WHERE key = 'a'").run();
-    assert.equal(usageDetailReady(db, { workspace: "A", home: false }), false);
-    assert.equal(usageDetailReady(db, { workspace: "B", home: false }), false);
-    assert.equal(usageDetailReady(db, { workspace: "C", home: false }), false);
-    while (!backfillUsageDetailMove(db, 4).done) { /* bounded batches */ }
+    check();
     db.exec("INSERT OR REPLACE INTO sessions VALUES ('a', 'A', 'a')");
-    while (!backfillUsageDetailMove(db, 4).done) { /* the same session was replaced */ }
+    check();
     db.exec("INSERT OR REPLACE INTO sessions VALUES ('c', 'C', 'b')");
-    while (!backfillUsageDetailMove(db, 4).done) { /* another session's token was replaced */ }
+    check();
     db.exec("UPDATE sessions SET key = 'renamed' WHERE key = 'a'");
-    while (!backfillUsageDetailMove(db, 4).done) { /* the old session's usage is now owned by home */ }
-    for (const viewer of [null, { workspace: "A", home: false }, { workspace: "B", home: false },
-      { workspace: "C", home: false }, { workspace: "C", home: true }]) {
-      assert.equal(usageDetailReady(db, viewer), true);
-      const query = detailQuery(-2000n, 100_000n, 0n, viewer)!;
-      const got = db.prepare(query.sql).all(...query.args) as { session: string; calls: number; input: number }[];
-      const sums = new Map<string, [number, number]>();
-      for (const row of got) {
-        const prior = sums.get(row.session) ?? [0, 0];
-        sums.set(row.session, [prior[0] + row.calls, prior[1] + row.input]);
-      }
-      const expected = db.prepare(`SELECT u.session, SUM(u.calls) AS calls, SUM(u.input) AS input FROM usage u
-        LEFT JOIN sessions s ON s.key = u.session WHERE u.at >= -2000 AND u.at < 100000
-        AND (?1 IS NULL OR s.ws = ?1 OR (?2 AND s.ws IS NULL)) GROUP BY u.session`)
-        .all(viewer?.workspace ?? null, viewer?.home === false ? 0 : 1) as { session: string; calls: number; input: number }[];
-      assert.deepEqual([...sums].sort(), expected.map((r) => [r.session, [r.calls, r.input]]).sort());
-    }
+    check();
   } finally { db.close(); }
 });
 

@@ -26,6 +26,11 @@ export function holdsWhole(held: unknown, from: number): held is J {
 const arr = (v: unknown): J[] => (Array.isArray(v) ? (v.filter(isObject) as J[]) : []);
 const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
+/// An update from a different statistics generation cannot be spliced into what was held from the old one.
+export function sameDetailCoverage(held: unknown, part: unknown): boolean {
+  return (get(held, "detailSince") ?? null) === (get(part, "detailSince") ?? null);
+}
+
 /// What is held, with the days from `day` on (the part's, read from `since`, ms) as `part` has them: its rows and the
 /// tasks run here from then on in place of those held, the threads, people and prices it names added, the profiles as
 /// it says them; and the history's days from then on added up again from the rows, as the station adds them up (the
@@ -34,20 +39,42 @@ const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ?
 export function withPart(held: J, part: unknown, day: string, since: number): J {
   if (!isObject(part)) return held;
   const rows = [...arr(get(held, "rows")).filter((r) => String(get(r, "day")) < day), ...arr(get(part, "rows"))];
-  const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
-  for (const r of rows) {
+  type Day = { day: string; runtime: string; model: string | null; tokens: number; calls: number };
+  const days = new Map<string, Day>();
+  const accumulate = (target: Map<string, Day>, records: J[], sign: number) => { for (const r of records) {
     const d = String(get(r, "day"));
     if (d < day) continue;
     const runtime = String(get(r, "runtime"));
     const model = typeof get(r, "model") === "string" ? (get(r, "model") as string) : null;
     const key = `${d}\n${runtime}\n${model ?? ""}`;
-    const at = days.get(key) ?? { day: d, runtime, model, tokens: 0, calls: 0 };
-    at.tokens += n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite")) + n(get(r, "output"));
-    at.calls += n(get(r, "calls"));
-    days.set(key, at);
-  }
+    const at = target.get(key) ?? { day: d, runtime, model, tokens: 0, calls: 0 };
+    at.tokens += sign * (n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite")) + n(get(r, "output")));
+    at.calls += sign * n(get(r, "calls"));
+    target.set(key, at);
+  } };
+  accumulate(days, rows, 1);
   const history = get(held, "history");
-  const before = arr(get(history, "days")).filter((d) => String(get(d, "day")) < day);
+  const historyDays = arr(get(history, "days"));
+  let updatedDays: J[];
+  if (typeof get(held, "detailSince") === "number") {
+    // A complete day can include older calls which the new detail index intentionally does not contain. Apply only
+    // the change in the new detail, rather than replacing that complete day with the partial detail's total.
+    const totals = new Map<string, Day>();
+    for (const d of historyDays) {
+      const item = { day: String(get(d, "day")), runtime: String(get(d, "runtime")), model: typeof get(d, "model") === "string" ? get(d, "model") as string : null,
+        tokens: n(get(d, "tokens")), calls: n(get(d, "calls")) };
+      totals.set(`${item.day}\n${item.runtime}\n${item.model ?? ""}`, item);
+    }
+    accumulate(totals, arr(get(held, "rows")), -1);
+    accumulate(totals, arr(get(part, "rows")), 1);
+    updatedDays = [...totals.values()].filter((d) => d.calls !== 0 || d.tokens !== 0);
+  } else {
+    updatedDays = [...historyDays.filter((d) => String(get(d, "day")) < day), ...days.values()];
+  }
+  updatedDays.sort((a, b) => {
+    const first = String(get(a, "day")), second = String(get(b, "day"));
+    return first < second ? -1 : first > second ? 1 : 0;
+  });
   const priced = new Map<string, J>();
   for (const p of [...arr(get(get(held, "prices"), "rows")), ...arr(get(get(part, "prices"), "rows"))]) priced.set(String(get(p, "model")), p);
   const { remoteRuns: _remoteRuns, history: _history, ...rest } = held;
@@ -65,6 +92,6 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     people: { ...(get(held, "people") as J | undefined), ...(get(part, "people") as J | undefined) },
     profiles: get(part, "profiles") ?? get(held, "profiles"),
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
-    ...(isObject(history) ? { history: { ...history, days: [...before, ...[...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))] } } : {}),
+    ...(isObject(history) ? { history: { ...history, days: updatedDays } } : {}),
   };
 }

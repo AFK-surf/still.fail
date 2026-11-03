@@ -12,7 +12,7 @@ import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
 import { archiveEntries } from "../store/archive.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
-import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
+import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
 import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -908,7 +908,7 @@ export { USAGE_DETAIL_PENDING };
 export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
   const generation = usageDetailGeneration(s.db);
   if (!usageDetailReady(s.db, viewer, generation)) throw new Error(USAGE_DETAIL_PENDING);
-  const query = detailQuery(from, to, utcOffsetMin, viewer, generation);
+  const query = detailQuery(from, to, utcOffsetMin, viewer, generation, usageDetailScopeBySession(s.db, viewer, generation));
   return query === null ? [] : all(s, query.sql, ...query.args).map(usageGroupOf);
 }
 

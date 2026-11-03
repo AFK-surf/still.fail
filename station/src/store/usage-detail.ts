@@ -133,7 +133,7 @@ CREATE TRIGGER usage_detail_session_add AFTER INSERT ON sessions BEGIN
     NOT EXISTS (SELECT 1 FROM usage WHERE session = NEW.key LIMIT 1)
     WHERE NOT EXISTS (SELECT 1 FROM usage_detail_sessions WHERE session = NEW.key);
   INSERT INTO usage_detail_scope SELECT NEW.key, NEW.ws, done FROM usage_detail_sessions WHERE session = NEW.key
-    AND EXISTS (SELECT 1 FROM usage WHERE session = NEW.key LIMIT 1)
+    AND EXISTS (SELECT 1 FROM ${live ? "usage_detail_lookup" : "usage"} WHERE session = NEW.key LIMIT 1)
     ON CONFLICT (session) DO UPDATE SET ws = excluded.ws, done = excluded.done;
 END;
 CREATE TRIGGER usage_detail_session_move AFTER UPDATE OF key, ws ON sessions BEGIN
@@ -147,7 +147,7 @@ CREATE TRIGGER usage_detail_session_move AFTER UPDATE OF key, ws ON sessions BEG
     NOT EXISTS (SELECT 1 FROM usage WHERE session = NEW.key LIMIT 1)
     WHERE NOT EXISTS (SELECT 1 FROM usage_detail_sessions WHERE session = NEW.key);
   INSERT INTO usage_detail_scope SELECT NEW.key, NEW.ws, done FROM usage_detail_sessions WHERE session = NEW.key
-    AND EXISTS (SELECT 1 FROM usage WHERE session = NEW.key LIMIT 1)
+    AND EXISTS (SELECT 1 FROM ${live ? "usage_detail_lookup" : "usage"} WHERE session = NEW.key LIMIT 1)
     ON CONFLICT (session) DO UPDATE SET ws = excluded.ws, done = excluded.done;
 END;
 CREATE TRIGGER usage_detail_session_drop AFTER DELETE ON sessions BEGIN
@@ -249,14 +249,18 @@ export const PENDING_DETAIL_SESSION = `SELECT session FROM usage_detail_scope IN
   WHERE ws = ? AND done = 0 LIMIT 1`;
 
 export const USAGE_DETAIL_PENDING = "usage detail statistics are still being filled";
+
+/// When a session has moved, its buckets still carry their former lookup scope. Read the asking workspace's current
+/// sessions and seek each one's buckets instead of rewriting its history or trusting the stale scope on those buckets.
+export function usageDetailScopeBySession(db: DatabaseSync, viewer: InWorkspace | null, generation = usageDetailGeneration(db)): boolean {
+  if (viewer === null) return false;
+  const table = prefix(generation);
+  if (db.prepare(`SELECT 1 FROM ${table}_dirty_scope INDEXED BY ${table}_dirty_by_scope WHERE scope = ? LIMIT 1`).get(`W${viewer.workspace}`)) return true;
+  return viewer.home !== false && db.prepare(`SELECT 1 FROM ${table}_dirty_scope INDEXED BY ${table}_dirty_by_scope WHERE scope = 'H' LIMIT 1`).get() !== undefined;
+}
+
 export function usageDetailReady(db: DatabaseSync, viewer: InWorkspace | null, generation = usageDetailGeneration(db)): boolean {
   const table = prefix(generation);
-  if (viewer === null) {
-    if (db.prepare(`SELECT 1 FROM ${table}_dirty LIMIT 1`).get()) return false;
-  } else {
-    if (db.prepare(`SELECT 1 FROM ${table}_dirty_scope INDEXED BY ${table}_dirty_by_scope WHERE scope = ? LIMIT 1`).get(`W${viewer.workspace}`)) return false;
-    if (viewer.home !== false && db.prepare(`SELECT 1 FROM ${table}_dirty_scope INDEXED BY ${table}_dirty_by_scope WHERE scope = 'H' LIMIT 1`).get()) return false;
-  }
   if ((db.prepare(`SELECT done FROM ${table}_all WHERE id = 1`).get() as { done: number }).done === 1) return true;
   if (viewer === null || viewer.home !== false) return false;
   return db.prepare(`SELECT 1 FROM ${table}_ready WHERE ws = ?`).get(viewer.workspace) !== undefined
@@ -387,20 +391,26 @@ export function detailRanges(from: bigint, to: bigint, offset: bigint): Range[] 
 }
 
 /// Build a scoped query from statistics, not per-call facts. It visits only bucket ranges intersecting the request.
-export function detailQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null, generation: DetailGeneration = "legacy"): { sql: string; args: (string | bigint)[] } | null {
+export function detailQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null, generation: DetailGeneration = "legacy", bySession = false): { sql: string; args: (string | bigint)[] } | null {
   const ranges = detailRanges(from, to, offset);
   if (ranges.length === 0) return null;
   const args: (string | bigint)[] = [offset];
   let whereScope = "";
   if (viewer !== null) {
-    args.push(`W${viewer.workspace}`);
+    args.push(bySession ? viewer.workspace : `W${viewer.workspace}`);
     whereScope = viewer.home === false ? "l.scope = ?2 AND " : "l.scope IN (?2, 'H') AND ";
   }
+  const source = bySession && viewer !== null
+    ? `FROM (${viewer.home === false
+      ? "SELECT session FROM usage_detail_scope INDEXED BY usage_detail_scope_ws WHERE ws = ?2"
+      : "SELECT session FROM usage_detail_scope INDEXED BY usage_detail_scope_ws WHERE ws = ?2 UNION ALL SELECT session FROM usage_detail_scope INDEXED BY usage_detail_scope_ws WHERE ws IS NULL"}) sc
+      CROSS JOIN usage_detail_lookup l ON l.session = sc.session`
+    : `FROM usage_detail_lookup l INDEXED BY ${viewer === null ? "usage_detail_lookup_time" : "usage_detail_lookup_scope"}`;
+  if (bySession && viewer !== null) whereScope = "";
   const parts = ranges.map((range) => {
     const start = args.push(range.from);
     const end = args.push(range.to);
-    return `SELECT d.bucket * ${SIZES[range.level]} AS at, d.* FROM usage_detail_lookup l
-      INDEXED BY ${viewer === null ? "usage_detail_lookup_time" : "usage_detail_lookup_scope"}
+    return `SELECT d.bucket * ${SIZES[range.level]} AS at, d.* ${source}
       CROSS JOIN usage_detail d ON d.session = l.session AND d.level = l.level AND d.bucket = l.bucket
       WHERE ${whereScope}l.level = ${range.level} AND l.bucket >= ?${start} AND l.bucket < ?${end}`;
   });

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { makeStore, usageGroups, usageSince } from "../src/read/store.ts";
+import { usage } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import { backfillUsageDetail } from "../src/store/usage-detail.ts";
 
@@ -31,17 +32,26 @@ test("an old partial detail index is left aside and only later calls enter new s
     store.close();
     store = Store.open(path);
 
-    const groups = () => usageGroups(makeStore(store.db, dir), 0n, 500n, 0n, { workspace: "A", home: false });
+    const groups = (workspace = "A") => usageGroups(makeStore(store.db, dir), 0n, 500n, 0n, { workspace, home: false });
     assert.deepEqual(groups(), [], "part of old history is not presented as complete");
+    store.db.exec("UPDATE sessions SET ws = 'B' WHERE key = 's'");
+    assert.deepEqual(store.db.prepare("SELECT * FROM usage_detail_live_scope").all(), [],
+      "moving an old session with no new statistics does not add it to the live lookup");
+    store.db.exec("UPDATE sessions SET ws = 'A' WHERE key = 's'");
     store.recordUsage("/s", { session: "s", offset: 2, model: null }, "claude", [call("new1", 50, 3), call("new2", 300, 4)] as never);
     store.recordUsage("/s", { session: "s", offset: 3, model: null }, "claude", [call("old2", 200, 20, 9), call("new1", 50, 3, 5)] as never);
+    store.db.exec("UPDATE sessions SET ws = 'B' WHERE key = 's'");
     store.db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "usage"
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
     try {
-      const result = groups();
+      assert.deepEqual(groups(), []);
+      const result = groups("B");
       assert.deepEqual(result.map((g) => [g.calls, g.input, g.output]), [[2, 7, 6]],
-        "new calls, including one earlier than the old cursor, are counted once");
+        "new calls, including one earlier than the old cursor, follow the moved session and are counted once");
+      const answer = usage(makeStore(store.db, dir), "en", 0n, 500n, 0n, false, { workspace: "B", home: false }, true);
+      assert.equal(answer.detailSince, usageSince(makeStore(store.db, dir)));
     } finally { store.db.setAuthorizer(null); }
+    store.db.exec("UPDATE sessions SET ws = 'A' WHERE key = 's'");
     assert.deepEqual(store.db.prepare("SELECT * FROM usage_detail_all").get(), before, "the old cursor is not advanced");
     assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage").get() as { n: number }).n, 4, "original calls remain intact");
     assert.equal(usageSince(makeStore(store.db, dir)), (store.db.prepare("SELECT since FROM usage_detail_live_since").get() as { since: number }).since);

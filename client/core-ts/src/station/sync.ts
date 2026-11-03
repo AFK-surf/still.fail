@@ -36,7 +36,7 @@ import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
-import { dayOf, holdsWhole, withPart } from "./usage-part.ts";
+import { dayOf, holdsWhole, sameDetailCoverage, withPart } from "./usage-part.ts";
 import { threadAfter, threadAfterLetters } from "./thread-after.ts";
 import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "./rows-after.ts";
 import { timed } from "../spent.ts";
@@ -955,11 +955,12 @@ export class StationsSync {
         const part = dayOf(changed, offset);
         const put = (answer: unknown) => {
           const held = this.#core.data.shared(topic);
-          if (holdsWhole(held, from)) return withPart(held, answer, part.day, part.from);
+          if (holdsWhole(held, from) && sameDetailCoverage(held, answer)) return withPart(held, answer, part.day, part.from);
           // What is held was let go meanwhile: read whole as it is shown next.
           if (link) {
             link.usageCurrent = false;
             link.usageFrom = null;
+            this.#enqueue(address, "usage/coverage", Priority.shown, this.#usage(address));
           }
           return held;
         };

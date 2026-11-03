@@ -474,7 +474,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   // the one seen alone, by its name in its list (none spent in the days: its key)
   const onlyShown = only !== null ? { list: only.list, key: only.key, title: lists_[only.list].get(only.key)?.title ?? only.key } : null;
   const dayShown = dayOnly !== null ? (dayOnly === today ? t("core-views.usage.today") : dayLabel(dayOnly)) : null;
-  return { days, day: dayOnly, accounts: allowances, split, only: onlyShown, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, versus: t("core-views.usage.tile.versus", { n: days }), period: dayShown ?? t("core-views.usage.period", { n: days }), series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
+  return { days, day: dayOnly, accounts: allowances, split, only: onlyShown, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0 && !unavailableDay), empty: total.calls === 0 && !unavailableDay, tiles, versus: t("core-views.usage.tile.versus", { n: days }), period: dayShown ?? t("core-views.usage.period", { n: days }), series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
 }
 
 export { tr };
