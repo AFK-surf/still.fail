@@ -244,27 +244,49 @@ function* partsOf(bytes: Buffer, from: number): Generator<Part> {
   }
 }
 
+/// Keep unfinished lines as pieces and copy them only when a newline arrives, even if one line spans many chunks.
+class Lines {
+  #held: Buffer[] = [];
+  #size = 0;
+  #start: number;
+
+  constructor(start: number) { this.#start = start; }
+
+  *add(piece: Buffer): Generator<Part> {
+    const cut = piece.lastIndexOf(0x0a);
+    if (cut < 0) {
+      if (piece.length) { this.#held.push(piece); this.#size += piece.length; }
+      return;
+    }
+    const complete = piece.subarray(0, cut + 1);
+    const bytes = this.#size === 0 ? complete : Buffer.concat([...this.#held, complete], this.#size + complete.length);
+    yield* partsOf(bytes, this.#start);
+    this.#start += bytes.length;
+    const rest = piece.subarray(cut + 1);
+    this.#held = rest.length ? [rest] : [];
+    this.#size = rest.length;
+  }
+}
+
 /// A file put away, past `offset`, as `readFrom` says it: decompressed as it is read, never whole (one is hundreds of MB,
 /// and every one is read again as the station starts). Shorter than `offset`: read again from its start.
-async function* packedFrom(path: string, offset: number): AsyncGenerator<Part> {
+async function* packedFrom(path: string, offset: number, keep: () => boolean): AsyncGenerator<Part> {
+  if (!keep()) return;
   // In segments (read/packed.ts): those from `offset` on alone.
   const length = await writtenLength(packed(path)).catch(() => null);
+  if (!keep()) return;
   if (length !== null) {
     if (offset > length) {
-      yield* packedFrom(path, 0);
+      yield* packedFrom(path, 0, keep);
       return;
     }
     const segments = await segmentsFrom(packed(path), offset).catch(() => null);
     if (segments === null) return;
-    let start = offset;
-    let held = Buffer.alloc(0);
+    const lines = new Lines(offset);
     try {
       for await (const piece of segments) {
-        const bytes = held.length > 0 ? Buffer.concat([held, piece]) : piece;
-        const cut = bytes.lastIndexOf(0x0a);
-        if (cut >= 0) yield* partsOf(bytes.subarray(0, cut + 1), start);
-        start += cut + 1;
-        held = Buffer.from(bytes.subarray(cut + 1));
+        if (!keep()) return;
+        yield* lines.add(piece);
       }
     } catch {
       return;
@@ -274,29 +296,16 @@ async function* packedFrom(path: string, offset: number): AsyncGenerator<Part> {
   const raw = createReadStream(packed(path), { highWaterMark: CHUNK });
   const stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
   raw.on("error", (error) => stream.destroy(error));
-  // What is past `offset` and not given yet, from `start`.
-  let held: Buffer[] = [];
-  let heldBytes = 0;
-  let start = offset;
+  // What is past `offset` and not given yet.
+  const lines = new Lines(offset);
   let total = 0;
-  const give = function* (): Generator<Part> {
-    const bytes = Buffer.concat(held, heldBytes);
-    const cut = bytes.lastIndexOf(0x0a);
-    if (cut < 0) return;
-    yield* partsOf(bytes.subarray(0, cut + 1), start);
-    const rest = Buffer.from(bytes.subarray(cut + 1));
-    start += cut + 1;
-    held = rest.length === 0 ? [] : [rest];
-    heldBytes = rest.length;
-  };
   try {
     for await (const chunk of stream as AsyncIterable<Buffer>) {
+      if (!keep()) return;
       const from = Math.max(0, offset - total);
       total += chunk.length;
       if (from >= chunk.length) continue;
-      held.push(from === 0 ? chunk : chunk.subarray(from));
-      heldBytes += chunk.length - from;
-      if (heldBytes >= CHUNK) yield* give();
+      yield* lines.add(from === 0 ? chunk : chunk.subarray(from));
     }
   } catch {
     return;
@@ -305,10 +314,9 @@ async function* packedFrom(path: string, offset: number): AsyncGenerator<Part> {
     stream.destroy();
   }
   if (total < offset) {
-    yield* packedFrom(path, 0);
+    yield* packedFrom(path, 0, keep);
     return;
   }
-  yield* give();
 }
 
 /// read_from: what a file holds past `offset`, up to its last whole line, in parts with where each ends. A file now
@@ -317,11 +325,13 @@ async function* packedFrom(path: string, offset: number): AsyncGenerator<Part> {
 /// Whether a transcript is put away: only its `.zst` there.
 const putAway = async (path: string): Promise<boolean> => !(await exists(path)) && (await exists(packed(path)));
 
-export async function* readFrom(path: string, offset: number): AsyncGenerator<Part> {
+export async function* readFrom(path: string, offset: number, keep: () => boolean = () => true): AsyncGenerator<Part> {
+  if (!keep()) return;
   if (await putAway(path)) {
-    yield* packedFrom(path, offset);
+    yield* packedFrom(path, offset, keep);
     return;
   }
+  if (!keep()) return;
   let size: number;
   try {
     size = (await stat(path)).size;
@@ -338,22 +348,15 @@ export async function* readFrom(path: string, offset: number): AsyncGenerator<Pa
   }
   try {
     // Up to the size it had: what is written meanwhile is the next read's.
-    let carry = Buffer.alloc(0);
-    let start = pos;
+    const lines = new Lines(pos);
     while (pos < size) {
+      if (!keep()) return;
       const buf = Buffer.allocUnsafe(Math.min(CHUNK, size - pos));
       const { bytesRead } = await file.read(buf, 0, buf.length, pos);
+      if (!keep()) return;
       if (bytesRead === 0) break;
       pos += bytesRead;
-      const bytes = carry.length === 0 ? buf.subarray(0, bytesRead) : Buffer.concat([carry, buf.subarray(0, bytesRead)]);
-      const cut = bytes.lastIndexOf(0x0a);
-      if (cut < 0) {
-        carry = bytes;
-        continue;
-      }
-      yield { text: bytes.toString("utf8", 0, cut + 1), offset: start + cut + 1 };
-      carry = bytes.subarray(cut + 1);
-      start += cut + 1;
+      yield* lines.add(buf.subarray(0, bytesRead));
     }
   } finally {
     await file.close();

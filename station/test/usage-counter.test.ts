@@ -411,6 +411,25 @@ test("a file read in parts records each part's whole lines and leaves a partial 
   assert.equal(parts.at(-1), line.length * 8);
 });
 
+test("a line spanning several parts is returned whole with its byte offset, both raw and put away", async () => {
+  const path = join(tempdir(), "long.jsonl");
+  const prefix = "first\n";
+  const line = `${"x".repeat(3 << 20)}🧭\n`;
+  writeFileSync(path, `${prefix}${line}unfinished`);
+  const end = Buffer.byteLength(prefix + line);
+  const check = async () => {
+    const read = await readAll(path, Buffer.byteLength(prefix));
+    assert.ok(read);
+    assert.equal(read[0].length, line.length);
+    assert.equal(read[0].slice(-3), "🧭\n");
+    assert.equal(read[1], end);
+    assert.equal(await readAll(path, end), null);
+  };
+  await check();
+  pack(path);
+  await check();
+});
+
 test("a turn's end is read shortly after, and the pages are told", async () => {
   const time = await today();
   const r = rig({ settleMs: 20, safetyMs: 60_000, clock: time.clock });
