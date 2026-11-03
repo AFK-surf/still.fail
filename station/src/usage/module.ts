@@ -33,6 +33,7 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
   live.countWith({ of: (key) => usageNow(store, key), ask: (key) => counter.soon(key) });
   let closed = false;
   let ready = false;
+  let initialized = false;
   let preferDirty = true;
   let pending: NodeJS.Immediate | null = null;
   let retry: NodeJS.Timeout | null = null;
@@ -48,6 +49,10 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
     pending = null;
     if (closed) return;
     try {
+      if (!initialized) {
+        store.startUsageSummaryRefresh(SUMMARY_VERSION);
+        initialized = true;
+      }
       // Alternate dirty sessions with the old-format sweep so a busy session cannot hold the upgrade back.
       const next = store.nextUsageSummaryRefresh(preferDirty);
       preferDirty = !preferDirty;
@@ -84,7 +89,6 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
   });
   void previous.then(() => {
     if (closed) return;
-    store.startUsageSummaryRefresh(SUMMARY_VERSION);
     ready = true;
     schedule();
   }).catch((error) => log.error("usage", "session summaries could not start", { error: (error as Error).message }));

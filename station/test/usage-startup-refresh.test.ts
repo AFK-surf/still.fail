@@ -172,3 +172,40 @@ test("an older writer's changes are reflected during and after handover", async 
     store.close();
   }
 });
+
+test("a temporary failure starting the upgrade is retried", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const store = Store.open(":memory:");
+  const live = { countWith() {}, usageCounted() {} } as unknown as LiveHub;
+  let stop = () => {};
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", createdAt: 1, lastActiveAt: 1 });
+    store.recordUsage("/a", { session: "a", offset: 1, model: null }, "claude", [[{
+      id: "call", at: 1000, model: "claude-opus-5-5", subagent: false, fast: false,
+      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 1, window: 100,
+    }, { turn: null, thread: null, person: null, profile: "cc" }]]);
+    const start = store.startUsageSummaryRefresh.bind(store);
+    let attempts = 0;
+    let attempted: (() => void) | undefined;
+    const firstAttempt = new Promise<void>((resolve) => { attempted = resolve; });
+    store.startUsageSummaryRefresh = (version) => {
+      if (++attempts === 1) { attempted?.(); throw new Error("temporary failure"); }
+      start(version);
+    };
+    let refreshed: (() => void) | undefined;
+    const done = new Promise<void>((resolve) => { refreshed = resolve; });
+    const unsubscribe = store.subscribe(() => {
+      if (store.sessionUsage("a")?.modelCalls === 1) refreshed?.();
+    });
+    stop = keepCounted(store, live, {} as UsageCounter);
+    await firstAttempt;
+    assert.equal(attempts, 1);
+    t.mock.timers.tick(5_000);
+    await done;
+    unsubscribe();
+    assert.equal(attempts, 2);
+  } finally {
+    stop();
+    store.close();
+  }
+});
