@@ -194,7 +194,10 @@ test("software checks, sign-ins, updates and the runner use the shell's runtime 
   await until(() => logins.get("test")?.state === "done" || logins.get("test")?.state === "failed");
   assert.equal(logins.get("test")?.state, "done");
 
-  const info = await startRunner(data, "shell-test", "codex", ["app-server"], w.env, w.home);
+  // The runner's socket lives under its data folder; macOS's temporary folder is too deep for a socket path (104 bytes).
+  const runnerData = mkdtempSync("/tmp/sf-sp-");
+  t.after(() => rmSync(runnerData, { recursive: true, force: true }));
+  const info = await startRunner(runnerData, "shell-test", "codex", ["app-server"], w.env, w.home);
   const lines: string[] = [];
   const connection = new RunnerConnection(info, (stream, line) => { if (stream === "out") lines.push(line); });
   t.after(() => { connection.signal("KILL"); connection.done(); });
