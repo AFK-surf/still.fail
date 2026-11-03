@@ -164,6 +164,8 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const d = driver();
     const o = options({ textOnly: true });
     const session = await d.open(o, listen().push);
+    // Opening starts the runner; the fake writes its invocation when its process actually begins.
+    await eventually(() => existsSync(o.dump) && readFileSync(o.dump, "utf8").endsWith("\n"));
     const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
     const args = started.argv as string[];
     assert.equal(args[args.indexOf("--tools") + 1], "");
