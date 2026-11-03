@@ -361,6 +361,8 @@ struct Node {
   /// where it was last placed beside its anchor (its place in what holds it, and the point it is drawn bigger or
   /// smaller about): where it stays once it is leaving or its anchor is drawn nowhere (View::beside)
   mut beside_last : (Double, Double, Double, Double)?
+  /// the point of its anchor the pointer was last at, in the anchor's own terms (View::beside's `at_pointer`)
+  mut beside_point : (Double, Double)?
   mut focus_keys : Int
   /// whether Tab stops on it as it takes the focus (View::focusable's `tab`)
   mut focus_tab : Bool
@@ -997,6 +999,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.cursor = None
       n.beside = None
       n.beside_last = None
+      n.beside_point = None
       n.focused_cell = None
       n.size_cell = None
       n.went_cell = None
@@ -1082,6 +1085,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         beside: None,
         went: None,
         beside_last: None,
+        beside_point: None,
         focus_keys: 0,
         focus_tab: true,
         tab_by_stop: false,
@@ -4701,6 +4705,7 @@ fn View::let_go(self : View) -> Unit {
   n.cursor = None
   n.beside = None
   n.beside_last = None
+  n.beside_point = None
   n.focused_cell = None
   n.focus_shown_cell = None
   n.size_cell = None

@@ -126,9 +126,10 @@ pub(all) struct Beside {
 /// window, to the other side where it has not the room on its own), by where the anchor is and how big both are as the
 /// tree is placed, each time it is: what it holds with it. Out of its holder's flow, as big as what it holds says (its
 /// width, its words). Leaving, or its anchor gone or drawn nowhere (let go, left out of its row, leaving), where it
-/// last went beside it: it follows its anchor while both are there, and never goes anywhere else. `at_pointer`: beside the point in the window the
-/// pointer is at while it is on the anchor (Tree::point_at, placed again as it moves), as the anchor were that point (a
-/// tip by the pointer along a tall thin thing); elsewhere beside all of it.
+/// last went beside it: it follows its anchor while both are there, and never goes anywhere else. `at_pointer`: beside
+/// the point in the window the pointer is at while it is on the anchor (Tree::point_at, placed again as it moves), as
+/// the anchor were that point (a tip by the pointer along a tall thin thing); the pointer gone off it, by the point of
+/// it the pointer was last at (following the anchor still); never on it, beside all of it.
 pub fn View::beside(
   self : View,
   anchor : NodeId,
@@ -252,10 +253,16 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     // (where it is beside: all of its anchor as drawn now; by the pointer, the point it is at, while it is on it)
     let (aw, ah) = (a.lw * ascale, a.lh * ascale)
     let (px, py) = self.pointer_xy
+    // (the pointer gone off it: by the point of it the pointer was last at, as the anchor is now, never jumping to all of
+    // it; never on it (shown by the keyboard's focus), beside all of it)
     let rect = if b.at_pointer && px >= ax && py >= ay && px < ax + aw && py < ay + ah {
+      n.beside_point = Some(((px - ax) / ascale, (py - ay) / ascale))
       (px, py, 0.0, 0.0)
     } else {
-      (ax, ay, aw, ah)
+      match (b.at_pointer, n.beside_point) {
+        (true, Some((ox, oy))) => (ax + ox * ascale, ay + oy * ascale, 0.0, 0.0)
+        _ => (ax, ay, aw, ah)
+      }
     }
     let (x, y, went) = place_beside(
       rect,
