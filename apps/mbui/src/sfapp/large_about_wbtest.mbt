@@ -475,42 +475,37 @@ test "归档, 一台 station 的归档 and 自动决策 made once on a large scr
       let old_words = words_where(old)
       let made = large_about_tester(true, platform, scale~, w~, mode~)
       same_drawn(words_where(made), old_words, "words, \{mode} at \{case}")
-      same_drawn_snapped(instances_sorted(made), old_drawn, "instances, \{mode} at \{case}")
+      // (one known apart: 一台 station 的归档 at 839 with a finger, 「30 天」's three glyphs, its words laid out at
+      // 335.74999999999994 by the old view and at 335.75 by the node, snapped half a pixel apart at twice its pixels)
+      let apart = if mode == "settings-archiving:ws1/st1" && case == (2, 1.0, 839.0) {
+        [(335.5, 336.0, 412.5), (343.0, 343.5, 412.5), (358.0, 358.5, 412.5)]
+      } else {
+        []
+      }
+      same_drawn_but(instances_sorted(made), old_drawn, apart, "instances, \{mode} at \{case}")
     }
   }
 }
 
 ///|
-/// `made` drawn as `old` (same_drawn), a glyph where its words stand on a half pixel's edge alone half a pixel aside: its
-/// words where the old view's are to a hundredth (words_where), the old view's place of them worked out a hair short of
-/// it (335.74999…, snapped to 335.5 at twice its pixels; the node's 335.75, to 336).
-fn same_drawn_snapped(made : Array[String], old : Array[String], what : String) -> Unit raise Error {
-  let glyph = fn(s : String) { s.split(",").to_array().get(5).map(fn(k) { k.to_string() }) == Some("1") }
-  same_drawn(made.filter(fn(s) { !glyph(s) }), old.filter(fn(s) { !glyph(s) }), what)
-  // (each glyph by all it is but where across: as many of each, each half a pixel at most from where it was)
-  let by = fn(all : Array[String]) -> Map[String, Array[Double]] {
-    let out : Map[String, Array[Double]] = {}
-    for s in all.filter(glyph) {
-      let f = s.split(",").to_array().map(fn(v) { v.to_string() })
-      let key = f[1:].to_array().join(",")
-      let x = (try @json.parse(f[0]) catch { _ => Json::null() }).as_number().unwrap_or(0.0)
-      match out.get(key) {
-        Some(xs) => xs.push(x)
-        None => out[key] = [x]
-      }
-    }
-    out
+/// `made` drawn as `old` (same_drawn), but for the glyphs listed (`apart`: each one's place across in the old view's and
+/// in the node's, the rest of it the same): those each found once on either side, each where it is said to be.
+fn same_drawn_but(made : Array[String], old : Array[String], apart : Array[(Double, Double, Double)], what : String) -> Unit raise Error {
+  let x_of = fn(s : String) { s.split(",").to_array()[0].to_string() }
+  let rest = fn(s : String) { s.split(",").to_array()[1:].to_array().map(fn(v) { v.to_string() }).join(",") }
+  let mut old_left = old.copy()
+  let mut made_left = made.copy()
+  for a in apart {
+    let (from, to, y) = a
+    let y_said = ((y * 100.0).round() / 100.0).to_string()
+    let o = old_left.search_by(fn(s) { x_of(s) == from.to_string() && rest(s).has_prefix(y_said + ",") })
+    let m = made_left.search_by(fn(s) { x_of(s) == to.to_string() && rest(s).has_prefix(y_said + ",") })
+    assert_true(o is Some(_) && m is Some(_), msg="\{what}: the glyph at \{from} (old) and \{to} (made), \{y} down")
+    let oi = o.unwrap()
+    let mi = m.unwrap()
+    assert_eq(rest(made_left[mi]), rest(old_left[oi]), msg="\{what}: the glyph at \{from} the same but where across")
+    old_left = old_left[:oi].to_array() + old_left[oi + 1:].to_array()
+    made_left = made_left[:mi].to_array() + made_left[mi + 1:].to_array()
   }
-  let m = by(made)
-  let o = by(old)
-  assert_eq(m.length(), o.length(), msg="\{what}: glyphs")
-  for key, xs in o {
-    let ys = m.get(key).unwrap_or([])
-    xs.sort()
-    ys.sort()
-    assert_eq(ys.length(), xs.length(), msg="\{what}: glyph \{key}")
-    for i, x in xs {
-      assert_true((ys[i] - x).abs() <= 0.5, msg="\{what}: glyph \{key} at \{ys[i]}, its old view's \{x}")
-    }
-  }
+  same_drawn(made_left, old_left, what)
 }
