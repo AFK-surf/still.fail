@@ -440,11 +440,11 @@ export function moveCompactStep(db: DatabaseSync, batch = 256, scope?: string): 
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null): { sql: string; args: (string | bigint)[] } {
+export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null, countParts = false): { sql: string; args: (string | bigint)[] } {
   // Minute totals cannot answer a partial minute exactly. Read original calls only at those two edges, after the
   // statistics have identified which sessions have calls there; the complete minutes still use their totals.
   if (from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n))) {
-    return compactQueryWithEdges(from, to, offset, viewer);
+    return compactQueryWithEdges(from, to, offset, viewer, countParts);
   }
   const floor = (n: bigint) => n >= 0n ? n / 60_000n : -1n - ((-1n - n) / 60_000n);
   const start = from >= to ? 0n : floor(from);
@@ -466,14 +466,14 @@ export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: I
     SELECT strftime('%Y-%m-%d', (c.minute + ?1) * 60, 'unixepoch') AS day,
     c.session, NULLIF(c.thread, 0) AS thread, NULLIF(c.person, '') AS person, NULLIF(c.profile, '') AS profile,
     c.runtime, NULLIF(c.model, '') AS model, c.fast, SUM(c.calls) AS calls, SUM(c.input) AS input,
-    SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output
+    SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
     FROM eligible p CROSS JOIN usage_compact c ON c.session = p.session AND c.minute >= ?2 AND c.minute < ?3
     WHERE ${bucketScope}c.records > 0
     GROUP BY day, c.session, c.thread, c.person, c.profile, c.runtime, c.model, c.fast`;
   return { sql, args };
 }
 
-function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null): { sql: string; args: (string | bigint)[] } {
+function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null, countParts: boolean): { sql: string; args: (string | bigint)[] } {
   const size = 60_000n;
   const max = 9223372036854775807n;
   const floor = (n: bigint) => n >= 0n ? n / size : -1n - ((-1n - n) / size);
@@ -512,7 +512,7 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
     SELECT strftime('%Y-%m-%d', (minute + ?1) * 60, 'unixepoch') AS day,
       session, NULLIF(thread, 0) AS thread, NULLIF(person, '') AS person, NULLIF(profile, '') AS profile,
       runtime, NULLIF(model, '') AS model, fast, SUM(calls) AS calls, SUM(input) AS input,
-      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
     FROM parts GROUP BY day, session, thread, person, profile, runtime, model, fast`;
   return { sql, args };
 }

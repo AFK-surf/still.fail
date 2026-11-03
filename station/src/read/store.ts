@@ -912,11 +912,15 @@ export function usageCallsPage(s: Store, session: string, from: bigint, to: bigi
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and by
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export { USAGE_DETAIL_PENDING };
-export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
+export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
+  diagnostics?: { parts?: number }): UsageGroup[] {
   if (hasCompactUsage(s.db)) {
     if (!compactScopeReady(s.db, viewer)) throw new Refused(503, "usage statistics are moving between workspaces");
-    const query = compactQuery(from, to, utcOffsetMin, viewer);
-    return all(s, query.sql, ...query.args).map(usageGroupOf);
+    const query = compactQuery(from, to, utcOffsetMin, viewer, diagnostics !== undefined);
+    const rows = all(s, query.sql, ...query.args);
+    // Count only rows already used by this read; asking the database for another count would repeat the slow work.
+    if (diagnostics !== undefined) diagnostics.parts = rows.reduce((n, row) => n + Number(row.source_parts), 0);
+    return rows.map(usageGroupOf);
   }
   if (retiredUsage(s.db)) throw new Refused(503, "usage detail statistics are unavailable");
   const generation = usageDetailGeneration(s.db);
