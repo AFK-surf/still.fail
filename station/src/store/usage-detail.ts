@@ -19,26 +19,32 @@ const indexed = (row: string) => `EXISTS (SELECT 1 FROM usage_detail_sessions st
     OR (st.end_at IS NOT NULL AND (${row}.at, ${row}.rowid) > (st.end_at, st.end_rowid))
     OR EXISTS (SELECT 1 FROM usage_detail_seen WHERE id = ${row}.id)))`;
 
-// UPDATE then INSERT WHERE NOT EXISTS keeps the sum even when an older writer uses INSERT OR REPLACE: the outer
-// statement's conflict policy would otherwise replace an existing bucket inside this trigger.
+// An explicit upsert adds a contribution to an existing bucket without replacing its accumulated total.
 const add = (row: string) => SIZES.map((_, level) => `
-  UPDATE usage_detail SET records = records + 1, ${COLUMNS.map((c) => `${c} = ${c} + ${row}.${c}`).join(", ")}
-    WHERE ${key(row, level)};
   INSERT INTO usage_detail (session, thread, person, profile, runtime, model, fast, level, bucket, records, ${COLUMNS.join(", ")})
-    SELECT ${fields(row)}, ${level}, ${bucket(row, SIZES[level]!)}, 1, ${COLUMNS.map((c) => `${row}.${c}`).join(", ")}
-    WHERE NOT EXISTS (SELECT 1 FROM usage_detail WHERE ${key(row, level)});`).join("");
+    VALUES (${fields(row)}, ${level}, ${bucket(row, SIZES[level]!)}, 1, ${COLUMNS.map((c) => `${row}.${c}`).join(", ")})
+    ON CONFLICT (session, level, bucket, thread, person, profile, runtime, model, fast) DO UPDATE SET
+      records = records + 1, ${COLUMNS.map((c) => `${c} = ${c} + excluded.${c}`).join(", ")};`).join("");
 const remove = (row: string) => SIZES.map((_, level) => `
   UPDATE usage_detail SET records = records - 1, ${COLUMNS.map((c) => `${c} = ${c} - ${row}.${c}`).join(", ")}
     WHERE ${key(row, level)} AND ${indexed(row)};
   DELETE FROM usage_detail WHERE ${key(row, level)} AND records = 0;`).join("");
 // REPLACE can remove the old row without a DELETE trigger on an older connection. A single staging row captures it
 // before INSERT; UPSERT's UPDATE consumes it without using it, while an ignored INSERT can leave at most that one row.
-const removeReplaced = SIZES.map((_, level) => `
-  UPDATE usage_detail SET records = records - 1,
-    ${COLUMNS.map((c) => `${c} = ${c} - (SELECT ${c} FROM usage_detail_replace)`).join(", ")}
-    WHERE EXISTS (SELECT 1 FROM usage_detail_replace x WHERE x.id = NEW.id AND x.counted = 1 AND ${key("x", level)});
-  DELETE FROM usage_detail WHERE records = 0 AND EXISTS
-    (SELECT 1 FROM usage_detail_replace x WHERE x.id = NEW.id AND x.counted = 1 AND ${key("x", level)});`).join("");
+export function removeReplacedStatements(id: string): string[] {
+  const value = (expression: string) => `(SELECT ${expression} FROM usage_detail_replace x WHERE x.id = ${id} AND x.counted = 1)`;
+  return SIZES.flatMap((size, level) => {
+    const match = `session = ${value("x.session")} AND level = ${level} AND bucket = ${value(bucket("x", size))}
+      AND thread = ${value("COALESCE(x.thread, 0)")} AND person = ${value("COALESCE(x.person, '')")}
+      AND profile = ${value("COALESCE(x.profile, '')")} AND runtime = ${value("x.runtime")}
+      AND model = ${value("COALESCE(x.model, '')")} AND fast = ${value("x.fast")}`;
+    return [
+      `UPDATE usage_detail SET records = records - 1, ${COLUMNS.map((c) => `${c} = ${c} - ${value(`x.${c}`)}`).join(", ")} WHERE ${match}`,
+      `DELETE FROM usage_detail WHERE ${match} AND records = 0`,
+    ];
+  });
+}
+const removeReplaced = removeReplacedStatements("NEW.id").map((sql) => `${sql};`).join("\n");
 const ensureSession = (row: string) => `
   INSERT INTO usage_detail_sessions
     SELECT ${row}.session, NULL, NULL,
@@ -145,7 +151,8 @@ CREATE TRIGGER usage_detail_session_drop AFTER DELETE ON sessions BEGIN
   ${dirty("OLD.key", "OLD.ws", "NULL", "OLD.ws IS NOT NULL")}
   UPDATE usage_detail_scope SET ws = NULL WHERE session = OLD.key;
 END;
-CREATE TRIGGER usage_detail_before_add BEFORE INSERT ON usage BEGIN
+CREATE TRIGGER usage_detail_before_add BEFORE INSERT ON usage
+  WHEN EXISTS (SELECT 1 FROM usage WHERE id = NEW.id) OR EXISTS (SELECT 1 FROM usage_detail_replace) BEGIN
   DELETE FROM usage_detail_replace;
   INSERT INTO usage_detail_replace SELECT u.id, u.at, u.session, u.thread, u.person, u.profile, u.runtime, u.model, u.fast,
     u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output, ${indexed("u")}

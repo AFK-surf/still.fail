@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { backfillNextUsageDetail, backfillUsageDetail, backfillUsageDetailMove, detailQuery, installUsageDetail, usageDetailReady } from "../src/store/usage-detail.ts";
+import { backfillNextUsageDetail, backfillUsageDetail, backfillUsageDetailMove, detailQuery, installUsageDetail, removeReplacedStatements, usageDetailReady } from "../src/store/usage-detail.ts";
 
 function older(path = ":memory:") {
   const db = new DatabaseSync(path);
@@ -103,6 +103,18 @@ test("replacing and updating a recorded call changes its contribution exactly on
       }
     } finally { db.close(); }
   }
+});
+
+test("looking for a replaced call seeks its own buckets instead of scanning the statistics", () => {
+  const db = older();
+  try {
+    installUsageDetail(db);
+    for (const sql of removeReplacedStatements("?1")) {
+      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("one") as { detail: string }[]).map((r) => r.detail);
+      assert.ok(plan.some((line) => line.includes("SEARCH usage_detail USING PRIMARY KEY (session=? AND level=? AND bucket=?")), plan.join(" | "));
+      assert.ok(!plan.some((line) => line.startsWith("SCAN usage_detail")), plan.join(" | "));
+    }
+  } finally { db.close(); }
 });
 
 test("detail totals follow repeated moves, replacements and writes while a move is unfinished", () => {

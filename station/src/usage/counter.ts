@@ -32,8 +32,10 @@ const MARGIN_MS = 60_000;
 export const SETTLE_MS = 2_000;
 /// How often everything that ran is read anyway, for what no turn's end told.
 export const SAFETY_MS = 10 * 60_000;
-/// How much of a transcript is read, parsed and recorded at a time before the event loop is let through.
+/// How much of a transcript is read and parsed at a time.
 const CHUNK = 1 << 20;
+/// How many calls are recorded in one transaction before the event loop is let through.
+const WRITE_BATCH = 64;
 
 type Runtime = RuntimeKind;
 
@@ -228,8 +230,8 @@ function extension(path: string): string | null {
   return dot <= 0 ? null : name.slice(dot + 1);
 }
 
-/// A part of a transcript: its whole lines from where the last part ended, and where they end in the file.
-export type Part = { text: string; offset: number };
+/// A part of a transcript: its whole lines and their bounds in the file.
+export type Part = { text: string; from: number; offset: number };
 
 /// Whole lines of `bytes` (what follows `from` in the file), a part at most CHUNK long each where lines allow.
 function* partsOf(bytes: Buffer, from: number): Generator<Part> {
@@ -239,7 +241,7 @@ function* partsOf(bytes: Buffer, from: number): Generator<Part> {
     let cut = bytes.lastIndexOf(0x0a, window - 1);
     if (cut < at) cut = bytes.indexOf(0x0a, window);
     if (cut < 0) return;
-    yield { text: bytes.toString("utf8", at, cut + 1), offset: from + cut + 1 };
+    yield { text: bytes.toString("utf8", at, cut + 1), from: from + at, offset: from + cut + 1 };
     at = cut + 1;
   }
 }
@@ -565,7 +567,7 @@ export class UsageCounter {
     Queue.offerUnsafe(this.#wake, undefined);
   }
 
-  /// Stops reading: the read under way stops at its next part (what it recorded stays).
+  /// Stops reading: the read under way stops at its next batch (what it recorded stays).
   async stop(): Promise<void> {
     this.#unsubscribe?.();
     this.#unsubscribe = null;
@@ -763,6 +765,7 @@ export class UsageCounter {
         first = false;
       }
       // What ran before the station had the session (a terminal's, continued here) is not the station's.
+      const modelBefore = state.model;
       const calls = callsOf(runtime, part.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS);
       // The turns they were made in, those alone (store/usage.ts usageTurns).
       const of = calls.length === 0 ? [] : this.#store.usageTurns(session.key, calls.reduce((m, c) => Math.min(m, c.at), Infinity), calls.reduce((m, c) => Math.max(m, c.at), -Infinity));
@@ -777,14 +780,23 @@ export class UsageCounter {
         }
         return [c, of[Math.max(lo - 1, 0)]!.of];
       });
-      const recorded = this.#store.recordUsage(path, { session: session.key, offset: part.offset, model: state.model }, runtime, withFor);
-      this.#files?.set(path, { session: session.key, offset: part.offset, model: state.model });
-      if (recorded > 0) {
-        this.#counted.add(session.key);
-        this.#from = calls.reduce((m, c) => Math.min(m, c.at), this.#from);
+      // A dense part can contain thousands of calls. Save its starting position until all its calls are recorded: if
+      // stopped between transactions, replaying the part is safe (the store keeps each call by id). `part.from` also
+      // handles a transcript that was shortened and is being read again from zero.
+      for (let i = 0; i < Math.max(1, withFor.length); i += WRITE_BATCH) {
+        if (this.#abort.signal.aborted) throw new Stopped();
+        const complete = i + WRITE_BATCH >= withFor.length;
+        const file = { session: session.key, offset: complete ? part.offset : part.from, model: complete ? state.model : modelBefore };
+        const batch = withFor.slice(i, i + WRITE_BATCH);
+        const recorded = this.#store.recordUsage(path, file, runtime, batch);
+        this.#files?.set(path, file);
+        if (recorded > 0) {
+          this.#counted.add(session.key);
+          this.#from = batch.reduce((m, [c]) => Math.min(m, c.at), this.#from);
+        }
+        added += recorded;
+        await breathe();
       }
-      added += recorded;
-      await breathe();
     }
     return added;
   }
