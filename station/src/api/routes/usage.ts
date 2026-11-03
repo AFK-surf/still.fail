@@ -3,7 +3,6 @@
 // still.fail uses of the machine (GET /resources, POST /resources/processes/:pid/end).
 import { type Request, type Answer, error, json, param, segment } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
-import { memory } from "../../read/memory.ts";
 import { cpus, totalmem } from "node:os";
 import { NotEndable, type ResourceWatch } from "../../resources/watch.ts";
 import { log } from "../../ops/log.ts";
@@ -56,13 +55,9 @@ export const routes = (tools: Tools): Route[] => {
       pattern: /^\/memory$/,
       handle: async (r: Request): Promise<Answer> => {
         if (r.viewer.home !== false) return read(r, "memory", {});
-        const agents = tools.agents;
-        if (!agents) return error(503, "station starting");
-        try {
-          return json(200, JSON.stringify(memory(agents.config.data, r.viewer.workspace)));
-        } catch (e) {
-          return error(400, (e as Error).message);
-        }
+        if (!tools.agents) return error(503, "station starting");
+        if (typeof r.viewer.workspace !== "string") return error(400, "not a workspace id");
+        return read(r, "memory", { workspace: r.viewer.workspace });
       },
     },
     // The machine's state, at most ten seconds old.
