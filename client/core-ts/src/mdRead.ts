@@ -31,6 +31,8 @@ reader.inline.ruler.before("escape", "math_paren", mathParen);
 const interrupts = { alt: ["paragraph", "reference", "blockquote", "list"] };
 reader.block.ruler.before("fence", "math_fence", mathFence, interrupts);
 reader.block.ruler.before("fence", "math_bracket", mathBracket, interrupts);
+const gfmTable = reader.block.ruler.__rules__.find((r: J) => r.name === "table").fn;
+reader.block.ruler.at("table", mathTable, { alt: ["paragraph", "reference"] });
 
 const isSpace = (c: number) => c === 0x20 || c === 0x09;
 
@@ -186,6 +188,51 @@ function mathParen(state: J, silent: boolean): boolean {
     at += at + 1 < state.posMax && src.charCodeAt(at + 1) !== 0x0a ? 2 : 1;
   }
   return false;
+}
+
+/// A table, its cells split at bars outside formulas: `| \(|x| \le 1\) | 2 |` is two cells, not four. Its rows'
+/// bars within a `\(…\)` are hidden from GFM's own rule (as NUL, which no text read has: markdown-it reads it as
+/// U+FFFD), and its cells given them back.
+function mathTable(state: J, startLine: number, endLine: number, silent: boolean): boolean {
+  const src: string = state.src;
+  // (no line of bars and dashes under it: no table, and nothing to look through)
+  const under = startLine + 1 < endLine ? src.slice(state.bMarks[startLine + 1] + state.tShift[startLine + 1], state.eMarks[startLine + 1]) : "";
+  if (!/^[-:|][-:|\s]*$/.test(under)) return false;
+  let end = startLine;
+  while (end < endLine && state.bMarks[end] + state.tShift[end] < state.eMarks[end]) end++;
+  const from = state.bMarks[startLine];
+  const to = state.eMarks[Math.max(startLine, end - 1)];
+  let hidden = "";
+  let last = from;
+  for (let at = from; at < to; ) {
+    if (src.charCodeAt(at) !== 0x5c) {
+      at++;
+      continue;
+    }
+    if (src.charCodeAt(at + 1) !== 0x28) {
+      at += 2;
+      continue;
+    }
+    let close = at + 2;
+    while (close < to && src.charCodeAt(close) !== 0x0a && !(src.charCodeAt(close) === 0x5c && src.charCodeAt(close + 1) === 0x29)) close += src.charCodeAt(close) === 0x5c ? 2 : 1;
+    if (close >= to || src.charCodeAt(close) === 0x0a) {
+      at = close;
+      continue;
+    }
+    hidden += src.slice(last, at) + src.slice(at, close).replaceAll("|", "\0");
+    last = at = close + 2;
+    hidden += "\\)";
+  }
+  if (hidden === "") return gfmTable(state, startLine, endLine, silent);
+  const first = state.tokens.length;
+  state.src = src.slice(0, from) + hidden + src.slice(last);
+  try {
+    if (!gfmTable(state, startLine, endLine, silent)) return false;
+  } finally {
+    state.src = src;
+  }
+  for (let i = first; i < state.tokens.length; i++) if (state.tokens[i].type === "inline") state.tokens[i].content = state.tokens[i].content.replaceAll("\0", "|");
+  return true;
 }
 
 // ── tokens into nodes ──
