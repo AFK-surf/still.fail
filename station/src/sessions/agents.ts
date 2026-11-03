@@ -497,6 +497,8 @@ export const AgentsLive = (control: Control) =>
         state: async (key) => (JSON.parse(await readers.read("transcriptState", { key }, "zh")) as { states: TailState[] | null }).states,
         page: async (key, before, limit, brief) => JSON.parse(await readers.read("timeline", { key, before: String(before), limit: String(limit), lang: "zh", ...(brief ? { brief: "1" } : {}) }, "zh")),
       };
+      // Where each checklist was read to, for the next process to read on from (not back, at each update).
+      parts.carry("live.plans", () => hub.live.carriedPlans(), (what) => hub.live.takePlans(what));
       hub.threadList = async () => JSON.parse(await readers.read("threadList", {}, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
       hub.followRunning();
