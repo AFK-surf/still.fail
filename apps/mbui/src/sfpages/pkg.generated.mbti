@@ -75,6 +75,8 @@ pub fn chat_list(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, Arr
 
 pub fn chat_mark(@ui.Ctx, String) -> Int32
 
+pub fn chat_menu_of(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?]
+
 pub fn chat_messages_sample(@ui.Ctx, Double) -> Unit
 
 pub let chat_narrow_w : Double
@@ -512,7 +514,6 @@ pub let row_last : @ui.Style
 pub fn row_mark(@ui.Ctx, String, String) -> Unit
 
 pub let row_more : @ui.Style
-
 
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
 

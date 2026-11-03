@@ -1196,3 +1196,34 @@ test "an iPhone Duo on its side: a finger's swipe across the page, wherever on i
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }
+
+///|
+test "an iPhone Duo: the chat's … in the system's bars is a menu of the system's own, its rows the chat's menu's, a row chosen run" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  let said = t.nav_said()
+  // (its rows as the page's menu has them: the chat's own group, a line, where else it goes; no line closing it)
+  for s in ["\"id\":\"page/chat/more/0\",\"title\":\"" + @sf.t("web-main.chat.rename") + "\"", "\"id\":\"-\"", @sf.t("web-main.chat.copyLink")] {
+    if !said.contains(s) {
+      fail("the chat's … handed holds no \{s}: \{said}")
+    }
+  }
+  assert_false(said.contains("\"id\":\"-\",\"title\":\"\",\"checked\":false,\"icon\":\"\"}]"), msg=said)
+  // the first row chosen in the system's menu: 重命名 asked
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/more/0\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(@sf.t("android-chat.rename.title")) is Some(_))
+}
+
+///|
+test "an iPhone Duo: the chat's station's screens a button of the system's bars, a dot on it while an agent drives one; the short column leaves it to the page" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-agent-screens")
+  let said = t.nav_said()
+  assert_true(said.contains("page/chat/screen"), msg=said)
+  assert_eq(nav_icon_of(t, "page/chat/screen", field="title"), Some(@sf.t("web-pages.chat.screen")))
+  assert_true(said.contains("\"id\":\"page/chat/screen\",\"title\":\"" + @sf.t("web-pages.chat.screen") + "\",\"icon\":\"" + @sf.icon_path("monitor") + "\",\"dot\":true"), msg=said)
+  // (none of the page's own)
+  assert_true(said_at(t, @sf.t("web-pages.chat.screen")) is None)
+  // the short column (the chat narrow: its screens from its agent's sheet, sheets.mbt): none handed
+  let s = native_chat(466.0, 678.0, true, side=70.0, mode="chat-agent-screens")
+  assert_false(s.nav_said().contains("page/chat/screen"))
+}
