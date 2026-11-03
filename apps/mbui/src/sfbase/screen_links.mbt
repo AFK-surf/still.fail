@@ -44,14 +44,15 @@ pub let globe_mark : LinkMark = { name: "web" }
 
 ///|
 /// A card: a row 236 wide, a capsule as a file's card (a row high, 52), on the chat's bubble ground: its mark, 24,
-/// concentric with its round end (14 from its end, its top and its foot), 8 from its words, their end 14 from the
-/// other end.
+/// concentric with its round end (14 from its end, its top and its foot), 8 from its words, their end where the other
+/// round end begins (@sf.file_capsule_words_end).
 // kept across runs: a value (no field of it changes)
 pub let link_card : @ui.Style = @ui.style(
   row=true,
   w=@sf.link_card_w,
   h=@sf.file_capsule_h,
-  px=S3_5,
+  pl=S3_5,
+  pr=@sf.room_of(@sf.file_capsule_words_end),
   gap=S2,
   align=ACenter,
   radius=Full,

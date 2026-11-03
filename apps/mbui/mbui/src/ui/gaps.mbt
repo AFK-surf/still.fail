@@ -17,7 +17,9 @@
 //    in from the left as from the right where it stands in one line (a row, a button, a chip: what a box with lines
 //    under lines holds stands as its column says): each end by its box, a drawing larger than an icon by its ink (a
 //    file's sheet in its tile), in a capsule what stands at its ends concentric with them by their middles (a dot, a
-//    tab's ×; a capsule button by its end's).
+//    tab's ×; a capsule button by its end's). A capsule's mark concentric with one end and its lines of words at the
+//    other (a file's card: its name over its size) stand each as its end has it: the mark so, the lines' box as clear
+//    of the curve at theirs as of the capsule's top and foot.
 //
 // 5. The blocks that show their edges (a ground, an edge, what lights up), half as wide as what they stand on at least,
 //    the outermost on it, stand on the edges most of them do, whatever boxes lay them out: one off them by less than
@@ -184,6 +186,55 @@ fn Ctx::words_only(self : Ctx, i : Int) -> Bool {
     k = self.nodes[k].next
   }
   true
+}
+
+///|
+/// Whether node `i` holds words one under another (a name over its size): two of its words whose lines do not share a
+/// row.
+fn Ctx::words_stacked(self : Ctx, i : Int) -> Bool {
+  let rows : Array[(Double, Double)] = []
+  let todo = [i]
+  while todo.pop() is Some(k) {
+    let n = self.nodes[k]
+    if (n.kind == kind_text || n.kind == kind_rich) && (n.text != "" || n.rich is Some(_)) && n.fh > 0.0 {
+      for r in rows {
+        if n.y >= r.1 - gap_slack || n.y + n.fh <= r.0 + gap_slack {
+          return true
+        }
+      }
+      rows.push((n.y, n.y + n.fh))
+    }
+    let mut ch = n.first
+    while ch >= 0 {
+      todo.push(ch)
+      ch = self.nodes[ch].next
+    }
+  }
+  false
+}
+
+///|
+/// How words `w` at an end of capsule `gi` (its left end where `left`) reach into the curve there, said, where their
+/// box's corners come nearer it than the box's top or foot is to the capsule's, by more than the slack (rule 4: they
+/// keep as clear of the round end as of the capsule's top and foot; a button's words 16 in from the end of its 34 are
+/// 0.05 nearer, a toast's 18 in its 40 0.2); None where they keep clear.
+fn Ctx::capsule_words_reach(self : Ctx, gi : Int, w : Int, left : Bool) -> String? {
+  let gb = self.nodes[gi]
+  let n = self.nodes[w]
+  let r = gb.fh / 2.0
+  let inset = if left { n.x - gb.x } else { gb.x + gb.fw - (n.x + n.fw) }
+  // (how far past where the round end begins the box reaches, and how far up or down from the end's centre its
+  // farther corner is)
+  let into = r - inset
+  let centre = gb.y + r
+  let half = dmax(centre - n.y, n.y + n.fh - centre)
+  let clear = r - half
+  let off = r - (into * into + half * half).sqrt()
+  if into <= 0.0 || off >= clear - gap_slack {
+    None
+  } else {
+    Some("\{self.named(w)} reaches into its round end, \{inset} in: \{off} from its curve, \{clear} from its top or foot")
+  }
 }
 
 ///|
@@ -556,6 +607,38 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
         Some(inset + n.fh / 2.0)
       } else {
         None
+      }
+    }
+    // (a mark concentric with one end of a capsule and, beside it, lines of words at the other, one under another (a
+    // file's card: its line icon, its name over its size), which do not stand in one line and were held by nothing
+    // here: each end held as it stands, the mark by its middle, on its end's centre; the lines by their box, its
+    // corners as clear of the curve at that end as its top and foot of the capsule's (Ctx::capsule_words_reach). Lines
+    // as far in from that end as the mark's box from its own reach into its curve: a file's name 14 from its card's
+    // end, its last tall letter 10 from the curve, the mark 15 from its own (still.fail's user, 2026-11-03: 右边是不是边距
+    // 不够). One line of words stands by its box as at the other end, below: its line's room over and under the letters
+    // is most of a small capsule's height (a tag's 18 of its 20).)
+    if capsule && first >= 0 && last >= 0 && first != last {
+      let mark_at = fn(i : Int, left : Bool) -> Bool {
+        match end_mid(i, left) {
+          Some(m) => (m - gb.fh / 2.0).abs() <= gap_slack
+          None => false
+        }
+      }
+      let lines_at = fn(i : Int) -> Bool { self.words_only(i) && self.words_stacked(i) }
+      let (fb, lb) = (self.nodes[first], self.nodes[last])
+      let beside = fb.x + fb.fw <= lb.x + gap_slack
+      let words_at = if beside && mark_at(first, true) && lines_at(last) {
+        Some((last, false))
+      } else if beside && mark_at(last, false) && lines_at(first) {
+        Some((first, true))
+      } else {
+        None
+      }
+      if words_at is Some((w, left)) {
+        if self.capsule_words_reach(gi, w, left) is Some(said) {
+          out.push("rule 4: in \{self.named(gi)}, \{said}")
+        }
+        continue
       }
     }
     // (else each end where its box is; a drawing larger than an icon where it draws, not the room round it (a file's
