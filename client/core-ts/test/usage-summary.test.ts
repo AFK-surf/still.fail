@@ -88,3 +88,24 @@ test("an incomplete station contributes the records it has and marks missing day
   const empty: Source = { ...partial, value: { ok: { ...station(undefined), historyUnavailable: true, partialHistory: history([]) } } };
   assert.doesNotMatch(usageSummary([empty], NOW, 480, "")!.activity.captions[0], /没有 token 用量/);
 });
+
+test("an empty day after partial recording began is known, while the cutover day remains incomplete", () => {
+  const partial: Source = { address: "ws/partial", name: "partial", online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true, detailSince: Date.UTC(2026, 9, 1, 4), partialHistory: history([]) } } };
+  const s = usageSummary([partial], NOW, 480, "")!;
+  assert.equal(s.activity.cells.at(-2), 0, "October 2 was followed for the whole day");
+  assert.equal(s.activity.cells.at(-3), -1, "October 1 was only partly followed");
+  assert.match(s.activity.tips.at(-2), /没有用 token/);
+  assert.doesNotMatch(s.activity.tips.at(-3), /没有用 token/);
+});
+
+test("each station must cover a day before an empty day can be called zero", () => {
+  const partial = (name: string, since: number): Source => ({ address: `ws/${name}`, name, online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true, detailSince: since, partialHistory: history([]) } } });
+  const older = partial("older", Date.UTC(2026, 8, 29));
+  const newer = partial("newer", Date.UTC(2026, 9, 1, 20)); // October 2 at +8
+  const s = usageSummary([older, newer], NOW, 480, "")!;
+  assert.equal(s.activity.cells.at(-2), -1, "the newest local cutover leaves today incomplete");
+  const withMissing = usageSummary([older, source("missing", undefined)], NOW, 480, "")!;
+  assert.equal(withMissing.activity.cells.at(-2), -1, "a missing station could have calls today");
+});

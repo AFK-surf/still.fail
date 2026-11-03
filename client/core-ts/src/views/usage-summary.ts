@@ -69,6 +69,8 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   let read = 0;
   let missing = 0;
   let incomplete = 0;
+  let unknownAllDays = false;
+  let lastIncompleteDay: string | null = null;
   const num = (v: unknown, k: string): number => (typeof get(v, k) === "number" ? get(v, k) : 0);
   for (const s of sources) {
     const value = s.value !== undefined && "ok" in s.value ? s.value.ok : undefined;
@@ -76,9 +78,18 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
     const history = full ?? get(value, "partialHistory");
     if (history === undefined || history === null) {
       missing++;
+      unknownAllDays = true;
       continue;
     }
-    if (full === undefined || full === null) incomplete++;
+    if (full === undefined || full === null) {
+      incomplete++;
+      const since = get(value, "detailSince");
+      if (typeof since !== "number" || !Number.isFinite(since)) unknownAllDays = true;
+      else {
+        const day = localDay(since, offset);
+        if (lastIncompleteDay === null || day > lastIncompleteDay) lastIncompleteDay = day;
+      }
+    }
     read++;
     archived += num(history, "archived");
     remote += num(history, "remoteRuns");
@@ -112,7 +123,13 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   for (let i = 0; i < WEEKS * WEEK_DAYS; i++) values.push(byDay.get(plus(start, i)) ?? 0);
   const most = Math.max(0, ...values);
   const unknown = missing > 0 || incomplete > 0;
-  const cells = values.map((v, i) => (plus(start, i) > today || (unknown && v === 0) ? -1 : level(v, most)));
+  // The cutover day can contain earlier, unrecorded calls. Later days have full coverage only if every station
+  // supplies a complete history or a known cutover; a missing station makes every day uncertain.
+  const unknownDays = values.map((_, i) => {
+    const day = plus(start, i);
+    return day <= today && (unknownAllDays || (lastIncompleteDay !== null && day <= lastIncompleteDay));
+  });
+  const cells = values.map((v, i) => (plus(start, i) > today || (unknownDays[i] && v === 0) ? -1 : level(v, most)));
   const weeks: number[] = [];
   for (let w = 0; w < WEEKS; w++) weeks.push(values.slice(w * WEEK_DAYS, (w + 1) * WEEK_DAYS).reduce((a, b) => a + b, 0));
   const running: number[] = [];
@@ -130,11 +147,11 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   // what each is, said as the pointer rests on it: a day its date and tokens, a week its first day and tokens, the
   // running total as of the week's last day so far
   const tokens = (n: number) => (n > 0 ? t("core-views.usage.summary.tokens", { n: count(n) }) : t("core-views.usage.summary.no_tokens"));
-  const tips = values.map((v, i) => (plus(start, i) > today ? "" : t("core-views.usage.summary.day_tip", { date: format.monthDayOf(plus(start, i)), tokens: unknown && v === 0 ? t("core-views.usage.summary.unknown") : tokens(v) })));
-  const weekTips = weeks.map((v, w) => t("core-views.usage.summary.week_tip", { date: format.monthDayOf(plus(start, w * WEEK_DAYS)), tokens: unknown && v === 0 ? t("core-views.usage.summary.unknown") : tokens(v) }));
+  const tips = values.map((v, i) => (plus(start, i) > today ? "" : t("core-views.usage.summary.day_tip", { date: format.monthDayOf(plus(start, i)), tokens: unknownDays[i] && v === 0 ? t("core-views.usage.summary.unknown") : tokens(v) })));
+  const weekTips = weeks.map((v, w) => t("core-views.usage.summary.week_tip", { date: format.monthDayOf(plus(start, w * WEEK_DAYS)), tokens: unknownDays.slice(w * WEEK_DAYS, (w + 1) * WEEK_DAYS).some(Boolean) && v === 0 ? t("core-views.usage.summary.unknown") : tokens(v) }));
   const runningTips = running.map((v, w) => {
     const last = plus(start, w * WEEK_DAYS + WEEK_DAYS - 1);
-    return t("core-views.usage.summary.running_tip", { date: format.monthDayOf(last > today ? today : last), tokens: unknown && v === 0 ? t("core-views.usage.summary.unknown") : tokens(v) });
+    return t("core-views.usage.summary.running_tip", { date: format.monthDayOf(last > today ? today : last), tokens: unknownDays.slice(0, (w + 1) * WEEK_DAYS).some(Boolean) && v === 0 ? t("core-views.usage.summary.unknown") : tokens(v) });
   });
   byStation.sort((x, y) => y[1] - x[1]);
   const placed = [...places].sort((x, y) => y[1] - x[1]);
