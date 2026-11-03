@@ -494,7 +494,7 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
 ///|
 /// The screen live in its card (ScreenLinks.kt Peek): only looking (not among those on it, its tab not brought
 /// forward), its mark until a picture comes (a tab behind another casts none). A browser's preview keeps its shape as
-/// its viewport adapts to a viewer; another screen's shape follows its listed size, within bounds. The newest picture
+/// its viewport adapts to a viewer; another screen's shape follows its picture, its listed size until one comes, within bounds. The newest picture
 /// decoded fills the preview, cropped from the top; a newer one is drawn over it once it is decoded.
 /// `target`: its card's (peeks_settle).
 pub fn screen_peek(
@@ -510,19 +510,26 @@ pub fn screen_peek(
   peeks_built[key] = true
   // (and each frame its row or part is put back as built, kept as its nodes: mbui's kept_nodes.mbt)
   @ui.built_used(fn() { peeks_built[key] = true })
+  let mut shown = -1
+  let mut natural = 0.0
+  for i, k in p.pictures {
+    match @ui.image_natural(k) {
+      Some((w, h)) => {
+        shown = i
+        natural = if h > 0.0 { w / h } else { 0.0 }
+      }
+      None => ()
+    }
+  }
   let listed = if card.width > 0.0 && card.height > 0.0 { card.width / card.height } else { 0.0 }
-  let ratio = if card.kind != "browser" && listed > 0.0 {
-    dclamp(listed, peek_ratio_least, peek_ratio_most)
+  // (a simulator's panel, and so its shape, may have changed since it was listed: as its picture has it)
+  let own = if natural > 0.0 { natural } else { listed }
+  let ratio = if card.kind != "browser" && own > 0.0 {
+    dclamp(own, peek_ratio_least, peek_ratio_most)
   } else {
     peek_ratio
   }
   c.box(style=peek_frame, aspect=ratio, fn() {
-    let mut shown = -1
-    for i, k in p.pictures {
-      if @ui.image_natural(k) is Some(_) {
-        shown = i
-      }
-    }
     if shown < 0 {
       link_mark(c, Some(if card.kind == "browser" { globe_mark } else { monitor_mark }), Muted)
     }
