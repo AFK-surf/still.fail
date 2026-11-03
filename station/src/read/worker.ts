@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { parentPort, workerData } from "node:worker_threads";
 import type { Lang } from "../ops/i18n.ts";
 import { ops } from "./ops.ts";
-import { openStore } from "./store.ts";
+import { openStore, usageGroupsBatched } from "./store.ts";
 import { HttpError, setSpoken } from "./views.ts";
 
 export type Ask = { id: number; op: string; args: any; lang: Lang; names: [string, string][]; processes: [string, string][]; clientKeys: [string, string][] };
@@ -31,7 +31,7 @@ function checkpoint(): unknown {
   return writer.prepare("PRAGMA wal_checkpoint(PASSIVE)").get();
 }
 
-parentPort!.on("message", (ask: Ask) => {
+parentPort!.on("message", async (ask: Ask) => {
   let answer: Answer;
   try {
     if (ask.op === "checkpoint") {
@@ -50,7 +50,11 @@ parentPort!.on("message", (ask: Ask) => {
     // database changed since it last read): each was read again, from the disk while memory was short.
     store.db.exec("BEGIN");
     try {
-      answer = { id: ask.id, text: JSON.stringify(op(store, ask.args)) };
+      // Usage can span many minutes. Read its compact statistics in bounded steps on this same snapshot, resting
+      // between them so the cold database does not displace other work's pages all at once.
+      const a = ask.args;
+      const batched = ask.op === "usage" ? await usageGroupsBatched(store, BigInt(a.from), BigInt(a.to), BigInt(a.tz), a.viewer ?? null) : null;
+      answer = { id: ask.id, text: JSON.stringify(op(store, batched === null ? a : { ...a, batchedSummary: batched })) };
     } finally {
       store.db.exec("COMMIT");
     }
