@@ -233,6 +233,7 @@ export function sampleArchiving(): ArchivingView {
 
 /** What changed made up: two days, each a few changes of a line or two, their kind before each line. */
 export const sampleChangelog = (): ChangelogDay[] => [[[22], [30, 16], [18]], [[26, 20], [14]]].map((day, d) => ({
+  day: -1 - d,
   label: sampleWords(4),
   entries: day.map((lines, i) => ({
     version: d * 10 + i, versionName: sampleWords(3), text: [], has: true, note: "", mine: true,

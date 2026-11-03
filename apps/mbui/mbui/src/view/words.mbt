@@ -109,6 +109,43 @@ pub fn View::runs_pressed(self : View, k : Live[Int]) -> View {
 }
 
 ///|
+/// What of its words in pieces is picked with the pointer (from, until, in their text's terms; none where the same), as
+/// it changes: drawn picked under them alone (what picks them says it: mbui/ui's selection).
+pub fn View::runs_picked(self : View, span : Live[(Int, Int)]) -> View {
+  let tree = self.tree
+  let at = self.at
+  self.bind(RunsPicked, span, Paint, fn(s) { tree.nodes[at].look.runs_picked = s })
+  self
+}
+
+///|
+/// What lends what holds it how what of a node's words in pieces is picked with the pointer is said (given the node, as
+/// View::words_runs makes it, now or later: its View::runs_picked), as what picks them has it (mbui/ui's selection).
+// kept across runs: what each node lends (View::lends), let go with it
+pub let runs_picker : Lent[(View) -> Live[(Int, Int)]] = Lent::new()
+
+///|
+/// Which row of a list made by its key (View::each) it is in, nearest it, and where it is in that row (its place among
+/// what holds it, each from the row down): the same while the row's key is there, whatever is made in it anew where it
+/// was; the window's root and where it is from it where it is in none.
+pub fn View::row_place(self : View) -> (NodeId, Array[Int]) {
+  let up : Array[Int] = []
+  let mut at = self
+  while at.live() is Some(n) && !n.each_row && at.parent() is Some(p) {
+    up.push(p.kids().search_by(fn(k) { k.at == at.at }).unwrap_or(0))
+    at = p
+  }
+  (at.id(), up.rev())
+}
+
+///|
+/// What of its words in pieces is picked with the pointer as it is said now (View::runs_picked).
+pub fn View::runs_picked_now(self : View) -> (Int, Int) {
+  guard self.live() is Some(n) else { return (0, 0) }
+  n.look.runs_picked
+}
+
+///|
 /// Where the pointer is in its own terms (where it is drawn now, as big as it is drawn), as the tree last had it; None
 /// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (pointer_here_told).
 pub fn View::pointer_here(self : View) -> (Double, Double)? {

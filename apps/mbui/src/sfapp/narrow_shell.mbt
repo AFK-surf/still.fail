@@ -369,6 +369,9 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
                 let core = settings_core(src, w)
                 let here = fn() { @settings.here_of(core, w.id, w.name) }
                 @settings.frame(core, @signals.untracked(here))
+                // (its words in pieces picked with the mouse, as an old view's page's in this frame are (narrow_page's
+                // c.selectable), before what it holds is made)
+                @ui.words_picked(p)
                 f(p, core, here, frame, stint)
               }
               None => ()
@@ -387,6 +390,8 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
         })
       })
     Setting(About) => made("about", fn(p, core, _here, frame, _stint) { @sfpages.about_node(p, core, on_back=core.pop, frame~) })
+    Setting(Changelog) =>
+      made("changelog", fn(p, core, _here, frame, _stint) { @sfpages.changelog_node(p, core, on_back=core.pop, frame~) })
     Setting(Archiving) =>
       made("archiving", fn(p, core, here, frame, stint) {
         @sfpages.archiving_node(p, core, here, on_back=core.pop, frame~, stint~)

@@ -963,8 +963,12 @@ export interface ChangelogItem {
 	mine: boolean;
 }
 
-/** A day's changes, under its heading (今天, 昨天, 9月20日). */
+/**
+ * A day's changes, under its heading (今天, 昨天, 9月20日): which day it is where the device is (`day`: days since
+ * 1970 there, the same day whatever else it lists or the list leaves off; its heading only says it).
+ */
 export interface ChangelogDay {
+	day: number;
 	label: string;
 	entries: ChangelogItem[];
 }

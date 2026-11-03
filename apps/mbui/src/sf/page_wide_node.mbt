@@ -30,8 +30,8 @@ fn wide_page_node(
   frame : () -> PageFrame,
   lead : () -> String,
   actions : ((@view.View) -> Unit)?,
+  scroll : @view.Scroll,
 ) -> Unit {
-  let scroll = @view.Scroll::list()
   let items = fn() -> Array[WideItem] {
     let f = frame()
     let out = []

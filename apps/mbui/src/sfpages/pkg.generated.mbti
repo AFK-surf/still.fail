@@ -65,6 +65,8 @@ pub fn cd_mode_dialog(@settings.Core, String, Json?) -> Unit
 
 pub fn changelog_news(@ui.Ctx, @sfbase.Source) -> Unit
 
+pub fn changelog_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
+
 pub fn changelog_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn chat_composer(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, apart? : Bool) -> Unit

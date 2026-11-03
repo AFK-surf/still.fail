@@ -185,7 +185,7 @@ fn leaked_state() -> Array[String] {
   check("desk.menus", desk.menus.length() + desk.mutable_menus.length())
   check("desk.keys", desk.keys.length() + desk.mutable_keys.length())
   check("desk.sels", desk.sels.length() + desk.next_sels.length())
-  check("picked", (if picked.from.base != 0 { 1 } else { 0 }) + picked.spans.length())
+  check("picked", (if picked.from.base != NoSel { 1 } else { 0 }) + picked.spans.length())
   check("image_cache", image_cache.length())
   check("image_data", image_data.length())
   check("image_vector_drawers", image_vector_drawers.length())

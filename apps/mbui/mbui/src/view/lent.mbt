@@ -120,3 +120,62 @@ pub fn View::shown_across(self : View, but? : View) -> (Double, Double)? {
     Some((lo.val, hi.val))
   }
 }
+
+///|
+/// The node `id` names, while it lives (that making of it); None let go.
+pub fn Tree::view_of(self : Tree, id : NodeId) -> View? {
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return None
+  }
+  let v = self.handle(id.at)
+  if v.gen == id.gen && v.alive() {
+    Some(v)
+  } else {
+    None
+  }
+}
+
+///|
+/// What of the window node `id` can be seen in as what holds it cuts it (View::clips: each that does, as it was last
+/// placed, its scale with it): x0, y0, x1, y1 in the window, its own box not cut by itself.
+pub fn Tree::seen_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, Double) {
+  let mut b = (-1.0e9, -1.0e9, 1.0e9, 1.0e9)
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return b
+  }
+  let mut i = self.nodes[id.at].parent
+  while i >= 0 {
+    let n = self.nodes[i]
+    if n.look.clips {
+      let (x, y, sc) = self.placed(i)
+      let (x1, y1) = (x + n.flex.width * sc, y + n.flex.height * sc)
+      b = (dmax(b.0, x), dmax(b.1, y), dmin(b.2, x1), dmin(b.3, y1))
+    }
+    i = n.parent
+  }
+  b
+}
+
+///|
+/// Laid out as of the logic's moment, what the change under way set so far counted (Tree::laid_now): where an event
+/// finds things, for what reads where they are then (what words a press picks).
+pub fn Tree::laid_as_now(self : Tree) -> Unit {
+  self.laid_now()
+}
+
+///|
+/// The node that scrolls by it now (View::scrolls: its column, its row), while it does; None where none does (not said
+/// yet, or let go).
+pub fn Scroll::shown_by(self : Scroll) -> View? {
+  match self.host {
+    Some(v) if v.alive() => Some(v)
+    _ => None
+  }
+}
+
+///|
+/// Whether it is laid out nowhere, or what holds it is (View::laid_nowhere, left out of its row: View::drops; a page
+/// of a stack not shown): nothing of it shows, its place none.
+pub fn View::shown_nowhere(self : View) -> Bool {
+  !self.alive() || self.tree.out_at(self.at)
+}

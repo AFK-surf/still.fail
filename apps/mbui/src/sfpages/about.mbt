@@ -286,7 +286,7 @@ fn version_rows(c : @ui.Ctx, core : Core) -> Unit {
 /// The changelog's part in view ("" the first), and the news last told read (as the core says it: told once, not again
 /// each frame until the core has it, and news an update brings later told again).
 // kept across runs: said by its tabs and as it opens; changelog_reset puts them back
-let changelog_part : Ref[String] = Ref("")
+let changelog_part : @signals.Signal[String] = @signals.signal("")
 
 ///|
 // kept across runs: said as the page opens; changelog_reset puts it back
@@ -294,7 +294,7 @@ let changelog_seen : Ref[String] = Ref("")
 
 ///|
 fn changelog_reset() -> Unit {
-  changelog_part.val = ""
+  changelog_part.set("")
   changelog_seen.val = ""
 }
 
@@ -316,7 +316,7 @@ pub fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     c.tell("changelog.seen", fn() { (core.call)("changelog.seen", obj([]), fn(_) {  }) })
   }
   let tabs = items(v, "tabs")
-  let at = match tabs.search_by(fn(x) { text(Some(x), "part") == changelog_part.val }) {
+  let at = match tabs.search_by(fn(x) { text(Some(x), "part") == @signals.untracked(fn() { changelog_part.get() }) }) {
     Some(i) => i
     None => 0
   }
@@ -327,7 +327,7 @@ pub fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       // (each part 120 wide at least, a wide page's)
       let chosen = @sf.page_choice(c, "changelog/tabs", labels, at, item_w=cl_tab_w)
       if chosen != at {
-        changelog_part.val = text(Some(tabs[chosen]), "part")
+        changelog_part.set(text(Some(tabs[chosen]), "part"))
       }
     })
   }
