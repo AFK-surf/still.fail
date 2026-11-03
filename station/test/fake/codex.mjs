@@ -13,6 +13,7 @@
 // FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin. The
 // version it says it is (`--version`, its userAgent) is FAKE_DUMP.version's when there is one, else 0.
 import fs from "node:fs";
+import { join } from "node:path";
 import readline from "node:readline";
 
 const dump = process.env.FAKE_DUMP;
@@ -156,11 +157,17 @@ function handle(msg) {
   if (method === "thread/start") {
     const threadId = `th-${++n}`;
     load(threadId, params.config);
-    return reply({ thread: { id: threadId } });
+    const path = process.env.FAKE_ROLLOUT ? join(process.env.CODEX_HOME, "sessions", "2026", "11", "03", `rollout-${threadId}.jsonl`) : undefined;
+    return reply({ thread: { id: threadId, ...(path ? { path } : {}) } });
   }
   if (method === "thread/resume") {
     load(params.threadId, params.config);
-    return reply({ thread: { id: params.threadId } });
+    const path = process.env.FAKE_ROLLOUT ? join(process.env.CODEX_HOME, "sessions", "2026", "11", "03", `rollout-${params.threadId}.jsonl`) : undefined;
+    return reply({ thread: { id: params.threadId, ...(path ? { path } : {}) } });
+  }
+  if (method === "thread/read") {
+    const path = process.env.FAKE_ROLLOUT || process.env.FAKE_ROLLOUT_ON_READ ? join(process.env.CODEX_HOME, "sessions", "2026", "11", "03", `rollout-${params.threadId}.jsonl`) : undefined;
+    return reply({ thread: { id: params.threadId, ...(path ? { path } : {}) } });
   }
   if (method === "turn/start") {
     const t = thread(params.threadId);
