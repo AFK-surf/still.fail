@@ -9,7 +9,7 @@ import { CoreError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { request } from "../src/ops.ts";
 import { Runner } from "../src/runtime.ts";
-import { cloudWhat, RELAY, Status, stationWhat, value } from "../src/status.ts";
+import { RELAY, Status, stationWhat, value } from "../src/status.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { EXPORT_MS, Kind, Tracer, route } from "../src/trace.ts";
 import { ofAddress, Workspaces } from "../src/workspace.ts";
@@ -101,33 +101,19 @@ test("says_nothing_until_a_wait_is_slow_then_what_and_how_fast", () => {
   assert.equal(v().state, null);
 });
 
-/// 2026-11-03: the splash said 「无法打开本机数据…· 共 4 项 · 172 KB/s」 under 正在读取你的 workspace, nothing of what it
-/// read nor how far it had come. Its lines say each thing read with how much came and how long, the first few, then what
-/// lasts.
-test("a_loading_pages_lines_say_what_is_read_and_how_far_then_what_lasts", () => {
+/// 2026-11-03: the splash said 「无法打开本机数据…· 共 4 项 · 172 KB/s」 under 正在读取你的 workspace. What is read is its
+/// bar's; its lines are only what lasts and is why it is slow.
+test("a_loading_pages_lines_are_only_what_lasts", () => {
   const host = new FakeHost();
   const status = new Status(host, new Runner(host.time.clock));
   status.setNames((a) => (a === "ws/s1" ? "studio" : null));
-  status.setDb(new Map([["a", { kind: "failed", detail: "disk I/O error" }]]));
   const lines = () => (status.value() as { lines: string[] }).lines;
-  assert.deepEqual(lines(), ["无法打开本机数据，内容需从网络读取，不会保存到此设备"]);
+  status.begin({ station: "ws/s1" }, stationWhat("GET", "/threads"), false).received(1536 * 1024);
   status.begin(RELAY, "连接", true);
-  const threads = status.begin({ station: "ws/s1" }, stationWhat("GET", "/threads"), false);
-  status.begin({ station: "ws/s1" }, stationWhat("GET", "/overview"), false);
-  status.begin({ cloud: true }, cloudWhat("GET", "/v1/me"), false);
-  status.begin({ station: "ws/s1" }, stationWhat("GET", "/sessions"), false);
   status.skew += 3_000;
-  threads.received(1536 * 1024);
-  assert.deepEqual(lines(), [
-    "正在连接 relay · 3 秒",
-    "studio 读取对话列表 · 已接收 1.5 MB · 3 秒",
-    "studio 读取 station 概况 · 尚未收到数据 · 3 秒",
-    "另有 2 项",
-    "无法打开本机数据，内容需从网络读取，不会保存到此设备",
-  ]);
-  status.skew += 1_000;
-  threads.received(512 * 1024);
-  assert.equal(lines()[1], "studio 读取对话列表 · 已接收 2.0 MB · 4 秒");
+  assert.deepEqual(lines(), []);
+  status.setDb(new Map([["a", { kind: "failed", detail: "disk I/O error" }]]));
+  assert.deepEqual(lines(), ["无法打开本机数据，内容需从网络读取，不会保存到此设备"]);
 });
 
 test("a_connection_goes_first_and_a_socket_down_is_trouble", () => {

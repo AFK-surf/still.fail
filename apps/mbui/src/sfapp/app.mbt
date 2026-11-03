@@ -1039,6 +1039,10 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
     justify=JCenter,
     fn() {
       @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 56.0) |> ignore
+      // (waiting, not failed: the bar going, how far not known)
+      if !now {
+        @sf.progress(c, "splash", None, w=Px(splash_bar_w))
+      }
       match label {
         Some(s) =>
           c.text(s, size=t.t.meta, color=t.p.muted, center=true, line=18.0)
@@ -1112,6 +1116,13 @@ fn splash_of_tree(v : @view.View, label : () -> String?, now : () -> Bool) -> Un
         |> ignore
       })
       |> ignore
+      m.show(fn() { !now() }, fn(p) {
+        p.box(fn(b) {
+          b.width(Is(Some(splash_bar_w))) |> ignore
+          @sf.progress_node(b, fn() { None }, fn() { @ui.tree_theme().line }, fn() { @sf.theme().p.accent }) |> ignore
+        })
+        |> ignore
+      })
       m.show(fn() { label() is Some(_) }, fn(w) {
         w
         .words(By(fn() { label().unwrap_or("") }))
@@ -1125,6 +1136,10 @@ fn splash_of_tree(v : @view.View, label : () -> String?, now : () -> Bool) -> Un
   })
   |> ignore
 }
+
+///|
+/// How wide the splash's bar is, under still.fail's mark while it waits.
+let splash_bar_w : Double = 120.0
 
 ///|
 /// How long the splash shows the ground alone before it says that it waits, and for what.
