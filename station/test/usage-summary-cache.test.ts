@@ -45,17 +45,23 @@ test("a repeated usage summary rereads only hours whose statistics changed", asy
     };
     const first = await read();
     assert.ok(first);
+    assert.equal(first.diagnostics.cache, "miss");
     assert.deepEqual(first.groups, reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer));
     const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
     db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && values.has(column ?? "")
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
-    try { assert.deepEqual((await read())?.groups, first.groups, "an unchanged summary does not read the minute buckets again"); }
+    try {
+      const again = await read();
+      assert.equal(again?.diagnostics.cache, "reused");
+      assert.deepEqual(again?.groups, first.groups, "an unchanged summary does not read the minute buckets again");
+    }
     finally { db.setAuthorizer(null); }
     writer.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[call("a-1", 60_000, 7), owner]]);
     const next = await read();
     assert.ok(next);
     assert.deepEqual(next.groups, reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer));
     assert.equal(next.diagnostics.parts, 60, "only the changed session's hour is read again");
+    assert.equal(next.diagnostics.candidates, 1, "a small pending set does not read the other minutes in the range");
     writer.recordUsage("/a", { session: "a", offset: 3, model: "m" }, "claude",
       [[call("a-0", 0, 2), owner], [call("a-90", 90 * 60_000, 3), owner]]);
     const beforeConcurrentWrite = reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer);
@@ -80,6 +86,75 @@ test("a repeated usage summary rereads only hours whose statistics changed", asy
     writer.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+for (const [scope, viewer] of [["all", null], ["workspace", { workspace: "A", home: false }],
+  ["workspace and home", { workspace: "A", home: true }]] as const) test(`a cached summary does not enumerate pending minutes outside its range (${scope})`, async () => {
+  const writer = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["a", "A"], ["h", null], ["other", "B"]] as const) {
+      writer.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
+    }
+    compact.installCompactUsage(writer.db, () => 0);
+    retireUsageIndexes(writer.db);
+    compact.installUsageSummaryChanges(writer.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string, at: number, output = 1) => ({ id, at, model: "m", subagent: true, fast: false,
+      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null });
+    writer.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call("within", 60_000), owner]]);
+    for (const key of ["h", "other"]) writer.recordUsage(`/${key}`, { session: key, offset: 1, model: "m" }, "claude", [[call(`${key}-within`, 60_000), owner]]);
+    while (!compact.compactTotalsStep(writer.db, 64).done) { /* Settle the initial bucket. */ }
+    const store = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache();
+    const from = 60_000n, to = 120_000n;
+    const read = () => reads.usageGroupsBatched(store, from, to, 0n, viewer, async () => {}, cache);
+    assert.ok(await read());
+    const pending: [ReturnType<typeof call>, typeof owner][] = Array.from({ length: 200 }, (_, i) =>
+      [call(`outside-${i}`, (i + 100) * 60_000), owner]);
+    pending.push([call("within", 60_000, 7), owner]);
+    writer.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", pending);
+    for (const key of ["h", "other"]) writer.recordUsage(`/${key}`, { session: key, offset: 2, model: "m" }, "claude", [[call(`${key}-within`, 60_000, 7), owner]]);
+    const result = await read();
+    assert.ok(result);
+    assert.deepEqual(result.groups, reads.usageGroups(store, from, to, 0n, viewer));
+    assert.ok(result.diagnostics.candidates <= 70, `one minute is relevant; visited ${result.diagnostics.candidates} candidates`);
+  } finally { writer.close(); }
+});
+
+test("a wide cached range checks the smaller pending set on one snapshot", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-pending-range-")), path = join(dir, "stillfail.db");
+  const writer = Store.open(path);
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    writer.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(writer.db, () => 0);
+    retireUsageIndexes(writer.db);
+    compact.installUsageSummaryChanges(writer.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (n: number, output = 1) => ({ id: `call-${n}`, at: n * 60_000, model: "m", subagent: true, fast: false,
+      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null });
+    writer.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", Array.from({ length: 300 }, (_, n) => [call(n), owner]));
+    while (!compact.compactTotalsStep(writer.db, 64).done) { /* Settle the initial buckets. */ }
+    const store = reads.makeStore(db, dir), cache = new reads.UsageSummaryCache(), viewer = { workspace: "A", home: false };
+    const from = 0n, to = 300n * 60_000n;
+    const read = async (pause: (ms: number) => Promise<void> = async () => {}) => {
+      db.exec("BEGIN");
+      try { return await reads.usageGroupsBatched(store, from, to, 0n, viewer, pause, cache); }
+      finally { db.exec("COMMIT"); }
+    };
+    assert.ok(await read());
+    writer.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", Array.from({ length: 70 }, (_, n) => [call(n, 3), owner]));
+    const before = reads.usageGroups(store, from, to, 0n, viewer);
+    let wrote = false;
+    const result = await read(async () => {
+      if (wrote) return;
+      wrote = true;
+      writer.recordUsage("/a", { session: "a", offset: 3, model: "m" }, "claude", [[call(1, 9), owner]]);
+    });
+    assert.ok(wrote && result);
+    assert.deepEqual(result.groups, before, "the pending index and range index share the earlier snapshot");
+    assert.ok(result.diagnostics.candidates <= 77, `70 pending buckets in 300 minutes visited ${result.diagnostics.candidates} candidates`);
+    assert.deepEqual((await read())?.groups, reads.usageGroups(store, from, to, 0n, viewer), "the next read sees the concurrent update");
+  } finally { db.close(); writer.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 for (const recursive of [false, true]) test(`cached usage follows older writers, edits, removals, ownership and journal overflow (recursive triggers ${recursive})`, async () => {
@@ -165,6 +240,7 @@ for (const recursive of [false, true]) test(`cached usage follows older writers,
     assert.ok(count >= 4096 && count < 4160, "only the bounded recent change journal is retained");
     const fallback = await read(1);
     assert.ok(fallback);
+    assert.equal(fallback.diagnostics.cache, "expired");
     assert.ok(fallback.diagnostics.candidates > 0, "a cache older than the journal is rebuilt");
     await same();
   } finally { db.close(); writer.close(); rmSync(dir, { recursive: true, force: true }); }

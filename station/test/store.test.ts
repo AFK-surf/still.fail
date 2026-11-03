@@ -1145,6 +1145,7 @@ test("what the station asks again and again is planned by an index, never a scan
   const usagePlans = [
     [usageBatch.selected, [0n, 100n, "Wws"]], [usageBatch.owner, ["a"]],
     [usageBatch.buckets, [0n, "a", 0n, 100n, "Wws"]], [usageBatch.anyPending, ["Wws"]], [usageBatch.pending, ["Wws"]],
+    [usageBatch.pendingRange, [0n, 100n, "Wws"]],
   ] as [string, unknown[]][];
   for (const [sql, args] of usagePlans) {
     const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
