@@ -1071,6 +1071,15 @@ export const SHAPES: Record<string, Shape> = {
     ["label", "String"],
     ["value", "String", { said: true }],
   ], { doc: "A fact of a machine, a row of its details: 主机名 studio." }),
+  HostGpu: struct([
+    ["big", "String"],
+    ["unit", "String"],
+    ["left", "i64", { client: "I54" }],
+    ["level", "Level"],
+    ["title", "String"],
+    ["total", "String"],
+    ["model", "String", { said: true }],
+  ], { doc: "One GPU's resource dial and model on the station's overview." }),
   Host: struct([
     ["hostname", "String"],
     ["os", "String"],
@@ -1088,6 +1097,7 @@ export const SHAPES: Record<string, Shape> = {
     ["line", "String", { said: true }],
     ["facts", vec("String")],
     ["meters", vec("Meter")],
+    ["gpus", vec("HostGpu"), { default: true, doc: "The machine's GPUs, each with the figures it can report." }],
     ["identity", "String", { doc: "What the machine is, the same line wherever it is named: Apple M2 Max · 64 GB · macOS 26." }],
     ["details", vec("HostDetail"), { doc: "The rest, a row each, where the machine is looked at closely: its hostname, chip, uptime, the process." }],
     ["usage", "String", { doc: "Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB." }],

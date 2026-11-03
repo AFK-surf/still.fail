@@ -5,7 +5,7 @@
 ///|
 /// A machine's CPU, memory and disk (MeterDials): each what is left large over its cells, filled as far as is used,
 /// its name and its total under them.
-fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
+fn meter_dials(c : @ui.Ctx, meters : Array[Json], details? : Array[String] = [], columns? : Int = 0) -> Unit {
   @sf.dials(
     c,
     meters.map(fn(m) {
@@ -19,7 +19,23 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
         note: text(mv, "total"),
       }
     }),
+    details~,
+    columns~,
   )
+}
+
+///|
+/// The machine's dials, including each GPU. Narrow pages keep three figures to a row; wide pages use their width.
+fn station_resource_dials(c : @ui.Ctx, meters : Array[Json], gpus : Array[Json]) -> Unit {
+  if gpus.is_empty() {
+    meter_dials(c, meters)
+    return
+  }
+  let all = meters.copy()
+  all.append(gpus)
+  let models = meters.map(fn(_) { "" })
+  models.append(gpus.map(fn(g) { text(Some(g), "model") }))
+  meter_dials(c, all, details=models, columns=3)
 }
 
 ///|

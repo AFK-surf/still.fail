@@ -29,7 +29,6 @@ import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/file
 import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store, Up, AgentsSide, MeshSide } from "../services.ts";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
-import { Gpus } from "../jobs/gpu.ts";
 import { Net, measure } from "../jobs/load.ts";
 import { Notifier } from "../cloud/notify.ts";
 import type { Cloud as CloudState } from "../cloud/state.ts";
@@ -338,7 +337,7 @@ export const AgentsLive = (control: Control) =>
       });
       // How busy this station is, told to the others' station_list (`describe`): the host page's measurements, the
       // GPUs (looked at once now, so the first to ask need not wait), what runs here and the relay.
-      const gpus = new Gpus();
+      const gpus = host.gpus;
       void gpus.read().catch(() => null);
       const net = meshSide.net;
       remote.setLoad(() =>
