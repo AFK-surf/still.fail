@@ -78,7 +78,12 @@ function watchFor(file, check) {
 
 if (tee) {
   const out = fs.openSync(opt.tee, "w");
-  if (opt.mark) fs.rmSync(opt.mark, { force: true });
+  if (opt.mark) {
+    // A FIFO is the caller's already-open event channel; do not unlink it like an old regular marker file.
+    let fifo = false;
+    try { fifo = fs.lstatSync(opt.mark).isFIFO(); } catch {}
+    if (!fifo) fs.rmSync(opt.mark, { force: true });
+  }
   const p = spawn(cmd[0], cmd.slice(1), { shell: process.platform === "win32", stdio: ["ignore", "pipe", "pipe"] });
   let buf = "";
   let marked = !(opt.mark && re);

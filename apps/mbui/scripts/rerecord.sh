@@ -86,7 +86,7 @@ echo "rerecord: the scripts written ($TMP)"; ls "$TMP"/*.drive | sed 's/^/  /'
 # replay's page laid out as the run's was: what the app tells the core of where the list is (client.focus's end,
 # chat.place) the same; TEXT_RECORD=0 leaves them out)
 [ "${TEXT_RECORD:-1}" = 0 ] || export MBUI_TEXT_RECORD=1
-export E2E_STATION=${station:-${E2E_STATION:-}} E2E_TAG=$tag E2E_FLOWS=$TMP MBUI_CORE_TRACE=1 MBUI_CORE_TRACE_BYTES=$MAX_BYTES
+export E2E_STATION=${E2E_STATION:-$station} E2E_TAG=$tag E2E_FLOWS=$TMP MBUI_CORE_TRACE=1 MBUI_CORE_TRACE_BYTES=$MAX_BYTES
 [ -n "$E2E_STATION" ] || unset E2E_STATION
 bash scripts/e2e-local.sh down > /dev/null 2>&1
 bash scripts/e2e-local.sh up > "$TMP/up.log" 2>&1 || { tail -30 "$TMP/up.log"; die "the local still.fail did not come up"; }

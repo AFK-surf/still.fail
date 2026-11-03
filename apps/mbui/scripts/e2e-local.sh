@@ -126,14 +126,24 @@ native() { (cd $E && node scripts/native.ts file $1); }
 # the cloud (cloud/test/dev.ts) over what it holds in $RUN/cloud-state; RESUME=1 (a starting point put back): the same
 # cloud again, nothing made anew
 start_cloud() {
-  # (its output read from its pipe as it comes (waitfor.mjs --tee), into cloud.log, and its READY line made a file of its
-  # own, cloud.ready: a file made is told to the waiting side as it is made; a log another process writes to is not
-  # always (GitHub's macOS runner: the READY line in cloud.log, its write never told, 2026-10-21))
-  rm -f $RUN/cloud.ready
+  # The READY line travels directly through a FIFO. On macOS, watching a newly created marker missed its creation
+  # even though it had been written, and watching a log's writes has also missed events.
+  rm -f "$RUN/cloud.ready"
+  mkfifo "$RUN/cloud.ready"
+  exec 9<> "$RUN/cloud.ready"
   (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
     AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach node "$D/waitfor.mjs" --tee $RUN/cloud.log \
-    --line 'READY still.fail cloud' --mark $RUN/cloud.ready -- pnpm exec tsx test/dev.ts & echo $! > $RUN/cloud.pid)
-  waitfor 120 --what "the cloud's READY line" --exists $RUN/cloud.ready || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
+    --line 'READY still.fail cloud' --mark $RUN/cloud.ready -- pnpm exec tsx test/dev.ts 9>&- & echo $! > $RUN/cloud.pid)
+  if ! IFS= read -r -t 120 ready <&9; then
+    exec 9>&-
+    stop cloud
+    stop relay
+    rm -f "$RUN/cloud.ready"
+    tail -20 "$RUN/cloud.log"
+    die "the cloud did not start"
+  fi
+  exec 9>&-
+  rm -f "$RUN/cloud.ready"
 }
 
 # the test station (enrolled), its launcher over its own data
@@ -229,6 +239,7 @@ for v in \$(env | grep -Eo '^(EMBER|STILLFAIL|CLAUDE|CODEX)[A-Z0-9_]*=' | tr -d 
 export HOME=$STATION/home
 export PATH=$ROOT/e2e/fake:$E/station/test/fake:\$PATH
 export STILLFAIL_NO_DISCOVERY=1
+export STILLFAIL_TEST_HOST=1
 export STILLFAIL_DATA=$STATION/data
 export STILLFAIL_MESH_NATIVE=$(native mesh)
 export STILLFAIL_RUNNER=$(native runner)

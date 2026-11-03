@@ -42,6 +42,16 @@ function disk(path: string) {
 
 /// host_info (without its ten-second cache, which the caller keeps): the machine's state now, and the ticks seen.
 export function hostInfo(dataDir: string, last: Seen): { info: unknown; seen: Seen; needsTicks: boolean } {
+  // The isolated app recording station must not put its host machine's identity and resource state in fixtures.
+  if (process.env.STILLFAIL_TEST_HOST === "1") {
+    return { info: {
+      hostname: "test-station", os: "Test OS", arch: "arm64", cpus: 4, cpuModel: "Test CPU", load: 0.25,
+      loadAvg: [1, 1, 1], cpuBusy: 0.25, uptimeSec: 3600,
+      memory: { totalBytes: 8_000_000_000, usedBytes: 4_000_000_000, swapUsedBytes: 0 },
+      disk: { path: "/test-station/data", totalBytes: 100_000_000_000, freeBytes: 50_000_000_000 },
+      emberRssBytes: 100_000_000, checkedAt: wall.now(),
+    }, seen: null, needsTicks: false };
+  }
   const { host } = platform;
   const mem = host.memory();
   const os = host.osName();
