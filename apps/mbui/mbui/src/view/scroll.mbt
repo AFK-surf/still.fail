@@ -601,6 +601,10 @@ pub fn View::scrolls(
     inner.val = Some(held)
     self.tree.nodes[self.at].scroll_held = held.at
     self.tree.nodes[self.at].scroll_across = across
+    // (a page's list's rows set on its host's pixels as an old view's list's are: Tree::set_rows_grid)
+    if s.as_list && !across {
+      self.tree.rows_list(held.at)
+    }
     held
     .shrink(Is(0.0))
     .offset(By(fn() {

@@ -50,6 +50,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         Some(h) => (h, true)
         None => (est, false)
       }
+      // (as tall as it is laid out in the column: on its host's pixels where it sets a page's list's rows on them,
+      // Tree::rows_slot)
+      let h = self.tree.rows_slot(h)
       out.push((k, top, h, known))
       top = top + h
     }
