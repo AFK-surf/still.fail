@@ -55,11 +55,16 @@ test("the roster stays current a while after its socket ends, until a fresh one 
   applyState(s, JSON.stringify({ type: "state", peers: [] }));
   assert.equal(s.peersCurrent, true);
   // The socket ends: still current, until the grace is over with no roster since.
+  let told = 0;
+  const unlisten = s.listen(() => told++);
   lapse(s, after);
   assert.equal(s.peersCurrent, true);
   assert.equal(timers[0]!.ms, ROSTER_GRACE_MS);
   timers.shift()!.f();
   assert.equal(s.peersCurrent, false);
+  // Told as a fresh roster is: the overview says the station is cut off.
+  assert.equal(told, 1);
+  unlisten();
   // Back within it: the fresh roster keeps it current past the old socket's grace.
   applyState(s, JSON.stringify({ type: "state", peers: [] }));
   lapse(s, after);

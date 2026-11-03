@@ -123,10 +123,15 @@ export function workspaceProfiles(stations: J[]): J {
       if (!source) continue;
       const share = source.share;
       const online = station.online === true;
+      // A copy goes from its host to it only while both know the workspace's stations from still.fail cloud: either
+      // cut off from it, the copy does not come, and the row says which one rather than waiting on.
+      const cutOff = [id, String(share.host)].find((at) => byId.get(at)?.overview?.mesh?.reached === false);
       places.push({
         station: String(station.station), stationId: id, stationName: String(station.name), profileId: "",
         online, usable: false, sourceName: id === String(share.host) ? "" : name(String(share.host)),
-        state: !online ? null : { text: t(isObject(station.overview) ? "core-views.profiles.waitSync" : "core-views.profiles.reading"), tone: "neutral" },
+        state: !online ? null
+          : cutOff !== undefined ? { text: t("core-views.profiles.cutOff", { station: name(cutOff) }), tone: "amber" }
+          : { text: t(isObject(station.overview) ? "core-views.profiles.waitSync" : "core-views.profiles.reading"), tone: "neutral" },
       });
     }
     // Keep the workspace's order as a pending copy arrives, so its row does not jump to a different position.

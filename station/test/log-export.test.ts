@@ -85,25 +85,41 @@ test("lines wait for the control plane, go in batches with the station, and stop
   await out.shutdown();
 });
 
-test("a batch that cannot go is dropped, and lines past what waits are counted", async () => {
+test("a batch that cannot go goes next round; one refused is dropped, and lines past what waits are counted", async () => {
   const out = new LogExport();
   out.configure({ enabled: () => true, station: () => "st1", version: () => "0.1.9", home: HOME });
-  let fail = true;
+  let fail: Error | null = new TypeError("fetch failed");
   const sent: any[] = [];
   out.sendWith(async (body) => {
-    if (fail) throw new Error("answered 503");
+    if (fail) throw fail;
     sent.push(JSON.parse(body));
   });
-  out.add(line("lost"));
+  const bodies = () => sent.flatMap((b) => b.resourceLogs[0].scopeLogs[0].logRecords).map((r: any) => r.body.stringValue);
+  // No way to the cloud: kept, and sent first once there is.
+  out.add(line("kept"));
   await out.flush();
-  fail = false;
+  fail = null;
+  out.add(line("after"));
+  await out.flush();
+  assert.deepEqual(bodies(), ["kept", "after"]);
+  // Refused: sending it again would be too.
+  sent.length = 0;
+  fail = Object.assign(new Error("still.fail cloud answered 400"), { status: 400 });
+  out.add(line("refused"));
+  await out.flush();
+  fail = Object.assign(new Error("still.fail cloud answered 503"), { status: 503 });
+  out.add(line("busy"));
+  await out.flush();
+  fail = null;
   for (let i = 0; i < 5_010; i++) out.add(line(`n${i}`));
   await out.flush();
   const records = sent.flatMap((b) => b.resourceLogs[0].scopeLogs[0].logRecords);
+  assert.ok(!bodies().includes("refused"));
+  // The oldest go first: "busy" and n0..n9 are past what waits.
   assert.equal(records[0].body.stringValue, "n10");
   assert.ok(sent.every((b) => b.resourceLogs[0].scopeLogs[0].logRecords.length <= 501));
   const said = records.find((r: any) => r.body.stringValue === "log lines dropped before they could be sent");
-  assert.equal(said?.attributes.find((a: any) => a.key === "log.dropped")?.value.intValue, "10");
+  assert.equal(said?.attributes.find((a: any) => a.key === "log.dropped")?.value.intValue, "11");
   assert.equal(records.filter((r: any) => r.body.stringValue.startsWith("n")).length, 5_000);
   await out.shutdown();
 });

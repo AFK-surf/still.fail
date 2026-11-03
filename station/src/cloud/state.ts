@@ -431,6 +431,14 @@ export class Cloud {
     return (s.relay_urls.length > 0 ? s.relay_urls : [s.relay_url]).filter((u) => URL.canParse(u));
   }
 
+  /// The roster said last is no longer current (presence.ts `lapse`): told, as a new one is, so what shows or acts on
+  /// whether it is current hears it.
+  lapsed() {
+    if (!this.peersCurrent) return;
+    this.peersCurrent = false;
+    this.tell();
+  }
+
   listen(f: (s: CloudState | null) => void): () => void {
     this.listeners.add(f);
     return () => this.listeners.delete(f);

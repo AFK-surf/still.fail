@@ -88,12 +88,12 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
 /// was removed).
 export function lapse(s: CloudState, after: (ms: number, f: () => void) => unknown = wall.after) {
   if (s.removed()) {
-    s.peersCurrent = false;
+    s.lapsed();
     return;
   }
   const said = s.rostersSaid;
   after(ROSTER_GRACE_MS, () => {
-    if (s.rostersSaid === said) s.peersCurrent = false;
+    if (s.rostersSaid === said) s.lapsed();
   });
 }
 

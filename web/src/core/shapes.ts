@@ -5271,6 +5271,11 @@ export interface MeshStatus {
 	workspace?: string;
 	workspaceId?: string;
 	name?: string;
+	/**
+	 * Whether it knows the workspace's stations now, from still.fail cloud (false: cut off from it, it takes no shared
+	 * Profile's copy). Absent from stations before it.
+	 */
+	reached?: boolean;
 }
 
 /**

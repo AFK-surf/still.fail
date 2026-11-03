@@ -239,6 +239,17 @@ test("a shared account lists all allowed stations while their copies or overview
   assert.equal(reading.state.text, "正在读取");
 });
 
+test("a pending copy names the station cut off from still.fail cloud instead of waiting on", () => {
+  const sub = { email: "z@x.test", runtime: "codex" };
+  const host = station(A, "Studio", true, [profile("host", { ...sub, share: { id: "sh-1", role: "host", host: A, allow: [B] } })]);
+  const mba = station(B, "MBA", true, []);
+  const cut = (s: any) => ({ ...s, overview: { ...s.overview, mesh: { state: "running", reached: false } } });
+  const placeOf = (stations: any[]) => workspaceProfiles(stations).items[0].places[1].state;
+  assert.deepEqual(placeOf([host, cut(mba)]), { text: "MBA 无法连接 still.fail cloud", tone: "amber" });
+  assert.deepEqual(placeOf([cut(host), mba]), { text: "Studio 无法连接 still.fail cloud", tone: "amber" });
+  assert.deepEqual(placeOf([host, mba]), { text: "等待同步", tone: "neutral" });
+});
+
 test("a share withheld from this workspace does not make its stations usable here", () => {
   const C = "c".repeat(64);
   const D = "d".repeat(64);
