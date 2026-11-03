@@ -85,6 +85,8 @@ priv struct SettingsFixture {
   mut profile_away : Bool
   /// A station may use the account, but its copy has not arrived yet.
   mut profile_pending : Bool
+  /// That station is cut off from still.fail cloud, so the copy does not come.
+  mut profile_cut_off : Bool
   /// how far the made-up workspace has changed on its own (settings-workspace-motion, settings-stations-motion): 1 a
   /// person and a station come, 2 one of each goes (fixture_motion)
   mut motion : Int
@@ -134,6 +136,7 @@ let fx : SettingsFixture = {
   profile_one_owner: false,
   profile_away: false,
   profile_pending: false,
+  profile_cut_off: false,
   motion: 0,
   drive_kept: fx_drive_kept,
   kept_cleared: [],
@@ -234,6 +237,7 @@ fn fixture_reset() -> Unit {
   fx.profile_one_owner = false
   fx.profile_away = false
   fx.profile_pending = false
+  fx.profile_cut_off = false
   fx.motion = 0
   fixture_open.sheet = ""
   fixture_open.list = ""
@@ -434,11 +438,12 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
     // The sharing section of the made-up subscription, for reviewing its on-screen layout.
     "settings-profile-share" => up("", "settings/profile/ws1/st1/cc", 6)
-    "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" => {
+    "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" => {
       fx.profile_hosts = true
       fx.profile_one_owner = m == "settings-profile-hosts-one"
       fx.profile_away = m == "settings-profile-hosts-away"
-      fx.profile_pending = m == "settings-profile-hosts-pending"
+      fx.profile_pending = m == "settings-profile-hosts-pending" || m == "settings-profile-hosts-cutoff"
+      fx.profile_cut_off = m == "settings-profile-hosts-cutoff"
       up("", "settings/profile/ws1/st1/cc", 3)
     }
     "settings-profile-login" => {
@@ -551,7 +556,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
-    "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
+    "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
     "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
@@ -848,7 +853,13 @@ fn fx_profile_places() -> Array[Json] {
       ("stationName", str(text(v, "stationName"))), ("profileId", str(if pending { "" } else { text(v, "profileId") })),
       ("online", Json::boolean(!offline)), ("usable", Json::boolean(!offline && !unavailable && !pending)),
       ("sourceName", str(if unavailable || pending { "Studio" } else { "" })),
-      ("state", if pending { obj([("text", str("等待同步")), ("tone", str("neutral"))]) } else { Json::null() }),
+      ("state", if pending && fx.profile_cut_off {
+        obj([("text", str("无法连接 still.fail cloud")), ("tone", str("amber"))])
+      } else if pending {
+        obj([("text", str("等待同步")), ("tone", str("neutral"))])
+      } else {
+        Json::null()
+      }),
     ])
   })
 }

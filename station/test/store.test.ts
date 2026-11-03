@@ -168,7 +168,11 @@ test("a message is recorded once and delivered to every session in its thread", 
   assert.deepEqual(store.deliver(thread.id, first[0], ["a", "b"]), ["a", "b"]);
   assert.deepEqual(store.deliver(thread.id, first[0], ["a", "b"]), []);
   assert.deepEqual(store.pendingMessages("b").map((m) => [m.message.text, m.connect]), [["hi", "gpt"]]);
+  const told = heard(store);
   store.markDelivered("a", [{ thread: thread.id, n: first[0], apart: false }]);
+  told.stop();
+  // How many it has yet to take, said with the change: devices are told it at once, not after its summary is read.
+  assert.deepEqual(told.changes.filter((c) => c.type === "session"), [{ type: "session", key: "a", pending: 0 }]);
   assert.deepEqual(store.sessionsWithPending(), ["b"]);
   assert.equal(store.latestThread("a")!.thread.id, thread.id);
   assert.equal(store.sessionThread("b", "C1", "1.1")!.connect, "gpt");

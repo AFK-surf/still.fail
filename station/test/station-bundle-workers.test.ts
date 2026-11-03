@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +7,16 @@ import { test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { Store } from "../src/store/store.ts";
 import { installSigninSaveIndex } from "../src/vault/signin-save-index.ts";
+
+// The release's main.js loads and answers: a module importing createRequire as the bundle's banner did declared it
+// twice, and every station updated to 0.1.7119 kept its old one (the new one exited with 1 before it was ready).
+test("the station in a release starts", { skip: !process.env.STATION_BUNDLE }, () => {
+  const data = mkdtempSync(join(tmpdir(), "station-bundle-main-"));
+  try {
+    const run = spawnSync(process.execPath, [join(process.env.STATION_BUNDLE!, "main.js"), "status", "--data", data], { encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+  } finally { rmSync(data, { recursive: true, force: true }); }
+});
 
 // The mac-build job calls this on the release it just laid out; the regular test suite has no release directory.
 test("the workers in a station release start and process a batch", { skip: !process.env.STATION_BUNDLE }, async () => {

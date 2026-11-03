@@ -48,7 +48,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 - 发什么：`stillfail.log` 里的每一行（INFO、WARN、ERROR），作为 OpenTelemetry 日志，每 5 秒一批（至多 500 行）发到 control plane 的 `/v1/telemetry/logs`（和 station 的 span 一样用 station 的 key 签名），still.fail cloud 转给 Axiom 的 `/v1/logs`，同一个数据集。资源属性 `service.name: stillfail-station`、`service.version`、`stillfail.station`；每行 `log.target`（`presence`、`share`…）和各字段 `log.<名字>`。
 - 脱敏：家目录下的路径换成 `~`；邮箱和用邮箱拼成的 profile id（`zzj3720-gmail-com`）换成 `<email>`；JWT、常见前缀的 API key/token、AWS access key 换成 `<secret>`；引号括起来的内容换成 `"…"`；可能是人写的字段（`text`、`name`、`title`、`command`、`args`、`prompt`、`body`、`question`、`content`）整个换成 `…`；`workspace` 字段不是 workspace id（是名字）时也换成 `…`；每个值最多 2000 字。
-- 发不出去（还没登记、mesh 还没起来）的先攒着，最多 5000 行，再多就丢最老的、下一批里说丢了几行；一批发失败就丢掉，不重发；失败每 10 分钟在 stderr 说一次。Comma 不收（`telemetry: null`）。
+- 发不出去（还没登记、mesh 还没起来）的先攒着，最多 5000 行，再多就丢最老的、下一批里说丢了几行；一批没送到（网络断了、cloud 没回答、回 429 或 5xx）就放回去，下一轮最先发（同样受 5000 行的限制），被 cloud 拒收（其他 4xx）的才丢掉：station 和 cloud 之间断开时正是日志最要紧的时候；失败每 10 分钟在 stderr 说一次。Comma 不收（`telemetry: null`）。
 - 查：Axiom 里 `['ember'] | where ['service.name'] == "stillfail-station" and ['resource.stillfail.station'] startswith "<station id 前几位>"`，按 `_time` 看 `body` 和 `attributes.log.*`。
 - 设备的连接（`mesh` 那几行，src/mesh/serve.ts）：`client connected` 在凭据通过时写，`a device's connection ended` 在连接断开时写。两行都带 `device`（设备这个端点 id 的前 12 位）和 `trace`（设备拨号那次 `mesh.connect` 的 trace id，客户端随凭据那行发来的 `traceparent`；后台重拨的没有）；前一行带 `via`（握手走的中继，或 `direct`）和 `ways`，后一行带 `why`（断开的原因，iroh 的原话）、`lasted`（连了多少毫秒）、`ways`（断开时的各条路，没了就用最后一次收到请求时的）、`rx`/`tx`（字节）。`ways` 的写法和慢回复行一样：`*` 是选定的那条，中继或地址、来回、发出/丢掉的包数。把设备那边和 station 这边对起来：`attributes.log.trace == <mesh.connect 的 trace_id>`。
 

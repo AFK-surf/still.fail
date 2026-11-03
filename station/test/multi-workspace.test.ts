@@ -46,7 +46,7 @@ async function enrolled(t: { after(f: () => unknown): void }, joins: boolean) {
     state.close();
     await fake.close();
   });
-  await until(() => state.peersCurrent);
+  await until(() => state.reached);
   return { fake, data, state, key };
 }
 
