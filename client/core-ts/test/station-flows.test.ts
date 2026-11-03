@@ -1225,6 +1225,8 @@ test("a_station_that_keeps_marks_has_its_sidebar_made_here_from_the_summaries_he
   push("made", { rows: true, marks: true });
   await coalesce(host);
   assert.deepEqual([held().thread, held().title, held().mine, held().agents.map((a: J) => a.key)], [7, t("core-views.new_chat"), true, ["k1"]]);
+  // Kept: started again, the device reads the marks at once, not the sidebar made.
+  assert.equal(core.inner.data.record("keepsMarks", ST), true);
   // What an agent said: its row's latest, unread; the viewer's pin: in place. Nothing of the sidebar read.
   push("thread", { id: 7, entries: [{ ...entry(4, "改好了"), authorKind: "agent", author: "k1", authorName: "bot" }] });
   push("pin", { session: "k1", at: 9 });

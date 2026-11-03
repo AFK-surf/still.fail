@@ -1471,6 +1471,7 @@ export class StationsSync {
         const link = this.#links.get(address);
         if (!link) return;
         link.makesRows = get(data, "rows") === true;
+        if (this.#core.data.record("keepsMarks", address) !== (get(data, "marks") === true)) this.#core.data.put("keepsMarks", address, get(data, "marks") === true);
         if (get(data, "marks") === true && link.marks === null) this.#enqueue(address, "chats", Priority.shown, this.#marksWhole(address));
         return;
       }
@@ -1605,7 +1606,9 @@ export class StationsSync {
   /// The station's sidebar: made here (rows-made.ts) from the summaries held and what the station keeps beside them
   /// (GET /chats?marks=1), once its stream said it keeps them (`made`); else read made, as from a station from before.
   #chats(address: string, ctx: SpanContext | null = null, unread?: () => void): Effect.Effect<void, CoreError> {
-    return Effect.suspend(() => (this.#links.get(address)?.marks ? this.#marksWhole(address, ctx, unread) : this.#read(address, { topic: "chatRows", station: address }, "/chats", undefined, ctx, 0, unread)));
+    // Said so by its stream before (kept: a device started again reads the station whole, as each did, some 2 min on ccvm).
+    const keeps = () => this.#links.get(address)?.marks || this.#core.data.record("keepsMarks", address) === true;
+    return Effect.suspend(() => (keeps() ? this.#marksWhole(address, ctx, unread) : this.#read(address, { topic: "chatRows", station: address }, "/chats", undefined, ctx, 0, unread)));
   }
 
   #marksWhole(address: string, ctx: SpanContext | null = null, unread?: () => void): Effect.Effect<void, CoreError> {
@@ -1620,6 +1623,7 @@ export class StationsSync {
       const marks = marksOf(answer.success);
       if (marks === null) {
         link.marks = null;
+        this.#core.data.put("keepsMarks", address, false);
         this.#core.data.set({ topic: "chatRows", station: address }, answer.success);
       } else {
         link.marks = marks;
