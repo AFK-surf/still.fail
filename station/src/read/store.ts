@@ -12,9 +12,10 @@ import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
 import { archiveEntries } from "../store/archive.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
+import { detailQuery, usageDetailReady, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
 import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
-import { USAGE_GROUPS, type UsageGroup, usageGroupOf } from "../store/usage.ts";
+import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
   CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, type Membership, type MessageRow, OPTIONS_BEFORE,
@@ -903,8 +904,11 @@ export type { UsageGroup };
 
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and by
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
-export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint): UsageGroup[] {
-  return all(s, USAGE_GROUPS, from, to, utcOffsetMin).map(usageGroupOf);
+export { USAGE_DETAIL_PENDING };
+export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
+  if (!usageDetailReady(s.db, viewer)) throw new Error(USAGE_DETAIL_PENDING);
+  const query = detailQuery(from, to, utcOffsetMin, viewer);
+  return query === null ? [] : all(s, query.sql, ...query.args).map(usageGroupOf);
 }
 
 /// usage_threads: the threads usage names, each with the first thing a person said in it (for its title; none where

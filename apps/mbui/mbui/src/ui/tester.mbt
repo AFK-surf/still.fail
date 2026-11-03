@@ -185,7 +185,7 @@ fn leaked_state() -> Array[String] {
   check("desk.menus", desk.menus.length() + desk.mutable_menus.length())
   check("desk.keys", desk.keys.length() + desk.mutable_keys.length())
   check("desk.sels", desk.sels.length() + desk.next_sels.length())
-  check("picked", (if picked.from.base != 0 { 1 } else { 0 }) + picked.spans.length())
+  check("picked", (if picked.from.base != NoSel { 1 } else { 0 }) + picked.spans.length())
   check("image_cache", image_cache.length())
   check("image_data", image_data.length())
   check("image_vector_drawers", image_vector_drawers.length())
@@ -1968,7 +1968,8 @@ pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double
 
 ///|
 /// Where the words `s` of a rich paragraph are drawn: one rectangle a line
-/// (x, y, w, h).
+/// (x, y, w, h). An old view's paragraph, else a node of the window's tree's words in pieces (View::words_runs: laid
+/// out as it draws them, view_runs_laid; as big as it is drawn), the first that holds them.
 pub fn Tester::run_rects(self : Tester, s : String) -> Array[(Double, Double, Double, Double)] {
   match self.rich_of(s) {
     Some((rl, x, y)) =>
@@ -1979,8 +1980,33 @@ pub fn Tester::run_rects(self : Tester, s : String) -> Array[(Double, Double, Do
           .map(fn(r) { (r.0 + x, r.1 + y, r.2, r.3) })
         None => []
       }
-    None => []
+    None => tree_run_rects(s)
   }
+}
+
+///|
+/// Where the words `s` of a node of the window's tree's words in pieces are drawn, as it lays them out now: one
+/// rectangle a line, in the window (its line in its middle where it says so: its start's room before it).
+fn tree_run_rects(s : String) -> Array[(Double, Double, Double, Double)] {
+  let out : Array[(Double, Double, Double, Double)] = []
+  guard view_app.val is Some(tree) else { return out }
+  tree.laid_as_now()
+  tree.each_drawn_scaled(fn(c, x, y, a, sc) {
+    if out.length() > 0 || c.runs.is_empty() || a <= 0.0 {
+      return
+    }
+    let (_, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w)
+    match lay.text.find(s) {
+      Some(i) =>
+        for r in lay.rects(i, i + s.length()) {
+          // (each line where it is drawn: in the middle of the node where it says so, view_host's picked rects')
+          let dx = rich_shift_at(lay, r.1 + r.3 / 2.0, if c.words_center { c.w } else { -1.0 })
+          out.push((x + (r.0 + dx) * sc, y + r.1 * sc, r.2 * sc, r.3 * sc))
+        }
+      None => ()
+    }
+  })
+  out
 }
 
 ///|

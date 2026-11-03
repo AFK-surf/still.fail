@@ -354,14 +354,23 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// the navigation bar: setting_page's) as that changes; under the status bar the page's ground over it, and a window's
 /// band its buttons are in dragging it, as page_view puts them over a page that has no top of its own.
 fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
-  let made = fn(kind : String, f : (@view.View, @settings.Core, () -> @settings.Here, () -> PageFrame, () -> Int) -> Unit) {
+  let made_at = fn(
+    kind : String,
+    place : String?,
+    f : (@view.View, @settings.Core, () -> @settings.Here, () -> PageFrame, () -> Int) -> Unit,
+  ) {
     Some(
       (
         kind,
         fn(v : @view.View, _page : () -> Page, under : Page?, stint : () -> Int, _entry : Int) {
           let frame = fn() -> PageFrame {
-            // (under the status bar as the window it is in is now: status_top_now, by its width as it changes)
-            { back: under.map(@sfbase.back_label), top: status_top_now(v.window().0), foot: nav_foot(), named: false }
+            // (under the status bar as the window it is in is now: status_top_now, by its width as it changes; a place
+            // of the bottom bar's under the top bar, which names it, over the bottom bar: place_page's)
+            if place is Some(_) {
+              { back: None, top: status_top_now(v.window().0) + bar_h + 8.0, foot: nav_foot() + bar_room_now(), named: true }
+            } else {
+              { back: under.map(@sfbase.back_label), top: status_top_now(v.window().0), foot: nav_foot(), named: false }
+            }
           }
           v.pick(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
             match @signals.untracked(fn() { workspace_in_view(src).0 }) {
@@ -369,15 +378,31 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
                 let core = settings_core(src, w)
                 let here = fn() { @settings.here_of(core, w.id, w.name) }
                 @settings.frame(core, @signals.untracked(here))
+                // (its words in pieces picked with the mouse, as an old view's page's in this frame are (narrow_page's
+                // c.selectable), before what it holds is made)
+                @ui.words_picked(p)
                 f(p, core, here, frame, stint)
               }
               None => ()
             }
           })
           narrow_made_top(v)
+          // (a place of the bottom bar's: its top bar over it, the place's name, settings at its end: place_page's)
+          match place {
+            Some(name) =>
+              v.box(fn(o) {
+                o.over(Is(true)) |> ignore
+                @ui.old(o, fn(c) { place_top_bar(c, name) }, natural=true) |> ignore
+              })
+              |> ignore
+            None => ()
+          }
         },
       ),
     )
+  }
+  let made = fn(kind : String, f : (@view.View, @settings.Core, () -> @settings.Here, () -> PageFrame, () -> Int) -> Unit) {
+    made_at(kind, None, f)
   }
   match page {
     Settings =>
@@ -387,6 +412,8 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
         })
       })
     Setting(About) => made("about", fn(p, core, _here, frame, _stint) { @sfpages.about_node(p, core, on_back=core.pop, frame~) })
+    Setting(Changelog) =>
+      made("changelog", fn(p, core, _here, frame, _stint) { @sfpages.changelog_node(p, core, on_back=core.pop, frame~) })
     Setting(Archiving) =>
       made("archiving", fn(p, core, here, frame, stint) {
         @sfpages.archiving_node(p, core, here, on_back=core.pop, frame~, stint~)
@@ -407,6 +434,21 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
       })
     Setting(Memories) =>
       made("memories", fn(p, core, here, frame, _stint) { @sfpages.memories_node(p, core, here, on_back=core.pop, frame~) })
+    // (a place of the bottom bar's whose page is one of those: place_page's, made once as they are)
+    Place(name) =>
+      match @settings.route_of(name) {
+        Some(Memories) =>
+          made_at("place/memories", Some(name), fn(p, core, here, frame, _stint) {
+            @sfpages.memories_node(p, core, here, on_back=core.pop, frame~)
+          })
+        Some(About) =>
+          made_at("place/about", Some(name), fn(p, core, _here, frame, _stint) { @sfpages.about_node(p, core, on_back=core.pop, frame~) })
+        Some(Changelog) =>
+          made_at("place/changelog", Some(name), fn(p, core, _here, frame, _stint) {
+            @sfpages.changelog_node(p, core, on_back=core.pop, frame~)
+          })
+        _ => None
+      }
     _ => None
   }
 }

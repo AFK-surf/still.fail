@@ -233,7 +233,7 @@ fn tape_bar_collected(c : @ui.Ctx, build : () -> Unit) -> Unit {
 ///|
 /// The pages of the library's made once as nodes in the page's panel, in the place of their old view (nav_flat_view's
 /// `made`), by what each is: 关于, 记忆, 归档 and 自动决策, as the settings' list opens them; a station's own archiving, as 归档
-/// opens it. 关于 and 记忆 laid out by the page's width (the stack's in the panel at rest, as the tape lays it out now: page_node
+/// opens it. 关于, 记忆 and 更新日志 laid out by the page's width (the stack's in the panel at rest, as the tape lays it out now: page_node
 /// narrow or wide; narrow while that is not known), a right click in it copying what is picked; the others made only
 /// where the page is narrow (look_for that width), a gate between their two makings for now (no wide arrangement of
 /// theirs yet); wider, their old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
@@ -282,6 +282,31 @@ fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
         context_node(p)
         @sfpages.memories_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
+    Setting(Changelog) if pane_makes.val =>
+      made("changelog", fn(p, core, _here, _stint, told) {
+        context_node(p)
+        @sfpages.changelog_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
+    // (a place of the rail's whose page is one of those: as it is opened from the settings, at the stack's root)
+    Place(name) if pane_makes.val =>
+      match @settings.route_of(name) {
+        Some(Memories) =>
+          made("place/memories", fn(p, core, here, _stint, told) {
+            context_node(p)
+            @sfpages.memories_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+          })
+        Some(About) =>
+          made("place/about", fn(p, core, _here, _stint, told) {
+            context_node(p)
+            @sfpages.about_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+          })
+        Some(Changelog) =>
+          made("place/changelog", fn(p, core, _here, _stint, told) {
+            context_node(p)
+            @sfpages.changelog_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+          })
+        _ => None
+      }
     // (the others narrow ones alone: wider, their old view)
     _ if !narrow => None
     Setting(Archiving) =>

@@ -411,6 +411,43 @@ test("a file read in parts records each part's whole lines and leaves a partial 
   assert.equal(parts.at(-1), line.length * 8);
 });
 
+for (const truncated of [false, true]) test(`a dense transcript yields between writes and resumes ${truncated ? "after it was shortened" : "from its last completed part"}`, async () => {
+  const r = rig();
+  const workspace = join(r.data, "dense");
+  session(r.store, "k", workspace, 0);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("before", 1000, "claude-opus-5-5", usage(1, 0, 0, 0, 1)), " ".repeat(200_000)]);
+  assert.equal(await r.usage.read(), 1);
+  const previous = r.store.usageFiles().get(path)!;
+  if (truncated) writeFileSync(path, "");
+  const count = 350;
+  append(path, Array.from({ length: count }, (_, i) => claudeLine(`dense-${i}`, 2000 + i, "claude-opus-5-5", usage(1, 0, 0, 0, 1))));
+  if (truncated) assert.ok(readFileSync(path).length < previous.offset);
+
+  const record = r.store.recordUsage.bind(r.store);
+  let stopping: Promise<void> | undefined;
+  r.store.recordUsage = (...args: Parameters<Store["recordUsage"]>) => {
+    const added = record(...args);
+    if (stopping === undefined) {
+      stopping = new Promise<void>((resolve, reject) => setImmediate(() => { r.usage.stop().then(resolve, reject); }));
+    }
+    return added;
+  };
+  const read = r.usage.read(new Set(["k"]));
+  await assert.rejects(read);
+  await stopping;
+  r.store.recordUsage = record;
+  const recorded = (r.store.db.prepare("SELECT COUNT(*) AS n FROM usage").get() as { n: number }).n;
+  assert.ok(recorded > 1 && recorded < count + 1, "the stop ran between writes");
+  assert.equal(r.store.usageFiles().get(path)?.offset, truncated ? 0 : previous.offset);
+
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }) });
+  counters.push(again);
+  await again.read();
+  assert.equal((r.store.db.prepare("SELECT COUNT(*) AS n FROM usage").get() as { n: number }).n, count + 1);
+  assert.equal(r.store.usageFiles().get(path)?.offset, readFileSync(path).length);
+});
+
 test("a line spanning several parts is returned whole with its byte offset, both raw and put away", async () => {
   const path = join(tempdir(), "long.jsonl");
   const prefix = "first\n";

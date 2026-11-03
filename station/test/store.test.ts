@@ -13,7 +13,8 @@ import {
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
-import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM, USAGE_GROUPS } from "../src/store/usage.ts";
+import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
+import { backfillNextUsageDetail, detailQuery } from "../src/store/usage-detail.ts";
 import { backfillUsageCompactions } from "../src/store/usage-compactions.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import * as read from "../src/read/store.ts";
@@ -997,6 +998,7 @@ test("usage: the sessions at work are found by when their turns ended, once each
 
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
   const store = memory();
+  const detail = detailQuery(1n, 1_000_001n, 1n, { workspace: "ws", home: false })!;
   // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the
   // login cards, or of the small one that counts sessions (or of what a subquery found); a table, or an index of every
   // turn, job or entry, never.
@@ -1005,8 +1007,9 @@ test("what the station asks again and again is planned by an index, never a scan
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [ARCHIVED_THREADS, []], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
+    [detail.sql, detail.args],
   ];
-  const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards|threads_archived)\b)/;
+  const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards|threads_archived)\b)/;
   const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
@@ -1025,6 +1028,7 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(MODELS_USED_BY)!.some((d) => d.includes("COVERING INDEX sessions_models (created_by=? AND created_at>?)")), plans.get(MODELS_USED_BY)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_OF)!.some((d) => d.includes("PRIMARY KEY (ws=? AND at>?)")), plans.get(REMOTE_RUNS_OF)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_ALL)!.some((d) => d.includes("PRIMARY KEY (at>?)")), plans.get(REMOTE_RUNS_ALL)!.join(" | "));
+  assert.ok(plans.get(detail.sql)!.some((d) => d.includes("usage_detail_lookup_scope (scope=? AND level=? AND bucket>? AND bucket<?)")), plans.get(detail.sql)!.join(" | "));
   // The latest card before a message: by the index of cards, not by going back over the thread to it.
   assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
   assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));
@@ -1262,7 +1266,7 @@ test("usage: a session's calls added up by the database, those from before the t
   assert.deepEqual(store.usageOfSession("b"), []);
 });
 
-test("usage: the page's days are the calls added up, as kept by quarter of an hour, whatever the range and time zone", () => {
+test("usage: the page's days are the calls added up from statistics, whatever the range and time zone", () => {
   const path = join(tempdir(), "usage.db");
   let store = open(path);
   session(store, "a");
@@ -1294,13 +1298,17 @@ test("usage: the page's days are the calls added up, as kept by quarter of an ho
       SUM(calls) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
     FROM usage WHERE at >= ?1 AND at < ?2 GROUP BY day, session, thread, person, profile, runtime, model, fast`;
   const sorted = (rows: unknown[]) => rows.map((r) => JSON.stringify(r)).sort();
-  const some = store.db.prepare(USAGE_GROUPS).all(day + 5 * 900_000 + 7, day * 3 - 11, 480).length;
+  const fromStats = (from: number, to: number, tz: number) => {
+    const query = detailQuery(BigInt(from), BigInt(to), BigInt(tz), null);
+    return query === null ? [] : store.db.prepare(query.sql).all(...query.args);
+  };
+  const some = fromStats(day + 5 * 900_000 + 7, day * 3 - 11, 480).length;
   assert.ok(some > 100, `${some} groups`);
   const q = 900_000;
   const ranges = [[0, 2 ** 62], [day + 5 * q, day * 3], [day + 5 * q + 7, day * 3 - 11], [day * 2 + 3, day * 2 + 400], [day * 2, day * 2 + q], [day * 3 + 1, day * 2], [-5, day + q + 1]];
   for (const [from, to] of ranges) {
     for (const tz of [0, 480, -300, 330, 345, 7, -1]) {
-      const kept = store.db.prepare(USAGE_GROUPS).all(from!, to!, tz);
+      const kept = fromStats(from!, to!, tz);
       const a = sorted(kept), b = sorted(store.db.prepare(one).all(from!, to!, tz));
       assert.deepEqual(a, b, `${from}..${to} at ${tz}: ${JSON.stringify([a.filter((x) => !b.includes(x)).slice(0, 3), b.filter((x) => !a.includes(x)).slice(0, 3)])}`);
     }
@@ -1319,6 +1327,8 @@ test("usage: a row is the calls it says, and a database from before says each wa
   store.close();
   // As a station from before the columns kept it: its triggers too.
   const before = new DatabaseSync(path);
+  const detailObjects = before.prepare("SELECT type, name FROM sqlite_master WHERE (name LIKE 'usage_detail_%' OR name = 'usage_detail') AND type IN ('trigger', 'table') ORDER BY type DESC").all() as { type: string; name: string }[];
+  for (const object of detailObjects) before.exec(`DROP ${object.type.toUpperCase()} "${object.name}"`);
   before.exec(`DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_drop; DROP TRIGGER usage_compactions_add;
     DROP TRIGGER usage_main_calls_usage_drop; DROP TRIGGER usage_main_calls_usage_change; DROP TRIGGER usage_main_calls_add; DROP TRIGGER usage_main_calls_drop;
     DROP TABLE usage_main_calls; DROP TABLE usage_compaction_events; DROP TABLE usage_compaction_backfill;
@@ -1340,6 +1350,7 @@ test("usage: a row is the calls it says, and a database from before says each wa
   // A turn told at once is its calls; the context it ended with is what it says, compacted from the one before.
   store.recordUsage("/a.jsonl", { session: "a", offset: 2, model: "m" }, "claude", [call("c2", 2000, 300_000, { calls: 3, context: 20_000, window: 200_000 })] as never);
   assert.deepEqual(store.usageOfSession("a").map((g) => [g.calls, g.input]), [[5, 420_007]]);
+  while (!backfillNextUsageDetail(store.db).done) { /* old calls are filled by the worker in a running station */ }
   assert.deepEqual(store.usageGroups(0, 3000, 0).reduce((n, g) => n + g.calls, 0), 5);
   assert.deepEqual(store.lastContexts("a", 1).map((c) => [c.context, c.window]), [[20_000, 200_000]]);
   while (!backfillUsageCompactions(store.db).done) { /* old calls are filled by the worker in a running station */ }

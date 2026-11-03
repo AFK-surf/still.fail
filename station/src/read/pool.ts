@@ -13,7 +13,7 @@ import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
 import type { Answer, Ask } from "./worker.ts";
-import { REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
+import { REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -143,6 +143,7 @@ export class Readers {
   /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
   read(op: string, args: unknown, lang: Ask["lang"], { told = false }: { told?: boolean } = {}): Promise<string> {
     if (op === "usage") return this.usageRead(args, lang, told);
+    if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told);
     return this.enqueue(op, args, lang, told, op === CHECKPOINT);
   }
 
@@ -159,6 +160,11 @@ export class Readers {
       } catch (error) {
         // The reader checks within its snapshot: a session may have entered the workspace after the worker checked it.
         if (error instanceof HttpError && error.message === USAGE_MINUTES_PENDING && history) continue;
+        if (error instanceof HttpError && error.message === USAGE_DETAIL_PENDING) {
+          this.startUsageIndex();
+          await this.minutes!.readyDetail(viewer);
+          continue;
+        }
         if (error instanceof HttpError && error.message === USAGE_CHATS_PENDING && history) {
           this.startUsageIndex();
           await this.minutes!.readyChats(viewer);
@@ -167,6 +173,21 @@ export class Readers {
         if (!(error instanceof HttpError) || error.message !== REMOTE_RUNS_PENDING) throw error;
         this.startUsageIndex();
         await this.minutes!.readyRemote();
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private async outflowUsageRead(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
+    const ws = (args as { ws?: InWorkspace } | null)?.ws;
+    const viewer: InWorkspace = ws !== null && typeof ws === "object" && typeof ws.workspace === "string"
+      ? { workspace: ws.workspace, home: ws.home === true } : { workspace: "\u0000home", home: true };
+    while (!this.closed) {
+      try { return await this.enqueue("outflowUsage", args, lang, told); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== USAGE_DETAIL_PENDING) throw error;
+        this.startUsageIndex();
+        await this.minutes!.readyDetail(viewer);
       }
     }
     throw new HttpError(502, "station stopping");

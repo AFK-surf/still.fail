@@ -1980,6 +1980,9 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   assert.deepEqual(c.tabs.map((x: J) => [x.part, x.label]), [["android", "安卓"], ["desktop", "桌面"], ["web", "网页"], ["station", "Station"], ["cloud", "云端"]]);
   const notes = (part: string) => c.tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
   assert.equal(c.tabs[0].days[0].label, "今天");
+  // Each day which it is where the device is (its label only says it): the same day for all of today's.
+  assert.equal(c.tabs[0].days.length, 1);
+  assert.equal(c.tabs[0].days[0].day, Math.floor((now * 1000 + host.utcOffsetMin(now * 1000) * 60_000) / 86_400_000));
   assert.deepEqual(notes("android"), ["未发布", "更新到 0.1.1330 后可用", ""]);
   // Another part's tab says what is not out of that part.
   assert.deepEqual(notes("desktop"), [""]);

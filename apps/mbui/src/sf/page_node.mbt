@@ -103,7 +103,8 @@ priv enum PageItem {
 /// line's end, then its blocks, those `blocks` names now by their keys, each made by `block`, then the frame's room at
 /// its foot; all of it scrolling in the page, each part made only while it shows (View::scrolls_window). What it says
 /// of itself told `said` as that changes (a frame's bar that names it: its title, and what it is for by a mark beside
-/// it, `about`).
+/// it, `about`). Where its list is scrolled to its own, the same through its arrangements, or kept by whoever holds it
+/// (`scroll`: a page of parts, each part's page its own as it was left).
 pub fn page_node(
   v : @view.View,
   title : () -> String,
@@ -116,6 +117,7 @@ pub fn page_node(
   actions? : (@view.View) -> Unit,
   said? : (PageSaid) -> Unit,
   width? : () -> Double,
+  scroll? : @view.Scroll,
 ) -> Unit {
   // (what it says of itself to the frame's bar that names it, as that changes, whole: the frame's own to keep)
   match said {
@@ -127,11 +129,19 @@ pub fn page_node(
     Some(w) => fn() { look_for(w()) }
     None => fn() { Narrow }
   }
+  // (a page's list: it moves as the platform's lists do, its slop the host's)
+  let own_scroll = @view.Scroll::list()
   v.pick(look, fn(p, l) {
     p.grow(Is(1.0)).min_height(Is(Some(0.0))).lends(part_at, { look: l, section: false, list: false }) |> ignore
+    // (where its list is scrolled to, kept by whoever holds the page where it says (a part of a page a page each,
+    // each as it was left), else the page's own; the same through its arrangements)
+    let scroll = match scroll {
+      Some(s) => s
+      None => own_scroll
+    }
     match l {
-      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions)
-      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions)
+      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll)
+      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll)
     }
   })
 }
@@ -178,9 +188,8 @@ fn narrow_page_node(
   frame : () -> PageFrame,
   lead : () -> String,
   actions : ((@view.View) -> Unit)?,
+  scroll : @view.Scroll,
 ) -> Unit {
-  // (a page's list: it moves as the platform's lists do, its slop the host's)
-  let scroll = @view.Scroll::list()
   let items = fn() -> Array[PageItem] {
     let f = frame()
     let out = []
@@ -759,8 +768,9 @@ let pg_note_top : Double = 8.0
 let pg_note_foot : Double = 4.0
 
 ///|
-/// A choice of a few on the page (page_choice's, narrow: Seg as wide as the page's room, seg_fill_node, 10 under it), `labels`
-/// as they are now, `chosen()` the one chosen, `choose` told the one a person chooses (the caller says it chosen then:
+/// A choice of a few on the page (page_choice's; narrow: Seg as wide as the page's room, seg_fill_node, 10 under it; wide:
+/// as wide as its options, each `item_w` at least, at the line's start, standing as a section does), `labels` as they
+/// are now, `chosen()` the one chosen, `choose` told the one a person chooses (the caller says it chosen then:
 /// `chosen` follows it).
 pub fn page_choice_node(
   parent : @view.View,
@@ -769,10 +779,31 @@ pub fn page_choice_node(
   choose : (Int) -> Unit,
   item_w? : Double = 0.0,
 ) -> Unit {
+  let at = part_of(parent)
+  if at.look is Wide {
+    // (a wide page's: as wide as its options, each `item_w` at least, at the line's start (desk_choice_row), standing as
+    // a section does where it is in none: page_choice's wide_alone)
+    let make = fn(p : @view.View) {
+      p.box(fn(row) {
+        row.row(Is(true)) |> ignore
+        seg_node(row, labels, chosen, choose, item_w~) |> ignore
+      })
+      |> ignore
+    }
+    if at.section {
+      make(parent)
+    } else {
+      parent.box(fn(r) {
+        r.padding(Is((0.0, 0.0, 0.0, section_foot))) |> ignore
+        make(r)
+      })
+      |> ignore
+    }
+    return
+  }
   parent.box(fn(b) {
     b.padding(Is((0.0, 0.0, 0.0, pg_choice_foot))) |> ignore
     // (a narrow page's: Seg filling the page's room, as segmented's on a narrow page; `item_w` a wide page's alone)
-    ignore(item_w)
     seg_fill_node(b, labels, chosen, choose) |> ignore
   })
   |> ignore
