@@ -288,45 +288,6 @@ pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
 }
 
 ///|
-/// The list as a page of its own (a small screen's, the gear's): who is signed in and the workspace on cards of their
-/// own, each group on its card under its heading. `open`: a row pressed, its page.
-pub fn settings_blocks(c : @ui.Ctx, core : Core, here : @settings.Here, open : (@settings.Route) -> Unit) -> Array[() -> Unit] {
-  let parts = settings_parts(c, core, here)
-  let blocks : Array[() -> Unit] = []
-  for part in parts {
-    let identity = part.rows.iter().any(fn(r) { !(r.lead is Icon(_)) })
-    // (the account and the workspace each a card of its own, as large as who and where they are)
-    let cards = if identity { part.rows.map(fn(r) { [r] }) } else { [part.rows] }
-    for i, rows in cards {
-      let heading = if i == 0 { part.heading } else { "" }
-      blocks.push(fn() {
-        if heading != "" {
-          @sf.heading(c, heading)
-        }
-        @sf.group(c, fn() {
-          for row in rows {
-            if @sf.link_row(
-                c,
-                "settings/" + row.key,
-                row.title,
-                value=row.value,
-                value_bad=row.bad,
-                value_dot=row.dot,
-                note=row.line,
-                strong=!(row.lead is Icon(_)),
-                lead=fn() { settings_lead(c, core, here, row, false) },
-              ) {
-              open(row.route)
-            }
-          }
-        })
-      })
-    }
-  }
-  blocks
-}
-
-///|
 /// The list as a sidebar's (beside the settings' pages on a medium or large screen): the same rows in the same groups,
 /// a sidebar's rows (the theme's side_row, as its other rows of one line), the room of a heading between two groups
 /// with none. `lit`: the row of the page beside it.
@@ -444,7 +405,8 @@ let settings_side_said : @ui.TextStyle = @ui.text_style(w=Hug)
 
 
 ///|
-/// The list as a page of its own made once as nodes (settings_blocks', the gear's on a small screen) in node `v`: who
+/// The settings' list as a page of its own made once as nodes (the gear's on a small screen; the settings' home on every
+/// screen, Setting(Home), laid out narrow or wide by its width) in node `v`: who
 /// is signed in and the workspace on cards of their own, each group on its card under its heading. The page's frame
 /// and how far it is scrolled kept whatever changes; its cards and their rows each a node of its own by its group's key
 /// and its own, come, gone and in their order as the core says which there are (security mode where the
@@ -452,7 +414,8 @@ let settings_side_said : @ui.TextStyle = @ui.text_style(w=Hug)
 /// things stand at its end) followed as it changes, in the language as it is. What a row is by: its icon; the account's
 /// picture and the workspace's mark old views, hosted (settings_lead). `open`: a row pressed, its page. `here`: who
 /// and where, as that changes. `bars`: whether the window has the bottom bar (the shell's to say), as that changes. `stint`: the page's time on top
-/// (its stack's entry's), what a picture is asked for on.
+/// (its stack's entry's), what a picture is asked for on. `said`, `width`: as page_node's (the tape's bar told what it is; its width where its
+/// frame says it).
 pub fn settings_home_node(
   v : @view.View,
   core : Core,
@@ -462,6 +425,8 @@ pub fn settings_home_node(
   frame~ : () -> PageFrame,
   bars~ : () -> Bool,
   stint~ : () -> Int,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
 ) -> Unit {
   // (the bottom bar's row where the shell says the window has the bar, as that changes; what is kept asked of the core as
   // it is asked to be read again, not as the list is worked out)
@@ -495,7 +460,7 @@ pub fn settings_home_node(
     }
     None
   }
-  @sf.page_node(v, fn() { @sf.t("android-settings.title") }, on_back~, frame~, fn() { cards().map(fn(c) { c.0 }) }, fn(
+  @sf.page_node(v, fn() { @sf.t("android-settings.title") }, on_back~, frame~, said?, width?, fn() { cards().map(fn(c) { c.0 }) }, fn(
     block,
     id,
   ) {

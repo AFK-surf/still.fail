@@ -322,6 +322,14 @@ fn tape_made(
   }
   match page {
     // (laid out by the page's width, narrow or wide: page_node's)
+    // (the settings' home come to by its name: the list the gear's is on a small screen)
+    Setting(Home) if pane_makes.val =>
+      made("settings", fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        @sfpages.settings_home_node(p, core, here, fn(r) { (core.push)(r) }, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, bars=fn() {
+          @sf.layout(p.window().0) is Small
+        }, said=told, width~)
+      })
     Setting(About) if pane_makes.val =>
       made("about", fn(p, core, _here, _stint, told, _acts) {
         context_node(p)
@@ -342,7 +350,7 @@ fn tape_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
+        Some(r) if r is (Home | About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
           tape_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }

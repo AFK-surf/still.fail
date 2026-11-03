@@ -1,6 +1,6 @@
-// The settings' list made once as nodes of the window's tree (sfpages' settings_home_node, the narrow shell's made
-// page) drawn as its old view was (the same fixture drawn by the old frame alone): every instance the window draws the
-// same, at rest, with a finger and with keyboard and mouse; what the core says of a row followed by its node, the page
+// The settings' list made once as nodes of the window's tree (sfpages' settings_home_node: the gear's on a small
+// screen, the settings' home on every screen), its old view gone: its rows the tree's own, at rest, with a finger and
+// with keyboard and mouse; what the core says of a row followed by its node, the page
 // not made again; its rows pressed opening their pages.
 
 ///|
@@ -102,30 +102,16 @@ fn same_drawn(made : Array[String], old : Array[String], what : String) -> Unit 
 }
 
 ///|
-test "the settings' list made once: every instance drawn as its old view's, with a finger and with keyboard and mouse, at the system's larger words" {
+test "the settings' list made once, with a finger and with keyboard and mouse, at the system's larger words: its title, groups and rows the tree's own, its corners held" {
   for case in [(2, 1.0), (0, 1.0), (2, 2.0)] {
     let (platform, scale) = case
-    // (at twice the words main's old view of this list breaks the corner rule (its account card's row, 18 round in a
-    // card 22.8 round, too square to follow it): what this compares with, not held here, its fault said and kept
-    // known; every other case, and every other page at any size, held as ever)
-    let corners_held = scale < 2.0
-    let (old, _) = settings_home_tester(false, platform, scale~, corners_held~)
-    if !corners_held {
-      let faults = old.corner_faults()
-      assert_true(faults.length() == 1 && faults[0].contains("lin@example.com"), msg="main's own fault at \{scale}: \{faults}")
-    }
-    let old_drawn = instances_sorted(old)
-    let old_words = words_where(old)
-    let (made, _) = settings_home_tester(true, platform, scale~, corners_held~)
-    if !corners_held {
-      // (the tree's drawn as the old view's, every instance (below); its corner checker finds nothing: it does not look
-      // at that pair among the tree's own nodes, the old views' alone, a difference of what it checks, said so)
-      assert_eq(made.corner_faults(), [])
-    }
+    let (made, _) = settings_home_tester(true, platform, scale~)
     assert_true(app.nav.top() == Settings)
-    // (the words first: what differs said by what it says)
-    same_drawn(words_where(made), old_words, "words")
-    same_drawn(instances_sorted(made), old_drawn, "instances")
+    assert_eq(made.corner_faults(), [], msg="\{case}")
+    let own = tree_words_drawn()
+    for w in ["设置", "外观", "通知", "关于", "密钥", "星火工作室", "林"] {
+      assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="\{w} at \{case}: \{own}")
+    }
   }
 }
 
@@ -196,17 +182,15 @@ test "the settings' list made once: what the core says of a row followed by the 
 }
 
 ///|
-test "the settings' list made once, as its screen is recorded: what shows drawn as the old view's; the text asked beyond it, said" {
-  // (each played as screens_wbtest plays it, to the Mac's last frame; read at once)
-  let old = screen_played("settings-home", @ui.move_most_ms, tree=false)
-  let (old_drawn, old_words, old_missing) = (instances_sorted(old), words_where(old), old.text_missing())
+test "the settings' list made once, as its screen is recorded: what shows the tree's own, in the Mac's text" {
+  // (played as screens_wbtest plays it, to the Mac's last frame; read at once)
   let made = screen_played("settings-home", @ui.move_most_ms)
-  let (made_drawn, made_words, made_missing) = (instances_sorted(made), words_where(made), made.text_missing())
-  // (each said as it is, whichever differs)
-  let said = "old lacks \{old_missing.length()}: \{old_missing}\nmade lacks \{made_missing.length()}: \{made_missing}"
-  same_drawn(made_drawn, old_drawn, "instances (\{said})")
-  same_drawn(made_words, old_words, "words (\{said})")
-  assert_eq(made_missing, old_missing, msg=said)
+  let own = tree_words_drawn()
+  for w in ["设置", "外观", "通知", "密钥"] {
+    assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="\{w}: \{own}")
+  }
+  // (what it asked of the Mac's text beyond what was recorded, said: as the old view's was, none expected beyond it)
+  assert_eq(made.text_missing(), [])
 }
 
 ///|
@@ -1183,4 +1167,25 @@ test "价目表 made once become another's of other days in its place: its usage
   t.run_for(@ui.move_most_ms)
   let own = tree_words_drawn()
   assert_eq((asked.last(), own.iter().any(fn(o) { o.contains("Opus") })), (Some(other.to_string()), true), msg="\{asked} \{own}")
+}
+
+///|
+test "the settings' home made once on every screen, as its name opens it: the gear's list, its rows the tree's own; a row pressed opens its page" {
+  for case in [(2, 390.0), (2, 700.0), (0, 839.0), (0, 1280.0)] {
+    let (platform, w) = case
+    let src = fixture_app("settings-home")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform~)
+    t.run_for(@ui.move_most_ms)
+    // (as a notice of the settings' opens it: settings:home)
+    app.nav.push(Setting(@settings.Route::Home))
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() == Setting(@settings.Route::Home), msg="\{case}")
+    let own = tree_words_drawn()
+    for words in ["外观", "通知", "密钥", "星火工作室"] {
+      assert_true(own.iter().any(fn(o) { o.contains(words) }), msg="\{words} the tree's own at \{case}: \{own}")
+    }
+    t.tap_text("通知")
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() == Setting(@settings.Route::Notifications), msg="通知 at \{case}: \{@sfbase.page_kind(app.nav.top())}")
+  }
 }

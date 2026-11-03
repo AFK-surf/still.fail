@@ -569,9 +569,7 @@ pub fn service_view(@ui.Ctx, @sfbase.Source, String, String, Int32, String, Bool
 
 pub fn set_filter(@sfbase.Source, @sfbase.Workspace, String) -> Unit
 
-pub fn settings_blocks(@ui.Ctx, @settings.Core, @settings.Here, (@settings.Route) -> Unit) -> Array[() -> Unit]
-
-pub fn settings_home_node(@view.View, @settings.Core, () -> @settings.Here, (@settings.Route) -> Unit, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, bars~ : () -> Bool, stint~ : () -> Int32) -> Unit
+pub fn settings_home_node(@view.View, @settings.Core, () -> @settings.Here, (@settings.Route) -> Unit, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, bars~ : () -> Bool, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn settings_parts(@ui.Ctx, @settings.Core, @settings.Here, bars? : Bool, asks? : Bool) -> Array[SettingsPart]
 

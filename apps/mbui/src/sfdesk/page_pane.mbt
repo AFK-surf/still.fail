@@ -218,6 +218,13 @@ fn pane_made(
     )
   }
   match page {
+    // (the settings' home come to by its name: the list the gear's is on a small screen)
+    Setting(Home) =>
+      made("settings", fn(a, core, here, stint, frame, width) {
+        @sfpages.settings_home_node(a, core, here, fn(r) { (core.push)(r) }, on_back=core.pop, frame~, stint~, bars=fn() {
+          @sf.layout(a.window().0) is Small
+        }, width~)
+      })
     Setting(About) =>
       made("about", fn(a, core, _here, _stint, frame, width) {
         @sfpages.about_node(a, core, on_back=core.pop, frame~, width~)
@@ -235,7 +242,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
+        Some(r) if r is (Home | About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }

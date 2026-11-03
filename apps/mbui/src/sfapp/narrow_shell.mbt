@@ -360,7 +360,7 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
+        Some(r) if r is (Home | About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
           narrow_made_as(src, Setting(r), true).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -486,8 +486,9 @@ fn narrow_made_as(
     made_at(kind, place, f)
   }
   match page {
-    Settings =>
-      made("settings", fn(p, core, here, frame, stint, _acts) {
+    // (the gear's; the settings' home come to by its name the same list, a page of its own over what it came from)
+    Settings | Setting(Home) =>
+      made(if page is Settings { "settings" } else { "settings-home" }, fn(p, core, here, frame, stint, _acts) {
         @sfpages.settings_home_node(p, core, here, fn(r) { (core.push)(r) }, on_back=core.pop, frame~, stint~, bars=fn() {
           @sf.layout(p.window().0) is Small
         })
