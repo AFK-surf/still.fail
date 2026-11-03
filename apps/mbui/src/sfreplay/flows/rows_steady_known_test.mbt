@@ -7,7 +7,7 @@
 fn init {
   @ui.rows_steady_known([
     // (Android's runs played again, src/sfapp/tape.mbt)
-    ("src/sfapp/tape.mbt", 2),
+    ("src/sfapp/tape.mbt", 1),
     ("src/sfreplay/flows/answer_option_test.mbt", 2),
     ("src/sfreplay/flows/bar_archive_test.mbt", 2),
     ("src/sfreplay/flows/card_motion_test.mbt", 1),

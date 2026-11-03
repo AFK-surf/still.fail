@@ -144,6 +144,10 @@ pub(all) struct Reading {
   linger : Map[String, Lingering]
   /// how many have lingered (Lingering.id)
   mut lingered : Int
+  /// the agents' lines in the order they first came to the list, by their keys: they stand so, one whose turn ended
+  /// lingering where it was, not put after the others (a line gone past another at once, 2026-11-03)
+  act_order : Map[String, Int]
+  mut acts_seen : Int
   /// told as one comes to linger or goes (what reads `linger` built again for it: it is said before any page is built)
   linger_said : @signals.Signal[Int]
   /// the room agents' lines left as they went from the list (Chat.kt floor): the list never gets shorter under the
@@ -263,6 +267,8 @@ pub fn reading_of(key : String) -> Reading {
         sent_as: {},
         sent_as_told: @signals.signal(0),
         linger: {},
+        act_order: {},
+        acts_seen: 0,
         lingered: 0,
         linger_said: @signals.signal(0),
         floor: 0.0,
@@ -598,7 +604,7 @@ fn linger_told(rd : Reading) -> Unit {
 pub fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
   rd.linger_said.get() |> ignore
   if rd.linger.is_empty() {
-    return list
+    return acts_in_order(rd, list)
   }
   // after the running ones, before the foot
   let out = list.copy()
@@ -612,6 +618,47 @@ pub fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
   match foot {
     Some(f) => out.push(f)
     None => ()
+  }
+  acts_in_order(rd, out)
+}
+
+///|
+/// `list` with its agents' lines (at its end, before its foot) in the order they first came (Reading's `act_order`):
+/// the list itself where they are so already.
+fn acts_in_order(rd : Reading, list : Array[Entry]) -> Array[Entry] {
+  let mut end = list.length()
+  if end > 0 && list[end - 1] is Foot {
+    end = end - 1
+  }
+  let mut start = end
+  while start > 0 && list[start - 1] is Working(_) {
+    start = start - 1
+  }
+  let order = fn(e : Entry) {
+    let k = e.id()
+    match rd.act_order.get(k) {
+      Some(n) => n
+      None => {
+        rd.acts_seen += 1
+        rd.act_order[k] = rd.acts_seen
+        rd.acts_seen
+      }
+    }
+  }
+  let mut sorted = true
+  for i in start..<end {
+    if i > start && order(list[i - 1]) > order(list[i]) {
+      sorted = false
+    }
+  }
+  if sorted {
+    return list
+  }
+  let out = list.copy()
+  let block = out[start:end].to_array()
+  block.sort_by(fn(a, b) { order(a).compare(order(b)) })
+  for i, e in block {
+    out[start + i] = e
   }
   out
 }
