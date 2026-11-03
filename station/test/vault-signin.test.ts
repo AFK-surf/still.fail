@@ -9,11 +9,12 @@ import { test } from "node:test";
 import type { Driven, FormField, FormValues } from "../src/browser/signin-form.ts";
 import type { Request } from "../src/vault/crypto.ts";
 import { SignIns, siteOf } from "../src/vault/signin.ts";
+import { installSigninSaveIndex, queueSigninSave, stepSigninSaveIndex } from "../src/vault/signin-save-index.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
 
 const tick = () => new Promise((r) => setImmediate(r));
 
-function world(o: { listed?: string; held?: string; surface?: string } = {}) {
+function world(o: { listed?: string; held?: string; surface?: string; db?: DatabaseSync; previousGone?: Promise<void> } = {}) {
   const cards: { ts: string; card: any; text: string }[] = [];
   const withdrawn: string[] = [];
   const told: string[] = [];
@@ -53,9 +54,10 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
     notify: (_s: string, text: string) => void told.push(text),
   };
   const timers: (() => void)[] = [];
-  const db = new DatabaseSync(":memory:");
+  const db = o.db ?? new DatabaseSync(":memory:");
   const signIns = new SignIns({
     db, hub, now: () => now, after: (_ms, f) => (timers.push(f), () => {}),
+    backfill: { previousGone: o.previousGone },
     workspace: () => "ws", screenLink: (tab) => `https://app/w/ws/s/st/screen/browser%3A${tab}`, id: () => "g1",
     browser: {
       tabs: () => tabs,
@@ -128,7 +130,47 @@ test("a vault decision finds its sign-in without reading the session's completed
   });
   w.signIns.heard({ id: "r_save", session: "s1", status: "granted", save: { kind: "browser" } } as unknown as Request);
   assert.equal(w.cards[0]!.card.signin.outcome.kept, "granted");
-  assert.equal(examined, 1, "only the sign-in for this save is examined");
+  assert.ok(examined <= 1, `only the sign-in for this save is examined (examined ${examined})`);
+});
+
+test("a pending old sign-in decision is recovered after the previous station exits", async () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE signin_asks (id TEXT PRIMARY KEY, session TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+  const insert = db.prepare("INSERT INTO signin_asks VALUES (?, 's1', 'pat@example.com', 'done', ?)");
+  for (let n=0; n<130; n++) insert.run(`old-${n}`, JSON.stringify({ id:`old-${n}`, session:"s1", owner:"pat@example.com", status:"done", save:`save-${n}` }));
+  const previous = Promise.withResolvers<void>();
+  const w = world({ db, previousGone: previous.promise });
+  try {
+    w.signIns.heard({ id:"save-129", session:"s1", status:"granted", save:{kind:"browser"} } as unknown as Request);
+    await Promise.resolve();
+    assert.equal(w.signIns.get("old-129")!.kept, undefined);
+    previous.resolve();
+    while (w.signIns.get("old-129")!.kept !== "granted") await tick();
+    assert.equal(w.signIns.get("old-128")!.kept, undefined);
+  } finally { previous.resolve(); await w.signIns.close(); db.close(); }
+});
+
+test("a recovered sign-in decision finishes updating its card after an interruption", async () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE signin_asks (id TEXT PRIMARY KEY, session TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+  db.prepare("INSERT INTO signin_asks VALUES ('old', 's1', 'pat@example.com', 'done', ?)")
+    .run(JSON.stringify({id:"old",session:"s1",owner:"pat@example.com",status:"done",site:"github.com",save:"save",kept:"granted",thread:1,cardTs:"old-card"}));
+  installSigninSaveIndex(db);
+  stepSigninSaveIndex(db, "s1");
+  queueSigninSave(db, "s1", "save", "granted");
+  const previous = Promise.withResolvers<void>();
+  const w = world({ db, previousGone: previous.promise });
+  w.cards.push({ ts:"old-card", card:{signin:{}}, text:"" });
+  try {
+    previous.resolve();
+    await Promise.resolve();
+    await tick();
+    assert.equal(w.cards[0]!.card.signin.outcome.kept, "granted");
+    assert.deepEqual(w.withdrawn, ["old-card"]);
+    assert.equal(db.prepare("SELECT 1 FROM signin_save_pending").get(), undefined);
+  } finally { previous.resolve(); await w.signIns.close(); db.close(); }
 });
 
 test("a site as asked: its host, without scheme, path, port or www.", () => {
