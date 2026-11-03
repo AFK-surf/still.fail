@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 test("an API deployment reads its administrator from private configuration", () => {
   const program = String.raw`
-import importlib.util, os, tempfile
+import importlib.util, json, os, sys, tempfile
 from pathlib import Path
 
 with tempfile.TemporaryDirectory() as directory:
@@ -25,6 +25,24 @@ with tempfile.TemporaryDirectory() as directory:
     assert deploy.admin_email(False) == "file@example.test"
     os.environ["STILLFAIL_ADMIN_EMAIL"] = "env@example.test"
     assert deploy.admin_email(False) == "env@example.test"
+    assert deploy.admin_email(True) == "admin@example.test"
+    deploy.ROOT = Path(directory)
+    deploy.read_template = lambda *args: {"name": "api-test", "vars": {"PUBLIC_ORIGIN": "https://example.test"}}
+    deploy.account_id = lambda: "account-test"
+    deploy.beta_ready = lambda account: True
+    google = Path(directory, "google.json")
+    google.write_text(json.dumps({"web": {"client_id": "test", "client_secret": "test", "redirect_uris": []}}))
+    def wrangler(*args, **kwargs):
+        config = json.loads(Path(args[args.index("--config") + 1]).read_text())
+        assert config["vars"]["ADMIN_EMAIL"] == "env@example.test"
+        raise RuntimeError("stopped before deployment")
+    deploy.wrangler = wrangler
+    sys.argv = ["deploy.py", "api", "--skip-build", "--google", str(google)]
+    try:
+        deploy.main()
+        raise AssertionError("deployment should have been intercepted")
+    except RuntimeError as error:
+        assert str(error) == "stopped before deployment"
 `;
   const result = spawnSync("python3", ["-c", program], {
     cwd: fileURLToPath(new URL("..", import.meta.url)), encoding: "utf8",

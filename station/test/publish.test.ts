@@ -40,7 +40,7 @@ test("secrets by their shape are hidden, counted; plain words are not", () => {
     ["eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", 1],
     // Not secrets: numbers called tokens, an author, a task's name, words.
     ["tokens: 12000 used, max_tokens = 4096", 0],
-    ["author: zuozijian, password reset page is broken", 0],
+    ["author: alice, password reset page is broken", 0],
     ["task-scheduler-for-the-nightly-build and risk-assessment-document", 0],
   ];
   for (const [text, count] of cases) {
