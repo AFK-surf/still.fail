@@ -290,7 +290,10 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     c.layer(fn() {
       c.box(style=stage_foot, fn() {
         c.box(style=stage_foot_column, fn() {
-          drops(c, s)
+          // (beside the device they are at the foot of what is done with it: nothing over the app being debugged)
+          if !u.logs.beside {
+            drops(c, s)
+          }
           login_fill(c, s)
           passkey_sign(c, s)
           match s.undriven() {

@@ -573,7 +573,7 @@ let debug_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg)
 ///|
 /// The picture's side of a simulator's page: what is left beside what debugs its app.
 // kept across runs: a value (no field of it changes)
-let debug_stage_side : @ui.Style = @ui.style(w=@sf.grow, h=@sf.grow)
+let debug_stage_side : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.grow)
 
 ///|
 /// Where a device's picture is, with room round it for its body.

@@ -2617,4 +2617,6 @@ let zh : Map[String, String] = {
   "web-main.preset.pickFolder": "选择文件夹",
   "web-main.preset.useFolder": "用这个文件夹",
   "web-main.preset.search": "搜仓库或目录",
+  "web-pages.screen.debug.app": "App",
+  "web-pages.screen.device.back": "返回",
 }
