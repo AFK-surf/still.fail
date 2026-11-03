@@ -1180,6 +1180,7 @@ test("a chat can switch runtime through its model control when its station suppo
   const values = new Map();
   apply(host, values);
   assert.equal(v(values, 1).runtimeFixed, false);
+  assert.ok(v(values, 1).efforts.includes("high"), "the current runtime's default model keeps its effort choices");
   await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", model: "gpt-6-astra", runtime: "codex" });
   apply(host, values);
   assert.equal(v(values, 1).draft.runtime, "codex");

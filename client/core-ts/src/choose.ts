@@ -603,7 +603,7 @@ export class Choose implements Owner {
     const on = fixed ? value.runtime : (runtimes.find((r) => r === runtime) ?? runtimes[0] ?? value.runtime);
     const onName = typeof on === "string" ? on : "";
     const accounts = option !== undefined ? arr(get(get(option, "accounts"), onName)) : [];
-    let efforts: J[] = option !== undefined ? arr(get(get(option, "efforts"), onName)) : fixed ? format.efforts(onName) : [];
+    let efforts: J[] = option !== undefined ? arr(get(get(option, "efforts"), onName)) : fixed || o.kind === "session" ? format.efforts(onName) : [];
     const account = (id: string | null) => (id === null ? undefined : accounts.find((a) => a.id === id));
     const profile = account(profileDrafted)?.id ?? null;
     const levels = profile !== null ? get(accounts.find((a) => a.id === profile), "efforts") : undefined;
