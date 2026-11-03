@@ -20,6 +20,20 @@ test("the latest read of a chat includes every viewer and ignores other chats", 
   } finally { store.close(); }
 });
 
+test("the latest read still includes everyone when there are many viewers", () => {
+  const store = Store.open(":memory:");
+  try {
+    const put = store.db.prepare("INSERT INTO reads (viewer, thread, n, at) VALUES (?, ?, 1, ?)");
+    for (let i = 0; i < 50; i++) put.run(`viewer-${i}`, i % 2 ? 8 : 7, i - 100);
+    put.run("last", 7, 42);
+    assert.equal(store.lastReadAt(7), 42);
+    assert.equal(store.lastReadAt(8), -51);
+    assert.equal(store.lastReadAt(9), null);
+    store.db.prepare("UPDATE reads SET at = 100 WHERE viewer = 'viewer-4' AND thread = 7").run();
+    assert.equal(store.lastReadAt(7), 100);
+  } finally { store.close(); }
+});
+
 test("finding a chat's latest read does not visit that viewer's other chats", () => {
   const store = Store.open(":memory:");
   const db = store.db;

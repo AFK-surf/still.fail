@@ -879,16 +879,18 @@ export class Store {
 
   /// When anyone last read a thread (moved their read position), in ms; null if nobody has.
   lastReadAt(thread: number): number | null {
-    // Reads are keyed by (viewer, thread). Seek past each viewer's other chats and look up this chat once per viewer,
-    // rather than visit the station's entire read history. This still grows with viewers and adds no index writes.
-    return this.#one(`WITH RECURSIVE viewers(viewer) AS (
-      SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1)
+    // Reads are keyed by (viewer, thread). For a few viewers, seek this chat once per viewer instead of walking
+    // their other chats. With many viewers, a table scan is cheaper than thousands of separate index seeks.
+    return this.#one(`WITH RECURSIVE viewers(viewer, count) AS (
+      SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1), 1
       UNION ALL
-      SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1)
-        FROM viewers v WHERE v.viewer IS NOT NULL
+      SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+        FROM viewers v WHERE v.viewer IS NOT NULL AND v.count < 33
     )
-    SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?)) AS at
-      FROM viewers v WHERE v.viewer IS NOT NULL`, thread).at;
+    SELECT CASE WHEN (SELECT COUNT(*) FROM viewers WHERE viewer IS NOT NULL) <= 32
+      THEN (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?))
+        FROM viewers v WHERE v.viewer IS NOT NULL)
+      ELSE (SELECT MAX(at) FROM reads WHERE thread = ?) END AS at`, thread, thread).at;
   }
 
   /// A session's own chat on the page (ThreadRow.home), if it has one.
