@@ -35,9 +35,7 @@ pub fn answer_invitation(@sfbase.Source, Json?, String, Bool, String, () -> Unit
 
 pub fn appearance_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
-pub fn archiving_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit) -> Unit
-
-pub fn archiving_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn archiving_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub let ask_turns : Map[String, Int32]
 
@@ -133,9 +131,7 @@ pub fn context_tile_id(@ui.Ctx) -> Int32
 
 pub fn decision_options(@ui.Ctx, @sfbase.Source, MessageHere, @sfbase.Message, Double, Array[@sfbase.Choice], Bool, on_pick? : (Int32) -> Unit) -> Unit
 
-pub fn decisions_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit) -> Unit
-
-pub fn decisions_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn decisions_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer) -> Unit
 
 pub fn desk_column(@ui.Ctx) -> Double
 
@@ -293,7 +289,7 @@ pub let let_go_ms : Double
 
 pub let lines_ms : Double
 
-pub fn link_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, agent? : String, chats? : Array[@sfbase.LinkedChat]) -> Unit
+pub fn link_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, agent? : String, chats? : Array[@sfbase.LinkedChat], link_to? : (String) -> @sf.LinkTo) -> Unit
 
 pub let link_size : Double
 
@@ -327,11 +323,11 @@ pub fn look_of(@ui.Ctx) -> @sf.Look
 
 pub fn me_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
-
 pub fn memories_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn memory_doc_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String, Int32) -> Unit
 
+pub fn memory_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer) -> Unit
 
 pub fn message_files(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Attachment], Bool, by? : (String, String, String)?, landing_key? : String, corner? : Double, at? : String) -> Unit
 
@@ -407,7 +403,7 @@ pub fn permissions_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn person_avatar(@ui.Ctx, @sfbase.Source, String, String, String) -> Unit
 
-pub fn person_words(@ui.Ctx, String, String, found? : Array[String], peek? : ((String, String, Int32) -> Unit)?, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Unit
+pub fn person_words(@ui.Ctx, String, String, found? : Array[String], peek? : ((String, String, Int32) -> Unit)?, chat_title? : (String) -> String?, runs? : Json?) -> Unit
 
 pub let pf_card_foot : @ui.Style
 
@@ -595,9 +591,7 @@ pub fn sign_in_page(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn state_line(@ui.Ctx, String, Int32, String, lead? : String, lead_text? : String, rest? : String, alert? : Bool) -> Unit
 
-pub fn station_archiving_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit) -> Unit
-
-pub fn station_archiving_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
+pub fn station_archiving_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn station_figures(@ui.Ctx, @sfbase.Source, Json?) -> Unit
 
@@ -667,7 +661,7 @@ pub let video_least : Double
 
 pub let vt_actions : @ui.Style
 
-pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : @view.Side) -> Unit
+pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : @view.Side, peek? : String) -> Unit
 
 pub fn work_mark(@ui.Ctx, @sfbase.Source, String, String, @ui.TextStyle, @ui.TextStyle, lead? : String, smallest? : Bool) -> Unit
 

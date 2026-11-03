@@ -652,8 +652,9 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
     self.p = 0.0
     self.t0 = -1.0
     self.waited = false
-    self.told()
+    // (its time on top anew before the stack says it changed: what reads that reads this one, Nav::topped)
     self.topped()
+    self.told()
     match self.hosted {
       Some(h) => (h.went)()
       None => ()
@@ -668,8 +669,8 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
     }
   }
   self.leaving = self.pages.pop()
-  self.told()
   self.topped()
+  self.told()
   self.go(2, 1.0, brings=true)
   true
 }
@@ -815,12 +816,12 @@ fn[P] Nav::gesture(
 /// Gone back from where a finger left the page: on from there, as fast as it let it go (`v`, its widths per ms).
 fn[P] Nav::let_go(self : Nav[P], v : Double) -> Unit {
   self.leaving = self.pages.pop()
+  self.topped()
   self.told()
   match self.leaving {
     Some(e) => (self.went_back)(e.page, e.over, e.rise, self.pages())
     None => ()
   }
-  self.topped()
   self.go(2, 1.0, v~)
 }
 

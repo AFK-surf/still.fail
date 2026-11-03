@@ -499,6 +499,9 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     // laid out and then said again; the old frame tells them each build, the same)
     @sf.set_words(fill)
     @sfbase.language_said(src)
+    // (pictures by their address as the core gives them, said before any page of nodes is made: what one shows on its
+    // first frame asks the core, not the library's stand-in; the old frame says it each build, the same)
+    @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
     // (what the splash waits by, kept by what lives through the app's states: splash_begin)
     splash_owner.val = Some(root)
     // (its nodes drawn in still.fail's theme, the one its old views are built in, as light or dark is set: view's

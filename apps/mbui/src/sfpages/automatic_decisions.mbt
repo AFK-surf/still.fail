@@ -7,29 +7,10 @@
 // controls at its end, its options a table) are gone.
 
 ///|
-/// 自动决策 (AutomaticDecisions; the narrow app's AutomaticDecisionsScreen): the point a decision is made at (the
-/// completion of a turn), what it does, how many stations have it on (the core's `settings`), a row to its page.
-pub fn decisions_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let look = look_of(c)
-  let said = (core.topic)("settings", { "scope": Json::string(here.workspace) }).value
-  @sf.page(c, on_back=core.pop, frame~, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
-    fn() {
-      @sf.group(c, fn() {
-        if @sf.link_row(c, "auto-completion",
-            @sf.t("web-pages.automaticDecisions.completion"),
-            note=@sf.t(if look == Narrow { "web-pages.automaticDecisions.completionShort" } else { "web-pages.automaticDecisions.completionNote" }),
-            value=text(said, "decisionsText"),
-          ) {
-          (core.push)(AutoCompletion)
-        }
-      })
-    },
-  ])
-}
-
-///|
-/// 自动决定 as nodes (decisions_page's, narrow: what it is for is a wide page's mark beside its title, none here): its one
-/// decision on a card: whether a chat is done, how it is decided now (the core's), short; pressed, that decision's page.
+/// 自动决策 (AutomaticDecisions; the narrow app's AutomaticDecisionsScreen) as nodes, laid out by the `width` its frame
+/// gives it (page_node; what it is for a wide page's mark beside its title, its tips over the window from `tips`): its
+/// one decision on a card: whether a chat is done, how it is decided now (the core's), short where narrow and whole where
+/// wide; pressed, that decision's page.
 pub fn decisions_node(
   v : @view.View,
   core : Core,
@@ -37,8 +18,10 @@ pub fn decisions_node(
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
   said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+  tips? : @sf.TipLayer,
 ) -> Unit {
-  // (what it says of itself to a frame's bar that names it, what it is for with it: decisions_page's `about`)
+  // (what it says of itself to a frame's bar that names it, what it is for with it: its `about`)
   let told = said
   let said = fn() { (core.topic)("settings", { "scope": Json::string(here().workspace) }).value }
   @sf.page_node(
@@ -52,6 +35,7 @@ pub fn decisions_node(
           fn() { @sf.t("web-pages.automaticDecisions.completion") },
           fn() { (core.push)(AutoCompletion) },
           note=fn() { @sf.t("web-pages.automaticDecisions.completionShort") },
+          wide_note=fn() { @sf.t("web-pages.automaticDecisions.completionNote") },
           value=fn() { text(said(), "decisionsText") },
         )
       })
@@ -60,6 +44,8 @@ pub fn decisions_node(
     frame~,
     about=fn() { @sf.t("web-pages.automaticDecisions.choosePoint") },
     said?=told,
+    width?,
+    tips?,
   )
 }
 

@@ -16,6 +16,8 @@ priv struct MadeLog {
   owns : Ref[Int]
   /// each page's time on top, as the stack gives it (what a picture it shows is asked for on)
   stints : Map[String, () -> Int]
+  /// each page's times on top as what read it was told them (View::reacts), in order
+  seen : Map[String, Array[Int]]
 }
 
 ///|
@@ -24,7 +26,7 @@ priv struct MadeLog {
 /// and 2000 high of words that scroll; the rest old views of their name.
 fn made_stack() -> (Tester, Nav[String], MadeLog, Array[String]) {
   let left : Array[String] = []
-  let log : MadeLog = { made: [], gone: [], taps: Map([]), scrolls: Map([]), roots: Map([]), owns: Ref(0), stints: Map([]) }
+  let log : MadeLog = { made: [], gone: [], taps: Map([]), scrolls: Map([]), roots: Map([]), owns: Ref(0), stints: Map([]), seen: Map([]) }
   let nav = Nav::new("a", on_leave=fn(p) { left.push(p) })
   let t = Tester::new(fn(_c) {  }, platform=1)
   t.check_looks(false)
@@ -48,6 +50,8 @@ fn made_stack() -> (Tester, Nav[String], MadeLog, Array[String]) {
                 log.scrolls[first] = scroll
                 log.roots[first] = v.id()
                 log.stints[first] = stint
+                log.seen[first] = []
+                v.reacts(stint, fn(s) { log.seen[first].push(s) })
                 v.owns(fn() { log.gone.push(first) }) |> ignore
                 if first.contains("own") {
                   v.box(fn(b) { b.over(Is(true)).takes_back(fn() { log.owns.val += 1 }) |> ignore }) |> ignore
@@ -246,4 +250,28 @@ test "window tree: a made page in the hand by a scripted run's drag (its steps t
   assert_eq(nav.depth(), 2)
   assert_eq(nav.mode, 0)
   assert_true(!g().page_in_hand, msg="at rest")
+}
+
+///|
+test "window tree: a made page come back to tells what reads its time on top the new one, by a back and by the stack's own pop" {
+  let (t, nav, log, _) = made_stack()
+  pushed(t, nav, "m1")
+  pushed(t, nav, "m2")
+  t.back()
+  t.run_for(nav.rest() - t.time() + 16.0)
+  let again = (log.stints["m1"])()
+  assert_eq(log.seen["m1"].last(), Some(again), msg="by a back: \{log.seen["m1"]}")
+  pushed(t, nav, "m3")
+  view_event(fn() { nav.pop() |> ignore })
+  t.run_for(nav.rest() - t.time() + 16.0)
+  let then = (log.stints["m1"])()
+  assert_true(then != again)
+  assert_eq(log.seen["m1"].last(), Some(then), msg="by the stack's pop: \{log.seen["m1"]}")
+  // (popped as an app pops it from outside any event: what reads its time on top told the new one all the same)
+  pushed(t, nav, "m4")
+  nav.pop() |> ignore
+  t.run_for(nav.rest() - t.time() + 16.0)
+  let last = (log.stints["m1"])()
+  assert_true(last != then)
+  assert_eq(log.seen["m1"].last(), Some(last), msg="by a pop from outside an event: \{log.seen["m1"]}")
 }

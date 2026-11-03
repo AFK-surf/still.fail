@@ -23,8 +23,6 @@ pub let accent : @ui.TextStyle
 
 pub fn action(@ui.Ctx, String, String, icon? : String, busy? : Bool, disabled? : Bool, bad? : Bool) -> Bool
 
-pub fn adb_of_link(String) -> String?
-
 pub let agent_card_w : @ui.Len
 
 pub fn agent_mark_corner(Double) -> @ui.Radius
@@ -821,12 +819,6 @@ pub let inset_room : @ui.Space
 
 pub fn into_column(Double) -> @ui.Style
 
-pub fn is_bare_link(String, String) -> Bool
-
-pub fn is_card_link(String) -> Bool
-
-pub fn is_chat_link(String) -> Bool
-
 pub fn is_subtitle(String) -> Bool
 
 pub fn item_row(@ui.Ctx, () -> Unit) -> Unit
@@ -838,6 +830,8 @@ pub let jobs_row_h : @ui.Len
 pub fn join_meta(Array[String]) -> String
 
 pub let kept_call : @ref.Ref[((String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?)?]
+
+pub fn kept_words(String) -> Json?
 
 pub fn keys_apart(size? : Double, least? : Double) -> Double
 
@@ -913,7 +907,9 @@ pub fn link_menu(String, from~ : Beside, () -> Unit, () -> Unit) -> Unit
 
 pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, value_bad? : Bool, value_dot? : Bool, strong? : Bool, danger? : Bool, out? : Bool, chevron? : Bool, folds? : Bool, note? : String, lacks? : Bool, trouble? : String, lead? : () -> Unit, tail? : () -> Unit, below? : () -> Unit, below_open? : Double, goes? : Bool, acts? : Bool, adds? : Bool, title_after? : () -> Unit, control? : () -> Unit, note_cut? : Bool, face? : Bool, title_style? : @ui.TextStyle, title_cut? : Bool, value_cut? : Bool) -> Bool
 
-pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, note? : () -> String, trouble? : () -> String, strong? : Bool, lead? : RowLead, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool) -> Unit
+pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, note? : () -> String, wide_note? : () -> String, trouble? : () -> String, strong? : Bool, lead? : RowLead, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool) -> Unit
+
+pub fn link_to_of(Json, text? : String, bare? : Bool) -> LinkTo
 
 pub fn list_apart(@ui.Ctx) -> Unit
 
@@ -1012,6 +1008,8 @@ pub fn markdown_part(@ui.Ctx, String, Array[Json], String, apart? : Bool, size? 
 pub let markdown_read : @ref.Ref[((String, (Json?) -> Unit) -> Unit)?]
 
 pub fn marks_actions_node(@view.View, () -> MarksActionsSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, () -> Unit, () -> Unit, tip? : TipLayer) -> @view.View
+
+pub fn md_links_to(String, Json?) -> Map[String, LinkTo]
 
 pub fn md_node_at(Json) -> Int32
 
@@ -1251,9 +1249,13 @@ pub let no_frame : PageFrame
 
 pub let no_ground : Int64
 
+pub let no_link_to : LinkTo
+
 pub let no_ring : Double
 
 pub let note : @ui.TextStyle
+
+pub fn note_link_node(@view.View, () -> String, () -> String, () -> Unit, inline? : Bool) -> Unit
 
 pub let notice_w : @ui.Len
 
@@ -1779,15 +1781,13 @@ pub fn said_row(@ui.Ctx, String, String, value? : () -> Unit, lead? : (@ui.Ctx) 
 
 pub fn sample_words(Int32) -> String
 
-pub fn screen_of_link(String) -> (String, String)?
-
 pub let search_ground : @ui.Color
 
 pub let secondary : @ui.TextStyle
 
 pub fn section(@ui.Ctx, String, () -> Unit, heads? : Bool, note? : String, actions? : () -> Unit, title_after? : () -> Unit) -> Unit
 
-pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String) -> Unit
+pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String) -> Unit
 
 pub fn section_none_node(@view.View, () -> String) -> Unit
 
@@ -1818,8 +1818,6 @@ pub fn select(@ui.Ctx, String, String, Array[(String, String)], (String) -> Unit
 pub let select_chevron : Double
 
 pub let select_w : Double
-
-pub fn service_of_link(String) -> (String, String)?
 
 pub fn set_dark(Bool?) -> Unit
 
@@ -1995,11 +1993,15 @@ pub let stage_plain_lit : Int64
 
 pub let stage_scrim : Int64
 
+pub fn state_dot_node(@view.View, () -> String) -> Unit
+
 pub fn station_glyph(@ui.Ctx, GlyphCounts, Double, Int64, Int64) -> Int32
 
 pub fn station_glyph_icon(GlyphCounts) -> String
 
 pub fn station_icon(@ui.Ctx, String, String, Double, Int64, here? : Bool) -> Unit
+
+pub fn station_lead(() -> Bool, () -> String, () -> String, () -> Int32) -> RowLead
 
 pub fn station_mark(@ui.Ctx, String, String, Double, Int64, none? : String, still? : Bool) -> Unit
 
@@ -2427,6 +2429,8 @@ pub fn with_look(Look, () -> Unit) -> Unit
 
 pub fn within_room(@ui.Ctx, @kit.PopState, () -> Unit, inner? : @ui.Style, most? : Double) -> Unit
 
+pub fn words_may_link(String) -> Bool
+
 pub fn words_node(@view.View, () -> String, () -> @ui.TextStyle) -> @view.View
 
 pub fn words_told_count() -> Int32
@@ -2653,6 +2657,17 @@ pub(all) enum Layout {
   Medium
   Large
 } derive(Eq, Show, @debug.Debug)
+
+pub(all) struct LinkTo {
+  chat : Bool
+  card : String
+  station : String
+  screen : String
+  job : String
+  peek : String
+  bare : Bool
+} derive(Eq)
+pub fn LinkTo::is_card(Self) -> Bool
 
 pub(all) enum ListAt {
   Side
@@ -3005,8 +3020,8 @@ pub(all) struct Rows {
 }
 
 pub(all) struct Screens {
-  card : (String, String?) -> Unit
-  title : (String) -> String
+  card : (String, LinkTo, String?) -> Unit
+  title : (String, LinkTo) -> String
 }
 
 pub(all) struct StrokeShape {

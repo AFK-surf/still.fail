@@ -18,7 +18,21 @@ pub fn core_pictures(ask : (String, (Bytes?) -> Unit) -> Unit) -> (String, Int) 
   let failed : Map[String, Bool] = {}
   // each address with each page's time on top it was put up in (an address on two pages at once, each its own)
   let shown : Map[String, Bool] = {}
+  // each address's answers so far, followed by all that read it (a node of the window's tree shown by it, read again as
+  // its answer comes, whoever asked: an old view reads it every frame it is built)
+  let answers : Map[String, @signals.Signal[Int]] = {}
+  let answered = fn(url : String) -> @signals.Signal[Int] {
+    match answers.get(url) {
+      Some(s) => s
+      None => {
+        let s = @signals.signal(0)
+        answers[url] = s
+        s
+      }
+    }
+  }
   fn(url, page) {
+    answered(url).get() |> ignore
     let at = "\{page}\u{1}" + url
     let anew = !shown.contains(at)
     shown[at] = true
@@ -30,6 +44,12 @@ pub fn core_pictures(ask : (String, (Bytes?) -> Unit) -> Unit) -> (String, Int) 
         }
         failed.remove(url)
         keys[url] = ""
+        // (this asking's own: an answer given at once told once it is in, not from within the asking)
+        let asking = Ref(true)
+        let told = fn() {
+          let s = answered(url)
+          s.set(@signals.untracked(fn() { s.get() }) + 1)
+        }
         ask(url, fn(bytes) {
           match bytes {
             Some(b) if b.length() > 0 => {
@@ -42,7 +62,18 @@ pub fn core_pictures(ask : (String, (Bytes?) -> Unit) -> Unit) -> (String, Int) 
               failed[url] = true
             }
           }
+          // (told to all that read it: at once where it came later, else as the asking ends)
+          if asking.val {
+            asking.val = false
+          } else {
+            told()
+          }
         })
+        // (answered at once: told to the others that read it too, now it is in)
+        if !asking.val {
+          told()
+        }
+        asking.val = false
         // (answered at once: its key already)
         keys.get(url).unwrap_or("")
       }

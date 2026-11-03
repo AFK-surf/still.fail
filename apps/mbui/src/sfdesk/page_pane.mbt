@@ -160,9 +160,10 @@ fn pane_stack(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
 
 ///|
 /// The pages of the library's made once as nodes in the pane off the tape (Large), in the place of their old view
-/// (nav_flat_view's `made`): 关于, 记忆, 更新日志. Laid out by the width the frame gives the pane (the window's less the block's column
-/// where its move goes: fold_target's, never what the page last laid out), narrow or wide (page_node), each made again
-/// only as that arrangement changes. What the old view's island did for the page done by its node (pane_made_host).
+/// (nav_flat_view's `made`): 关于, 记忆, 更新日志; 归档, a station's own archiving, 自动决策. Laid out by the width the
+/// frame gives the pane (the window's less the block's column where its move goes: fold_target's, never what the page
+/// last laid out), narrow or wide (page_node), each made again only as that arrangement changes. What the old view's
+/// island did for the page done by its node (pane_made_host).
 fn pane_made(
   src : Source,
   page : Page,
@@ -172,12 +173,12 @@ fn pane_made(
   // (made in the workspace in view, its settings' core, under what it was opened from, as wide as the frame gives it)
   let made = fn(
     kind : String,
-    f : (@view.View, @settings.Core, () -> @settings.Here, () -> @sf.PageFrame, () -> Double) -> Unit,
+    f : (@view.View, @settings.Core, () -> @settings.Here, () -> Int, () -> @sf.PageFrame, () -> Double) -> Unit,
   ) {
     Some(
       (
         kind,
-        fn(v : @view.View, page : () -> Page, under : Page?, _stint : () -> Int, k : Int) {
+        fn(v : @view.View, page : () -> Page, under : Page?, stint : () -> Int, k : Int) {
           v.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
             guard @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) is Some(w) else { return }
             let core = settings_core(src, w)
@@ -208,7 +209,7 @@ fn pane_made(
             }
             p.box(fn(a) {
               a.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-              f(a, core, here, frame, width)
+              f(a, core, here, stint, frame, width)
             })
             |> ignore
           })
@@ -218,40 +219,44 @@ fn pane_made(
   }
   match page {
     Setting(About) =>
-      made("about", fn(a, core, _here, frame, width) {
+      made("about", fn(a, core, _here, _stint, frame, width) {
         @sfpages.about_node(a, core, on_back=core.pop, frame~, width~)
       })
     Setting(Memories) =>
-      made("memories", fn(a, core, here, frame, width) {
+      made("memories", fn(a, core, here, _stint, frame, width) {
         @sfpages.memories_node(a, core, here, on_back=core.pop, frame~, width~)
       })
     Setting(Changelog) =>
-      made("changelog", fn(a, core, _here, frame, width) {
+      made("changelog", fn(a, core, _here, _stint, frame, width) {
         @sfpages.changelog_node(a, core, on_back=core.pop, frame~, width~)
       })
-    // (a place of the rail's whose page is one of those, at the stack's root: no back over it, place_page's)
+    // (a place of the rail's whose page is one of those: that page, at the stack's root (no back over it, place_page's),
+    // made under its own kind)
     Place(name) =>
       match @settings.route_of(name) {
-        Some(Memories) =>
-          made("place/memories", fn(a, core, here, frame, width) {
-            @sfpages.memories_node(a, core, here, on_back=core.pop, frame~, width~)
-          })
-        Some(About) => made("place/about", fn(a, core, _here, frame, width) { @sfpages.about_node(a, core, on_back=core.pop, frame~, width~) })
-        Some(Changelog) =>
-          made("place/changelog", fn(a, core, _here, frame, width) {
-            @sfpages.changelog_node(a, core, on_back=core.pop, frame~, width~)
-          })
-        // (by its station: another station's another page, not this one become it)
-        Some(Memory(address)) =>
-          made("place/memory/" + address, fn(a, core, here, frame, width) {
-            @sfpages.memory_node(a, core, here, address, on_back=core.pop, frame~, width~, tips~)
-          })
+        // (those whose old view is gone: every frame makes them once, as a page or a place)
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions) =>
+          pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
     // (by its station: another station's another page, not this one become it)
     Setting(Memory(address)) =>
-      made("memory/" + address, fn(a, core, here, frame, width) {
+      made("memory/" + address, fn(a, core, here, _stint, frame, width) {
         @sfpages.memory_node(a, core, here, address, on_back=core.pop, frame~, width~, tips~)
+      })
+    Setting(Archiving) =>
+      // (its pictures asked for again each time it is come back to, not each frame it stays: nav_flat_view's stint)
+      made("archiving", fn(a, core, here, stint, frame, width) {
+        @sfpages.archiving_node(a, core, here, on_back=core.pop, frame~, stint~, width~)
+      })
+    Setting(AutoDecisions) =>
+      made("auto-decisions", fn(a, core, here, _stint, frame, width) {
+        @sfpages.decisions_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
+      })
+    // (by its station: another station's another page, not this one become it)
+    Setting(StationArchiving(st)) =>
+      made("station-archiving/" + st, fn(a, core, here, _stint, frame, width) {
+        @sfpages.station_archiving_node(a, core, here, st, on_back=core.pop, frame~, width~)
       })
     _ => None
   }
