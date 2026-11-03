@@ -27,7 +27,7 @@ for (const recursive of [false, true]) test(`the running limit follows watches, 
     assert.match(plan, /jobs_state \(state=\?\)/);
     const limitPlan = (db.prepare(`EXPLAIN QUERY PLAN ${RUNNING_LIMIT}`).all("a", 19) as { detail: string }[]).map((r) => r.detail).join(" | ");
     assert.match(limitPlan, /active_watch_jobs_session \(session=\?\)/);
-    assert.match(limitPlan, /active_other_jobs_session \(session=\?\)/);
+    assert.match(limitPlan, /active_other_jobs USING PRIMARY KEY \(session=\?\)/);
     const atLeast = (session: string, count: number) => db.prepare(RUNNING_LIMIT).get(session, count - 1) !== undefined;
     const watching = (thread: number) => db.prepare(HAS_ACTIVE_WATCH).get(thread) !== undefined;
     assert.equal(atLeast("a", 2), true);
@@ -44,11 +44,23 @@ for (const recursive of [false, true]) test(`the running limit follows watches, 
     assert.equal(atLeast("b", 2), true);
     db.prepare("INSERT OR IGNORE INTO jobs VALUES (?, ?, ?, ?, ?)").run("ignored", "a", "running", 0, "token-b-job");
     assert.equal(atLeast("b", 2), true);
+    db.prepare("UPDATE jobs SET state = 'running' WHERE id = ?").run("a-watch");
+    assert.equal(atLeast("b", 2), true, "an ignored insert cannot remove a different job on a later update");
+    db.prepare("INSERT OR IGNORE INTO jobs VALUES (?, ?, ?, ?, ?)").run("ignored", "a", "running", 0, "token-b-job");
+    db.prepare("DELETE FROM jobs WHERE id = ?").run("a-watch");
+    assert.equal(atLeast("b", 2), true, "an ignored insert cannot affect a later deletion");
+    add("a-watch", "a", "running", 0);
     db.prepare("INSERT OR REPLACE INTO jobs VALUES (?, ?, ?, ?, ?)").run("replace", "a", "exited", 0, "token-b-job");
     assert.equal(atLeast("b", 2), false, "replacing on the unique token removes the displaced job");
     add("overwritten", "b", "running", 0);
     db.prepare("UPDATE OR REPLACE jobs SET token = ? WHERE id = ?").run("token-overwritten", "replace");
     assert.equal(atLeast("b", 2), false, "updating on the unique token removes the displaced job");
+    add("upserted", "b", "running", 0);
+    db.prepare(`INSERT INTO jobs VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+      session_key = excluded.session_key, state = excluded.state, watch = excluded.watch, token = excluded.token`)
+      .run("upserted", "a", "running", 0, "token-upserted");
+    assert.equal(atLeast("a", 2), true, "an upsert moves the existing job once");
+    db.prepare("DELETE FROM jobs WHERE id = ?").run("upserted");
     for (let i = 0; i < 50; i++) add(`other-${i}`, "b", "running", 0);
     let inspected = 0;
     db.function("inspected_active_job", (_job) => { inspected++; return 1; });
