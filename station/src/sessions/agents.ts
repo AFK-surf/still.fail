@@ -266,8 +266,8 @@ export const AgentsLive = (control: Control) =>
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places, bus: yield* Peers });
       // Measure only working chats, and only station-owned workspaces. A chat's remote workspaces are measured on the
       // machines that hold them; an offline or older station supplies no reading until it can answer.
-      const workingRow = (row: NonNullable<ReturnType<typeof store.getSession>>, jobsRunning: Set<string>): boolean =>
-        row.archivedAt === null && (row.running || hub.processState(row.key) === "running" || jobsRunning.has(row.key) || store.lastTurn(row.key)?.declared === "waiting");
+      const workingRow = (row: NonNullable<ReturnType<typeof store.getSession>>, jobsRunning: Set<string>, waiting?: Set<string>): boolean =>
+        row.archivedAt === null && (row.running || hub.processState(row.key) === "running" || jobsRunning.has(row.key) || (waiting ? waiting.has(row.key) : store.lastTurn(row.key)?.declared === "waiting"));
       const working = (key: string): boolean => {
         const row = store.getSession(key);
         return row !== null && workingRow(row, new Set(store.jobsRunning().map((j) => j.sessionKey)));
@@ -279,7 +279,10 @@ export const AgentsLive = (control: Control) =>
         notify: (session, text) => hub.notify(session, text),
         readings: async () => {
           const jobsRunning = new Set(store.jobsRunning().map((j) => j.sessionKey));
-          return (await Promise.all(store.liveSessions().filter((s) => workingRow(s, jobsRunning)).map(async (s) => {
+          const live = store.liveSessions();
+          // Whether each waits, of those not at work otherwise, in one statement.
+          const waiting = store.waitingOf(live.filter((s) => s.archivedAt === null && !s.running && hub.processState(s.key) !== "running" && !jobsRunning.has(s.key)).map((s) => s.key));
+          return (await Promise.all(live.filter((s) => workingRow(s, jobsRunning, waiting)).map(async (s) => {
             const found: WorkspaceReading[] = [];
             if (roomOf(data, s.workspace) !== null) {
               const size = remote.workspaceReader.size(s.workspace, workspaceWatch.limit(s.key, ""));
