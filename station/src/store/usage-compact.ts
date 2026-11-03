@@ -156,7 +156,13 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
       -- Older stations omit compact_counted and grow responses with an upsert. Route their new calls through the
       -- compact writers and preserve their output-only update semantics, even after this station is replaced.
       CREATE TRIGGER usage_compact_legacy_insert BEFORE INSERT ON usage WHEN NEW.compact_counted = 0 BEGIN
+        INSERT INTO usage_minute_scope (session, ws, done)
+          SELECT NEW.session, (SELECT ws FROM sessions WHERE key = NEW.session), 1
+          WHERE NEW.subagent = 0 AND NOT EXISTS (SELECT 1 FROM usage WHERE id = NEW.id)
+          ON CONFLICT (session) DO UPDATE SET ws = excluded.ws WHERE ws IS NOT excluded.ws;
         ${invalidateContext("NEW.session", "NEW.subagent = 0 AND NOT EXISTS (SELECT 1 FROM usage WHERE id = NEW.id)")}
+        UPDATE usage_minute_scope SET context_after = MAX(COALESCE(context_after, NEW.at), NEW.at)
+          WHERE session = NEW.session AND NEW.subagent = 0 AND NOT EXISTS (SELECT 1 FROM usage WHERE id = NEW.id);
         UPDATE usage SET output = NEW.output WHERE id = NEW.id AND output < NEW.output;
         INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read,
           cache_write, cache_write_long, output, calls, context, context_window, compact_counted)

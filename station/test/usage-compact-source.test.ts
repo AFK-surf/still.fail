@@ -101,6 +101,24 @@ for (const recursive of [false, true]) test(`an older station can still record a
   } finally { store.close(); }
 });
 
+test("a first call written by an older station is not skipped when reconstructing recent context", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    store.db.exec(`INSERT INTO usage (id, at, session, person, profile, runtime, model, input, cache_read, cache_write, cache_write_long, output, context)
+      VALUES ('legacy', 60000, 'a', 'p', 'cc', 'claude', 'm', 10, 0, 10, 0, 1, 10)`);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "new", at: 120_000, model: "m", subagent: false, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 20, window: null };
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    assert.deepEqual(store.lastContexts("a", 5), [], "one later call cannot reconstruct the missing legacy cache write");
+    for (let n = 1; n <= 4; n++) store.recordUsage("/a", { session: "a", offset: n + 1, model: "m" }, "claude",
+      [[{ ...call, id: `new-${n}`, at: call.at + n }, owner]]);
+    assert.equal(store.lastContexts("a", 5).length, 5, "five newer calls restore the complete recent tail");
+  } finally { store.close(); }
+});
+
 test("a time range does not visit sessions with only older statistics", () => {
   const store = Store.open(":memory:");
   try {
