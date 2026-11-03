@@ -1,8 +1,9 @@
 // A column's edge as a node of the window's tree (the way there, docs/retained.md 4: handle_drag and edge_tip given
 // their made-once form beside their old one): what is done with it taken at each event's own moment, whatever frames
 // come. A mouse drags it at once; a finger only once held still on it a long press's while (a swipe that passes over
-// it is what lies under it's: View::gesture's `held_first`); dragged, the width it is dragged to, from the width it had
-// as it went down, on whole pixels between its least and its most; let go, the width it ends at; pressed and let go
+// it is what lies under it's: View::gesture's `held_first`), felt as the hold takes it; dragged, the width it is
+// dragged to, from the width it had as it went down, on whole pixels between its least and its most, felt as it gets
+// to either end; let go, the width it ends at; pressed and let go
 // without moving, a press of it (where it lies over what is beside the column, that one's), the second of two its
 // own width again. Its pointer the resizing one, read out as a separator; its tip (edge_tip's: a mouse's, by the
 // pointer as it moves along it, edge_tip_ms after it comes onto it, shut by a press till the pointer has left it).
@@ -77,6 +78,24 @@ pub fn edge_node(
     // (whether this press has moved it: a mouse's held long, not moved, and let go within the slop of where it went
     // down is a press, as a click is, as handle_drag had it; let go past it, with no move told, a drag's end)
     let moved = Ref(false)
+    // (dragged to either end (-1 its least, 1 its most), felt as it gets there, once a stay there (TextHandleMove, as
+    // handle_drag had it); 0 between)
+    let at_end = Ref(0)
+    let dragged = fn(wx : Double) -> Double {
+      let w = @signals.untracked(fn() { to(wx) })
+      let end = if w <= @signals.untracked(least) {
+        -1
+      } else if w >= @signals.untracked(most) {
+        1
+      } else {
+        0
+      }
+      if end != 0 && end != at_end.val {
+        @ui.haptic(TextHandleMove)
+      }
+      at_end.val = end
+      w
+    }
     // (where it went down in the window, as the gesture's slop is reckoned)
     let went = Ref((0.0, 0.0))
     v.gesture(
@@ -84,17 +103,20 @@ pub fn edge_node(
       press=fn(d) {
         from.val = (d.wx, @signals.untracked(width))
         moved.val = false
+        at_end.val = 0
         went.val = (d.wx, d.wy)
         held(true)
       },
-      hold=(@ui.long_press_ms, fn(_) {  }),
+      // (a finger's hold taken: the edge its own from now, felt so (LongPress, as Ctx::drag_on's hold had it); a
+      // mouse's needs no hold, nothing felt)
+      hold=(@ui.long_press_ms, fn(_) { if @ui.pointing() is Finger { @ui.haptic(LongPress) } }),
       held_first=fn(_) { @ui.pointing() is Finger },
       tap=pressed,
       drag=fn(d) {
         match d.kind {
           Down | Moved => {
             moved.val = true
-            said(Dragging(@signals.untracked(fn() { to(d.wx) })), d.at)
+            said(Dragging(dragged(d.wx)), d.at)
           }
           Up if !moved.val &&
             @ui.pointing() is Mouse &&
