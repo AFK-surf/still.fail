@@ -413,6 +413,9 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
   2000 lines held. So it has what goes to the unified log (`Logger`, `os_log`, `NSLog`), not an app's stdout (`print`).
 - **Apps**: `GET /admin/api/screens/<id>/apps` → `{apps: [{id, name, running}]}`, those a person installed (`simctl
   listapps`), running ones first (`launchctl list` inside the device, which does not say which is in front).
+- **What Device Hub does of a device**: `POST /admin/api/screens/<id>/open-url` `{url}` (`simctl openurl`), `.../location` `{at?}`
+  ("latitude,longitude"; none: clears it), `.../status-bar` `{tidy}` (`simctl status_bar`: 9:41, full bars and battery, or as
+  it is), `.../push` `{app, text}` (`simctl push`, to an app a person installed), each → `{}`, 400 for what is no such thing.
 - **Restart**: `POST /admin/api/screens/<id>/relaunch` `{app}` → `{}` (`simctl launch --terminate-running-process`), 404
   for what is not an app a person installed there. Building it again is the agent's: the station does not know the project.
 

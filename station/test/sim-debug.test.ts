@@ -100,6 +100,48 @@ test("only an app installed here is started again", async () => {
   debug.close();
 });
 
+test("a link is opened only if it is one, an option never", async () => {
+  const { debug, runs } = played();
+  assert.equal(await debug.openUrl("--help"), false);
+  assert.equal(await debug.openUrl("not a link"), false);
+  assert.equal(runs.length, 0);
+  assert.equal(await debug.openUrl("myapp://open/3"), true);
+  assert.deepEqual(runs.at(-1), ["simctl", "openurl", "U", "myapp://open/3"]);
+  debug.close();
+});
+
+test("a place is set only if it is on the earth, and cleared", async () => {
+  const { debug, runs } = played();
+  for (const bad of ["", "shanghai", "91,0", "0,181", "1,2,3", "--help"]) assert.equal(await debug.location(bad), false, bad);
+  assert.equal(runs.length, 0);
+  assert.equal(await debug.location(" 31.23, -121.47 "), true);
+  assert.deepEqual(runs.at(-1), ["simctl", "location", "U", "set", "31.23,-121.47"]);
+  assert.equal(await debug.location(null), true);
+  assert.deepEqual(runs.at(-1), ["simctl", "location", "U", "clear"]);
+  debug.close();
+});
+
+test("the status bar tidy, and as it is", async () => {
+  const { debug, runs } = played();
+  await debug.statusBar(true);
+  assert.deepEqual(runs.at(-1)!.slice(0, 6), ["simctl", "status_bar", "U", "override", "--time", "9:41"]);
+  await debug.statusBar(false);
+  assert.deepEqual(runs.at(-1), ["simctl", "status_bar", "U", "clear"]);
+  debug.close();
+});
+
+test("a notification goes only to an app installed here, saying something", async () => {
+  const { debug, runs } = played();
+  assert.equal(await debug.push("com.apple.Preferences", "hi"), false);
+  assert.equal(await debug.push("fail.still.a", "  "), false);
+  assert.ok(!runs.some((r) => r.includes("push")));
+  assert.equal(await debug.push("fail.still.a", "hi"), true);
+  const sent = runs.at(-1)!;
+  assert.deepEqual(sent.slice(0, 4), ["simctl", "push", "U", "fail.still.a"]);
+  assert.match(sent[4]!, /\.apns$/);
+  debug.close();
+});
+
 test("a setting is set only to what simctl takes, and said back", async () => {
   const { debug, runs } = played();
   assert.equal(await debug.setSetting("appearance", "sepia"), false);

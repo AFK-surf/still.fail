@@ -97,6 +97,10 @@ export interface OperationParams {
   "screen.settings": { screen: string };
   "screen.setSetting": { screen: string; name: string; value: string };
   "screen.screenshot": { screen: string };
+  "screen.openUrl": { screen: string; url: string };
+  "screen.location": { screen: string; at?: string | null | undefined };
+  "screen.statusBar": { screen: string; tidy: boolean };
+  "screen.push": { screen: string; app: string; text: string };
   "signin.fill": { id: string; login: unknown; keep?: boolean | null | undefined };
   "signin.self": { id: string; done?: boolean | null | undefined };
   "signin.deny": { id: string };
@@ -260,6 +264,10 @@ export function bindStationOperations(call: Call) {
     screenSettings: <T = unknown>(params: OperationParams["screen.settings"]) => call("screen.settings", params) as Promise<T>,
     screenSetSetting: <T = unknown>(params: OperationParams["screen.setSetting"]) => call("screen.setSetting", params) as Promise<T>,
     screenScreenshot: <T = unknown>(params: OperationParams["screen.screenshot"]) => call("screen.screenshot", params) as Promise<T>,
+    screenOpenUrl: <T = unknown>(params: OperationParams["screen.openUrl"]) => call("screen.openUrl", params) as Promise<T>,
+    screenLocation: <T = unknown>(params: OperationParams["screen.location"]) => call("screen.location", params) as Promise<T>,
+    screenStatusBar: <T = unknown>(params: OperationParams["screen.statusBar"]) => call("screen.statusBar", params) as Promise<T>,
+    screenPush: <T = unknown>(params: OperationParams["screen.push"]) => call("screen.push", params) as Promise<T>,
     signinFill: <T = unknown>(params: OperationParams["signin.fill"]) => call("signin.fill", params) as Promise<T>,
     signinSelf: <T = unknown>(params: OperationParams["signin.self"]) => call("signin.self", params) as Promise<T>,
     signinDeny: <T = unknown>(params: OperationParams["signin.deny"]) => call("signin.deny", params) as Promise<T>,
