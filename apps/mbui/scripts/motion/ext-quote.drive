@@ -1,0 +1,15 @@
+# Extreme: a passage quoted, then lines typed before its card has settled.
+timeout 20000
+until 推送截图前要先登录 gh。
+wait 600
+hold 700 推送截图前要先登录 gh。
+wait 400
+tap 引用
+wait 100
+type 一
+key shift+enter
+wait 60
+type 二
+key shift+enter
+wait 1000
+exit

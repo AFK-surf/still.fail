@@ -1,0 +1,21 @@
+# Extreme: five lines in five frames (a big change at once), taken back half way, then again.
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 一
+key shift+enter
+key shift+enter
+key shift+enter
+key shift+enter
+key shift+enter
+wait 150
+clear
+wait 120
+type 二
+key shift+enter
+key shift+enter
+key shift+enter
+wait 900
+exit

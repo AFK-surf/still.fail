@@ -939,3 +939,54 @@ pub fn Ctx::row_way(self : Ctx) -> (Double, Double)? {
     _ => None
   }
 }
+
+///|
+/// How far row `key` of the list is off the height it goes to now, on the list's way (its height as laid out at this
+/// moment, less where it comes to stand), how far off it was as that way set out, and that height (None: it is on none,
+/// or not laid out on it yet). Worked out from its way at the frame's moment, as its layout will have it: what goes with the row
+/// outside the list (a chat's composer, its Foot row's room) read before the list is laid out moves with it in the same
+/// frame, not a frame after.
+pub fn ListReader::row_left(self : ListReader, key : String) -> (Double, Double, Double)? {
+  let st = match self.ctx.lists.get(self.id) {
+    Some(st) => st
+    None => return None
+  }
+  let c = match st.causes {
+    Some(c) => c
+    None => return None
+  }
+  let now = self.ctx.moment()
+  let r = match (c.by.get(key), st.sizes.get(key)) {
+    (Some(_), Some(r)) if now < c.end - 0.001 => r
+    _ => return None
+  }
+  let k = if r.start == c.start && r.end == c.end {
+    match c.way_k(self.ctx.frame_number()) {
+      Some(k) => k
+      None => r.k
+    }
+  } else {
+    r.k
+  }
+  Some((r.at(now, r.to, k).0 - r.to, r.a, r.to))
+}
+
+///|
+/// Whether row `key` goes to another height on the rows' way now (what changed it said, its way not over).
+pub fn[T] ListRows::on_way(self : ListRows[T], c : Ctx, key : String) -> Bool {
+  self.causes.by.contains(key) && c.moment() < self.causes.end - 0.001
+}
+
+///|
+/// Whether row `key` of the list waits where it is for its way to set out later (its cause timed on: ListRows::rows'
+/// `from`, words sent leaving the composer), not moving till then.
+pub fn ListReader::row_waits(self : ListReader, key : String) -> Bool {
+  match self.ctx.lists.get(self.id) {
+    Some(st) =>
+      match st.sizes.get(key) {
+        Some(r) => self.ctx.moment() < r.start
+        None => false
+      }
+    None => false
+  }
+}

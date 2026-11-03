@@ -87,6 +87,10 @@ priv struct Composing {
   pictures : Map[String, MediaPicture]
   /// what its box last changed shape for and how, in which build (composer_shape)
   mut shaped : (Int, String, @motion.Spec)?
+  /// the frame a composer last set out on its chat list's way (composer_list_way), and each time it did (by
+  /// @sfbase.composer_ways' count) how it went there
+  mut way_frame : Int
+  ways : Map[Int, ListWay]
 }
 
 ///|
@@ -125,6 +129,8 @@ let composing : Composing = {
   grounds: {},
   pictures: {},
   shaped: None,
+  way_frame: -1,
+  ways: {},
 }
 
 ///|
@@ -308,6 +314,10 @@ pub fn composer(
     // this clock so far; on a faster one it cut into ＋, the user 2026-10-30: 「输入框盖住了加号和发送」)
     // det-ok(motion-length): the field opening past ＋ and send kept off them on this clock, till their cutting is mended
     @motion.tween(composer_shape_ms, ease=Move)
+  } else if composer_listed(spec) {
+    // (a line more or less, a quote, a file: its room under the chat's rows going there as one of the list's rows,
+    // with all that changes there, one way: its ground and what is in it as far as that room has gone)
+    composer_list_way(c, spec.draft, spec.station + "\u{1}" + spec.session)
   } else {
     @motion.move()
   }
@@ -2010,9 +2020,125 @@ fn composer_least(c : @ui.Ctx) -> Double {
 pub fn composer_foot_room(c : @ui.Ctx, draft : String, room : Double, let_go~ : Bool) -> Double {
   if let_go {
     dmax(room - dmax(composer_room(c, draft) - composer_least(c), 0.0), 0.0)
+  } else if composer_following(c, draft) {
+    // (changing shape on the list's way: where it comes to stand, the list taking its room there, composer_list_way)
+    composer_room(c, draft, settled=true)
   } else {
     room
   }
+}
+
+///|
+/// Whether a chat's composer (`spec`) changes shape on its chat list's way (composer_list_way): one at a chat's foot
+/// over its list.
+fn composer_listed(spec : ComposerSpec) -> Bool {
+  !spec.roomy && spec.session != "" && @sfbase.readings.contains(spec.station + "\u{1}" + spec.session)
+}
+
+///|
+/// How draft `draft`'s composer changes shape at its chat's foot (2026-11-03 the user, of its own curve beside the
+/// list's: 「一旦一个新的运动加入，就把当前运动的剩余部分跟新的运动结合起来」): its room under the list's rows (the list's
+/// Foot row) going to where it comes to stand as one of the list's rows does, on the list's one way with all else
+/// that changes there (sfbase's composer_ways: the Foot row's version once more as it sets out), and its ground and
+/// what is in it as far as that room has gone, in the same frame (ListReader::row_left), so the rows over it and the
+/// composer under them go as one, the words never nearer it nor further than they were. Where the list has not taken
+/// it (the frame it set out: the list given its rows before it was laid out; taken, its Foot row's way not yet laid
+/// out) it stays where it set out from; where the list says nothing of it (out of view, nothing to move there) a Move
+/// as long as a row's.
+fn composer_list_way(c : @ui.Ctx, draft : String, rk : String) -> @motion.Spec {
+  ignore(c)
+  @motion.follow(ms=@ui.row_size_ms, fn() {
+    let c = @ui.current()
+    let frame = c.frame_number()
+    // (once a frame: its ground and each part in it set out on the same)
+    if composing.way_frame != frame {
+      composing.way_frame = frame
+      let n = @sfbase.composer_ways.get(draft).unwrap_or(0) + 1
+      @sfbase.composer_ways[draft] = n
+      composing.ways[n] = { rk, at: c.moment(), from: None, to: 0.0, p: 0.0, p_at: c.moment(), v: 0.0, alone: None }
+      composing.ways.remove(n - 8)
+    }
+    let n = @sfbase.composer_ways.get(draft).unwrap_or(0)
+    fn() {
+      let w = match composing.ways.get(n) {
+        Some(w) => w
+        None => return Some(1.0)
+      }
+      let now = @ui.current().moment()
+      // (gone on its own: on from where it was then as fast as it went, a Move as long as a row's)
+      match w.alone {
+        Some(_) => return Some(1.0 - @ui.move_path(1.0 - w.p, -w.v, now - w.p_at, @ui.row_size_ms).0)
+        None => ()
+      }
+      let p = match @sfbase.composer_way_at(rk, n) {
+        None | Some(Timed) => None
+        Some(Over) => Some(1.0)
+        // (not taken a while after it set out, the list not built again: on its own)
+        Some(Waiting) => if now - w.at > 50.0 { None } else { Some(0.0) }
+        // (its room held where it is for words sent from it till they leave it: so is the composer)
+        Some(Held) => Some(w.p)
+        Some(Left(left, a, to)) =>
+          match w.from {
+            None if a.abs() < 0.5 => None
+            None => {
+              w.from = Some(a)
+              w.to = to
+              Some(1.0 - left / a)
+            }
+            // (its room given another end for another cause (words sent letting go of it): what is left of the
+            // list's way is not its own any more, on on its own from where it is)
+            Some(_) if (to - w.to).abs() > 0.5 => {
+              w.alone = Some(now)
+              return Some(1.0 - @ui.move_path(1.0 - w.p, -w.v, now - w.p_at, @ui.row_size_ms).0)
+            }
+            Some(from) => Some(1.0 - left / from)
+          }
+      }
+      println("CWDBG f=\{@ui.current().frame_number()} n=\{n} p=\{p} from=\{w.from} st=\{match @sfbase.composer_way_at(rk, n) { None => "none"; Some(Waiting) => "wait"; Some(Timed) => "timed"; Some(Over) => "over"; Some(Held) => "held"; Some(Left(l, a, to)) => "left \{l} \{a} \{to}" }}")
+      match p {
+        Some(p) if now > w.p_at => {
+          w.v = (p - w.p) / (now - w.p_at)
+          w.p = p
+          w.p_at = now
+        }
+        _ => ()
+      }
+      p
+    }
+  })
+}
+
+///|
+/// Whether draft `draft`'s composer's last change of shape on its chat list's way (composer_list_way) is still under way
+/// there: its room under the list's rows laid out where it comes to stand till then, also as the composer is set off
+/// another way meanwhile (words sent from it; taken back to where it is drawn then, what the list had left of its way
+/// would close only a share of it, the rows over it lagging behind it). By what the list says of it, as every build
+/// of the frame finds it, not by how the composer was last built.
+fn composer_following(c : @ui.Ctx, draft : String) -> Bool {
+  let n = @sfbase.composer_ways.get(draft).unwrap_or(0)
+  match composing.ways.get(n) {
+    Some(w) if w.alone is None && c.moment() - w.at < 2000.0 =>
+      match @sfbase.composer_way_at(w.rk, n) {
+        Some(Waiting | Left(_, _, _) | Held | Timed) => true
+        _ => false
+      }
+    _ => false
+  }
+}
+
+///|
+/// A chat composer's change of shape on its list's way (composer_list_way): when it set out, how far off its room was
+/// as the list took it and where that went then, how far it had gone as last read (when, and how fast it went then),
+/// and since when it goes on its own.
+priv struct ListWay {
+  rk : String
+  at : Double
+  mut from : Double?
+  mut to : Double
+  mut p : Double
+  mut p_at : Double
+  mut v : Double
+  mut alone : Double?
 }
 
 ///|

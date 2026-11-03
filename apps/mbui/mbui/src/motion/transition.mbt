@@ -122,6 +122,35 @@ pub fn tween_to(duration? : Double = 300.0, ease? : (Double) -> Double = ease_in
 }
 
 ///|
+/// A way gone as another thing goes (a chat's composer reshaping as its list's room for it does, list_size.mbt): from
+/// where it is to its target as far as that other has gone, by `set_out`'s answer as each value sets out on it (what
+/// is called as it does, telling that other it set out; read at the frame's moment: 0 as it set out, 1 there), each
+/// value on it there in the same frame; where that says nothing (None), a Move `ms` long from where it set out. Done
+/// once there, `most` ms on at the latest.
+pub fn follow(set_out : () -> (() -> Double?), ms~ : Double, most? : Double = 2000.0) -> Spec {
+  Motion({
+    kind: "follow",
+    delay: 0.0,
+    said: None,
+    make: fn(from, to, _) {
+      let gone = set_out()
+      let next = fn(t : Double) -> GenState {
+        if t >= most {
+          return { done: true, value: to }
+        }
+        let p = match gone() {
+          Some(p) => clamp(0.0, 1.0, p)
+          None => @ui.Ease::Move.at(t / ms)
+        }
+        println("CWDBG gen t=\{t} from=\{from} to=\{to} p=\{p}")
+        { done: p >= 1.0, value: if p >= 1.0 { to } else { mix(from, to, p) } }
+      }
+      { next_: next, velocity_: Some(fn(_) { 0.0 }), retarget_: None, duration_: Some(most), calculated: Some(most) }
+    },
+  })
+}
+
+///|
 /// Motion's keyframes: from where it is through `values` (the last where it ends: the target asked is not used) over
 /// `duration` ms, at `times` (offsets 0 … 1 of the start and each value), eased by `ease` or each piece by its own.
 pub fn keyframes_to(

@@ -544,12 +544,14 @@ test "the list keeps clear the room the composer takes in the very frame it grow
   for line in ["第二行", "第三行", "第四行", "第五行", "第六行"] {
     t.enter()
     t.type_text(line)
+    println("CWDBG line foot=\{foot()} room=\{@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over}")
     assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
   }
   // and each frame of its morph, as the display draws them, to its end
   let end = t.time() + @ui.move_most_ms
   while t.time() < end {
     t.frame()
+    println("CWDBG frame foot=\{foot()} room=\{@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over}")
     assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
   }
   assert_true(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") > before)

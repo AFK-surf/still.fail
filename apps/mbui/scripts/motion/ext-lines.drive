@@ -1,0 +1,21 @@
+# Extreme: four lines typed fast (one every 80 ms, each a line more before the last has settled), then all taken back
+# at once while the last is on its way: the composer and the rows over it as one.
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 第一行
+key shift+enter
+wait 80
+type 第二行
+key shift+enter
+wait 80
+type 第三行
+key shift+enter
+wait 80
+type 第四行
+wait 120
+clear
+wait 900
+exit

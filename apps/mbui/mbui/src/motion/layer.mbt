@@ -724,6 +724,7 @@ pub fn reshaped_over(c : @ui.Ctx, key : String) -> Double {
   match mo.recs.get(motion_key(key)) {
     Some(r) if r.seen >= c.frame_number() - 1 && !r.g_carry => {
       let p = r.gp.get()
+      println("CWDBG over f=\{c.frame_number()} p=\{p} running=\{r.gp.running} y=\{r.y} gy=\{r.gy}")
       if p < 1.0 {
         (r.y - r.gy) * (1.0 - p)
       } else {

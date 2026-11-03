@@ -1,0 +1,18 @@
+# Extreme: a message sent, then lines typed just as the agent's answer comes in (2.1 s after), and all taken back as
+# it grows: the composer's change and the answer's on one way.
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 帮我看一下构建
+tap icon:arrow-up
+wait 1950
+type 还有
+key shift+enter
+type 这个
+key shift+enter
+wait 150
+clear
+wait 2500
+exit

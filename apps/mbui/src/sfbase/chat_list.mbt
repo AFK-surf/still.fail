@@ -47,6 +47,10 @@ pub(all) struct Reading {
   /// the last words sent from here that let go of the composer (their row's key): the composer's room under the rows
   /// goes down where it comes to stand as they do, the Foot row's version with it
   mut sent_foot : String
+  /// how many times the composer of its draft changed shape on the list's way (composer_ways): what the Foot row's
+  /// version says (`foot_told`), and what it is to say as its rows are next given (`foot_want`)
+  mut foot_told : Int
+  mut foot_want : Int
   /// the first message's entry and where it was in the list, the last frame
   mut head : String
   mut head_at : Int
@@ -217,6 +221,8 @@ pub fn reading_of(key : String) -> Reading {
       let r = {
         foot_sign: "",
         sent_foot: "",
+        foot_told: 0,
+        foot_want: 0,
         head: "",
         head_at: -1,
         placed: false,
@@ -1227,6 +1233,11 @@ fn shown_rows(
   // from now till then (a card they answer closing) sets out with them, one way
   let now = c.moment()
   let mut told_foot = false
+  // (the composer changed shape: its room under the rows goes there on the list's way, composer_ways)
+  if rd.foot_told != rd.foot_want {
+    rd.foot_told = rd.foot_want
+    told_foot = true
+  }
   let leaving = match flight {
     Some(f) if !f.carried => {
       if f.placed && rd.sent_foot != "/" + f.key {
@@ -1245,7 +1256,7 @@ fn shown_rows(
     list,
     fn(e) {
       match e {
-        Foot => "foot" + rd.foot_sign + rd.sent_foot
+        Foot => "foot" + rd.foot_sign + rd.sent_foot + "|" + rd.foot_told.to_string()
         _ => shown_sign(e)
       }
     },
@@ -1515,6 +1526,7 @@ pub fn list_frame(
   in_front~ : Bool,
 ) -> ListFrame {
   let rd = reading_of(r.station + "\u{1}" + r.session)
+  rd.foot_want = composer_ways.get(draft).unwrap_or(0)
   // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
   // wait out of the list (emit.mbt, ChatMotion.kt)
   // (taken and played on, before the page is built, by linger_tick)
@@ -1958,4 +1970,50 @@ fn shown_sign(e : Entry) -> String {
 /// end not one: the core's `askClear`): the room under its rows the taller.
 pub fn ask_clears(v : ChatView) -> Bool {
   !(v.archived || v.thread is None) && !v.asks.is_empty() && v.ask_clear
+}
+
+///|
+/// How many times each draft's composer has changed shape on its chat list's way, by the draft: each one the list's
+/// Foot row's version once more (shown_rows), its room going to where the composer comes to stand as one of the
+/// list's rows does, the composer's ground and what is in it going as far as that room has gone (composer_way_at).
+/// Not by what the composer holds itself (each word typed), only as its shape changes: the list's way set out anew
+/// only then.
+pub let composer_ways : Map[String, Int] = {}
+
+///|
+/// How far draft `draft`'s composer's change of shape `n` (composer_ways) has gone on the list of its chat (`rk`, as
+/// list_frame keys it): Waiting, the list not given it yet (it is, the frame after); Left, its Foot row on its way
+/// there, how far off where it goes, how far off it was as the way set out, and where it goes; Held, waiting where it
+/// is for its way to set out later (words sent from the composer, as they leave it); Timed, on its way but not laid out (out
+/// of view); Over, there. None: no list of it.
+pub fn composer_way_at(rk : String, n : Int) -> ComposerWay? {
+  let rd = match readings.get(rk) {
+    Some(rd) => rd
+    None => return None
+  }
+  if rd.foot_told < n {
+    return Some(Waiting)
+  }
+  let c = @ui.current()
+  if !rd.rows.on_way(c, "foot") {
+    return Some(Over)
+  }
+  match rd.list_read {
+    Some(lr) if lr.row_waits("foot") => return Some(Held)
+    _ => ()
+  }
+  match rd.list_read.map(fn(lr) { lr.row_left("foot") }) {
+    Some(Some((left, a, to))) => Some(Left(left, a, to))
+    _ => Some(Timed)
+  }
+}
+
+///|
+/// Where a composer's change of shape is on its chat list's way (composer_way_at).
+pub(all) enum ComposerWay {
+  Waiting
+  Left(Double, Double, Double)
+  Held
+  Timed
+  Over
 }

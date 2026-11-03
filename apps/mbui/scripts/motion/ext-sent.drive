@@ -1,0 +1,17 @@
+# Extreme: lines typed while the message just sent is still flying out of the composer (its room let go).
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 第一条
+key shift+enter
+type 两行
+tap icon:arrow-up
+wait 150
+type 接着写
+key shift+enter
+type 又一行
+key shift+enter
+wait 1500
+exit
