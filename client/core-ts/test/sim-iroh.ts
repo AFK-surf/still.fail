@@ -579,6 +579,9 @@ export class SimEndpoint {
     let relay: string | null = null;
     // Addresses it is dialled at: none reached from off the station's LAN (`SimNet.away`).
     const ips = [...(addr.ips ?? []), ...(known?.ips ?? [])];
+    // Addresses that reach it one way only (`SimNet.oneWay`): the station answers on the way it heard first, and its
+    // answers are lost.
+    if (this.net.oneWay && !this.relayOnly && there.direct && ips.length > 0) return NEVER;
     if (this.relayOnly || !there.direct || ips.length === 0 || (this.net.away && (addr.ips?.length ?? 0) > 0)) {
       const told = [...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href).map((r) => this.#access.get(r) ?? r);
       // The path through the relay of the quickest round trip carries it, as iroh's path selector chooses among relays
@@ -654,7 +657,7 @@ export class SimEndpoint {
     // Addresses of a station on this LAN, its connections there open: iroh opens a path to them, and their packets go
     // that way (dialled at an address, not punched: it stays).
     const there = this.net.endpoint(addr.id);
-    if ((addr.ips?.length ?? 0) === 0 || this.relayOnly || this.net.away || !there?.direct) return;
+    if ((addr.ips?.length ?? 0) === 0 || this.relayOnly || this.net.away || this.net.oneWay || !there?.direct) return;
     for (const c of this.conns)
       if (c.remoteId() === addr.id && c.reason === null && c.way.relay !== null) {
         c.way.relay = c.peer.way.relay = null;
@@ -745,6 +748,10 @@ export class SimNet {
   lan: { punchMs: number; quietAfterMs?: number } | null = null;
   /// The device is off the stations' LAN: their LAN addresses lead nowhere, no hole is punched.
   away = false;
+  /// The stations' addresses reach them from the device but their answers do not come back (a station in WSL with
+  /// mirrored networking, saying the addresses of the Windows machine the device is on): a handshake dialled at them is
+  /// never answered, and a connection open does not move to them.
+  oneWay = false;
   /// Every dial, in order: whom to, and whether at addresses it was given.
   readonly tries: { to: string; ips: boolean }[] = [];
   readonly #relays = new Map<string, { device: Leg; station: Leg }>();

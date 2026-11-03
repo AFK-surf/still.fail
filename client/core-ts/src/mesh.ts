@@ -701,6 +701,8 @@ export class Mesh {
   readonly #tried = new Map<string, string>();
   readonly #atDialledAt = new Map<string, number>();
   readonly #atDialling = new Set<string>();
+  /// By address: the addresses a dial on the main endpoint was given when it went unanswered (`#dialAll`).
+  readonly #unansweredAt = new Map<string, string>();
   /// Dials under way on pinned endpoints (their endpoints are not let go meanwhile).
   #dialing = 0;
   /// By address: the relay requests last moved to (its host), and how many times they moved.
@@ -1211,12 +1213,16 @@ export class Mesh {
           // spans saying nothing of either.
           const straight = self.#straightAt(addr);
           if (straight.length > 0) span.set("stillfail.ips", straight.join(", "));
+          if (unanswered && straight.length > 0 && self.#mainOn(addr)) self.#unansweredAt.set(addr, straight.join(" "));
           const beside = self.#besideOf(addr);
           if (beside !== "") span.set("stillfail.beside", beside);
         }
         span.end();
         opening.result = link._tag === "Success" ? { ok: link.success } : { err: link.failure, unanswered };
-        if (link._tag === "Success") self.#adopt(addr, link.success);
+        if (link._tag === "Success") {
+          if (link.success.pinned === null) self.#unansweredAt.delete(addr);
+          self.#adopt(addr, link.success);
+        }
         Deferred.doneUnsafe(opening.done, link._tag === "Success" ? Effect.succeed(link.success) : Effect.fail(link.failure));
       });
       this.#env.runner.fork(run);
@@ -1311,12 +1317,26 @@ export class Mesh {
       // all of them), to the addresses it said it is reached straight at, and those iroh punches through; iroh moves
       // its packets between them, and nothing on it ends as they change. The other endpoints only while its workspace
       // turned the main endpoint's ways off (`#mainOn`).
-      if (this.#mainOn(addr)) return open(this.#env, endpoint, relays, stationId(addr), credentials, fresh, null, ctx, this.#straightAt(addr));
       const main: Effect.Effect<Link, CoreError>[] = [];
-      const pinned = this.#pinnable(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
-      // Where the station said (in a run before, perhaps) it is reached straight: dialled beside the relays, not after
-      // one of them brought its answer again.
-      const at = AT_ADDRESSES.flatMap((kind) => this.#dialAt(addr, kind, credentials, fresh) ?? []);
+      let pinned: Effect.Effect<Link, CoreError>[];
+      let at: Effect.Effect<Link, CoreError>[] = [];
+      if (this.#mainOn(addr)) {
+        const straight = this.#straightAt(addr);
+        const dial = open(this.#env, endpoint, relays, stationId(addr), credentials, fresh, null, ctx, straight);
+        // Given those addresses, its last dial went unanswered: each relay's own endpoint (on that relay alone, at no
+        // address) dialled beside it. An address can reach the station one way only, and iroh's handshake goes on the
+        // way the station heard first: a station in WSL with mirrored networking says the Windows machine's own
+        // addresses, its answers to the Windows app there going back into WSL; that app's dials waited out
+        // CONNECT_TIMEOUT_MS on them for hours while the phone came through a relay (2026-11-03).
+        if (straight.length === 0 || this.#unansweredAt.get(addr) !== straight.join(" ")) return dial;
+        main.push(dial);
+        pinned = this.#waysFor(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
+      } else {
+        pinned = this.#pinnable(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
+        // Where the station said (in a run before, perhaps) it is reached straight: dialled beside the relays, not
+        // after one of them brought its answer again.
+        at = AT_ADDRESSES.flatMap((kind) => this.#dialAt(addr, kind, credentials, fresh) ?? []);
+      }
       const all = [...main, ...pinned, ...at];
       if (all.length === 0) return Effect.fail(meshError(t("core-logic.mesh.all_off")));
       const self = this;
