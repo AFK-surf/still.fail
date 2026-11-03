@@ -235,6 +235,7 @@ type BatchedHistory = { range: { from: bigint; to: bigint }; result: BatchedUsag
 // A reader says once when its cache actually serves a request. Fast reads otherwise leave no trace in the slow-read
 // log, so the absence of that warning alone cannot show whether the cache is used.
 let reportedSummaryReuse = false;
+let reportedCleanSummaryReuse = false;
 
 /// An indexed existence check is enough to know whether an unbounded history has minutes before a summary.
 /// Count even an empty bucket: that can only make us retain the ordinary history query.
@@ -355,9 +356,11 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   };
   mark("other");
   const ms = Math.round(performance.now() - started);
-  if (!reportedSummaryReuse && options.batched?.diagnostics.cache === "reused") {
+  const cleanSummaryReuse = summaryCandidates === 0 && summaryParts === 0;
+  if (options.batched?.diagnostics.cache === "reused" && (!reportedSummaryReuse || (cleanSummaryReuse && !reportedCleanSummaryReuse))) {
     reportedSummaryReuse = true;
-    log.info("readers", "a usage read reused its summary", { ms, summaryQuery: stages.summaryQuery, summaryCandidates, summaryParts,
+    if (cleanSummaryReuse) reportedCleanSummaryReuse = true;
+    log.info("readers", "a usage read reused its summary", { ms, summaryQuery: stages.summaryQuery, summaryCandidates, summaryParts, summaryClean: cleanSummaryReuse,
       ...(stages.historyQuery === undefined ? {} : { historyQuery: stages.historyQuery }) });
   }
   if (ms >= 1_000) {

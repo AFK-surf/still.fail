@@ -120,8 +120,16 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals:
           || localEnd < -8_640_000_000_000_000n || localEnd > 8_640_000_000_000_000n) throw new Refused(400, "invalid history range");
         wakeTotals(r.viewer);
       }
-      return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history: param(r, "history") === "1",
+      const history = param(r, "history") === "1";
+      const answer = read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history,
         ...(historyFrom !== null && historyTo !== null ? { historyRange: { from: String(historyFrom), to: String(historyTo) } } : {}) });
+      // Older clients request the whole history without its chart range. Their summary cache also needs the new
+      // pending buckets to be accounted; otherwise every later read revisits them. Let the current read finish first,
+      // then settle only this viewer's new statistics in the existing bounded background worker.
+      return history && historyFrom === null ? answer.then((result) => {
+        if (result.status === 200) wakeTotals(r.viewer);
+        return result;
+      }) : answer;
     },
   },
 ];

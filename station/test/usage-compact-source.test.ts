@@ -1015,6 +1015,28 @@ test("the optional usage chart range reaches the reader and wakes pending totals
   assert.equal(wakes, 1);
 });
 
+test("an unbounded usage history asks its workspace to settle pending new statistics", async () => {
+  const woken: unknown[] = [];
+  const answer = { status: 200, headers: {}, body: Buffer.alloc(0) };
+  let finish!: (value: typeof answer) => void;
+  const pending = new Promise<typeof answer>((resolve) => { finish = resolve; });
+  const noteWake = (viewer: unknown) => { woken.push(viewer); };
+  const route = usageRoutes({ read: () => pending } as never,
+    () => false, noteWake)[1]!;
+  const viewer = { workspace: "A", home: false };
+  const result = route.handle({ lang: "en", query: [["history", "1"]], viewer } as never, []);
+  assert.equal(woken.length, 0, "accounting waits for the current usage read to finish");
+  finish(answer);
+  await result;
+  assert.deepEqual(woken, [viewer]);
+  await route.handle({ lang: "en", query: [], viewer } as never, []);
+  assert.deepEqual(woken, [viewer], "a summary without history does not cause extra accounting");
+  const failed = usageRoutes({ read: () => Promise.resolve({ ...answer, status: 503 }) } as never,
+    () => false, noteWake)[1]!;
+  await failed.handle({ lang: "en", query: [["history", "1"]], viewer } as never, []);
+  assert.deepEqual(woken, [viewer], "a failed read does not start accounting");
+});
+
 test("pages calls at the same time past SQLite rowids above JavaScript's integer precision", () => {
   const store = Store.open(":memory:");
   try {
