@@ -706,6 +706,8 @@ test("a session's summary says what its calls used as the usage counter recorded
     r.store.setRuntimeSessionId(key, "rs1");
     const summary = async () => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}`))[1].session;
     assert.equal((await summary()).usage, undefined, "no call read yet: not said");
+    r.store.startTurn("usage-summary-turn", key, "input");
+    r.store.endTurn("usage-summary-turn", "completed", null, null, null);
     await counter.read();
     const usage = (await summary()).usage;
     assert.deepEqual([usage.modelCalls, usage.inputTokens, usage.cachedTokens, usage.outputTokens, usage.contextTokens, usage.model], [2, 203, 200, 14, 102, "claude-opus-5-5"]);
@@ -739,6 +741,8 @@ test("a saved summary is left alone on startup and updated when its usage change
     writeFileSync(join(dir, "rs1.jsonl"), `${JSON.stringify({ type: "assistant", timestamp: new Date(r.store.now() + 1000).toISOString(), message: { id: "m1", model: "claude-opus-5-5", content: [], usage } })}\n`);
     r.store.ranIn(key, "rs1", "cc");
     r.store.setRuntimeSessionId(key, "rs1");
+    r.store.startTurn("saved-usage-turn", key, "input");
+    r.store.endTurn("saved-usage-turn", "completed", null, null, null);
     await counter.read();
     const now = r.store.sessionUsage(key);
     assert.equal(now.cacheMs, 3_600_000);
