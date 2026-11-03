@@ -11,5 +11,7 @@ import {
 
 options(
   "is-main": true,
+  link: { "wasm-gc": { "use-js-builtin-string": true } },
   "native-stub": [ "events.c" ],
+  targets: { "events_native.mbt": [ "native" ], "events_wasm.mbt": [ "wasm-gc" ] },
 )

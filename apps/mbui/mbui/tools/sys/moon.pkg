@@ -4,4 +4,5 @@ import {
 
 options(
   "native-stub": [ "sys.c" ],
+  targets: { "sys_native.mbt": [ "native" ], "sys_wasm.mbt": [ "wasm-gc" ] },
 )

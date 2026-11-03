@@ -1,11 +1,11 @@
 import {
   "mbctools/re",
   "mbctools/rjson",
+  "mbctools/sys",
   "moonbitlang/core/env",
-  "moonbitlang/core/encoding/utf8",
 }
 
 options(
   "is-main": true,
-  "native-stub": [ "files.c" ],
+  link: { "wasm-gc": { "use-js-builtin-string": true } },
 )
