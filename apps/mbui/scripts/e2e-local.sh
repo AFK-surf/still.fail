@@ -149,8 +149,22 @@ start_cloud() {
 # the test station (enrolled), its launcher over its own data
 start_station() {
   local launcher=$(native launcher)
-  (. $RUN/station-env.sh && detach "$launcher" run --app $STATION/app --data $STATION/data >$RUN/station.log 2>&1 & echo $! > $RUN/station.pid)
-  waitfor 60 --what "the station's database" --exists $STATION/data/stillfail.db || { tail -20 $RUN/station.log; die "the station did not start"; }
+  # The launcher's takeover means the station has initialized and is serving. Deliver that event directly: the
+  # database can be created empty and filesystem notifications of subsequent writes can be missed on macOS.
+  rm -f "$RUN/station.ready"
+  mkfifo "$RUN/station.ready"
+  exec 9<> "$RUN/station.ready"
+  (. $RUN/station-env.sh && detach node "$D/waitfor.mjs" --tee "$RUN/station.log" \
+    --line 'Node [0-9]+ has taken over' --mark "$RUN/station.ready" -- \
+    "$launcher" run --app "$STATION/app" --data "$STATION/data" 9>&- & echo $! > "$RUN/station.pid")
+  if ! IFS= read -r -t 60 ready <&9; then
+    exec 9>&-
+    rm -f "$RUN/station.ready"
+    tail -20 "$RUN/station.log"
+    die "the station did not start"
+  fi
+  exec 9>&-
+  rm -f "$RUN/station.ready"
 }
 
 # the station and the cloud stopped, their files at rest (the relay holds nothing: it stays)
