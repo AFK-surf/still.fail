@@ -437,7 +437,9 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Offered(v, waiting~) => {
       let size = number(Some(v), "size")
       (
-        @sf.t("android-misc.updates.download", args=version(v)),
+        // (the first of the update's three stages, 有新版本, 正在下载, 重启以更新到: 2026-11-03 the user, 「所有能看到更新的
+        // 地方，一定要有三个阶段」; pressed, downloaded now)
+        @sf.t("desktop.update.available", args=version(v)),
         // (its size, what it waits for: a line under it from the first, the row as tall as it goes on)
         if size <= 0.0 {
           ""
@@ -489,7 +491,8 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Installing(v) => (@sf.t("android-misc.updates.installingVersion", args=version(v)), "", true, None)
     Failed(v, why) => (@sf.t("android-misc.updates.retry", args=version(v)), why, false, None)
   }
-  { label, note, going, part, ready: update_ready_version(), asks: update_asks() }
+  let newer = now is (Offered(_, ..) | Coming(_, _) | Ready(_, ..) | Allow(_) | Installing(_) | Failed(_, _))
+  { newer, label, note, going, part, ready: update_ready_version(), asks: update_asks() }
 }
 
 ///|
