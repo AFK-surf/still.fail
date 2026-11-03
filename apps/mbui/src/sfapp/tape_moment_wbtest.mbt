@@ -838,3 +838,43 @@ test "on the tape a table with further to go takes a finger's swipe across it fi
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }
+
+///|
+test "on the tape a finger held on a message's words widens them as it slides across: the press the pick's, no panel brought over" {
+  let t = tape_chat(2, 720.0, 840.0, width="medium", height="medium")
+  page_over(t, 720.0)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  let (rx, ry, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  let (x, y) = (rx + 24.0, ry + 8.0)
+  t.press_at(x, y)
+  t.run_for(long_press_ms)
+  assert_true(pk.ts != "")
+  let first = (pk.sel.a, pk.sel.b)
+  slide(t, x, y, x + 60.0, y, 6)
+  assert_eq(@sfdesk.wide.tape_pull.get(), None)
+  assert_eq(pk.sel.a, first.0)
+  assert_true(pk.sel.b > first.1 + 2, msg="\{(first, pk.sel.a, pk.sel.b)}")
+  t.release(x + 60.0, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  assert_true(pk.ts != "", msg="still picked")
+}
+
+///|
+test "on the tape a picked passage's handle moved across moves its end, no panel brought over" {
+  let t = tape_chat(2, 720.0, 840.0, width="medium", height="medium")
+  page_over(t, 720.0)
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  let first = (pk.sel.a, pk.sel.b)
+  let lines = t.ctx().words_of(pk.sel.key).unwrap().rects(pk.sel.a, pk.sel.b)
+  let last = lines[lines.length() - 1]
+  let (x, y) = (last.0 + last.2, last.1 + last.3 / 2.0)
+  t.press_at(x, y)
+  t.frame()
+  slide(t, x, y, x + 60.0, y, 6)
+  assert_eq(@sfdesk.wide.tape_pull.get(), None)
+  assert_true(pk.sel.b > first.1 + 2, msg="\{(first, pk.sel.a, pk.sel.b)}")
+  t.release(x + 60.0, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+}
