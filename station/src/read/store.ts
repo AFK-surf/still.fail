@@ -142,6 +142,25 @@ export function listSessions(s: Store): SessionRow[] {
   return all(s, "SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
 }
 
+/// The sessions not archived (the sidebar's), the latest active first, by the index of those alone (schema.ts
+/// sessions_live): each read of the sidebar went over every session the station ever had (1,505 on ccvm, 1,398 of them
+/// archived) to pick out its 107 (2026-11-03).
+export const SHOWN_SESSIONS = "SELECT * FROM sessions INDEXED BY sessions_live WHERE archived_at IS NULL ORDER BY last_active_at DESC";
+export function shownSessions(s: Store): SessionRow[] {
+  return all(s, SHOWN_SESSIONS).map(toSession);
+}
+
+/// The archive a page at a time: archived sessions and chats archived alone, the latest archived first, before `(?1, ?2)`
+/// (when, and its key or chat id as text), `?3` of them; each by the index of those archived.
+export const ARCHIVED_PAGE = `SELECT kind, id, at FROM (
+    SELECT 's' AS kind, key AS id, archived_at AS at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL AND (archived_at < ?1 OR (archived_at = ?1 AND key < ?2))
+    UNION ALL
+    SELECT 't' AS kind, CAST(id AS TEXT) AS id, hidden_at AS at FROM threads INDEXED BY threads_put_away WHERE hidden_at IS NOT NULL AND (hidden_at < ?1 OR (hidden_at = ?1 AND CAST(id AS TEXT) < ?2))
+  ) ORDER BY at DESC, id DESC LIMIT ?3`;
+export function archivedPage(s: Store, before: [number, string], limit: number): { kind: "s" | "t"; id: string; at: number }[] {
+  return all(s, ARCHIVED_PAGE, before[0], before[1], limit) as { kind: "s" | "t"; id: string; at: number }[];
+}
+
 /// Store::sessionOfRuntime: the session that went on with `runtime`'s session `id`, the latest active if more did.
 export function sessionOfRuntime(s: Store, runtime: string, id: string): string | null {
   return one(s, SESSION_OF_RUNTIME, runtime, id)?.key ?? null;

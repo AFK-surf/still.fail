@@ -931,6 +931,34 @@ test("what is written of a chat beside what is said in it is told as written: ar
   ]);
 });
 
+// On ccvm (2026-11-03) the archive was made whole at once: its 1,398 chats in 60 s, every other read of devices waiting.
+test("the archive a page at a time, the latest archived first, each by the index of those archived; the sidebar by those shown", async () => {
+  const time = testClock();
+  await time.adjust(Date.parse("2026-11-03T00:00:00Z"));
+  const store = Store.open(":memory:", null, time.clock);
+  stores.push(store);
+  for (const key of ["a", "b", "c", "d", "e"]) session(store, key);
+  for (const key of ["b", "d", "a", "e"]) {
+    await time.adjust(1000);
+    store.setArchived(key, true, MANUAL);
+  }
+  const r = read.makeStore(store.db, tempdir());
+  const pages: string[][] = [];
+  let before: [number, string] = [Number.MAX_SAFE_INTEGER, "\uffff"];
+  for (;;) {
+    const page = read.archivedPage(r, before, 3);
+    pages.push(page.map((i) => i.id));
+    if (page.length < 3) break;
+    before = [page.at(-1)!.at, page.at(-1)!.id];
+  }
+  assert.deepEqual(pages.flat().filter((id) => !/^\d+$/.test(id)), ["e", "a", "d", "b"], "each once, the latest archived first");
+  assert.deepEqual(read.shownSessions(r).map((x) => x.key), ["c"]);
+  for (const [sql, args] of [[read.ARCHIVED_PAGE, [Number.MAX_SAFE_INTEGER, "\uffff", 3]], [read.SHOWN_SESSIONS, []]] as const) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((p) => p.detail);
+    assert.ok(!plan.some((d) => /^SCAN (sessions|threads)\b/.test(d) && !d.includes("INDEX sessions_live")), plan.join(" | "));
+  }
+});
+
 test("jobs: started, said, ended and cleared", () => {
   const store = memory();
   session(store, "a");

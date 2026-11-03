@@ -1,7 +1,7 @@
 // What the readers answer, by name: each module of reads adds its own. Every op runs in a reader thread over a
 // read-only store, with the request's language set (`setSpoken`), and returns a JSON value.
 import type { Store } from "./store.ts";
-import { chatRows, chats, entries, letters, setSpoken } from "./views.ts";
+import { archivedPage, chatRows, chats, entries, letters, setSpoken } from "./views.ts";
 import { usageOps } from "./ops-usage.ts";
 import { sessionOps } from "./ops-sessions.ts";
 import { saidNotices, turnNotices } from "./notices.ts";
@@ -11,8 +11,16 @@ import { publishDraft } from "./publish.ts";
 
 export type ReadOp = (store: Store, args: any) => unknown;
 
+/// `?page=` of the archive: where the page before ended (`<when>:<key or chat id>`, as `archivedPage` says it), or ""
+/// for its first.
+const cursorOf = (page: string): [number, string] | null => {
+  const at = page.indexOf(":");
+  const when = Number(page.slice(0, at));
+  return at > 0 && Number.isSafeInteger(when) ? [when, page.slice(at + 1)] : null;
+};
+
 export const ops: Record<string, ReadOp> = {
-  chats: (store, a) => chats(store, a.viewer, a.archived),
+  chats: (store, a) => (a.archived && typeof a.page === "string" ? archivedPage(store, a.viewer, cursorOf(a.page)) : chats(store, a.viewer, a.archived)),
   chatRows: (store, a) => chatRows(store, a.viewer, a.sessions, a.threads),
   /// The same sidebar items (`chatRows`) for each of several viewers (one person's devices in two languages or
   /// workspaces), in one read: what the first read in serves the others.

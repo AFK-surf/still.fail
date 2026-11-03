@@ -1092,6 +1092,10 @@ export function addTellIndexes(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
   db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
   db.exec("CREATE INDEX IF NOT EXISTS threads_archived ON threads (id, archived_at) WHERE archived_at IS NOT NULL");
+  // The archive's, a page at a time by
+  // when each was archived (ARCHIVED_PAGE): its whole list was made at once, 60 s on ccvm (2026-11-03).
+  db.exec("CREATE INDEX IF NOT EXISTS sessions_put_away ON sessions (archived_at, key) WHERE archived_at IS NOT NULL");
+  db.exec("CREATE INDEX IF NOT EXISTS threads_put_away ON threads (hidden_at, id) WHERE hidden_at IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS sessions_models ON sessions (created_by, created_at, runtime, model)");
 }
 
