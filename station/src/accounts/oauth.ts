@@ -5,6 +5,7 @@
 // that can no longer be renewed (none to renew it with, or its refresh token refused) is over: RenewRefused.
 import { execFile, spawn } from "node:child_process";
 import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmdirSync, statSync, futimesSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type Env, readClaudeKeychain } from "../agents/machine-logins.ts";
 import { writePrivate } from "../agents/no-keychain.ts";
@@ -80,7 +81,8 @@ async function read(env: Env, home: string, machine: boolean, lang: Lang): Promi
   }
   let text: string;
   try {
-    text = readFileSync(join(home, ".credentials.json"), "utf8");
+    // Off the station's thread: six of these at once held it 1 s on ccvm short of memory (2026-11-03).
+    text = await readFile(join(home, ".credentials.json"), "utf8");
   } catch {
     throw new Said(tr(lang, "station.claudeAuth.noCredentials"));
   }
