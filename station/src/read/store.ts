@@ -931,10 +931,16 @@ export function usageCallsPage(s: Store, session: string, from: bigint, to: bigi
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export { USAGE_DETAIL_PENDING };
 export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
-  diagnostics?: { parts?: number }): UsageGroup[] {
+  diagnostics?: { parts?: number; candidates?: number; selectedMs?: number }): UsageGroup[] {
   if (hasCompactUsage(s.db)) {
     if (!compactScopeReady(s.db, viewer)) throw new Refused(503, "usage statistics are moving between workspaces");
-    const query = compactQuery(from, to, utcOffsetMin, viewer, diagnostics !== undefined);
+    const query = compactQuery(from, to, utcOffsetMin, viewer, diagnostics !== undefined, diagnostics !== undefined);
+    if (diagnostics !== undefined && query.sql.includes("usage_summary_candidate()")) {
+      diagnostics.candidates = 0;
+      const started = performance.now();
+      s.db.function("usage_summary_candidate", () => { diagnostics.candidates!++; return 1; });
+      s.db.function("usage_summary_selected", () => { diagnostics.selectedMs = Math.round(performance.now() - started); return 1; });
+    }
     const rows = all(s, query.sql, ...query.args);
     // Count only rows already used by this read; asking the database for another count would repeat the slow work.
     if (diagnostics !== undefined) diagnostics.parts = rows.reduce((n, row) => n + Number(row.source_parts), 0);

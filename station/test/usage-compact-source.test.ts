@@ -319,7 +319,7 @@ test("a usage summary checks a session's workspace once for its minutes", () => 
   } finally { store.close(); }
 });
 
-test("usage summary diagnostics count only the statistics that contributed", () => {
+test("usage summary diagnostics distinguish candidates from contributing statistics", () => {
   const store = Store.open(":memory:");
   try {
     for (const [key, ws] of [["a", "A"], ["other", "B"]] as const) {
@@ -332,15 +332,36 @@ test("usage summary diagnostics count only the statistics that contributed", () 
     store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude",
       [[call("a1", 60_000), owner], [call("a2", 61_000), owner], [call("a3", 120_000), owner]]);
     store.recordUsage("/other", { session: "other", offset: 1, model: "m" }, "claude", [[call("b", 60_000), owner]]);
+    // A pending empty bucket can be visited by the time index without contributing to the answer.
+    store.db.prepare(`INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast,
+      records, calls, input, cache_read, cache_write, cache_write_long, output, scope)
+      VALUES ('a', 1, 0, 'tombstone', 'cc', 'claude', 'm', 0, 0, 0, 0, 0, 0, 0, 0, 'WA')`).run();
     const reader = makeStore(store.db, ".");
     const viewer = { workspace: "A", home: false };
+    const before = (store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
     for (const [from, to, parts, calls] of [[60_000n, 180_000n, 2, 3], [60_001n, 180_001n, 2, 2]] as const) {
-      const diagnostics: { parts?: number } = {};
+      const diagnostics: { parts?: number; candidates?: number; selectedMs?: number } = {};
       const result = usageGroups(reader, from, to, 0n, viewer, diagnostics);
       assert.deepEqual(result, usageGroups(reader, from, to, 0n, viewer));
       assert.equal(result[0]!.calls, calls);
       assert.equal(diagnostics.parts, parts, "only the visible minute buckets or partial-edge calls are counted");
+      if (from === 60_000n) {
+        assert.equal(diagnostics.candidates, 3, "the index includes an empty bucket, but not another workspace");
+        assert.equal(typeof diagnostics.selectedMs, "number", "the query records when selection finished");
+      }
     }
+    const query = compactQuery(60_000n, 180_000n, 0n, viewer, true, true);
+    let candidates = 0;
+    let whenSelected = -1;
+    store.db.function("usage_summary_candidate", () => { candidates++; return 1; });
+    store.db.function("usage_summary_selected", () => { whenSelected = candidates; return 1; });
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.args) as { detail: string }[]).map((r) => r.detail).join(" | ");
+    assert.match(plan, /SEARCH usage_compact USING COVERING INDEX usage_compact_scope_time/);
+    assert.match(plan, /SEARCH c USING PRIMARY KEY/);
+    store.db.prepare(query.sql).all(...query.args);
+    assert.equal(candidates, 3);
+    assert.equal(whenSelected, 3, "selection is marked only after every indexed candidate has been examined");
+    assert.equal((store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n, before, "diagnostics write nothing");
   } finally { store.close(); }
 });
 
