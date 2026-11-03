@@ -1027,6 +1027,25 @@ test("the archive a page at a time, the latest archived first, each by the index
   }
 });
 
+test("the archived sessions by the index of those archived, the longest archived first; the log's file kept small", async () => {
+  // Every session read whole on the main thread to find the archived held the station 8 to 13 s on ccvm (2026-11-03);
+  // and the log's file stayed at the 520 MB it once grew to, with 1 GB of the disk left.
+  const time = testClock();
+  await time.adjust(Date.parse("2026-11-03T00:00:00Z"));
+  const store = Store.open(join(tempdir(), "s.db"), null, time.clock);
+  stores.push(store);
+  for (const key of ["a", "b", "c"]) session(store, key);
+  for (const key of ["c", "a"]) {
+    await time.adjust(1000);
+    store.setArchived(key, true, MANUAL);
+  }
+  assert.deepEqual(store.archivedSessions().map((s) => s.key), ["c", "a"]);
+  const plan = (store.db.prepare("EXPLAIN QUERY PLAN SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL ORDER BY archived_at, key").all() as { detail: string }[]).map((p) => p.detail).join(" | ");
+  assert.match(plan, /sessions_put_away/);
+  assert.ok(!/TEMP B-TREE/.test(plan), plan);
+  assert.equal((store.db.prepare("PRAGMA journal_size_limit").get() as { journal_size_limit: number }).journal_size_limit, 64 << 20);
+});
+
 test("jobs: started, said, ended and cleared", () => {
   const store = memory();
   session(store, "a");

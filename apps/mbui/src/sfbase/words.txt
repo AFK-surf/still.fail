@@ -538,6 +538,7 @@ android-misc.screen.fill.pick
 android-misc.screen.fill.none
 android-misc.screen.fill.noOp
 android-misc.screen.fill.failed
+android-misc.screen.fill.unreached
 android-misc.screen.fill.empty
 android-misc.screen.fill.offerAuto
 android-misc.screen.fill.autoPick

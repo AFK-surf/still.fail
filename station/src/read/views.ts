@@ -377,8 +377,23 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   const shown = (scope === null ? store.shownSessions(s) : scope.sessions.flatMap((k) => store.getSession(s, k) ?? []).filter((x) => x.archivedAt === null)).filter((x) => sees(viewer, x.ws));
   const keys = shown.map((x) => x.key);
   const threadIds = [...new Set([...(scope?.threads ?? []), ...store.threadsOfSessions(s, keys)])];
-  const own = store.listThreads(s, viewer.email, null, threadIds).filter((t) => t.thread.surface === STILLFAIL_SURFACE && t.thread.hiddenAt === null);
-  const stats = store.sessionStats(s, [...new Set(own.flatMap((t) => t.sessions.map((m) => m.session)))]);
+  // The chats themselves and who is in them, by their keys alone: their summaries (latest message, unread, people) are
+  // the device's already, and read with them, this read took up to 73 s on ccvm short of memory (2026-11-03).
+  const own = threadIds.flatMap((id) => {
+    const thread = store.getThread(s, id);
+    return thread !== null && thread.surface === STILLFAIL_SURFACE && thread.hiddenAt === null ? [{ thread, sessions: store.threadSessions(s, id) }] : [];
+  });
+  const listed = new Set(keys);
+  const listedOne = (key: string) => {
+    if (scope === null) return listed.has(key);
+    const x = store.getSession(s, key);
+    return x !== null && x.archivedAt === null && sees(viewer, x.ws);
+  };
+  const lastTurns = new Map<string, Json>();
+  const lastTurnOf = (key: string) => {
+    if (!lastTurns.has(key)) lastTurns.set(key, store.lastTurn(s, key));
+    return lastTurns.get(key) ?? null;
+  };
   const dismissed = store.dismissed(s, viewer.email, own.map((t) => t.thread.id));
   const mine = isMine(api, viewer);
   const card: Json = {};
@@ -391,7 +406,8 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
     const c = cardView(api, id, dismissed, names);
     if (c !== null) card[id] = c;
     else {
-      const agents = t.sessions.filter((m) => stats.has(m.session)).map((m) => ({ lastTurn: stats.get(m.session)?.lastTurn ?? null }));
+      // its agents in lists, as its row has them (`chats`)
+      const agents = t.sessions.filter((m) => listedOne(m.session)).map((m) => ({ lastTurn: lastTurnOf(m.session) }));
       const n = needView(api, id, agents, dismissed, names);
       if (n !== null) need[id] = n;
     }

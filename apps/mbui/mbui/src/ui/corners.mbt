@@ -247,6 +247,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     self.count = i + 1
     i
   }
+  tree_pictures.clear()
   let held = if laid { tree.laid_held() } else { tree.drawn_held() }
   // (each drawn one's node here, and the last of what it holds so far: what follows it among them)
   let at : Array[Int] = Array::make(held.length(), -1)
@@ -297,6 +298,10 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     let i = add(n)
     at[k] = i
     link(parent, i)
+    // (said to be a picture, as an old view's box is by its semantics: Ctx::pictures)
+    if tree.says_picture(d.id) {
+      tree_pictures.add(i)
+    }
     if d.words != "" {
       let w = Node::new()
       w.kind = kind_text
@@ -324,6 +329,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
   // (what the old views hold where it is drawn, as big, as the window draws it: Ctx::with_old_drawn; laid out, where
   // their nodes are laid out, as the tree's: each old view's carried back from where it is drawn, Ctx::moved_carries)
   let out = if laid { self.with_old_laid(count, f) } else { self.with_old_drawn(f) }
+  tree_pictures.clear()
   for r in reparented {
     self.nodes[r.0].parent = r.1
   }
@@ -1009,9 +1015,18 @@ fn Ctx::scroll_still(self : Ctx, q : Int, st : Sideways) -> Bool {
 }
 
 ///|
-/// The nodes said to be pictures (Role Image) this frame (in_picture).
+/// The window's tree's nodes said to be pictures (View::says: Role Image), by their node here, while they are among the
+/// frame's (Ctx::with_tree_nodes).
+// kept across runs: emptied before and after each time the tree's nodes are taken in
+let tree_pictures : Set[Int] = Set::new()
+
+///|
+/// The nodes said to be pictures (Role Image) this frame, the old views' and the tree's (in_picture).
 fn Ctx::pictures(self : Ctx) -> Set[Int] {
   let out : Set[Int] = Set::new()
+  for i in tree_pictures {
+    out.add(i)
+  }
   for s in self.sems {
     if s.role == Image {
       out.add(s.node)

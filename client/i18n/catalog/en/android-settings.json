@@ -675,7 +675,7 @@
   "android-settings.vault.mode.file": "File",
   "android-settings.vault.mode.browser": "Browser",
   "android-settings.vault.noKey": "This device has no key to this vault yet",
-  "android-settings.vault.noKeyHow": "Open Secrets on a device that has the key and give it to this one",
+  "android-settings.vault.noKeyHow": "Ask for the key and your other devices are prompted; or use your recovery words",
   "android-settings.vault.recover": "Recover with the words",
   "android-settings.vault.recoverLead": "Enter the 24 words you wrote down, separated by spaces",
   "android-settings.vault.recoverCount": "{n} / 24",

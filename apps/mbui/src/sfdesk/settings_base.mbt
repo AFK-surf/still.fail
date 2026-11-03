@@ -6,7 +6,6 @@ using @settings {
   builtin_open,
   confirm,
   connects_mine,
-  decision_form,
   doing_mark,
   error_text,
   failed_of,

@@ -1229,10 +1229,10 @@ pub fn fixture(mode : String) -> Source {
         let code = text(Some(params), "code").replace_all(old="&", new="&amp;").replace_all(old="<", new="&lt;")
         done(
           Ok({
-            "svg": ("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 160\"><rect width=\"320\" height=\"160\" fill=\"#ffffff\"/>" +
-            "<text x=\"16\" y=\"80\">" + code + "</text></svg>").to_json(),
-            "width": 320.0.to_json(),
-            "height": 160.0.to_json(),
+            "svg": Json::string("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 160\"><rect width=\"320\" height=\"160\" fill=\"#ffffff\"/>" +
+            "<text x=\"16\" y=\"80\">" + code + "</text></svg>"),
+            "width": ToJson::to_json(320.0),
+            "height": ToJson::to_json(160.0),
           }),
         )
         return

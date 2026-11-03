@@ -11,6 +11,19 @@ pub fn source(arg : (String) -> String) -> () -> @sfapp.Source {
       Some(s) => s
       None => {
         if arg("MBUI_FILM_AUTOFILL") == "1" { @ui.fake_autofill.val = true }
+        // 1Password as a scene has it (none unless said): asked and slow to answer, or allowed but its servers not
+        // reached
+        match arg("MBUI_FILM_OP") {
+          "slow" => {
+            @ui.fake_op.val = Some(fn(_) { (0, "[]", "") })
+            @ui.fake_op_pending.val = true
+          }
+          "unreached" =>
+            @ui.fake_op.val = Some(fn(_) {
+              (1, "", "[ERROR] 2026/11/03 16:43:31 Get \"https://my.1password.com/api/v2/account/keysets\": unexpected EOF\n")
+            })
+          _ => ()
+        }
         let s = @sfapp.fixture_app(mode)
         if arg("MBUI_WINDOW") != "" { @sfbase.lone_page.val = @sfbase.window_page(arg("MBUI_WINDOW")) }
         if arg("MBUI_UPDATES_MS") != "" { @sffixture.fixture_updates(ms=whole_ms(arg("MBUI_UPDATES_MS"))) }

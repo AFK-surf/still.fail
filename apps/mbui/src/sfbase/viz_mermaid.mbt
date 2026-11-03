@@ -59,16 +59,16 @@ fn mermaid_ask(code : String, width : Int) -> Json {
   let p = t.p
   let ground = p.canvas
   let colours : Map[String, Json] = {
-    "background": mermaid_hex(ground, ground).to_json(),
-    "card": mermaid_hex(p.card, ground).to_json(),
-    "border": mermaid_hex(p.line_strong, ground).to_json(),
-    "text": mermaid_hex(p.text, ground).to_json(),
-    "line": mermaid_hex(p.muted, ground).to_json(),
-    "accent": mermaid_hex(p.neutral_bg, ground).to_json(),
-    "muted": mermaid_hex(p.hover, ground).to_json(),
-    "brand": mermaid_hex(p.accent, ground).to_json(),
+    "background": ToJson::to_json(mermaid_hex(ground, ground)),
+    "card": ToJson::to_json(mermaid_hex(p.card, ground)),
+    "border": ToJson::to_json(mermaid_hex(p.line_strong, ground)),
+    "text": ToJson::to_json(mermaid_hex(p.text, ground)),
+    "line": ToJson::to_json(mermaid_hex(p.muted, ground)),
+    "accent": ToJson::to_json(mermaid_hex(p.neutral_bg, ground)),
+    "muted": ToJson::to_json(mermaid_hex(p.hover, ground)),
+    "brand": ToJson::to_json(mermaid_hex(p.accent, ground)),
   }
-  { "code": code.to_json(), "dark": t.dark.to_json(), "colours": Json::object(colours), "width": width.to_json() }
+  { "code": ToJson::to_json(code), "dark": ToJson::to_json(t.dark), "colours": Json::object(colours), "width": ToJson::to_json(width) }
 }
 
 ///|

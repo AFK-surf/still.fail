@@ -1608,7 +1608,10 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
         // (a ground: a click round what it shows closes it, the bars come and go on a tap)
         c.cursor(stage, Arrow)
         @ui.capture(c, stage)
-        c.box(style=stage_whole, id=stage, fn() { vw.content(c, src, stage) }) |> ignore
+        // (its words picked with the pointer, a mouse's drag or a finger's hold, as a page's are)
+        c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), fn() {
+          c.box(style=stage_whole, id=stage, fn() { vw.content(c, src, stage) }) |> ignore
+        })
       })
       .over(Is(true))
       |> ignore

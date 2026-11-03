@@ -120,7 +120,13 @@ pub fn button_node(
     })
     // (its icon before its words where it has one: button's `icon`)
     if icon != "" {
-      icon_node(v, icon, button_icon, By(fn() { looks().2 })) |> ignore
+      // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes taking
+      // none, so the two ends look alike: button's draw_icon by_ink)
+      let (ink_l, ink_r) = match icon_numbers(icon) {
+        Some(d) => @ui.shapes_ink_in(icon_shapes(d, button_icon / 24.0, 0x000000FFL), button_icon)
+        None => (0.0, 0.0)
+      }
+      icon_node(v, icon, button_icon, By(fn() { looks().2 })).margin(Is((-ink_l, 0.0, -ink_r, 0.0))) |> ignore
       v.box(fn(g) { g.width(By(fn() { Some(gap()) })) |> ignore }) |> ignore
     }
     let words = v.box(fn(w) {

@@ -24,7 +24,8 @@ test "通知, at each width and with either hand: the ways, each kind with what 
 test "notification workspace rows do not repeat an unmarked workspace's initial" {
   for (w, platform) in page_cases {
     let t = setting_tester(Notifications, w, platform~, h=2400.0)
-    let boxes = t.boxes()
+    // (the tree's nodes among them: the page is made once)
+    let boxes = t.boxes_held()
     let at = "\{w} platform \{platform}"
     assert_true(boxes.iter().any(fn(b) { b.text == "个人" }), msg=at)
     assert_true(boxes.filter(fn(b) { b.text == "个" }).is_empty(), msg=at)

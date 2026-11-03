@@ -270,11 +270,35 @@ priv struct Picked {
   mut list : Int
   mut layer : SelLayer
   mut made : Int
+  /// picked by a finger (finger_select.mbt): held on a word, its ends' handles, the system's text menu over it; the
+  /// old view it was picked in (an old view's words: Node's `island`), the only one whose words it picks
+  mut finger : Bool
+  mut island : @view.NodeId?
+  /// the word a finger's hold picked (its start and its end), widened from by words while the finger slides on
+  mut word : (SelSpot, SelSpot)?
+  /// which handle a finger has (1 the start's, 2 the end's, 0 none) and the end's place off the finger
+  mut handle : Int
+  mut grab_x : Double
+  mut grab_y : Double
 }
 
 ///|
 // kept across runs: let go as a run begins (select_none), which one it was only counting on
-let picked : Picked = { from: no_spot, to: no_spot, spans: {}, dragging: false, list: 0, layer: OldLayer(0), made: 0 }
+let picked : Picked = {
+  from: no_spot,
+  to: no_spot,
+  spans: {},
+  dragging: false,
+  list: 0,
+  layer: OldLayer(0),
+  made: 0,
+  finger: false,
+  island: None,
+  word: None,
+  handle: 0,
+  grab_x: 0.0,
+  grab_y: 0.0,
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -314,6 +338,7 @@ fn desk_reset() -> Unit {
   desk.next_sels.clear()
   desk.sels = []
   select_none()
+  finger_reset()
 }
 
 ///|
@@ -349,6 +374,7 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
     None => true
   }
   desk.sels = desk.next_sels.copy()
+  finger_frame_end()
   if !self.down && self.px >= 0.0 {
     if pointing() is Finger {
       // a finger lifted is nowhere: what it last touched is not hovered, and the pointer is not over it (this frame,
@@ -747,9 +773,10 @@ pub fn Ctx::sized(self : Ctx, w : Double, h : Double, body : () -> Unit) -> Unit
 }
 
 ///|
-/// The rich text `body` builds (and its lists' rows) is picked with the pointer: pressed and dragged over, its words
-/// are selected (in `color`), ⌘C (Ctrl+C) copies them; a press elsewhere lets them go. A desktop's page, where the
-/// mouse drags no list (Ctx::mouse_drags_lists false).
+/// The rich text `body` builds (and its lists' rows) is picked with the pointer: pressed and dragged over with a mouse
+/// (a desktop's page, where the mouse drags no list: Ctx::mouse_drags_lists false), held still on with a finger (the
+/// word there, then its handles and the system's text menu: finger_select.mbt), its words are selected (in `color`),
+/// ⌘C (Ctrl+C) or the menu copies them; a press elsewhere (a finger's tap) lets them go.
 pub fn Ctx::selectable(self : Ctx, body : () -> Unit, color? : Int64 = 0x3B82F64DL) -> Unit {
   ignore(self)
   let saved = desk.selecting
@@ -782,6 +809,9 @@ fn select_none() -> Unit {
   picked.spans.clear()
   picked.dragging = false
   picked.layer = OldLayer(0)
+  picked.finger = false
+  picked.island = None
+  finger_let_go()
   select_edge_stop()
   picked_told()
 }
@@ -1061,8 +1091,14 @@ fn sel_spot_at(laid : Array[SelTarget], x : Double, y : Double) -> (SelTarget, I
 /// those not laid out now (scrolled out of view) kept as they were while they lie between, let go once they do not
 /// (the one the press went down in kept, empty).
 fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
-  // the paragraphs laid out: their words and where they stand in the page, now
-  let laid = (self.sel_laid() + tree_sels()).filter(fn(t) { t.layer == picked.layer })
+  // (a finger's handle: the end where it was off the finger, not under it)
+  let x = x + picked.grab_x
+  let y = y + picked.grab_y
+  // the paragraphs laid out: their words and where they stand in the page, now (a finger's: of the old view it picked
+  // in, as a dialog's selection stays in it)
+  let laid = (self.sel_laid() + tree_sels()).filter(fn(t) {
+    t.layer == picked.layer && (!picked.finger || t.island == picked.island)
+  })
   let drawn : Map[SelKey, SelSpan] = {}
   for t in laid {
     if !drawn.contains(t.base) {
@@ -1077,7 +1113,27 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   }
   picked.from = now(picked.from)
   picked.to = match sel_spot_at(laid, x, y) {
-    Some((t, off)) => now({ base: t.base, off, at: [] })
+    Some((t, off)) =>
+      match picked.word {
+        // a finger sliding on from the word its hold picked: by words, that word kept whole (Pick::slide's)
+        Some((ws, we)) => {
+          let (s, e) = word_at(t.text, off)
+          let start = now({ base: t.base, off: s, at: [] })
+          if spot_cmp(start, now(ws)) < 0 {
+            picked.from = now(we)
+            start
+          } else {
+            picked.from = now(ws)
+            let end = now({ base: t.base, off: e, at: [] })
+            if spot_cmp(end, now(we)) > 0 {
+              end
+            } else {
+              now(we)
+            }
+          }
+        }
+        None => now({ base: t.base, off, at: [] })
+      }
     None => now(picked.to)
   }
   let (lo, hi) = if spot_cmp(picked.from, picked.to) <= 0 {
@@ -1213,7 +1269,15 @@ fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
 /// picking starts there (a double click's second picks the word under it, a triple's the paragraph, as a browser's
 /// do); elsewhere what was picked is let go.
 fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
+  // (a finger's press picks nothing as it goes down: a hold does, finger_select.mbt; what a finger picked stays through
+  // it, let go by a tap elsewhere as it lifts)
+  if pointing() is Finger && picked.finger {
+    return
+  }
   select_none()
+  if pointing() is Finger {
+    return
+  }
   match self.sel_at(x, y) {
     Some(target) => {
       let text = target.text

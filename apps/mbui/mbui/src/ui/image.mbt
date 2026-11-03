@@ -239,9 +239,12 @@ fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
 }
 
 ///|
-/// The decode of `src` to show at `px` pixels on the long side: the
-/// smallest ready one at least that big, else the biggest ready one while
-/// a big enough one decodes (started here if none is).
+/// The decode of `src` to show at `px` pixels on the long side: the one
+/// of that bucket once ready, else, while it decodes (started here if
+/// none at least that big is coming), the smallest ready one bigger than
+/// it, or the biggest ready one smaller. (A much bigger decode is not kept to draw small: the
+/// GPU's bilinear sample of a texture without mipmaps, shrunk several
+/// times over, is jagged.)
 fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   // (followed: which of its decodes is ready changes as the host says one is, or failed)
   image_decodes_read(src)
@@ -259,7 +262,8 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
     }
   }
   let mut good : ImageEntry? = None
-  let mut fallback : ImageEntry? = None
+  let mut bigger : ImageEntry? = None
+  let mut smaller : ImageEntry? = None
   let mut pending = false
   let mut failed = false
   // (a decode is ready, or failed, as the host's word that it is says, at that word's moment: image_decoded; never as a
@@ -269,18 +273,23 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       failed = true
       continue
     }
-    if e.px >= want {
-      if e.state == 1 {
-        if good is None {
-          good = Some(e)
-        }
-      } else {
+    if e.state == 0 {
+      // (one coming at least as big: waited for, as it will be drawn from (once ready, it stands in while one of this
+      // size decodes))
+      if e.px >= want {
         pending = true
       }
-    } else if e.state == 1 {
-      fallback = Some(e)
+    } else if e.px == want {
+      good = Some(e)
+    } else if e.px > want {
+      if bigger is None {
+        bigger = Some(e)
+      }
+    } else {
+      smaller = Some(e)
     }
   }
+  let fallback = if bigger is Some(_) { bigger } else { smaller }
   if good is None && !pending && !failed {
     let id = match image_data.get(src) {
       Some(d) => h_image_load_bytes(host_bytes(src, d, want), want, src)
@@ -342,7 +351,7 @@ fn image_awaited(src : String, px : Double) -> Bool {
     Some(list) => {
       let mut coming = false
       for e in list {
-        if e.state == 1 && e.px >= want {
+        if e.state == 1 && e.px == want {
           return false
         }
         if e.state == 0 && e.px >= want {
@@ -627,7 +636,7 @@ fn Ctx::draw_image(
     match fake.val {
       Some(f) => {
         let needs_decode = match found {
-          Some(e) => e.px < bucket(px)
+          Some(e) => e.px != bucket(px)
           None => true
         }
         if needs_decode {

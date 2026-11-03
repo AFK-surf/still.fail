@@ -53,16 +53,18 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19${compact ? ", 1" : ""})
        ${compact ? "" : "ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)"}`,
     );
-    const known = db.prepare("SELECT 1 FROM usage WHERE id = ?");
+    const known = db.prepare("SELECT output FROM usage WHERE id = ?");
     const grow = compact ? db.prepare("UPDATE usage SET output = ?1 WHERE id = ?2 AND output < ?1") : null;
     for (const [c, of] of calls) {
-      const was = known.get(c.id) !== undefined;
-      if (was && grow !== null) grow.run(c.output, c.id);
+      const was = known.get(c.id) as { output: number } | undefined;
+      // The same response can occur in several transcript lines or be replayed after an interrupted read.
+      if (was !== undefined && c.output <= was.output) continue;
+      if (was !== undefined && grow !== null) grow.run(c.output, c.id);
       else insert.run(
-          c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,
-          c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
-        );
-      if (!was) { added++; if (compact && !c.subagent) recent.push([c, of]); }
+        c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,
+        c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
+      );
+      if (was === undefined) { added++; if (compact && !c.subagent) recent.push([c, of]); }
     }
     if (recent.length > 0) noteCompactContexts(db, file.session, runtime, recent);
   }
