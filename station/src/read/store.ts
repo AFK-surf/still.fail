@@ -12,7 +12,7 @@ import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
 import { archiveEntries } from "../store/archive.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
-import { detailQuery, usageDetailReady, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
+import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
 import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -906,8 +906,9 @@ export type { UsageGroup };
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export { USAGE_DETAIL_PENDING };
 export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
-  if (!usageDetailReady(s.db, viewer)) throw new Error(USAGE_DETAIL_PENDING);
-  const query = detailQuery(from, to, utcOffsetMin, viewer);
+  const generation = usageDetailGeneration(s.db);
+  if (!usageDetailReady(s.db, viewer, generation)) throw new Error(USAGE_DETAIL_PENDING);
+  const query = detailQuery(from, to, utcOffsetMin, viewer, generation);
   return query === null ? [] : all(s, query.sql, ...query.args).map(usageGroupOf);
 }
 
@@ -1049,7 +1050,9 @@ export function usageChatTotals(s: Store, viewer: InWorkspace | null): { places:
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(s: Store): number | null {
-  return one(s, "SELECT first_at FROM usage_span WHERE id = 1").first_at ?? null;
+  const first = one(s, "SELECT first_at FROM usage_span WHERE id = 1").first_at as number | null;
+  const cutover = usageDetailSince(s.db);
+  return cutover === null ? first : Math.max(first ?? cutover, cutover);
 }
 
 /// The tasks other stations' chats ran here since `from` (remote_runs), oldest first: when, and whose session.

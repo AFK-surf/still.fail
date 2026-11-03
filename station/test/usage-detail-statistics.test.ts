@@ -50,7 +50,7 @@ test("usage detail reads statistics for the viewer and exact boundaries, includi
   }
 });
 
-test("an incomplete detail summary is unavailable without holding a reader or rebuilding old calls", async () => {
+test("an incomplete old detail summary is left aside without holding a reader or rebuilding old calls", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-detail-wait-"));
   const path = join(dir, "stillfail.db");
   let store = Store.open(path);
@@ -66,26 +66,25 @@ test("an incomplete detail summary is unavailable without holding a reader or re
   store = Store.open(path);
   store.db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "usage" ? constants.SQLITE_DENY : constants.SQLITE_OK);
   try {
-    assert.throws(() => usage(makeStore(store.db, dir), "en", 0n, 100n, 0n, false, { workspace: "A", home: false }),
-      /usage detail statistics.*being filled/);
+    const result = usage(makeStore(store.db, dir), "en", 0n, 100n, 0n, false, { workspace: "A", home: false });
+    assert.deepEqual(result.rows, []);
   } finally { store.db.setAuthorizer(null); }
   let handover!: () => void;
   const previousGone = new Promise<void>((resolve) => { handover = resolve; });
   const readers = new Readers(dir, 1, undefined, 1, { previousGone });
   const args = { from: 0, to: 100, tz: 0, reading: false, viewer: { workspace: "A", home: false } };
   const before = store.db.prepare("SELECT * FROM usage_detail_all").get();
-  const unavailable = (error: any) => error.status === 503 && /detail.*unavailable/i.test(error.message);
-  const pending = assert.rejects(readers.read("usage", args, "en"), unavailable);
+  const pending = readers.read("usage", args, "en");
   try {
     await readers.read("checkpoint", {}, "en");
-    await pending;
-    await assert.rejects(readers.read("outflowUsage", { ...args, ws: args.viewer }, "en"), unavailable);
+    assert.deepEqual(JSON.parse(await pending).rows, []);
+    await readers.read("outflowUsage", { ...args, ws: args.viewer }, "en");
     handover();
     assert.deepEqual(store.db.prepare("SELECT * FROM usage_detail_all").get(), before);
   } finally { handover(); readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("an incomplete detail summary does not attempt to fill a missing index", async () => {
+test("an incomplete old detail summary does not use a missing legacy index", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-detail-error-"));
   const path = join(dir, "stillfail.db");
   let store = Store.open(path);
@@ -101,8 +100,8 @@ test("an incomplete detail summary does not attempt to fill a missing index", as
   store.db.exec("DROP TABLE usage_detail_lookup");
   const reader = new MinuteReader(path);
   try {
-    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /detail.*unavailable/);
-    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /detail.*unavailable/);
+    await reader.readyDetail({ workspace: "A", home: false });
+    await reader.readyDetail({ workspace: "A", home: false });
     await reader.readyRemote();
   } finally { await reader.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });

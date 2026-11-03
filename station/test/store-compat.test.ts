@@ -56,6 +56,9 @@ const MERGED_ADDS = [", m.letter"];
 /// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes
 /// (`addUsageColumns`).
 const MADE = ["usage_chat", "usage_chat_stats", "usage_chat_members", "usage_chat_cards", "usage_chat_scopes", "usage_chat_totals", "usage_chat_progress", "usage_chat_dirty", "usage_chat_dirty_scope", "usage_detail", "usage_detail_scope", "usage_detail_lookup", "usage_detail_dirty", "usage_detail_dirty_scope", "usage_detail_sessions", "usage_detail_seen", "usage_detail_replace", "usage_detail_ready", "usage_detail_all", "usage_totals", "usage_span", "usage_compactions", "usage_main_calls", "usage_compaction_events", "usage_compaction_backfill", "usage_quarters", "usage_day_quarters", "usage_minute", "usage_minute_scope", "usage_minute_sessions", "usage_minute_seen", "usage_minute_all", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries", "card_outcomes", "session_turns", "session_work", "session_work_from", "remote_run", "remote_run_progress", "remote_run_lookup", "remote_run_by_time", "remote_run_by_job", "remote_run_counts", "remote_run_total"];
+MADE.push("usage_detail_live", "usage_detail_live_scope", "usage_detail_live_lookup", "usage_detail_live_dirty",
+  "usage_detail_live_dirty_scope", "usage_detail_live_sessions", "usage_detail_live_seen", "usage_detail_live_ignored",
+  "usage_detail_live_update", "usage_detail_live_replace", "usage_detail_live_ready", "usage_detail_live_all", "usage_detail_live_since");
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {

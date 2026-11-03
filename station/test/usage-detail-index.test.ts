@@ -29,33 +29,6 @@ function expected(db: DatabaseSync, size: number) {
     FROM usage GROUP BY session, bucket ORDER BY session, bucket`).all();
 }
 
-test("detail statistics fill old calls in bounded resumable batches and follow concurrent writes", () => {
-  const db = older();
-  try {
-    for (let i = 0; i < 20; i++) add(db, `a${i}`, "a", i * 1000);
-    for (let i = 0; i < 120; i++) add(db, `b${i}`, "b", 1);
-    installUsageDetail(db);
-    assert.equal(backfillUsageDetail(db, "a", 3).processed, 3);
-    add(db, "before", "a", -1, 2);
-    add(db, "between", "a", 12_345, 3);
-    db.prepare("UPDATE usage SET output = 9 WHERE id = 'a17'").run();
-    db.prepare("DELETE FROM usage WHERE id = 'a18'").run();
-    db.prepare("DELETE FROM usage WHERE id = 'a0'").run();
-    add(db, "a0", "a", 1, 5);
-    for (let n = 0; ; n++) {
-      assert.ok(n < 60);
-      const step = backfillNextUsageDetail(db, 3);
-      assert.ok(step.processed <= 3);
-      if (step.done) break;
-    }
-    for (const [level, size] of [900_000, 60_000, 1_000, 1].entries()) {
-      assert.deepEqual(actual(db, level), expected(db, size));
-    }
-    db.prepare("UPDATE sessions SET ws = 'C' WHERE key = 'a'").run();
-    assert.equal((db.prepare("SELECT ws FROM usage_detail_scope WHERE session = 'a'").get() as { ws: string }).ws, "C");
-  } finally { db.close(); }
-});
-
 test("a range seeks the workspace and time, and moving a session updates lookups in bounded batches", () => {
   const db = older();
   try {

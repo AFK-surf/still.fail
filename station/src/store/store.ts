@@ -207,7 +207,7 @@ export class Store {
       installUsageCompactions(db);
       addUsageQuarters(db);
       installUsageMinutes(db);
-      installUsageDetail(db);
+      installUsageDetail(db, clock.currentTimeMillisUnsafe());
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);

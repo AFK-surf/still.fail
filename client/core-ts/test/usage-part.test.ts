@@ -74,3 +74,16 @@ test("the days a change touched, read again, take the place of those held; the r
   assert.equal(now.from, from, "still the whole window's");
   assert.equal(holdsWhole(now, from), true);
 });
+
+test("a full response without historical statistics still permits a partial refresh", () => {
+  const from = Date.UTC(2026, 8, 5, 16), since = Date.UTC(2026, 10, 1, 16);
+  const held: J = { from, rows: [row("2026-11-01", "s", "m", 1)], historyUnavailable: true, detailSince: from + DAY };
+  assert.equal(holdsWhole(held, from), true);
+  const part: J = { rows: [row("2026-11-02", "s", "m", 2)], detailSince: from + DAY };
+  const updated: J = withPart(held, part, "2026-11-02", since);
+  assert.deepEqual(updated.rows.map((r: J) => r.calls), [1, 2]);
+  assert.equal(updated.historyUnavailable, true);
+  assert.equal(updated.detailSince, from + DAY);
+  assert.equal("history" in updated, false, "missing history is not made into an empty summary");
+  assert.equal("remoteRuns" in updated, false, "missing remote tasks are not made into zero tasks");
+});

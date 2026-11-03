@@ -2,7 +2,7 @@
 // turn it was in, whom that turn worked for, in which thread and on which profile. The Store's usage methods call these.
 import type { DatabaseSync } from "node:sqlite";
 import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
-import { detailQuery, usageDetailReady, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
+import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
 import { usageCompactionsReady } from "./usage-compactions.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
@@ -169,8 +169,9 @@ export function usageGroupOf(r: Json): UsageGroup {
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and
 /// by thread, person, profile and model.
 export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffsetMin: number): UsageGroup[] {
-  if (!usageDetailReady(db, null)) throw new Error(USAGE_DETAIL_PENDING);
-  const query = detailQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null);
+  const generation = usageDetailGeneration(db);
+  if (!usageDetailReady(db, null, generation)) throw new Error(USAGE_DETAIL_PENDING);
+  const query = detailQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null, generation);
   return query === null ? [] : (db.prepare(query.sql).all(...query.args) as Json[]).map(usageGroupOf);
 }
 
@@ -190,5 +191,7 @@ export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] 
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(db: DatabaseSync): number | null {
-  return (db.prepare("SELECT first_at FROM usage_span WHERE id = 1").get() as Json).first_at ?? null;
+  const first = (db.prepare("SELECT first_at FROM usage_span WHERE id = 1").get() as Json).first_at as number | null;
+  const cutover = usageDetailSince(db);
+  return cutover === null ? first : Math.max(first ?? cutover, cutover);
 }

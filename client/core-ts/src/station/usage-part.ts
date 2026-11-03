@@ -19,7 +19,8 @@ export function dayOf(at: number, offset: number): { day: string; from: number }
 /// Whether what is held is a whole read of the usage from `from` (the page's 60 days as they are now, in this time zone:
 /// another day or zone reads another `from`), with its history: what a part can be put into.
 export function holdsWhole(held: unknown, from: number): held is J {
-  return isObject(held) && Number(get(held, "from")) === from && Array.isArray(get(held, "rows")) && isObject(get(held, "history"));
+  return isObject(held) && Number(get(held, "from")) === from && Array.isArray(get(held, "rows"))
+    && (isObject(get(held, "history")) || get(held, "historyUnavailable") === true);
 }
 
 const arr = (v: unknown): J[] => (Array.isArray(v) ? (v.filter(isObject) as J[]) : []);
@@ -45,20 +46,25 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     at.calls += n(get(r, "calls"));
     days.set(key, at);
   }
-  const history = get(held, "history") as J;
+  const history = get(held, "history");
   const before = arr(get(history, "days")).filter((d) => String(get(d, "day")) < day);
   const priced = new Map<string, J>();
   for (const p of [...arr(get(get(held, "prices"), "rows")), ...arr(get(get(part, "prices"), "rows"))]) priced.set(String(get(p, "model")), p);
+  const { remoteRuns: _remoteRuns, history: _history, ...rest } = held;
+  const detailSince = get(part, "detailSince") ?? get(held, "detailSince");
+  const remoteRuns = Array.isArray(get(held, "remoteRuns")) && Array.isArray(get(part, "remoteRuns"))
+    ? [...arr(get(held, "remoteRuns")).filter((r) => n(get(r, "at")) < since), ...arr(get(part, "remoteRuns"))] : undefined;
   return {
-    ...held,
+    ...rest,
     since: get(part, "since") ?? get(held, "since") ?? null,
+    ...(typeof detailSince === "number" ? { detailSince } : {}),
     reading: get(part, "reading") ?? get(held, "reading"),
     prices: { ...(isObject(get(held, "prices")) ? (get(held, "prices") as J) : {}), ...(isObject(get(part, "prices")) ? (get(part, "prices") as J) : {}), rows: [...priced.values()] },
     rows,
     threads: { ...(get(held, "threads") as J | undefined), ...(get(part, "threads") as J | undefined) },
     people: { ...(get(held, "people") as J | undefined), ...(get(part, "people") as J | undefined) },
     profiles: get(part, "profiles") ?? get(held, "profiles"),
-    remoteRuns: [...arr(get(held, "remoteRuns")).filter((r) => n(get(r, "at")) < since), ...arr(get(part, "remoteRuns"))],
-    history: { ...history, days: [...before, ...[...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))] },
+    ...(remoteRuns !== undefined ? { remoteRuns } : {}),
+    ...(isObject(history) ? { history: { ...history, days: [...before, ...[...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))] } } : {}),
   };
 }

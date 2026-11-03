@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
+import { usageDetailSince } from "../store/usage-detail.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
@@ -239,6 +240,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   mark("people");
   const i64 = (n: bigint) => (JSON as any).rawJSON(String(n));
   const since = usageSince(s);
+  const detailSince = usageDetailSince(s.db);
   const prices = priceTable(lang, rows.map((r) => r.model));
   const profiles = configProfiles(s.dataDir);
   // An older station may not have complete historical statistics. Leave the unavailable part absent so clients can
@@ -263,6 +265,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     from: i64(from),
     to: i64(to),
     since,
+    ...(detailSince !== null ? { detailSince } : {}),
     reading,
     prices,
     rows,
@@ -273,6 +276,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     // workspace their key names (`remote:<workspace>:…`)
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
     ...(historyResult !== undefined ? { history: historyResult } : {}),
+    ...(history && historyResult === undefined ? { historyUnavailable: true } : {}),
   };
   mark("other");
   const ms = Math.round(performance.now() - started);
