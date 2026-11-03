@@ -881,6 +881,14 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         // what the badge counts, as the core says it (the prefs' badgeKinds, or their defaults)
         "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false, "services": true },
       })
+    // (the workspaces read slowly, the device's data not opened: with MBUI_HOLD=workspaces, the splash saying so)
+    "status" if f.mode == "reading-slow" =>
+      Some({
+        "state": "trouble",
+        "text": "本机数据无法打开，只能从网络读取 · 共 4 项 · 172 KB/s",
+        "items": [],
+        "lines": ["本机数据无法打开，只能从网络读取"],
+      })
     "status" => Some({ "items": [] })
     // what the last update brought (home_news.mbt): said on MBUI_FIXTURE=home-news only
     "changelog" if f.mode == "home-news" =>
