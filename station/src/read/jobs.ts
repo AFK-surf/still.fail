@@ -8,6 +8,7 @@ import * as store from "./store.ts";
 import type { Json, JobRow, Store } from "./store.ts";
 import { HttpError, chats, scopeOf } from "./views.ts";
 import type { Lang } from "../ops/i18n.ts";
+import { log } from "../ops/log.ts";
 
 /// How much of a log `tail` reads at most.
 const LOG_BYTES = 64 * 1024;
@@ -96,12 +97,23 @@ export function rustLines(text: string): string[] {
 /// `chats`: each with the chat it is in; without (a device that names it from the sidebar it holds), the jobs alone: the
 /// sidebar's items made for it held a device reader up to 17 s on ccvm short of memory (2026-11-03).
 export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Json[] {
+  // What a slow one spent where: 4 to 13 s on ccvm (2026-11-03), unsaid whether with the chats.
+  const started = performance.now();
+  const slow = (stage: Record<string, unknown>) => {
+    const ms = Math.round(performance.now() - started);
+    if (ms >= 1_000) log.warn("readers", "a jobs read's stages", { ms, named, ...stage });
+  };
   setLang(lang);
   const up = store.upJobs(s);
   const seen = store.seenBy(s, viewer, up.map((j) => j.sessionKey));
   const open = up.filter((j) => seen(j.sessionKey));
-  if (open.length === 0) return [];
-  if (!named) return open.map((j) => shown(s, j));
+  const looked = Math.round(performance.now() - started);
+  if (open.length === 0) return (slow({ up: up.length, looked }), []);
+  if (!named) {
+    const out = open.map((j) => shown(s, j));
+    slow({ up: up.length, open: open.length, looked });
+    return out;
+  }
   // Each job's chat: the session's own over one it only takes part in, a listed one over an archived one (the last of
   // each, as the sidebar lists them): of the items its session and the chats it takes part in make (views.ts
   // `scopeOf`), each as the whole list has it. The archive's are read only for a session whose own chat is not listed.
@@ -121,8 +133,11 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Js
     }
     return { own, any };
   };
+  const scanStart = performance.now();
   const listed = scan(false);
+  const listedMs = Math.round(performance.now() - scanStart);
   const archived = [...keys].some((key) => !listed.own.has(key)) ? scan(true) : null;
+  slow({ up: up.length, open: open.length, looked, listedMs, archivedScanned: archived !== null });
   return open.map((j) => {
     const v = shown(s, j);
     const k = j.sessionKey;
