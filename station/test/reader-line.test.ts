@@ -213,7 +213,7 @@ test("an incomplete old history is omitted without holding a device reader", { t
   }
 });
 
-test("the last reader of what devices ask and of what streams tell is kept idle, started before either is asked", { timeout: 30_000 }, async () => {
+test("the readers of what devices ask and of what streams tell are kept idle, started before either is asked", { timeout: 30_000 }, async () => {
   const { wall } = await import("../src/ops/fibers.ts");
   const after = wall.after;
   const due: (() => void)[] = [];
@@ -225,9 +225,10 @@ test("the last reader of what devices ask and of what streams tell is kept idle,
     const [asked, told] = [lines.asked.slots[0], lines.told.slots[0]];
     assert.ok(asked !== undefined && told !== undefined, "started before anything is asked");
     await readers.read("thread", args(false), "en");
-    // A minute idle, every timer due: the last of each is kept.
+    assert.deepEqual([lines.asked.slots.length, lines.told.slots.length], [2, 1], "as many as each line has");
+    // A minute idle, every timer due: every one of them is kept.
     for (const f of due.splice(0)) f();
-    assert.deepEqual([lines.asked.slots.length, lines.told.slots.length], [1, 1]);
+    assert.deepEqual([lines.asked.slots.length, lines.told.slots.length], [2, 1]);
     await readers.read("thread", args(false), "en");
     assert.equal(lines.asked.slots[0], asked, "the same reader answers");
     assert.equal(Atomics.load(state, 0), 2);

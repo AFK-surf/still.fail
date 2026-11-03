@@ -181,16 +181,16 @@ export class Readers {
     return slot;
   }
 
-  /// A reader with nothing to do goes after IDLE_MS, but the last of a line someone waits on (what devices ask, what
+  /// A reader with nothing to do goes after IDLE_MS, but not those of a line someone waits on (what devices ask, what
   /// streams tell): one started for a read took 3 s on ccvm short of memory (2026-11-03, its code read in again), the
-  /// read itself 40 ms.
+  /// read itself 40 ms; the second of what devices ask, started as the first was busy, 16 s.
   private letGoLater(slot: Slot, line: Line) {
     if (slot.idle) return;
     // A thread's resources: the machine's time.
     slot.idle = wall.after(IDLE_MS, () => {
       slot.idle = undefined;
       if (slot.held !== null) return;
-      if (this.kept(line) && line.slots.filter((s) => !s.retiring).length <= 1) return;
+      if (this.kept(line)) return;
       void slot.worker.terminate();
     });
   }
@@ -199,10 +199,10 @@ export class Readers {
     return line === this.asked || line === this.told;
   }
 
-  /// A reader for what devices ask and one for what streams tell, started before either is asked anything: the first
-  /// reads after the station starts (an update) need not wait on them.
+  /// The readers of what devices ask and of what streams tell, started before either is asked anything: the first
+  /// reads after the station starts (an update), and one beside a slow one, need not wait on them.
   warm() {
-    for (const line of [this.asked, this.told]) if (!this.closed && line.slots.length === 0) this.start(line);
+    for (const line of [this.asked, this.told]) while (!this.closed && line.slots.length < line.size) this.start(line);
   }
 
   /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
