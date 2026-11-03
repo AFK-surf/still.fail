@@ -1412,6 +1412,7 @@ export const SHAPES: Record<string, Shape> = {
     ["state", opt("String")],
     ["text", opt("String"), { said: true }],
     ["items", vec("StatusItem")],
+    ["lines", vec("String"), { said: true, default: true, doc: "What a page still loading says under its words, a line each: the first few things read with how much came and\nhow long, then what lasts (the device's data, a connection down)." }],
   ], { doc: "What the core is waiting on (the `status` topic), when it is worth saying: `state` slow (something has taken a\nwhile) | trouble (a connection down), absent while all goes as it should; `text` says it in one line." }),
   ConnectionView: struct([
     ["tone", opt("String")],

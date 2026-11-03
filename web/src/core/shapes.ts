@@ -7142,6 +7142,11 @@ export interface StatusView {
 	state?: string;
 	text?: string;
 	items: StatusItem[];
+	/**
+	 * What a page still loading says under its words, a line each: the first few things read with how much came and
+	 * how long, then what lasts (the device's data, a connection down).
+	 */
+	lines?: string[];
 }
 
 /** A subscription on the usage page: its allowance as its profile shows it, what its copies spent in the days. */

@@ -881,6 +881,19 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         // what the badge counts, as the core says it (the prefs' badgeKinds, or their defaults)
         "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false, "services": true },
       })
+    // (the workspaces read slowly, the device's data not opened: with MBUI_HOLD=workspaces, the splash saying so)
+    "status" if f.mode == "reading-slow" =>
+      Some({
+        "state": "trouble",
+        "text": "无法打开本机数据，内容需从网络读取，不会保存到此设备 · 共 4 项 · 172 KB/s",
+        "items": [],
+        "lines": [
+          "Studio 读取对话列表 · 已接收 1.4 MB · 9 秒",
+          "Studio 读取 agent 列表 · 尚未收到数据 · 9 秒",
+          "MacBook Air 读取对话列表 · 已接收 236 KB · 8 秒",
+          "无法打开本机数据，内容需从网络读取，不会保存到此设备",
+        ],
+      })
     "status" => Some({ "items": [] })
     // what the last update brought (home_news.mbt): said on MBUI_FIXTURE=home-news only
     "changelog" if f.mode == "home-news" =>

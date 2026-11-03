@@ -773,13 +773,16 @@ fn reading_tree(v : @view.View, src : Source) -> Unit {
 }
 
 ///|
-/// 正在读取你的 workspace, with what the core has been waiting on for a while under it (`status`).
+/// 正在读取你的 workspace, with what the core has been waiting on for a while under it, a line each (`status`'s
+/// lines: what is read and how far it has come, then what lasts).
 fn t_reading_workspaces(src : Source) -> String {
-  let status = (src.topic)("status", {})
-  match text(status.value, "text") {
-    "" => tr("android-misc.workspaces.loading")
-    s => tr("android-misc.workspaces.loading") + "\n" + s
-  }
+  let lines = items((src.topic)("status", {}).value, "lines").filter_map(fn(l) {
+    match l {
+      String(s) => Some(s)
+      _ => None
+    }
+  })
+  [tr("android-misc.workspaces.loading"), ..lines].join("\n")
 }
 
 ///|

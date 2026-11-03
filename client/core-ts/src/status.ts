@@ -12,6 +12,8 @@ import { laterSleep, type Runner } from "./runtime.ts";
 export const SLOW_MS = 2_000;
 const RATE_WINDOW_MS = 3_000;
 const TICK_MS = 1_000;
+/// How many of the waits a page's "loading…" says, one line each.
+const LINES = 3;
 
 /// Where a wait is: still.fail cloud, the relay, or a station by its address.
 export type Place = { cloud: true } | { relay: true } | { station: string };
@@ -331,7 +333,7 @@ export function value(parts: ([Status, Take] | [Status, Take, string | null])[])
         : t("core-logic.status.received", { size: size(w.bytes), secs });
     items.push({ state: "slow", text: n > 1 ? t("core-logic.status.times", { text, n }) : text, detail });
   }
-  if (items.length === 0) return { state: null, text: null, items: [] };
+  if (items.length === 0) return { state: null, text: null, items: [], lines: [] };
   const window = all.window > 0 ? all.window : RATE_WINDOW_MS;
   const rate = Math.trunc(all.recent / (window / 1000));
   const state = down || all.db.length > 0 ? "trouble" : "slow";
@@ -340,7 +342,22 @@ export function value(parts: ([Status, Take] | [Status, Take, string | null])[])
   const count = items.length - alike.size + slow.length;
   if (count > 1) text += ` · ${t("core-logic.status.count", { n: count })}`;
   if (slow.length > 0 && rate > 0) text += ` · ${size(rate)}/s`;
-  return { state, text, items };
+  // Under a page's "loading…", one line each: what is read and how far it has come (how much came, how long), the
+  // first few; then what lasts (the device's data, still.fail cloud down), which is why it is slow.
+  const lines: string[] = [];
+  for (const [text, { first: w }] of [...alike].slice(0, LINES)) {
+    const secs = Math.floor(w.age / 1000);
+    lines.push(
+      w.connecting
+        ? t("core-logic.status.line.waited", { text, secs })
+        : w.bytes === 0
+          ? t("core-logic.status.line.nothing", { text, secs })
+          : t("core-logic.status.line.received", { text, size: size(w.bytes), secs }),
+    );
+  }
+  if (alike.size > LINES) lines.push(t("core-logic.status.line.more", { n: alike.size - LINES }));
+  for (const item of items) if (item.state === "trouble") lines.push(String(item.text));
+  return { state, text, items, lines };
 }
 
 /// Bytes in words: "820 B", "12 KB", "1.4 MB".
