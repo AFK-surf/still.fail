@@ -65,7 +65,8 @@ test("machine session owners remain readable before runtime history's fields or 
   const project = join(roots.claude, "project");
   mkdirSync(project, { recursive: true });
   const id = "11111111-aaaa-bbbb-cccc-000000000001";
-  writeFileSync(join(project, `${id}.jsonl`), `${JSON.stringify({ type: "user", cwd: root, message: { content: "hello" } })}\n`);
+  const prior = "22222222-aaaa-bbbb-cccc-000000000002";
+  for (const key of [id, prior]) writeFileSync(join(project, `${key}.jsonl`), `${JSON.stringify({ type: "user", cwd: root, message: { content: "hello" } })}\n`);
   for (const version of ["runtime", "history", "none"] as const) {
     const db = new DatabaseSync(":memory:");
     try {
@@ -76,10 +77,16 @@ test("machine session owners remain readable before runtime history's fields or 
         db.exec(`CREATE TABLE runtime_sessions (session_key TEXT, id TEXT${version === "runtime" ? ", runtime TEXT" : ""}, PRIMARY KEY (session_key, id));
           CREATE INDEX runtime_sessions_by_id ON runtime_sessions (id);`);
         db.prepare("INSERT INTO sessions VALUES (?, ?, ?, ?)").run("old", "claude", null, 10);
-        if (version === "runtime") db.prepare("INSERT INTO runtime_sessions VALUES (?, ?, ?)").run("old", id, "claude");
-        else db.prepare("INSERT INTO runtime_sessions VALUES (?, ?)").run("old", id);
+        if (version === "runtime") db.prepare("INSERT INTO runtime_sessions VALUES (?, ?, ?)").run("old", prior, "claude");
+        else db.prepare("INSERT INTO runtime_sessions VALUES (?, ?)").run("old", prior);
       }
-      assert.equal(machineSessions(makeStore(db, root), roots).sessions[0].session, "current", version);
+      const found = Object.fromEntries(machineSessions(makeStore(db, root), roots).sessions.map((v: any) => [v.id, v.session]));
+      assert.deepEqual(found, { [id]: "current", [prior]: version === "none" ? null : "old" }, version);
+      if (version === "none") {
+        db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "sessions" && column === "runtime_session_id" ? constants.SQLITE_DENY : constants.SQLITE_OK);
+        try { assert.throws(() => machineSessions(makeStore(db, root), roots), /prohibited|not authorized/); }
+        finally { db.setAuthorizer(null); }
+      }
     } finally { db.close(); }
   }
 });
