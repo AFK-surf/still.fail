@@ -452,6 +452,42 @@ test("a shared chat's exported agents belong to the requested workspace", () => 
   } finally { store.close(); }
 });
 
+test("a page of exported chats does not enumerate every session", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const key of ["a", "b", "c"]) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key,
+        createdAt: 1, lastActiveAt: 1, ws: "A" });
+      const thread = store.openThreadOf("ember", "EMBER", `chat-${key}`, key, "ann@x", key);
+      store.joinThread(thread.id, key, "ember");
+      store.db.prepare("UPDATE threads SET created_at = 10 WHERE id = ?").run(thread.id);
+    }
+    store.db.exec("BEGIN");
+    for (let i = 0; i < 200; i++) store.insertSession({ key: `other-${i}`, connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/w", token: `other-${i}`, createdAt: 1, lastActiveAt: 1, ws: "B" });
+    store.db.exec("COMMIT");
+    const reader = read.makeStore(store.db, "."), viewer = { workspace: "A", home: false };
+    const first = outflowChats(reader, 0, viewer, { limit: 1, before: null }) as any;
+    const second = outflowChats(reader, 0, viewer, { limit: 1, before: first.next }) as any;
+    assert.deepEqual(first.chats.map((chat: any) => chat.title), ["c"]);
+    assert.deepEqual(second.chats.map((chat: any) => chat.title), ["b"]);
+    const db = reader.db;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql === "SELECT * FROM sessions ORDER BY last_active_at DESC") throw new Error("enumerated session history");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    try {
+      assert.deepEqual(outflowChats(reader, 0, viewer, { limit: 1, before: null }), first);
+      assert.deepEqual(outflowChats(reader, 0, viewer, { limit: 1, before: first.next }), second);
+    } finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+  } finally { store.close(); }
+});
+
 test("messages: a chat's, a page at a time, to a program granted them", async () => {
   const r = await rig();
   const asking = (await asked(r, ["messages"])).answer;
