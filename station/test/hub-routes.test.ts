@@ -20,6 +20,7 @@ import { Store, newMessage } from "../src/store/store.ts";
 import { digest } from "../src/read/digest.ts";
 import { openStore } from "../src/read/store.ts";
 import { chatRows, chats } from "../src/read/views.ts";
+import { marksOf, rowsMade } from "../../client/core-ts/src/station/rows-made.ts";
 import { isDeepStrictEqual } from "node:util";
 import { fileAway } from "./archived-before.ts";
 import { FakeDriver, settle } from "./hub-fakes.ts";
@@ -805,6 +806,44 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
     }
     assert.equal(unrelated, 0, "a scoped row update did not read marks or answers of unrelated chats");
     store.db.close();
+  } finally {
+    await r.close();
+  }
+});
+
+test("a device makes the sidebar from the summaries and marks as the station makes it", async () => {
+  // The station made every row again for every viewer at every change, 3 to 10 s each on ccvm (2026-11-03): a device
+  // makes it from what it holds (client/core-ts/src/station/rows-made.ts), by the same rules.
+  const r = rig();
+  try {
+    const made: any[] = [];
+    for (const title of ["a", "b", "c", "d"]) made.push((await r.ask("POST", "/sessions", { runtime: "claude", title }))[1]);
+    // b brought into a's chat; said in it, a card waiting there; c's chat pinned and kept; d's from a Slack thread.
+    assert.equal((await r.ask("POST", `/threads/${made[0].thread.id}/sessions`, { session: made[1].key }))[0], 200);
+    r.store.insertMessage(newMessage(made[0].thread.id, "1.2", "person", "a@x", "  看一下 "));
+    r.store.insertMessage({ ...newMessage(made[0].thread.id, "1.3", "agent", made[0].key, "选一个"), card: { type: "options", options: [{ label: "好" }] } } as any);
+    r.store.insertMessage(newMessage(made[2].thread.id, "2.1", "agent", made[2].key, "做完了"));
+    r.store.setPin("a@x", made[2].key, true);
+    r.store.keepChat("a@x", made[2].thread.id);
+    const slack = r.store.openThread("slack:T1", "C1", "9.1", null, "slack:cs:U1");
+    r.store.joinThread(slack.id, made[3].key, "cs");
+    r.store.insertMessage(newMessage(slack.id, "9.1", "person", "U1", "从 Slack 来的"));
+    r.store.suggestArchive(made[2].key, made[2].thread.id, r.store.lastEntry(made[2].thread.id));
+    const station = (await r.ask("GET", "/chats"))[1];
+    const sessions = (await r.ask("GET", "/sessions"))[1];
+    const threads = (await r.ask("GET", "/threads"))[1];
+    const [status, answer] = await r.ask("GET", "/chats", undefined, [["marks", "1"]]);
+    assert.equal(status, 200);
+    const marks = marksOf(answer);
+    assert.ok(marks !== null, JSON.stringify(answer));
+    const words = { untitled: tr("en", "station.chat.untitled"), directMessage: tr("en", "station.chat.directMessage"), quotedOnly: tr("en", "station.chat.quotedOnly") };
+    const device = rowsMade(sessions, threads, marks!, viewer.email, words);
+    const byId = (rows: any[]) => Object.fromEntries(rows.map((row) => [String(row.id), row]));
+    assert.deepEqual(byId(device), byId(station));
+    assert.ok(station.some((row: any) => row.card) && station.some((row: any) => row.pinned !== null) && station.length >= 3, "the cases looked at");
+    // Of some chats alone: what they are now, the rest as held.
+    const [, some] = await r.ask("GET", "/chats", undefined, [["marks", "1"], ["thread", String(made[0].thread.id)], ["session", made[0].key]]);
+    assert.deepEqual(Object.keys(marksOf(some)!.card), [String(made[0].thread.id)]);
   } finally {
     await r.close();
   }

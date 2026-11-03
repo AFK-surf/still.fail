@@ -356,6 +356,63 @@ export function chatRows(station: Store, viewer: Viewer, sessions: string[], thr
   return { rows: chats(station, viewer, false, scope), scope: [...scope.rows] };
 }
 
+/// GET /chats?marks=1: what a device that makes the viewer's sidebar itself (client/core-ts/src/station/rows-made.ts)
+/// cannot make of it from the sessions' and threads' summaries it holds, as written beside them: the cards and needs
+/// waiting (`card`, `need` by thread, as `chats` gives them), the cards the viewer answered lately (`answered`), the
+/// review's marks (`suggested`, `verdicts`, `reviews`), what the viewer pinned and kept (`pins`, `kept`), the chats
+/// opened from each and its opener (`opened`, `openers`), who each is shared with (`shares`), client keys, the Slack
+/// teams' names by connect (`teams`) and the Slack users the viewer is (`selves`). Of the shown sessions' chats, or of
+/// those `threads` and `sessions` alone.
+export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: string[]; threads: number[] } | null = null): Json {
+  useNames(station);
+  const api = apiOf(station);
+  const s = api.store;
+  const shown = (scope === null ? store.shownSessions(s) : scope.sessions.flatMap((k) => store.getSession(s, k) ?? []).filter((x) => x.archivedAt === null)).filter((x) => sees(viewer, x.ws));
+  const keys = shown.map((x) => x.key);
+  const threadIds = [...new Set([...(scope?.threads ?? []), ...store.threadsOfSessions(s, keys)])];
+  const own = store.listThreads(s, viewer.email, null, threadIds).filter((t) => t.thread.surface === STILLFAIL_SURFACE && t.thread.hiddenAt === null);
+  const stats = store.sessionStats(s, [...new Set(own.flatMap((t) => t.sessions.map((m) => m.session)))]);
+  const dismissed = store.dismissed(s, viewer.email, own.map((t) => t.thread.id));
+  const mine = isMine(api, viewer);
+  const card: Json = {};
+  const need: Json = {};
+  const suggested: number[] = [];
+  const verdicts: Json = {};
+  for (const t of own) {
+    const id = t.thread.id;
+    const names = authorNames(api, id);
+    const c = cardView(api, id, dismissed, names);
+    if (c !== null) card[id] = c;
+    else {
+      const agents = t.sessions.filter((m) => stats.has(m.session)).map((m) => ({ lastTurn: stats.get(m.session)?.lastTurn ?? null }));
+      const n = needView(api, id, agents, dismissed, names);
+      if (n !== null) need[id] = n;
+    }
+    if (store.archiveSuggested(s, id)) suggested.push(id);
+    if (api.reviews) {
+      const v = store.archiveVerdict(s, id);
+      if (v !== null) verdicts[id] = v;
+    }
+  }
+  const answered: Json = {};
+  for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, own.map((t) => t.thread.id))) {
+    if (!mine(creator(a.by))) continue;
+    (answered[a.question.thread] ??= []).push(answeredView(a));
+  }
+  const kept = [...store.keptChats(s, viewer.email, own.map((t) => t.thread.id))];
+  const pins = Object.fromEntries([...store.pins(s, viewer.email)].filter(([k]) => scope === null || keys.includes(k)));
+  const named = (o: { station: string | null; session: string; title: string | null }) => ({ ...(o.station !== null ? { station: o.station } : {}), session: o.session, ...(o.title !== null ? { title: o.title } : {}) });
+  const openers = Object.fromEntries([...store.openers(s, keys)].map(([k, o]) => [k, named(o)]));
+  const opened = Object.fromEntries([...store.openedChats(s, keys)].map(([k, list]) => [k, list.map(named)]));
+  const shares = Object.fromEntries([...store.chatShares(s, keys)].map(([k, v]) => [k, { to: v.to.map((t) => t.workspace), write: v.write }]));
+  const clientKeys = Object.fromEntries(keys.flatMap((k) => (s.clientKeys.has(k) ? [[k, s.clientKeys.get(k)!]] : [])));
+  const teams = Object.fromEntries(api.connects.flatMap((c) => {
+    const name = teamName(s, c.id);
+    return name === null ? [] : [[c.id, name]];
+  }));
+  return { card, need, answered, suggested, verdicts, reviews: api.reviews, kept, pins, openers, opened, shares, clientKeys, teams, selves: store.slackIdentities(s, viewer.email) };
+}
+
 /// The viewer's sidebar: one kind of item, an agent (a shown session) merged with its internal chat. An agent in an
 /// internal chat is that chat's item; one with none yet is an item without a chat. A Slack thread is no item: it lends
 /// its agent's item a title (while the chat has no words of its own), the connect and the origin. `archived`: the

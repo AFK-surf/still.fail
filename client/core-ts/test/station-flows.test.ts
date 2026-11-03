@@ -1211,6 +1211,35 @@ test("a_station_that_leaves_its_rows_to_the_device_has_them_made_here_from_what_
   core.close();
 });
 
+test("a_station_that_keeps_marks_has_its_sidebar_made_here_from_the_summaries_held", async () => {
+  // The station made every row again for every viewer at every change, 3 to 10 s each on ccvm (2026-11-03): made here
+  // from the sessions' and threads' summaries and what the station keeps beside them, it reads none of its rows.
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+  const answers: J = { ...base(), "GET /chats?marks=1": marks, "GET /sessions": [{ ...session("k1"), creator: { id: "a@x.com", name: "A", email: "a@x.com", via: "cloud" } }] };
+  answers["GET /chats"] = [];
+  const { host, core, push, read } = await ui(answers);
+  await read();
+  const held = () => core.inner.data.chat(ST, "k1") as J;
+  const asked = () => host.requests.filter((r) => r.url.includes("/admin/api/chats?")).map((r) => r.url.replace("https://stillfail.test/admin/api", ""));
+  // Its stream says it keeps the marks: read, and the sidebar made here.
+  push("made", { rows: true, marks: true });
+  await coalesce(host);
+  assert.deepEqual([held().thread, held().title, held().mine, held().agents.map((a: J) => a.key)], [7, t("core-views.new_chat"), true, ["k1"]]);
+  // What an agent said: its row's latest, unread; the viewer's pin: in place. Nothing of the sidebar read.
+  push("thread", { id: 7, entries: [{ ...entry(4, "改好了"), authorKind: "agent", author: "k1", authorName: "bot" }] });
+  push("pin", { session: "k1", at: 9 });
+  await coalesce(host);
+  assert.deepEqual([held().last?.text, held().unread, held().pinned], ["改好了", true, 9]);
+  assert.deepEqual(asked(), ["/chats?marks=1"]);
+  // A card posted: that chat's marks read again, the row made with it.
+  answers["GET /chats?marks=1&thread=7"] = { ...marks, card: { 7: { seq: 5, card: { type: "options", options: [] }, message: {}, before: [] } } };
+  push("thread", { id: 7, entries: [{ ...entry(5, "选一个"), authorKind: "agent", author: "k1", card: { type: "options", options: [] } }] });
+  await coalesce(host);
+  assert.deepEqual(asked(), ["/chats?marks=1", "/chats?marks=1&thread=7"]);
+  assert.deepEqual([held().card?.seq, held().decision?.seq], [5, 5]);
+  core.close();
+});
+
 test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
   const { host, core, push, values, read } = await ui({
     ...base(),

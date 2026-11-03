@@ -594,7 +594,7 @@ test("the sidebar's rows are left to clients that make them from what they are t
   const sidebar = () => reads.filter((r) => r === "chats" || r === "chatRowsOf");
   const theirs = reader((await events.open(viewer("a@x"), "zh", false, [], [], null, false, [], false, true, true)).body as AsyncIterable<Buffer>);
   await settle();
-  assert.deepEqual(theirs.got.filter((e) => e.event === "made").map((e) => e.data), [{ rows: true }], "told it makes them, first");
+  assert.deepEqual(theirs.got.filter((e) => e.event === "made").map((e) => e.data), [{ rows: true, marks: true }], "told it makes them, first");
   assert.deepEqual(sidebar(), [], "not read as it opens: it reads them itself (read here too, each stream read the sidebar twice)");
   reads.length = 0;
   change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
