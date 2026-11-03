@@ -275,6 +275,31 @@ test("partial-minute reads find sessions occurring only at either edge", () => {
   } finally { store.close(); }
 });
 
+test("a partial-minute edge looks only at sessions with a bucket at that edge", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "edge", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
+      token: "edge", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "edge", at: 1_001, model: "m", subagent: false, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null };
+    store.recordUsage("/edge", { session: "edge", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    const scope = store.db.prepare("INSERT INTO usage_minute_scope (session, ws, done) VALUES (?, 'A', 1)");
+    const bucket = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, 1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 0, 'WA')");
+    for (let n = 0; n < 200; n++) { scope.run(`middle-${n}`); bucket.run(`middle-${n}`); }
+    const q = compactQuery(1_001n, 120_000n, 0n, { workspace: "A", home: false });
+    let visits = 0;
+    store.db.function("edge_looked", (session) => { visits++; return session; });
+    const sql = q.sql.replaceAll("c.session = p.session AND c.minute =", "c.session = edge_looked(p.session) AND c.minute =")
+      .replaceAll("ON p.session = c.session", "ON p.session = edge_looked(c.session)");
+    assert.notEqual(sql, q.sql, "count the outer sessions looked up for the edge");
+    const rows = store.db.prepare(sql).all(...q.args) as { session: string }[];
+    assert.equal(rows.length, 201);
+    assert.equal(visits, 1, "sessions which have only middle-minute buckets do not cause edge lookups");
+  } finally { store.close(); }
+});
+
 test("compact usage does not read sessions again after selecting its workspace", () => {
   const store = Store.open(":memory:");
   try {
