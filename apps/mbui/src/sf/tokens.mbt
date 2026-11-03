@@ -2042,6 +2042,14 @@ pub let link_card_w : @ui.Len = Fixed(236.0)
 pub let file_capsule_h : @ui.Len = Fixed(52.0)
 
 ///|
+/// How far in from such a capsule's end its words end where they are the last thing in it: where its round end begins
+/// (its half, 26) less the 2 every capsule's words reach into one (a button's 16 in its 34, a toast's 18 in its 40), so
+/// that their corners keep as clear of the curve there as their top and foot of the capsule's (the user, 2026-11-03:
+/// 右边是不是边距不够; at 14, as far as its mark at the other end, a name's last tall letter came within 10 of the curve,
+/// the mark 15 from its own). Its mark (and a ✕ or a ↻ at this end) stands concentric with its end instead, 14 in.
+pub let file_capsule_words_end : Double = 24.0
+
+///|
 pub let peek_card_px : Double = 280.0
 
 ///|

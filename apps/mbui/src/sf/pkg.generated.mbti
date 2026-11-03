@@ -577,6 +577,8 @@ pub fn figures(@ui.Ctx, Array[(String, String, String)]) -> Unit
 
 pub let file_capsule_h : @ui.Len
 
+pub let file_capsule_words_end : Double
+
 pub fn file_card(@ui.Ctx, String, String, Double, path? : String, dir? : Bool, named? : Bool, pending? : Bool, sent? : Double?, error? : String, download? : (Double, String)?, remove? : Bool, retry? : Bool, slot? : Bool, open? : Bool, title? : String, meta? : String, restore? : Bool, remove_label? : String, retry_label? : String, composer? : Bool) -> FileCardDone
 
 pub fn file_card_across(@ui.Ctx, String, Double, meta? : String, ends? : Int32) -> Double
