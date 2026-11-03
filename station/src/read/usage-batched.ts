@@ -193,7 +193,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     const key = blockKey(session, block);
     let held = blocks!.get(key);
     if (!held) {
-      held = { session, minute: block, groups: new Map(), bytes: 128 + key.length * 2 };
+      held = { session, minute: block, groups: new Map(), bytes: 288 + key.length * 2 };
       blocks!.set(key, held);
       bytes += held.bytes;
     }
@@ -204,7 +204,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       cells++;
       // Count the key, retained strings, bigint fields and object overhead conservatively. Long names cannot make
       // an otherwise small number of groups retain an unbounded share of a reader's 128 MB heap.
-      const size = 256 + 2 * (group.length + row.session.length + (row.day?.length ?? 0) + row.person.length
+      const size = 416 + 2 * (group.length + row.session.length + (row.day?.length ?? 0) + row.person.length
         + row.profile.length + row.runtime.length + row.model.length);
       held.bytes += size;
       bytes += size;
