@@ -161,7 +161,7 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
   let made_mid = swiped_mid.val
   let old_across = across(false)
   swiped_mid.val = made_mid + " | old: " + swiped_mid.val
-  assert_eq(made, old_across, msg=swiped_mid.val)
+  assert_eq(made, old_across, msg="made \{made} old \{old_across}: \{swiped_mid.val}")
   assert_eq(made, (-1, true, @sfdesk.TapePane::Page), msg="\{made} \{swiped_mid.val}")
 }
 
