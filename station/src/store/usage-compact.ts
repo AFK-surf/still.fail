@@ -66,7 +66,7 @@ export function hasCompactUsage(db: DatabaseSync): boolean {
 export function installUsageSummaryChanges(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get() !== undefined;
   if (!hasCompactUsage(db) || installed()) return;
-  const changed = ["scope", "session", "minute", "thread", "person", "profile", "runtime", "model", "fast", "records", ...cols];
+  const changed = ["scope", "session", "minute", "thread", "person", "profile", "runtime", "model", "fast"];
   const sameBucket = "OLD.scope IS NEW.scope AND OLD.session IS NEW.session AND OLD.minute IS NEW.minute";
   const insert = (r: string, value: string) => `INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${value}, ${r}.session, ${r}.minute);`;
   db.exec("BEGIN IMMEDIATE");
@@ -81,16 +81,20 @@ export function installUsageSummaryChanges(db: DatabaseSync): void {
         INSERT INTO usage_summary_changes (scope, session, minute)
           SELECT scope, session, minute FROM usage_compact WHERE session = NEW.session AND minute = NEW.minute
             AND thread = NEW.thread AND person = NEW.person AND profile = NEW.profile AND runtime = NEW.runtime
-            AND model = NEW.model AND fast = NEW.fast AND scope IS NOT NEW.scope AND records > 0;
+            AND model = NEW.model AND fast = NEW.fast AND scope IS NOT NEW.scope AND (records > 0 OR pending = 1);
       END;
-      CREATE TRIGGER usage_summary_add AFTER INSERT ON usage_compact BEGIN ${insert("NEW", "NEW.scope")} END;
+      CREATE TRIGGER usage_summary_add AFTER INSERT ON usage_compact WHEN NEW.pending = 0 BEGIN ${insert("NEW", "NEW.scope")} END;
       CREATE TRIGGER usage_summary_change AFTER UPDATE OF ${changed.join(", ")} ON usage_compact
         WHEN ${changed.map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ")} BEGIN
           ${insert("OLD", "OLD.scope")}
           INSERT INTO usage_summary_changes (scope, session, minute)
             SELECT NEW.scope, NEW.session, NEW.minute WHERE NOT (${sameBucket});
       END;
-      CREATE TRIGGER usage_summary_drop AFTER DELETE ON usage_compact WHEN OLD.records > 0 BEGIN ${insert("OLD", "OLD.scope")} END;
+      -- Inserts and value changes make the bucket pending. Readers check that index on each reuse; accounting the
+      -- bucket records its final state before it leaves the index, in the total worker's already-batched transaction.
+      CREATE TRIGGER usage_summary_accounted AFTER UPDATE OF pending ON usage_compact
+        WHEN OLD.pending = 1 AND NEW.pending = 0 BEGIN ${insert("NEW", "NEW.scope")} END;
+      CREATE TRIGGER usage_summary_drop AFTER DELETE ON usage_compact WHEN OLD.records > 0 OR OLD.pending = 1 BEGIN ${insert("OLD", "OLD.scope")} END;
       CREATE TRIGGER usage_summary_owner_replace BEFORE INSERT ON usage_minute_scope BEGIN
         INSERT INTO usage_summary_changes (scope, session, minute)
           SELECT ${scopeOf("ws")}, session, NULL FROM usage_minute_scope

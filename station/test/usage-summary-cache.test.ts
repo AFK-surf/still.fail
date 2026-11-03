@@ -29,7 +29,11 @@ test("a repeated usage summary rereads only hours whose statistics changed", asy
       const calls = Array.from({ length: 120 }, (_, n) => [call(`${key}-${n}`, n * 60_000), owner] as [ReturnType<typeof call>, typeof owner]);
       writer.recordUsage(`/${key}`, { session: key, offset: 1, model: "m" }, "claude", calls);
     }
-    compact.installUsageSummaryChanges(writer.db);
+    while (!compact.compactTotalsStep(writer.db, 64).done) { /* Settle existing pending buckets. */ }
+    writer.db.setAuthorizer((action, table) => action === constants.SQLITE_READ &&
+      ["usage", "usage_compact", "usage_minute_scope"].includes(table ?? "") ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { compact.installUsageSummaryChanges(writer.db); }
+    finally { writer.db.setAuthorizer(null); }
     db = new DatabaseSync(path, { readOnly: true });
     const store = reads.makeStore(db, dir);
     const cache = new reads.UsageSummaryCache();
@@ -42,7 +46,9 @@ test("a repeated usage summary rereads only hours whose statistics changed", asy
     const first = await read();
     assert.ok(first);
     assert.deepEqual(first.groups, reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer));
-    db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "usage_compact" ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
+    db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && values.has(column ?? "")
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
     try { assert.deepEqual((await read())?.groups, first.groups, "an unchanged summary does not read the minute buckets again"); }
     finally { db.setAuthorizer(null); }
     writer.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[call("a-1", 60_000, 7), owner]]);
@@ -147,7 +153,9 @@ for (const recursive of [false, true]) test(`cached usage follows older writers,
 
     // An unrelated workspace does not cause a bucket lookup in A while the journal still covers the cache.
     writer.db.exec("UPDATE usage SET output = output + 1 WHERE id = 'b-0'");
-    db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "usage_compact" ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
+    db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && values.has(column ?? "")
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
     try { assert.ok(await read(0)); } finally { db.setAuthorizer(null); }
     const append = writer.db.prepare("INSERT INTO usage_summary_changes (scope, session, minute) VALUES ('WB', 'b', 0)");
     writer.db.exec("BEGIN");
@@ -160,6 +168,59 @@ for (const recursive of [false, true]) test(`cached usage follows older writers,
     assert.ok(fallback.diagnostics.candidates > 0, "a cache older than the journal is rebuilt");
     await same();
   } finally { db.close(); writer.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+for (const recursive of [false, true]) test(`a pending bucket coalesces writes without losing a cached update (recursive triggers ${recursive})`, async () => {
+  const writer = Store.open(":memory:");
+  try {
+    writer.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(writer.db, () => 0);
+    retireUsageIndexes(writer.db);
+    writer.db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    compact.installUsageSummaryChanges(writer.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "one", at: 60_000, model: "m", subagent: true, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    writer.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    while (!compact.compactTotalsStep(writer.db, 64).done) { /* Settle the initial bucket. */ }
+    const reader = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache();
+    const viewer = { workspace: "A", home: false };
+    const read = () => reads.usageGroupsBatched(reader, 0n, 120_000n, 0n, viewer, async () => {}, cache);
+    const seq = () => (writer.db.prepare("SELECT COALESCE(MAX(seq), 0) AS n FROM usage_summary_changes").get() as { n: number }).n;
+    const same = async () => {
+      const result = await read();
+      assert.ok(result);
+      assert.deepEqual(result.groups, reads.usageGroups(reader, 0n, 120_000n, 0n, viewer));
+      return result;
+    };
+    await same();
+    const settledSeq = seq();
+    writer.db.exec("UPDATE usage SET output = 3 WHERE id = 'one'");
+    assert.equal(seq(), settledSeq, "a value change uses the pending index until it is accounted");
+    await same();
+    const pendingSeq = seq();
+    writer.db.exec("UPDATE usage SET output = 7 WHERE id = 'one'");
+    assert.equal(seq(), pendingSeq, "a second write while pending does not write the change journal again");
+    assert.equal((await same()).groups[0]?.output, 7, "the pending index invalidates the hour even without a new journal entry");
+    while (!compact.compactTotalsStep(writer.db, 64).done) { /* The final state is journaled as it is accounted. */ }
+    assert.ok(seq() > pendingSeq);
+    assert.equal((await same()).groups[0]?.output, 7);
+    writer.db.exec("UPDATE usage SET output = 9 WHERE id = 'one'");
+    await same();
+    writer.db.exec("DELETE FROM usage WHERE id = 'one'");
+    assert.deepEqual((await same()).groups, [], "a pending tombstone cannot retain a removed call");
+    while (!compact.compactTotalsStep(writer.db, 64).done) { /* The tombstone is accounted and removed. */ }
+    assert.deepEqual((await same()).groups, []);
+    writer.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "replacement" }, owner]]);
+    while (!compact.compactTotalsStep(writer.db, 64).done) { /* Begin from a visible, accounted bucket. */ }
+    assert.equal((await same()).groups[0]?.calls, 1);
+    writer.db.exec("DELETE FROM usage WHERE id = 'replacement'");
+    writer.db.exec(`INSERT OR REPLACE INTO usage_compact
+      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope)
+      SELECT session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, 'WB'
+      FROM usage_compact WHERE session = 'a'`);
+    assert.deepEqual((await same()).groups, [], "replacing a pending tombstone in another scope invalidates the old scope");
+  } finally { writer.close(); }
 });
 
 test("a cached summary and partial history reuse minutes together and a reader returns the same result", async () => {
@@ -211,5 +272,55 @@ test("a cached summary and partial history reuse minutes together and a reader r
     const wanted = JSON.parse(JSON.stringify(expected));
     assert.deepEqual(JSON.parse(await workers.read("usage", args, "en")), wanted);
     assert.deepEqual(JSON.parse(await workers.read("usage", args, "en")), wanted);
+    writer.recordUsage("/a", { session: "a", offset: 3, model: "m" }, "claude", [[{ ...calls[3]![0], output: 9 }, calls[3]![1]]]);
+    while (!compact.compactTotalsStep(writer.db, 64).done) { /* Account the changed response. */ }
+    const changed = usage(store, "en", 0n, 120n * 60_000n, 0n, false, viewer, true, { historyRange: range });
+    db.exec("BEGIN");
+    try { assert.deepEqual(JSON.parse(JSON.stringify(await compute())), JSON.parse(JSON.stringify(changed))); }
+    finally { db.exec("COMMIT"); }
+    assert.deepEqual(JSON.parse(await workers.read("usage", args, "en")), JSON.parse(JSON.stringify(changed)),
+      "the actual reader refreshes both the detail and the chart after a write");
+    for (const offset of [-61n, 330n]) {
+      const interval = { from: -86_400_000n, to: 86_400_000n - offset * 60_000n };
+      const expectedAtOffset = usage(store, "en", 0n, 120n * 60_000n, offset, false, viewer, true, { historyRange: interval });
+      db.exec("BEGIN");
+      try {
+        const summary = await reads.usageGroupsBatched(store, 0n, 120n * 60_000n, offset, viewer, async () => {}, cache);
+        const history = await reads.usageGroupsBatched(store, interval.from, interval.to, offset, viewer, async () => {}, cache, "history");
+        assert.ok(summary && history);
+        const actual = usage(store, "en", 0n, 120n * 60_000n, offset, false, viewer, true,
+          { historyRange: interval, batched: summary, batchedHistory: { range: interval, result: history } });
+        assert.deepEqual(JSON.parse(JSON.stringify(actual)), JSON.parse(JSON.stringify(expectedAtOffset)));
+      } finally { db.exec("COMMIT"); }
+    }
   } finally { workers?.close(); db?.close(); writer.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("history groups many people before caching, and leaves an oversized history to the SQL aggregate", async () => {
+  const writer = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["people", "A"], ["models", "B"]] as const) {
+      writer.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
+    }
+    compact.installCompactUsage(writer.db, () => 0);
+    retireUsageIndexes(writer.db);
+    writer.db.exec("INSERT INTO usage_minute_scope (session, ws, done) VALUES ('people', 'A', 1), ('models', 'B', 1)");
+    const bucket = writer.db.prepare(`INSERT INTO usage_compact
+      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope)
+      VALUES (?, 0, 0, ?, 'cc', 'claude', ?, 0, 1, 1, 1, 0, 0, 0, 1, ?)`);
+    writer.db.exec("BEGIN");
+    for (let i = 0; i < 8_193; i++) {
+      bucket.run("people", "p" + i, "m", "WA");
+      bucket.run("models", "p", "m" + i, "WB");
+    }
+    writer.db.exec("COMMIT");
+    compact.installUsageSummaryChanges(writer.db);
+    const store = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache();
+    const people = await reads.usageGroupsBatched(store, 0n, 60_000n, 0n, { workspace: "A", home: false }, async () => {}, cache, "history");
+    assert.ok(people);
+    assert.deepEqual(people.groups.map((g) => [g.calls, g.input, g.output]), [[8_193, 8_193, 8_193]]);
+    const models = await reads.usageGroupsBatched(store, 0n, 60_000n, 0n, { workspace: "B", home: false }, async () => {}, cache, "history");
+    assert.equal(models, null, "an unusually large history uses the original SQL aggregate");
+    assert.equal(reads.usageByDay(store, 0n, { workspace: "B", home: false }, true, { from: 0n, to: 1n }).length, 8_193);
+  } finally { writer.close(); }
 });

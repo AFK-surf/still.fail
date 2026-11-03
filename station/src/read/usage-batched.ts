@@ -7,16 +7,21 @@ import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import type { Store } from "./store.ts";
 
 /// The requested time index, ownership lookup, and the selected session's minute index.
-export function batchedUsageQueries(viewer: InWorkspace | null): { selected: string; owner: string; buckets: string } {
+export function batchedUsageQueries(viewer: InWorkspace | null): { selected: string; owner: string; buckets: string; pending: string; anyPending: string } {
   const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
   const scope = viewer === null ? "" : viewer.home === false ? "scope = ?3 AND " : "scope IN (?3, 'H') AND ";
   const bucketScope = viewer === null ? "" : viewer.home === false ? " AND scope = ?5" : " AND scope IN (?5, 'H')";
+  const pendingIndex = viewer === null ? "usage_compact_pending_session" : "usage_compact_pending_scope";
+  const pendingScope = viewer === null ? "" : viewer.home === false ? " AND scope = ?1" : " AND scope IN (?1, 'H')";
+  const pendingFrom = " FROM usage_compact INDEXED BY " + pendingIndex + " WHERE pending = 1" + pendingScope;
   return {
     selected: "SELECT session FROM usage_compact INDEXED BY " + index + " WHERE " + scope + "minute >= ?1 AND minute < ?2",
     owner: "SELECT ws FROM usage_minute_scope WHERE session = ?",
     buckets: "SELECT strftime('%Y-%m-%d', (minute + ?1) * 60, 'unixepoch') AS day, minute, " +
       "session, thread, person, profile, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output " +
       "FROM usage_compact WHERE session = ?2 AND minute >= ?3 AND minute < ?4" + bucketScope + " AND records > 0",
+    pending: "SELECT session, minute" + pendingFrom,
+    anyPending: "SELECT 1" + pendingFrom + " LIMIT 1",
   };
 }
 
@@ -24,10 +29,11 @@ type Part = { day: string | null; session: string; thread: bigint; person: strin
   runtime: string; model: string; fast: bigint; calls: bigint; input: bigint; cache_read: bigint;
   cache_write: bigint; cache_write_long: bigint; output: bigint };
 type Bucket = Part & { minute: bigint };
-type Hour = { session: string; minute: bigint; groups: Map<string, Part> };
-type Cached = { seq: bigint; hours: Map<string, Hour>; cells: number };
+type Hour = { session: string; minute: bigint; groups: Map<string, Part>; bytes: number };
+type Cached = { seq: bigint; hours: Map<string, Hour>; cells: number; bytes: number };
 const names = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
 const MAX_CELLS = 8192;
+const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_ENTRIES = 3;
 
 /// Kept by one reader, never shared across connections. Bound both the number and size of cached answers.
@@ -46,9 +52,10 @@ export class UsageSummaryCache {
   put(db: DatabaseSync, key: string, value: Cached): void {
     this.use(db);
     this.entries.delete(key);
-    if (value.cells > MAX_CELLS) return;
+    if (value.cells > MAX_CELLS || value.bytes > MAX_BYTES) return;
     while (this.entries.size >= MAX_ENTRIES ||
-      [...this.entries.values()].reduce((n, e) => n + e.cells, 0) + value.cells > MAX_CELLS) {
+      [...this.entries.values()].reduce((n, e) => n + e.cells, 0) + value.cells > MAX_CELLS ||
+      [...this.entries.values()].reduce((n, e) => n + e.bytes, 0) + value.bytes > MAX_BYTES) {
       this.entries.delete(this.entries.keys().next().value!);
     }
     this.entries.set(key, value);
@@ -137,13 +144,28 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   // with the preceding snapshot while new ones are built.
   let hours: Map<string, Hour> | null = journal ? new Map(usable ? prior.hours : []) : null;
   let cells = usable ? prior.cells : 0;
+  let bytes = usable ? prior.bytes : 0;
   const putBucket = (row: Bucket) => {
     if (hours === null) return;
     const hour = hourOf(row.minute, utcOffsetMin);
     const key = hourKey(row.session, hour);
     let held = hours.get(key);
-    if (!held) { held = { session: row.session, minute: hour, groups: new Map() }; hours.set(key, held); }
-    if (add(held.groups, groupKey(row), row) && ++cells > MAX_CELLS) hours = null;
+    if (!held) {
+      held = { session: row.session, minute: hour, groups: new Map(), bytes: 128 + key.length * 2 };
+      hours.set(key, held);
+      bytes += held.bytes;
+    }
+    const group = groupKey(row);
+    if (add(held.groups, group, row)) {
+      cells++;
+      // Count the key, retained strings, bigint fields and object overhead conservatively. Long names cannot make
+      // an otherwise small number of groups retain an unbounded share of a reader's 128 MB heap.
+      const size = 256 + 2 * (group.length + row.session.length + (row.day?.length ?? 0) + row.person.length
+        + row.profile.length + row.runtime.length + row.model.length);
+      held.bytes += size;
+      bytes += size;
+      if (cells > MAX_CELLS || bytes > MAX_BYTES) hours = null;
+    }
   };
   let bucket: ReturnType<DatabaseSync["prepare"]> | undefined;
   const visible = viewer === null ? null : s.db.prepare(queries.owner);
@@ -176,17 +198,32 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     if (viewer !== null) args.push("W" + viewer.workspace);
     const whole = new Set<string>();
     const dirty = new Map<string, { session: string; minute: bigint }>();
+    const changedMinute = (session: string, minute: bigint) => {
+      if (minute < start || minute >= end) return;
+      const hour = hourOf(minute, utcOffsetMin);
+      dirty.set(hourKey(session, hour), { session, minute: hour });
+    };
     for (const row of changes.iterate(...args) as Iterable<{ session: string; minute: bigint | null }>) {
       if (row.minute === null) whole.add(row.session);
-      else if (row.minute >= start && row.minute < end) {
-        const minute = hourOf(row.minute, utcOffsetMin);
-        dirty.set(hourKey(row.session, minute), { session: row.session, minute });
-      }
+      else changedMinute(row.session, row.minute);
       if (++steps >= 128) await rest();
+    }
+    // Repeated writes to a pending bucket are coalesced until the totals worker accounts it. A pending bucket may
+    // have changed since this snapshot, so refresh its hour; accounting it records a change before it disappears.
+    const pendingArgs = viewer === null ? [] : ["W" + viewer.workspace];
+    if (s.db.prepare(queries.anyPending).get(...pendingArgs)) {
+      const pending = s.db.prepare(queries.pending);
+      pending.setReadBigInts(true);
+      for (const row of pending.iterate(...pendingArgs) as Iterable<{ session: string; minute: bigint }>) {
+        candidates++;
+        changedMinute(row.session, row.minute);
+        if (++steps >= 64) await rest();
+      }
     }
     const selectedMs = Math.round(performance.now() - started);
     for (const [id, hour] of hours!) if (whole.has(hour.session) || dirty.has(id)) {
       cells -= hour.groups.size;
+      bytes -= hour.bytes;
       hours!.delete(id);
     }
     for (const session of whole) if (!(await readSession(session, start, end))) { cache!.drop(s.db, key); return null; }
@@ -200,7 +237,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       const groups = combine(hours);
       // Formatting can fail on integer overflow. Do not publish an entry from a failed answer.
       const done = result(groups, selectedMs);
-      cache!.put(s.db, key, { seq: last, hours, cells });
+      cache!.put(s.db, key, { seq: last, hours, cells, bytes });
       return done;
     }
     cache!.drop(s.db, key);
@@ -225,7 +262,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     groups.push(...ofSession.values());
   }
   const done = result(groups, selectedMs);
-  if (hours !== null) cache!.put(s.db, key, { seq: last, hours, cells });
+  if (hours !== null) cache!.put(s.db, key, { seq: last, hours, cells, bytes });
   else cache?.drop(s.db, key);
   return done;
 }
