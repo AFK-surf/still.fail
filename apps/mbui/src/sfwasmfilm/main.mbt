@@ -283,3 +283,28 @@ fn drive_passed(logs : Array[String]) -> Bool {
 
 ///|
 fn main { }
+
+///|
+/// A film of the scene (MBUI_FILM and the rest of mbui's film arguments, src/film/film.mbt, as the host's environment
+/// has them): mbui's own film over this host's text and pictures, drawn and written by the Mac host's renderer and
+/// writer (the Node host's). The process ends as the film's run ends it.
+pub fn film() -> Unit {
+  @hostapi.set_host(WasmHost::{})
+  let source = @sffilmscene.source(@film.arg)
+  @film.run(fn(c) { @sfapp.view(c, source()) }, tree=fn(root) { @sfapp.app_tree(source())(root) })
+}
+
+///|
+pub fn film_text_length() -> Int {
+  @film.wasm_text_length()
+}
+
+///|
+pub fn film_text_unit(i : Int) -> Int {
+  @film.wasm_text_unit(i)
+}
+
+///|
+pub fn film_item(i : Int) -> Double {
+  @film.wasm_item(i)
+}

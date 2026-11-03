@@ -11,8 +11,8 @@ job=$3
 prepare=${4:-}
 case "$kind" in
   figure) [ "$#" -eq 3 ] || { echo "$usage" >&2; exit 2; }; part=mbui-figure ;;
-  picture) part=mbui-film-wasm ;;
-  film) part=mbui-film ;;
+  # (both in Wasm, no C compiled for a source state: the user, 2026-11-03)
+  picture|film) part=mbui-film-wasm ;;
   *) echo "$usage" >&2; exit 2 ;;
 esac
 [ -s "$input" ] || { echo "media-job: cannot read $input" >&2; exit 2; }
@@ -45,7 +45,6 @@ case "$part" in
   mbui-film|mbui-film-wasm)
     kind=${MBUI_MEDIA_KIND:-picture}
     case "$kind" in picture) default_out="$D/result.png" ;; film) default_out="$D/result.mp4" ;; *) echo 'media-job: MBUI_MEDIA_KIND must be picture or film' >&2; exit 2 ;; esac
-    [ "$part" != mbui-film-wasm ] || [ "$kind" = picture ] || { echo 'media-job: use a film job for video' >&2; exit 2; }
     out=${1:-$default_out}
     drive=${2:-$D/action.drive}
     prepare=${3:-}

@@ -1,10 +1,11 @@
-// Node host for mbui's Core Text, image decoder and Metal offscreen renderer. No browser or window.
+// Node host for mbui's Core Text, image decoder, Metal offscreen renderer and film writer. No browser or window.
 #import <Cocoa/Cocoa.h>
 #include <node_api.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../../mbui/src/host/apple_text.m"
 #include "../../mbui/src/host/apple_image.m"
+#include "../../mbui/src/host/apple_film.m"
 
 void mb_host_outside(int32_t kind, int32_t image, int32_t state) { (void)kind; (void)image; (void)state; }
 void mb_host_request_frame(void) { }
@@ -244,6 +245,36 @@ static napi_value snapshot_transparent(napi_env env, napi_callback_info info) {
   int ok = mb_render_snapshot_transparent(path); free(path); return integer(env, ok);
 }
 
+// The film's writer (apple_film.m): begun at a path, a frame's instances drawn and kept, put as frame k, closed, and
+// published or discarded.
+static napi_value film_open(napi_env env, napi_callback_info info) {
+  napi_value a[4]; args(env, info, 4, a); size_t len;
+  napi_get_value_string_utf8(env, a[0], NULL, 0, &len);
+  char *path = calloc(len + 1, 1);
+  napi_get_value_string_utf8(env, a[0], path, len + 1, &len);
+  int ok = mbf_open_path([NSString stringWithUTF8String:path], (int32_t)number(env, a[1]), (int32_t)number(env, a[2]),
+      (int32_t)number(env, a[3]));
+  free(path); return integer(env, ok);
+}
+static napi_value film_draw(napi_env env, napi_callback_info info) {
+  napi_value a[5]; args(env, info, 5, a);
+  napi_typedarray_type type; size_t len; void *data; napi_value buffer; size_t offset;
+  if (napi_get_typedarray_info(env, a[0], &type, &len, &data, &buffer, &offset) != napi_ok ||
+      type != napi_float64_array || len < (size_t)number(env, a[1]) * 60) {
+    napi_throw_error(env, NULL, "invalid instance data"); return NULL;
+  }
+  return integer(env, mbf_draw(data, (int32_t)number(env, a[1]), number(env, a[2]), number(env, a[3]), number(env, a[4])));
+}
+static napi_value film_put(napi_env env, napi_callback_info info) {
+  napi_value a[1]; args(env, info, 1, a); return integer(env, mbf_put((int32_t)number(env, a[0])));
+}
+static napi_value film_close(napi_env env, napi_callback_info info) {
+  napi_value a[1]; args(env, info, 1, a); return integer(env, mbf_close((int32_t)number(env, a[0])));
+}
+static napi_value film_finish(napi_env env, napi_callback_info info) {
+  napi_value a[1]; args(env, info, 1, a); return integer(env, mbf_finish((int32_t)number(env, a[0])));
+}
+
 static napi_value setup_exports(napi_env env, napi_value exports) {
   napi_property_descriptor props[] = {
     {"init", NULL, init, NULL, NULL, NULL, napi_default, NULL},
@@ -268,6 +299,11 @@ static napi_value setup_exports(napi_env env, napi_value exports) {
     {"imageFree", NULL, image_free, NULL, NULL, NULL, napi_default, NULL},
     {"imagePixels", NULL, image_pixels, NULL, NULL, NULL, napi_default, NULL},
     {"turn", NULL, turn, NULL, NULL, NULL, napi_default, NULL},
+    {"filmOpen", NULL, film_open, NULL, NULL, NULL, napi_default, NULL},
+    {"filmDraw", NULL, film_draw, NULL, NULL, NULL, napi_default, NULL},
+    {"filmPut", NULL, film_put, NULL, NULL, NULL, napi_default, NULL},
+    {"filmClose", NULL, film_close, NULL, NULL, NULL, napi_default, NULL},
+    {"filmFinish", NULL, film_finish, NULL, NULL, NULL, napi_default, NULL},
   };
   napi_define_properties(env, exports, sizeof(props) / sizeof(props[0]), props);
   return exports;
