@@ -1681,9 +1681,11 @@ pub fn Tester::set_perf(self : Tester, state : Int) -> Unit {
 }
 
 ///|
-/// How many bytes the performance record's files have from now on (@hostapi.perf_size).
+/// How many bytes the performance record's files have from now on (@hostapi.perf_size), told as a host tells it wrote
+/// them (its event: hostcall.mbt's on_outside, outside_perf).
 pub fn Tester::set_perf_size(self : Tester, bytes : Double) -> Unit {
   self.fake.perf_bytes = bytes
+  on_outside(outside_perf, 0, 1)
 }
 
 ///|

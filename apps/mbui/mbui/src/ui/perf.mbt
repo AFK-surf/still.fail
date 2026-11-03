@@ -254,3 +254,23 @@ fn perf_log(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
     "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} painted=\{if p.painted { 1 } else { 0 }} share=\{presented_share.val} passes=\{p.passes} rows=\{nodes_run.built} kept=\{nodes_run.kept} why=\{built_why.val.escape()}",
   )
 }
+
+///|
+/// How many times the host said it wrote to the performance record (hostcall.mbt's on_outside: outside_perf).
+// kept across runs: counted on (what reads it follows it), never put back
+let perf_written : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// The host wrote to the performance record: what reads how much it holds told (perf_size).
+fn perf_told() -> Unit {
+  perf_written.set(@signals.untracked(fn() { perf_written.get() }) + 1)
+}
+
+///|
+/// How many bytes the performance record's files hold (@hostapi.perf_size), as the host last said it wrote them: what
+/// reads it follows each write the host tells (outside_perf), nothing asked of the host on a clock; read again where
+/// the record is turned on or off (what turns it says so).
+pub fn perf_size() -> Double {
+  perf_written.get() |> ignore
+  @hostapi.perf_size()
+}
