@@ -28,10 +28,11 @@ fn settings_home_tester(
 }
 
 ///|
-/// What the window draws, each instance's numbers rounded to a hundredth, in one order whatever order they were drawn in
-/// (read at once: the Tester's are what the window last drew, whichever Tester that was).
+/// What the window draws, each instance's numbers rounded to a hundredth, in one order whatever order they were drawn in,
+/// a shape's band by its pieces (read at once: the Tester's are what the window last drew, whichever Tester that was).
 fn instances_sorted(t : @ui.Tester) -> Array[String] {
-  let all = t.drawn_instances().map(fn(a) {
+  // (a shape's band by its pieces, not where they stand among the frame's: drawn_instances_keyed)
+  let all = t.drawn_instances_keyed().map(fn(a) {
     a
     .mapi(fn(j, x) {
       // (a glyph's place in its atlas, 12 and 13: where the order its glyphs were first drawn in put it, not what is
