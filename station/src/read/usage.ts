@@ -232,6 +232,9 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
 type BatchedHistory = { range: { from: bigint; to: bigint }; result: BatchedUsage };
+// A reader says once when its cache actually serves a request. Fast reads otherwise leave no trace in the slow-read
+// log, so the absence of that warning alone cannot show whether the cache is used.
+let reportedSummaryReuse = false;
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
   options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage; batchedHistory?: BatchedHistory; historyPrepassMs?: number } = {}): Json {
   const includeRemoteRuns = options.remoteRuns !== false;
@@ -330,6 +333,11 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   };
   mark("other");
   const ms = Math.round(performance.now() - started);
+  if (!reportedSummaryReuse && options.batched?.diagnostics.reused) {
+    reportedSummaryReuse = true;
+    log.info("readers", "a usage read reused its summary", { ms, summaryQuery: stages.summaryQuery, summaryCandidates, summaryParts,
+      ...(stages.historyQuery === undefined ? {} : { historyQuery: stages.historyQuery }) });
+  }
   if (ms >= 1_000) {
     const partialMinute = from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n));
     log.warn("readers", "a usage read's stages", { ms, ...stages, summaryGroups: groups.length,

@@ -7,7 +7,7 @@ import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import type { Store } from "./store.ts";
 
 /// The requested time index, ownership lookup, and the selected session's minute index.
-export function batchedUsageQueries(viewer: InWorkspace | null): { selected: string; owner: string; buckets: string; pending: string; anyPending: string } {
+export function batchedUsageQueries(viewer: InWorkspace | null): { selected: string; owner: string; buckets: string; pending: string; pendingRange: string; anyPending: string } {
   const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
   const scope = viewer === null ? "" : viewer.home === false ? "scope = ?3 AND " : "scope IN (?3, 'H') AND ";
   const bucketScope = viewer === null ? "" : viewer.home === false ? " AND scope = ?5" : " AND scope IN (?5, 'H')";
@@ -21,6 +21,7 @@ export function batchedUsageQueries(viewer: InWorkspace | null): { selected: str
       "session, thread, person, profile, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output " +
       "FROM usage_compact WHERE session = ?2 AND minute >= ?3 AND minute < ?4" + bucketScope + " AND records > 0",
     pending: "SELECT session, minute" + pendingFrom,
+    pendingRange: "SELECT session, minute, pending FROM usage_compact INDEXED BY " + index + " WHERE " + scope + "minute >= ?1 AND minute < ?2",
     anyPending: "SELECT 1" + pendingFrom + " LIMIT 1",
   };
 }
@@ -103,7 +104,7 @@ function combine(hours: Map<string, Hour>): Part[] {
 export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
   pause: (ms: number) => Promise<void> = (ms) => ms > 0 ? wall.sleep(ms) : new Promise((resolve) => setImmediate(resolve)),
   cache?: UsageSummaryCache, kind: "summary" | "history" = "summary"): Promise<{
-    groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; rests: number; restMs: number }; ms: number;
+    groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; rests: number; restMs: number; reused: boolean }; ms: number;
   } | null> {
   const max = 9223372036854775807n;
   if (!hasCompactUsage(s.db) || (from < to && (from % 60_000n !== 0n || (to !== max && to % 60_000n !== 0n)))) return null;
@@ -122,8 +123,8 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     steps = 0;
     batchAt = performance.now();
   };
-  const result = (groups: Part[], selectedMs: number) => ({ groups: answer(groups),
-    diagnostics: { parts, candidates, selectedMs, rests, restMs: Math.round(restMs) }, ms: Math.round(performance.now() - started) });
+  const result = (groups: Part[], selectedMs: number, reused = false) => ({ groups: answer(groups),
+    diagnostics: { parts, candidates, selectedMs, rests, restMs: Math.round(restMs), reused }, ms: Math.round(performance.now() - started) });
   const key = JSON.stringify([kind, from.toString(), to.toString(), utcOffsetMin.toString(), viewer?.workspace ?? null,
     viewer === null ? null : viewer.home !== false]);
   const journal = cache !== undefined && s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get() !== undefined;
@@ -198,10 +199,10 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     if (viewer !== null) args.push("W" + viewer.workspace);
     const whole = new Set<string>();
     const dirty = new Map<string, { session: string; minute: bigint }>();
-    const changedMinute = (session: string, minute: bigint) => {
+    const changedMinute = (session: string, minute: bigint, target = dirty) => {
       if (minute < start || minute >= end) return;
       const hour = hourOf(minute, utcOffsetMin);
-      dirty.set(hourKey(session, hour), { session, minute: hour });
+      target.set(hourKey(session, hour), { session, minute: hour });
     };
     for (const row of changes.iterate(...args) as Iterable<{ session: string; minute: bigint | null }>) {
       if (row.minute === null) whole.add(row.session);
@@ -212,13 +213,49 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     // have changed since this snapshot, so refresh its hour; accounting it records a change before it disappears.
     const pendingArgs = viewer === null ? [] : ["W" + viewer.workspace];
     if (s.db.prepare(queries.anyPending).get(...pendingArgs)) {
+      // Usually only a few buckets are pending. If there are many, compare that index with the requested time
+      // range and stop as soon as either is exhausted: a narrow request must not walk another year's pending work,
+      // and a wide request must not walk every minute merely to find a handful of pending buckets.
+      type Pending = { session: string; minute: bigint };
       const pending = s.db.prepare(queries.pending);
       pending.setReadBigInts(true);
-      for (const row of pending.iterate(...pendingArgs) as Iterable<{ session: string; minute: bigint }>) {
-        candidates++;
-        changedMinute(row.session, row.minute);
-        if (++steps >= 64) await rest();
+      const pendingRows = (pending.iterate(...pendingArgs) as IterableIterator<Pending>)[Symbol.iterator]();
+      let rangeRows: IterableIterator<Pending & { pending: bigint }> | undefined;
+      let pendingChanges = new Map<string, { session: string; minute: bigint }>();
+      try {
+        let complete = false;
+        for (let n = 0; n < 64; n++) {
+          const next = pendingRows.next();
+          if (next.done) { complete = true; break; }
+          candidates++;
+          changedMinute(next.value.session, next.value.minute, pendingChanges);
+          if (++steps >= 64) await rest();
+        }
+        if (!complete) {
+          const range = s.db.prepare(queries.pendingRange);
+          range.setReadBigInts(true);
+          const rangeArgs: (string | bigint)[] = [start, end];
+          if (viewer !== null) rangeArgs.push("W" + viewer.workspace);
+          rangeRows = (range.iterate(...rangeArgs) as IterableIterator<Pending & { pending: bigint }>)[Symbol.iterator]();
+          const rangeChanges = new Map<string, { session: string; minute: bigint }>();
+          for (;;) {
+            const inRange = rangeRows.next();
+            if (inRange.done) { pendingChanges = rangeChanges; break; }
+            candidates++;
+            if (inRange.value.pending === 1n) changedMinute(inRange.value.session, inRange.value.minute, rangeChanges);
+            if (++steps >= 64) await rest();
+            const next = pendingRows.next();
+            if (next.done) break;
+            candidates++;
+            changedMinute(next.value.session, next.value.minute, pendingChanges);
+            if (++steps >= 64) await rest();
+          }
+        }
+      } finally {
+        pendingRows.return?.();
+        rangeRows?.return?.();
       }
+      for (const [id, change] of pendingChanges) dirty.set(id, change);
     }
     const selectedMs = Math.round(performance.now() - started);
     for (const [id, hour] of hours!) if (whole.has(hour.session) || dirty.has(id)) {
@@ -236,7 +273,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     if (hours !== null) {
       const groups = combine(hours);
       // Formatting can fail on integer overflow. Do not publish an entry from a failed answer.
-      const done = result(groups, selectedMs);
+      const done = result(groups, selectedMs, true);
       cache!.put(s.db, key, { seq: last, hours, cells, bytes });
       return done;
     }
