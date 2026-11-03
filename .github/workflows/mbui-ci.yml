@@ -111,7 +111,7 @@ jobs:
           for app in demo textdiff kitdemo; do
             /usr/bin/time -p env APP=$app scripts/mac.sh build 2>&1 | tail -4
           done
-      # (no screenshot against goldens/mac*.png here: those are Studio's, at its scale, and every run on this runner
+      # (no screenshot against goldens/mac*.png here: those are test station's, at its scale, and every run on this runner
       # differed from them in size; the pictures are the render workflows' against their machine's references, and the
       # host's picture is the draw list's below, to the byte)
       - name: "Text against Core Text's own (scripts/textdiff.sh mac: the corpus's 255 strings, not only kitdemo's)"
