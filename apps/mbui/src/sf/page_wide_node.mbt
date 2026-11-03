@@ -31,6 +31,8 @@ fn wide_page_node(
   lead : () -> String,
   actions : ((@view.View) -> Unit)?,
   scroll : @view.Scroll,
+  about : () -> String,
+  tips : TipLayer,
 ) -> Unit {
   let items = fn() -> Array[WideItem] {
     let f = frame()
@@ -55,7 +57,7 @@ fn wide_page_node(
       match item {
         // the room the frame keeps over it (a status bar's)
         WideTop => s.height(By(fn() { Some(frame().top) })) |> ignore
-        WideHead => lane_node(s, fn(col) { wide_head_node(col, title, on_back, frame, lead, actions) })
+        WideHead => lane_node(s, fn(col) { wide_head_node(col, title, on_back, frame, lead, actions, about, tips) })
         // what it is for under the frame's bar that names it (barred_page's: desk_barred_lead, 16 in, 12 under)
         WideLead =>
           lane_node(s, fn(col) {
@@ -114,6 +116,8 @@ fn wide_head_node(
   frame : () -> PageFrame,
   lead : () -> String,
   actions : ((@view.View) -> Unit)?,
+  about : () -> String,
+  tips : TipLayer,
 ) -> Unit {
   col
   .padding(By(fn() {
@@ -128,9 +132,17 @@ fn wide_head_node(
   })
   col.box(fn(l) {
     l.row(Is(true)).gap(Is(desk_title_gap)).lines_up(Is(Some(Middle))) |> ignore
+    // (its title, and what it is for by a mark after it where it says (desk_title_about: 6 apart, across their middle),
+    // the title cut short before it)
     l.box(fn(w) {
-      w.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(pg_title_least))) |> ignore
-      styled_words(w, title, fn() { desk_title }) |> ignore
+      w.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(pg_title_least))).row(Is(true)).gap(Is(desk_about_gap)).lines_up(Is(Some(Middle)))
+      |> ignore
+      w.box(fn(t) {
+        t.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        styled_words(t, title, fn() { desk_title }) |> ignore
+      })
+      |> ignore
+      w.show(fn() { about() != "" }, fn(m) { about_mark_node(m, about, fn() { t("web-main.about") }, tips) |> ignore })
     })
     |> ignore
     match actions {
@@ -171,6 +183,10 @@ let desk_lead_top : Double = 6.0
 let desk_back_foot : Double = 8.0
 
 ///|
+/// A wide title's mark after it (desk_title_about's gap=S1_5).
+let desk_about_gap : Double = 6.0
+
+///|
 /// Back over a wide page's head (desk_back's, as a node): its chevron and where it goes (`label`), muted, the text's
 /// ink under the hand; `back` done as it is pressed; read out a link by where it goes.
 fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit) -> Unit {
@@ -185,6 +201,30 @@ fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit) 
   })
   |> ignore
 }
+
+///|
+/// What a section says in place of what it holds where it has none, `words` as it says it now: narrow, 12 from the
+/// page's sides, none over and 8 under, the meta's muted as wide as the page (mMemoryNote); wide, as it is, the UI's
+/// muted.
+pub fn section_none_node(parent : @view.View, words : () -> String) -> Unit {
+  parent.box(fn(n) {
+    match look_node(n) {
+      Narrow => {
+        n.padding(Is((section_none_x, 0.0, section_none_x, section_none_foot))) |> ignore
+        words_node(n, words, fn() { said_narrow }) |> ignore
+      }
+      Wide => words_node(n, words, fn() { desk_muted }) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// section_none_node's room, narrow: from the page's sides, and under it.
+let section_none_x : Double = 12.0
+
+///|
+let section_none_foot : Double = 8.0
 
 ///|
 /// A titled block of a page made once (section's): narrow, a heading over what it holds where it `heads` (none where
@@ -295,10 +335,14 @@ fn wide_link_row_node(
   lead : RowLead,
   goes : Bool,
   ends : Bool,
-  mark : String,
+  mark : () -> String,
   acts : Bool,
   below : ((@view.View) -> Unit)?,
   below_open : () -> Double,
+  note_cut : Bool,
+  title_after : ((@view.View) -> Unit)?,
+  title_after_shown : () -> Bool,
+  folds : (() -> Bool)?,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
@@ -315,7 +359,7 @@ fn wide_link_row_node(
     if goes {
       r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
       presses_node(r, press)
-      r.says(By(fn() { Some(@view.said(Link, label=title())) })) |> ignore
+      r.says(By(fn() { Some(@view.said(Link, label=title(), expanded?=folds.map(fn(f) { f() }))) })) |> ignore
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as a list's title's line at least,
     // across its middle)
@@ -345,9 +389,28 @@ fn wide_link_row_node(
       words.box(fn(first) {
         first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
         first.box(fn(t) {
-          styled_words(t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))), title, fn() { titled }) |> ignore
-          if acts {
-            t.ink(By(fn() { link_ink() })) |> ignore
+          t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          // (what follows its title on its line while it is said, 8 apart across their middle, the title cut short where
+          // the line leaves it less: link_row's title_line; its title the same words all along)
+          t.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+          t.box(fn(w) {
+            w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+            styled_words(w, title, fn() {
+              if title_after is Some(_) && title_after_shown() { titled.then(cut_words) } else { titled }
+            })
+            |> ignore
+            if acts {
+              w.ink(By(fn() { link_ink() })) |> ignore
+            }
+          })
+          |> ignore
+          match title_after {
+            Some(after) =>
+              t.show(title_after_shown, fn(a) {
+                a.margin(Is((8.0, 0.0, 0.0, 0.0))) |> ignore
+                after(a)
+              })
+            None => ()
           }
         })
         |> ignore
@@ -358,11 +421,13 @@ fn wide_link_row_node(
           |> ignore
         })
         if ends {
-          icon_node(first, mark, desk_chevron, By(fn() { theme().p.muted })) |> ignore
+          icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore
         }
       })
       |> ignore
-      words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { wide_list_note }) |> ignore })
+      words.show(fn() { note() != "" }, fn(n) {
+        styled_words(n, note, fn() { if note_cut { wide_list_note.then(cut_words) } else { wide_list_note } }) |> ignore
+      })
       words.show(fn() { trouble() != "" }, fn(n) { styled_words(n, trouble, fn() { desk_note_bad }) |> ignore })
       match below {
         Some(f) => row_below_node(words, f, below_open)

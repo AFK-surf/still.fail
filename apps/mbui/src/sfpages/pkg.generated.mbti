@@ -327,13 +327,11 @@ pub fn look_of(@ui.Ctx) -> @sf.Look
 
 pub fn me_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
-pub let mem_narrow_title : @ui.TextStyle
 
 pub fn memories_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn memory_doc_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String, Int32) -> Unit
 
-pub fn memory_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
 
 pub fn message_files(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Attachment], Bool, by? : (String, String, String)?, landing_key? : String, corner? : Double, at? : String) -> Unit
 

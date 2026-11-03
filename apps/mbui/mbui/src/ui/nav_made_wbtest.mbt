@@ -224,3 +224,26 @@ test "window tree: a made page's time on top its own entry's: kept while another
   let again = (log.stints["m1"])()
   assert_true(again != s1 && again != s2, msg="\{s1} \{s2} \{again}")
 }
+
+///|
+test "window tree: a made page in the hand by a scripted run's drag (its steps taken as each frame ends, as a film's): each frame it moves in the hand says a page held by a finger; at rest again, none" {
+  let (t, nav, _, _) = made_stack()
+  pushed(t, nav, "m1")
+  let held = Ref(0)
+  let missed : Array[Int] = []
+  t.drive("drag 4 400 60 0 300\nwait 800\nexit", each=fn(_) {
+    if nav.mode == 3 {
+      held.val += 1
+      if !g().page_in_hand {
+        missed.push(g().frame_no)
+      }
+    }
+  })
+  |> ignore
+  assert_true(held.val > 3, msg="frames in the hand: \{held.val}")
+  assert_eq(missed, [])
+  // (let go short of a third: back where it was, at rest, no page in the hand)
+  assert_eq(nav.depth(), 2)
+  assert_eq(nav.mode, 0)
+  assert_true(!g().page_in_hand, msg="at rest")
+}

@@ -349,7 +349,7 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// The pages of the stack made once as nodes of the tree's in the narrow shell (nav_view's `made`), by their kind, the
-/// rest old views (narrow_page_held): the settings' list (the gear's), 关于, 记忆 and 归档. Each in the workspace in view, made
+/// rest old views (narrow_page_held): the settings' list (the gear's), 关于, 记忆, 一台 station 的记忆 and 归档. Each in the workspace in view, made
 /// again as that changes; its frame what the shell gives a page (back to the one under it, under the status bar, over
 /// the navigation bar: setting_page's) as that changes; under the status bar the page's ground over it, and a window's
 /// band its buttons are in dragging it, as page_view puts them over a page that has no top of its own.
@@ -429,11 +429,15 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
     Setting(Usage) =>
       made("usage", fn(p, core, here, frame, _stint) { @sfpages.usage_node(p, core, here, on_back=core.pop, frame~) })
     Setting(UsagePrices(days)) =>
-      made("usage-prices", fn(p, core, here, frame, _stint) {
+      made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint) {
         @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame~)
       })
     Setting(Memories) =>
       made("memories", fn(p, core, here, frame, _stint) { @sfpages.memories_node(p, core, here, on_back=core.pop, frame~) })
+    Setting(Memory(address)) =>
+      made("memory/" + address, fn(p, core, here, frame, _stint) {
+        @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame~)
+      })
     // (a place of the bottom bar's whose page is one of those: place_page's, made once as they are)
     Place(name) =>
       match @settings.route_of(name) {
@@ -446,6 +450,11 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
         Some(Changelog) =>
           made_at("place/changelog", Some(name), fn(p, core, _here, frame, _stint) {
             @sfpages.changelog_node(p, core, on_back=core.pop, frame~)
+          })
+        // (by its station: another station's another page, not this one become it)
+        Some(Memory(address)) =>
+          made_at("place/memory/" + address, Some(name), fn(p, core, here, frame, _stint) {
+            @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame~)
           })
         _ => None
       }

@@ -48,7 +48,7 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
       // (a page's bar on the tape the tree's, over its own view: what the page says of it, collected as it is built)
       head=fn(b, k, made) { tape_bar_head(b, k, made, tips) },
       // (a page of the library's made once in its place, where it is: its bar the tape's, from what the page is)
-      made=fn(p) { tape_made(src, p) },
+      made=fn(p) { tape_made(src, p, tips) },
       // (what its bar said kept till its entry leaves the stack: shown again (beside the one over it as that goes back),
       // its bar there with it before its page is built again)
       gone=fn(k) { tape_bars.remove(k) },
@@ -157,15 +157,20 @@ fn tape_bar_head(b : @view.View, k : Int, made : Bool, tips : @sf.TipLayer) -> U
   // from (its back); else as its old view said it. Where it was put on from as last said, kept while the stack is
   // told of a change before it is whole (an entry put in place and kept shown by its owner, told in either order))
   let under : Ref[Page?] = Ref(None)
+  // (and whether it is a place of the rail's itself, kept so with it: no back over one, whatever is under it)
+  let place = Ref(false)
   let said = fn() {
     if !made {
       return tb.said.get()
     }
     match app.nav.page_of(k) {
-      Some((_, u)) => under.val = u
+      Some((p, u)) => {
+        under.val = u
+        place.val = p is Place(_)
+      }
       None => ()
     }
-    Some(tape_made_bar(under.val, tb.page_said.get()))
+    Some(tape_made_bar(under.val, place.val, tb.page_said.get()))
   }
   b.show(fn() { said() is Some(_) }, fn(h) {
     pane_bar_node(
@@ -238,7 +243,11 @@ fn tape_bar_collected(c : @ui.Ctx, build : () -> Unit) -> Unit {
 /// where the page is narrow (look_for that width), a gate between their two makings for now (no wide arrangement of
 /// theirs yet); wider, their old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
 /// its own, nothing over it in its room.
-fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
+fn tape_made(
+  src : Source,
+  page : Page,
+  tips : @sf.TipLayer,
+) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
   // (as wide as the stack in the panel at rest, as the tape lays it out now: the page's width, 0 while not known)
   let width = fn() {
     let r = tape_room_now()
@@ -305,8 +314,20 @@ fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
             context_node(p)
             @sfpages.changelog_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
           })
+        // (by its station: another station's another page, not this one become it)
+        Some(Memory(address)) =>
+          made("place/memory/" + address, fn(p, core, here, _stint, told) {
+            context_node(p)
+            @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
+          })
         _ => None
       }
+    // (by its station: another station's another page, not this one become it)
+    Setting(Memory(address)) if pane_makes.val =>
+      made("memory/" + address, fn(p, core, here, _stint, told) {
+        context_node(p)
+        @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
+      })
     // (the others narrow ones alone: wider, their old view)
     _ if !narrow => None
     Setting(Archiving) =>
@@ -335,10 +356,10 @@ let tape_made_frame : @sf.PageFrame = { back: None, top: 0.0, foot: 0.0, named: 
 ///|
 /// The bar over a page made once in the page's panel (tape_made), as it said of itself (`said`: its title, what it is
 /// for; none yet, nothing said), back where the page it was put on from (`under`) is one of the settings' or a place
-/// of the rail's (setting_page's).
-fn tape_made_bar(under : Page?, said : @sf.PageSaid?) -> PaneBarSaid {
+/// of the rail's (setting_page's); none over a `place` of the rail's itself, whatever is under it (place_page's).
+fn tape_made_bar(under : Page?, place : Bool, said : @sf.PageSaid?) -> PaneBarSaid {
   let back = match under {
-    Some(u) if u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
+    Some(u) if !place && u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
     _ => None
   }
   match said {

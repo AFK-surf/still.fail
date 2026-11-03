@@ -76,7 +76,7 @@ fn pane_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
 /// place shown as pane_page_wait says, at its causes; nothing pushed over slides here (shown in place as any other).
 /// While the workspace waits to be confirmed in its safe mode, what waits in its place instead, the stack none of it
 /// (nothing of it pressed, nothing of it back), as the frame had it before.
-fn pane_pages(v : @view.View, src : Source) -> Unit {
+fn pane_pages(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
   let gated = fn() {
     match @sfbase.workspace_in_view(src).0 {
       Some(w) => fold_target(src, w, v.window().0).0.gated
@@ -95,7 +95,7 @@ fn pane_pages(v : @view.View, src : Source) -> Unit {
   })
   v.box(fn(s) {
     s.grow(Is(1.0)).laid_nowhere(By(gated)) |> ignore
-    pane_stack(s, src)
+    pane_stack(s, src, tips)
   })
   |> ignore
 }
@@ -118,7 +118,7 @@ fn pane_gate_built(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-fn pane_stack(v : @view.View, src : Source) -> Unit {
+fn pane_stack(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
   @ui.nav_flat_view(
     v,
     app.nav,
@@ -129,7 +129,7 @@ fn pane_stack(v : @view.View, src : Source) -> Unit {
     stacks=fn() { false },
     page_key=fn(_) { tape_island_key() },
     // (a page of the library's made once in its place: 关于)
-    made=fn(p) { pane_made(src, p) },
+    made=fn(p) { pane_made(src, p, tips) },
     // (which show, as the stack stands whole: the page made once that shows, by its entry)
     shown=fn(ks) { fold_goes.shown = ks },
   )
@@ -141,7 +141,11 @@ fn pane_stack(v : @view.View, src : Source) -> Unit {
 /// (nav_flat_view's `made`): 关于, 记忆, 更新日志. Laid out by the width the frame gives the pane (the window's less the block's column
 /// where its move goes: fold_target's, never what the page last laid out), narrow or wide (page_node), each made again
 /// only as that arrangement changes. What the old view's island did for the page done by its node (pane_made_host).
-fn pane_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
+fn pane_made(
+  src : Source,
+  page : Page,
+  tips : @sf.TipLayer,
+) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
   guard pane_makes.val else { return None }
   // (made in the workspace in view, its settings' core, under what it was opened from, as wide as the frame gives it)
   let made = fn(
@@ -151,19 +155,21 @@ fn pane_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
     Some(
       (
         kind,
-        fn(v : @view.View, _page : () -> Page, under : Page?, _stint : () -> Int, k : Int) {
+        fn(v : @view.View, page : () -> Page, under : Page?, _stint : () -> Int, k : Int) {
           v.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
             guard @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) is Some(w) else { return }
             let core = settings_core(src, w)
             let here = fn() { @settings.here_of(core, w.id, w.name) }
             @settings.frame(core, @signals.untracked(here))
             pane_made_host(p, src, k)
-            // (back over it only under another settings page or a place of the rail's: setting_page's; its words read
-            // as they are said, in the language now)
+            // (back over it only under another settings page or a place of the rail's: setting_page's; a place of the
+            // rail's itself, none, whatever is under it: place_page's; its words read as they are said, in the
+            // language now)
             let frame = fn() -> @sf.PageFrame {
               {
-                back: match under {
-                  Some(u) if u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
+                back: match (page(), under) {
+                  (Place(_), _) => None
+                  (_, Some(u)) if u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
                   _ => None
                 },
                 top: 0.0,
@@ -213,8 +219,18 @@ fn pane_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
           made("place/changelog", fn(a, core, _here, frame, width) {
             @sfpages.changelog_node(a, core, on_back=core.pop, frame~, width~)
           })
+        // (by its station: another station's another page, not this one become it)
+        Some(Memory(address)) =>
+          made("place/memory/" + address, fn(a, core, here, frame, width) {
+            @sfpages.memory_node(a, core, here, address, on_back=core.pop, frame~, width~, tips~)
+          })
         _ => None
       }
+    // (by its station: another station's another page, not this one become it)
+    Setting(Memory(address)) =>
+      made("memory/" + address, fn(a, core, here, frame, width) {
+        @sfpages.memory_node(a, core, here, address, on_back=core.pop, frame~, width~, tips~)
+      })
     _ => None
   }
 }

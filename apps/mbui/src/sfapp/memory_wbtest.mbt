@@ -15,8 +15,8 @@ test "记忆 as a place of the bottom bar: the top bar names it, no title of its
 }
 
 ///|
-test "记忆, 关于 and 更新日志 as places of the bottom bar, made once: the top bar names each and has settings, what it holds under it; the window wider, the same place still shows" {
-  for case in [("memories", "全局记忆 · 项目记忆"), ("about", "服务条款"), ("changelog", "10 月 19 日")] {
+test "记忆, 关于, 更新日志 and 一台 station 的记忆 as places of the bottom bar, made once: the top bar names each and has settings, what it holds under it; the window wider, the same place still shows" {
+  for case in [("memories", "全局记忆 · 项目记忆"), ("about", "服务条款"), ("changelog", "10 月 19 日"), ("memory:ws1/st1", "发布流程")] {
     let (place, words) = case
     new_run()
     let src = fixture("settings")
@@ -42,5 +42,52 @@ test "记忆, 关于 and 更新日志 as places of the bottom bar, made once: th
       assert_true(app.nav.top() == Place(place), msg="\{place} at \{w}")
       assert_true(t.find(words) is Some(_), msg="\{place} at \{w}: \{t.drawn_text()}")
     }
+  }
+}
+
+///|
+test "一台 station 的记忆 as a place, become another station's in its place, on each screen: that station's memory asked for, its name and rows the tree's" {
+  for w in [390.0, 700.0, 1280.0] {
+    new_run()
+    let asked : Array[String] = []
+    let src = topic_asked(fixture("settings"), "memory", "station", asked)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform=2)
+    t.draw()
+    app.nav.replace(Place("memory:ws1/st1"))
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    let first = (asked.last(), tree_words_drawn().iter().any(fn(o) { o.contains("发布流程") }))
+    app.nav.become(Place("memory:ws1/st2"))
+    t.run_for(@ui.move_most_ms)
+    let own = tree_words_drawn()
+    assert_eq(
+      (first, asked.last(), own.iter().any(fn(o) { o.contains("发布流程") })),
+      ((Some("ws1/st1"), true), Some("ws1/st2"), true),
+      msg="at \{w}: \{own}",
+    )
+  }
+}
+
+///|
+test "一台 station 的记忆 as a place over another place, on the tape and wide: no back over it, in the page nor in the tape's bar (a place of the rail's has none, whatever is under it)" {
+  for w in [700.0, 1280.0] {
+    new_run()
+    let src = fixture("settings")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform=0)
+    t.draw()
+    let back = @sfbase.back_label(Place("memories"))
+    let backs = fn() { t.semantics().filter(fn(s) { s.label == back && !s.hidden }).length() }
+    app.nav.replace(Place("memories"))
+    t.run_for(@ui.move_most_ms)
+    @sfdesk.bring_page()
+    t.run_for(@ui.move_most_ms)
+    let alone = backs()
+    app.nav.push(Place("memory:ws1/st1"))
+    t.run_for(@ui.move_most_ms)
+    // (on the tape, its panel the one in use: what its bar says read out)
+    @sfdesk.bring_page()
+    t.run_for(@ui.move_most_ms)
+    assert_true(tree_words_drawn().iter().any(fn(o) { o.contains("发布流程") }), msg="at \{w}: \{tree_words_drawn()}")
+    assert_eq(backs(), alone, msg="a back over it at \{w}")
   }
 }

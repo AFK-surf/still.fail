@@ -144,6 +144,10 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   slow_probe(c, t, t3 - t0, t4 - t3)
   perf_log(c, t, t3 - t0, t4 - t3)
   drive_frame(c)
+  // (what the stacks the window's tree holds say of the frame, as it ends: built whole, painted alone or of its looks
+  // alone, and what came in as it was drawn taken (a scripted run's steps, drive_frame): a page one of them has in the
+  // hand moves with no clock read, nav_view.mbt)
+  nav_views_framed(c)
   // a motion said, not at its end; one read going (built or painted from where it is now: Ctx::shows_motion); a cycle
   // shown (motion_data.mbt)
   c.motion_left = c.motion_owed() || c.motion_read
