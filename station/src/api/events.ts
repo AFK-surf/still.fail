@@ -710,6 +710,10 @@ export class Events {
     if (this.taking !== null) return void this.early.push(() => this.storeChanged(change));
     switch (change.type) {
       case "session":
+        // Its messages taken: how many it has yet to take, told now (its summary, read after, says it too): read
+        // behind the station's other tells, 2 to 6 s each on ccvm short of memory (2026-11-03), a person's message
+        // showed it waits for its agent all that while.
+        if (change.pending !== undefined) this.emit("session-pending", { key: change.key, pending: change.pending }, { sees: { session: change.key } });
         this.dirty.sessions.add(change.key);
         // Its summary is told (`session`): a device that makes its rows puts it in them.
         this.itemsChanged({ sessions: [change.key] }, null, true);

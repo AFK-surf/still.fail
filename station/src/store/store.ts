@@ -1434,7 +1434,13 @@ export class Store {
       for (const { thread, n, apart } of messages) {
         this.#run(`UPDATE ${apart ? "letter_deliveries" : "deliveries"} SET delivered_at = ? WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL`, now, thread, n, session);
       }
-      if (messages.length > 0) changes.push({ type: "session", key: session });
+      if (messages.length > 0) {
+        const pending = Number(this.#one(
+          "SELECT (SELECT COUNT(*) FROM deliveries INDEXED BY deliveries_pending WHERE session = ?1 AND delivered_at IS NULL) + (SELECT COUNT(*) FROM letter_deliveries WHERE session = ?1 AND delivered_at IS NULL) AS n",
+          session,
+        )?.n ?? 0);
+        changes.push({ type: "session", key: session, pending });
+      }
     });
   }
 

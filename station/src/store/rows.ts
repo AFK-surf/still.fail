@@ -224,8 +224,8 @@ export type TurnFor = { profile: string | null; person: string | null; thread: n
 
 /// What the store says changed, for whoever follows it (the admin API's /events, the hub).
 export type StoreChange =
-  /// Anything about that session changed.
-  | { type: "session"; key: string }
+  /// Anything about that session changed; `pending`: how many messages it has yet to take, as it took some.
+  | { type: "session"; key: string; pending?: number }
   /// It was deleted; `ws` the workspace its chat was in (null: the home one).
   | { type: "sessionRemoved"; key: string; ws?: string | null }
   /// Entries were appended there (contiguous, in order), or its sessions changed (none); `closed`: the post (its n)
