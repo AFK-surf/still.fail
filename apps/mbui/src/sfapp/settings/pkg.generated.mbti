@@ -167,7 +167,7 @@ pub fn keys_changeable(Json?) -> Bool
 
 pub fn keys_of(Json?, String) -> Array[String]
 
-pub let keys_recording : @ref.Ref[String]
+pub let keys_recording : @signals.Signal[String]
 
 pub fn keys_text(Json?, String) -> String
 

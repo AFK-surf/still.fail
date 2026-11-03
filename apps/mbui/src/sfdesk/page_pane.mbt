@@ -235,7 +235,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -257,6 +257,11 @@ fn pane_made(
     Setting(StationArchiving(st)) =>
       made("station-archiving/" + st, fn(a, core, here, _stint, frame, width) {
         @sfpages.station_archiving_node(a, core, here, st, on_back=core.pop, frame~, width~)
+      })
+    Setting(Shortcuts) =>
+      // (recording while it is the one on top of the stack: its stay there, stint's)
+      made("shortcuts", fn(a, core, _here, stint, frame, width) {
+        @sfpages.shortcuts_node(a, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stint() }, width~)
       })
     Setting(Usage) =>
       made("usage", fn(a, core, here, _stint, frame, width) {

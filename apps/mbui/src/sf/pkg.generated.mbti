@@ -843,6 +843,10 @@ pub fn keys_gap(size? : Double, least? : Double) -> @ui.Space
 
 pub fn keys_row(size? : Double) -> @ui.Style
 
+pub fn keys_row_node(@view.View, () -> String, () -> String, () -> Bool, () -> Bool, () -> Unit, () -> Bool, () -> Unit, () -> String, () -> String) -> Unit
+
+pub fn keys_rows_node(@view.View, (@view.View) -> Unit) -> Unit
+
 pub fn kind_icon(String) -> String
 
 pub let lacking : @ui.TextStyle
@@ -1799,7 +1803,7 @@ pub let secondary : @ui.TextStyle
 
 pub fn section(@ui.Ctx, String, () -> Unit, heads? : Bool, note? : String, actions? : () -> Unit, title_after? : () -> Unit) -> Unit
 
-pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String) -> Unit
+pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String, actions? : (() -> Bool, (@view.View) -> Unit)) -> Unit
 
 pub fn section_none_node(@view.View, () -> String) -> Unit
 
@@ -2114,6 +2118,8 @@ pub fn tape_side_corners() -> FixedArray[@paint.CornerOf]
 pub let text_in : Double
 
 pub let text_scale : @ui.TextScale
+
+pub fn text_toggle_node(@view.View, () -> String, () -> Unit) -> Unit
 
 pub fn textarea(@ui.Ctx, String, rows? : Int32, most? : Int32, placeholder? : String, field? : @ui.Field, corner? : Double, solid? : Bool) -> String
 
