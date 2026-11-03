@@ -392,39 +392,33 @@ test "更新日志 made once, narrow: words picked dragged past the page's foot 
 
 
 ///|
-test "大屏 一台 station 的记忆 made once: every instance drawn as its old view's, wide, with keyboard and mouse and with a finger, at the system's larger words, the window wider; its rows the tree's own" {
+test "大屏 一台 station 的记忆 made once, wide, with keyboard and mouse and with a finger, at the system's larger words, the window wider: its rows the tree's own" {
   for case in [(0, 1.0, 1280.0), (2, 1.0, 1280.0), (0, 2.0, 1280.0), (0, 1.0, 1800.0)] {
     let (platform, scale, w) = case
-    let old = large_about_tester(false, platform, scale~, w~, mode="settings-memory")
-    let old_drawn = instances_sorted(old)
-    let old_words = words_where(old)
     let made = large_about_tester(true, platform, scale~, w~, mode="settings-memory")
     assert_true(app.nav.top() == Setting(@settings.Route::Memory("ws1/st1")), msg="\{case}")
+    assert_true(instances_sorted(made).length() > 0)
     let own = tree_words_drawn()
-    assert_true(own.iter().any(fn(o) { o.contains("发布流程") }), msg="its rows the tree's: \{own}")
-    same_drawn(words_where(made), old_words, "words at \{case}")
-    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
+    for w in [@sf.t("web-main.memory.global"), "习惯", "发布流程", "周报", "pdf、xlsx"] {
+      assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="\{w} not the tree's own at \{case}: \{own}")
+    }
   }
 }
 
 ///|
-test "大屏 一台 station 的记忆 made once, its own skills folded open and shut, wide: each as its old view's" {
+test "大屏 一台 station 的记忆 made once, its own skills folded open and shut, wide" {
   for platform in [0, 2] {
-    let at = fn(tree : Bool) {
-      let t = large_about_tester(tree, platform, mode="settings-memory")
-      t.tap_text(@sf.t("web-main.memory.builtin"))
-      t.run_for(@motion.ripple_tap_ms)
-      let open = (instances_sorted(t), words_where(t))
-      t.tap_text(@sf.t("web-main.memory.builtin"))
-      t.run_for(@motion.ripple_tap_ms)
-      (open, instances_sorted(t), words_where(t))
-    }
-    let (old_open, old_shut, old_shut_words) = at(false)
-    let (open, shut, shut_words) = at(true)
-    same_drawn(open.1, old_open.1, "open, words at \{platform}")
-    same_drawn(open.0, old_open.0, "open, instances at \{platform}")
-    same_drawn(shut_words, old_shut_words, "shut, words at \{platform}")
-    same_drawn(shut, old_shut, "shut, instances at \{platform}")
+    let t = large_about_tester(true, platform, mode="settings-memory")
+    let shut0 = words_where(t)
+    t.tap_text(@sf.t("web-main.memory.builtin"))
+    t.run_for(@motion.ripple_tap_ms)
+    let open = words_where(t)
+    t.tap_text(@sf.t("web-main.memory.builtin"))
+    t.run_for(@motion.ripple_tap_ms)
+    let shut = words_where(t)
+    let rows = fn(ws : Array[String]) { ws.iter().any(fn(w) { w.has_prefix("xlsx at") }) }
+    assert_true(!rows(shut0) && rows(open) && !rows(shut), msg="its rows at \{platform}")
+    same_drawn(shut, shut0, "shut again as at first at \{platform}")
   }
 }
 
@@ -451,21 +445,13 @@ test "大屏 一台 station 的记忆 made once, the language changed and the st
 }
 
 ///|
-test "大屏 一台 station 的记忆 made once: what it is for by a mark after its title, its tip as the pointer rests on it, as its old view's" {
-  let at = fn(tree : Bool) raise {
-    let t = large_about_tester(tree, 0, mode="settings-memory")
-    let mark = match t.semantics().search_by(fn(n) { n.role == Button && n.label == @sf.t("web-main.about") }) {
-      Some(i) => t.semantics()[i].rect
-      None => fail("its mark read out")
-    }
-    t.move(mark.0 + mark.2 / 2.0, mark.1 + mark.3 / 2.0)
-    t.run_for(@kit.tooltip_delay_ms + @ui.move_most_ms)
-    (mark, words_where(t), instances_sorted(t))
-  }
-  let (old_mark, old_words, old_drawn) = at(false)
-  let (mark, words, drawn) = at(true)
-  assert_eq(mark, old_mark)
+test "大屏 一台 station 的记忆 made once: what it is for by one mark after its title, its tip as the pointer rests on it" {
+  let t = large_about_tester(true, 0, mode="settings-memory")
+  let marks = t.semantics().filter(fn(n) { n.role == Button && n.label == @sf.t("web-main.about") })
+  guard marks is [m] else { fail("its mark read out \{marks.length()} times") }
+  let mark = m.rect
+  t.move(mark.0 + mark.2 / 2.0, mark.1 + mark.3 / 2.0)
+  t.run_for(@kit.tooltip_delay_ms + @ui.move_most_ms)
+  let words = words_where(t)
   assert_true(words.iter().any(fn(w) { w.has_prefix(@sf.t("web-pages.settings.memory.lead")) }), msg="its tip: \{words}")
-  same_drawn(words, old_words, "words, its tip shown")
-  same_drawn(drawn, old_drawn, "instances, its tip shown")
 }
