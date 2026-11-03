@@ -221,7 +221,7 @@ export function usageDetailSince(db: DatabaseSync): number | null {
 
 /// Install triggers and the cutover under one write lock, so no call can fall between them. The old statistics remain
 /// untouched and no old calls are enumerated; an already complete index continues to be used as before.
-export function installUsageDetail(db: DatabaseSync, now = Date.now()): void {
+export function installUsageDetail(db: DatabaseSync, now: number): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_detail_all'").get() !== undefined;
   const incomplete = () => (db.prepare("SELECT done FROM usage_detail_all WHERE id = 1").get() as { done: number }).done !== 1;
   if (installed() && (usageDetailGeneration(db) === "live" || !incomplete())) return;

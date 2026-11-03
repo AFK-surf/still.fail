@@ -32,7 +32,7 @@ function expected(db: DatabaseSync, size: number) {
 test("a moved session's range is sought through its current workspace without rewriting buckets", () => {
   const db = older();
   try {
-    installUsageDetail(db);
+    installUsageDetail(db, 0);
     for (let i = 0; i < 80; i++) add(db, `a${i}`, "a", i * 60_000);
     add(db, "b", "b", 1);
     const query = detailQuery(0n, 90_000_000n, 0n, { workspace: "A", home: false })!;
@@ -63,7 +63,7 @@ test("replacing and updating a recorded call changes its contribution exactly on
     const db = older();
     try {
       db.exec(`PRAGMA recursive_triggers = ${recursive}`);
-      installUsageDetail(db);
+      installUsageDetail(db, 0);
       add(db, "one", "a", 2, 3);
       add(db, "two", "a", 2, 4);
       db.prepare(`INSERT OR IGNORE INTO usage VALUES (?, ?, ?, NULL, NULL, NULL, 'claude', 'm', 0, 1, ?, 0, 0, 0, 0)`)
@@ -82,7 +82,7 @@ test("replacing and updating a recorded call changes its contribution exactly on
 test("looking for a replaced call seeks its own buckets instead of scanning the statistics", () => {
   const db = older();
   try {
-    installUsageDetail(db);
+    installUsageDetail(db, 0);
     for (const sql of removeReplacedStatements("?1")) {
       const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("one") as { detail: string }[]).map((r) => r.detail);
       assert.ok(plan.some((line) => line.includes("SEARCH usage_detail USING PRIMARY KEY (session=? AND level=? AND bucket=?")), plan.join(" | "));
@@ -94,7 +94,7 @@ test("looking for a replaced call seeks its own buckets instead of scanning the 
 test("detail totals follow repeated moves, replacements and writes without a history worker", () => {
   const db = older();
   try {
-    installUsageDetail(db);
+    installUsageDetail(db, 0);
     for (let i = 0; i < 40; i++) add(db, `a${i}`, "a", i * 1000, i + 1);
     add(db, "b1", "b", 1, 2);
     const check = () => {
@@ -137,7 +137,7 @@ test("a partially filled detail index resumes after reopening", () => {
   let db = older(path);
   try {
     for (let i = 0; i < 12; i++) add(db, `a${i}`, "a", i * 1000);
-    installUsageDetail(db);
+    installUsageDetail(db, 0);
     assert.equal(backfillUsageDetail(db, "a", 3).processed, 3);
     db.close();
     db = new DatabaseSync(path);
