@@ -551,6 +551,10 @@ pub struct Tree {
   mut layout_due : Bool
   mut order_due : Bool
   mut due : Bool
+  /// the host is being told that a frame is due (Tree::marked)
+  mut telling_due : Bool
+  /// the host took a frame while being told (Tree::frame)
+  mut due_frame_taken : Bool
   mut last_w : Double
   mut last_h : Double
   /// the window's size, as its frames give it: what is laid out by it (which frame a window's width calls for) follows it
@@ -793,6 +797,8 @@ pub fn Tree::new(
     layout_due: true,
     order_due: true,
     due: true,
+    telling_due: false,
+    due_frame_taken: false,
     last_w: -1.0,
     last_h: -1.0,
     order: [],
@@ -1407,7 +1413,21 @@ fn Tree::placed(self : Tree, at : Int) -> (Double, Double, Double) {
 fn Tree::marked(self : Tree) -> Unit {
   if !self.due {
     self.due = true
-    (self.on_due)()
+    // (the host is already being told: it will ask for a frame for everything marked by that telling too. Laying out
+    // during the telling can clear `due` and mark it again; telling the host recursively would repeat that layout.)
+    if !self.telling_due {
+      self.telling_due = true
+      while true {
+        self.due_frame_taken = false
+        (self.on_due)()
+        // (a host that took a frame synchronously needs to hear of work left after that frame; a layout alone is not
+        // a frame and does not consume the notification)
+        if !self.due_frame_taken || !self.due {
+          break
+        }
+      }
+      self.telling_due = false
+    }
   }
 }
 
@@ -5583,6 +5603,9 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   self.brought(upto)
   let drawn = self.drawn_due
   self.drawn_due = false
+  if self.telling_due {
+    self.due_frame_taken = true
+  }
   drawn
 }
 
