@@ -37,4 +37,36 @@ cmp "$take/prepare.drive" "$take/film/prepare.drive"
 if bash "$repo/apps/mbui/scripts/media-job.sh" figure "$take/scene.json" "$take/first" >/dev/null 2>&1; then
   echo 'media-job-test: an existing job was overwritten' >&2; exit 1
 fi
-echo 'media-job-test: scenes and drives stay separate from the exact renderer version'
+
+# One prepared job can capture several scenes with the same cached renderer, without overwriting the first result.
+cache="$take/cache"
+for kind in figure film; do
+  if [ "$kind" = figure ]; then job="$take/first"; part=mbui-figure; exe=sffigure; launcher=figure-run.sh
+  else job="$take/film"; part=mbui-film; exe=sffilm; launcher=media.sh; fi
+  key=$(cat "$job/runtime.key")
+  artifact="$cache/$part/darwin-arm64-$key"
+  mkdir -p "$artifact"
+  : > "$artifact/$exe"
+  printf '{"part":"%s","target":"darwin-arm64","key":"%s"}\n' "$part" "$key" > "$artifact/manifest.json"
+  cat > "$artifact/$launcher" <<'LAUNCHER'
+#!/bin/bash
+printf '%s\n' "$@" > "$MEDIA_TEST_ARGS"
+LAUNCHER
+done
+export STILLFAIL_NATIVE_CACHE="$cache" STILLFAIL_NATIVE=offline MEDIA_TEST_ARGS="$take/args"
+bash "$take/film/run.sh"
+printf 'picture\n%s\n%s\n%s\n' "$take/film/result.png" "$take/film/action.drive" "$take/film/prepare.drive" > "$take/expected"
+cmp "$take/expected" "$take/args"
+bash "$take/film/run.sh" "$take/other.png" "$take/action.drive" ''
+printf 'picture\n%s\n%s\n' "$take/other.png" "$take/action.drive" > "$take/expected"
+cmp "$take/expected" "$take/args"
+MBUI_MEDIA_KIND=film bash "$take/film/run.sh" "$take/other.mp4" "$take/action.drive" "$take/prepare.drive"
+printf 'film\n%s\n%s\n%s\n' "$take/other.mp4" "$take/action.drive" "$take/prepare.drive" > "$take/expected"
+cmp "$take/expected" "$take/args"
+bash "$take/first/run.sh" "$take/other-figure.png" "$take/scene.json"
+printf '%s\n' --scene "$take/scene.json" "$take/other-figure.png" > "$take/expected"
+cmp "$take/expected" "$take/args"
+if bash "$take/first/run.sh" a b c >/dev/null 2>&1; then
+  echo 'media-job-test: a figure accepted a preparation drive' >&2; exit 1
+fi
+echo 'media-job-test: source keys, separate scenes and repeated captures passed'

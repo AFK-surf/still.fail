@@ -33,19 +33,25 @@ cat > "$job/run.sh" <<'RUN'
 #!/bin/bash
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
+[ "$#" -le 3 ] || { echo 'run.sh [OUTPUT [INPUT [PREPARE]]]' >&2; exit 2; }
 part=$(cat "$D/runtime.part")
 key=$(cat "$D/runtime.key")
 renderer=$(node "$D/scripts/native.ts" file-key "$part" darwin-arm64 "$key")
 case "$part" in
   mbui-figure)
-    exec bash "$(dirname "$renderer")/figure-run.sh" --scene "$D/scene.json" "$D/result.png" ;;
+    [ "$#" -le 2 ] || { echo 'run.sh [OUTPUT [SCENE]]' >&2; exit 2; }
+    exec bash "$(dirname "$renderer")/figure-run.sh" --scene "${2:-$D/scene.json}" "${1:-$D/result.png}" ;;
   mbui-film)
     kind=${MBUI_MEDIA_KIND:-picture}
-    case "$kind" in picture) out="$D/result.png" ;; film) out="$D/result.mp4" ;; *) echo 'media-job: MBUI_MEDIA_KIND must be picture or film' >&2; exit 2 ;; esac
-    if [ -s "$D/prepare.drive" ]; then
-      exec bash "$(dirname "$renderer")/media.sh" "$kind" "$out" "$D/action.drive" "$D/prepare.drive"
+    case "$kind" in picture) default_out="$D/result.png" ;; film) default_out="$D/result.mp4" ;; *) echo 'media-job: MBUI_MEDIA_KIND must be picture or film' >&2; exit 2 ;; esac
+    out=${1:-$default_out}
+    drive=${2:-$D/action.drive}
+    prepare=${3:-}
+    if [ "$#" -lt 3 ] && [ -s "$D/prepare.drive" ]; then prepare="$D/prepare.drive"; fi
+    if [ -n "$prepare" ]; then
+      exec bash "$(dirname "$renderer")/media.sh" "$kind" "$out" "$drive" "$prepare"
     else
-      exec bash "$(dirname "$renderer")/media.sh" "$kind" "$out" "$D/action.drive"
+      exec bash "$(dirname "$renderer")/media.sh" "$kind" "$out" "$drive"
     fi ;;
   *) echo 'media-job: invalid runtime part' >&2; exit 2 ;;
 esac
