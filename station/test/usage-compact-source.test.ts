@@ -1015,6 +1015,15 @@ test("the optional usage chart range reaches the reader and wakes pending totals
   assert.equal(wakes, 1);
 });
 
+test("an unbounded usage history asks its workspace to settle pending new statistics", async () => {
+  const woken: unknown[] = [];
+  const route = usageRoutes({ read: () => Promise.resolve({ status: 200, headers: {}, body: Buffer.alloc(0) }) } as never,
+    () => false, (viewer) => { woken.push(viewer); })[1]!;
+  const viewer = { workspace: "A", home: false };
+  await route.handle({ lang: "en", query: [["history", "1"]], viewer } as never, []);
+  assert.deepEqual(woken, [viewer]);
+});
+
 test("pages calls at the same time past SQLite rowids above JavaScript's integer precision", () => {
   const store = Store.open(":memory:");
   try {
