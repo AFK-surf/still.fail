@@ -971,7 +971,7 @@ export function batchedUsageQueries(viewer: InWorkspace | null): { selected: str
 /// pages at once to evict what the station is using. Both the time-index pass and the per-session pass yield; no old
 /// calls are reconstructed and no new statistics are written. Partial-minute edges keep their existing exact query.
 export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
-  pause: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => { if (ms > 0) setTimeout(resolve, ms); else setImmediate(resolve); })): Promise<{
+  pause: (ms: number) => Promise<void> = (ms) => ms > 0 ? wall.sleep(ms) : new Promise((resolve) => setImmediate(resolve))): Promise<{
     groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; rests: number; restMs: number }; ms: number;
   } | null> {
   const max = 9223372036854775807n;
