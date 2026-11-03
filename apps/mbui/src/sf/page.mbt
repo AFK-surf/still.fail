@@ -1126,7 +1126,8 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// say), its title `strong` where it names who or what the row is, in red where it takes something away (`danger`:
 /// 注销账号), and a chevron (none where not `chevron`: what it does is done here; down where it `folds` what follows
 /// it, up while that is open), or an arrow out where it goes `out` of the app; `lead` before its words (a mark, a dot), `tail` after what it says (a pill, a spinner); going nowhere
-/// where not `goes` (a value said); `below` under its note (its allowance's chips). Its note, what is wrong and what is
+/// where not `goes` (a value said); `chevron_room` keeps a chevron's space when there is none, so a list's ends align;
+/// `below` under its note (its allowance's chips). Its note, what is wrong and what is
 /// below are lines of their own as wide as its words, what it says, its tail and its chevron on its first line beside
 /// its title (row_top). One that `acts` (does something at once where it is: 检查未决策的 chat) says so at either width:
 /// its title in the link's ink, no chevron; one that `adds` one more to the list it ends (添加: an option, a station) is
@@ -1154,6 +1155,7 @@ pub fn link_row(
   danger? : Bool = false,
   out? : Bool = false,
   chevron? : Bool = true,
+  chevron_room? : Bool = false,
   folds? : Bool,
   note? : String = "",
   lacks? : Bool = false,
@@ -1269,6 +1271,8 @@ pub fn link_row(
           }
           if goes && (chevron || out) {
             icon(c, mark, size=pg_chevron, color=th.p.subtle) |> ignore
+          } else if chevron_room {
+            c.box(style=@ui.style(w=Fixed(pg_chevron), h=Fixed(pg_chevron)), fn() {  }) |> ignore
           }
           // (a face's row's control at the row's end in its middle, not on its first line: a control as tall as a
           // press's room (button_height) on a first line reaches past the row over it)
@@ -1396,6 +1400,8 @@ pub fn link_row(
           }
           if goes && (chevron || out) {
             icon(c, mark, size=desk_chevron, color=th.p.muted) |> ignore
+          } else if chevron_room {
+            c.box(style=@ui.style(w=Fixed(desk_chevron), h=Fixed(desk_chevron)), fn() {  }) |> ignore
           }
           // (a face's row's control at the row's end in its middle, as on a narrow page)
           if !(under && face) {

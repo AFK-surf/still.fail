@@ -96,6 +96,63 @@ test "a profile's workspace row shows its own mark, but no repeated initial with
 }
 
 ///|
+/// Three places with the same account status: the current station, a link, and one still waiting for a profile.
+fn alignment_places(s : Source) -> Source {
+  fn shaped(v : Json) -> Json {
+    match v {
+      Object(o) => {
+        let p = o.copy()
+        for k, x in o { p[k] = shaped(x) }
+        if o.get("key") == Some(Json::string("ws1/st1/cc")) && o.contains("places") {
+          let place = fn(station : String, name : String, id : String) -> Json {
+            obj([
+              ("station", str(station)), ("stationName", str(name)), ("profileId", str(id)),
+              ("online", Json::boolean(true)), ("usable", Json::boolean(true)),
+              ("state", obj([("text", str("额度查询失败")), ("tone", str("amber"))])),
+            ])
+          }
+          p["places"] = Json::array([
+            place("ws1/st1", "Studio", "cc"),
+            place("ws1/st2", "MBA", "cc"),
+            place("ws1/st3", "Mini1", ""),
+          ])
+        }
+        Json::object(p)
+      }
+      Array(a) => Json::array(a.map(shaped))
+      _ => v
+    }
+  }
+  {
+    ..s,
+    topic: fn(name, params) {
+      let v = (s.topic)(name, params)
+      if name == "profiles" {
+        match v.value {
+          Some(x) => { ..v, value: Some(shaped(x)) }
+          None => v
+        }
+      } else { v }
+    },
+  }
+}
+
+///|
+test "an account's station statuses line up whether their rows open or not" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, h=2400.0, over=alignment_places)
+    let at = "\{w} platform \{platform}"
+    let statuses = t.boxes().filter(fn(b) { b.text == "额度查询失败" })
+    assert_eq(statuses.length(), 3, msg=at)
+    assert_eq(statuses[0].x, statuses[1].x, msg="\{at}: current and link")
+    assert_eq(statuses[2].x, statuses[1].x, msg="\{at}: pending and link")
+    assert_true(t.query(Link, label="Studio") is None, msg="\{at}: current does not open")
+    assert_true(t.query(Link, label="MBA") is Some(_), msg="\{at}: another station opens")
+    assert_true(t.query(Link, label="Mini1") is None, msg="\{at}: pending does not open")
+  }
+}
+
+///|
 /// The fixture's Claude subscription before it is shared.
 fn unshared_claude(s : Source) -> Source {
   fn without_share(v : Json) -> Json {
