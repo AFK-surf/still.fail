@@ -10,3 +10,7 @@ bench/flutter/build/
 bench/flutter/pubspec.lock
 bench/flutter/macos/Flutter/ephemeral/
 __pycache__/
+# Moon's media pre-build embeds the tracked SVGs into these generated sources.
+src/media/iphone_11_pro.mbt
+src/media/ipad_pro_11.mbt
+src/media/macbook_pro_16.mbt

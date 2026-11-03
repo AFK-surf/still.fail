@@ -1075,6 +1075,17 @@ fn Ctx::rows_on_grid(self : Ctx) -> Bool {
 }
 
 ///|
+/// How many device pixels a point the window's tree sets a page's list's rows on (@view.Tree::set_rows_grid), at
+/// `scale` as this frame draws: as an old view's list's are (rows_on_grid), anywhere where they are not.
+fn Ctx::rows_grid_of(self : Ctx, scale : Double) -> Double {
+  if self.rows_on_grid() {
+    scale
+  } else {
+    0.0
+  }
+}
+
+///|
 /// A Tester's list rows laid on the pixels as a host lays them, its rows kept as their nodes (a test of it).
 // kept across runs: set by a test, put back by each Tester (Tester::new)
 let rows_grid_test : Ref[Bool] = Ref(false)

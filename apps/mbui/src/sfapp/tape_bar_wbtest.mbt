@@ -219,11 +219,11 @@ test "on the tape a finger's tap on the bar's mark shows what the page is for ti
 ///|
 /// A station's memory a level further in from 记忆 on the tape of a window 600 × 760 of `platform` (a Mac's; else a
 /// finger's, its host saying Medium), its page in use: back to 记忆 there.
-fn tape_station_memory(platform? : Int = 0, said? : Bool = false, font? : Double = 1.0) -> @ui.Tester raise {
+fn tape_station_memory(platform? : Int = 0, said? : Bool = false, font? : Double = 1.0, w? : Double = 600.0) -> @ui.Tester raise {
   new_run()
   let src = fixture("settings")
   let src = if said { @sffixture.said_longest_source(src) } else { src }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=600.0, h=760.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=760.0, platform~)
   if platform != 0 {
     say_room(t, "medium", "medium")
   }
@@ -235,7 +235,7 @@ fn tape_station_memory(platform? : Int = 0, said? : Bool = false, font? : Double
   t.run_for(@ui.move_most_ms)
   t.click(Link, label="记忆")
   t.run_for(@ui.move_most_ms)
-  page_over(t, 600.0)
+  page_over(t, w)
   // (the station's row: its name as it wrote it, the first line of it)
   match t.words().search_by(fn(w) { w.0.has_prefix("Studio") }) {
     Some(i) => {
@@ -246,7 +246,7 @@ fn tape_station_memory(platform? : Int = 0, said? : Bool = false, font? : Double
   }
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "发布流程", 600.0))
+  assert_true(settings_page_whole(t, "发布流程", w))
   t
 }
 
@@ -547,5 +547,21 @@ test "on the tape 记忆, 归档 and 自动决策 made once under the tape's bar
     // (what it is for by a mark in the bar where the page says so: 自动决策's, as its old bar has it)
     let marks = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "说明" && !s.hidden }).length()
     assert_eq(marks, if page.0 == "settings-decisions" { 1 } else { 0 }, msg="\{page.0}: its mark")
+  }
+}
+
+///|
+test "on the tape 一台 station 的记忆 swiped from its edge by a scripted run's drag (its steps taken as each frame ends, as a film's): each frame held to the corner rule where the page is not in the hand; across, the page under it, short, the page stays" {
+  // (Tester::hold_corners on every frame drawn: a frame with the page off its place and not said to be in the hand
+  // fails the test where it is drawn)
+  for case in [(300.0, -1, 600.0), (60.0, 0, 600.0), (300.0, -1, 720.0), (60.0, 0, 720.0), (300.0, -1, 839.0), (60.0, 0, 839.0)] {
+    let (across, went, w) = case
+    let t = tape_station_memory(platform=1, w~)
+    let depth = app.nav.depth()
+    guard tape_page_panel(t) is Some(p) else { fail("no page") }
+    let x = (p.x + 6.0).to_int()
+    let y = (p.y + 300.0).to_int()
+    t.drive("drag \{x} \{y} \{across.to_int()} 0 600\nwait 800\nexit") |> ignore
+    assert_eq(app.nav.depth(), depth + went, msg="\{across} across at \{w}")
   }
 }

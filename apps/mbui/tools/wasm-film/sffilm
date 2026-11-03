@@ -1,0 +1,7 @@
+#!/bin/sh
+# A picture renderer compatible with media.sh; films still use the native renderer.
+set -eu
+D=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+[ -z "${MBUI_FILM:-}" ] || { echo 'wasm-film: films require the native renderer' >&2; exit 2; }
+[ -n "${MBUI_PICTURE:-}" ] || { echo 'wasm-film: MBUI_PICTURE is required' >&2; exit 2; }
+exec node --liftoff-only --no-wasm-tier-up --wasm-num-compilation-tasks=2 "$D/run.mjs" "$MBUI_PICTURE"

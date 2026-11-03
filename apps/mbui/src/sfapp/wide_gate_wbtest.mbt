@@ -242,3 +242,33 @@ test "wide: the chat with the focus in its field put out of the stack while the 
   assert_eq(focus_said(t), "none")
   assert_false(t.ime().0)
 }
+
+///|
+test "Duo: 发送批准请求 pressed on the waiting page is taken, the system's bars handed all the while" {
+  new_run()
+  let calls : Array[String] = []
+  let base = fixture("lock-waiting")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push(name)
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=669.0, h=951.0, platform=1, nav_able=true)
+  t.keep_parts(true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":82,\"bottom\":34,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.move_most_ms)
+  // (none handed to the host in a frame would take the app's view out of the tabs, the finger on it never told it went up)
+  let handed = fn() { !t.nav_said().contains("\"groups\":[]") }
+  assert_true(handed())
+  let b = t.words().filter(fn(n) { n.0 == "发送批准请求" })[0]
+  let (x, y) = (b.1 + b.3 / 2.0, b.2 + b.4 / 2.0)
+  t.press_at(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_true(handed())
+  t.release(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_true(handed())
+  assert_true(calls.contains("lock.pair"), msg="\{calls}")
+}

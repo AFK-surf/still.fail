@@ -124,6 +124,29 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
     v.close();
     view = null;
     await pulling;
+
+    // Opened again on the inner panel, after all those folds: the picture its shape from the first, not back through them.
+    const unfolding = await hub.get(`simulator:${udid}`)!.open({ maxWidth: 1000, maxHeight: 1400, codecs: ["jpeg"] });
+    view = unfolding;
+    await unfolding.input({ t: "pose", name: "open" });
+    await sleep(5000);
+    unfolding.close();
+    await sleep(1000);
+    const again = await hub.get(`simulator:${udid}`)!.open({ maxWidth: 1000, maxHeight: 1400, codecs: ["jpeg"] });
+    view = again;
+    const shapes: number[] = [];
+    const seen = (async () => {
+      for (let f = await again.next(); f !== null; f = await again.next()) shapes.push(shape(f.data));
+    })();
+    await sleep(6000);
+    again.close();
+    view = null;
+    await seen;
+    console.log("shapes on opening", shapes.map((n) => n.toFixed(3)).join(" "));
+    assert.ok(shapes.length > 0, "a picture");
+    near(shapes.at(-1)!, inner, "at the end");
+    const wrong = shapes.filter((n) => Math.abs(n - inner) >= 0.006);
+    assert.ok(wrong.length <= 1, `its picture went through other shapes: ${shapes}`);
   } finally {
     view?.close();
     simulators.close();

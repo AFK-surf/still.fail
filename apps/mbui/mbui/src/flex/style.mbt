@@ -176,6 +176,10 @@ pub(all) struct Style {
   // at its width, what it holds laid out whole in it (past it where the share is less than 1): a room opening on what
   // it holds, its height and what it holds the same layout's, whatever what it holds comes to as it opens.
   mut content_share : Double
+  // Not CSS's: a column whose items are a page's list's rows set on a host's pixels (this many a point; 0: anywhere): each
+  // as tall as whole pixels, rounded up, what is under it lower by as much, the column as much taller (an old view's
+  // list's rows', ui's Ctx::row_slot).
+  mut rows_grid : Double
   // bumped by every change to what the box comes from (its lengths and box
   // sizing): a node's box stands while it is the same (Node's box_ver)
   priv mut ver : Int
@@ -256,6 +260,7 @@ pub fn Style::new() -> Style {
     min_held: false,
     wrap_least: false,
     content_share: 0.0 / 0.0,
+    rows_grid: 0.0,
     ver: 0,
     basis_v: 0.0,
     basis_k: LEN_AUTO,

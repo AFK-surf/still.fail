@@ -573,7 +573,7 @@ fn view_words_rescaled() -> Unit {
 ///|
 /// The tree's frame of the window `w` by `h` at `t` (what was marked done: src/view), the instances it changed to be
 /// made again, where each old view is placed now.
-fn view_frame(w : Double, h : Double, t : Double) -> Unit {
+fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let tree = match view_app.val {
     Some(tree) => tree
     None => {
@@ -591,6 +591,9 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   tree_theme_said.set(Some(g().theme_for(w)))
   tree_window_corner.set(window_corner())
   tree_inset_said.set(Some(window_inset()))
+  // (a page's list's rows on the pixels as this frame draws them, as an old view's list's are, before anything of it is
+  // laid out: Tree::set_rows_grid)
+  tree.set_rows_grid(g().rows_grid_of(scale))
   // (the logic's moment for all of this frame: what the host has come to as it began; brought again in the frame, the
   // tree goes no further than that, whatever time its building takes)
   view_logic_at.val = h_now()
@@ -702,8 +705,6 @@ fn view_island_said() -> String {
 /// The old frame's build where the window is a tree: the one old view's own where it is the whole window; else each
 /// old view in a box of its own where it is placed, cut to it, its subtree made once there by its own watch.
 fn old_frame(c : Ctx) -> Unit {
-  // (what the stacks the tree holds say of a frame: nav_view.mbt)
-  nav_views_framed(c)
   // (told since the frame began (what the frame took as it went: a core's answer, the system's bars), or old views made
   // or let go: the tree brought and each placed as it is, so that the frame builds those there are where they are)
   match view_app.val {

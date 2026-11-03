@@ -157,9 +157,12 @@ fn seg_room(c : @ui.Ctx, options : Array[String]) -> (Double, Double) {
 
 ///|
 /// How wide a choice's words `s` are on one line at `size` and `weight`, as they are drawn: the app's own words, their
-/// digits all one width where the theme says so (@ui.Theme `tabular`: 「7 天」's 7 as wide as 30's digits each).
-fn choice_words_w(c : @ui.Ctx, s : String, size : Double, weight? : Int = 400) -> Double {
-  @ui.text_advance(s, size~, weight~, style=if c.theme().tabular { @hostapi.style_tabular } else { 0 })
+/// digits all one width where the theme they are drawn in says so (@ui.Theme `tabular`: 「7 天」's 7 as wide as 30's
+/// digits each): an old view's, `c`'s; a node's, the window's tree's (`tree`: @ui.tree_theme, what its words are drawn
+/// in, view_host's words_style), whatever theme `c` was left in.
+fn choice_words_w(c : @ui.Ctx, s : String, size : Double, weight? : Int = 400, tree? : Bool = false) -> Double {
+  let tabular = if tree { @ui.tree_theme().tabular } else { c.theme().tabular }
+  @ui.text_advance(s, size~, weight~, style=if tabular { @hostapi.style_tabular } else { 0 })
 }
 
 ///|
@@ -283,9 +286,10 @@ fn fitted(
   weight : Int,
   side : Double,
   least : Double,
+  tree? : Bool = false,
 ) -> Fitted {
   let size = c.sp(base)
-  let words = labels.map(fn(l) { choice_words_w(c, l, size, weight~) })
+  let words = labels.map(fn(l) { choice_words_w(c, l, size, weight~, tree~) })
   // (no smaller than the app says them: the size the system's own size of words draws)
   let smallest = dmin(1.0, base / size)
   let (widths, fit) = option_widths(words, room, side, least, smallest)
@@ -296,14 +300,14 @@ fn fitted(
     Smaller(k0) => {
       let most = room - 2.0 * least * labels.length().to_double()
       let mut k = k0
-      let mut drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~) })
+      let mut drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~, tree~) })
       let mut sum = drawn.fold(init=0.0, fn(s, w) { s + w })
       for _ in 0..<4 {
         if sum <= most + 0.01 || sum <= 0.0 || k < smallest {
           break
         }
         k = k * most / sum
-        drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~) })
+        drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~, tree~) })
         sum = drawn.fold(init=0.0, fn(s, w) { s + w })
       }
       if k < smallest || sum > most + 0.01 {

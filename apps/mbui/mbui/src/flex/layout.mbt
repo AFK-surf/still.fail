@@ -1377,6 +1377,14 @@ fn layout_flex(
           f.unsafe_set(k * ITEM + MAIN, f.unsafe_get(k * ITEM + HYP))
         }
       }
+      // (a page's list's rows on a host's pixels: each as tall as whole pixels, Style's rows_grid)
+      let g = s.rows_grid
+      if g > 0.0 && !row {
+        for k in ln.start..<ln.end {
+          let m = f.unsafe_get(k * ITEM + MAIN)
+          f.unsafe_set(k * ITEM + MAIN, (m * g - 0.000001).ceil() / g)
+        }
+      }
       let mut used = gaps
       for k in ln.start..<ln.end {
         used = used + f.unsafe_get(k * ITEM + MAIN) + f.unsafe_get(k * ITEM + MARGIN_MAIN)

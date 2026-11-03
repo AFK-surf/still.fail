@@ -1069,6 +1069,25 @@ test "wide: words picked in a message with the pointer: 引用 over them quotes 
 }
 
 ///|
+test "wide: words in a message that did not go can be picked, copied and quoted" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-failed")
+  let (x, y, w, h) = words_rect(t, "好，就按这个改")
+  t.drag(x + 1.0, y + h / 2.0, x + w - 1.0, y + h / 2.0)
+  t.frame()
+  let selected = t.ctx().selected_text()
+  assert_true(selected != "")
+  t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
+  assert_eq(t.clipboard(), selected)
+  t.tap_text("引用")
+  let quoted = named(calls, "composer.quote")
+  assert_eq(quoted.length(), 1)
+  let q = field(Some(quoted[0].params), "quote")
+  assert_eq(text(q, "text"), selected.trim(chars=" \n\t").to_string())
+  assert_eq(text(q, "ts"), "")
+}
+
+///|
 test "wide: words picked with the pointer from a message's heading into its list: 引用 over them quotes all of them, a line each" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")

@@ -239,10 +239,12 @@ function mbuiRenderer(app: string, launcher: string): Part {
     // Their own workflow tests and publishes them without holding up unrelated native parts.
     publish: [],
     rust: false,
+    // Generated interface summaries are not compiler inputs; `moon check` can rewrite them without changing a scene.
     inputs: ["apps/mbui/src", "apps/mbui/mbui/src", "apps/mbui/mbui/tools", "apps/mbui/mbui/scripts",
       "apps/mbui/moon.mod", "apps/mbui/moon.work", "apps/mbui/mbui/moon.mod",
       "apps/mbui/scripts/env.sh", "apps/mbui/scripts/mbui.sh", "apps/mbui/scripts/mac.sh", `apps/mbui/scripts/${launcher}`,
-      ":(exclude,glob)apps/mbui/**/*_test.mbt", ":(exclude,glob)apps/mbui/**/*_wbtest.mbt"],
+      ":(exclude,glob)apps/mbui/**/*_test.mbt", ":(exclude,glob)apps/mbui/**/*_wbtest.mbt",
+      ":(exclude,glob)apps/mbui/**/pkg.generated.mbti"],
     recipe: () => ({ app, target: "native", mode: "release", host: "macOS", scene: 1 }),
     build(t, out) {
       if (t !== "darwin-arm64" || osPlatform() !== "darwin" || osArch() !== "arm64") {
@@ -258,9 +260,29 @@ function mbuiRenderer(app: string, launcher: string): Part {
   };
 }
 
+/// The same scene in classic Wasm, with the Mac's offscreen text, pictures and Metal renderer. Stills only.
+function mbuiWasmFilm(): Part {
+  const base = mbuiRenderer("sffilm", "media.sh");
+  if (!Array.isArray(base.inputs)) throw new Error("mbui renderer inputs must be a list");
+  return {
+    ...base,
+    files: () => ["sffilm", "media.sh", "scene.wasm", "native.node", "run.mjs", "compact.mjs"],
+    inputs: [...base.inputs, "apps/mbui/tools/wasm-film", ":(exclude,glob)apps/mbui/tools/wasm-film/*test.mjs", "apps/mbui/scripts/wasm-film-build.sh"],
+    recipe: () => ({ app: "sfwasmfilm", target: "wasm", mode: "release", host: "macOS", scene: 1 }),
+    build(t, out) {
+      if (t !== "darwin-arm64" || osPlatform() !== "darwin" || osArch() !== "arm64") {
+        throw new Error("sfwasmfilm is built on an Apple Silicon Mac");
+      }
+      const module = join(ROOT, "apps/mbui");
+      run("bash", [join(module, "scripts/wasm-film-build.sh"), out], { cwd: module });
+    },
+  };
+}
+
 const PARTS: Record<string, Part> = {
   "mbui-figure": mbuiRenderer("sffigure", "figure-run.sh"),
   "mbui-film": mbuiRenderer("sffilm", "media.sh"),
+  "mbui-film-wasm": mbuiWasmFilm(),
   // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the core on Node (its tests,
   // apps/mbui's e2e peer) uses it too.
   mesh: {

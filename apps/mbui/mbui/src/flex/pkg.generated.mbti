@@ -141,6 +141,7 @@ pub(all) struct Style {
   mut min_held : Bool
   mut wrap_least : Bool
   mut content_share : Double
+  mut rows_grid : Double
   // private fields
 }
 pub fn Style::basis_kind(Self) -> Int32
