@@ -14,7 +14,7 @@ import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { Store } from "../src/store/store.ts";
 import { watchCompactMoves } from "../src/usage/module.ts";
 
-test("a repeated usage summary rereads only hours whose statistics changed", async () => {
+test("a repeated usage summary rereads only minutes whose statistics changed", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-summary-cache-"));
   const path = join(dir, "stillfail.db");
   const writer = Store.open(path);
@@ -63,10 +63,14 @@ test("a repeated usage summary rereads only hours whose statistics changed", asy
     const next = await read();
     assert.ok(next);
     assert.deepEqual(next.groups, reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer));
-    assert.equal(next.diagnostics.parts, 60, "only the changed session's hour is read again");
+    assert.equal(next.diagnostics.parts, 1, "only the changed session's minute is read again");
     assert.equal(next.diagnostics.candidates, 1, "a small pending set does not read the other minutes in the range");
     writer.recordUsage("/a", { session: "a", offset: 3, model: "m" }, "claude",
-      [[call("a-0", 0, 2), owner], [call("a-90", 90 * 60_000, 3), owner]]);
+      Array.from({ length: 70 }, (_, n) => [call(`a-${n}`, n * 60_000, 2), owner] as [ReturnType<typeof call>, typeof owner]));
+    db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && column === "output"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { await assert.rejects(read(), /prohibited/); }
+    finally { db.setAuthorizer(null); }
     const beforeConcurrentWrite = reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer);
     let paused = false;
     db.exec("BEGIN");
@@ -89,6 +93,41 @@ test("a repeated usage summary rereads only hours whose statistics changed", asy
     writer.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("cached groups survive removed blocks until their last minute is removed", async () => {
+  const writer = Store.open(":memory:");
+  try {
+    writer.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(writer.db, () => 0);
+    retireUsageIndexes(writer.db);
+    writer.db.exec("INSERT INTO usage_minute_scope (session, ws, done) VALUES ('a', 'A', 1)");
+    const insert = writer.db.prepare(`INSERT INTO usage_compact
+      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope, pending)
+      VALUES ('a', ?, 0, 'p', 'cc', 'claude', ?, 0, 1, 0, 0, 0, 0, 0, ?, 'WA', 0)`);
+    insert.run(0, "m", 3);
+    insert.run(1, "m", 7);
+    insert.run(2, "m", 0);
+    insert.run(2, "other", 4);
+    compact.installUsageSummaryChanges(writer.db);
+    const reader = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache(), viewer = { workspace: "A", home: false };
+    const read = async () => {
+      const actual = await reads.usageGroupsBatched(reader, 0n, 180_000n, 0n, viewer, async () => {}, cache);
+      assert.ok(actual);
+      assert.deepEqual(actual.groups, reads.usageGroups(reader, 0n, 180_000n, 0n, viewer));
+      return actual.groups;
+    };
+    await read();
+    writer.db.exec("DELETE FROM usage_compact WHERE session='a' AND minute=0 AND model='m'");
+    assert.equal((await read()).find((group) => group.model === "m")?.output, 7);
+    writer.db.exec("DELETE FROM usage_compact WHERE session='a' AND minute=1 AND model='m'");
+    assert.equal((await read()).find((group) => group.model === "m")?.output, 0,
+      "an existing all-zero group remains present");
+    writer.db.exec("DELETE FROM usage_compact WHERE session='a' AND minute=2 AND model='m'");
+    assert.equal((await read()).some((group) => group.model === "m"), false);
+    insert.run(1, "m", 5);
+    assert.equal((await read()).find((group) => group.model === "m")?.output, 5);
+  } finally { writer.close(); }
 });
 
 test("an unbounded history settles its workspace's new statistics so its cache can reuse them", async (t) => {
@@ -118,9 +157,17 @@ test("an unbounded history settles its workspace's new statistics so its cache c
       try { return await reads.usageGroupsBatched(reader, 0n, 128n * 60_000n, 0n, viewer, async () => {}, cache); }
       finally { db!.exec("COMMIT"); }
     };
-    const first = await read(), pending = await read();
+    const first = await read();
+    let ownerReads = 0;
+    db.function("count_usage_owner", (ws) => { ownerReads++; return ws; });
+    const prepare = db.prepare.bind(db);
+    db.prepare = ((sql: string) => prepare(sql === "SELECT ws FROM usage_minute_scope WHERE session = ?"
+      ? "SELECT count_usage_owner(ws) AS ws FROM usage_minute_scope WHERE session = ?" : sql)) as typeof db.prepare;
+    let pending: Awaited<ReturnType<typeof read>>;
+    try { pending = await read(); } finally { db.prepare = prepare; }
     assert.ok(first && pending);
     assert.equal(pending.diagnostics.parts, 128, "pending buckets have to be checked before they are settled");
+    assert.equal(ownerReads, 1, "adjacent changed minutes of a session share one ownership check and read");
     usage(reader, "en", 0n, 128n * 60_000n, 0n, false, viewer, false, { batched: pending, remoteRuns: false });
     mover = watchCompactMoves(writer, Promise.resolve());
     const settled = new Promise<void>((resolve, reject) => {
@@ -471,5 +518,39 @@ test("history groups many people before caching, and leaves an oversized history
     const models = await reads.usageGroupsBatched(store, 0n, 60_000n, 0n, { workspace: "B", home: false }, async () => {}, cache, "history");
     assert.equal(models, null, "an unusually large history uses the original SQL aggregate");
     assert.equal(reads.usageByDay(store, 0n, { workspace: "B", home: false }, true, { from: 0n, to: 1n }).length, 8_193);
+  } finally { writer.close(); }
+});
+
+test("a large summary coarsens its cache without exceeding its limit or losing exact totals", async () => {
+  const writer = Store.open(":memory:");
+  try {
+    writer.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(writer.db, () => 0);
+    retireUsageIndexes(writer.db);
+    writer.db.exec("INSERT INTO usage_minute_scope (session, ws, done) VALUES ('a', 'A', 1)");
+    const bucket = writer.db.prepare(`INSERT INTO usage_compact
+      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope, pending)
+      VALUES ('a', ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WA', 0)`);
+    writer.db.exec("BEGIN");
+    for (let minute = 0; minute < 8_192; minute++) bucket.run(minute);
+    writer.db.exec("COMMIT");
+    compact.installUsageSummaryChanges(writer.db);
+    const reader = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache(), viewer = { workspace: "A", home: false };
+    const to = 8_193n * 60_000n, offset = 17n;
+    const read = () => reads.usageGroupsBatched(reader, 0n, to, offset, viewer, async () => {}, cache);
+    const first = await read();
+    assert.ok(first);
+    assert.deepEqual(first.groups, reads.usageGroups(reader, 0n, to, offset, viewer));
+    bucket.run(8_192);
+    const grown = await read();
+    assert.ok(grown);
+    assert.deepEqual(grown.groups, reads.usageGroups(reader, 0n, to, offset, viewer),
+      "a change that crosses the cache limit is still included when rebuilding at a coarser width");
+    writer.db.prepare("UPDATE usage_compact SET output=7 WHERE session='a' AND minute=100").run();
+    const changed = await read();
+    assert.ok(changed);
+    assert.equal(changed.diagnostics.cache, "reused");
+    assert.equal(changed.diagnostics.parts, 5, "one changed minute refreshes its five-minute block after coarsening");
+    assert.deepEqual(changed.groups, reads.usageGroups(reader, 0n, to, offset, viewer));
   } finally { writer.close(); }
 });
