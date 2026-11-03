@@ -583,7 +583,7 @@ pub fn share_card_open(@sfbase.Source, @sfbase.Workspace) -> Unit
 
 pub fn share_look_keys() -> Array[String]
 
-pub fn shortcuts_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
+pub fn shortcuts_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, active~ : () -> Bool, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn sign_in_node(@view.View, @sfbase.Source) -> @view.View
 

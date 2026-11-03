@@ -38,7 +38,7 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
-  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_))
+  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts)
   let t = @ui.Tester::new(
     fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
@@ -107,6 +107,11 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     StationArchiving(st) => station_archiving_node(p, core, here, st, on_back=core.pop, frame~, width~)
     AutoDecisions => decisions_node(p, core, here, on_back=core.pop, frame~, width~)
     Usage => usage_node(p, core, here, on_back=core.pop, frame~, width~)
+    Shortcuts => {
+      // (recording while it is the one on top, as every frame says it: its stay there as it is made)
+      let stay = @signals.untracked(fn() { app.nav.top_stay().1 })
+      shortcuts_node(p, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stay }, width~)
+    }
     UsagePrices(days) => usage_prices_node(p, core, here, days, on_back=core.pop, frame~, width~)
     // (the pages opened from them not made once yet: their old view, hosted)
     _ =>
@@ -132,7 +137,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     BarSettings => bars_page(c, core, frame)
     Permissions => permissions_page(c, core, frame)
     Notifications => notify_page(c, core, here, frame)
-    Shortcuts => shortcuts_page(c, core, frame)
     Me => me_page(c, core, here, frame)
     Workspace => workspace_page(c, core, here, frame)
     Security => security_page(c, core, here, frame)

@@ -4,12 +4,14 @@
 // where they are changed by pressing new ones.
 
 ///|
-/// The action whose new keys the next key press is ("" none): the page's.
-pub let keys_recording : Ref[String] = Ref("")
+/// The action whose new keys the next key press is ("" none): the page's, told as it changes (its keys' button says it
+/// records; what else a key does stands aside meanwhile: pressed, window_zoom's).
+// kept across runs: put back as a run begins (keymap_reset)
+pub let keys_recording : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 fn keymap_reset() -> Unit {
-  keys_recording.val = ""
+  keys_recording.set("")
   action_asked.val = ""
 }
 
@@ -156,7 +158,7 @@ pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : B
     return true
   }
   // (no key came: none of its keys did, its bindings not looked up and read)
-  if keys_recording.val != "" || !c.keys_came() {
+  if @signals.untracked(fn() { keys_recording.get() }) != "" || !c.keys_came() {
     return false
   }
   keys_of(prefs, action).iter().any(fn(b) {
