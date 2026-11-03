@@ -69,11 +69,6 @@ export const DELETE_EXPIRED_REMOTE_RUNS = `DELETE FROM remote_runs WHERE job IN
 
 export const REMOTE_RUNS_OF = "SELECT at, session FROM remote_run_lookup WHERE ws = ?1 AND at >= ?2 ORDER BY at, seq";
 export const REMOTE_RUNS_ALL = "SELECT at, session FROM remote_run_by_time WHERE at >= ? ORDER BY at, seq";
-/// Until the old rows are filled, readers keep the original complete answer. These paths can still scan old history.
-export const REMOTE_RUNS_LEGACY_OF = `SELECT at, session FROM remote_runs r WHERE at >= ?2 AND ${WS("r")} = ?1 ORDER BY at, rowid`;
-export const REMOTE_RUNS_LEGACY_ALL = "SELECT at, session FROM remote_runs WHERE at >= ? ORDER BY at, rowid";
-export const REMOTE_RUNS_LEGACY_COUNT_OF = `SELECT COUNT(*) AS n FROM remote_runs r WHERE at >= 0 AND ${WS("r")} = ?`;
-
 /// Fill no more than `limit` old rows; writes, deletions, and the cursor commit together.
 export function backfillRemoteRuns(db: DatabaseSync, limit = 32): { done: boolean; processed: number } {
   db.exec("BEGIN IMMEDIATE");

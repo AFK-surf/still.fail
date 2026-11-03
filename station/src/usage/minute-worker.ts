@@ -9,10 +9,11 @@ import { backfillNextUsageSession, backfillUsageMinutes, PENDING_MINUTE_SESSION 
 import { backfillRemoteRuns } from "../store/remote-runs.ts";
 import type { MinuteRequest, MinuteResponse } from "./minute-reader.ts";
 
-type Waiting = { request: MinuteRequest; after: string | null; sessions: string[]; scanned: boolean };
+type Waiting = { request: Extract<MinuteRequest, { viewer: unknown }>; after: string | null; sessions: string[]; scanned: boolean };
 const db = new DatabaseSync(workerData.path as string, { timeout: 100 });
 db.exec("PRAGMA synchronous = NORMAL");
 const waiting: Waiting[] = [];
+const remoteWaiting: number[] = [];
 const scanned = new Set<string>();
 let complete = (db.prepare("SELECT done FROM usage_minute_all WHERE id = 1").get() as { done: number }).done === 1;
 const remoteInstalled = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'remote_run_progress'").get() !== undefined;
@@ -21,10 +22,12 @@ let remoteTurn = true;
 let scheduled = false;
 let foreground = 0;
 let backgroundFailed = false;
+let backgroundError: string | null = null;
 let foregroundWaiting = false;
 const priority = workerData.priority instanceof SharedArrayBuffer ? new Int32Array(workerData.priority) : null;
 
 function signalComplete() {
+  if (remoteComplete) for (const id of remoteWaiting.splice(0)) parentPort!.postMessage({ id } satisfies MinuteResponse);
   if (complete && remoteComplete) parentPort!.postMessage({ complete: true } satisfies MinuteResponse);
 }
 
@@ -128,7 +131,9 @@ function schedule(delay = 0) {
       if (q) parentPort!.postMessage({ id: q.request.id, error: (error as Error).message } satisfies MinuteResponse);
       else {
         backgroundFailed = true;
-        log.error("usage", "the minute summary backfill stopped", { error: (error as Error).message });
+        backgroundError = (error as Error).message;
+        for (const id of remoteWaiting.splice(0)) parentPort!.postMessage({ id, error: backgroundError } satisfies MinuteResponse);
+        log.error("usage", "the minute summary backfill stopped", { error: backgroundError });
       }
     } finally {
       if (held) giveBackfill(priority, threadId);
@@ -141,6 +146,11 @@ function schedule(delay = 0) {
 
 parentPort!.on("message", (request: MinuteRequest) => {
   foregroundWaiting = false;
+  if ("remote" in request) {
+    if (remoteComplete || backgroundError !== null) parentPort!.postMessage({ id: request.id, ...(backgroundError !== null && !remoteComplete ? { error: backgroundError } : {}) } satisfies MinuteResponse);
+    else remoteWaiting.push(request.id);
+    return;
+  }
   const viewer = request.viewer;
   waiting.push({ request, after: null, sessions: [], scanned: viewer !== null && viewer.home === false && scanned.has(viewer.workspace) });
   schedule();

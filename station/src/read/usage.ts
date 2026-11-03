@@ -8,7 +8,7 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, decisionCards, remoteRunCount, remoteRunsSince, seenBy, threadsByPlace, sessionThreads, usageByDay, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, decisionCards, remoteRunCount, remoteRunsReady, remoteRunsSince, seenBy, threadsByPlace, sessionThreads, usageByDay, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
@@ -208,7 +208,10 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
-export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false): Json {
+export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false, options: { remoteRuns?: boolean } = {}): Json {
+  // A not-yet-complete remote summary is retried once it is ready; do not do the other work twice in the meantime.
+  const includeRemoteRuns = options.remoteRuns !== false;
+  if (includeRemoteRuns || history) remoteRunsReady(s);
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
   const started = performance.now();
@@ -240,7 +243,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   const since = usageSince(s);
   const prices = priceTable(lang, rows.map((r) => r.model));
   const profiles = configProfiles(s.dataDir);
-  const remoteRuns = remoteRunsSince(s, from, viewer);
+  const remoteRuns = includeRemoteRuns ? remoteRunsSince(s, from, viewer) : [];
   mark("details");
   const answer = {
     from: i64(from),

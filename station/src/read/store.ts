@@ -12,7 +12,7 @@ import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
 import { archiveEntries } from "../store/archive.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
-import { REMOTE_RUNS_ALL, REMOTE_RUNS_LEGACY_ALL, REMOTE_RUNS_LEGACY_COUNT_OF, REMOTE_RUNS_LEGACY_OF, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
+import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { USAGE_GROUPS, type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
@@ -1003,19 +1003,22 @@ export function usageSince(s: Store): number | null {
 }
 
 /// The tasks other stations' chats ran here since `from` (remote_runs), oldest first: when, and whose session.
+export const REMOTE_RUNS_PENDING = "remote task statistics are still being filled";
+
+export function remoteRunsReady(s: Store): void {
+  if (one(s, "SELECT done FROM remote_run_progress WHERE id = 1")?.done !== 1) throw new Error(REMOTE_RUNS_PENDING);
+}
+
 export function remoteRunsSince(s: Store, from: bigint, viewer: InWorkspace | null = null): { at: number; session: string }[] {
-  const ready = one(s, "SELECT done FROM remote_run_progress WHERE id = 1")?.done === 1;
-  const rows = viewer === null ? all(s, ready ? REMOTE_RUNS_ALL : REMOTE_RUNS_LEGACY_ALL, from)
-    : all(s, ready ? REMOTE_RUNS_OF : REMOTE_RUNS_LEGACY_OF, viewer.workspace, from);
+  remoteRunsReady(s);
+  const rows = viewer === null ? all(s, REMOTE_RUNS_ALL, from)
+    : all(s, REMOTE_RUNS_OF, viewer.workspace, from);
   return rows.map((r) => ({ at: Number(r.at), session: String(r.session) }));
 }
 
 /// The all-time card needs a count, not every task. Like remoteRunsSince(s, 0), it excludes negative timestamps.
 export function remoteRunCount(s: Store, viewer: InWorkspace | null): number {
-  if (one(s, "SELECT done FROM remote_run_progress WHERE id = 1")?.done !== 1) {
-    return viewer === null ? Number(one(s, "SELECT COUNT(*) AS n FROM remote_runs WHERE at >= 0")?.n ?? 0)
-      : Number(one(s, REMOTE_RUNS_LEGACY_COUNT_OF, viewer.workspace)?.n ?? 0);
-  }
+  remoteRunsReady(s);
   return viewer === null ? Number(one(s, "SELECT n FROM remote_run_total WHERE id = 1")?.n ?? 0)
     : Number(one(s, "SELECT n FROM remote_run_counts WHERE ws = ?", viewer.workspace)?.n ?? 0);
 }

@@ -3,7 +3,7 @@ import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 
-export type MinuteRequest = { id: number; viewer: InWorkspace | null };
+export type MinuteRequest = { id: number; viewer: InWorkspace | null } | { id: number; remote: true };
 export type MinuteResponse = { id?: number; error?: string; complete?: boolean; foreground?: boolean };
 
 /// A history waits here, away from all of the readers, while its old minute summaries are filled.
@@ -14,7 +14,7 @@ export class MinuteReader {
   #closed = false;
   #complete = false;
   #termination: Promise<number> | null = null;
-  #waiting = new Map<number, { resolve: () => void; reject: (error: Error) => void; viewer: InWorkspace | null; sent: boolean }>();
+  #waiting = new Map<number, { resolve: () => void; reject: (error: Error) => void; request: MinuteRequest; sent: boolean }>();
   #previousGone: Promise<void> | null;
   #starting = false;
   readonly #priority: SharedArrayBuffer | undefined;
@@ -81,8 +81,8 @@ export class MinuteReader {
 
   #sendWaiting(): void {
     if (this.#worker === null) return;
-    for (const [id, waiting] of this.#waiting) if (!waiting.sent) {
-      this.#worker.postMessage({ id, viewer: waiting.viewer } satisfies MinuteRequest);
+    for (const waiting of this.#waiting.values()) if (!waiting.sent) {
+      this.#worker.postMessage(waiting.request);
       waiting.sent = true;
     }
   }
@@ -93,7 +93,24 @@ export class MinuteReader {
     return new Promise((resolve, reject) => {
       const id = ++this.#next;
       try {
-        this.#waiting.set(id, { resolve, reject, viewer, sent: false });
+        this.#waiting.set(id, { resolve, reject, request: { id, viewer }, sent: false });
+        this.start();
+        this.#sendWaiting();
+      } catch (error) {
+        this.#waiting.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  /// A usage request must wait for the old remote task counts too, without holding a device reader.
+  readyRemote(): Promise<void> {
+    if (this.#closed) return Promise.reject(new Error("station stopping"));
+    if (this.#complete) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const id = ++this.#next;
+      try {
+        this.#waiting.set(id, { resolve, reject, request: { id, remote: true }, sent: false });
         this.start();
         this.#sendWaiting();
       } catch (error) {
