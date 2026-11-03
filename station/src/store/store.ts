@@ -28,6 +28,7 @@ import {
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
+import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 import { installUsageMinutes } from "./usage-minutes.ts";
@@ -204,7 +205,7 @@ export class Store {
       addUsageColumns(db);
       installUsageSpan(db);
       addUsageTotals(db);
-      addUsageCompactions(db);
+      if (!retiredUsage(db)) addUsageCompactions(db);
       installUsageCompactions(db);
       addUsageQuarters(db);
       installUsageMinutes(db);

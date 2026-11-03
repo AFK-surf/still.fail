@@ -2,8 +2,10 @@
 // the duplicate legacy quarter and minute summaries once the previous process has exited.
 import type { DatabaseSync } from "node:sqlite";
 import { usageDetailGeneration, usageDetailReady } from "./usage-detail.ts";
+import { retiredUsage } from "./usage-retire.ts";
 
 export function retireDuplicateUsage(db: DatabaseSync): boolean {
+  if (retiredUsage(db)) return false;
   const retired = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'").get() !== undefined;
   const ready = () => usageDetailGeneration(db) === "legacy" && usageDetailReady(db, null, "legacy")
     && (db.prepare("SELECT done FROM usage_minute_all WHERE id = 1").get() as { done: number } | undefined)?.done === 1;

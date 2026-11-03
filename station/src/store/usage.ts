@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, usageTotalsComplete, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
 import { usageCompactionsReady } from "./usage-compactions.ts";
+import { retiredUsage } from "./usage-retire.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
 /// them. `context`: of a main-thread call, what its session's context held after it (null: not told); `window`: the
@@ -169,6 +170,7 @@ export function usageGroupOf(r: Json): UsageGroup {
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and
 /// by thread, person, profile and model.
 export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffsetMin: number): UsageGroup[] {
+  if (retiredUsage(db)) throw new Error("usage detail statistics are unavailable");
   const generation = usageDetailGeneration(db);
   if (!usageDetailReady(db, null, generation)) throw new Error(USAGE_DETAIL_PENDING);
   const query = detailQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null, generation);

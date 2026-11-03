@@ -3,6 +3,7 @@
 // way it is shown is added up from that record: a chat's execution details and agent card (told as more is recorded,
 // on its live stream and in its session's summary, `usage`) and the usage page (GET /usage).
 import { Effect, Layer } from "effect";
+import { Worker } from "node:worker_threads";
 import { usageRoutes } from "../api/routes/usage.ts";
 import { usageNow } from "../read/usage.ts";
 import { Agents } from "../sessions/agents.ts";
@@ -11,6 +12,8 @@ import type { LiveHub } from "../sessions/live.ts";
 import { Parts, Paths, Previous, StationConfig, Store } from "../services.ts";
 import { log } from "../ops/log.ts";
 import type { Store as StationStore } from "../store/store.ts";
+import { releaseStoppedBackfill } from "../store/backfill.ts";
+import { retireUsageIndexes } from "../store/usage-retire.ts";
 import { UsageCounter } from "./counter.ts";
 
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
@@ -32,12 +35,32 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
   });
 }
 
-/// An older station may still read the old summaries during handover. Retire their writers only after it actually exits.
+/// An older station may still use these indexes during handover. Stop their writers only after it actually exits.
 export function retireAfterPrevious(store: StationStore, exited: Promise<void>) {
-  return Effect.promise(() => exited).pipe(Effect.andThen(Effect.sync(() => {
-    try { store.retireDuplicateUsage(); }
-    catch (error) { log.warn("usage", "duplicate usage statistics could not be retired", { error: (error as Error).message }); }
-  })));
+  return Effect.promise(async () => {
+    try {
+      await exited;
+      const path = store.db.location();
+      if (path === null) { retireUsageIndexes(store.db); return; }
+      const file = new URL(import.meta.url.endsWith(".ts") ? "./retire-worker.ts" : "./usage/retire-worker.js", import.meta.url);
+      const worker = new Worker(file, { workerData: { path, priority: store.backfillPriority } });
+      const owner = worker.threadId;
+      worker.unref();
+      await new Promise<void>((resolve, reject) => {
+        let failure: Error | null = null;
+        let complete = false;
+        worker.on("message", (answer: { complete?: boolean }) => { complete ||= answer.complete === true; });
+        worker.once("error", (error) => { failure = error; });
+        worker.once("exit", (code) => {
+          releaseStoppedBackfill(store.backfillPriority, owner);
+          if (failure !== null || code !== 0 || !complete) reject(failure ?? new Error(`usage retirement stopped (exit ${code})`));
+          else resolve();
+        });
+      });
+    } catch (error) {
+      log.warn("usage", "usage indexes could not be retired", { error: (error as Error).message });
+    }
+  });
 }
 
 export const UsageLive = Layer.effectDiscard(

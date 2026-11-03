@@ -2,6 +2,7 @@
 // same dimensions; coarser buckets let a read cover a long interval without visiting each finer bucket.
 import type { DatabaseSync } from "node:sqlite";
 import type { InWorkspace } from "./rows.ts";
+import { retiredUsage } from "./usage-retire.ts";
 
 const SIZES = [900_000, 60_000, 1_000, 1] as const;
 const COLUMNS = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
@@ -215,6 +216,7 @@ export function usageDetailGeneration(db: DatabaseSync): DetailGeneration {
 }
 
 export function usageDetailSince(db: DatabaseSync): number | null {
+  if (retiredUsage(db)) return null;
   if (usageDetailGeneration(db) !== "live") return null;
   return (db.prepare("SELECT since FROM usage_detail_live_since WHERE id = 1").get() as { since: number }).since;
 }
@@ -222,6 +224,7 @@ export function usageDetailSince(db: DatabaseSync): number | null {
 /// Install triggers and the cutover under one write lock, so no call can fall between them. The old statistics remain
 /// untouched and no old calls are enumerated; an already complete index continues to be used as before.
 export function installUsageDetail(db: DatabaseSync, now: number): void {
+  if (retiredUsage(db)) return;
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_detail_all'").get() !== undefined;
   const incomplete = () => (db.prepare("SELECT done FROM usage_detail_all WHERE id = 1").get() as { done: number }).done !== 1;
   if (installed() && (usageDetailGeneration(db) === "live" || !incomplete())) return;
@@ -301,6 +304,7 @@ export const USAGE_DETAIL_PENDING = "usage detail statistics are still being fil
 /// When a session has moved, its buckets still carry their former lookup scope. Read the asking workspace's current
 /// sessions and seek each one's buckets instead of rewriting its history or trusting the stale scope on those buckets.
 export function usageDetailScopeBySession(db: DatabaseSync, viewer: InWorkspace | null, generation = usageDetailGeneration(db)): boolean {
+  if (retiredUsage(db)) return false;
   if (viewer === null) return false;
   const table = prefix(generation);
   if (db.prepare(`SELECT 1 FROM ${table}_dirty_scope INDEXED BY ${table}_dirty_by_scope WHERE scope = ? LIMIT 1`).get(`W${viewer.workspace}`)) return true;
@@ -308,6 +312,7 @@ export function usageDetailScopeBySession(db: DatabaseSync, viewer: InWorkspace 
 }
 
 export function usageDetailReady(db: DatabaseSync, viewer: InWorkspace | null, generation = usageDetailGeneration(db)): boolean {
+  if (retiredUsage(db)) return false;
   const table = prefix(generation);
   if ((db.prepare(`SELECT done FROM ${table}_all WHERE id = 1`).get() as { done: number }).done === 1) return true;
   if (viewer === null || viewer.home !== false) return false;
