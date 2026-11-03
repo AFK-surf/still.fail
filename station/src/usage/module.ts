@@ -5,6 +5,7 @@
 import { Effect, Layer } from "effect";
 import { join } from "node:path";
 import { usageRoutes } from "../api/routes/usage.ts";
+import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { usageNow } from "../read/usage.ts";
 import { Agents } from "../sessions/agents.ts";
@@ -38,12 +39,12 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
   let initialized = false;
   let preferDirty = true;
   let pending: NodeJS.Immediate | null = null;
-  let retry: NodeJS.Timeout | null = null;
+  let retry: (() => void) | null = null;
   const schedule = () => {
     if (ready && !closed && pending === null && retry === null) pending = setImmediate(step);
   };
   const wake = () => {
-    if (retry !== null) clearTimeout(retry);
+    retry?.();
     retry = null;
     schedule();
   };
@@ -59,8 +60,7 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
       const next = store.nextUsageSummaryRefresh(preferDirty);
       preferDirty = !preferDirty;
       if (next === null) {
-        retry = setTimeout(() => { retry = null; schedule(); }, SUMMARY_POLL_MS);
-        retry.unref();
+        retry = wall.after(SUMMARY_POLL_MS, () => { retry = null; schedule(); });
         return;
       }
       store.refreshSessionUsage(next.key, () => usageNow(store, next.key), false, next.upgrade ? SUMMARY_VERSION : undefined);
@@ -69,8 +69,7 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
     } catch (error) {
       log.error("usage", "a session summary could not be refreshed", { error: (error as Error).message });
       if (!closed) {
-        retry = setTimeout(() => { retry = null; schedule(); }, 5_000);
-        retry.unref();
+        retry = wall.after(5_000, () => { retry = null; schedule(); });
       }
     }
   };
@@ -99,7 +98,7 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
     closed = true;
     unsubscribe();
     if (pending !== null) clearImmediate(pending);
-    if (retry !== null) clearTimeout(retry);
+    retry?.();
   };
 }
 
