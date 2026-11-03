@@ -230,7 +230,7 @@ test("compact usage agrees with calls across dates and arbitrary bounds", () => 
     }
     const reader = makeStore(store.db, ".");
     const ranges: [bigint, bigint][] = [[-86_400_003n, -86_400_001n], [-60_001n, 60_001n], [-1n, 1n],
-      [0n, 59_999n], [1n, 60_000n], [0n, 9_223_372_036_854_775_807n], [-60_000n, 120_000n],
+      [0n, 59_999n], [1n, 60_000n], [0n, 9_223_372_036_854_775_807n], [1n, 9_223_372_036_854_775_807n], [-60_000n, 120_000n],
       [1n, 1n], [-86_399_999n, 86_400_001n]];
     for (const [from, to] of ranges) for (const offset of [-31, 0, 1, 345]) for (const home of [false, true]) {
       const expected = new Map<string, { day: string; session: string; calls: number; input: number; output: number }>();
@@ -250,6 +250,53 @@ test("compact usage agrees with calls across dates and arbitrary bounds", () => 
         .map(({ day, session, calls, input, output }) => ({ day, session, calls, input, output })).sort(order);
       assert.deepEqual(actual, [...expected.values()].sort(order), `${from}..${to}, offset ${offset}, home ${home}`);
     }
+  } finally { store.close(); }
+});
+
+test("partial-minute reads find sessions occurring only at either edge", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const key of ["first", "last", "outside"]) store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/w", token: key, ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    for (const [key, at] of [["first", 10], ["last", 120_010], ["outside", 180_000]] as const) {
+      const call = { id: key, at, model: "m", subagent: false, fast: false, input: 1,
+        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null };
+      store.recordUsage(`/${key}`, { session: key, offset: 1, model: "m" }, "claude", [[call, owner]]);
+    }
+    const reader = makeStore(store.db, ".");
+    for (const viewer of [null, { workspace: "A", home: false }]) {
+      const rows = (from: bigint, to: bigint) => usageGroups(reader, from, to, 0n, viewer).map((r) => r.session).sort();
+      assert.deepEqual(rows(1n, 120_011n), ["first", "last"]);
+      assert.deepEqual(rows(10n, 11n), ["first"]);
+      assert.deepEqual(rows(120_010n, 120_011n), ["last"]);
+    }
+  } finally { store.close(); }
+});
+
+test("a partial-minute edge looks only at sessions with a bucket at that edge", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "edge", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
+      token: "edge", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "edge", at: 1_001, model: "m", subagent: false, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null };
+    store.recordUsage("/edge", { session: "edge", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    const scope = store.db.prepare("INSERT INTO usage_minute_scope (session, ws, done) VALUES (?, 'A', 1)");
+    const bucket = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, 1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 0, 'WA')");
+    for (let n = 0; n < 200; n++) { scope.run(`middle-${n}`); bucket.run(`middle-${n}`); }
+    const q = compactQuery(1_001n, 120_000n, 0n, { workspace: "A", home: false });
+    let visits = 0;
+    store.db.function("edge_looked", (session) => { visits++; return session; });
+    const sql = q.sql.replaceAll("c.session = p.session AND c.minute =", "c.session = edge_looked(p.session) AND c.minute =")
+      .replaceAll("ON p.session = c.session", "ON p.session = edge_looked(c.session)");
+    assert.notEqual(sql, q.sql, "count the outer sessions looked up for the edge");
+    const rows = store.db.prepare(sql).all(...q.args) as { session: string }[];
+    assert.equal(rows.length, 201);
+    assert.equal(visits, 1, "sessions which have only middle-minute buckets do not cause edge lookups");
   } finally { store.close(); }
 });
 
@@ -315,6 +362,13 @@ test("a usage summary checks a session's workspace once for its minutes", () => 
     const rows = store.db.prepare(counted).all(...query.args) as { session: string; calls: number; input: number }[];
     assert.deepEqual(rows.map((r) => [r.session, r.calls, r.input]).sort(), [["a", 60, 60], ["b", 60, 60]]);
     assert.equal(visits, 2, "each relevant session's scope is looked up once, not once per minute");
+    const edge = compactQuery(1n, 3_600_000n, 0n, { workspace: "A", home: false });
+    const countedEdge = edge.sql.replaceAll(/sc\.session = ([a-z]+)\.session/g, "sc.session = inspected_scope_session($1.session)");
+    assert.notEqual(countedEdge, edge.sql);
+    visits = 0;
+    const partial = store.db.prepare(countedEdge).all(...edge.args) as { session: string; calls: number; input: number }[];
+    assert.deepEqual(partial.map((r) => [r.session, r.calls, r.input]).sort(), [["a", 59, 59], ["b", 59, 59]]);
+    assert.equal(visits, 2, "a partial-minute edge also checks each session once, not once per bucket");
     assert.equal((store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n, before, "reading writes nothing");
   } finally { store.close(); }
 });
@@ -402,7 +456,8 @@ test("a partial minute does not visit other workspaces or calls outside its boun
       Array.from({ length: 300 }, (_, n) => [call(`earlier-${n}`, 500), owner]));
     assert.deepEqual(read(), before, "unrelated statistics and calls do not increase edge work");
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.args) as { detail: string }[]).map((r) => r.detail).join(" | ");
-    assert.match(plan, /usage_compact_scope_time \(scope=\? AND minute=\?\)/);
+    assert.match(plan, /SEARCH usage_compact USING COVERING INDEX usage_compact_scope_time/);
+    assert.match(plan, /SEARCH c USING PRIMARY KEY/);
     assert.match(plan, /usage_session \(session=\? AND at>\? AND at<\?\)/);
   } finally { store.close(); }
 });
