@@ -585,6 +585,11 @@ fn[P] Nav::backs_over(
   // and, where it is another's, which, and where that is drawn from: x from its left, as it is told by the old frame's)
   let down_x = Ref(0.0)
   let down_wx = Ref(0.0)
+  // (where `m` was in the window as it went down, and how big it was drawn: what the stack's steps are told x from,
+  // as the old frame's are from where the page was as the gesture began, whatever `m` is moved by as it goes)
+  let down_left = Ref(0.0)
+  let down_scale = Ref(1.0)
+  let from_down = fn(d : @view.Drag) { (d.wx - down_left.val) / down_scale.val }
   let swiped = Ref(false)
   let other : Ref[(@view.NodeId, Double)?] = Ref(None)
   let to_other = fn(id : @view.NodeId, step : @view.BackStep, at : Double) { m.tree.back_step(id, step, at) |> ignore }
@@ -598,13 +603,18 @@ fn[P] Nav::backs_over(
       down_x.val = x
       // (where it went down in the window, as `m` is drawn as it goes down: what it sets out from, whatever moves `m`
       // before it is taken over)
-      down_wx.val = match m.tree.drawn_of(m.id()) {
+      match m.tree.drawn_of(m.id()) {
         Some(o) => {
           let lw = @signals.untracked(fn() { m.laid_size() }).0
-          o.x + x * (if lw > 0.0 { o.w / lw } else { 1.0 })
+          down_left.val = o.x
+          down_scale.val = if lw > 0.0 { o.w / lw } else { 1.0 }
         }
-        None => x
+        None => {
+          down_left.val = 0.0
+          down_scale.val = 1.0
+        }
       }
+      down_wx.val = down_left.val + x * down_scale.val
       h_platform() != 2 && desk.mouse_drags && x < edge && (backs(false) || elsewhere() is Some(_))
     },
   )
@@ -624,19 +634,19 @@ fn[P] Nav::backs_over(
             }
             None => {
               nav.gesture(0, down_x.val, w, d.at)
-              nav.gesture(1, d.x, w, d.at)
+              nav.gesture(1, from_down(d), w, d.at)
             }
           }
         }
         Moved =>
           match other.val {
             Some((id, left)) => to_other(id, Moved(d.wx - left, d.at), d.at)
-            None => nav.gesture(1, d.x, w, d.at)
+            None => nav.gesture(1, from_down(d), w, d.at)
           }
         Up => {
           match other.val {
             Some((id, left)) => to_other(id, LetGo(d.wx - left, d.at), d.at)
-            None => nav.gesture(2, d.x, w, d.at)
+            None => nav.gesture(2, from_down(d), w, d.at)
           }
           swiped.val = false
           other.val = None
@@ -644,7 +654,7 @@ fn[P] Nav::backs_over(
         Off => {
           match other.val {
             Some((id, _)) => to_other(id, CalledOff, d.at)
-            None => nav.gesture(3, d.x, w, d.at)
+            None => nav.gesture(3, from_down(d), w, d.at)
           }
           swiped.val = false
           other.val = None
