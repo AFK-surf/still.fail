@@ -97,9 +97,50 @@ test("a worker completes pending totals after new calls and tells the page", asy
       const told = ready(n);
       store.recordUsage("/a", { session: "a", offset: n, model: "m" }, "claude", [[call(`call-${n}`), owner]]);
       store.usageChanged(["a"]);
+      mover.read({ workspace: "A", home: false });
       await told;
       assert.deepEqual(compact.compactTotal(store.db, { workspace: "A", home: false }), { calls: n, tokens: n * 2 });
     }
+  } finally {
+    if (mover !== null) await mover.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a workspace asking for its total does not flush another workspace's pending buckets", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "compact-total-scope-"));
+  const store = Store.open(join(dir, "station.db"));
+  let mover: ReturnType<typeof watchCompactMoves> | null = null;
+  try {
+    for (const ws of ["A", "B"]) store.insertSession({ key: ws, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
+      token: ws, ws, createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string, at: number) => ({ id, at, model: "m", subagent: true, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+    store.recordUsage("/B", { session: "B", offset: 1, model: "m" }, "claude",
+      Array.from({ length: 300 }, (_, i) => [call(`b-${i}`, i * 60_000), owner]));
+    store.recordUsage("/A", { session: "A", offset: 1, model: "m" }, "claude", [[call("a", 0), owner]]);
+    mover = watchCompactMoves(store, Promise.resolve());
+    const ready = new Promise<void>((resolve, reject) => {
+      const abort = () => { unsubscribe(); reject(t.signal.reason); };
+      const unsubscribe = store.subscribe((change) => {
+        if (change.type !== "usage" || !change.statisticsOnly || !change.sessions.includes("A")) return;
+        if (compact.compactTotal(store.db, { workspace: "A", home: false }) === null) return;
+        unsubscribe();
+        t.signal.removeEventListener("abort", abort);
+        resolve();
+      });
+      t.signal.addEventListener("abort", abort, { once: true });
+    });
+    store.usageChanged(["A"], 0);
+    mover.read({ workspace: "A", home: false });
+    await ready;
+    assert.deepEqual(compact.compactTotal(store.db, { workspace: "A", home: false }), { calls: 1, tokens: 2 });
+    assert.equal(compact.compactTotal(store.db, { workspace: "B", home: false }), null);
+    assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage_compact WHERE scope = 'WB' AND pending = 1").get() as { n: number }).n, 300);
   } finally {
     if (mover !== null) await mover.close();
     store.close();

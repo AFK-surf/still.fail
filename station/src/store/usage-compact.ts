@@ -327,6 +327,7 @@ function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string
 /// Apply at most one batch of new buckets; this never reads or reconstructs original calls.
 export function compactTotalsStep(db: DatabaseSync, batch = 256): { done: boolean; sessions: string[]; from?: number } {
   if (!Number.isSafeInteger(batch) || batch < 1) throw new RangeError("compact totals batch must be positive");
+  batch = Math.min(batch, 256);
   db.exec("BEGIN IMMEDIATE");
   try {
     const { count, sessions, from } = accountCompactBuckets(db, batch);
@@ -337,6 +338,8 @@ export function compactTotalsStep(db: DatabaseSync, batch = 256): { done: boolea
 
 /// Re-scope at most one batch. The cursor is reset if the session moves again; writes during a move use its current scope.
 export function moveCompactStep(db: DatabaseSync, batch = 256): { done: boolean; session?: string } {
+  if (!Number.isSafeInteger(batch) || batch < 1) throw new RangeError("compact workspace batch must be positive");
+  batch = Math.min(batch, 256);
   db.exec("BEGIN IMMEDIATE");
   try {
     const move = db.prepare("SELECT * FROM usage_compact_moving ORDER BY session LIMIT 1").get() as Moving | undefined;
