@@ -160,7 +160,9 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     Some((w, h)) => u.zoom.natural(w.to_double(), h.to_double())
     None => u.zoom.natural(0.0, 0.0)
   }
-  u.zoom.boxed(u.box_w, u.box_h)
+  // (a device's page keeps some of it for what the device has itself: debug_room)
+  let (room_w, room_h) = debug_room(u, size)
+  u.zoom.boxed(dmax(0.0, u.box_w - room_w), dmax(0.0, u.box_h - room_h))
   // where a double tap's glide has got to
   u.zoom.step()
   let fit = u.fit()
@@ -235,6 +237,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
       })
       |> ignore
       device_round(c, s, u, shown)
+      debug_by_device(c, s, u, shown, size)
       if over {
         // the screen gone dark in its place (its last frame showing through, blurred), what happened said there
         c.layer(fn() {
@@ -291,7 +294,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
       c.box(style=stage_foot, fn() {
         c.box(style=stage_foot_column, fn() {
           // (beside the device they are at the foot of what is done with it: nothing over the app being debugged)
-          if !u.logs.beside {
+          if !(u.logs.beside && u.logs.shown) {
             drops(c, s)
           }
           login_fill(c, s)

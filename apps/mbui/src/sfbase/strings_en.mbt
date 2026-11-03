@@ -2646,4 +2646,6 @@ let en : Map[String, String] = {
   "web-main.preset.search": "Search repositories and folders",
   "web-pages.screen.debug.app": "App",
   "web-pages.screen.device.back": "Back",
+  "web-pages.screen.debug.paneHide": "Hide the side panel",
+  "web-pages.screen.debug.paneShow": "Show the side panel",
 }
