@@ -932,7 +932,9 @@ fn debug_apps_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor, push? : Stri
     }
   })
   let open = fn() {
-    @sf.panel(@sf.t("web-pages.screen.debug.relaunch"), fn(c, _) { debug_apps(c, s, u, d) }, from~, side=screen_panel_side(),
+    // (what is chosen in it is what it is said to be for)
+    let title = @sf.t(if push is Some(_) { "web-pages.screen.debug.pushGo" } else if uninstall { "web-pages.screen.debug.uninstall" } else { "web-pages.screen.debug.relaunch" })
+    @sf.panel(title, fn(c, _) { debug_apps(c, s, u, d) }, from~, side=screen_panel_side(),
       w=net_panel_w, focus=false)
   }
   if @sf.native_on() && !u.in_tab {
@@ -977,7 +979,13 @@ fn debug_apps(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, d : DebugApps) -> Unit 
             (s.src.call)(op, Json::object(params), fn(r) {
               d.going = false
               d.said = match r {
-                Ok(_) => done
+                Ok(_) => {
+                  // (one taken off the device is not offered again)
+                  if d.uninstall {
+                    d.apps = d.apps.map(fn(a) { a.filter(fn(x) { text(Some(x), "id") != id }) })
+                  }
+                  done
+                }
                 Err(e) => text(Some(e), "message")
               }
             })
