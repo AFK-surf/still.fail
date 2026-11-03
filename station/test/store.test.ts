@@ -1381,7 +1381,8 @@ test("usage: a row is the calls it says, and a database from before says each wa
   // A turn told at once is its calls; the context it ended with is what it says, compacted from the one before.
   store.recordUsage("/a.jsonl", { session: "a", offset: 2, model: "m" }, "claude", [call("c2", 2000, 300_000, { calls: 3, context: 20_000, window: 200_000 })] as never);
   assert.deepEqual(store.usageOfSession("a").map((g) => [g.calls, g.input]), [[5, 420_007]]);
-  assert.throws(() => store.usageGroups(0, 3000, 0), /detail statistics.*being filled/);
+  assert.deepEqual(store.usageGroups(0, 3000, 0).map((g) => [g.calls, g.input]), [[3, 300_000]],
+    "the new detail starts with the call recorded after the upgrade");
   assert.deepEqual(store.lastContexts("a", 1), []);
   assert.deepEqual([...store.compactionPoints(0)], []);
   store.close();
