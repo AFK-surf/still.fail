@@ -609,9 +609,9 @@ function borrowPick(picked: boolean): Picking {
     options, runtimeFixed: false, value, valueOption: options[0], draft, option: draft.model, runtimes: [], efforts: ["low", "medium", "high"], accounts: [],
     who: "账号", autoNote: "额度用完或登录失效时自动切换", changed: picked, was: [], becomes: [], modelText: "", accountText: "自动分配", accountNote: "", accountWarn: false, saveText: "",
     ...(picked ? { borrow: {
-      note: "此 station 还不能用 DeepSeek V4 Pro", title: "向 Studio 借用 zuozijian1994@gmail.com", action: "借用账号", allowed: true,
+      note: "此 station 还不能用 DeepSeek V4 Pro", title: "向 Studio 借用 alex@example.test", action: "借用账号", allowed: true,
       lines: [
-        "此 station 尚无可运行 DeepSeek V4 Pro 的账号。借用后，Studio 会把 Profile「zuozijian1994@gmail.com」分享给此 station，此 station 上的对话可以用它运行。",
+        "此 station 尚无可运行 DeepSeek V4 Pro 的账号。借用后，Studio 会把 Profile「alex@example.test」分享给此 station，此 station 上的对话可以用它运行。",
         "此 station 会保存一份副本，Studio 离线时仍可使用。",
         "不同 station 的环境可能不同（已安装的运行时和工具、网络、文件），借用前请确认此 station 能正常使用这个账号。",
       ],
