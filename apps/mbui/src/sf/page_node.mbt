@@ -18,6 +18,13 @@ pub fn lit_node(v : @view.View) -> Bool {
 }
 
 ///|
+/// Whether the hand is on `v` or on what it holds (lit_node's, a mouse over any of it: as an old view's row is hovered
+/// by any of its parts, its keys among them).
+pub fn lit_in_node(v : @view.View) -> Bool {
+  lit_node(v) || (@ui.pointing() is Mouse && v.pointed_in())
+}
+
+///|
 /// `v` pressed as an old view's box with an id is (a tap on it, a mouse's let go on it, Enter or Space with the
 /// keyboard's focus on it, a screen reader's Activate), `press` done then; while `on` says so (a box given no id: none
 /// of these). Nothing drawn of it: what it draws as the hand is on it is its own (lit_node).
@@ -29,6 +36,47 @@ pub fn presses_node(v : @view.View, press : () -> Unit, on? : () -> Bool = fn() 
     @ui.touch_slop(),
     tap=fn(d) { if on_it(d) { press() } },
     drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { press() } },
+  )
+  |> ignore
+}
+
+///|
+/// `v` pressed as presses_node's is, and held: `held` once a finger or the pointer has been down on it `held_ms`
+/// without leaving it (a row's menu), `down` as one goes down on it (where, in the window: its Drag), `up` as it is let
+/// go however it ends (after `press` where it is pressed).
+pub fn presses_held_node(
+  v : @view.View,
+  press : () -> Unit,
+  held_ms : Double,
+  held : (@view.Drag) -> Unit,
+  down? : (@view.Drag) -> Unit = fn(_) {  },
+  up? : () -> Unit = fn() {  },
+) -> Unit {
+  v.presses(Is(true)).focusable(Is(true)).on_press(press) |> ignore
+  let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
+  v.gesture(
+    @ui.touch_slop(),
+    press=fn(d) { down(d) },
+    tap=fn(d) {
+      if on_it(d) {
+        press()
+      }
+      up()
+    },
+    hold=(held_ms, held),
+    drag=fn(d) {
+      match d.kind {
+        Up => {
+          if @ui.pointing() is Mouse && on_it(d) {
+            press()
+          }
+          up()
+        }
+        // (called off: taken by what scrolls under it, say)
+        Off => up()
+        _ => ()
+      }
+    },
   )
   |> ignore
 }

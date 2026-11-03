@@ -91,7 +91,8 @@ test "大屏: the sidebar's list's thumb shown where the edge's strip is: a mous
   let x1 = if tx + tw + g < ex + ew { tx + tw + g } else { ex + ew }
   assert_true(x1 > x0 && ty + th / 2.0 > ey && ty + th / 2.0 < ey + eh, msg="thumb \{(tx, ty, tw, th)} edge \{(ex, ey, ew, eh)}")
   let (px, py) = ((x0 + x1) / 2.0, ty + th / 2.0)
-  let before = t.list_offset()
+  // (where the list is, by its thumb: down it as the list scrolls on)
+  let before = ty
   t.move(px, py)
   t.run_for(@ui.scrollbar_fade_ms)
   t.press_at(px, py)
@@ -101,6 +102,7 @@ test "大屏: the sidebar's list's thumb shown where the edge's strip is: a mous
   }
   t.release(px, py + 40.0)
   t.frame()
-  assert_true(t.list_offset() > before, msg="the list scrolled: \{before} to \{t.list_offset()}")
+  let after = side_thumb(t).map(fn(b) { b.1 }).unwrap_or(before)
+  assert_true(after > before, msg="the list scrolled: its thumb from \{before} to \{after}")
   assert_eq((@sfdesk.wide.side_w.get(), @sfdesk.wide.edge_held.get(), @sfdesk.wide.folded.get()), (240.0, false, false))
 }

@@ -103,7 +103,7 @@ test "a row pressed: on the ground it has held once the press is not the list's 
   // one needing the viewer, one offered for archiving
   for title in ["夜里的构建又失败了", "把旧的截图都换成新的"] {
     let t = android_home()
-    t.scroll_to(12)
+    list_down(t, 12)
     t.draw()
     let (x, y) = t.find(title).unwrap()
     t.press_at(x, y)
@@ -202,7 +202,10 @@ test "small screen home: a long workspace name gives way to syncing and transfer
   let (tx, _, tw, _) = t.query(Button, label="1 个传输 · 2%").unwrap().rect
   let (sx, _, sw, _) = t.query(Button, label="设置").unwrap().rect
   let (wx, wy, ww, wh) = t.rect_of(long_name).unwrap()
-  assert_true(fx + fw <= sync_x && sync_x + sync_w <= tx && tx + tw <= wx && wx + ww <= sx && sx + sw <= 320.0)
+  assert_true(
+    fx + fw <= sync_x && sync_x + sync_w <= tx && tx + tw <= wx && wx + ww <= sx && sx + sw <= 320.0,
+    msg="filter \{fx}+\{fw}, sync \{sync_x}+\{sync_w}, transfers \{tx}+\{tw}, name \{wx}+\{ww}, settings \{sx}+\{sw}",
+  )
   assert_true(ww > 0.0, msg="workspace name stays in the bar: \{wx}, \{ww}")
   t.tap(wx + ww / 2.0, wy + wh / 2.0)
   assert_true(@sf.presenting())
@@ -435,7 +438,7 @@ test "a chat keeping watch is archived only once asked, in the core's words" {
 test "a row with nothing left in it, swiped left past a third: off, then archived (chat.archive); a short swipe archives nothing" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
-  t.scroll_to(12)
+  list_down(t, 12)
   t.draw()
   let (_, y) = t.find("把旧的截图都换成新的").unwrap()
   // across a little: let go short of a third, nothing archived
@@ -468,7 +471,7 @@ test "a finger swipes a waiting, failed or unread chat to archive it on both sma
       let calls : Array[Made] = []
       let t = wide_tester(calls, w~, h=900.0, platform=2)
       if session == "s-c10" {
-        t.scroll_to(12)
+        list_down(t, 12)
         t.draw()
       }
       let (_, y) = t.find(title).unwrap()
@@ -861,7 +864,7 @@ test "the wide frame's first page: shown once its pane has landed on what the co
 test "a row swiped off and archived, then asked back with 撤销, is back where it rests, not off to the left" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
-  t.scroll_to(12)
+  list_down(t, 12)
   t.draw()
   let before = t.locate("=把旧的截图都换成新的")
   let (_, y) = before[0]
@@ -873,7 +876,7 @@ test "a row swiped off and archived, then asked back with 撤销, is back where 
   t.run_for(@kit.presence_in_ms)
   t.tap_text("撤销")
   assert_eq(named(calls, "chat.archive").length(), 2)
-  t.scroll_to(12)
+  list_down(t, 12)
   t.draw()
   // where it rests, its 归档 under it covered: nothing of the swipe left
   let after = t.locate("=把旧的截图都换成新的")

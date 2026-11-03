@@ -7,8 +7,9 @@ test "chat neighbours: a list held under the pointer is traversed in its display
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  t.tap_text("给设置页加一个深色模式开关")
+  // (its row in the list, where the pointer rests: not its title over the chat it opens)
   let (x, y) = t.find("给设置页加一个深色模式开关").unwrap()
+  t.tap_text("给设置页加一个深色模式开关")
   t.move(x, y)
   t.frame()
   // The core moves CI to the top, while the list keeps it below the current row under the pointer.

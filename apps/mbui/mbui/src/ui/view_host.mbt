@@ -2257,6 +2257,7 @@ fn view_frame_end(c : Ctx) -> Unit {
   if tree.cycle_read() {
     c.cycling = true
   }
+
   match tree.wake() {
     Some(at) =>
       if c.wake_at <= 0.0 || at < c.wake_at {
@@ -4395,8 +4396,9 @@ pub fn yield_thumbs(v : @view.View, island : @view.View) -> Unit {
 
 ///|
 /// What takes a finger at (x, y) of what the tree found (`picked`, the topmost of `found`): where it is a node that
-/// yields to an old view's thumbs (yield_thumbs), that old view found under it there and what of it takes it there a
-/// thumb shown for a mouse, the old view; else what was found.
+/// yields to thumbs (yield_thumbs) and the pointer a mouse's, a thumb of a column of the tree's found under it there
+/// (one taking a drag while it shows: Tree::is_thumb), the topmost; else that old view found under it there and what of
+/// it takes it there a thumb shown, the old view; else what was found.
 fn view_retarget(
   tree : @view.Tree,
   picked : @view.Target,
@@ -4410,7 +4412,16 @@ fn view_retarget(
   }
   guard thumbs_yielded.get(id.at) is Some((who, island)) && who == id else { return picked }
   // (a mouse's alone, as a thumb takes one: a finger takes none, whatever the frame before published)
-  guard pointing() is Mouse && found.contains(Hosted(island)) else { return picked }
+  guard pointing() is Mouse else { return picked }
+  // (a thumb of a column of the tree's own under it there, shown: the topmost of them)
+  // (found in the order they are drawn, the topmost last)
+  for i = found.length() - 1; i >= 0; i = i - 1 {
+    match found[i] {
+      Dragged(d) if d != id && tree.is_thumb(d) => return found[i]
+      _ => ()
+    }
+  }
+  guard found.contains(Hosted(island)) else { return picked }
   match old_taker_at(tree, island, x, y) {
     Some(token) if token % 2 == 0 && g().bars.iter().any(fn(b) { b.thumb == token / 2 }) => Hosted(island)
     _ => picked

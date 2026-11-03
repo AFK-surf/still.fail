@@ -130,7 +130,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
 ///|
 test "Home: a row swiped off is archived once it has gone, and leaves no copy of it behind" {
   let t = tester("home")
-  t.scroll_to(12)
+  list_down(t, 12)
   t.draw()
   let (x, y, _, h) = t.rect_of("把旧的截图都换成新的").unwrap()
   ignore(x)

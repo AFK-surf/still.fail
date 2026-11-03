@@ -54,22 +54,22 @@ fn update_trailing(c : @ui.Ctx, src : Source) -> (() -> Unit)? {
 ///|
 /// A sidebar's action band with the update at its end: on the tape or in the floating pane, the same line and corner
 /// as the chats' filter. With no update, the other sidebars keep their ordinary band.
-fn update_band() -> @ui.Style {
+fn update_band(at? : BandAt = band_at_old()) -> @ui.Style {
   if !update_shown() {
     @sf.nav_new()
-  } else if wide.tape {
-    band_new_tape()
+  } else if at.tape {
+    band_new_tape(at~)
   } else {
-    band_new_pane()
+    band_new_pane(at~)
   }
 }
 
 ///|
 /// The settings' old back row has the list's 4 above it and at least row_least in height; the action band has 6 above
 /// it and band_row_h in height. Make up the difference below so the groups do not jump when the update appears.
-fn update_back_band() -> @ui.Style {
-  let band = update_band().then(settings_back_band)
-  if wide.in_bar || wide.tape {
+fn update_back_band(at? : BandAt = band_at_old()) -> @ui.Style {
+  let band = update_band(at~).then(settings_back_band)
+  if at.in_bar || at.tape {
     band
   } else {
     let bottom = @sf.room_of(update_back_room + @sf.row_least() - @sf.band_row_h())

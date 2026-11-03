@@ -16,7 +16,7 @@ fn finder_tester(w : Double, platform : Int, regular : Bool, words : String) -> 
   t.draw()
   if platform == 2 {
     // a finger's: the field at the list's top, in every tier
-    t.scroll_to(0)
+    list_up_to_top(t)
     t.draw()
     tap_search_field(t)
     t.run_for(@ui.move_most_ms)
@@ -84,7 +84,7 @@ test "the search's way in by the hand: a finger's field at the lists' top in eve
       assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
     }
     t.draw()
-    t.scroll_to(0)
+    list_up_to_top(t)
     t.draw()
     let at = "\{w} platform \{platform}"
     if platform == 2 {
@@ -102,23 +102,42 @@ test "the search's way in by the hand: a finger's field at the lists' top in eve
 }
 
 ///|
-/// The search's field as drawn: the list's (its words, `editor` false) or come up from it (the page's, its placeholder
-/// the same words): how big its words are and how high what holds them is.
+/// The search's field as drawn now (`editor`: the page's, its placeholder the same words, as the one seen while it is
+/// open; else the list's): how big its words are and how high its capsule is.
 fn search_field_drawn(t : @ui.Tester, editor : Bool) -> (Double, Double)? {
-  let bs = t.boxes()
-  for b in bs {
-    let it = if editor {
-      b.kind == "editor" && b.text == "搜索全部内容"
-    } else {
-      b.kind == "text" && (b.text == "搜索全部内容" || b.text == "搜索")
-    }
-    if it {
-      // (the editor in a box of its own, beside the mark; the list's words beside it)
-      let row = if editor { bs[bs[b.parent].parent] } else { bs[b.parent] }
-      return Some((b.font_size, row.h))
+  // (the page's field an editor, its placeholder the words: as the frame lays it out, in its capsule)
+  if editor {
+    let bs = t.boxes()
+    for b in bs {
+      if b.kind == "editor" && (b.text == "搜索全部内容" || b.text == "搜索") && b.parent >= 0 {
+        let mut p = b.parent
+        while p >= 0 && bs[p].h < b.h + 1.0 {
+          p = bs[p].parent
+        }
+        if p >= 0 {
+          return Some((b.font_size, bs[p].h))
+        }
+      }
     }
   }
-  None
+  // (the field drawn now, the last of them: the search's page over the list where it is open; its words' size and its
+  // capsule's height, the first drawn round them with a ground)
+  guard @ui.view_tree() is Some(tree) else { return None }
+  let drawn = tree.drawn_held()
+  let mut found : (Double, Double)? = None
+  for d in drawn {
+    let (n, holder, _) = d
+    if n.alpha > 0.0 && (n.words == "搜索全部内容" || n.words == "搜索") {
+      let mut h = holder
+      while h >= 0 && drawn[h].0.ground == 0L {
+        h = drawn[h].1
+      }
+      if h >= 0 {
+        found = Some((n.words_look.size, drawn[h].0.h))
+      }
+    }
+  }
+  found
 }
 
 ///|
@@ -132,13 +151,13 @@ test "a finger's search field comes up from the list and goes back as itself: it
       assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
     }
     t.draw()
-    t.scroll_to(0)
+    list_up_to_top(t)
     t.draw()
     let at = w.to_string()
     guard search_field_drawn(t, false) is Some(list) else { fail("\{at}: no field in the list") }
     tap_search_field(t)
     t.run_for(@ui.move_most_ms)
-    assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: come up")
+    assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: come up: \{search_field_drawn(t, true)} for \{list}")
     // 取消: on its way back, then the list's again, as it was
     guard t.find_last("取消") is Some((x, y)) else { fail("\{at}: no 取消") }
     t.tap(x, y)
@@ -186,8 +205,9 @@ test "small with a mouse, ⌘K: the search's page in the lists' box, the keys in
   assert_true(@sfpages.search_opened())
   assert_false(@sfdesk.switcher_open())
   // the lists gone from under it, as under a finger's (not seen through its rows)
-  let row = t.words().iter().find_first(fn(x) { x.0 == "整理发布清单" }).unwrap()
-  assert_true(row.5 < 0.01, msg=row.5.to_string())
+  // (the list's row there unseen; the same chat among what the search offers, seen)
+  let rows = t.words().filter(fn(x) { x.0 == "整理发布清单" }).map(fn(x) { x.5 })
+  assert_true(rows.iter().any(fn(a) { a < 0.01 }), msg=rows.to_string())
   // what can be done here among what it finds: 设置 with its keys, Enter runs it
   t.type_text("设置")
   t.frame()

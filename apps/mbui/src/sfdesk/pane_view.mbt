@@ -593,6 +593,18 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   |> ignore
   // the block over them (reaching over the page shown a while), 更新: taking presses where they draw them
   let block = @ui.old(v, fn(c) { pane_block_built(c, src) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own
+  // the sidebar made once, the tree's, over the block where it lays its sidebar out (side_node)
+  v.box(fn(sides) {
+    sides.over(Is(true)) |> ignore
+    side_node(sides, src, tips, fn() { pane_side_at(src, sides) })
+  })
+  |> ignore
+  // the block's line over all it holds (dock_edge_node)
+  v.box(fn(line) {
+    line.over(Is(true)) |> ignore
+    dock_edge_node(line, fn() { pane_side_at(src, line) })
+  })
+  |> ignore
   // the sidebar's edge, the tree's, over the block (its rows under its strip), but where a list's thumb of the block's
   // is shown there: the thumb's (@ui.yield_thumbs)
   v.box(fn(edges) {
@@ -600,6 +612,36 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     edges.show(fn() { pane_edge_stands(src, edges) }, fn(n) { pane_edge(n, edges, src, tips, block) })
   })
   |> ignore
+}
+
+///|
+/// Where the block off the tape lays its sidebar out as node `n` (over all of the window) is drawn, in the workspace in
+/// view: as pane_block_built lays the block out, where its move has got then (fold_along at what `n` is drawn at:
+/// dock_side_at).
+fn pane_side_at(src : Source, n : @view.View) -> SideAt {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => {
+      let (ww, wh) = n.window()
+      let (r, now) = fold_target(src, w, ww)
+      let t = fold_drawn_at(n)
+      let f = fold_along(t, now)
+      let top = if side_full_height(r.bar) { 0.0 } else { r.top }
+      dock_side_at(r.bar, r.peek, r.s, f.col, top, r.foot, 0.0, wh, Some((f, fold_going(t))))
+    }
+    None =>
+      {
+        box: (0.0, 0.0, 0.0, 0.0),
+        block: (0.0, 0.0, 0.0, 0.0),
+        links: None,
+        round: 0.0,
+        edge: (0.0, 0L),
+        shown: false,
+        brand: 0.0,
+        band: 0.0,
+        bar: false,
+        tape: false,
+      }
+  }
 }
 
 ///|

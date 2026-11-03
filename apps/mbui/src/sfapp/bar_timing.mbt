@@ -45,3 +45,25 @@ fn bar_built(c : @ui.Ctx, page : Page) -> Unit {
     _ => ()
   }
 }
+
+///|
+/// A page made once at the stack's root (narrow_made_as's place), its page `page`: told built as bar_built tells one,
+/// as it is made and as the place is switched to it again (place_switch said), at that change's moment.
+fn bar_built_node(v : @view.View, page : () -> Page) -> Unit {
+  v.reacts(fn() {
+    place_switch.said()
+    place_switch.starts_at()
+  }, fn(_) {
+    match (bar_timing.val, bar_timed.val, place_of(@signals.untracked(page))) {
+      (Some(t), Some(p), Some(q)) if p == q =>
+        v.at_moment(v.cause_at(), fn() {
+          if bar_timed.val == Some(p) {
+            bar_timed.val = None
+            (t.built)(p)
+          }
+        })
+        |> ignore
+      _ => ()
+    }
+  })
+}

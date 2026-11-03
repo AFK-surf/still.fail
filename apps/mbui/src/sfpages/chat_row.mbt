@@ -39,6 +39,8 @@ let rows : Rows = {
 ///|
 fn chat_rows_reset() -> Unit {
   row_left.val = ("", false)
+  row_left_said.set("")
+  row_renaming.set("")
   rows.renaming = ""
   rows.rename_for = ""
   rows.rename_seen = false
@@ -669,7 +671,10 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
           @sf.t("android-chat.rename.title"),
           @sf.t("common.save"),
           fn(title) { rename(src, item, title) },
-          fn() { rows.renaming = @sfbase.row_name(item) },
+          fn() {
+            rows.renaming = @sfbase.row_name(item)
+            row_renaming.set(rows.renaming)
+          },
           value=item.title,
           placeholder=@sf.t("android-chat.rename.field"),
           hint=@sf.t("android-chat.rename.note"),

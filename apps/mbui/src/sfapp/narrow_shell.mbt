@@ -224,6 +224,7 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)
+  first_hide(first_waiting.val)
 }
 
 ///|
@@ -397,6 +398,7 @@ fn narrow_made_as(
               outer.box(fn(i) {
                 i.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
                 place_comes_in(i)
+                bar_built_node(i, page)
                 inner = Some(i)
               })
               |> ignore
@@ -484,6 +486,32 @@ fn narrow_made_as(
     made_at(kind, place, f)
   }
   match page {
+    // the chats' lists under Home's top bar (home_node); a device waiting to be confirmed in the workspace's safe mode
+    // sees that instead (lock_gate, its old view)
+    Home =>
+      made("home", fn(p, core, _here, _frame, stint, _acts) {
+        let tips = @sf.TipLayer::new(fn() { None })
+        p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+        p.pick(fn() { workspace_in_view(src).0.map(fn(w) { @settings.lock_waiting(core, w.id) }).unwrap_or(false) }, fn(
+          q,
+          waiting,
+        ) {
+          // (all of the page's room, the lock's page and Home alike)
+          q.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+          if waiting {
+            @ui.old(q, fn(c) {
+              match workspace_in_view(src).0 {
+                Some(w) => lock_gate(c, src, w, bar=workspace_in_view(src).3) |> ignore
+                None => ()
+              }
+            })
+            .grow(Is(1.0))
+            |> ignore
+          } else {
+            home_node(q, src, tips, stint)
+          }
+        })
+      })
     Settings =>
       made("settings", fn(p, core, here, frame, stint, _acts) {
         @sfpages.settings_home_node(p, core, here, fn(r) { (core.push)(r) }, on_back=core.pop, frame~, stint~, bars=fn() {

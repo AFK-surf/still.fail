@@ -85,6 +85,7 @@ fn reset() -> Unit {
   splash_owner.val = None
   first_shown.val = false
   first_waiting.val = false
+  first_hidden.set(false)
   first_has.val = 0
   frame_bare.val = false
   window_shown.val = false
@@ -413,6 +414,7 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
     first_shown.val = true
     first_waiting.val = false
   }
+  first_hide(first_waiting.val)
   // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
   if first_waiting.val {
@@ -562,7 +564,8 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; on the tape, its panels' nodes
         // (tape_shell.mbt); the ways in, the splash, a window of its own; nothing before the window has a width
         v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
-          s.grow(Is(1.0)) |> ignore
+          // (its first page built and waiting for what it shows: not drawn, the splash in its place: view_in)
+          s.grow(Is(1.0)).alpha(By(fn() { if first_hidden.get() { 0.0 } else { 1.0 } })) |> ignore
           match shell {
             Stacked => narrow_shell(s, src)
             Taped => taped_shell(s, src)
@@ -811,10 +814,8 @@ fn page_view(
       match page {
         // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
         // stations refuse it: Security.kt LockGate); its settings stay
-        Home =>
-          if lock_gate(c, src, w, bar=invited) {
-            home_page(c, src, w, all, invited)
-          }
+        // (made once: narrow_shell.mbt's Home)
+        Home => ()
         Chat(r) => {
           chat_page(c, src, w, r)
           new_chat_leaving(c, src, w, r)
@@ -1266,6 +1267,20 @@ let first_shown : Ref[Bool] = Ref(false)
 ///|
 /// Whether this frame's first page is built and not shown yet (signed_in, view_in).
 let first_waiting : Ref[Bool] = Ref(false)
+
+///|
+/// Whether the shell's nodes are drawn at none (the first page built and waiting: first_waiting), followed: what its
+/// old views are drawn with too (view_in's old_views_look).
+// kept across runs: put back as a run begins
+let first_hidden : @signals.Signal[Bool] = @signals.signal(false)
+
+///|
+/// The shell's nodes drawn at none while `on` (first_hidden), told only as it changes.
+fn first_hide(on : Bool) -> Unit {
+  if @signals.untracked(fn() { first_hidden.get() }) != on {
+    first_hidden.set(on)
+  }
+}
 
 ///|
 /// Whether this frame drew the ground alone (splash), and whether the window held (host_setup) is shown (view_in).

@@ -12,7 +12,7 @@
 /// its own as it comes to show (its room, from the column's top to its foot, met by any of it), let go as it no more
 /// does, as tall in the column meanwhile as it was last laid out (`est` where it never was). How tall each that does
 /// not show was is forgotten as the column is laid out at another width or all words are measured anew (what shows is
-/// laid out again as it is, its height told anew).
+/// laid out again as it is, its height told anew). `bar_clear`: the bar's ends kept clear (View::scrolls').
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
   s : Scroll,
@@ -21,6 +21,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   est? : Double = 80.0,
   slop? : Double,
   bar? : ScrollBar,
+  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
 ) -> View {
   guard self.live() is Some(_) else { return self }
   // (how tall each was laid out while it showed, by its key, told as each is laid out (`told` counting each change of
@@ -103,7 +104,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       None => None
     }
   })
-  self.scrolls(s, slop?=slop, bar?=bar, fn(held) {
+  self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
     held.each(keys, fn(k) { k }, fn(slot, item) {
       let k = @signals.untracked(fn() { item.get() })
       let shows = fn() { window.get().contains(k) }

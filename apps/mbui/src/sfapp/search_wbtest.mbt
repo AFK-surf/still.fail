@@ -6,7 +6,7 @@ fn search_tester() -> @ui.Tester {
   new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  t.scroll_to(0)
+  list_up_to_top(t)
   t.draw()
   t.tap_text("搜索全部内容")
   t.run_for(@ui.move_most_ms)
@@ -29,7 +29,7 @@ test "Home's list starts at its first row, the search above it out of view under
 ///|
 test "the field tapped: the search opens over Home, its field focused, the bars away; 取消 puts it back" {
   let t = tester("home")
-  t.scroll_to(0)
+  list_up_to_top(t)
   t.draw()
   let (_, from) = t.find("搜索全部内容").unwrap()
   t.tap_text("搜索全部内容")
@@ -157,7 +157,7 @@ test "a chat opened from the search, read a while, back: the search as it was le
   // its field still up with 取消 beside it, not back in the list with the words left in it (the list under the page
   // then, the page taking its touches)
   assert_eq(t.shown_of("取消"), cancel_at)
-  assert_eq(t.look_of("取消").map(fn(l) { l.2 }), Some(1.0))
+  assert_eq(t.words().filter(fn(w) { w.0 == "取消" }).map(fn(w) { w.5 }), [1.0])
 }
 
 ///|

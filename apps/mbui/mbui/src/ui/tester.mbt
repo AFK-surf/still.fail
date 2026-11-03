@@ -2234,6 +2234,16 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
       return Some(c.drawn_at(i))
     }
   }
+  // (or the words of a node of the window's tree, where it is drawn, as Tester::rect_of finds them)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+          return Some((d.x, d.y))
+        }
+      }
+    None => ()
+  }
   None
 }
 
@@ -2266,6 +2276,16 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
       }
       return Some((x0, y0, dmax(x1 - x0, 0.0), dmax(y1 - y0, 0.0)))
     }
+  }
+  // (or the words of a node of the window's tree, as much of them as is drawn: the tree's own clips, as drawn)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+          return Some((d.x, d.y, d.w, d.h))
+        }
+      }
+    None => ()
   }
   None
 }

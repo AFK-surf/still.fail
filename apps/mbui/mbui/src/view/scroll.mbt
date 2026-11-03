@@ -386,6 +386,18 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
 }
 
 ///|
+/// Put at `to` (down the column) at the logic's moment of the tree it scrolls in, read as far as it can go as it is
+/// laid out (a list's first place, past what is tucked over its rows; its top again): what it was on by itself stopped
+/// there, no scroll of the hand's (nothing told as scrolled: its bar). Not scrolling in a node yet, there as it comes to.
+pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
+  match self.host {
+    Some(v) if v.alive() => self.stopped(v.tree.logic_at()) |> ignore
+    _ => ()
+  }
+  self.x.set(dmax(to, 0.0))
+}
+
+///|
 /// Moved by `d` (down the column) at `t`, as far as it can go: whether it moved.
 fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
   let was = self.stopped(t)
@@ -551,7 +563,8 @@ pub fn View::scroll_holding(self : View, across? : Bool = false) -> Scroll? {
 /// laid out as wide as it is, given way to nothing across where what holds it is narrower; a hold its own once it moves
 /// across past the slop; its bar along its foot, `bar_in` in from either end (under what it is for, where what it holds
 /// reaches past that: Ctx::sideways's), room under what it holds for it while it can go (its bar never over what it
-/// holds' last line), none while it cannot.
+/// holds' last line), none while it cannot. `bar_clear`: down a column, how much of its top and its foot its bar keeps
+/// clear of, as it is now (what lies over them: a bar the list runs under), as an old view's list's bar does.
 pub fn View::scrolls(
   self : View,
   s : Scroll,
@@ -559,6 +572,7 @@ pub fn View::scrolls(
   slop? : Double,
   bar? : ScrollBar,
   bar_in? : Double = 0.0,
+  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
 ) -> View {
   guard self.live() is Some(_) else { return self }
   // (a page's list's as its platform's is as it is held: what hosts the tree may say it after it is made)
@@ -647,7 +661,7 @@ pub fn View::scrolls(
           (None, None) => -1.0e9
         }
       })
-      self.scroll_bar(s, b, state, bar_in~)
+      self.scroll_bar(s, b, state, bar_in~, bar_clear~)
       s.on_scrolled = fn(t) { state.woke(b, self, t, scrolled=true) }
     }
     None => ()

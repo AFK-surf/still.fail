@@ -515,6 +515,9 @@ pub struct Tree {
   clock : @signals.Signal[Double]
   /// the same moment, for what draws a wait by it (a cycle: View::cycle): what never ends, read apart from what moves
   beat : @signals.Signal[Double]
+  /// the same moment on the resident clock's steps (resident_step_ms): for an endless decoration drawn by it
+  /// (View::cycle_resident), told only as a step is passed
+  resident : @signals.Signal[Double]
   /// told each time what the root holds is put at another place in the window's stack of layers (View::stacked,
   /// View::over_all): what orders things by those places as it is built (an old frame's layers opened in its nodes:
   /// Tree::places_read) built again
@@ -722,6 +725,9 @@ pub struct Tree {
   mut rows_grid : Double
   /// the nodes holding such a list's rows (Node's list_rows), let go or not
   rows_lists : Array[Int]
+  /// the thumbs of its columns' bars (View::scroll_bar), by their places: what a node over one yields to (ui's
+  /// yield_thumbs, Tree::thumb_at)
+  thumbs : Map[Int, NodeId]
   /// rows_grid, followed (Tree::rows_slot)
   rows_grid_said : @signals.Signal[Double]
   work : Work
@@ -769,6 +775,7 @@ pub fn Tree::new(
   let t : Tree = {
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
+    resident: @signals.signal(resident_of(start), same=fn(a, b) { a == b }),
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
@@ -867,6 +874,7 @@ pub fn Tree::new(
     pixel_grid: 0.0,
     rows_grid: 0.0,
     rows_lists: [],
+    thumbs: {},
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
     on_modals: fn() {  },
@@ -1247,6 +1255,52 @@ pub fn View::cycle(self : View, period : Double) -> Double {
 }
 
 ///|
+/// How far apart the resident clock's steps are (an old view's cycle_step_ms): an endless decoration drawn by it
+/// (View::cycle_resident) is drawn anew at each, never between.
+pub let resident_step_ms : Double = 100.0
+
+///|
+/// Moment `ms` on the resident clock: the step it is in.
+fn resident_of(ms : Double) -> Double {
+  (ms / resident_step_ms).floor() * resident_step_ms
+}
+
+///|
+/// A frame's moment told (beat's), and on the resident clock's steps (resident's): a frame's alone, never the moment an
+/// input or the logic is worked out at for a while (what is drawn at the resident clock's step is what the frames show).
+fn Tree::beat_set(self : Tree, ms : Double) -> Unit {
+  self.beat.set(ms)
+  self.resident.set(resident_of(ms))
+}
+
+///|
+/// Where a cycle of `period` ms is on the resident clock's steps (0 to 1, from moment 0 on), followed: for an endless
+/// decoration (a working mark's spokes, a waiting mark's breath) drawn anew only at each step, as an old view's resident
+/// cycle is (Ctx::cycle's `resident`): what hosts the tree wakes for its next step, said `later` (Tree::resident_next),
+/// not a frame after each frame.
+pub fn View::cycle_resident(self : View, period : Double) -> Double {
+  let t = self.tree.resident.get()
+  if period <= 0.0 {
+    return 0.0
+  }
+  let p = t / period
+  p - p.floor()
+}
+
+///|
+/// Whether an endless decoration reads the resident clock (View::cycle_resident): what hosts the tree wakes for its next
+/// step then.
+pub fn Tree::resident_read(self : Tree) -> Bool {
+  self.resident.watched()
+}
+
+///|
+/// The resident clock's next step after the moment drawn now (Tree::drawn_at's).
+pub fn Tree::resident_next(self : Tree) -> Double {
+  resident_of(@signals.untracked(fn() { self.clock.get() })) + resident_step_ms
+}
+
+///|
 /// Whether a wait reads the clock (View::cycle): what hosts the tree draws its frames one after another as an old view's
 /// cycle has them drawn, a wait, not a motion (Tree::clock_read).
 pub fn Tree::cycle_read(self : Tree) -> Bool {
@@ -1257,7 +1311,7 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 /// The clock set to `ms` (a frame's time).
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
   self.clock_to(ms)
-  self.beat.set(ms)
+  self.beat_set(ms)
 }
 
 ///|
@@ -2592,6 +2646,19 @@ pub fn Tree::ground_drawn_of(self : Tree, id : NodeId) -> (Double, Double, Doubl
 /// drawn off by whole pixels (View::drawn_off).
 pub fn Tree::set_pixel_grid(self : Tree, g : Double) -> Unit {
   self.pixel_grid = g
+}
+
+///|
+/// The thumbs of its columns' bars living now (View::scroll_bar's), for a test: where each takes the pointer is
+/// Tree::input_bounds'.
+pub fn Tree::thumbs_now(self : Tree) -> Array[NodeId] {
+  self.thumbs.values().filter(fn(id) { self.is_thumb(id) }).collect()
+}
+
+///|
+/// Whether node `id` is the thumb of one of its columns' bars (View::scroll_bar's), living.
+pub fn Tree::is_thumb(self : Tree, id : NodeId) -> Bool {
+  self.thumbs.get(id.at) == Some(id) && self.nodes[id.at].live
 }
 
 ///|
