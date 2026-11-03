@@ -913,6 +913,23 @@ test("the cards answered in some chats are those the whole station's say, read b
   } finally { await r.close(); }
 });
 
+test("a job's chat named from the sidebar's items as they are, none of their messages, cards or marks read for it", async () => {
+  const r = rig();
+  try {
+    const a = (await r.ask("POST", "/sessions", { runtime: "claude", title: "Deploy" }))[1] as any;
+    const b = (await r.ask("POST", "/sessions", { runtime: "claude" }))[1] as any;
+    r.store.insertMessage(newMessage(b.thread.id, "1.1", "person", viewer.email, "what do we do first"));
+    r.store.insertMessage({ ...newMessage(a.thread.id, "card", "agent", a.key, "Choose"), card: { type: "options", options: [{ label: "Yes" }] } });
+    const store = openStore(r.data);
+    const look = (rows: any[]) => rows.map((row) => [row.id, row.title, row.agents.map((x: any) => x.key)]);
+    const full = chats(store, viewer, false);
+    const named = chats(store, viewer, false, null, true);
+    assert.deepEqual(look(named), look(full));
+    assert.ok(full.some((row: any) => row.card !== undefined) && named.every((row: any) => row.card === undefined && row.last === null), "nothing else read for them");
+    store.db.close();
+  } finally { await r.close(); }
+});
+
 test("a device makes the sidebar from the summaries and marks as the station makes it", async () => {
   // The station made every row again for every viewer at every change, 3 to 10 s each on ccvm (2026-11-03): a device
   // makes it from what it holds (client/core-ts/src/station/rows-made.ts), by the same rules.

@@ -122,7 +122,7 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Js
   const scan = (archived: boolean) => {
     const own = new Map<string, Json>();
     const any = new Map<string, Json>();
-    for (const chat of chats(s, viewer, archived, scope)) {
+    for (const chat of chats(s, viewer, archived, scope, true)) {
       const shownChat = { id: chat.id ?? null, title: chat.title ?? null, archived };
       for (const agent of Array.isArray(chat.agents) ? chat.agents : []) {
         const key = agent?.key;
