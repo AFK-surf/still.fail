@@ -240,7 +240,7 @@ Built (`APP=coredemo scripts/android.sh build`): the core runs in the app's engi
 
 ## Windows
 
-Built (`apps/mbui/scripts/win.sh build`, Git Bash with MSVC's environment and MoonBit; CI: mbui.yml's `windows` job on
+Built (`apps/mbui/scripts/win.sh build`, Git Bash with MSVC's environment and MoonBit; CI: preview.yml's `windows` job on
 GitHub's Windows): the core in Hermes 0.81.4, in-process, on the Rust shell, as on Android (the decision and its
 measurements: core-engine-pc.md of the session that made it; Hermes starts 4–5× sooner than Node in a quarter of the
 memory).

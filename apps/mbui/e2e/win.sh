@@ -1,5 +1,5 @@
 #!/bin/bash
-# still.fail mbui on Windows end to end (mbui.yml's windows job, Git Bash on GitHub's Windows), against a still.fail of
+# still.fail mbui on Windows end to end (preview.yml's windows job, Git Bash on GitHub's Windows), against a still.fail of
 # its own started here: this checkout's local cloud (cloud/test/dev.ts: its Workers in Miniflare, Google mocked, alice
 # and the "Dev" workspace). The app (APP=stillfail, built by scripts/win.sh build) starts its core in Hermes, and is
 # signed in as a person would: 登录或注册 pressed, the login page handed to the browser, which is e2e/win/browser.cmd (a
@@ -16,7 +16,7 @@
 # a notification while put away, shown, tapped: the app back at the chat.
 #   apps/mbui/e2e/win.sh        (E2E_PORT: the cloud's ports from it, 18787 by default; the relay's E2E_PORT - 47)
 #   E2E_APP=FILE: the app is waited for, the still.fail it runs against made meanwhile: FILE is what its build writes
-#   once the app is whole (`ok`; anything else: it failed). mbui.yml starts this before the app's build ends: the
+#   once the app is whole (`ok`; anything else: it failed). preview.yml starts this before the app's build ends: the
 #   cloud, the relay, the station and the chat took ~13 s of the flow's ~18, after the build (2026-10-24, 40065721641).
 # Out: out/e2e/windows/ (the shots, the app's, the browser's and the cloud's logs, verdicts in result.txt).
 set -u

@@ -56,7 +56,7 @@ jobs:
       actions: read
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
-      # mbc's units and the core's bytecode as main's newest iOS build (mbui.yml) kept them: without, all ~510 units were
+      # mbc's units and the core's bytecode as main's newest iOS build (preview.yml) kept them: without, all ~510 units were
       # compiled again each release, 70 s on its 3 cores
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
@@ -68,7 +68,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - run: bash apps/mbui/scripts/testflight-guard.sh checkout
-      # (restored only: mbui.yml's ios job, on main, saves them)
+      # (restored only: preview.yml's ios job, on main, saves them)
       - uses: actions/cache/restore@v4
         with:
           path: |

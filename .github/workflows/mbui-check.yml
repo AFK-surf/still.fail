@@ -1,6 +1,6 @@
 # The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh), on native: a branch's in its pipeline
 # (pipeline.yml's check-mbui calls this, its gate waits for it), main's here on its own (on a push to the app). On main
-# they hold nothing back (the app's beta is mbui.yml's, done waits for neither) and were the last of its pipeline run
+# they hold nothing back (the preview app is preview.yml's, done waits for neither) and were the last of its pipeline run
 # in half of them: as part of it, the run after waited for them, 16 of 40 runs a median 88 s (2026-10-20).
 name: mbui-check
 on:
@@ -27,10 +27,10 @@ jobs:
   # code (its host the Tester's fake, mbui/hostapi; the platforms' hosts are an app's main's alone), built with clang
   # (gcc took the 16 GB runner's memory on the largest units and the job was killed). The units each test is split
   # into kept in the Actions cache by content (MBC_STORE: main's newest and a branch's own together): 667 tests,
-  # ~170 s a part with them, ~390 s without (2026-10-22). A merge's evidence and main's, apart from the app's beta (mbui.yml),
+  # ~170 s a part with them, ~390 s without (2026-10-22). A merge's evidence and main's, apart from the preview app (preview.yml),
   # which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit (.github/actions/mbui-moonbit); mbui in
   # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's: no macOS
-  # runner (a test's program is the same C on any system; the Apple toolchain builds the apps, mbui.yml). No ThinLTO
+  # runner (a test's program is the same C on any system; the Apple toolchain builds the apps, pipeline.yml's desktop and preview.yml's ios). No ThinLTO
   # parts: the apps are not built with it (scripts/mbc's lto_for, 2026-10-24).
   native:
     name: native (${{ matrix.part }}${{ matrix.group && format(' {0}', matrix.group) || '' }})

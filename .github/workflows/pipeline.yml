@@ -132,7 +132,7 @@ jobs:
           # cache's downloads, whose account limit GitHub slows them by (mbui-only branches, login-flow-look 41162994216,
           # 2026-10-31).
           browser=false
-          if [ "$range" = all ] || has '^(web/|test/browser/)' || printf '%s\n' "$changed" | grep '^\.github/' | grep -qv '^\.github/workflows/mbui[.-]'; then browser=true; fi
+          if [ "$range" = all ] || has '^(web/|test/browser/)' || printf '%s\n' "$changed" | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then browser=true; fi
           # Exercise the GitHub-hosted web and Mac release paths, without secrets or publishing, when their CI changes.
           release_smoke=false
           if [ "$GITHUB_REF" != refs/heads/main ] && { [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || has '^(\.github/workflows/pipeline\.yml$|\.github/deploy\.sh$|\.github/actions/(setup|natives|mbui-moonbit)/|scripts/release\.sh$)'; }; then release_smoke=true; fi
@@ -314,7 +314,7 @@ jobs:
       - name: Full check (station, core)
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui[.-]'; then range=all; fi
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
           # Its guards beside it: the stable release's selection, and (a branch) nothing merged into main taken back by
           # a squash onto a main that moved (scripts/undone.sh), and the changelog's trailers (scripts/changelog.ts: no
           # `Changelog: none`, the parts said).
@@ -368,7 +368,7 @@ jobs:
       - name: Full check (ts)
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui[.-]'; then range=all; fi
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
           # exec: the runner's signal when the job's time is up goes to this shell alone; so it reaches the check, which
           # says then which steps were still running and where each had got to.
           if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
@@ -405,7 +405,7 @@ jobs:
       - name: Full check (browser, ${{ matrix.share }})
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui[.-]'; then range=all; fi
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
           # exec: the runner's signal when the job's time is up goes to this shell alone; so it reaches the check, which
           # says then which steps were still running and where each had got to.
           if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
@@ -429,7 +429,7 @@ jobs:
 
   # A branch: the TypeScript station's bundle main would release, built with the prebuilt native parts (unsigned,
   # nothing sent). On GitHub's macos-15 (free for a public repository): unsigned, it needs nothing of Mini1's (main's
-  # signed builds stay there, with its keychain). (The apps are mbui's: their builds are mbui.yml's and mbui-host-mac's.)
+  # signed builds stay there, with its keychain). (The apps are mbui's: their builds are this workflow's desktop job's, preview.yml's and mbui-host-mac's.)
   mac-build:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.station == 'true' }}
@@ -625,7 +625,7 @@ jobs:
 
   # The Mac app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place), on mac/beta/latest.json and
   # desktop/stillfail-beta-mac.yml (which moves an installed Electron beta over): built, signed and notarized on the
-  # GitHub's Mac, using the same build caches as mbui.yml (scripts/release.sh desktop). The beta Windows app, mbui's too, is
+  # GitHub's Mac, warm from the build caches this job keeps (scripts/release.sh desktop). The beta Windows app, mbui's too, is
   # desktop-win's.
   desktop:
     needs: [plan, natives]
@@ -643,7 +643,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, filter: "blob:none" } # its build is the commits in the history
+      # (mbc's units and the core's bytecode, and moon's own build below: main's newest, saved by this job on main by what
+      # they hold, as preview.yml's jobs keep theirs; stable.yml's Mac app restores them too)
       - uses: actions/cache/restore@v4
+        id: store
         with:
           path: |
             .ci/mbc-store
@@ -674,13 +677,16 @@ jobs:
           key: ${{ steps.native-keys.outputs.key }}
       - uses: ./.github/actions/mbui-moonbit
       - uses: actions/cache/restore@v4
+        id: moon
         with:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
           key: mbui-mac-moon-${{ github.sha }}
           restore-keys: mbui-mac-moon-
-      - run: bash apps/mbui/scripts/moon-mtimes.sh
+      - run: |
+          bash apps/mbui/scripts/moon-mtimes.sh
+          touch "$RUNNER_TEMP/start"
       - if: steps.shell.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
@@ -727,10 +733,35 @@ jobs:
           set -o pipefail
           sh scripts/release-put.sh --hand "$RUNNER_TEMP/release" | tee "$RUNNER_TEMP/hand.out"
           echo "key=$(tail -1 "$RUNNER_TEMP/hand.out")" >> "$GITHUB_OUTPUT"
+      # (main's, when it built the shell here)
+      - if: github.ref == 'refs/heads/main' && steps.shell.outputs.cache-hit != 'true' && hashFiles('apps/mbui/out/core-target*/native/shell-apple/**/libstillfail_shell.a') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: apps/mbui/out/core-target*/native/shell-apple
+          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
+      - name: The cache's key, by what it holds
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          echo "STORE_KEY=mbui-mac-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
+      - if: github.ref == 'refs/heads/main' && env.STORE_KEY != steps.store.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: ${{ env.STORE_KEY }}
+      - if: github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/_build
+            !apps/mbui/_build/**/*.mbc
+          key: mbui-mac-moon-${{ github.sha }}
 
   # The beta Windows app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place, as the Mac one), on
   # win/beta/latest.json and desktop/stillfail-beta.yml (which moves an installed Electron beta over): built on GitHub's
-  # Windows runner as mbui.yml's windows job builds still.fail mbui, from main's build as that job left it in the Actions
+  # Windows runner as preview.yml's windows job builds still.fail mbui, from main's build as that job left it in the Actions
   # cache (what is the same is not compiled again: mbui's scripts/mbc), packed in its installer (windows/setup.c) and
   # signed: its .sig (docs/release-signing.md), which the Electron app and mbui's core check; not code-signed. The stable
   # one is built the same way (stable.yml).
@@ -765,7 +796,7 @@ jobs:
         run: |
           node scripts/native.ts fetch shell win32-x64
           node scripts/native.ts fetch engine win32-x64
-      # (mbui.yml's windows job saves them, main's; read here, never saved)
+      # (preview.yml's windows job saves them, main's; read here, never saved)
       - uses: actions/cache/restore@v4
         with:
           path: |

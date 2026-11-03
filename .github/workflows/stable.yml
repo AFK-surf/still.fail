@@ -83,7 +83,7 @@ jobs:
 
   # The Windows app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, its installer run by an installed
   # Electron app's updater, its data and sign-in kept), as the beta's became on 2026-10-26: built as the pipeline's
-  # desktop-win job builds the beta's, from main's build as mbui.yml's windows job left it in the Actions cache, its
+  # desktop-win job builds the beta's, from main's build as preview.yml's windows job left it in the Actions cache, its
   # installer's .sig signed (docs/release-signing.md), not code-signed.
   desktop-win:
     needs: plan
@@ -115,7 +115,7 @@ jobs:
         run: |
           node scripts/native.ts fetch shell win32-x64
           node scripts/native.ts fetch engine win32-x64
-      # (mbui.yml's windows job saves them, main's; read here, never saved)
+      # (preview.yml's windows job saves them, main's; read here, never saved)
       - uses: actions/cache/restore@v4
         with:
           path: |
