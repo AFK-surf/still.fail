@@ -258,24 +258,31 @@ export class ColdRooms implements ColdStorage {
     if (await access(said).then(() => true, () => false)) return;
     let done = 0;
     let failed = false;
-    for (const row of this.hub().store.listSessions()) {
-      if (row.archivedAt === null) continue;
-      let files: string[];
-      try {
-        files = this.historyFiles(row.key, false);
-      } catch {
-        continue;
-      }
-      for (const path of files) {
+    const store = this.hub().store;
+    // Do not load every session before yielding. The upper bound also keeps newly archived sessions from extending
+    // this sweep; archives made now are already put away in segments.
+    const through = store.lastArchivedSession();
+    let after: typeof through = null;
+    while (through !== null) {
+      const page = store.archivedSessions(after, through);
+      if (page.length === 0) break;
+      for (const row of page) {
+        let files: string[] = [];
         try {
-          if (await archive.segmentFile(path)) done++;
-        } catch (error) {
-          failed = true;
-          log.warn("hub", "a put-away transcript not put in segments", { session: row.key, error: (error as Error).message });
+          files = this.historyFiles(row.key, false);
+        } catch {}
+        for (const path of files) {
+          try {
+            if (await archive.segmentFile(path)) done++;
+          } catch (error) {
+            failed = true;
+            log.warn("hub", "a put-away transcript not put in segments", { session: row.key, error: (error as Error).message });
+          }
         }
+        // Between sessions, including one whose files could not be found, the station's other work.
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
-      // Between sessions, the station's other work.
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      after = page[page.length - 1]!;
     }
     if (done > 0) log.info("hub", "put-away transcripts put in segments", { n: done });
     if (!failed) await writeFile(said, "").catch(() => undefined);
