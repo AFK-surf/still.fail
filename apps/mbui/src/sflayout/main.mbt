@@ -93,7 +93,7 @@ fn main {
   }
   let boxes_path = @film.arg("LAYOUT_BOXES")
   if boxes_path != "" {
-    ignore(@film.write_text(boxes_path, Json::array(mine.map(fn(e) { ToJson::to_json(e) })).stringify()))
+    ignore(@film.write_text(boxes_path, Json::array(mine.map(fn(e) { e.to_json() })).stringify()))
   }
   let asked_path = @film.arg("LAYOUT_ASKED")
   if asked_path != "" {

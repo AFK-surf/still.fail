@@ -110,7 +110,7 @@ pub fn nav_bar(bar : NavBar) -> Bool {
     Some((was, shown)) if was == bar => return shown
     _ => ()
   }
-  let shown = nv_bar(ToJson::to_json(bar)) != 0
+  let shown = nv_bar(bar.to_json()) != 0
   nav_said.val = Some((bar, shown))
   shown
 }
