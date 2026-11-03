@@ -20,7 +20,7 @@ import { openAgentsDoor } from "../src/tools/http.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
 import { agentNice } from "../src/ops/nice.ts";
 import { jobTools } from "../src/tools/jobs.ts";
-import { Store } from "../src/store/store.ts";
+import { JOB_AT_PORT, Store } from "../src/store/store.ts";
 import { remoteRunsSince } from "../src/read/store.ts";
 import { WINDOWS, platform } from "../src/platform/index.ts";
 
@@ -140,6 +140,34 @@ function restarted(before: Rig): Rig {
 }
 
 describe("jobs", { concurrency: true }, () => {
+  test("starting a service looks up its port without reading other active jobs", async () => {
+    const r = new Rig();
+    const recorded = (id: string, sessionKey: string, state: string, port: number, startedAt: number) => ({ id, sessionKey, name: id,
+      command: "true", cwd: r.work, port, token: id, state, pgid: null, exitCode: 0,
+      startedAt, endedAt: state === "running" ? null : 2, restarts: 0, log: "/dev/null", watch: false });
+    for (let i = 0; i < 200; i++) r.store.insertJob(recorded(`other-${i}`, `other-${i}`, "running", 10000 + i, i));
+    r.store.insertJob(recorded("old-claim", "s2", "exited", 5100, 1));
+    r.store.insertJob(recorded("new-claim", "s3", "running", 5100, 2));
+    r.store.insertJob(recorded("paused", "s4", "exited", 5101, 3));
+    r.store.insertJob(recorded("stopped", "s5", "stopped", 5102, 4));
+    let visited = 0;
+    r.store.db.function("visited_port", (_id) => { visited++; return 1; });
+    const measured = JOB_AT_PORT.replaceAll("port = ?1", "port = ?1 AND visited_port(id)");
+    assert.equal((r.store.db.prepare(measured).get(5100) as { id: string }).id, "new-claim");
+    assert.equal(visited, 2, "only jobs claiming that port were inspected");
+    visited = 0;
+    assert.equal(r.store.db.prepare(measured).get(5102), undefined);
+    assert.equal(visited, 0, "a stopped service and other ports were not inspected");
+    const list = r.store.jobsUp;
+    r.store.jobsUp = () => { throw new Error("unrelated running jobs were read"); };
+    try {
+      assert.throws(() => r.jobs.start("s1", "other", FOREVER, r.work, 5100, false), /new-claim/);
+      assert.throws(() => r.jobs.start("s1", "other", FOREVER, r.work, 5101, false), /paused/);
+      const job = r.jobs.start("s1", "free", FOREVER, r.work, 5102, false);
+      await r.jobs.stop(job.id);
+    } finally { r.store.jobsUp = list; }
+  });
+
   test("starting a job checks the running limit without reading the session's job history", async () => {
     const r = new Rig();
     const recorded = (id: string, sessionKey: string, state: string) => ({ id, sessionKey, name: id,

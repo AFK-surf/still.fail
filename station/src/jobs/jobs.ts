@@ -259,7 +259,7 @@ export function chatOf(session: string): string {
 }
 
 /// How a job is named to its agent.
-export function named(job: JobRow): string {
+export function named(job: Pick<JobRow, "id" | "name" | "port">): string {
   return job.port !== null ? `Service "${job.name}" (${job.id}, port ${job.port})` : `Job "${job.name}" (${job.id})`;
 }
 
@@ -423,7 +423,7 @@ export class Jobs {
     }
     if (port !== null) {
       // A service holds its port until it is stopped (between its restarts too).
-      const taken = this.store.jobsUp().find((j) => j.port === port);
+      const taken = this.store.jobAtPort(port);
       if (taken) throw new Error(`port ${port} is ${named(taken)}'s already`);
     }
     const jobId = id ?? `job_${hex(4)}`;

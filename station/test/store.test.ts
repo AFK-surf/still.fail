@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
@@ -1143,7 +1143,7 @@ test("what the station asks again and again is planned by an index, never a scan
   // turn, job or entry, never.
   const planned: [string, unknown[]][] = [
     [read.ORIGINAL_RUNTIME, ["a"]],
-    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
+    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [JOB_AT_PORT, [5100]], [SESSION_JOBS, ["a"]],
     [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
@@ -1163,6 +1163,8 @@ test("what the station asks again and again is planned by an index, never a scan
       && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN p" && plan.includes("CO-ROUTINE parts"))), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
   }
+  assert.equal(plans.get(JOB_AT_PORT)!.filter((d) => d.includes("jobs_up (state=? AND port=?)")).length, 2,
+    "a port is sought among running and restarting services");
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
   // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on ccvm).
   assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));

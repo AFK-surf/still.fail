@@ -24,7 +24,7 @@ import {
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
-  CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
+  CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
@@ -2077,6 +2077,12 @@ export class Store {
   /// latest first: what a session has up.
   jobsUp(): JobRow[] {
     return this.#all(JOBS_UP).map(toJob);
+  }
+
+  /// The service holding a port, including one waiting to restart.
+  jobAtPort(port: number): Pick<JobRow, "id" | "name" | "port"> | null {
+    const r = this.#one(JOB_AT_PORT, port);
+    return r ? { id: r.id, name: r.name, port: r.port } : null;
   }
 
   /// A session's jobs (all sessions' with null), newest first. A session's by its index: asked as one statement for
