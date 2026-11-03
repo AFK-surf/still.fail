@@ -64,6 +64,62 @@ test "a row's menu at each width and with either hand: held by a finger, right c
 }
 
 ///|
+test "a row's rename ends when its field loses focus, and can be opened again" {
+  let calls : Array[Made] = []
+  let t = lists_tester(calls, 1280.0, 0, false)
+  let title = "夜里的构建又失败了"
+  let (x, y) = t.find(title).unwrap()
+  t.right_click(x, y)
+  t.tap_text("重命名")
+  assert_true(@sfpages.renaming())
+  t.type_text("临时草稿")
+  assert_true(t.ime().1.contains("临时草稿"))
+  let fields = t.semantics().filter(fn(s) { s.value.contains("临时草稿") })
+  assert_eq(fields.length(), 1)
+  let (fx, fy, fw, fh) = fields[0].rect
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  assert_true(@sfpages.renaming())
+  t.ctx().blur()
+  t.draw()
+  assert_false(@sfpages.renaming())
+  assert_false(t.semantics().iter().any(fn(s) { s.value.contains("临时草稿") }))
+  assert_true(t.find(title) is Some(_))
+  assert_eq(named(calls, "chat.rename").length(), 0)
+  let (x, y) = t.find(title).unwrap()
+  t.right_click(x, y)
+  t.tap_text("重命名")
+  t.type_text("再次编辑")
+  assert_true(t.ime().1.contains("再次编辑"))
+  t.key_named("escape") |> ignore
+  assert_false(@sfpages.renaming())
+  assert_false(t.semantics().iter().any(fn(s) { s.value.contains("再次编辑") }))
+  let (x, y) = t.find(title).unwrap()
+  t.right_click(x, y)
+  t.tap_text("重命名")
+  t.type_text("保存")
+  t.enter()
+  assert_eq(named(calls, "chat.rename").length(), 1)
+  assert_eq(text(Some(named(calls, "chat.rename")[0].params), "title"), title + "保存")
+  assert_false(@sfpages.renaming())
+}
+
+///|
+test "clicking another chat leaves an unfinished rename and opens that chat" {
+  let calls : Array[Made] = []
+  let t = lists_tester(calls, 1280.0, 0, false)
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.right_click(x, y)
+  t.tap_text("重命名")
+  t.type_text("临时草稿")
+  assert_true(t.ime().1.contains("临时草稿"))
+  t.tap_text("首页的列表改成按天分组")
+  assert_false(@sfpages.renaming())
+  assert_false(t.semantics().iter().any(fn(s) { s.value.contains("临时草稿") }))
+  assert_eq(open_title(), "首页的列表改成按天分组")
+  assert_eq(named(calls, "chat.rename").length(), 0)
+}
+
+///|
 /// How many rows of the list are on a ground of the chat in view (theme's `selected`, at any share): lit.
 fn lit_rows(t : @ui.Tester) -> Int {
   let selected = @sf.theme().p.selected & 0xFFFFFF00L
