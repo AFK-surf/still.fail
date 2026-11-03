@@ -168,6 +168,7 @@ export const PARAMS: Record<string, string> = {
   "memory.get": "",
   "outflow.revoke": "id:string",
   "outflow.answer": "id:string allow:boolean scopes?:strings workspace?:boolean",
+  "outflow.tailcat": "on:boolean",
   "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
@@ -606,6 +607,10 @@ function stationOp(name: string, params: unknown): Request | null {
     // refused (docs/data-outflow.md). Its program takes the token the next time it asks.
     case "outflow.answer":
       return op("POST", () => `/outflow/requests/${p.at("id")}`, p.pick(["allow", "scopes", "workspace"]), { kind: "outflowGrants" });
+    // Programs of other machines let ask through Tailcat, or no longer (docs/data-outflow.md): an admin's switch; how
+    // it is, with the address to give, comes back in the overview (`outflowTailcat`).
+    case "outflow.tailcat":
+      return op("POST", () => "/outflow/tailcat", p.pick(["on"]), OVERVIEW);
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);

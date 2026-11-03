@@ -26,11 +26,15 @@ export type Identity = {
   app: string | null;
   /// Of an unsigned program: its executable's SHA-256.
   sha256: string | null;
+  /// Come from another machine through the station's Tailcat link (tailcat.ts), proven by the link's code: the program
+  /// is not known, only that it was given the link.
+  via?: "tailcat";
 };
 
 /// A program is the one granted when it is signed by the same team with the same identifier, or (unsigned) the same
-/// executable, byte for byte.
+/// executable, byte for byte; one through the Tailcat link, whoever was given the link.
 export function identityKey(i: Identity): string {
+  if (i.via === "tailcat") return "tailcat:";
   return i.valid && i.teamId !== null && i.identifier !== null ? `team:${i.teamId}:${i.identifier}` : `file:${i.path}:${i.sha256 ?? ""}`;
 }
 

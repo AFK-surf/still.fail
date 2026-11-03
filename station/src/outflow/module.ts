@@ -7,7 +7,7 @@
 import { Effect, Layer } from "effect";
 import { readlink } from "node:fs/promises";
 import type { Socket } from "node:net";
-import { routes } from "../api/routes/outflow.ts";
+import { routes, tailcatRoutes } from "../api/routes/outflow.ts";
 import type { HelperApp } from "../helper/app.ts";
 import { bytesOf } from "../mesh/bus.ts";
 import { managesStation } from "../mesh/credential.ts";
@@ -20,6 +20,7 @@ import { ControlPlane, Events, Helper, Parts, Paths, Peers, Previous, Readers } 
 import { type Identity, OutflowGrants } from "./grants.ts";
 import { READ, peerRead, textOf } from "./peer.ts";
 import { type Identify, OutflowServer, type StationEntry, fileHash, socketPath } from "./server.ts";
+import { TailcatLink } from "./tailcat.ts";
 
 type Peer = (fd: number) => { pid: number; auditToken: string | null } | null;
 
@@ -108,17 +109,25 @@ export const OutflowLive = Layer.effectDiscard(
     // the other end of a socket.
     const peer = loadMesh().peerProcess;
     const identify = peer === undefined ? null : helper !== null ? helperIdentify(helper, peer) : platform.os === "linux" ? procIdentify(peer) : null;
-    if (identify === null) return;
+    const server = new OutflowServer({
+      path: socketPath(data), grants, reads: (op, args, lang) => readers.read(op, args, lang), identify: identify ?? (async () => null), workspace, lang: stationLang,
+    });
+    // Programs of other machines, through Tailcat, when an admin turned it on (tailcat.ts): told to the admins' pages
+    // by the overview.
+    const link = new TailcatLink({ data, server, changed: () => events.overviewChanged() });
+    parts.routes(tailcatRoutes(link));
+    parts.overview("outflowTailcat", (viewer) => (viewer.home !== false && managesStation(viewer) ? link.view() : undefined));
     yield* Effect.acquireRelease(
       Effect.promise(async () => {
-        const server = new OutflowServer({
-          path: socketPath(data), grants, reads: (op, args, lang) => readers.read(op, args, lang), identify, workspace, lang: stationLang,
-        });
-        await server.listen().catch((e) => log.warn("outflow", "the outflow socket is not listened on", { error: (e as Error).message }));
-        void previous.gone.then(() => server.previousGone());
+        // The socket only where the station can say who a program of this machine is.
+        if (identify !== null) {
+          await server.listen().catch((e) => log.warn("outflow", "the outflow socket is not listened on", { error: (e as Error).message }));
+          void previous.gone.then(() => server.previousGone());
+        }
+        link.start();
         return server;
       }),
-      (server) => Effect.promise(() => server.close()),
+      (server) => Effect.promise(async () => (await link.close(), await server.close())),
     );
   }),
 );

@@ -2529,6 +2529,11 @@ web-main.outflow.whereStation
 web-main.outflow.kind
 web-main.outflow.allowed
 web-main.outflow.refused
+web-main.outflow.link
+web-main.outflow.linkLine
+web-main.outflow.linkStarting
+web-main.outflow.linkRunning
+web-main.outflow.linkFailed
 web-main.preset.label
 web-main.preset.none
 web-main.preset.new
