@@ -38,7 +38,7 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
-  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications)
+  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion)
   let t = @ui.Tester::new(
     fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
@@ -106,6 +106,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     Archiving => archiving_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
     StationArchiving(st) => station_archiving_node(p, core, here, st, on_back=core.pop, frame~, width~)
     AutoDecisions => decisions_node(p, core, here, on_back=core.pop, frame~, width~)
+    AutoCompletion => completion_node(p, core, here, on_back=core.pop, frame~, width~)
     Usage => usage_node(p, core, here, on_back=core.pop, frame~, width~)
     Shortcuts => {
       // (recording while it is the one on top, as every frame says it: its stay there as it is made)
@@ -150,7 +151,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Profile(a, id) => profile_page(c, core, here, frame, a, id)
     LocalStation => local_station_page(c, core, frame)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, here, frame, a, skill, at)
-    AutoCompletion => completion_page(c, core, here, frame)
     AutoPolicy(st) => policy_page(c, core, here, frame, st)
     _ => ()
   }

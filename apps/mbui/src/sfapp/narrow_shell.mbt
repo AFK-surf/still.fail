@@ -358,7 +358,7 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
           narrow_made_as(src, Setting(r), true).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -504,6 +504,11 @@ fn narrow_made_as(
     Setting(AutoDecisions) =>
       made("auto-decisions", fn(p, core, here, frame, _stint, _acts) {
         @sfpages.decisions_node(p, core, here, on_back=core.pop, frame~)
+      })
+    Setting(AutoCompletion) =>
+      // (what it does in its place's top bar as a place; at its head as a page of the stack)
+      made("auto-completion", fn(p, core, here, frame, _stint, acts) {
+        @sfpages.completion_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
       })
     Setting(Usage) =>
       // (what it does in its place's top bar as a place; at its head as a page of the stack)

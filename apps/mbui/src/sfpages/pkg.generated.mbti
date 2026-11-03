@@ -95,7 +95,7 @@ pub let coming_after_ms : Double
 
 pub let coming_in_ms : Double
 
-pub fn completion_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn completion_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer, bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit) -> Unit
 
 pub fn composer(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, ComposerSpec, (@sfbase.Writing) -> Unit, place? : ComposerPlace) -> Unit
 

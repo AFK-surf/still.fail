@@ -539,6 +539,8 @@ pub fn set_work_clock((() -> Double)?) -> Unit
 
 pub fn shape_of(Array[(Array[Double], Bool)], fill? : Int64, even_odd? : Bool, stroke? : Int64, width? : Double) -> @paint.Shape
 
+pub fn shapes_ink_in(Array[@paint.Shape], Double) -> (Double, Double)
+
 pub fn share(String, String, String, Bytes) -> Bool
 
 pub fn shared_in() -> String
