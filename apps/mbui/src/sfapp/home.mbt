@@ -54,6 +54,7 @@ fn home_page(
     others: [],
     shown: @sfpages.filter_at(src, w),
     at: Whole,
+    kept: false,
   }
   // under a finger's search (sfpages' search.mbt): the lists up and away, the bar faded (Home.kt `away`), the
   // search over them

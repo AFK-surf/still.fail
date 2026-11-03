@@ -716,6 +716,19 @@ fn fold_peek_shift(at : FoldLook) -> Double {
 }
 
 ///|
+/// The sidebar's top row's room for its lists, its box's width and how far the band over its lists is to the closed bar's
+/// (`f` where its move has got): on the way between two
+/// looks the larger end's all the way, what is in the sidebar not laid out again each frame for the little they differ
+/// (it goes under what cuts the block as it goes).
+fn fold_held(f : FoldLook) -> (Double, Double, Double) {
+  match (fold_goes.from, fold_goes.to) {
+    (Some(a), Some(b)) if fold_going(@ui.current().moment()) =>
+      (dmax(a.brand, b.brand), dmax(a.side_w, b.side_w), dmin(a.band, b.band))
+    _ => (f.brand, f.side_w, f.band)
+  }
+}
+
+///|
 /// What the page's bars and the sidebar's parts work out from, where the block's move has got (page_bar_room, side_top,
 /// the lists' bands, the rail's marks).
 fn fold_bars(f : FoldLook) -> Unit {
@@ -723,9 +736,18 @@ fn fold_bars(f : FoldLook) -> Unit {
   wide.bar_ml = f.bar_ml
   wide.bar_mr = f.bar_mr
   wide.brand_h = f.brand
+  let (list_top, _, list_band) = fold_held(f)
+  wide.list_top = list_top
+  wide.list_band = list_band
   wide.band = f.band
   wide.mark = f.mark
   wide.page_from = f.col
+  // (the page's width on the block's way: where the block's column goes, the window's less it)
+  match (fold_goes.to, fold_goes.node) {
+    (Some(b), Some(v)) if fold_going(@ui.current().moment()) =>
+      @sfbase.page_way_said(fold_goes.way.starts_at().to_string(), v.window().0 - b.col)
+    _ => @sfbase.page_way_said("", 0.0)
+  }
 }
 
 ///|
@@ -738,6 +760,7 @@ fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
   let (r, target) = fold_target(src, w, c.width)
   let f = fold_built(c, target)
   fold_bars(f)
+  let f = { ..f, side_w: fold_held(f).1 }
   wide.closed.set(r.bar)
   wide.crowded = r.crowded
   let moving = fold_going(c.moment())

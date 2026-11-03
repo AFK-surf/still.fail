@@ -58,6 +58,8 @@ priv struct RowNodes {
   mut reads_all : Bool
   /// a part put where it is by what is made once (made_island): what the frame built anew does not build it
   mut own : Bool
+  /// a part's: whether the rows of the lists in it go on as it does (Ctx::kept_part's `rows_stay`)
+  mut rows_stay : Bool
   mut theme : Theme?
   mut ok : Bool
   mut why : String
@@ -239,7 +241,7 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
     // it in the frame: left where they were, a node more or less built before them (a bar's in a motion) put another
     // node in each of their places, all of them laid out anew; a part's left there, for it to make again in its place.
     // But a row that shows only what it read, unless none is kept at all)
-    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all && (!rn.own || evented_for(rn.list))) {
+    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all && self.goes_with_frame(rn)) {
       if rn.item >= 0 {
         self.row_nodes_out(rn)
       }
@@ -250,6 +252,19 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
     }
     self.row_nodes_out(rn)
     rn.in_pool = false
+  }
+}
+
+///|
+/// Whether a frame built anew builds row or part `rn` anew: not an old view's own part, nor a row of a list in a part
+/// whose rows stay with it (Ctx::kept_part's `rows_stay`), but for an event that came to it.
+fn Ctx::goes_with_frame(self : Ctx, rn : RowNodes) -> Bool {
+  if rn.item < 0 {
+    return !(rn.own || rn.rows_stay) || evented_for(rn.list)
+  }
+  match self.lists.get(rn.list) {
+    Some(st) if st.island != 0 => evented_for(st.island)
+    _ => true
   }
 }
 
@@ -556,6 +571,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     lit_all: false,
     reads_all: false,
     own: false,
+    rows_stay: false,
     back: None,
     theme: None,
     ok: false,
@@ -878,6 +894,12 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
       rn.links.push((at(nd.parent), at(nd.first), at(nd.last), at(nd.next)))
       if nd.kind == kind_list {
         rn.lists.push(nd.id)
+        if rn.rows_stay {
+          match self.lists.get(nd.id) {
+            Some(st) => st.island = rn.list
+            None => ()
+          }
+        }
       }
     }
   }
@@ -1060,6 +1082,7 @@ fn Ctx::part_nodes(
   body : () -> Unit,
   read_out : Bool,
   own? : Bool = false,
+  rows_stay? : Bool = false,
   named? : String = "",
   made_at? : SourceLoc,
   flows? : Bool = false,
@@ -1092,12 +1115,13 @@ fn Ctx::part_nodes(
   rn.shown = self.frame_no
   rn.laid_pass.val = nodes_run.pass
   rn.own = own
+  rn.rows_stay = rows_stay
   rn.named = named
   rn.made_at = made_at
   rn.holder.val = outer
   // (`own`: what puts it here is made once (made.mbt's made_island), so what it is built from is its key and what it
   // read alone, whatever else the frame built anew)
-  let may_keep = if own {
+  let may_keep = if own || rows_stay {
     nodes_run.on && !nodes_run.whole && !evented_for(id) && !inst_owners.on && !self.lit_every
   } else {
     self.nodes_keep()
@@ -1130,7 +1154,7 @@ fn Ctx::part_nodes(
   }
   // (built for what it read, or as it is new or built elsewhere: what it builds its lists from may be otherwise, their
   // rows built anew; built only as it may not be kept, nothing it read changed: its lists' rows kept)
-  let fresh = (nodes_run.fresh && (!own || evented_for(id))) ||
+  let fresh = (nodes_run.fresh && (!(own || rows_stay) || evented_for(id))) ||
     rn.n == 0 ||
     rn.watch.is_stale() ||
     rn.key != key ||

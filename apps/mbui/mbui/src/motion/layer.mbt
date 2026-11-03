@@ -400,6 +400,7 @@ fn reset() -> Unit {
   mo.entries.clear()
   measure_at.clear()
   measure_size.clear()
+  measure_tall.clear()
   measure_radii.clear()
   measure_names.clear()
   measure_told.clear()
@@ -703,10 +704,11 @@ pub fn measure_drawn(c : @ui.Ctx, i : Int, key : String) -> Unit {
 }
 
 ///|
-/// How tall the node kept as `key` was when last laid out (measure).
+/// How tall the node kept as `key` was when last laid out (measure); what reads it is told as that changes, not as the
+/// node gets wider (a page beside the sidebar on its way).
 pub fn measured(c : @ui.Ctx, key : String) -> Double? {
   ignore(c)
-  measure_read(measure_size, motion_key("measure\u{1}" + key), name=key)
+  measure_read(measure_tall, motion_key("measure\u{1}" + key), name=key)
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
     Some(r) => Some(r.h)
     None => None
@@ -1569,6 +1571,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       } else {
         None
       }
+      let taller = made || r.h != nh || r.seen < frame - 1
       let radii = c.node_radii(e.node)
       let cornered = r.rad != radii
       let moved = r.x != nx || r.y != ny
@@ -1579,7 +1582,12 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       r.rad = radii
       r.seen = frame
       match resized {
-        Some(why) => measure_changed(measure_size, e.kept, why)
+        Some(why) => {
+          measure_changed(measure_size, e.kept, why)
+          if taller {
+            measure_changed(measure_tall, e.kept, why)
+          }
+        }
         None => ()
       }
       if moved {
@@ -2059,6 +2067,7 @@ fn forget_recs(c : @ui.Ctx) -> Unit {
     mo.recs.remove(k)
     // (a measure forgotten: none from now on, what read it told)
     measure_changed(measure_size, k, "forgotten")
+    measure_changed(measure_tall, k, "forgotten")
   }
   let lists : Array[Int] = []
   mo.lists.each(fn(k, l) { if frame - l.seen > 600 { lists.push(k) } })
@@ -2111,6 +2120,11 @@ let measure_at : Map[Int, @signals.Signal[Int]] = {}
 /// signal by the key, made as it is first read.
 // kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
 let measure_size : Map[Int, @signals.Signal[Int]] = {}
+
+///|
+/// What reads only how tall a node kept by its key is (measured), told as that changes, not as it gets wider.
+// kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
+let measure_tall : Map[Int, @signals.Signal[Int]] = {}
 
 ///|
 /// What reads the resolved corners of a measured node, independently of its position and size.
@@ -2289,6 +2303,11 @@ fn measures_lapsed(frame : Int) -> Unit {
   measure_radii.each(fn(k, s) { if !s.watched() { unread.push(k) } })
   for k in unread {
     measure_radii.remove(k)
+  }
+  unread.clear()
+  measure_tall.each(fn(k, s) { if !s.watched() { unread.push(k) } })
+  for k in unread {
+    measure_tall.remove(k)
   }
   if measure_size.is_empty() {
     return
