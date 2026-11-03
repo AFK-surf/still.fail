@@ -1821,9 +1821,12 @@ pub let share_letters_apart : @ui.Tracking = Wide
 pub let share_look_tile_w : Double = 72.0
 
 ///|
+pub let share_look_tile_h : Double = 96.0
+
+///|
 pub let share_look_tile : @ui.Style = @ui.style(
   w=Fixed(share_look_tile_w),
-  h=Fixed(96.0),
+  h=Fixed(share_look_tile_h),
   radius=small_radius,
   clip=true,
 )

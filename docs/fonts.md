@@ -62,8 +62,12 @@ Garamond (grown 1.14 times, as tall as 文楷) for Latin and figures, made one f
 of its own) with only the characters the card says, and carried in the app (`apps/mbui/src/sfbase/share_face.mbt`,
 host face 14). The 千恋＊万花 looks' words (`web-main.stations.shareSenren.*`, hundreds of characters more) are not in
 it: the same face with their characters too is on still.fail's site beside their pictures
-(`web/public/share-looks/<n>/face-<weight>.gz`), fetched through the core (`fonts.share {file}`, kept once fetched) as
-the card is drawn in one of them and given to the share face in place of the carried one (`@sfbase.share_face_whole`);
-until it is here, their words are in the carried face, a character not in it in the system's.
+(`web/public/share-looks/<n>/face-<weight>.gz`), fetched through the core as their pictures are (`fonts.share {file}`:
+each file on its own, how far on the `fonts` topic's `share`, kept only once its size and hash are those of
+`client/core-ts/src/share-looks.ts`, which `node scripts/share-looks.ts` makes from the site's files) as the card is
+drawn in one of them and given to the share face in place of the carried one (`@sfbase.share_face_whole`). Until all
+of a look's files are here the card is not handed out: its button says how far they are, or 下载失败，重试. still.fail's
+own app on the test channel takes them from the test channel's site (app.youdid.wtf), which every build of main
+deploys; app.still.fail has them only once a release is.
 `python3 scripts/fonts.py --share` makes both again; run it when the card's words change (a new site face goes under a
-new drawing number: a device keeps what it fetched).
+new drawing number: a device keeps what it fetched), then `node scripts/share-looks.ts`.
