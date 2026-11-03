@@ -5558,6 +5558,25 @@ export interface Overview {
 	outflowAnswers?: boolean;
 }
 
+export interface StationProfileGroup {
+	/** The account kind used by the workspace's profile list. */
+	group: string;
+	/** The account kind in the viewer's language. */
+	title: string;
+	/** The station's profile ids in this kind, those needing a look first. */
+	profiles: string[];
+	/** How many of these profiles need a look. */
+	attention: number;
+}
+
+/** How a profile of the workspace's list is, in a few words and their tone. */
+export interface ProfileState {
+	/** studio 离线; 需要登录; 额度查询失败; 未检查. */
+	text: string;
+	/** red or amber: it needs a look; neutral: it does not (a check not made yet). */
+	tone: Tone;
+}
+
 /** How a connection to a station goes: straight there, through a relay, or still being chosen. */
 export type NetVia = "direct" | "relay" | "choosing";
 
@@ -5612,6 +5631,10 @@ export interface StationView {
 	runtimes: RuntimeModels[];
 	models: ModelOption[];
 	overview?: Overview;
+	/** Its profiles by account kind, those needing a look first. */
+	profileGroups?: StationProfileGroup[];
+	/** Each of its profile rows' state, keyed by profile id, using the profiles list's rule. */
+	profileStates?: Record<string, ProfileState>;
 	/**
 	 * Its versions offer the 测试版 switch: it can be put on a channel (its station's version says one), and the
 	 * account that reaches it is in the beta or it is on the test channel already (to be switched back).
@@ -6174,14 +6197,6 @@ export interface ProfileMember {
 	checkTone: string;
 	/** How many connects use it there. */
 	usedBy: number;
-}
-
-/** How a profile of the workspace's list is, in a few words and their tone. */
-export interface ProfileState {
-	/** studio 离线; 需要登录; 额度查询失败; 未检查. */
-	text: string;
-	/** red or amber: it needs a look; neutral: it does not (a check not made yet). */
-	tone: Tone;
 }
 
 /** One station where an account is available, even when several profiles there have it. */

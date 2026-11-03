@@ -179,6 +179,41 @@ export function workspaceProfiles(stations: J[]): J {
   return { items, attention: items.filter((e) => e.look).length, wait: waitNote(waiting, [], items.length === 0) };
 }
 
+/// A station's profiles by account kind; those needing a look come first within their kind.
+export function stationProfileSummary(overview: J, station: J, byId: Map<string, J>): { profileGroups: J[]; profileStates: Record<string, J> } {
+  const profiles = Array.isArray(overview?.profiles) ? overview.profiles : [];
+  const profileStates: Record<string, J> = {};
+  const groups = new Map<string, { group: string; title: string; troubled: string[]; fine: string[] }>();
+  for (const p of profiles) {
+    if (!isObject(p) || typeof p.id !== "string") continue;
+    const kind = group(p);
+    let g = groups.get(kind);
+    if (!g) {
+      g = { group: kind, title: groupTitle(kind), troubled: [], fine: [] };
+      groups.set(kind, g);
+    }
+    const { usable, awayName } = profileAvailability(station, p, byId);
+    const { state, look } = stateOf(usable, awayName, p, null);
+    if (state !== null) profileStates[p.id] = state;
+    (look ? g.troubled : g.fine).push(p.id);
+  }
+  const profileGroups = GROUPS.flatMap((kind) => {
+    const g = groups.get(kind);
+    return g ? [{ group: g.group, title: g.title, profiles: [...g.troubled, ...g.fine], attention: g.troubled.length }] : [];
+  });
+  return { profileGroups, profileStates };
+}
+
+/// Whether a station can use its copy, and which station to name if it cannot.
+function profileAvailability(s: J, p: J, byId: Map<string, J>): { usable: boolean; awayName: string } {
+  const share = isObject(p.share) ? p.share : null;
+  const borrowedSubscription = share?.role === "user" && p.access?.kind === "subscription";
+  const hostUp = !borrowedSubscription || (byId.get(String(share.host))?.online === true && share.reachable !== false);
+  const online = s.online === true;
+  const awayId = String(online && borrowedSubscription ? share.host : s.id);
+  return { usable: online && hostUp, awayName: String(byId.get(awayId)?.name ?? awayId.slice(0, 8)) };
+}
+
 /// How an account is, where that is not simply fine, as its row says it (`state`: its words and their tone), and whether
 /// it needs a look (`look`: counted where its list is entered, first in its kind, in colour): nobody can use it now (its
 /// host away, red); else its trouble (present.ts profileTrouble: stopped by its provider, its check failed or wants a
@@ -210,10 +245,9 @@ function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>):
   const share = isObject(p.share) ? p.share : null;
   const role = share?.role === "user" ? "user" : share ? "host" : "own";
   const subscription = p.access?.kind === "subscription";
-  // A borrowed subscription: as good as its host is reachable (the cloud's word, and the borrower's).
-  const hostUp = role !== "user" || (byId.get(String(share.host))?.online === true && share.reachable !== false);
   const online = s.online === true;
-  const usable = online && (role !== "user" || !subscription || hostUp);
+  // A borrowed subscription: as good as its host is reachable (the cloud's word, and the borrower's).
+  const { usable } = profileAvailability(s, p, byId);
   const users: string[] = role === "host" && Array.isArray(share.users) ? share.users.map((u: string) => name(u)) : [];
   let about: string;
   if (role === "user") about = t(subscription ? "core-views.profiles.borrows" : "core-views.profiles.copyOf", { station: name(String(share.host)) });

@@ -608,7 +608,8 @@ fn capped_want(c : @ui.Ctx, serial : Int, id : Int) -> Double? {
 
 ///|
 /// A long list in a panel's body (its rows laid out as they come into view: `Ctx::list`), its rows drawn as the panel
-/// has what it holds (its sides, its words' line, its rows' reach): they are drawn after the panel's body has said it.
+/// has what it holds (its arrangement, its sides, its words' line, its rows' reach): they are drawn after the panel's
+/// body has said it.
 /// The list spans the room the panel leaves its rows to reach across (rows_out: a list clips what it holds to itself),
 /// its rows' words that much further in from its edge, so a row's ground reaches the panel's sides as it does outside
 /// a list. `stick_end`: it starts at its end and stays there as rows come (Ctx::list's). `fills`: in a panel a share of
@@ -623,6 +624,7 @@ pub fn panel_list(
   stick_end? : Bool = false,
   fills? : Bool = false,
 ) -> Int {
+  let arrangement = look()
   let (sides, out, words, body, small) = (
     panel_sides_in.val,
     rows_out.val,
@@ -653,18 +655,20 @@ pub fn panel_list(
   }
   let room_box = c.box(style=room_at, id=room_id, taps=false, fn() {
     list = c.list(key, count, est, stick_end~, fn(i) {
-      let was = (panel_sides_in.val, rows_out.val, words_in_now.val, panel_body_now.val, small_panel_now.val)
-      panel_sides_in.val = sides - out
-      rows_out.val = 0.0
-      words_in_now.val = words + out
-      panel_body_now.val = body
-      small_panel_now.val = small
-      row(i)
-      panel_sides_in.val = was.0
-      rows_out.val = was.1
-      words_in_now.val = was.2
-      panel_body_now.val = was.3
-      small_panel_now.val = was.4
+      with_look(arrangement, fn() {
+        let was = (panel_sides_in.val, rows_out.val, words_in_now.val, panel_body_now.val, small_panel_now.val)
+        panel_sides_in.val = sides - out
+        rows_out.val = 0.0
+        words_in_now.val = words + out
+        panel_body_now.val = body
+        small_panel_now.val = small
+        row(i)
+        panel_sides_in.val = was.0
+        rows_out.val = was.1
+        words_in_now.val = was.2
+        panel_body_now.val = was.3
+        small_panel_now.val = was.4
+      })
     })
   })
   if sized is Some(_) {

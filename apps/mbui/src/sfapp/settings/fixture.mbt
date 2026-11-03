@@ -162,11 +162,16 @@ let fixture_open : FixtureOpen = { sheet: "", list: "", block: 0, frames: 0, des
 let fx_connect_step : Ref[String] = Ref("team")
 
 ///|
+/// A station with enough accounts in one kind to search its profiles.
+let fx_station_many_profiles : Ref[Bool] = Ref(false)
+
+///|
 /// The made-up settings as a run starts (reset): none changed, no sheet or scroll to put up.
 fn fixture_reset() -> Unit {
   fx.names.clear()
   fx_many_models.val = false
   fx_many_kept.val = false
+  fx_station_many_profiles.val = false
   fx.restored.clear()
   fx.skills_shared.clear()
   fx.drive_kept = fx_drive_kept
@@ -347,6 +352,7 @@ pub fn fixture_page(mode : String) -> String {
     // The grants list with long reasons is itself in view for the spacing and corner sweeps.
     "settings-adb-chats-long" => up("", "settings/adb/", 4)
     "settings-station-mark" => up("mark", "", 0)
+    "settings-station-many-profiles" => fx_station_many_profiles.val = true
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
     // its 设置 with 高级网络设置 opened: its congestion control, a section of the page after it
@@ -486,7 +492,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-notify-off" | "settings-lock-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
-    "settings-station" => "station:ws1/st1"
+    "settings-station" | "settings-station-many-profiles" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
@@ -659,6 +665,92 @@ fn fx_profiles() -> Array[Json] {
       ("usedBy", []),
     ]),
   ]
+}
+
+///|
+/// The station overview's accounts: the long case has nine Claude and three ChatGPT accounts.
+fn fx_station_profiles() -> Array[Json] {
+  let profiles = fx_profiles()
+  if fx_station_many_profiles.val {
+    for i in 1..<9 {
+      match profiles[0] {
+        Object(p) => {
+          let copy = p.copy()
+          copy["id"] = str("claude-" + i.to_string())
+          copy["name"] = str("claude" + i.to_string() + "@example.com")
+          let hours = 90 - i * 7
+          let week = 92 - i * 10
+          copy["quota"] = obj([
+            ("state", str("ok")),
+            ("windows", [
+              obj([("label", str("5 小时")), ("usedPercent", Json::number((100 - hours).to_double())), ("mark", str("5H")), ("left", Json::number(hours.to_double())), ("level", str(if hours <= 20 { "amber" } else { "ok" })), ("refills", str("2 小时后恢复"))]),
+              obj([("label", str("本周")), ("usedPercent", Json::number((100 - week).to_double())), ("mark", str("W")), ("left", Json::number(week.to_double())), ("level", str(if week <= 20 { "amber" } else { "ok" })), ("refills", str("星期一恢复"))]),
+            ]),
+            ("checkedAt", Json::number(0.0)),
+          ])
+          profiles.push(Json::object(copy))
+        }
+        _ => ()
+      }
+    }
+    for i in 1..<3 {
+      match profiles[1] {
+        Object(p) => {
+          let copy = p.copy()
+          copy["id"] = str("chatgpt-" + i.to_string())
+          copy["name"] = str("chatgpt" + i.to_string() + "@example.com")
+          profiles.push(Json::object(copy))
+        }
+        _ => ()
+      }
+    }
+  }
+  profiles
+}
+
+///|
+/// Its account kinds and states, in the same shapes as the core's station view.
+fn fx_station_profile_groups(profiles : Array[Json]) -> Array[Json] {
+  let groups : Array[(String, String, Array[String], Array[String])] = []
+  for p in profiles {
+    let pv = Some(p)
+    let kind = text(pv, "group")
+    let at = match groups.search_by(fn(g) { g.0 == kind }) {
+      Some(i) => i
+      None => {
+        groups.push((kind, text(pv, "groupTitle"), [], []))
+        groups.length() - 1
+      }
+    }
+    if field(pv, "trouble") is Some(Object(_)) {
+      groups[at].2.push(text(pv, "id"))
+    } else {
+      groups[at].3.push(text(pv, "id"))
+    }
+  }
+  groups.map(fn(g) {
+    obj([
+      ("group", str(g.0)), ("title", str(g.1)),
+      ("profiles", Json::array(g.2.iter().concat(g.3.iter()).map(fn(id) { str(id) }).collect())),
+      ("attention", Json::number(g.2.length().to_double())),
+    ])
+  })
+}
+
+///|
+fn fx_station_profile_states(profiles : Array[Json]) -> Json {
+  let states : Map[String, Json] = {}
+  for p in profiles {
+    let pv = Some(p)
+    let trouble = field(pv, "trouble")
+    let green = text(pv, "checkTone") == "green"
+    if trouble is Some(Object(_)) && green {
+      states[text(pv, "id")] = obj([("text", str(text(trouble, "title"))), ("tone", str("amber"))])
+    } else if !green && text(pv, "checkText") != "" {
+      states[text(pv, "id")] = obj([("text", str(text(pv, "checkText"))), ("tone", str(text(pv, "checkTone")))])
+    }
+  }
+  Json::object(states)
 }
 
 ///|
@@ -976,6 +1068,7 @@ fn fx_station(address : String) -> Json {
   let id = station_name(address)
   let renamed = fx.names.get(id)
   if address == "ws1/st1" {
+    let profiles = fx_station_profiles()
     obj([
       ("station", str(address)),
       ("id", str(id)),
@@ -985,6 +1078,8 @@ fn fx_station(address : String) -> Json {
       ("face", str("working")),
       ("line", str("Apple M2 Max · 64 GB · macOS 26")),
       ("online", Json::boolean(true)),
+      ("profileGroups", Json::array(fx_station_profile_groups(profiles))),
+      ("profileStates", fx_station_profile_states(profiles)),
       ("link", obj([("state", str("online"))])),
       ("runtimes", []),
       // what its profiles have turned on (Claude 主账号's: Opus 5.5 and Sonnet 5, on claude)
@@ -1036,7 +1131,7 @@ fn fx_station(address : String) -> Json {
         "overview",
         obj([
           ("connects", [fx_connect("k1", "星火助手", "online", "在线", "multi-session")]),
-          ("profiles", Json::array(fx_profiles())),
+          ("profiles", Json::array(profiles)),
           // a new profile's sign-in under way (settings-new-profile-login…)
           ("logins", if fx.new_login { [obj([("id", str("login-new")), ("runtime", str("claude")), ("job", fx_login_job("login-new", "needs_code"))])] } else { [] }),
           ("processesText", str("2 个 agent 进程 · claude 1.2 GB")),

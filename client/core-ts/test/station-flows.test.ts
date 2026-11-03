@@ -473,6 +473,33 @@ test("a_stations_host_reading_makes_its_overview_in_the_list_again_not_every_tim
   core.close();
 });
 
+test("a station's profile warning follows changes to its quota", async () => {
+  const { host, core, push } = await started(base());
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "stations", scope: "ws" });
+  await host.settle();
+  apply(host, values);
+  const profile = {
+    id: "p1", name: "Account", runtime: "claude", runtimes: ["claude"], access: { kind: "subscription", key: "" },
+    home: "", homeExists: true, models: [], env: [], usedBy: [], loginCommand: "",
+    check: { state: "ok", detail: "", checkedAt: 1 },
+    quota: { state: "unavailable", windows: [], checkedAt: 1, detail: "No quota returned" },
+  };
+  const shown = () => (v(values, 1) as J[]).find((s) => s.station === ST);
+  push("overview", { ...overview, profiles: [profile] });
+  await host.settle();
+  apply(host, values);
+  assert.equal(shown().profileGroups[0].attention, 1);
+  assert.deepEqual(shown().profileStates.p1, { text: "额度查询失败", tone: "amber" });
+  push("overview", { ...overview, profiles: [{ ...profile, quota: { state: "ok", windows: [], checkedAt: 2 } }] });
+  await host.settle();
+  apply(host, values);
+  assert.equal(shown().profileGroups[0].attention, 0);
+  assert.deepEqual(shown().profileStates, {});
+  core.close();
+});
+
 const summary = (key: string, turns: number) => ({ ...session(key, turns), title: null, archivedAt: null, lastTurn: null });
 
 test("a_rows_digest_is_the_stations_whatever_the_order_of_its_fields", () => {

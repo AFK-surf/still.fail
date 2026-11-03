@@ -76,6 +76,28 @@ fn open_it(t : @ui.Tester) -> Unit {
 }
 
 ///|
+test "a panel's long list draws its rows in the panel's arrangement" {
+  for at in [phone, desk] {
+    let seen : Array[Look] = []
+    let t = presenting_tester(at, fn(from) {
+      panel("账号", from~, tall=0.8, grows=true, fn(c, _) {
+        panel_list(c, "accounts", 12, 48.0, fn(i) {
+          seen.push(look())
+          c.text("账号 " + i.to_string()) |> ignore
+        }) |> ignore
+      })
+    })
+    open_it(t)
+    t.draw()
+    assert_true(!seen.is_empty(), msg="the list draws rows")
+    let expected = if at == phone { Narrow } else { Wide }
+    for arrangement in seen {
+      assert_true(arrangement == expected, msg="each row takes the panel's arrangement")
+    }
+  }
+}
+
+///|
 /// Where `words` are drawn, or a failure.
 fn where_is(t : @ui.Tester, words : String) -> (Double, Double) raise {
   match t.find(words) {

@@ -1783,6 +1783,8 @@ let en : Map[String, String] = {
   "web-mobile.files.wholeFolder": "This whole folder",
   "web-mobile.history.copyLink": "Copy history link",
   "web-mobile.profiles.addModelPlaceholder": "Add a model by name",
+  "web-mobile.settings.profilesCount": "{n}",
+  "web-mobile.settings.profilesShort": "{n} to check",
   "web-pages.addProfile.pick": "Choose a provider",
   "web-pages.addProfile.protocol": "Protocol",
   "web-pages.addProfile.region": "Region",

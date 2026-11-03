@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
 import { profile as shownProfile } from "../src/present.ts";
 import { runtimes } from "../src/views/models.ts";
-import { workspaceProfiles } from "../src/views/profiles.ts";
+import { stationProfileSummary, workspaceProfiles } from "../src/views/profiles.ts";
 
 holdLanguage();
 
@@ -13,6 +13,50 @@ const A = "a".repeat(64);
 const B = "b".repeat(64);
 const profile = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: id, access: { kind: "subscription" }, checkTone: "green", ...extra });
 const station = (id: string, name: string, online: boolean, profiles: unknown[] | null) => ({ id, station: `w/${id}`, name, online, overview: profiles === null ? undefined : { sharing: true, profiles } });
+
+test("a station's profile count uses the profile list's needs-a-look rule", () => {
+  const shown = (id: string, extra: Record<string, unknown>) => shownProfile(profile(id, { runtime: "claude", ...extra }));
+  const profiles = [
+    shown("ok", { check: { state: "ok" }, quota: { state: "ok", windows: [] } }),
+    shown("new", {}),
+    shown("quota", { check: { state: "ok" }, quota: { state: "unavailable", detail: "No quota returned" } }),
+    shown("login", { check: { state: "login" } }),
+  ];
+  const current = station(A, "studio", true, profiles);
+  const byId = new Map([[A, current]]);
+  const summary = stationProfileSummary(current.overview, current, byId);
+  assert.deepEqual(summary.profileGroups, [{ group: "claude", title: "Claude 订阅", profiles: ["quota", "login", "ok", "new"], attention: 2 }]);
+  assert.deepEqual(summary.profileStates.quota, { text: "额度查询失败", tone: "amber" });
+  assert.deepEqual(summary.profileStates.login, { text: "需要登录", tone: "amber" });
+  assert.deepEqual(stationProfileSummary(null, current, byId), { profileGroups: [], profileStates: {} });
+  assert.equal(workspaceProfiles([current]).attention, 2);
+});
+
+test("a station's borrowed subscription needs a look when its host is away or unreachable", () => {
+  const shared = { id: "sh-1", host: A, role: "user", reachable: true };
+  const borrowed = profile("borrowed", { checkText: "", share: shared });
+  const key = profile("key", { access: { kind: "env" }, share: { id: "sh-2", host: A, role: "user", reachable: true } });
+  const host = station(A, "studio", false, null);
+  const current = station(B, "mini", true, [borrowed, key]);
+  const byId = new Map([[A, host], [B, current]]);
+  assert.deepEqual(stationProfileSummary(current.overview, current, byId), {
+    profileGroups: [
+      { group: "claude", title: "Claude 订阅", profiles: ["borrowed"], attention: 1 },
+      { group: "key", title: "API Key", profiles: ["key"], attention: 0 },
+    ],
+    profileStates: { borrowed: { text: "studio 离线", tone: "red" } },
+  });
+  host.online = true;
+  shared.reachable = false;
+  assert.deepEqual(stationProfileSummary(current.overview, current, byId).profileStates.borrowed, { text: "studio 离线", tone: "red" });
+  shared.reachable = true;
+  assert.deepEqual(stationProfileSummary(current.overview, current, byId).profileGroups.map((g) => g.attention), [0, 0]);
+  current.online = false;
+  assert.deepEqual(stationProfileSummary(current.overview, current, byId).profileStates, {
+    borrowed: { text: "mini 离线", tone: "red" }, key: { text: "mini 离线", tone: "red" },
+  });
+  assert.deepEqual(stationProfileSummary(current.overview, current, byId).profileGroups.map((g) => g.attention), [1, 1]);
+});
 
 test("a shared profile is listed once, from its host, with where it is signed in and who borrows it", () => {
   const share = { id: "sh-1", host: A, allow: [A, B] };
@@ -293,4 +337,3 @@ test("Hermes profiles can name models and expose a selected model to new chats",
   const selected = {...base,models:["openrouter:model-a"]};
   assert.deepEqual(runtimes({profiles:[selected]}),[{runtime:"hermes",models:["openrouter:model-a"]}]);
 });
-
