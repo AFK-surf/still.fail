@@ -38,6 +38,7 @@ fn screen_rig(
   screen? : String = "browser:tab-1",
   here? : String = "",
   h264? : Bool = false,
+  os? : String = "",
 ) -> ScreenRig {
   @sfbase.reset()
   // this machine's station, as its host says (`here`); none by default
@@ -76,7 +77,9 @@ fn screen_rig(
     ..base,
     topic: fn(name, params) {
       let tp = (base.topic)(name, params)
-      if name == "prefs" && (touch_.get() != "" || quality_.get() != "" || fps_.get() != 0) {
+      if name == "stations" && os != "" {
+        { ..tp, value: Some([{ "station": "ws-1/st-1", "host": { "os": os } }]) }
+      } else if name == "prefs" && (touch_.get() != "" || quality_.get() != "" || fps_.get() != 0) {
         let m = match tp.value {
           Some(Object(m)) => m.copy()
           _ => {}
@@ -863,6 +866,20 @@ test "denied for a grant the station lacks: its station's 权限 a tap away (前
   assert_true(app.nav.top() == Setting(@settings.Route::Station("ws-1/st-1")))
   assert_eq(@settings.station_parts.get("ws-1/st-1"), Some("settings"))
   @settings.station_parts.remove("ws-1/st-1")
+  screen_done(r.t)
+}
+
+///|
+test "a Linux desktop failure offers reopening without a macOS permissions button" {
+  let r = screen_rig(os="Linux 6.8")
+  r.state(
+    "denied",
+    message="正在为 Linux 屏幕控制准备所需组件，完成后请重新打开。",
+    access={ "capture": false, "control": false, "message": "正在为 Linux 屏幕控制准备所需组件，完成后请重新打开。" },
+  )
+  r.finish()
+  assert_true(r.t.find("重新打开") is Some(_))
+  assert_true(r.t.find("前往权限设置") is None)
   screen_done(r.t)
 }
 

@@ -352,7 +352,8 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
     // denied for a grant the station lacks (macOS's): its station's page where it is asked for (设置's 权限), a tap
     // away rather than looked for
     let access = field(s.state, "access")
-    let granting = phase == "denied" &&
+    let os = screen_os(s.src, s.station).to_lower()
+    let granting = !os.has_prefix("linux") && phase == "denied" &&
       (field(access, "capture") == Some(Json::boolean(false)) || field(access, "control") == Some(Json::boolean(false)))
     // a light capsule on the dark either way: the solid one in the dark theme, the soft one in the light
     if phase == "ended" || phase == "denied" || phase == "failed" {
