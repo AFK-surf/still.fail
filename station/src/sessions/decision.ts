@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { accessKind, apiSource, profileEnv, profileVia } from "../agents/profiles.ts";
 import { endpoints, find } from "../agents/providers.ts";
-import { liveClock, within } from "../ops/fibers.ts";
+import { liveClock, wall, within } from "../ops/fibers.ts";
 import type { Profile } from "./config.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 
@@ -225,7 +225,7 @@ function codexConfig(text: string): { provider?: string; providers: Record<strin
 const READ_FOR_MS = 10_000;
 const lately = new Map<string, { at: number; text: string | null }>();
 function readLately(path: string): string | null {
-  const now = Date.now();
+  const now = wall.now();
   const kept = lately.get(path);
   if (kept !== undefined && now - kept.at < READ_FOR_MS) return kept.text;
   let text: string | null;
