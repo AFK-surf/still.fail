@@ -333,7 +333,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   };
   mark("other");
   const ms = Math.round(performance.now() - started);
-  if (!reportedSummaryReuse && options.batched?.diagnostics.reused) {
+  if (!reportedSummaryReuse && options.batched?.diagnostics.cache === "reused") {
     reportedSummaryReuse = true;
     log.info("readers", "a usage read reused its summary", { ms, summaryQuery: stages.summaryQuery, summaryCandidates, summaryParts,
       ...(stages.historyQuery === undefined ? {} : { historyQuery: stages.historyQuery }) });
@@ -341,6 +341,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   if (ms >= 1_000) {
     const partialMinute = from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n));
     log.warn("readers", "a usage read's stages", { ms, ...stages, summaryGroups: groups.length,
+      ...(options.batched === undefined ? {} : { summaryCache: options.batched.diagnostics.cache }),
       ...(summaryCandidates !== undefined ? { summaryCandidates } : {}), historyPending,
       ...(summaryParts !== undefined ? { summaryParts, summaryEdges: partialMinute } : {}) });
   }

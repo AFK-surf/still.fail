@@ -32,6 +32,7 @@ type Part = { day: string | null; session: string; thread: bigint; person: strin
 type Bucket = Part & { minute: bigint };
 type Hour = { session: string; minute: bigint; groups: Map<string, Part>; bytes: number };
 type Cached = { seq: bigint; hours: Map<string, Hour>; cells: number; bytes: number };
+type CacheStatus = "disabled" | "miss" | "expired" | "reused" | "oversized";
 const names = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
 const MAX_CELLS = 8192;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -104,7 +105,7 @@ function combine(hours: Map<string, Hour>): Part[] {
 export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
   pause: (ms: number) => Promise<void> = (ms) => ms > 0 ? wall.sleep(ms) : new Promise((resolve) => setImmediate(resolve)),
   cache?: UsageSummaryCache, kind: "summary" | "history" = "summary"): Promise<{
-    groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; rests: number; restMs: number; reused: boolean }; ms: number;
+    groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; rests: number; restMs: number; cache: CacheStatus }; ms: number;
   } | null> {
   const max = 9223372036854775807n;
   if (!hasCompactUsage(s.db) || (from < to && (from % 60_000n !== 0n || (to !== max && to % 60_000n !== 0n)))) return null;
@@ -123,8 +124,8 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     steps = 0;
     batchAt = performance.now();
   };
-  const result = (groups: Part[], selectedMs: number, reused = false) => ({ groups: answer(groups),
-    diagnostics: { parts, candidates, selectedMs, rests, restMs: Math.round(restMs), reused }, ms: Math.round(performance.now() - started) });
+  const result = (groups: Part[], selectedMs: number, cache: CacheStatus) => ({ groups: answer(groups),
+    diagnostics: { parts, candidates, selectedMs, rests, restMs: Math.round(restMs), cache }, ms: Math.round(performance.now() - started) });
   const key = JSON.stringify([kind, from.toString(), to.toString(), utcOffsetMin.toString(), viewer?.workspace ?? null,
     viewer === null ? null : viewer.home !== false]);
   const journal = cache !== undefined && s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get() !== undefined;
@@ -140,6 +141,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   }
   const prior = journal ? cache!.get(s.db, key) : undefined;
   const usable = prior !== undefined && prior.seq <= last && (first === 0n ? prior.seq === last : prior.seq >= first - 1n);
+  const cacheStatus: CacheStatus = !journal ? "disabled" : prior === undefined ? "miss" : usable ? "reused" : "expired";
 
   // A cache is updated only after the complete read succeeds. Unchanged hour maps remain immutable and can be shared
   // with the preceding snapshot while new ones are built.
@@ -273,7 +275,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     if (hours !== null) {
       const groups = combine(hours);
       // Formatting can fail on integer overflow. Do not publish an entry from a failed answer.
-      const done = result(groups, selectedMs, true);
+      const done = result(groups, selectedMs, "reused");
       cache!.put(s.db, key, { seq: last, hours, cells, bytes });
       return done;
     }
@@ -298,7 +300,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     if (!(await readSession(session, start, end, ofSession))) { cache!.drop(s.db, key); return null; }
     groups.push(...ofSession.values());
   }
-  const done = result(groups, selectedMs);
+  const done = result(groups, selectedMs, journal && hours === null ? "oversized" : cacheStatus);
   if (hours !== null) cache!.put(s.db, key, { seq: last, hours, cells, bytes });
   else cache?.drop(s.db, key);
   return done;

@@ -45,14 +45,14 @@ test("a repeated usage summary rereads only hours whose statistics changed", asy
     };
     const first = await read();
     assert.ok(first);
-    assert.equal(first.diagnostics.reused, false);
+    assert.equal(first.diagnostics.cache, "miss");
     assert.deepEqual(first.groups, reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer));
     const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
     db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && values.has(column ?? "")
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
     try {
       const again = await read();
-      assert.equal(again?.diagnostics.reused, true);
+      assert.equal(again?.diagnostics.cache, "reused");
       assert.deepEqual(again?.groups, first.groups, "an unchanged summary does not read the minute buckets again");
     }
     finally { db.setAuthorizer(null); }
@@ -240,6 +240,7 @@ for (const recursive of [false, true]) test(`cached usage follows older writers,
     assert.ok(count >= 4096 && count < 4160, "only the bounded recent change journal is retained");
     const fallback = await read(1);
     assert.ok(fallback);
+    assert.equal(fallback.diagnostics.cache, "expired");
     assert.ok(fallback.diagnostics.candidates > 0, "a cache older than the journal is rebuilt");
     await same();
   } finally { db.close(); writer.close(); rmSync(dir, { recursive: true, force: true }); }
