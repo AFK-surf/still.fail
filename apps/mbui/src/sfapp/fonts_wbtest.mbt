@@ -80,7 +80,7 @@ fn kept_here(base : Source) -> Source {
             for place in ["ui", "text", "code"] {
               for f in items(faces.get(place), "files") {
                 match f {
-                  Object(m) => m["path"] = ("/data/" + number(Some(f), "weight").to_int().to_string()).to_json()
+                  Object(m) => m["path"] = ToJson::to_json(("/data/" + number(Some(f), "weight").to_int().to_string()))
                   _ => ()
                 }
               }
