@@ -464,7 +464,9 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   fold_goes.was = None
   fold_goes.shift = 0.0
   fold_goes.way.put(1.0)
+  nav_hold(src)
   v.owns(fn() {
+    nav_held.val = fn() { None }
     fold_goes.node = None
     fold_goes.parts.clear()
     fold_goes.from = None
