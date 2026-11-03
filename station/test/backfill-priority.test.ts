@@ -27,7 +27,7 @@ test("the station marks its writes as pending until they finish, including failu
   } finally { store.close(); }
 });
 
-test("the minute worker is not started during a previous process's handover", async () => {
+test("a read-only coverage check does not wait for the previous process", async () => {
   const original = workerThreads.Worker;
   const workers: FakeWorker[] = [];
   class FakeWorker extends EventEmitter {
@@ -45,13 +45,11 @@ test("the minute worker is not started during a previous process's handover", as
   try {
     const ready = reader.ready(null);
     await Promise.resolve();
-    assert.equal(workers.length, 0, "no backfill connection is opened before handover ends");
-    finish();
-    await Promise.resolve();
-    assert.equal(workers.length, 1, "the worker starts once the previous process is gone");
+    assert.equal(workers.length, 1, "the read-only worker can start before handover ends");
     assert.equal(workers[0]!.posts.length, 1, "a page requested during handover is sent once");
     workers[0]!.emit("message", { id: workers[0]!.posts[0].id });
     await ready;
+    finish();
 
     let finishOther!: () => void;
     const otherHandover = new Promise<void>((resolve) => { finishOther = resolve; });
@@ -61,7 +59,7 @@ test("the minute worker is not started during a previous process's handover", as
     await waiting;
     finishOther();
     await Promise.resolve();
-    assert.equal(workers.length, 1, "a stopped station does not start a worker when handover later ends");
+    assert.equal(workers.length, 2, "a stopped station does not start another worker when handover later ends");
   } finally {
     await reader.close();
     (workerThreads as any).Worker = original;

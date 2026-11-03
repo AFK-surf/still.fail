@@ -25,7 +25,7 @@ test("the station starts its store before the background minute reader", async (
   }
 });
 
-test("a disk-backed old history is filled by its worker and follows a workspace move", async () => {
+test("an incomplete old minute history stays unavailable after a workspace move", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-minute-reader-"));
   const path = join(dir, "stillfail.db");
   let store = Store.open(path);
@@ -48,15 +48,14 @@ test("a disk-backed old history is filled by its worker and follows a workspace 
     store.close();
     store = Store.open(path);
     reader = new MinuteReader(path);
-    await reader.ready({ workspace: "workspace-a", home: false });
+    const before = store.db.prepare("SELECT * FROM usage_minute_all WHERE id = 1").get();
+    await assert.rejects(reader.ready({ workspace: "workspace-a", home: false }), /minute.*unavailable/);
     const page = () => usageHistory(makeStore(store.db, dir), 1n, { workspace: "workspace-a", home: false });
-    assert.deepEqual(page().days.map((d: { day: string; calls: number }) => [d.day, d.calls]), [["2026-01-02", 1]]);
-    assert.equal((store.db.prepare("SELECT done FROM usage_minute_sessions WHERE session = 'a'").get() as { done: number }).done, 1);
+    assert.throws(page, /minutes.*indexed/);
     store.db.prepare("UPDATE sessions SET ws = 'workspace-b' WHERE key = 'a'").run();
-    assert.deepEqual(page().days, []);
-    await reader.ready({ workspace: "workspace-b", home: false });
-    const moved = usageHistory(makeStore(store.db, dir), 1n, { workspace: "workspace-b", home: false });
-    assert.equal(moved.days.reduce((sum: number, d: { calls: number }) => sum + d.calls, 0), 2_001);
+    await assert.rejects(reader.ready({ workspace: "workspace-b", home: false }), /minute.*unavailable/);
+    assert.deepEqual(store.db.prepare("SELECT * FROM usage_minute_all WHERE id = 1").get(), before);
+    assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage").get() as { n: number }).n, 2_001);
   } finally {
     if (reader !== null) await reader.close();
     store.close();

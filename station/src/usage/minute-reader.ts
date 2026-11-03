@@ -1,13 +1,12 @@
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
-import { releaseStoppedBackfill } from "../store/backfill.ts";
 
 export type MinuteRequest = { id: number; viewer: InWorkspace | null } | { id: number; detail: InWorkspace | null }
   | { id: number; remote: true } | { id: number; chats: InWorkspace | null };
 export type MinuteResponse = { id?: number; error?: string; complete?: boolean; foreground?: boolean };
 
-/// A history waits here, away from all of the readers, while its old minute summaries are filled.
+/// Check whether previously maintained summaries are complete without writing or filling old history.
 export class MinuteReader {
   readonly #path: string;
   #worker: Worker | null = null;
@@ -16,32 +15,14 @@ export class MinuteReader {
   #complete = false;
   #termination: Promise<number> | null = null;
   #waiting = new Map<number, { resolve: () => void; reject: (error: Error) => void; request: MinuteRequest; sent: boolean }>();
-  #previousGone: Promise<void> | null;
-  #starting = false;
-  readonly #priority: SharedArrayBuffer | undefined;
-
-  constructor(path: string, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}) {
+  constructor(path: string, _options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}) {
     this.#path = path;
-    this.#previousGone = options.previousGone ?? null;
-    this.#priority = options.priority;
   }
 
   start(): void {
-    if (this.#closed || this.#complete || this.#worker !== null || this.#starting) return;
-    if (this.#previousGone !== null) {
-      this.#starting = true;
-      const previous = this.#previousGone;
-      this.#previousGone = null;
-      void previous.then(() => {
-        this.#starting = false;
-        try { this.start(); } catch (error) { this.#fail(error as Error); }
-      }, (error) => { this.#starting = false; this.#fail(error as Error); });
-      return;
-    }
+    if (this.#closed || this.#complete || this.#worker !== null) return;
     const file = new URL(import.meta.url.endsWith(".ts") ? "./minute-worker.ts" : "./usage/minute-worker.js", import.meta.url);
-    const worker = new Worker(file, { workerData: { path: this.#path, priority: this.#priority }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
-    const owner = worker.threadId;
-    worker.once("exit", () => releaseStoppedBackfill(this.#priority, owner));
+    const worker = new Worker(file, { workerData: { path: this.#path }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     this.#worker = worker;
     worker.unref();
     worker.on("message", (answer: MinuteResponse) => {
@@ -76,11 +57,6 @@ export class MinuteReader {
     this.#sendWaiting();
   }
 
-  #fail(error: Error): void {
-    for (const waiting of this.#waiting.values()) waiting.reject(error);
-    this.#waiting.clear();
-  }
-
   #sendWaiting(): void {
     if (this.#worker === null) return;
     for (const waiting of this.#waiting.values()) if (!waiting.sent) {
@@ -105,7 +81,7 @@ export class MinuteReader {
     });
   }
 
-  /// Detail statistics have their own cursor and may be ready before other summaries.
+  /// A moved session can make only its workspace's detail statistics incomplete.
   readyDetail(viewer: InWorkspace | null): Promise<void> {
     if (this.#closed) return Promise.reject(new Error("station stopping"));
     // A session can move after the original fill finished; the requesting reader has seen pending work.
@@ -123,7 +99,7 @@ export class MinuteReader {
     });
   }
 
-  /// A usage request must wait for the old remote task counts too, without holding a device reader.
+  /// Remote-task statistics may already be complete even when another statistic is incomplete.
   readyRemote(): Promise<void> {
     if (this.#closed) return Promise.reject(new Error("station stopping"));
     if (this.#complete) return Promise.resolve();
@@ -140,7 +116,7 @@ export class MinuteReader {
     });
   }
 
-  /// Old chat and card totals are filled in the background without taking a device reader while they are pending.
+  /// Check only the asking workspace's chat and card totals.
   readyChats(viewer: InWorkspace | null = null): Promise<void> {
     if (this.#closed) return Promise.reject(new Error("station stopping"));
     // A session can move after an earlier fill finished. The calling reader saw pending work in its own snapshot.

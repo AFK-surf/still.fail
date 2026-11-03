@@ -23,9 +23,11 @@ test("an unfinished remote-task summary does not read task records or report a p
         /remote.*(not ready|pending|being filled)/i);
       assert.throws(() => remoteRunsSince(makeStore(store.db, "."), 0n, { workspace: "workspace-a", home: false }),
         /remote.*(not ready|pending|being filled)/i);
-      assert.throws(() => readUsage(makeStore(store.db, "."), "en", 0n, 100n, 0n, false,
-        { workspace: "workspace-a", home: false }), /remote.*(not ready|pending|being filled)/i,
-      "an unready summary is detected before doing the rest of the read");
+      const result = readUsage(makeStore(store.db, "."), "en", 0n, 100n, 0n, false,
+        { workspace: "workspace-a", home: false }, true);
+      assert.equal(result.remoteRuns, undefined, "an incomplete task count is not returned as zero");
+      assert.equal(result.history, undefined, "the history is omitted while its task count is unavailable");
+      assert.deepEqual(result.rows, [], "independent complete usage details remain readable");
     } finally {
       store.db.setAuthorizer(null);
     }
@@ -50,7 +52,7 @@ test("exporting usage does not wait for or read remote-task statistics it does n
   } finally { store.close(); }
 });
 
-test("a usage read waits for the remote summary without holding a reader or blocking handover", async () => {
+test("an incomplete remote summary is omitted without holding a reader or rebuilding history", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-remote-ready-"));
   const path = join(dir, "stillfail.db");
   const old = new DatabaseSync(path);
@@ -62,21 +64,16 @@ test("a usage read waits for the remote summary without holding a reader or bloc
   const previousGone = new Promise<void>((resolve) => { handover = resolve; });
   const readers = new Readers(dir, 1, undefined, 1, { previousGone });
   const args = { lang: "en", from: 0, to: 100, tz: 0, reading: false, viewer: { workspace: "A", home: false } };
-  const usage = readers.read("usage", args, "en");
-  let state = "pending";
-  void usage.then(() => { state = "resolved"; }, () => { state = "rejected"; });
+  const before = store.db.prepare("SELECT * FROM remote_run_progress WHERE id = 1").get();
+  const usage = readers.read("usage", { ...args, history: true }, "en");
   try {
-    // The usage read was enqueued first. A checkpoint reaches the sole reader after it returned the pending signal.
     await readers.read("checkpoint", {}, "en");
-    assert.equal(state, "pending");
-    assert.equal((store.db.prepare("SELECT done FROM remote_run_progress WHERE id = 1").get() as { done: number }).done, 0,
-      "the backfill does not start before the previous station is gone");
-    handover();
     const result = JSON.parse(await usage);
-    assert.deepEqual(result.remoteRuns, [{ at: 10, session: "remote:A:station:a" }]);
-    assert.equal((store.db.prepare("SELECT done FROM remote_run_progress WHERE id = 1").get() as { done: number }).done, 1);
-    const history = JSON.parse(await readers.read("usage", { ...args, history: true }, "en"));
-    assert.equal(history.history.remoteRuns, 1);
+    assert.equal(result.remoteRuns, undefined);
+    assert.equal(result.history, undefined);
+    assert.deepEqual(result.rows, []);
+    handover();
+    assert.deepEqual(store.db.prepare("SELECT * FROM remote_run_progress WHERE id = 1").get(), before);
   } finally {
     handover();
     readers.close();
@@ -87,9 +84,9 @@ test("a usage read waits for the remote summary without holding a reader or bloc
 
 test("closing a reader rejects remote summary requests waiting for handover", async () => {
   const reader = new MinuteReader("unused", { previousGone: new Promise<void>(() => {}) });
-  const waiting = reader.readyRemote();
+  const waiting = assert.rejects(reader.readyRemote(), /station stopping/);
   await reader.close();
-  await assert.rejects(waiting, /station stopping/);
+  await waiting;
 });
 
 test("ready remote task statistics do not wait for unrelated minute summaries", async () => {
@@ -110,7 +107,7 @@ test("ready remote task statistics do not wait for unrelated minute summaries", 
   }
 });
 
-test("a failed remote summary reports the error to current and later readers", async () => {
+test("an incomplete remote summary does not try to fill a missing lookup", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-remote-error-"));
   const path = join(dir, "stillfail.db");
   const old = new DatabaseSync(path);
@@ -121,8 +118,8 @@ test("a failed remote summary reports the error to current and later readers", a
   store.db.exec("DROP TABLE remote_run_lookup");
   const reader = new MinuteReader(path);
   try {
-    await assert.rejects(reader.readyRemote(), /no such table: remote_run_lookup/);
-    await assert.rejects(reader.readyRemote(), /no such table: remote_run_lookup/);
+    await assert.rejects(reader.readyRemote(), /remote.*unavailable/);
+    await assert.rejects(reader.readyRemote(), /remote.*unavailable/);
   } finally {
     await reader.close();
     store.close();

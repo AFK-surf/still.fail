@@ -14,8 +14,7 @@ import {
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
-import { backfillNextUsageDetail, detailQuery } from "../src/store/usage-detail.ts";
-import { backfillUsageCompactions } from "../src/store/usage-compactions.ts";
+import { detailQuery } from "../src/store/usage-detail.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import * as read from "../src/read/store.ts";
 import { fileAway } from "./archived-before.ts";
@@ -1043,7 +1042,9 @@ test("what the station asks again and again is planned by an index, never a scan
   const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
-    assert.ok(!plan.some((d) => scans.test(d)), `${sql}\n  ${plan.join(" | ")}`);
+    // The detail query materializes only keys sought inside the requested range, then scans those keys in session
+    // order. It must still seek the underlying lookup below (asserted separately), not scan the historical table.
+    assert.ok(!plan.some((d) => scans.test(d) && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
   }
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
@@ -1271,7 +1272,7 @@ test("usage: a call is recorded once, its output grown; turns tell whom they wer
   h.stop();
 });
 
-test("usage: a session's calls added up by the database, those from before the totals and those an older station records too", () => {
+test("usage: a missing old session total does not reconstruct calls and new writes are kept apart", () => {
   const path = join(tempdir(), "usage.db");
   const of = { turn: null, person: null, thread: null, profile: null };
   const call = (id: string, model: string | null, output: number) => ({ id, at: 1000, model, subagent: false, fast: false, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output, calls: 1, context: 10, window: null });
@@ -1279,7 +1280,7 @@ test("usage: a session's calls added up by the database, those from before the t
   session(first, "a");
   first.recordUsage("/a.jsonl", { session: "a", offset: 1, model: "m" }, "claude", [[call("c1", "m", 5), of], [call("c2", null, 1), of]]);
   first.close();
-  // A database from before the totals: what was recorded is added up as it is opened.
+  // A database from before the totals: old calls remain untouched as it is opened.
   const before = new DatabaseSync(path);
   before.exec("DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_grow; DROP TRIGGER usage_totals_drop; DROP TABLE usage_totals;");
   before.close();
@@ -1289,10 +1290,10 @@ test("usage: a session's calls added up by the database, those from before the t
   const older = new DatabaseSync(path);
   older.exec("INSERT INTO usage (id, at, session, runtime, model, input, cache_read, cache_write, cache_write_long, output) VALUES ('c4', 1000, 'a', 'claude', 'm', 1, 2, 3, 4, 7)");
   older.close();
-  assert.deepEqual(
-    store.usageOfSession("a").map((g) => [g.runtime, g.model, g.calls, g.input, g.cacheRead, g.cacheWrite, g.cacheWriteLong, g.output]),
-    [["claude", null, 1, 1, 2, 3, 4, 1], ["claude", "m", 3, 3, 6, 9, 12, 18]],
-  );
+  assert.deepEqual(store.usageOfSession("a"), [], "a partial session total is not shown as a lifetime total");
+  assert.deepEqual(store.db.prepare("SELECT runtime, model, calls, input, cache_read, cache_write, cache_write_long, output FROM usage_totals WHERE session = 'a'")
+    .all().map((r) => [r.runtime, r.model, r.calls, r.input, r.cache_read, r.cache_write, r.cache_write_long, r.output]),
+  [["claude", "m", 2, 2, 4, 6, 8, 9]], "only new calls contribute to the incremental total");
   assert.deepEqual(store.usageOfSession("b"), []);
 });
 
@@ -1315,7 +1316,7 @@ test("usage: the page's days are the calls added up from statistics, whatever th
   };
   record(calls.slice(0, 400));
   store.close();
-  // A database from before them: made from the calls it has as it opens, kept from then on.
+  // The current detail index remains usable if the obsolete quarter table is absent on an older database.
   const before = new DatabaseSync(path);
   before.exec("DROP TRIGGER usage_quarters_add; DROP TRIGGER usage_quarters_drop; DROP TRIGGER usage_quarters_grow; DROP TABLE usage_quarters;");
   before.close();
@@ -1375,16 +1376,17 @@ test("usage: a row is the calls it says, and a database from before says each wa
     CREATE TRIGGER usage_compactions_add AFTER INSERT ON usage BEGIN SELECT 1; END;`);
   before.close();
   store = open(path);
-  // Each call from before is one, its context what it sent (a subagent's none), as before.
-  assert.deepEqual(store.lastContexts("a", 5).map((c) => [c.context, c.window]), [[120_000, null]]);
+  // The old call remains intact; an unfinished context index does not claim it is complete.
+  assert.deepEqual(store.db.prepare("SELECT context, context_window FROM usage WHERE id = 'c1'").get(),
+    Object.assign(Object.create(null), { context: null, context_window: null }));
+  assert.deepEqual(store.lastContexts("a", 5), []);
   // A turn told at once is its calls; the context it ended with is what it says, compacted from the one before.
   store.recordUsage("/a.jsonl", { session: "a", offset: 2, model: "m" }, "claude", [call("c2", 2000, 300_000, { calls: 3, context: 20_000, window: 200_000 })] as never);
   assert.deepEqual(store.usageOfSession("a").map((g) => [g.calls, g.input]), [[5, 420_007]]);
-  while (!backfillNextUsageDetail(store.db).done) { /* old calls are filled by the worker in a running station */ }
-  assert.deepEqual(store.usageGroups(0, 3000, 0).reduce((n, g) => n + g.calls, 0), 5);
-  assert.deepEqual(store.lastContexts("a", 1).map((c) => [c.context, c.window]), [[20_000, 200_000]]);
-  while (!backfillUsageCompactions(store.db).done) { /* old calls are filled by the worker in a running station */ }
-  assert.deepEqual([...store.compactionPoints(0)], [["m", 120_000]]);
+  assert.deepEqual(store.usageGroups(0, 3000, 0).map((g) => [g.calls, g.input]), [[3, 300_000]],
+    "the new detail starts with the call recorded after the upgrade");
+  assert.deepEqual(store.lastContexts("a", 1), []);
+  assert.deepEqual([...store.compactionPoints(0)], []);
   store.close();
 });
 

@@ -50,7 +50,7 @@ test("usage detail reads statistics for the viewer and exact boundaries, includi
   }
 });
 
-test("a usage request waits for old details outside the reader and resumes after handover", async () => {
+test("an incomplete old detail summary is left aside without holding a reader or rebuilding old calls", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-detail-wait-"));
   const path = join(dir, "stillfail.db");
   let store = Store.open(path);
@@ -66,28 +66,25 @@ test("a usage request waits for old details outside the reader and resumes after
   store = Store.open(path);
   store.db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "usage" ? constants.SQLITE_DENY : constants.SQLITE_OK);
   try {
-    assert.throws(() => usage(makeStore(store.db, dir), "en", 0n, 100n, 0n, false, { workspace: "A", home: false }),
-      /usage detail statistics.*being filled/);
+    const result = usage(makeStore(store.db, dir), "en", 0n, 100n, 0n, false, { workspace: "A", home: false });
+    assert.deepEqual(result.rows, []);
   } finally { store.db.setAuthorizer(null); }
   let handover!: () => void;
   const previousGone = new Promise<void>((resolve) => { handover = resolve; });
   const readers = new Readers(dir, 1, undefined, 1, { previousGone });
   const args = { from: 0, to: 100, tz: 0, reading: false, viewer: { workspace: "A", home: false } };
+  const before = store.db.prepare("SELECT * FROM usage_detail_all").get();
   const pending = readers.read("usage", args, "en");
-  let state = "pending";
-  void pending.then(() => { state = "resolved"; }, () => { state = "rejected"; });
   try {
     await readers.read("checkpoint", {}, "en");
-    assert.equal(state, "pending");
+    assert.deepEqual(JSON.parse(await pending).rows, []);
+    await readers.read("outflowUsage", { ...args, ws: args.viewer }, "en");
     handover();
-    const result = JSON.parse(await pending);
-    assert.equal(result.rows[0].input, 3);
-    const exported = JSON.parse(await readers.read("outflowUsage", { ...args, ws: args.viewer }, "en"));
-    assert.equal(exported.rows[0].input, 3);
+    assert.deepEqual(store.db.prepare("SELECT * FROM usage_detail_all").get(), before);
   } finally { handover(); readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a failed detail backfill reports an error rather than leaving readers waiting", async () => {
+test("an incomplete old detail summary does not use a missing legacy index", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-detail-error-"));
   const path = join(dir, "stillfail.db");
   let store = Store.open(path);
@@ -103,20 +100,20 @@ test("a failed detail backfill reports an error rather than leaving readers wait
   store.db.exec("DROP TABLE usage_detail_lookup");
   const reader = new MinuteReader(path);
   try {
-    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /no such table: (?:main\.)?usage_detail_lookup/);
-    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /no such table: (?:main\.)?usage_detail_lookup/);
+    await reader.readyDetail({ workspace: "A", home: false });
+    await reader.readyDetail({ workspace: "A", home: false });
     await reader.readyRemote();
   } finally { await reader.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("closing while detail statistics wait for handover rejects the request", async () => {
   const reader = new MinuteReader("unused", { previousGone: new Promise<void>(() => {}) });
-  const pending = reader.readyDetail({ workspace: "A", home: false });
+  const pending = assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /station stopping/);
   await reader.close();
-  await assert.rejects(pending, /station stopping/);
+  await pending;
 });
 
-test("a moved session restarts its detail worker without holding unrelated workspace reads", async () => {
+test("a moved session's details follow it without rewriting the old buckets", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-detail-move-"));
   const path = join(dir, "stillfail.db");
   const store = Store.open(path);
@@ -130,11 +127,15 @@ test("a moved session restarts its detail worker without holding unrelated works
   const reader = new MinuteReader(path);
   try {
     await reader.readyDetail({ workspace: "A", home: false });
+    const original = store.db.prepare("SELECT COUNT(*) AS n FROM usage_detail_lookup WHERE session = 'a' AND scope = 'WA'").get();
     store.db.prepare("UPDATE sessions SET ws = 'B' WHERE key = 'a'").run();
+    assert.deepEqual(store.db.prepare("SELECT COUNT(*) AS n FROM usage_detail_lookup WHERE session = 'a' AND scope = 'WA'").get(), original);
     assert.deepEqual(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "C", home: false }), []);
+    await reader.readyDetail({ workspace: "A", home: false });
     await reader.readyDetail({ workspace: "B", home: false });
-    assert.equal(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "B", home: false })[0]?.input, 3);
+    await reader.readyDetail({ workspace: "C", home: false });
     assert.deepEqual(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "A", home: false }), []);
+    assert.deepEqual(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "B", home: false }).map((g) => [g.calls, g.input]), [[1, 3]]);
   } finally { await reader.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -2,7 +2,7 @@
 // turn it was in, whom that turn worked for, in which thread and on which profile. The Store's usage methods call these.
 import type { DatabaseSync } from "node:sqlite";
 import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
-import { detailQuery, usageDetailReady, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
+import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, usageTotalsComplete, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
 import { usageCompactionsReady } from "./usage-compactions.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
@@ -138,10 +138,10 @@ export type ContextCall = {
 export const LAST_CONTEXTS = `SELECT u.turn, u.profile, u.model, u.context, u.context_window, u.at, u.fast, u.cache_write, u.cache_write_long
   FROM usage_main_calls m JOIN usage u ON u.id = m.id WHERE m.session = ?1 ORDER BY m.at DESC, m.id DESC LIMIT ?2`;
 export function lastContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {
-  const rows = (usageCompactionsReady(db)
-    ? db.prepare(LAST_CONTEXTS)
-    : db.prepare("SELECT turn, profile, model, context, context_window, at, fast, cache_write, cache_write_long FROM usage WHERE session = ?1 AND subagent = 0 ORDER BY at DESC, id DESC LIMIT ?2"))
-    .all(session, limit) as Json[];
+  // A partially built index cannot prove which call was last. Do not scan the raw history or present an older call as
+  // current; the context is unavailable until it can be maintained independently of the old index.
+  if (!usageCompactionsReady(db)) return [];
+  const rows = db.prepare(LAST_CONTEXTS).all(session, limit) as Json[];
   return rows.reverse().map((r) => ({
     turn: r.turn, profile: r.profile, model: r.model, context: r.context, window: r.context_window,
     at: r.at, fast: r.fast !== 0 && r.fast !== null, cacheWrite: r.cache_write, cacheWriteLong: r.cache_write_long,
@@ -169,8 +169,9 @@ export function usageGroupOf(r: Json): UsageGroup {
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and
 /// by thread, person, profile and model.
 export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffsetMin: number): UsageGroup[] {
-  if (!usageDetailReady(db, null)) throw new Error(USAGE_DETAIL_PENDING);
-  const query = detailQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null);
+  const generation = usageDetailGeneration(db);
+  if (!usageDetailReady(db, null, generation)) throw new Error(USAGE_DETAIL_PENDING);
+  const query = detailQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null, generation);
   return query === null ? [] : (db.prepare(query.sql).all(...query.args) as Json[]).map(usageGroupOf);
 }
 
@@ -178,6 +179,7 @@ export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffse
 /// show of it. As the database keeps them added up (schema.ts USAGE_TOTALS): asked each time the live view of a session
 /// at work tells its usage.
 export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] {
+  if (!usageTotalsComplete(db, session)) return [];
   return (
     db
       .prepare(
@@ -190,5 +192,7 @@ export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] 
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(db: DatabaseSync): number | null {
-  return (db.prepare("SELECT first_at FROM usage_span WHERE id = 1").get() as Json).first_at ?? null;
+  const first = (db.prepare("SELECT first_at FROM usage_span WHERE id = 1").get() as Json).first_at as number | null;
+  const cutover = usageDetailSince(db);
+  return cutover === null ? first : Math.max(first ?? cutover, cutover);
 }

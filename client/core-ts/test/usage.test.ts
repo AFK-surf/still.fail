@@ -134,6 +134,24 @@ test("unknown_prices_are_not_shown_as_zero_and_tokens_stay_counted", () => {
   assert.ok("ok" in conform("UsageView", v));
 });
 
+test("days before one station began keeping detail are unavailable rather than zero or partial", () => {
+  const old = row("2026-09-30", "a@x", 7, "cc", "claude-opus-5-5", 2, 10);
+  const recent = row("2026-10-01", "a@x", 7, "cc", "claude-opus-5-5", 1, 2);
+  const today = row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 1, 3);
+  const sources: Source[] = [
+    { address: "ws/a", name: "a", online: true, value: ok({ ...station([today]), detailSince: NOW - 86_400_000 }) },
+    { address: "ws/b", name: "b", online: true, value: ok(station([old, recent])) },
+  ];
+  const v = usageView(sources, 7, NOW, 480, {}, []);
+  assert.deepEqual([v.daily[4].costText, v.daily[4].callsText, v.daily[4].cost], ["—", "—", 0]);
+  assert.deepEqual([v.daily[5].costText, v.daily[6].costText], ["$2.00", "$3.00"]);
+  assert.deepEqual([v.tiles[0].value, v.tiles[1].value], ["$5.00", "2 次"]);
+  assert.ok(v.notes.some((note: string) => note.includes("10 月 1 日")));
+  const earlier = usageView(sources, 7, NOW, 480, {}, [], { day: "2026-09-30" });
+  assert.ok(earlier.tiles.every((tile: J) => tile.value === "—"));
+  assert.equal(earlier.empty, false, "unavailable is not described as a period with no usage");
+});
+
 test("unknown_people_keep_their_usage_and_the_view_decodes", () => {
   for (const reference of [null, "missing@x"]) {
     const unknown = row("2026-10-02", "", 7, "cc", "gpt-6", 2, 3.0);

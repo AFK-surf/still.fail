@@ -2,7 +2,7 @@
 // the same as reading it all again would have given.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dayOf, holdsWhole, withPart } from "../src/station/usage-part.ts";
+import { dayOf, holdsWhole, sameDetailCoverage, withPart } from "../src/station/usage-part.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -73,4 +73,33 @@ test("the days a change touched, read again, take the place of those held; the r
   assert.deepEqual(now.remoteRuns.map((r: J) => r.session), ["remote:w:a", "remote:w:b", "remote:w:c"]);
   assert.equal(now.from, from, "still the whole window's");
   assert.equal(holdsWhole(now, from), true);
+});
+
+test("a full response without historical statistics still permits a partial refresh", () => {
+  const from = Date.UTC(2026, 8, 5, 16), since = Date.UTC(2026, 10, 1, 16);
+  const held: J = { from, rows: [row("2026-11-01", "s", "m", 1)], historyUnavailable: true, detailSince: from + DAY };
+  assert.equal(holdsWhole(held, from), true);
+  const part: J = { rows: [row("2026-11-02", "s", "m", 2)], detailSince: from + DAY };
+  const updated: J = withPart(held, part, "2026-11-02", since);
+  assert.deepEqual(updated.rows.map((r: J) => r.calls), [1, 2]);
+  assert.equal(updated.historyUnavailable, true);
+  assert.equal(updated.detailSince, from + DAY);
+  assert.equal("history" in updated, false, "missing history is not made into an empty summary");
+  assert.equal("remoteRuns" in updated, false, "missing remote tasks are not made into zero tasks");
+});
+
+test("refreshing new detail preserves a complete older daily total", () => {
+  const from = Date.UTC(2026, 8, 5, 16), since = Date.UTC(2026, 10, 1, 16);
+  const oldNewDetail = row("2026-11-02", "s", "m", 1);
+  const oldTotal = daysOf([oldNewDetail])[0];
+  oldTotal.calls += 50;
+  oldTotal.tokens += 5_000;
+  const held: J = { from, detailSince: since, rows: [oldNewDetail], history: { days: [oldTotal], cards: 1 } };
+  const part: J = { detailSince: since, rows: [row("2026-11-02", "s", "m", 2)] };
+  assert.equal(sameDetailCoverage(held, part), true);
+  assert.equal(sameDetailCoverage(held, { ...part, detailSince: since + 1 }), false);
+  assert.equal(sameDetailCoverage(held, { rows: part.rows }), false);
+  const updated: J = withPart(held, part, "2026-11-02", since);
+  const nowNewDetail = daysOf(part.rows)[0];
+  assert.deepEqual(updated.history.days, [{ ...nowNewDetail, calls: nowNewDetail.calls + 50, tokens: nowNewDetail.tokens + 5_000 }]);
 });

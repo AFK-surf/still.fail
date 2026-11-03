@@ -60,7 +60,7 @@ test("old chat totals fill in bounded resumable batches while writes and workspa
     const reader = makeStore(store.db, dir);
     assert.throws(() => usageChatTotals(reader, null), /chat statistics.*being filled/);
     store.db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "usage" ? constants.SQLITE_DENY : constants.SQLITE_OK);
-    try { assert.throws(() => usage(reader, "en", 0n, 1n, 0n, false, null, true), /chat statistics.*being filled/); }
+    try { assert.equal(usage(reader, "en", 0n, 1n, 0n, false, null, true).history, undefined); }
     finally { store.db.setAuthorizer(null); }
     assert.deepEqual(backfillUsageChatStats(store.db, 4), { done: false, processed: 4 });
 
@@ -86,7 +86,7 @@ test("old chat totals fill in bounded resumable batches while writes and workspa
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("an old chat summary waits outside the device reader during handover", async () => {
+test("an incomplete chat summary is omitted without holding a reader or rebuilding history", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-chat-wait-"));
   const path = join(dir, "stillfail.db");
   let store = Store.open(path);
@@ -97,24 +97,23 @@ test("an old chat summary waits outside the device reader during handover", asyn
   let handover!: () => void;
   const previousGone = new Promise<void>((resolve) => { handover = resolve; });
   const readers = new Readers(dir, 1, undefined, 1, { previousGone });
+  const before = store.db.prepare("SELECT * FROM usage_chat_progress").get();
   const history = readers.read("usage", { from: 0, to: 100, tz: 0, reading: false, history: true, viewer: null }, "en");
-  let state = "pending";
-  void history.then(() => { state = "resolved"; }, () => { state = "rejected"; });
   try {
     await readers.read("checkpoint", {}, "en");
-    assert.equal(state, "pending");
-    assert.equal((store.db.prepare("SELECT done FROM usage_chat_progress").get() as { done: number }).done, 0);
-    handover();
     const result = JSON.parse(await history);
-    assert.deepEqual(result.history.places, { ember: 1 });
+    assert.equal(result.history, undefined);
+    assert.deepEqual(result.rows, []);
+    handover();
+    assert.deepEqual(store.db.prepare("SELECT * FROM usage_chat_progress").get(), before);
   } finally { handover(); readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("chat summary waiters are released on shutdown and ready summaries skip other backfills", async () => {
   const waiting = new MinuteReader("unused", { previousGone: new Promise<void>(() => {}) });
-  const pending = waiting.readyChats();
+  const pending = assert.rejects(waiting.readyChats(), /station stopping/);
   await waiting.close();
-  await assert.rejects(pending, /station stopping/);
+  await pending;
   const dir = mkdtempSync(join(tmpdir(), "usage-chat-ready-"));
   const path = join(dir, "stillfail.db");
   const store = Store.open(path);
@@ -128,7 +127,7 @@ test("chat summary waiters are released on shutdown and ready summaries skip oth
   } finally { await reader.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a failed chat summary reports its error to current and later waiters", async () => {
+test("an incomplete chat summary does not attempt to fill a missing index", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-chat-error-"));
   const path = join(dir, "stillfail.db");
   const store = Store.open(path);
@@ -139,8 +138,8 @@ test("a failed chat summary reports its error to current and later waiters", asy
   store.db.exec("DROP TABLE usage_chat_cards");
   const reader = new MinuteReader(path);
   try {
-    await assert.rejects(reader.readyChats(), /no such table: usage_chat_cards/);
-    await assert.rejects(reader.readyChats(), /no such table: usage_chat_cards/);
+    await assert.rejects(reader.readyChats(), /chat.*unavailable/);
+    await assert.rejects(reader.readyChats(), /chat.*unavailable/);
     await reader.readyRemote();
   } finally { await reader.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
@@ -215,7 +214,7 @@ test("moving a session does not rewrite all of its chat statistics in the foregr
   } finally { store.close(); }
 });
 
-test("the background worker restarts for a session moved after the initial fill", async () => {
+test("a moved session leaves affected chat totals unavailable until their scope is correct", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-chat-move-worker-"));
   const path = join(dir, "stillfail.db");
   const store = Store.open(path);
@@ -228,9 +227,11 @@ test("the background worker restarts for a session moved after the initial fill"
     await worker.readyChats();
     store.db.prepare("UPDATE sessions SET ws = 'B' WHERE key = 's'").run();
     assert.throws(() => usageChatTotals(makeStore(store.db, dir), { workspace: "B", home: false }), /chat statistics.*being filled/);
-    await worker.readyChats();
-    assert.deepEqual(usageChatTotals(makeStore(store.db, dir), { workspace: "B", home: false }),
-      { places: { ember: 1 }, archived: 0, cards: 0, picked: 0 });
+    await assert.rejects(worker.readyChats({ workspace: "A", home: false }), /chat.*unavailable/);
+    await assert.rejects(worker.readyChats({ workspace: "B", home: false }), /chat.*unavailable/);
+    await worker.readyChats({ workspace: "C", home: false });
+    assert.deepEqual(usageChatTotals(makeStore(store.db, dir), { workspace: "C", home: false }),
+      { places: {}, archived: 0, cards: 0, picked: 0 });
   } finally { await worker.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -258,7 +259,7 @@ test("a session moving between two workspaces does not hold a third workspace's 
   } finally { store.close(); }
 });
 
-test("an unrelated workspace can finish while a moved session waits for a writer", async () => {
+test("a moved session does not prevent an unrelated workspace reading its totals", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-chat-move-isolation-"));
   const path = join(dir, "stillfail.db");
   const store = Store.open(path);
@@ -270,17 +271,15 @@ test("an unrelated workspace can finish while a moved session waits for a writer
   const priority = new SharedArrayBuffer(8);
   Atomics.store(new Int32Array(priority), 0, 1);
   const worker = new MinuteReader(path, { priority });
-  const pending = worker.readyChats({ workspace: "A", home: false });
-  let state = "pending";
-  void pending.then(() => { state = "resolved"; }, () => { state = "rejected"; });
+  const unavailable = assert.rejects(worker.readyChats({ workspace: "A", home: false }), /chat.*unavailable/);
   try {
     await worker.readyChats({ workspace: "C", home: false });
-    assert.equal(state, "pending");
+    await unavailable;
     assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage_chat_dirty").get() as { n: number }).n, 1);
     Atomics.store(new Int32Array(priority), 0, 0);
-    await pending;
-    assert.deepEqual(usageChatTotals(makeStore(store.db, dir), { workspace: "B", home: false }),
-      { places: { ember: 1 }, archived: 0, cards: 0, picked: 0 });
+    await assert.rejects(worker.readyChats({ workspace: "B", home: false }), /chat.*unavailable/);
+    assert.deepEqual(usageChatTotals(makeStore(store.db, dir), { workspace: "C", home: false }),
+      { places: {}, archived: 0, cards: 0, picked: 0 });
   } finally { Atomics.store(new Int32Array(priority), 0, 0); await worker.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 

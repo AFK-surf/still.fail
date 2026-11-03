@@ -231,6 +231,15 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const dayList: string[] = [];
   for (let i = days - 1; i >= 0; i--) dayList.push(localDay(now - i * DAY_MS, offset));
   const first = dayList[0];
+  // A station that began a new, incremental statistic can only say what happened from that point. When several
+  // stations are combined, a day is complete only if every one of them has its detail for that day.
+  let detailSince: number | null = null;
+  for (const source of sources) {
+    if (!source.online) continue;
+    const at = get(get(source.value, "ok"), "detailSince");
+    if (typeof at === "number" && Number.isFinite(at)) detailSince = detailSince === null ? at : Math.max(detailSince, at);
+  }
+  const firstDetailDay = detailSince === null ? null : localDay(detailSince, offset);
   // the days before as many, to say each total against
   const before = new Set<string>();
   for (let i = 2 * days - 1; i >= days; i--) before.add(localDay(now - i * DAY_MS, offset));
@@ -305,6 +314,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     const stationProfiles = get(value, "profiles") ?? null;
     for (const row of arr(get(value, "rows"))) {
       const day = typeof get(row, "day") === "string" ? row.day : "";
+      if (firstDetailDay !== null && day < firstDetailDay) continue;
       const at = byDay.get(day);
       if (!at && !before.has(day)) continue;
       const text = (k: string): string | null => (typeof get(row, k) === "string" ? row[k] : null);
@@ -373,6 +383,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   }
 
   // (recorded only since within the days before: no telling what they spent; a day picked: none to say it against)
+  if (detailSince !== null) since = since === null ? detailSince : Math.max(since, detailSince);
   if (since !== null && localDay(since, offset) > beforeFirst) compared = false;
   if (dayOnly !== null) compared = false;
   // each chat said with who it was for and its model, the most of each, before where it is (who only where several
@@ -393,6 +404,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   // Too many days for each to say its date under its bar: today's and one a week back from the last.
   const many = byDay.size > 10;
   const daily = [...byDay].map(([day, [sum, byList]], i) => {
+    const unavailable = firstDetailDay !== null && day < firstDetailDay;
     const split_ = byList[split];
     const parts = top.map(([k]) => split_.get(k) ?? 0);
     if (rest) {
@@ -409,9 +421,9 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       tick: !many || day === today || (byDay.size - 1 - i) % 7 === 0 ? name : "",
       shares: parts.map((p) => (sum.cost > 0 ? Math.min(1, Math.max(p > 0 ? 0.01 : 0, p / sum.cost)) : 0)),
       cost: sum.cost,
-      costText: sum.costText(),
+      costText: unavailable ? "—" : sum.costText(),
       calls: sum.calls,
-      callsText: t("core-views.usage.calls", { n: count(sum.calls) }),
+      callsText: unavailable ? "—" : t("core-views.usage.calls", { n: count(sum.calls) }),
       partsText: parts.map(money),
       sharesText: parts.map((p) => percent(p, sum.cost)),
       parts,
@@ -420,12 +432,13 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const max = [...byDay.values()].reduce((m, [s]) => Math.max(m, s.cost), 0);
   const input = total.input + total.cacheRead + total.cacheWrite;
   const vs = (now_: number, before_: number) => (compared ? change(now_, before_) : { change: null, trend: "" });
+  const unavailableDay = dayOnly !== null && firstDetailDay !== null && dayOnly < firstDetailDay;
   const tiles = [
     { label: t("core-views.usage.tile.cost"), value: total.costText(), sub: t("core-views.usage.tile.cost_sub"), ...(total.unpriced > 0 || earlier.unpriced > 0 ? { change: null, trend: "" } : vs(total.cost, earlier.cost)) },
     { label: t("core-views.usage.tile.calls"), value: t("core-views.usage.tile.calls_value", { n: count(total.calls) }), sub: t("core-views.usage.tile.calls_sub", { n: count(total.calls / days) }), ...vs(total.calls, earlier.calls) },
     { label: t("core-views.usage.tile.input"), value: count(input), sub: t("core-views.usage.tile.input_sub", { percent: percent(total.cacheRead, input) }), ...vs(input, earlier.input + earlier.cacheRead + earlier.cacheWrite) },
     { label: t("core-views.usage.tile.output"), value: count(total.output), sub: t("core-views.usage.tile.output_sub", { n: count(total.calls > 0 ? total.output / total.calls : 0) }), ...vs(total.output, earlier.output) },
-  ];
+  ].map((tile) => unavailableDay ? { ...tile, value: "—", sub: "", change: null, trend: "" } : tile);
   for (const [key, used] of profileModels) {
     const most = [...used.values()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0];
     const item = profiles.get(key);
@@ -461,7 +474,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   // the one seen alone, by its name in its list (none spent in the days: its key)
   const onlyShown = only !== null ? { list: only.list, key: only.key, title: lists_[only.list].get(only.key)?.title ?? only.key } : null;
   const dayShown = dayOnly !== null ? (dayOnly === today ? t("core-views.usage.today") : dayLabel(dayOnly)) : null;
-  return { days, day: dayOnly, accounts: allowances, split, only: onlyShown, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, versus: t("core-views.usage.tile.versus", { n: days }), period: dayShown ?? t("core-views.usage.period", { n: days }), series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
+  return { days, day: dayOnly, accounts: allowances, split, only: onlyShown, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0 && !unavailableDay), empty: total.calls === 0 && !unavailableDay, tiles, versus: t("core-views.usage.tile.versus", { n: days }), period: dayShown ?? t("core-views.usage.period", { n: days }), series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
 }
 
 export { tr };

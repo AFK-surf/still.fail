@@ -707,7 +707,7 @@ test("a session's summary says what its calls used as the usage counter recorded
   }
 });
 
-test("as the station starts, a summary a station from before kept is kept as it says it now, and devices are told", async () => {
+test("a saved summary is left alone on startup and updated when its usage changes", async () => {
   const r = rig();
   const counter = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes", "cc") }] }) });
   let stop = keepCounted(r.store, r.hub.live, counter);
@@ -732,9 +732,12 @@ test("as the station starts, a summary a station from before kept is kept as it 
       if (c.type === "session") told.push(c.key);
     });
     stop = keepCounted(r.store, r.hub.live, counter);
+    assert.deepEqual(r.store.sessionUsage(key), before, "starting does not rewrite old summaries");
+    assert.equal(told.length, 0, "starting does not tell an unchanged summary");
+    r.store.usageChanged([key]);
     unsubscribe();
-    assert.deepEqual(r.store.sessionUsage(key), now, "kept as this station says it");
-    assert.deepEqual(told, [key], "told, as a device holds the summary from before");
+    assert.deepEqual(r.store.sessionUsage(key), now, "a later usage change updates the summary");
+    assert.deepEqual(told, [key], "the updated summary is told");
     told.length = 0;
     stop();
     const again = r.store.subscribe((c) => {

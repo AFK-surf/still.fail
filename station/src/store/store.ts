@@ -31,7 +31,7 @@ import { installUsageCompactions, usageCompactionsReady } from "./usage-compacti
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 import { installUsageMinutes } from "./usage-minutes.ts";
-import { installUsageDetail } from "./usage-detail.ts";
+import { installIncrementalUsageTotals, installUsageDetail, usageTotalsComplete } from "./usage-detail.ts";
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
@@ -207,7 +207,8 @@ export class Store {
       installUsageCompactions(db);
       addUsageQuarters(db);
       installUsageMinutes(db);
-      installUsageDetail(db);
+      installUsageDetail(db, clock.currentTimeMillisUnsafe());
+      installIncrementalUsageTotals(db);
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);
@@ -467,6 +468,7 @@ export class Store {
 
   /// What a session's calls used as last kept (`setSessionUsage`); null before any.
   sessionUsage(key: string): Json | null {
+    if (!usageTotalsComplete(this.db, key)) return null;
     const r = this.#one("SELECT usage FROM session_usage WHERE session = ?", key);
     return r ? JSON.parse(r.usage) : null;
   }

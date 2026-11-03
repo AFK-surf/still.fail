@@ -12,7 +12,7 @@ import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
 import { archiveEntries } from "../store/archive.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
-import { detailQuery, usageDetailReady, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
+import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
 import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -193,7 +193,10 @@ export function transcriptLengths(s: Store, key: string | null): Map<string, num
 /// null): none for a session that has made no call (or a database no station of this version opened).
 export function sessionUsages(s: Store, key: string | null): Map<string, Json> {
   try {
-    const rows = key !== null ? all(s, "SELECT session, usage FROM session_usage WHERE session = ?", key) : all(s, "SELECT session, usage FROM session_usage");
+    const incremental = s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get() !== undefined;
+    const source = incremental ? "session_usage u JOIN usage_totals_source_sessions c ON c.session = u.session AND c.done = 1" : "session_usage u";
+    const rows = key !== null ? all(s, `SELECT u.session, u.usage FROM ${source} WHERE u.session = ?`, key)
+      : all(s, `SELECT u.session, u.usage FROM ${source}`);
     return new Map(rows.map((r) => [r.session as string, JSON.parse(r.usage as string)]));
   } catch {
     return new Map();
@@ -906,8 +909,9 @@ export type { UsageGroup };
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export { USAGE_DETAIL_PENDING };
 export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
-  if (!usageDetailReady(s.db, viewer)) throw new Error(USAGE_DETAIL_PENDING);
-  const query = detailQuery(from, to, utcOffsetMin, viewer);
+  const generation = usageDetailGeneration(s.db);
+  if (!usageDetailReady(s.db, viewer, generation)) throw new Error(USAGE_DETAIL_PENDING);
+  const query = detailQuery(from, to, utcOffsetMin, viewer, generation, usageDetailScopeBySession(s.db, viewer, generation));
   return query === null ? [] : all(s, query.sql, ...query.args).map(usageGroupOf);
 }
 
@@ -973,9 +977,10 @@ export const USAGE_DAY_HOME = minutesAtDayEdges(QUARTERS_HOME, "1");
 
 /// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
 export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
-  if (viewer === null || viewer.home !== false) {
-    if (one(s, "SELECT done FROM usage_minute_all WHERE id = 1")?.done !== 1) throw new Error(USAGE_MINUTES_PENDING);
-  } else if (one(s, PENDING_MINUTE_SESSION, viewer.workspace)) {
+  // Before the old fill completed, an old session might have no scope row at all. An empty scope is therefore not
+  // proof that this workspace's historical total is complete.
+  if (one(s, "SELECT done FROM usage_minute_all WHERE id = 1")?.done !== 1) throw new Error(USAGE_MINUTES_PENDING);
+  if (viewer !== null && viewer.home === false && one(s, PENDING_MINUTE_SESSION, viewer.workspace)) {
     throw new Error(USAGE_MINUTES_PENDING);
   }
   const aligned = utcOffsetMin % 15n === 0n;
@@ -1048,7 +1053,9 @@ export function usageChatTotals(s: Store, viewer: InWorkspace | null): { places:
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(s: Store): number | null {
-  return one(s, "SELECT first_at FROM usage_span WHERE id = 1").first_at ?? null;
+  const first = one(s, "SELECT first_at FROM usage_span WHERE id = 1").first_at as number | null;
+  const cutover = usageDetailSince(s.db);
+  return cutover === null ? first : Math.max(first ?? cutover, cutover);
 }
 
 /// The tasks other stations' chats ran here since `from` (remote_runs), oldest first: when, and whose session.
