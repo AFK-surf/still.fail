@@ -270,6 +270,9 @@ struct FakeHost {
   live_images : Map[Int, Int]
   /// the words of each shot taken (shot.mbt), in the order they were drawn in it: a test's (Tester::shots)
   shots : Array[Array[String]]
+  /// and each one's size in pixels and what it drew, each instance as a test compares them (Tester::shot_drawn)
+  shot_sizes : Array[(Int, Int)]
+  shot_drawn : Array[Array[String]]
 }
 
 ///|

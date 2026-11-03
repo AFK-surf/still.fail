@@ -773,13 +773,13 @@ pub fn icon_action(@ui.Ctx, String, String, String, disabled? : Bool) -> Bool
 
 pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String) -> Bool
 
-pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double) -> @view.View
+pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String) -> @view.View
 
 pub let icon_button_side : Double
 
 pub let icon_fallback : Int64
 
-pub fn icon_node(@view.View, String, Double, @view.Live[Int64]) -> @view.View
+pub fn icon_node(@view.View, String, Double, @view.Live[Int64], name_now? : () -> String) -> @view.View
 
 pub fn icon_parts(@ui.Ctx, String, Array[Int32], size? : Double, color? : Int64) -> Int32
 
@@ -2050,6 +2050,8 @@ pub fn system_top_room(Double) -> @ui.Space
 pub fn t(String, args? : Array[(String, String)]) -> String
 
 pub fn t_around(String, String, args? : Array[(String, String)]) -> (String, String)
+
+pub fn table_node(@view.View, () -> String, bleed? : Double, tree? : () -> Json?, copy? : Bool, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?) -> Unit
 
 pub let tag_max : @ui.Len
 

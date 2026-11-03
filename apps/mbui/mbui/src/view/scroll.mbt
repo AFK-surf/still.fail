@@ -8,7 +8,9 @@
 // where there is the room, it gives way (to nothing) where what holds it is short of room (a dialog no taller than the
 // window), how far it can go told as it is laid out (View::laid_size_told). Where it is, a function of the time while
 // flung, is the column's own (Scroll), let go with the node. One made as a page's list (Scroll::list) moves as an old
-// view's list does on the platform it is on instead (scroll_list.mbt).
+// view's list does on the platform it is on instead (scroll_list.mbt). One made to scroll across (Scroll::across) is a
+// row that scrolls sideways the same way (an old view's Ctx::sideways): along its width, the wheel and a hold across,
+// its bar along its foot, what holds it asked what goes up or down.
 
 ///|
 /// A fling under way: set out from `x0` at `v0` (points a ms, down the column) at `t0`, at rest at `end_x` at `end_t`;
@@ -57,6 +59,9 @@ pub struct Scroll {
   priv mut tall : () -> Double
   /// the node it scrolls in, while it is (View::scrolls): what it is on by itself said on its timeline
   priv mut host : View?
+  /// it scrolls across, along its width (Scroll::across: a row that scrolls sideways), not up and down: what is said
+  /// down the column above said along the row, its start for its top
+  priv across : Bool
 }
 
 ///|
@@ -71,14 +76,21 @@ pub fn Scroll::new() -> Scroll {
 }
 
 ///|
+/// A row's scroll, at its start: across, as an old view's box scrolled sideways does (ui's Ctx::sideways).
+pub fn Scroll::across() -> Scroll {
+  Scroll::made(false, across=true)
+}
+
+///|
 /// A column's scroll, at its top: as a page's list on the platform it is on (scroll_list.mbt).
 pub fn Scroll::list() -> Scroll {
   Scroll::made(true)
 }
 
 ///|
-fn Scroll::made(as_list : Bool) -> Scroll {
+fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
   {
+    across,
     x: @signals.signal(0.0, same=fn(a, b) { a == b }),
     fling: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     room: fn() { None },
@@ -395,13 +407,18 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
 /// gives way to nothing where what holds it is short of room (View::shrink, View::min_height). A hold that began on
 /// what it holds is its own once it has moved `slop` (the window's points) up or down (View::claims; none: 8, a page's
 /// list's its platform's, list_slop). `bar`: its bar
-/// along its right, as that says (scroll_bar.mbt; none: none).
+/// along its right, as that says (scroll_bar.mbt; none: none). Scrolling across (Scroll::across): a row, what it holds
+/// laid out as wide as it is, given way to nothing across where what holds it is narrower; a hold its own once it moves
+/// across past the slop; its bar along its foot, `bar_in` in from either end (under what it is for, where what it holds
+/// reaches past that: Ctx::sideways's), room under what it holds for it while it can go (its bar never over what it
+/// holds' last line), none while it cannot.
 pub fn View::scrolls(
   self : View,
   s : Scroll,
   build : (View) -> Unit,
   slop? : Double,
   bar? : ScrollBar,
+  bar_in? : Double = 0.0,
 ) -> View {
   guard self.live() is Some(_) else { return self }
   // (a page's list's as its platform's is as it is held: what hosts the tree may say it after it is made)
@@ -412,10 +429,17 @@ pub fn View::scrolls(
     }
   }
   s.host = Some(self)
-  // (how tall it is, as it is asked: what shows past its ends is in its heights)
-  s.tall = fn() { if self.live() is Some(n) { n.flex.height } else { 0.0 } }
+  let across = s.across
+  // (how tall it is, as it is asked: what shows past its ends is in its heights; across, how wide)
+  s.tall = fn() { if self.live() is Some(n) { if across { n.flex.width } else { n.flex.height } } else { 0.0 } }
   let inner : Ref[View?] = Ref(None)
-  self.clips(Is(true)).bounds_input(Is(true)).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  self.clips(Is(true)).bounds_input(Is(true)) |> ignore
+  // (across: a row, what it holds laid out along it as wide as it is; narrower than that where what holds it is)
+  if across {
+    self.row(Is(true)).min_width(Is(Some(0.0))) |> ignore
+  } else {
+    self.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  }
   // (what it holds laid out as tall as it is, whatever room it has: its content's own height, as CSS's overflow scroll
   // has it)
   self.tree.nodes[self.at].flex.style.overflow = @flex.Overflow::Scroll
@@ -425,7 +449,7 @@ pub fn View::scrolls(
     match inner.val {
       Some(held) =>
         match (held.laid_size_told(), self.laid_size_told()) {
-          (Some(h), Some(v)) => Some(h.1 - v.1)
+          (Some(h), Some(v)) => Some(if across { h.0 - v.0 } else { h.1 - v.1 })
           _ => None
         }
       None => None
@@ -434,14 +458,27 @@ pub fn View::scrolls(
   self.box(fn(held) {
     inner.val = Some(held)
     self.tree.nodes[self.at].scroll_held = held.at
+    self.tree.nodes[self.at].scroll_across = across
     held
     .shrink(Is(0.0))
     .offset(By(fn() {
       let t = if s.goes_on() { held.drawn_at() } else { 0.0 }
       // (a page's list's on iOS moved past its end as far as its rubber band shows it)
-      (0.0, -s.where_at(t) + s.past_moved(t))
+      if across {
+        (-s.where_at(t), 0.0)
+      } else {
+        (0.0, -s.where_at(t) + s.past_moved(t))
+      }
     }))
     |> ignore
+    // (across with a bar: room at its foot for it while it can go, as laid out (none while it cannot), its bar never
+    // over what it holds' last line: Ctx::sideways's bar_room, from this layout's told reach, not a frame's before)
+    // (under what it holds, not within: its own room, whatever room what holds it says what it holds has round it)
+    match bar {
+      Some(b) if across =>
+        held.margin(By(fn() { (0.0, 0.0, 0.0, if s.most_now() > 0.5 { b.size + 2.0 * b.inset } else { 0.0 }) })) |> ignore
+      _ => ()
+    }
     build(held)
   })
   |> ignore
@@ -455,7 +492,7 @@ pub fn View::scrolls(
           None => -1.0e9
         }
       })
-      self.scroll_bar(s, b, state)
+      self.scroll_bar(s, b, state, bar_in~)
       s.on_scrolled = fn(t) { state.woke(b, self, t, scrolled=true) }
     }
     None => ()
@@ -470,7 +507,13 @@ pub fn View::scrolls(
     self.fades(By(fn() {
       let x = s.where_at(if s.fling.get() is Some(_) { self.drawn_at() } else { 0.0 })
       let most = s.most_now()
-      (0.0, dclamp(x, 0.0, scroll_soft_most), 0.0, dclamp(most - x, 0.0, scroll_soft_most))
+      let (a, b) = (dclamp(x, 0.0, scroll_soft_most), dclamp(most - x, 0.0, scroll_soft_most))
+      // (across: towards its start and its end)
+      if across {
+        (a, 0.0, b, 0.0)
+      } else {
+        (0.0, a, 0.0, b)
+      }
     }))
     |> ignore
   }
@@ -535,6 +578,12 @@ pub fn View::scrolls(
   self
   // (the wheel up or down more than across, as an old view's box kept to a height takes it: sideways_wheel_moves)
   .on_wheel_moves(fn(w) {
+    // (across: the wheel across more than up or down, as an old view's box scrolled sideways takes it, as far as it
+    // goes that way: sideways_wheel_moves)
+    if across {
+      guard w.dx != 0.0 && w.dx.abs() >= w.dy.abs() else { return false }
+      return s.moved(w.at, w.dx)
+    }
     guard w.dy != 0.0 && w.dy.abs() >= w.dx.abs() else { return false }
     // (a page's list's fling stopped as the wheel comes, what shows past an end going on back as it was)
     // (a wheel's notch eased in, as an old view's list's is: Ctx::ease_list)
@@ -550,15 +599,19 @@ pub fn View::scrolls(
   // it moves up or down past the slop, more than across, the way it can still go: else what holds it is asked)
   .claims(fn(dx, dy) {
     let x = s.at(self.tree)
+    // (across: along the row, what holds it asked what goes up or down)
+    let (along, other) = if across { (dx, dy) } else { (dy, dx) }
     // (a page's list's pulled past its end, where its platform's is)
-    let can = (if dy < 0.0 { x < s.most() } else { x > 0.0 }) ||
+    let can = (if along < 0.0 { x < s.most() } else { x > 0.0 }) ||
       (s.as_list && (self.tree.list_feel)().0 != Desktop)
-    let takes = dy.abs() > slop() && dy.abs() >= dx.abs() && can
+    let takes = along.abs() > slop() && along.abs() >= other.abs() && can
     s.claimed = takes
     takes
   }, scrolls=true)
   // (held, its own terms: what it holds moved as far as the hand, as big as it is drawn)
   .on_drag(fn(d) {
+    // (where the hand is along it, in its own terms and the window's, and how fast: across, along the row)
+    let (hy, hwy, hvy) = if across { (d.x, d.wx, d.vx) } else { (d.y, d.wy, d.vy) }
     match d.kind {
       Down => {
         // (what shows past an end of a page's list caught where it shows: held by the finger from there)
@@ -566,16 +619,16 @@ pub fn View::scrolls(
           s.past_held(d.at)
         }
         s.stopped(d.at) |> ignore
-        s.hand_y = d.y
-        s.hand_wy = d.wy
+        s.hand_y = hy
+        s.hand_wy = hwy
         s.hand_t = d.at
         s.hand_v = 0.0
       }
       Moved => {
         // (taken over: the first move from where it went down past the slop alone, in the window's points, as big
         // in its own terms as it is drawn)
-        let mut dy = d.y - s.hand_y
-        let dw = d.wy - s.hand_wy
+        let mut dy = hy - s.hand_y
+        let dw = hwy - s.hand_wy
         if s.claimed && dw != 0.0 {
           s.claimed = false
           let past = if dw > 0.0 { dmax(dw - slop(), 0.0) } else { dmin(dw + slop(), 0.0) }
@@ -586,15 +639,15 @@ pub fn View::scrolls(
         } else {
           s.moved(d.at, -dy) |> ignore
         }
-        s.hand_y = d.y
-        s.hand_wy = d.wy
+        s.hand_y = hy
+        s.hand_wy = hwy
         s.hand_t = d.at
       }
       // (let go: flung at the finger's speed as of then, by its own events (Drag's `vy`: a pause before it let go, none),
       // no faster than a fling goes in the window's points, then in its own terms)
       Up => {
         let (_, _, sc) = self.tree.placed(self.at)
-        s.hand_v = dclamp(-d.vy, -scroll_most_v, scroll_most_v) / (if sc > 0.0 { sc } else { 1.0 })
+        s.hand_v = dclamp(-hvy, -scroll_most_v, scroll_most_v) / (if sc > 0.0 { sc } else { 1.0 })
         if s.as_list {
           s.let_go(self, d.at)
         } else {
@@ -614,7 +667,8 @@ pub fn View::scrolls(
   // (a part of what it holds brought into sight: its top or its foot to its own, as little as that takes)
   .shows(fn(top, foot) {
     let t = self.logic_at()
-    let vh = self.tree.nodes[self.at].flex.height
+    // (across: its start and its end, as wide as it is)
+    let vh = if across { self.tree.nodes[self.at].flex.width } else { self.tree.nodes[self.at].flex.height }
     let x = s.stopped(t)
     if top < 0.0 {
       s.sent(t, x + top)
@@ -622,12 +676,12 @@ pub fn View::scrolls(
       s.sent(t, x + dmin(top, foot - vh))
     }
     s.at(self.tree) - x
-  })
+  }, across~)
 }
 
 ///|
-/// Whether node `id` scrolls what it holds up and down (View::scrolls) and it can go, as last laid out (Scroll::goes:
-/// what it holds taller than it, by more than half a point, as an old box kept to a height is, ui's scroll_still):
+/// Whether node `id` scrolls what it holds up and down or across (View::scrolls) and it can go that way, as last laid
+/// out (Scroll::goes: what it holds taller than it, or wider where it scrolls across, by more than half a point, as an old box kept to a height is, ui's scroll_still):
 /// what lies in it moves under its top and foot as it scrolls, never in its container's corners for good (ui's corner
 /// rule: a row of a list's as it scrolls).
 pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
@@ -637,7 +691,13 @@ pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
   n.scroll_held >= 0 &&
   n.scroll_held < self.nodes.length() &&
   self.nodes[n.scroll_held].live &&
-  self.nodes[n.scroll_held].flex.height - n.flex.height > 0.5
+  // (the way it scrolls alone: up and down, or across, Scroll::across)
+  (if n.scroll_across {
+    self.nodes[n.scroll_held].flex.width - n.flex.width
+  } else {
+    self.nodes[n.scroll_held].flex.height - n.flex.height
+  }) >
+  0.5
 }
 
 ///|

@@ -254,11 +254,13 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
 
 ///|
 /// What brings a part of what it holds into its sight (Tree::show_in_sight: the focus come to it): `f` given where that
-/// is in its own terms (its top, its foot), answering how far it moved what it holds to (down: a column that scrolls,
-/// View::scrolls), all of it laid out, before it is drawn.
-pub fn View::shows(self : View, f : (Double, Double) -> Double) -> View {
+/// is in its own terms (its top, its foot; `across`, its start, its end), answering how far it moved what it holds to
+/// (down, or `across` along it: a column that scrolls, a row that scrolls sideways, View::scrolls), all of it laid out,
+/// before it is drawn.
+pub fn View::shows(self : View, f : (Double, Double) -> Double, across? : Bool = false) -> View {
   guard self.live() is Some(n) else { return self }
   n.shows = Some(f)
+  n.shows_across = across
   self
 }
 

@@ -370,6 +370,8 @@ struct Node {
   mut drawn_clear : NodeId?
   /// how far in from its right edge the pointer brings its bar out (View::bar_near; 0 none), and whether it does now
   mut bar_near : Double
+  /// whether its bar is along its foot (View::bar_near's `across`: a row that scrolls sideways), not its right
+  mut bar_across : Bool
   /// whether the pointer over it, or over what it holds that takes it not, is over it (View::points): pointed at,
   /// never pressed nor held
   mut points : Bool
@@ -377,6 +379,8 @@ struct Node {
   /// what brings a part of what it holds into its sight (View::shows): given where that is in its own terms (its top,
   /// its foot), how far it moved what it holds to
   mut shows : ((Double, Double) -> Double)?
+  /// whether what it brings into sight it brings across (View::shows' `across`): a row that scrolls sideways
+  mut shows_across : Bool
   /// whether it takes over a hold that began on what it holds, moved so far from where it went down (View::claims)
   mut claims : ((Double, Double) -> Bool)?
   /// where a hold it takes over may have gone down, in its own terms (View::claims' `from`): none, anywhere
@@ -403,6 +407,9 @@ struct Node {
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
   /// far it can go (Scroll's room); -1 for one that does not
   mut scroll_held : Int
+  /// whether what it scrolls it scrolls across (View::scrolls with Scroll::across): which way Tree::scrolls_now asks
+  /// whether it can go
+  mut scroll_across : Bool
   mut focus_shown_cell : @signals.Signal[Bool]?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
@@ -961,9 +968,11 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.bounds_input = false
       n.drawn_clear = None
       n.bar_near = 0.0
+      n.bar_across = false
       n.points = false
       n.bar_near_cell = None
       n.shows = None
+      n.shows_across = false
       n.claims = None
       n.claims_from = None
       n.claims_said = 0
@@ -971,6 +980,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.line_gap = None
       n.claims_scroll = false
       n.scroll_held = -1
+      n.scroll_across = false
       n.focus_shown_cell = None
       n.key_said = 0
       n.wheel_said = 0
@@ -1043,9 +1053,11 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         bounds_input: false,
         drawn_clear: None,
         bar_near: 0.0,
+        bar_across: false,
         points: false,
         bar_near_cell: None,
         shows: None,
+        shows_across: false,
         claims: None,
         claims_from: None,
         claims_said: 0,
@@ -1057,6 +1069,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         shorter: [],
         claims_scroll: false,
         scroll_held: -1,
+        scroll_across: false,
         focus_shown_cell: None,
         on_drag: None,
         fingers: 1,
@@ -4508,11 +4521,13 @@ fn View::let_go(self : View) -> Unit {
   n.size_cell = None
   n.went_cell = None
   n.shows = None
+  n.shows_across = false
   n.claims = None
   n.claims_from = None
   n.bounds_input = false
   n.drawn_clear = None
   n.bar_near = 0.0
+  n.bar_across = false
   n.points = false
   n.bar_near_cell = None
   self.drag_ended()
@@ -5673,22 +5688,32 @@ fn Tree::shown_now(self : Tree) -> Unit {
   for e in due {
     let (id, within) = e
     guard self.alive_id(id) else { continue }
-    let (_, ty, ts) = self.placed(id.at)
+    let (tx, ty, ts) = self.placed(id.at)
     let (a, b) = match within() {
       Some(w) => w
       None => (0.0, self.nodes[id.at].flex.height)
     }
+    // (where it is in the window, down and across: each that holds it moving it one way or the other, View::shows'
+    // `across`)
     let mut y0 = ty + a * ts
     let mut y1 = ty + b * ts
+    let mut x0 = tx
+    let mut x1 = tx + self.nodes[id.at].flex.width * ts
     let mut i = self.nodes[id.at].parent
     while i >= 0 {
       let n = self.nodes[i]
       match n.shows {
         Some(f) => {
-          let (_, vy, vs) = self.placed(i)
-          let moved = @signals.untracked(fn() { f((y0 - vy) / vs, (y1 - vy) / vs) })
-          y0 = y0 - moved * vs
-          y1 = y1 - moved * vs
+          let (vx, vy, vs) = self.placed(i)
+          if n.shows_across {
+            let moved = @signals.untracked(fn() { f((x0 - vx) / vs, (x1 - vx) / vs) })
+            x0 = x0 - moved * vs
+            x1 = x1 - moved * vs
+          } else {
+            let moved = @signals.untracked(fn() { f((y0 - vy) / vs, (y1 - vy) / vs) })
+            y0 = y0 - moved * vs
+            y1 = y1 - moved * vs
+          }
         }
         None => ()
       }
@@ -7137,11 +7162,12 @@ fn Tree::withins_told(self : Tree) -> Bool {
 /// Tree::input_bounds), if the pointer is along its edge; none where that one's is not (as an old view's bar_near_at
 /// takes the innermost box that scrolls there). Told as the pointer moves, as the frame places what changed, and as
 /// what is drawn or found there changes otherwise.
-pub fn View::bar_near(self : View, near : Double) -> Bool {
+pub fn View::bar_near(self : View, near : Double, across? : Bool = false) -> Bool {
   guard self.live() is Some(n) else { return false }
   // (said anew, none where it has no bar now (nothing to scroll: 0): which one the pointer is along told anew too)
-  if n.bar_near != near {
+  if n.bar_near != near || n.bar_across != across {
     n.bar_near = near
+    n.bar_across = across
     self.tree.bars_due = true
     self.tree.marked()
   }
@@ -7185,9 +7211,14 @@ fn Tree::bar_near_at(self : Tree) -> Int? {
   let i = top.val
   if i >= 0 {
     let n = self.nodes[i]
-    let (x, _, sc) = self.placed(i)
+    let (x, y, sc) = self.placed(i)
+    // (how near its edge in the window's points, the hand's, whatever it is drawn as big as: its right, or its foot
+    // where its bar is along that, View::bar_near's `across`)
+    if n.bar_across {
+      let foot = y + n.flex.height * sc
+      return if py >= foot - n.bar_near && py < foot { Some(i) } else { None }
+    }
     let right = x + n.flex.width * sc
-    // (how near its edge in the window's points, the hand's, whatever it is drawn as big as)
     return if px >= right - n.bar_near && px < right { Some(i) } else { None }
   }
   None

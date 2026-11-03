@@ -75,6 +75,56 @@ pub fn Ctx::shot(self : Ctx, key : String, w : Double, body : () -> Unit) -> Uni
 }
 
 ///|
+/// The pictures asked of what is drawn apart from any view's build (take_picture): each shot's key, how wide it is
+/// built, what builds it, built while it is being taken, let go as it is told.
+// kept across runs: put back as a run begins (on_reset)
+let pictures_asked : Map[Int, (String, Double, (Ctx) -> Unit)] = {}
+
+///|
+fn init {
+  on_reset(fn() { pictures_asked.clear() })
+}
+
+///|
+/// A picture of what `body` builds (as an old view builds it: what a shot draws is the old drawing's, whoever asks),
+/// `w` wide and as tall as it is, taken once from now as a shot is (Ctx::take_shot: built apart, never seen, at `scale`
+/// pixels a point, its bands and the pictures in it waited for as a shot's), `done` told its PNG: asked at a cause (a
+/// press) by what has no build of its own to say it in each frame (a node of the window's tree), `body` built in the
+/// frames it is being taken alone. Taken again under the same `key` while it is, it begins again.
+pub fn take_picture(
+  key : String,
+  w : Double,
+  body : (Ctx) -> Unit,
+  done : (Bytes?) -> Unit,
+  scale? : Double = 0.0,
+) -> Unit {
+  let id = shot_id(key)
+  pictures_asked[id] = (key, w, body)
+  g().take_shot(
+    key,
+    fn(png) {
+      pictures_asked.remove(id)
+      done(png)
+    },
+    scale~,
+  )
+}
+
+///|
+/// The pictures asked (take_picture) built in this frame, each as its shot (Ctx::shot), while it is being taken: in the
+/// theme the window's tree is drawn in (tree_theme), what asks them its nodes, not in what the frame's build left.
+fn Ctx::pictures_built(self : Ctx) -> Unit {
+  if pictures_asked.is_empty() {
+    return
+  }
+  let theme = @signals.untracked(tree_theme)
+  for _, p in pictures_asked {
+    let (key, w, body) = p
+    self.with_theme(theme, fn() { self.shot(key, w, fn() { body(self) }) })
+  }
+}
+
+///|
 /// Takes the shot `key` (Ctx::shot), built from now: `done` told its PNG once it is taken, None where this host cannot
 /// read what it draws back. `scale`: its pixels a point, the same on any screen (a picture to share as sharp from a
 /// screen of one pixel a point as from one of three); the window's where not said. Taken again while it is being
@@ -201,7 +251,13 @@ fn Ctx::shots_after_present(self : Ctx) -> Unit {
     }
     let n = self.nodes[node]
     match fake.val {
-      Some(f) => f.shots.push(self.shot_words(node))
+      Some(f) => {
+        f.shots.push(self.shot_words(node))
+        // (how big a picture it makes and what it drew: a test's, Tester::shot_drawn)
+        let sc = if s.scale > 0.0 { s.scale } else { self.scale }
+        f.shot_sizes.push(((n.fw * sc).round().to_int(), (n.fh * sc).round().to_int()))
+        f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, n.x, n.y))
+      }
       None => ()
     }
     ended.push((id, self.shot_png(s, n)))
@@ -324,4 +380,34 @@ fn Ctx::shot_words(self : Ctx, i : Int) -> Array[String] {
 /// The words of each shot taken (Ctx::take_shot), oldest first: what each drew, in the order it was painted.
 pub fn Tester::shots(self : Tester) -> Array[Array[String]] {
   self.fake.shots
+}
+
+///|
+/// Each instance a shot drew (`inst`, `n` of them), from its root's corner (`x`, `y`), as a test compares them: its
+/// numbers to a hundredth, a glyph's place in its atlas left out; in one order.
+fn shot_drawn_of(inst : FixedArray[Double], n : Int, x : Double, y : Double) -> Array[String] {
+  let out = Array::makei(n, fn(k) {
+    let b = k * inst_size
+    Array::makei(inst_size, fn(j) {
+      let v = inst[b + j]
+      if inst[b + 5] == 1.0 && (j == 12 || j == 13) {
+        "-"
+      } else if j == 0 {
+        ((v - x) * 100.0).round().to_string()
+      } else if j == 1 {
+        ((v - y) * 100.0).round().to_string()
+      } else {
+        (v * 100.0).round().to_string()
+      }
+    }).join(",")
+  })
+  out.sort()
+  out
+}
+
+///|
+/// Each shot taken (Ctx::take_shot), oldest first: its picture's size in pixels and each instance it drew, from its
+/// root's corner (shot_drawn_of).
+pub fn Tester::shot_drawn(self : Tester) -> Array[((Int, Int), Array[String])] {
+  Array::makei(self.fake.shot_sizes.length(), fn(i) { (self.fake.shot_sizes[i], self.fake.shot_drawn[i]) })
 }

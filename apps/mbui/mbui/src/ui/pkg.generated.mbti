@@ -601,6 +601,8 @@ pub fn system_tabletop() -> (Double, Double)?
 
 pub fn take_drop(over? : (Double, Double) -> Bool) -> (Double, Double, Pick)?
 
+pub fn take_picture(String, Double, (Ctx) -> Unit, (Bytes?) -> Unit, scale? : Double) -> Unit
+
 pub fn takes_drops() -> Bool
 
 pub let tap_indication_ms : Double
@@ -2376,6 +2378,7 @@ pub struct Tester {
 }
 pub fn Tester::a11y_said(Self) -> String
 pub fn Tester::act(Self, @view.Role, @view.Action, label? : String) -> Unit raise
+pub fn Tester::act_on(Self, SemNode, @view.Action) -> Unit raise
 pub fn Tester::adaptive_glyphs(Self) -> Int32
 pub fn Tester::add_image(Self, String, Int32, Int32) -> Unit
 pub fn Tester::add_pixels(Self, String, Int32, Int32, FixedArray[Byte]) -> Unit
@@ -2625,6 +2628,7 @@ pub fn Tester::shape_boxes(Self) -> Array[(String, Double, Double, Double, Doubl
 pub fn Tester::shape_cover(Self, Double, Double) -> Double
 pub fn Tester::share_in(Self, String, title? : String, files? : Array[(String, Bytes)]) -> Unit
 pub fn Tester::shared_out(Self) -> Array[(String, String, String, Bytes)]
+pub fn Tester::shot_drawn(Self) -> Array[((Int32, Int32), Array[String])]
 pub fn Tester::shots(Self) -> Array[Array[String]]
 pub fn Tester::shown_of(Self, String) -> (Double, Double, Double, Double)?
 pub fn Tester::site_no_answer(Self, Int32, Int32) -> Unit
