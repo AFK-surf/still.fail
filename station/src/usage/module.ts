@@ -116,6 +116,9 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
   let ready = false;
   let moves = true;
   const scopes = new Set<string>();
+  // A page cannot use a total until all its pending buckets are accounted. Remember only the earliest changed time
+  // for each requested scope, so intermediate batches do not send it back to read an unavailable total again.
+  const totals = new Map<string, { from: number | undefined }>();
   let held: { scope?: string } | null = null;
   let preferMoves = false;
   let retryMs = 250;
@@ -163,8 +166,20 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
         retry();
         return;
       }
-      const sessions = answer.session ? [answer.session] : answer.sessions;
-      if (sessions?.length) store.usageChanged(sessions, answer.from, true);
+      if (answer.session) store.usageChanged([answer.session], undefined, true);
+      if (work.scope !== undefined) {
+        if (answer.sessions?.length) {
+          const prior = totals.get(work.scope);
+          const from = prior === undefined ? answer.from : prior.from === undefined || answer.from === undefined
+            ? undefined : Math.min(prior.from, answer.from);
+          totals.set(work.scope, { from });
+        }
+        const complete = answer.done ? totals.get(work.scope) : undefined;
+        if (complete !== undefined) {
+          totals.delete(work.scope);
+          store.usageChanged([], complete.from, true);
+        }
+      }
       retryMs = 250;
       dispatch();
     });
