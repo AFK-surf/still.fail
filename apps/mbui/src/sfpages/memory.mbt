@@ -178,19 +178,6 @@ fn memory_body_node(
       )
     })
   }
-  // (what a section says where it has nothing)
-  let none = fn(p : @view.View, words : () -> String) {
-    p.box(fn(n) {
-      match @sf.look_node(n) {
-        Narrow => {
-          n.padding(Is((12.0, 0.0, 12.0, 8.0))) |> ignore
-          @sf.words_node(n, words, fn() { mem_narrow_none_words }) |> ignore
-        }
-        Wide => @sf.words_node(n, words, fn() { desk_muted }) |> ignore
-      }
-    })
-    |> ignore
-  }
   @sf.section_node(
     v,
     fn() { @sf.t("web-main.memory.global") },
@@ -198,7 +185,7 @@ fn memory_body_node(
     fn(s) {
       s.pick(fn() { sections_of(m()).length() == 0 }, fn(p, empty) {
         if empty {
-          none(p, fn() { @sf.t("web-main.memory.empty") })
+          @sf.section_none_node(p, fn() { @sf.t("web-main.memory.empty") })
         } else {
           @sf.group_node(p, fn(g) {
             g.each(fn() { sections_of(m()).mapi(fn(i, x) { (i, x) }) }, fn(x) { x.0.to_string() }, fn(row, x) {
@@ -217,7 +204,7 @@ fn memory_body_node(
   ) {
     s.pick(fn() { skills("project").length() == 0 }, fn(p, empty) {
       if empty {
-        none(p, fn() { @sf.t("web-main.memory.projects.none") })
+        @sf.section_none_node(p, fn() { @sf.t("web-main.memory.projects.none") })
       } else {
         @sf.group_node(p, fn(g) { skill_rows(g, fn() { skills("project") }) })
       }
@@ -271,21 +258,11 @@ fn memory_row_node(
     value~,
     note=sub,
     note_cut=true,
-    title_after=fn(a) { @sf.words_node(a, tag, fn() { mem_tag }) |> ignore },
+    title_after=fn(a) { @sf.row_tag_node(a, tag) },
     title_after_shown=fn() { tag() != "" },
     folds?,
   )
 }
-
-///|
-/// What a narrow page's section says where it has nothing (mMemoryNote: the meta's size, muted)
-// kept across runs: a value (no field of it changes)
-let mem_narrow_none_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
-
-///|
-/// (memoryTag: the meta's size, subtle)
-// kept across runs: a value (no field of it changes)
-let mem_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
 /// A station's memory made up, for what is shown while it is read (memory_body_node in its bones): a few parts of the

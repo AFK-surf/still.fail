@@ -1761,6 +1761,8 @@ pub let row_radius : @ui.Radius
 
 pub fn row_ripple(@ui.Ctx, Int32) -> Unit
 
+pub fn row_tag_node(@view.View, () -> String) -> Unit
+
 pub let row_top_in_y : Double
 
 pub fn rows_head(@ui.Ctx, () -> Unit, first? : Bool) -> Unit
@@ -1786,6 +1788,8 @@ pub let secondary : @ui.TextStyle
 pub fn section(@ui.Ctx, String, () -> Unit, heads? : Bool, note? : String, actions? : () -> Unit, title_after? : () -> Unit) -> Unit
 
 pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String) -> Unit
+
+pub fn section_none_node(@view.View, () -> String) -> Unit
 
 pub let section_note_gap : Double
 

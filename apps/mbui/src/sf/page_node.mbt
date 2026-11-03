@@ -422,6 +422,17 @@ pub(all) enum RowLead {
 }
 
 ///|
+/// What a row says after its title of whose or what it is (a tag: link_row_node's `title_after`), `words` as it says
+/// it now: the meta's size, subtle, on one line (memoryTag).
+pub fn row_tag_node(parent : @view.View, words : () -> String) -> Unit {
+  words_node(parent, words, fn() { row_tag }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
+
+///|
 /// A row on a group's card that goes somewhere (link_row's, narrow, in a card): `lead` before its title (`strong`
 /// where it names who or what it is), what it says at its end (`value`, in red where `value_bad`, a red dot before it
 /// where `value_dot`) and a chevron (none where not `chevron`; an arrow out where it goes `out` of the app); `note` under

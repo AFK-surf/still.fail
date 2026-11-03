@@ -203,6 +203,30 @@ fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit) 
 }
 
 ///|
+/// What a section says in place of what it holds where it has none, `words` as it says it now: narrow, 12 from the
+/// page's sides, none over and 8 under, the meta's muted as wide as the page (mMemoryNote); wide, as it is, the UI's
+/// muted.
+pub fn section_none_node(parent : @view.View, words : () -> String) -> Unit {
+  parent.box(fn(n) {
+    match look_node(n) {
+      Narrow => {
+        n.padding(Is((section_none_x, 0.0, section_none_x, section_none_foot))) |> ignore
+        words_node(n, words, fn() { said_narrow }) |> ignore
+      }
+      Wide => words_node(n, words, fn() { desk_muted }) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// section_none_node's room, narrow: from the page's sides, and under it.
+let section_none_x : Double = 12.0
+
+///|
+let section_none_foot : Double = 8.0
+
+///|
 /// A titled block of a page made once (section's): narrow, a heading over what it holds where it `heads` (none where
 /// not: what it holds alone, as the web's mobile pages leave a group's title out), what it holds said under it
 /// (`note`); wide, wide_section's whatever it `heads` (its title, 14 on 22, 600; `note` under it, the meta's muted, 3
