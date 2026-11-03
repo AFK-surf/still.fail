@@ -258,7 +258,7 @@ export type StoreChange =
   | { type: "chatMark"; thread: number | null; session: string; archive?: { suggested?: number | null; verdict?: Json }; share?: { to: { workspace: string; name: string }[]; write: boolean }; opened?: Json }
   /// Model calls were recorded (store/usage.ts), of these sessions; `from`, when the earliest of them was made (ms):
   /// what a page holding the usage reads again of it, from that day on.
-  | { type: "usage"; sessions: string[]; from?: number }
+  | { type: "usage"; sessions: string[]; from?: number; statisticsOnly?: boolean }
   /// A session went on in another runtime session, or in none (its context cleared): where its context stands changed.
   | { type: "conversation"; key: string };
 

@@ -2216,9 +2216,9 @@ export class Store {
     return usageCompactionsReady(this.db);
   }
 
-  /// Tells whoever follows the store that calls of `sessions` were recorded, the earliest made at `from` (ms).
-  usageChanged(sessions: string[], from?: number): void {
-    this.#send([{ type: "usage", sessions, ...(from !== undefined ? { from } : {}) }]);
+  /// Tell followers about new calls or completed statistics. The latter do not change a session's saved usage.
+  usageChanged(sessions: string[], from?: number, statisticsOnly = false): void {
+    this.#send([{ type: "usage", sessions, ...(from !== undefined ? { from } : {}), ...(statisticsOnly ? { statisticsOnly: true } : {}) }]);
   }
 
   /// Sessions whose transcripts may have grown since `since`: a turn running, or ended since then.

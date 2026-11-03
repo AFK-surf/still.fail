@@ -29,6 +29,7 @@ export function keepUsage(store: StationStore, key: string, quiet = false): void
 export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCounter): () => void {
   live.countWith({ of: (key) => store.sessionUsage(key), ask: (key) => counter.soon(key) });
   return store.subscribe((change) => {
+    if (change.type === "usage" && change.statisticsOnly) return;
     // A session gone on in another conversation (its context cleared, as 换新上下文 does): its context is that one's.
     const sessions = change.type === "usage" ? change.sessions : change.type === "conversation" ? [change.key] : null;
     if (sessions === null) return;
@@ -144,7 +145,7 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
       const sessions = answer.session ? [answer.session] : answer.sessions;
       if (sessions?.length) {
         reporting = true;
-        try { store.usageChanged(sessions, answer.from); } finally { reporting = false; }
+        try { store.usageChanged(sessions, answer.from, true); } finally { reporting = false; }
       }
       if (answer.idle) {
         outstanding = false;
