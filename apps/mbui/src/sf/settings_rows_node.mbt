@@ -4,7 +4,7 @@
 ///|
 /// How something stands, at a glance (status_dot's, as a node): a dot 7 round, online the online green, busy amber,
 /// error red, waiting the muted ink, else (offline) a ring 1.5 in it; `state` as it is now.
-pub fn status_dot_node(parent : @view.View, state : () -> String) -> Unit {
+pub fn state_dot_node(parent : @view.View, state : () -> String) -> Unit {
   let look = fn() {
     let p = theme().p
     match state() {
@@ -51,7 +51,7 @@ pub fn station_lead(online : () -> Bool, emoji : () -> String, icon : () -> Stri
     }))
     |> ignore
     if look_node(l) is Wide {
-      status_dot_node(l, fn() { if online() { "online" } else { "offline" } })
+      state_dot_node(l, fn() { if online() { "online" } else { "offline" } })
     }
     l.show(fn() { has_station_mark(emoji(), icon()) }, fn(m) {
       station_mark_node(m, emoji, icon, row_mark, fn() { theme().p.text }, stint)
