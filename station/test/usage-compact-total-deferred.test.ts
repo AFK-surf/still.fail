@@ -19,7 +19,7 @@ test("recording calls does not rewrite the workspace total in every transaction"
     const owner = { turn: null, thread: null, person: "p", profile: "cc" };
     const call = (id: string, at: number) => ({ id, at, model: "m", subagent: true, fast: false, input: 1,
       cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
-    store.db.setAuthorizer((action, name) => name === "usage_compact_total" &&
+    store.db.setAuthorizer((action, name) => ["usage_compact_total", "usage_compact_total_tree"].includes(name ?? "") &&
       [constants.SQLITE_INSERT, constants.SQLITE_UPDATE, constants.SQLITE_DELETE].includes(action) ? constants.SQLITE_DENY : constants.SQLITE_OK);
     try {
       for (let i = 0; i < 8; i++) store.recordUsage("/a", { session: "a", offset: i + 1, model: "m" }, "claude", [[call(`call-${i}`, Math.floor(i / 3) * 60_000), owner]]);

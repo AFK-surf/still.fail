@@ -16,6 +16,45 @@ function account(store: Store): void {
   assert.fail("compact totals did not finish in bounded batches");
 }
 
+test("a bounded lifetime total does not read future or unrelated minute buckets", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["a", "A"], ["b", "B"], ["h", null]] as const) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws,
+        createdAt: 0, lastActiveAt: 0 });
+    }
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const rows = [
+      ...[-65_537, -257, -256, -1, 0, 1, 255, 256, 65_536].map((minute, i) => ({ session: "a", minute, input: i + 1 })),
+      ...Array.from({ length: 40 }, (_, i) => ({ session: "a", minute: 100_000 + i * 257, input: 1 })),
+      { session: "b", minute: 0, input: 100 },
+      { session: "h", minute: -1, input: 10 },
+    ];
+    for (const [i, row] of rows.entries()) {
+      const call = { id: `c-${i}`, at: row.minute * 60_000, model: "m", subagent: true, fast: false,
+        input: row.input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+      store.recordUsage(`/${row.session}`, { session: row.session, offset: i + 1, model: "m" }, "claude", [[call, owner]]);
+    }
+    account(store);
+    // Readiness may check scope and pending, but the answer must not enumerate minute buckets on either side of the cutoff.
+    const denied = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
+    store.db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && denied.has(column ?? "")
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try {
+      for (const end of [-65_538, -65_537, -256, 0, 1, 256, 65_537, 100_100, 1_000_000]) {
+        for (const [viewer, sessions] of [[a, ["a"]], [b, ["b"]], [home, ["a", "h"]], [null, ["a", "b", "h"]]] as const) {
+          const visible = rows.filter((row) => (sessions as readonly string[]).includes(row.session) && row.minute < end);
+          assert.deepEqual(compact.compactTotal(store.db, viewer, BigInt(end)), {
+            calls: visible.length, tokens: visible.reduce((sum, row) => sum + row.input + 1, 0),
+          }, `cutoff ${end} for ${viewer?.workspace ?? "all"}`);
+        }
+      }
+    } finally { store.db.setAuthorizer(null); }
+  } finally { store.close(); }
+});
+
 test("a year's usage view reads only its requested days but keeps the all-time total", () => {
   const store = Store.open(":memory:");
   try {
@@ -108,6 +147,8 @@ for (const recursive of [false, true]) test(`compact totals follow changes and w
     assert.equal(compact.compactTotal(store.db, a), null);
     account(store);
     assert.deepEqual(compact.compactTotal(store.db, a), { calls: 1, tokens: 24 });
+    assert.deepEqual(compact.compactTotal(store.db, a, 1n), { calls: 0, tokens: 0 });
+    assert.deepEqual(compact.compactTotal(store.db, a, 2n), { calls: 1, tokens: 24 });
 
     store.db.exec("UPDATE sessions SET ws = 'B' WHERE key = 'a'");
     assert.equal(compact.compactTotal(store.db, a), null, "a moving scope is never shown with stale ownership");
@@ -118,6 +159,8 @@ for (const recursive of [false, true]) test(`compact totals follow changes and w
     assert.deepEqual(compact.compactTotal(store.db, a), { calls: 0, tokens: 0 });
     assert.deepEqual(compact.compactTotal(store.db, b), { calls: 2, tokens: 54 });
     assert.deepEqual(compact.compactTotal(store.db, home), { calls: 1, tokens: 40 });
+    assert.deepEqual(compact.compactTotal(store.db, a, 2n), { calls: 0, tokens: 0 });
+    assert.deepEqual(compact.compactTotal(store.db, b, 2n), { calls: 2, tokens: 54 });
 
     // A previous station omits the compact marker but can still insert and grow its response.
     const oldWriter = store.db.prepare(`INSERT INTO usage (id, at, session, person, profile, runtime, model, subagent,
