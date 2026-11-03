@@ -272,3 +272,38 @@ test "Duo: 发送批准请求 pressed on the waiting page is taken, the system's
   assert_true(handed())
   assert_true(calls.contains("lock.pair"), msg="\{calls}")
 }
+
+///|
+/// One of the system's bars' floating controls (a native button at a box of the app's: rail_native.mbt
+/// native_workspace_placed) by its id: where it is.
+fn floating_at(t : @ui.Tester, id : String) -> (Double, Double, Double, Double)? raise {
+  guard @json.parse(t.nav_said()) is Object(bar) else { fail("no bar") }
+  guard bar.get("floating") is Some(Array(items)) else { return None }
+  for i in items {
+    let f = Some(i)
+    if text(field(f, "item"), "id") == id {
+      return Some((number(f, "x"), number(f, "y"), number(f, "w"), number(f, "h")))
+    }
+  }
+  None
+}
+
+///|
+test "Duo: while the device waits in the lock the workspace's button is in the system's glass over the waiting page (the sidebar not shown), and another workspace chosen from it is the one in view" {
+  new_run()
+  let src = fixture("lock-waiting")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=669.0, h=951.0, platform=1, nav_able=true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":82,\"bottom\":34,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("等待批准此设备") is Some(_))
+  guard floating_at(t, "workspace-switch") is Some((x, y, w, h)) else { fail("no workspace-switch in the bars: \{t.nav_said()}") }
+  // under the status bar, in from the left, over the page's words
+  let (_, ty, _, _) = t.rect_of("等待批准此设备").unwrap()
+  assert_true(y >= 82.0 && x > 0.0 && w > 0.0 && h > 0.0 && y + h <= ty, msg="\{x} \{y} \{w} \{h} over the title at \{ty}")
+  t.post(@hostapi.system_channel, "{\"nav\":\"workspace-switch\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sf.presenting())
+  t.tap_text("个人")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfbase.workspace_in_view(src).0.map(fn(w) { w.id }), Some("ws2"))
+}

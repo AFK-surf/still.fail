@@ -113,6 +113,28 @@ fn pane_gate_built(c : @ui.Ctx, src : Source) -> Unit {
   c.box(style=frame_gate.then(@ui.style(w=Fixed(c.width), h=Fixed(c.height))), fn() {
     let core = settings_core(src, w)
     @sfpages.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+    // (the workspace's button over the page where the system's tabs are the rail: gate_heading)
+    if @sf.native_on() {
+      c.layer(fn() { gate_heading(c, src, w) }) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The workspace's button (its icon and name in the system's glass: chats.mbt workspace_heading, the bars'
+/// workspace-switch) over the top of the page that waits, where the sidebar's head would have it: the sidebar is not
+/// shown while the device waits, and where the rail's places are the system's tabs those hold no workspaces, so with
+/// nothing to switch with a person was held in the workspace until a trusted device approved this one (the user,
+/// 2026-11-03; the web's SecurityWaiting keeps its WorkspaceSwitcher over the page, cloud/workspace.tsx Bare). The
+/// rail has the workspaces where it is the app's own, the narrow frame's Home bar its switch (sfapp lock_gate).
+fn gate_heading(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let list = @sf.theme().chat_list
+  let inset = list.band_in + list.heading_in
+  let top = @ui.system_bars().top + side_top_web + band_new_top
+  let width = dmin(dmax(side_min, wide.side_w.get()), c.width - @sf.native_clear() - 2.0 * inset)
+  c.box(style=@ui.style(w=Fixed(width), h=Fixed(@sf.band_row_h())), left=inset, top=top, fn() {
+    workspace_heading(c, src, w)
   })
   |> ignore
 }
