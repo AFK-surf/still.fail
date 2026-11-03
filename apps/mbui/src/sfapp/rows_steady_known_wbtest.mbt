@@ -10,7 +10,7 @@ fn init {
     ("src/sfapp/desk_service_wbtest.mbt", 1),
     ("src/sfapp/drive_wbtest.mbt", 1),
     ("src/sfapp/settings_wbtest.mbt", 1),
-    ("src/sfapp/tape.mbt", 2),
+    ("src/sfapp/tape.mbt", 1),
     ("src/sfapp/wide_wbtest.mbt", 1),
   ])
 }
