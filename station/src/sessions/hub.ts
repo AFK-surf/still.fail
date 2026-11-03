@@ -156,6 +156,9 @@ export class Hub {
   /// Stops following the store's sessions starting and stopping (live.ts `running`).
   private unlistenRunning: () => void = () => {};
   readonly actors = new Map<string, SessionActor>();
+  /// Installed by the agents' side: older stores finish indexing active keys without holding the station thread.
+  waitForWorkspaceActivity: (() => Promise<boolean>) | null = null;
+  private awaitingWorkspaceActivity = new Set<string>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
   /// Fibers of the hub's own (title waits, archive reviews): interrupted at shutdown.
@@ -306,9 +309,30 @@ export class Hub {
 
   /// The station is in a workspace again: its sessions' cut-off turns resume, and what waited goes on.
   backIn(ws: string) {
-    for (const row of this.store.listSessions().filter((s) => s.ws === ws)) {
-      if (row.running && this.online(row)) void this.actor(row).recover();
-      else if (this.store.hasPending(row.key) && this.online(row)) void this.actor(row).kick();
+    let rows = this.store.returningSessionsIn(ws);
+    if (rows === null && this.waitForWorkspaceActivity !== null) {
+      if (!this.awaitingWorkspaceActivity.has(ws)) {
+        this.awaitingWorkspaceActivity.add(ws);
+        void this.waitForWorkspaceActivity().then((ready) => {
+          this.awaitingWorkspaceActivity.delete(ws);
+          if (ready && this.workspaces().includes(ws)) this.backIn(ws);
+        }).catch((error) => {
+          this.awaitingWorkspaceActivity.delete(ws);
+          log.warn("hub", "could not find a rejoined workspace's active sessions", { error: (error as Error).message });
+        });
+      }
+      return;
+    }
+    // A standalone hub without the agents' worker can still open an older store.
+    if (rows === null) {
+      const keys = new Set([...this.store.runningSessions().map((row) => row.key), ...this.store.sessionsWithPending()]);
+      rows = [...keys].map((key) => this.store.getSession(key)).filter((row): row is SessionRow =>
+        row !== null && row.ws === ws && (row.running || this.store.hasPending(row.key))).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    }
+    for (const row of rows) {
+      if (!this.online(row)) continue;
+      if (row.running) void this.actor(row).recover();
+      else void this.actor(row).kick();
     }
   }
 
