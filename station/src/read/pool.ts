@@ -12,6 +12,8 @@ import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
+import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
+import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
 import { REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
@@ -108,6 +110,7 @@ export class Readers {
   private next = 0;
   private closed = false;
   private minutes: MinuteReader | null = null;
+  private outflowChats: OutflowChatIndex | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -215,6 +218,7 @@ export class Readers {
   read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false, signal }: { told?: boolean; background?: boolean; signal?: AbortSignal } = {}): Promise<string> {
     if (op === "usage") return this.usageRead(args, lang, told, signal);
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
+    if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
     return this.enqueue(op, args, lang, told, op === CHECKPOINT, background || filling(op, args), signal);
   }
 
@@ -273,6 +277,21 @@ export class Readers {
         if (!(error instanceof HttpError) || error.message !== USAGE_DETAIL_PENDING) throw error;
         this.startUsageIndex();
         await this.covered(this.minutes!.readyDetail(viewer), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private async outflowChatsRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+    const ws = (args as { ws?: InWorkspace } | null)?.ws;
+    const viewer: InWorkspace = ws !== null && typeof ws === "object" && typeof ws.workspace === "string"
+      ? { workspace: ws.workspace, home: ws.home === true } : { workspace: "\u0000home", home: true };
+    while (!this.closed) {
+      try { return await this.enqueue("outflowChats", args, lang, told, false, false, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== OUTFLOW_CHATS_PENDING) throw error;
+        this.outflowChats ??= new OutflowChatIndex(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.outflowChats.ready(viewer, signal), signal);
       }
     }
     throw new HttpError(502, "station stopping");
@@ -395,6 +414,7 @@ export class Readers {
   close() {
     this.closed = true;
     if (this.minutes !== null) void this.minutes.close();
+    if (this.outflowChats !== null) void this.outflowChats.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
