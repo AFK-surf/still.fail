@@ -1183,10 +1183,13 @@ test "一台 station 的记忆 made once, its own skills' row pressed: folded op
       t.tap_text(@sf.t("web-main.memory.builtin"))
       // (its press's ripple gone: an old view's drawn where the row was as it went down, a node's where it is)
       t.run_for(@motion.ripple_tap_ms)
+      // (the pointer gone from the window: nothing lit by it, open, nor as the pages go and come; a page come back to
+      // under a still pointer: still_pointer_push_wbtest)
+      t.leave()
+      t.run_for(@ui.move_most_ms)
       let open = (instances_sorted(t), words_where(t))
       let said = t.semantics().filter(fn(n) { n.label == @sf.t("web-main.memory.builtin") }).map(fn(n) { n.expanded })
-      // (back to 记忆, and in again: the pointer gone from the window first, nothing under it as the pages go)
-      t.leave()
+      // (back to 记忆, and in again)
       app.nav.pop() |> ignore
       t.run_for(@ui.move_most_ms)
       app.nav.push(Setting(@settings.Route::Memory("ws1/st1")))
