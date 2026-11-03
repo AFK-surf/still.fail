@@ -86,6 +86,16 @@ else
 fi
 
 sha() { shasum -a 256 "$1" | awk '{print $1}'; }
+wasm_sha=''
+host_sha=''
+runner_sha=''
+compact_sha=''
+if [ -f "$(dirname "$exe")/scene.wasm" ]; then
+  wasm_sha=$(sha "$(dirname "$exe")/scene.wasm")
+  host_sha=$(sha "$(dirname "$exe")/native.node")
+  runner_sha=$(sha "$(dirname "$exe")/run.mjs")
+  compact_sha=$(sha "$(dirname "$exe")/compact.mjs")
+fi
 last_sha=''
 text_sha=''
 if [ "$kind" = film ]; then
@@ -102,6 +112,7 @@ fi
 jq -n --rawfile drive "$work/drive" --rawfile prepare "$work/prepare" \
   --arg kind "$kind" --arg app "$app" --arg revision "$revision" --arg dirty "$dirty" --arg runtime_key "$runtime_key" \
   --arg exe_sha "$(sha "$exe")" --arg output_sha "$(sha "$result")" --arg last_sha "$last_sha" --arg text_sha "$text_sha" \
+  --arg wasm_sha "$wasm_sha" --arg host_sha "$host_sha" --arg runner_sha "$runner_sha" --arg compact_sha "$compact_sha" \
   --arg drive_path "$drive" --arg drive_sha "$(sha "$work/drive")" \
   --arg prepare_path "$prepare" --arg prepare_sha "$(sha "$work/prepare")" \
   --arg made "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" --arg os "$os" --arg arch "$(uname -m)" \
@@ -118,7 +129,8 @@ jq -n --rawfile drive "$work/drive" --rawfile prepare "$work/prepare" \
   --arg failed_why "${MBUI_FAILED_WHY:-}" --arg window "${MBUI_WINDOW:-}" --arg said "${MBUI_SAID:-}" \
   --arg core_ms "${MBUI_CORE_MS:-}" --arg update "${MBUI_UPDATE:-}" --arg updates_ms "${MBUI_UPDATES_MS:-}" \
   --arg autofill "${MBUI_FILM_AUTOFILL:-}" --argjson extra "${MBUI_MEDIA_RECORD:-null}" \
-  '{version: 1, kind: $kind, made_utc: $made, source: {app: $app, revision: $revision, dirty: $dirty, runtime_key: $runtime_key, executable_sha256: $exe_sha},
+  '{version: 1, kind: $kind, made_utc: $made, source: ({app: $app, revision: $revision, dirty: $dirty, runtime_key: $runtime_key, executable_sha256: $exe_sha} +
+    (if $wasm_sha == "" then {} else {wasm_sha256: $wasm_sha, host_sha256: $host_sha, runner_sha256: $runner_sha, compact_sha256: $compact_sha} end)),
     host: {os: $os, architecture: $arch}, output_sha256: $output_sha,
     last_frame_sha256: $last_sha, text_record_sha256: $text_sha,
     drive: {path: $drive_path, sha256: $drive_sha, text: $drive},

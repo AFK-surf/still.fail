@@ -88,22 +88,26 @@ PNG or film to inspect those settings and frame-accurate timing.
 
 ## Prebuilt scene renderer
 
-The macOS Apple Silicon offscreen application renderer is also available as the `mbui-film` native part. To prepare a
-small job from a source checkout, without synchronizing the checkout or building on the machine drawing the picture:
+For development stills, use the Wasm scene renderer on macOS Apple Silicon. It runs the actual application and the
+same offscreen text, image and Metal host as the native renderer; it does not open a window. To prepare a small job
+from a source checkout, without synchronizing the checkout or building on the machine drawing the picture:
 
 ```sh
 job=/absolute/path/to/a-new-job
-bash scripts/media-job.sh film out/scene.drive "$job"
+bash scripts/media-job.sh picture out/scene.drive "$job"
 # Optionally add a preparation drive as the fourth argument.
 ```
 
 Run `MBUI_FIXTURE=home MBUI_WIN=320x560 bash /absolute/path/to/a-new-job/run.sh` locally, or use that directory as
-`station_task`'s `dir` and run `bash run.sh`. Return `result.png` and `result.png.scene.json`; set
-`MBUI_MEDIA_KIND=film` to return `result.mp4`,
-`result.mp4.last.png`, `result.mp4.textrec` and `result.mp4.scene.json`. The ordinary `MBUI_*` scene settings still
-apply. The job obtains its exact prebuilt renderer by the source key, with the station's shared native-part cache;
+`station_task`'s `dir` and run `bash run.sh`. Return `result.png` and `result.png.scene.json`. The ordinary `MBUI_*`
+scene settings still apply. The job obtains its exact prebuilt renderer by the source key, with the station's shared cache;
 it does not build one. Each new source state needs a newly prepared job: the job always uses the key it was created
 with, even if the original checkout changes. Missing versions fail rather than showing an old component.
+
+The Wasm part is for stills. For a video, prepare a `film` job instead and set `MBUI_MEDIA_KIND=film` when running it;
+return `result.mp4`, `result.mp4.last.png`, `result.mp4.textrec` and `result.mp4.scene.json`. The `film` job uses the
+native renderer. A Wasm scene that needs a native view or reads pixels back from the renderer fails instead of omitting
+content. The scene record includes hashes of the Wasm module, its host and loader as well as the launcher.
 
 A single prepared job can capture different fixtures, sizes and action scripts without building or preparing another
 renderer for each picture. The first argument selects a distinct output; the second and third optionally replace the
@@ -126,16 +130,21 @@ in the submitted station command; local shell variables do not automatically car
 ```sh
 # In the original checkout, before submitting the station task:
 key=$(cat "$job/runtime.key")
+part=$(cat "$job/runtime.part")
 base=$(git rev-parse HEAD)
 # In the synced repository on the build station:
-bash apps/mbui/scripts/media-dev-build.sh "$key" apps/mbui/out/media-inbox "$base"
+bash apps/mbui/scripts/media-dev-build.sh "$key" apps/mbui/out/media-inbox "$base" "$part"
 ```
 
 It checks the synced sources against the requested key before and after the build, reuses an existing matching
-artifact, writes `mbui-film-darwin-arm64-<key>.tar.gz` to the inbox, and installs it in the build station's shared
+artifact, writes `<part>-darwin-arm64-<key>.tar.gz` to the inbox, and installs it in the build station's shared
 cache. A station mirror without Git metadata gets
 a temporary snapshot for the source-key calculation; that snapshot is removed afterwards. Retrieve the archive and
 set `STILLFAIL_NATIVE_INBOX` to its directory for the first run of the prepared job. The native-part client validates
 the manifest and puts it in the machine's shared cache for subsequent runs. The base commit identifies the starting
 revision; the source key also identifies uncommitted component changes. Do not substitute a different key or use a
 previous binary after a source change.
+
+Building the Wasm part needs MoonBit, Node with its headers, Xcode's command-line tools and the macOS frameworks.
+The loader reuses non-overlapping local variables in MoonBit's generated start function before instantiating it;
+unsupported module instructions fail instead of drawing from a partially interpreted module.

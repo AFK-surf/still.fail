@@ -1,0 +1,17 @@
+import {
+  "mbui/ui",
+  "mbui/hostapi",
+  "stillfail/sf",
+  "stillfail/sfapp",
+  "stillfail/sfkept",
+  "stillfail/sfbase",
+  "stillfail/sffixture",
+  "mbui/view",
+}
+
+options(
+  "is-main": true,
+  link: {
+    "wasm": { "exports": ["draw", "done", "item", "background", "text_length", "text_unit", "bytes_length", "bytes_unit"] },
+  },
+)

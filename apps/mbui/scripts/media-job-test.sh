@@ -31,6 +31,8 @@ if cmp -s "$take/first/runtime.key" "$take/changed/runtime.key"; then
 fi
 bash "$repo/apps/mbui/scripts/media-job.sh" film "$take/action.drive" "$take/film" "$take/prepare.drive"
 [ "$(cat "$take/film/runtime.part")" = mbui-film ]
+bash "$repo/apps/mbui/scripts/media-job.sh" picture "$take/action.drive" "$take/picture" "$take/prepare.drive"
+[ "$(cat "$take/picture/runtime.part")" = mbui-film-wasm ]
 cmp "$take/action.drive" "$take/film/action.drive"
 cmp "$take/prepare.drive" "$take/film/prepare.drive"
 [ ! -e "$take/first/apps" ] && [ ! -e "$take/first/_build" ]
@@ -40,13 +42,17 @@ fi
 
 # One prepared job can capture several scenes with the same cached renderer, without overwriting the first result.
 cache="$take/cache"
-for kind in figure film; do
+for kind in figure film picture; do
   if [ "$kind" = figure ]; then job="$take/first"; part=mbui-figure; exe=sffigure; launcher=figure-run.sh
-  else job="$take/film"; part=mbui-film; exe=sffilm; launcher=media.sh; fi
+  elif [ "$kind" = film ]; then job="$take/film"; part=mbui-film; exe=sffilm; launcher=media.sh
+  else job="$take/picture"; part=mbui-film-wasm; exe=sffilm; launcher=media.sh; fi
   key=$(cat "$job/runtime.key")
   artifact="$cache/$part/darwin-arm64-$key"
   mkdir -p "$artifact"
   : > "$artifact/$exe"
+  if [ "$kind" = picture ]; then
+    for file in scene.wasm native.node run.mjs compact.mjs; do : > "$artifact/$file"; done
+  fi
   printf '{"part":"%s","target":"darwin-arm64","key":"%s"}\n' "$part" "$key" > "$artifact/manifest.json"
   cat > "$artifact/$launcher" <<'LAUNCHER'
 #!/bin/bash
@@ -57,6 +63,12 @@ export STILLFAIL_NATIVE_CACHE="$cache" STILLFAIL_NATIVE=offline MEDIA_TEST_ARGS=
 bash "$take/film/run.sh"
 printf 'picture\n%s\n%s\n%s\n' "$take/film/result.png" "$take/film/action.drive" "$take/film/prepare.drive" > "$take/expected"
 cmp "$take/expected" "$take/args"
+bash "$take/picture/run.sh" "$take/wasm.png"
+printf 'picture\n%s\n%s\n%s\n' "$take/wasm.png" "$take/picture/action.drive" "$take/picture/prepare.drive" > "$take/expected"
+cmp "$take/expected" "$take/args"
+if MBUI_MEDIA_KIND=film bash "$take/picture/run.sh" >/dev/null 2>&1; then
+  echo 'media-job-test: a prepared picture job accepted a film' >&2; exit 1
+fi
 bash "$take/film/run.sh" "$take/other.png" "$take/action.drive" ''
 printf 'picture\n%s\n%s\n' "$take/other.png" "$take/action.drive" > "$take/expected"
 cmp "$take/expected" "$take/args"

@@ -99,6 +99,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 ## What is checked, and where
 
 - The app's screens are tested in the Tester: its draw list at the declared moment.
+- For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
+  renderer across scenes; use a `film` job for video. The matching build, cache and scene records are in `docs/media.md`.
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture
   with a kept one: that is slow, and what it waits for is never the app's own. A device runs only the host's
   contracts (`mbui-host-*`), the render contracts, and a few end-to-end smoke flows that wait for named events; their
