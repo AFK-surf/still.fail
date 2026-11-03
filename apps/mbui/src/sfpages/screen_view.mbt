@@ -672,7 +672,13 @@ fn screen_keys_in(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, keys : Array[@ui.Ke
   let send = fn(j : Json) { sent.push(j) }
   for k in keys {
     match k {
-      Text(words) => type_words(send, u.held, words)
+      Text(words) => {
+        type_words(send, u.held, words)
+        // (no paste on Xcode 27's yet: docs/remote-screens.md, the keys; said when it is what was just typed)
+        if s.simulator() && text(s.state, "title").contains("iOS 27") && words.iter().any(fn(ch) { ch.to_int() > 0x7e }) {
+          u.logs.relaunch_said = @sf.t("web-pages.screen.debug.keysNote")
+        }
+      }
       // ⌘V (Ctrl+V): this device's clipboard onto the screen's and pasted there, where it carries one, as a paste is
       // on the web's page (its keys are not sent)
       Key(down~, code="KeyV", mods~, ..) if (mods & (mod_meta | mod_ctrl)) != 0 &&
