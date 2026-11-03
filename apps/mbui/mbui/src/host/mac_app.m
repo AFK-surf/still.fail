@@ -1189,6 +1189,8 @@ static pid_t local_pid(NSString *data, NSString **version) {
   return [pid intValue];
 }
 moonbit_string_t mb_host_local_station(void) {
+  // An isolated end-to-end run must not inspect the person's installed station.
+  if (getenv("MBUI_ISOLATED_STATION")) return mb_string_from_ns(@"");
   NSString *data = local_data();
   NSString *service = local_service();
   BOOL there = [NSFileManager.defaultManager fileExistsAtPath:data];
@@ -1375,6 +1377,7 @@ static NSString *local_install(NSDictionary *ask) {
 }
 
 void mb_host_local_station_act(moonbit_string_t action) {
+  if (getenv("MBUI_ISOLATED_STATION")) return;
   NSString *a = mb_ns_from_string(action);
   NSString *data = local_data();
   // `install {…}`, `update {…}`: the installer (local_install), off the main thread, as the others

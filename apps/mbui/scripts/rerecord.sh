@@ -124,6 +124,19 @@ for x in $tests; do
     code=1
     continue
   fi
+  # The native host must also report no installed local station. Its workspace identity need not contain HOME or hostname.
+  if ! node - "$trace" <<'NODE'
+const fs = require("node:fs");
+const lines = fs.readFileSync(process.argv[2], "utf8").split("\n").filter(Boolean).map(JSON.parse);
+const hosts = lines.filter((line) => line.host && Object.hasOwn(line.host, "localStation"));
+if (!hosts.length || hosts.some((line) => line.host.localStation !== null)) process.exit(1);
+NODE
+  then
+    cp "$TMP/$(basename "$trace").old" "$trace"
+    echo "  $test: recording contains a local station; its old trace was kept"
+    code=1
+    continue
+  fi
   "$D/trace" diff "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
   # (what the new trace has the app ask of the core's pure calls that is not kept yet (src/sfkept: a text the run typed,
   # read by the core): worked out by the core and kept, as scripts/kept does, for this test alone, then run again)
