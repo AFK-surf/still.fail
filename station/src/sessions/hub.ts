@@ -383,7 +383,8 @@ export class Hub {
       // Claude's and dsh's runner is the session's own (an idle one is taken up too); codex sessions share their
       // profile's host, which its driver finds, for a turn that was running.
       if (!runtime || (runtime !== "codex" ? !runners.has(runnerId(runtime, row.key)) : !row.running)) continue;
-      const turn = row.running ? this.store.listTurns(row.key).at(-1) : undefined;
+      // Its latest turn alone: every one it had read for it, the main thread took 254 ms for 3,664 on ccvm (2026-11-03).
+      const turn = row.running ? (this.store.latestTurn(row.key) ?? undefined) : undefined;
       const snap: Snapshot = {
         key: row.key,
         runtime,

@@ -52,7 +52,7 @@ export type ThreadSummary = {
 /// TurnSummary, as serde writes it (camelCase, the skipped Nones left out).
 export type TurnSummary = Record<string, Json>;
 
-export type SessionStats = { turns: number; pending: number; firstText: string | null; lastTurn: TurnSummary | null };
+export type SessionStats = { turns: number; workMs: number | null; pending: number; firstText: string | null; lastTurn: TurnSummary | null };
 
 /// A job as the pages are given it: without its token (nor the sandbox it asked for).
 export type JobRow = Omit<rows.JobRow, "token" | "size">;
@@ -736,6 +736,9 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
 /// short of memory (2026-11-02), as often as the session changed.
 export const SESSION_STATS = `SELECT s.key,
        COALESCE((SELECT c.n FROM session_turns c WHERE c.session = s.key), 0) AS turns,
+       -- How long its turns ran, where every one ended since that was kept (schema.ts SESSION_WORK); else none.
+       CASE WHEN NOT EXISTS (SELECT 1 FROM turns o INDEXED BY turns_by_end WHERE o.session_key = s.key AND o.ended_at <= (SELECT f.at FROM session_work_from f WHERE f.id = 1))
+         THEN COALESCE((SELECT w.ms FROM session_work w WHERE w.session = s.key), 0) END AS work_ms,
        ((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
          (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
        (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
@@ -746,8 +749,8 @@ export const SESSION_STATS = `SELECT s.key,
 /// A session's latest turn, as `sessionStats` has it, by the index of its turns alone.
 export const LAST_TURN = "SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1";
 
-/// Per session (or for one): turn count, the latest turn (with its id: a client holding the turns puts it in place
-/// rather than read them all again), undelivered messages and the first one it heard.
+/// Per session (or for one): turn count and how long its ended turns ran, the latest turn (with its id: a client holding
+/// the turns puts it in place rather than read them all again), undelivered messages and the first one it heard.
 /// Each session's counts and last turn: one's, those named (`keys`), or all (null).
 export function sessionStats(s: Store, key: string | string[] | null): Map<string, SessionStats> {
   if (Array.isArray(key) && key.length === 0) return new Map();
@@ -757,7 +760,7 @@ export function sessionStats(s: Store, key: string | string[] | null): Map<strin
   return new Map(
     rows.map((r) => [
       r.key as string,
-      { turns: r.turns, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id } },
+      { turns: r.turns, workMs: r.work_ms, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id } },
     ]),
   );
 }
@@ -1046,9 +1049,17 @@ export function participants(s: Store, session: string | null): Map<string, stri
 }
 
 /// Store::list_turns: a session's turns, oldest first, each its summary and id (as views.rs `session` shows them).
-export function listTurns(s: Store, session: string): Json[] {
-  return all(s, "SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session).map((r) => ({ ...turnSummary(r, r.started_at), id: r.id }));
+/// A session's turns, the first first; `last`: only that many of the latest (by the index of its turns, read from its
+/// end), none of those before them read.
+export function listTurns(s: Store, session: string, last: number | null = null): Json[] {
+  const rows = last === null
+    ? all(s, "SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session)
+    : all(s, LATEST_TURNS, session, last).reverse();
+  return rows.map((r) => ({ ...turnSummary(r, r.started_at), id: r.id }));
 }
+
+/// A session's latest turns (`listTurns`), the latest first.
+export const LATEST_TURNS = "SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT ?";
 
 export function getJob(s: Store, id: string): JobRow | null {
   const r = one(s, "SELECT * FROM jobs WHERE id = ?", id);

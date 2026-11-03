@@ -1026,6 +1026,54 @@ export function addSessionTurns(db: DatabaseSync): void {
   }
 }
 
+/// How long each session's turns have run, ended ones' added up, kept by the database as each turn ends (and goes): what
+/// a session's summary says beside how many turns it had (`workMs`), the work a device shows ("12 turns, 3 h"). Kept from
+/// when it began to be kept (`session_work_from`) and never added up from the turns before: a session with a turn that
+/// ended by then says none (read/store.ts SESSION_STATS), and shows its turns alone (the user, 2026-11-03). To add them
+/// up, a device read a session with its every turn, again after each one: 3,685 of one session took 25 s on ccvm short
+/// of memory (2026-11-03).
+const SESSION_WORK = `
+CREATE TABLE session_work (
+  session TEXT PRIMARY KEY,
+  ms INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE session_work_from (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  at INTEGER NOT NULL
+);
+CREATE TRIGGER session_work_add AFTER INSERT ON turns WHEN NEW.ended_at > NEW.started_at BEGIN
+  INSERT INTO session_work VALUES (NEW.session_key, NEW.ended_at - NEW.started_at) ON CONFLICT (session) DO UPDATE SET ms = ms + excluded.ms;
+END;
+CREATE TRIGGER session_work_end AFTER UPDATE OF started_at, ended_at ON turns
+WHEN NEW.ended_at IS NOT OLD.ended_at OR NEW.started_at IS NOT OLD.started_at BEGIN
+  INSERT INTO session_work VALUES (NEW.session_key,
+      (CASE WHEN NEW.ended_at > NEW.started_at THEN NEW.ended_at - NEW.started_at ELSE 0 END)
+      - (CASE WHEN OLD.ended_at > OLD.started_at THEN OLD.ended_at - OLD.started_at ELSE 0 END))
+    ON CONFLICT (session) DO UPDATE SET ms = ms + excluded.ms;
+END;
+CREATE TRIGGER session_work_drop AFTER DELETE ON turns WHEN OLD.ended_at > OLD.started_at BEGIN
+  UPDATE session_work SET ms = ms - (OLD.ended_at - OLD.started_at) WHERE session = OLD.session_key;
+  DELETE FROM session_work WHERE session = OLD.session_key AND ms <= 0;
+END;
+`;
+
+/// The sessions' work (SESSION_WORK), kept from `now` on: its tables and the triggers that keep it, nothing read.
+export function addSessionWork(db: DatabaseSync, now: number): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_work_from'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) {
+      db.exec(SESSION_WORK);
+      db.prepare("INSERT INTO session_work_from VALUES (1, ?)").run(now);
+    }
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 /// What is told as chats change (a chat's row and how it stands for each viewer, a turn's end) is read by these, each
 /// lookup the size of what it finds rather than of the chat's history:
 /// - entries_said: a chat's messages after where a viewer read, counted from the index alone (read/store.ts `unreadOf`;

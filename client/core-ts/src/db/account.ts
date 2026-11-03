@@ -970,7 +970,7 @@ export class AccountDb {
       if (listed === 1 && r?.[2] !== 1) ord = ((this.sql.all("SELECT min(ord) FROM session WHERE station = ? AND listed = 1", [station])[0]?.[0] as number | null) ?? 1) - 1;
       const json = JSON.stringify(summary);
       const detail = r && r[3] !== null ? parse(r[3]) : undefined;
-      again = detail === undefined || !sameTurns(get(detail, "turns"), summary);
+      again = detail === undefined || (!counted(summary) && !sameTurns(get(detail, "turns"), summary));
       // One more turn, or the last one gone on, as the summary says it: put in place, not all its turns read again.
       const placed = again && detail !== undefined && placeTurn(detail, summary);
       if (placed) {
@@ -1103,7 +1103,10 @@ export class AccountDb {
               THEN json_quote(json_extract(detail, '$.turns[#-1]')) END
        FROM session WHERE station = ? AND listed = 1${only} ORDER BY ord`,
       [station, ...(keys ?? [])],
-    ).map((r) => [String(r[0]), r[2] !== 1 || !sameTurnEnd(Number(r[3]), r[4] === null ? null : parse(r[4]), parse(r[1]))]);
+    ).map((r) => {
+      const summary = parse(r[1]);
+      return [String(r[0]), r[2] !== 1 || (!counted(summary) && !sameTurnEnd(Number(r[3]), r[4] === null ? null : parse(r[4]), summary))];
+    });
   }
 
   // ── threads ──
@@ -1976,6 +1979,15 @@ export function placeTurn(detail: J, summary: unknown): boolean {
   else if (n === list.length && list.length > 0 && get(list[list.length - 1], "id") === last.id) list[list.length - 1] = last;
   else return false;
   return true;
+}
+
+/// Whether a session's summary says what is shown of its turns (how many, how long they ran: `turns`, `workMs`, none for
+/// one with turns from before that was kept, which shows how many alone), so
+/// that its detail, read once, needs no reading again as they start and end: a detail listed every turn for that, read
+/// again after each one, 3,685 of one session in 25 s on ccvm (2026-11-03). A station from before says none.
+export function counted(summary: unknown): boolean {
+  if (!isObject(summary) || !("workMs" in summary)) return false;
+  return (typeof summary.workMs === "number" || summary.workMs === null) && typeof summary.turns === "number";
 }
 
 /// Whether the turns a session detail lists still end as its summary says.

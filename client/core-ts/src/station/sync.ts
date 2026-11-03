@@ -62,6 +62,9 @@ export const HISTORY_BATCH = 40;
 const HISTORY_SLICE_ITEMS = 64;
 const HISTORY_SLICE_MS = 8;
 const HISTORY_SESSION_GROUP = 32;
+/// A session's detail as the device reads it: without its turns. Its summary says how many it had, how long they ran and
+/// its latest (db/account.ts `counted`), what its every turn was read for; a station from before lists them all.
+const sessionPath = (key: string) => `/sessions/${encode(key)}?turns=0`;
 
 export const RECHECKING = "等它回来确认";
 /// The station's events that change what a search of it finds.
@@ -1036,7 +1039,7 @@ export class StationsSync {
         if (this.#links.get(address) !== link || link.historySweep !== sweep) return null;
         if (again) {
           const topic = { topic: "session", station: address, key };
-          reads.push({ path: `/sessions/${encode(key)}`, cost: 1, apply: (a) => (this.#took(address, topic, a), null) });
+          reads.push({ path: sessionPath(key), cost: 1, apply: (a) => (this.#took(address, topic, a), null) });
         }
         if (this.#core.store.firstValuesPending() || ++sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
           yield* Effect.yieldNow;
@@ -1151,7 +1154,7 @@ export class StationsSync {
   }
 
   #session(address: string, key: string): Effect.Effect<void, CoreError> {
-    return this.#read(address, { topic: "session", station: address, key }, `/sessions/${encode(key)}`);
+    return this.#read(address, { topic: "session", station: address, key }, sessionPath(key));
   }
 
   /// A session's transcript entries `from` to `to` whole, in place of what is held of them in brief (`history.detail`):
