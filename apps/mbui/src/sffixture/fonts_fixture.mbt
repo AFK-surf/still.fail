@@ -34,22 +34,22 @@ pub fn fixture_face(e : (String, String, Bool, Array[Int], Double)) -> Json {
   // (a whole number of bytes, as the core says a file's size)
   let each = (bytes / weights.length().to_double()).floor()
   {
-    "id": id.to_json(),
-    "name": name.to_json(),
-    "mono": mono.to_json(),
-    "family": ("SF " + name).to_json(),
-    "preview": (base + "/preview.ttf").to_json(),
+    "id": ToJson::to_json(id),
+    "name": ToJson::to_json(name),
+    "mono": ToJson::to_json(mono),
+    "family": ToJson::to_json(("SF " + name)),
+    "preview": ToJson::to_json((base + "/preview.ttf")),
     "files": Json::array(
       weights.map(fn(w) {
         {
-          "weight": w.to_json(),
-          "url": (base + "/" + (if w == 0 { "var" } else { w.to_string() }) + ".ttf.gz").to_json(),
-          "bytes": each.to_json(),
-          "sha256": fixture_face_sha.to_json(),
+          "weight": ToJson::to_json(w),
+          "url": ToJson::to_json((base + "/" + (if w == 0 { "var" } else { w.to_string() }) + ".ttf.gz")),
+          "bytes": ToJson::to_json(each),
+          "sha256": ToJson::to_json(fixture_face_sha),
         }
       }),
     ),
-    "bytes": bytes.to_json(),
+    "bytes": ToJson::to_json(bytes),
   }
 }
 
@@ -69,7 +69,7 @@ pub fn fixture_faces(fonts : Map[String, String]) -> Json {
         {
           "id": "",
           "name": "",
-          "mono": (place == "code").to_json(),
+          "mono": ToJson::to_json((place == "code")),
           "family": "",
           "files": [],
           "bytes": 0,
@@ -90,7 +90,7 @@ pub fn fixture_faces(fonts : Map[String, String]) -> Json {
 pub fn fixture_fonts(fonts : Map[String, String]) -> Json {
   let m : Map[String, Json] = {}
   for k, v in fonts {
-    m[k] = v.to_json()
+    m[k] = ToJson::to_json(v)
   }
   Json::object(m)
 }
@@ -100,9 +100,9 @@ pub fn fixture_fonts(fonts : Map[String, String]) -> Json {
 pub fn fixture_fonts_topic(f : Fixture) -> Json {
   let fetching : Map[String, Json] = {}
   if f.mode == "settings-fonts-coming" {
-    fetching["noto-sans-sc"] = (0.42).to_json()
+    fetching["noto-sans-sc"] = ToJson::to_json(0.42)
   }
-  let kept : Array[Json] = f.fonts_fetched.keys().map(fn(id) { id.to_json() }).collect()
+  let kept : Array[Json] = f.fonts_fetched.keys().map(fn(id) { ToJson::to_json(id) }).collect()
   // (share-card-senren-adv-coming: its picture and face partly here, its tiles' not begun)
   let share : Map[String, Json] = {}
   if f.mode == "share-card-senren-adv-coming" {
