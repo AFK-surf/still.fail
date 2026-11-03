@@ -84,3 +84,42 @@ test "a host that draws while being told is told again for work made after that 
   t.frame(300.0, 300.0, now=0.0) |> ignore
   assert_eq(t.drawn_of(id.val.unwrap()).unwrap().w, 40.0)
 }
+
+///|
+test "a structure of the drawn clock told as layout sets the clock back does not lay out again within it" {
+  let width = @signals.signal(20.0, same=fn(a, b) { a == b })
+  let runs = Ref(0)
+  let within = Ref(false)
+  let id : Ref[NodeId?] = Ref(None)
+  let t = Tree::new(
+    fn(root) {
+      root.lines_up(Is(Some(Start))) |> ignore
+      root.box(fn(n) {
+        id.val = Some(n.id())
+        n.width(By(fn() { Some(width.get()) })).height(Is(Some(20.0))).ground(Is(1L)) |> ignore
+        n.reacts(fn() { n.pointer_within() }, fn(on) { within.val = on })
+        // (a structure of the drawn clock, laying things out otherwise on either side of 75)
+        n.reacts(fn() { n.drawn_past(75.0) }, fn(past) {
+          runs.val += 1
+          // Stop the broken feedback loop at 50 so the assertion fails without overflowing the test process's stack.
+          if runs.val < 50 {
+            width.set(if past { 40.0 } else { 30.0 })
+          }
+        })
+      }) |> ignore
+    },
+    time=fn() { 50.0 },
+  )
+  t.frame(300.0, 300.0, now=0.0) |> ignore
+  // The pointer over it, so that what changes it is laid out at once as of the logic's moment, 50.
+  t.point_at(10.0, 10.0)
+  t.frame(300.0, 300.0, now=0.0) |> ignore
+  assert_true(within.val, msg="under the pointer before the clock moves")
+  let before = runs.val
+  // A frame to be shown at 100, past 75, while the logic is at 50, before it.
+  t.at(100.0)
+  assert_eq(runs.val - before, 1, msg="told once, of the frame's clock, not of layout's own setting it and back")
+  t.frame(300.0, 300.0, now=100.0) |> ignore
+  assert_eq(t.drawn_of(id.val.unwrap()).unwrap().w, 40.0, msg="laid out as of the frame's clock")
+  assert_true(within.val, msg="still under the pointer")
+}

@@ -2725,9 +2725,13 @@ fn Tree::measured_now(self : Tree) -> Unit {
   }
   let at = self.logic_at()
   let shown = @signals.untracked(fn() { self.clock.get() })
-  // (its clock set to the moment and back: what that tells is no change of its own to settle after)
+  // (its clock set to the moment and back: what that tells is no change of its own to settle after, nor to run on: a
+  // structure or an effect following the clock told once it is back, of what it was told in all, nothing where it
+  // comes back as it was (one told of the logic's moment would lay out again as of it, setting the clock to it and back
+  // again, without end))
   let was_standing = self.standing
   self.standing = true
+  @signals.start_batch()
   @signals.untracked(fn() {
     self.clock_to(at)
     self.beat.set(at)
@@ -2758,6 +2762,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
       self.beat.set(shown)
     })
   }
+  @signals.end_batch()
   self.standing = was_standing
 }
 
@@ -4140,9 +4145,13 @@ fn Tree::laid_now(self : Tree) -> Unit {
   }
   let at = self.logic_at()
   let shown = @signals.untracked(fn() { self.clock.get() })
-  // (its clock set to the moment and back: what that tells is no change of its own to settle after)
+  // (its clock set to the moment and back: what that tells is no change of its own to settle after, nor to run on: a
+  // structure or an effect following the clock told once it is back, of what it was told in all, nothing where it
+  // comes back as it was (one told of the logic's moment would lay out again as of it, setting the clock to it and back
+  // again, without end))
   let was_standing = self.standing
   self.standing = true
+  @signals.start_batch()
   @signals.untracked(fn() {
     self.clock_to(at)
     self.beat.set(at)
@@ -4155,6 +4164,7 @@ fn Tree::laid_now(self : Tree) -> Unit {
       self.beat.set(shown)
     })
   }
+  @signals.end_batch()
   self.standing = was_standing
 }
 
@@ -5289,6 +5299,8 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
   }
   self.standing = true
   self.work.settles = self.work.settles + 1
+  // (its clock set to the moment and back told once it is back, as Tree::laid_now's)
+  @signals.start_batch()
   let shown = @signals.untracked(fn() { self.clock.get() })
   @signals.untracked(fn() {
     self.clock_to(at)
@@ -5302,6 +5314,7 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
       self.beat.set(shown)
     })
   }
+  @signals.end_batch()
   self.standing = false
 }
 
