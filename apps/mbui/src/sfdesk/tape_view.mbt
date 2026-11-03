@@ -767,6 +767,19 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       side.width(By(fn() { Some(tape_col_at(tape_drawn_at(side))) })) |> ignore
       tape_swipes(side, Side)
       @ui.old(side, fn(c) { tape_side_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
+      // (the settings' sidebar, the tree's, over the panel where it lays its sidebar out; nothing of it read out while
+      // the panel is behind the one in use: tape_behind's)
+      side.box(fn(sides) {
+        sides.over(Is(true)).hides(By(fn() { wide.tape_at.get() != Side })) |> ignore
+        settings_side_node(sides, src, @sf.TipLayer::new(fn() { tape_goes.node }), fn() { tape_side_at(side) })
+      })
+      |> ignore
+      // (the block's line over all it holds: dock_edge_node)
+      side.box(fn(line) {
+        line.over(Is(true)) |> ignore
+        dock_edge_node(line, fn() { tape_side_at(side) })
+      })
+      |> ignore
       tape_cover(side, Side, fn() {
         let r = tape_room_now()
         let (_, wh) = side.window()
@@ -1105,6 +1118,23 @@ fn tape_side_built(c : @ui.Ctx, src : Source) -> Unit {
       held=true,
     )
   })
+}
+
+///|
+/// Where the sidebar's panel on the tape lays its sidebar out as node `side` (its column) is drawn: as tape_side_built
+/// lays it out (dock_side_at, the tape's look), in the column's own room.
+fn tape_side_at(side : @view.View) -> SideAt {
+  let r = tape_room_now()
+  let col = tape_col_at(tape_drawn_at(side))
+  let s = dmax(0.0, col - rail_left() - bar_in_now() - bar_gap_now() - rail_more())
+  let top = if side_full_height(false) { 0.0 } else { r.top }
+  // (its top row the tape's, its band the bar's, as tape_under says them: side_brand_h)
+  {
+    ..dock_side_at(false, false, s, col, top, r.foot, 0.0, side.window().1, None),
+    brand: side_brand_h(false, r.top),
+    band: 1.0,
+    tape: true,
+  }
 }
 
 ///|

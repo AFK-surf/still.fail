@@ -12,7 +12,8 @@
 fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
   match side_place() {
     "files" => files_nav(c, src, w.id)
-    "settings" => settings_side(c, src, w)
+    // (the settings': the tree's, over the block where it lays its sidebar out: settings_side_node)
+    "settings" => ()
     "stations" => stations_side(c, src, w)
     "profiles" => profiles_side(c, src, w)
     _ => lists_side(c, src, w, width)

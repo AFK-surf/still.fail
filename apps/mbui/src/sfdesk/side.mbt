@@ -14,6 +14,17 @@ pub fn side_top(c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// The band's first row (side_top's) as a node in `parent`: `brand()` tall (where the block's move has got: the frame's
+/// --brand), the window's buttons' row where they are in the app's top row, which drags the window while the sidebar is
+/// open.
+fn side_top_node(parent : @view.View, brand : () -> Double) -> Unit {
+  parent.box(fn(top) {
+    top.height(By(fn() { Some(brand()) })).moves_window(By(fn() { @ui.window_inset_now() && !side_folded() })) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// The band's first row's height (side_top).
 pub fn side_top_h() -> Double {
   wide.brand_h

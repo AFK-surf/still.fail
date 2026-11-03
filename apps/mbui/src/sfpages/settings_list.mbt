@@ -288,116 +288,12 @@ pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
 }
 
 ///|
-/// The list as a sidebar's (beside the settings' pages on a medium or large screen): the same rows in the same groups,
-/// a sidebar's rows (the theme's side_row, as its other rows of one line), the room of a heading between two groups
-/// with none. `lit`: the row of the page beside it.
-pub fn settings_side_rows(
-  c : @ui.Ctx,
-  core : Core,
-  here : @settings.Here,
-  lit : @settings.Route?,
-  open : (@settings.Route) -> Unit,
-) -> Unit {
-  let t = @sf.theme()
-  let parts = settings_parts(c, core, here)
-  for k, part in parts {
-    if part.heading != "" {
-      @sf.list_heading(c, part.heading, Side)
-    } else if k > 0 {
-      @sf.list_apart(c)
-    }
-    for i, row in part.rows {
-      let key = "settings-nav/" + row.key
-      let id = c.id(key)
-      let ground = @sf.nav_ground(c, key, c.lit(id) || c.pressed(id), lit == Some(row.route))
-      // (a sidebar's row of one line, as its others are: its mark, its words, how things stand at its end, left out
-      // where the row has not the room: its words whole till then, cut only where they alone have not)
-      let draw = fn() {
-        let look = t.chat_list.side_row.then(settings_side_across).then(@sf.row_least_h())
-        c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
-          settings_lead(c, core, here, row, true)
-          c.box(style=settings_side_words, keep=true, fn() {
-            c.text(row.title, style=t.chat_list.title.then(settings_side_title), keep=true) |> ignore
-          })
-          |> ignore
-          if row.value != "" {
-            c.box(style=settings_side_end, drop=1, fn() {
-              if row.dot {
-                @sf.status_dot(c, "error")
-              }
-              let said = t.chat_list.last.then(settings_side_said)
-              c.text(row.value, style=if row.bad { said.then(@sf.bad) } else { said }) |> ignore
-            })
-            |> ignore
-          }
-        })
-      }
-      let b = if i + 1 < part.rows.length() {
-        let mut b = 0
-        c.box(style=@sf.list_more(Side), fn() { b = draw() }) |> ignore
-        b
-      } else {
-        draw()
-      }
-      c.semantics(b, Link, id~, label=row.title)
-      if c.clicked(id) {
-        open(row.route)
-      }
-    }
-  }
-}
-
-///|
-/// What a row is by. On a page's row, its line icon in the muted ink, the account's picture, the workspace's mark (its
-/// letter where it has none), the two as large as their cards have them. In a sidebar row, a line icon in its mark's
-/// column (16 across) as every other row there has (the account's a person's, the workspace's people's): what fills
-/// that column whole would stand in the row's rounded end off its corner (the corner ladder).
-fn settings_lead(c : @ui.Ctx, core : Core, here : @settings.Here, row : SettingsRow, side : Bool) -> Unit {
-  let t = @sf.theme()
-  match (row.lead, side) {
-    (Icon(name), _) =>
-      @sf.icon(c, name, size=if side { settings_side_mark } else { @sf.row_icon }, color=t.p.muted) |> ignore
-    (Person, true) => @sf.icon(c, "user", size=settings_side_mark, color=t.p.muted) |> ignore
-    (Space(_, _), true) => @sf.icon(c, "users", size=settings_side_mark, color=t.p.muted) |> ignore
-    (Person, false) => @settings.avatar(c, core, here.email, row.title, @sf.identity_mark, picture=here.picture)
-    (Space(emoji, icon), false) => {
-      let w : Workspace = { id: here.workspace, name: row.title, emoji, icon, email: here.email }
-      // a picture put up fills the square; one of still.fail's icons or an emoji on the chips' ground; else its first
-      // letter, muted, as the rail has it
-      let picture = icon.has_prefix("https://") || icon.has_prefix("http://") || icon.has_prefix("data:image/")
-      c.box(style=@sf.workspace_tile.then(@ui.style(bg=Data(if picture { t.p.card } else { t.p.chip }))), fn() {
-        if picture {
-          @sf.station_mark(c, emoji, icon, @sf.identity_mark, t.p.text)
-        } else {
-          workspace_mark(c, w, @sf.workspace_tile_mark, t.p.text, @sf.workspace_letter)
-        }
-      })
-      |> ignore
-    }
-  }
-}
-
-///|
 /// A sidebar row's mark's side (the rows' icons': SidebarList.css.ts mark, ICON's 16).
 let settings_side_mark : Double = 16.0
 
 ///|
-/// A sidebar row's mark, words and what is at its end, across its middle.
-// kept across runs: a value (no field of it changes)
-let settings_side_across : @ui.Style = @ui.css("align=ACenter")
-
-///|
-/// A sidebar row's words: what the row leaves its mark and what is at its end (settings_side_rows).
-// kept across runs: a value (no field of it changes)
-let settings_side_words : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
 // kept across runs: a value (no field of it changes)
 let settings_side_title : @ui.TextStyle = @ui.text_style(w=Cut)
-
-///|
-// kept across runs: a value (no field of it changes)
-let settings_side_end : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -412,7 +308,7 @@ let settings_side_said : @ui.TextStyle = @ui.text_style(w=Hug)
 /// and its own, come, gone and in their order as the core says which there are (security mode where the
 /// workspace has none, the bottom bar's where the window has one), what each says (a heading, a row's words and how
 /// things stand at its end) followed as it changes, in the language as it is. What a row is by: its icon; the account's
-/// picture and the workspace's mark old views, hosted (settings_lead). `open`: a row pressed, its page. `here`: who
+/// picture and the workspace's mark (settings_row_node). `open`: a row pressed, its page. `here`: who
 /// and where, as that changes. `bars`: whether the window has the bottom bar (the shell's to say), as that changes. `stint`: the page's time on top
 /// (its stack's entry's), what a picture is asked for on. `said`, `width`: as page_node's (the tape's bar told what it is; its width where its
 /// frame says it).
@@ -477,7 +373,7 @@ pub fn settings_home_node(
 
 ///|
 /// The settings' list's row `key` in node `v` (settings_home_node's): what it says as row_of has it now; what it is by
-/// as settings_lead draws it, as nodes: its icon; the account's picture (on the page's time on top, `stint`), else its
+/// as a page's row has it, as nodes: its icon; the account's picture (on the page's time on top, `stint`), else its
 /// initial; the workspace's mark (a picture put up filling its square, else its glyph or emoji in it, else its first
 /// letter).
 fn settings_row_node(
@@ -523,7 +419,7 @@ fn settings_row_node(
 }
 
 ///|
-/// The workspace's mark on its row (settings_lead's Space, as nodes) in `parent`: in its square (workspace_tile), a
+/// The workspace's mark on its row (as nodes) in `parent`: in its square (workspace_tile), a
 /// picture put up filling it on the card's ground; else on the chips' ground one of still.fail's icons or an emoji, 26,
 /// else its first letter, muted; each as `row` says it now.
 fn settings_space_node(parent : @view.View, row : () -> SettingsRow?, stint : () -> Int) -> Unit {
@@ -567,4 +463,108 @@ fn settings_space_node(parent : @view.View, row : () -> SettingsRow?, stint : ()
     })
   })
   |> ignore
+}
+
+///|
+/// The settings' list as a sidebar's made once as nodes (beside the settings' pages on a medium or large screen, the
+/// home's list's rows arranged as a sidebar's: settings_parts', the same groups and rows): in node `v`, each part its
+/// heading or, after the first, the room of one; its rows a sidebar's of one line (nav_row_node), each its mark (a line
+/// icon in the mark's column, the account's a person's, the workspace's people's), its words, how things stand at its
+/// end left out where the row has not the room; the row of `lit()`'s page lit. Each by its part's key and its own,
+/// come, gone and in their order as the core says which there are; what each says followed as it changes. `open`: a
+/// row pressed, its page.
+pub fn settings_side_rows_node(
+  v : @view.View,
+  core : Core,
+  here : () -> @settings.Here,
+  lit : () -> @settings.Route?,
+  open : (@settings.Route) -> Unit,
+) -> Unit {
+  let parts = @signals.computed(fn(_) { settings_parts(@ui.current(), core, here(), asks=false) })
+  v.reacts(fn() { @settings.kept_asked() }, fn(_) { @settings.kept_ask(@ui.current(), core) })
+  let part_of = fn(key : String) { parts.get().search_by(fn(p) { p.key == key }).map(fn(i) { parts.get()[i] }) }
+  let row_of = fn(key : String) -> SettingsRow? {
+    for p in parts.get() {
+      for r in p.rows {
+        if r.key == key {
+          return Some(r)
+        }
+      }
+    }
+    None
+  }
+  v.each(fn() { parts.get().map(fn(p) { p.key }) }, fn(k) { k }, fn(pb, key) {
+    let key = @signals.untracked(fn() { key.get() })
+    let heading = fn() { part_of(key).map(fn(p) { p.heading }).unwrap_or("") }
+    let first = fn() { parts.get().get(0).map(fn(p) { p.key == key }).unwrap_or(false) }
+    pb.show(fn() { heading() != "" }, fn(h) { @sf.side_heading_node(h, heading) })
+    pb.show(fn() { heading() == "" && !first() }, fn(a) { @sf.side_apart_node(a) })
+    let rows = fn() { part_of(key).map(fn(p) { p.rows.map(fn(r) { r.key }) }).unwrap_or([]) }
+    pb.each(rows, fn(k) { k }, fn(rb, rkey) {
+      let rkey = @signals.untracked(fn() { rkey.get() })
+      let row = fn() { row_of(rkey) }
+      let more = fn() {
+        let all = rows()
+        all.search(rkey).map(fn(i) { i + 1 < all.length() }).unwrap_or(false)
+      }
+      rb.pick(more, fn(slot, more) {
+        @sf.nav_row_node(
+          slot,
+          fn() { row().map(fn(r) { lit() == Some(r.route) }).unwrap_or(false) },
+          fn() { row().map(fn(r) { r.title }).unwrap_or("") },
+          fn() {
+            match @signals.untracked(row) {
+              Some(r) => open(r.route)
+              None => ()
+            }
+          },
+          fn(r) { settings_side_row_parts(r, row) },
+          more~,
+          across=true,
+        )
+        |> ignore
+      })
+    })
+  })
+}
+
+///|
+/// What a sidebar's settings row holds as nodes (settings_side_rows_node's): its mark in the mark's column, its words
+/// cut short where the row has not the room, how things stand at its end (a red dot where it says one, its words red
+/// where they are bad) left out first.
+fn settings_side_row_parts(r : @view.View, row : () -> SettingsRow?) -> Unit {
+  let icon = fn() {
+    match row().map(fn(r) { r.lead }) {
+      Some(Icon(name)) => name
+      Some(Person) => "user"
+      Some(Space(_, _)) => "users"
+      None => ""
+    }
+  }
+  r.pick(icon, fn(m, name) {
+    if name != "" {
+      @sf.icon_node(m, name, settings_side_mark, By(fn() { @sf.theme().p.muted })) |> ignore
+    }
+  })
+  r.box(fn(w) {
+    w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+    @sf.words_node(w, fn() { row().map(fn(r) { r.title }).unwrap_or("") }, fn() {
+      @sf.theme().chat_list.title.then(settings_side_title)
+    })
+    |> ignore
+  })
+  |> ignore
+  r.show(fn() { row().map(fn(r) { r.value != "" }).unwrap_or(false) }, fn(e) {
+    e.row(Is(true)).gap(Is(@ui.Space::px(S1_5))).lines_up(Is(Some(Middle))).drops(Is(1)) |> ignore
+    e.show(fn() { row().map(fn(r) { r.dot }).unwrap_or(false) }, fn(d) { @sf.state_dot_node(d, fn() { "error" }) })
+    @sf.words_node(e, fn() { row().map(fn(r) { r.value }).unwrap_or("") }, fn() {
+      let said = @sf.theme().chat_list.last.then(settings_side_said)
+      if row().map(fn(r) { r.bad }).unwrap_or(false) {
+        said.then(@sf.bad)
+      } else {
+        said
+      }
+    })
+    |> ignore
+  })
 }

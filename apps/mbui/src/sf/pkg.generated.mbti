@@ -123,6 +123,8 @@ pub fn band_row(@ui.Ctx, String, Bool, () -> Unit) -> Bool
 
 pub fn band_row_h() -> Double
 
+pub fn band_row_node(@view.View, () -> Bool, () -> String, () -> Unit, (@view.View) -> Unit) -> Unit
+
 pub fn band_words(@ui.Ctx, String) -> Unit
 
 pub fn bar(@ui.Ctx, @ui.Size, Double, radius? : Double, breathing? : Bool) -> Unit
@@ -1217,6 +1219,8 @@ pub fn nav_ground(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> Int64
 
 pub fn nav_ground_by(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> () -> Int64
 
+pub fn nav_ground_node(@view.View, () -> Bool, lit? : Int64) -> Unit
+
 pub fn nav_ground_on(@ui.Ctx, Int32, String, Bool, Bool, lit? : Int64) -> Unit
 
 pub fn nav_item(@ui.Ctx, String, Bool, () -> Unit, () -> Unit, end? : () -> Unit, lines? : () -> Unit, keep_lines? : Int32, more? : Bool, foot? : () -> Unit, foot_capsule? : Double) -> Bool
@@ -1231,6 +1235,8 @@ pub fn nav_quota_chips(@ui.Ctx, Json?, key? : String) -> Unit
 
 pub fn nav_row(@ui.Ctx, String, Bool, () -> Unit, align? : @ui.Align, more? : Bool) -> Bool
 
+pub fn nav_row_node(@view.View, () -> Bool, () -> String, () -> Unit, (@view.View) -> Unit, more? : Bool, across? : Bool) -> @view.View
+
 pub let nav_sub_gap : @ui.Space
 
 pub fn nav_title(@ui.Ctx, String, away? : Bool) -> Unit
@@ -1238,6 +1244,8 @@ pub fn nav_title(@ui.Ctx, String, away? : Bool) -> Unit
 pub let nav_title_clear : @ui.Space
 
 pub fn nav_words(@ui.Ctx, String, color? : Int64) -> Unit
+
+pub fn nav_words_node(@view.View, () -> String) -> Unit
 
 pub fn neg(Double) -> Double
 
@@ -1939,7 +1947,11 @@ pub let sheet_scrim : Int64
 
 pub fn shortcut_keys(String) -> String
 
+pub fn side_apart_node(@view.View) -> Unit
+
 pub let side_face_step : @ui.Len
+
+pub fn side_heading_node(@view.View, () -> String) -> Unit
 
 pub fn side_list() -> @ui.Style
 
@@ -1948,6 +1960,8 @@ pub let side_row_h : @ui.Len
 pub let side_row_radius : @ui.Radius
 
 pub fn side_scroll(@ui.Ctx, String, () -> Unit) -> Unit
+
+pub fn side_scroll_node(@view.View, @view.Scroll, (@view.View) -> Unit) -> @view.View
 
 pub fn side_subtitle(String, Array[String]) -> String?
 
@@ -2042,6 +2056,8 @@ pub fn stroke_part(Double, Int32) -> Double
 pub fn strokes_ms(Int32) -> Double
 
 pub let strong : @ui.TextStyle
+
+pub fn style_node(@view.View, () -> @ui.Style) -> Unit
 
 pub fn submenu_row(@ui.Ctx, String, String, Array[MenuItem?], icon? : String, side? : @view.Side) -> Unit
 
@@ -2224,6 +2240,8 @@ pub let under_card_words : @ui.Style
 pub fn untitled_clear() -> @ui.Style
 
 pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool, coming? : Double??) -> Bool
+
+pub fn update_key_node(@view.View, TipLayer, Double, Double, () -> String, () -> String, () -> Bool, () -> Double??, () -> Unit) -> Unit
 
 pub let update_raised : Raised
 

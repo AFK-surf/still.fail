@@ -717,6 +717,9 @@ pub struct Tree {
   mut rows_grid : Double
   /// the nodes holding such a list's rows (Node's list_rows), let go or not
   rows_lists : Array[Int]
+  /// the thumbs of its columns' bars (View::scroll_bar), by their places: what a node over one yields to (ui's
+  /// yield_thumbs, Tree::thumb_at)
+  thumbs : Map[Int, NodeId]
   /// rows_grid, followed (Tree::rows_slot)
   rows_grid_said : @signals.Signal[Double]
   work : Work
@@ -862,6 +865,7 @@ pub fn Tree::new(
     pixel_grid: 0.0,
     rows_grid: 0.0,
     rows_lists: [],
+    thumbs: {},
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
     on_modals: fn() {  },
@@ -2583,6 +2587,19 @@ pub fn Tree::ground_drawn_of(self : Tree, id : NodeId) -> (Double, Double, Doubl
 /// drawn off by whole pixels (View::drawn_off).
 pub fn Tree::set_pixel_grid(self : Tree, g : Double) -> Unit {
   self.pixel_grid = g
+}
+
+///|
+/// The thumbs of its columns' bars living now (View::scroll_bar's), for a test: where each takes the pointer is
+/// Tree::input_bounds'.
+pub fn Tree::thumbs_now(self : Tree) -> Array[NodeId] {
+  self.thumbs.values().filter(fn(id) { self.is_thumb(id) }).collect()
+}
+
+///|
+/// Whether node `id` is the thumb of one of its columns' bars (View::scroll_bar's), living.
+pub fn Tree::is_thumb(self : Tree, id : NodeId) -> Bool {
+  self.thumbs.get(id.at) == Some(id) && self.nodes[id.at].live
 }
 
 ///|

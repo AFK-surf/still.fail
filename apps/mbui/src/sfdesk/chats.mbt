@@ -81,32 +81,52 @@ fn sidebar_glass(c : @ui.Ctx, key : String, title : String, icon : String, menu 
 }
 
 ///|
-/// A value in the band's open and floating looks, on the block's own trajectory between them.
-fn band_between(open : Double, bar : Double) -> Double {
-  open + (bar - open) * wide.band
+/// A value in the band's open and floating looks, on the block's own trajectory between them (`at`'s: the old views'
+/// as the frame has said it, else the tree's where its block is).
+fn band_between(open : Double, bar : Double, at? : BandAt = band_at_old()) -> Double {
+  open + (bar - open) * at.band
+}
+
+///|
+/// What a sidebar's band is laid out by, as its block stands: its top row's height, where the block's move has got
+/// between open and the floating bar, whether on the tape or drawn in the closed bar, what linked corners are worked
+/// out from. The old views' (band_at_old) or a node's of the tree where its block is (settings_side_parts', from
+/// SideAt and @ui.tree_corner_roots_now).
+priv struct BandAt {
+  brand : Double
+  band : Double
+  tape : Bool
+  in_bar : Bool
+  roots : @ui.CornerRoots
+}
+
+///|
+/// BandAt as the old views have it: as the frame said it as it drew the block (fold_bars, tape_under).
+fn band_at_old() -> BandAt {
+  { brand: side_top_h(), band: wide.band, tape: wide.tape, in_bar: wide.in_bar, roots: @ui.corner_roots() }
 }
 
 ///|
 /// The top and bottom of the action's band. Its list uses these same values for the room over its rows.
-fn band_pane_top() -> Double {
+fn band_pane_top(at? : BandAt = band_at_old()) -> Double {
   let lift = (band_row_h() - filter_side) / 2.0
-  band_between(band_new_top, dmax(0.0, filter_bar_in - lift))
+  band_between(band_new_top, dmax(0.0, filter_bar_in - lift), at~)
 }
 
 ///|
-fn band_pane_under() -> Double {
-  band_between(side_new_under, bar_band_in)
+fn band_pane_under(at? : BandAt = band_at_old()) -> Double {
+  band_between(side_new_under, bar_band_in, at~)
 }
 
 ///|
 /// The action and filter follow the block from the open band's insets to the floating bar's insets.
-fn band_new_pane() -> @ui.Style {
+fn band_new_pane(at? : BandAt = band_at_old()) -> @ui.Style {
   let inset = @sf.theme().chat_list.band_in
   nav_new().then(@ui.style(
-    pl=@sf.room_of(band_between(inset, bar_band_start)),
-    pr=@sf.room_of(band_between(inset, filter_bar_in)),
-    pt=@sf.room_of(band_pane_top()),
-    pb=@sf.room_of(band_pane_under()),
+    pl=@sf.room_of(band_between(inset, bar_band_start, at~)),
+    pr=@sf.room_of(band_between(inset, filter_bar_in, at~)),
+    pt=@sf.room_of(band_pane_top(at~)),
+    pb=@sf.room_of(band_pane_under(at~)),
   ))
 }
 
@@ -131,7 +151,7 @@ let filter_bar_in : Double = 6.0
 /// In the sidebar's panel on the tape (laid out Medium, its corners @sf.tape_side_corners): the filter (a circle 32
 /// across) in its top right corner on the tape's line, concentric with it (@sf.line_end_in, band_new_tape_over), under
 /// the band's top row; where the corner is too square for that (it follows a round window), clear of it.
-fn band_new_tape() -> @ui.Style {
+fn band_new_tape(at? : BandAt = band_at_old()) -> @ui.Style {
   if @sf.native_on() {
     // The glass's outside edge follows the day heading's words, including the
     // list row's inner padding, not just the card's outer content margin.
@@ -139,11 +159,11 @@ fn band_new_tape() -> @ui.Style {
     let inset = @sf.room_of(list.band_in + list.heading_in)
     return nav_new().then(@ui.style(pl=inset, pr=inset, pt=S1))
   }
-  let corner = @sf.tape_side_corners()[1].radius(@ui.corner_roots())
+  let corner = @sf.tape_side_corners()[1].radius(at.roots)
   nav_new().then(
     @ui.style(
       pr=@sf.room_of(@sf.line_end_in(corner, band_new_end, side=filter_side)),
-      pt=@sf.room_of(band_new_top + band_new_tape_over()),
+      pt=@sf.room_of(band_new_top + band_new_tape_over(at~)),
     ),
   )
 }
@@ -170,23 +190,23 @@ let filter_side : Double = 32.0
 /// How much taller 新建对话's row is in a panel of the tape (band_new_tape over nav_new's 6): the filter, in the row's
 /// middle (as high as a band's row is: band_row_h), its top where it is concentric with the panel's corner: the tape's one line
 /// (@sf.tape_bar_over), a page's bar's beside it.
-fn band_new_tape_over() -> Double {
-  let brand = side_top_h()
+fn band_new_tape_over(at? : BandAt = band_at_old()) -> Double {
+  let brand = at.brand
   let lift = (band_row_h() - filter_side) / 2.0
   let alone = brand + band_new_top + lift
   // (on the tape's line in the tape's corner; under a taller top row, 更新's or the window's buttons', it can not
   // stand so high: where it stands alone)
-  let at = if (@sf.tape_side_corners()[1].radius(@ui.corner_roots()) - @sf.tape_corner).abs() <= 0.5 {
+  let line = if (@sf.tape_side_corners()[1].radius(at.roots) - @sf.tape_corner).abs() <= 0.5 {
     @sf.tape_line
   } else {
     alone
   }
   // (as high as its row reaches where the line is a little higher still, its top at the band's: the line 10.78, a
   // mouse's band's row 11, within the half a point the corner rule allows)
-  if at < brand + lift - 0.5 {
+  if line < brand + lift - 0.5 {
     0.0
   } else {
-    dmax(at, brand + lift) - alone
+    dmax(line, brand + lift) - alone
   }
 }
 

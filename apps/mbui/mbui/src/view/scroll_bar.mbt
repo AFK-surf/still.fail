@@ -217,6 +217,10 @@ fn View::scroll_bar(self : View, s : Scroll, b : ScrollBar, bar : BarState, bar_
     })
     // (its thumb, and as far round it as a press takes it: held, it moves the column as far as it goes for a point)
     over.box(fn(thumb) {
+      // (a thumb, for what over it yields to one: Tree::is_thumb)
+      let me = thumb.id()
+      self.tree.thumbs[me.at] = me
+      thumb.owns(fn() { if self.tree.thumbs.get(me.at) == Some(me) { self.tree.thumbs.remove(me.at) } }) |> ignore
       let held_y = Ref(0.0)
       let long = fn() { Some(track(s.where_at(0.0)).1 + b.grab * 2.0) }
       let thick = Is(Some(b.size + b.grab * 2.0))

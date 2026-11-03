@@ -1174,7 +1174,8 @@ test "the settings' home made once on every screen, as its name opens it: the ge
   for case in [(2, 390.0), (2, 700.0), (0, 839.0), (0, 1280.0)] {
     let (platform, w) = case
     let src = fixture_app("settings-home")
-    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform~)
+    // (tall enough for all of the page's rows)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=1400.0, platform~)
     t.run_for(@ui.move_most_ms)
     // (as a notice of the settings' opens it: settings:home)
     app.nav.push(Setting(@settings.Route::Home))
@@ -1184,8 +1185,36 @@ test "the settings' home made once on every screen, as its name opens it: the ge
     for words in ["外观", "通知", "密钥", "星火工作室"] {
       assert_true(own.iter().any(fn(o) { o.contains(words) }), msg="\{words} the tree's own at \{case}: \{own}")
     }
-    t.tap_text("通知")
+    // (the page's own 通知: the rightmost of the words, the settings' sidebar's beside it at its left where it shows)
+    let spots = fn() {
+      let out = []
+      for d in @ui.view_tree().unwrap().drawn() {
+        if d.words == "通知" && d.alpha > 0.0 {
+          out.push((d.x, d.y, d.w, d.h))
+        }
+      }
+      out.sort_by(fn(a, b) { a.0.compare(b.0) })
+      out
+    }
+    let tap = fn(s : (Double, Double, Double, Double)) { t.tap(s.0 + s.2 / 2.0, s.1 + s.3 / 2.0) }
+    // (on the tape, the page's panel the one in use: a press on it then the page's)
+    @sfdesk.bring_page()
     t.run_for(@ui.move_most_ms)
-    assert_true(app.nav.top() == Setting(@settings.Route::Notifications), msg="通知 at \{case}: \{@sfbase.page_kind(app.nav.top())}")
+    let here = spots()
+    tap(here[here.length() - 1])
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() == Setting(@settings.Route::Notifications), msg="the page's 通知 at \{case}: \{here}")
+    // (the sidebar's, where it shows: its page beside it in place of the one there)
+    if here.length() > 1 {
+      app.nav.push(Setting(@settings.Route::Home))
+      t.run_for(@ui.move_most_ms)
+      // (on the tape, the sidebar's panel the one in use: a press on it then the sidebar's)
+      @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Side))
+      t.run_for(@ui.move_most_ms)
+      tap(spots()[0])
+      t.run_for(@ui.move_most_ms)
+      assert_true(app.nav.top() == Setting(@settings.Route::Notifications), msg="the sidebar's 通知 at \{case}")
+      assert_eq(app.nav.depth(), 2, msg="beside the stack's root at \{case}")
+    }
   }
 }

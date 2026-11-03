@@ -54,37 +54,37 @@ test "styles: the lock's waiting page, every state, drawn as before" {
   }
   inspect(out.to_string(), content=(
     #|waiting narrow 28261:7c9a5819
-    #|waiting wide 58401:7892ac5e
+    #|waiting wide 58348:d4e1f8b1
     #|waiting-dark narrow 28177:bb5c99a7
-    #|waiting-dark wide 58224:de7ec378
+    #|waiting-dark wide 58173:df9940bf
     #|finding narrow 33120:3f27ffed
-    #|finding wide 63930:9f4f7c0a
+    #|finding wide 63877:9fe7c0d
     #|finding-dark narrow 33233:e8fc15f4
-    #|finding-dark wide 63950:d3000bbf
+    #|finding-dark wide 63899:d53179f6
     #|code narrow 26964:d2c5e5f
-    #|code wide 57233:ac19855e
+    #|code wide 57180:ba92ebb1
     #|code-dark narrow 26856:8e2a7494
-    #|code-dark wide 57032:e8dda263
+    #|code-dark wide 56981:8db80fc2
     #|wrong narrow 28173:b382eec3
-    #|wrong wide 58462:785dc777
+    #|wrong wide 58409:d86d396a
     #|wrong-dark narrow 28275:5a0abdba
-    #|wrong-dark wide 58471:9f4e9514
+    #|wrong-dark wide 58420:ffb1883
     #|checking narrow 35247:bdc55f15
-    #|checking wide 66177:4541c7d2
+    #|checking wide 66124:9566bdf5
     #|checking-dark narrow 35339:262e25cc
-    #|checking-dark wide 66176:8bf911b9
+    #|checking-dark wide 66125:3e1bfc6c
     #|none narrow 27729:15fcd916
-    #|none wide 57877:947de3f4
+    #|none wide 57824:a622957
     #|none-dark narrow 27649:8f4cc1a0
-    #|none-dark wide 57704:834ec27c
+    #|none-dark wide 57653:d11bbccb
     #|failed narrow 23488:671c3cf6
-    #|failed wide 53629:375fb30
+    #|failed wide 53576:f33facb3
     #|failed-dark narrow 23488:ed579594
-    #|failed-dark wide 53536:49a572b4
+    #|failed-dark wide 53485:ba1728a3
     #|nocode narrow 28261:7c9a5819
-    #|nocode wide 58401:7892ac5e
+    #|nocode wide 58348:d4e1f8b1
     #|nocode-dark narrow 28177:bb5c99a7
-    #|nocode-dark wide 58224:de7ec378
+    #|nocode-dark wide 58173:df9940bf
     #|
 
 
@@ -143,15 +143,15 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     #|settings narrow 84592:569f8b9c
     #|station narrow 95476:53ebe4d8
     #|me-reading narrow 15718:bc76477a
-    #|settings wide 157948:8b48dd8a
-    #|station wide 224624:ebfad3a5
-    #|me-reading wide 152661:a4f17765
+    #|settings wide 157895:4dcc7713
+    #|station wide 224571:e9cfe246
+    #|me-reading wide 152608:156fe818
     #|settings-dark narrow 84895:e7029b89
     #|station-dark narrow 95296:ceccc620
     #|me-reading-dark narrow 15808:e5c51641
-    #|settings-dark wide 157826:c287b253
-    #|station-dark wide 224268:78404295
-    #|me-reading-dark wide 152615:778c3fcd
+    #|settings-dark wide 157775:5e44ebc6
+    #|station-dark wide 224217:731d61c8
+    #|me-reading-dark wide 152564:bebc91ba
     #|
 
 

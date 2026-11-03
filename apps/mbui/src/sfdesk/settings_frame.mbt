@@ -112,98 +112,31 @@ fn settings_reset() -> Unit {
 }
 
 ///|
-/// The settings' sidebar: back to the chats, then the settings' list (sfpages' settings_list.mbt: the same rows in the
-/// same groups as a small screen's settings page), the row of the page beside it lit; a row pressed, its page beside
-/// it, in place of the one there.
-fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let lit = match app.nav.top() {
-    Setting(r) => Some(@sfpages.settings_row_of(r))
-    // (the settings come to: their first row's page, settings_landing)
-    Settings => Some(settings_landing)
-    _ => None
-  }
-  let core = settings_core(src, w)
-  let here = @settings.here_of(core, w.id, w.name)
-  c.box(style=settings_side_fill, fn() {
-    side_top(c)
-    // The way back belongs to the sidebar's band, not to the list that scrolls beneath it.
-    // (none beside the system's tabs: 对话 is one of them, rail_native.mbt)
-    let updating = update_shown()
-    if updating {
-      // The update and the back action share the same band as the other sidebars' actions: the band's spacing gives
-      // each key its press room, and keeps the update concentric with the sidebar's corner.
-      let band = if @sf.native_on() { update_band() } else { update_back_band() }
-      c.box(style=band, fn() {
-        c.box(style=side_full, fn() {
-          if !@sf.native_on() {
-            settings_back(c, true)
-          }
-        })
-        |> ignore
-        update_in_row(c, src)
-      })
-      |> ignore
-    } else if !@sf.native_on() {
-      c.box(style=@sf.side_list().then(settings_back_band), fn() { settings_back(c, false) }) |> ignore
-    }
-    side_scroll(c, "settings-nav", fn() {
-      // (a row's page in place of the one open; on the tape brought over to show it)
-      @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
-        @sfbase.history_push()
-        while app.nav.depth() > 1 {
-          if !app.nav.pop() {
-            break
-          }
-        }
-        app.nav.push(Setting(r))
-        @sfbase.show_chosen()
-      })
-    })
-  })
-  |> ignore
-}
-
-///|
-/// The way back, a band's action when the update is beside it; otherwise the settings list's own row.
-fn settings_back(c : @ui.Ctx, band : Bool) -> Unit {
-  let t = @sf.theme()
-  let body = fn() {
-    @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
-    nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
-  }
-  let pressed = if band {
-    band_row(c, "settings-nav/back", false, body)
-  } else {
-    nav_row(c, "settings-nav/back", false, body)
-  }
-  if pressed {
-    @sfbase.history_push()
-    while app.nav.depth() > 1 {
-      if !app.nav.pop() {
-        break
-      }
-    }
-    if app.nav.top() != Home {
-      app.nav.replace(Home)
-    }
-    wide.landed.set("")
-  }
-}
-
-///|
 /// The page the settings come to beside their list on a medium or large screen (the stack's root, the gear pressed):
 /// the list's first row's, the account's, as a list's page is the one first in it.
 // kept across runs: a value (no field of it changes)
 pub let settings_landing : Route = Route::Me
 
 ///|
+/// 返回对话's mark across (settings_side_node's).
 let settings_nav_icon : Double = 16.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let settings_side_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// The list supplies four points of its own top room; with the band's ten the groups remain fourteen apart.
 // kept across runs: a value (no field of it changes)
 let settings_back_band : @ui.Style = @ui.css("h=Hug pb=S2_5")
+
+///|
+/// 返回对话 pressed: back to the chats, the stack's root Home, what was landed on let go.
+fn settings_back_pressed() -> Unit {
+  @sfbase.history_push()
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
+  if app.nav.top() != Home {
+    app.nav.replace(Home)
+  }
+  wide.landed.set("")
+}

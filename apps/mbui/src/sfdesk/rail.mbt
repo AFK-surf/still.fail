@@ -202,7 +202,7 @@ fn rail(
     rail_open_tape()
   } else {
     let inset = rail_window_in()
-    rail_open.then(@ui.style(w=Fixed(rail_shown_w + inset - rail_in_px), pl=@sf.room_of(inset), pb=@sf.room_of(inset)))
+    rail_open.then(@ui.style(w=Fixed(rail_box_w(false, None)), pl=@sf.room_of(inset), pb=@sf.room_of(inset)))
   }
   // (where the block's move has got: its width and padding, its top row's, between closed and open: pane_view.mbt)
   let (look, top_h) = match moving {
@@ -333,7 +333,25 @@ let rail_ground_in : Double = (rail_item_side - rail_sq_side) / 2.0
 /// The rail open in a panel of the tape (laid out Medium): its places in the panel's corners concentric with it
 /// (@sf.rail_in_tape, as round as the panel is this frame), what it shows beside the sidebar as much wider.
 fn rail_open_tape() -> @ui.Style {
-  rail_open.then(@ui.style(w=Fixed(rail_shown_w + rail_tape_more()), pl=@sf.rail_in_tape_room(), pb=@sf.rail_in_tape_room()))
+  rail_open.then(@ui.style(w=Fixed(rail_box_w(false, None)), pl=@sf.rail_in_tape_room(), pb=@sf.rail_in_tape_room()))
+}
+
+///|
+/// How wide the rail is drawn in the block (its look's width, its padding in it), what the sidebar stands beside: where
+/// the block's move has got (`moving`: pane_view.mbt's FoldLook, as rail draws it then); else closed, the bar's; on the
+/// tape, its panel's (rail_open_tape); open, as far in from the window's corner as its places stand (rail_window_in).
+fn rail_box_w(bar : Bool, moving : FoldLook?) -> Double {
+  match moving {
+    Some(f) => f.rail_w
+    None =>
+      if bar {
+        rail_closed_w
+      } else if wide.tape {
+        rail_shown_w + rail_tape_more()
+      } else {
+        rail_shown_w + rail_window_in() - rail_in_px
+      }
+  }
 }
 
 ///|
