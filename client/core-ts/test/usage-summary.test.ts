@@ -72,3 +72,19 @@ test("a station from before tells no history: left out and said; none at all: no
   const v = { ...usageView([source("studio", history([day("2026-10-02", 1)]))], 7, NOW, 480, { id: "a@x", email: "a@x" }, []), summary: s };
   assert.ok("ok" in conform("UsageView", v));
 });
+
+test("an incomplete station contributes the records it has and marks missing days as unknown", () => {
+  const partial: Source = { address: "ws/partial", name: "partial", online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true, partialHistory: history([day("2026-10-02", 20)]) } } };
+  const s = usageSummary([partial], NOW, 480, "")!;
+  assert.equal(s.figures[0].value, "20");
+  assert.equal(s.figures[0].label, "已计入 token");
+  assert.ok(s.partial, "the total is explicitly marked incomplete");
+  assert.equal(s.activity.cells.at(-2), 4, "the known call appears on its day");
+  assert.equal(s.activity.cells.at(-3), -1, "an unknown day is not presented as zero use");
+  assert.doesNotMatch(s.activity.tips.at(-3), /没有用 token/);
+  assert.doesNotMatch(s.activity.weekTips.at(-2), /没有用 token/);
+  assert.doesNotMatch(s.activity.runningTips.at(-2), /没有用 token/);
+  const empty: Source = { ...partial, value: { ok: { ...station(undefined), historyUnavailable: true, partialHistory: history([]) } } };
+  assert.doesNotMatch(usageSummary([empty], NOW, 480, "")!.activity.captions[0], /没有 token 用量/);
+});

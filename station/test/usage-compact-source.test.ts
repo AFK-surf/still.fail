@@ -8,7 +8,7 @@ import { Worker } from "node:worker_threads";
 import { Effect, Fiber } from "effect";
 import { usageRoutes } from "../src/api/routes/usage.ts";
 import { makeStore, USAGE_CALLS_EARLIER, USAGE_CALLS_SAME, usageByDay, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
-import { usageNow } from "../src/read/usage.ts";
+import { usage, usageNow } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import { compactQuery, compactScopeReady, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
@@ -565,6 +565,30 @@ test("old daily totals are not claimed complete after summary writers were stopp
     assert.throws(() => usageByDay(makeStore(store.db, "."), 0n, { workspace: "A", home: false }), /being indexed|unavailable/);
     store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", at: 120_000 }, owner]]);
     assert.deepEqual(usageGroups(makeStore(store.db, "."), 0n, 180_000n, 0n, { workspace: "A", home: false }).map((row) => [row.calls, row.input]), [[1, 2]]);
+  } finally { store.close(); }
+});
+
+test("a station with incomplete old totals can report its new history without claiming completeness", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["a", "A"], ["b", "B"]] as const) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
+    }
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "old", at: 60_000, model: "m", subagent: false, fast: false, input: 100, cacheRead: 0,
+      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    store.db.exec("CREATE TABLE usage_retired_detail (id INTEGER PRIMARY KEY); INSERT INTO usage_retired_detail VALUES (1)");
+    compactUsage(store);
+    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", at: 120_000, input: 2 }, owner]]);
+    store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [[{ ...call, id: "other", at: 120_000, input: 50 }, owner]]);
+    store.db.setAuthorizer((action, name) => action === constants.SQLITE_READ && name === "usage" ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try {
+      const answer = usage(makeStore(store.db, "."), "en", 0n, 180_000n, 0n, false, { workspace: "A", home: false }, true);
+      assert.equal(answer.history, undefined, "older clients must not mistake the new records for complete history");
+      assert.equal(answer.historyUnavailable, true);
+      assert.deepEqual(answer.partialHistory.days.map((d: { calls: number; tokens: number }) => [d.calls, d.tokens]), [[1, 3]]);
+    } finally { store.db.setAuthorizer(null); }
   } finally { store.close(); }
 });
 

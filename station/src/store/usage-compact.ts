@@ -353,11 +353,12 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
 
 /// Preserve a complete old daily summary and add only the new minute buckets. If the old minute coverage was already
 /// retired, a non-quarter-hour zone cannot infer where the old quarter crossed midnight.
-export function compactHistory(db: DatabaseSync, offset: bigint, viewer: InWorkspace | null): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] | null {
+export function compactHistory(db: DatabaseSync, offset: bigint, viewer: InWorkspace | null, partial = false): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] | null {
   if (!compactScopeReady(db, viewer)) return null;
   const coverage = db.prepare("SELECT old_days, old_minutes FROM usage_compact_since WHERE id = 1").get() as { old_days: number; old_minutes: number };
   const aligned = offset % 15n === 0n;
-  if (!coverage.old_days || (!aligned && !coverage.old_minutes)) return null;
+  const complete = !!coverage.old_days && (aligned || !!coverage.old_minutes);
+  if (!complete && !partial) return null;
   const args: (string | bigint)[] = [offset];
   const source = (table: string, alias: string) => viewer === null ? `FROM ${table} ${alias}`
     : `FROM usage_minute_scope sc INDEXED BY usage_minute_scope_ws CROSS JOIN ${table} ${alias} ON ${alias}.session = sc.session`;
@@ -370,8 +371,7 @@ export function compactHistory(db: DatabaseSync, offset: bigint, viewer: InWorks
   const compactWhere = viewer === null ? "" : viewer.home ? "WHERE c.scope IN (?3, 'H') AND (sc.ws = ?2 OR sc.ws IS NULL)"
     : "WHERE c.scope = ?3 AND sc.ws = ?2";
   const sql = `WITH parts AS (
-    SELECT ${oldMinute} AS minute, q.session, q.runtime, q.model, q.calls, q.tokens ${source(old, "q")} ${where}
-    UNION ALL
+    ${complete ? `SELECT ${oldMinute} AS minute, q.session, q.runtime, q.model, q.calls, q.tokens ${source(old, "q")} ${where} UNION ALL` : ""}
     SELECT c.minute, c.session, c.runtime, c.model, c.calls,
       c.input + c.cache_read + c.cache_write + c.cache_write_long + c.output AS tokens ${compactSource} ${compactWhere}
   ) SELECT strftime('%Y-%m-%d', (minute + ?1) * 60, 'unixepoch') AS day, session, runtime, NULLIF(model, '') AS model,

@@ -269,10 +269,17 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     }
   }
   let historyResult: Json | undefined;
+  let partialHistory: Json | undefined;
   if (history) {
     try { historyResult = usageHistory(s, utcOffsetMin, viewer, mark); }
     catch (error) {
       if (!(error instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(error.message)) throw error;
+      if (error.message === USAGE_MINUTES_PENDING) {
+        try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true); }
+        catch (partialError) {
+          if (!(partialError instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(partialError.message)) throw partialError;
+        }
+      }
     }
   }
   mark("details");
@@ -292,6 +299,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
     ...(historyResult !== undefined ? { history: historyResult } : {}),
     ...(history && historyResult === undefined ? { historyUnavailable: true } : {}),
+    ...(partialHistory !== undefined ? { partialHistory } : {}),
   };
   mark("other");
   const ms = Math.round(performance.now() - started);
@@ -303,11 +311,11 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
 /// in the asker's time zone, runtime and model (the year, as Codex's usage summary has it); the chats of each place
 /// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's chat
 /// working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
-export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}): Json {
+export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}, partial = false): Json {
   usageChatsReady(s, viewer);
   mark("historyVisibility");
   const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
-  for (const r of usageByDay(s, utcOffsetMin, viewer)) {
+  for (const r of usageByDay(s, utcOffsetMin, viewer, partial)) {
     const key = `${r.day}\n${r.runtime}\n${r.model ?? ""}`;
     const d = days.get(key) ?? { day: r.day, runtime: r.runtime, model: r.model, tokens: 0, calls: 0 };
     d.tokens += r.tokens;

@@ -103,3 +103,15 @@ test("refreshing new detail preserves a complete older daily total", () => {
   const nowNewDetail = daysOf(part.rows)[0];
   assert.deepEqual(updated.history.days, [{ ...nowNewDetail, calls: nowNewDetail.calls + 50, tokens: nowNewDetail.tokens + 5_000 }]);
 });
+
+test("refreshing details updates the available portion of an incomplete history", () => {
+  const from = Date.UTC(2026, 8, 5, 16), since = Date.UTC(2026, 10, 1, 16);
+  const old = row("2026-11-02", "s", "m", 1);
+  const held: J = { from, detailSince: since, rows: [old], historyUnavailable: true, partialHistory: { days: daysOf([old]), cards: 1 } };
+  const part: J = { detailSince: since, rows: [row("2026-11-02", "s", "m", 2)] };
+  const updated: J = withPart(held, part, "2026-11-02", since);
+  assert.equal(updated.historyUnavailable, true);
+  assert.equal(updated.history, undefined);
+  assert.deepEqual(updated.partialHistory.days, daysOf(part.rows));
+  assert.equal(updated.partialHistory.cards, 1);
+});

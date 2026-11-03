@@ -53,7 +53,8 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     target.set(key, at);
   } };
   accumulate(days, rows, 1);
-  const history = get(held, "history");
+  const full = get(held, "history");
+  const history = isObject(full) ? full : get(held, "partialHistory");
   const historyDays = arr(get(history, "days"));
   let updatedDays: J[];
   if (typeof get(held, "detailSince") === "number") {
@@ -77,7 +78,7 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
   });
   const priced = new Map<string, J>();
   for (const p of [...arr(get(get(held, "prices"), "rows")), ...arr(get(get(part, "prices"), "rows"))]) priced.set(String(get(p, "model")), p);
-  const { remoteRuns: _remoteRuns, history: _history, ...rest } = held;
+  const { remoteRuns: _remoteRuns, history: _history, partialHistory: _partialHistory, ...rest } = held;
   const detailSince = get(part, "detailSince") ?? get(held, "detailSince");
   const remoteRuns = Array.isArray(get(held, "remoteRuns")) && Array.isArray(get(part, "remoteRuns"))
     ? [...arr(get(held, "remoteRuns")).filter((r) => n(get(r, "at")) < since), ...arr(get(part, "remoteRuns"))] : undefined;
@@ -92,6 +93,6 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     people: { ...(get(held, "people") as J | undefined), ...(get(part, "people") as J | undefined) },
     profiles: get(part, "profiles") ?? get(held, "profiles"),
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
-    ...(isObject(history) ? { history: { ...history, days: updatedDays } } : {}),
+    ...(isObject(history) ? { [isObject(full) ? "history" : "partialHistory"]: { ...history, days: updatedDays } } : {}),
   };
 }

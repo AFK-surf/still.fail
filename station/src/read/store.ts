@@ -952,9 +952,9 @@ export const USAGE_DETAIL_QUARTERS_SCOPED = quartersByDay(DETAIL_QUARTERS_SCOPED
 export const USAGE_DETAIL_QUARTERS_HOME = quartersByDay(DETAIL_QUARTERS_HOME, "1");
 
 /// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
-export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
+export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null, partial = false): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
   if (hasCompactUsage(s.db)) {
-    const rows = compactHistory(s.db, utcOffsetMin, viewer);
+    const rows = compactHistory(s.db, utcOffsetMin, viewer, partial);
     if (rows === null) throw new Error(USAGE_MINUTES_PENDING);
     return rows;
   }

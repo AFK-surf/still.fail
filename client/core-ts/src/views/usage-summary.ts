@@ -68,13 +68,17 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   let picked = 0;
   let read = 0;
   let missing = 0;
+  let incomplete = 0;
   const num = (v: unknown, k: string): number => (typeof get(v, k) === "number" ? get(v, k) : 0);
   for (const s of sources) {
-    const history = s.value !== undefined && "ok" in s.value ? get(s.value.ok, "history") : undefined;
+    const value = s.value !== undefined && "ok" in s.value ? s.value.ok : undefined;
+    const full = get(value, "history");
+    const history = full ?? get(value, "partialHistory");
     if (history === undefined || history === null) {
       missing++;
       continue;
     }
+    if (full === undefined || full === null) incomplete++;
     read++;
     archived += num(history, "archived");
     remote += num(history, "remoteRuns");
@@ -96,7 +100,7 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   if (read === 0) return null;
   const share = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—");
   const figures = [
-    { label: t("core-views.usage.summary.lifetime"), value: count(total) },
+    { label: t(incomplete > 0 || missing > 0 ? "core-views.usage.summary.counted" : "core-views.usage.summary.lifetime"), value: count(total) },
     { label: t("core-views.usage.summary.archived"), value: count(archived) },
     { label: t("core-views.usage.summary.remote"), value: count(remote) },
     { label: t("core-views.usage.summary.picked"), value: share(picked, cards) },
@@ -107,7 +111,8 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   const values: number[] = [];
   for (let i = 0; i < WEEKS * WEEK_DAYS; i++) values.push(byDay.get(plus(start, i)) ?? 0);
   const most = Math.max(0, ...values);
-  const cells = values.map((v, i) => (plus(start, i) > today ? -1 : level(v, most)));
+  const unknown = missing > 0 || incomplete > 0;
+  const cells = values.map((v, i) => (plus(start, i) > today || (unknown && v === 0) ? -1 : level(v, most)));
   const weeks: number[] = [];
   for (let w = 0; w < WEEKS; w++) weeks.push(values.slice(w * WEEK_DAYS, (w + 1) * WEEK_DAYS).reduce((a, b) => a + b, 0));
   const running: number[] = [];
@@ -125,11 +130,11 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   // what each is, said as the pointer rests on it: a day its date and tokens, a week its first day and tokens, the
   // running total as of the week's last day so far
   const tokens = (n: number) => (n > 0 ? t("core-views.usage.summary.tokens", { n: count(n) }) : t("core-views.usage.summary.no_tokens"));
-  const tips = values.map((v, i) => (plus(start, i) > today ? "" : t("core-views.usage.summary.day_tip", { date: format.monthDayOf(plus(start, i)), tokens: tokens(v) })));
-  const weekTips = weeks.map((v, w) => t("core-views.usage.summary.week_tip", { date: format.monthDayOf(plus(start, w * WEEK_DAYS)), tokens: tokens(v) }));
+  const tips = values.map((v, i) => (plus(start, i) > today ? "" : t("core-views.usage.summary.day_tip", { date: format.monthDayOf(plus(start, i)), tokens: unknown && v === 0 ? t("core-views.usage.summary.unknown") : tokens(v) })));
+  const weekTips = weeks.map((v, w) => t("core-views.usage.summary.week_tip", { date: format.monthDayOf(plus(start, w * WEEK_DAYS)), tokens: unknown && v === 0 ? t("core-views.usage.summary.unknown") : tokens(v) }));
   const runningTips = running.map((v, w) => {
     const last = plus(start, w * WEEK_DAYS + WEEK_DAYS - 1);
-    return t("core-views.usage.summary.running_tip", { date: format.monthDayOf(last > today ? today : last), tokens: tokens(v) });
+    return t("core-views.usage.summary.running_tip", { date: format.monthDayOf(last > today ? today : last), tokens: unknown && v === 0 ? t("core-views.usage.summary.unknown") : tokens(v) });
   });
   byStation.sort((x, y) => y[1] - x[1]);
   const placed = [...places].sort((x, y) => y[1] - x[1]);
@@ -152,7 +157,7 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
       more: t("core-views.usage.summary.more"),
       captions: year
         ? ["", t("core-views.usage.summary.weekly_caption", { n: count(tallest) }), t("core-views.usage.summary.cumulative_caption", { n: count(top) })]
-        : [t("core-views.usage.summary.no_year"), t("core-views.usage.summary.no_year"), t("core-views.usage.summary.no_year")],
+        : Array(3).fill(t(unknown ? "core-views.usage.summary.no_year_incomplete" : "core-views.usage.summary.no_year")),
     },
     stations: {
       title: t("core-views.usage.summary.by_station"),
@@ -168,6 +173,6 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
         }
       : {}),
     asOf: t("core-views.usage.summary.as_of", { date: format.monthDayOf(today) }),
-    partial: missing > 0 ? t("core-views.usage.summary.partial") : null,
+    partial: incomplete > 0 ? t("core-views.usage.summary.incomplete") : missing > 0 ? t("core-views.usage.summary.partial") : null,
   };
 }
