@@ -65,7 +65,7 @@ test("finding the latest chat seeks one delivery per joined chat", () => {
   } finally { store.close(); }
 });
 
-test("a session without deliveries finds its fallback without enumerating memberships", () => {
+test("a session without deliveries finds its fallback without loading a list of memberships", () => {
   const { store, thread } = fixture();
   try {
     const id = thread("joined");
