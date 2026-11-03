@@ -121,8 +121,14 @@ export const isRevocation = (r: any): r is Revocation => typeof r?.kind === "str
 /// The state in memory, and who wants to hear of its changes.
 export class Cloud {
   state: CloudState | null;
-  /// Whether `peers` is the cloud's roster as of the current presence socket (fail closed until a `state` frame says so).
+  /// Whether `peers` is taken as the workspace's stations: the roster the cloud said last, kept in cloud.json, through a
+  /// presence socket gone and a restart (user, 2026-11-04: a station cut off from the cloud for an hour refused every
+  /// other one, a shared Profile's copy among them). Not once the station is removed; a station removed meanwhile is
+  /// refused when a fresh roster says so.
   peersCurrent = false;
+  /// Whether the roster is the one of the current presence socket (a minute's grace after it ends): the pages say a
+  /// station cut off from still.fail cloud.
+  reached = false;
   /// How many rosters the control plane said (presence.ts: one said since its socket ended keeps it current).
   rostersSaid = 0;
   /// Runs a device tool request that came over the presence socket (mesh/tools.ts `presenceTools`), while the mesh
@@ -148,6 +154,7 @@ export class Cloud {
   constructor(data: string) {
     this.data = data;
     this.state = readState(data);
+    this.peersCurrent = this.state !== null && !this.removed();
     this.lock = readLock(data);
     // `enroll` from another process, or an older tool editing the file; `lock reset` taking the lock away.
     try {
@@ -431,11 +438,13 @@ export class Cloud {
     return (s.relay_urls.length > 0 ? s.relay_urls : [s.relay_url]).filter((u) => URL.canParse(u));
   }
 
-  /// The roster said last is no longer current (presence.ts `lapse`): told, as a new one is, so what shows or acts on
-  /// whether it is current hears it.
+  /// The roster said last is no longer the socket's (presence.ts `lapse`): still taken, unless the station was removed;
+  /// told, as a new one is, so what shows whether it is reached hears it.
   lapsed() {
-    if (!this.peersCurrent) return;
-    this.peersCurrent = false;
+    const current = !this.removed() && this.peersCurrent;
+    if (!this.reached && current === this.peersCurrent) return;
+    this.reached = false;
+    this.peersCurrent = current;
     this.tell();
   }
 
