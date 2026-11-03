@@ -10,7 +10,7 @@ import { Refused } from "../api/request.ts";
 import { retiredUsage } from "../store/usage-retire.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
-import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage, PartialMinuteUsage } from "../store/usage-compact.ts";
+import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
 import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -798,13 +798,8 @@ export { USAGE_DETAIL_PENDING };
 export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
   if (hasCompactUsage(s.db)) {
     if (!compactScopeReady(s.db, viewer)) throw new Refused(503, "usage statistics are moving between workspaces");
-    try {
-      const query = compactQuery(from, to, utcOffsetMin, viewer);
-      return all(s, query.sql, ...query.args).map(usageGroupOf);
-    } catch (error) {
-      if (error instanceof PartialMinuteUsage) throw new Refused(400, error.message);
-      throw error;
-    }
+    const query = compactQuery(from, to, utcOffsetMin, viewer);
+    return all(s, query.sql, ...query.args).map(usageGroupOf);
   }
   if (retiredUsage(s.db)) throw new Refused(503, "usage detail statistics are unavailable");
   const generation = usageDetailGeneration(s.db);

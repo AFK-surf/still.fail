@@ -160,11 +160,6 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-/// Rows for complete minutes. The public usage page asks at local-day boundaries, all of which are minute-aligned.
-export class PartialMinuteUsage extends Error {
-  constructor() { super("partial-minute usage requires paged calls"); }
-}
-
 /// A moved session is unavailable in both affected workspaces until its buckets have been re-scoped in small batches.
 export function compactScopeReady(db: DatabaseSync, viewer: InWorkspace | null): boolean {
   if (viewer === null) return db.prepare("SELECT 1 FROM usage_compact_moving LIMIT 1").get() === undefined;
@@ -221,9 +216,10 @@ export function moveCompactStep(db: DatabaseSync, batch = 256): { done: boolean;
 }
 
 export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null): { sql: string; args: (string | bigint)[] } {
-  // Minute totals cannot answer a partial minute exactly. Callers needing those boundaries can page the original calls.
+  // Minute totals cannot answer a partial minute exactly. Read original calls only at those two edges, after the
+  // statistics have identified which sessions have calls there; the complete minutes still use their totals.
   if (from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n))) {
-    throw new PartialMinuteUsage();
+    return compactQueryWithEdges(from, to, offset, viewer);
   }
   const floor = (n: bigint) => n >= 0n ? n / 60_000n : -1n - ((-1n - n) / 60_000n);
   const start = from >= to ? 0n : floor(from);
@@ -241,6 +237,50 @@ export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: I
     SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output
     ${source} ${condition} c.minute >= ?2 AND c.minute < ?3
     GROUP BY day, c.session, c.thread, c.person, c.profile, c.runtime, c.model, c.fast`;
+  return { sql, args };
+}
+
+function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null): { sql: string; args: (string | bigint)[] } {
+  const size = 60_000n;
+  const max = 9223372036854775807n;
+  const floor = (n: bigint) => n >= 0n ? n / size : -1n - ((-1n - n) / size);
+  const first = floor(from);
+  const last = floor(to);
+  const args: (string | bigint)[] = [offset];
+  const bind = (value: string | bigint) => { args.push(value); return `?${args.length}`; };
+  let visible = "";
+  const source = viewer === null ? "FROM usage_compact c INDEXED BY usage_compact_time"
+    : "FROM usage_compact c INDEXED BY usage_compact_scope_time CROSS JOIN usage_minute_scope sc ON sc.session = c.session";
+  if (viewer !== null) {
+    const scope = bind(`W${viewer.workspace}`);
+    const ws = bind(viewer.workspace);
+    visible = viewer.home ? `c.scope IN (${scope}, 'H') AND (sc.ws = ${ws} OR sc.ws IS NULL) AND `
+      : `c.scope = ${scope} AND sc.ws = ${ws} AND `;
+  }
+  const start = bind(first + (from === first * size ? 0n : 1n));
+  const end = bind(to === max ? max : last);
+  const parts = [`SELECT c.minute, c.session, c.thread, c.person, c.profile, c.runtime, c.model, c.fast,
+    c.calls, c.input, c.cache_read, c.cache_write, c.cache_write_long, c.output
+    ${source} WHERE ${visible}c.minute >= ${start} AND c.minute < ${end}`];
+  const edge = (minute: bigint, begin: bigint, until: bigint) => {
+    if (begin >= until) return;
+    const bucket = bind(minute);
+    const low = bind(begin);
+    const high = bind(until);
+    parts.push(`SELECT e.minute, u.session, COALESCE(u.thread, 0), COALESCE(u.person, ''), COALESCE(u.profile, ''),
+      u.runtime, COALESCE(u.model, ''), u.fast, u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output
+      FROM (SELECT DISTINCT c.session, c.minute ${source} WHERE ${visible}c.minute = ${bucket}) e
+      CROSS JOIN usage u INDEXED BY usage_session ON u.session = e.session AND u.at >= ${low} AND u.at < ${high}
+      WHERE u.compact_counted = 1`);
+  };
+  if (from !== first * size) edge(first, from, (first + 1n) * size < to ? (first + 1n) * size : to);
+  if (to !== max && to !== last * size && (last !== first || from === first * size)) edge(last, last * size, to);
+  const sql = `WITH parts AS (${parts.join(" UNION ALL ")})
+    SELECT strftime('%Y-%m-%d', (minute + ?1) * 60, 'unixepoch') AS day,
+      session, NULLIF(thread, 0) AS thread, NULLIF(person, '') AS person, NULLIF(profile, '') AS profile,
+      runtime, NULLIF(model, '') AS model, fast, SUM(calls) AS calls, SUM(input) AS input,
+      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+    FROM parts GROUP BY day, session, thread, person, profile, runtime, model, fast`;
   return { sql, args };
 }
 

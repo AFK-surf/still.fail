@@ -112,6 +112,122 @@ test("a time range does not visit sessions with only older statistics", () => {
   } finally { store.close(); }
 });
 
+test("compact usage keeps exact millisecond boundaries and workspace visibility", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["a", "A"], ["b", "B"], ["home", null]] as const) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
+    }
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string, at: number, input: number) => ({ id, at, model: "m", subagent: false, fast: false,
+      input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null });
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [
+      [call("a0", -60_001, 1), owner], [call("a1", -60_000, 2), owner], [call("a2", -1, 4), owner],
+      [call("a3", 0, 8), owner], [call("a4", 10, 16), owner], [call("a5", 59_999, 32), owner], [call("a6", 60_000, 64), owner],
+      [call("a7", 120_010, 128), owner],
+    ]);
+    store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [[call("b", 10, 4096), owner]]);
+    store.recordUsage("/home", { session: "home", offset: 1, model: "m" }, "claude", [[call("home", 10, 8192), owner]]);
+    const reader = makeStore(store.db, ".");
+    const rows = (from: bigint, to: bigint, home: boolean) => usageGroups(reader, from, to, 1n, { workspace: "A", home })
+      .map((r) => [r.day, r.session, r.input]).sort((a, b) => String(a).localeCompare(String(b)));
+    assert.deepEqual(rows(10n, 11n, false), [["1970-01-01", "a", 16]]);
+    assert.deepEqual(rows(-60_001n, 60_001n, false), [["1969-12-31", "a", 1], ["1970-01-01", "a", 126]]);
+    assert.deepEqual(rows(-60_001n, 60_001n, true), [["1969-12-31", "a", 1], ["1970-01-01", "a", 126], ["1970-01-01", "home", 8192]]);
+    assert.deepEqual(rows(-60_000n, 60_000n, false), [["1970-01-01", "a", 62]]);
+    assert.deepEqual(rows(10n, 10n, false), []);
+  } finally { store.close(); }
+});
+
+test("compact usage agrees with calls across dates and arbitrary bounds", () => {
+  const store = Store.open(":memory:");
+  try {
+    const sessions = [["a", "A"], ["b", "B"], ["home", null]] as const;
+    for (const [key, ws] of sessions) store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const times = [-86_400_002, -60_001, -60_000, -1, 0, 1, 59_999, 60_000, 86_399_999, 86_400_000];
+    const originals: { session: string; ws: string | null; at: number; input: number; output: number }[] = [];
+    for (const [key, ws] of sessions) {
+      const calls = Array.from({ length: 50 }, (_, n) => {
+        const at = times[n % times.length]! + Math.floor(n / times.length);
+        const input = n + 1;
+        const output = n % 7;
+        originals.push({ session: key, ws, at, input, output });
+        return [{ id: `${key}-${n}`, at, model: "m", subagent: false, fast: false, input,
+          cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null }, owner] as const;
+      });
+      store.recordUsage(`/${key}`, { session: key, offset: 1, model: "m" }, "claude", calls.map(([call, of]) => [call, of]));
+    }
+    const reader = makeStore(store.db, ".");
+    const ranges: [bigint, bigint][] = [[-86_400_003n, -86_400_001n], [-60_001n, 60_001n], [-1n, 1n],
+      [0n, 59_999n], [1n, 60_000n], [0n, 9_223_372_036_854_775_807n], [-60_000n, 120_000n],
+      [1n, 1n], [-86_399_999n, 86_400_001n]];
+    for (const [from, to] of ranges) for (const offset of [-31, 0, 1, 345]) for (const home of [false, true]) {
+      const expected = new Map<string, { day: string; session: string; calls: number; input: number; output: number }>();
+      for (const call of originals) {
+        if (BigInt(call.at) < from || BigInt(call.at) >= to || (call.ws !== "A" && !(home && call.ws === null))) continue;
+        const day = new Date(call.at + offset * 60_000).toISOString().slice(0, 10);
+        const id = `${day}\0${call.session}`;
+        const row = expected.get(id) ?? { day, session: call.session, calls: 0, input: 0, output: 0 };
+        row.calls++;
+        row.input += call.input;
+        row.output += call.output;
+        expected.set(id, row);
+      }
+      const order = (a: { day: string; session: string }, b: { day: string; session: string }) =>
+        a.day.localeCompare(b.day) || a.session.localeCompare(b.session);
+      const actual = usageGroups(reader, from, to, BigInt(offset), { workspace: "A", home })
+        .map(({ day, session, calls, input, output }) => ({ day, session, calls, input, output })).sort(order);
+      assert.deepEqual(actual, [...expected.values()].sort(order), `${from}..${to}, offset ${offset}, home ${home}`);
+    }
+  } finally { store.close(); }
+});
+
+test("a partial minute does not visit other workspaces or calls outside its bounds", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string, at: number) => ({ id, at, model: "m", subagent: false, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null });
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call("wanted", 1_001), owner]]);
+    let buckets = 0;
+    let calls = 0;
+    store.db.function("edge_bucket", () => { buckets++; return 1; });
+    store.db.function("edge_call", () => { calls++; return 1; });
+    const q = compactQuery(1_001n, 1_002n, 0n, { workspace: "A", home: false });
+    const sql = q.sql.replace("c.minute = ", "edge_bucket() AND c.minute = ")
+      .replace("WHERE u.compact_counted = 1", "WHERE edge_call() AND u.compact_counted = 1");
+    assert.notEqual(sql, q.sql);
+    const read = () => {
+      buckets = 0;
+      calls = 0;
+      const rows = store.db.prepare(sql).all(...q.args) as { session: string; calls: number; input: number }[];
+      assert.deepEqual(rows.map((r) => [r.session, r.calls, r.input]), [["a", 1, 1]]);
+      return [buckets, calls];
+    };
+    const before = read();
+    const scope = store.db.prepare("INSERT INTO usage_minute_scope (session, ws, done) VALUES (?, ?, 1)");
+    const bucket = store.db.prepare("INSERT INTO usage_compact VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 0, ?)");
+    for (let n = 0; n < 200; n++) {
+      scope.run(`old-${n}`, "A");
+      bucket.run(`old-${n}`, -1, "WA");
+      scope.run(`other-${n}`, "B");
+      bucket.run(`other-${n}`, 0, "WB");
+    }
+    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude",
+      Array.from({ length: 300 }, (_, n) => [call(`earlier-${n}`, 500), owner]));
+    assert.deepEqual(read(), before, "unrelated statistics and calls do not increase edge work");
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.args) as { detail: string }[]).map((r) => r.detail).join(" | ");
+    assert.match(plan, /usage_compact_scope_time \(scope=\? AND minute=\?\)/);
+    assert.match(plan, /usage_session \(session=\? AND at>\? AND at<\?\)/);
+  } finally { store.close(); }
+});
+
 test("a moved session's statistics are re-scoped in bounded batches and follow another move", () => {
   const store = Store.open(":memory:");
   try {
@@ -540,9 +656,7 @@ test("original usage is paged by session with exact bounds and workspace isolati
     const reader = makeStore(store.db, ".");
     const viewer = { workspace: "A", home: false };
     const max = 9_223_372_036_854_775_807n;
-    assert.throws(() => usageGroups(reader, 1_001n, 1_002n, 0n, viewer),
-      (error: unknown) => error instanceof Error && "status" in error && error.status === 400 && /paged calls/.test(error.message),
-      "a partial minute must not be reported as a complete aggregate");
+    assert.deepEqual(usageGroups(reader, 1_001n, 1_002n, 0n, viewer).map((row) => [row.session, row.calls, row.input]), [["a", 3, 3]]);
     assert.deepEqual(usageGroups(reader, 1_001n, 1_001n, 0n, viewer), [], "an empty range stays empty");
     let before: [bigint, bigint] = [max, max];
     const ids: string[] = [];
