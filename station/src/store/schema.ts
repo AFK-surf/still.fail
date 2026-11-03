@@ -800,6 +800,12 @@ export function addUsageCompactions(db: DatabaseSync): void {
 /// - session_first: the first message a session was given (its delivery the earliest made).
 /// Made once from what is there, in the same transaction as the triggers that keep them from then on (as
 /// usage_totals), after the letters were marked (addLetterColumn).
+// An outer INSERT OR REPLACE / OR ABORT overrides OR IGNORE in a trigger. Do not attempt an insert if this session
+// already has a first delivery: the caller's conflict policy must neither replace the summary nor reject a new message.
+const SESSION_FIRST_ADD = `CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+  INSERT INTO session_first SELECT NEW.session, NEW.thread, NEW.n
+    WHERE NOT EXISTS (SELECT 1 FROM session_first WHERE session = NEW.session);
+END;`;
 const LIST_STATE = `
 CREATE TABLE thread_state (
   thread INTEGER PRIMARY KEY,
@@ -844,9 +850,7 @@ CREATE TRIGGER thread_state_drop AFTER DELETE ON entries BEGIN
   DELETE FROM thread_state WHERE thread = OLD.thread;
   DELETE FROM thread_people WHERE thread = OLD.thread;
 END;
-CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
-  INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
-END;
+${SESSION_FIRST_ADD}
 CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries
   WHEN EXISTS (SELECT 1 FROM session_first WHERE session = OLD.session AND thread = OLD.thread AND n = OLD.n) BEGIN
   DELETE FROM session_first WHERE session = OLD.session;
@@ -1147,10 +1151,13 @@ export function addTellIndexes(db: DatabaseSync): void {
 /// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
 export function addListState(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thread_state'").get() !== undefined;
-  if (made()) return;
+  const firstSafe = () => ((db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'session_first_add'").get() as { sql: string } | undefined)?.sql ?? "")
+    .includes("WHERE NOT EXISTS (SELECT 1 FROM session_first WHERE session = NEW.session)");
+  if (made() && firstSafe()) return;
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!made()) db.exec(LIST_STATE);
+    else if (!firstSafe()) db.exec(`DROP TRIGGER IF EXISTS session_first_add; ${SESSION_FIRST_ADD}`);
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");

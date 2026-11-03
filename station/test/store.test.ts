@@ -4,14 +4,14 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { constants, DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
-import { MERGED, SCHEMA } from "../src/store/schema.ts";
+import { addListState, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
@@ -364,6 +364,49 @@ test("deleting a session removes its first-message summary once, not once per de
   store.deleteSession("a");
   assert.deepEqual(store.db.prepare("SELECT session FROM first_removed").all().map((r) => r.session), ["a"]);
   assert.equal(store.sessionStats("b").get("b")!.firstText, "message 0", "the other participant keeps its summary");
+});
+
+for (const mode of ["ABORT", "REPLACE"] as const) for (const recursive of [false, true]) {
+  test(`a delivery written with ${mode} keeps the session's first message (recursive triggers ${recursive})`, () => {
+    const store = memory();
+    const db = store.db;
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    session(store, "first");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+    db.prepare(`INSERT OR ${mode} INTO deliveries (thread,n,session) VALUES (1,2,'first')`).run();
+    assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 1 });
+  });
+}
+
+test("an older database replaces the first-delivery trigger without rebuilding its summary", () => {
+  const path = join(tempdir(), "first-delivery.db");
+  const before = open(path);
+  session(before, "first");
+  before.db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+  before.db.exec(`DROP TRIGGER session_first_add;
+    CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+      INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+    END`);
+  before.close();
+  const after = open(path);
+  after.db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,2,'first')").run();
+  assert.deepEqual({ ...after.db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 1 });
+});
+
+test("updating the first-delivery trigger does not read or rewrite old deliveries and summaries", () => {
+  const store = memory();
+  const db = store.db;
+  db.exec(`DROP TRIGGER session_first_add;
+    CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+      INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+    END`);
+  const tables = new Set(["deliveries", "entries", "session_first", "thread_state", "thread_people"]);
+  db.setAuthorizer((action, table) => tables.has(table ?? "") && [constants.SQLITE_READ, constants.SQLITE_INSERT, constants.SQLITE_UPDATE, constants.SQLITE_DELETE].includes(action)
+    ? constants.SQLITE_DENY : constants.SQLITE_OK);
+  try { addListState(db); } finally { db.setAuthorizer(null); }
+  db.setAuthorizer((action) => action === constants.SQLITE_CREATE_TRIGGER || action === constants.SQLITE_DROP_TRIGGER
+    ? constants.SQLITE_DENY : constants.SQLITE_OK);
+  try { addListState(db); } finally { db.setAuthorizer(null); }
 });
 
 test("what two chats' agents wrote each other is neither a chat's unread nor what lists show of it, archived or not", () => {
