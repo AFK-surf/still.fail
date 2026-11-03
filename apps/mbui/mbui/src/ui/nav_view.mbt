@@ -561,11 +561,11 @@ fn[P] Nav::backs_over(
     let w = @signals.untracked(fn() { m.laid_size() }).0
     let p = back_progress.val
     match s {
-      Began(x, t) => nav.gesture(0, x, w, t, progress=p)
-      Moved(x, t) => nav.gesture(1, x, w, t, progress=p)
-      LetGo(x, t) => nav.gesture(2, x, w, t, progress=p)
-      CalledOff => nav.gesture(3, 0.0, w, m.cause_at(), progress=p)
-      Back => nav.gesture(4, 0.0, w, m.cause_at(), progress=p)
+      Began(x, t) => nav.gesture(0, x, w, t, progress=p, floor=floor())
+      Moved(x, t) => nav.gesture(1, x, w, t, progress=p, floor=floor())
+      LetGo(x, t) => nav.gesture(2, x, w, t, progress=p, floor=floor())
+      CalledOff => nav.gesture(3, 0.0, w, m.cause_at(), progress=p, floor=floor())
+      Back => nav.gesture(4, 0.0, w, m.cause_at(), progress=p, floor=floor())
     }
   }
   let back_node = fn(b : @view.View) { b.over(Is(true)).follows_back(step) |> ignore }
@@ -633,20 +633,20 @@ fn[P] Nav::backs_over(
               to_other(id, Moved(d.wx - left, d.at), d.at)
             }
             None => {
-              nav.gesture(0, down_x.val, w, d.at)
-              nav.gesture(1, from_down(d), w, d.at)
+              nav.gesture(0, down_x.val, w, d.at, floor=floor())
+              nav.gesture(1, from_down(d), w, d.at, floor=floor())
             }
           }
         }
         Moved =>
           match other.val {
             Some((id, left)) => to_other(id, Moved(d.wx - left, d.at), d.at)
-            None => nav.gesture(1, from_down(d), w, d.at)
+            None => nav.gesture(1, from_down(d), w, d.at, floor=floor())
           }
         Up => {
           match other.val {
             Some((id, left)) => to_other(id, LetGo(d.wx - left, d.at), d.at)
-            None => nav.gesture(2, from_down(d), w, d.at)
+            None => nav.gesture(2, from_down(d), w, d.at, floor=floor())
           }
           swiped.val = false
           other.val = None
@@ -654,7 +654,7 @@ fn[P] Nav::backs_over(
         Off => {
           match other.val {
             Some((id, _)) => to_other(id, CalledOff, d.at)
-            None => nav.gesture(3, from_down(d), w, d.at)
+            None => nav.gesture(3, from_down(d), w, d.at, floor=floor())
           }
           swiped.val = false
           other.val = None
