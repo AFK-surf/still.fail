@@ -324,19 +324,39 @@ fn chat_bar(
             let info = fn() { chat_own.info_open.set(!@signals.untracked(fn() { chat_own.info_open.get() })) }
             // its "…": what is done with it, the menu a row of the sidebar has (from the mark where it was chosen in the
             // system's bars, rail_native.mbt bar_anchor)
+            let extra = @sfpages.chat_extra_items(src, r, chat)
             let more = fn() {
               let (at, _, _) = bar_anchor(c.id("chat-more"), Bottom, End)
-              @sfpages.open_chat_menu(src, w.id, r, @sfpages.chat_extra_items(src, r, chat), from=Of(at))
+              @sfpages.open_chat_menu(src, w.id, r, extra, from=Of(at))
             }
-            // (each its own in the system's bars where it has them: rail_native.mbt bar_chat)
-            let in_bars = bar_chat(src, r, view.agents, info, more, if archivable { Some(archive) } else { None })
+            // (each its own in the system's bars where it has them, the "…" a menu of the system's: rail_native.mbt
+            // bar_chat)
+            let rows = if @sf.native_on() { @sfpages.chat_menu_of(src, w.id, r, extra) } else { [] }
+            let screens = view.screens
+            let screen = if screens.length() > 0 {
+              Some(
+                (
+                  fn() {
+                    let (at, _, _) = bar_anchor(c.id("chat-screen"), Bottom, End)
+                    chat_screens_open(r, screens, from=Of(at))
+                  },
+                  chat_screens_driven(screens),
+                ),
+              )
+            } else {
+              None
+            }
+            let in_bars = bar_chat(src, r, view.agents, info, rows, more, screen, if archivable { Some(archive) } else { None })
             if !in_bars &&
               archivable &&
               @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
               archive()
             }
             jobs_trigger(c, src, r)
-            screen_trigger(c, r, view)
+            // (in the system's bars where the chat's actions are, the column not short: bar_chat)
+            if !in_bars || column_short.get() {
+              screen_trigger(c, r, view)
+            }
             if !in_bars {
               @sf.icon_button(c, "info", key="chat-info", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info"))
               |> ignore
