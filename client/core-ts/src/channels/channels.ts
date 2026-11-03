@@ -309,6 +309,13 @@ export class Channels {
   range(c: Channel, from: number, to: number, options: { quiet: boolean; ctx?: SpanContext | null }): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (to < from || this.#held.count(c, from, to) === to - from + 1) return;
+      // A chat opens around an unread or saved position with a page on either side. Keep that bounded opening in one
+      // answer, so its first half cannot open the window before the position itself has arrived.
+      if (to - from + 1 <= c.kind.page * 2) {
+        yield* this.read(c, { from, to }, options);
+        if (this.#held.count(c, from, to) !== to - from + 1) return yield* this.#incomplete();
+        return;
+      }
       for (let first = from; first <= to;) {
         const last = Math.min(to, first + c.kind.page - 1);
         if (this.#held.count(c, first, last) !== last - first + 1) {

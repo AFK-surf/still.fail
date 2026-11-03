@@ -1947,14 +1947,53 @@ test("a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after", async
   third.core.close();
 });
 
+test("an unread chat waits for its opening position before showing a newly read window", async () => {
+  const answers: J = {
+    ...base(),
+    "GET /threads": [threadView(7, 300, 200, 100)],
+    "GET /threads/7/entries?limit=50": { last: 300, entries: entries(251, 300) },
+    "GET /threads/7/entries?from=151&to=250": { last: 300, entries: entries(151, 250) },
+    "GET /threads/7/entries?from=151&to=200": { last: 300, entries: entries(151, 200) },
+    "GET /threads/7/entries?from=201&to=250": { last: 300, entries: entries(201, 250) },
+  };
+  let background!: () => void;
+  const s = await ui(answers, (state) => { background = state.host.hold("/admin/api/batch"); });
+  // Hold either the previous one-request opening or its second half. The earlier half may arrive, but the first
+  // unread entry (201) has not, so a new window cannot yet open at its requested position.
+  const whole = s.host.hold("/admin/api/threads/7/entries?from=151&to=250");
+  const second = s.host.hold("/admin/api/threads/7/entries?from=201&to=250");
+  try {
+    subscribe(s.core, s.ui, 1, thread7);
+    await s.read();
+    await s.read();
+    if (gets(s.host, "/admin/api/threads/7/entries?from=201&to=250")) {
+      assert.equal(s.core.inner.data.logCount("entry", ST, "7", 151, 200), 50, "the earlier half has arrived");
+    } else {
+      assert.equal(gets(s.host, "/admin/api/threads/7/entries?from=151&to=250"), 1, "the whole opening is held");
+    }
+    assert.equal(s.core.inner.data.logCount("entry", ST, "7", 201, 201), 0, `the opening position has not arrived; requests: ${JSON.stringify(entryReads(s.host, 0))}`);
+    const shown = page(s.values);
+    assert.ok(!shown?.entries?.length || shown.entries.some((e: J) => e.n === 201), "the opening position has not arrived yet");
+    whole();
+    second();
+    await s.read();
+    await s.read();
+    assert.deepEqual(windowOf(s.values), [151, 250, false]);
+  } finally {
+    whole();
+    second();
+    background();
+    s.core.close();
+  }
+});
+
 test("a_chat_with_something_unread_opens_whole_at_it_and_pages_either_way", async () => {
   // 300 entries, read up to 200: the window is the page before the first unread and the page from it.
   const answers: J = {
     ...base(),
     "GET /threads": [threadView(7, 300, 200, 100)],
     "GET /threads/7/entries?limit=50": { last: 300, entries: entries(251, 300) },
-    "GET /threads/7/entries?from=151&to=200": { last: 300, entries: entries(151, 200) },
-    "GET /threads/7/entries?from=201&to=250": { last: 300, entries: entries(201, 250) },
+    "GET /threads/7/entries?from=151&to=250": { last: 300, entries: entries(151, 250) },
   };
   const { host, core, push, values, read } = await ui(answers);
   core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
@@ -2020,8 +2059,7 @@ test("a_chat_opens_from_the_device_when_what_is_kept_is_current_and_else_waits_t
   again.core.inner.stationTopics.place(ST, 7, 120, null);
   again.core.receive(again.ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
   await s.host.time.pass(EVICT_AFTER_MS + 500, 500);
-  answers["GET /threads/7/entries?from=70&to=119"] = { last: 320, entries: entries(70, 119) };
-  answers["GET /threads/7/entries?from=120&to=169"] = { last: 320, entries: entries(120, 169) };
+  answers["GET /threads/7/entries?from=70&to=169"] = { last: 320, entries: entries(70, 169) };
   again.core.receive(again.ui, { kind: "subscribe", id: 2, subscribe: thread7 });
   await again.read();
   await again.read();
@@ -2041,8 +2079,7 @@ test("where_a_chat_was_left_is_kept_on_the_device_for_a_core_started_anew", asyn
   // Left 180 down: the core goes (the page reloaded) before the chat is opened again.
   s.core.inner.stationTopics.place(ST, 7, 180, -36.5);
   await s.host.settle();
-  answers["GET /threads/7/entries?from=130&to=179"] = { last: 300, entries: entries(130, 179) };
-  answers["GET /threads/7/entries?from=180&to=229"] = { last: 300, entries: entries(180, 229) };
+  answers["GET /threads/7/entries?from=130&to=229"] = { last: 300, entries: entries(130, 229) };
   let again = await reopen(s);
   again.core.receive(again.ui, { kind: "subscribe", id: 1, subscribe: thread7 });
   await again.read();
@@ -3073,8 +3110,7 @@ test("a_partial_chat_page_keeps_the_reading_window_and_retries_through_the_core_
     ...base(),
     "GET /threads": [threadView(7, 300, 100, 200)],
     "GET /threads/7/entries?limit=50": { last: 300, entries: entries(251, 300) },
-    "GET /threads/7/entries?from=51&to=100": { last: 300, entries: entries(51, 100) },
-    "GET /threads/7/entries?from=101&to=150": { last: 300, entries: entries(101, 150) },
+    "GET /threads/7/entries?from=51&to=150": { last: 300, entries: entries(51, 150) },
     [path]: { last: 300, entries: entries(151, 175) },
   };
   const s = await ui(replies);
