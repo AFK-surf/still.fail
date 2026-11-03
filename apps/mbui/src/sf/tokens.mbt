@@ -2959,3 +2959,15 @@ pub let white : Int64 = 0xFFFFFFFFL
 pub fn ui_theme_now() -> @ui.Theme {
   ui_theme()
 }
+
+///|
+/// A top bar's title (a place's name over its page, the phone's Home's workspace): 24 on 30, bold, one line, 0.4 of a
+/// point tighter at the system's size of words, made larger with it (PlacePage.kt TopBarTitle's letterSpacing, in sp).
+/// One spec: the old view's top_bar_title and top_bar_title_node both read it.
+pub let top_bar_title_look : @view.WordsLook = {
+  size: 24.0,
+  weight: 700,
+  line: 30.0,
+  wrap: false,
+  tracking: ScaledPoints(-0.4),
+}

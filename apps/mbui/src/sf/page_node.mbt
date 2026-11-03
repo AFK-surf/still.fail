@@ -183,6 +183,34 @@ fn part_of(v : @view.View) -> PartAt {
 }
 
 ///|
+/// What is made in node `v` laid out as a page laid out `look` lays out its parts (what a frame puts by a page made once,
+/// as its page is: a bar's actions), in no section or list of it.
+pub fn look_lent(v : @view.View, look : Look) -> Unit {
+  v.lends(part_at, { look, section: false, list: false }) |> ignore
+}
+
+///|
+/// What a page made once does, put in a pane's bar by the frame (the tape's), made in node `v`: laid out as a wide
+/// page's are whatever the page's width (the old pane bar called them outside the page's look: Wide where none is said).
+pub fn pane_bar_actions_lent(v : @view.View) -> Unit {
+  look_lent(v, Wide)
+}
+
+///|
+/// How tall what a page made once does stands in a pane's bar (pane_bar_actions_lent's look), as the page says it
+/// (`side`, by the look it is laid out in).
+pub fn pane_bar_actions_side(side : (Look) -> Double) -> Double {
+  side(Wide)
+}
+
+///|
+/// What a page made once does, put in a phone's top bar at its end by the frame (a place's), made in node `v`: laid out
+/// as a narrow page's at a head's end are (the old top bar's with_look(Narrow, …), head_end's).
+pub fn top_bar_actions_lent(v : @view.View) -> Unit {
+  look_lent(v, Narrow)
+}
+
+///|
 /// How the page node `v` is in is laid out (page_node's), narrow outside one: what a part made in it reads as it is
 /// made, however late.
 pub fn look_node(v : @view.View) -> Look {
@@ -849,6 +877,22 @@ pub fn page_note_node(parent : @view.View, words : () -> String, bad? : () -> Bo
 }
 
 ///|
+/// What a page says in place of what it lists where it has none, `words` as it says it now: narrow, as what the page is
+/// for is said (pg_lead_box: 12 in, 10 under, the secondary's words); wide, as it is, the UI's muted (up_said's).
+pub fn page_none_node(parent : @view.View, words : () -> String) -> Unit {
+  parent.box(fn(n) {
+    match look_node(n) {
+      Narrow => {
+        n.padding(Is((pg_lead_x, 0.0, pg_lead_x, pg_lead_foot))) |> ignore
+        words_node(n, words, fn() { pg_lead }) |> ignore
+      }
+      Wide => words_node(n, words, fn() { desk_muted }) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
 /// pg_note_box's room (px=S3, pt=S2, pb=S1).
 let pg_note_x : Double = 12.0
 
@@ -940,9 +984,10 @@ let tap_corner : Double = 8.0
 pub let row_mark : Double = desk_mark
 
 ///|
-/// A card of a page's (page_card's, narrow) in `parent`: as wide as the page's room, 20 in, what `body` puts on it 14
-/// apart, round as a card is (Xl3), on the card's ground; 10 under it to what follows (pg_card_room), none where it is a
-/// layer of one thing (`layered`: page_card in layers, the card alone). `footed`: a button at its foot, the card's
+/// A card of a page's (page_card's) in `parent`: as wide as the page's room, 20 in, what `body` puts on it 14 apart,
+/// round as a card is (Xl3), on the card's ground; under it to what follows, narrow 10 (pg_card_room), wide a section's
+/// 28 where it stands alone on the page (wide_alone's) and none in a section, none where it is a layer of one thing
+/// (`layered`: page_card in layers, the card alone). `footed`: a button at its foot, the card's
 /// room under it the capsule's that stands in its corner (foot_pad). What is on it is a card's words (page_card's
 /// `in_words`): a row on it that has a card's form (a switch's row) is told so where it is made, by whoever makes it on
 /// the card (`body` given the card's node), as what is made later on it is.
@@ -959,11 +1004,13 @@ pub fn page_card_node(parent : @view.View, body : (@view.View) -> Unit, footed? 
     })
     |> ignore
   }
-  if layered {
+  let at = part_of(parent)
+  if layered || at.look is Wide && at.section {
     card(parent)
   } else {
+    // (narrow, 10 under it; wide, alone on the page, a section's 28 (wide_alone's))
     parent.box(fn(room) {
-      room.padding(Is((0.0, 0.0, 0.0, page_card_foot))) |> ignore
+      room.padding(Is((0.0, 0.0, 0.0, if at.look is Wide { section_foot } else { page_card_foot }))) |> ignore
       card(room)
     })
     |> ignore
@@ -982,4 +1029,45 @@ let page_card_foot : Double = 10.0
 /// they are said: the node.
 pub fn words_node(parent : @view.View, words : () -> String, style : () -> @ui.TextStyle) -> @view.View {
   parent.box(fn(w) { styled_words(w, words, style) |> ignore })
+}
+
+///|
+/// A round key in a bar (nav_button's, Parts.kt NavButton) as a node: `side` across, round, its icon `icon_size` in the
+/// ink in its middle, no disc behind it (a ground while pressed: its ripple), read out a button named `label`; `press`
+/// done as it is pressed.
+pub fn round_key_node(
+  parent : @view.View,
+  icon : String,
+  label : () -> String,
+  press : () -> Unit,
+  side? : Double = 34.0,
+  icon_size? : Double = 22.0,
+) -> Unit {
+  parent.box(fn(k) {
+    k
+    .width(Is(Some(side)))
+    .height(Is(Some(side)))
+    .radius(Is(side / 2.0))
+    .lines_up(Is(Some(Middle)))
+    .lies_along(Is(Middle))
+    |> ignore
+    pressed_node(k, press, Is(side / 2.0), Button, label)
+    icon_node(k, icon, icon_size, By(fn() { theme().p.text })) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A top bar's title (top_bar_title_look, in the tree theme's ink), on one line, giving way in its row where it has not
+/// the room (the line then ends in an ellipsis, as every one-line words' do).
+pub fn top_bar_title_node(parent : @view.View, words : () -> String) -> @view.View {
+  parent.box(fn(w) {
+    w
+    .words(By(words))
+    .words_look(Is(top_bar_title_look))
+    .ink(By(fn() { @ui.tree_theme().color(Fg) }))
+    .cuts(Is(true))
+    .min_width(Is(Some(0.0)))
+    |> ignore
+  })
 }

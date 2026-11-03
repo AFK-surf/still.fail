@@ -118,21 +118,56 @@ test "on the tape a settings page's bar is the tree's: its title the same node a
 }
 
 ///|
-test "on the tape a page with actions of its own keeps its whole bar as before: its title once, where a chat's stands, the tree's bar none" {
+test "on the tape 用量 made once: its bar the tree's, its title where a chat's stands, what it does at its end; another workspace, the bar's share its; none, nothing of the one before" {
   let chat = screen_in("chat", ("touch", 600.0, 900.0, 2, "medium"), "zh")
   guard words_in_page(chat, "整理发布清单") is Some((cx, cy, _)) else { fail("no chat's title") }
-  let t = tape_bar_in("settings-usage", Ref(""))
+  // (the workspaces as `listed` says: none while it says so)
+  let listed = @signals.signal(true)
+  let shared : Array[String] = []
+  @sfbase.share_card_of.val = fn(_, w) { shared.push(w.id) }
+  let src : Ref[Source?] = Ref(None)
+  let t = tape_bar_in("settings-usage", Ref(""), wrap=fn(base) {
+    let s : Source = {
+      ..base,
+      topic: fn(name, params) {
+        let got = (base.topic)(name, params)
+        if name == "workspaces" && !listed.get() {
+          return { ..got, value: Some(Json::array([])) }
+        }
+        got
+      },
+    }
+    src.val = Some(s)
+    s
+  })
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
-  assert_eq(bar_words_drawn(t, "用量").length(), 0)
-  assert_eq(bar_words_old(t, "用量").length(), 1)
+  assert_eq(bar_words_drawn(t, "用量").length(), 1)
+  assert_eq(bar_words_old(t, "用量").length(), 0)
   guard words_in_page(t, "用量") is Some((x, y, _)) else { fail("no title") }
   assert_true((x - cx).abs() < 0.5 && (y - cy).abs() < 0.5, msg="its title at \{x}, \{y}; a chat's at \{cx}, \{cy}")
-  // (nothing of the tree's bar there: no mark, no back of its)
-  assert_eq(
-    t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "说明" && !s.hidden }).length(),
-    1,
-    msg="the old bar's mark alone",
-  )
+  // (its days and its share in the bar)
+  assert_eq(bar_words_drawn(t, "7 天").length(), 1, msg="its days in the bar")
+  let share = fn() {
+    t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == @sf.t("web-main.stations.shareCard") && !s.hidden })
+  }
+  guard share() is [b] else { fail("its share read out \{share().length()} times") }
+  t.tap(b.rect.0 + b.rect.2 / 2.0, b.rect.1 + b.rect.3 / 2.0)
+  t.run_for(@ui.move_most_ms)
+  // (another workspace in view: the page made again for it, its share the bar's then)
+  @sfbase.pick_workspace(src.val.unwrap(), "ws2")
+  t.run_for(@ui.move_most_ms)
+  @sfdesk.bring_page()
+  t.run_for(@ui.move_most_ms)
+  guard share() is [b2] else { fail("its share read out \{share().length()} times in ws2") }
+  t.tap(b2.rect.0 + b2.rect.2 / 2.0, b2.rect.1 + b2.rect.3 / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(shared, ["ws1", "ws2"])
+  // (no workspace in view: nothing of the page's in the bar)
+  listed.set(false)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(share().length(), 0, msg="its share left over")
+  assert_eq(bar_words_drawn(t, "7 天").length(), 0, msg="its days left over")
+  @sfbase.share_card_of.val = fn(_, _) {  }
 }
 
 ///|

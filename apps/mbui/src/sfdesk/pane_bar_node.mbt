@@ -19,7 +19,8 @@ priv struct PaneBarSaid {
 /// The bar in `parent`, as `said` says it as it changes (none: nothing in it), back done by `back` as it is pressed; the
 /// panel's corners `corners` (its top left and top right where its ends stand), its ground `ground`, its tips in
 /// `tips`; its words as a page `width` wide has them (@sf.look_for: the page's look, as its page's bar was built in);
-/// nothing of it read out while `hidden` (the panel not in use, as what is under it: tape_behind). The node.
+/// nothing of it read out while `hidden` (the panel not in use, as what is under it: tape_behind); what its page does
+/// (`actions`: what makes it, how tall it stands in a page laid out so) at its end. The node.
 fn pane_bar_node(
   parent : @view.View,
   said : () -> PaneBarSaid?,
@@ -29,7 +30,12 @@ fn pane_bar_node(
   tips : @sf.TipLayer,
   width : () -> Double,
   hidden : () -> Bool,
+  actions? : () -> ((@view.View) -> Unit, (@sf.Look) -> Double, Int)?,
 ) -> @view.View {
+  let actions = match actions {
+    Some(f) => f
+    None => fn() { None }
+  }
   let now = fn() {
     match said() {
       Some(s) => s
@@ -85,12 +91,38 @@ fn pane_bar_node(
         })
       })
       |> ignore
+      // (what the page does at its end, as a bar's actions are laid out whatever the page's width (wide: the old
+      // view's pane_bar called them outside the page's look, the library's look Wide where none is said), its keys
+      // apart as a bar's are (pane_bar's keys_row); made again as the page that gives them is made again)
+      inner.show(fn() { actions() is Some(_) }, fn(a) {
+        // (16 after the title, as chat_bar_inner's gap)
+        a.padding(Is((@ui.Space::px(S4), 0.0, 0.0, 0.0))) |> ignore
+        a.pick(
+          fn() {
+            match actions() {
+              Some((_, _, g)) => g
+              None => 0
+            }
+          },
+          fn(k, _) {
+            @sf.pane_bar_actions_lent(k)
+            k.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@sf.keys_apart())) |> ignore
+            match @signals.untracked(actions) {
+              Some((make, _, _)) => make(k)
+              None => ()
+            }
+          },
+        )
+      })
     })
     |> ignore
-    // (clear of the panel's top right corner; where the mark saying what it is for may end it (the title cut short
-    // before it), by the mark's own height, concentric with the corner as an action's there is: tape_bar_end's `side`)
+    // (clear of the panel's top right corner; its last action there by its own height (pane_bar's); where the mark
+    // saying what it is for may end it (the title cut short before it), by the mark's own height, concentric with the
+    // corner as an action's there is: tape_bar_end's `side`)
     room(bar, fn() {
-      if now().about != "" {
+      if actions() is Some((_, side, _)) {
+        @sf.tape_bar_end_of(corners(), @ui.tree_corner_roots_now(), bar_in, side=@sf.pane_bar_actions_side(side))
+      } else if now().about != "" {
         @sf.tape_bar_end_of(corners(), @ui.tree_corner_roots_now(), bar_in, side=@ui.Space::px(S5))
       } else {
         @sf.tape_bar_end_of(corners(), @ui.tree_corner_roots_now(), bar_in)

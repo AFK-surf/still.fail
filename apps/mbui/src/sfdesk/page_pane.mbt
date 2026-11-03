@@ -160,10 +160,10 @@ fn pane_stack(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
 
 ///|
 /// The pages of the library's made once as nodes in the pane off the tape (Large), in the place of their old view
-/// (nav_flat_view's `made`): 关于, 记忆, 更新日志; 归档, a station's own archiving, 自动决策. Laid out by the width the
-/// frame gives the pane (the window's less the block's column where its move goes: fold_target's, never what the page
-/// last laid out), narrow or wide (page_node), each made again only as that arrangement changes. What the old view's
-/// island did for the page done by its node (pane_made_host).
+/// (nav_flat_view's `made`): 关于, 记忆, 更新日志, 一台 station 的记忆; 归档, a station's own archiving, 自动决策; 用量,
+/// 价目表. Laid out by the width the frame gives the pane (the window's less the block's column where its move goes:
+/// fold_target's, never what the page last laid out), narrow or wide (page_node), each made again only as that
+/// arrangement changes. What the old view's island did for the page done by its node (pane_made_host).
 fn pane_made(
   src : Source,
   page : Page,
@@ -235,7 +235,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -257,6 +257,15 @@ fn pane_made(
     Setting(StationArchiving(st)) =>
       made("station-archiving/" + st, fn(a, core, here, _stint, frame, width) {
         @sfpages.station_archiving_node(a, core, here, st, on_back=core.pop, frame~, width~)
+      })
+    Setting(Usage) =>
+      made("usage", fn(a, core, here, _stint, frame, width) {
+        @sfpages.usage_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
+      })
+    // (by its days: another's of other days another page)
+    Setting(UsagePrices(days)) =>
+      made("usage-prices/" + days.to_string(), fn(a, core, here, _stint, frame, width) {
+        @sfpages.usage_prices_node(a, core, here, days, on_back=core.pop, frame~, width~)
       })
     _ => None
   }

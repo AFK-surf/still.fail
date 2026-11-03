@@ -20,10 +20,13 @@ pub(all) struct WordsLook {
 
 ///|
 /// How far apart a node's letters are set besides their own spacing (ui's Tracking as it is resolved): a share of
-/// their size as it is drawn (the system's size of words applied), or so many points whatever their size.
+/// their size as it is drawn (the system's size of words applied), so many points whatever their size, or so many
+/// points at the system's size of words, made larger by it as a size of their own is (an old view's `tracking` said
+/// with its words, Ctx::text: Ctx::sp of it).
 pub(all) enum Spacing {
   Ems(Double)
   Points(Double)
+  ScaledPoints(Double)
 } derive(Eq, Debug)
 
 ///|

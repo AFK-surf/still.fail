@@ -215,3 +215,30 @@ fn worked_at(fit : CornerFit?, links : FixedArray[CornerOf]) -> (Double, Double,
   let roots : CornerRoots = { window: 8.0, fit, zoom: 1.0 }
   Some((links[0].radius(roots), links[1].radius(roots), links[2].radius(roots), links[3].radius(roots)))
 }
+
+///|
+test "the window's tree let go before its theme and its inset are forgotten: what of it read them not worked out again as a run ends (a tree whose theme said other corners than the window's own)" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  let reads = Ref(0)
+  set_view_app(fn(root) {
+    set_tree_theme(fn() { { ..Theme::light(), radii: { ..Theme::light().radii, xl3: 26.0 } } })
+    root.show(
+      fn() {
+        reads.val += 1
+        tree_theme().corner(Xl3) > 25.0 && window_inset_now()
+      },
+      fn(_) {  },
+    )
+    root.show(
+      fn() {
+        reads.val += 1
+        tree_theme().corner(Xl3) > 25.0
+      },
+      fn(b) { b.width(Is(Some(32.0))).height(Is(Some(32.0))) |> ignore },
+    )
+  })
+  t.draw()
+  let before = reads.val
+  run_let_go()
+  assert_eq(reads.val, before, msg="read again as the run ended")
+}

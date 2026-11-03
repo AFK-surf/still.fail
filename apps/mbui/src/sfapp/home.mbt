@@ -164,11 +164,15 @@ fn top_bar(
 ///|
 /// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, its letters 0.4 closer, on one line.
 fn top_bar_title(c : @ui.Ctx, s : String, cut? : Bool = false) -> Int {
-  c.text(s, size=24.0, weight=700, color=@sf.theme().p.text, wrap=false, line=30.0, tracking=top_title_tracking, w=if cut { Cut } else { Auto })
+  let look = @sf.top_bar_title_look
+  // (said as it is: Ctx::text makes it larger at the system's size of words, as view_spacing does a ScaledPoints)
+  guard look.tracking is ScaledPoints(tracking) else { abort("top_bar_title_look's tracking: ScaledPoints") }
+  c.text(s, size=look.size, weight=look.weight, color=@sf.theme().p.text, wrap=look.wrap, line=look.line, tracking~, w=if cut {
+    Cut
+  } else {
+    Auto
+  })
 }
-
-///|
-let top_title_tracking : Double = -0.4
 
 ///|
 /// A bar's round key's side (nav_button's 34).

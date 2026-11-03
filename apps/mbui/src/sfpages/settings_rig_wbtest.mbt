@@ -38,7 +38,7 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
-  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions)
+  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_))
   let t = @ui.Tester::new(
     fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
@@ -63,6 +63,9 @@ fn setting_tester(
   if made {
     @ui.set_view_app(
       fn(root) {
+        // (its nodes drawn in still.fail's theme, as the app's are: app_tree's; told as the tree is made, set_view_app
+        // having forgotten what was told before it)
+        @ui.set_tree_theme(@sf.ui_theme_now)
         root.pick(fn() { app.nav.top() }, fn(p, page) {
           @ui.words_picked(p)
           match page {
@@ -103,6 +106,8 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     Archiving => archiving_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
     StationArchiving(st) => station_archiving_node(p, core, here, st, on_back=core.pop, frame~, width~)
     AutoDecisions => decisions_node(p, core, here, on_back=core.pop, frame~, width~)
+    Usage => usage_node(p, core, here, on_back=core.pop, frame~, width~)
+    UsagePrices(days) => usage_prices_node(p, core, here, days, on_back=core.pop, frame~, width~)
     // (the pages opened from them not made once yet: their old view, hosted)
     _ =>
       @ui.old(p, fn(c) {
@@ -143,8 +148,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, here, frame, a, skill, at)
     AutoCompletion => completion_page(c, core, here, frame)
     AutoPolicy(st) => policy_page(c, core, here, frame, st)
-    Usage => usage_page(c, core, here, frame)
-    UsagePrices(days) => usage_prices_page(c, core, here, frame, days)
     _ => ()
   }
 }

@@ -238,7 +238,7 @@
       "src/sfapp/drive.mbt": 11,
       "src/sfapp/drive_parts.mbt": 19,
       "src/sfapp/history.mbt": 61,
-      "src/sfapp/home.mbt": 23,
+      "src/sfapp/home.mbt": 20,
       "src/sfapp/messages.mbt": 4,
       "src/sfapp/pages.mbt": 13,
       "src/sfapp/service.mbt": 5,
@@ -354,7 +354,6 @@
       "src/sfpages/security.mbt": 33,
       "src/sfpages/shortcuts.mbt": 5,
       "src/sfpages/slack_app.mbt": 6,
-      "src/sfpages/usage.mbt": 7,
       "src/sfpages/vault.mbt": 5,
       "src/sfpages/vault_dialogs.mbt": 6,
       "src/sfpages/vault_item.mbt": 10,
@@ -437,8 +436,7 @@
       "src/sfpages/screen_view.mbt": 1,
       "src/sfpages/search.mbt": 3,
       "src/sfpages/service.mbt": 3,
-      "src/sfpages/things.mbt": 2,
-      "src/sfpages/usage.mbt": 1
+      "src/sfpages/things.mbt": 2
     },
     "motion-length": {}
   },

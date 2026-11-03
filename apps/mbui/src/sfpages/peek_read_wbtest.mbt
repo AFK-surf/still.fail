@@ -174,6 +174,18 @@ test "a file is read on every entry, including while its card is still open" {
     native=Mouse,
     pointing=Mouse,
   )
+  // (its card's made-up file while it is read, in its bones: none of its code coloured, nothing asked of the core)
+  let inked = Ref(0)
+  let kept = @sf.kept_call.val
+  @sf.kept_call.val = Some(fn(name, params, bytes) {
+    if name == "code.ink" {
+      inked.val += 1
+    }
+    match kept {
+      Some(k) => k(name, params, bytes)
+      None => None
+    }
+  })
   t.draw()
   let (x, y, w, h) = t.get(@ui.Role::Button, label="src/a.ts").rect
   t.move(x + w / 2.0, y + h / 2.0)
@@ -185,4 +197,6 @@ test "a file is read on every entry, including while its card is still open" {
   t.move(x + w / 2.0, y + h / 2.0)
   t.frame()
   assert_eq(reads.val, 2)
+  @sf.kept_call.val = kept
+  assert_eq(inked.val, 0, msg="code coloured in its bones")
 }

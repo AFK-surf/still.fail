@@ -40,10 +40,10 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 ///|
 /// The settings' pages, one for every frame, by route: drawn in the frame it is shown in (the Small stack's, the wide
 /// frame's pane: back, the room over and under it). False for a route whose page every frame makes once in its place
-/// (关于, 更新日志, 记忆, 一台 station 的记忆: pane_made, tape_made, narrow_made), and for one whose pages are not one yet (its frame draws its
+/// (关于, 更新日志, 记忆, 一台 station 的记忆, 用量, 价目表: pane_made, tape_made, narrow_made), and for one whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Home | Appearance | Fonts | BarSettings | Permissions | UsagePrices(_) | Usage | Notifications | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_))) {
+  if !(route is (Home | Appearance | Fonts | BarSettings | Permissions | Notifications | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_))) {
     return false
   }
   let core = settings_core(src, w)
@@ -61,8 +61,6 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Fonts => @sfpages.fonts_page(c, core, frame)
     BarSettings => @sfpages.bars_page(c, core, frame)
     Permissions => @sfpages.permissions_page(c, core, frame)
-    UsagePrices(days) => @sfpages.usage_prices_page(c, core, here, frame, days)
-    Usage => @sfpages.usage_page(c, core, here, frame)
     Notifications => @sfpages.notify_page(c, core, here, frame)
     Shortcuts => @sfpages.shortcuts_page(c, core, frame)
     Me => @sfpages.me_page(c, core, here, frame)
