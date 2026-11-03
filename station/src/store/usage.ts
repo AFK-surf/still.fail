@@ -33,15 +33,62 @@ export type UsageGroup = {
 /// Stands for i64::MIN as a turn's start: before every call.
 const EARLIEST = Number.MIN_SAFE_INTEGER;
 
+/// The counter starts recording at installation. Its last completed sweep lets a restart find only turns which may
+/// have produced new usage while it was stopped, without walking the station's older sessions.
+export function installUsageCounter(db: DatabaseSync, now: number): void {
+  const has = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
+  const columnsOf = () => new Set((db.prepare("PRAGMA table_info(usage_files)").all() as { name: string }[]).map((row) => row.name));
+  const columns = columnsOf();
+  if (has("usage_counter") && columns.has("counter_cutoff") && columns.has("counter_anchor")) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec("CREATE TABLE IF NOT EXISTS usage_counter (id INTEGER PRIMARY KEY CHECK (id = 1), since INTEGER NOT NULL, through INTEGER NOT NULL)");
+    db.prepare("INSERT OR IGNORE INTO usage_counter VALUES (1, ?, ?)").run(now, now);
+    const current = columnsOf();
+    if (!current.has("counter_cutoff")) db.exec("ALTER TABLE usage_files ADD COLUMN counter_cutoff INTEGER");
+    if (!current.has("counter_anchor")) db.exec("ALTER TABLE usage_files ADD COLUMN counter_anchor TEXT");
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+export type CounterFile = { cutoff: number; anchor: string | null };
+
+/// The boundary at which a file began being followed, and the bytes immediately before its saved offset.
+export function usageCounterFile(db: DatabaseSync, path: string): CounterFile | null {
+  const row = db.prepare("SELECT counter_cutoff AS cutoff, counter_anchor AS anchor FROM usage_files WHERE path = ?").get(path) as { cutoff: number | null; anchor: string | null } | undefined;
+  return row?.cutoff == null ? null : { cutoff: row.cutoff, anchor: row.anchor };
+}
+
+/// Save the boundary and position together before reading. A replaced file must not inherit the old position after a crash.
+export function beginUsageCounterFile(db: DatabaseSync, path: string, file: UsageFile, counter: CounterFile, reset: boolean): CounterFile {
+  db.prepare(`INSERT INTO usage_files (path, session, offset, model, counter_cutoff, counter_anchor)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    ON CONFLICT(path) DO UPDATE SET
+      session = CASE WHEN ?7 THEN excluded.session ELSE usage_files.session END,
+      offset = CASE WHEN ?7 THEN excluded.offset ELSE usage_files.offset END,
+      model = CASE WHEN ?7 THEN excluded.model ELSE usage_files.model END,
+      counter_cutoff = CASE WHEN ?7 THEN excluded.counter_cutoff ELSE COALESCE(usage_files.counter_cutoff, excluded.counter_cutoff) END,
+      counter_anchor = CASE WHEN ?7 THEN excluded.counter_anchor ELSE COALESCE(usage_files.counter_anchor, excluded.counter_anchor) END`)
+    .run(path, file.session, file.offset, file.model, counter.cutoff, counter.anchor, reset ? 1 : 0);
+  return usageCounterFile(db, path)!;
+}
+
 /// usage_files: every transcript read for usage so far, by path.
 export function usageFiles(db: DatabaseSync): Map<string, UsageFile> {
   const rows = db.prepare("SELECT path, session, offset, model FROM usage_files").all() as Json[];
   return new Map(rows.map((r) => [r.path, { session: r.session, offset: r.offset, model: r.model }]));
 }
 
+/// One transcript's saved position, by its path's primary key.
+export function usageFile(db: DatabaseSync, path: string): UsageFile | undefined {
+  return db.prepare("SELECT session, offset, model FROM usage_files WHERE path = ?").get(path) as UsageFile | undefined;
+}
+
+export type UsageWriteOptions = { minNewAt?: number; changed?: { from: number }; counter?: CounterFile };
+
 /// record_usage: a transcript's calls read up to `file.offset`, each with what it was for; a call recorded before keeps
 /// its row (its output grown). How many were new. Run in a transaction by the caller.
-export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, runtime: string, calls: [UsageCall, UsageFor][]): number {
+export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, runtime: string, calls: [UsageCall, UsageFor][], options?: UsageWriteOptions): number {
   let added = 0;
   if (file.session !== null) {
     const insert = db.prepare(
@@ -52,6 +99,8 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
     const known = db.prepare("SELECT output FROM usage WHERE id = ?");
     for (const [c, of] of calls) {
       const was = known.get(c.id) as { output: number } | undefined;
+      // An old call may grow after the cutover, but an unseen old call is not historical work to fill in.
+      if (was === undefined && options?.minNewAt !== undefined && c.at < options.minNewAt) continue;
       // The same response can occur in several transcript lines or be replayed after an interrupted read.
       if (was !== undefined && c.output <= was.output) continue;
       insert.run(
@@ -59,13 +108,17 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
         c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
       );
       if (was === undefined) added++;
+      if (options?.changed !== undefined) options.changed.from = Math.min(options.changed.from, c.at);
     }
   }
   db.prepare(
-    `INSERT INTO usage_files (path, session, offset, model) VALUES (?1, ?2, ?3, ?4)
-     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model
-       WHERE usage_files.session IS NOT excluded.session OR usage_files.offset IS NOT excluded.offset OR usage_files.model IS NOT excluded.model`,
-  ).run(path, file.session, file.offset, file.model);
+    `INSERT INTO usage_files (path, session, offset, model, counter_cutoff, counter_anchor) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model,
+       counter_cutoff = COALESCE(excluded.counter_cutoff, usage_files.counter_cutoff),
+       counter_anchor = CASE WHEN excluded.counter_cutoff IS NULL THEN usage_files.counter_anchor ELSE excluded.counter_anchor END
+     WHERE usage_files.session IS NOT excluded.session OR usage_files.offset IS NOT excluded.offset OR usage_files.model IS NOT excluded.model
+       OR (excluded.counter_cutoff IS NOT NULL AND (usage_files.counter_cutoff IS NOT excluded.counter_cutoff OR usage_files.counter_anchor IS NOT excluded.counter_anchor))`,
+  ).run(path, file.session, file.offset, file.model, options?.counter?.cutoff ?? null, options?.counter?.anchor ?? null);
   return added;
 }
 
