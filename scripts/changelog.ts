@@ -121,7 +121,8 @@ const NOTHING = /^(none|n\/?a|nothing|无|没有|-+)[.。]?$/i;
  * in its trailers, from every paragraph after the subject that is only trailers (each line `Key: value`, or one indented
  * to fold the line before on). git takes the last such paragraph alone for the trailers, which lost every `Changelog:`
  * written above a blank line and `Co-Authored-By:` (37 commits from 2026-10-01 to 10-08: their changes were in the
- * apps, and nothing said so).
+ * apps, and nothing said so). A line said again is one line: a squash merge's body repeats each of its commits, each with
+ * the same trailers (b7abff2e's one line showed four times in the update dialog).
  */
 export function readMessage(message: string): { text: string[]; fixes: number[]; parts: string[] } {
   const text: string[] = [];
@@ -137,7 +138,7 @@ export function readMessage(message: string): { text: string[]; fixes: number[];
       if (/^changelog-parts$/i.test(key!)) parts.push(...value!.toLowerCase().split(/[,，\s]+/).filter(Boolean));
     }
   }
-  return { text, fixes, parts };
+  return { text: [...new Set(text)], fixes: [...new Set(fixes)], parts: [...new Set(parts)] };
 }
 
 /** The parts a commit was said to reach people in ([]: `none`, it needs no release); null: it does not say. */
