@@ -57,10 +57,11 @@ class FakeHelper {
     await this.#listen();
   };
   async #listen() {
+    if (this.#closed || this.#server !== null) return;
     rmSync(this.#where!.path, { force: true });
     const server = net.createServer((c) => this.#serve(c));
-    await new Promise<void>((resolve) => server.listen(this.#where!.path, resolve));
     this.#server = server;
+    await new Promise<void>((resolve) => server.listen(this.#where!.path, resolve));
   }
   /// It ends (a crash, macOS's Quit & Reopen): its socket gone, every connection with it.
   crash() {
@@ -324,6 +325,7 @@ const ops = (fake: FakeHelper) => fake.asked.map((a) => a.op).filter((o) => o.st
 
 test("the fake helper closes every listener when started again", { skip: WINDOWS }, async () => {
   const { base, fake } = machine();
+  const simultaneous = machine();
   const servers: net.Server[] = [];
   const create = net.createServer;
   const made = mock.method(net, "createServer", ((...args: any[]) => {
@@ -338,9 +340,15 @@ test("the fake helper closes every listener when started again", { skip: WINDOWS
     await fake.launch("", env);
     await fake.launch("", env);
     fake.close();
+    const otherDir = join(simultaneous.base, "helper");
+    mkdirSync(otherDir, { recursive: true });
+    const otherEnv = { STILLFAIL_HELPER_SOCKET: join(otherDir, "helper.sock"), STILLFAIL_HELPER_TOKEN: "test" };
+    await Promise.all([simultaneous.fake.launch("", otherEnv), simultaneous.fake.launch("", otherEnv)]);
+    simultaneous.fake.close();
     assert.equal(servers.filter((s) => s.listening).length, 0, "no listener outlives the fake helper");
   } finally {
     fake.close();
+    simultaneous.fake.close();
     for (const s of servers) if (s.listening) await new Promise<void>((resolve) => s.close(() => resolve()));
     made.mock.restore();
   }
