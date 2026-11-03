@@ -66,3 +66,28 @@ moon_tests() {
 on_screen() {
   if [ -n "${STILLFAIL_JOB_SCREEN:-}" ] && command -v stillfail-job > /dev/null; then stillfail-job screen "$@"; else "$@"; fi
 }
+
+# The objects of an app's Wasm shell (scripts/android.sh, ios.sh with MBUI_WASM_THUNKS: no C of moonc's to split),
+# each source its own, compiled side by side, kept while the command, the source and what its depfile says it included
+# are as they were. `shell_objs DIR CC CFLAGS OBJC_FLAGS FILE…` prints the objects.
+shell_objs() {
+  local dir=$1 cc=$2 cflags=$3 objc=$4 f o flags pids=()
+  shift 4
+  mkdir -p "$dir"
+  for f in "$@"; do
+    o=$dir/$(echo "$f" | tr '/' '_').o
+    echo "$o"
+    flags=$cflags
+    case $f in *.m) flags="$flags $objc" ;; esac
+    [ -f "$o" ] && [ "$(cat "$o.sum" 2>/dev/null)" = "$(shell_obj_sum "$cc $flags" "$f" "$o")" ] && continue
+    (rm -f "$o.sum"; $cc $flags -MD -MF "$o.d" -c "$f" -o "$o" >&2 && shell_obj_sum "$cc $flags" "$f" "$o" > "$o.sum") &
+    pids+=($!)
+  done
+  for p in ${pids[@]+"${pids[@]}"}; do wait "$p" || return 1; done
+}
+
+# (what object $3 of source $2 is made of: command $1, the source and what its depfile says it included)
+shell_obj_sum() {
+  (echo "$1"; cat "$2" $(sed -e '1d' -e 's/\\$//' "$3.d" 2>/dev/null | tr ' ' '\n' | grep -v '^$' | sort -u) 2>/dev/null) |
+    shasum | cut -c1-40
+}

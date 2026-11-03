@@ -102,6 +102,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   app compiled in development); `build` alone builds it (6 s after a change of the app; the shell is built again only
   when the host's C, the core's parts or the declarations change). `e2e/run.sh mac` runs it too outside CI. The
   native app (`scripts/mac.sh`) is CI's and the releases'.
+- The same on the other platforms, `PLATFORM=android|ios|windows scripts/wasm-app.sh run`: the shell an APK (installed
+  only when it changed; the app compiled here for the device and put in its files), an iOS simulator's app (which reads
+  the app where it lies on the Mac), a Windows program (Git Bash with MSVC). `e2e/run.sh android|ios` run it outside
+  CI. `scripts/android.sh`, `ios.sh`, `win.sh` build the native apps, CI's and the releases'.
 
 ## What is checked, and where
 
