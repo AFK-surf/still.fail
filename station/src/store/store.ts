@@ -46,6 +46,16 @@ export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL O
 export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+/// Whether another shown or running session can use a runtime transcript. Look up the id in the history and current
+/// id indexes, rather than checking every active session's transcripts while an archive is packed.
+export const TRANSCRIPT_IN_USE = `SELECT 1 FROM runtime_sessions r INDEXED BY runtime_sessions_by_id
+    CROSS JOIN sessions s ON s.key = r.session_key
+    WHERE r.id = ?1 AND COALESCE(r.runtime, s.original_runtime, s.runtime) = ?2 AND s.key <> ?3
+      AND (s.archived_at IS NULL OR s.running = 1)
+  UNION ALL SELECT 1 FROM sessions s INDEXED BY sessions_by_runtime_id
+    WHERE s.runtime_session_id = ?1 AND s.runtime = ?2 AND s.key <> ?3 AND (s.archived_at IS NULL OR s.running = 1)
+      AND NOT EXISTS (SELECT 1 FROM runtime_sessions r WHERE r.session_key = s.key AND r.id = ?1)
+  LIMIT 1`;
 /// A session's messages not delivered yet and its latest turn (`statsOf`): what is not delivered by the index of those
 /// alone. By (session, thread), SQLite went over every message the session was ever given, and every turn was counted
 /// besides, for no one: auto-archiving looked at each session shown so, on the main thread, 13 s and 22 s on ccvm short
@@ -215,6 +225,7 @@ export class Store {
       installUsageMinutes(db);
       installUsageDetail(db, clock.currentTimeMillisUnsafe());
       installIncrementalUsageTotals(db);
+      usage.installUsageCounter(db, clock.currentTimeMillisUnsafe());
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);
@@ -731,6 +742,11 @@ export class Store {
     if (current === null) return sources;
     const entry = sources.find((s) => s.id === current) ?? { id: current, runtime: row.runtime, profile: row.profile };
     return [...sources.filter((s) => s.id !== current), entry];
+  }
+
+  /// A transcript is left unpacked while another shown or running session can still write it.
+  transcriptInUse(runtime: string, id: string, except: string): boolean {
+    return this.#one(TRANSCRIPT_IN_USE, id, runtime, except) !== undefined;
   }
 
   setRunning(key: string, running: boolean): void {
@@ -2146,15 +2162,35 @@ export class Store {
     return retireDuplicateUsage(this.db);
   }
 
+  usageCounter(): { since: number; through: number } {
+    return this.#one("SELECT since, through FROM usage_counter WHERE id = 1") as { since: number; through: number };
+  }
+
+  advanceUsageCounter(through: number): void {
+    this.#run("UPDATE usage_counter SET through = MAX(through, ?) WHERE id = 1", through);
+  }
+
+  usageCounterFile(path: string): usage.CounterFile | null {
+    return usage.usageCounterFile(this.db, path);
+  }
+
+  beginUsageCounterFile(path: string, file: usage.UsageFile, counter: usage.CounterFile, reset = false): usage.CounterFile {
+    return this.#tx(() => usage.beginUsageCounterFile(this.db, path, file, counter, reset));
+  }
+
   /// Every transcript read for usage so far, by path.
   usageFiles(): Map<string, usage.UsageFile> {
     return usage.usageFiles(this.db);
   }
 
+  usageFile(path: string): usage.UsageFile | undefined {
+    return usage.usageFile(this.db, path);
+  }
+
   /// Records a transcript's calls read up to `file.offset`, each with what it was for; a call recorded before keeps its
   /// row (its output grown, when the transcript wrote it again whole). How many were new.
-  recordUsage(path: string, file: usage.UsageFile, runtime: string, calls: [usage.UsageCall, usage.UsageFor][]): number {
-    return this.#tx(() => usage.recordUsage(this.db, path, file, runtime, calls));
+  recordUsage(path: string, file: usage.UsageFile, runtime: string, calls: [usage.UsageCall, usage.UsageFor][], options?: usage.UsageWriteOptions): number {
+    return this.#tx(() => usage.recordUsage(this.db, path, file, runtime, calls, options));
   }
 
   /// A session's last `limit` main-thread calls, oldest first: the context each sent, on what (store/usage.ts).

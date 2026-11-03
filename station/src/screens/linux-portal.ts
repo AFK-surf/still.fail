@@ -35,6 +35,7 @@ export class LinuxGstDesktop implements ScreenSource {
   readonly kind = "desktop" as const;
   readonly #o: PortalOptions;
   readonly #views = new Set<PortalProcess>();
+  readonly #running = new Set<PortalProcess>(); // every helper started, until its process has exited
   #pending: PortalProcess | null = null;
   #failed = false;
   #size: Size = { width: 0, height: 0 };
@@ -68,6 +69,8 @@ export class LinuxGstDesktop implements ScreenSource {
           if (!this.#closed) this.#o.changed();
         }, this.#o.mode === "x11" ? "X11 / GStreamer" : "XDG Desktop Portal / PipeWire");
       this.#pending = process;
+      this.#running.add(process);
+      void process.exited.then(() => this.#running.delete(process));
       void process.ready.then(() => this.#o.changed(), () => {});
     }
     const pending = this.#pending;
@@ -100,11 +103,14 @@ export class LinuxGstDesktop implements ScreenSource {
     this.#closed = true;
     this.#pending?.close();
     for (const view of [...this.#views]) view.close();
+    // Closed means no helper is left running: a closed view's helper may still be releasing its keys.
+    await Promise.all([...this.#running].map((process) => process.exited));
   }
 }
 
 class PortalProcess implements ScreenView {
   readonly ready: Promise<void>;
+  readonly exited: Promise<void>;
   readonly #first: Promise<void>;
   readonly #child: ChildProcessWithoutNullStreams;
   readonly #sizeChanged: (size: Size) => void;
@@ -146,6 +152,10 @@ class PortalProcess implements ScreenView {
     this.#child.stdout.on("data", (data: Buffer) => this.#read(data));
     this.#child.on("error", (error) => this.#end(error));
     this.#child.on("close", () => this.#end(new Error(this.#error.trim() || "desktop portal ended")));
+    this.exited = new Promise((resolve) => {
+      this.#child.once("close", () => resolve());
+      this.#child.once("error", () => { if (this.#child.pid === undefined) resolve(); }); // never started
+    });
   }
   get isReady(): boolean { return this.#ready && !this.#ended; }
   get finishedNormally(): boolean { return this.#normal; }

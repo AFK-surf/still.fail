@@ -331,7 +331,7 @@ export function value(parts: ([Status, Take] | [Status, Take, string | null])[])
         : t("core-logic.status.received", { size: size(w.bytes), secs });
     items.push({ state: "slow", text: n > 1 ? t("core-logic.status.times", { text, n }) : text, detail });
   }
-  if (items.length === 0) return { state: null, text: null, items: [] };
+  if (items.length === 0) return { state: null, text: null, items: [], lines: [] };
   const window = all.window > 0 ? all.window : RATE_WINDOW_MS;
   const rate = Math.trunc(all.recent / (window / 1000));
   const state = down || all.db.length > 0 ? "trouble" : "slow";
@@ -340,7 +340,10 @@ export function value(parts: ([Status, Take] | [Status, Take, string | null])[])
   const count = items.length - alike.size + slow.length;
   if (count > 1) text += ` · ${t("core-logic.status.count", { n: count })}`;
   if (slow.length > 0 && rate > 0) text += ` · ${size(rate)}/s`;
-  return { state, text, items };
+  // Under a page's "loading…": only what lasts and is why it is slow (the device's data, still.fail cloud down), a line
+  // each; what is read is the page's bar, not words.
+  const lines = items.filter((i) => i.state === "trouble").map((i) => String(i.text));
+  return { state, text, items, lines };
 }
 
 /// Bytes in words: "820 B", "12 KB", "1.4 MB".

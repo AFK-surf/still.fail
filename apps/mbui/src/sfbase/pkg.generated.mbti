@@ -1996,6 +1996,7 @@ pub(all) struct ChatItem {
   settled : Bool
   swipe_archive : Bool
   watch_ask : String?
+  swipe_ask : String?
   ago : String
   full : String
   agents : Array[RowAgent]

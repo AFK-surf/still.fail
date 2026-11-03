@@ -15,7 +15,7 @@ import { checkContext } from "./context-cap.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
 import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
-import { AUTO, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
+import { AUTO, type Attachment, MANUAL, type Quote, type SessionBusy, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
@@ -334,16 +334,23 @@ export function autoArchive(hub: Hub, now: number): number | null {
   // Over the sessions shown and the chats of their own (and those chats' sessions), never every one ever archived.
   const live = store.liveSessions();
   const own = store.chatsOfTheirOwn();
-  const stats = store.statsOf([...live.map((s) => s.key), ...own.flatMap((t) => store.threadSessions(t.id).map((m) => m.session))]);
+  // Each session's undelivered messages and last turn, read for those idle long enough alone, once each: read for every
+  // session shown and every member of their chats at each look, the station's thread was held 17 s on ccvm short of
+  // memory (2026-11-03), what was said meanwhile waiting.
+  const statsRead = new Map<string, SessionBusy | undefined>();
+  const statOf = (key: string) => {
+    if (!statsRead.has(key)) statsRead.set(key, store.statsOf([key]).get(key));
+    return statsRead.get(key);
+  };
   const jobs = new Set(store.jobsUp().map((j) => j.sessionKey));
   const working = (key: string) => {
     const row = store.getSession(key);
     if (!row) return true;
-    const stat = stats.get(key);
+    const stat = statOf(key);
     const last = stat?.lastTurn ?? null;
     return row.running || jobs.has(key) || hub.processState(key) === "running" || (stat?.pending ?? 0) > 0 || (last !== null && last.endedAt === null);
   };
-  const busy = (key: string) => working(key) || stats.get(key)?.lastTurn?.declared === "block";
+  const busy = (key: string) => working(key) || statOf(key)?.lastTurn?.declared === "block";
   // A chat someone pinned stays in the lists until put away by hand.
   const pinned = store.pinnedSessions();
   const kept = store.keptChats(null);
@@ -351,10 +358,14 @@ export function autoArchive(hub: Hub, now: number): number | null {
   const recommended = (thread: number) => !autoArchiveReviewed || (automaticDecisions.completion.enabled && store.archiveSuggested(thread));
   for (const s of live) {
     if (bound.has(s.key) || pinned.has(s.key)) continue;
+    // Idle long enough by its times alone, before anything else of it is read.
+    const quiet = idle([s.lastActiveAt, s.shownAt]);
+    const quietLong = idle([s.lastActiveAt, s.shownAt], slackArchiveMs);
+    if (!quiet && !quietLong) continue;
     const threads = store.sessionThreads(s.key);
     const slack = threads.length > 0 && threads.every((t) => t.thread.surface !== STILLFAIL_SURFACE);
-    const done = idle([s.lastActiveAt, s.shownAt]) && !busy(s.key);
-    const lingering = slack && idle([s.lastActiveAt, s.shownAt], slackArchiveMs) && !working(s.key);
+    const done = quiet && !busy(s.key);
+    const lingering = slack && quietLong && !working(s.key);
     if (!done && !lingering) continue;
     if (!lingering && !threads.every((t) => recommended(t.thread.id))) continue;
     if (threads.some((t) => kept.has(t.thread.id) || unread(t.thread))) continue;
