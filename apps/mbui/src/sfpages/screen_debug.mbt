@@ -21,6 +21,10 @@ let debug_panel_w : Double = 420.0
 let debug_pane_w : Double = 380.0
 
 ///|
+/// 设备 as tall as it is about, until it is laid out.
+let debug_device_est : Double = 1000.0
+
+///|
 /// An iPhone Duo's picture narrower than this (width by height) is its cover's, 1398×2034, not its inner panel's, 2007×2853.
 let duo_cover_shape : Double = 0.695
 
@@ -768,7 +772,11 @@ fn debug_pane(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       let n = d.lines.length()
       c.list("screen-logs/" + s.screen, n, 20.0, fn(i) { debug_line_row(c, d.lines[n - 1 - i]) }) |> ignore
     } else {
-      debug_device(c, s, u)
+      // (scrolls as one: all of it is taller than a window may be)
+      c.list("screen-device/" + s.screen, 1, debug_device_est, fn(_) {
+        c.box(style=debug_device_box, fn() { debug_device(c, s, u) }) |> ignore
+      })
+      |> ignore
     }
   })
   |> ignore

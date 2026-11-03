@@ -591,6 +591,10 @@ let debug_pane_box : @ui.Style = @ui.css("bg=Surface px=S3 py=S3 gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
+let debug_device_box : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
 let debug_pane_head : @ui.Style = @ui.css("row w=Full align=ACenter justify=JBetween")
 
 ///|

@@ -604,6 +604,29 @@ test "安装 App: offered where the state says; a file gone up asked to be insta
 }
 
 ///|
+test "设备 beside the device: what is below a short window's fold is scrolled to and pressed" {
+  let r = screen_rig()
+  r.t.resize(1280.0, 600.0)
+  simulator_live(r)
+  r.tap_label(tr("web-pages.screen.debug.device"))
+  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  r.t.draw()
+  let word = tr("web-pages.screen.debug.volumeUp")
+  let x = r.t.rect_of(tr("web-pages.screen.debug.device")).unwrap().0
+  for _ in 0..<40 {
+    r.t.wheel(x, 300.0, 200.0)
+    r.t.draw()
+  }
+  let (_, y, _, h) = r.t.rect_of(word).unwrap()
+  assert_true(y + h <= 600.0)
+  r.tap_label(word)
+  r.t.draw()
+  let ins = r.inputs()
+  assert_eq(text(Some(ins[ins.length() - 1]), "name"), "volume_up")
+  screen_done(r.t)
+}
+
+///|
 test "录屏: started, with the panel in use, and ended" {
   let r = screen_rig()
   r.state("live", more={ "kind": Json::string("simulator"), "debug": Json::boolean(true), "poses": Json::boolean(true) })
