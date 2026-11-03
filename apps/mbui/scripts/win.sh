@@ -18,8 +18,8 @@
 # (windows/AppIcon-<mac-icon.swift's hash>.ico: that script draws it on a Mac, `--ico`), its version (0.1.<MBUI_BUILD>,
 # else the commits in still.fail's history), its name, and its own environment (RCDATA MBUI_ENV, which mbui's host
 # reads as what the process's environment does not say: src/host/win_life.h): MBUI_APP_ID, MBUI_APP_NAME,
-# MBUI_SCHEMES, MBUI_OWN, MBUI_BETA. MBUI_VARIANT, which app it is built as (as mac-app.sh's): mbui (the default) still.fail
-# mbui, an app beside still.fail's desktop app (fail.still.mbui, the test channel's, no links of that app's); stable and
+# MBUI_SCHEMES, MBUI_OWN, MBUI_BETA. MBUI_VARIANT, which app it is built as (as mac-app.sh's): preview (the default) still.fail
+# preview, an app beside still.fail's desktop app (fail.still.mbui, the test channel's, no links of that app's); stable and
 # beta still.fail's desktop app itself, to take its place (apps/desktop/package.json, build.sh): its id
 # (fail.still.desktop, .beta: its AppUserModelID, its pinned shortcuts'), its name (still.fail, youdid.wtf: its
 # userData, %APPDATA%\<name>, whose data, sign-in and sealed keys it takes: src/host/win_core.c), its links (stillfail
@@ -41,11 +41,11 @@ core() { HERMESC=$(cygpath -m "$engine/hermesc.exe") bash "$D/core.sh" hermes; }
 # own program's in its place), the folder it is put in (%LOCALAPPDATA%\Programs\<dir>: the desktop app's installer's,
 # its package name), and its own environment beyond those
 variant() {
-  case "${MBUI_VARIANT:-mbui}" in
-    mbui) id=fail.still.mbui name="still.fail preview" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1\nMBUI_UPDATE_FEED=win/mbui' ;;
+  case "${MBUI_VARIANT:-preview}" in
+    preview) id=fail.still.mbui name="still.fail preview" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1\nMBUI_UPDATE_FEED=win/mbui' ;;
     stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail,ember extra='MBUI_OWN=1\nMBUI_UPDATE_FEED=win' ;;
     beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta extra='MBUI_OWN=1\nMBUI_BETA=1\nMBUI_UPDATE_FEED=win' ;;
-    *) echo "win.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; return 1 ;;
+    *) echo "win.sh: MBUI_VARIANT is preview, stable or beta, not $MBUI_VARIANT" >&2; return 1 ;;
   esac
 }
 # res: the app's resources (out/win-res/app.res), for mbui's win.sh to link into it (MBUI_WIN_RES)

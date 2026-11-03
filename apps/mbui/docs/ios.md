@@ -16,7 +16,7 @@ The app on iOS is Android's, as on an Android phone (2026-10-23):
   `fold`; @sf.layout): regular in width said as medium under 840 points and expanded from there, the web's wide frame
   in the phone's theme, Medium on its tape, Large its sidebar ending on a fold that stands upright; the hinge
   (UIHingeInteraction) and where its fold
-  divides the view (the view's division regions), iOS 27.1 on and built with its SDK (mbui.yml's ios job, on Xcode
+  divides the view (the view's division regions), iOS 27.1 on and built with its SDK (preview.yml's ios job, on Xcode
   27.1): half open with the fold across the view, a chat's page across it, its messages over the fold, its composer
   and the latest chats under it (src/sfapp/tabletop.mbt).
 - From side to side too: the safe area's sides said as `bars` (an iPhone Duo's outer screen has its status bar down

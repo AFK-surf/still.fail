@@ -1,21 +1,21 @@
-# still.fail mbui (apps/mbui: still.fail's app written in mbui, fail.still.mbui, a test app of its own beside
-# still.fail's): on main, each push that changes what it is built from is out in about two minutes from the push, on
-# GitHub's own runners (no machine of ours: 2026-10-21, a push to four packages in three minutes): its Android app
-# signed with every still.fail Android release's key (/releases/latest/android-mbui, its feed android/mbui/latest.json,
-# still.fail's AppRelease), its macOS app signed with still.fail's Developer ID (/releases/latest/mac-mbui), its
-# Windows app's installer, signed (/releases/latest/win-mbui), its Linux app tarred with its installer for x64 and
-# arm64 (/releases/latest/linux-mbui, linux-arm64-mbui),
-# side by side; its iOS app built unsigned for a device and kept as an Actions artifact. TestFlight is the separate manual mbui-testflight.yml workflow.
+# still.fail preview (apps/mbui's `preview` variant: fail.still.mbui, "still.fail preview", an app of its own beside
+# the released and beta ones): on main, each push that changes what it is built from is out in a few minutes, on
+# GitHub's own runners, without waiting for the pipeline's checks: its Windows app's installer, signed
+# (/releases/latest/win-mbui), its Linux app tarred with its installer for x64 and arm64 (/releases/latest/linux-mbui,
+# linux-arm64-mbui; Linux has no other channel), and its iOS app built unsigned for a device and kept as an Actions
+# artifact (TestFlight is the separate manual mbui-testflight.yml workflow). The Windows app also runs end to end here
+# once a day, and main's Windows build is kept for the beta's and stable's installers (pipeline.yml desktop-win,
+# stable.yml) to reuse. Its Android and Mac preview builds were taken out on 2026-11-03 (the beta, pipeline.yml, is
+# the test channel there; their feeds android/mbui and mac/mbui stay as they were). The feeds and the app's id keep
+# the name mbui: installed preview apps update by them.
 # A workflow of its own, not a job of pipeline.yml: nothing of the pipeline waits for it or fails with it. As asked
 # (2026-10-19), its tests do not hold it back: it is a test app (Windows' e2e runs after its installer is out). A feed moves
 # only once its file is fetched back from where it is served, the same bytes.
 # What stays between runs, by content, in the Actions cache: MoonBit (by its release's ETags), mbc's compiled units
 # (MBC_STORE), core.hbc by its inputs (HBC_CACHE), React Native's Hermes for Apple and its hermesc (by the versions
-# core.sh pins), the APK's dependencies, its dex (R8's: by its classes, dependencies and rules) and its stripped native
-# libraries (APK_CACHE: mbui's scripts/apk, the APK built without Gradle). The core's shell is still.fail's natives
-# (scripts/native.ts shell, shell-apple; Android's and Windows' engine too), fetched by its key, never built here;
-# Apple's engine, one file compiled in 1-2 s, is made in each run.
-name: mbui
+# core.sh pins). The core's shell is still.fail's natives (scripts/native.ts shell, shell-apple; Windows' engine too),
+# fetched by its key, never built here; Apple's engine, one file compiled in 1-2 s, is made in each run.
+name: preview
 on:
   push:
     branches: ["**"]
@@ -32,7 +32,7 @@ on:
       - "station/src/updates/**"
       - "cloud/src/install.ts"
       - "cloud/test/dev.ts"
-      - ".github/workflows/mbui.yml"
+      - ".github/workflows/preview.yml"
       - ".github/actions/setup/**"
       - ".github/actions/msvc/**"
       - ".github/actions/apt/**"
@@ -42,7 +42,7 @@ on:
   workflow_dispatch:
 # main: one at a time, a push meanwhile waits as one run of the newest; a branch: only its newest push matters.
 concurrency:
-  group: mbui-${{ github.ref }}
+  group: preview-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 permissions:
   contents: read
@@ -50,16 +50,13 @@ jobs:
   # Which packages main's push makes: those whose app changed since the build their feed names (beta.sh changed: its
   # code, not its tests, docs, scripts or CI; a push of those alone is no new package, 2026-10-21). iOS has no
   # feed: every matching main push builds a downloadable unsigned artifact. A run by hand builds them all;
-  # a branch's push only Android and Windows: its macOS and iOS
-  # builds put nothing and took two of the organization's 5 macOS jobs at once for each push, check-mbui's native
-  # waiting 1.5 to 15 minutes for one (2026-10-21).
+  # a branch's push only Windows and Linux: its iOS build puts nothing and took one of the organization's 5 macOS
+  # jobs for each push (2026-10-21).
   what:
     if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      android: ${{ steps.what.outputs.android }}
-      mac: ${{ steps.what.outputs.mac }}
       win: ${{ steps.what.outputs.win }}
       linux: ${{ steps.what.outputs.linux }}
       ios: ${{ steps.what.outputs.ios }}
@@ -72,14 +69,14 @@ jobs:
       - id: what
         run: |
           branch=; [ "$GITHUB_REF" = refs/heads/main ] || [ "$GITHUB_EVENT_NAME" != push ] || branch=1
-          for p in android mac win linux ios; do
+          for p in win linux ios; do
             # (the day's run: the Windows app alone, built and run end to end, nothing put)
             if [ "$GITHUB_EVENT_NAME" = schedule ]; then v=no; [ $p = win ] && v=yes; echo "$p=$v" >> "$GITHUB_OUTPUT"; echo "$p: $v"; continue; fi
-            # iOS has no feed: build every matching main push, independently of Android.
+            # iOS has no feed: build every matching main push.
             if [ "$p" != ios ] && [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then v=$(bash apps/mbui/scripts/beta.sh changed "$p"); else v=yes; fi
             # (Linux's two machines each have a feed: a package for both when either's is behind, as arm64's before its first)
             if [ "$p" = linux ] && [ "$v" = no ]; then v=$(bash apps/mbui/scripts/beta.sh changed linux-arm64); fi
-            case "$branch$p" in 1mac|1ios) v=no ;; esac
+            case "$branch$p" in 1ios) v=no ;; esac
             echo "$p=$v" >> "$GITHUB_OUTPUT"
             echo "$p: $v"
           done
@@ -105,113 +102,10 @@ jobs:
           else
             base=$(git merge-base origin/main HEAD)
             if git cat-file -e "$base^{commit}" 2>/dev/null && git diff --name-only "$base" HEAD |
-              grep -qE '^(apps/mbui/scripts/(win|win-compiler|beta|env)\.sh$|apps/mbui/mbui/scripts/(win\.sh|mbc|env\.sh)$|apps/mbui/mbui/tools/mbc/|\.github/workflows/(mbui|pipeline|stable)\.yml$|\.github/actions/(msvc|mbui-moonbit)/|scripts/release\.sh$)'; then v=yes; fi
+              grep -qE '^(apps/mbui/scripts/(win|win-compiler|beta|env)\.sh$|apps/mbui/mbui/scripts/(win\.sh|mbc|env\.sh)$|apps/mbui/mbui/tools/mbc/|\.github/workflows/(preview|pipeline|stable)\.yml$|\.github/actions/(msvc|mbui-moonbit)/|scripts/release\.sh$)'; then v=yes; fi
           fi
           echo "win_build=$v" >> "$GITHUB_OUTPUT"
           echo "win_build: $v"
-
-  android:
-    needs: what
-    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.android == 'yes'
-    runs-on: ubuntu-24.04
-    # production's secrets (the key, the bucket's token) on main only: a branch's run builds, unsigned, and puts nothing
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 5
-    env:
-      MBUI_FRESH: 1
-      MBUI_CACHE: ${{ github.workspace }}/.ci/release
-      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
-      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
-      APK_CACHE: ${{ github.workspace }}/.ci/apk
-    steps:
-      - uses: actions/checkout@v5
-        with: { fetch-depth: 0, filter: "blob:none" } # versionCode is the commits in the history (their files only as checked out)
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: 21 }
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/mbui-moonbit
-      # (mbc's units and the core's bytecode: main's newest, and on a branch its own last push's over them, m- and b-, as
-      # the linux job keeps them: with main's alone each push of a branch compiled all it had changed again)
-      - uses: actions/cache/restore@v4
-        id: store
-        with:
-          path: |
-            .ci/mbc-store
-            .ci/hbc
-          key: mbui-android-m-${{ github.sha }}
-          # (m- alone: GitHub tries every restore key on the branch's own caches before main's, so a wider name took the
-          # branch's last push for main's newest, a push after main's moved compiling it all again: 286 of 494 units,
-          # fix/card-foot-text-alignment, 41348175675, its first push 34)
-          restore-keys: mbui-android-m-
-      - if: github.ref != 'refs/heads/main'
-        run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
-      - uses: actions/cache/restore@v4
-        id: own
-        if: github.ref != 'refs/heads/main'
-        with:
-          path: |
-            .ci/mbc-store
-            .ci/hbc
-          key: mbui-android-b-${{ github.sha }}
-          restore-keys: mbui-android-b-
-      - if: github.ref != 'refs/heads/main'
-        run: |
-          mkdir -p .ci && cp -a -n "$RUNNER_TEMP/ci-main/." .ci/ && rm -rf "$RUNNER_TEMP/ci-main"
-          echo "units: $(find .ci/mbc-store -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l)"
-      # (the APK's own, apart: a cache's paths are part of what it is, and the one above stays the one main has)
-      - uses: actions/cache/restore@v4
-        id: apk-store
-        with:
-          path: .ci/apk
-          key: mbui-apk-${{ github.sha }}
-          restore-keys: mbui-apk-
-      # (the Android engine and shell in the native cache, as a run before fetched them, as the windows job keeps its own:
-      # one download from the store took 84 s for 2.9 MB, main 9440b484, 40668393099)
-      - name: The Android natives' keys
-        id: native-keys
-        run: echo "key=natives-android-arm64-$(node scripts/native.ts key shell android-arm64)-$(node scripts/native.ts key engine android-arm64)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/stillfail-native
-          key: ${{ steps.native-keys.outputs.key }}
-      - name: Tools (the Android engine and shell prebuilt, the core's packages)
-        run: |
-          sh apps/mbui/scripts/mbui.sh > /dev/null
-          node scripts/native.ts fetch engine android-arm64
-          node scripts/native.ts fetch shell android-arm64
-          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          touch "$RUNNER_TEMP/start"
-      - name: Build (and sign, on main)
-        env:
-          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
-          # PostHog's key, the app's crash reports' (apps/mbui/android/apk.json's strings)
-          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
-        run: bash apps/mbui/scripts/beta.sh build
-      - name: Put it, check it, then its feed
-        if: github.ref == 'refs/heads/main'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: bash apps/mbui/scripts/beta.sh publish android
-      # (main's, saved under a key by what they hold: as restored, not saved again; under the commit's key each job of
-      # each run saved the same, ~25 s a job, 2026-10-22)
-      - name: The caches' keys, by what they hold
-        run: |
-          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
-          echo "STORE_KEY=mbui-android-${{ github.ref == 'refs/heads/main' && 'm' || 'b' }}-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
-          echo "APK_KEY=mbui-apk-$(sh apps/mbui/scripts/held.sh .ci/apk)" >> "$GITHUB_ENV"
-      # (the units on every ref, a branch's under b-; the APK's, 400 MB, main's alone)
-      - if: env.STORE_KEY != steps.store.outputs.cache-matched-key && env.STORE_KEY != steps.own.outputs.cache-matched-key
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .ci/mbc-store
-            .ci/hbc
-          key: ${{ env.STORE_KEY }}
-      - if: github.ref == 'refs/heads/main' && env.APK_KEY != steps.apk-store.outputs.cache-matched-key
-        uses: actions/cache/save@v4
-        with:
-          path: .ci/apk
-          key: ${{ env.APK_KEY }}
 
   # The Linux app (apps/mbui/scripts/linux.sh: GTK 4, the engine and shell prebuilt for the machine, core.hbc), for x64
   # and arm64, each on GitHub's Ubuntu of that machine (a public repository's: free): built on every push that changes
@@ -256,7 +150,7 @@ jobs:
             .ci/hbc
           key: mbui-linux-${{ matrix.arch }}-m-${{ github.sha }}
           # (m- alone: GitHub tries every restore key on the branch's own caches before main's, so a wider name took the
-          # branch's last push for main's newest, as the android job's did: see there)
+          # branch's last push for main's newest, a push after main's moved compiling it all again)
           restore-keys: mbui-linux-${{ matrix.arch }}-m-
       - if: github.ref != 'refs/heads/main'
         run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
@@ -313,144 +207,6 @@ jobs:
             .ci/hbc
           key: ${{ env.STORE_KEY }}
 
-  # On macOS 26: its app icon is an Icon Composer document, which actool compiles only there (Xcode 26's actool on
-  # macos-15 crashed in its asset agent, IBPlatformToolFailureException, 2026-10-29, 40819418131)
-  mac:
-    needs: what
-    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.mac == 'yes'
-    runs-on: macos-26
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 5
-    env:
-      MBUI_FRESH: 1
-      MBUI_CACHE: ${{ github.workspace }}/.ci/release
-      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
-      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
-    steps:
-      - uses: actions/checkout@v5
-        with: { fetch-depth: 0, filter: "blob:none" }
-      # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB. Before the
-      # setup: whether core.hbc is in it says whether the job needs pnpm, below)
-      - uses: actions/cache/restore@v4
-        id: store
-        with:
-          path: |
-            .ci/mbc-store
-            .ci/hbc
-          key: mbui-mac-${{ github.sha }}
-          restore-keys: mbui-mac-
-      # React Native's Hermes for Apple (its framework and headers) and its hermesc, downloads of what core.sh pins: kept
-      # by those lines alone. (Not the core's parts, out/core, by a hash of the shell's sources, core.sh and the engine's,
-      # with nothing to fall back on, as before: any change to core.sh missed it, and mac-app.sh then built the shell with
-      # cargo, 253 s of the job's 427, 2026-10-24, 40069429045. The shell is shell-apple, fetched by its key; the engine
-      # is compiled in seconds, and a restored one was compiled again anyway, older than the checkout's sources.)
-      - id: hermes
-        run: echo "key=$(grep -E '^HERMES_(RN|APPLE_URL|APPLE_SHA256)=' apps/mbui/scripts/core.sh | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/Library/Caches/stillfail-build
-            apps/mbui/out/core/hermesc
-          key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
-      # The core's packages (pnpm, its store, core-ts's node_modules) only when core.hbc is not in HBC_CACHE for this
-      # commit's inputs (core.sh hermes-kept: the key core.sh itself keeps it by), and then installed by core.sh as it
-      # makes the core: they are only esbuild's and Babel's, and the core is unchanged in most runs. They were 12-37 s
-      # of each run (pnpm, its ~58 MB store restored, the install; 2026-10-24, 40076678382: the job's 216 s).
-      - id: core
-        run: if bash apps/mbui/scripts/core.sh hermes-kept apple; then echo "kept=true" >> "$GITHUB_OUTPUT"; fi
-      - uses: ./.github/actions/setup
-        with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
-      # (its icon, drawn by scripts/mac-icon.swift run with swift and compiled by actool, made once for that script, as
-      # the build does, not again on each fresh runner)
-      - uses: actions/cache@v4
-        with:
-          path: apps/mbui/out/mac/AppIcon-*
-          key: mbui-mac-icon-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
-      # (shell-apple darwin-arm64 in the native cache by its key, as the other jobs keep their engine and shell: a shell not
-      # prebuilt yet is built here with cargo, ~4.5 min, and was built again by each run of main until the pipeline's
-      # natives job published it, main 9d59e567 and 1c0b2ca0, 2026-10-29)
-      - name: The macOS shell's key
-        id: native-keys
-        run: echo "key=natives-shell-apple-darwin-arm64-$(node scripts/native.ts key shell-apple darwin-arm64)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        id: shell
-        with:
-          path: ~/Library/Caches/stillfail-native/shell-apple
-          key: ${{ steps.native-keys.outputs.key }}
-      - uses: ./.github/actions/mbui-moonbit
-      # moon's own build of the app (apps/mbui/_build, without the programs' objects the store keeps) as main's newest run
-      # left it, as the iOS job's and check-mbui's: without, moonc made all of it again each run (the build and signing
-      # 169 s of the job's 211, main ba28c96f, 40628153347, 2026-10-28)
-      - uses: actions/cache/restore@v4
-        id: moon
-        with:
-          path: |
-            apps/mbui/_build
-            !apps/mbui/_build/**/*.mbc
-          key: mbui-mac-moon-${{ github.sha }}
-          restore-keys: mbui-mac-moon-
-      # (each file an mtime of its content: moon builds again only what changed since that build)
-      - run: bash apps/mbui/scripts/moon-mtimes.sh
-      # (no Rust target: nothing is built with cargo here; native.ts adds one itself if a part must be built)
-      - name: Tools
-        run: |
-          sh apps/mbui/scripts/mbui.sh > /dev/null
-          touch "$RUNNER_TEMP/start"
-      # (the shell's cargo build, its dependencies kept, as main's newest that built it left it: a shell changed is built
-      # here when not prebuilt yet, and from nothing that was 180-320 s of the job, a crate of its own again and again
-      # (2026-10-29, five times on main); its dependencies change with Cargo.lock alone)
-      - if: steps.shell.outputs.cache-hit != 'true'
-        uses: actions/cache/restore@v4
-        with:
-          path: apps/mbui/out/core-target*/native/shell-apple
-          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
-          # (or from a Cargo.lock before it: cargo builds again only the crates it changed, the rest as they were.
-          # Keyed by the lock alone, a lock's change built all from nothing, 331 s of the macOS app's, bef99112's iroh)
-          restore-keys: |
-            shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-
-            shell-apple-target-darwin-arm64-
-      - name: The macOS app, built (and signed with still.fail's identity, on main)
-        if: github.ref == 'refs/heads/main'
-        env:
-          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
-          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
-          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
-        run: bash apps/mbui/scripts/beta.sh mac
-      - name: The macOS app, built (ad hoc signed)
-        if: github.ref != 'refs/heads/main'
-        run: EMBER=$PWD bash apps/mbui/scripts/mac-app.sh build
-      - name: Put it, check it, then its feed (mac)
-        if: github.ref == 'refs/heads/main'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: bash apps/mbui/scripts/beta.sh publish mac
-      # (by what it holds, as the android job's)
-      # (main's, when it built the shell here)
-      - if: github.ref == 'refs/heads/main' && steps.shell.outputs.cache-hit != 'true' && hashFiles('apps/mbui/out/core-target*/native/shell-apple/**/libstillfail_shell.a') != ''
-        uses: actions/cache/save@v4
-        with:
-          path: apps/mbui/out/core-target*/native/shell-apple
-          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
-      - name: The cache's key, by what it holds
-        if: github.ref == 'refs/heads/main'
-        run: |
-          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
-          echo "STORE_KEY=mbui-mac-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
-      - if: github.ref == 'refs/heads/main' && env.STORE_KEY != steps.store.outputs.cache-matched-key
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .ci/mbc-store
-            .ci/hbc
-          key: ${{ env.STORE_KEY }}
-      - if: github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            apps/mbui/_build
-            !apps/mbui/_build/**/*.mbc
-          key: mbui-mac-moon-${{ github.sha }}
-
   # Built with iOS 27.1's SDK: an app built with an older one runs on an iPhone Duo's inner screen letterboxed, black
   # bars either side, and is told nothing of its hinge (UIHingeInteraction, its fold's reserved regions: ios_app.m).
   # GitHub's xcode-27 image has Xcode 27.1 beside its default 27.0 (2026-10-23); the SDK is checked, not trusted.
@@ -463,7 +219,7 @@ jobs:
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
-      # (the shell's cargo build in the checkout, as the macOS job's is (mac-app.sh's), for the cache below)
+      # (the shell's cargo build in the checkout, as mac-app.sh's is, for the cache below)
       CARGO_TARGET_DIR: ${{ github.workspace }}/apps/mbui/out/core-target
     steps:
       - name: iOS's SDK 27.1 or later
@@ -473,7 +229,7 @@ jobs:
           case "$v" in 2[0-6].*|27.0*) echo "::error::iOS SDK $v: an iPhone Duo letterboxes an app built before 27.1"; exit 1 ;; esac
       - uses: actions/checkout@v5
       # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB; before the
-      # setup, as the mac job's)
+      # setup: whether core.hbc is in it says whether the job needs pnpm, below)
       - uses: actions/cache/restore@v4
         id: store
         with:
@@ -482,7 +238,7 @@ jobs:
             .ci/hbc
           key: mbui-ios-${{ github.sha }}
           restore-keys: mbui-ios-
-      # (Hermes for Apple and its hermesc by the versions core.sh pins, as the mac job's)
+      # (Hermes for Apple and its hermesc by the versions core.sh pins, as pipeline.yml's desktop job keeps them)
       - id: hermes
         run: echo "key=$(grep -E '^HERMES_(RN|APPLE_URL|APPLE_SHA256)=' apps/mbui/scripts/core.sh | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
@@ -491,7 +247,8 @@ jobs:
             ~/Library/Caches/stillfail-build
             apps/mbui/out/core/hermesc
           key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
-      # (the core's packages only for a core.hbc not kept, as the mac job's)
+      # (the core's packages only for a core.hbc not kept for this commit's inputs: they are only esbuild's and Babel's,
+      # and the core is unchanged in most runs)
       - id: core
         run: if bash apps/mbui/scripts/core.sh hermes-kept apple; then echo "kept=true" >> "$GITHUB_OUTPUT"; fi
       - uses: ./.github/actions/setup
@@ -553,7 +310,6 @@ jobs:
           path: apps/mbui/out/ios-device/stillfail-mbui.ipa
           if-no-files-found: error
           retention-days: 14
-      # (by what it holds, as the android job's)
       # (main's, when it built the shell here)
       - if: github.ref == 'refs/heads/main' && steps.shell.outputs.cache-hit != 'true' && hashFiles('apps/mbui/out/core-target*/native/shell-apple/**/libstillfail_shell.a') != ''
         uses: actions/cache/save@v4

@@ -54,7 +54,7 @@ runs:
         echo "Node $v in the tool cache in $(( $(date +%s) - t0 )) s"
     # Windows: the image's Node of that version, from its tool cache, put on the PATH as it is. setup-node prints npm's
     # and yarn's versions, their first start on the runner: 45 s of the release's Windows job beside cl compiling the
-    # app (main dd3caeef, 40599181003; mbui.yml's own Node step says the same of 29-81 s, 2026-10-25). setup-node when
+    # app (main dd3caeef, 40599181003; preview.yml's own Node step says the same of 29-81 s, 2026-10-25). setup-node when
     # the image has not that Node.
     - id: node
       if: runner.os == 'Windows'

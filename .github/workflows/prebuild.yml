@@ -105,7 +105,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ids=
-          for wf in pipeline.yml mbui.yml; do
+          for wf in pipeline.yml preview.yml; do
             id=$(gh run list -R "$GITHUB_REPOSITORY" -w "$wf" --commit "$GITHUB_SHA" --event push -L 1 --json databaseId --jq '.[0].databaseId // empty')
             if [ -n "$id" ]; then ids="$ids $id"; else echo "$wf: no run of $GITHUB_SHA"; fi
           done

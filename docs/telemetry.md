@@ -90,7 +90,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
   | `topics` | 页面新订阅的每个 topic：`topic`（名字，不带参数）、`core_ms`（订阅到第一条消息在 UI 线程解完）、`tap_shown_ms`、`bytes`（第一个值的 JSON 大小）、`failed` |
 
 - release 包关了 R8 的混淆（`android/app/proguard-rules.pro` 的 `-dontobfuscate`，保留行号），堆栈里是原名，不用上传 mapping。
-- 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`android/apk.json` 的 `strings`：`posthog_host`、`posthog_key`）；CI 的安卓构建从 `POSTHOG_JSON` 写这个文件（`.github/release.sh android`、`.github/workflows/mbui.yml` → `apps/mbui/scripts/beta.sh build`）。没有 key 的构建（本地、开发）什么都不发。
+- 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`android/apk.json` 的 `strings`：`posthog_host`、`posthog_key`）；CI 的安卓构建从 `POSTHOG_JSON` 写这个文件（`.github/release.sh android` → `scripts/release.sh` → `apps/mbui/scripts/beta.sh build`）。没有 key 的构建（本地、开发）什么都不发。
 - 设置 → 此设备里的「发送使用统计和错误报告」（默认开，只存在这台设备上，app prefs `stillfail` 的 `telemetry`，`Crashes.reporting`；没有 key 的构建不显示）关掉后，以上都不发：都经 `Crashes.send` 发出，它先看这个开关；关着时的闪退也不留到以后再报。
 - 采样 core：`adb shell am broadcast -n <包名>/dev.mbui.CoreProfileReceiver --ei seconds 60`（正式版 `fail.still.android`）。
 
