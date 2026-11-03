@@ -15,7 +15,6 @@ fn page_one(
   main_w : Double,
   ph : Double,
   aside : Double,
-  finger : Bool,
 ) -> Unit {
   let top = page == app.nav.top()
   if @ui.window_inset() {
@@ -35,11 +34,7 @@ fn page_one(
       })
       @motion.scope(c, moved, bottom=true)
     }
-    if finger {
-      body()
-    } else {
-      c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), body)
-    }
+    c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), body)
   })
 }
 
@@ -64,7 +59,7 @@ fn pane_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
   // a right click in it: what is picked copied (context_menu.mbt)
   context_page(c, page_id)
   let pane = c.box(style=frame_main.then(@ui.style(w=Fixed(c.width))), id=page_id, fn() {
-    page_one(c, src, w, page, c.width, c.height, f.aside, pane_finger())
+    page_one(c, src, w, page, c.width, c.height, f.aside)
   })
   // (what moves in the page of its own takes its place from the page's foot: a keyboard, the block moving the page
   // aside, move none of it)

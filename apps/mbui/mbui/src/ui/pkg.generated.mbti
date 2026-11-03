@@ -1322,6 +1322,7 @@ pub fn Ctx::second_pointer(Self) -> (Double, Double)?
 pub fn Ctx::segmented(Self, String, Array[String], Int32, item_w? : Double) -> Int32
 pub fn Ctx::selectable(Self, () -> Unit, color? : Int64) -> Unit
 pub fn Ctx::selected_text(Self) -> String
+pub fn Ctx::selection_by_finger(Self) -> Bool
 pub fn Ctx::selection_box(Self) -> (Double, Double, Double, Double)?
 pub fn Ctx::selection_clear(Self) -> Unit
 pub fn Ctx::selection_end(Self) -> (Double, Double, Double)?

@@ -103,7 +103,7 @@ fn tape_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
     context_page(c, page_id)
     let pane = c.box(style=frame_main.then(@ui.style(w=Fixed(c.width))), id=page_id, fn() {
       @sf.pane_round.val = Some(beside_column(corners, under))
-      tape_bar_collected(c, fn() { page_one(c, src, w, page, c.width, c.height, 0.0, pane_finger()) })
+      tape_bar_collected(c, fn() { page_one(c, src, w, page, c.width, c.height, 0.0) })
       @sf.pane_round.val = None
     })
     // (what moves in the page of its own takes its place from the page's foot: the tape moving the page, a keyboard
