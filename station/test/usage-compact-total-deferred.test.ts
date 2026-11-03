@@ -115,6 +115,8 @@ test("a workspace asking for its total does not flush another workspace's pendin
   try {
     for (const ws of ["A", "B"]) store.insertSession({ key: ws, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
       token: ws, ws, createdAt: 0, lastActiveAt: 0 });
+    store.insertSession({ key: "H", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
+      token: "H", ws: null, createdAt: 0, lastActiveAt: 0 });
     compact.installCompactUsage(store.db, () => store.now());
     retireUsageIndexes(store.db);
     const owner = { turn: null, thread: null, person: "p", profile: "cc" };
@@ -123,12 +125,13 @@ test("a workspace asking for its total does not flush another workspace's pendin
     store.recordUsage("/B", { session: "B", offset: 1, model: "m" }, "claude",
       Array.from({ length: 300 }, (_, i) => [call(`b-${i}`, i * 60_000), owner]));
     store.recordUsage("/A", { session: "A", offset: 1, model: "m" }, "claude", [[call("a", 0), owner]]);
+    store.recordUsage("/H", { session: "H", offset: 1, model: "m" }, "claude", [[call("h", 0), owner]]);
     mover = watchCompactMoves(store, Promise.resolve());
     const ready = new Promise<void>((resolve, reject) => {
       const abort = () => { unsubscribe(); reject(t.signal.reason); };
       const unsubscribe = store.subscribe((change) => {
-        if (change.type !== "usage" || !change.statisticsOnly || !change.sessions.includes("A")) return;
-        if (compact.compactTotal(store.db, { workspace: "A", home: false }) === null) return;
+        if (change.type !== "usage" || !change.statisticsOnly || !change.sessions.some((s) => s === "A" || s === "H")) return;
+        if (compact.compactTotal(store.db, { workspace: "A" }) === null) return;
         unsubscribe();
         t.signal.removeEventListener("abort", abort);
         resolve();
@@ -136,9 +139,10 @@ test("a workspace asking for its total does not flush another workspace's pendin
       t.signal.addEventListener("abort", abort, { once: true });
     });
     store.usageChanged(["A"], 0);
-    mover.read({ workspace: "A", home: false });
+    mover.read({ workspace: "A" });
     await ready;
     assert.deepEqual(compact.compactTotal(store.db, { workspace: "A", home: false }), { calls: 1, tokens: 2 });
+    assert.deepEqual(compact.compactTotal(store.db, { workspace: "A" }), { calls: 2, tokens: 4 });
     assert.equal(compact.compactTotal(store.db, { workspace: "B", home: false }), null);
     assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage_compact WHERE scope = 'WB' AND pending = 1").get() as { n: number }).n, 300);
   } finally {
