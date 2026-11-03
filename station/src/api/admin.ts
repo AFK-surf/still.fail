@@ -206,6 +206,8 @@ export class Admin {
             },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/screenshot$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => ({ png: (await d.screenshot()).toString("base64") })) },
             ...simActions(deps.screens),
+            // Its movie, the drive's way for the viewer to download (none: nothing was going on).
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/record\/stop$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => (await d.recordStop()) ?? {}) },
             {
               method: "POST",
               pattern: /^\/screens\/([^/]+)\/install$/,
@@ -400,6 +402,13 @@ function simActions(screens: ScreenHub) {
       if ((at !== undefined && typeof at !== "string") || !(await d.location((at as string | undefined) ?? null))) throw new ScreenRefused(400, "station.screen.badPlace");
     }),
     route("status-bar", async (d, { tidy }) => d.statusBar(tidy === true)),
+    route("biometrics", async (d, { what }) => {
+      if (typeof what !== "string" || !(await d.biometrics(what))) throw new ScreenRefused(400, "station.screen.noSetting");
+    }),
+    route("uninstall", async (d, { app }) => {
+      if (typeof app !== "string" || !(await d.uninstall(app))) throw new ScreenRefused(404, "station.screen.noApp");
+    }),
+    route("record", async (d, { panel }) => d.recordStart(panel === "inner" || panel === "cover" ? panel : null)),
     route("push", async (d, { app, text }) => {
       if (typeof app !== "string" || typeof text !== "string" || !(await d.push(app, text))) throw new ScreenRefused(404, "station.screen.noApp");
     }),

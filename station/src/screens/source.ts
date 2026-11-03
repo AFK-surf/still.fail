@@ -29,7 +29,9 @@ export type ScreenInput =
   | { t: "key"; kind: "down" | "up"; key: string; code: string; mods: number }
   | { t: "text"; text: string }
   /// A foldable simulator's hinge (`ScreenSource.poses`).
-  | { t: "pose"; name: "closed" | "book" | "open" };
+  | { t: "pose"; name: "closed" | "book" | "open" }
+  // What Device Hub does of a device besides its keys and a finger
+  | { t: "device"; name: "volume_up" | "volume_down" | "memory_warning" };
 
 /// `peek`: a preview (a link's card in a chat): it brings nothing forward, wakes nothing and is not among those on it.
 /// `bitrate`: what to encode at first (bits a second; none: the source's own), until `ScreenView.rate` says otherwise.

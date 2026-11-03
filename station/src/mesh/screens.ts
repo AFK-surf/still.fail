@@ -182,6 +182,8 @@ export function parseInput(v: any): ScreenInput | null {
       return { t: "text", text: v.text };
     case "pose":
       return v.name === "closed" || v.name === "book" || v.name === "open" ? { t: "pose", name: v.name } : null;
+    case "device":
+      return v.name === "volume_up" || v.name === "volume_down" || v.name === "memory_warning" ? { t: "device", name: v.name } : null;
     default:
       return null;
   }
