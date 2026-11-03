@@ -13,6 +13,8 @@ import { OutflowServer, type Workspace } from "../src/outflow/server.ts";
 import { TAILCAT_PORT, TailcatLink, VIA_TAILCAT } from "../src/outflow/tailcat.ts";
 import { routes } from "../src/api/routes/outflow.ts";
 import { Store, newMessage } from "../src/store/store.ts";
+import { installOutflowChatIndex, outflowChatIndexStep, outflowChatScopes } from "../src/store/outflow-index.ts";
+import type { InWorkspace } from "../src/store/rows.ts";
 import * as read from "../src/read/store.ts";
 import { outflowChats, outflowMessages, outflowThread, outflowUsage } from "../src/read/outflow.ts";
 import { usageOps } from "../src/read/ops-usage.ts";
@@ -29,6 +31,11 @@ const tempdir = () => {
   dirs.push(d);
   return d;
 };
+
+function readyChats(store: Store, viewer: InWorkspace = { workspace: "\u0000home", home: true }): void {
+  installOutflowChatIndex(store.db);
+  for (const scope of outflowChatScopes(viewer)) while (!outflowChatIndexStep(store.db, scope).done) { /* bounded batches */ }
+}
 
 const COMMA: Identity = { path: "/Applications/Comma.app/Contents/Resources/station/node", valid: true, teamId: "D9AAN3VJK8", identifier: "surf.comma.station", signer: "Developer ID Application: AFK Inc. (D9AAN3VJK8)", app: "Comma", sha256: null };
 const OTHER: Identity = { ...COMMA, teamId: "XXXXXXXXXX", signer: "Developer ID Application: Someone (XXXXXXXXXX)" };
@@ -380,6 +387,7 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   const otherUsage = outflowUsage(r, "en", 86_400_000, 2 * 86_400_000, 0, { workspace: "other-ws", home: false }) as any;
   assert.deepEqual(otherUsage.rows.map((x: any) => [x.session, x.thread]), [["b", away.id]]);
 
+  readyChats(store);
   const chats = outflowChats(r, 0) as any;
   assert.deepEqual(chats.chats.map((c: any) => [c.thread, c.title, c.state, c.creator?.email, c.surface, c.archived]), [[home.id, "Fix the build", "all_done", "ann@x", "stillfail", false]]);
   assert.ok(!JSON.stringify(chats).includes("secret"), "no message");
@@ -390,17 +398,20 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   const second = store.openThreadOf("ember", "EMBER", "100.4", "Ship it", "ann@x", "a");
   store.joinThread(second.id, "a", "ember");
   store.insertMessage(newMessage(second.id, "100.5", "person", "ann@x", "ship"));
+  readyChats(store);
   const all = (outflowChats(read.openStore(dir), 0) as any).chats.map((c: any) => c.thread);
   const first = outflowChats(read.openStore(dir), 0, undefined, { limit: 1, before: null }) as any;
   const rest = outflowChats(read.openStore(dir), 0, undefined, { limit: 1, before: first.next }) as any;
   assert.deepEqual([first.chats.map((c: any) => c.thread), first.more, rest.chats.map((c: any) => c.thread), rest.more, rest.next], [[all[0]], true, [all[1]], false, null]);
   assert.equal(all.length, 2);
   // Another station of a workspace this one joined reads that workspace's, as its program's grant there asks.
+  readyChats(store, { workspace: "other-ws", home: false });
   const theirs = usageOps.outflowChats!(r, { since: 0, ws: { workspace: "other-ws", home: false } }) as any;
   assert.deepEqual(theirs.chats.map((c: any) => c.title), ["Theirs"]);
   const spent = usageOps.outflowUsage!(r, { lang: "en", from: 0, to: 365 * 86_400_000, tz: 0, ws: { workspace: "other-ws", home: false } }) as any;
   assert.deepEqual([spent.rows.map((x: any) => x.person), spent.to], [["bob@x"], 31 * 86_400_000], "a span of 31 days at most, whoever asks");
   // Read here with the home workspace's id: its chats made in the app too, those that say no workspace as well.
+  readyChats(store, { workspace: "ws-home", home: true });
   const own = usageOps.outflowChats!(read.openStore(dir), { since: 0, ws: { workspace: "ws-home", home: true } }) as any;
   assert.deepEqual(own.chats.map((c: any) => c.title).sort(), ["Fix the build", "From the app", "Ship it"]);
 });
@@ -417,6 +428,7 @@ test("listing chats for a program does not count the chat's unread history", () 
     store.db.exec("COMMIT");
     store.db.prepare("UPDATE threads SET created_at = 1 WHERE id = ?").run(thread.id);
     store.db.prepare("INSERT INTO entries (thread, n, kind, target, author_kind, author, text, at) VALUES (?, 1001, 'edit', 1000, 'person', 'ann@x', 'edited', 999999)").run(thread.id);
+    readyChats(store);
     const reader = read.makeStore(store.db, ".");
     const expected = outflowChats(reader, 0, undefined, { limit: 1, before: null }) as any;
     assert.equal(expected.chats[0].lastActiveAt, read.lastSaid(reader, thread.id)?.createdAt);
@@ -444,11 +456,35 @@ test("a shared chat's exported agents belong to the requested workspace", () => 
     }
     const thread = store.openThreadOf("ember", "EMBER", "shared", "Shared", "ann@x", "a");
     for (const key of ["a", "b", "home"]) store.joinThread(thread.id, key, "ember");
+    readyChats(store, { workspace: "A", home: true });
+    readyChats(store, { workspace: "B", home: false });
     const reader = read.makeStore(store.db, ".");
     const a = outflowChats(reader, 0, { workspace: "A", home: true }, { limit: 1, before: null }) as any;
     const b = outflowChats(reader, 0, { workspace: "B", home: false }, { limit: 1, before: null }) as any;
     assert.deepEqual(a.chats[0].agents.map((agent: any) => agent.runtime), ["claude", "gemini"]);
     assert.deepEqual(b.chats[0].agents.map((agent: any) => agent.runtime), ["codex"]);
+  } finally { store.close(); }
+});
+
+test("export pages merge home and workspace chats once, including tied activity times", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["home", null], ["a", "A"], ["b", "B"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, ws });
+    for (const [name, members] of [["one", ["a", "home"]], ["two", ["a"]], ["three", ["home"]], ["four", ["a", "home"]], ["away", ["b"]]] as const) {
+      const thread = store.openThreadOf("ember", "EMBER", name, name, "ann@x", members[0]!);
+      for (const member of members) store.joinThread(thread.id, member, "ember");
+      store.db.prepare("UPDATE threads SET created_at=10 WHERE id=?").run(thread.id);
+    }
+    const viewer = { workspace: "A", home: true };
+    readyChats(store, viewer);
+    const reader = read.makeStore(store.db, ".");
+    const first = outflowChats(reader, 10, viewer, { limit: 2, before: null }) as any;
+    const second = outflowChats(reader, 10, viewer, { limit: 2, before: first.next }) as any;
+    assert.deepEqual(first.chats.map((chat: any) => chat.title), ["four", "three"]);
+    assert.deepEqual(second.chats.map((chat: any) => chat.title), ["two", "one"]);
+    assert.deepEqual([first.more, second.more, second.next], [true, false, null]);
+    assert.deepEqual((outflowChats(reader, 11, viewer) as any).chats, []);
   } finally { store.close(); }
 });
 
@@ -467,6 +503,7 @@ test("a page of exported chats does not enumerate every session", () => {
       workspace: "/w", token: `other-${i}`, createdAt: 1, lastActiveAt: 1, ws: "B" });
     store.db.exec("COMMIT");
     const reader = read.makeStore(store.db, "."), viewer = { workspace: "A", home: false };
+    readyChats(store, viewer);
     const first = outflowChats(reader, 0, viewer, { limit: 1, before: null }) as any;
     const second = outflowChats(reader, 0, viewer, { limit: 1, before: first.next }) as any;
     assert.deepEqual(first.chats.map((chat: any) => chat.title), ["c"]);

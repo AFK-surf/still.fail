@@ -5,16 +5,16 @@ import type { InWorkspace } from "./rows.ts";
 
 const scope = (ws: string) => `(CASE WHEN ${ws} IS NULL THEN 'H' ELSE 'W' || ${ws} END)`;
 const mark = (threads: string) => `
-  INSERT INTO outflow_chat_dirty (scope, thread)
-    SELECT DISTINCT o.scope, o.thread FROM outflow_chat_order o WHERE o.thread IN (${threads}) AND NOT EXISTS
-      (SELECT 1 FROM outflow_chat_dirty d WHERE d.scope = o.scope AND d.thread = o.thread);
-  INSERT INTO outflow_chat_dirty (scope, thread)
-    SELECT DISTINCT ${scope("s.ws")}, m.thread FROM thread_sessions m JOIN sessions s ON s.key = m.session
+  UPDATE outflow_chat_order SET dirty = 1 WHERE dirty = 0 AND thread IN (${threads});
+  INSERT INTO outflow_chat_order (thread, scope, at, dirty)
+    SELECT DISTINCT m.thread, ${scope("s.ws")}, 0, 1 FROM thread_sessions m JOIN sessions s ON s.key = m.session
     WHERE m.thread IN (${threads}) AND NOT EXISTS
-      (SELECT 1 FROM outflow_chat_dirty d WHERE d.scope = ${scope("s.ws")} AND d.thread = m.thread);`;
+      (SELECT 1 FROM outflow_chat_order o WHERE o.scope = ${scope("s.ws")} AND o.thread = m.thread);`;
 const sessionThreads = (session: string) => `SELECT thread FROM thread_sessions WHERE session = ${session}`;
 const conflictingThreads = `SELECT thread FROM thread_sessions WHERE session IN
   (SELECT key FROM sessions WHERE key = NEW.key OR token = NEW.token)`;
+const conflictingChat = `SELECT id FROM threads WHERE id = NEW.id OR
+  (surface = NEW.surface AND channel = NEW.channel AND thread_ts = NEW.thread_ts)`;
 
 /// No history is read or rewritten here. Triggers also cover an older station writing during handover.
 export function installOutflowChatIndex(db: DatabaseSync): void {
@@ -23,19 +23,23 @@ export function installOutflowChatIndex(db: DatabaseSync): void {
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!installed()) db.exec(`
-      CREATE TABLE outflow_chat_order (thread INTEGER NOT NULL, scope TEXT NOT NULL, at INTEGER NOT NULL,
+      CREATE TABLE outflow_chat_order (thread INTEGER NOT NULL, scope TEXT NOT NULL, at INTEGER NOT NULL, dirty INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (thread, scope)) WITHOUT ROWID;
-      CREATE INDEX outflow_chat_scope_order ON outflow_chat_order (scope, at DESC, thread DESC);
-      CREATE TABLE outflow_chat_dirty (scope TEXT NOT NULL, thread INTEGER NOT NULL, PRIMARY KEY (scope, thread)) WITHOUT ROWID;
-      CREATE INDEX outflow_chat_dirty_thread ON outflow_chat_dirty (thread, scope);
+      -- One ordered index locates both dirty rows and clean pages, so settling changes need not maintain two extra indexes.
+      CREATE INDEX outflow_chat_scope_order ON outflow_chat_order (scope, dirty, at DESC, thread DESC);
       CREATE TABLE outflow_chat_progress (id INTEGER PRIMARY KEY CHECK (id = 1), cursor INTEGER, last INTEGER, done INTEGER NOT NULL);
       INSERT INTO outflow_chat_progress SELECT 1, NULL, MAX(id), MAX(id) IS NULL FROM threads;
 
+      CREATE TRIGGER outflow_thread_before_add BEFORE INSERT ON threads BEGIN ${mark(conflictingChat)} END;
       CREATE TRIGGER outflow_thread_add AFTER INSERT ON threads BEGIN ${mark("SELECT NEW.id")} END;
-      CREATE TRIGGER outflow_thread_before BEFORE UPDATE OF id, created_at ON threads
-        WHEN OLD.id IS NOT NEW.id OR OLD.created_at IS NOT NEW.created_at BEGIN ${mark("SELECT OLD.id")} END;
-      CREATE TRIGGER outflow_thread_after AFTER UPDATE OF id, created_at ON threads
-        WHEN OLD.id IS NOT NEW.id OR OLD.created_at IS NOT NEW.created_at BEGIN ${mark("SELECT NEW.id")} END;
+      CREATE TRIGGER outflow_thread_before BEFORE UPDATE OF id, surface, channel, thread_ts, created_at ON threads
+        WHEN OLD.id IS NOT NEW.id OR OLD.surface IS NOT NEW.surface OR OLD.channel IS NOT NEW.channel OR
+             OLD.thread_ts IS NOT NEW.thread_ts OR OLD.created_at IS NOT NEW.created_at BEGIN
+          ${mark("SELECT OLD.id")} ${mark(conflictingChat)}
+      END;
+      CREATE TRIGGER outflow_thread_after AFTER UPDATE OF id, surface, channel, thread_ts, created_at ON threads
+        WHEN OLD.id IS NOT NEW.id OR OLD.surface IS NOT NEW.surface OR OLD.channel IS NOT NEW.channel OR
+             OLD.thread_ts IS NOT NEW.thread_ts OR OLD.created_at IS NOT NEW.created_at BEGIN ${mark("SELECT NEW.id")} END;
       CREATE TRIGGER outflow_thread_drop BEFORE DELETE ON threads BEGIN ${mark("SELECT OLD.id")} END;
 
       CREATE TRIGGER outflow_member_add AFTER INSERT ON thread_sessions BEGIN ${mark("SELECT NEW.thread")} END;
@@ -58,8 +62,17 @@ export function installOutflowChatIndex(db: DatabaseSync): void {
       CREATE TRIGGER outflow_session_drop BEFORE DELETE ON sessions BEGIN ${mark(sessionThreads("OLD.key"))} END;
 
       CREATE TRIGGER outflow_said_add AFTER INSERT ON thread_state BEGIN ${mark("SELECT NEW.thread")} END;
-      CREATE TRIGGER outflow_said_change AFTER UPDATE OF said_n ON thread_state WHEN OLD.said_n IS NOT NEW.said_n BEGIN ${mark("SELECT NEW.thread")} END;
+      CREATE TRIGGER outflow_said_change AFTER UPDATE OF thread, said_n ON thread_state
+        WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN
+          ${mark("SELECT OLD.thread")} ${mark("SELECT NEW.thread")}
+      END;
       CREATE TRIGGER outflow_said_drop BEFORE DELETE ON thread_state BEGIN ${mark("SELECT OLD.thread")} END;
+      -- REPLACE can remove the last message without a DELETE trigger, including by its unique timestamp.
+      CREATE TRIGGER outflow_entry_before_add BEFORE INSERT ON entries WHEN EXISTS (
+        SELECT 1 FROM thread_state st WHERE st.thread = NEW.thread AND
+          (st.said_n = NEW.n OR (NEW.ts IS NOT NULL AND EXISTS
+            (SELECT 1 FROM entries e WHERE e.thread = st.thread AND e.n = st.said_n AND e.ts = NEW.ts)))
+      ) BEGIN ${mark("SELECT NEW.thread")} END;
       CREATE TRIGGER outflow_entry_change AFTER UPDATE OF thread, n, at, kind ON entries BEGIN
         ${mark("SELECT OLD.thread")} ${mark("SELECT NEW.thread")}
       END;
@@ -77,8 +90,8 @@ function refresh(db: DatabaseSync, thread: bigint): void {
   db.prepare(`DELETE FROM outflow_chat_order WHERE thread = ?1 AND
     (NOT EXISTS (SELECT 1 FROM threads t WHERE t.id = ?1) OR NOT EXISTS
       (SELECT 1 FROM thread_sessions m JOIN sessions s ON s.key = m.session WHERE m.thread = ?1 AND ${scope("s.ws")} = outflow_chat_order.scope))`).run(thread);
-  db.prepare(`UPDATE outflow_chat_order SET at = (SELECT ${lastAt} FROM threads t WHERE t.id = ?1)
-    WHERE thread = ?1 AND at IS NOT (SELECT ${lastAt} FROM threads t WHERE t.id = ?1)`).run(thread);
+  db.prepare(`UPDATE outflow_chat_order SET at = (SELECT ${lastAt} FROM threads t WHERE t.id = ?1), dirty = 0
+    WHERE thread = ?1 AND (dirty <> 0 OR at IS NOT (SELECT ${lastAt} FROM threads t WHERE t.id = ?1))`).run(thread);
   db.prepare(`INSERT INTO outflow_chat_order (thread, scope, at)
     SELECT DISTINCT m.thread, ${scope("s.ws")}, ${lastAt} FROM thread_sessions m
       JOIN sessions s ON s.key = m.session JOIN threads t ON t.id = m.thread
@@ -104,15 +117,14 @@ export function outflowChatIndexStep(db: DatabaseSync, requested: string, limit 
       db.prepare("UPDATE outflow_chat_progress SET cursor = ?1, done = ?2 WHERE id = 1")
         .run(rows.at(-1)?.thread ?? state.cursor, rows.length < limit ? 1 : 0);
     } else {
-      const query = db.prepare("SELECT thread FROM outflow_chat_dirty WHERE scope = ?1 ORDER BY thread LIMIT ?2");
+      const query = db.prepare("SELECT thread FROM outflow_chat_order INDEXED BY outflow_chat_scope_order WHERE scope = ?1 AND dirty = 1 ORDER BY at DESC, thread DESC LIMIT ?2");
       query.setReadBigInts(true);
       rows = query.all(requested, limit) as { thread: bigint }[];
-      // Refresh derives every scope of this thread in the same transaction, so all its markers are settled.
-      const remove = db.prepare("DELETE FROM outflow_chat_dirty WHERE thread = ?");
-      for (const row of rows) { refresh(db, row.thread); remove.run(row.thread); }
+      // Refresh derives and cleans every scope of this thread in the same transaction.
+      for (const row of rows) refresh(db, row.thread);
     }
     const done = (db.prepare("SELECT done FROM outflow_chat_progress WHERE id = 1").get() as { done: number }).done === 1
-      && db.prepare("SELECT 1 FROM outflow_chat_dirty WHERE scope = ? LIMIT 1").get(requested) === undefined;
+      && db.prepare("SELECT 1 FROM outflow_chat_order INDEXED BY outflow_chat_scope_order WHERE scope = ? AND dirty = 1 LIMIT 1").get(requested) === undefined;
     db.exec("COMMIT");
     return { done, visited: rows.length };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
@@ -122,6 +134,6 @@ export const outflowChatScopes = (viewer: InWorkspace) => viewer.home === false 
 export function outflowChatIndexReady(db: DatabaseSync, viewer: InWorkspace): boolean {
   if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'outflow_chat_progress'").get() === undefined) return false;
   if ((db.prepare("SELECT done FROM outflow_chat_progress WHERE id = 1").get() as { done: number }).done !== 1) return false;
-  const pending = db.prepare("SELECT 1 FROM outflow_chat_dirty WHERE scope = ? LIMIT 1");
+  const pending = db.prepare("SELECT 1 FROM outflow_chat_order INDEXED BY outflow_chat_scope_order WHERE scope = ? AND dirty = 1 LIMIT 1");
   return outflowChatScopes(viewer).every((scope) => pending.get(scope) === undefined);
 }
