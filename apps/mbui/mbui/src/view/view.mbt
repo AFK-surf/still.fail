@@ -3132,15 +3132,43 @@ fn Tree::modals_settled(self : Tree) -> Unit {
 /// (Tree::laid_now: what it told pulled in, laid out, placed; what is under the pointer told then, laid_out's), so what
 /// reads it has it as the change left it, no frame waited for. Nothing laid out where nothing reads it.
 fn Tree::withins_settled(self : Tree) -> Unit {
+  // A clock reaction can commit another structure while an immediate layout is standing. That layout will finish
+  // the work; entering it again here can alternate the drawn clock and exhaust the stack.
   if self.committing == 0 &&
+    !self.standing &&
     !self.withins_passing &&
     (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) &&
     (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
     self.laid_now()
+    self.withins_restored()
   }
   // (what takes input changed with nothing else to lay out: which column's bar the pointer is along told now, at the
   // change's end)
-  if self.committing == 0 && !self.withins_passing && self.bars_due {
+  if self.committing == 0 && !self.standing && !self.withins_passing && self.bars_due {
+    self.withins_passing = true
+    self.bars_near_told() |> ignore
+    self.withins_passing = false
+  }
+}
+
+///|
+/// Finish pointer work told as an immediate layout restored the drawn clock. The original layout was needed at the
+/// change's moment; this pass uses the restored clock without switching it back and recursively entering that layout.
+fn Tree::withins_restored(self : Tree) -> Unit {
+  if self.committing != 0 || self.withins_passing || self.last_w <= 0.0 {
+    return
+  }
+  if (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) &&
+    (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
+    let was_standing = self.standing
+    self.standing = true
+    @signals.untracked(fn() {
+      self.pull()
+      self.laid_out(self.clock.get())
+    })
+    self.standing = was_standing
+  }
+  if !self.withins_passing && self.bars_due {
     self.withins_passing = true
     self.bars_near_told() |> ignore
     self.withins_passing = false
@@ -5303,6 +5331,7 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
     })
   }
   self.standing = false
+  self.withins_restored()
 }
 
 ///|
