@@ -536,15 +536,19 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   const kept = store.keptChats(s, viewer.email, scope?.threads ?? null);
   // The cards the viewer answered lately, by chat.
   const answered = new Map<number, Json[]>();
+  const itemThreads = threads.filter((t) => t.thread.surface === STILLFAIL_SURFACE && listed(t) && inChat(t).length > 0);
   if (!archived) {
-    for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, scope === null ? null : scope.threads)) {
+    // Only these items can show an answer, and a chat without cards cannot have one. Looking at every person's recent
+    // messages first made even a change to one cardless chat read that chat's whole recent conversation.
+    const carded = store.threadsWithCards(s, itemThreads.map((t) => t.thread.id));
+    for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, carded)) {
       if (!mine(creator(a.by))) continue;
       const list = answered.get(a.question.thread) ?? [];
       list.push(answeredView(a));
       answered.set(a.question.thread, list);
     }
   }
-  for (const t of threads.filter((t) => t.thread.surface === STILLFAIL_SURFACE && listed(t) && inChat(t).length > 0)) {
+  for (const t of itemThreads) {
     const from = t.sessions.map((m) => origins.get(m.session)).find((o) => o !== undefined) ?? null;
     const agents = inChat(t).map(agent);
     const origin_ = from === null ? null : origin(from);

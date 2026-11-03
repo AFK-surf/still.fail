@@ -846,6 +846,47 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
   }
 });
 
+test("sidebar answers read only chats that can have a card answer", async () => {
+  const r = rig();
+  try {
+    const quiet = (await r.ask("POST", "/sessions", { runtime: "claude", title: "No cards" }))[1] as any;
+    const asked = (await r.ask("POST", "/sessions", { runtime: "claude", title: "A card" }))[1] as any;
+    for (let i = 0; i < 40; i++) r.store.insertMessage(newMessage(quiet.thread.id, `quiet-${i}`, "person", viewer.email, `message ${i}`));
+    r.store.insertMessage({ ...newMessage(asked.thread.id, "card", "agent", asked.key, "Choose"), card: { type: "options", options: [{ label: "Yes" }] } });
+    r.store.insertMessage(newMessage(asked.thread.id, "answer", "person", viewer.email, "Yes"));
+    const store = openStore(r.data);
+    let quietMessages = 0;
+    const db = store.db;
+    store.db = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          return new Proxy(statement, {
+            get(query, method) {
+              if (method === "all") return (...args: any[]) => {
+                const rows = query.all(...args);
+                if (/SELECT thread, n FROM entries WHERE (?:thread = \? AND )?author_kind = 'person' AND kind = 'message' AND at >= \?/i.test(sql))
+                  quietMessages += rows.filter((row) => Number(row.thread) === quiet.thread.id).length;
+                return rows;
+              };
+              const value = Reflect.get(query, method, query);
+              return typeof value === "function" ? value.bind(query) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const whole = chats(store, viewer, false);
+    const scoped = chatRows(store, viewer, [quiet.key], []);
+    assert.deepEqual(scoped.rows, whole.filter((row: any) => row.id === quiet.key));
+    assert.equal(whole.find((row: any) => row.id === asked.key).answered.length, 1);
+    assert.equal(quietMessages, 0, "neither a full nor a scoped sidebar reads people’s messages from a chat with no cards");
+    store.db.close();
+  } finally { await r.close(); }
+});
+
 test("a device makes the sidebar from the summaries and marks as the station makes it", async () => {
   // The station made every row again for every viewer at every change, 3 to 10 s each on ccvm (2026-11-03): a device
   // makes it from what it holds (client/core-ts/src/station/rows-made.ts), by the same rules.
