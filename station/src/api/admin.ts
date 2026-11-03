@@ -205,6 +205,7 @@ export class Admin {
                 }),
             },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/screenshot$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => ({ png: (await d.screenshot()).toString("base64") })) },
+            ...simActions(deps.screens),
             {
               method: "POST",
               pattern: /^\/screens\/([^/]+)\/relaunch$/,
@@ -369,6 +370,31 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
 
 /// A simulator's logs, apps and restart: only for those who may drive it (what apps log may be private; a read-only
 /// member only sees the screen). 404 no such screen, 405 nothing to debug on it, 502 simctl failed.
+/// What a person does of a device as Device Hub would (docs/remote-screens.md "Simulators"), each with what it is told.
+function simActions(screens: ScreenHub) {
+  const route = (path: string, act: (d: SimDebug, said: Record<string, unknown>) => Promise<void>) => ({
+    method: "POST",
+    pattern: new RegExp(`^/screens/([^/]+)/${path}$`),
+    handle: async (r: Request, [raw]: string[]) =>
+      screenDebug(screens, r, raw!, async (d) => {
+        await act(d, JSON.parse(r.body.toString("utf8") || "{}"));
+        return {};
+      }),
+  });
+  return [
+    route("open-url", async (d, { url }) => {
+      if (typeof url !== "string" || !(await d.openUrl(url))) throw new ScreenRefused(400, "station.screen.badUrl");
+    }),
+    route("location", async (d, { at }) => {
+      if ((at !== undefined && typeof at !== "string") || !(await d.location((at as string | undefined) ?? null))) throw new ScreenRefused(400, "station.screen.badPlace");
+    }),
+    route("status-bar", async (d, { tidy }) => d.statusBar(tidy === true)),
+    route("push", async (d, { app, text }) => {
+      if (typeof app !== "string" || typeof text !== "string" || !(await d.push(app, text))) throw new ScreenRefused(404, "station.screen.noApp");
+    }),
+  ];
+}
+
 async function screenDebug(screens: ScreenHub, r: Request, raw: string, answer: (debug: SimDebug) => Promise<unknown>): Promise<Answer> {
   if (readOnly(r.viewer)) return error(403, "a read-only member does not read an app's logs");
   let id: string;

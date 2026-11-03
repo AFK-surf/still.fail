@@ -34,6 +34,13 @@ const IDLE_MS = 10 * 60_000;
 const INSTALLED = '"/Containers/Bundle/Application/"';
 const PREDICATE = `processImagePath CONTAINS ${INSTALLED} AND (senderImagePath CONTAINS ${INSTALLED} OR senderImagePath ENDSWITH "/Foundation" OR messageType == error OR messageType == fault)`;
 const BUNDLE_ID = /^[A-Za-z0-9][A-Za-z0-9.-]*$/;
+const URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:\S*$/;
+const MAX_URL = 8192;
+const TIDY_BAR = [
+  "override",
+  ...["--time", "9:41", "--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "3"],
+  ...["--cellularMode", "active", "--cellularBars", "4", "--batteryState", "charged", "--batteryLevel", "100"],
+];
 
 /// A line of `log stream --style ndjson` as a person reads it; null for what is not one (its own words at its start).
 export function logOf(line: string): Omit<SimLog, "seq"> | null {
@@ -139,6 +146,43 @@ export class SimDebug {
     const allowed = name === "appearance" ? APPEARANCES : name === "textSize" ? TEXT_SIZES : [];
     if (!allowed.includes(value)) return false;
     await this.#run(this.#simctl, ["ui", this.#udid, name === "appearance" ? "appearance" : "content_size", value]);
+    return true;
+  }
+
+  /// Opens a link in it (its browser, or the app that takes it: a deep link); false when it is no URL.
+  async openUrl(url: string): Promise<boolean> {
+    if (url.length > MAX_URL || !URL_SCHEME.test(url)) return false;
+    await this.#run(this.#simctl, ["openurl", this.#udid, url]);
+    return true;
+  }
+
+  /// Puts it at `at` ("latitude,longitude"), or back to none (null); false when that is no place.
+  async location(at: string | null): Promise<boolean> {
+    if (at === null) {
+      await this.#run(this.#simctl, ["location", this.#udid, "clear"]);
+      return true;
+    }
+    const place = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(at);
+    if (place === null || Math.abs(Number(place[1])) > 90 || Math.abs(Number(place[2])) > 180) return false;
+    await this.#run(this.#simctl, ["location", this.#udid, "set", `${place[1]},${place[2]}`]);
+    return true;
+  }
+
+  /// Its status bar tidy, as App Store screenshots have it (9:41, full bars and battery), or as it really is.
+  async statusBar(tidy: boolean): Promise<void> {
+    await this.#run(this.#simctl, ["status_bar", this.#udid, ...(tidy ? TIDY_BAR : ["clear"])]);
+  }
+
+  /// A notification saying `text` to `app`; false when it is no app a person installed here or says nothing.
+  async push(app: string, text: string): Promise<boolean> {
+    if (text.trim() === "" || !BUNDLE_ID.test(app) || !(await this.apps()).some((a) => a.id === app)) return false;
+    const file = join(tmpdir(), `stillfail-sim-${randomBytes(8).toString("hex")}.apns`);
+    try {
+      await writeFile(file, JSON.stringify({ aps: { alert: text, sound: "default" } }));
+      await this.#run(this.#simctl, ["push", this.#udid, app, file]);
+    } finally {
+      await rm(file, { force: true });
+    }
     return true;
   }
 

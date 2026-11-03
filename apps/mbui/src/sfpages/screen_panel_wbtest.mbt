@@ -553,6 +553,27 @@ test "日志 asks for what came since while it shows; a member who may not debug
 }
 
 ///|
+test "设备: what Device Hub does there, each told with what it is given" {
+  let r = screen_rig()
+  simulator_live(r)
+  r.tap_label(tr("web-pages.screen.debug.logs"))
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.debug.device"))
+  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  r.t.draw()
+  for word in ["openUrlGo", "locationSet", "locationClear", "statusTidy", "pushGo"] {
+    assert_true(r.t.find(tr("web-pages.screen.debug." + word)) is Some(_))
+  }
+  let (s, d) = (r.sess(), r.ui().logs)
+  debug_act(s, d, "screen.statusBar", { "tidy": Json::boolean(true) }, "done")
+  assert_eq(flag(Some(r.told("screen.statusBar")[0]), "tidy"), true)
+  assert_eq(text(Some(r.told("screen.statusBar")[0]), "screen"), s.screen)
+  screen_done(r.t)
+}
+
+///|
 test "重启 App: the list the first time, and the app chosen at one press after" {
   let r = screen_rig()
   simulator_live(r)

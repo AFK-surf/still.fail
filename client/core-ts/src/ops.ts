@@ -162,6 +162,10 @@ export const PARAMS: Record<string, string> = {
   "screen.settings": "screen:string",
   "screen.setSetting": "screen:string name:string value:string",
   "screen.screenshot": "screen:string",
+  "screen.openUrl": "screen:string url:string",
+  "screen.location": "screen:string at?:string",
+  "screen.statusBar": "screen:string tidy:boolean",
+  "screen.push": "screen:string app:string text:string",
   "signin.fill": "id:string login:json keep?:boolean",
   "signin.self": "id:string done?:boolean",
   "signin.deny": "id:string",
@@ -578,6 +582,16 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/screens/${p.at("screen")}/settings`, p.pick(["name", "value"]), NONE);
     case "screen.screenshot":
       return op("POST", () => `/screens/${p.at("screen")}/screenshot`, null, NONE);
+    // What Device Hub does of a device besides its keys: a link opened in it, where it is (`at`; none: nowhere), its status
+    // bar tidy, a notification to one of its apps.
+    case "screen.openUrl":
+      return op("POST", () => `/screens/${p.at("screen")}/open-url`, p.pick(["url"]), NONE);
+    case "screen.location":
+      return op("POST", () => `/screens/${p.at("screen")}/location`, p.pick(["at"]), NONE);
+    case "screen.statusBar":
+      return op("POST", () => `/screens/${p.at("screen")}/status-bar`, p.pick(["tidy"]), NONE);
+    case "screen.push":
+      return op("POST", () => `/screens/${p.at("screen")}/push`, p.pick(["app", "text"]), NONE);
     // A sign-in its card asks of the person (station/src/vault/signin.ts, docs/vault.md 登录态): what their password
     // manager gave (`login`: username, password, code; an object, so `doing` keeps no copy of it), typed into the chat's
     // tab by the station; they sign in themselves on its screen (`signin.self`, `done` once they did); or they will not.

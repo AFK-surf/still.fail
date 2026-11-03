@@ -341,6 +341,10 @@ priv struct DebugLogs {
   mut half_open : Bool
   /// the pose last pressed, until the picture says it (-1: none)
   mut pose_asked : Int
+  /// what the last of debug_actions came to
+  mut acted : String
+  /// whether its status bar was made tidy here (simctl does not say)
+  mut tidy_bar : Bool
 }
 
 ///|
@@ -409,6 +413,8 @@ fn debug_logs_new() -> DebugLogs {
     relaunch_said: "",
     half_open: false,
     pose_asked: -1,
+    acted: "",
+    tidy_bar: false,
   }
 }
 
@@ -537,6 +543,68 @@ fn debug_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     ("extra-extra-large", "web-pages.screen.debug.textLarge"),
     ("accessibility-large", "web-pages.screen.debug.textLargest"),
   ])
+  debug_actions(c, s, u)
+}
+
+///|
+/// `op` of the device told, what comes back said where 设备 says things.
+fn debug_act(s : ScreenSess, d : DebugLogs, op : String, more : Map[String, Json], done : String) -> Unit {
+  let params : Map[String, Json] = { "station": Json::string(s.station), "screen": Json::string(s.screen) }
+  more.each(fn(k, v) { params[k] = v })
+  d.acted = ""
+  (s.src.call)(op, Json::object(params), fn(r) {
+    d.acted = match r {
+      Ok(_) => done
+      Err(e) => text(Some(e), "message")
+    }
+  })
+}
+
+///|
+/// What Device Hub does of a device besides its keys, all simctl's: a link, where it is, its status bar, a notification.
+fn debug_actions(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let d = u.logs
+  let done = @sf.t("web-pages.screen.debug.done")
+  @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.openUrl"), fn() {
+    let url = @sf.input(c, "screen-open-url", placeholder="https://", small=true)
+    let go = @sf.menu_item(c, @sf.t("web-pages.screen.debug.openUrlGo"), key="screen-open-url-go", panel=true, icon="external")
+    if (go || url.submitted) && url.text != "" {
+      debug_act(s, d, "screen.openUrl", { "url": Json::string(url.text) }, done)
+    }
+  })
+  @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.location"), fn() {
+    let at = @sf.input(c, "screen-location", placeholder=@sf.t("web-pages.screen.debug.locationHint"), small=true)
+    let go = @sf.menu_item(c, @sf.t("web-pages.screen.debug.locationSet"), key="screen-location-go", panel=true, icon="move")
+    if (go || at.submitted) && at.text != "" {
+      debug_act(s, d, "screen.location", { "at": Json::string(at.text) }, done)
+    }
+    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.locationClear"), key="screen-location-clear", panel=true, icon="close") {
+      debug_act(s, d, "screen.location", {}, done)
+    }
+  })
+  @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.statusBar"), fn() {
+    let at = if d.tidy_bar { 1 } else { 0 }
+    let chosen = @sf.segmented(
+      c,
+      "screen-status-bar",
+      [@sf.t("web-pages.screen.debug.statusReal"), @sf.t("web-pages.screen.debug.statusTidy")],
+      at,
+    )
+    if chosen != at && chosen >= 0 {
+      d.tidy_bar = chosen == 1
+      debug_act(s, d, "screen.statusBar", { "tidy": Json::boolean(d.tidy_bar) }, done)
+    }
+  })
+  @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.push"), fn() {
+    let said = @sf.input(c, "screen-push", placeholder=@sf.t("web-pages.screen.debug.pushHint"), small=true)
+    let key = "screen-push-go"
+    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.pushGo"), key~, panel=true, icon="bell", end="chevron-right") && said.text != "" {
+      debug_apps_open(s, u, Of(c.id(key)), push=said.text)
+    }
+  })
+  if d.acted != "" {
+    @sf.panel_note(c, d.acted)
+  }
 }
 
 ///|
@@ -589,12 +657,14 @@ priv struct DebugApps {
   /// what the last thing done says: asked for the apps, one started again
   mut said : String
   mut going : Bool
+  /// the notification the one chosen is sent (none: it is started again)
+  push : String?
 }
 
 ///|
 /// 重启 App from 控制中心.
-fn debug_apps_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
-  let d : DebugApps = { apps: None, said: "", going: false }
+fn debug_apps_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor, push? : String) -> Unit {
+  let d : DebugApps = { apps: None, said: "", going: false, push }
   let params = { "station": Json::string(s.station), "screen": Json::string(s.screen) }
   (s.src.call)("screen.apps", Json::object(params), fn(r) {
     match r {
@@ -636,12 +706,21 @@ fn debug_apps(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, d : DebugApps) -> Unit 
               note=if flag(Some(app), "running") { @sf.t("web-pages.screen.debug.appRunning") } else { "" },
             ) && !d.going {
             d.going = true
-            u.logs.last_app = Some((id, name))
             let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "app": Json::string(id) }
-            (s.src.call)("screen.relaunch", Json::object(params), fn(r) {
+            let (op, done) = match d.push {
+              Some(words) => {
+                params["text"] = Json::string(words)
+                ("screen.push", @sf.t("web-pages.screen.debug.pushed", args=[("name", name)]))
+              }
+              None => {
+                u.logs.last_app = Some((id, name))
+                ("screen.relaunch", @sf.t("web-pages.screen.debug.relaunched", args=[("name", name)]))
+              }
+            }
+            (s.src.call)(op, Json::object(params), fn(r) {
               d.going = false
               d.said = match r {
-                Ok(_) => @sf.t("web-pages.screen.debug.relaunched", args=[("name", name)])
+                Ok(_) => done
                 Err(e) => text(Some(e), "message")
               }
             })
