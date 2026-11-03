@@ -22,9 +22,10 @@ case "${1:?usage: release.sh station|android|modules}" in
     # the natives job before this one built and published those of this commit (all four platforms).
     (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
     # The native parts signed with the desktop app's identity (.github/sign-station.sh): macOS keeps the launcher's
-    # Local Network grant across releases. Without the signing keychain (.github/mac_signing.py), a warning and ad hoc parts.
+    # Local Network grant across releases. Without the signing keychain (.github/mac_signing.py) nothing is released: a
+    # warning let stable.yml's station job, never given it, put ad hoc parts out (2026-11-02).
     if [ -n "${MACOS_DEVELOPER_ID_KEYCHAIN_B64_1:-}" ] && [ -n "${KEYCHAIN_PASSWORD_AFK:-}" ]; then export STILLFAIL_SIGN_STATION=1
-    else echo "::warning::no signing keychain: the station's native parts are ad hoc, and macOS asks for the local network again after an update"; fi
+    else echo "no signing keychain (MACOS_DEVELOPER_ID_KEYCHAIN_B64_1, KEYCHAIN_PASSWORD_AFK): not releasing a station with ad hoc native parts" >&2; exit 1; fi
     sh scripts/release.sh ${beta:+$beta}
     ;;
   android)

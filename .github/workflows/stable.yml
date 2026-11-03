@@ -175,6 +175,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # AFK's Developer ID (.github/mac_signing.py): the native parts are signed with it, as the beta's are; without
+          # it the stable station went out ad hoc (2026-11-02's).
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           # The key the release is signed with (docs/release-signing.md): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: sh .github/release.sh --stable station
