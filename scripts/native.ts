@@ -768,9 +768,10 @@ const cached = (part: string, target: Target, k: string) => join(CACHE, part, `$
 const log = (msg: string) => process.stderr.write(`native: ${msg}\n`);
 
 // A path handed to a caller may be used after native.ts exits. On mini1, CI sets a budget and only versions not
-// requested for a day may be evicted (its jobs finish within ten minutes). Older caches without a usage record are
-// first marked now, so jobs started before tracking was introduced get the same grace period. Records live outside
-// artifacts: they must not become part of the archives published to the native store.
+// requested for six hours may be evicted (the renderer jobs time out after five minutes). A day's grace let hundreds of
+// renderer versions fill the disk. Older caches without a usage record are first marked now, so jobs started before
+// tracking was introduced get the same grace period. Records live outside artifacts: they must not become part of
+// published archives.
 const accessRecord = (dir: string) => join(CACHE, ".access", basename(dirname(dir)), basename(dir));
 function noteUse(dir: string) {
   const record = accessRecord(dir);
@@ -836,7 +837,7 @@ function trimCache(limit: number) {
   // Serialize the accounting, so concurrent jobs do not each remove enough versions to reach the budget.
   const release = acquire(join(CACHE, ".prune"));
   try {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - 6 * 60 * 60 * 1000;
     const entries: { dir: string; bytes: number; used: number }[] = [];
     for (const [part, spec] of Object.entries(PARTS)) {
       const parent = join(CACHE, part);
