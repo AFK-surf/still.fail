@@ -98,12 +98,16 @@ pub fn chat_list(
   let list_w = if held { way.to } else { c.width }
   let side = if held { dmax(row_side_least, (list_w - chat_column_w) / 2.0) } else { side }
   let gutter = side
+  // (and what the chat says: what came on its way is shown as it comes, the rows built anew for it)
   let rows_key = way.id +
     " " +
     [list_w, c.height, list_top, foot_room, foot, ask_clear, bar].map(fn(x) { x.to_string() }).join(" ") +
     " " +
-    n.to_string()
-  let list_box = c.box(style=chat_list_box, tx=(frame_w - list_w) / 2.0, fn() {
+    n.to_string() +
+    " " +
+    rows_said(key, v, read).to_string()
+  let list_style = if held { chat_list_box.then(@ui.style(w=Fixed(list_w))) } else { chat_list_box }
+  let list_box = c.box(style=list_style, tx=(frame_w - list_w) / 2.0, fn() {
     c.sized(list_w, c.height, fn() {
     let rows = fn() {
     c.list(
@@ -263,6 +267,26 @@ pub fn chat_list(
     @motion.placed(c, list_box, fn() { @ui.look(dy=flight_carry_shift(c, lf.draft)) })
   }
 }
+
+///|
+/// How many times what chat list `key` shows has changed: its view or its entries given otherwise.
+fn rows_said(key : String, v : ChatView, read : Array[Entry]) -> Int {
+  match rows_given.get(key) {
+    Some((was_v, was_read, n)) if physical_equal(was_v, v) && physical_equal(was_read, read) => n
+    Some((_, _, n)) => {
+      rows_given[key] = (v, read, n + 1)
+      n + 1
+    }
+    None => {
+      rows_given[key] = (v, read, 0)
+      0
+    }
+  }
+}
+
+///|
+// kept across runs: only compared with what is given next, by each list's key
+let rows_given : Map[String, (ChatView, Array[Entry], Int)] = {}
 
 ///|
 /// A chat's messages to come while it is read the first time (the library's Waiting, in its bones): made-up messages
