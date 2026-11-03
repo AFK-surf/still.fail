@@ -112,7 +112,8 @@ To build or test a local working directory there (a checkout with uncommitted ch
 absolute path here) instead of uploading: each start syncs it into a mirror on the target (named in prepare's answer,
 inside the session directory) and runs the command there. Only files Git tracks or would add (all but the usual build
 and dependency directories outside Git) go, and only what changed; the target's build output and dependencies stay
-warm. `back: [paths]` downloads outputs into `station-back/<key>/` here when the task ends. Synced files the command
+warm. `back: [paths]` downloads outputs into `station-back/<key>/` here when the task ends; it is removed once nothing in
+it changed for 6 hours, so move what you keep into your workspace. Synced files the command
 changed come back as `station-back/<key>/changes.patch`: review it and `git apply` it in the directory if wanted. One task
 at a time per mirror.
 
