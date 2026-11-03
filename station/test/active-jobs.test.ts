@@ -30,9 +30,16 @@ for (const recursive of [false, true]) test(`the running limit follows watches, 
     assert.match(limitPlan, /active_other_jobs USING PRIMARY KEY \(session=\?\)/);
     const atLeast = (session: string, count: number) => db.prepare(RUNNING_LIMIT).get(session, count - 1) !== undefined;
     const watching = (thread: number) => db.prepare(HAS_ACTIVE_WATCH).get(thread) !== undefined;
+    const assertActive = () => {
+      const pairs = (sql: string) => (db.prepare(sql).all() as { session: string; job: string }[]).map((r) => [r.session, r.job]);
+      assert.deepEqual(pairs(`SELECT session, job FROM (SELECT session, job FROM active_watch_jobs UNION ALL
+        SELECT session, job FROM active_other_jobs) ORDER BY session, job`),
+      pairs("SELECT session_key AS session, id AS job FROM jobs WHERE state = 'running' ORDER BY session, job"));
+    };
     assert.equal(atLeast("a", 2), true);
     assert.equal(atLeast("a", 3), false);
     assert.equal(watching(1), true);
+    assertActive();
     db.prepare("UPDATE jobs SET watch = 1 WHERE id = ?").run("a-job");
     assert.equal(atLeast("a", 2), true, "switching to watch does not count a job twice");
     db.prepare("UPDATE jobs SET watch = 0 WHERE id = ?").run("a-watch");
@@ -44,6 +51,8 @@ for (const recursive of [false, true]) test(`the running limit follows watches, 
     assert.equal(atLeast("b", 2), true);
     db.prepare("INSERT OR IGNORE INTO jobs VALUES (?, ?, ?, ?, ?)").run("ignored", "a", "running", 0, "token-b-job");
     assert.equal(atLeast("b", 2), true);
+    db.prepare("UPDATE OR IGNORE jobs SET token = ? WHERE id = ?").run("token-b-job", "a-watch");
+    assertActive();
     db.prepare("UPDATE jobs SET state = 'running' WHERE id = ?").run("a-watch");
     assert.equal(atLeast("b", 2), true, "an ignored insert cannot remove a different job on a later update");
     db.prepare("INSERT OR IGNORE INTO jobs VALUES (?, ?, ?, ?, ?)").run("ignored", "a", "running", 0, "token-b-job");
@@ -55,12 +64,20 @@ for (const recursive of [false, true]) test(`the running limit follows watches, 
     add("overwritten", "b", "running", 0);
     db.prepare("UPDATE OR REPLACE jobs SET token = ? WHERE id = ?").run("token-overwritten", "replace");
     assert.equal(atLeast("b", 2), false, "updating on the unique token removes the displaced job");
+    assertActive();
     add("upserted", "b", "running", 0);
     db.prepare(`INSERT INTO jobs VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
       session_key = excluded.session_key, state = excluded.state, watch = excluded.watch, token = excluded.token`)
       .run("upserted", "a", "running", 0, "token-upserted");
     assert.equal(atLeast("a", 2), true, "an upsert moves the existing job once");
+    assertActive();
     db.prepare("DELETE FROM jobs WHERE id = ?").run("upserted");
+    add("by-id", "d", "running", 0);
+    add("by-token", "d", "running", 0);
+    db.prepare("INSERT OR REPLACE INTO jobs VALUES (?, ?, ?, ?, ?)").run("by-id", "d", "running", 0, "token-by-token");
+    assertActive();
+    db.prepare("DELETE FROM jobs WHERE id = ?").run("by-id");
+    assertActive();
     for (let i = 0; i < 50; i++) add(`other-${i}`, "b", "running", 0);
     let inspected = 0;
     db.function("inspected_active_job", (_job) => { inspected++; return 1; });
