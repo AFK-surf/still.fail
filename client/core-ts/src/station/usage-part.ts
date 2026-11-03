@@ -8,12 +8,20 @@ import { get, isObject } from "../util.ts";
 type J = Record<string, unknown>;
 
 const DAY_MS = 86_400_000;
+export const USAGE_WEEKS = 52;
 
 /// The day (YYYY-MM-DD, as the station names them) `at` (ms) is in, `offset` minutes east of UTC, and when it began.
 export function dayOf(at: number, offset: number): { day: string; from: number } {
   const local = Math.trunc(at) + offset * 60_000;
   const start = local - (((local % DAY_MS) + DAY_MS) % DAY_MS);
   return { day: new Date(start).toISOString().slice(0, 10), from: start - offset * 60_000 };
+}
+
+/// The chart starts on Sunday, 51 weeks before this one, and ends at the next local midnight.
+export function usageHistoryRange(now: number, offset: number): { from: number; to: number } {
+  const today = dayOf(now, offset).from;
+  const weekday = new Date(today + offset * 60_000).getUTCDay();
+  return { from: today - (weekday + (USAGE_WEEKS - 1) * 7) * DAY_MS, to: today + DAY_MS };
 }
 
 /// Whether what is held is a whole read of the usage from `from` (the page's 60 days as they are now, in this time zone:
@@ -76,6 +84,15 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     const first = String(get(a, "day")), second = String(get(b, "day"));
     return first < second ? -1 : first > second ? 1 : 0;
   });
+  const beforeDay = get(history, "beforeDay");
+  const previousTotal = get(history, "tokens");
+  let total: number | undefined;
+  if (typeof beforeDay === "string" && typeof previousTotal === "number" && Number.isFinite(previousTotal)) {
+    const tokensOf = (records: J[]) => records.filter((r) => String(get(r, "day")) >= day && String(get(r, "day")) < beforeDay)
+      .reduce((sum, r) => sum + n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite")) + n(get(r, "output")), 0);
+    total = previousTotal - tokensOf(arr(get(held, "rows"))) + tokensOf(arr(get(part, "rows")));
+    updatedDays = updatedDays.filter((d) => String(get(d, "day")) < beforeDay);
+  }
   const priced = new Map<string, J>();
   for (const p of [...arr(get(get(held, "prices"), "rows")), ...arr(get(get(part, "prices"), "rows"))]) priced.set(String(get(p, "model")), p);
   const { remoteRuns: _remoteRuns, history: _history, partialHistory: _partialHistory, ...rest } = held;
@@ -93,6 +110,6 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     people: { ...(get(held, "people") as J | undefined), ...(get(part, "people") as J | undefined) },
     profiles: get(part, "profiles") ?? get(held, "profiles"),
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
-    ...(isObject(history) ? { [isObject(full) ? "history" : "partialHistory"]: { ...history, days: updatedDays } } : {}),
+    ...(isObject(history) ? { [isObject(full) ? "history" : "partialHistory"]: { ...history, ...(total !== undefined ? { tokens: total } : {}), days: updatedDays } } : {}),
   };
 }

@@ -9,6 +9,7 @@ import { t } from "../i18n.ts";
 import * as format from "../format.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 import { count, localDay, type Source } from "./usage.ts";
+import { USAGE_WEEKS } from "../station/usage-part.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -17,7 +18,7 @@ const get = (v: unknown, k: string): J => getU(v, k);
 
 const DAY_MS = 86_400_000;
 /// The year's weeks, each a column of its seven days, Sunday first (Codex's WEEK_COUNT, DAY_COUNT).
-export const WEEKS = 52;
+export const WEEKS = USAGE_WEEKS;
 const WEEK_DAYS = 7;
 /// Where chats come from, by their surface's kind: still.fail's own, Slack, Feishu.
 function placeName(place: string): string {
@@ -103,9 +104,11 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
       const tokens = num(d, "tokens");
       if (day === "" || day > today || tokens <= 0) continue;
       byDay.set(day, (byDay.get(day) ?? 0) + tokens);
-      total += tokens;
       mine += tokens;
     }
+    const boundedTotal = get(history, "tokens");
+    if (typeof boundedTotal === "number" && Number.isFinite(boundedTotal)) mine = boundedTotal;
+    total += mine;
     if (mine > 0) byStation.push([s.name, mine]);
   }
   if (read === 0) return null;

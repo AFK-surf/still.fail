@@ -2,7 +2,7 @@
 // the same as reading it all again would have given.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dayOf, holdsWhole, sameDetailCoverage, withPart } from "../src/station/usage-part.ts";
+import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "../src/station/usage-part.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -33,6 +33,14 @@ test("a day and when it began, in a time zone", () => {
   assert.deepEqual(dayOf(at, 480), { day: "2026-11-03", from: Date.UTC(2026, 10, 2, 16, 0) });
   assert.deepEqual(dayOf(at, 0), { day: "2026-11-02", from: Date.UTC(2026, 10, 2) });
   assert.deepEqual(dayOf(at, -300), { day: "2026-11-02", from: Date.UTC(2026, 10, 2, 5, 0) });
+});
+
+test("the requested history covers the year of chart days in the device's time zone", () => {
+  const at = Date.UTC(2026, 10, 2, 17, 30);
+  const range = usageHistoryRange(at, 480);
+  assert.equal(dayOf(range.from, 480).day, "2025-11-09");
+  assert.equal(dayOf(range.to, 480).day, "2026-11-04");
+  assert.equal(range.to, Date.UTC(2026, 10, 3, 16));
 });
 
 test("the days a change touched, read again, take the place of those held; the rest is as read whole", () => {
@@ -114,4 +122,16 @@ test("refreshing details updates the available portion of an incomplete history"
   assert.equal(updated.history, undefined);
   assert.deepEqual(updated.partialHistory.days, daysOf(part.rows));
   assert.equal(updated.partialHistory.cards, 1);
+});
+
+test("refreshing a bounded history changes its lifetime total without counting tomorrow", () => {
+  const from = Date.UTC(2026, 8, 5, 16), since = Date.UTC(2026, 10, 1, 16);
+  const old = [row("2026-11-02", "s", "m", 1), row("2026-11-04", "s", "m", 10)];
+  const held: J = { from, detailSince: since, rows: old, historyUnavailable: true,
+    partialHistory: { days: daysOf([old[0]]), tokens: 1_106, beforeDay: "2026-11-03", cards: 1 } };
+  const part: J = { detailSince: since, rows: [row("2026-11-02", "s", "m", 2), row("2026-11-04", "s", "m", 20)] };
+  const updated: J = withPart(held, part, "2026-11-02", since);
+  assert.equal(updated.partialHistory.tokens, 1_212);
+  assert.equal(updated.partialHistory.beforeDay, "2026-11-03");
+  assert.deepEqual(updated.partialHistory.days.map((d: J) => d.day), ["2026-11-02"]);
 });

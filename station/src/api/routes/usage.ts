@@ -88,7 +88,7 @@ export const routes = (tools: Tools): Route[] => {
 };
 
 /// GET /usage, the usage part's (usage/module.ts): `reading`, whether the counter is still reading what was spent.
-export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] => [
+export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals: () => void = () => {}): Route[] => [
   // A bounded page of one session's original calls; aggregates remain a separate, statistics-only read.
   {
     method: "GET",
@@ -110,7 +110,17 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] =>
       const from = number(r, "from") ?? 0n;
       const tz = number(r, "tz") ?? 0n;
       const clamped = tz < -1440n ? -1440n : tz > 1440n ? 1440n : tz;
-      return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history: param(r, "history") === "1" });
+      const historyFrom = cursorInteger(r, "historyFrom"), historyTo = cursorInteger(r, "historyTo");
+      if ((historyFrom === null) !== (historyTo === null)) throw new Refused(400, "history range needs both bounds");
+      if (historyFrom !== null && historyTo !== null) {
+        const localEnd = historyTo + clamped * 60_000n;
+        if (historyFrom > historyTo || historyTo - historyFrom > 370n * 86_400_000n || historyFrom % 60_000n !== 0n
+          || historyTo % 60_000n !== 0n || localEnd % 86_400_000n !== 0n
+          || localEnd < -8_640_000_000_000_000n || localEnd > 8_640_000_000_000_000n) throw new Refused(400, "invalid history range");
+        wakeTotals();
+      }
+      return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history: param(r, "history") === "1",
+        ...(historyFrom !== null && historyTo !== null ? { historyRange: { from: String(historyFrom), to: String(historyTo) } } : {}) });
     },
   },
 ];

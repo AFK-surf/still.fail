@@ -208,6 +208,6 @@ export const UsageLive = Layer.effectDiscard(
       Effect.sync(() => keepCounted(store, hub.live, usage)),
       (unsubscribe) => Effect.sync(unsubscribe),
     );
-    (yield* Parts).routes((tools) => usageRoutes(tools, () => usage.readingAll()));
+    (yield* Parts).routes((tools) => usageRoutes(tools, () => usage.readingAll(), mover.wake));
   }),
 );

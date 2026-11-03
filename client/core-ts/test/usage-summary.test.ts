@@ -35,6 +35,15 @@ test("the figures across stations: tokens, chats archived, tasks across devices,
   assert.deepEqual(s.places.items.map((f: J) => [f.name, f.value]), [["still.fail", "11 个对话"], ["飞书", "4 个对话"], ["Slack", "2 个对话"]]);
 });
 
+test("a bounded year keeps its separate lifetime total and combines it with older stations", () => {
+  const bounded = history([day("2026-10-02", 20)], { tokens: 1_020, beforeDay: "2026-10-03" });
+  const old = history([day("2025-01-01", 30), day("2026-10-02", 40), day("2026-10-03", 999)]);
+  const summary = usageSummary([source("new", bounded), source("old", old)], NOW, 480, "")!;
+  assert.equal(summary.figures[0].value, "1,090");
+  assert.deepEqual(summary.stations.items.map((s: J) => s.name), ["new", "old"]);
+  assert.match(summary.activity.tips.at(-2), /60 token/);
+});
+
 test("one place: where the chats came from not said; no decision cards: no share", () => {
   const s = usageSummary([source("studio", history([day("2026-10-02", 1)]))], NOW, 480, "")!;
   assert.equal(s.places, undefined);

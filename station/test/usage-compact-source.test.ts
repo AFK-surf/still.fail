@@ -788,6 +788,21 @@ test("the call-page cursor preserves SQLite rowids beyond JavaScript's integer p
   assert.equal((captured as { beforeSeq: string }).beforeSeq, "9007199254740993");
 });
 
+test("the optional usage chart range reaches the reader and wakes pending totals", async () => {
+  let captured: unknown, wakes = 0;
+  const route = usageRoutes({ read: (_request: unknown, _operation: string, args: unknown) => {
+    captured = args;
+    return Promise.resolve({ status: 200, headers: {}, body: Buffer.alloc(0) });
+  } } as never, () => false, () => { wakes++; })[1]!;
+  const request = { lang: "en", query: [["history", "1"], ["historyFrom", "0"], ["historyTo", "86400000"]], viewer: { workspace: "A", home: false } };
+  await route.handle(request as never, []);
+  assert.deepEqual((captured as { historyRange: unknown }).historyRange, { from: "0", to: "86400000" });
+  assert.equal(wakes, 1);
+  assert.throws(() => route.handle({ ...request, query: [["historyFrom", "0"]] } as never, []), /both bounds/);
+  assert.throws(() => route.handle({ ...request, query: [["historyFrom", "0"], ["historyTo", "60000"]] } as never, []), /invalid history range/);
+  assert.equal(wakes, 1);
+});
+
 test("pages calls at the same time past SQLite rowids above JavaScript's integer precision", () => {
   const store = Store.open(":memory:");
   try {

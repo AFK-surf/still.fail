@@ -251,17 +251,24 @@ export function compactScopeReady(db: DatabaseSync, viewer: InWorkspace | null):
 }
 
 /// The lifetime total of compacted calls alone. Never serve a total until its pending buckets and scope moves finish.
-export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null): { calls: number; tokens: number } | null {
+export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null, before?: bigint): { calls: number; tokens: number } | null {
   const scope = viewer === null ? "scope = 'G'" : viewer.home ? "scope IN (?1, 'H')" : "scope = ?1";
   const moving = viewer === null ? "SELECT 1 FROM usage_compact_moving LIMIT 1"
     : `SELECT 1 FROM usage_compact_moving_scope WHERE ${scope} LIMIT 1`;
   const dirty = viewer === null ? "SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_session WHERE pending = 1 LIMIT 1"
     : `SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_scope WHERE pending = 1 AND ${scope} LIMIT 1`;
+  // A viewer's lifetime total ends at the next local midnight. Subtract only future buckets, seeking by scope and time;
+  // old buckets already included in the maintained total are not visited again.
+  const future = before === undefined ? null : viewer === null
+    ? `FROM usage_compact INDEXED BY usage_compact_time WHERE minute >= ?1 AND records > 0`
+    : `FROM usage_compact INDEXED BY usage_compact_scope_time WHERE ${scope} AND minute >= ?2 AND records > 0`;
+  const minus = (column: string) => future === null ? "" : ` - (SELECT COALESCE(SUM(${column}), 0) ${future})`;
   // The readiness checks and value must share one SQLite snapshot, including when another connection is moving rows.
   const row = db.prepare(`SELECT NOT EXISTS (${moving}) AND NOT EXISTS (${dirty}) AS ready,
-    (SELECT COALESCE(SUM(calls), 0) FROM usage_compact_total WHERE ${scope}) AS calls,
-    (SELECT COALESCE(SUM(tokens), 0) FROM usage_compact_total WHERE ${scope}) AS tokens`)
-    .get(...(viewer === null ? [] : [`W${viewer.workspace}`])) as { ready: number; calls: number; tokens: number };
+    (SELECT COALESCE(SUM(calls), 0) FROM usage_compact_total WHERE ${scope})${minus("calls")} AS calls,
+    (SELECT COALESCE(SUM(tokens), 0) FROM usage_compact_total WHERE ${scope})${minus("input + cache_read + cache_write + cache_write_long + output")} AS tokens`)
+    .get(...(viewer === null ? [] : [`W${viewer.workspace}`]), ...(before === undefined ? [] : [before])) as
+    { ready: number; calls: number; tokens: number };
   return row.ready ? { calls: Number(row.calls), tokens: Number(row.tokens) } : null;
 }
 
@@ -458,7 +465,9 @@ export function compactHistory(db: DatabaseSync, offset: bigint, viewer: InWorks
   // A caller can ask for a bounded interval in UTC minutes. A partial quarter needs minute statistics even where
   // local midnight is quarter-aligned; without those the older coverage cannot prove the requested answer.
   const oldQuarter = aligned && (!range || (range.from % 15n === 0n && range.to % 15n === 0n));
-  if (complete && !oldQuarter && !coverage.old_minutes) return null;
+  // On an empty-at-cutover station there is no old history to seek through session by session.
+  const oldRows = complete && (range === undefined || db.prepare("SELECT 1 FROM usage_day_quarters LIMIT 1").get() !== undefined);
+  if (oldRows && !oldQuarter && !coverage.old_minutes) return null;
   const old = oldQuarter ? "usage_day_quarters" : "usage_minute";
   const oldMinute = oldQuarter ? "q.quarter * 15" : "q.minute";
   const compactSource = viewer === null ? "FROM usage_compact c" :
@@ -477,7 +486,7 @@ export function compactHistory(db: DatabaseSync, offset: bigint, viewer: InWorks
       : `q.minute >= ${low} AND q.minute < ${high}`);
   }
   const sql = `WITH parts AS (
-    ${complete ? `SELECT ${oldMinute} AS minute, q.session, q.runtime, q.model, q.calls, q.tokens ${source(old, "q")} ${oldWhere} UNION ALL` : ""}
+    ${oldRows ? `SELECT ${oldMinute} AS minute, q.session, q.runtime, q.model, q.calls, q.tokens ${source(old, "q")} ${oldWhere} UNION ALL` : ""}
     SELECT c.minute, c.session, c.runtime, c.model, c.calls,
       c.input + c.cache_read + c.cache_write + c.cache_write_long + c.output AS tokens ${compactSource} ${compactWhere}
   ) SELECT strftime('%Y-%m-%d', (minute + ?1) * 60, 'unixepoch') AS day, session, runtime, NULLIF(model, '') AS model,

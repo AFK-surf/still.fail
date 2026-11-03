@@ -38,9 +38,34 @@ test("a year's usage view reads only its requested days but keeps the all-time t
     assert.deepEqual(compact.compactTotal(store.db, a, 1_440n), { calls: 2, tokens: 31 });
     assert.deepEqual(compact.compactTotal(store.db, b, 1_440n), { calls: 1, tokens: 1_000 });
     const answer = usage(makeStore(store.db, "."), "en", 0n, 86_400_000n, 0n, false, a, true,
-      { historyRange: { from: 0n, to: 86_400_000n } } as never);
+      { historyRange: { from: 0n, to: 86_400_000n } });
     assert.deepEqual(answer.history.days.map((d: { day: string; tokens: number }) => [d.day, d.tokens]), [["1970-01-01", 20]]);
     assert.equal(answer.history.tokens, 31, "the older day remains in the total, while tomorrow's call is not yet included");
+    assert.equal(answer.history.beforeDay, "1970-01-02");
+    const oldClient = usage(makeStore(store.db, "."), "en", 0n, 86_400_000n, 0n, false, a, true);
+    assert.deepEqual(oldClient.history.days.map((d: { day: string }) => d.day), ["1969-12-31", "1970-01-01", "1970-01-02"]);
+    assert.equal(oldClient.history.tokens, undefined, "older clients keep the full history contract");
+  } finally { store.close(); }
+});
+
+test("bounded requests preserve complete older daily summaries without rebuilding them", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A",
+      createdAt: 0, lastActiveAt: 0 });
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "old", at: 0, model: "m", subagent: true, fast: false, input: 9, cacheRead: 0,
+      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", at: 86_400_000 }, owner]]);
+    account(store);
+    const answer = usage(makeStore(store.db, "."), "en", 0n, 172_800_000n, 0n, false, a, true,
+      { historyRange: { from: 86_400_000n, to: 172_800_000n } });
+    assert.deepEqual(answer.history.days.map((d: { day: string; tokens: number }) => [d.day, d.tokens]),
+      [["1970-01-01", 10], ["1970-01-02", 10]]);
+    assert.equal(answer.history.tokens, undefined, "the old complete summary remains in the legacy full-history form");
   } finally { store.close(); }
 });
 

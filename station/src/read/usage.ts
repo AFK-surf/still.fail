@@ -11,6 +11,7 @@ import { type Lang, tr } from "../ops/i18n.ts";
 import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { usageDetailSince } from "../store/usage-detail.ts";
+import { compactTotal, hasCompactUsage } from "../store/usage-compact.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
@@ -224,7 +225,8 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
-export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false, options: { remoteRuns?: boolean } = {}): Json {
+export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
+  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint } } = {}): Json {
   const includeRemoteRuns = options.remoteRuns !== false;
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
@@ -271,13 +273,13 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   let historyResult: Json | undefined;
   let partialHistory: Json | undefined;
   if (history) {
-    try { historyResult = usageHistory(s, utcOffsetMin, viewer, mark); }
+    try { historyResult = usageHistory(s, utcOffsetMin, viewer, mark, false, options.historyRange); }
     catch (error) {
       if (!(error instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(error.message)) throw error;
       // Old clients continue to see history as unavailable; newer clients can use the separately named, explicitly
       // incomplete history without treating missing earlier calls as zero.
       if (error.message === USAGE_MINUTES_PENDING) {
-        try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true); }
+        try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange); }
         catch (partialError) {
           if (!(partialError instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(partialError.message)) throw partialError;
         }
@@ -313,11 +315,25 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
 /// in the asker's time zone, runtime and model (the year, as Codex's usage summary has it); the chats of each place
 /// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's chat
 /// working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
-export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}, partial = false): Json {
+export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}, partial = false,
+  requested?: { from: bigint; to: bigint }): Json {
   usageChatsReady(s, viewer);
   mark("historyVisibility");
+  const day = 86_400_000n;
+  const valid = requested !== undefined && requested.from <= requested.to && requested.to - requested.from <= 370n * day
+    && requested.from % 60_000n === 0n && requested.to % 60_000n === 0n
+    && (requested.to + utcOffsetMin * 60_000n) % day === 0n
+    && requested.to + utcOffsetMin * 60_000n >= -8_640_000_000_000_000n
+    && requested.to + utcOffsetMin * 60_000n <= 8_640_000_000_000_000n;
+  // Preserve a complete pre-existing history until it has its own bounded source. Incomplete history has only the
+  // new compact buckets; a fresh database has no older daily rows to consult.
+  const bounded = valid && hasCompactUsage(s.db) && (partial ||
+    s.db.prepare("SELECT 1 FROM usage_day_quarters LIMIT 1").get() === undefined);
+  const range = bounded && requested !== undefined ? { from: requested.from / 60_000n, to: requested.to / 60_000n } : undefined;
+  const total = range === undefined ? null : compactTotal(s.db, viewer, range.to);
+  if (range !== undefined && total === null) throw new Error(USAGE_MINUTES_PENDING);
   const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
-  for (const r of usageByDay(s, utcOffsetMin, viewer, partial)) {
+  for (const r of usageByDay(s, utcOffsetMin, viewer, partial, range)) {
     const key = `${r.day}\n${r.runtime}\n${r.model ?? ""}`;
     const d = days.get(key) ?? { day: r.day, runtime: r.runtime, model: r.model, tokens: 0, calls: 0 };
     d.tokens += r.tokens;
@@ -335,6 +351,9 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
   mark("historyCards");
   return {
     days: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),
+    ...(total !== null && requested !== undefined ? {
+      tokens: total.tokens, beforeDay: new Date(Number(requested.to + utcOffsetMin * 60_000n)).toISOString().slice(0, 10),
+    } : {}),
     cards: chats.cards,
     picked: chats.picked,
     places: chats.places,
