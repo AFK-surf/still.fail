@@ -1,6 +1,7 @@
 // An explicit request for a new chat title. It uses a separate, text-only runtime session so it cannot change the
 // chat agent's running turn, its waiting state, or the files it is working on.
 import { randomUUID } from "node:crypto";
+import { wall } from "../ops/fibers.ts";
 import { sandboxed } from "../agents/sandbox.ts";
 import type { AgentSession, RuntimeEvent } from "../agents/runtime.ts";
 import type { SessionRow } from "../store/rows.ts";
@@ -43,7 +44,7 @@ export async function regenerateTitle(hub: Hub, thread: number, members: Session
   pending.set(thread, id);
   let agent: AgentSession | null = null;
   let closed = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopTimer: (() => void) | undefined;
   const abort = new AbortController();
   try {
     const work = (async () => {
@@ -94,7 +95,7 @@ export async function regenerateTitle(hub: Hub, thread: number, members: Session
       if (title === "" || /[\r\n]/u.test(line)) throw new TitleError("failed");
       return title;
     })();
-    const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new TitleError("timeout")), TIMEOUT_MS); });
+    const timeout = new Promise<never>((_, reject) => { stopTimer = wall.after(TIMEOUT_MS, () => reject(new TitleError("timeout"))); });
     const title = await Promise.race([work, timeout]);
     if (pending.get(thread) !== id || hub.store.titleRevision(thread) !== revision || hub.store.getThread(thread) === null) throw new TitleError("changed");
     hub.titles.delete(thread);
@@ -106,12 +107,12 @@ export async function regenerateTitle(hub: Hub, thread: number, members: Session
   } finally {
     closed = true;
     abort.abort();
-    if (timer !== undefined) clearTimeout(timer);
+    stopTimer?.();
     if (pending.get(thread) === id) pending.delete(thread);
     if (agent !== null) {
       const ending = agent as AgentSession;
       void (async () => {
-        if (ending.busy()) await Promise.race([ending.abort().catch(() => {}), new Promise<void>((resolve) => setTimeout(resolve, 2000))]);
+        if (ending.busy()) await Promise.race([ending.abort().catch(() => {}), wall.sleep(2000)]);
         await ending.dispose().catch(() => {});
       })();
     }
