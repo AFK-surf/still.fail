@@ -110,13 +110,15 @@ test("pending session enumeration merges messages and letters in the same order,
 
 test("rejoining one workspace does not enumerate every workspace's pending sessions", async () => {
   const rig = new Rig();
+  const list = rig.store.listSessions;
   try {
     for (let i = 0; i < 8; i++) rig.store.insertSession({ key: `s${i}`, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${i}`, token: `s${i}`, createdAt: 1, lastActiveAt: 1, ws: "W2" });
     const all = rig.store.sessionsWithPending;
     rig.store.sessionsWithPending = () => { throw new Error("enumerated other workspaces"); };
+    rig.store.listSessions = () => { throw new Error("read all session history"); };
     try { assert.doesNotThrow(() => rig.hub.backIn("W2")); }
     finally { rig.store.sessionsWithPending = all; }
-  } finally { await rig.close(); }
+  } finally { rig.store.listSessions = list; await rig.close(); }
 });
 
 test("leaving a workspace checks its live actors without reading session history", async () => {
