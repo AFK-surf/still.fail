@@ -457,18 +457,24 @@ export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: I
   const eligible = viewer === null ? "SELECT session FROM selected" : `SELECT p.session FROM selected p
     CROSS JOIN usage_minute_scope sc ON sc.session = p.session
     WHERE ${viewer.home === false ? "sc.ws = ?5" : "(sc.ws = ?5 OR sc.ws IS NULL)"}`;
+  // These callbacks touch no rows beyond those the query already reads. The marker runs once after selection, before
+  // the first selected session's buckets; the counter sees candidates including buckets that later contribute nothing.
+  const countCandidate = countParts ? " AND usage_summary_candidate()" : "";
+  const marker = countParts ? ", selected_marker AS MATERIALIZED (SELECT usage_summary_selected() AS ready)" : "";
+  const markerJoin = countParts ? " CROSS JOIN selected_marker marker" : "";
+  const markerWhere = countParts ? "marker.ready = 1 AND " : "";
   // Find sessions through the covering time index, then read each session's buckets together in primary-key order.
   // Materializing the eligible sessions keeps the workspace check from being repeated for every minute.
   const sql = `WITH selected AS MATERIALIZED (
     SELECT DISTINCT session FROM usage_compact INDEXED BY ${index}
-    WHERE ${scope}minute >= ?2 AND minute < ?3
-  ), eligible AS MATERIALIZED (${eligible})
+    WHERE ${scope}minute >= ?2 AND minute < ?3${countCandidate}
+  ), eligible AS MATERIALIZED (${eligible})${marker}
     SELECT strftime('%Y-%m-%d', (c.minute + ?1) * 60, 'unixepoch') AS day,
     c.session, NULLIF(c.thread, 0) AS thread, NULLIF(c.person, '') AS person, NULLIF(c.profile, '') AS profile,
     c.runtime, NULLIF(c.model, '') AS model, c.fast, SUM(c.calls) AS calls, SUM(c.input) AS input,
     SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
-    FROM eligible p CROSS JOIN usage_compact c ON c.session = p.session AND c.minute >= ?2 AND c.minute < ?3
-    WHERE ${bucketScope}c.records > 0
+    FROM eligible p${markerJoin} CROSS JOIN usage_compact c ON c.session = p.session AND c.minute >= ?2 AND c.minute < ?3
+    WHERE ${markerWhere}${bucketScope}c.records > 0
     GROUP BY day, c.session, c.thread, c.person, c.profile, c.runtime, c.model, c.fast`;
   return { sql, args };
 }

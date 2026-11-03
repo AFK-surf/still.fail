@@ -180,11 +180,11 @@ export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
 
 /// Usage::summary: every day's calls from `from` until `to`, by thread, person, profile and model (UsageRow).
 function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null,
-  queryTime: (ms: number, parts?: number) => void): Json[] {
+  queryTime: (ms: number, diagnostics: { parts?: number; candidates?: number; selectedMs?: number }) => void): Json[] {
   const started = performance.now();
-  const diagnostics: { parts?: number } = {};
+  const diagnostics: { parts?: number; candidates?: number; selectedMs?: number } = {};
   const groups = usageGroups(s, from, to, utcOffsetMin, viewer, diagnostics);
-  queryTime(Math.round(performance.now() - started), diagnostics.parts);
+  queryTime(Math.round(performance.now() - started), diagnostics);
   return groups.map((g) => ({
     day: g.day, session: g.session, thread: g.thread, person: g.person, profile: g.profile, runtime: g.runtime, model: g.model,
     calls: g.calls, input: g.input, cacheRead: g.cacheRead, cacheWrite: g.cacheWrite + g.cacheWriteLong, output: g.output, cost: cost(g),
@@ -244,7 +244,13 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     last = now;
   };
   let summaryParts: number | undefined;
-  const groups = summary(s, from, to, utcOffsetMin, viewer, (ms, parts) => { stages.summaryQuery = ms; summaryParts = parts; });
+  let summaryCandidates: number | undefined;
+  const groups = summary(s, from, to, utcOffsetMin, viewer, (ms, diagnostics) => {
+    stages.summaryQuery = ms;
+    if (diagnostics.selectedMs !== undefined) stages.summarySelected = diagnostics.selectedMs;
+    summaryParts = diagnostics.parts;
+    summaryCandidates = diagnostics.candidates;
+  });
   mark("summary");
   // Compact groups have already checked each session's current workspace in the same read snapshot. Looking them
   // up again here needlessly rereads the sessions index for every usage page, including on a cold database.
@@ -321,6 +327,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   if (ms >= 1_000) {
     const partialMinute = from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n));
     log.warn("readers", "a usage read's stages", { ms, ...stages, summaryGroups: groups.length,
+      ...(summaryCandidates !== undefined ? { summaryCandidates } : {}), historyPending,
       ...(summaryParts !== undefined ? { summaryParts, summaryEdges: partialMinute } : {}) });
   }
   return answer;
