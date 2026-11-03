@@ -859,6 +859,22 @@ test("session fast migrates old databases and survives restart", () => {
   assert.equal(store.getSession("old")!.fast, false);
 });
 
+test("the sessions that wait are those whose latest turn said so, found together", () => {
+  const store = memory();
+  for (const key of ["waits", "waited", "done", "none"]) session(store, key);
+  store.startTurn("w1", "waits", "input");
+  store.endTurn("w1", "completed", null, "waiting", 60);
+  store.startTurn("d1", "waited", "input");
+  store.endTurn("d1", "completed", null, "waiting", 60);
+  store.startTurn("d2", "waited", "job");
+  store.endTurn("d2", "completed", null, null, null);
+  store.startTurn("x1", "done", "input");
+  store.endTurn("x1", "completed", null, null, null);
+  assert.deepEqual([...store.waitingOf(["waits", "waited", "done", "none"])], ["waits"]);
+  assert.deepEqual([...store.waitingOf([])], []);
+  for (const key of ["waits", "waited", "done", "none"]) assert.equal(store.waitingOf([key]).has(key), store.lastTurn(key)?.declared === "waiting", key);
+});
+
 test("the latest turn is the last inserted when start times tie", () => {
   const store = memory();
   session(store, "same-ms");
