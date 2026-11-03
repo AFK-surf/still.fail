@@ -55,7 +55,7 @@ test("what devices ask is read while the station's own reader is held", { timeou
   }
 });
 
-for (const bulk of ["usage", "chats", "openJobs", "changed", "timeline", "aNewRead"]) test(`a chat can be read while ${bulk} reads are held`, { timeout: 30_000 }, async () => {
+for (const bulk of ["usage", "openJobs", "changed", "timeline", "aNewRead"]) test(`a chat can be read while ${bulk} reads are held`, { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);
   // Two bulk reads: one takes a reader, the other waits, leaving the second reader to the chat.
   const asked = [readers.read(bulk, args(true), "en"), readers.read(bulk, args(true), "en")];
@@ -109,6 +109,21 @@ test("a stretch of a history filled in brief is read behind the rest; one read w
     assert.ok(settled.every((s) => s.status === "fulfilled"));
   }
   assert.equal(Atomics.load(state, 0), 4);
+});
+
+test("the sidebar and a session's detail are read beside a slow bulk read, before another waiting", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(2);
+  // A slow usage read holds one reader, another waits for the one left.
+  const asked = [readers.read("usage", args(true), "en"), readers.read("usage", args(true), "en")];
+  try {
+    await started(1);
+    assert.equal(await readers.read("chats", args(false), "en"), "{}");
+    assert.equal(await readers.read("session", args(false), "en"), "{}");
+    assert.equal(Atomics.load(state, 0), 3, "the usage read waiting still waits");
+  } finally {
+    const settled = await open(asked);
+    assert.ok(settled.every((s) => s.status === "fulfilled"));
+  }
 });
 
 // On ccvm (2026-11-02) the log waited up to 98 s behind bulk reads, growing until the main connection wrote it itself.
