@@ -8,6 +8,7 @@ import { decisionCards, makeStore, usageChatsReady } from "../src/read/store.ts"
 import { addCardOutcomes } from "../src/store/schema.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import { MinuteReader } from "../src/usage/minute-reader.ts";
+import { fileAway } from "./archived-before.ts";
 
 const card = { type: "options" as const, options: [{ label: "yes" }] };
 
@@ -60,6 +61,36 @@ test("an old database keeps new decisions but never reports its missing history 
     const reader = new MinuteReader(path);
     try { await assert.rejects(reader.readyChats(null), /chat.*unavailable/i); }
     finally { await reader.close(); }
+  } finally {
+    store?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("restoring old archived chats does not reconstruct their decision statistics", () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-archive-no-history-"));
+  const path = join(dir, "stillfail.db");
+  let store: Store | null = null;
+  try {
+    store = Store.open(path);
+    const threads = ["a", "b"].map((name) => store!.openThread("ember", "EMBER", name, null, null).id);
+    for (const thread of threads) {
+      store.insertMessage({ ...newMessage(thread, "1", "agent", "agent", "pick"), card });
+      store.insertMessage(newMessage(thread, "2", "person", "person", "yes"));
+      fileAway(store, thread);
+    }
+    store.close();
+    store = Store.open(path);
+    for (const thread of threads) assert.equal(store.entriesAfter(thread, 0).length, 2);
+    assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM card_outcomes").get() as { n: number }).n, 0);
+    assert.throws(() => usageChatsReady(makeStore(store!.db, dir), null), /usage chat statistics/);
+    store.insertMessage({ ...newMessage(threads[0]!, "3", "agent", "agent", "new pick"), card });
+    store.insertMessage(newMessage(threads[0]!, "4", "person", "person", "yes"));
+    assert.deepEqual((store.db.prepare("SELECT answered, said FROM card_outcomes").all() as { answered: number; said: number }[])
+      .map((row) => [row.answered, row.said]), [[1, 1]]);
+    store.close();
+    store = Store.open(path);
+    assert.throws(() => usageChatsReady(makeStore(store!.db, dir), null), /usage chat statistics/);
   } finally {
     store?.close();
     rmSync(dir, { recursive: true, force: true });
