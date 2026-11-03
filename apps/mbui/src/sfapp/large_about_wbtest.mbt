@@ -283,7 +283,9 @@ test "大屏 关于 made once where the device keeps a performance record: turne
   assert_true(t.at_rest(), msg="at rest once left")
   t.set_perf_size(1000.0)
   assert_true(t.at_rest(), msg="nothing owed for it")
+}
 
+///|
 test "更新日志 made once on a large screen and on the tape, wide and narrow: every instance drawn as its old view's; its days' words the tree's own" {
   for case in [(0, 1.0, 1280.0), (2, 2.0, 1280.0), (2, 1.0, 839.0), (0, 1.0, 600.0), (2, 2.0, 600.0)] {
     let (platform, scale, w) = case
