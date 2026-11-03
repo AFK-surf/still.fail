@@ -834,6 +834,9 @@ export class UsageCounter {
     this.#files?.set(path, { ...before, cutoff, anchor, path });
     if (archived && !replaced && size === before.offset) return 0;
     const state: CallState = { model: before.model, codexId: null };
+    // A session created after the counter began can have its first call timestamped just before that boundary when
+    // the runtime's clock is behind. Use the same clock-skew allowance already used to attribute calls to a session.
+    const firstNewAt = session.createdAt >= since ? Math.min(since, session.createdAt - SKEW_MS) : since;
     let added = 0;
     let first = true;
     for await (const part of readFrom(path, before.offset)) {
@@ -849,7 +852,7 @@ export class UsageCounter {
         // What ran before the station had the session (a terminal's, continued here) is not the station's.
         const modelBefore = state.model;
         const fromKnownSuffix = was !== undefined && !replaced && section.from >= before.offset;
-        const calls = callsOf(runtime, section.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS && (section.followed || c.at >= since || fromKnownSuffix));
+        const calls = callsOf(runtime, section.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS && (section.followed || c.at >= firstNewAt || fromKnownSuffix));
         // The turns they were made in, those alone (store/usage.ts usageTurns).
         const of = calls.length === 0 ? [] : this.#store.usageTurns(session.key, calls.reduce((m, c) => Math.min(m, c.at), Infinity), calls.reduce((m, c) => Math.max(m, c.at), -Infinity));
         const withFor: [UsageCall, UsageFor][] = calls.map((c) => {
@@ -873,7 +876,7 @@ export class UsageCounter {
           const batch = withFor.slice(i, i + WRITE_BATCH);
           const changed = { from: Infinity };
           const savedAnchor = complete ? nextAnchor : anchor;
-          const recorded = this.#store.recordUsage(path, file, runtime, batch, { changed, counter: { cutoff, anchor: savedAnchor }, ...(section.followed ? {} : { minNewAt: since }) });
+          const recorded = this.#store.recordUsage(path, file, runtime, batch, { changed, counter: { cutoff, anchor: savedAnchor }, ...(section.followed ? {} : { minNewAt: firstNewAt }) });
           this.#files?.set(path, { ...file, cutoff, anchor: savedAnchor, path });
           if (Number.isFinite(changed.from)) {
             this.#counted.add(session.key);

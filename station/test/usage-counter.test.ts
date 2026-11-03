@@ -217,6 +217,21 @@ test("starting the counter skips idle history and counts only new calls in an ac
   assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["active-new", "after"]);
 });
 
+for (const delay of [0, 1_000]) test(`a new session's first call is counted when its runtime clock is slightly behind the station (created ${delay} ms after cutover)`, async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const since = r.store.now();
+  if (delay > 0) await time.adjust(delay);
+  const workspace = join(r.data, "new-skewed-session");
+  session(r.store, "new-skewed", workspace, r.store.now());
+  r.store.startTurn("new-turn", "new-skewed", "input");
+  append(join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl"),
+    [claudeLine("old-call", since - 60_000, "claude-opus-5-5", usage(9, 0, 0, 0, 1)),
+      claudeLine("new-skewed-call", since - 1_000, "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["new-skewed-call"]);
+});
+
 test("an already counted response can grow after the counter's starting time", async () => {
   const time = await today();
   const r = rig({ clock: time.clock });
