@@ -34,9 +34,11 @@ function authorOf(s: Store, m: MessageRow, names: Record<string, string>, known:
   if (m.authorKind === "agent") {
     const model = typeof m.agentIdentity?.model === "string" && m.agentIdentity.model !== "" ? m.agentIdentity.model : null;
     if (model !== null) return modelName(model);
+    const runtime = m.agentIdentity?.runtime ?? store.originalRuntime(s, m.author) ?? store.getSession(s, m.author)?.runtime;
+    if (m.agentIdentity != null || (runtime && runtime !== store.getSession(s, m.author)?.runtime)) return runtimeLabel(runtimeKind(runtime) ?? "claude");
     const name = said("agent", m.author);
     if (name !== null && name !== m.author) return name;
-    return runtimeLabel(runtimeKind(m.agentIdentity?.runtime ?? store.originalRuntime(s, m.author) ?? store.getSession(s, m.author)?.runtime) ?? "claude");
+    return runtimeLabel(runtimeKind(runtime) ?? "claude");
   }
   return said(m.authorKind, m.author) ?? "still.fail";
 }
@@ -47,9 +49,9 @@ function whoDrawn(s: Store, m: MessageRow): { maker?: string; model?: string; ru
   if (m.authorKind === "person") return m.author.includes("@") ? { person: m.author } : {};
   if (m.authorKind !== "agent") return {};
   const session = store.getSession(s, m.author);
-  const model = typeof m.agentIdentity?.model === "string" && m.agentIdentity.model !== "" ? m.agentIdentity.model : (session?.model ?? null);
-  const maker = model !== null ? makerOf(model) : null;
   const runtime = m.agentIdentity?.runtime ?? store.originalRuntime(s, m.author) ?? session?.runtime;
+  const model = m.agentIdentity != null ? (typeof m.agentIdentity.model === "string" && m.agentIdentity.model !== "" ? m.agentIdentity.model : null) : runtime === session?.runtime ? (session?.model ?? null) : null;
+  const maker = model !== null ? makerOf(model) : null;
   return { ...(maker !== null ? { maker } : {}), ...(model !== null ? { model } : {}), ...(runtime ? { runtime } : {}) };
 }
 

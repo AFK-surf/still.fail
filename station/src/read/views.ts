@@ -719,12 +719,13 @@ export function entryViews(api: Api, thread: number, entries: EntryRow[]): Json[
       if (!sessions.has(e.author)) sessions.set(e.author, store.getSession(api.store, e.author));
       const session = sessions.get(e.author)!;
       if (session !== null) {
-        if (session.model !== null) v.authorModel = session.model;
         if (typeof e.agentIdentity?.runtime === "string") v.authorRuntime = e.agentIdentity.runtime;
         else {
           if (!origins.has(e.author)) origins.set(e.author, store.originalRuntime(api.store, e.author));
           v.authorRuntime = origins.get(e.author) ?? session.runtime;
         }
+        const model = e.agentIdentity != null ? e.agentIdentity.model : v.authorRuntime === session.runtime ? session.model : null;
+        if (typeof model === "string") v.authorModel = model;
       }
     }
     declaredView(v, e.declared);

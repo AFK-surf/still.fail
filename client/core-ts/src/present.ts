@@ -492,12 +492,13 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
   const saidName = str(last.authorName) || null;
   if (kind === "agent") {
     const agent = (arr(get(row, "agents")) ?? []).find((a) => get(a, "key") === author);
-    const m = str(get(last.agentIdentity, "model")) ?? str(get(agent, "model")) ?? null;
+    const identity = isObject(last.agentIdentity) ? last.agentIdentity : null;
+    const m = (identity !== null ? str(get(identity, "model")) : str(get(agent, "model"))) ?? null;
     return {
       kind: "agent",
-      name: m !== null ? model.name(m) : (saidName ?? "agent"),
+      name: m !== null ? model.name(m) : identity !== null ? format.agentLabel(null, str(get(identity, "effort"))) : (saidName ?? "agent"),
       model: m,
-      runtime: get(agent, "runtime") ?? "claude",
+      runtime: str(get(identity, "runtime")) ?? str(get(last, "authorRuntime")) ?? get(agent, "runtime") ?? "claude",
       mine: false,
       state: agent ? markOf(agent) : null,
     };

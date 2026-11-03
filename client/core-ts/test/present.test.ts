@@ -279,6 +279,13 @@ test("the_last_speaker_is_named_and_an_agents_state_rides_on_it", () => {
   });
   const agent = p.lastBy(row("agent", "k"), me, [], members);
   assert.deepEqual([agent.name, agent.state], ["DeepSeek Flash", "block"]);
+  const switched = row("agent", "k");
+  switched.last.agentIdentity = { model: "claude-opus-5-5", runtime: "claude" };
+  const old = p.lastBy(switched, me, [], members);
+  assert.deepEqual([old.name, old.runtime], ["Opus 5.5", "claude"]);
+  switched.last.agentIdentity = { model: null, runtime: "claude" };
+  const defaultModel = p.lastBy(switched, me, [], members);
+  assert.deepEqual([defaultModel.model, defaultModel.runtime], [null, "claude"]);
   const legacy = row("agent", "k");
   delete legacy.last.agentIdentity;
   assert.equal(p.lastBy(legacy, me, [], members).name, "GPT-6 Astra");
