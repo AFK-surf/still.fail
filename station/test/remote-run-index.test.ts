@@ -20,8 +20,7 @@ test("old remote tasks fill in bounded batches and survive concurrent old writes
   before.close();
   let store = Store.open(path);
   try {
-    assert.equal(remoteRunCount(makeStore(store.db, dir), { workspace: "A", home: false }), 35,
-      "old history stays available while its lookup is being filled");
+    assert.throws(() => remoteRunCount(makeStore(store.db, dir), { workspace: "A", home: false }), /remote task statistics are still being filled/);
     assert.deepEqual(backfillRemoteRuns(store.db, 5), { done: false, processed: 5 });
     const later = 91 * 24 * 60 * 60 * 1_000;
     store.noteRemoteRun("later", "remote:A:station:later", later);
@@ -31,8 +30,7 @@ test("old remote tasks fill in bounded batches and survive concurrent old writes
     store.db.prepare("DELETE FROM remote_runs WHERE job = ?").run("old-49");
     store.db.prepare("INSERT INTO remote_runs (rowid, job, at, session) VALUES (50, 'late', 2, 'remote:B:station:late')").run();
     store.db.prepare("UPDATE remote_runs SET session = 'remote:B:station:moved' WHERE job = 'old-10'").run();
-    assert.deepEqual(remoteRunsSince(makeStore(store.db, dir), 0n, { workspace: "B", home: false }),
-      [{ at: 2, session: "remote:B:station:late" }]);
+    assert.throws(() => remoteRunsSince(makeStore(store.db, dir), 0n, { workspace: "B", home: false }), /remote task statistics are still being filled/);
     store.close();
     store = Store.open(path);
 
@@ -132,7 +130,7 @@ test("the existing background reader finishes old remote tasks even when minutes
     const [ready] = await once(worker, "message");
     assert.equal(ready.id, 1, "a ready minute history can be read while remote tasks wait to be indexed");
     assert.equal((store.db.prepare("SELECT done FROM remote_run_progress WHERE id = 1").get() as { done: number }).done, 0);
-    assert.equal(remoteRunCount(makeStore(store.db, dir), { workspace: "A", home: false }), 1);
+    assert.throws(() => remoteRunCount(makeStore(store.db, dir), { workspace: "A", home: false }), /remote task statistics are still being filled/);
     Atomics.store(new Int32Array(priority), 0, 0);
     const [message] = await once(worker, "message");
     assert.deepEqual(message, { complete: true });

@@ -13,7 +13,7 @@ import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
 import type { Answer, Ask } from "./worker.ts";
-import { USAGE_MINUTES_PENDING } from "./store.ts";
+import { REMOTE_RUNS_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -142,20 +142,26 @@ export class Readers {
 
   /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
   read(op: string, args: unknown, lang: Ask["lang"], { told = false }: { told?: boolean } = {}): Promise<string> {
-    if (op === "usage" && (args as { history?: unknown } | null)?.history === true) return this.usageHistory(args, lang, told);
+    if (op === "usage") return this.usageRead(args, lang, told);
     return this.enqueue(op, args, lang, told, op === CHECKPOINT);
   }
 
-  private async usageHistory(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
-    const viewer = (args as { viewer?: InWorkspace | null }).viewer ?? null;
+  private async usageRead(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
+    const viewer = (args as { viewer?: InWorkspace | null } | null)?.viewer ?? null;
+    const history = (args as { history?: unknown } | null)?.history === true;
     while (!this.closed) {
-      this.startUsageIndex();
-      await this.minutes!.ready(viewer);
+      if (history) {
+        this.startUsageIndex();
+        await this.minutes!.ready(viewer);
+      }
       try {
         return await this.enqueue("usage", args, lang, told);
       } catch (error) {
         // The reader checks within its snapshot: a session may have entered the workspace after the worker checked it.
-        if (!(error instanceof HttpError) || error.message !== USAGE_MINUTES_PENDING) throw error;
+        if (error instanceof HttpError && error.message === USAGE_MINUTES_PENDING && history) continue;
+        if (!(error instanceof HttpError) || error.message !== REMOTE_RUNS_PENDING) throw error;
+        this.startUsageIndex();
+        await this.minutes!.readyRemote();
       }
     }
     throw new HttpError(502, "station stopping");
