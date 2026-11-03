@@ -452,6 +452,8 @@ fn fold_built(c : @ui.Ctx, now : FoldLook) -> FoldLook {
 /// in view (its file's head).
 pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : Double) -> Unit {
   wide.tape = false
+  // (its tips over all of the window, as the old frame's are: none cut by the pane, the sidebar's edge's and its pages')
+  let tips = @sf.TipLayer::new(fn() { Some(v) })
   fold_goes.node = Some(v)
   fold_goes.ready = ready
   fold_goes.most = most
@@ -580,7 +582,7 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       pane.box(fn(page) {
         page.grow(Is(1.0)).over(Is(true)) |> ignore
         // (the stack the tree's, each page its island: page_pane.mbt)
-        pane_pages(page, src)
+        pane_pages(page, src, tips)
       })
       |> ignore
     })
@@ -591,7 +593,6 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   let block = @ui.old(v, fn(c) { pane_block_built(c, src) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own
   // the sidebar's edge, the tree's, over the block (its rows under its strip), but where a list's thumb of the block's
   // is shown there: the thumb's (@ui.yield_thumbs)
-  let tips = @sf.TipLayer::new(fn() { Some(v) })
   v.box(fn(edges) {
     edges.over(Is(true)) |> ignore
     edges.show(fn() { pane_edge_stands(src, edges) }, fn(n) { pane_edge(n, edges, src, tips, block) })

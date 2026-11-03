@@ -118,6 +118,7 @@ pub fn page_node(
   said? : (PageSaid) -> Unit,
   width? : () -> Double,
   scroll? : @view.Scroll,
+  tips? : TipLayer,
 ) -> Unit {
   // (what it says of itself to the frame's bar that names it, as that changes, whole: the frame's own to keep)
   match said {
@@ -133,8 +134,13 @@ pub fn page_node(
   let own_scroll = @view.Scroll::list()
   // (what is said of what the pointer rests on, its about's mark's: in a layer of its own over the page, past its list,
   // which cuts what it holds to it)
+  // (the frame's, over all of the window where it gives one; else its own)
   let tips_at : Ref[@view.View?] = Ref(None)
-  let tips = TipLayer::new(fn() { tips_at.val })
+  let own_tips = tips is None
+  let tips = match tips {
+    Some(t) => t
+    None => TipLayer::new(fn() { tips_at.val })
+  }
   v.pick(look, fn(p, l) {
     p.grow(Is(1.0)).min_height(Is(Some(0.0))).lends(part_at, { look: l, section: false, list: false }) |> ignore
     // (where its list is scrolled to, kept by whoever holds the page where it says (a part of a page a page each,
@@ -148,7 +154,9 @@ pub fn page_node(
       Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips)
     }
   })
-  tips_at.val = Some(v.box(fn(t) { t.over(Is(true)) |> ignore }))
+  if own_tips {
+    tips_at.val = Some(v.box(fn(t) { t.over(Is(true)) |> ignore }))
+  }
 }
 
 ///|
