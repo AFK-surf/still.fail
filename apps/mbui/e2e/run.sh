@@ -10,6 +10,8 @@
 #   e2e/run.sh ios [NAME…]        the same on the iOS simulator (a simulator of our own: MBUI_IOS_DEVICE, default
 #     ios-mbui-sf, as mbui's; scripts/ios.sh; on Mini1: Studio's simulators open no app), the app installed afresh, its
 #     log followed (e2e/ios-flow.sh), recorded; with no NAME its smoke flows only (01, 03, 05)
+#   Outside CI the app is Wasm in mbui's native shell on each (scripts/wasm-app.sh: no C of it compiled); E2E_NATIVE=1
+#   the native app.
 #
 # A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed;
 # `{LOG}` in it is the flow's own log, as it is so far), then says so to the app (e2e/runner-do.sh: the drive's
@@ -153,10 +155,20 @@ if [ $PLATFORM = android ]; then
   SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
   ADB="$SDK/platform-tools/adb -s emulator-$EMU_PORT"
   export E2E_PKG=${E2E_PKG:-fail.still.android.dev}
-  [ -n "${E2E_NOBUILD:-}${E2E_APK:-}" ] || APP=stillfail scripts/android.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  # (in development the app in Wasm in mbui's Android shell, scripts/wasm-app.sh: no C of it compiled; in CI, with
+  # E2E_NATIVE=1 or an APK given, the native app)
+  wasm=1
+  [ -z "${GITHUB_ACTIONS:-}${E2E_APK:-}" ] && [ "${E2E_NATIVE:-}" != 1 ] || wasm=
+  if [ -n "$wasm" ]; then
+    [ -n "${E2E_NOBUILD:-}" ] || PLATFORM=android bash scripts/wasm-app.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  else
+    [ -n "${E2E_NOBUILD:-}${E2E_APK:-}" ] || APP=stillfail scripts/android.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  fi
   scripts/android.sh emu >$OUT/emu.log 2>&1 || { tail $OUT/emu.log; exit 1; }
   $ADB install -r ${E2E_APK:-android/app/build/outputs/apk/debug/app-debug.apk} >/dev/null || exit 1
   $ADB shell pm clear $E2E_PKG >/dev/null
+  # (the program after the app's data is cleared: it lies in its files)
+  [ -z "$wasm" ] || scripts/android.sh put out/wasm-app/app-android.cwasm app.cwasm || exit 1
   # notifications allowed, as a person who said yes once has them (else the first sign-in's ask is a system dialog over
   # the flows; 40-44 look at what is shown)
   $ADB shell pm grant $E2E_PKG android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
@@ -174,7 +186,14 @@ if [ $PLATFORM = ios ]; then
   # this Mac's path, as on macOS); 127.0.0.1 in the simulator is this Mac's, so the local still.fail needs no forwarding
   export MBUI_IOS_DEVICE=${MBUI_IOS_DEVICE:-ios-mbui-sf}
   export E2E_PKG=${E2E_PKG:-fail.still.mbui.debug}
-  [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/ios.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  # (in development the app in Wasm in mbui's iOS shell, scripts/wasm-app.sh, read where it lies here; in CI or with
+  # E2E_NATIVE=1 the native app)
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${E2E_NATIVE:-}" = 1 ]; then
+    [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/ios.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  else
+    [ -n "${E2E_NOBUILD:-}" ] || PLATFORM=ios bash scripts/wasm-app.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+    export SIMCTL_CHILD_MBUI_WASM_APP=$ROOT/$(pkg_build stillfail wasm release)/stillfail.wasm
+  fi
   IOS_DEV=$(scripts/ios.sh device 2>$OUT/device.log | tail -1)
   [ -n "$IOS_DEV" ] || { cat $OUT/device.log; exit 1; }
   export IOS_DEV CORE FILES
