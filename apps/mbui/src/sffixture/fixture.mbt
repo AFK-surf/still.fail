@@ -885,9 +885,9 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "status" if f.mode == "reading-slow" =>
       Some({
         "state": "trouble",
-        "text": "本机数据无法打开，改从网络读取，读到的内容不会保存 · 共 4 项 · 172 KB/s",
+        "text": "本机数据无法打开，只能从网络读取 · 共 4 项 · 172 KB/s",
         "items": [],
-        "lines": ["本机数据无法打开，改从网络读取，读到的内容不会保存"],
+        "lines": ["本机数据无法打开，只能从网络读取"],
       })
     "status" => Some({ "items": [] })
     // what the last update brought (home_news.mbt): said on MBUI_FIXTURE=home-news only

@@ -113,7 +113,7 @@ test("a_loading_pages_lines_are_only_what_lasts", () => {
   status.skew += 3_000;
   assert.deepEqual(lines(), []);
   status.setDb(new Map([["a", { kind: "failed", detail: "disk I/O error" }]]));
-  assert.deepEqual(lines(), ["本机数据无法打开，改从网络读取，读到的内容不会保存"]);
+  assert.deepEqual(lines(), ["本机数据无法打开，只能从网络读取"]);
 });
 
 test("a_connection_goes_first_and_a_socket_down_is_trouble", () => {
