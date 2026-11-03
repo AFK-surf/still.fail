@@ -182,9 +182,17 @@ if [ $PLATFORM = ios ]; then
   xcrun simctl install $IOS_DEV out/ios/MBUI.app || exit 1
 fi
 if [ $PLATFORM = mac ]; then
-  [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/mac.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  # (in development the app in Wasm in mbui's native shell, scripts/wasm-app.sh: no C of it compiled, the user
+  # 2026-11-03; in CI (GITHUB_ACTIONS) or with E2E_NATIVE=1 the native app)
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${E2E_NATIVE:-}" = 1 ]; then
+    [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/mac.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+    built=$ROOT/_build/native/release/build/stillfail/stillfail/stillfail.exe
+  else
+    [ -n "${E2E_NOBUILD:-}" ] || bash scripts/wasm-app.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+    built=$ROOT/out/wasm-app/stillfail
+  fi
   # (E2E_EXE: another build of it, as the app bundle's, out/mac/still.fail mbui.app/Contents/MacOS/stillfail-mbui)
-  EXE=${E2E_EXE:-$ROOT/_build/native/release/build/stillfail/stillfail/stillfail.exe}
+  EXE=${E2E_EXE:-$built}
   export MB_CORE_BUNDLE=$ROOT/out/core/core.hbc
 fi
 

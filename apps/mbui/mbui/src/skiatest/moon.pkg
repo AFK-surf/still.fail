@@ -6,6 +6,6 @@ import {
 }
 
 options(
-  targets: { "files.mbt": [ "native" ], "files_js.mbt": [ "js" ], "files_wasm.mbt": [ "wasm", "wasm-gc" ] },
+  targets: { "files.mbt": [ "native" ], "files_js.mbt": [ "js" ], "files_wasm.mbt": [ "wasm-gc" ] },
   "native-stub": [ "read_file.c" ],
 )
