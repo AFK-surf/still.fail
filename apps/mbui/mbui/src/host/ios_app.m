@@ -513,17 +513,23 @@ static void touches_sent(int kind, NSSet<UITouch *> *t, UIEvent *e, UIView *v) {
 }
 - (UITextRange *)characterRangeAtPoint:(CGPoint)p { return nil; }
 // The keyboard's trackpad (a long press on the space bar): where the finger has gone, the field's to move the caret by
-// (text kinds 9, 10; its words' places are the app's, not the view's, so closestPositionToPoint cannot answer it).
+// (text kinds 9, 10, in 64ths of a point: the finger's way as finely as UIKit has it, device.mbt's text_float_unit;
+// its words' places are the app's, not the view's, so closestPositionToPoint cannot answer it), and its let go (11:
+// the caret the field drew for it slides back to the caret).
 - (void)beginFloatingCursorAtPoint:(CGPoint)p {
   self.floating = YES;
-  send_text(9, @"", (int)lround(p.x), (int)lround(p.y));
+  send_text(9, @"", (int)lround(p.x * 64.0), (int)lround(p.y * 64.0));
   [self requestFrame];
 }
 - (void)updateFloatingCursorAtPoint:(CGPoint)p {
-  send_text(10, @"", (int)lround(p.x), (int)lround(p.y));
+  send_text(10, @"", (int)lround(p.x * 64.0), (int)lround(p.y * 64.0));
   [self requestFrame];
 }
-- (void)endFloatingCursor { self.floating = NO; }
+- (void)endFloatingCursor {
+  self.floating = NO;
+  send_text(11, @"", 0, 0);
+  [self requestFrame];
+}
 // The system's edit actions (its floating edit menu: mb_host_text_menu; a hardware keyboard's ⌘X, ⌘C, ⌘V, ⌘A; a
 // scripted run's paste): what the field's menu offers (cut and copy over words picked, paste, select all), done as
 // Android's floating menu does them (MBView.textMenu): cut, copy and select all as the field's own keys, the
