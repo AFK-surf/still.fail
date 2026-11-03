@@ -14,6 +14,7 @@
   let canvas, gl, prog, post, vao, instBuf, atlasTex, ta;
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
+  let sizeDirty = true, sizeObserver = null;
   // the numbers of an instance (src/ui/scene.mbt)
   const INST = 60;
   let f32 = new Float32Array(INST * 4096);
@@ -264,9 +265,21 @@
     queueMicrotask(() => outside(kind, id, state));
   }
   function resize() {
-    dpr = window.devicePixelRatio || 1;
-    cssW = canvas.clientWidth;
-    cssH = canvas.clientHeight;
+    const scale = window.devicePixelRatio || 1;
+    if (scale !== dpr) {
+      dpr = scale;
+      // Glyph pictures in the atlas were rasterized at the old scale. The UI keeps their boxes and atlas places until
+      // the generation changes, so it must draw and place them again before presenting a frame at the new scale.
+      textChanged();
+      sizeDirty = true;
+    }
+    // The observer marks the size dirty only when it changes. On older browsers without one, measure each frame as
+    // before. A fractional CSS size matters at browser zoom: clientWidth/clientHeight round it too early.
+    if (!sizeDirty && sizeObserver) return;
+    sizeDirty = false;
+    const rect = canvas.getBoundingClientRect();
+    cssW = rect.width;
+    cssH = rect.height;
     const w = Math.round(cssW * dpr), h = Math.round(cssH * dpr);
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
@@ -1126,7 +1139,9 @@
     gl.useProgram(prog);
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    gl.uniform2f(U.u_vp, cssW, cssH);
+    // The framebuffer's rounded size may not be exactly cssW*dpr. Mapping to cssW would stretch its pixels by that
+    // remainder, sampling glyphs between atlas texels. A point must cover exactly dpr pixels, including at 125% zoom.
+    gl.uniform2f(U.u_vp, canvas.width / dpr, canvas.height / dpr);
     gl.uniform1f(U.u_scale, dpr);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, atlasTex);
@@ -1822,8 +1837,9 @@
     const f = faceOf(style);
     return `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${f ? `"mbface${f}", ${own}` : own}`;
   };
-  // what was shaped and drawn before a face changed, forgotten (MoonBit drops its glyphs as the generation moves on)
-  const facesChanged = () => {
+  // what was shaped and drawn before a face or the scale changed, forgotten (MoonBit drops its glyphs as the
+  // generation moves on)
+  const textChanged = () => {
     advCache.clear();
     held = null;
     generation++;
@@ -1841,7 +1857,7 @@
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);
-      facesChanged();
+      textChanged();
       H.requestFrame();
     }, () => {});
     return true;
@@ -1853,7 +1869,7 @@
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);
-      facesChanged();
+      textChanged();
       H.requestFrame();
     }, () => {});
     return true;
@@ -1861,7 +1877,7 @@
   H.faceClear = (face) => {
     if (!faces.delete(face)) return;
     for (const ff of [...document.fonts]) if (ff.family === `mbface${face}` || ff.family === `"mbface${face}"`) document.fonts.delete(ff);
-    facesChanged();
+    textChanged();
   };
 
   H.fontMetrics = (size, weight, style, out) => {
@@ -2226,7 +2242,27 @@
       cb.text(1, '', 0, 0);
       if (e.data) cb.text(0, e.data, 0, 0);
     });
-    window.addEventListener('resize', H.requestFrame);
+    const sizeChanged = () => { sizeDirty = true; H.requestFrame(); };
+    window.addEventListener('resize', sizeChanged);
+    if (typeof ResizeObserver !== 'undefined') {
+      sizeObserver = new ResizeObserver(sizeChanged);
+      sizeObserver.observe(canvas);
+    }
+    // A window can move between displays with different scales without changing its CSS size (and so without a
+    // resize event). Watch the current resolution, then subscribe to the new one when it changes.
+    if (window.matchMedia) {
+      let resolution;
+      const watch = () => {
+        if (resolution) resolution.removeEventListener('change', changed);
+        resolution = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+        resolution.addEventListener('change', changed);
+      };
+      const changed = () => {
+        watch();
+        H.requestFrame();
+      };
+      watch();
+    }
   }
 
   // the pointer's shape (@hostapi.set_cursor)
