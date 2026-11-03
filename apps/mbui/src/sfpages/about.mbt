@@ -95,8 +95,9 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
 /// stands as the core's update says it, its bar coming and going with what is under way, the row growing and closing
 /// round it), what changed; whether this device sends usage statistics and error reports (where the build sends any:
 /// the switch as the host has it, told as it is turned); still.fail's terms and privacy policy on its site; last, where
-/// the device keeps one, its performance record (its switch and its size as the host says them as it is turned here,
-/// the host telling nothing of them otherwise: perf_turned; 分享记录 while it holds anything).
+/// the device keeps one, its performance record (its switch as the host says it as it is turned here, the host telling
+/// nothing of it otherwise: perf_turned; how much it holds as the host tells each write, @ui.perf_size; 分享记录 while
+/// it holds anything).
 pub fn about_node(
   v : @view.View,
   core : Core,
@@ -162,9 +163,10 @@ pub fn about_node(
               perf_turned.get() |> ignore
               @hostapi.perf_state() == 1
             }
+            // (how much it holds as the host says it wrote it, each write told: @ui.perf_size)
             let size = fn() {
               perf_turned.get() |> ignore
-              @hostapi.perf_size()
+              @ui.perf_size()
             }
             @sf.switch_row_node(
               g,

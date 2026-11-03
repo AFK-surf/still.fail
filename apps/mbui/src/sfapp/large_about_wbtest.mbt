@@ -230,3 +230,52 @@ test "大屏 关于 made once over 更新日志, the language changed: its back 
   lang.val = ""
   @sf.set_language(None)
 }
+
+///|
+/// Whether a word of the window's says `words` among its own.
+fn says(t : @ui.Tester, words : String) -> Bool {
+  t.words().any(fn(w) { w.0.contains(words) })
+}
+
+///|
+test "大屏 关于 made once where the device keeps a performance record: turned on, what the host writes after shown as it tells it (分享记录, how much), as it grows and once turned off; the page left, nothing more for it" {
+  let t = large_about_tester(true, 0)
+  // (a device that keeps one, as it starts: 关于 opened again on it)
+  t.set_perf(0)
+  app.nav.pop() |> ignore
+  t.run_for(@ui.move_most_ms)
+  open_page(Setting(About))
+  t.run_for(@ui.move_most_ms)
+  t.wheel(800.0, 500.0, 5000.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(says(t, "现有 0 B"), msg="none written yet")
+  assert_true(t.find("分享记录") is None)
+  // (turned on: nothing written yet as it is)
+  t.click(Switch, label="性能记录")
+  t.draw()
+  assert_eq(t.perf_said().0, [true])
+  assert_true(t.find("分享记录") is None)
+  // (the host's first lines written, told after: shown on the same page)
+  t.set_perf_size(666.0)
+  t.draw()
+  assert_true(t.find("分享记录") is Some(_), msg="its first lines")
+  assert_true(says(t, "现有 666 B"))
+  // (more written)
+  t.set_perf_size(900.0)
+  t.draw()
+  assert_true(says(t, "现有 900 B"), msg="more")
+  // (turned off: what was still being written, told after)
+  t.click(Switch, label="性能记录")
+  t.draw()
+  assert_eq(t.perf_said().0, [true, false])
+  t.set_perf_size(950.0)
+  t.draw()
+  assert_true(says(t, "现有 950 B"), msg="its last lines")
+  // (the page left: what the host tells after asks nothing of a frame)
+  app.nav.pop() |> ignore
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("分享记录") is None)
+  assert_true(t.at_rest(), msg="at rest once left")
+  t.set_perf_size(1000.0)
+  assert_true(t.at_rest(), msg="nothing owed for it")
+}

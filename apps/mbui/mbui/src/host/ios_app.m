@@ -14,6 +14,7 @@
 #import <mach/mach.h>
 #import <os/log.h>
 #import "apple.h"
+#include <stdatomic.h>
 #include <pthread.h>
 #include <sys/resource.h>
 #include <sys/time.h>
@@ -1126,6 +1127,18 @@ static void perf_pick(const char *day) {
   perf_count();
 }
 
+// What was written told to the app (hostcall.mbt's outside_perf), on the main thread, the writes gathered: one told
+// for all of them written before it is delivered, the app reading how much is written then (perf_q). Its mark let go
+// before it is told, waiting on nothing: a write after that tells again.
+static atomic_int perf_telling;
+static void perf_written(void) {
+  if (atomic_exchange(&perf_telling, 1)) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    atomic_store(&perf_telling, 0);
+    mb_host_outside(MB_OUTSIDE_PERF, 0, 1);
+  });
+}
+
 // A line into the record while it is kept, the wall time before it (any thread; written on perf_q).
 void mb_perf_note(const char *text) {
   if (!perf_on_now || !text) return;
@@ -1151,6 +1164,7 @@ void mb_perf_note(const char *text) {
     fclose(f);
     perf_file_bytes += n;
     perf_total = (perf_total < 0 ? 0 : perf_total) + n;
+    perf_written();
   });
 }
 

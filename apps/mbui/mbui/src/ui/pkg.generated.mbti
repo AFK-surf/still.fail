@@ -429,6 +429,8 @@ pub fn perf_also(String, (Double) -> String) -> Unit
 
 pub fn perf_counting() -> Bool
 
+pub fn perf_size() -> Double
+
 pub fn pick(@hostapi.PickKind, hold? : Bool) -> Pick?
 
 pub fn pick_photos(Array[String]) -> Pick?
