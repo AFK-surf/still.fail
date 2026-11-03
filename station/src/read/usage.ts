@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type BatchedUsage, type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
+import type { UsageSqlTimings } from "./usage-batched.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { usageDetailSince } from "../store/usage-detail.ts";
 import { compactTotal, hasCompactUsage } from "../store/usage-compact.ts";
@@ -181,7 +182,7 @@ export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
 /// Usage::summary: every day's calls from `from` until `to`, by thread, person, profile and model (UsageRow).
 function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null,
   queryTime: (ms: number, diagnostics: { parts?: number; candidates?: number; selectedMs?: number; selectedRestMs?: number;
-    selectedCpuMs?: number; cpuMs?: number; rests?: number; restMs?: number }) => void,
+    selectedCpuMs?: number; cpuMs?: number; rests?: number; restMs?: number; sql?: UsageSqlTimings }) => void,
   batched?: BatchedUsage): Json[] {
   const started = performance.now();
   const diagnostics: { parts?: number; candidates?: number; selectedMs?: number } = {};
@@ -272,6 +273,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   };
   let summaryParts: number | undefined;
   let summaryCandidates: number | undefined;
+  let summarySqlSlowOp: string | undefined;
   const groups = summary(s, from, to, utcOffsetMin, viewer, (ms, diagnostics) => {
     stages.summaryQuery = ms;
     if (diagnostics.selectedMs !== undefined) stages.summarySelected = diagnostics.selectedMs;
@@ -280,6 +282,16 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     if (diagnostics.cpuMs !== undefined) stages.summaryCpuMs = diagnostics.cpuMs;
     if (diagnostics.rests !== undefined) stages.summaryRests = diagnostics.rests;
     if (diagnostics.restMs !== undefined) stages.summaryRestMs = diagnostics.restMs;
+    if (diagnostics.sql !== undefined) {
+      stages.summarySqlJournalMs = diagnostics.sql.journal;
+      stages.summarySqlChangesMs = diagnostics.sql.changes;
+      stages.summarySqlPendingMs = diagnostics.sql.pending;
+      stages.summarySqlSelectedMs = diagnostics.sql.selected;
+      stages.summarySqlOwnerMs = diagnostics.sql.owner;
+      stages.summarySqlBucketsMs = diagnostics.sql.buckets;
+      stages.summarySqlSlowMs = diagnostics.sql.slowMs;
+      summarySqlSlowOp = diagnostics.sql.slowOp;
+    }
     summaryParts = diagnostics.parts;
     summaryCandidates = diagnostics.candidates;
   }, options.batched);
@@ -370,6 +382,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   if (ms >= 1_000) {
     const partialMinute = from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n));
     log.warn("readers", "a usage read's stages", { ms, ...stages, summaryGroups: groups.length,
+      ...(summarySqlSlowOp === undefined ? {} : { summarySqlSlowOp }),
       ...(options.batched === undefined ? {} : { summaryCache: options.batched.diagnostics.cache }),
       ...(summaryCandidates !== undefined ? { summaryCandidates } : {}), historyPending,
       ...(summaryParts !== undefined ? { summaryParts, summaryEdges: partialMinute } : {}) });
