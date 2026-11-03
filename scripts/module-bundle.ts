@@ -23,9 +23,10 @@
 //       OUT/modules/<id>/<id>-0.1.<build>.tar.gz (with native parts: <id>-0.1.<build>-<platform>.tar.gz, one for each
 //       platform) and its feed OUT/modules/<id>/<id>[-beta].json, signed by scripts/release-sign.ts (`module`;
 //       --unsigned-ok passed on to it); their names under OUT said on stdout, on one line, the feed last
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { type ArchivedFile, safePath, writeArchive } from "../station/src/updates/archive.ts";
 import { filesOf as nativeFiles, inputsOf, isPart, targetsOf } from "./native.ts";
@@ -83,28 +84,37 @@ const fail = (why: string): never => {
 };
 
 /// esbuild, the one the station is built with (station/package.json), from the station's packages.
-const esbuild = () =>
-  createRequire(join(root, "station", "package.json"))("esbuild") as { buildSync(options: object): { outputFiles: { contents: Uint8Array }[] } };
+const esbuild = () => createRequire(join(root, "station", "package.json")).resolve("esbuild");
 
 /// The module's entry and all it imports as one plain ES module for Node 22 and newer: node's own modules (node:*, and
-/// the bare names) left to it; nothing in it says when or where it was made.
+/// the bare names) left to it; nothing in it says when or where it was made. Built in a Node of its own: esbuild's
+/// service process ends with it, none left running beside the caller (a station test's file is failed for one:
+/// station/test/setup-env.mjs).
 export function bundle(dir: string, spec: ModuleSpec): Uint8Array {
-  const { outputFiles } = esbuild().buildSync({
-    absWorkingDir: dir,
-    entryPoints: [spec.entry],
-    outfile: join(dir, BUNDLE),
-    write: false,
-    bundle: true,
-    platform: "node",
-    format: "esm",
-    target: "node22",
-    legalComments: "none",
-    sourcemap: false,
-    charset: "utf8",
-    logLevel: "warning",
-  });
-  if (outputFiles.length !== 1) throw new Error(`esbuild made ${outputFiles.length} files of the module ${spec.id}`);
-  return outputFiles[0]!.contents;
+  const out = mkdtempSync(join(tmpdir(), "module-bundle-"));
+  try {
+    const options = {
+      absWorkingDir: dir,
+      entryPoints: [spec.entry],
+      outfile: join(out, BUNDLE),
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      target: "node22",
+      legalComments: "none",
+      sourcemap: false,
+      charset: "utf8",
+      logLevel: "warning",
+    };
+    const run = spawnSync(process.execPath, ["-e", "require(process.argv[1]).buildSync(JSON.parse(process.argv[2]))", esbuild(), JSON.stringify(options)], { stdio: ["ignore", "ignore", "pipe"], encoding: "utf8" });
+    if (run.stderr) process.stderr.write(run.stderr);
+    if (run.status !== 0) throw new Error(`esbuild could not bundle the module ${spec.id}`);
+    const made = readdirSync(out);
+    if (made.length !== 1) throw new Error(`esbuild made ${made.length} files of the module ${spec.id}`);
+    return readFileSync(join(out, BUNDLE));
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
 }
 
 /// The platforms a module is packed for: `any` (one archive for every machine), or, with native parts, each platform

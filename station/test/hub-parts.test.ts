@@ -5,9 +5,9 @@ import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFile
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { brief, claudeProject, readTimeline, sessionPlaces, transcriptPaths } from "../src/read/transcript.ts";
+import { brief, claudeProject, readTimeline, rememberCodexRollout, sessionPlaces, transcriptPaths } from "../src/read/transcript.ts";
 import { linkTranscripts, sessionSkills, unlinkAgentHome, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, slackWithFiles, threadCommand } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
@@ -563,6 +563,48 @@ test("a Codex transcript is looked for through its days once, then where it was 
     syncBuiltinESMExports();
   }
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("a reported Codex path follows the shared directory and finds a moved file", () => {
+  const dir = temp();
+  const shared = join(dir, "transcripts", "codex");
+  const home = join(dir, "home");
+  mkdirSync(join(shared, "2026", "11", "03"), { recursive: true });
+  mkdirSync(home, { recursive: true });
+  symlinkSync(shared, join(home, "sessions"), "dir");
+  const suffix = join("2026", "11", "03", "rollout-2026-11-03-said.jsonl");
+  const reported = join(home, "sessions", suffix);
+  const path = join(shared, suffix);
+  const moved = join(shared, "2026", "11", "03", "rollout-moved-said.jsonl");
+  try {
+    assert.equal(rememberCodexRollout(home, "said", join(dir, "elsewhere", "rollout-said.jsonl")), null);
+    assert.equal(rememberCodexRollout(home, "said", join(home, "sessions", "rollout-other.jsonl")), null);
+    assert.equal(rememberCodexRollout(home, "said", reported), reported);
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["said"]), { paths: [], current: false });
+    writeFileSync(path, "");
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["said"]), { paths: [path], current: true });
+    rmSync(path);
+    writeFileSync(moved, "");
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["said"]), { paths: [moved], current: true });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a reported Codex file moved before its first read can still be found in history", () => {
+  const dir = temp();
+  const home = join(dir, "home");
+  const original = join(home, "sessions", "2026", "11", "03", "rollout-original-later.jsonl");
+  const moved = join(home, "sessions", "2026", "11", "04", "rollout-moved-later.jsonl");
+  mkdirSync(dirname(moved), { recursive: true });
+  writeFileSync(moved, "");
+  try {
+    assert.equal(rememberCodexRollout(home, "later", original), original);
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["later"]), { paths: [moved], current: true });
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["later"], [], { anywhere: false }), { paths: [moved], current: true });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("finding a Codex transcript does not stat every other transcript", () => {

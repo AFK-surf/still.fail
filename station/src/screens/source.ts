@@ -162,7 +162,7 @@ export type ScreenResolution = { width: number; height: number; modes: { width: 
 export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; reason?: "linuxNoDisplay" | "linuxWayland" | "linuxTools" | "linuxToolsPreparing" | "linuxToolsFailed" | "linuxUnavailable" | "linuxPortalConsent" | "linuxPortalUnavailable" | "linuxDesktopStarting" | "linuxX11FallbackUnavailable"; app?: string; path?: string; asking?: boolean };
 
 export interface ScreenSource {
-  /// Stable while the source lasts: `desktop`, `browser:<targetId>`, `simulator:<udid>`.
+  /// Stable while the source lasts: `desktop`, `browser:<targetId>`, `simulator:<udid>`, `android:<id>`.
   readonly id: string;
   readonly kind: ScreenKind;
   title(): string;

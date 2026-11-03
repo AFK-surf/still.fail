@@ -94,6 +94,35 @@ test "a bigger box loads a sharper decode, showing the small one meanwhile" {
 }
 
 ///|
+test "a small box beside a big one of the same picture loads its own decode, the big one standing in meanwhile" {
+  let small = [false]
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(fn() {
+        c.image("p.png", w=Px(300.0), h=Px(300.0)) |> ignore
+        if small[0] {
+          c.image("p.png", w=Px(30.0), h=Px(30.0)) |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=400.0,
+    images=[("p.png", 2000, 2000)],
+  )
+  t.draw()
+  t.run_for(@ui.image_fade_ms)
+  small[0] = true
+  t.frame()
+  // the 1024 decode shrunk to 60 pixels is a bilinear sample of a texture without mipmaps: jagged
+  assert_eq(t.image_loads(), [("p.png", 1024), ("p.png", 64)])
+  assert_eq(t.drawn_images().length(), 2)
+  t.frame()
+  assert_eq(t.drawn_images().length(), 2)
+  t.assert_idle()
+}
+
+///|
 test "a wide picture covering a square tile is decoded as tall as the tile, not as wide" {
   let t = @ui.Tester::new(
     fn(c) { c.image("shot.png", w=Px(56.0), h=Px(56.0)) |> ignore },

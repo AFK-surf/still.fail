@@ -3398,7 +3398,7 @@ export const SHAPES: Record<string, Shape> = {
     ["files", vec("PublishFile"), { doc: "Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`; a `list` message's by its `n`\nand `file.path`)." }],
     ["hidden", "u32", { doc: "How many things in all were hidden as looking secret." }],
     ["hiddenText", opt("String"), { doc: "That in words (隐藏了 3 处); absent when none." }],
-  ], { doc: "What a snapshot of a chat would hold now (`chat.publishPreview`): nothing is kept until it is published." }),
+  ], { doc: "What a picture of a chat holds now (`chat.publishPreview`), made of what the device holds of it: nothing is asked of its station or kept." }),
   PublishMessage: struct([
     ["n", "i64", { client: "I54" }],
     ["author", "String", { doc: "As the snapshot names them (no emails)." }],

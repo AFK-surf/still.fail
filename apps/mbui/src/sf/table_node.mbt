@@ -159,7 +159,7 @@ fn table_cell_runs(cell : Array[MdInline]) -> Array[@ui.Run] {
 /// words a person's.
 fn table_runs_look() -> @view.RunsLook {
   let p = theme().p
-  { link: p.blue, pressed: alpha(p.blue, 0.14), code_ink: p.code_ink, code_ground: 0L, code_scale: 0.9, words: true }
+  { ..@view.runs_plain, link: p.blue, pressed: alpha(p.blue, 0.14), code_ink: p.code_ink, code_ground: 0L, code_scale: 0.9, words: true }
 }
 
 ///|
@@ -192,6 +192,23 @@ pub fn table_node(
       reading.val = ""
     })
     |> ignore
+    md_table_body_node(outer, table, bleed, copy, on_link, on_link_hold)
+  })
+  |> ignore
+}
+
+///|
+/// A table (`table`, as it changes) as nodes in `outer` (table_node's, whatever reads its Markdown: a table alone, or
+/// one of a message's blocks, markdown_node's): its columns' widths from the room `outer` is laid out in, `bleed` past
+/// it either side where it scrolls across; its copy key where `copy`; its links taken by `on_link` (`on_link_hold`).
+fn md_table_body_node(
+  outer : @view.View,
+  table : () -> MdTable?,
+  bleed : Double,
+  copy : Bool,
+  on_link : (String) -> Unit,
+  on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?,
+) -> Unit {
     outer.margin(Is((-bleed, 0.0, -bleed, 0.0))) |> ignore
     let room = fn() {
       outer.words_redone() |> ignore
@@ -318,8 +335,6 @@ pub fn table_node(
       |> ignore
     })
     |> ignore
-  })
-  |> ignore
 }
 
 ///|

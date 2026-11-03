@@ -619,10 +619,17 @@ pub fn View::scrolls(
     |> ignore
     // (across with a bar: room at its foot for it while it can go, as laid out (none while it cannot), its bar never
     // over what it holds' last line: Ctx::sideways's bar_room, from this layout's told reach, not a frame's before)
-    // (under what it holds, not within: its own room, whatever room what holds it says what it holds has round it)
+    // (under what it holds, its own room at its foot counted, as Ctx::sideways' `foot` is the more of its padding there
+    // and the bar's room: what of the bar's room its padding there has not, under it)
     match bar {
       Some(b) if across =>
-        held.margin(By(fn() { (0.0, 0.0, 0.0, if s.most_now() > 0.5 { b.size + 2.0 * b.inset } else { 0.0 }) })) |> ignore
+        held.margin(By(fn() {
+          let room = if s.most_now() > 0.5 { b.size + 2.0 * b.inset } else { 0.0 }
+          let st = self.tree.nodes[held.at].flex.style
+          let pad = if st.padding_bottom_kind() == @flex.LEN_PT { st.padding_bottom_value() } else { 0.0 }
+          (0.0, 0.0, 0.0, if room > pad { room - pad } else { 0.0 })
+        }))
+        |> ignore
       _ => ()
     }
     build(held)
