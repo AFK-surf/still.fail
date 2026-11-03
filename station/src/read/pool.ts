@@ -47,10 +47,11 @@ type Line = { told: boolean; size: number; room: boolean; slots: Slot[]; waiting
 const HOMES = 4096;
 /// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
 const CHECKPOINT_MS = 2_000;
-/// Writing the store's log into the database (worker.ts `checkpoint`) is no read and waits for no one: it goes before
-/// the reads waiting, to the first reader free, the one bulk reads leave for a chat's included. In line behind them, it
-/// waited up to 98 s on ccvm (2026-11-02) while the log grew, until the main connection wrote it itself at its next
-/// commit (store.ts WAL_PAGES), holding every device and agent as it reached the disk.
+/// Writing the store's log into the database (worker.ts `checkpoint`) is no read and waits for no one: it has a reader
+/// of its own (`log`). In line behind reads, it waited up to 98 s on ccvm (2026-11-02) while the log grew, until the main
+/// connection wrote it itself at its next commit (store.ts WAL_PAGES), holding every device and agent as it reached the
+/// disk; going before them in their readers, it held the one left for a chat 53 s as it reached a disk short of memory
+/// (2026-11-03), devices' reads waiting 40 s and more behind it.
 const CHECKPOINT = "checkpoint";
 /// The scoped reads on the path to showing a chat, and those a device's lists are made of, each of a few rows and the
 /// statistics kept of them (the sidebar, a session's detail and summary, a chat's latest messages). Other page reads,
@@ -82,6 +83,8 @@ export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
   private asked: Line;
   private told: Line;
+  /// The store's log written into the database (CHECKPOINT), by a reader of its own.
+  private log: Line;
   /// The reader each session's history was last read in (`timeline`).
   private homes = new Map<string, Slot>();
   private next = 0;
@@ -107,6 +110,7 @@ export class Readers {
     this.backfill = backfill;
     this.asked = { told: false, size, room: true, slots: [], waiting: [] };
     this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
+    this.log = { told: true, size: 1, room: false, slots: [], waiting: [] };
   }
 
   /// Check statistical coverage without occupying a device reader or writing old history.
@@ -219,7 +223,7 @@ export class Readers {
   /// `first`: before the reads waiting (CHECKPOINT).
   private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
-    const line = told ? this.told : this.asked;
+    const line = op === CHECKPOINT ? this.log : told ? this.told : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
@@ -296,13 +300,13 @@ export class Readers {
 
   /// Each running reader's JS heap in use, in bytes (for the memory log).
   heaps(): Promise<number[]> {
-    return Promise.all([...this.asked.slots, ...this.told.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
+    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
   }
 
   close() {
     this.closed = true;
     if (this.minutes !== null) void this.minutes.close();
-    for (const line of [this.asked, this.told]) {
+    for (const line of [this.asked, this.told, this.log]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
     }
