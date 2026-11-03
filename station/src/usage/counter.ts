@@ -688,12 +688,15 @@ export class UsageCounter {
     if (only === null) for (const root of codexRoots) await rolloutsIn(root, found);
     else {
       const ids = sessions.filter((s) => s.runtime === "codex").flatMap((s) => store.runtimeSessions(s.key));
+      const running = new Set(sessions.filter((s) => s.runtime === "codex" && s.running).map((s) => s.runtimeSessionId));
       if (ids.length > 0) {
         const readOf = new Map<string, string>();
         for (const [path, file] of known) if (file.session !== null && wanted!.has(file.session)) readOf.set(basename(path), path);
         for (const id of ids) {
           const had = [...readOf].find(([name]) => name.endsWith(`${id}.jsonl`))?.[1];
-          const path = had ?? transcriptPaths("codex", config.dataDir, homes, [id]).paths[0];
+          // A running thread can report its path before it creates the file. Wait for that file instead of searching
+          // every old rollout; earlier or idle threads still search history if their reported file has moved.
+          const path = had ?? transcriptPaths("codex", config.dataDir, homes, [id], [], { anywhere: !running.has(id) }).paths[0];
           if (path !== undefined) found.push(path);
         }
       }
