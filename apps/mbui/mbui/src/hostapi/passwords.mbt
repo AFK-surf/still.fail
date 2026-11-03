@@ -55,6 +55,34 @@ pub fn OpRun::done(self : OpRun) -> OpDone? {
 }
 
 ///|
+/// Why a run did not give what it was asked, as the person can act on it.
+pub(all) enum OpTrouble {
+  /// No `op` here, or not signed in through the desktop app (1Password's CLI integration off).
+  NoTool
+  /// It was allowed, but could not reach 1Password's servers (a request of its cut off, timed out, refused).
+  Unreached
+  /// Anything else, in its own words.
+  Other(String)
+} derive(Eq, Show, Debug)
+
+///|
+/// Why it ended badly; None where it gave what it was asked.
+pub fn OpDone::trouble(self : OpDone) -> OpTrouble? {
+  if self.code == 0 {
+    return None
+  }
+  let why = self.err.trim(chars=" \n").to_owned()
+  if self.code == -1 || why.contains("not found") || why.contains("not currently signed in") || why.contains("integration") {
+    Some(NoTool)
+  } else if why.contains("Get \"https://") || why.contains("Post \"https://") || why.contains("Put \"https://") {
+    // (a request that never had an answer, as Go says it: `Get "<url>": <why>`; an answer that refused has none)
+    Some(Unreached)
+  } else {
+    Some(Other(why))
+  }
+}
+
+///|
 /// Forgets it (its output, and the process if it still runs).
 pub fn OpRun::end(self : OpRun) -> Unit {
   pw_end(self.id)
