@@ -79,6 +79,17 @@ test("cleanup rechecks free space before emptying a workspace", async () => {
   } finally { await r.close(); }
 });
 
+test("cleanup leaves a workspace when room recovers while its contents are checked", async () => {
+  const { r, add, cold, emptied } = rig();
+  try {
+    add("old", DAY);
+    let room = false;
+    cold.holdsMore = async () => { room = true; return true; };
+    await relieveArchived(r.hub, () => room ? DISK_LOW_BYTES : DISK_LOW_BYTES - 1);
+    assert.deepEqual(emptied, [], "room recovered while checking the workspace");
+  } finally { await r.close(); }
+});
+
 test("low-disk cleanup stops reading archives once it has freed enough room", async () => {
   const { r, add, emptied, fetched } = rig();
   try {
