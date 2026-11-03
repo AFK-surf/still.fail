@@ -38,7 +38,7 @@ test("a time range reads each session's nearby detail buckets together", () => {
     const visited: string[] = [];
     db.function("inspect_session", (session) => { visited.push(String(session)); return session; });
     const query = detailQuery(0n, 5_400_000n, 0n, { workspace: "A", home: false })!;
-    const sql = query.sql.replaceAll("d.session = l.session", "d.session = inspect_session(l.session)");
+    const sql = query.sql.replaceAll("d.session = target.session", "d.session = inspect_session(target.session)");
     const rows = db.prepare(sql).all(...query.args) as { session: string; calls: number }[];
     assert.deepEqual(rows.map((r) => [r.session, r.calls]), [["a", 6], ["b", 6]]);
     assert.deepEqual(visited, [...visited].sort(), "the lookup does not alternate sessions at every time bucket");

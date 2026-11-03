@@ -465,8 +465,8 @@ export function detailQuery(from: bigint, to: bigint, offset: bigint, viewer: In
   // repeatedly jumps between sessions' pages; group them first so a range uses each session's nearby pages together.
   const sizes = SIZES.map((size, level) => `WHEN ${level} THEN ${size}`).join(" ");
   const sql = `WITH targets AS MATERIALIZED (${targets.join(" UNION ALL ")} ORDER BY 1, 2, 3),
-    parts AS (SELECT d.bucket * (CASE d.level ${sizes} END) AS at, d.* FROM targets l
-      CROSS JOIN usage_detail d ON d.session = l.session AND d.level = l.level AND d.bucket = l.bucket)
+    parts AS (SELECT d.bucket * (CASE d.level ${sizes} END) AS at, d.* FROM targets target
+      CROSS JOIN usage_detail d ON d.session = target.session AND d.level = target.level AND d.bucket = target.bucket)
     SELECT strftime('%Y-%m-%d', (at + ?1 * 60000) / 1000.0, 'unixepoch') AS day,
       session, NULLIF(thread, 0) AS thread, NULLIF(person, '') AS person, NULLIF(profile, '') AS profile,
       runtime, NULLIF(model, '') AS model, fast, SUM(calls) AS calls, SUM(input) AS input,

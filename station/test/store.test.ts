@@ -1042,7 +1042,9 @@ test("what the station asks again and again is planned by an index, never a scan
   const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
-    assert.ok(!plan.some((d) => scans.test(d)), `${sql}\n  ${plan.join(" | ")}`);
+    // The detail query materializes only keys sought inside the requested range, then scans those keys in session
+    // order. It must still seek the underlying lookup below (asserted separately), not scan the historical table.
+    assert.ok(!plan.some((d) => scans.test(d) && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
   }
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
