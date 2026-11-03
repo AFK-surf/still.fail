@@ -15,7 +15,7 @@ import { checkContext } from "./context-cap.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
 import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
-import { AUTO, type Attachment, MANUAL, type Quote, type SessionBusy, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
+import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, type SessionBusy, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
@@ -271,6 +271,20 @@ export function archiveChat(hub: Hub, thread: number, archived: boolean): void |
   hub.store.setThreadHidden(thread, archived, MANUAL);
 }
 
+/// A snapshot-bounded walk of archived workspaces; no main-thread query returns more than a page.
+async function* archivedWorkspaces(hub: Hub, through: number | ArchivedWorkspace, needed: () => boolean = () => true): AsyncGenerator<ArchivedWorkspace> {
+  let after: ArchivedWorkspace | null = null;
+  for (;;) {
+    if (!needed()) return;
+    const page = hub.store.archivedSessions(after, through);
+    for (const s of page) yield s;
+    if (page.length < ARCHIVED_WORKSPACE_BATCH) return;
+    after = page[page.length - 1]!;
+    // Even if every file check completes immediately, other station work gets a turn before the next database page.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
 /// Empties the workspaces of sessions archived past archivedWorkspaceMs, one after another: each keeps the files sent in
 /// its chat, its history and its transcripts (cold.ts `expire`). Returns when the next one archived comes due (null:
 /// none, or off).
@@ -278,20 +292,15 @@ export async function expireArchived(hub: Hub, now: number): Promise<number | nu
   const after = hub.config().archivedWorkspaceMs;
   const { cold } = hub;
   if (after <= 0 || !cold.expire || !cold.holdsMore) return null;
-  let next: number | null = null;
-  for (const s of hub.store.archivedSessions()) {
-    const due = s.archivedAt + after;
-    if (due > now) {
-      if (next === null || due < next) next = due;
-      continue;
-    }
+  for await (const s of archivedWorkspaces(hub, now - after)) {
     try {
       if (await cold.holdsMore(s.key)) await cold.expire(s.key, now - after);
     } catch (error) {
       log.warn("hub", "the workspace of a long-archived session was not emptied", { session: s.key, error: (error as Error).message });
     }
   }
-  return next;
+  const next = hub.store.nextArchivedAt(now - after);
+  return next === null ? null : next + after;
 }
 
 /// The disk of the station's data is low (ops/disk.ts): archived workspaces are emptied before archivedWorkspaceMs, the
@@ -300,11 +309,16 @@ export async function expireArchived(hub: Hub, now: number): Promise<number | nu
 export async function relieveArchived(hub: Hub, free: () => number): Promise<void> {
   const { cold } = hub;
   if (hub.config().archivedWorkspaceMs <= 0 || !cold.expire || !cold.holdsMore) return;
-  for (const s of hub.store.archivedSessions()) {
+  if (free() >= DISK_LOW_BYTES) return;
+  const through = hub.store.lastArchivedSession();
+  if (through === null) return;
+  for await (const s of archivedWorkspaces(hub, through, () => free() < DISK_LOW_BYTES)) {
     if (free() >= DISK_LOW_BYTES) return;
     try {
       // Shown and archived again since, it is not the one looked at: `expire` leaves it.
-      if (await cold.holdsMore(s.key)) await cold.expire(s.key, s.archivedAt);
+      if (!(await cold.holdsMore(s.key))) continue;
+      if (free() >= DISK_LOW_BYTES) return;
+      await cold.expire(s.key, s.archivedAt);
     } catch (error) {
       log.warn("hub", "the workspace of an archived session was not emptied", { session: s.key, error: (error as Error).message });
     }

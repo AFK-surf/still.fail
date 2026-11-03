@@ -133,6 +133,9 @@ const JOB_NOTICES = 50;
 const REMOTE_RUNS_MS = 90 * 24 * 3600 * 1000;
 /// A chat shared with another workspace being used there is noted at most this often (chat_shares `used`).
 const USED_NOTE_MS = 60_000;
+/// The most archived workspaces the cleanup reads in one main-thread query.
+export const ARCHIVED_WORKSPACE_BATCH = 64;
+export type ArchivedWorkspace = { key: string; archivedAt: number };
 
 type Changes = StoreChange[];
 type Arg = SQLInputValue;
@@ -375,14 +378,30 @@ export class Store {
     return r ? toSession(r) : null;
   }
 
-  /// Every session, most recently active first.
-  /// The archived sessions, the longest archived first, by the index of those archived alone (schema.ts
-  /// sessions_put_away): what the emptying of their workspaces goes over (sessions/lifecycle.ts). Every session read
-  /// whole for it held the station 8 to 13 s on ccvm short of memory (2026-11-03), each time the disk was low.
-  archivedSessions(): { key: string; archivedAt: number }[] {
-    return this.#all("SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL ORDER BY archived_at, key").map((r) => ({ key: r.key, archivedAt: r.archived_at }));
+  /// A page of archived workspaces, longest archived first. `through` is a time inclusive, or the last row included in
+  /// a snapshot; `after` resumes past the previous page, even when several workspaces were archived at the same time.
+  archivedSessions(after: ArchivedWorkspace | null = null, through: number | ArchivedWorkspace | null = null): ArchivedWorkspace[] {
+    let sql = "SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL";
+    const args: Arg[] = [];
+    if (typeof through === "number") { sql += " AND archived_at <= ?"; args.push(through); }
+    else if (through !== null) { sql += " AND (archived_at, key) <= (?, ?)"; args.push(through.archivedAt, through.key); }
+    if (after !== null) { sql += " AND (archived_at, key) > (?, ?)"; args.push(after.archivedAt, after.key); }
+    return this.#all(`${sql} ORDER BY archived_at, key LIMIT ${ARCHIVED_WORKSPACE_BATCH}`, ...args)
+      .map((r) => ({ key: r.key, archivedAt: r.archived_at }));
   }
 
+  /// The latest archived workspace when a low-disk cleanup began, so newly archived work does not extend that sweep.
+  lastArchivedSession(): ArchivedWorkspace | null {
+    const r = this.#one("SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL ORDER BY archived_at DESC, key DESC LIMIT 1");
+    return r ? { key: r.key, archivedAt: r.archived_at } : null;
+  }
+
+  /// The first archive after a time, when a timed cleanup should next wake.
+  nextArchivedAt(after: number): number | null {
+    return this.#one("SELECT archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at > ? ORDER BY archived_at, key LIMIT 1", after)?.archived_at ?? null;
+  }
+
+  /// Every session, most recently active first.
   listSessions(): SessionRow[] {
     return this.#all("SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
   }
