@@ -150,6 +150,21 @@ test("archive cleanup keeps running jobs and shared projects", async () => {
   await r.close();
 });
 
+test("the auto-archive reads the state of sessions idle long enough alone", async () => {
+  // Read for every session shown and every member of their chats at each look, the station's thread was held 17 s on
+  // ccvm short of memory (2026-11-03).
+  const [r] = coldRig();
+  const { key } = await idleSession(r);
+  const read: string[] = [];
+  const statsOf = r.store.statsOf.bind(r.store);
+  r.store.statsOf = (keys: Iterable<string>) => (read.push(...keys), statsOf(keys));
+  autoArchive(r.hub, Date.now());
+  assert.deepEqual(read, [], "none idle long enough: no state read");
+  autoArchive(r.hub, Date.now() + 3 * 86_400_000);
+  assert.deepEqual([...new Set(read)], [key], "the one idle long enough, once");
+  await r.close();
+});
+
 test("the auto-archive timer does not sweep previously archived workspaces", async () => {
   const [r] = coldRig();
   const { key } = await idleSession(r);
