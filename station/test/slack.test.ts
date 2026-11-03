@@ -454,7 +454,6 @@ describe("slack", { concurrency: true }, () => {
     }
   });
 
-<<<<<<< HEAD
   test("a login card posts a field for its page's code; its button hands the code over, never said in the thread", async () => {
     const fake = await FakeSlack.start();
     bot(fake);
@@ -501,7 +500,19 @@ describe("slack", { concurrency: true }, () => {
       assert.deepEqual(JSON.parse(update.blocks!).map((b: any) => b.type), ["markdown", "context"], "no field any more");
       assert.doesNotMatch(update.blocks!, /4\/0Ab-code/);
       assert.equal(fake.calls("chat.postMessage").length, 1, "the code is never posted");
-=======
+      // The login ending after its code was entered leaves the card saying so; one never entered loses its field.
+      await surface.cardEnded({ channel: "C1", threadTs: "1.1" }, asked, "登录 gcloud：https://x/login/l1", { type: "login", login: "l1" }, { why: "withdrawn" });
+      assert.equal(fake.calls("chat.update").length, 1);
+      const again = await surface.post({ channel: "C1", threadTs: "1.1" }, "再登录：https://x/login/l2", [], { type: "login", login: "l2" });
+      await surface.cardEnded({ channel: "C1", threadTs: "1.1" }, again, "再登录：https://x/login/l2", { type: "login", login: "l2" }, { why: "withdrawn" });
+      const ended = fake.calls("chat.update")[1]!.params;
+      assert.deepEqual([ended.ts, JSON.parse(ended.blocks!).map((b: any) => b.type)], [again, ["markdown", "context"]]);
+    } finally {
+      await surface.stop();
+      await fake.close();
+    }
+  });
+
   test("a question that stops waiting otherwise says why, its buttons gone; one pressed or closed already is left as it is", async () => {
     const fake = await FakeSlack.start();
     bot(fake);
@@ -542,7 +553,6 @@ describe("slack", { concurrency: true }, () => {
       assert.equal(changed.ts, `${Number(first.split(".")[0]) + parts - 1}.000100`);
       assert.equal(changed.text, posts.at(-1)!.params.text);
       assert.match(changed.blocks!, /有了新的问题，这张卡已关闭/);
->>>>>>> 9b6b731f60 (Slack and Feishu: a card that stops waiting says why, its buttons gone)
     } finally {
       await surface.stop();
       await fake.close();
