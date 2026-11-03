@@ -75,6 +75,8 @@ priv struct SettingsFixture {
   mut key_ask_ended : String
   /// MBA online too (settings-profiles-pick: Profile's ＋ asks which station)
   mut mba_online : Bool
+  // (settings-station-away: Studio away, what it last said of itself kept)
+  mut studio_away : Bool
   /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
   mut monthly : Bool
   /// The same subscription independently signed in and borrowed on several stations.
@@ -131,6 +133,7 @@ let fx : SettingsFixture = {
   key_ask: false,
   key_ask_ended: "",
   mba_online: false,
+  studio_away: false,
   monthly: false,
   profile_hosts: false,
   profile_one_owner: false,
@@ -232,6 +235,7 @@ fn fixture_reset() -> Unit {
   fx.key_ask = false
   fx.key_ask_ended = ""
   fx.mba_online = false
+  fx.studio_away = false
   fx.monthly = false
   fx.profile_hosts = false
   fx.profile_one_owner = false
@@ -412,6 +416,11 @@ pub fn fixture_page(mode : String) -> String {
     }
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
+    // its 设置 while it is away: only what can be changed then
+    "settings-station-away" => {
+      fx.studio_away = true
+      station_parts["ws1/st1"] = "settings"
+    }
     // its 设置 with 高级网络设置 opened: its congestion control, a section of the page after it
     "settings-station-network" => {
       station_parts["ws1/st1"] = "settings"
@@ -514,7 +523,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" | "settings-station-away" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -1143,10 +1152,19 @@ fn fx_station(address : String) -> Json {
       ("summary", str(if fx.gpus { "AMD EPYC · 2 个 agent 在工作" } else { "Apple M2 Max · 2 个 agent 在工作" })),
       ("face", str("working")),
       ("line", str(if fx.gpus { "AMD EPYC · 64 GB · Linux" } else { "Apple M2 Max · 64 GB · macOS 26" })),
-      ("online", Json::boolean(true)),
+      ("online", Json::boolean(!fx.studio_away)),
       ("profileGroups", Json::array(fx_station_profile_groups(profiles))),
       ("profileStates", fx_station_profile_states(profiles)),
-      ("link", obj([("state", str("online"))])),
+      ("link", obj([("state", str(if fx.studio_away { "offline" } else { "online" }))])),
+      ("stateText", str(if fx.studio_away { "2 天前在线" } else { "" })),
+      (
+        "problems",
+        if fx.studio_away {
+          [obj([("key", str("away")), ("level", str("red")), ("text", str("离线：在该机器上打开 still.fail 即可重新连接"))])]
+        } else {
+          []
+        },
+      ),
       ("runtimes", []),
       // what its profiles have turned on (Claude 主账号's: Opus 5.5 and Sonnet 5, on claude)
       (

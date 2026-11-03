@@ -673,14 +673,26 @@ let st_profile_row_est : Double = 84.0
 
 ///|
 /// What it is let do and set to (Settings): the grants macOS gives it, the tools logged in on it, the programs of its
-/// machine granted its data, its agents' variables, what its search finds, the workspaces it is in.
+/// machine granted its data, its agents' variables, what its search finds, the workspaces it is in. Away, none of what
+/// only it can change (用户定 2026-11-04: what cannot be changed while it is offline is not shown then), a line saying
+/// so in their place (a login under way too: it goes on there only); what it has logged in and the workspaces it
+/// is in stay, nothing there to change.
 fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Array[() -> Unit] {
   let address = text(s, "station")
   let o = field(s, "overview")
-  let online = flag(s, "online")
   let out : Array[() -> Unit] = []
+  if !flag(s, "online") {
+    out.push(fn() {
+      @sf.group(c, fn() { @sf.said_row(c, @sf.t("web-pages.stations.settingsOffline"), "") })
+    })
+    out.push(fn() { station_logins(c, core, address, online=false) })
+    if manager {
+      out.push(fn() { station_workspaces(c, core, address) })
+    }
+    return out
+  }
   match field(o, "permissions") {
-    Some(Object(_)) as p if online => out.push(fn() { station_permissions(c, core, address, p) })
+    Some(Object(_)) as p => out.push(fn() { station_permissions(c, core, address, p) })
     _ => ()
   }
   out.push(fn() { station_logins(c, core, address) })
@@ -699,7 +711,7 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     _ => ()
   }
   match field(o, "search") {
-    Some(Object(_)) as search if online && text(search, "files") == "spotlight" =>
+    Some(Object(_)) as search if text(search, "files") == "spotlight" =>
       out.push(fn() { station_search(c, core, address, search, manager) })
     _ => ()
   }
@@ -712,7 +724,7 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     _ => ()
   }
   match field(o, "elevation") {
-    Some(Object(_)) as elevation if online => out.push(fn() { station_elevation(c, core, address, elevation) })
+    Some(Object(_)) as elevation => out.push(fn() { station_elevation(c, core, address, elevation) })
     _ => ()
   }
   if manager {

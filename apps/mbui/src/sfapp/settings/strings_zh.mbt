@@ -1574,6 +1574,7 @@ let zh : Map[String, String] = {
   "web-pages.stations.search.personalLine": "workspace 成员也可搜索邮件、信息、日历、通讯录、备忘录和照片",
   "web-pages.stations.search.section": "搜索",
   "web-pages.stations.search.what": "更改搜索设置",
+  "web-pages.stations.settingsOffline": "station 离线，连接后可查看和修改设置",
   "web-pages.stations.software": "软件与更新",
   "web-pages.stations.softwareOffline": "station 离线，连接后可查看更新",
   "web-pages.vault.accounts": "订阅和 API Key",
