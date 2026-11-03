@@ -5,6 +5,7 @@ import { outflowChatScopes } from "../store/outflow-index.ts";
 import type { InWorkspace } from "../store/rows.ts";
 
 type Waiter = { resolve: () => void; reject: (error: Error) => void; done: () => void };
+const IDLE_MS = 5_000;
 
 /// Work only while a program is waiting. Concurrent requests share each scope's bounded work.
 export class OutflowChatIndex {
@@ -15,6 +16,7 @@ export class OutflowChatIndex {
   #previousReady = false;
   #previousWaiting = false;
   #retry: ReturnType<typeof setTimeout> | null = null;
+  #idle: ReturnType<typeof setTimeout> | null = null;
   #retryMs = 250;
   readonly #path: string;
   readonly #options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer };
@@ -56,9 +58,20 @@ export class OutflowChatIndex {
   #pump(): void {
     if (this.#closed || this.#current !== null || this.#retry !== null) return;
     if (this.#waiting.size === 0) {
-      if (this.#worker !== null) { const worker = this.#worker; this.#worker = null; void worker.terminate(); }
+      if (this.#worker !== null && this.#idle === null) {
+        const worker = this.#worker;
+        this.#idle = setTimeout(() => {
+          this.#idle = null;
+          if (this.#worker === worker && this.#current === null && this.#waiting.size === 0) {
+            this.#worker = null;
+            void worker.terminate();
+          }
+        }, IDLE_MS);
+        this.#idle.unref();
+      }
       return;
     }
+    if (this.#idle !== null) { clearTimeout(this.#idle); this.#idle = null; }
     if (!this.#previousReady) {
       if (this.#previousWaiting) return;
       this.#previousWaiting = true;
@@ -98,6 +111,7 @@ export class OutflowChatIndex {
         if (this.#worker !== worker) return;
         this.#worker = null;
         this.#current = null;
+        if (this.#idle !== null) { clearTimeout(this.#idle); this.#idle = null; }
         if (this.#closed || this.#waiting.size === 0) return;
         const ms = this.#retryMs;
         this.#retryMs = Math.min(ms * 2, 30_000);
@@ -114,6 +128,8 @@ export class OutflowChatIndex {
     this.#closed = true;
     if (this.#retry !== null) clearTimeout(this.#retry);
     this.#retry = null;
+    if (this.#idle !== null) clearTimeout(this.#idle);
+    this.#idle = null;
     this.#fail(new Error("station stopping"));
     const worker = this.#worker;
     this.#worker = null;

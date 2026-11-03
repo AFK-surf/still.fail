@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -70,6 +70,20 @@ test("a stopped chat order worker resumes its pending request", async () => {
     await builder.ready({ workspace: "A", home: false });
     assert.equal(existsSync(marker), true);
     assert.deepEqual(Object.values(f.store.db.prepare("SELECT scope,thread,at FROM outflow_chat_order").get()!), ["WA", f.thread.id, 20]);
+  } finally { await builder.close(); f.close(); }
+});
+
+test("nearby chat exports reuse their index worker", async () => {
+  const f = fixture();
+  const file = join(f.dir, "worker.mjs"), starts = join(f.dir, "starts");
+  const real = new URL("../src/outflow/chat-index-worker.ts", import.meta.url).href;
+  writeFileSync(file, `import { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(starts)}, 'x');\nawait import(${JSON.stringify(real)});\n`);
+  const builder = new OutflowChatIndex(f.path, {}, pathToFileURL(file));
+  try {
+    await builder.ready({ workspace: "A", home: false });
+    f.say(2, 70);
+    await builder.ready({ workspace: "A", home: false });
+    assert.equal(readFileSync(starts, "utf8"), "x");
   } finally { await builder.close(); f.close(); }
 });
 
