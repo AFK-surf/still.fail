@@ -86,6 +86,16 @@ export class Accounts {
     return typeof health.account === "string" && health.account !== "" ? `account:${health.account}` : `profile:${id}`;
   }
 
+  /// Profiles can be different logins to the same account, whose allowance they share.
+  sameAccount(a: string, b: string): boolean {
+    return this.accountKey(a) === this.accountKey(b);
+  }
+
+  /// An explicit reset supersedes the failure which made this account unavailable to the pool.
+  resetAllowance(id: string): void {
+    this.spent.delete(this.accountKey(id));
+  }
+
   healthOf(id: string): ProfileHealth {
     const health: ProfileHealth = { ...this.health(id) };
     const key = this.accountKey(id, health);
@@ -240,7 +250,7 @@ export class Accounts {
     if (!row) return now + SPENT_FOR_MS;
     const full = windowsOf(this.healthOf(row.profile).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
     if (full.length > 0) return Math.max(...full.map((w) => w.resetsAt as number));
-    return (this.spent.get(this.accountKey(row.profile)) ?? now) + SPENT_FOR_MS;
+    return (this.spent.get(this.accountKey(row.profile)) ?? this.deps.store.lastTurn(key)?.endedAt ?? now) + SPENT_FOR_MS;
   }
 
   /// The reasoning levels every eligible account offers for a model (a pinned account may offer more): automatic

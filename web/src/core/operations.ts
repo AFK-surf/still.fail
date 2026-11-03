@@ -22,6 +22,7 @@ export interface OperationParams {
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
   "chat.keep": { kept?: boolean | null | undefined; thread: number };
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
+  "chat.regenerateTitle": { thread: number };
   "chat.pin": { pinned?: boolean | null | undefined; session: string };
   "chat.relayPlaces": { thread: number };
   "chat.relay": { thread: number; connect?: string | null | undefined; channel?: string | null | undefined; link?: string | null | undefined; note?: string | null | undefined };
@@ -194,6 +195,7 @@ export function bindStationOperations(call: Call) {
     chatArchive: <T = unknown>(params: OperationParams["chat.archive"]) => call("chat.archive", params) as Promise<T>,
     chatKeep: <T = unknown>(params: OperationParams["chat.keep"]) => call("chat.keep", params) as Promise<T>,
     chatRename: <T = unknown>(params: OperationParams["chat.rename"] = {}) => call("chat.rename", params) as Promise<T>,
+    chatRegenerateTitle: <T = unknown>(params: OperationParams["chat.regenerateTitle"]) => call("chat.regenerateTitle", params) as Promise<T>,
     chatPin: <T = unknown>(params: OperationParams["chat.pin"]) => call("chat.pin", params) as Promise<T>,
     chatRelayPlaces: <T = unknown>(params: OperationParams["chat.relayPlaces"]) => call("chat.relayPlaces", params) as Promise<T>,
     chatRelay: <T = unknown>(params: OperationParams["chat.relay"]) => call("chat.relay", params) as Promise<T>,

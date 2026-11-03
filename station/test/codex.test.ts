@@ -80,6 +80,56 @@ const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().spl
 
 // Each test has its own driver, profile and runners: they run side by side.
 describe("the Codex driver", { concurrency: true }, () => {
+  test("a text-only request has no shell, MCP server or writable environment", async () => {
+    const d = driver();
+    const p = profile();
+    const session = await d.open(options(p, { textOnly: true }), listen().push);
+    const start = stdin(p.dump).find((m) => m.method === "thread/start");
+    assert.equal(start.params.sandbox, "read-only");
+    assert.equal(start.params.ephemeral, true);
+    assert.deepEqual(start.params.environments, []);
+    assert.equal(start.params.config["features.shell_tool"], false);
+    assert.equal(start.params.config["features.unified_exec"], false);
+    assert.equal(start.params.config["features.view_image"], false);
+    assert.equal(start.params.config["features.goals"], false);
+    assert.deepEqual(start.params.config.mcp_servers, {});
+    assert.ok(stdin(p.dump).some((m) => m.method === "mcpServerStatus/list"));
+    assert.ok(!stdin(p.dump).some((m) => m.method === "config/read"), "MCP credentials are not read into the runner log");
+    await session.dispose();
+  });
+
+  test("a text-only request refuses a server that still exposes MCP tools", async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_MCP_UNAVOIDABLE: "1" };
+    await assert.rejects(d.open(options(p, { textOnly: true }), listen().push), /cannot open a text-only Codex session/);
+    assert.ok(!stdin(p.dump).some((m) => m.method === "turn/start"));
+  });
+
+  test("a text-only request disables configured MCP servers for its own thread", async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_MCP_CONFIGURED: "1" };
+    const session = await d.open(options(p, { textOnly: true }), listen().push);
+    const start = stdin(p.dump).find((m) => m.method === "thread/start");
+    assert.deepEqual(start.params.config.mcp_servers, { configured: { enabled: false } });
+    await session.dispose();
+  });
+
+  test("a text-only request disables servers added by the working directory before sending any text", async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_MCP_PROJECT: "1" };
+    const session = await d.open(options(p, { textOnly: true }), listen().push);
+    const requests = stdin(p.dump);
+    const starts = requests.filter((m) => m.method === "thread/start");
+    assert.equal(starts.length, 2);
+    assert.deepEqual(starts[1].params.config.mcp_servers, { configured: { enabled: false } });
+    assert.ok(requests.some((m) => m.method === "thread/unsubscribe"));
+    assert.ok(!requests.some((m) => m.method === "turn/start" || m.method === "config/read"));
+    await session.dispose();
+  });
+
   test("a new sign-in replaces the app-server after its running turn, and new requests wait for it", async () => {
     const d = driver();
     const p = profile();

@@ -640,3 +640,19 @@ test "a login card in a chat on a phone: as tall as what it holds, the next mess
   let (_, ny, _, _) = t.rect_of("5 分钟前").unwrap()
   assert_true(ny - (by + bh) < 60.0, msg="room between the card's key and the next message: \{ny - (by + bh)}")
 }
+
+///|
+test "a notice opened keeps the size of its words" {
+  // (the user, 2026-11-03: a failing notice tapped, its words grew to a message's size)
+  let t = chat_tester("chat")
+  let words = "Studio 上 codex 的登录已失效"
+  let before = t.run_rects("Studio")
+  assert_true(before.length() > 0)
+  let (x, y) = t.find(words).unwrap()
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  let after = t.run_rects("Studio")
+  assert_true(after.length() > 0)
+  assert_true((after[0].2 - before[0].2).abs() < 0.5)
+  assert_true((after[0].3 - before[0].3).abs() < 0.5)
+}

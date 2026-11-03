@@ -11,6 +11,7 @@ import * as keymap from "./keymap.ts";
 import { SCREEN_FPS, type ScreenFps } from "./station/wire.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
+import { setOwnBuild } from "./station/oldest.ts";
 
 const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "windowZoom", "motion", "haptics", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
@@ -281,6 +282,7 @@ export function device(data: Data, facts: unknown): void {
   const app = said("app");
   if (!["web", "desktop", "android", "ios"].includes(app)) throw CoreError.invalid(t("core-misc.params.app"));
   const build = said("build");
+  setOwnBuild(build);
   const agent = said("userAgent");
   const model = said("model");
   const machine = said("machine").slice(0, 60);

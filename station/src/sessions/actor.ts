@@ -88,7 +88,7 @@ export type SessionStore = {
   lastTurn(key: string): any | null;
   slackStop(session: string, connect: string, channel: string, threadTs: string): { ts: string; turn: string | null } | null;
   rememberSlackStop(session: string, connect: string, channel: string, threadTs: string, ts: string, turn: string | null): void;
-  stopWait(key: string): void;
+  stopWait(key: string, refill?: boolean): void;
   forgetWait(key: string): void;
   listJobs(session: string | null): any[];
   latestThread(key: string): any | null;
@@ -535,6 +535,20 @@ export class SessionActor {
     });
   }
 
+  /// An allowance this session was waiting for was reset by hand.
+  allowanceReset(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.refill === null || this.archived() || this.turn || this.agent?.session.busy()) return;
+      if (this.deps.held(this.key)) {
+        this.refillAt = this.now();
+        return;
+      }
+      this.refill = null;
+      if (this.deps.store.hasPending(this.key)) return this.pump();
+      await this.startTurn("resume", GO_ON_AFTER_REFILL);
+    });
+  }
+
   /// After a station stopped with this session's turn running and no runner kept it: the turn was cut off; resume it.
   recover(): Promise<void> {
     return this.enqueue(async () => {
@@ -564,10 +578,21 @@ export class SessionActor {
     });
   }
 
+  /// After an unclean restart, take up the allowance wait recorded by the failed turn.
+  takeRefill(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.refill !== null || this.turn || this.agent?.session.busy() || this.archived()) return;
+      const last = this.deps.store.lastTurn(this.key);
+      if (last?.outcome !== "failed" || !last.detail?.startsWith("rate_limit:") || last.endedAt === null) return;
+      this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
+    });
+  }
+
   /// Turns were held and are no longer: what waited meanwhile goes on.
   release(): Promise<void> {
     return this.enqueue(async () => {
       if (this.waiting !== null && this.waitingUntil <= this.now()) this.waitMs(this.waitingSeconds, 0);
+      if (this.refill !== null && this.refillAt <= this.now()) this.awaitRefill(this.now());
       await this.pump();
       if (this.notices.length > 0) await this.giveNotices();
     });
@@ -1472,8 +1497,10 @@ export class SessionActor {
   /// Stopped while it waits: the wait ends, and so does the work that would bring it back (session.rs `stop_waiting`).
   private async stopWaiting(say = true) {
     const store = this.deps.store;
-    const waited = this.waiting !== null;
+    const refill = this.refill !== null;
+    const waited = this.waiting !== null || refill;
     this.waiting = null;
+    this.refill = null;
     if (this.phase === "waiting") this.phase = "idle";
     // Its wait may be on record only (an earlier station had it).
     const last = store.lastTurn(this.key);
@@ -1487,7 +1514,7 @@ export class SessionActor {
     const agent = this.agent;
     this.agent = null;
     await agent?.session.dispose();
-    store.stopWait(this.key);
+    store.stopWait(this.key, refill);
     if (say) await this.notice(t("station.notice.stopped"));
   }
 
@@ -1584,9 +1611,10 @@ export class SessionActor {
           Effect.promise(() =>
             this.enqueue(async () => {
               if (this.refill !== refill) return;
+              // Held: keep the wait so release can run it.
+              if (this.deps.held(this.key)) return;
               this.refill = null;
-              // Held, it goes on when released (its notices); a running turn ends as it will.
-              if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
+              if (this.archived() || this.turn || this.agent?.session.busy()) return;
               log.info("session", "its allowance should have refilled; going on", { session: this.key });
               if (this.deps.store.hasPending(this.key)) return this.pump();
               await this.startTurn("resume", GO_ON_AFTER_REFILL);

@@ -91,6 +91,25 @@ test("a new chat: its session and its thread, refused without a runtime or with 
   }
 });
 
+test("a chat's regenerate title action names it after its text-only request finishes", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "codex", title: "manual" });
+    const id = made.thread.id;
+    r.store.insertMessage(newMessage(id, "1.1", "person", viewer.email, "fix login"));
+    const answer = r.ask("POST", `/threads/${id}/regenerate-title`);
+    await until("the title helper has started", () => r.codex.sessions.some((s) => s.options.textOnly === true && s.prompts.length > 0));
+    const helper = r.codex.sessions.find((s) => s.options.textOnly === true)!;
+    helper.says("Login fix");
+    helper.complete();
+    const [status, named] = await answer;
+    assert.equal(status, 200);
+    assert.equal(named.autoTitle, "Login fix");
+    assert.equal(named.title, null);
+    assert.equal(r.store.getSession(made.key)?.running, false);
+  } finally { await r.close(); }
+});
+
 test("retrying a new chat after the station restarts returns the same chat", async () => {
   const r = rig();
   try {

@@ -835,6 +835,10 @@ web-main.chat.pinFailed
 web-main.chat.quote
 web-main.chat.shareTurn
 web-main.chat.rename
+web-main.chat.regenerateTitle
+web-main.chat.regenerateTitle.done
+web-main.chat.regenerateTitle.start
+web-main.chat.regenerateTitle.verb
 web-main.chat.resendFailed
 web-main.chat.sending
 web-main.chat.toLatest
@@ -2444,6 +2448,7 @@ web-pages.settings.thisMac.failed
 web-pages.settings.thisMac.noAnswer
 web-pages.settings.thisPc.failed
 web-pages.settings.title
+web-pages.settings.search
 web-pages.settings.usage.failed
 web-pages.settings.usage.title
 web-pages.settings.workspace.name

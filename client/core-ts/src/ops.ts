@@ -87,6 +87,7 @@ export const PARAMS: Record<string, string> = {
   "chat.archive": "archived?:boolean session:string thread?:number",
   "chat.keep": "kept?:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
+  "chat.regenerateTitle": "thread:number",
   "chat.pin": "pinned?:boolean session:string",
   "chat.relayPlaces": "thread:number",
   "chat.relay": "thread:number connect?:string channel?:string link?:string note?:string",
@@ -389,6 +390,10 @@ function stationOp(name: string, params: unknown): Request | null {
       const thread = optU64("thread");
       if (thread !== null) return op("PUT", () => `/threads/${thread}/title`, p.pick(["title"]), { kind: "thread", archived: false });
       return op("POST", () => `/sessions/${p.at("session")}/title`, p.pick(["title"]), session("session"));
+    }
+    case "chat.regenerateTitle": {
+      const thread = p.u64("thread");
+      return op("POST", () => `/threads/${thread}/regenerate-title`, null, { kind: "thread", archived: false });
     }
     case "chat.pin":
       return op(p.bool("pinned") ? "PUT" : "DELETE", () => `/sessions/${p.at("session")}/pin`, null, session("session"));

@@ -151,6 +151,11 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
        OR name IN ('usage_minute_add', 'usage_minute_drop', 'usage_minute_grow', 'usage_quarters_add', 'usage_quarters_drop',
                    'usage_quarters_grow', 'usage_compactions_add', 'usage_span_add', 'usage_span_drop', 'usage_span_move'))`).all() as { name: string }[];
     for (const { name } of triggers) db.exec(`DROP TRIGGER "${name.replaceAll('"', '""')}"`);
+    // Retire the old writers in the same transaction that starts the compact ones. Otherwise a call made between
+    // those two operations can be missing from both the saved daily totals and the new statistics.
+    if (!has("usage_retired_detail")) {
+      db.exec("CREATE TABLE usage_retired_detail (id INTEGER PRIMARY KEY CHECK (id = 1)); INSERT INTO usage_retired_detail VALUES (1)");
+    }
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }

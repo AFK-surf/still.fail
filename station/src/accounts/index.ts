@@ -19,7 +19,7 @@
 import { HERMES_MODEL_LIMIT } from "../agents/hermes.ts";
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
 import { access as accessFile, readFile, stat } from "node:fs/promises";
 import { hostname } from "node:os";
@@ -103,6 +103,8 @@ export type AccountsDeps = {
     accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth; setRecheck?(recheck: (id: string) => Promise<unknown>): void };
     /// A profile was deleted: its sessions are taken on by another, or stopped.
     profileGone?(id: string): Promise<void>;
+    /// A manual reset lets sessions waiting on this account continue.
+    allowanceReset?(id: string): void | Promise<void>;
   };
   /// The codex driver, once there.
   codex?: () => CodexAccess | undefined;
@@ -133,6 +135,8 @@ export type AccountsDeps = {
     status(profile: Profile): Promise<{ check: Json; quota: Json }>;
     view(profile: Json): Json | null;
     lendCodex?(profile: Profile, rejected: boolean): Promise<number>;
+    quotaReset?(profile: Profile, key: string): Promise<void>;
+    loginUpdated?(): void;
     /// Whether the station the profile is another's of did not answer lately.
     hostName?(profile: Json): string | null;
   };
@@ -153,6 +157,16 @@ const text = (v: unknown) => (v === undefined || v === null ? "" : typeof v === 
 const named = (runtime: Runtime) => runtimeLabel(runtime);
 /// A copy of a profile another station shares (share/index.ts): edited, checked and signed in only there.
 export const borrowed = (p: Json): boolean => isObject(p?.share) && p.share.borrowed === true;
+
+/// Which login a borrowed Codex process will read, without keeping its tokens in memory or logs.
+function lentLoginVersion(home: string): string | null {
+  try {
+    const tokens = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"))?.tokens;
+    return createHash("sha256").update(JSON.stringify([tokens?.id_token, tokens?.access_token, tokens?.account_id])).digest("hex");
+  } catch {
+    return null;
+  }
+}
 
 /// What a profile's home says, as the overview shows it: whether it is there, and whose account its files say (a
 /// subscription's, or a console sign-in's).
@@ -191,6 +205,8 @@ export class Accounts {
   private quotaBusy = new Map<string, Promise<void>>();
   /// A quota read started before a Codex sign-in must not replace the new login's status.
   private loginGeneration = new Map<string, number>();
+  /// The last changed borrowed login whose app-servers were told to reload it.
+  private borrowedLogin = new Map<string, string | null>();
   /// OpenCode Console and Kimi tokens being renewed, by profile (a refresh token is spent once).
   private renewing = new Map<string, Promise<void>>();
   private pending = new Map<string, Pending>();
@@ -856,6 +872,7 @@ export class Accounts {
     if (profile?.runtime === "codex" && accessKind(profile) === "subscription") {
       this.loginGeneration.set(id, (this.loginGeneration.get(id) ?? 0) + 1);
       this.codexLogin(id, false);
+      this.deps.shared?.loginUpdated?.();
     }
     this.background.spawn(async () => {
       const profile = this.profile(id);
@@ -1136,6 +1153,35 @@ export class Accounts {
     }
   }
 
+  /// A shared profile changed on its host. Get the new login even when the old access token has not expired yet, and
+  /// retire app-servers that cached it after their current turns. A reset also wakes sessions once its allowance is read.
+  async sharedChanged(id: string, reset: boolean): Promise<void> {
+    const profile = this.profile(id);
+    if (!profile || !borrowed(profile) || accessKind(profile) !== "subscription" || !this.deps.shared) return;
+    // A host that signed out may have no login to lend; its status must still reach the copy.
+    await this.checkBorrowed(profile, stationLang());
+    if (profile.runtime === "codex" && this.deps.shared.lendCodex) {
+      const before = this.borrowedLogin.has(id) ? this.borrowedLogin.get(id) : lentLoginVersion(profile.home);
+      if (!this.borrowedLogin.has(id)) this.borrowedLogin.set(id, before ?? null);
+      await this.deps.shared.lendCodex(profile, true);
+      const after = lentLoginVersion(profile.home);
+      if (before !== after) {
+        this.loginGeneration.set(id, (this.loginGeneration.get(id) ?? 0) + 1);
+        await this.deps.codex?.()?.loginChanged?.(id);
+      }
+      this.borrowedLogin.set(id, after);
+      await this.readQuota(id, true);
+      if (reset) await this.deps.hub?.allowanceReset?.(id);
+    }
+    await this.checkBorrowed(profile, stationLang());
+  }
+
+  /// Another station redeemed a reset on a subscription hosted here.
+  async sharedQuotaReset(id: string): Promise<void> {
+    await this.readQuota(id, true);
+    await this.deps.hub?.allowanceReset?.(id);
+  }
+
   /// The first follower of the events came: allowances older than a round are asked again now.
   followed() {
     this.refreshQuotas(false);
@@ -1149,9 +1195,21 @@ export class Accounts {
     if (profile.runtime !== "codex" || accessKind(profile) !== "subscription") throw new Refusal(400, t("station.quota.resetOpenAiOnly"));
     if (!this.resetFn) throw new Refusal(503, t("station.quota.resetUnsupported"));
     const result = await this.resetFn(profile, key);
-    await this.readQuota(id, true);
+    const quota = await this.readQuota(id, true).catch((error) => {
+      log.warn("accounts", "could not read the allowance after a reset", { profile: id, error: (error as Error).message });
+      return null;
+    });
     const outcome = result?.outcome;
-    if (outcome === "reset" || outcome === "alreadyRedeemed") return result;
+    if (outcome === "reset" || outcome === "alreadyRedeemed") {
+      // An old idempotency key may be replayed after the account has run out again.
+      if (outcome === "reset" || (quota?.state === "ok" && quota.windows.every((w) => w.usedPercent < 100))) {
+        await this.deps.shared?.quotaReset?.(profile, key).catch((error) => {
+          log.warn("accounts", "could not record a shared allowance reset", { profile: id, error: (error as Error).message });
+        });
+        await this.deps.hub?.allowanceReset?.(id);
+      }
+      return result;
+    }
     if (outcome === "nothingToReset") throw new Refusal(409, t("station.quota.nothingToReset"));
     if (outcome === "noCredit") throw new Refusal(409, t("station.quota.noCredit"));
     throw new Refusal(502, t("station.quota.resetUnconfirmed"));

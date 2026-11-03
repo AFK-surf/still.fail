@@ -779,6 +779,84 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a successful reset wakes its account and informs its share; an old redemption with no allowance does neither", async () => {
+    const woke: string[] = [];
+    const sent: string[] = [];
+    let used = 100;
+    const hub: NonNullable<AccountsDeps["hub"]> = {
+      accounts: { setHealth: () => {}, healthOf: () => ({}) },
+      allowanceReset: async (id) => { woke.push(id); },
+    };
+    const t = await rig({
+      hub,
+      readQuota: async () => ({ state: "ok", windows: [{ label: "week", usedPercent: used, resetsAt: null }], detail: null, checkedAt: 0 }),
+      resetQuota: async (_p, key) => {
+        if (key === "new") { used = 5; return { outcome: "reset" }; }
+        return { outcome: key === "old" ? "alreadyRedeemed" : "noCredit" };
+      },
+      shared: { status: async () => ({ check: null, quota: null }), view: () => null, quotaReset: async (p, key) => { sent.push(`${p.id}:${key}`); } },
+    });
+    await t.call("PUT", "/profiles/cx", { access: { kind: "subscription" } });
+    const redeem = (key: string) => t.call("POST", "/profiles/cx/reset-quota", undefined, owner, { "Idempotency-Key": key });
+    assert.equal((await redeem("empty"))[0], 409);
+    assert.equal((await redeem("old"))[0], 200);
+    assert.deepEqual(woke, []);
+    assert.equal((await redeem("new"))[0], 200);
+    await until(() => sent.length === 1, "the reset is shared");
+    assert.deepEqual(woke, ["cx"]);
+    assert.deepEqual(sent, ["cx:new"]);
+    await t.close();
+  });
+
+  test("a changed shared Codex login is fetched and loaded even when the old token has not expired", async () => {
+    const data = temp("borrowed-changed");
+    const home = join(data, "homes", "bx");
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+    const jwt = (name: string) => ["{}", JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400, name }), "s"].map((x) => Buffer.from(x).toString("base64url")).join(".");
+    const old = jwt("old"), fresh = jwt("fresh");
+    const write = (token: string) => writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: token, account_id: "acct" } }));
+    write(old);
+    const chatgpt = await provider((asked) => asked.headers.authorization === `Bearer ${fresh}`
+      ? { status: 200, body: { rate_limit: { primary_window: { used_percent: 20 } } } }
+      : { status: 401, body: { error: { code: "token_revoked" } } });
+    const woke: string[] = [];
+    let replaced = 0;
+    let failReload = true;
+    const hub: NonNullable<AccountsDeps["hub"]> = { accounts: { setHealth: () => {}, healthOf: () => ({}) }, allowanceReset: async (id) => { woke.push(id); } };
+    const shared = {
+      status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: null }),
+      lendCodex: async (_profile: any, noFallback: boolean) => { assert.equal(noFallback, true); write(fresh); return Date.now() + 86400_000; },
+      view: () => null,
+    };
+    const codex = () => ({ rateLimits: async () => ({}), resetQuota: async () => ({}), models: async () => ({ models: [], efforts: new Map() }), loginChanged: async () => { replaced++; if (failReload) { failReload = false; throw new Error("reload failed"); } } });
+    const t = await rig({ data, shared, codex, hub, urls: { ...URLS, chatgpt: chatgpt.base } });
+    await assert.rejects(t.accounts.sharedChanged("bx", true), /reload failed/);
+    await t.accounts.sharedChanged("bx", true);
+    assert.equal(JSON.parse(readFileSync(join(home, "auth.json"), "utf8")).tokens.access_token, fresh);
+    assert.equal(replaced, 2, "a failed reload is retried even though the new file was already written");
+    assert.equal(t.accounts.health("bx").quota.windows[0].usedPercent, 20);
+    assert.deepEqual(woke, ["bx"]);
+    await t.accounts.sharedChanged("bx", false);
+    assert.equal(replaced, 2, "a quota or profile update with the same login does not restart a running app-server");
+    await chatgpt.close();
+    await t.close();
+  });
+
+  test("a shared Codex host signing out updates the borrowed check even when there is no login to lend", async () => {
+    const data = temp("borrowed-signed-out");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+    const shared = {
+      status: async () => ({ check: { state: "login", detail: "signed out", models: null, checkedAt: 1 }, quota: null }),
+      lendCodex: async () => { throw new Error("no login to lend"); },
+      view: () => null,
+    };
+    const t = await rig({ data, shared });
+    await assert.rejects(t.accounts.sharedChanged("bx", false), /no login to lend/);
+    assert.equal(t.accounts.health("bx").check.state, "login");
+    await t.close();
+  });
+
   test("OpenAI fast defaults off, survives other edits and can be turned off", async () => {
     const t = await rig();
     assert.equal(t.profile("cx")!.fast, undefined);

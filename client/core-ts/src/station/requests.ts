@@ -15,6 +15,7 @@ import { fromBase64, get, hex, isObject, parseJson, toJsonBytes } from "../util.
 import type { StationAddr } from "./addr.ts";
 import { concat, readAll, replyHeader, type RequestHead, type ScreenAsk, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
 import { timed } from "../spent.ts";
+import { BUILD_HEADER, ownBuild, stationTooOld } from "./oldest.ts";
 
 export const IDEMPOTENCY_KEY = "idempotency-key";
 /// A request that only reads though it is no GET (POST /changed/<list>, what is held in its body): asked again on
@@ -168,6 +169,7 @@ export class Requests {
     span.set("stillfail.station", station.station);
     if (bodySize > 0) span.set("http.request.body.size", bodySize);
     const h: [string, string][] = [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]];
+    if (ownBuild() !== "") h.push([BUILD_HEADER, ownBuild()]);
     if (!path.startsWith("/preview/")) h.push(["stillfail-runtimes", RUNTIMES.join(",")]);
     if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", ZSTD]);
     // A write carries a key of its own: a station that keeps writes to once does it once however often it arrives.
@@ -196,6 +198,8 @@ export class Requests {
           Effect.gen({ self: this }, function* () {
             const reply = yield* within(this.wire.request(station, head, body, wrote), idleMs);
             answered(span, reply);
+            const tooOld = stationTooOld(reply.headers);
+            if (tooOld !== null) return yield* Effect.fail(tooOld);
             onHead?.(reply.status, reply.headers);
             // What came over the link is counted (and said in the span); what it says, decompressed.
             let came = 0;
@@ -279,6 +283,8 @@ export class Requests {
       const reply = opened.success;
       answered(span, reply);
       span.end();
+      const tooOld = stationTooOld(reply.headers);
+      if (tooOld !== null) return yield* Effect.fail(tooOld);
       if (reply.status < 200 || reply.status >= 300) {
         const bytes = yield* Effect.orElseSucceed(readAll(yield* plain(this.#core.host, reply)), () => empty);
         const data = parseJson(bytes);

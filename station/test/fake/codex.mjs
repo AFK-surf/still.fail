@@ -52,7 +52,8 @@ function thread(id) {
 /// Loads thread `id` with `config`'s MCP url, unless it is loaded.
 function load(id, config) {
   const t = thread(id);
-  t.mcp ??= String(config?.["mcp_servers.stillfail.url"] ?? "").includes(":1/") ? "failed" : "connected";
+  const url = config?.["mcp_servers.stillfail.url"];
+  t.mcp ??= process.env.FAKE_MCP_UNAVOIDABLE === "1" ? "connected" : config?.mcp_servers?.configured?.enabled === false ? "disabled" : process.env.FAKE_MCP_CONFIGURED === "1" || process.env.FAKE_MCP_PROJECT === "1" ? "connected" : typeof url === "string" ? (url.includes(":1/") ? "failed" : "connected") : null;
 }
 
 /// A reply of `texts`, `gap` ms apart; `before(i)`, if given, waited for before the i-th (and before its end, at i =
@@ -190,7 +191,10 @@ function handle(msg) {
     thread(params.threadId).mcp = null;
     return reply({ status: "unsubscribed" });
   }
-  if (method === "mcpServerStatus/list") return reply({ data: [{ name: "stillfail", runtimeStatus: thread(params.threadId).mcp, tools: {} }], nextCursor: null });
+  if (method === "mcpServerStatus/list") {
+    if (params.threadId === undefined) return reply({ data: process.env.FAKE_MCP_CONFIGURED === "1" || process.env.FAKE_MCP_UNAVOIDABLE === "1" ? [{ name: "configured" }] : [], nextCursor: null });
+    return reply({ data: thread(params.threadId).mcp === null ? [] : [{ name: process.env.FAKE_MCP_CONFIGURED === "1" || process.env.FAKE_MCP_PROJECT === "1" || process.env.FAKE_MCP_UNAVOIDABLE === "1" ? "configured" : "stillfail", runtimeStatus: thread(params.threadId).mcp, tools: {} }], nextCursor: null });
+  }
   if (method === "account/rateLimits/read") return reply({ rateLimits: { primary: { usedPercent: 5 } } });
   if (method === "account/read") return reply({ account: { type: "chatgpt", email: "a@x.test", planType: "plus" }, requiresOpenaiAuth: true });
   if (method === "model/list") {

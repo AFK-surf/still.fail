@@ -13,7 +13,7 @@ import { tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
 import { find as findMachineSession, roots as machineRoots } from "../../read/machine.ts";
 import { STILLFAIL_SURFACE } from "../../store/rows.ts";
-import type { Attachment, Quote } from "../../store/rows.ts";
+import type { Attachment, Quote, SessionRow } from "../../store/rows.ts";
 import type { Store } from "../../store/store.ts";
 import type { AgentsParts } from "../../sessions/agents.ts";
 import type { SessionChange } from "../../sessions/accounts.ts";
@@ -39,6 +39,7 @@ import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";
 import { runtimeKind } from "../../agents/runtime.ts";
 import { contextAsked } from "../../sessions/context-cap.ts";
+import { regenerateTitle, TitleError } from "../../sessions/regenerate-title.ts";
 
 /// A hub error the Rust maps to a status (`map_err(|e| http_error(status, e.to_string()))`).
 async function as<T>(status: number, f: () => T | Promise<T>): Promise<T> {
@@ -342,6 +343,23 @@ export const routes = (tools: Tools): Route[] => {
   /// A development station's (STILLFAIL_DEV=1, else EMBER_DEV=1): only there is /dev/inject a route.
   const dev = (process.env.STILLFAIL_DEV || process.env.EMBER_DEV) === "1";
   return [
+    {
+      method: "POST",
+      pattern: /^\/*threads\/+([^/]+)\/+regenerate-title\/*$/,
+      handle: (r, [raw]) => write(async (s, a) => {
+        const t = thread(s, segment(raw!));
+        if (t.surface !== STILLFAIL_SURFACE) throw new Refused(400, tr(r.lang, "station.admin.renameOnlyStillfail"));
+        const members = s.threadSessions(t.id).map((m) => s.getSession(m.session))
+          .filter((row): row is SessionRow => row !== null && sessionSeen(s, r.viewer, row.key));
+        try {
+          await regenerateTitle(a.hub, t.id, members);
+        } catch (e) {
+          if (e instanceof TitleError) throw new Refused(e.problem === "changed" ? 409 : 400, tr(r.lang, `station.title.${e.problem}`));
+          throw e;
+        }
+        return threadView(r, t.id);
+      }),
+    },
     // Hands the station a chat message as if the connect had received it (development stations, for those who manage
     // them; anyone else finds no such route).
     ...(dev
