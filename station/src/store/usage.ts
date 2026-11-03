@@ -2,7 +2,7 @@
 // turn it was in, whom that turn worked for, in which thread and on which profile. The Store's usage methods call these.
 import type { DatabaseSync } from "node:sqlite";
 import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
-import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
+import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, usageTotalsComplete, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
 import { usageCompactionsReady } from "./usage-compactions.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
@@ -179,6 +179,7 @@ export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffse
 /// show of it. As the database keeps them added up (schema.ts USAGE_TOTALS): asked each time the live view of a session
 /// at work tells its usage.
 export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] {
+  if (!usageTotalsComplete(db, session)) return [];
   return (
     db
       .prepare(

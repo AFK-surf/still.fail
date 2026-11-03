@@ -1270,7 +1270,7 @@ test("usage: a call is recorded once, its output grown; turns tell whom they wer
   h.stop();
 });
 
-test("usage: a session's calls added up by the database, those from before the totals and those an older station records too", () => {
+test("usage: a missing old session total does not reconstruct calls and new writes are kept apart", () => {
   const path = join(tempdir(), "usage.db");
   const of = { turn: null, person: null, thread: null, profile: null };
   const call = (id: string, model: string | null, output: number) => ({ id, at: 1000, model, subagent: false, fast: false, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output, calls: 1, context: 10, window: null });
@@ -1278,7 +1278,7 @@ test("usage: a session's calls added up by the database, those from before the t
   session(first, "a");
   first.recordUsage("/a.jsonl", { session: "a", offset: 1, model: "m" }, "claude", [[call("c1", "m", 5), of], [call("c2", null, 1), of]]);
   first.close();
-  // A database from before the totals: what was recorded is added up as it is opened.
+  // A database from before the totals: old calls remain untouched as it is opened.
   const before = new DatabaseSync(path);
   before.exec("DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_grow; DROP TRIGGER usage_totals_drop; DROP TABLE usage_totals;");
   before.close();
@@ -1288,10 +1288,10 @@ test("usage: a session's calls added up by the database, those from before the t
   const older = new DatabaseSync(path);
   older.exec("INSERT INTO usage (id, at, session, runtime, model, input, cache_read, cache_write, cache_write_long, output) VALUES ('c4', 1000, 'a', 'claude', 'm', 1, 2, 3, 4, 7)");
   older.close();
-  assert.deepEqual(
-    store.usageOfSession("a").map((g) => [g.runtime, g.model, g.calls, g.input, g.cacheRead, g.cacheWrite, g.cacheWriteLong, g.output]),
-    [["claude", null, 1, 1, 2, 3, 4, 1], ["claude", "m", 3, 3, 6, 9, 12, 18]],
-  );
+  assert.deepEqual(store.usageOfSession("a"), [], "a partial session total is not shown as a lifetime total");
+  assert.deepEqual(store.db.prepare("SELECT runtime, model, calls, input, cache_read, cache_write, cache_write_long, output FROM usage_totals WHERE session = 'a'")
+    .all().map((r) => [r.runtime, r.model, r.calls, r.input, r.cache_read, r.cache_write, r.cache_write_long, r.output]),
+  [["claude", "m", 2, 2, 4, 6, 8, 9]], "only new calls contribute to the incremental total");
   assert.deepEqual(store.usageOfSession("b"), []);
 });
 
@@ -1314,7 +1314,7 @@ test("usage: the page's days are the calls added up from statistics, whatever th
   };
   record(calls.slice(0, 400));
   store.close();
-  // A database from before them: made from the calls it has as it opens, kept from then on.
+  // The current detail index remains usable if the obsolete quarter table is absent on an older database.
   const before = new DatabaseSync(path);
   before.exec("DROP TRIGGER usage_quarters_add; DROP TRIGGER usage_quarters_drop; DROP TRIGGER usage_quarters_grow; DROP TABLE usage_quarters;");
   before.close();
@@ -1376,7 +1376,7 @@ test("usage: a row is the calls it says, and a database from before says each wa
   store = open(path);
   // The old call remains intact; an unfinished context index does not claim it is complete.
   assert.deepEqual(store.db.prepare("SELECT context, context_window FROM usage WHERE id = 'c1'").get(),
-    Object.assign(Object.create(null), { context: 120_000, context_window: null }));
+    Object.assign(Object.create(null), { context: null, context_window: null }));
   assert.deepEqual(store.lastContexts("a", 5), []);
   // A turn told at once is its calls; the context it ended with is what it says, compacted from the one before.
   store.recordUsage("/a.jsonl", { session: "a", offset: 2, model: "m" }, "claude", [call("c2", 2000, 300_000, { calls: 3, context: 20_000, window: 200_000 })] as never);

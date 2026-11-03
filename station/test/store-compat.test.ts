@@ -59,6 +59,9 @@ const MADE = ["usage_chat", "usage_chat_stats", "usage_chat_members", "usage_cha
 MADE.push("usage_detail_live", "usage_detail_live_scope", "usage_detail_live_lookup", "usage_detail_live_dirty",
   "usage_detail_live_dirty_scope", "usage_detail_live_sessions", "usage_detail_live_seen", "usage_detail_live_ignored",
   "usage_detail_live_update", "usage_detail_live_replace", "usage_detail_live_ready", "usage_detail_live_all", "usage_detail_live_since");
+MADE.push("usage_totals_incremental", "usage_totals_source", "usage_totals_source_scope", "usage_totals_source_lookup",
+  "usage_totals_source_dirty", "usage_totals_source_dirty_scope", "usage_totals_source_sessions", "usage_totals_source_seen",
+  "usage_totals_source_ignored", "usage_totals_source_update", "usage_totals_source_replace", "usage_totals_source_ready", "usage_totals_source_all");
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {

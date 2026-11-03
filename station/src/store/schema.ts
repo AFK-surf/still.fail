@@ -612,9 +612,8 @@ CREATE TABLE usage_totals (
   output INTEGER NOT NULL,
   PRIMARY KEY (session, runtime, model, fast)
 ) WITHOUT ROWID;
-INSERT INTO usage_totals
-  SELECT session, runtime, COALESCE(model, ''), fast, SUM(calls), SUM(input), SUM(cache_read), SUM(cache_write), SUM(cache_write_long), SUM(output)
-  FROM usage NOT INDEXED GROUP BY session, runtime, COALESCE(model, ''), fast;
+`;
+const USAGE_TOTALS_NORMAL = `
 ${USAGE_TOTALS_KEPT}
 CREATE TRIGGER usage_totals_grow AFTER UPDATE OF output ON usage WHEN NEW.output <> OLD.output BEGIN
   UPDATE usage_totals SET output = output + NEW.output - OLD.output
@@ -623,8 +622,8 @@ END;
 `;
 
 /// The columns usage came with as the one record of what was spent (usage.calls, context, context_window), added to a
-/// table made before them, in one transaction: a row from before is one call, and a main-thread one left the context it
-/// sent (as the context of a call was worked out before), and the triggers made before them (the totals', the
+/// table made before them, in one transaction: a row from before is one call and its untold context remains unknown;
+/// the triggers made before them (the totals', the
 /// compactions') are made anew to read them. Before the totals and compactions are made, which read them too.
 export function addUsageColumns(db: DatabaseSync): void {
   if (has(db, "usage", "calls")) return;
@@ -633,8 +632,7 @@ export function addUsageColumns(db: DatabaseSync): void {
     if (!has(db, "usage", "calls")) {
       db.exec(`ALTER TABLE usage ADD COLUMN calls INTEGER NOT NULL DEFAULT 1;
         ALTER TABLE usage ADD COLUMN context INTEGER;
-        ALTER TABLE usage ADD COLUMN context_window INTEGER;
-        UPDATE usage SET context = input + cache_read + cache_write + cache_write_long WHERE subagent = 0;`);
+        ALTER TABLE usage ADD COLUMN context_window INTEGER;`);
       const made = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = ?").get(name) !== undefined;
       if (made("usage_totals_add")) db.exec(`DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_drop; ${USAGE_TOTALS_KEPT}`);
       if (made("usage_compactions_add")) db.exec(`DROP TRIGGER usage_compactions_add; ${USAGE_COMPACTIONS_KEPT}`);
@@ -646,15 +644,19 @@ export function addUsageColumns(db: DatabaseSync): void {
   }
 }
 
-/// The usage totals (USAGE_TOTALS), made once from the calls recorded before them, in the same transaction as the
-/// triggers that keep them from then on: no call is counted twice or missed. The making reads the table through once, in
-/// order (a second or two for 300,000 calls).
+/// Install an empty total. If calls predate it, mark the coverage: a separate incremental source is installed after
+/// the detail structures, without walking or claiming the older calls. A new database uses the ordinary triggers.
 export function addUsageTotals(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals'").get() !== undefined;
   if (made()) return;
   db.exec("BEGIN IMMEDIATE");
   try {
-    if (!made()) db.exec(USAGE_TOTALS);
+    if (!made()) {
+      const old = db.prepare("SELECT 1 FROM usage LIMIT 1").get() !== undefined;
+      db.exec(`DROP TRIGGER IF EXISTS usage_totals_add; DROP TRIGGER IF EXISTS usage_totals_drop;
+        DROP TRIGGER IF EXISTS usage_totals_grow; ${USAGE_TOTALS}`);
+      db.exec(old ? "CREATE TABLE usage_totals_incremental (id INTEGER PRIMARY KEY CHECK (id = 1)); INSERT INTO usage_totals_incremental VALUES (1);" : USAGE_TOTALS_NORMAL);
+    }
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
@@ -711,26 +713,24 @@ CREATE TABLE usage_quarters (
   output INTEGER NOT NULL,
   PRIMARY KEY (quarter, session, thread, person, profile, runtime, model, fast)
 ) WITHOUT ROWID;
-INSERT INTO usage_quarters
-  SELECT at / ${QUARTER_MS}, session, COALESCE(thread, 0), COALESCE(person, ''), COALESCE(profile, ''), runtime, COALESCE(model, ''), fast,
-    SUM(calls), SUM(input), SUM(cache_read), SUM(cache_write), SUM(cache_write_long), SUM(output)
-  FROM usage NOT INDEXED GROUP BY 1, 2, 3, 4, 5, 6, 7, 8;
 ${USAGE_QUARTERS_KEPT}`;
 
-/// The usage by quarter (USAGE_QUARTERS), made once from the calls recorded before, in the same transaction as the
-/// triggers that keep it from then on (as addUsageTotals).
+/// Keep an existing quarter index for older station processes. A fresh database can start one empty; current readers
+/// use usage_detail, so an older database without it does not need an incomplete replacement.
 export function addUsageQuarters(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_quarters'").get() !== undefined;
   if (!made()) {
     db.exec("BEGIN IMMEDIATE");
     try {
-      if (!made()) db.exec(USAGE_QUARTERS);
+      // Current readers use usage_detail. An obsolete quarter index cannot be made complete without reading old calls.
+      if (!made() && !db.prepare("SELECT 1 FROM usage LIMIT 1").get()) db.exec(USAGE_QUARTERS);
       db.exec("COMMIT");
     } catch (e) {
       db.exec("ROLLBACK");
       throw e;
     }
   }
+  if (!made()) return;
   const bounded = () => ((db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'usage_quarters_drop'").get() as { sql: string } | undefined)?.sql ?? "")
     .includes(`DELETE FROM usage_quarters WHERE quarter = OLD.at / ${QUARTER_MS} AND session = OLD.session`);
   if (!bounded()) {
@@ -758,10 +758,7 @@ CREATE TRIGGER usage_compactions_add AFTER INSERT ON usage WHEN NEW.subagent = 0
 END;
 `;
 
-/// Where a model's context was compacted, at each call it was (pool.ts `cheapToLeave` asks the last days' most): the
-/// call's time and model, and the context the call before it left (usage.context). Made once from the calls recorded
-/// before (what compactionPoints worked out from every call of the last days, by a window over them, each time it was
-/// asked: 4 s on ccvm, 2026-10-25), and kept by a trigger from then on (USAGE_COMPACTIONS_KEPT).
+/// The old append-only compaction table, retained for older station processes; current reads use the newer index.
 const USAGE_COMPACTIONS = `
 CREATE TABLE usage_compactions (
   at INTEGER NOT NULL,
@@ -769,15 +766,9 @@ CREATE TABLE usage_compactions (
   point INTEGER NOT NULL
 );
 CREATE INDEX usage_compactions_at ON usage_compactions (at);
-INSERT INTO usage_compactions
-  SELECT at, model, before FROM (
-    SELECT at, model, profile, context, LAG(context) OVER w AS before, LAG(profile) OVER w AS was, LAG(model) OVER w AS of
-    FROM usage u WHERE subagent = 0 WINDOW w AS (PARTITION BY session ORDER BY at))
-  WHERE before >= ${COMPACTED_FROM} AND context * 2 < before AND profile IS was AND model IS of AND model IS NOT NULL;
 ${USAGE_COMPACTIONS_KEPT}`;
 
-/// The compactions (USAGE_COMPACTIONS), made once from the calls recorded before, in the same transaction as the
-/// trigger that keeps them from then on (as addUsageTotals).
+/// Make the old compatibility table empty when absent; do not reconstruct old compactions.
 export function addUsageCompactions(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compactions'").get() !== undefined;
   if (made()) return;

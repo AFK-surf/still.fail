@@ -193,7 +193,10 @@ export function transcriptLengths(s: Store, key: string | null): Map<string, num
 /// null): none for a session that has made no call (or a database no station of this version opened).
 export function sessionUsages(s: Store, key: string | null): Map<string, Json> {
   try {
-    const rows = key !== null ? all(s, "SELECT session, usage FROM session_usage WHERE session = ?", key) : all(s, "SELECT session, usage FROM session_usage");
+    const incremental = s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get() !== undefined;
+    const source = incremental ? "session_usage u JOIN usage_totals_source_sessions c ON c.session = u.session AND c.done = 1" : "session_usage u";
+    const rows = key !== null ? all(s, `SELECT u.session, u.usage FROM ${source} WHERE u.session = ?`, key)
+      : all(s, `SELECT u.session, u.usage FROM ${source}`);
     return new Map(rows.map((r) => [r.session as string, JSON.parse(r.usage as string)]));
   } catch {
     return new Map();
