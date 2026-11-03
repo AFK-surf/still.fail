@@ -141,7 +141,7 @@ export class Admin {
     const tools: Tools = {
       read: async (r, op, args) => {
         try {
-          return json(200, await this.readers.read(op, args, r.lang));
+          return json(200, await this.readers.read(op, args, r.lang, { background: r.background === true }));
         } catch (e) {
           return error(e instanceof HttpError ? e.status : 500, (e as Error).message);
         }
@@ -321,7 +321,7 @@ export class Admin {
         const at = paths[i]!.indexOf("?");
         const path = at < 0 ? paths[i]! : paths[i]!.slice(0, at);
         const a = BATCHED.some((p) => p.test(path))
-          ? await this.answer({ ...r, method: "GET", path, query: at < 0 ? [] : queryPairs(paths[i]!.slice(at + 1)), search: at < 0 ? "" : paths[i]!.slice(at), body: Buffer.alloc(0) })
+          ? await this.answer({ ...r, background: true, method: "GET", path, query: at < 0 ? [] : queryPairs(paths[i]!.slice(at + 1)), search: at < 0 ? "" : paths[i]!.slice(at), body: Buffer.alloc(0) })
           : error(400, `not read in a batch: ${path}`);
         const text = Buffer.isBuffer(a.body) ? a.body.toString("utf8") : "";
         const isJson = Buffer.isBuffer(a.body) && (a.headers["content-type"] ?? "").startsWith("application/json") && text !== "";

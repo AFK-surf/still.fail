@@ -70,6 +70,29 @@ for (const bulk of ["usage", "chats", "openJobs", "changed", "timeline", "aNewRe
   assert.equal(Atomics.load(state, 0), 3);
 });
 
+// On ccvm (2026-11-03) a device's history sweep (POST /batch, four pages at once, 1 to 4 s each) held the sidebar, a
+// session opened and the rest 10 s and more behind it.
+test("a history brought on in the background is read after every other read, one page at a time, a reader left beside it", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(2);
+  const background = { background: true };
+  const pages = [readers.read("timeline", args(true), "en", background), readers.read("timeline", args(true), "en", background)];
+  const asked = [...pages];
+  try {
+    await started(1);
+    // One page at a time: the other waits, and the sidebar is read beside it.
+    assert.equal(await readers.read("chats", args(false), "en"), "{}");
+    assert.equal(Atomics.load(state, 0), 2, "the second page still waits");
+    // What a device asks meanwhile goes before the page waiting.
+    asked.push(readers.read("session", args(true), "en"));
+    await started(3);
+    assert.equal(Atomics.load(state, 0), 3, "the session read, the page still waiting");
+  } finally {
+    const settled = await open(asked);
+    assert.ok(settled.every((s) => s.status === "fulfilled"), "the page waiting is read once nothing else is");
+  }
+  assert.equal(Atomics.load(state, 0), 4);
+});
+
 // On ccvm (2026-11-02) the log waited up to 98 s behind bulk reads, growing until the main connection wrote it itself.
 test("the database's log is written into it before the reads waiting, by the reader left for a chat", { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);
