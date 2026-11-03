@@ -10,6 +10,23 @@ import { hostInfo } from "../src/read/host.ts";
 import { Readers } from "../src/read/pool.ts";
 import { Store } from "../src/store/store.ts";
 
+test("an isolated recording uses a fictional host sample", () => {
+  const before = process.env.STILLFAIL_TEST_HOST;
+  process.env.STILLFAIL_TEST_HOST = "1";
+  try {
+    const result = hostInfo("/Users/example/private/data", null);
+    const info = result.info as { hostname: string; cpuModel: string; disk: { path: string }; cpuBusy: number | null };
+    assert.equal(info.hostname, "test-station");
+    assert.equal(info.cpuModel, "Test CPU");
+    assert.equal(info.disk.path, "/test-station/data");
+    assert.equal(info.cpuBusy, 0.25);
+    assert.equal(result.needsTicks, false);
+  } finally {
+    if (before === undefined) delete process.env.STILLFAIL_TEST_HOST;
+    else process.env.STILLFAIL_TEST_HOST = before;
+  }
+});
+
 test("a host read takes the first CPU ticks without sleeping in the reader", () => {
   const waits = mock.method(Atomics, "wait", () => { throw new Error("the reader slept"); });
   let current: [number, number] | null = [10, 20];

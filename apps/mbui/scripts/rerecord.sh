@@ -86,7 +86,7 @@ echo "rerecord: the scripts written ($TMP)"; ls "$TMP"/*.drive | sed 's/^/  /'
 # replay's page laid out as the run's was: what the app tells the core of where the list is (client.focus's end,
 # chat.place) the same; TEXT_RECORD=0 leaves them out)
 [ "${TEXT_RECORD:-1}" = 0 ] || export MBUI_TEXT_RECORD=1
-export E2E_STATION=${station:-${E2E_STATION:-}} E2E_TAG=$tag E2E_FLOWS=$TMP MBUI_CORE_TRACE=1 MBUI_CORE_TRACE_BYTES=$MAX_BYTES
+export E2E_STATION=${E2E_STATION:-$station} E2E_TAG=$tag E2E_FLOWS=$TMP MBUI_CORE_TRACE=1 MBUI_CORE_TRACE_BYTES=$MAX_BYTES
 [ -n "$E2E_STATION" ] || unset E2E_STATION
 bash scripts/e2e-local.sh down > /dev/null 2>&1
 bash scripts/e2e-local.sh up > "$TMP/up.log" 2>&1 || { tail -30 "$TMP/up.log"; die "the local still.fail did not come up"; }
@@ -109,7 +109,34 @@ for x in $tests; do
     continue
   fi
   cp "$trace" "$TMP/$(basename "$trace").old"
-  "$D/trace" make "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"
+  if ! "$D/trace" make "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"; then
+    cp "$TMP/$(basename "$trace").old" "$trace"
+    echo "  $test: recording failed; its old trace was kept"
+    code=1
+    continue
+  fi
+  # Refuse to keep this machine's identity even if another source is added to the recording later.
+  machine=$(hostname -s)
+  if { [ -n "${HOME:-}" ] && [ "$HOME" != / ] && grep -Fq "$HOME" "$trace"; } ||
+     { [ -n "$machine" ] && grep -Fq "$machine" "$trace"; }; then
+    cp "$TMP/$(basename "$trace").old" "$trace"
+    echo "  $test: recording contains local machine information; its old trace was kept"
+    code=1
+    continue
+  fi
+  # The native host must also report no installed local station. Its workspace identity need not contain HOME or hostname.
+  if ! node - "$trace" <<'NODE'
+const fs = require("node:fs");
+const lines = fs.readFileSync(process.argv[2], "utf8").split("\n").filter(Boolean).map(JSON.parse);
+const hosts = lines.filter((line) => line.host && Object.hasOwn(line.host, "localStation"));
+if (!hosts.length || hosts.some((line) => line.host.localStation !== null)) process.exit(1);
+NODE
+  then
+    cp "$TMP/$(basename "$trace").old" "$trace"
+    echo "  $test: recording contains a local station; its old trace was kept"
+    code=1
+    continue
+  fi
   "$D/trace" diff "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
   # (what the new trace has the app ask of the core's pure calls that is not kept yet (src/sfkept: a text the run typed,
   # read by the core): worked out by the core and kept, as scripts/kept does, for this test alone, then run again)
