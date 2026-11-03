@@ -115,7 +115,8 @@ test "an admin lets other machines ask through Tailcat with a switch, then has t
   // no program asks or holds a grant: the section is there for the switch alone
   assert_true(t.find(tr("web-main.outflow.title")) is Some(_), msg="the section")
   assert_true(t.find(tr("web-main.outflow.linkLine")) is Some(_), msg="what the switch does")
-  t.tap_text(tr("web-main.outflow.link"))
+  t.click(Switch, label=tr("web-main.outflow.link"))
+  t.frame()
   t.frame()
   assert_eq(@settings.fixture_outflow_link_set(), Some(true))
   // on: the line to give the program on the other machine
