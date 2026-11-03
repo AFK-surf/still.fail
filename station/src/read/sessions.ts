@@ -22,7 +22,8 @@ import * as store from "./store.ts";
 import type { Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
 import { homesFirst, sessionPlaces, transcriptPaths } from "./transcript.ts";
-import { chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
+import { type Read, chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
+import { log } from "../ops/log.ts";
 import { HttpError, apiOf, authorNames as authorNamesOf, creator as creatorOf, messageView, people as peopleOf, useNames } from "./views.ts";
 import { parseUsize } from "./jobs.ts";
 import { agentHomeOf } from "./memory.ts";
@@ -268,13 +269,24 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   setLang(lang);
   const before = parseUsize(beforeParam) ?? 0;
   const limit = Math.min(Math.max(parseUsize(limitParam) ?? 200, 1), 1000);
+  const started = performance.now();
   const found = transcriptsOf(s, key);
   if (found === null) return { start: 0, entries: [], end: 0 };
   const { runtime, paths } = found;
+  const looked = performance.now();
   // Read on to where they are written now, each stretch from the mark before it (read/transcripts.ts).
   const chain = chainOf(runtime, paths, marksDir(s.dataDir));
   const end = lengthOf(chain);
-  const between = (a: number, b: number) => entriesOf(runtime, chain, a, b, briefParam === "1");
+  const readOnAt = performance.now();
+  // What a slow one spent where, and read how much: the pages of a history took 2 to 4 s each on ccvm (2026-11-03),
+  // unsaid where.
+  const read: Read = { bytes: 0, lines: 0, packed: 0 };
+  const between = (a: number, b: number) => {
+    const entries = entriesOf(runtime, chain, a, b, briefParam === "1", read);
+    const ms = Math.round(performance.now() - started);
+    if (ms >= 1_000) log.warn("readers", "a timeline read's stages", { ms, found: Math.round(looked - started), readOn: Math.round(readOnAt - looked), runtime, transcripts: paths.length, end, from: a, to: b, entries: entries.length, ...read });
+    return entries;
+  };
   const from = parseUsize(fromParam);
   const to = parseUsize(toParam);
   if (from !== null && to !== null) return { start: from, entries: between(from, Math.min(to, from + 999) + 1), end };
