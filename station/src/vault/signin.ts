@@ -134,7 +134,10 @@ export class SignIns {
   }
 
   #bySession(session: string): SignInAsk[] {
-    return (this.#d.db.prepare("SELECT body FROM signin_asks WHERE session = ? ORDER BY rowid").all(session) as { body: string }[]).map((r) => JSON.parse(r.body));
+    // Both callers need only sign-ins still under way; use the session/status index before reading their bodies.
+    const statuses = OPEN.map(() => "?").join(", ");
+    return (this.#d.db.prepare(`SELECT body FROM signin_asks WHERE session = ? AND status IN (${statuses}) ORDER BY rowid`)
+      .all(session, ...OPEN) as { body: string }[]).map((r) => JSON.parse(r.body));
   }
 
   #save(a: SignInAsk) {

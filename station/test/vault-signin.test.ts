@@ -96,10 +96,17 @@ test("an active sign-in is found without reading the session's completed sign-in
   let read = 0;
   w.db.function("count_signin", (body) => { read++; return body; });
   const prepare = w.db.prepare.bind(w.db);
-  w.db.prepare = ((sql: string) => prepare(sql.replace("SELECT body FROM signin_asks WHERE session = ?",
-    "SELECT count_signin(body) AS body FROM signin_asks WHERE session = ?"))) as typeof w.db.prepare;
+  let selected = "";
+  w.db.prepare = ((sql: string) => {
+    if (sql.startsWith("SELECT body FROM signin_asks WHERE session = ?")) selected = sql;
+    return prepare(sql.replace("SELECT body FROM signin_asks WHERE session = ?",
+      "SELECT count_signin(body) AS body FROM signin_asks WHERE session = ?"));
+  }) as typeof w.db.prepare;
   assert.match(await w.signIns.ask("s1", { site: "github.com" }), /waits for pat@example.com/);
   assert.equal(read, 1, "only the active sign-in is read");
+  const plan = (prepare(`EXPLAIN QUERY PLAN ${selected}`).all("s1", "pending", "filling", "code", "person", "left") as { detail: string }[])
+    .map((r) => r.detail).join(" | ");
+  assert.match(plan, /signin_asks_by_session \(session=\? AND status=\?\)/);
   read = 0;
   w.archive("s1");
   assert.equal(read, 1, "archiving also reads only active sign-ins");
