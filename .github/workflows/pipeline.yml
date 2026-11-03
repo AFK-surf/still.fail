@@ -445,6 +445,7 @@ jobs:
           pnpm install --frozen-lockfile --prefer-offline > /dev/null
           (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/station-bundle.sh "$RUNNER_TEMP/station" darwin-arm64
+          STATION_BUNDLE="$RUNNER_TEMP/station/stillfail/station" node --disable-warning=ExperimentalWarning --import ./station/test/setup-env.mjs --test --test-timeout=30000 station/test/station-bundle-workers.test.ts
           du -sh "$RUNNER_TEMP/station/stillfail"
 
   # A branch: the one check main's protection requires (2026-10-20, asked: "main 开保护"; an admin may merge past it,

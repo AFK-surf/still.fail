@@ -1,0 +1,37 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import { Worker } from "node:worker_threads";
+import { Store } from "../src/store/store.ts";
+import { installSigninSaveIndex } from "../src/vault/signin-save-index.ts";
+
+// The mac-build job calls this on the release it just laid out; the regular test suite has no release directory.
+test("the workers in a station release start and process a batch", { skip: !process.env.STATION_BUNDLE }, async () => {
+  const directory = mkdtempSync(join(tmpdir(), "station-bundle-workers-"));
+  const path = join(directory, "station.db");
+  const store = Store.open(path);
+  try {
+    store.db.exec(`CREATE TABLE signin_asks (id TEXT PRIMARY KEY, session TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
+      CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+    installSigninSaveIndex(store.db);
+    for (const [file, message] of [
+      ["sessions/workspace-activity-worker.js", {}],
+      ["outflow/chat-index-worker.js", "H"],
+      ["vault/signin-save-worker.js", "s"],
+    ] as const) {
+      const worker = new Worker(join(process.env.STATION_BUNDLE!, file), { workerData: { path, priority: store.backfillPriority } });
+      try {
+        const result = new Promise<{ done: boolean; error?: string }>((resolve, reject) => {
+          worker.once("message", resolve);
+          worker.once("error", reject);
+        });
+        worker.postMessage(message);
+        const answer = await result;
+        assert.equal(answer.error, undefined, file);
+        assert.equal(answer.done, true, file);
+      } finally { await worker.terminate(); }
+    }
+  } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+});
