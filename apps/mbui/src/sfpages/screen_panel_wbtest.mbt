@@ -574,6 +574,78 @@ test "设备: what Device Hub does there, each told with what it is given" {
 }
 
 ///|
+test "安装 App: offered where the state says; a file gone up asked to be installed by where it is" {
+  let r = screen_rig()
+  r.state("live", more={ "kind": Json::string("simulator"), "debug": Json::boolean(true), "install": Json::string("/tmp/up") })
+  r.config()
+  r.frame(1.0)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.debug.logs"))
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.debug.device"))
+  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  r.t.draw()
+  assert_true(r.t.find(tr("web-pages.screen.debug.install")) is Some(_))
+  let s = r.sess()
+  let d : ScreenDropItem = {
+    serial: 1, folder: "/tmp/up", reveal: false, install: true, bytes: b"x",
+    name: @signals.signal("Demo.ipa"), tried: @sf.LiveArray::from([]), sent: @signals.signal(1),
+    state: @signals.signal("going"), error: "", installed: "", id: @signals.signal("a"),
+  }
+  s.drops.push(d)
+  s.drop_install(d)
+  // (this rig's core answers at once)
+  assert_eq(d.state.get(), "done")
+  assert_eq(text(Some(r.told("screen.install")[0]), "path"), "/tmp/up/Demo.ipa")
+  s.drops.clear()
+  screen_done(r.t)
+}
+
+///|
+test "录屏: started, with the panel in use, and ended" {
+  let r = screen_rig()
+  r.state("live", more={ "kind": Json::string("simulator"), "debug": Json::boolean(true), "poses": Json::boolean(true) })
+  r.say({ "config": { "codec": "jpeg", "width": 1426.0, "height": 1004.0 } })
+  r.frame(1.0)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.debug.logs"))
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.debug.device"))
+  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  r.t.draw()
+  assert_true(r.t.find(tr("web-pages.screen.debug.recordStart")) is Some(_))
+  let (sess, d) = (r.sess(), r.ui().logs)
+  debug_record_pressed(sess, d, false)
+  assert_eq(text(Some(r.told("screen.recordStart")[0]), "panel"), "inner")
+  assert_true(d.recording)
+  debug_record_pressed(sess, d, true)
+  assert_eq(r.told("screen.recordStop").length(), 1)
+  assert_true(!d.recording)
+  screen_done(r.t)
+}
+
+///|
+test "设备: the rest of Device Hub's are there" {
+  let r = screen_rig()
+  simulator_live(r)
+  r.tap_label(tr("web-pages.screen.debug.logs"))
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.debug.device"))
+  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  r.t.draw()
+  for word in ["notEnrolled", "volumeUp", "volumeDown", "memoryWarning", "uninstall"] {
+    assert_true(r.t.find(tr("web-pages.screen.debug." + word)) is Some(_))
+  }
+  screen_done(r.t)
+}
+
+///|
 test "重启 App: the list the first time, and the app chosen at one press after" {
   let r = screen_rig()
   simulator_live(r)

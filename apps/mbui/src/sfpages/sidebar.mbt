@@ -59,7 +59,6 @@ pub fn filter_at(src : Source, w : Workspace) -> Int {
 ///|
 /// The chats' lists of workspace `w` in the box they are given, as `frame` says (ListsFrame).
 pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame) -> Unit {
-  rows_frame(c, src)
   let last = list_filters.length() + frame.others.length() - 1
   // (its track a list's width a step: a Move as long as it goes)
   let x = @motion.animate(c, "lists/" + w.id, frame.shown.to_double(), spec=@sf.theme().chat_list.slide.per_unit(c.width))

@@ -19,7 +19,6 @@ import { Readers as ReaderPool } from "./read/pool.ts";
 import { makeStore } from "./read/store.ts";
 import { apiOf, entryViews, spokenIn } from "./read/views.ts";
 import type { AgentsParts } from "./sessions/agents.ts";
-import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
@@ -131,10 +130,7 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
       const { data } = yield* Paths;
       return yield* Effect.acquireRelease(
         Effect.sync(() => {
-          const store = StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
-          const lost = store.lostArchives();
-          if (lost.length > 0) log.warn("store", "archived threads whose file is not there read as empty", { n: lost.length, threads: lost.join(" ") });
-          return store;
+          return StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
         }),
         (store) => Effect.sync(() => store.close()),
       );

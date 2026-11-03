@@ -454,6 +454,58 @@ describe("slack", { concurrency: true }, () => {
     }
   });
 
+  test("a login card posts a field for its page's code; its button hands the code over, never said in the thread", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    const heard: ChatEvent[] = [];
+    let refuse: string | null = "this login has ended";
+    try {
+      await surface.start(async (event) => {
+        if (event.type === "loginCode" && refuse !== null) throw new Error(refuse);
+        heard.push(event);
+      });
+      await fake.until("a socket", () => fake.sockets.length === 1 && surface.socket().connected);
+      assert.equal(surface.loginCards, true);
+      const asked = await surface.post({ channel: "C1", threadTs: "1.1" }, "登录 gcloud：https://x/login/l1", [], { type: "login", login: "l1" });
+      const post = fake.calls("chat.postMessage")[0]!.params;
+      const blocks = JSON.parse(post.blocks!);
+      assert.deepEqual(blocks.map((b: any) => b.type), ["markdown", "input", "actions"]);
+      assert.equal(blocks[1].element.type, "plain_text_input");
+      const press = (id: string, code: string | null) =>
+        fake.send({
+          type: "interactive",
+          envelope_id: id,
+          payload: {
+            type: "block_actions",
+            user: { id: "U1" },
+            channel: { id: "C1" },
+            message: { ts: asked, thread_ts: "1.1", text: "登录 gcloud" },
+            actions: [{ action_id: "sf_login", action_ts: "9.5" }],
+            state: { values: { sf_code: { sf_code: { value: code } } } },
+          },
+        });
+      // Nothing written: only they are told. Refused: only they are told why, the card kept.
+      press("i1", " ");
+      await fake.until("told to write", () => fake.calls("chat.postEphemeral").length === 1);
+      press("i2", "4/0Ab-code");
+      await fake.until("told it was refused", () => fake.calls("chat.postEphemeral").length === 2);
+      assert.match(fake.calls("chat.postEphemeral")[1]!.params.text!, /this login has ended/);
+      assert.equal(fake.calls("chat.update").length, 0);
+      refuse = null;
+      press("i3", " 4/0Ab-code ");
+      await fake.until("the card changed", () => fake.calls("chat.update").length === 1);
+      assert.deepEqual(heard, [{ type: "loginCode", channel: "C1", threadTs: "1.1", ts: asked, user: "U1", code: "4/0Ab-code" }]);
+      const update = fake.calls("chat.update")[0]!.params;
+      assert.deepEqual(JSON.parse(update.blocks!).map((b: any) => b.type), ["markdown", "context"], "no field any more");
+      assert.doesNotMatch(update.blocks!, /4\/0Ab-code/);
+      assert.equal(fake.calls("chat.postMessage").length, 1, "the code is never posted");
+    } finally {
+      await surface.stop();
+      await fake.close();
+    }
+  });
+
   test("history pages through the thread and gives what came before, the latest at most; people and channels are named", async () => {
     const fake = await FakeSlack.start();
     bot(fake);

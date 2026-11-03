@@ -33,7 +33,7 @@ pub fn window_zoom_keys(c : @ui.Ctx, src : Source) -> Unit {
   }
   let prefs = (src.topic)("prefs", {}).value
   @ui.set_window_key_handler(fn(code, mods) {
-    if @settings.keys_recording.val != "" {
+    if @signals.untracked(fn() { @settings.keys_recording.get() }) != "" {
       return false
     }
     guard @settings.binding_of(code, mods) is Some(binding) else { return false }

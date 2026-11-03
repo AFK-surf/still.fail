@@ -342,7 +342,7 @@ fn tape_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts) =>
           tape_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -351,6 +351,14 @@ fn tape_made(
       made("memory/" + address, fn(p, core, here, _stint, told, _acts) {
         context_node(p)
         @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
+      })
+    Setting(Shortcuts) if pane_makes.val =>
+      made("shortcuts", fn(p, core, _here, stint, told, _acts) {
+        context_node(p)
+        // (recording while it is the one on top of the stack: its stay there, stint's)
+        @sfpages.shortcuts_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, active=fn() {
+          app.nav.top_stay().1 == stint()
+        }, said=told, width~)
       })
     Setting(Usage) if pane_makes.val =>
       made("usage", fn(p, core, here, _stint, told, acts) {

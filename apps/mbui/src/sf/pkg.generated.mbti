@@ -577,6 +577,8 @@ pub fn figures(@ui.Ctx, Array[(String, String, String)]) -> Unit
 
 pub let file_capsule_h : @ui.Len
 
+pub let file_capsule_words_end : Double
+
 pub fn file_card(@ui.Ctx, String, String, Double, path? : String, dir? : Bool, named? : Bool, pending? : Bool, sent? : Double?, error? : String, download? : (Double, String)?, remove? : Bool, retry? : Bool, slot? : Bool, open? : Bool, title? : String, meta? : String, restore? : Bool, remove_label? : String, retry_label? : String, composer? : Bool) -> FileCardDone
 
 pub fn file_card_across(@ui.Ctx, String, Double, meta? : String, ends? : Int32) -> Double
@@ -840,6 +842,10 @@ pub fn keys_at_foot(Double) -> Bool
 pub fn keys_gap(size? : Double, least? : Double) -> @ui.Space
 
 pub fn keys_row(size? : Double) -> @ui.Style
+
+pub fn keys_row_node(@view.View, () -> String, () -> String, () -> Bool, () -> Bool, () -> Unit, () -> Bool, () -> Unit, () -> String, () -> String) -> Unit
+
+pub fn keys_rows_node(@view.View, (@view.View) -> Unit) -> Unit
 
 pub fn kind_icon(String) -> String
 
@@ -1797,7 +1803,7 @@ pub let secondary : @ui.TextStyle
 
 pub fn section(@ui.Ctx, String, () -> Unit, heads? : Bool, note? : String, actions? : () -> Unit, title_after? : () -> Unit) -> Unit
 
-pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String) -> Unit
+pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String, actions? : (() -> Bool, (@view.View) -> Unit)) -> Unit
 
 pub fn section_none_node(@view.View, () -> String) -> Unit
 
@@ -2112,6 +2118,8 @@ pub fn tape_side_corners() -> FixedArray[@paint.CornerOf]
 pub let text_in : Double
 
 pub let text_scale : @ui.TextScale
+
+pub fn text_toggle_node(@view.View, () -> String, () -> Unit) -> Unit
 
 pub fn textarea(@ui.Ctx, String, rows? : Int32, most? : Int32, placeholder? : String, field? : @ui.Field, corner? : Double, solid? : Bool) -> String
 

@@ -97,6 +97,11 @@ export interface OperationParams {
   "screen.settings": { screen: string };
   "screen.setSetting": { screen: string; name: string; value: string };
   "screen.screenshot": { screen: string };
+  "screen.install": { screen: string; path: string };
+  "screen.biometrics": { screen: string; what: string };
+  "screen.uninstall": { screen: string; app: string };
+  "screen.recordStart": { screen: string; panel?: string | null | undefined };
+  "screen.recordStop": { screen: string };
   "screen.openUrl": { screen: string; url: string };
   "screen.location": { screen: string; at?: string | null | undefined };
   "screen.statusBar": { screen: string; tidy: boolean };
@@ -264,6 +269,11 @@ export function bindStationOperations(call: Call) {
     screenSettings: <T = unknown>(params: OperationParams["screen.settings"]) => call("screen.settings", params) as Promise<T>,
     screenSetSetting: <T = unknown>(params: OperationParams["screen.setSetting"]) => call("screen.setSetting", params) as Promise<T>,
     screenScreenshot: <T = unknown>(params: OperationParams["screen.screenshot"]) => call("screen.screenshot", params) as Promise<T>,
+    screenInstall: <T = unknown>(params: OperationParams["screen.install"]) => call("screen.install", params) as Promise<T>,
+    screenBiometrics: <T = unknown>(params: OperationParams["screen.biometrics"]) => call("screen.biometrics", params) as Promise<T>,
+    screenUninstall: <T = unknown>(params: OperationParams["screen.uninstall"]) => call("screen.uninstall", params) as Promise<T>,
+    screenRecordStart: <T = unknown>(params: OperationParams["screen.recordStart"]) => call("screen.recordStart", params) as Promise<T>,
+    screenRecordStop: <T = unknown>(params: OperationParams["screen.recordStop"]) => call("screen.recordStop", params) as Promise<T>,
     screenOpenUrl: <T = unknown>(params: OperationParams["screen.openUrl"]) => call("screen.openUrl", params) as Promise<T>,
     screenLocation: <T = unknown>(params: OperationParams["screen.location"]) => call("screen.location", params) as Promise<T>,
     screenStatusBar: <T = unknown>(params: OperationParams["screen.statusBar"]) => call("screen.statusBar", params) as Promise<T>,

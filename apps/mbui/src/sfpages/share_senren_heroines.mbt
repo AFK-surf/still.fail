@@ -2219,7 +2219,7 @@ fn sr_ledger(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
             c.box(style=led_marks, fn() {
               c.box(style=led_tally, fn() {
                 let n = @string.parse_int(d.2) catch { _ => 0 }
-                let mut left = n
+                let mut left = if n > led_tally_most * led_five { led_tally_most * led_five } else { n }
                 while left > 0 {
                   led_glyph(c, if left > led_five { led_five } else { left })
                   left = left - led_five
@@ -2425,6 +2425,11 @@ let led_glyph_side : Double = 18.0
 
 ///|
 let led_five : Int = 5
+
+///|
+/// The most 正 a day's row holds (its marks 178 across, a 正 20 with the gap after it): a day of more fills the row and
+/// stops there, its count beside it saying how many (a real week had 64 in one day, 2026-11-03, past the row's end).
+let led_tally_most : Int = 8
 
 ///|
 let led_unit_scale : Double = 0.75

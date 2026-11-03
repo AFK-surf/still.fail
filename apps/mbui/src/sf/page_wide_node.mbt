@@ -232,7 +232,11 @@ let section_none_foot : Double = 8.0
 /// (`note`); wide, wide_section's whatever it `heads` (its title, 14 on 22, 600; `note` under it, the meta's muted, 3
 /// under, 624 at most; 10 over what it holds, 28 under all of it), what is made in it a section's (part_of). `body`
 /// makes what it holds. `about`: what it is for, as the web's pages say it: wide under its title (`note`'s, where it
-/// says none), narrow under what it holds (the mobile pages' note at a section's foot).
+/// says none), narrow under what it holds (the mobile pages' note at a section's foot). `actions`: what is done to all
+/// it holds (all of them back as they were), made while it says so: wide at its title's end, 8 apart (wide_section's
+/// section_actions); narrow at the section's foot after what it is for, in a page's note's room (pg_note_box: 快捷键's
+/// 全部恢复默认 as its old view put it). Not the old view's section's narrow `actions`, which stand on its heading's line
+/// (heading's): a section whose actions belong there says its title's own.
 pub fn section_node(
   parent : @view.View,
   title : () -> String,
@@ -240,6 +244,7 @@ pub fn section_node(
   heads? : Bool = true,
   note? : () -> String = fn() { "" },
   about? : () -> String = fn() { "" },
+  actions? : (() -> Bool, (@view.View) -> Unit),
 ) -> Unit {
   let at = part_of(parent)
   match at.look {
@@ -252,24 +257,55 @@ pub fn section_node(
       }
       body(parent)
       parent.show(fn() { about() != "" }, fn(n) { page_note_node(n, about) })
+      match actions {
+        Some((shown, make)) =>
+          parent.show(shown, fn(a) {
+            a.box(fn(r) {
+              r.row(Is(true)).padding(Is((pg_note_x, pg_note_top, pg_note_x, pg_note_foot))) |> ignore
+              make(r)
+            })
+            |> ignore
+          })
+        None => ()
+      }
     }
     Wide =>
       parent.box(fn(sec) {
         sec.padding(Is((0.0, 0.0, 0.0, section_foot))) |> ignore
-        sec.box(fn(head) {
-          head.padding(Is((0.0, 0.0, 0.0, title_card_wide))) |> ignore
-          words_node(head, title, fn() { section_title }) |> ignore
-          // (what it holds said, and what it is for: under its title)
-          let said = fn() {
-            match (note(), about()) {
-              ("", a) => a
-              (n, _) => n
+        sec.box(fn(line) {
+          line
+          .row(Is(true))
+          .padding(Is((0.0, 0.0, 0.0, title_card_wide)))
+          .gap(Is(section_actions_apart))
+          .lines_up(Is(Some(Middle)))
+          |> ignore
+          line.box(fn(head) {
+            head.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+            words_node(head, title, fn() { section_title }) |> ignore
+            // (what it holds said, and what it is for: under its title)
+            let said = fn() {
+              match (note(), about()) {
+                ("", a) => a
+                (n, _) => n
+              }
             }
-          }
-          head.show(fn() { said() != "" }, fn(n) {
-            n.padding(Is((0.0, section_note_gap, 0.0, 0.0))).max_width(Is(Some(section_note_w))) |> ignore
-            words_node(n, said, fn() { section_note }) |> ignore
+            head.show(fn() { said() != "" }, fn(n) {
+              n.padding(Is((0.0, section_note_gap, 0.0, 0.0))).max_width(Is(Some(section_note_w))) |> ignore
+              words_node(n, said, fn() { section_note }) |> ignore
+            })
           })
+          |> ignore
+          match actions {
+            Some((shown, make)) =>
+              line.show(shown, fn(a) {
+                a.box(fn(r) {
+                  r.row(Is(true)).gap(Is(section_actions_gap)).lines_up(Is(Some(Middle))) |> ignore
+                  make(r)
+                })
+                |> ignore
+              })
+            None => ()
+          }
         })
         |> ignore
         sec.box(fn(b) {
@@ -281,6 +317,13 @@ pub fn section_node(
       |> ignore
   }
 }
+
+///|
+/// section_head's room between its words and what is done at its end (gap=S3), section_actions' between those (gap=S2).
+let section_actions_apart : Double = 12.0
+
+///|
+let section_actions_gap : Double = 8.0
 
 ///|
 /// section_box's room under it (mb=S7), its note's widest (section_note_most).

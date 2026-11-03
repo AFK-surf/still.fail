@@ -616,6 +616,20 @@ fn send_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 }
 
 ///|
+/// 安装 App tapped: the system's picker, what it gives going up to be installed on the device.
+fn install_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let folder = text(s.state, "install")
+  guard folder != "" else { return }
+  match @ui.pick(Files) {
+    Some(p) => {
+      u.picking = Some(p)
+      u.drop_to = Some({ folder, reveal: false, install: true })
+    }
+    None => say(c, @sf.t("android-chat.composer.noFiles"))
+  }
+}
+
+///|
 /// The files picked, once the system has answered: each going onto the machine, one after another.
 fn screen_picked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   guard u.picking is Some(p) else { return }

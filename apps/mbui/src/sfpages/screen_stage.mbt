@@ -430,6 +430,9 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
       }
     }, fn() {
       match d.state.get() {
+        "done" if d.install =>
+          c.text(@sf.t("web-pages.screen.debug.installed", args=[("name", d.installed)]), style=drop_path_words) |> ignore
+        "installing" => c.text(@sf.t("web-pages.screen.debug.installGoing"), style=drop_going_words) |> ignore
         "done" => {
           c.text(d.path(), style=drop_path_words) |> ignore
           // what is done with it there goes through the view: while driving it

@@ -156,17 +156,6 @@ test "wide: a row's menu keeps its chat out of the archive (保留, chat.keep) a
 }
 
 ///|
-test "wide: a row's menu's 复制 session 文件路径 copies where each agent's session is kept (session.transcript)" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls)
-  let (x, y) = t.find("夜里的构建又失败了").unwrap()
-  t.right_click(x, y)
-  t.tap_text("复制 session 文件路径")
-  assert_true(named(calls, "session.transcript").length() > 0)
-  assert_true(t.clipboard().has_suffix(".jsonl"), msg=t.clipboard())
-}
-
-///|
 test "wide: ⌘K's switcher narrows to what is typed and Enter opens it; Esc closes it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

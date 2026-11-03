@@ -4,18 +4,18 @@ import { latest as latestNote } from "../agents/migrations.ts";
 // the Rust `Store` method of the same name in camelCase, with its parameters in the same order.
 //
 // A thread is a log of entries that are appended and never changed: an edit is an entry of its own, which readers merge
-// into the message it changes. A thread whose sessions are all archived is written out to a zstd file and read from
-// there (store/archive.ts).
+// into the message it changes.
 //
 // What changed is told to subscribers once the method's writes are done (Store::with): the same StoreChange values at
 // the same points as the Rust, in the same order.
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
 import { liveClock } from "../ops/fibers.ts";
+import { log } from "../ops/log.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { readArchive, threadFile } from "./archive.ts";
 import {
@@ -96,9 +96,6 @@ export const PENDING_SESSIONS = `WITH RECURSIVE
   )
   SELECT session FROM said WHERE session IS NOT NULL
   UNION SELECT session FROM letters_pending WHERE session IS NOT NULL`;
-/// The threads an older station wrote out to their archive files (`bringInArchived`, `lostArchives`), by the index of
-/// those alone (schema.ts threads_archived): by every thread there was, looked for after each start, 3 s on ccvm.
-export const ARCHIVED_THREADS = "SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id";
 /// How many chats someone started since a time, by runtime and model (`modelsUsedBy`): from the index of them alone
 /// (schema.ts sessions_models), not each session's row (1.2 s on ccvm, as an agent opened a chat).
 export const MODELS_USED_BY = "SELECT runtime, model, COUNT(*) AS n FROM sessions INDEXED BY sessions_models WHERE created_by = ? AND created_at >= ? GROUP BY runtime, model";
@@ -117,8 +114,6 @@ const CACHE_KIB = 32 * 1024;
 /// How long the log may grow, in pages, before the main connection writes it into the database itself: well past what
 /// the readers' checkpoints let it come to.
 const WAL_PAGES = 10_000;
-/// Archived threads whose entries are kept decompressed, the most recently read last.
-const ARCHIVE_CACHE = 32;
 /// How many of a job's notices are kept.
 const JOB_NOTICES = 50;
 /// How long a task another station's chat ran here is remembered (remote_runs): past the card's week and the usage
@@ -142,8 +137,6 @@ export class Store {
   /// Where published snapshots are kept (docs/public-share.md): published/ beside the database (in an in-memory store's
   /// archive directory).
   readonly publishedDir: string;
-  /// Entries of archived threads read lately (they never change), the most recent last.
-  #archived: [number, EntryRow[]][] = [];
   #listeners: ((change: StoreChange) => void)[] = [];
   #workspaceListeners = new Set<() => void>();
   #statements = new Map<string, StatementSync>();
@@ -163,7 +156,7 @@ export class Store {
   }
 
   /// Opens the store at `path` (":memory:" for one of its own); archived threads go to `archive`, else `archive/`
-  /// beside the database. A database of another schema version is refused.
+  /// beside the database. One of version 12 is brought up to this one (#upgradeFrom12); one of another is refused.
   static open(path: string, archive: string | null = null, clock: Clock.Clock = liveClock): Store {
     const memory = path === ":memory:";
     if (!memory) mkdirSync(dirname(path), { recursive: true });
@@ -171,6 +164,7 @@ export class Store {
     // On the main thread, what takes long is said (timed.ts).
     const priority = new Int32Array(new SharedArrayBuffer(8));
     const db = timed(new DatabaseSync(path, { timeout: 5000 }), undefined, undefined, priority);
+    let from = SCHEMA_VERSION;
     try {
       // A commit waits for the log's write, not for the disk: what the last moments before a power cut wrote may be lost,
       // the database never damaged (WAL). Each live step of an agent commits a few times; with each its own flush to
@@ -186,9 +180,9 @@ export class Store {
       db.exec(`PRAGMA cache_size = -${CACHE_KIB}; PRAGMA wal_autocheckpoint = ${WAL_PAGES};`);
       const hasTables = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
       if (hasTables) {
-        const version = (db.prepare("PRAGMA user_version").get() as Json).user_version;
-        if (version !== SCHEMA_VERSION) {
-          throw new Error(`${path} has schema version ${version}; this station uses ${SCHEMA_VERSION}. Move its data by hand, or move it aside.`);
+        from = (db.prepare("PRAGMA user_version").get() as Json).user_version;
+        if (from !== SCHEMA_VERSION && from !== 12) {
+          throw new Error(`${path} has schema version ${from}; this station uses ${SCHEMA_VERSION}. Move its data by hand, or move it aside.`);
         }
       }
       db.exec(SCHEMA);
@@ -221,18 +215,25 @@ export class Store {
       addSessionTurns(db);
       addSessionWork(db, clock.currentTimeMillisUnsafe());
       addTellIndexes(db);
+    } catch (e) {
+      db.close();
+      throw e;
+    }
+    let store: Store;
+    if (archive !== null) store = new Store(db, archive, null, clock, priority.buffer as SharedArrayBuffer);
+    else if (memory) {
+      const dir = join(tmpdir(), `stillfail-archive-${randomBytes(8).toString("hex")}`);
+      mkdirSync(dir, { recursive: true });
+      store = new Store(db, dir, dir, clock, priority.buffer as SharedArrayBuffer);
+    } else store = new Store(db, join(dirname(path), "archive"), null, clock, priority.buffer as SharedArrayBuffer);
+    try {
+      if (from === 12) store.#upgradeFrom12();
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
       db.close();
       throw e;
     }
-    if (archive !== null) return new Store(db, archive, null, clock, priority.buffer as SharedArrayBuffer);
-    if (memory) {
-      const dir = join(tmpdir(), `stillfail-archive-${randomBytes(8).toString("hex")}`);
-      mkdirSync(dir, { recursive: true });
-      return new Store(db, dir, dir, clock, priority.buffer as SharedArrayBuffer);
-    }
-    return new Store(db, join(dirname(path), "archive"), null, clock, priority.buffer as SharedArrayBuffer);
+    return store;
   }
 
   /// Now, by its clock.
@@ -819,7 +820,6 @@ export class Store {
           this.#run("DELETE FROM letter_deliveries WHERE thread = ?", thread);
           this.#run("DELETE FROM letters WHERE thread = ?", thread);
           this.#run("DELETE FROM reads WHERE thread = ?", thread);
-          this.#run("DELETE FROM items WHERE thread = ?", thread);
           this.#run("DELETE FROM dismissed WHERE thread = ?", thread);
           this.#run("DELETE FROM closed_cards WHERE thread = ?", thread);
           this.#run("DELETE FROM kept_chats WHERE thread = ?", thread);
@@ -830,10 +830,6 @@ export class Store {
         }
       });
       if (session !== undefined) this.#sessionWorkspaceChanged();
-      for (const thread of removed) {
-        this.#archived = this.#archived.filter(([id]) => id !== thread);
-        rmSync(this.#threadFile(thread), { force: true });
-      }
       for (const id of unpublished) this.#removeSnapshot(id);
       changes.push({ type: "sessionRemoved", key, ws });
       // Clients drop what they keep of the threads that went with it.
@@ -1007,7 +1003,6 @@ export class Store {
 
   /// The thread's latest message as merged, for lists.
   lastMessage(thread: number): MessageRow | null {
-    if (this.#isArchived(thread)) return mergeEntries(this.#archivedEntries(thread)).pop() ?? null;
     const r = this.#one("SELECT * FROM merged WHERE thread = ? ORDER BY n DESC LIMIT 1", thread);
     return r ? toMessage(r) : null;
   }
@@ -1016,19 +1011,11 @@ export class Store {
   #letterCount(thread: number): number {
     // (those kept as entries before letters had their own log, and those of it)
     const apart = this.lastLetter(thread);
-    if (this.#isArchived(thread)) {
-      const keys = new Set(this.threadSessions(thread).map((m) => m.session));
-      return apart + mergeEntries(this.#archivedEntries(thread)).filter((m) => isLetter(m, keys)).length;
-    }
     return apart + (this.#one("SELECT letters FROM thread_state WHERE thread = ?", thread)?.letters ?? 0);
   }
 
   /// The thread's latest message that is not a letter (rows.ts isLetter), for lists: what they show and sort by.
   #lastSaid(thread: number): MessageRow | null {
-    if (this.#isArchived(thread)) {
-      const keys = new Set(this.threadSessions(thread).map((m) => m.session));
-      return mergeEntries(this.#archivedEntries(thread)).findLast((m) => !isLetter(m, keys)) ?? null;
-    }
     const r = this.#one("SELECT m.* FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ?", thread);
     return r ? toMessage(r) : null;
   }
@@ -1184,7 +1171,6 @@ export class Store {
 
   /// The thread's last entry number, 0 before anything is said.
   lastEntry(thread: number): number {
-    if (this.#isArchived(thread)) return this.#archivedEntries(thread).at(-1)?.n ?? 0;
     return this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", thread).n ?? 0;
   }
 
@@ -1196,16 +1182,11 @@ export class Store {
   /// The latest `limit` entries before n (the latest of all without it), oldest first.
   entriesBefore(thread: number, n: number | null, limit: number): EntryRow[] {
     const before = n ?? I64_MAX;
-    if (this.#isArchived(thread)) {
-      const entries = this.#archivedEntries(thread).filter((e) => e.n < before);
-      return entries.slice(Math.max(0, entries.length - limit));
-    }
     return this.#all("SELECT * FROM entries WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, before, limit).map(toEntry).reverse();
   }
 
   /// Entries from n = `from` to n = `to`, both included: a gap.
   entriesBetween(thread: number, from: number | bigint, to: number | bigint): EntryRow[] {
-    if (this.#isArchived(thread)) return this.#archivedEntries(thread).filter((e) => e.n >= from && e.n <= to);
     return this.#all("SELECT * FROM entries WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n", thread, from, to).map(toEntry);
   }
 
@@ -1214,13 +1195,15 @@ export class Store {
     return this.#messageAt(thread, ts);
   }
 
+  /// The card the message at `ts` in a thread was posted with, if any (a Slack login card's field answered: whose login).
+  cardAt(thread: number, ts: string): Json | null {
+    const row = this.#one("SELECT card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread, ts);
+    return parsed(row?.card) ?? null;
+  }
+
   /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
   messagesBefore(thread: number, n: number | null, limit: number): MessageRow[] {
     const before = n ?? I64_MAX;
-    if (this.#isArchived(thread)) {
-      const messages = mergeEntries(this.#archivedEntries(thread)).filter((m) => m.n < before);
-      return messages.slice(Math.max(0, messages.length - limit));
-    }
     return this.#all("SELECT * FROM merged WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, before, limit).map(toMessage).reverse();
   }
 
@@ -1359,15 +1342,12 @@ export class Store {
 
   /// Everyone who wrote in each session's threads (or one session's), as creator references, earliest first.
   participants(session: string | null): Map<string, string[]> {
-    const sql = `SELECT ts.session, ts.connect, t.id, t.surface, t.archived_at FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${session !== null ? "WHERE ts.session = ?" : ""}`;
+    const sql = `SELECT ts.session, ts.connect, t.id, t.surface FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${session !== null ? "WHERE ts.session = ?" : ""}`;
     const rows = session !== null ? this.#all(sql, session) : this.#all(sql);
     // Each person once per session, at the first time they wrote in any of its threads.
     const firsts = new Map<string, Map<string, number>>();
     for (const r of rows) {
-      const authors: [string, number][] =
-        r.archived_at !== null
-          ? this.#archivedEntries(r.id).filter((e) => e.kind === "message" && e.authorKind === "person").map((e) => [e.author, e.at])
-          : this.#all(PEOPLE_AT, r.id).map((a) => [a.author, a.at]);
+      const authors: [string, number][] = this.#all(PEOPLE_AT, r.id).map((a) => [a.author, a.at]);
       const refs = firsts.get(r.session) ?? new Map<string, number>();
       firsts.set(r.session, refs);
       for (const [author, at] of authors) {
@@ -1466,7 +1446,6 @@ export class Store {
   /// The thread's card still pending, if any: its latest post with a card (a newer one replaces an older one), as long
   /// as no person has written in the thread since. The post as merged, and its card.
   pendingCard(thread: number): [MessageRow, Json] | null {
-    if (this.#isArchived(thread)) return null;
     // The latest of each kind (cards, and options from before cards), each read by its own index.
     const latest = (column: string): Json | undefined =>
       this.#one(`SELECT n, card, options FROM entries WHERE thread = ? AND kind = 'message' AND ${column} IS NOT NULL ORDER BY n DESC LIMIT 1`, thread);
@@ -1507,7 +1486,6 @@ export class Store {
   /// about (`about`, an entry n), else the agent's latest message during the turn (`during`: from, to, ms); with the two
   /// messages before it. Null in an archived chat, or when that message has a card.
   askingMessage(thread: number, about: number | null, during: [number, number]): [MessageRow, MessageRow[]] | null {
-    if (this.#isArchived(thread)) return null;
     const n: number | null =
       about ??
       this.#one("SELECT max(n) AS n FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?", thread, during[0], during[1]).n;
@@ -2169,10 +2147,6 @@ export class Store {
     const slack = t ? t.surface !== STILLFAIL_SURFACE : true;
     const selves = [viewer];
     if (slack) selves.push(...this.slackIdentities(viewer));
-    if (this.#isArchived(thread)) {
-      const keys = new Set(this.threadSessions(thread).map((m) => m.session));
-      return mergeEntries(this.#archivedEntries(thread)).filter((m) => m.n > read && !isLetter(m, keys) && !(m.authorKind === "person" && selves.includes(m.author))).length;
-    }
     return this.#one(
       `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
        AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?))) AND NOT ${LETTER_SQL}`,
@@ -2183,42 +2157,27 @@ export class Store {
   /// Everyone who wrote in a thread, as creator references (a Slack user through a connect in it), earliest first.
   #threadPeople(thread: number, surface: string): string[] {
     const connect: string | null = this.#one("SELECT MIN(connect) AS c FROM thread_sessions WHERE thread = ?", thread).c;
-    let authors: string[];
-    if (this.#isArchived(thread)) {
-      const seen = new Set<string>();
-      authors = this.#archivedEntries(thread)
-        .filter((e) => e.kind === "message" && e.authorKind === "person")
-        .map((e) => e.author)
-        .filter((a) => !seen.has(a) && (seen.add(a), true));
-    } else {
-      authors = this.#all("SELECT author FROM thread_people WHERE thread = ? ORDER BY first_n", thread).map((r) => r.author);
-    }
+    const authors: string[] = this.#all("SELECT author FROM thread_people WHERE thread = ? ORDER BY first_n", thread).map((r) => r.author);
     if (surface === STILLFAIL_SURFACE) return authors;
     return connect === null ? [] : authors.map((a) => `slack:${connect}:${a}`);
   }
 
   /// The first thing a person said in it (up to 300 characters).
   firstText(thread: number): string | null {
-    if (this.#isArchived(thread)) {
-      const m = mergeEntries(this.#archivedEntries(thread)).find((m) => m.authorKind === "person");
-      return m ? takeChars(m.text, 300) : null;
-    }
     return this.#one("SELECT substr(m.text, 1, 300) AS t FROM thread_state s JOIN merged m ON m.thread = s.thread AND m.n = s.person_n WHERE s.thread = ?", thread)?.t ?? null;
   }
 
   #messageAt(thread: number, ts: string): MessageRow | null {
-    if (this.#isArchived(thread)) return mergeEntries(this.#archivedEntries(thread)).find((m) => m.ts === ts) ?? null;
     const r = this.#one("SELECT * FROM merged WHERE thread = ? AND ts = ?", thread, ts);
     return r ? toMessage(r) : null;
   }
 
-  /// Appends an entry as the thread's next, bringing an archived thread back first.
+  /// Appends an entry as the thread's next.
   #append(entry: EntryRow, changes: Changes): EntryRow {
     if (entry.kind === "message" && entry.authorKind === "agent") {
       const r = this.#one("SELECT model, effort FROM sessions WHERE key = ?", entry.author);
       entry.agentIdentity = r ? { model: r.model, effort: r.effort } : undefined;
     }
-    if (this.#isArchived(entry.thread)) this.#restoreThread(entry.thread);
     this.#tx(() => {
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;
       entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
@@ -2241,10 +2200,7 @@ export class Store {
       }
       this.#run("UPDATE threads SET hidden_at = ?, hidden_by = ? WHERE home = ?", archived ? now : null, archived ? by : null, key);
     });
-    for (const t of this.sessionThreads(key)) {
-      this.#bringIn(t.thread.id);
-      changes.push({ type: "thread", id: t.thread.id, entries: [] });
-    }
+    for (const t of this.sessionThreads(key)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
     changes.push({ type: "session", key });
   }
 
@@ -2256,7 +2212,6 @@ export class Store {
       const shown = by === MANUAL ? now : null;
       this.#run("UPDATE threads SET hidden_at = NULL, hidden_by = NULL, shown_at = COALESCE(?, shown_at) WHERE id = ?", shown, thread);
     }
-    this.#bringIn(thread);
     changes.push({ type: "thread", id: thread, entries: [] });
   }
 
@@ -2268,11 +2223,6 @@ export class Store {
     const shown =
       this.#one("SELECT 1 FROM thread_sessions ts JOIN sessions s ON s.key = ts.session WHERE ts.thread = ? AND s.archived_at IS NULL LIMIT 1", thread) !== undefined;
     return !shown;
-  }
-
-  /// Brings a thread an older station wrote out to its archive file back into the database.
-  #bringIn(thread: number): void {
-    if (this.#isArchived(thread)) this.#restoreThread(thread);
   }
 
   /// Something new said in a thread brings what it is about back into lists: the chat, if the station archived it
@@ -2302,65 +2252,31 @@ export class Store {
     return r.n ?? 0;
   }
 
-  // ── archive ──
+  // ── the database's version ──
   //
-  // A chat out of every list keeps its entries in the database, as one in a list does: they are a few KB each (all of
-  // ccvm's 26,000 come to some 20 MB), and every list read all of them alone, by an index, in some 10 ms. Stations before
-  // wrote each such thread's entries out to `archive/threads/<id>.jsonl.zst` and took them out of the database
-  // (`threads.archived_at`): then every list read each of those files (some 850 on ccvm, decompressed again whenever a
-  // reader had let go of what it kept of them), and a thread said in again was read back first. Those files are read as
-  // they are until each is brought back (`bringInArchived`, a few at a time after the station starts; at once when one
-  // is said in or shown again).
+  // Version 12 is the Rust station's, which this one kept so either could open the other's data. Those stations wrote
+  // an archived chat's entries out to `archive/threads/<id>.jsonl.zst` and took them out of the database
+  // (`threads.archived_at`). Going to 13, every such file is brought back in at once (one lost with the disk it was on:
+  // a chat with no entries, numbered on from what was read and delivered of it, `#lastKnown`), and what only the Rust
+  // station used goes. A station from before 13 refuses the database then (Store.open).
 
-  /// Brings back into the database up to `most` of the threads an older station wrote out to their archive files,
-  /// the oldest first: how many it brought, and how many are left. Their entries are the same, so what clients keep of
-  /// them stays true.
-  bringInArchived(most: number): { brought: number; left: number } {
-    const ids = this.#all(`${ARCHIVED_THREADS} LIMIT ?`, most).map((r) => r.id as number);
-    for (const id of ids) this.#restoreThread(id);
-    return { brought: ids.length, left: this.#one("SELECT COUNT(*) AS c FROM threads INDEXED BY threads_archived WHERE archived_at IS NOT NULL").c };
-  }
-
-  /// The archived threads whose file is not there (lost with the disk it was on): each reads as one with no entries.
-  lostArchives(): number[] {
-    return this.#all(ARCHIVED_THREADS)
-      .map((r) => r.id as number)
-      .filter((id) => !existsSync(this.#threadFile(id)));
-  }
-
-  #isArchived(thread: number): boolean {
-    const r = this.#one("SELECT archived_at FROM threads WHERE id = ?", thread);
-    return r !== undefined && r.archived_at !== null;
-  }
-
-  #threadFile(thread: number): string {
-    return threadFile(this.#archiveDir, thread);
-  }
-
-  /// Loads an archived thread's entries back into the database and removes its file (one lost: none, and the thread is
-  /// counted on from what was read and delivered of it, `#lastKnown`).
-  #restoreThread(thread: number): void {
-    const entries = this.#archivedEntries(thread);
-    this.#tx(() => {
-      for (const e of entries) this.#insertEntry(e);
-      this.#run("UPDATE threads SET archived_at = NULL WHERE id = ?", thread);
-    });
-    this.#archived = this.#archived.filter(([id]) => id !== thread);
-    rmSync(this.#threadFile(thread), { force: true });
-  }
-
-  /// An archived thread's entries, from its file.
-  #archivedEntries(thread: number): EntryRow[] {
-    const at = this.#archived.findIndex(([id]) => id === thread);
-    if (at >= 0) {
-      const [cached] = this.#archived.splice(at, 1);
-      this.#archived.push(cached!);
-      return cached![1];
+  #upgradeFrom12(): void {
+    const lost: number[] = [];
+    let brought = 0;
+    for (const r of this.#all("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id")) {
+      const thread = r.id as number;
+      const file = threadFile(this.#archiveDir, thread);
+      const entries = readArchive(file);
+      if (entries.length === 0) lost.push(thread);
+      brought++;
+      this.#tx(() => {
+        for (const e of entries) this.#insertEntry(e);
+        this.#run("UPDATE threads SET archived_at = NULL WHERE id = ?", thread);
+      });
+      rmSync(file, { force: true });
     }
-    const entries = readArchive(this.#threadFile(thread));
-    if (this.#archived.length >= ARCHIVE_CACHE) this.#archived.shift();
-    this.#archived.push([thread, entries]);
-    return entries;
+    this.db.exec("DROP INDEX IF EXISTS threads_archived; DROP TABLE IF EXISTS items;");
+    if (brought > 0) log.info("store", "the threads archived to files are back in the database", { n: brought, lost: lost.join(" ") });
   }
 
   #insertEntry(e: EntryRow): void {

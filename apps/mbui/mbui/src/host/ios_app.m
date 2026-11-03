@@ -280,6 +280,23 @@ static double drawn_for;
 // Each touch at its own time (UITouch.timestamp: seconds since startup, CACurrentMediaTime's clock), which MoonBit
 // asks for while handling it; a move with the samples coalesced into it (120 Hz digitizers), each at its time.
 static double event_time = -1;
+// A touch's time on the frames' clock. A UITouch's timestamp is not always on it: an iPhone Duo's touches came some 665
+// ms behind CACurrentMediaTime for a while, all alike and however often the app began, then on it again (past
+// long_press_ms as they went down: every tap a long press, the user, 2026-11-03). So as the first finger goes down, what
+// it is behind by, past what a touch takes to come, is taken off it and off all that follows until the next: how far
+// apart they are kept as it is.
+static const double touch_late_most_ms = 100.0;
+static double touch_shift = 0;
+static double touch_ms(double stamp) { return MIN(stamp * 1000.0 + touch_shift, mb_now_ms()); }
+static void touches_begun(NSSet<UITouch *> *t, UIEvent *e) {
+  if (e.allTouches.count > t.count) return;  // (fingers down already: theirs goes on)
+  double stamp = t.anyObject.timestamp * 1000.0, now = mb_now_ms(), late = now - stamp;
+  double shift = fabs(late) > touch_late_most_ms ? late : 0;
+  if (fabs(shift - touch_shift) > touch_late_most_ms) {
+    say([NSString stringWithFormat:@"ios: touches %.0f ms behind the clock", late]);
+  }
+  touch_shift = shift;
+}
 // Each finger by an id of its own from its down to its end (a UITouch is the same object all that while; its
 // coalesced samples are others): handed on as it comes (pointer kinds 10 down, 11 moved, 12 up, 13 called off, the id
 // where a button goes), what the fingers come to the app's to work out (touches.mbt: two of them its, the first let
@@ -298,7 +315,7 @@ static int touch_id(UITouch *u) {
 // finger `u`'s event (`kind` 10-13) where sample `at` of it was, at its time
 static void touch_at(int kind, UITouch *u, UITouch *at, UIView *v) {
   CGPoint p = [at locationInView:v];
-  event_time = at.timestamp * 1000.0;
+  event_time = touch_ms(at.timestamp);
   mb_cb.pointer(kind, p.x, p.y, touch_id(u));
   event_time = -1;
 }
@@ -308,6 +325,7 @@ static void touch_at(int kind, UITouch *u, UITouch *at, UIView *v) {
 // take their ids in the order of where they are (top to bottom, then left to right).
 static void touches_sent(int kind, NSSet<UITouch *> *t, UIEvent *e, UIView *v) {
   if (kind == 10) {
+    touches_begun(t, e);
     NSArray<UITouch *> *down = [t.allObjects sortedArrayUsingComparator:^NSComparisonResult(UITouch *a, UITouch *b) {
       if (a.timestamp != b.timestamp) return a.timestamp < b.timestamp ? NSOrderedAscending : NSOrderedDescending;
       CGPoint pa = [a locationInView:v], pb = [b locationInView:v];
@@ -513,17 +531,23 @@ static void touches_sent(int kind, NSSet<UITouch *> *t, UIEvent *e, UIView *v) {
 }
 - (UITextRange *)characterRangeAtPoint:(CGPoint)p { return nil; }
 // The keyboard's trackpad (a long press on the space bar): where the finger has gone, the field's to move the caret by
-// (text kinds 9, 10; its words' places are the app's, not the view's, so closestPositionToPoint cannot answer it).
+// (text kinds 9, 10, in 64ths of a point: the finger's way as finely as UIKit has it, device.mbt's text_float_unit;
+// its words' places are the app's, not the view's, so closestPositionToPoint cannot answer it), and its let go (11:
+// the caret the field drew for it slides back to the caret).
 - (void)beginFloatingCursorAtPoint:(CGPoint)p {
   self.floating = YES;
-  send_text(9, @"", (int)lround(p.x), (int)lround(p.y));
+  send_text(9, @"", (int)lround(p.x * 64.0), (int)lround(p.y * 64.0));
   [self requestFrame];
 }
 - (void)updateFloatingCursorAtPoint:(CGPoint)p {
-  send_text(10, @"", (int)lround(p.x), (int)lround(p.y));
+  send_text(10, @"", (int)lround(p.x * 64.0), (int)lround(p.y * 64.0));
   [self requestFrame];
 }
-- (void)endFloatingCursor { self.floating = NO; }
+- (void)endFloatingCursor {
+  self.floating = NO;
+  send_text(11, @"", 0, 0);
+  [self requestFrame];
+}
 // The system's edit actions (its floating edit menu: mb_host_text_menu; a hardware keyboard's ⌘X, ⌘C, ⌘V, ⌘A; a
 // scripted run's paste): what the field's menu offers (cut and copy over words picked, paste, select all), done as
 // Android's floating menu does them (MBView.textMenu): cut, copy and select all as the field's own keys, the
@@ -593,11 +617,12 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
 @implementation MBTakeTouch
 // finger `u`'s event (kind 10-13, as the canvas's own: touch_at) at `p`, at time `t`
 - (void)canvasTouch:(int)kind of:(UITouch *)u at:(CGPoint)p time:(double)t {
-  event_time = t * 1000.0;
+  event_time = touch_ms(t);
   mb_cb.pointer(kind, p.x, p.y, touch_id(u));
   event_time = -1;
 }
 - (void)touchesBegan:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
+  touches_begun(t, e);
   for (UITouch *u in t) {
     if (!self.one) {
       CGPoint p = [u locationInView:self.canvas];

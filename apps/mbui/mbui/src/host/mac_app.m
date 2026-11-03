@@ -2662,6 +2662,8 @@ static NSString *update_download(NSString *dir, NSURL *url, NSString *sha256, lo
   for (;;) {
     long long before = (long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize];
     BOOL retry = NO;
+    // (why an earlier try failed is not this one's: left, the build staged after it was thrown away as failed)
+    *why = nil;
     if (update_fetch(url, part, size, &retry, why)) break;
     if (!retry) return nil;
     if ((long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize] > before) failures = 0;

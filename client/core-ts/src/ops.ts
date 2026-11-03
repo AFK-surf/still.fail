@@ -162,6 +162,11 @@ export const PARAMS: Record<string, string> = {
   "screen.settings": "screen:string",
   "screen.setSetting": "screen:string name:string value:string",
   "screen.screenshot": "screen:string",
+  "screen.install": "screen:string path:string",
+  "screen.biometrics": "screen:string what:string",
+  "screen.uninstall": "screen:string app:string",
+  "screen.recordStart": "screen:string panel?:string",
+  "screen.recordStop": "screen:string",
   "screen.openUrl": "screen:string url:string",
   "screen.location": "screen:string at?:string",
   "screen.statusBar": "screen:string tidy:boolean",
@@ -584,6 +589,17 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/screens/${p.at("screen")}/screenshot`, null, NONE);
     // What Device Hub does of a device besides its keys: a link opened in it, where it is (`at`; none: nowhere), its status
     // bar tidy, a notification to one of its apps.
+    // Its screen recorded (`panel`: `inner` or `cover`, where it has two); ended, its movie where the drive reads it (`{root, path}`).
+    case "screen.biometrics":
+      return op("POST", () => `/screens/${p.at("screen")}/biometrics`, p.pick(["what"]), NONE);
+    case "screen.uninstall":
+      return op("POST", () => `/screens/${p.at("screen")}/uninstall`, p.pick(["app"]), NONE);
+    case "screen.recordStart":
+      return op("POST", () => `/screens/${p.at("screen")}/record`, p.pick(["panel"]), NONE);
+    case "screen.recordStop":
+      return op("POST", () => `/screens/${p.at("screen")}/record/stop`, null, NONE);
+    case "screen.install":
+      return op("POST", () => `/screens/${p.at("screen")}/install`, p.pick(["path"]), NONE);
     case "screen.openUrl":
       return op("POST", () => `/screens/${p.at("screen")}/open-url`, p.pick(["url"]), NONE);
     case "screen.location":

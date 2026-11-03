@@ -369,24 +369,28 @@ fn screen_fix_drops(done : Bool) -> Unit {
     serial: 1,
     folder: "/Users/alice/Downloads",
     reveal: true,
+    install: false,
     bytes: report,
     name: @signals.signal("季度报告 (1).pdf"),
     tried: @sf.LiveArray::from(["季度报告.pdf"]),
     sent: @signals.signal(if done { report.length() } else { 256 * 1024 }),
     state: if done { @signals.signal("done") } else { @signals.signal("going") },
     error: "",
+    installed: "",
     id: @signals.signal(""),
   })
   s.drops.push({
     serial: 2,
     folder: "/Users/alice/Downloads",
     reveal: true,
+    install: false,
     bytes: notes,
     name: @signals.signal("notes.txt"),
     tried: @sf.LiveArray::from([]),
     sent: if done { @signals.signal(notes.length()) } else { @signals.signal(0) },
     state: if done { @signals.signal("done") } else { @signals.signal("waiting") },
     error: "",
+    installed: "",
     id: @signals.signal(""),
   })
   s.drops_serial = 2
