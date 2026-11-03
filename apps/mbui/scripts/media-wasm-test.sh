@@ -32,4 +32,12 @@ if render "$take/fail.drive"; then
 fi
 cmp "$take/home.png" "$take/previous.png"
 cmp "$take/home.png.scene.json" "$take/previous.json"
+for setting in MBUI_PICTURE_FRAME=-1 MBUI_PICTURE_FRAME=1.5 MBUI_FILM_FPS=0.5; do
+  if env "$setting" MBUI_MEDIA_RUNTIME="$runtime" MBUI_FIXTURE=home \
+    bash scripts/media.sh picture "$take/home.png" "$take/pass.drive"; then
+    echo "media-wasm-test: invalid $setting was accepted" >&2; exit 1
+  fi
+  cmp "$take/home.png" "$take/previous.png"
+  cmp "$take/home.png.scene.json" "$take/previous.json"
+done
 echo 'media-wasm-test: picture, source record and failure preservation passed'

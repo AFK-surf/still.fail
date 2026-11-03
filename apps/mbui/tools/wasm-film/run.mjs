@@ -22,10 +22,12 @@ const size = (process.env.MBUI_WIN ?? '390x844').split('x').map(Number);
 const scale = Number(process.env.MBUI_FILM_SCALE ?? 2);
 const platform = Number(process.env.MBUI_FILM_PLATFORM ?? 0);
 const dark = process.env.MBUI_DARK === '1' ? 1 : 0;
-const at = Number(process.env.MBUI_PICTURE_AT ?? 0);
-const fps = Number(process.env.MBUI_FILM_FPS ?? 60);
+const jsonNumber = s => { try { const n = JSON.parse(s); return typeof n === 'number' ? n : NaN; } catch { return NaN; } };
+const at = jsonNumber(process.env.MBUI_PICTURE_AT || '0');
+const fps = jsonNumber(process.env.MBUI_FILM_FPS || '60');
 const max = Number(process.env.MBUI_FILM_FRAMES ?? 3000);
-const frame = process.env.MBUI_PICTURE_FRAME ? Number(process.env.MBUI_PICTURE_FRAME) : -1;
+const hasFrame = !!process.env.MBUI_PICTURE_FRAME;
+const frame = hasFrame ? jsonNumber(process.env.MBUI_PICTURE_FRAME) : -1;
 const fontScale = Number(process.env.MBUI_FONT_SCALE ?? 0);
 const inset = process.env.MBUI_FILM_INSET === '1' ? 1 : 0;
 const corner = Number(process.env.MBUI_FILM_WINDOW_CORNER ?? 0);
@@ -35,7 +37,9 @@ const coreMs = wholeMs(process.env.MBUI_CORE_MS);
 const updatesMs = process.env.MBUI_UPDATES_MS ? wholeMs(process.env.MBUI_UPDATES_MS) : -1;
 if (size.length !== 2 || !size.every(n => Number.isFinite(n) && n > 0) || !Number.isFinite(scale) || scale <= 0)
   throw new Error('invalid picture dimensions');
-if (![platform, at, fps, max, frame, fontScale, corner].every(Number.isFinite) || at < 0 || fps <= 0 || max <= 0 || frame < -1 || (frame >= 0 && at > 0))
+if (![platform, at, fps, max, frame, fontScale, corner].every(Number.isFinite) || at < 0 || max <= 0 ||
+    !Number.isInteger(fps) || fps < 1 || fps > 2147483647 ||
+    (hasFrame && (!Number.isInteger(frame) || frame < 0 || frame > 2147483647 || at > 0)))
   throw new Error('invalid picture timing');
 const script = name => {
   const file = process.env[name];
