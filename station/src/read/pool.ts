@@ -52,9 +52,12 @@ const CHECKPOINT_MS = 2_000;
 /// waited up to 98 s on ccvm (2026-11-02) while the log grew, until the main connection wrote it itself at its next
 /// commit (store.ts WAL_PAGES), holding every device and agent as it reached the disk.
 const CHECKPOINT = "checkpoint";
-/// The scoped reads on the path to showing a chat. Other page reads, including new kinds not yet classified, leave room
-/// for these: a slow transcript or resource snapshot can block just as a slow aggregate can.
-const INTERACTIVE = new Set(["thread"]);
+/// The scoped reads on the path to showing a chat, and those a device's lists are made of, each of a few rows and the
+/// statistics kept of them (the sidebar, a session's detail and summary, a chat's latest messages). Other page reads,
+/// including new kinds not yet classified, leave room for these, and these go before them: a slow transcript or resource
+/// snapshot can block just as a slow aggregate can. Behind a usage read of 76 s and a history's pages, the sidebar
+/// waited 7 s and a session opened 9 s on ccvm (2026-11-03), their own reads 0.2 s.
+const INTERACTIVE = new Set(["thread", "chats", "session", "summary", "latestMessages"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
 /// older clients, so it remains in the background until that request is paged end to end.
@@ -237,7 +240,8 @@ export class Readers {
       const foreground = line.waiting.findIndex((a) => !a.background);
       const free = line.slots.filter((s) => s.held === null).length + (line.size - line.slots.length);
       const behind = line.slots.some((s) => s.held?.background === true) || (free < 2 && line.size > 1) ? -1 : line.waiting.findIndex((a) => a.background);
-      const at = limited ? line.waiting.findIndex((a) => interactive(a) || a.ask.op === CHECKPOINT) : foreground >= 0 ? foreground : behind;
+      const first = line.waiting.findIndex((a) => interactive(a) || a.ask.op === CHECKPOINT);
+      const at = limited || first >= 0 ? first : foreground >= 0 ? foreground : behind;
       if (at < 0) break;
       const asked = line.waiting[at]!;
       const home = asked.home !== null && asked.home.held === null && line.slots.includes(asked.home) ? asked.home : null;
