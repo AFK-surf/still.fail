@@ -332,14 +332,22 @@ test("usage summary diagnostics count only the statistics that contributed", () 
     store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude",
       [[call("a1", 60_000), owner], [call("a2", 61_000), owner], [call("a3", 120_000), owner]]);
     store.recordUsage("/other", { session: "other", offset: 1, model: "m" }, "claude", [[call("b", 60_000), owner]]);
+    // A pending empty bucket can be visited by the time index without contributing to the answer.
+    store.db.prepare(`INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast,
+      records, calls, input, cache_read, cache_write, cache_write_long, output, scope)
+      VALUES ('a', 1, 0, 'tombstone', 'cc', 'claude', 'm', 0, 0, 0, 0, 0, 0, 0, 0, 'WA')`).run();
     const reader = makeStore(store.db, ".");
     const viewer = { workspace: "A", home: false };
     for (const [from, to, parts, calls] of [[60_000n, 180_000n, 2, 3], [60_001n, 180_001n, 2, 2]] as const) {
-      const diagnostics: { parts?: number } = {};
+      const diagnostics: { parts?: number; candidates?: number; selectedMs?: number } = {};
       const result = usageGroups(reader, from, to, 0n, viewer, diagnostics);
       assert.deepEqual(result, usageGroups(reader, from, to, 0n, viewer));
       assert.equal(result[0]!.calls, calls);
       assert.equal(diagnostics.parts, parts, "only the visible minute buckets or partial-edge calls are counted");
+      if (from === 60_000n) {
+        assert.equal(diagnostics.candidates, 3, "the index includes an empty bucket, but not another workspace");
+        assert.equal(typeof diagnostics.selectedMs, "number", "the query records when selection finished");
+      }
     }
   } finally { store.close(); }
 });
