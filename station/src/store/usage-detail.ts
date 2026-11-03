@@ -259,9 +259,13 @@ export function installIncrementalUsageTotals(db: DatabaseSync): void {
   try {
     if (!has("usage_totals_source_all")) {
       db.exec(schema(true, [SIZES[0]]).replace(/\busage_detail(?=_|\b)/g, "usage_totals_source"));
+      // A compact station can keep its bounded context on a totals row. Do not delete that row while it owns it.
+      const keepContext = db.prepare("SELECT 1 FROM pragma_table_info('usage_totals') WHERE name = 'compact_context'").get()
+        ? " AND compact_context IS NULL" : "";
       db.exec(`UPDATE usage_totals_source_all SET done = 1 WHERE id = 1;
         CREATE TRIGGER usage_totals_source_aggregate_add AFTER INSERT ON usage_totals_source BEGIN
-          INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, NEW.model, NEW.fast, NEW.calls, NEW.input,
+          INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output)
+          VALUES (NEW.session, NEW.runtime, NEW.model, NEW.fast, NEW.calls, NEW.input,
             NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
           ON CONFLICT (session, runtime, model, fast) DO UPDATE SET
             calls = calls + excluded.calls, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
@@ -274,14 +278,14 @@ export function installIncrementalUsageTotals(db: DatabaseSync): void {
             cache_write_long = cache_write_long + NEW.cache_write_long - OLD.cache_write_long, output = output + NEW.output - OLD.output
             WHERE session = OLD.session AND runtime = OLD.runtime AND model = OLD.model AND fast = OLD.fast;
           DELETE FROM usage_totals WHERE session = OLD.session AND runtime = OLD.runtime AND model = OLD.model AND fast = OLD.fast
-            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0;
+            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0${keepContext};
         END;
         CREATE TRIGGER usage_totals_source_aggregate_drop AFTER DELETE ON usage_totals_source BEGIN
           UPDATE usage_totals SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read,
             cache_write = cache_write - OLD.cache_write, cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
             WHERE session = OLD.session AND runtime = OLD.runtime AND model = OLD.model AND fast = OLD.fast;
           DELETE FROM usage_totals WHERE session = OLD.session AND runtime = OLD.runtime AND model = OLD.model AND fast = OLD.fast
-            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0;
+            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0${keepContext};
         END;`);
     }
     db.exec("COMMIT");

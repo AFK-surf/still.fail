@@ -64,7 +64,7 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
         );
       if (!was) { added++; if (compact && !c.subagent) recent.push([c, of]); }
     }
-    if (recent.length > 0) noteCompactContexts(db, file.session, recent);
+    if (recent.length > 0) noteCompactContexts(db, file.session, runtime, recent);
   }
   db.prepare(
     `INSERT INTO usage_files (path, session, offset, model) VALUES (?1, ?2, ?3, ?4)

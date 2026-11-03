@@ -41,6 +41,15 @@ const oldRemove = (r: string, table: string, period: string, value: string, cove
     AND ${legacyKey(r, period, value)} AND calls = 0 AND tokens = 0;`;
 const oldAddAll = (r: string) => oldAdd(r, "usage_day_quarters", "quarter", quarter(r), "old_days") + oldAdd(r, "usage_minute", "minute", minute(r), "old_minutes");
 const oldRemoveAll = (r: string) => oldRemove(r, "usage_day_quarters", "quarter", quarter(r), "old_days") + oldRemove(r, "usage_minute", "minute", minute(r), "old_minutes");
+const invalidateContext = (session: string) => `
+  UPDATE usage_totals SET compact_context = NULL WHERE session = ${session}
+    AND (runtime, model, fast) = (SELECT context_runtime, context_model, context_fast FROM usage_minute_scope WHERE session = ${session})
+    AND compact_context IS NOT NULL;
+  UPDATE usage_minute_scope SET context_runtime = NULL, context_model = NULL, context_fast = NULL, context_uncertain = 1,
+    context_after = (SELECT at FROM usage INDEXED BY usage_session WHERE session = ${session} ORDER BY at DESC LIMIT 1)
+    WHERE session = ${session};`;
+const contextColumns = ["id", "at", "session", "turn", "profile", "runtime", "model", "subagent", "fast", "context", "context_window", "cache_write", "cache_write_long", "compact_counted"];
+const contextChanged = contextColumns.map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ");
 
 export function hasCompactUsage(db: DatabaseSync): boolean {
   return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compact_since'").get() !== undefined;
@@ -54,6 +63,27 @@ export function compactUsageSince(db: DatabaseSync): number {
   const row = db.prepare("SELECT since, first_at, first_unknown FROM usage_compact_since WHERE id = 1").get() as
     { since: number; first_at: number | null; first_unknown: number };
   return row.first_unknown || row.first_at === null ? row.since : Math.max(row.since, row.first_at);
+}
+
+// Existing databases can have the older positional totals INSERT. Adding a column without changing that trigger
+// would make the next call fail. Keep the old totals logic, but name its columns and retain a row that owns context.
+function adaptTotalsWriters(db: DatabaseSync): void {
+  for (const name of ["usage_totals_add", "usage_totals_source_aggregate_add", "usage_totals_source_aggregate_change", "usage_totals_source_aggregate_drop"]) {
+    const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?").get(name) as { sql: string } | undefined;
+    if (!row) continue;
+    let sql = row.sql;
+    if (name.endsWith("_add")) {
+      sql = sql.replace(/INSERT\s+INTO\s+usage_totals\s+VALUES\s*\(/i,
+        "INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output) VALUES (");
+      if (!/INSERT\s+INTO\s+usage_totals\s*\(/i.test(sql)) throw new Error(`cannot adapt ${name}`);
+    } else {
+      const deletion = /DELETE\s+FROM\s+usage_totals\b[^;]*;/i;
+      const match = sql.match(deletion);
+      if (!match) throw new Error(`cannot adapt ${name}`);
+      if (!/\bcompact_context\b/i.test(match[0])) sql = sql.replace(deletion, (statement) => `${statement.slice(0, -1)} AND compact_context IS NULL;`);
+    }
+    if (sql !== row.sql) db.exec(`DROP TRIGGER "${name}"; ${sql}`);
+  }
 }
 
 /// Switch only after the old process has gone. No old calls or old summaries are read to create the new source.
@@ -70,6 +100,12 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
       && (db.prepare("SELECT done FROM usage_minute_all WHERE id = 1").get() as { done: number } | undefined)?.done === 1);
     const oldMinutes = empty || (oldDays && !has("usage_history_from_detail"));
     db.exec(`ALTER TABLE usage ADD COLUMN compact_counted INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE usage_totals ADD COLUMN compact_context TEXT;
+      ALTER TABLE usage_minute_scope ADD COLUMN context_runtime TEXT;
+      ALTER TABLE usage_minute_scope ADD COLUMN context_model TEXT;
+      ALTER TABLE usage_minute_scope ADD COLUMN context_fast INTEGER;
+      ALTER TABLE usage_minute_scope ADD COLUMN context_uncertain INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE usage_minute_scope ADD COLUMN context_after INTEGER;
       CREATE TABLE usage_compact_since (id INTEGER PRIMARY KEY CHECK (id = 1), since INTEGER NOT NULL, old_days INTEGER NOT NULL,
         old_minutes INTEGER NOT NULL, first_at INTEGER, first_unknown INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE usage_compact (session TEXT NOT NULL, minute INTEGER NOT NULL, thread INTEGER NOT NULL, person TEXT NOT NULL,
@@ -79,7 +115,6 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
         PRIMARY KEY (session, minute, thread, person, profile, runtime, model, fast)) WITHOUT ROWID;
       CREATE INDEX usage_compact_time ON usage_compact (minute, session);
       CREATE INDEX usage_compact_scope_time ON usage_compact (scope, minute, session);
-      CREATE TABLE usage_compact_context (session TEXT PRIMARY KEY, state TEXT NOT NULL) WITHOUT ROWID;
       CREATE TABLE usage_compact_moving (session TEXT PRIMARY KEY, target TEXT NOT NULL, phase INTEGER NOT NULL DEFAULT 0, after_minute INTEGER,
         after_thread INTEGER, after_person TEXT, after_profile TEXT, after_runtime TEXT, after_model TEXT, after_fast INTEGER) WITHOUT ROWID;
       CREATE TABLE usage_compact_moving_scope (scope TEXT NOT NULL, session TEXT NOT NULL, PRIMARY KEY (scope, session)) WITHOUT ROWID;
@@ -124,6 +159,19 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
         WHEN EXISTS (SELECT 1 FROM usage WHERE id = NEW.id) BEGIN
           SELECT RAISE(ABORT, 'recorded usage must be updated in place');
       END;
+      -- A bounded tail cannot reconstruct a removed or edited main call. Stop presenting the old context as current;
+      -- later main calls build a new tail without reading the history.
+      CREATE TRIGGER usage_compact_context_drop AFTER DELETE ON usage WHEN OLD.subagent = 0 BEGIN
+        ${invalidateContext("OLD.session")}
+      END;
+      CREATE TRIGGER usage_compact_context_old_add AFTER INSERT ON usage WHEN NEW.compact_counted = 0 AND NEW.subagent = 0 BEGIN
+        ${invalidateContext("NEW.session")}
+      END;
+      CREATE TRIGGER usage_compact_context_change AFTER UPDATE OF ${contextColumns.join(", ")} ON usage
+        WHEN (OLD.subagent = 0 OR NEW.subagent = 0) AND (${contextChanged}) BEGIN
+          ${invalidateContext("OLD.session")}
+          ${invalidateContext("NEW.session")}
+      END;
       CREATE TRIGGER usage_compact_add AFTER INSERT ON usage WHEN NEW.compact_counted = 1 BEGIN
         ${scope("NEW")}
         ${add("NEW")}
@@ -144,6 +192,7 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
         WHEN OLD.compact_counted = 1 AND NEW.compact_counted = 1 AND NOT (${dimensionsChanged}) AND (${valuesChanged}) BEGIN
           UPDATE usage_compact SET ${cols.map((c) => `${c} = ${c} + NEW.${c} - OLD.${c}`).join(", ")} WHERE ${key("NEW")};
       END;`);
+    adaptTotalsWriters(db);
     db.prepare("INSERT INTO usage_compact_since (id, since, old_days, old_minutes) VALUES (1, ?, ?, ?)")
       .run(now(), oldDays ? 1 : 0, oldMinutes ? 1 : 0);
     const triggers = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'trigger' AND
@@ -317,15 +366,60 @@ type RecentCall = ContextCall & { id: string };
 type SavedContext = { runtimeSession: string; model: string | null; contextWindow: number | null; lastCallAt: number;
   contextTokens?: number; cacheMs?: number; rereadCost?: number };
 type Recent = { calls: RecentCall[]; turns: { id: string | null; compacted: boolean }[]; uncertain: boolean; saved?: SavedContext };
+type ContextOwner = { runtime: string; model: string; fast: number };
+type ContextSnapshot = { state: Recent; stored: boolean; invalid: boolean; after: number | null };
+
+function contextOwner(db: DatabaseSync, session: string): ContextOwner | undefined {
+  return db.prepare(`SELECT context_runtime AS runtime, context_model AS model, context_fast AS fast
+    FROM usage_minute_scope WHERE session = ? AND context_runtime IS NOT NULL`).get(session) as ContextOwner | undefined;
+}
+
+function contextSnapshot(db: DatabaseSync, session: string): ContextSnapshot {
+  const row = db.prepare(`SELECT t.compact_context AS state, sc.context_uncertain AS invalid, sc.context_after AS after
+    FROM usage_minute_scope sc LEFT JOIN usage_totals t ON t.session = sc.session AND t.runtime = sc.context_runtime
+      AND t.model = sc.context_model AND t.fast = sc.context_fast WHERE sc.session = ?`).get(session) as
+    { state: string | null; invalid: number; after: number | null } | undefined;
+  const invalid = row?.invalid === 1;
+  return { state: row?.state == null ? { calls: [], turns: [], uncertain: invalid } : JSON.parse(row.state) as Recent,
+    stored: row?.state != null, invalid, after: row?.after ?? null };
+}
+
 function recent(db: DatabaseSync, session: string): Recent {
-  const row = db.prepare("SELECT state FROM usage_compact_context WHERE session = ?").get(session) as { state: string } | undefined;
-  return row === undefined ? { calls: [], turns: [], uncertain: false } : JSON.parse(row.state) as Recent;
+  return contextSnapshot(db, session).state;
+}
+
+// After an edit, there may be a later main call among the old rows. The session/time index gives an upper bound on
+// those rows; once five new calls are later than it, they form a complete tail without walking that history.
+function reliableTail(snapshot: ContextSnapshot): boolean {
+  return !snapshot.invalid || snapshot.after === null
+    || (snapshot.state.calls.length >= 5 && snapshot.state.calls[0]!.at > snapshot.after);
+}
+
+// Put context on the same totals row that this call already changed. The pointer changes only when the model,
+// runtime or speed changes, so recording the next call does not dirty a separate context page.
+function keepRecent(db: DatabaseSync, session: string, owner: ContextOwner, state: Recent): void {
+  const previous = contextOwner(db, session);
+  if (previous && (previous.runtime !== owner.runtime || previous.model !== owner.model || previous.fast !== owner.fast)) {
+    db.prepare(`UPDATE usage_totals SET compact_context = NULL WHERE session = ? AND runtime = ? AND model = ? AND fast = ?`)
+      .run(session, previous.runtime, previous.model, previous.fast);
+  }
+  db.prepare(`INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output, compact_context)
+    VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+    ON CONFLICT (session, runtime, model, fast) DO UPDATE SET compact_context = excluded.compact_context`)
+    .run(session, owner.runtime, owner.model, owner.fast, JSON.stringify(state));
+  db.prepare(`INSERT INTO usage_minute_scope (session, ws, done, context_runtime, context_model, context_fast)
+    VALUES (?, (SELECT ws FROM sessions WHERE key = ?), 1, ?, ?, ?)
+    ON CONFLICT (session) DO UPDATE SET context_runtime = excluded.context_runtime, context_model = excluded.context_model,
+      context_fast = excluded.context_fast
+    WHERE context_runtime IS NOT excluded.context_runtime OR context_model IS NOT excluded.context_model OR context_fast IS NOT excluded.context_fast`)
+    .run(session, session, owner.runtime, owner.model, owner.fast);
 }
 
 /// A saved summary can seed a context only while it still represents every call and the current runtime session.
 /// This is one session's existing summary and totals, not a read of its old calls. An uncertain snapshot is left out.
 export function seedCompactContext(db: DatabaseSync, session: string): void {
-  if (db.prepare("SELECT 1 FROM usage_compact_context WHERE session = ?").get(session)) return;
+  const snapshot = contextSnapshot(db, session);
+  if (snapshot.stored || snapshot.invalid) return;
   const row = db.prepare(`SELECT u.usage, s.runtime_session_id AS runtime, r.at AS began
     FROM session_usage u JOIN sessions s ON s.key = u.session
     LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE u.session = ?`).get(session) as
@@ -341,21 +435,47 @@ export function seedCompactContext(db: DatabaseSync, session: string): void {
   for (const name of ["contextTokens", "cacheMs", "rereadCost"] as const) {
     if (typeof old[name] === "number") saved[name] = old[name];
   }
+  const owner = db.prepare("SELECT runtime, model, fast FROM usage_totals WHERE session = ? ORDER BY runtime, model, fast LIMIT 1")
+    .get(session) as ContextOwner | undefined;
+  if (!owner) return;
   const state: Recent = { calls: [], turns: [], uncertain: false, saved };
-  db.prepare("INSERT INTO usage_compact_context VALUES (?, ?)").run(session, JSON.stringify(state));
+  keepRecent(db, session, owner, state);
 }
 
 export function savedCompactContext(db: DatabaseSync, session: string): SavedContext | null {
-  const saved = recent(db, session).saved;
+  const snapshot = contextSnapshot(db, session);
+  if (snapshot.invalid) return null;
+  const saved = snapshot.state.saved;
   if (saved === undefined) return null;
   const row = db.prepare("SELECT runtime_session_id AS id FROM sessions WHERE key = ?").get(session) as { id: string | null } | undefined;
   return row?.id === saved.runtimeSession ? saved : null;
 }
 
 /// The last five contexts and whether the last two turns compacted are bounded session statistics, not a copy of every call.
-export function noteCompactContexts(db: DatabaseSync, session: string, calls: [UsageCall, UsageFor][]): void {
+export function noteCompactContexts(db: DatabaseSync, session: string, runtime: string, calls: [UsageCall, UsageFor][]): void {
   const state = recent(db, session);
+  let changed = false;
+  let target: UsageCall | undefined;
   for (const [call, of] of calls) {
+    if (state.saved && call.at < state.saved.lastCallAt) {
+      // A late call cannot be the saved latest call. It can change which cache write was in the last five, though.
+      if (state.saved.cacheMs !== undefined || state.saved.rereadCost !== undefined) {
+        delete state.saved.cacheMs;
+        delete state.saved.rereadCost;
+        changed = true;
+      }
+      continue;
+    }
+    if (state.saved && call.at === state.saved.lastCallAt) {
+      // The saved summary did not keep an id, so the order of two calls at the same time is unknown.
+      delete state.saved;
+      state.calls = [];
+      state.turns = [];
+      state.uncertain = true;
+      db.prepare(`UPDATE usage_minute_scope SET context_uncertain = 1,
+        context_after = (SELECT at FROM usage INDEXED BY usage_session WHERE session = ? ORDER BY at DESC LIMIT 1)
+        WHERE session = ?`).run(session, session);
+    }
     const previous = state.calls.at(-1);
     const next: RecentCall = { id: call.id, turn: of.turn, profile: of.profile, model: call.model, context: call.context,
       window: call.window, at: call.at, fast: call.fast, cacheWrite: call.cacheWrite, cacheWriteLong: call.cacheWriteLong };
@@ -378,16 +498,20 @@ export function noteCompactContexts(db: DatabaseSync, session: string, calls: [U
     state.calls.push(next);
     state.calls.sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     state.calls = state.calls.slice(-5);
+    changed = true;
+    target = call;
   }
-  db.prepare("INSERT INTO usage_compact_context VALUES (?, ?) ON CONFLICT (session) DO UPDATE SET state = excluded.state")
-    .run(session, JSON.stringify(state));
+  const owner = target ? { runtime, model: target.model ?? "", fast: target.fast ? 1 : 0 } : contextOwner(db, session);
+  if (changed && owner) keepRecent(db, session, owner, state);
 }
 
 export function compactContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {
-  return limit <= 0 ? [] : recent(db, session).calls.slice(-limit).map(({ id: _id, ...call }) => call);
+  if (limit <= 0) return [];
+  const snapshot = contextSnapshot(db, session);
+  return reliableTail(snapshot) ? snapshot.state.calls.slice(-limit).map(({ id: _id, ...call }) => call) : [];
 }
 
 export function compactRecentlyCompacted(db: DatabaseSync, session: string): boolean {
-  const state = recent(db, session);
-  return !state.uncertain && state.turns.some((turn) => turn.compacted);
+  const snapshot = contextSnapshot(db, session);
+  return reliableTail(snapshot) && !snapshot.state.uncertain && snapshot.state.turns.some((turn) => turn.compacted);
 }
