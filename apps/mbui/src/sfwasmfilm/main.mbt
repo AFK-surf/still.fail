@@ -232,8 +232,16 @@ pub fn draw() -> Int {
     println("picture: reading back drawn pixels is not supported by the Wasm host")
     return -1
   }
-  if !t.corner_faults().is_empty() || !t.pending().is_empty() || !t.failed_images_drawn().is_empty() || !t.holes().is_empty() {
-    println("picture: corner, image or native-view check failed")
+  // Each broken corner is named, so a picture of a known fault (a change's before) is taken by MBUI_FILM_ALLOW_CORNER_FAULTS
+  // with the prepared renderer, not a patched and rebuilt one.
+  let faults = t.corner_faults()
+  for fault in faults { println("picture: \{fault}") }
+  if !faults.is_empty() && option_number(13) != 1.0 {
+    println("picture: the corner rule is broken (MBUI_FILM_ALLOW_CORNER_FAULTS=1 draws it anyway)")
+    return -1
+  }
+  if !t.pending().is_empty() || !t.failed_images_drawn().is_empty() || !t.holes().is_empty() {
+    println("picture: an image is pending or failed, or a native view is visible")
     return -1
   }
   let (values, count, bg) = t.presented()

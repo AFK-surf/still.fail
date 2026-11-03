@@ -34,6 +34,7 @@ const fontScale = Number(process.env.MBUI_FONT_SCALE ?? 0);
 const inset = process.env.MBUI_FILM_INSET === '1' ? 1 : 0;
 const corner = Number(process.env.MBUI_FILM_WINDOW_CORNER ?? 0);
 const nav = process.env.MBUI_FILM_NAV_ABLE === '1' ? 1 : 0;
+const cornersKept = process.env.MBUI_FILM_ALLOW_CORNER_FAULTS === '1' ? 1 : 0;
 if (size.length !== 2 || !size.every(n => Number.isFinite(n) && n > 0) || !Number.isFinite(scale) || scale <= 0)
   throw new Error('invalid picture dimensions');
 if (![platform, at, fps, max, frame, fontScale, corner].every(Number.isFinite) || at < 0 || max <= 0 ||
@@ -55,7 +56,7 @@ const strings = [process.env.MBUI_FIXTURE ?? '', process.env.MBUI_LOCALE ?? '', 
   process.env.MBUI_FAILED ?? '', process.env.MBUI_FAILED_WHY ?? '', process.env.MBUI_SAID ?? '',
   process.env.MBUI_UPDATE ?? '', process.env.MBUI_FILM_AUTOFILL ?? '',
   process.env.MBUI_CORE_MS ?? '', process.env.MBUI_UPDATES_MS ?? ''].map(s => Array.from(s, c => c.codePointAt(0)));
-const numbers = [size[0], size[1], scale, platform, dark, at, fps, max, frame, fontScale, inset, corner, nav];
+const numbers = [size[0], size[1], scale, platform, dark, at, fps, max, frame, fontScale, inset, corner, nav, cornersKept];
 let core, scratch = [], pixels;
 function text() {
   const n = core.text_length();

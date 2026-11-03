@@ -200,6 +200,16 @@ fn run_picture(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
     fps~,
     max=number(arg("MBUI_FILM_FRAMES")).unwrap_or(3000.0).to_int(),
     transparent=arg("MBUI_PICTURE_TRANSPARENT") == "1",
+    corner_faults_ok?=if arg("MBUI_FILM_ALLOW_CORNER_FAULTS") == "1" {
+      Some(fn(faults) {
+        for fault in faults {
+          say("picture: \{fault}")
+        }
+        true
+      })
+    } else {
+      None
+    },
     words_over_held=false,
   )
   exit(if ok { 0 } else { 1 })
