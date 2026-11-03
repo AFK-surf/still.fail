@@ -457,7 +457,18 @@ test "大屏 一台 station 的记忆 made once: what it is for by one mark afte
 }
 test "归档, 一台 station 的归档 and 自动决策 made once on a large screen and on the tape, wide: every instance drawn as its old view's, with keyboard and mouse and with a finger, at the system's larger words" {
   for mode in ["settings-archiving", "settings-archiving:ws1/st1", "settings-decisions"] {
-    for case in [(0, 1.0, 1280.0), (2, 1.0, 1280.0), (0, 2.0, 1280.0), (2, 1.0, 839.0), (0, 1.0, 760.0)] {
+    // (on the tape at its every width a 中屏 has: its page narrow and wide)
+    for case in [
+      (0, 1.0, 1280.0),
+      (2, 1.0, 1280.0),
+      (0, 2.0, 1280.0),
+      (2, 1.0, 600.0),
+      (0, 1.0, 700.0),
+      (0, 1.0, 760.0),
+      (2, 1.0, 839.0),
+      (2, 1.5, 920.0),
+      (0, 1.0, 1000.0),
+    ] {
       let (platform, scale, w) = case
       let old = large_about_tester(false, platform, scale~, w~, mode~)
       let old_drawn = instances_sorted(old)
@@ -482,7 +493,7 @@ fn same_drawn_snapped(made : Array[String], old : Array[String], what : String) 
     for s in all.filter(glyph) {
       let f = s.split(",").to_array().map(fn(v) { v.to_string() })
       let key = f[1:].to_array().join(",")
-      let x = (try? @json.parse(f[0])).map(fn(j) { j.as_number().unwrap_or(0.0) }).unwrap_or(0.0)
+      let x = (try @json.parse(f[0]) catch { _ => Json::null() }).as_number().unwrap_or(0.0)
       match out.get(key) {
         Some(xs) => xs.push(x)
         None => out[key] = [x]
