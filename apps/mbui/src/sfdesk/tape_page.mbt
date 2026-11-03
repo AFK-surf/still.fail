@@ -157,15 +157,20 @@ fn tape_bar_head(b : @view.View, k : Int, made : Bool, tips : @sf.TipLayer) -> U
   // from (its back); else as its old view said it. Where it was put on from as last said, kept while the stack is
   // told of a change before it is whole (an entry put in place and kept shown by its owner, told in either order))
   let under : Ref[Page?] = Ref(None)
+  // (and whether it is a place of the rail's itself, kept so with it: no back over one, whatever is under it)
+  let place = Ref(false)
   let said = fn() {
     if !made {
       return tb.said.get()
     }
     match app.nav.page_of(k) {
-      Some((_, u)) => under.val = u
+      Some((p, u)) => {
+        under.val = u
+        place.val = p is Place(_)
+      }
       None => ()
     }
-    Some(tape_made_bar(under.val, tb.page_said.get()))
+    Some(tape_made_bar(under.val, place.val, tb.page_said.get()))
   }
   b.show(fn() { said() is Some(_) }, fn(h) {
     pane_bar_node(
@@ -351,10 +356,10 @@ let tape_made_frame : @sf.PageFrame = { back: None, top: 0.0, foot: 0.0, named: 
 ///|
 /// The bar over a page made once in the page's panel (tape_made), as it said of itself (`said`: its title, what it is
 /// for; none yet, nothing said), back where the page it was put on from (`under`) is one of the settings' or a place
-/// of the rail's (setting_page's).
-fn tape_made_bar(under : Page?, said : @sf.PageSaid?) -> PaneBarSaid {
+/// of the rail's (setting_page's); none over a `place` of the rail's itself, whatever is under it (place_page's).
+fn tape_made_bar(under : Page?, place : Bool, said : @sf.PageSaid?) -> PaneBarSaid {
   let back = match under {
-    Some(u) if u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
+    Some(u) if !place && u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
     _ => None
   }
   match said {
