@@ -105,6 +105,32 @@ const unb64 = (v: Json) => Buffer.from(v.data, "base64").toString();
 
 // Each test has stations of its own (directories, stores, clocks): they run at once.
 describe("remote", { concurrency: true }, () => {
+  test("what tasks brought back goes once nothing in it changed for 6 hours, what is newer stays", async () => {
+    const r = station();
+    const home = join(r.dir, "home");
+    r.store.insertSession({ key: "s1", connect: "ds", runtime: "claude", profile: "cc", workspace: home, token: "t1", createdBy: "ann", createdAt: Date.now(), lastActiveAt: Date.now() });
+    const back = join(home, "station-back");
+    const put = (key: string, hoursAgo: number, inner?: number) => {
+      mkdirSync(join(back, key, "logs"), { recursive: true });
+      const file = join(back, key, "logs", "a.log");
+      writeFileSync(file, "x");
+      const at = (Date.now() - hoursAgo * 3600_000) / 1000;
+      for (const p of [file, join(back, key, "logs"), join(back, key)]) utimesSync(p, at, at);
+      if (inner !== undefined) {
+        const late = join(back, key, "late.txt");
+        writeFileSync(late, "y");
+        const t = (Date.now() - inner * 3600_000) / 1000;
+        utimesSync(late, t, t);
+        utimesSync(join(back, key), at, at);
+      }
+    };
+    put("old", 7);
+    put("new", 1);
+    put("old-with-a-new-file", 7, 1);
+    await (r.remote as any).tidyBack();
+    assert.deepEqual(["old", "new", "old-with-a-new-file"].map((k) => existsSync(join(back, k))), [false, true, true]);
+  });
+
   test("a startup sweep lets other station work run while it reads many remote sessions and tasks", async () => {
     const r = station();
     const incoming = join(r.remote.root, "incoming");
