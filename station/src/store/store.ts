@@ -34,6 +34,7 @@ import { installUsageMinutes } from "./usage-minutes.ts";
 import { installIncrementalUsageTotals, installUsageDetail, usageTotalsComplete } from "./usage-detail.ts";
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
+import { retireDuplicateUsage } from "./usage-unified.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
@@ -2049,6 +2050,11 @@ export class Store {
   }
 
   // ── usage (store/usage.rs) ──
+
+  /// Once the previous station has exited, stop maintaining redundant historical summaries.
+  retireDuplicateUsage(): boolean {
+    return retireDuplicateUsage(this.db);
+  }
 
   /// Every transcript read for usage so far, by path.
   usageFiles(): Map<string, usage.UsageFile> {
