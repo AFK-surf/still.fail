@@ -118,7 +118,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // clock alone: frame_watch.mbt)
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
   // (view_host.mbt)
-  view_frame(w, h, t)
+  view_frame(w, h, scale, t)
   let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`), built where

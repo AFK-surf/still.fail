@@ -416,6 +416,10 @@ struct Node {
   /// whether what it scrolls it scrolls across (View::scrolls with Scroll::across): which way Tree::scrolls_now asks
   /// whether it can go
   mut scroll_across : Bool
+  /// whether it holds a page's list's rows (Scroll::list's, up and down): on a host that sets them on its pixels
+  /// (Tree::set_rows_grid), each laid out as tall as whole pixels (@flex.Style's rows_grid) and all moved alike so the
+  /// first one's top is on one, as an old view's list's are (ui's Ctx::row_slot, Ctx::rows_on_pixels)
+  mut list_rows : Bool
   mut focus_shown_cell : @signals.Signal[Bool]?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
@@ -704,6 +708,13 @@ pub struct Tree {
   /// how many device pixels a point what hosts it draws at (0: none said): what is drawn off where it is laid out drawn
   /// off by whole pixels (View::drawn_off), as an old view's look is
   mut pixel_grid : Double
+  /// how many device pixels a point a page's list's rows are set on (0: anywhere): its host's, where it sets them so, as
+  /// it does an old view's (Tree::set_rows_grid)
+  mut rows_grid : Double
+  /// the nodes holding such a list's rows (Node's list_rows), let go or not
+  rows_lists : Array[Int]
+  /// rows_grid, followed (Tree::rows_slot)
+  rows_grid_said : @signals.Signal[Double]
   work : Work
   /// told as there is first something for a frame to do: what hosts it asks for a frame
   mut on_due : () -> Unit
@@ -843,6 +854,9 @@ pub fn Tree::new(
     measured_gen: -1,
     walk_from: -1,
     pixel_grid: 0.0,
+    rows_grid: 0.0,
+    rows_lists: [],
+    rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
     on_modals: fn() {  },
     work: {
@@ -992,6 +1006,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.claims_scroll = false
       n.scroll_held = -1
       n.scroll_across = false
+      n.list_rows = false
       n.focus_shown_cell = None
       n.key_said = 0
       n.wheel_said = 0
@@ -1082,6 +1097,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         claims_scroll: false,
         scroll_held: -1,
         scroll_across: false,
+        list_rows: false,
         focus_shown_cell: None,
         on_drag: None,
         fingers: 1,
@@ -2547,6 +2563,103 @@ pub fn Tree::ground_drawn_of(self : Tree, id : NodeId) -> (Double, Double, Doubl
 /// drawn off by whole pixels (View::drawn_off).
 pub fn Tree::set_pixel_grid(self : Tree, g : Double) -> Unit {
   self.pixel_grid = g
+}
+
+///|
+/// How many device pixels a point its host sets a page's list's rows on (0: anywhere: a Tester's, unless it says
+/// otherwise; ui's Ctx::rows_on_grid), said as each frame begins, before anything of it is laid out: each such list's
+/// rows (View::scrolls with Scroll::list, up and down) laid out as tall as whole pixels (@flex.Style's rows_grid: what
+/// is laid out, read and scrolled by all that reads it), and moved alike so the first one's top is on one (rows_placed),
+/// as an old view's list's are (ui's Ctx::row_slot, Ctx::rows_on_pixels). Changed, each such list laid out and placed
+/// again, and what reads how tall its rows are (rows_slot) told.
+pub fn Tree::set_rows_grid(self : Tree, g : Double) -> Unit {
+  if self.rows_grid == g {
+    return
+  }
+  self.rows_grid = g
+  for at in self.rows_lists {
+    if self.nodes[at].live && self.nodes[at].list_rows {
+      self.nodes[at].flex.style.rows_grid = g
+      self.layout_marked_at(at)
+      self.place_marked_at(at)
+    }
+  }
+  self.rows_grid_said.set(g)
+}
+
+///|
+/// How tall a row `h` laid out as tall is laid out in a page's list (Tree::set_rows_grid): as tall as whole pixels where
+/// its host sets its rows on them, else as it is; followed, told as that changes.
+pub fn Tree::rows_slot(self : Tree, h : Double) -> Double {
+  let g = self.rows_grid_said.get()
+  if g > 0.0 {
+    (h * g - 0.000001).ceil() / g
+  } else {
+    h
+  }
+}
+
+///|
+/// Node `at` a page's list's rows' holder (Tree::set_rows_grid), its rows laid out on the grid there is; those let go
+/// since no more counted.
+fn Tree::rows_list(self : Tree, at : Int) -> Unit {
+  let keep = self.rows_lists.filter(fn(i) { i != at && self.nodes[i].live && self.nodes[i].list_rows })
+  self.rows_lists.clear()
+  self.rows_lists.append(keep)
+  self.rows_lists.push(at)
+  self.nodes[at].list_rows = true
+  self.nodes[at].flex.style.rows_grid = self.rows_grid
+  self.layout_marked_at(at)
+}
+
+///|
+/// The first row of the list node `at` holds: what it holds first, through any slot, not left out of its row (-1: none).
+fn Tree::first_row(self : Tree, at : Int) -> Int {
+  for k in self.nodes[at].kids {
+    let m = self.nodes[k]
+    if m.slot {
+      let r = self.first_row(k)
+      if r >= 0 {
+        return r
+      }
+    } else if !m.flex.left_out() {
+      return k
+    }
+  }
+  -1
+}
+
+///|
+/// Where node `at` is laid out down the window, each that holds it where it is laid out, those a column scrolls moved
+/// as far as it scrolls them, nothing drawn off (an old view's place in its layout, an old list's scrolled).
+fn Tree::rows_laid_y(self : Tree, at : Int) -> Double {
+  let mut y = 0.0
+  let mut i = at
+  while i >= 0 {
+    let m = self.nodes[i]
+    if !m.slot {
+      y = y + m.flex.top
+      if m.parent >= 0 && self.nodes[m.parent].scroll_held == i {
+        y = y + m.look.dy
+      }
+    }
+    i = m.parent
+  }
+  y
+}
+
+///|
+/// Node `at` placed `y` down in what holds it, as a page's list's rows are (Tree::set_rows_grid): such a list moved less
+/// than a pixel so its first row's top is on the grid, that row where it is laid out, the list where it is scrolled to
+/// (ui's Ctx::rows_on_pixels); else where it is.
+fn Tree::rows_placed(self : Tree, at : Int, y : Double) -> Double {
+  let n = self.nodes[at]
+  let g = self.rows_grid
+  guard n.list_rows && g > 0.0 else { return y }
+  let first = self.first_row(at)
+  guard first >= 0 else { return y }
+  let top = self.rows_laid_y(n.parent) + y + self.nodes[first].flex.top
+  y + (top * g).round() / g - top
 }
 
 
@@ -5565,6 +5678,14 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   }
   self.places_due.clear()
   if placing {
+    // (a page's list's first row on the pixels from where it is now laid out, whatever moved: Tree::rows_placed)
+    if self.rows_grid > 0.0 {
+      for at in self.rows_lists {
+        if self.nodes[at].live && self.nodes[at].list_rows {
+          self.place(at)
+        }
+      }
+    }
     self.besides_placed()
   }
   // (what changed of its look alone: its content, nothing else)
@@ -5972,7 +6093,8 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   n.place_due = false
   let x = n.flex.left + n.look.dx + n.look.sx * n.flex.width
-  let y = n.flex.top + n.look.dy + n.look.sy * n.flex.height
+  // (a page's list's first row on the host's pixels where it sets them so: Tree::rows_placed)
+  let y = self.rows_placed(at, n.flex.top + n.look.dy + n.look.sy * n.flex.height)
   let a = n.look.alpha
   let w = n.flex.width
   let h = n.flex.height
