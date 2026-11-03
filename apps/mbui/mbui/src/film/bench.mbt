@@ -157,18 +157,18 @@ pub fn bench(
   let passed = logs.iter().any(fn(l) { l == "DRIVE PASS" })
   let d = fn(f : (Measured) -> Double) { drawn.map(f) }
   let stat = fn(xs : Array[Double]) -> Json {
-    { "med": centile(xs, 50).to_json(), "p95": centile(xs, 95).to_json() }
+    { "med": @json.ToJson::to_json(centile(xs, 50)), "p95": @json.ToJson::to_json(centile(xs, 95)) }
   }
   let out : Json = {
-    "scene": name.to_json(),
-    "w": w.to_json(),
-    "h": h.to_json(),
-    "fps": fps.to_json(),
-    "ticks": ticks.to_json(),
-    "frames": drawn.length().to_json(),
-    "looks": drawn.filter(fn(m) { m.perf.looks }).length().to_json(),
-    "painted": drawn.filter(fn(m) { m.perf.painted }).length().to_json(),
-    "kept": drawn.filter(fn(m) { m.perf.kept > 0 }).length().to_json(),
+    "scene": @json.ToJson::to_json(name),
+    "w": @json.ToJson::to_json(w),
+    "h": @json.ToJson::to_json(h),
+    "fps": @json.ToJson::to_json(fps),
+    "ticks": @json.ToJson::to_json(ticks),
+    "frames": @json.ToJson::to_json(drawn.length()),
+    "looks": @json.ToJson::to_json(drawn.filter(fn(m) { m.perf.looks }).length()),
+    "painted": @json.ToJson::to_json(drawn.filter(fn(m) { m.perf.painted }).length()),
+    "kept": @json.ToJson::to_json(drawn.filter(fn(m) { m.perf.kept > 0 }).length()),
     "rows_kept": stat(d(fn(m) { m.perf.kept.to_double() })),
     "rows_built": stat(d(fn(m) { m.perf.rows.to_double() })),
     "work_ms": stat(d(fn(m) { m.work_ms })),
@@ -183,9 +183,9 @@ pub fn bench(
     "damage": stat(d(fn(m) { m.damage })),
     "damage_ms": stat(d(fn(m) { m.damage_ms })),
     "upload_kb": stat(d(fn(m) { m.bytes.to_double() / 1024.0 })),
-    "passes": d(fn(m) { m.perf.passes.to_double() }).fold(init=0.0, dmax).to_json(),
-    "passed": passed.to_json(),
-    "why": whys.to_json(),
+    "passes": @json.ToJson::to_json(d(fn(m) { m.perf.passes.to_double() }).fold(init=0.0, dmax)),
+    "passed": @json.ToJson::to_json(passed),
+    "why": @json.ToJson::to_json(whys),
   }
   say("APPBENCH " + out.stringify())
   // (and a row of the table scripts/appbench.sh prints)
@@ -285,16 +285,16 @@ pub fn bench_log(name : String, log : String) -> Bool {
   })
   let secs = if t1 > t0 { (t1 - t0) / 1000.0 } else { 0.0 }
   let stat = fn(xs : Array[Double]) -> Json {
-    { "med": centile(xs, 50).to_json(), "p95": centile(xs, 95).to_json() }
+    { "med": @json.ToJson::to_json(centile(xs, 50)), "p95": @json.ToJson::to_json(centile(xs, 95)) }
   }
   let out : Json = {
-    "scene": name.to_json(),
-    "host": "phone".to_json(),
-    "seconds": secs.to_json(),
-    "frames": frames.length().to_json(),
-    "drawn": shown.length().to_json(),
-    "looks": frames.filter(fn(f) { f.get("looks").unwrap_or(0.0) > 0.0 }).length().to_json(),
-    "painted": frames.filter(fn(f) { f.get("painted").unwrap_or(0.0) > 0.0 }).length().to_json(),
+    "scene": @json.ToJson::to_json(name),
+    "host": @json.ToJson::to_json("phone"),
+    "seconds": @json.ToJson::to_json(secs),
+    "frames": @json.ToJson::to_json(frames.length()),
+    "drawn": @json.ToJson::to_json(shown.length()),
+    "looks": @json.ToJson::to_json(frames.filter(fn(f) { f.get("looks").unwrap_or(0.0) > 0.0 }).length()),
+    "painted": @json.ToJson::to_json(frames.filter(fn(f) { f.get("painted").unwrap_or(0.0) > 0.0 }).length()),
     "work_ms": stat(col("work")),
     "build_ms": stat(col("build")),
     "layout_ms": stat(col("layout")),
@@ -306,7 +306,7 @@ pub fn bench_log(name : String, log : String) -> Bool {
     "insts": stat(col("insts")),
     "damage": stat(col("share")),
     "upload_kb": stat(upload),
-    "passed": passed.to_json(),
+    "passed": @json.ToJson::to_json(passed),
   }
   say("APPBENCH " + out.stringify())
   let ms = fn(xs : Array[Double]) { "\{round2(centile(xs, 50))} / \{round2(centile(xs, 95))}" }
