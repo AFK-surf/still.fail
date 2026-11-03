@@ -6,6 +6,11 @@ import type { ContextCall, UsageCall, UsageFor } from "./usage.ts";
 
 const minute = (r: string) => `(CASE WHEN ${r}.at >= 0 THEN ${r}.at / 60000 ELSE -1 - ((-1 - ${r}.at) / 60000) END)`;
 const cols = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+// A signed SQLite millisecond timestamp fits in 49 bits once rounded down to a minute and shifted by this bias.
+// Seven base-256 levels cover that space, with at most 255 nodes per level in a prefix.
+const MINUTE_BIAS = 2 ** 48;
+const TREE_LEVELS = 7;
+const TOTALS_BATCH = 64;
 const scopeOf = (value: string) => `(CASE WHEN ${value} IS NULL THEN 'H' ELSE 'W' || ${value} END)`;
 const sessionScope = (r: string) => scopeOf(`(SELECT ws FROM sessions WHERE key = ${r}.session)`);
 const fields = (r: string) => `${r}.session, ${minute(r)}, COALESCE(${r}.thread, 0), COALESCE(${r}.person, ''),
@@ -123,6 +128,8 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
       -- 'G' is all scopes, 'H' is the home-only scope and 'W' prefixes a workspace id. New buckets start empty, so
       -- this total is maintained only from later writes; installing it never reads or reconstructs old usage.
       CREATE TABLE usage_compact_total (scope TEXT PRIMARY KEY, calls INTEGER NOT NULL, tokens INTEGER NOT NULL) WITHOUT ROWID;
+      CREATE TABLE usage_compact_total_tree (scope TEXT NOT NULL, level INTEGER NOT NULL, bucket INTEGER NOT NULL,
+        calls INTEGER NOT NULL, tokens INTEGER NOT NULL, PRIMARY KEY (scope, level, bucket)) WITHOUT ROWID;
       CREATE TRIGGER usage_compact_total_dirty AFTER UPDATE OF scope, records, calls, input, cache_read, cache_write, cache_write_long, output ON usage_compact
         WHEN OLD.pending = 0 AND (OLD.scope IS NOT NEW.scope OR OLD.records IS NOT NEW.records OR OLD.calls IS NOT NEW.calls
           OR ${cols.slice(1).map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ")}) BEGIN
@@ -257,19 +264,37 @@ export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null, befor
     : `SELECT 1 FROM usage_compact_moving_scope WHERE ${scope} LIMIT 1`;
   const dirty = viewer === null ? "SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_session WHERE pending = 1 LIMIT 1"
     : `SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_scope WHERE pending = 1 AND ${scope} LIMIT 1`;
-  // A viewer's lifetime total ends at the next local midnight. Subtract only future buckets, seeking by scope and time;
-  // old buckets already included in the maintained total are not visited again.
-  const future = before === undefined ? null : viewer === null
-    ? `FROM usage_compact INDEXED BY usage_compact_time WHERE minute >= ?1 AND records > 0`
-    : `FROM usage_compact INDEXED BY usage_compact_scope_time WHERE ${scope} AND minute >= ?2 AND records > 0`;
-  const prefix = future === null ? "" : `WITH future AS MATERIALIZED (SELECT COALESCE(SUM(calls), 0) AS calls,
-    COALESCE(SUM(input + cache_read + cache_write + cache_write_long + output), 0) AS tokens ${future})`;
-  const minus = (column: string) => future === null ? "" : ` - (SELECT ${column} FROM future)`;
+  // Cover [the earliest possible minute, before) with at most seven runs of at most 255 tree nodes. A request
+  // therefore does not visit either earlier calls or arbitrarily many future-dated buckets.
+  const bias = BigInt(MINUTE_BIAS);
+  const edge = before === undefined ? 2n * bias : before + bias;
+  const ranges: [number, number, number][] | null = edge >= 2n * bias ? null : [];
+  if (ranges !== null) {
+    const end = edge < 0n ? 0n : edge;
+    let covered = 0n;
+    for (let level = TREE_LEVELS - 1; level >= 0; level--) {
+      const width = 1n << BigInt(8 * level);
+      const count = (end - covered) / width;
+      if (count > 0n) ranges.push([level, Number(covered / width), Number(covered / width + count)]);
+      covered += count * width;
+    }
+  }
+  const treeScope = viewer === null ? "t.scope = 'G'" : viewer.home !== false ? "t.scope IN (?1, 'H')" : "t.scope = ?1";
+  const treeRanges = viewer === null ? "?1" : "?2";
+  const prefix = ranges === null ? "" : `WITH ranges AS MATERIALIZED (
+    SELECT json_extract(value, '$[0]') AS level, json_extract(value, '$[1]') AS lo, json_extract(value, '$[2]') AS hi
+    FROM json_each(${treeRanges})
+  ), prefix AS MATERIALIZED (
+    SELECT COALESCE(SUM(t.calls), 0) AS calls, COALESCE(SUM(t.tokens), 0) AS tokens
+    FROM ranges r CROSS JOIN usage_compact_total_tree t
+    WHERE ${treeScope} AND t.level = r.level AND t.bucket >= r.lo AND t.bucket < r.hi
+  )`;
+  const value = (column: string) => ranges === null
+    ? `(SELECT COALESCE(SUM(${column}), 0) FROM usage_compact_total WHERE ${scope})` : `(SELECT ${column} FROM prefix)`;
   // The readiness checks and value must share one SQLite snapshot, including when another connection is moving rows.
   const row = db.prepare(`${prefix} SELECT NOT EXISTS (${moving}) AND NOT EXISTS (${dirty}) AS ready,
-    (SELECT COALESCE(SUM(calls), 0) FROM usage_compact_total WHERE ${scope})${minus("calls")} AS calls,
-    (SELECT COALESCE(SUM(tokens), 0) FROM usage_compact_total WHERE ${scope})${minus("tokens")} AS tokens`)
-    .get(...(viewer === null ? [] : [`W${viewer.workspace}`]), ...(before === undefined ? [] : [before])) as
+    ${value("calls")} AS calls, ${value("tokens")} AS tokens`)
+    .get(...(viewer === null ? [] : [`W${viewer.workspace}`]), ...(ranges === null ? [] : [JSON.stringify(ranges)])) as
     { ready: number; calls: number; tokens: number };
   return row.ready ? { calls: Number(row.calls), tokens: Number(row.tokens) } : null;
 }
@@ -289,12 +314,26 @@ function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string
   const rows = db.prepare(`SELECT session, minute, thread, person, profile, runtime, model, fast, scope, records, calls,
     ${tokens("usage_compact")} AS tokens, accounted_scope, accounted_calls, accounted_tokens FROM usage_compact ${selected}`)
     .all(...(session !== undefined ? [session, batch] : scope !== undefined ? [scope, batch] : [batch])) as PendingBucket[];
-  const changes = new Map<string, { calls: number; tokens: number }>();
-  const add = (scope: string, calls: number, tokens: number) => {
+  type Delta = { calls: number; tokens: number };
+  const changes = new Map<string, Delta>();
+  const trees = new Map<string, Map<string, Delta & { level: number; bucket: number }>>();
+  const add = (scope: string, calls: number, tokens: number, minute: number) => {
+    if (calls === 0 && tokens === 0) return;
     const prior = changes.get(scope) ?? { calls: 0, tokens: 0 };
     prior.calls += calls;
     prior.tokens += tokens;
     changes.set(scope, prior);
+    let nodes = trees.get(scope);
+    if (nodes === undefined) { nodes = new Map(); trees.set(scope, nodes); }
+    const shifted = minute + MINUTE_BIAS;
+    for (let level = 0; level < TREE_LEVELS; level++) {
+      const bucket = Math.floor(shifted / 256 ** level);
+      const key = `${level}:${bucket}`;
+      const node = nodes.get(key) ?? { level, bucket, calls: 0, tokens: 0 };
+      node.calls += calls;
+      node.tokens += tokens;
+      nodes.set(key, node);
+    }
   };
   const update = db.prepare(`UPDATE usage_compact SET accounted_scope = scope, accounted_calls = calls,
     accounted_tokens = ${tokens("usage_compact")}, pending = 0 WHERE session = ? AND minute = ? AND thread = ?
@@ -303,11 +342,11 @@ function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string
     AND profile = ? AND runtime = ? AND model = ? AND fast = ? AND records = 0`);
   for (const row of rows) {
     if (row.accounted_scope !== null) {
-      add(row.accounted_scope, -row.accounted_calls, -row.accounted_tokens);
-      add("G", -row.accounted_calls, -row.accounted_tokens);
+      add(row.accounted_scope, -row.accounted_calls, -row.accounted_tokens, row.minute);
+      add("G", -row.accounted_calls, -row.accounted_tokens, row.minute);
     }
-    add(row.scope, row.calls, row.tokens);
-    add("G", row.calls, row.tokens);
+    add(row.scope, row.calls, row.tokens, row.minute);
+    add("G", row.calls, row.tokens, row.minute);
     const key = [row.session, row.minute, row.thread, row.person, row.profile, row.runtime, row.model, row.fast] as const;
     update.run(...key);
     if (row.records === 0) drop.run(...key);
@@ -319,6 +358,14 @@ function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string
     if (delta.calls !== 0 || delta.tokens !== 0) put.run(scope, delta.calls, delta.tokens);
     clean.run(scope);
   }
+  const putNode = db.prepare(`INSERT INTO usage_compact_total_tree (scope, level, bucket, calls, tokens) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (scope, level, bucket) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens`);
+  const cleanNode = db.prepare("DELETE FROM usage_compact_total_tree WHERE scope = ? AND level = ? AND bucket = ? AND calls = 0 AND tokens = 0");
+  for (const [scope, nodes] of trees) for (const node of nodes.values()) {
+    if (node.calls === 0 && node.tokens === 0) continue;
+    putNode.run(scope, node.level, node.bucket, node.calls, node.tokens);
+    cleanNode.run(scope, node.level, node.bucket);
+  }
   const from = rows.length === 0 ? undefined : Math.min(...rows.map((row) => row.minute * 60_000));
   return { count: rows.length, sessions: [...new Set(rows.map((row) => row.session))],
     ...(from !== undefined && Number.isSafeInteger(from) ? { from } : {}) };
@@ -327,7 +374,7 @@ function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string
 /// Apply at most one batch of new buckets; this never reads or reconstructs original calls.
 export function compactTotalsStep(db: DatabaseSync, batch = 256, scope?: string): { done: boolean; sessions: string[]; from?: number } {
   if (!Number.isSafeInteger(batch) || batch < 1) throw new RangeError("compact totals batch must be positive");
-  batch = Math.min(batch, 256);
+  batch = Math.min(batch, TOTALS_BATCH);
   db.exec("BEGIN IMMEDIATE");
   try {
     const { count, sessions, from } = accountCompactBuckets(db, batch, undefined, scope);
@@ -348,7 +395,7 @@ export function moveCompactStep(db: DatabaseSync, batch = 256, scope?: string): 
     if (move === undefined) { db.exec("COMMIT"); return { done: true }; }
     if (move.phase === 1) {
       // Keep every old scope unavailable until the session's pending contributions have actually left its totals.
-      if (accountCompactBuckets(db, batch, move.session).count > 0) {
+      if (accountCompactBuckets(db, Math.min(batch, TOTALS_BATCH), move.session).count > 0) {
         db.exec("COMMIT");
         return { done: false };
       }
