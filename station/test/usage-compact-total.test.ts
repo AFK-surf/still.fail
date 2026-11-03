@@ -32,8 +32,11 @@ test("a year's usage view reads only its requested days but keeps the all-time t
       [call("old", -86_400_000, 10), owner], [call("new", 60_000, 19), owner], [call("future", 86_400_000, 6), owner],
     ]);
     store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [[call("other", 60_000, 999), owner]]);
+    account(store);
     const limited = compact.compactHistory(store.db, 0n, a, false, { from: 0n, to: 1_440n });
     assert.deepEqual(limited?.map((d) => [d.day, d.tokens]), [["1970-01-01", 20]]);
+    assert.deepEqual(compact.compactTotal(store.db, a, 1_440n), { calls: 2, tokens: 31 });
+    assert.deepEqual(compact.compactTotal(store.db, b, 1_440n), { calls: 1, tokens: 1_000 });
     const answer = usage(makeStore(store.db, "."), "en", 0n, 86_400_000n, 0n, false, a, true,
       { historyRange: { from: 0n, to: 86_400_000n } } as never);
     assert.deepEqual(answer.history.days.map((d: { day: string; tokens: number }) => [d.day, d.tokens]), [["1970-01-01", 20]]);
