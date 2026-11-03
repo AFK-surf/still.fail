@@ -569,9 +569,25 @@ fn[P] Nav::backs_over(
     }
   }
   let back_node = fn(b : @view.View) { b.over(Is(true)).follows_back(step) |> ignore }
-  // (where a swipe from its edge went down, as it went down: from there it sets out, as the old frame's from press_x)
+  // (back not the stack's but another's of the tree's, outside the page (a tape's panel's: what the frame takes it by,
+  // View::follows_back): the swipe from the page's edge is its, as the old frame's edge gives a page's swipe to what
+  // takes back then (Ctx::back_gesture: Tree::back_taker))
+  let elsewhere = fn() -> @view.NodeId? {
+    if backs(false) {
+      return None
+    }
+    match m.tree.back_taker() {
+      Some(id) if !m.tree.holds(m.id(), id) => Some(id)
+      _ => None
+    }
+  }
+  // (where a swipe from its edge went down, as it went down: from there it sets out, as the old frame's from press_x;
+  // and, where it is another's, which, and where that is drawn from: x from its left, as it is told by the old frame's)
   let down_x = Ref(0.0)
+  let down_wx = Ref(0.0)
   let swiped = Ref(false)
+  let other : Ref[(@view.NodeId, Double)?] = Ref(None)
+  let to_other = fn(id : @view.NodeId, step : @view.BackStep, at : Double) { m.tree.back_step(id, step, at) |> ignore }
   m
   .claims(
     fn(dx, dy) {
@@ -580,7 +596,16 @@ fn[P] Nav::backs_over(
     },
     from=fn(x, _) {
       down_x.val = x
-      h_platform() != 2 && desk.mouse_drags && x < edge && backs(false)
+      // (where it went down in the window, as `m` is drawn as it goes down: what it sets out from, whatever moves `m`
+      // before it is taken over)
+      down_wx.val = match m.tree.drawn_of(m.id()) {
+        Some(o) => {
+          let lw = @signals.untracked(fn() { m.laid_size() }).0
+          o.x + x * (if lw > 0.0 { o.w / lw } else { 1.0 })
+        }
+        None => x
+      }
+      h_platform() != 2 && desk.mouse_drags && x < edge && (backs(false) || elsewhere() is Some(_))
     },
   )
   .on_drag(fn(d) {
@@ -588,17 +613,41 @@ fn[P] Nav::backs_over(
       let w = d.w
       match d.kind {
         Down => {
-          nav.gesture(0, down_x.val, w, d.at)
-          nav.gesture(1, d.x, w, d.at)
+          other.val = match elsewhere() {
+            Some(id) => Some((id, m.tree.drawn_of(id).map(fn(o) { o.x }).unwrap_or(0.0)))
+            None => None
+          }
+          match other.val {
+            Some((id, left)) => {
+              to_other(id, Began(down_wx.val - left, d.at), d.at)
+              to_other(id, Moved(d.wx - left, d.at), d.at)
+            }
+            None => {
+              nav.gesture(0, down_x.val, w, d.at)
+              nav.gesture(1, d.x, w, d.at)
+            }
+          }
         }
-        Moved => nav.gesture(1, d.x, w, d.at)
+        Moved =>
+          match other.val {
+            Some((id, left)) => to_other(id, Moved(d.wx - left, d.at), d.at)
+            None => nav.gesture(1, d.x, w, d.at)
+          }
         Up => {
-          nav.gesture(2, d.x, w, d.at)
+          match other.val {
+            Some((id, left)) => to_other(id, LetGo(d.wx - left, d.at), d.at)
+            None => nav.gesture(2, d.x, w, d.at)
+          }
           swiped.val = false
+          other.val = None
         }
         Off => {
-          nav.gesture(3, d.x, w, d.at)
+          match other.val {
+            Some((id, _)) => to_other(id, CalledOff, d.at)
+            None => nav.gesture(3, d.x, w, d.at)
+          }
           swiped.val = false
+          other.val = None
         }
       }
     }
