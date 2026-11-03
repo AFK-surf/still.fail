@@ -278,9 +278,13 @@ export class Store {
     }
   }
 
-  /// rusqlite's transaction(): BEGIN (deferred), committed when `run` returns, rolled back when it throws.
+  /// A transaction that writes, committed when `run` returns, rolled back when it throws: it takes the database's writing
+  /// from its start, waiting its turn as long as busy_timeout says. Begun deferred (rusqlite's transaction()), it read
+  /// first and took the writing at its first write: where the station's other writers (the usage worker's backfills, a
+  /// reader's checkpoint) had written meanwhile, SQLite refused it at once, no wait ("database is locked": a person's
+  /// message not sent, on ccvm 2026-11-03, while the usage worker filled its statistics).
   #tx<T>(run: () => T): T {
-    this.db.exec("BEGIN");
+    this.db.exec("BEGIN IMMEDIATE");
     let result: T;
     try {
       result = run();
