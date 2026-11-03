@@ -323,7 +323,8 @@ export class Readers {
       const free = line.slots.filter((s) => s.held === null).length + (line.size - line.slots.length);
       const resting = line.rested !== undefined && wall.now() < line.rested;
       const behind = resting || line.slots.some((s) => s.held?.background === true) || (free < 2 && line.size > 1) ? -1 : line.waiting.findIndex((a) => a.background);
-      const first = line.waiting.findIndex((a) => interactive(a) || a.ask.op === CHECKPOINT);
+      // (a background read of a kind someone waits on, a batch's chat, is a background read: one at a time, after a rest)
+      const first = line.waiting.findIndex((a) => !a.background && (interactive(a) || a.ask.op === CHECKPOINT));
       const at = limited || first >= 0 ? first : foreground >= 0 ? foreground : behind;
       if (at < 0) {
         // A background read waiting while the line rests: looked at again once it has, however early a timer fires

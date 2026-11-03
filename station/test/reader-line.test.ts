@@ -268,3 +268,19 @@ test("a background read waiting while its line rests is read once it has rested,
     await open([]);
   }
 });
+
+test("a batch's chat reads, in the background, are read one at a time beside what a device asks, not as it is", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(2);
+  const background = { background: true };
+  const asked = [readers.read("thread", args(true), "en", background), readers.read("thread", args(true), "en", background)];
+  try {
+    await started(1);
+    // The second waits: one at a time, a reader left for a chat someone opens.
+    assert.equal(await readers.read("thread", args(false), "en"), "{}");
+    assert.equal(Atomics.load(state, 0), 2, "the second background read still waits");
+  } finally {
+    const settled = await open(asked);
+    assert.ok(settled.every((s) => s.status === "fulfilled"));
+  }
+  assert.equal(Atomics.load(state, 0), 3);
+});
