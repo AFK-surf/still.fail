@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { lanAddrs, lanKept, lanNeighbours, lanReach, privateV4, tailnetAddrs, tailnetV4 } from "../src/mesh/lan.ts";
+import { lanAddrs, lanNeighbours, lanReach, privateV4, tailnetAddrs, tailnetV4 } from "../src/mesh/lan.ts";
 
 const nic = (address: string, family: "IPv4" | "IPv6" = "IPv4", internal = false) => ({ address, family, internal, netmask: "", mac: "", cidr: null }) as never;
 
@@ -49,13 +49,4 @@ test("the LAN is reached once one takes a byte, refused when each says no route"
   assert.equal(await lanReach(["192.168.20.1", "192.168.0.1"], says({ "192.168.20.1": "EHOSTUNREACH", "192.168.0.1": null })), "granted");
   assert.equal(await lanReach(["192.168.20.1"], says({ "192.168.20.1": "ENETDOWN" })), null);
   assert.equal(await lanReach([], says({})), null);
-});
-
-// The MacBook's app, not let reach its LAN: studio's address on its own subnet refused, the one past the router not.
-test("a station's LAN addresses are kept from the app when one on its subnet is refused", async () => {
-  const says = (codes: Record<string, string | null>) => async (ip: string) => codes[ip] ?? null;
-  const studio = ["192.168.0.126:54829", "192.168.20.10:54829", "192.168.20.107:54829"];
-  assert.equal(await lanKept(studio, says({ "192.168.20.10": "EHOSTUNREACH", "192.168.20.107": "EHOSTUNREACH" })), true);
-  assert.equal(await lanKept(studio, says({})), false);
-  assert.equal(await lanKept(["100.67.165.110:1", "nonsense"], says({ "100.67.165.110": "EHOSTUNREACH" })), false);
 });

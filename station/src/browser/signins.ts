@@ -1,10 +1,6 @@
 // Sign-ins in a chat's browser (docs/vault.md 登录态): a site's sign-in is its cookies (and its passkeys: passkeys.ts),
 // kept in the vault as an item of kind browser and put into a chat's browser while a grant for it lasts. Here: which cookies are a site's, the cookies
-// of a browser as they are set again (DevTools' Storage.getCookies gives more than Storage.setCookies takes), and the
-// sign-ins put into a chat's browser, written down in its directory (signins.json) until each is taken out again, so a
-// station process after this one still takes them out on time.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+// of a browser as they are set again (DevTools' Storage.getCookies gives more than Storage.setCookies takes).
 import { type Passkey, passkeyOf } from "./passkeys.ts";
 
 /// A cookie as DevTools sets it (Network.CookieParam): what of a cookie it read is kept.
@@ -62,22 +58,4 @@ export function keptOf(s: SignInState): string {
 /// The same cookies set to have expired: setting them so takes them out of the browser.
 export function expired(cookies: CookieParam[]): CookieParam[] {
   return cookies.map((c) => ({ ...c, value: "", expires: 1 }));
-}
-
-/// A sign-in put into a chat's browser: the grant's request, its sites, until when (unix seconds).
-export type SignedIn = { request: string; sites: string[]; until: number };
-
-/// The sign-ins in a chat's browser not taken out yet (<its dir>/signins.json).
-export function readSignIns(dir: string): SignedIn[] {
-  try {
-    const v = JSON.parse(readFileSync(join(dir, "signins.json"), "utf8"));
-    return Array.isArray(v) ? v.filter((x) => typeof x?.request === "string" && Array.isArray(x.sites) && Number.isSafeInteger(x.until)) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function writeSignIns(dir: string, all: SignedIn[]) {
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "signins.json"), JSON.stringify(all, null, 2) + "\n");
 }

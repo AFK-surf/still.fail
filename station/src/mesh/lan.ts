@@ -108,14 +108,6 @@ export async function lanReach(neighbours = lanNeighbours(), send: (ip: string) 
 /// refused then, it is switched on there).
 export const LOCAL_NETWORK_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork";
 
-/// Whether macOS keeps this process from any of `addrs` (`ip:port`, where a station said it is on its LAN): one on the
-/// subnet it is on refused at once. One past the router goes through either way; one not there is not told so at once.
-export async function lanKept(addrs: string[], send: (ip: string) => Promise<string | null> = sendOne): Promise<boolean> {
-  const ips = [...new Set(addrs.map((a) => /^(\d+\.\d+\.\d+\.\d+):\d+$/.exec(a)?.[1]).filter((ip): ip is string => ip !== undefined && privateV4(ip)))];
-  const said = await Promise.all(ips.map(send));
-  return said.some((e) => e === "EHOSTUNREACH");
-}
-
 /// What System Settings' Local Network list names the station by: the app it runs in (the desktop app's station runs on
 /// its Node, `STILLFAIL_NODE`), else its launcher, which launchd starts and Node is part of.
 export function localNetworkName(execPath = process.execPath): string {

@@ -1256,11 +1256,3 @@ export class Sharing {
     return null;
   }
 }
-
-export const sharedSkillConflicts = (dir: string): string[] => {
-  try {
-    return readdirSync(dir).filter((n) => /^SKILL\.conflict-.*\.md$/.test(n));
-  } catch {
-    return [];
-  }
-};
