@@ -1080,13 +1080,18 @@ export class Store {
   /// The thread a session last heard from: where the station's own notices go and whose connect's name the agent goes
   /// by. Falls back to the thread it joined last when it has heard nothing yet.
   latestThread(session: string): SessionThread | null {
-    const heard = this.#one(
-      `SELECT t.*, ts.connect FROM deliveries d JOIN threads t ON t.id = d.thread
-       JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
-       WHERE d.session = ? ORDER BY d.rowid DESC LIMIT 1`,
+    // The delivery index groups by session and thread. Seek the last row within each joined thread rather than sort
+    // every delivery the session has ever received. A null last row sorts after a delivery, then the join order is the
+    // same fallback as sessionThreads. This still visits each joined thread, but writes no per-delivery summary.
+    const latest = this.#one(
+      `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
+       WHERE ts.session = ?
+       ORDER BY (SELECT d.rowid FROM deliveries d INDEXED BY deliveries_session
+                 WHERE d.session = ts.session AND d.thread = ts.thread ORDER BY d.rowid DESC LIMIT 1) DESC,
+                ts.joined_at DESC, ts.rowid DESC LIMIT 1`,
       session,
     );
-    return heard ? toSessionThread(heard) : (this.sessionThreads(session)[0] ?? null);
+    return latest ? toSessionThread(latest) : null;
   }
 
   /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
