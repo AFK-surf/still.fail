@@ -258,7 +258,7 @@ export const routes = (tools: Tools): Route[] => {
       handle: async (r, [rawKey, rawAction]) => {
         const key = segment(rawKey!);
         const action = rawAction === undefined ? undefined : segment(rawAction);
-        if (action === undefined) return read(r, "session", { key, viewer: r.viewer, lang: r.lang, turns: param(r, "turns") });
+        if (action === undefined) return read(r, "session", { key, viewer: r.viewer, lang: r.lang });
         // `brief=1`: in brief (what a history shows unopened); `from`, `to`: those entries whole, as one is opened.
         if (action === "timeline") return read(r, "timeline", { key, before: param(r, "before"), limit: param(r, "limit"), lang: r.lang, from: param(r, "from"), to: param(r, "to"), brief: param(r, "brief"), after: param(r, "after") });
         if (action === "files") return file(tools, r, key, param(r, "name") ?? "", param(r, "thumb") === "1");
