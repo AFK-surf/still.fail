@@ -475,7 +475,10 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
 ///
 /// `scope` (`scopeOf`): only the items whose ids it names (what a change of some sessions and threads can touch), read
 /// from what they are made of alone, each as the whole list has it.
-export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null): Json[] {
+/// `named`: the items' ids, titles and agents alone (what names a job's chat, read/jobs.ts `openJobs`): none of their
+/// latest messages, cards, needs, answers or the review's marks read for them, 8 s for 8 jobs' chats on ccvm short of
+/// memory (2026-11-03).
+export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null, named = false): Json[] {
   useNames(station);
   const api = apiOf(station);
   const s = api.store;
@@ -513,7 +516,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   // The sidebar's own threads alone; the archive's, all of them.
   const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
   const threads = store.listThreads(s, viewer.email, null, of).filter((t) => t.sessions.some((m) => all.has(m.session)));
-  const stats = store.sessionStats(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
+  const stats: ReturnType<typeof store.sessionStats> = named ? new Map() : store.sessionStats(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
   // Per agent: the Slack thread it came from (the latest one it is in), whether it has an internal chat, and whether
   // the viewer wrote in one of its Slack threads.
   const origins = new Map<string, ThreadSummary>();
@@ -537,7 +540,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   // The cards the viewer answered lately, by chat.
   const answered = new Map<number, Json[]>();
   const itemThreads = threads.filter((t) => t.thread.surface === STILLFAIL_SURFACE && listed(t) && inChat(t).length > 0);
-  if (!archived) {
+  if (!archived && !named) {
     // Only these items can show an answer, and a chat without cards cannot have one. Looking at every person's recent
     // messages first made even a change to one cardless chat read that chat's whole recent conversation.
     const carded = store.threadsWithCards(s, itemThreads.map((t) => t.thread.id));
@@ -554,8 +557,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     const origin_ = from === null ? null : origin(from);
     const creator_ = creator(t.thread.createdBy);
     const people_ = people(t.people);
-    const names = authorNames(api, t.thread.id);
-    const lastView = t.lastMessage === null ? null : messageView(t.lastMessage, names, api.store);
+    const names = named ? null : authorNames(api, t.thread.id);
+    const lastView = names === null || t.lastMessage === null ? null : messageView(t.lastMessage, names, api.store);
     const starters = agents.map((a) => creator(all.get(a.key)?.createdBy ?? null));
     const key = agents[0].key;
     // with no name of its own, the Slack thread its agent came from names it
@@ -593,8 +596,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     row.archiveReminderDismissed = kept.has(t.thread.id);
     // The decision looked at it (after its agent said all done) and found nothing left to do; with the review on, only
     // such a chat is shown as one to archive (`archiveReviewed`), not every one whose agents are done.
-    row.archiveRecommended = !archived && store.archiveSuggested(s, t.thread.id);
-    if (api.reviews) {
+    row.archiveRecommended = !archived && !named && store.archiveSuggested(s, t.thread.id);
+    if (api.reviews && !named) {
       row.archiveReviewed = true;
       // What the review made of it as it stands: the option picked (and whether that recommends it), or its failure.
       const verdict = archived ? null : store.archiveVerdict(s, t.thread.id);
@@ -604,7 +607,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     const clientKey = s.clientKeys.get(String(key));
     if (clientKey !== undefined) row.clientKey = clientKey;
     // The card it waits on, if any, and whether the viewer dismissed it; an options card is its `decision` too.
-    const card = archived ? null : cardView(api, t.thread.id, dismissed, names);
+    const card = archived || names === null ? null : cardView(api, t.thread.id, dismissed, names);
     if (card !== null) {
       if (field(card.card, "type") === "options") {
         const decision = swapRemove(card, "card");
@@ -612,7 +615,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
         row.decision = decision;
       }
       row.card = card;
-    } else if (!archived) {
+    } else if (!archived && names !== null) {
       // With no card waiting: what an agent needs a person for all the same, the message that asks.
       const need = needView(api, t.thread.id, agents, dismissed, names);
       if (need !== null) row.need = need;
