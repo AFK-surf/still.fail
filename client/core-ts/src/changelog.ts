@@ -178,13 +178,16 @@ export class Changelog implements Owner {
       if (it.mine && build !== null && version <= build && seen !== null && version > seen && news.length < NEWS) news.push(it);
       const ms = (typeof get(entry, "at") === "number" ? entry.at : 0) * 1000;
       const label = format.dayLabel(ms, now, offset);
+      // the day it is of where the device is: which day of the list it is, the same whatever else that day lists or
+      // what the list leaves off (its label only says it)
+      const day = format.localDay(ms, offset);
       const parts: string[] = arr(get(entry, "parts")).filter((p): p is string => typeof p === "string");
       for (const tab of tabs) {
         if (!inTab(tab.part, parts)) continue;
         const shown = item(entry, app, build, released, tab.part);
         const last = tab.days[tab.days.length - 1];
-        if (last && last.label === label) last.entries.push(shown);
-        else tab.days.push({ label, entries: [shown] });
+        if (last && last.day === day) last.entries.push(shown);
+        else tab.days.push({ day, label, entries: [shown] });
       }
     }
     // A tab a part only where they part what is said: where each would list the same changes, this app's alone.

@@ -15,8 +15,6 @@ import {
 // Values
 pub fn about_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
-pub fn about_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
-
 pub let acc_delete_words : @ui.TextStyle
 
 pub let acc_narrow_foot : @ui.Style
@@ -65,7 +63,7 @@ pub fn cd_mode_dialog(@settings.Core, String, Json?) -> Unit
 
 pub fn changelog_news(@ui.Ctx, @sfbase.Source) -> Unit
 
-pub fn changelog_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
+pub fn changelog_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn chat_composer(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, apart? : Bool) -> Unit
 
@@ -332,8 +330,6 @@ pub fn me_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 pub let mem_narrow_title : @ui.TextStyle
 
 pub fn memories_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
-
-pub fn memories_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
 pub fn memory_doc_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String, Int32) -> Unit
 

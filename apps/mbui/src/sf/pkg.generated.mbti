@@ -237,6 +237,8 @@ pub let centred_x : @ui.Style
 
 pub let centred_y : @ui.Style
 
+pub fn change_node(@view.View, () -> Array[ChangeLine], () -> String, () -> String, () -> Bool) -> Unit
+
 pub let chat_station_in : @ui.Space
 
 pub let chat_station_most : @ui.Len
@@ -362,6 +364,8 @@ pub let custom_field_w : @ui.Len
 pub fn dashed_frame(@ui.Ctx, Double, Double, Double, Double, Int64) -> Int32
 
 pub fn data_image(String) -> String
+
+pub fn day_group_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
 
 pub let desk_card : @ui.Style
 
@@ -1309,13 +1313,15 @@ pub let page_list_opened : @ref.Ref[(@ui.Ctx, String, Int32) -> Unit]
 
 pub let page_narrow_most : Double
 
-pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double) -> Unit
+pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, scroll? : @view.Scroll) -> Unit
 
 pub fn page_note(@ui.Ctx, String, bad? : Bool) -> Unit
 
 pub fn page_note_node(@view.View, () -> String, bad? : () -> Bool) -> Unit
 
 pub let page_raised : Raised
+
+pub fn page_said_node(@view.View, () -> String, bad? : Bool) -> Unit
 
 pub fn page_viewer_ink() -> ViewerInk
 
@@ -2481,6 +2487,12 @@ pub struct Book {
 }
 pub fn Book::at(Self, Int32) -> (Int32, Int32)
 pub fn Book::offset_of(Self, Int32, Double) -> Int32
+
+pub(all) struct ChangeLine {
+  label : String
+  text : String
+  fresh : Bool
+} derive(Eq)
 
 pub(all) struct Chapter {
   title : String

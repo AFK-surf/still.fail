@@ -138,7 +138,7 @@ fn pane_stack(v : @view.View, src : Source) -> Unit {
 
 ///|
 /// The pages of the library's made once as nodes in the pane off the tape (Large), in the place of their old view
-/// (nav_flat_view's `made`): 关于, 记忆. Laid out by the width the frame gives the pane (the window's less the block's column
+/// (nav_flat_view's `made`): 关于, 记忆, 更新日志. Laid out by the width the frame gives the pane (the window's less the block's column
 /// where its move goes: fold_target's, never what the page last laid out), narrow or wide (page_node), each made again
 /// only as that arrangement changes. What the old view's island did for the page done by its node (pane_made_host).
 fn pane_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
@@ -197,6 +197,24 @@ fn pane_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
       made("memories", fn(a, core, here, frame, width) {
         @sfpages.memories_node(a, core, here, on_back=core.pop, frame~, width~)
       })
+    Setting(Changelog) =>
+      made("changelog", fn(a, core, _here, frame, width) {
+        @sfpages.changelog_node(a, core, on_back=core.pop, frame~, width~)
+      })
+    // (a place of the rail's whose page is one of those, at the stack's root: no back over it, place_page's)
+    Place(name) =>
+      match @settings.route_of(name) {
+        Some(Memories) =>
+          made("place/memories", fn(a, core, here, frame, width) {
+            @sfpages.memories_node(a, core, here, on_back=core.pop, frame~, width~)
+          })
+        Some(About) => made("place/about", fn(a, core, _here, frame, width) { @sfpages.about_node(a, core, on_back=core.pop, frame~, width~) })
+        Some(Changelog) =>
+          made("place/changelog", fn(a, core, _here, frame, width) {
+            @sfpages.changelog_node(a, core, on_back=core.pop, frame~, width~)
+          })
+        _ => None
+      }
     _ => None
   }
 }

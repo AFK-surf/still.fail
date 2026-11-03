@@ -243,6 +243,8 @@ pub fn set_view_app(make : (@view.View) -> Unit, around? : (Ctx) -> Unit) -> Uni
     view_held.val = Some(Nowhere)
   }
   g().back_off = back_off
+  // (its own number: what its words picked are known by, none of the one before's)
+  view_tree_made.val = view_tree_made.val + 1
   view_made_now(make)
   // (the focus on a node of the tree before: none's now, its id nobody's)
   focus_told_tree(g())
@@ -596,6 +598,14 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   // (what a still pointer is over, the tree laid out as this frame has it, before anything is built or drawn of it:
   // view_pointed_again)
   view_pointed_again()
+  // (its words being picked with the pointer held: to what is under it as this frame lays the tree out (its column
+  // scrolled on under a pointer that stays where it is, words come), whether or not an old view is built in it; the
+  // column toward the pointer, shown nowhere now let go: tree_edge_to)
+  let c = g()
+  if tree_picking() && picked.dragging && c.down {
+    c.select_to(c.px, c.py)
+  }
+  tree_edge_to(c, picked.dragging && c.down)
 }
 
 ///|
@@ -1418,6 +1428,15 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     let center_in = if c.words_center { c.w } else { -1.0 }
     // (its grounds under its words (code's, a label's), the lines through or under them over them: as an old view's
     // paragraph's, Ctx::paint_rich's)
+    // (what of it is picked with the pointer, under all of it: View::runs_picked, as an old view's paragraph's)
+    let (pa, pb) = c.runs_picked
+    if pa < pb {
+      for rect in lay.rects(pa, pb) {
+        // (each line where it is drawn: in its middle where it stands so)
+        let dx = rich_shift_at(lay, rect.1 + rect.3 / 2.0, if c.words_center { c.w } else { -1.0 })
+        self.emit_rect(rect.0 + dx, rect.1, rect.2, rect.3, 0.0, desk.sel_color, 0.0, 0L, 1.0)
+      }
+    }
     // (the link held, by its first run, its pressed ground under it alone: View::runs_pressed)
     let held = c.runs_pressed
     self.paint_run_grounds(
@@ -1961,7 +1980,12 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     }
     // (a handle of the focused field of the tree's under it (Android's), before what is under it: that field's)
     (0, _) if button != 2 && tree_field_handle_down(x, y, at) => true
-    (0, _) =>
+    (0, _) => {
+      // (a press of the primary button, wherever on the tree: words of its picked with the pointer let go, as an old
+      // view's page's are by a press elsewhere (Ctx::select_press); on words to pick, picked anew from there below)
+      if button != 2 && tree_picking() {
+        select_none()
+      }
       match tree.target_at(x, y) {
         // (held by a node of the tree's: the finger its, each event at its moment)
         Dragged(id) if button != 2 => {
@@ -2020,6 +2044,15 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
         // (nothing of the tree's there: where the one old view is the whole window, its own (the old root's, as it was
         // before the tree: what it draws past the window, a list scrolled on below it, is its own: a way there, no rule
         // of the tree's); else nobody's)
+        // (words of the tree's picked with the pointer under it (words_picked), nothing of the tree's taking the press
+        // there (what scrolls them claims it only as it moves): the selection's, the old view's way to it told it so
+        // (Ctx::select_press, its moves and its let go its too), as an old view's page's words are, its lists not
+        // dragged by the mouse there)
+        Nothing if button != 2 && pointing() is Mouse && tree_sel_at(x, y) is Some(_) => {
+          view_held.val = Some(Old(-1, None))
+          view_input_went(-1)
+          false
+        }
         Nothing if old_whole.val && island_allows(old_whole_island()) => {
           view_held.val = Some(Old(-1, old_whole_island()))
           view_input_went(-1)
@@ -2034,6 +2067,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           true
         }
       }
+    }
     // (moved: taken over by what holds where it went down, where that says it takes it (a column scrolling it up or
     // down: View::claims), what had it called off)
     // (a field of the tree's the press went down on: what is picked dragged on, where it took it as it went down; how far
@@ -3084,7 +3118,7 @@ fn old_taker_at(tree : @view.Tree, island : @view.NodeId, x : Double, y : Double
     return if old_hit_owner(k) == Some(island) { Some(c.hit_ids[k] * 2) } else { None }
   }
   match c.sel_at(x, y) {
-    Some(s) if s.island == Some(island) => Some(s.base * 2 + 1)
+    Some({ island: Some(i), base: Para(base), .. }) if i == island => Some(base * 2 + 1)
     _ => None
   }
 }

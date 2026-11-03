@@ -175,7 +175,9 @@ pub fn seg_node(
             o
             .width(By(fn() { Some(w_of(k)) }))
             .height(Is(Some(segmented_h)))
+            // (its words in its middle both ways, as the old view's option is: align and justify centre)
             .lines_up(Is(Some(Middle)))
+            .lies_along(Is(Middle))
             .presses(Is(true))
             .focusable(Is(true))
             .tab_stop(By(on))
@@ -192,7 +194,9 @@ pub fn seg_node(
               .words(By(label))
               .words_look(By(fn() {
                 let size = theme().t.ui * smaller()
-                { size, weight: if on() { 500 } else { 400 }, line: @ui.tree_theme().text_line * size, wrap: false, tracking: @view.letters_own }
+                // (its line so many times its size as drawn, at the system's size of words: an old view's words' as
+                // Ctx::text has them, where none is said (a negative line: view_line's))
+                { size, weight: if on() { 500 } else { 400 }, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own }
               }))
               .ink(By(fn() {
                 if on() || o.pointed() {

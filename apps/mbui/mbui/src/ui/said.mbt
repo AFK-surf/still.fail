@@ -231,6 +231,15 @@ let said_log : SaidLog = { on: false, built: StringBuilder(), sb: StringBuilder(
 
 ///|
 /// Id `id` as shown (SaidLog's `ids`; 0 none).
+fn said_sel(k : SelKey) -> String {
+  match k {
+    NoSel => "0"
+    Para(id) => said_id(id).to_string()
+    Words(tree, row, place) => "w\{tree}/\{row.at}/\{row.gen}/\{place}"
+  }
+}
+
+///|
 fn said_id(id : Int) -> Int {
   if id == 0 {
     return 0
@@ -726,7 +735,7 @@ impl SaidAgain for ScrollsTaken with said_show(self, sb) {
 impl SaidAgain for SelsTaken with said_show(self, sb) {
   for t in self.sels {
     sb.write_string(
-      "sel \{said_id(t.base)} \{t.at} \{said_num(t.ox)} \{said_num(t.oy)} \{said_num(t.x0)} \{said_num(t.y0)} \{said_num(t.x1)} \{said_num(t.y1)} \{t.text.length()}\n",
+      "sel \{said_sel(t.base)} \{t.at} \{said_num(t.ox)} \{said_num(t.oy)} \{said_num(t.x0)} \{said_num(t.y0)} \{said_num(t.x1)} \{said_num(t.y1)} \{t.text.length()}\n",
     )
   }
 }

@@ -152,42 +152,6 @@ test "the settings' list made once: a row pressed opens its page" {
 }
 
 ///|
-test "关于 made once: every instance drawn as its old view's, with an update on its way and statistics sent, at the system's larger words" {
-  for case in [(2, 1.0), (0, 1.0), (2, 2.0)] {
-    let (platform, scale) = case
-    let (old, _) = settings_home_tester(false, platform, mode="settings-about", scale~)
-    let old_drawn = instances_sorted(old)
-    let old_words = words_where(old)
-    let (made, _) = settings_home_tester(true, platform, mode="settings-about", scale~)
-    assert_true(app.nav.top() == Setting(@settings.Route::About))
-    // (the words first: what differs said by what it says)
-    same_drawn(words_where(made), old_words, "words")
-    same_drawn(instances_sorted(made), old_drawn, "instances")
-  }
-}
-
-///|
-test "关于 made once: as an update goes (offered, checked, its bar opening, downloaded, ready), each moment drawn as its old view's" {
-  let moments = [1000.0, 2190.0, 2240.0, 2300.0, 2500.0, 4000.0, 6000.0]
-  let (old, _) = settings_home_tester(false, 2, mode="settings-about-flow", wait=0.0)
-  let olds = []
-  let mut at = 0.0
-  for m in moments {
-    old.run_for(m - at)
-    at = m
-    olds.push((instances_sorted(old), words_where(old)))
-  }
-  let (made, _) = settings_home_tester(true, 2, mode="settings-about-flow", wait=0.0)
-  at = 0.0
-  for i, m in moments {
-    made.run_for(m - at)
-    at = m
-    same_drawn(words_where(made), olds[i].1, "words at \{m}")
-    same_drawn(instances_sorted(made), olds[i].0, "instances at \{m}")
-  }
-}
-
-///|
 test "关于 made once: its title, rows and switch are the tree's own nodes; its switch turned, statistics told so" {
   let (t, _) = settings_home_tester(true, 2, mode="settings-about")
   let own = tree_words_drawn()
@@ -325,69 +289,42 @@ fn memories_tester(
 }
 
 ///|
-test "记忆 made once: every instance drawn as its old view's, a station online and one offline, with a finger and with keyboard and mouse, at the system's larger words" {
-  for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
-    let (platform, scale) = case
-    let old = memories_tester(false, platform, scale~)
-    let old_drawn = instances_sorted(old)
-    let old_words = words_where(old)
-    let made = memories_tester(true, platform, scale~)
-    assert_true(app.nav.top() == Setting(@settings.Route::Memories))
-    same_drawn(words_where(made), old_words, "words at \{case}")
-    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
-  }
-}
-
-///|
-test "记忆 made once, its stations read the first time: its list in its bones as the old view's, as it breathes, at the system's sizes of words; none of it found or read out" {
+test "记忆 made once, its stations read the first time: its list in its bones, as it breathes, at the system's sizes of words; none of it found or read out" {
   for scale in [1.0, 1.5, 2.0] {
-    let seen = fn(tree : Bool) {
-      let t = memories_tester(tree, 2, held=true, scale~)
-      let t0 = t.time()
-      let out = [instances_sorted(t)]
-      for dt in [@sf.breath_ms / 4.0, @sf.breath_ms / 2.0] {
-        t.frame_at(t0 + dt)
-        out.push(instances_sorted(t))
-      }
-      (out, words_where(t), t.words_said().map(fn(w) { w.0 }))
+    let t = memories_tester(true, 2, held=true, scale~)
+    let t0 = t.time()
+    let out = [instances_sorted(t)]
+    for dt in [@sf.breath_ms / 4.0, @sf.breath_ms / 2.0] {
+      t.frame_at(t0 + dt)
+      out.push(instances_sorted(t))
     }
-    let (old, old_words, old_said) = seen(false)
-    let (made, made_words, made_said) = seen(true)
-    same_drawn(made_words, old_words, "words at \{scale}")
-    assert_eq(made_said, old_said, msg="read out at \{scale}")
-    for i, o in old {
-      same_drawn(made[i], o, "instances at \{scale}, step \{i}")
+    let words = words_where(t)
+    let said = t.words_said().map(fn(w) { w.0 })
+    for i, o in out {
       assert_true(o.length() > 0, msg="nothing drawn at \{scale}, step \{i}")
     }
     // (it breathes: not drawn the same at its faintest as at first)
-    assert_true(made[0] != made[2], msg="not breathing at \{scale}")
-    assert_true(!made_words.iter().any(fn(w) { w.contains("字") }), msg="\{made_words}")
+    assert_true(out[0] != out[2], msg="not breathing at \{scale}")
+    // (its bones' words neither drawn nor read out)
+    assert_true(!words.iter().any(fn(w) { w.contains("字") }), msg="\{words}")
+    assert_true(!said.iter().any(fn(w) { w.contains("字") }), msg="read out at \{scale}: \{said}")
   }
 }
 
 ///|
-test "记忆 made once, its stations not read: what failed said over its list in its bones, still, read out, as the old view's, at the system's sizes of words" {
+test "记忆 made once, its stations not read: what failed said over its list in its bones, still, read out, at the system's sizes of words" {
   for scale in [1.0, 1.5, 2.0] {
-    let seen = fn(tree : Bool) {
-      let t = memories_tester(tree, 2, failed=true, scale~)
-      let t0 = t.time()
-      let out = [instances_sorted(t)]
-      t.frame_at(t0 + @sf.breath_ms / 2.0)
-      out.push(instances_sorted(t))
-      (out, words_where(t), t.words_said().map(fn(w) { w.0 }), t.find("网络连接失败") is Some(_))
-    }
-    let (old, old_words, old_said, _) = seen(false)
-    let (made, made_words, made_said, found) = seen(true)
-    same_drawn(made_words, old_words, "words at \{scale}")
-    assert_eq(made_said, old_said, msg="read out at \{scale}")
-    assert_true(made_said.contains("网络连接失败"), msg="\{made_said}")
-    assert_true(found)
-    for i, o in old {
-      same_drawn(made[i], o, "instances at \{scale}, step \{i}")
-      assert_true(o.length() > 0, msg="nothing drawn at \{scale}, step \{i}")
-    }
+    let t = memories_tester(true, 2, failed=true, scale~)
+    let t0 = t.time()
+    let out = [instances_sorted(t)]
+    t.frame_at(t0 + @sf.breath_ms / 2.0)
+    out.push(instances_sorted(t))
+    let said = t.words_said().map(fn(w) { w.0 })
+    assert_true(said.contains("网络连接失败"), msg="\{said}")
+    assert_true(t.find("网络连接失败") is Some(_))
+    assert_true(out[0].length() > 0, msg="nothing drawn at \{scale}")
     // (still: what failed stops its breath, whole at its faintest's moment as at first)
-    same_drawn(made[1], made[0], "still at \{scale}")
+    same_drawn(out[1], out[0], "still at \{scale}")
   }
 }
 
