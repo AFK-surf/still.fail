@@ -342,39 +342,33 @@ test "记忆 made once: its rows are the tree's own; an online station's opens i
 }
 
 ///|
-test "归档 made once: every instance drawn as its old view's, its choice, notes and stations, with a finger and with keyboard and mouse, at the system's larger words" {
+test "归档 made once: its choice, notes and stations drawn, with a finger and with keyboard and mouse, at the system's larger words" {
   for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
     let (platform, scale) = case
-    let old = memories_tester(false, platform, scale~, mode="settings-archiving")
-    let old_drawn = instances_sorted(old)
-    let old_words = words_where(old)
     let made = memories_tester(true, platform, scale~, mode="settings-archiving")
     assert_true(app.nav.top() == Setting(@settings.Route::Archiving))
-    same_drawn(words_where(made), old_words, "words at \{case}")
-    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
-    assert_true(old_drawn.length() > 0)
+    assert_true(instances_sorted(made).length() > 0, msg="\{case}")
+    for w in ["Studio", @sf.t("web-pages.appearance.archive.title"), @sf.t("web-pages.archiving.auto.title")] {
+      assert_true(made.find(w) is Some(_), msg="\{w} at \{case}")
+    }
   }
 }
 
 ///|
-test "归档 made once, its stations read the first time: their rows in their bones as the old view's, as they breathe" {
+test "归档 made once, its stations read the first time: their rows in their bones, as they breathe; none of them read out" {
   for scale in [1.0, 2.0] {
-    let seen = fn(tree : Bool) {
-      let t = memories_tester(tree, 2, held=true, scale~, mode="settings-archiving")
-      let t0 = t.time()
-      let out = [instances_sorted(t)]
-      t.frame_at(t0 + @sf.breath_ms / 2.0)
-      out.push(instances_sorted(t))
-      (out, words_where(t), t.words_said().map(fn(w) { w.0 }))
-    }
-    let (old, old_words, old_said) = seen(false)
-    let (made, made_words, made_said) = seen(true)
-    same_drawn(made_words, old_words, "words at \{scale}")
-    assert_eq(made_said, old_said, msg="read out at \{scale}")
-    for i, o in old {
-      same_drawn(made[i], o, "instances at \{scale}, step \{i}")
-      assert_true(o.length() > 0)
-    }
+    let t = memories_tester(true, 2, held=true, scale~, mode="settings-archiving")
+    let t0 = t.time()
+    let first = instances_sorted(t)
+    t.frame_at(t0 + @sf.breath_ms / 2.0)
+    let faintest = instances_sorted(t)
+    assert_true(first.length() > 0, msg="nothing drawn at \{scale}")
+    // (they breathe: not drawn the same at their faintest as at first)
+    assert_true(first != faintest, msg="not breathing at \{scale}")
+    // (their made-up words neither drawn nor read out)
+    let said = t.words_said().map(fn(w) { w.0 })
+    assert_true(!words_where(t).iter().any(fn(w) { w.contains("字") }), msg="its bones drawn at \{scale}")
+    assert_true(!said.iter().any(fn(w) { w.contains("字") }), msg="its bones read out at \{scale}: \{said}")
   }
 }
 
@@ -483,42 +477,41 @@ fn station_archiving_tester(
 }
 
 ///|
-test "一台 station 的归档 made once: every instance drawn as its old view's, with a finger and with keyboard and mouse, at the system's larger words; its managers' alone, off, and not online" {
-  let cases : Array[(String, Int, Double, (Json) -> Json)] = [
-    ("as it is", 2, 1.0, fn(a) { a }),
-    ("as it is", 0, 1.0, fn(a) { a }),
-    ("as it is", 2, 1.5, fn(a) { a }),
-    ("as it is", 2, 2.0, fn(a) { a }),
-    ("not a manager", 2, 1.0, archiving_with([("canEdit", Json::boolean(false))])),
-    ("off", 2, 1.0, archiving_with([("mode", Json::string("off"))])),
-    ("too old to say", 2, 1.0, fn(_) { Json::null() }),
+test "一台 station 的归档 made once, with a finger and with keyboard and mouse, at the system's larger words; its managers' alone, off, and not online: what each says" {
+  let cases : Array[(String, Int, Double, (Json) -> Json, Array[String], Array[String])] = [
+    ("as it is", 2, 1.0, fn(a) { a }, ["按模型判断", "7 天", "不归档"], []),
+    ("as it is", 0, 1.0, fn(a) { a }, ["按模型判断", "7 天", "不归档"], []),
+    ("as it is", 2, 2.0, fn(a) { a }, ["按模型判断", "7 天", "不归档"], []),
+    ("not a manager", 2, 1.0, archiving_with([("canEdit", Json::boolean(false))]), [@sf.t("web-pages.archiving.adminOnly")], []),
+    ("off", 2, 1.0, archiving_with([("mode", Json::string("off"))]), ["不归档"], [@sf.t("web-pages.archiving.idle")]),
+    ("too old to say", 2, 1.0, fn(_) { Json::null() }, [@sf.t("web-pages.archiving.upgrade")], ["按模型判断"]),
   ]
   for c in cases {
-    let (what, platform, scale, f) = c
-    let old = station_archiving_tester(false, platform, scale~, f=@signals.signal(f))
-    let old_drawn = instances_sorted(old)
-    let old_words = words_where(old)
+    let (what, platform, scale, f, shown, none) = c
     let made = station_archiving_tester(true, platform, scale~, f=@signals.signal(f))
     assert_true(app.nav.top() == Setting(@settings.Route::StationArchiving("ws1/st1")), msg="\{what}")
-    same_drawn(words_where(made), old_words, "words, \{what} at \{platform} \{scale}")
-    same_drawn(instances_sorted(made), old_drawn, "instances, \{what} at \{platform} \{scale}")
-    assert_true(old_drawn.length() > 0)
+    for w in shown {
+      assert_true(made.find(w) is Some(_), msg="\{what}: \{w} at \{platform} \{scale}")
+    }
+    for w in none {
+      assert_true(made.find(w) is None, msg="\{what}: no \{w} at \{platform} \{scale}")
+    }
   }
 }
 
 ///|
 /// How many saves of the station's archiving were asked for, in a page made once or an old one, after `act` (taps by
 /// words), as its archiving is (`f`) and a save of it on its way or not (`busy`).
-fn station_archiving_saves(tree : Bool, f : (Json) -> Json, busy : Bool, act : (@ui.Tester) -> Unit) -> Int {
+fn station_archiving_saves(f : (Json) -> Json, busy : Bool, act : (@ui.Tester) -> Unit) -> Int {
   let calls : Array[String] = []
-  let t = station_archiving_tester(tree, 2, f=@signals.signal(f), busy=@signals.signal(busy), calls~)
+  let t = station_archiving_tester(true, 2, f=@signals.signal(f), busy=@signals.signal(busy), calls~)
   act(t)
   t.run_for(@ui.move_most_ms)
   calls.filter(fn(n) { n == "archiving.save" }).length()
 }
 
 ///|
-test "一台 station 的归档 made once: chosen as the old view's: a way, after how long, Slack's, saved; the one chosen again, a way not allowed, not a manager's, or while a save is on its way, not" {
+test "一台 station 的归档 made once: chosen: a way, after how long, Slack's, saved; the one chosen again, a way not allowed, not a manager's, or while a save is on its way, not" {
   let tap = fn(w : String) { fn(t : @ui.Tester) { t.tap_text(w) } }
   let cases : Array[(String, (Json) -> Json, Bool, (@ui.Tester) -> Unit, Int)] = [
     ("another way", fn(a) { a }, false, tap("按模型判断"), 1),
@@ -547,18 +540,13 @@ test "一台 station 的归档 made once: chosen as the old view's: a way, after
   ]
   for c in cases {
     let (what, f, busy, act, n) = c
-    let old = station_archiving_saves(false, f, busy, act)
-    let made = station_archiving_saves(true, f, busy, act)
-    assert_eq(old, n, msg="\{what}: the old one saved \{old} times")
-    assert_eq(made, old, msg="\{what}: made, saved \{made} times, the old one \{old}")
+    assert_eq(station_archiving_saves(f, busy, act), n, msg="\{what}")
   }
 }
 
 ///|
 test "一台 station 的归档 made once: as the core says it anew, the same nodes say it: the way and the while chosen, its note" {
   let anew = archiving_with([("mode", Json::string("reviewed")), ("days", Json::number(7.0)), ("modeNote", Json::string("按模型判断，空闲七天以上"))])
-  // (the old view's as the core says it then: made first, alone)
-  let old_drawn = instances_sorted(station_archiving_tester(false, 2, f=@signals.signal(anew)))
   let f : @signals.Signal[(Json) -> Json] = @signals.signal(fn(a) { a })
   let t = station_archiving_tester(true, 2, f~)
   let ids = fn(w : String) {
@@ -574,7 +562,6 @@ test "一台 station 的归档 made once: as the core says it anew, the same nod
   assert_eq(t.moving(), [], msg="at rest once a cover's way is out")
   assert_eq((ids("7 天"), ids("按模型判断"), ids(@sf.t("web-pages.archiving.slackHint"))), before, msg="the same nodes")
   assert_true(t.find("按模型判断，空闲七天以上") is Some(_), msg="its note said anew")
-  same_drawn(instances_sorted(t), old_drawn, "said anew, as the old one draws it")
 }
 
 ///|
@@ -588,17 +575,13 @@ test "归档 made once: a station's row pressed opens its own archiving, made on
 }
 
 ///|
-test "自动决定 made once: every instance drawn as its old view's, with a finger and with keyboard and mouse, at the system's larger words; its row opens the decision's page" {
+test "自动决定 made once, with a finger and with keyboard and mouse, at the system's larger words; its row opens the decision's page" {
   for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
     let (platform, scale) = case
-    let old = memories_tester(false, platform, scale~, mode="settings-decisions-settings")
-    let old_drawn = instances_sorted(old)
-    let old_words = words_where(old)
     let made = memories_tester(true, platform, scale~, mode="settings-decisions-settings")
     assert_true(app.nav.top() == Setting(@settings.Route::AutoDecisions))
-    same_drawn(words_where(made), old_words, "words at \{case}")
-    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
-    assert_true(old_drawn.length() > 0)
+    // (narrow: its row's note short)
+    assert_true(made.find(@sf.t("web-pages.automaticDecisions.completionShort")) is Some(_), msg="\{case}")
   }
   let t = memories_tester(true, 2, mode="settings-decisions-settings")
   let own = tree_words_drawn()

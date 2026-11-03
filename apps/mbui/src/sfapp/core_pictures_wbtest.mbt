@@ -115,3 +115,35 @@ test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one bef
   assert_eq(rings.length(), 3)
   assert_true(rings.iter().all(fn(r) { r.3 == 20.0 }))
 }
+
+///|
+test "a picture's answer told to all that read it: one that could not be had then had on another page put up, at once or later, read again by the first too" {
+  for later in [false, true] {
+    let answers : Array[Bytes?] = [None, Some(b"GIF89a")]
+    let waiting : Array[(Bytes?) -> Unit] = []
+    let picture = core_pictures(fn(_, done) {
+      let a = answers.remove(0)
+      if later && a is Some(_) {
+        waiting.push(done)
+      } else {
+        done(a)
+      }
+    })
+    let url = "https://pictures.example/lin.jpg"
+    // (a reader on page 1: could not be had, it stays up reading it)
+    let first = @signals.computed(fn(_) { picture(url, 1) })
+    let seen = []
+    let stop = @signals.effect(fn() { seen.push(first.get()) })
+    assert_eq(first.get(), "")
+    // (another on page 2, put up anew: asked again, had)
+    let second = @signals.computed(fn(_) { picture(url, 2) })
+    second.get() |> ignore
+    for done in waiting {
+      done(Some(b"GIF89a"))
+    }
+    assert_true(second.get().has_prefix("mem:picture/"), msg="the one that asked, later \{later}")
+    assert_true(first.get().has_prefix("mem:picture/"), msg="the first reader told too, later \{later}")
+    assert_true(seen.last().unwrap_or("").has_prefix("mem:picture/"), msg="followed by the first: \{seen}, later \{later}")
+    stop()
+  }
+}

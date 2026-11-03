@@ -238,11 +238,10 @@ fn tape_bar_collected(c : @ui.Ctx, build : () -> Unit) -> Unit {
 ///|
 /// The pages of the library's made once as nodes in the page's panel, in the place of their old view (nav_flat_view's
 /// `made`), by what each is: 关于, 记忆, 归档 and 自动决策, as the settings' list opens them; a station's own archiving, as 归档
-/// opens it. 关于, 记忆 and 更新日志 laid out by the page's width (the stack's in the panel at rest, as the tape lays it out now: page_node
-/// narrow or wide; narrow while that is not known), a right click in it copying what is picked; the others made only
-/// where the page is narrow (look_for that width), a gate between their two makings for now (no wide arrangement of
-/// theirs yet); wider, their old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
-/// its own, nothing over it in its room.
+/// opens it; 更新日志 as 关于 opens it; 一台 station 的记忆 as 记忆 opens it. Each laid out by the page's width (the stack's
+/// in the panel at rest, as the tape lays it out now: page_node narrow or wide; narrow while that is not known); 关于,
+/// 记忆 and 更新日志 a right click in them copying what is picked. Under the tape's bar (tape_bar_head, from
+/// tape_made_bar): no title, no back of its own, nothing over it in its room.
 fn tape_made(
   src : Source,
   page : Page,
@@ -253,7 +252,6 @@ fn tape_made(
     let r = tape_room_now()
     r.main_to - (if tape_shown_side() is None { r.under } else { 0.0 })
   }
-  let narrow = width() > 0.0 && @sf.look_for(width()) is Narrow
   // (made in the workspace in view, its settings' core; what it says of itself kept with its entry, `k`)
   let made = fn(
     kind : String,
@@ -296,30 +294,13 @@ fn tape_made(
         context_node(p)
         @sfpages.changelog_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
-    // (a place of the rail's whose page is one of those: as it is opened from the settings, at the stack's root)
-    Place(name) if pane_makes.val =>
+    // (a place of the rail's whose page is one of those: that page as the settings open it, at the stack's root, made
+    // under its own kind)
+    Place(name) =>
       match @settings.route_of(name) {
-        Some(Memories) =>
-          made("place/memories", fn(p, core, here, _stint, told) {
-            context_node(p)
-            @sfpages.memories_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
-          })
-        Some(About) =>
-          made("place/about", fn(p, core, _here, _stint, told) {
-            context_node(p)
-            @sfpages.about_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
-          })
-        Some(Changelog) =>
-          made("place/changelog", fn(p, core, _here, _stint, told) {
-            context_node(p)
-            @sfpages.changelog_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
-          })
-        // (by its station: another station's another page, not this one become it)
-        Some(Memory(address)) =>
-          made("place/memory/" + address, fn(p, core, here, _stint, told) {
-            context_node(p)
-            @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
-          })
+        // (those whose old view is gone: every frame makes them once, as a page or a place)
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions) =>
+          tape_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
     // (by its station: another station's another page, not this one become it)
@@ -328,20 +309,18 @@ fn tape_made(
         context_node(p)
         @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
       })
-    // (the others narrow ones alone: wider, their old view)
-    _ if !narrow => None
-    Setting(Archiving) =>
+    Setting(Archiving) if pane_makes.val =>
       made("archiving", fn(p, core, here, stint, told) {
-        @sfpages.archiving_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told)
+        @sfpages.archiving_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~)
       })
-    Setting(AutoDecisions) =>
+    Setting(AutoDecisions) if pane_makes.val =>
       made("auto-decisions", fn(p, core, here, _stint, told) {
-        @sfpages.decisions_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told)
+        @sfpages.decisions_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
       })
     // (by its station: another station's another page, not this one become it)
-    Setting(StationArchiving(st)) =>
+    Setting(StationArchiving(st)) if pane_makes.val =>
       made("station-archiving/" + st, fn(p, core, here, _stint, told) {
-        @sfpages.station_archiving_node(p, core, here, st, on_back=core.pop, frame=fn() { tape_made_frame }, said=told)
+        @sfpages.station_archiving_node(p, core, here, st, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
     _ => None
   }

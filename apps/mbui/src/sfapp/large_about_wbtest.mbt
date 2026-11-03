@@ -455,3 +455,184 @@ test "大屏 一台 station 的记忆 made once: what it is for by one mark afte
   let words = words_where(t)
   assert_true(words.iter().any(fn(w) { w.has_prefix(@sf.t("web-pages.settings.memory.lead")) }), msg="its tip: \{words}")
 }
+
+///|
+test "归档, 一台 station 的归档 and 自动决策 made once on a large screen and on the tape at its every width, narrow and wide, with keyboard and mouse and with a finger, at the system's larger words: what each says, its old view gone" {
+  // (wide where its page is: 自动决策's row says whole what it decides, narrow short)
+  for case in [
+    (0, 1.0, 1280.0),
+    (2, 1.0, 1280.0),
+    (0, 2.0, 1280.0),
+    (2, 1.0, 600.0),
+    (0, 1.0, 700.0),
+    (0, 1.0, 760.0),
+    (2, 1.0, 839.0),
+    (2, 1.5, 920.0),
+    (0, 1.0, 1000.0),
+  ] {
+    let (platform, scale, w) = case
+    let at = "\{case}"
+    let _ = large_about_tester(true, platform, scale~, w~, mode="settings-archiving")
+    assert_true(app.nav.top() == Setting(@settings.Route::Archiving), msg=at)
+    let own = tree_words_drawn()
+    for words in ["Studio", @sf.t("web-pages.appearance.archive.title"), @sf.t("web-pages.archiving.auto.title")] {
+      assert_true(own.iter().any(fn(o) { o.contains(words) }), msg="归档's \{words} the tree's own at \{at}: \{own}")
+    }
+    let _ = large_about_tester(true, platform, scale~, w~, mode="settings-archiving:ws1/st1")
+    let own = tree_words_drawn()
+    for words in ["按模型判断", "7 天", "不归档", @sf.t("web-pages.archiving.slackHint")] {
+      assert_true(own.iter().any(fn(o) { o.contains(words) }), msg="一台 station 的归档's \{words} the tree's own at \{at}: \{own}")
+    }
+    let t = large_about_tester(true, platform, scale~, w~, mode="settings-decisions")
+    let own = tree_words_drawn()
+    let whole = own.iter().any(fn(o) { o.contains(@sf.t("web-pages.automaticDecisions.completionNote")) })
+    let short = own.iter().any(fn(o) { o.contains(@sf.t("web-pages.automaticDecisions.completionShort")) })
+    assert_true(whole != short, msg="自动决策's note one way at \{at}: \{own}")
+    if w >= 1280.0 {
+      assert_true(whole, msg="自动决策 wide at \{at}")
+    }
+    if w <= 600.0 {
+      assert_true(short, msg="自动决策 narrow at \{at}")
+    }
+    t.tap_text(@sf.t("web-pages.automaticDecisions.completion"))
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() == Setting(@settings.Route::AutoCompletion), msg="自动决策's row at \{at}")
+  }
+}
+
+///|
+/// 归档 made once `w` wide over the core's pictures, the network down, its first station's mark a picture by its address
+/// (`url`): how many times that was asked for as the page was put up, as it stayed, as it was come back to from 自动决策
+/// and as it stayed then; and each page's time on top it was put up in.
+fn archiving_pictures_asked(w : Double, url : String) -> (Array[Int], Array[Int]) {
+  let asked = []
+  let stints : Array[Int] = []
+  let base = fixture_app("settings-archiving")
+  let core = core_pictures(fn(u, done) {
+    asked.push(u)
+    done(None)
+  })
+  let src : Source = {
+    ..base,
+    picture: fn(u, s) {
+      if u == url && !stints.contains(s) {
+        stints.push(s)
+      }
+      core(u, s)
+    },
+    topic: fn(name, params) {
+      let r = (base.topic)(name, params)
+      guard name == "stations" && r.value is Some(Array(a)) else { return r }
+      let first = match a.get(0) {
+        Some(Object(m)) => {
+          let m2 = m.copy()
+          m2["icon"] = Json::string(url)
+          [Json::object(m2)]
+        }
+        _ => []
+      }
+      { ..r, value: Some(Json::array(first + a[1:].to_array())) }
+    },
+  }
+  @sfdesk.pane_makes.val = true
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  let mine = fn() { asked.filter(fn(u) { u == url }).length() }
+  let counts = [mine()]
+  let stay = fn() {
+    for _ in 0..<5 {
+      t.advance(@ui.move_most_ms)
+      t.draw()
+    }
+  }
+  stay()
+  counts.push(mine())
+  app.nav.push(Setting(@settings.Route::AutoDecisions))
+  t.run_for(@ui.move_most_ms)
+  app.nav.pop() |> ignore
+  t.run_for(@ui.move_most_ms)
+  counts.push(mine())
+  stay()
+  counts.push(mine())
+  (counts, stints)
+}
+
+///|
+test "归档 made once, on every screen: a station's picture that could not be had asked again as the page is come back to, not while it stays" {
+  let url = "https://pictures.example/studio.png"
+  let got = [390.0, 700.0, 1280.0].map(fn(w) { (w, archiving_pictures_asked(w, url)) })
+  // (asked as it is put up; not while it stays; once again as it is come back to; not while it stays then)
+  if got.iter().any(fn(g) { g.1.0 != [1, 1, 2, 2] }) {
+    fail("\{got}")
+  }
+}
+
+///|
+test "归档 made once, on every screen: a station's picture answered later, while the page stays, shown then in its emoji's place" {
+  let url = "https://pictures.example/studio.png"
+  let out = []
+  for w in [390.0, 700.0, 1280.0] {
+    let pending : Array[(Bytes?) -> Unit] = []
+    let given : Array[String] = []
+    let base = fixture_app("settings-archiving")
+    let core = core_pictures(fn(u, done) { if u == url { pending.push(done) } else { done(None) } })
+    let src : Source = {
+      ..base,
+      picture: fn(u, s) {
+        let key = core(u, s)
+        if u == url {
+          given.push(key)
+        }
+        key
+      },
+      topic: fn(name, params) {
+        let r = (base.topic)(name, params)
+        guard name == "stations" && r.value is Some(Array(a)) else { return r }
+        let first = match a.get(0) {
+          Some(Object(m)) => {
+            let m2 = m.copy()
+            m2["icon"] = Json::string(url)
+            m2["emoji"] = Json::string("🛰")
+            [Json::object(m2)]
+          }
+          _ => []
+        }
+        { ..r, value: Some(Json::array(first + a[1:].to_array())) }
+      },
+    }
+    @sfdesk.pane_makes.val = true
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform=0)
+    t.run_for(@ui.move_most_ms)
+    let emoji_before = tree_words_drawn().iter().any(fn(o) { o.contains("🛰") })
+    let asked_before = pending.length()
+    // (the page stays; the core answers: its bytes)
+    t.advance(@ui.move_most_ms)
+    t.draw()
+    for done in pending {
+      done(Some(late_gif()))
+    }
+    t.run_for(@ui.move_most_ms)
+    let shown = given.iter().any(fn(k) { k.has_prefix("mem:picture/") })
+    // (and drawn: its bytes decoded, an instance of it in the frame)
+    let drawn = t.drawlist_images().iter().any(fn(d) { d.1.has_prefix("mem:picture/") })
+    let emoji_after = tree_words_drawn().iter().any(fn(o) { o.contains("🛰") })
+    if !(asked_before == 1 && emoji_before && shown && drawn && !emoji_after && pending.length() == 1) {
+      out.push("\{w}: asked \{asked_before} then \{pending.length()}, emoji \{emoji_before} then \{emoji_after}, read again with its key \{shown}, drawn \{drawn}")
+    }
+  }
+  if out.length() > 0 {
+    fail(out.join("\n"))
+  }
+}
+
+///|
+/// A GIF 2 by 1 of two frames, 100 ms each (ui's gif_test's): a picture the core may answer with.
+fn late_gif() -> Bytes {
+  Bytes::from_array([
+    b'G', b'I', b'F', b'8', b'9', b'a', b'\x02', b'\x00', b'\x01', b'\x00', b'\x80', b'\x00', b'\x00', b'\xFF', b'\x00',
+    b'\x00', b'\x00', b'\x00', b'\xFF', b'\x21', b'\xF9', b'\x04', b'\x00', b'\x0A', b'\x00', b'\x00', b'\x00', b'\x2C',
+    b'\x00', b'\x00', b'\x00', b'\x00', b'\x02', b'\x00', b'\x01', b'\x00', b'\x00', b'\x02', b'\x02', b'\x04', b'\x0A',
+    b'\x00', b'\x21', b'\xF9', b'\x04', b'\x00', b'\x0A', b'\x00', b'\x00', b'\x00', b'\x2C', b'\x00', b'\x00', b'\x00',
+    b'\x00', b'\x02', b'\x00', b'\x01', b'\x00', b'\x00', b'\x02', b'\x02', b'\x4C', b'\x0A', b'\x00', b'\x3B',
+  ])
+}

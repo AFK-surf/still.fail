@@ -354,19 +354,41 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// the navigation bar: setting_page's) as that changes; under the status bar the page's ground over it, and a window's
 /// band its buttons are in dragging it, as page_view puts them over a page that has no top of its own.
 fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
+  match page {
+    // (a place of the bottom bar's whose page is one of those: that page under the place's top bar, place_page's, made
+    // under its own kind)
+    Place(name) =>
+      match @settings.route_of(name) {
+        // (those whose old view is gone: every frame makes them once, as a page or a place)
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions) =>
+          narrow_made_as(src, Setting(r), true).map(fn(m) { ("place/" + m.0, m.1) })
+        _ => None
+      }
+    _ => narrow_made_as(src, page, false)
+  }
+}
+
+///|
+/// narrow_made's page `page`, made as a place of the bottom bar's (`place`: named as the stack's entry is now, whichever
+/// of its names it is) or as a page of the stack.
+fn narrow_made_as(
+  src : Source,
+  page : Page,
+  place : Bool,
+) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
   let made_at = fn(
     kind : String,
-    place : String?,
+    place : Bool,
     f : (@view.View, @settings.Core, () -> @settings.Here, () -> PageFrame, () -> Int) -> Unit,
   ) {
     Some(
       (
         kind,
-        fn(v : @view.View, _page : () -> Page, under : Page?, stint : () -> Int, _entry : Int) {
+        fn(v : @view.View, page : () -> Page, under : Page?, stint : () -> Int, _entry : Int) {
           let frame = fn() -> PageFrame {
             // (under the status bar as the window it is in is now: status_top_now, by its width as it changes; a place
             // of the bottom bar's under the top bar, which names it, over the bottom bar: place_page's)
-            if place is Some(_) {
+            if place {
               { back: None, top: status_top_now(v.window().0) + bar_h + 8.0, foot: nav_foot() + bar_room_now(), named: true }
             } else {
               { back: under.map(@sfbase.back_label), top: status_top_now(v.window().0), foot: nav_foot(), named: false }
@@ -387,22 +409,27 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
             }
           })
           narrow_made_top(v)
-          // (a place of the bottom bar's: its top bar over it, the place's name, settings at its end: place_page's)
-          match place {
-            Some(name) =>
-              v.box(fn(o) {
-                o.over(Is(true)) |> ignore
-                @ui.old(o, fn(c) { place_top_bar(c, name) }, natural=true) |> ignore
-              })
+          // (a place of the bottom bar's: its top bar over it, the place's name as the entry is now (another of the same
+          // page's names it may become), settings at its end: place_page's)
+          if place {
+            v.box(fn(o) {
+              o.over(Is(true)) |> ignore
+              @ui.old(o, fn(c) {
+                match page() {
+                  Place(name) => place_top_bar(c, name)
+                  _ => ()
+                }
+              }, natural=true)
               |> ignore
-            None => ()
+            })
+            |> ignore
           }
         },
       ),
     )
   }
   let made = fn(kind : String, f : (@view.View, @settings.Core, () -> @settings.Here, () -> PageFrame, () -> Int) -> Unit) {
-    made_at(kind, None, f)
+    made_at(kind, place, f)
   }
   match page {
     Settings =>
@@ -438,26 +465,6 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
       made("memory/" + address, fn(p, core, here, frame, _stint) {
         @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame~)
       })
-    // (a place of the bottom bar's whose page is one of those: place_page's, made once as they are)
-    Place(name) =>
-      match @settings.route_of(name) {
-        Some(Memories) =>
-          made_at("place/memories", Some(name), fn(p, core, here, frame, _stint) {
-            @sfpages.memories_node(p, core, here, on_back=core.pop, frame~)
-          })
-        Some(About) =>
-          made_at("place/about", Some(name), fn(p, core, _here, frame, _stint) { @sfpages.about_node(p, core, on_back=core.pop, frame~) })
-        Some(Changelog) =>
-          made_at("place/changelog", Some(name), fn(p, core, _here, frame, _stint) {
-            @sfpages.changelog_node(p, core, on_back=core.pop, frame~)
-          })
-        // (by its station: another station's another page, not this one become it)
-        Some(Memory(address)) =>
-          made_at("place/memory/" + address, Some(name), fn(p, core, here, frame, _stint) {
-            @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame~)
-          })
-        _ => None
-      }
     _ => None
   }
 }
