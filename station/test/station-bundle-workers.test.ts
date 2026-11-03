@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +9,20 @@ import { Store } from "../src/store/store.ts";
 import { installSigninSaveIndex } from "../src/vault/signin-save-index.ts";
 
 // The mac-build job calls this on the release it just laid out; the regular test suite has no release directory.
+test("the station in a release starts its command line", { skip: !process.env.STATION_BUNDLE }, () => {
+  const directory = mkdtempSync(join(tmpdir(), "station-bundle-main-"));
+  try {
+    // An unknown command reaches the usage message without starting the station or touching a real data directory.
+    const run = spawnSync(process.execPath, [join(process.env.STATION_BUNDLE!, "main.js"), "bundle-smoke", "--data", directory], {
+      encoding: "utf8",
+      env: { ...process.env, STILLFAIL_DATA: directory, EMBER_DATA: directory, STILLFAIL_CONFIG: join(directory, "config.json") },
+    });
+    assert.equal(run.error, undefined);
+    assert.equal(run.status, 2, run.stderr);
+    assert.match(run.stderr, /usage: stillfail-station/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("the workers in a station release start and process a batch", { skip: !process.env.STATION_BUNDLE }, async () => {
   const directory = mkdtempSync(join(tmpdir(), "station-bundle-workers-"));
   const path = join(directory, "station.db");
