@@ -336,9 +336,12 @@ test("a host's changed Codex login and resets reach borrowers, including one tha
   await settle(a, b);
   const copy = b.config.raw().profiles[0];
   await b.sharing.lendCodex(copy);
-  // A replacement is watched at its directory, even though the old access token has days left.
+  // A replacement reaches borrowers even though the old access token has days left. (The host's next reconcile reads
+  // it: its directory is watched too, but a test cannot wait on that, as on the Mac runners and Studio fs.watch tells
+  // nothing, 2026-11-03.)
   writeFileSync(join(home, "auth.new"), login("second"));
   renameSync(join(home, "auth.new"), join(home, "auth.json"));
+  await a.sharing.reconcile();
   await until(() => updates.some((u) => u.token === jwt("second")), "the changed login is lent");
   assert.equal(updates.at(-1)!.reset, false);
   // A borrower away at the change catches up by the host's version when it returns.
