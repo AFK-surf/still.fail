@@ -22,6 +22,7 @@ import { trim } from "../../../client/core-ts/src/whitespace.ts";
 
 export { makeStore, openStore } from "./store.ts";
 import { knownChannel, knownPerson, slackCreator, teamName } from "./slack-known.ts";
+import { log } from "../ops/log.ts";
 import { type AuthorKind, type EntryRow, type Json, type MessageRow, type SessionRow, type Store, type ThreadRow, type ThreadSummary, STILLFAIL_SURFACE, takeChars } from "./store.ts";
 
 /// How much of a chat's last message the sidebar gets.
@@ -373,6 +374,15 @@ export function chatRows(station: Store, viewer: Viewer, sessions: string[], thr
 /// teams' names by connect (`teams`) and the Slack users the viewer is (`selves`). Of the shown sessions' chats, or of
 /// those `threads` and `sessions` alone.
 export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: string[]; threads: number[] } | null = null): Json {
+  // What a slow one spent where: 5.7 s for one new chat's on ccvm (2026-11-03), unsaid where.
+  const started = performance.now();
+  const stages: Record<string, number> = {};
+  let last = started;
+  const stage = (name: string) => {
+    const now = performance.now();
+    stages[name] = Math.round(now - last);
+    last = now;
+  };
   useNames(station);
   const api = apiOf(station);
   const s = api.store;
@@ -385,6 +395,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
     const thread = store.getThread(s, id);
     return thread !== null && thread.surface === STILLFAIL_SURFACE && thread.hiddenAt === null ? [{ thread, sessions: store.threadSessions(s, id) }] : [];
   });
+  stage("chats");
   const listed = new Set(keys);
   const listedOne = (key: string) => {
     if (scope === null) return listed.has(key);
@@ -429,11 +440,13 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
       if (v !== null) verdicts[id] = v;
     }
   }
+  stage("waiting");
   const answered: Json = {};
   for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, own.map((t) => t.thread.id))) {
     if (!mine(creator(a.by))) continue;
     (answered[a.question.thread] ??= []).push(answeredView(a));
   }
+  stage("answered");
   const kept = [...store.keptChats(s, viewer.email, own.map((t) => t.thread.id))];
   const pins = Object.fromEntries([...store.pins(s, viewer.email)].filter(([k]) => scope === null || keys.includes(k)));
   const named = (o: { station: string | null; session: string; title: string | null }) => ({ ...(o.station !== null ? { station: o.station } : {}), session: o.session, ...(o.title !== null ? { title: o.title } : {}) });
@@ -445,7 +458,11 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
     const name = teamName(s, c.id);
     return name === null ? [] : [[c.id, name]];
   }));
-  return { card, need, answered, suggested, verdicts, reviews: api.reviews, kept, pins, openers, opened, shares, clientKeys, teams, selves: store.slackIdentities(s, viewer.email) };
+  const selves = store.slackIdentities(s, viewer.email);
+  stage("rest");
+  const ms = Math.round(performance.now() - started);
+  if (ms >= 1_000) log.warn("readers", "a chat marks read's stages", { ms, chats: own.length, scoped: scope !== null, ...stages });
+  return { card, need, answered, suggested, verdicts, reviews: api.reviews, kept, pins, openers, opened, shares, clientKeys, teams, selves };
 }
 
 /// The viewer's sidebar: one kind of item, an agent (a shown session) merged with its internal chat. An agent in an
