@@ -315,6 +315,13 @@ test("a usage summary checks a session's workspace once for its minutes", () => 
     const rows = store.db.prepare(counted).all(...query.args) as { session: string; calls: number; input: number }[];
     assert.deepEqual(rows.map((r) => [r.session, r.calls, r.input]).sort(), [["a", 60, 60], ["b", 60, 60]]);
     assert.equal(visits, 2, "each relevant session's scope is looked up once, not once per minute");
+    const edge = compactQuery(1n, 3_600_000n, 0n, { workspace: "A", home: false });
+    const countedEdge = edge.sql.replaceAll(/sc\.session = ([a-z]+)\.session/g, "sc.session = inspected_scope_session($1.session)");
+    assert.notEqual(countedEdge, edge.sql);
+    visits = 0;
+    const partial = store.db.prepare(countedEdge).all(...edge.args) as { session: string; calls: number; input: number }[];
+    assert.deepEqual(partial.map((r) => [r.session, r.calls, r.input]).sort(), [["a", 59, 59], ["b", 59, 59]]);
+    assert.equal(visits, 2, "a partial-minute edge also checks each session once, not once per bucket");
     assert.equal((store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n, before, "reading writes nothing");
   } finally { store.close(); }
 });
