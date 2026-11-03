@@ -64,6 +64,8 @@ priv struct SettingsFixture {
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
   mut pairing : Bool
+  /// MBA is being added to security mode (settings-security-protecting).
+  mut protecting : Bool
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
   mut pair_ended : String
   /// a device of lin's (Pixel 9) set up without the key to 林的库, waiting on this one for it (settings-vault-prompt),
@@ -122,6 +124,7 @@ let fx : SettingsFixture = {
   reset_expiry: false,
   models_added: [],
   pairing: false,
+  protecting: false,
   pair_ended: "",
   key_ask: false,
   key_ask_ended: "",
@@ -221,6 +224,7 @@ fn fixture_reset() -> Unit {
   fx.vault_off = false
   fx.plain_left = 0
   fx.pairing = false
+  fx.protecting = false
   fx.pair_ended = ""
   fx.key_ask = false
   fx.key_ask_ended = ""
@@ -481,6 +485,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-policy-option" => fixture_open.desk = "policy-option"
     "settings-security-join" => fixture_open.desk = "lock-join"
     "settings-security-off" => fixture_open.desk = "lock-off"
+    "settings-security-protecting" => fx.protecting = true
     // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
     "settings-run-models" => {
       fx_many_models.val = true
@@ -538,7 +543,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connects-motion" => "connects"
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
-    "settings-security-join" | "settings-security-off" => "security"
+    "settings-security-join" | "settings-security-off" | "settings-security-protecting" => "security"
     "settings-notify-off" | "settings-lock-prompt" | "settings-vault-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
@@ -2516,7 +2521,11 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         ]),
       )
     }
-    "doing" => Some(obj([("doing", [])]))
+    "doing" => Some(obj([("doing", if fx.protecting {
+      [obj([("call", str("lock.joinStation")), ("stage", str("running")), ("params", obj([("workspace", str("ws1")), ("station", str("st2"))]))])]
+    } else {
+      []
+    })]))
     "lockDraft" =>
       Some(
         obj([
