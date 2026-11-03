@@ -142,7 +142,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
       if m.author_kind == "person" {
         if m.text != "" {
           picking(here, c, src, m.ts, m.seq, m.by.name, "person", m.text, fn() {
-            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, chat_links=chat_links_of(m)), chat_title=chat_title_of(m), runs=m.words)
+            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, chat_links=fn() { chat_links_of(m) }), chat_title=chat_title_of(m), runs=m.words)
           })
         }
         message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f")
@@ -172,7 +172,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
     message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)), at=message_place(m) + "/f")
     if m.text != "" {
       picking(here, c, src, m.ts, m.seq, @sf.t("web-main.chat.you"), "person", m.text, fn() {
-        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, chat_links=chat_links_of(m)), chat_title=chat_title_of(m), runs=m.words)
+        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, chat_links=fn() { chat_links_of(m) }), chat_title=chat_title_of(m), runs=m.words)
       }, fill=false)
     }
     if !m.followed {
@@ -480,7 +480,7 @@ fn link_peeks(
   here : MessageHere,
   agent? : String = "",
   chats? : Array[LinkedChat] = [],
-  chat_links? : Array[String] = [],
+  chat_links? : () -> Array[String] = fn() { [] },
 ) -> ((String, String, Int) -> Unit)? {
   Some(fn(href, words, id) { link_peek(c, src, here.station, href, words, id, agent~, chats~, chat_links~) })
 }
@@ -617,7 +617,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         }
       },
       on_link_hold=Some(fn(href, _) { if @sf.path_of_link(href) is None { link_held(c, href) } }),
-      on_link_shown=link_peeks(c, src, here, agent=m.by.agent, chats=m.chats, chat_links=chat_links_of(m)),
+      on_link_shown=link_peeks(c, src, here, agent=m.by.agent, chats=m.chats, chat_links=fn() { chat_links_of(m) }),
       chat_title=chat_title_of(m),
       // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips
       paths=m.by.agent != "",
