@@ -83,7 +83,7 @@ test "on the tape 记忆 made once, the window made wider between a finger going
 }
 
 ///|
-/// 更新日志 made once on the tape over 关于 (or its old view: `made` false), 600 wide by 760, a finger where the app takes
+/// 更新日志 made once on the tape over 关于, each pressed as a person does (or its old view: `made` false), 600 wide by 760, a finger where the app takes
 /// the swipe (an iPad's): its panel.
 fn tape_changelog_made(made? : Bool = true) -> (@ui.Tester, @ui.Laid, Int) raise {
   new_run()
@@ -94,11 +94,15 @@ fn tape_changelog_made(made? : Bool = true) -> (@ui.Tester, @ui.Laid, Int) raise
   t.draw()
   open_page(Settings)
   t.run_for(@ui.move_most_ms)
-  // (关于 as the settings' list opens it, 更新日志 as 关于's row does: each over the one before)
-  open_page(Setting(About))
+  // (关于 pressed in the settings' list (at its end: scrolled to it), 更新日志 in 关于's: each over the one before)
+  t.wheel(150.0, 500.0, 2000.0)
   t.run_for(@ui.move_most_ms)
-  open_page(Setting(Changelog))
+  t.click(Link, label="关于")
   t.run_for(@ui.move_most_ms)
+  guard app.nav.top() == Setting(About) else { fail("关于 not reached: \{@sfbase.page_kind(app.nav.top())}") }
+  t.click(Link, label="更新日志")
+  t.run_for(@ui.move_most_ms)
+  guard app.nav.top() == Setting(Changelog) else { fail("更新日志 not reached: \{@sfbase.page_kind(app.nav.top())}") }
   page_over(t, 600.0)
   guard tape_page_panel(t) is Some(p) else { fail("no page") }
   (t, p, app.nav.depth())
@@ -115,6 +119,8 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
       t.advance(@ui.input_step_ms)
       t.touch(1, p.x + 6.0 + 194.0 * i.to_double() / 6.0, y)
     }
+    // (what took it as it went: the tape pulled (its own back), or the stack's)
+    let tape = @signals.untracked(fn() { @sfdesk.wide.tape_drag.get() }) > 0.0
     for i in 1..=6 {
       t.advance(@ui.input_step_ms)
       t.touch(1, p.x + 200.0 - 194.0 * i.to_double() / 6.0, y)
@@ -122,7 +128,7 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
     t.touch(2, p.x + 6.0, y)
     t.run_for(@ui.move_most_ms)
     @sfdesk.pane_makes.val = true
-    (app.nav.depth() - depth, app.nav.top() == Setting(About), @sfdesk.wide.tape_at.get())
+    (tape, app.nav.depth() - depth, app.nav.top() == Setting(About), @sfdesk.wide.tape_at.get())
   }
   // (across: what is shown then, how deep)
   let across = fn(made : Bool) raise {
@@ -136,7 +142,7 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
   // stack's own back over 关于, not the tape's): no calling it off so)
   let made_back = back(true)
   assert_eq(made_back, back(false))
-  assert_eq(made_back, (-1, true, @sfdesk.TapePane::Page))
+  assert_eq(made_back, (false, -1, true, @sfdesk.TapePane::Page), msg="\{made_back}")
   let made = across(true)
   assert_eq(made, across(false))
   assert_eq(made, (-1, true))
