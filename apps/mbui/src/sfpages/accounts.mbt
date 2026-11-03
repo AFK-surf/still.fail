@@ -802,11 +802,13 @@ fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Jso
         let pid = text(mv, "profileId")
         let state = field(mv, "state")
         let current = station == here_station
+        let opens = !current && pid != ""
         if @sf.link_row(
             c,
             "profile-station/" + station,
             text(mv, "stationName"),
-            goes=!current && pid != "",
+            goes=opens,
+            chevron_room=true,
             title_after=fn() {
               if current { @sf.pill(c, @sf.t("web-pages.connect.current")) }
             },
