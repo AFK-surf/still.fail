@@ -31,6 +31,7 @@ import { installUsageCompactions, usageCompactionsReady } from "./usage-compacti
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 import { installUsageMinutes } from "./usage-minutes.ts";
+import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -202,6 +203,7 @@ export class Store {
       installUsageCompactions(db);
       addUsageQuarters(db);
       installUsageMinutes(db);
+      installRemoteRuns(db);
       addListState(db);
       addLetters(db);
       addCardOutcomes(db);
@@ -1840,7 +1842,10 @@ export class Store {
   noteRemoteRun(job: string, session: string, at: number): void {
     this.#tx(() => {
       this.#run("INSERT OR IGNORE INTO remote_runs (job, at, session) VALUES (?, ?, ?)", job, at, session);
-      this.#run("DELETE FROM remote_runs WHERE at < ?", at - REMOTE_RUNS_MS);
+      // Until every legacy row is indexed, retain the old cleanup so an older station sees the same table. Once the
+      // backfill is complete, the time lookup avoids inspecting any unexpired task.
+      const indexed = this.#one("SELECT done FROM remote_run_progress WHERE id = 1").done === 1;
+      this.#run(indexed ? DELETE_EXPIRED_REMOTE_RUNS : "DELETE FROM remote_runs WHERE at < ?", at - REMOTE_RUNS_MS);
     });
   }
 

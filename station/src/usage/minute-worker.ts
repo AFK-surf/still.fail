@@ -6,6 +6,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { BACKFILL_PAUSE_MS, REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { backfillNextUsageSession, backfillUsageMinutes, PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
+import { backfillRemoteRuns } from "../store/remote-runs.ts";
 import type { MinuteRequest, MinuteResponse } from "./minute-reader.ts";
 
 type Waiting = { request: MinuteRequest; after: string | null; sessions: string[]; scanned: boolean };
@@ -14,6 +15,9 @@ db.exec("PRAGMA synchronous = NORMAL");
 const waiting: Waiting[] = [];
 const scanned = new Set<string>();
 let complete = (db.prepare("SELECT done FROM usage_minute_all WHERE id = 1").get() as { done: number }).done === 1;
+const remoteInstalled = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'remote_run_progress'").get() !== undefined;
+let remoteComplete = !remoteInstalled || (db.prepare("SELECT done FROM remote_run_progress WHERE id = 1").get() as { done: number }).done === 1;
+let remoteTurn = true;
 let scheduled = false;
 let foreground = 0;
 let backgroundFailed = false;
@@ -21,7 +25,7 @@ let foregroundWaiting = false;
 const priority = workerData.priority instanceof SharedArrayBuffer ? new Int32Array(workerData.priority) : null;
 
 function signalComplete() {
-  parentPort!.postMessage({ complete: true } satisfies MinuteResponse);
+  if (complete && remoteComplete) parentPort!.postMessage({ complete: true } satisfies MinuteResponse);
 }
 
 // A ready workspace can be checked with reads alone, even while a foreground writer is waiting. Return null only
@@ -72,7 +76,7 @@ function schedule(delay = 0) {
   scheduled = true;
   const step = () => {
     scheduled = false;
-    const q = waiting.length && (foreground < 8 || backgroundFailed || complete || (priority !== null && Atomics.load(priority, 0) !== 0))
+    const q = waiting.length && (foreground < 8 || backgroundFailed || (complete && remoteComplete) || (priority !== null && Atomics.load(priority, 0) !== 0))
       ? waiting.shift() : undefined;
     let held = false;
     const take = () => {
@@ -101,7 +105,7 @@ function schedule(delay = 0) {
         foreground++;
         if (done) parentPort!.postMessage({ id: q.request.id } satisfies MinuteResponse);
         else waiting.push(q);
-      } else if (!complete && !backgroundFailed) {
+      } else if ((!complete || !remoteComplete) && !backgroundFailed) {
         if (!take()) {
           // The background turn cannot write now; let waiting requests try their read-only steps.
           if (waiting.length) foreground = 0;
@@ -109,8 +113,10 @@ function schedule(delay = 0) {
           return;
         }
         foreground = 0;
-        complete = backfillNextUsageSession(db).done;
-        if (complete) signalComplete();
+        if (!remoteComplete && (complete || remoteTurn)) remoteComplete = backfillRemoteRuns(db).done;
+        else complete = backfillNextUsageSession(db).done;
+        remoteTurn = !remoteTurn;
+        signalComplete();
       }
     } catch (error) {
       const code = (error as { errcode?: number }).errcode;
@@ -127,7 +133,7 @@ function schedule(delay = 0) {
     } finally {
       if (held) giveBackfill(priority, threadId);
     }
-    if (waiting.length || (!complete && !backgroundFailed)) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
+    if (waiting.length || ((!complete || !remoteComplete) && !backgroundFailed)) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
   };
   if (delay > 0) wall.after(delay, step);
   else setImmediate(step);
@@ -139,5 +145,5 @@ parentPort!.on("message", (request: MinuteRequest) => {
   waiting.push({ request, after: null, sessions: [], scanned: viewer !== null && viewer.home === false && scanned.has(viewer.workspace) });
   schedule();
 });
-if (complete) signalComplete();
+if (complete && remoteComplete) signalComplete();
 else schedule();

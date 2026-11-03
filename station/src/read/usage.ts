@@ -8,7 +8,7 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, decisionCards, remoteRunsSince, seenBy, threadsByPlace, sessionThreads, usageByDay, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, decisionCards, remoteRunCount, remoteRunsSince, seenBy, threadsByPlace, sessionThreads, usageByDay, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
@@ -240,7 +240,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   const since = usageSince(s);
   const prices = priceTable(lang, rows.map((r) => r.model));
   const profiles = configProfiles(s.dataDir);
-  const remoteRuns = remoteRunsSince(s, from).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? ""));
+  const remoteRuns = remoteRunsSince(s, from, viewer);
   mark("details");
   const answer = {
     from: i64(from),
@@ -288,7 +288,7 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
   }
   mark("historyPlaces");
   // the tasks the viewer's chats on other stations ran here, as long as they are kept (remote_runs: 90 days)
-  const remoteRuns = remoteRunsSince(s, 0n).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? "")).length;
+  const remoteRuns = remoteRunCount(s, viewer);
   mark("historyRemoteRuns");
   // the decision cards the viewer's chats were asked with, and those answered by an option pressed
   const cards = decisionCards(s, viewer);
