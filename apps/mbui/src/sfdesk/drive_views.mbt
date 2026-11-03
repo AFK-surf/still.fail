@@ -243,7 +243,7 @@ fn tree_lines(src : Source, s : Shown, at : DriveAt, depth : Int, out : Array[Li
 ///|
 /// The rows of a list or a tree (`tree`: folders opened in place), in a list of their own (`key`: by where it is shown
 /// and how, so each folder keeps how far it was scrolled): `head` over them, `empty` where the folder has nothing,
-/// `foot` the room under the last. The row whose name is being changed is kept in view (the soft keyboard up, the
+/// `foot` the room under the last (`head_shows`: what changes its head's height, said as words). The row whose name is being changed is kept in view (the soft keyboard up, the
 /// list shorter: it comes up over it).
 pub fn rows_view(
   c : @ui.Ctx,
@@ -254,6 +254,7 @@ pub fn rows_view(
   tree : Bool,
   compact? : Bool = false,
   head? : () -> Unit,
+  head_shows? : String = "",
   empty? : () -> Unit,
   foot? : Double = 0.0,
 ) -> Unit {
@@ -304,7 +305,17 @@ pub fn rows_view(
   })
   let was = drive_keys.get(key).unwrap_or([])
   drive_keys[key] = all_keys
-  let (all, shown_keys) = lr.rows(c, all_keys, all, fn(_) { "" }, comes=fn(l) { l is At(_) }, watched=all_keys.iter().any(fn(k) { k.has_prefix("r/") && was.contains(k) }))
+  // (what each shows: the row being named its field, a line taller: going to its height as it is named and let go)
+  let naming = s.b.renaming().unwrap_or("")
+  let shows = fn(l : ListLine) {
+    match l {
+      At(Row(a, e, _, _)) if naming != "" && row_key(a.path, e.name) == naming => "naming"
+      // (what its head shows besides itself: the files going up here, its columns' heads: `head_shows`)
+      Head => head_shows
+      _ => ""
+    }
+  }
+  let (all, shown_keys) = lr.rows(c, all_keys, all, shows, comes=fn(l) { l is At(_) }, watched=all_keys.iter().any(fn(k) { k.has_prefix("r/") && was.contains(k) }))
   // (the lines among them, with those going: where each is, its first and last of the group's)
   let line_of : Array[Int] = []
   let mut lines_n = 0

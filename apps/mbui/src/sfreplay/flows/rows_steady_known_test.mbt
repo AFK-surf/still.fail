@@ -11,7 +11,6 @@ fn init {
     ("src/sfreplay/flows/answer_option_test.mbt", 2),
     ("src/sfreplay/flows/bar_archive_test.mbt", 2),
     ("src/sfreplay/flows/card_motion_test.mbt", 1),
-    ("src/sfreplay/flows/drive_rename_test.mbt", 2),
     ("src/sfreplay/flows/drive_upload_test.mbt", 1),
     ("src/sfreplay/flows/history_test.mbt", 1),
     ("src/sfreplay/flows/offline_retry_test.mbt", 1),
