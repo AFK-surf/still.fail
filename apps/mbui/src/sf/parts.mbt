@@ -4635,6 +4635,7 @@ pub fn update_key(
   why : String,
   busy : Bool,
   coming? : Double?? = None,
+  offered? : Bool = false,
 ) -> Bool {
   let t = theme()
   let id = c.id(key)
@@ -4649,7 +4650,7 @@ pub fn update_key(
           if busy {
             updating_mark(c, mark, t.p.text) |> ignore
           } else {
-            icon(c, "update", size=mark, color=t.p.text) |> ignore
+            icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
           }
         })
         c.look(ready, @ui.look(alpha=1.0 - progress))

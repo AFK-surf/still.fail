@@ -1038,3 +1038,23 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   let picked = t.words().filter(fn(w) { w.0 == "MBA" }).length()
   assert_true(picked >= 2, msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
+
+///|
+test "wide: the update's three stages in the sidebar, the same key in the same place: 有新版本 (pressed, downloaded now), 正在下载, 重启更新" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_updates()
+  @sffixture.fixture_update("0.1.9999")
+  t.run_for(@ui.move_most_ms)
+  let offered = t.query(Button, label="有新版本 0.1.9999")
+  assert_true(offered is Some(_), msg="the offered update in the sidebar")
+  let at = offered.unwrap().rect
+  t.click(Button, label="有新版本 0.1.9999")
+  assert_eq(t.update_asked().filter(fn(a) { a.has_suffix(" true") }).length(), 1)
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.query(Button, label="正在下载 0.1.9999").unwrap().rect, at)
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.query(Button, label="重启更新").unwrap().rect, at)
+  update_reset()
+}

@@ -111,13 +111,15 @@ pub fn about_node(
 ///|
 /// This build and the way to a newer one as nodes, a row each on every screen: its name and version, a row going
 /// nowhere, words of a length known, the row's alone; then, where newer builds are asked for here (not on iOS, nor run
-/// from the sources), how the update stands said by the row's own words (updates.mbt update_stands: 检查更新, 下载
-/// <version>, 正在下载 <version>, 重启以更新到 <version>, 允许安装更新, 重试…) and the line under them, pressed to do
-/// what is the person's to do (else the update dialog opens and says how it goes); under them the bar while something
-/// is under way, its room opening and closing as that begins and ends (a move as far as the bar's room, from where it
-/// is then). (A spinner at its end while how far was not known, the bar only while it was, made the row taller and
-/// shorter again as it went, 2026-10-28. A button at the row's end took what its words left: the name cut to
-/// 「still.fail…」 on a phone, 2026-10-26.)
+/// from the sources), 检查更新, a row of its own always (pressed, the update dialog asks still.fail cloud and says what
+/// it answered), apart from installing one (2026-11-03 the user: 「检查更新和安装更新应该分开」); and under it, while a
+/// newer build is known, the update's row in its three stages (updates.mbt update_stands: 有新版本 <version>, 正在下载
+/// <version>, 重启以更新到 <version>; 允许安装更新, 重试… beside them) and the line under them, pressed to do what is the
+/// person's to do (else the update dialog opens and says how it goes); under them the bar while something is under
+/// way, its room opening and closing as that begins and ends (a move as far as the bar's room, from where it is then).
+/// (A spinner at its end while how far was not known, the bar only while it was, made the row taller and shorter again
+/// as it went, 2026-10-28. A button at the row's end took what its words left: the name cut to 「still.fail…」 on a
+/// phone, 2026-10-26.)
 fn version_rows_node(g : @view.View, core : Core) -> Unit {
   // (its name as the core's preferences say it, still.fail where they say none)
   @sf.link_row_node(g, fn() {
@@ -126,6 +128,9 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
   }, fn() {  }, goes=false)
   let v = fn() { (core.version_now)() }
   g.show(fn() { v().asks }, fn(r) {
+    @sf.link_row_node(r, fn() { @sf.t("android-settings.version.check") }, fn() { (core.version_check)() }, chevron=false)
+  })
+  g.show(fn() { v().asks && v().newer }, fn(r) {
     let open = @motion.Way::new(if @signals.untracked(fn() { v().going }) { 1.0 } else { 0.0 })
     r.reacts(fn() { v().going }, fn(going) {
       let to = if going { 1.0 } else { 0.0 }

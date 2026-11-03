@@ -292,6 +292,14 @@ pub fn open_fixture_mode(mode : String) -> Unit {
     @sffixture.fixture_update("0.1.5640")
     @sffixture.fixture_update_goes("0.1.5640", "ready", away=false)
   }
+  // the same build's first two stages there: offered (有新版本), coming (40%)
+  if mode == "home-update-offered" {
+    @sffixture.fixture_update("0.1.5640")
+  }
+  if mode == "home-update-coming" {
+    @sffixture.fixture_update("0.1.5640")
+    @sffixture.fixture_update_goes("0.1.5640", "downloading", percent=40)
+  }
   if mode == "home-transfers" || mode == "home-transfers-update" || mode == "home-update-list" {
     @sfdesk.open_transfers()
   }
