@@ -9,7 +9,7 @@ import { chmodSync, closeSync, existsSync, fstatSync, fsyncSync, ftruncateSync, 
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { after, test } from "node:test";
+import { after, mock, test } from "node:test";
 import { routes } from "../src/api/routes/drive.ts";
 import type { Request } from "../src/api/request.ts";
 import { Drive, DriveError } from "../src/drive/drive.ts";
@@ -321,6 +321,30 @@ const until = async (what: () => boolean) => {
 };
 
 const ops = (fake: FakeHelper) => fake.asked.map((a) => a.op).filter((o) => o.startsWith("files."));
+
+test("the fake helper closes every listener when started again", { skip: WINDOWS }, async () => {
+  const { base, fake } = machine();
+  const servers: net.Server[] = [];
+  const create = net.createServer;
+  const made = mock.method(net, "createServer", ((...args: any[]) => {
+    const server = (create as (...args: any[]) => net.Server)(...args);
+    servers.push(server);
+    return server;
+  }) as typeof net.createServer);
+  try {
+    const dir = join(base, "helper");
+    mkdirSync(dir, { recursive: true });
+    const env = { STILLFAIL_HELPER_SOCKET: join(dir, "helper.sock"), STILLFAIL_HELPER_TOKEN: "test" };
+    await fake.launch("", env);
+    await fake.launch("", env);
+    fake.close();
+    assert.equal(servers.filter((s) => s.listening).length, 0, "no listener outlives the fake helper");
+  } finally {
+    fake.close();
+    for (const s of servers) if (s.listening) await new Promise<void>((resolve) => s.close(() => resolve()));
+    made.mock.restore();
+  }
+});
 
 test("which way: a protected folder through still.fail Helper, by its name; any other directly", { skip: WINDOWS }, async () => {
   const { home, docs, project, fake, drive } = machine();
