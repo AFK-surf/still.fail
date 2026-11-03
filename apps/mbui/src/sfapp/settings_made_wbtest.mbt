@@ -1191,7 +1191,7 @@ test "一台 station 的记忆 made once, its own skills' row pressed: folded op
       t.run_for(@ui.move_most_ms)
       app.nav.push(Setting(@settings.Route::Memory("ws1/st1")))
       t.run_for(@ui.move_most_ms)
-      let again = (instances_sorted(t), words_where(t))
+      let again = (instances_sorted(t), words_where(t), t.focused().map(fn(n) { n.label }))
       t.tap_text(@sf.t("web-main.memory.builtin"))
       t.run_for(@motion.ripple_tap_ms)
       (open, said, again, words_where(t))
@@ -1202,7 +1202,7 @@ test "一台 station 的记忆 made once, its own skills' row pressed: folded op
     same_drawn(open.1, old_open.1, "open, words at \{platform}")
     assert_eq(said, old_said, msg="read out at \{platform}")
     assert_true(said == [Some(true)], msg="read out open: \{said}")
-    same_drawn(again.0, old_again.0, "in again, instances at \{platform}")
+    same_drawn(again.0, old_again.0, "in again, instances at \{platform}, focus made \{again.2} old \{old_again.2}")
     same_drawn(again.0, open.0, "in again as it was left at \{platform}")
     same_drawn(shut, old_shut, "shut, words at \{platform}")
     assert_true(open.1.iter().any(fn(w) { w.has_prefix("xlsx at") }) && !shut.iter().any(fn(w) { w.has_prefix("xlsx at") }), msg="its rows")
@@ -1232,6 +1232,8 @@ test "一台 station 的记忆 made once, read the first time or failing to be: 
 ///|
 test "一台 station 的记忆 made once: a part of its global memory pressed opens it, a skill its own; 记忆's station row opens this page made once" {
   let t = memories_tester(true, 2, mode="settings-memory")
+  // (the part's page reads its words as Markdown: the core said to read them as they are)
+  @sf.markdown_read.val = Some(fn(_, done) { done(None) })
   t.tap_text("习惯")
   t.run_for(@ui.move_most_ms)
   let part = app.nav.top()
@@ -1240,6 +1242,7 @@ test "一台 station 的记忆 made once: a part of its global memory pressed op
   t.tap_text("发布流程")
   t.run_for(@ui.move_most_ms)
   let skill = app.nav.top()
+  @sf.markdown_read.val = None
   assert_true(
     part == Setting(@settings.Route::MemoryDoc("ws1/st1", "", 1)) && skill == Setting(@settings.Route::MemoryDoc("ws1/st1", "发布流程", 0)),
     msg="\{@sfbase.page_kind(part)} \{@sfbase.page_kind(skill)}",

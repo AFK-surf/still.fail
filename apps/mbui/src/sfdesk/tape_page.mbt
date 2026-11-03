@@ -48,7 +48,7 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
       // (a page's bar on the tape the tree's, over its own view: what the page says of it, collected as it is built)
       head=fn(b, k, made) { tape_bar_head(b, k, made, tips) },
       // (a page of the library's made once in its place, where it is: its bar the tape's, from what the page is)
-      made=fn(p) { tape_made(src, p) },
+      made=fn(p) { tape_made(src, p, tips) },
       // (what its bar said kept till its entry leaves the stack: shown again (beside the one over it as that goes back),
       // its bar there with it before its page is built again)
       gone=fn(k) { tape_bars.remove(k) },
@@ -238,7 +238,11 @@ fn tape_bar_collected(c : @ui.Ctx, build : () -> Unit) -> Unit {
 /// where the page is narrow (look_for that width), a gate between their two makings for now (no wide arrangement of
 /// theirs yet); wider, their old view. Under the tape's bar (tape_bar_head, from tape_made_bar): no title, no back of
 /// its own, nothing over it in its room.
-fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
+fn tape_made(
+  src : Source,
+  page : Page,
+  tips : @sf.TipLayer,
+) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
   // (as wide as the stack in the panel at rest, as the tape lays it out now: the page's width, 0 while not known)
   let width = fn() {
     let r = tape_room_now()
@@ -311,7 +315,7 @@ fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
     Setting(Memory(address)) if pane_makes.val =>
       made("memory/" + address, fn(p, core, here, _stint, told) {
         context_node(p)
-        @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+        @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
       })
     // (the others narrow ones alone: wider, their old view)
     _ if !narrow => None

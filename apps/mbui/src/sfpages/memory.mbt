@@ -240,6 +240,7 @@ pub fn memory_node(
   frame~ : () -> PageFrame,
   said? : (@sf.PageSaid) -> Unit,
   width? : () -> Double,
+  tips? : @sf.TipLayer,
 ) -> Unit {
   let stations = fn() {
     match @settings.stations_of(core, here()).value {
@@ -265,6 +266,7 @@ pub fn memory_node(
     frame~,
     said?,
     width?,
+    tips?,
     about=fn() { @sf.t("web-pages.settings.memory.lead") },
     fn() { ["memory"] },
     fn(b, _) {
@@ -381,9 +383,8 @@ fn memory_body_node(
             fn() { @settings.builtin_turn(address) },
           )
         })
-        g.show(fn() { skills("builtin").length() > 0 && @settings.builtin_open_of(address) }, fn(f) {
-          skill_rows(f, fn() { skills("builtin") })
-        })
+        // (each a row of the list's own while open, the list's gap between them: no box round them)
+        skill_rows(g, fn() { if @settings.builtin_open_of(address) { skills("builtin") } else { [] } })
       })
     })
   })
