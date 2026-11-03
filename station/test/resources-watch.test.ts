@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resourceRoutes } from "../src/api/routes/usage.ts";
-import { parseNettop } from "../src/resources/module.ts";
+import { appBundles, parseNettop } from "../src/resources/module.ts";
 import { FIRST_MS, KILL_AFTER_MS, LOOK_MS, NotEndable, ResourceWatch, type Traffic, type Usage, WANTED_MS, whoseOf } from "../src/resources/watch.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { ProcessInfo } from "../src/platform/index.ts";
@@ -334,4 +334,20 @@ test("GET /resources as events: a resources event, as GET /resources answers, ea
   await body.return!();
   assert.equal(stopped, 1, "the station stops looking for it as it ends");
   assert.equal((await body.next()).done, true);
+});
+
+test("which processes are the desktop app's is read off the station's thread, each bundle once", async () => {
+  // Read as each was asked, the first look after a start read every app running from a disk short of memory: the
+  // station held 7.8 s on ccvm (2026-11-03), a message sent waiting on it.
+  const asked: string[] = [];
+  let answer: (plist: Buffer) => void = () => {};
+  const isApp = appBundles((path) => (asked.push(path), new Promise<Buffer>((resolve) => (answer = resolve))));
+  const app = "/Applications/still.fail.app/Contents/MacOS/still.fail";
+  assert.equal(isApp(app), false, "not known yet: none, nothing waited on");
+  assert.equal(isApp(`${app} --child`), false);
+  assert.deepEqual(asked, ["/Applications/still.fail.app/Contents/Info.plist"], "each bundle read once");
+  answer(Buffer.from("<string>fail.still.desktop.beta</string>"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(isApp(app), true);
+  assert.equal(isApp("/usr/bin/node"), false);
 });
