@@ -1907,9 +1907,10 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let words = w.text.get().trim(chars=" \n\t").to_string()
   let rk = r.station + "\u{1}" + r.session
   remember_sent_pictures(src, w, r.station)
-  // (its references as the field's marks till the core makes them links: drawn as the field drew them)
+  // (its references as the field's marks, which its flight takes off as; its row's runs as the core read its words)
   let marks = @sfbase.refs_sent_marks(w.key, words)
-  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), marks~)
+  let runs = @sfbase.refs_sent_runs(w.key, words)
+  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~)
   // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as
   // tall as it is till they let go of it
   let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
@@ -1928,6 +1929,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     hold=fn(ms) { composer_hold(w.key, room, box, ms) },
     desk=true,
     marks~,
+    runs~,
   )
   // At the end, the new row and its neighbours move together with the flight. When reading above it, glide there
   // instead of putting the list at the end in a single frame.

@@ -51,7 +51,7 @@ fn fake_core(
         // what still.fail's links open, as the core reads them (links_wbtest.mbt)
         "link.parse" => done(Ok(fixture_link_parse(text(Some(params), "url"))))
         // what is written, read as the core reads it (refLinks.ts, pasted.ts: its answers kept)
-        "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => (base.call)(name, params, done)
+        "ref.at" | "ref.before" | "ref.marks" | "ref.words" | "ref.pasted" | "paste.info" => (base.call)(name, params, done)
         // the chat's draft, as the core keeps it (the composer's: sfpages, its fixture compose_fixture.mbt)
         _ if name.has_prefix("composer.") => (base.call)(name, params, done)
         _ => ()

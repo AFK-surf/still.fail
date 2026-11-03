@@ -163,36 +163,12 @@ test "while the chat is read: its bar, the messages to come, the composer" {
 }
 
 ///|
-test "references and addresses in plain words" {
-  let runs = message_runs("看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 和 https://example.com/a。", @sf.theme().p.accent)
-  assert_eq(runs.length(), 6)
-  assert_eq(runs[1].text, "@")
-  assert_eq(runs[2].text, "首页")
-  assert_eq(runs[2].link, "https://app.still.fail/w/ws1/s/st1/chats/s-c2")
-  assert_eq(runs[3].text, " 和 ")
-  assert_eq(runs[4].link, "https://example.com/a")
-  assert_eq(runs[5].text, "。")
-}
-
-///|
-test "references in plain words: a still.fail link's, and one linked bare reading as its message says its chat" {
-  let old = "https://app.still.fail/o/ws1/st1/c-old"
-  let runs = message_runs(
-    "[首页](https://app.still.fail/o/ws1/st1/s-c2) 和 \{old} 还有 https://app.still.fail/o/ws1/st1/c-none",
-    @sf.theme().p.accent,
-    chat_title=fn(h) { if h == old { Some("旧的对话") } else { None } },
-  )
-  assert_eq(runs.map(fn(r) { r.text }), ["@", "首页", " 和 ", "@", "旧的对话", " 还有 ", "@", "https://app.still.fail/o/ws1/st1/c-none"])
-  assert_eq(runs[4].link, old)
-}
-
-///|
-test "a person's words as the core gives them in runs are drawn as the words read here are" {
+test "a person's words as the core gives them in runs: references to chats, one linked bare reading as its chat's title" {
   let accent = @sf.theme().p.accent
   let page = "https://app.still.fail/w/ws1/s/st1/chats/s-c2"
   let old = "https://app.still.fail/o/ws1/st1/c-old"
   let title = fn(h) { if h == old { Some("旧的对话") } else { None } }
-  // (refLinks.ts personWords of these words, as the core gives them in a message's `words`)
+  // (refLinks.ts personWords of `看 [首页](page) 和 https://example.com/a 还有 old`, as the core gives them)
   let parts : Array[Json] = [
     { "text": "看 " },
     { "text": "首页", "link": Json::string(page), "ref": true },
@@ -201,20 +177,24 @@ test "a person's words as the core gives them in runs are drawn as the words rea
     { "text": " 还有 " },
     { "text": Json::string(old), "link": Json::string(old), "ref": true },
   ]
-  let core = words_runs(parts, accent, chat_title=title)
-  let here = message_runs("看 [首页](\{page}) 和 https://example.com/a 还有 \{old}", accent, chat_title=title)
-  assert_eq(core.map(fn(r) { (r.text, r.link, r.color) }), here.map(fn(r) { (r.text, r.link, r.color) }))
+  let runs = words_runs(parts, accent, chat_title=title)
+  assert_eq(runs.map(fn(r) { r.text }), ["看 ", "@", "首页", " 和 ", "https://example.com/a", " 还有 ", "@", "旧的对话"])
+  assert_eq(runs[2].link, page)
+  assert_eq(runs[2].color, accent)
+  assert_eq(runs[4].link, "https://example.com/a")
+  assert_eq(runs[7].link, old)
 }
 
 ///|
 test "what was sent from here draws the composer's marks as the references its message will have" {
   let accent = @sf.theme().p.accent
-  let sent = message_runs("看 @[首页] 吧", accent, marks=[(2, 7)])
-  let theirs = message_runs("看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 吧", accent)
-  assert_eq(sent.map(fn(r) { r.text }), theirs.map(fn(r) { r.text }))
-  assert_eq(sent.map(fn(r) { r.color }), theirs.map(fn(r) { r.color }))
-  // (words like a mark that the field did not hold as one stay as written)
-  assert_eq(message_runs("看 @[首页] 吧", accent).map(fn(r) { r.text }), ["看 @[首页] 吧"])
+  // (draftWords of `看 @[首页] 吧`, and personWords of the words the core sends for it)
+  let sent = words_runs([{ "text": "看 " }, { "text": "首页", "ref": true }, { "text": " 吧" }], accent)
+  let theirs = words_runs(
+    [{ "text": "看 " }, { "text": "首页", "link": "https://app.still.fail/w/ws1/s/st1/chats/s-c2", "ref": true }, { "text": " 吧" }],
+    accent,
+  )
+  assert_eq(sent.map(fn(r) { (r.text, r.color) }), theirs.map(fn(r) { (r.text, r.color) }))
 }
 
 ///|

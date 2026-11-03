@@ -92,6 +92,28 @@ pub let markdown_read : Ref[((String, (Json?) -> Unit) -> Unit)?] = Ref(None)
 pub let kept_call : Ref[((String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?)?] = Ref(None)
 
 ///|
+/// Whether a person's words may hold more than one run as the core reads them (refLinks.ts draftWords: an address, a
+/// composer's mark, a link to a chat): words holding none of `://`, `@[`, `](` are their own one run, asked of none.
+pub fn words_may_link(text : String) -> Bool {
+  text.contains("://") || text.contains("@[") || text.contains("](")
+}
+
+///|
+/// A person's `text` in the runs the real core reads it in (`ref.words`: refLinks.ts draftWords), kept (`kept_call`),
+/// if it was: for a run without a core, whose messages have no `words` of their own.
+pub fn kept_words(text : String) -> Json? {
+  guard words_may_link(text) else { return None }
+  match kept_call.val {
+    Some(kept) =>
+      match kept("ref.words", { "text": Json::string(text) }, None) {
+        Some(Ok((Object(m), _))) => m.get("runs")
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
 /// `text`'s tree as the real core read it, kept (`kept_call`), if it was.
 fn kept_tree(text : String) -> Json? {
   match kept_call.val {
@@ -234,62 +256,6 @@ let file_chip_share : Double = 0.13
 // kept across runs: a value (no field of it changes)
 let file_chip_ground : @ui.Ground = { room: 6.0 / 13.2, height: 20.0 / 13.2, corner: 6.0 / 13.2, after: 0.0 }
 
-///|
-/// A link to a chat's page (Markdown.kt isChatLink): …/chats/<key>, or
-/// still.fail cloud's /o/<workspace>/<station>/<key>.
-pub fn is_chat_link(href : String) -> Bool {
-  // …/chats/<key> with nothing after it but a slash, a query or a fragment
-  match href.find("/chats/") {
-    Some(i) => {
-      let rest = href.view(start_offset=i + 7).to_string()
-      let mut k = 0
-      while k < rest.length() {
-        let ch = rest.at(k).to_int()
-        if ch == 47 || ch == 63 || ch == 35 || ch == 32 {
-          break
-        }
-        k = k + 1
-      }
-      if k > 0 {
-        let tail = rest.view(start_offset=k).to_string()
-        if tail == "" || tail == "/" || tail.has_prefix("?") || tail.has_prefix("#") ||
-          tail.has_prefix("/?") ||
-          tail.has_prefix("/#") {
-          return true
-        }
-      }
-    }
-    None => ()
-  }
-  // https://<host>/o/<workspace>/<station>/<key>
-  let scheme = if href.has_prefix("https://") {
-    8
-  } else if href.has_prefix("http://") {
-    7
-  } else {
-    return false
-  }
-  let after = href.view(start_offset=scheme).to_string()
-  let path = match after.find("/") {
-    Some(i) => after.view(start_offset=i).to_string()
-    None => return false
-  }
-  if !path.has_prefix("/o/") {
-    return false
-  }
-  // what follows its key, a query (one of its messages, its agent's history) or a fragment, is still the chat's
-  let body = match path.find("#") {
-    Some(i) => path.view(end_offset=i).to_string()
-    None => path
-  }
-  let body = match body.find("?") {
-    Some(i) => body.view(end_offset=i).to_string()
-    None => body
-  }
-  let parts = body.view(start_offset=3).to_string().split("/").map(fn(v) { v.to_string() }).to_array()
-  let parts = if parts.length() == 4 && parts[3] == "" { parts[:3].to_array() } else { parts }
-  parts.length() == 3 && parts.iter().all(fn(x) { x != "" })
-}
 
 ///|
 /// The file a link or an image names, by its name (the last part of its

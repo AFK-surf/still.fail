@@ -448,14 +448,18 @@ pub fn person_words(
   found? : Array[String] = [],
   peek? : ((String, String, Int) -> Unit)? = None,
   chat_title? : (String) -> String? = fn(_) { None },
-  marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
 ) -> Unit {
   let p = @sf.theme().p
-  // (the core's reading where it gave one: a message's `words`; else what is not its yet, read here)
+  // (the core's reading: a message's `words`, or what was sent from here's; a run without a core's, as it kept it;
+  // none yet, the words as they are)
   let shown = match runs {
     Some(Array(parts)) => words_runs(parts, p.accent, chat_title~)
-    _ => message_runs(words, p.accent, chat_title~, marks~)
+    _ =>
+      match @sf.kept_words(words) {
+        Some(Array(parts)) => words_runs(parts, p.accent, chat_title~)
+        _ => [@ui.plain(words)]
+      }
   }
   c.rich(
     @sf.found_weight(shown, found),
@@ -487,8 +491,7 @@ fn link_peeks(
 
 ///|
 /// What a link of message `m` is to, as the core says (each link's `to`): of a person's words' runs, or of an agent's
-/// Markdown (read as the row is, as its words are). A person's words the core has not said yet (being sent) are drawn
-/// by the app's own runs (`message_runs`), whose links to chats are `@sf.is_chat_link`'s.
+/// Markdown (read as the row is, as its words are).
 fn link_to_in(m : Message) -> (String) -> @sf.LinkTo {
   match m.words {
     Some(Array(runs)) =>
@@ -498,7 +501,7 @@ fn link_to_in(m : Message) -> (String) -> @sf.LinkTo {
           None => @sf.no_link_to
         }
       }
-    _ if m.author_kind == "person" || m.mine => fn(href) { { ..@sf.no_link_to, chat: @sf.is_chat_link(href) } }
+    _ if m.author_kind == "person" || m.mine => fn(_) { @sf.no_link_to }
     _ => {
       let links = @sf.md_links_to(m.text, m.md)
       fn(href) { links.get(href).unwrap_or(@sf.no_link_to) }
@@ -532,7 +535,6 @@ fn mine_bubble(
   found? : Array[String] = [],
   peek? : ((String, String, Int) -> Unit)? = None,
   chat_title? : (String) -> String? = fn(_) { None },
-  marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
 ) -> Unit {
   // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
@@ -553,11 +555,11 @@ fn mine_bubble(
       // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
       match flight {
         Some(f) => {
-          let w = c.box(fn() { person_words(c, words, key, found~, peek~, chat_title~, marks~, runs~) })
+          let w = c.box(fn() { person_words(c, words, key, found~, peek~, chat_title~, runs~) })
           flight_landing_words(c, f, w)
           flight_pieces_in(c, f, bubble_node)
         }
-        None => person_words(c, words, key, found~, peek~, chat_title~, marks~, runs~)
+        None => person_words(c, words, key, found~, peek~, chat_title~, runs~)
       }
     },
   )

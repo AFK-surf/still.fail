@@ -64,8 +64,10 @@ pub(all) struct SendFlight {
   /// one block
   lines : @ui.FieldLines?
   lead : Int
-  /// the composer's marks in its words (refs_sent_marks): drawn as the field drew them, and as their row does
+  /// the composer's marks in its words (refs_sent_marks): drawn as the field drew them; and the runs their row draws
+  /// them in (refs_sent_runs: the core's; None, as they are), which their pieces land as
   marks : Array[(Int, Int)]
+  runs : Json?
   /// the files sent with them, from their tiles, and their quotes, from their cards
   files : Array[FlyingFile]
   /// its row's key (what was sent from here, then the core's row it became: chat.mbt row_keys), whether it is laid
@@ -170,6 +172,7 @@ pub fn flight_start(
   hold~ : (Double) -> Unit,
   desk~ : Bool,
   marks? : Array[(Int, Int)] = [],
+  runs? : Json? = None,
 ) -> Unit {
   send_flight.set(None)
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
@@ -195,6 +198,7 @@ pub fn flight_start(
         lines,
         lead,
         marks,
+        runs,
         files,
         key,
         placed: false,
@@ -240,6 +244,7 @@ pub fn flight_carry_start(
   hold~ : (Double) -> Unit,
   desk~ : Bool,
   marks? : Array[(Int, Int)] = [],
+  runs? : Json? = None,
 ) -> Unit {
   send_flight.set(None)
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
@@ -270,6 +275,7 @@ pub fn flight_carry_start(
         lines: None,
         lead: 0,
         marks,
+        runs,
         files,
         key: "",
         placed: false,
@@ -796,7 +802,10 @@ fn flight_pieces_drawn(
   let flying = f.placed && f.placed_frame != c.frame_number()
   let across = if flying { flight_across_of(c, f) } else { 0.0 }
   let up = if flying { flight_up_of(c, f) } else { 0.0 }
-  let runs = message_runs(f.text, t.p.accent, marks=f.marks)
+  let runs = match f.runs {
+    Some(Array(parts)) => words_runs(parts, t.p.accent)
+    _ => [@ui.plain(f.text)]
+  }
   for k, p in pieces {
     let (ax, ay, aw, ah) = p.at
     let cut = c.box(style=@ui.style(w=Fixed(aw), h=Fixed(ah), clip=true), fn() {

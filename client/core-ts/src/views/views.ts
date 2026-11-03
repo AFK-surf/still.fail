@@ -2629,7 +2629,7 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     return out;
   });
   view.messages = messages;
-  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? goingUp({ ...o, attachments: own(o.attachments) }) : o));
+  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? goingUp({ ...o, attachments: own(o.attachments), ...(typeof o.text === "string" && o.text !== "" ? { words: personWords(o.text) } : {}) }) : o));
   const elsewhere = arr(view.elsewhere);
   if (elsewhere.length > 0) {
     const bySeq = new Map(messages.map((m) => [u64(m.seq), m]));
