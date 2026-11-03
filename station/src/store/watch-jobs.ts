@@ -5,6 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 export const HAS_ACTIVE_WATCH = `SELECT 1 FROM thread_sessions t
   CROSS JOIN active_watch_jobs w INDEXED BY active_watch_jobs_session ON w.session = t.session
   WHERE t.thread = ? LIMIT 1`;
+export const HAS_SESSION_ACTIVE_WATCH = "SELECT 1 FROM active_watch_jobs INDEXED BY active_watch_jobs_session WHERE session = ? LIMIT 1";
 export const ACTIVE_WATCHES_AT_INSTALL = "SELECT id, session_key, token FROM jobs INDEXED BY jobs_state WHERE state = 'running' AND watch <> 0";
 
 /// Install the lookup with the writers, and bring over only watches running now through the jobs' state index.

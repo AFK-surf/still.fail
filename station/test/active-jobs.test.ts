@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { OTHER_JOBS_AT_INSTALL, RUNNING_LIMIT, installOtherActiveJobs } from "../src/store/active-jobs.ts";
+import { OTHER_JOBS_AT_INSTALL, RUNNING_LIMIT, RUNNING_WAIT_JOBS, installOtherActiveJobs } from "../src/store/active-jobs.ts";
 import { HAS_ACTIVE_WATCH, installActiveWatches } from "../src/store/watch-jobs.ts";
 
 for (const recursive of [false, true]) test(`the running limit follows watches, ordinary jobs and older writers (recursive triggers ${recursive})`, () => {
@@ -89,5 +89,37 @@ for (const recursive of [false, true]) test(`the running limit follows watches, 
     assert.equal(inspected, 1, "other sessions' active jobs and completed history are not inspected");
     installOtherActiveJobs(db);
     assert.equal(atLeast("b", 20), true);
+  } finally { db.close(); }
+});
+
+test("stopping a wait finds only its running watches and commands", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(`CREATE TABLE jobs (id TEXT PRIMARY KEY, session_key TEXT NOT NULL, state TEXT NOT NULL,
+      watch INTEGER NOT NULL, token TEXT NOT NULL UNIQUE, port INTEGER, started_at INTEGER NOT NULL);
+      CREATE INDEX jobs_state ON jobs (state);`);
+    const add = (id: string, session: string, state: string, watch: number, port: number | null, at: number) =>
+      db.prepare("INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, session, state, watch, id, port, at);
+    for (let i = 0; i < 200; i++) add(`old-${i}`, "a", "exited", 0, null, i);
+    add("watch", "a", "running", 1, null, 10);
+    add("command", "a", "running", 0, null, 20);
+    add("service", "a", "running", 0, 47123, 30);
+    add("other", "b", "running", 1, null, 40);
+    installActiveWatches(db);
+    installOtherActiveJobs(db);
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${RUNNING_WAIT_JOBS}`).all("a") as { detail: string }[]).map((r) => r.detail).join(" | ");
+    assert.match(plan, /active_watch_jobs_session \(session=\?\)/);
+    assert.match(plan, /active_other_jobs USING PRIMARY KEY \(session=\?\)/);
+    assert.match(plan, /SEARCH j USING INDEX \S+ \(id=\?\)/);
+    let visited = 0;
+    db.function("visited_job", (_id) => { visited++; return 1; });
+    const measured = RUNNING_WAIT_JOBS.replace("j.id = active.job", "j.id = active.job AND visited_job(j.id)");
+    const ids = () => (db.prepare(measured).all("a") as { id: string }[]).map((r) => r.id);
+    assert.deepEqual(ids(), ["command", "watch"]);
+    assert.equal(visited, 3, "the other session and completed jobs are not visited");
+    db.prepare("UPDATE jobs SET state = 'stopped' WHERE id = ?").run("watch");
+    visited = 0;
+    assert.deepEqual(ids(), ["command"]);
+    assert.equal(visited, 2);
   } finally { db.close(); }
 });

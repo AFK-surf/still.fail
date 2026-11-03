@@ -234,6 +234,36 @@ const watchJob = (session: string) => ({
   pgid: null, exitCode: null, startedAt: Date.now(), endedAt: null, restarts: 0, log: "/dev/null", watch: true,
 });
 
+test("a watched wait checks its active watch without reading the session's job history", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  const r = new Rig();
+  const list = r.store.listJobs;
+  try {
+    const m = message();
+    await r.accept(m);
+    await settle();
+    const key = sessionKey("cl", "C1", m.threadTs);
+    r.store.insertJob(watchJob(key));
+    r.store.listJobs = function (session) {
+      if (session === key) throw new Error("the session's job history was read");
+      return list.call(this, session);
+    };
+    await r.call(key, "chat_state", { kind: "waiting", seconds: 10, for: "盯 CI", watch: true });
+    r.claude.last().complete();
+    await settle();
+    t.mock.timers.tick(10_000);
+    await settle();
+    assert.equal(r.claude.last().prompts.length, 1, "a running watch keeps the wait");
+    r.store.jobEnded("job_w", "stopped", null);
+    t.mock.timers.tick(11_000);
+    await settle();
+    assert.equal(r.claude.last().prompts.length, 2, "the wait ends after its watch ends");
+  } finally {
+    r.store.listJobs = list;
+    await r.close();
+  }
+});
+
 test("a wait does not run out while a watch of its session runs", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
   const r = new Rig();
@@ -488,8 +518,17 @@ test("stop while waiting ends the jobs that would bring it back, but not its ser
   await r.call(key, "chat_state", { kind: "waiting", seconds: 600, for: "任务跑完" });
   r.claude.last().complete();
   await settle();
-  await r.hub.stop(key);
-  await settle();
+  const list = r.store.listJobs;
+  r.store.listJobs = function (session) {
+    if (session === key) throw new Error("the session's job history was read");
+    return list.call(this, session);
+  };
+  try {
+    await r.hub.stop(key);
+    await settle();
+  } finally {
+    r.store.listJobs = list;
+  }
   const state = (id: string) => r.store.getJob(id)!.state;
   assert.deepEqual([state("build"), state("watch"), state("page")], ["stopped", "stopped", "running"]);
   assert.equal(r.chat.lastText(), "已停止当前任务");

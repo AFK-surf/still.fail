@@ -1121,14 +1121,13 @@ export class Hub {
       held: (key) => this.holdsNow.size > 0 || !this.inAWorkspace(key),
       stopJobs: async (key) => {
         const jobs = this.jobs;
-        const running = this.store.listJobs(key).filter((j) => j.state === "running" && (j.watch || j.port === null));
         if (!jobs) return;
-        for (const job of running) {
+        for (const id of this.store.runningWaitJobIds(key)) {
           try {
-            await jobs.stop(job.id);
-            log.info("hub", "job stopped with its session's wait", { session: key, job: job.id });
+            await jobs.stop(id);
+            log.info("hub", "job stopped with its session's wait", { session: key, job: id });
           } catch (error) {
-            log.warn("hub", "job not stopped", { session: key, job: job.id, error: (error as Error).message });
+            log.warn("hub", "job not stopped", { session: key, job: id, error: (error as Error).message });
           }
         }
       },

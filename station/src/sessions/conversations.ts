@@ -395,7 +395,7 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
     if (what === "") throw new Error("for is required for waiting: what you wait for, in a few words people read");
     if (args.watch !== undefined && typeof args.watch !== "boolean") throw new Error("watch must be true or false");
     watch = args.watch === true;
-    if (watch && !hub.store.listJobs(key).some((j) => j.watch && j.state === "running")) {
+    if (watch && !hub.store.hasSessionActiveWatch(key)) {
       throw new Error("watch: true is for waiting on a watch of yours that runs (job_start with watch); none does: leave it out, or start the watch first");
     }
     const whole = Number.isNaN(seconds) ? 0 : Math.trunc(Math.max(0, seconds));

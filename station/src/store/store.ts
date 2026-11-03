@@ -38,8 +38,8 @@ import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { retireDuplicateUsage } from "./usage-unified.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
-import { HAS_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
-import { RUNNING_LIMIT, installOtherActiveJobs } from "./active-jobs.ts";
+import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
+import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, installOtherActiveJobs } from "./active-jobs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -1022,6 +1022,11 @@ export class Store {
   /// Whether an agent in this thread has a watch running, without reading its completed jobs.
   hasActiveWatch(thread: number): boolean {
     return this.#one(HAS_ACTIVE_WATCH, thread) !== undefined;
+  }
+
+  /// Whether this session has a watch running, without reading its completed jobs.
+  hasSessionActiveWatch(session: string): boolean {
+    return this.#one(HAS_SESSION_ACTIVE_WATCH, session) !== undefined;
   }
 
   /// A thread of this session by the address the agent names it with, and how the session posts there.
@@ -2090,6 +2095,11 @@ export class Store {
   /// Whether this session has at least `limit` jobs running. The lookup reads at most that many active jobs.
   runningJobsAtLeast(session: string, limit: number): boolean {
     return limit <= 0 || this.#one(RUNNING_LIMIT, session, limit - 1) !== undefined;
+  }
+
+  /// Running jobs stopped with a wait, newest first; completed jobs and other sessions are not read.
+  runningWaitJobIds(session: string): string[] {
+    return this.#all(RUNNING_WAIT_JOBS, session).map((r) => r.id);
   }
 
   /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and
