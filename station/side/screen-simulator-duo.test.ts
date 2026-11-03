@@ -136,9 +136,19 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
     // Opened again on the inner panel, after all those folds: the picture its shape from the first, not back through them.
     const unfolding = await hub.get(`simulator:${udid}`)!.open({ maxWidth: 1000, maxHeight: 1400, codecs: ["jpeg"] });
     view = unfolding;
+    // Waited for by its picture, as the poses above: a new view's first pose took 6.2 s on mini1, and a fixed 5 s closed
+    // the view before it had unfolded (side run 41635377489).
+    let unfolded = 0;
+    const following = (async () => {
+      for (let f = await unfolding.next(); f !== null; f = await unfolding.next()) unfolded = shape(f.data);
+    })();
+    const asked = Date.now();
     await unfolding.input({ t: "pose", name: "open" });
-    await sleep(5000);
+    while (Math.abs(unfolded - inner) >= 0.006 && Date.now() - asked < 60_000) await sleep(500);
+    console.log("unfolded in", Date.now() - asked, "ms");
+    near(unfolded, inner, "unfolded");
     unfolding.close();
+    await following;
     await sleep(1000);
     const again = await hub.get(`simulator:${udid}`)!.open({ maxWidth: 1000, maxHeight: 1400, codecs: ["jpeg"] });
     view = again;

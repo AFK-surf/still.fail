@@ -32,6 +32,12 @@ jobs:
         run: pnpm install --frozen-lockfile && cd station && pnpm install --frozen-lockfile
       - name: side (${{ matrix.part }})
         run: sh scripts/side.sh ${{ matrix.part }}
+        # (the simulators' pictures as the tests took them, kept when one fails: a tap on the Duo's inner panel that opened
+        # nothing for a minute could not be told from its log alone, 41636490524)
+        env: { SIM_OUT: "${{ runner.temp }}/sim" }
+      - if: failure() && matrix.part == 'station'
+        uses: actions/upload-artifact@v4
+        with: { name: "side-sim-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/sim", retention-days: 3, if-no-files-found: ignore }
   # The station's X11 screens on a real X server (Xvfb, ffmpeg's x11grab, xdotool): a display that would not open
   # failed main's check once (Cannot open display :99, 41459527166), so here, not on every push.
   x11:
