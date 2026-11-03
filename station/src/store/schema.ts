@@ -800,6 +800,36 @@ export function addUsageCompactions(db: DatabaseSync): void {
 /// - session_first: the first message a session was given (its delivery the earliest made).
 /// Made once from what is there, in the same transaction as the triggers that keep them from then on (as
 /// usage_totals), after the letters were marked (addLetterColumn).
+// The first row of each thread is a seek in (session, thread, rowid); a session's earliest is the smallest of those.
+// In particular, do not sort all of its deliveries when the first is removed. This visits its threads, not its messages.
+export const firstDelivery = (session: string) => `WITH RECURSIVE first_threads(thread) AS (
+  VALUES ((SELECT thread FROM deliveries INDEXED BY deliveries_session WHERE session = ${session} ORDER BY thread LIMIT 1))
+  UNION ALL
+  SELECT (SELECT thread FROM deliveries INDEXED BY deliveries_session WHERE session = ${session} AND thread > first_threads.thread ORDER BY thread LIMIT 1)
+    FROM first_threads WHERE thread IS NOT NULL
+)
+SELECT thread, n FROM deliveries WHERE rowid = (
+  SELECT MIN((SELECT rowid FROM deliveries INDEXED BY deliveries_session WHERE session = ${session} AND thread = first_threads.thread ORDER BY rowid LIMIT 1))
+  FROM first_threads WHERE thread IS NOT NULL
+)`;
+
+// An outer INSERT OR REPLACE / OR ABORT overrides OR IGNORE in a trigger. Do not attempt an insert if this session
+// already has a first delivery: the caller's conflict policy must neither replace the summary nor reject a new message.
+const SESSION_FIRST_ADD = `CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+  -- REPLACE may remove the first delivery without firing DELETE triggers; its replacement has a new rowid.
+  UPDATE session_first SET (thread, n) = (${firstDelivery("NEW.session")})
+    WHERE session = NEW.session AND thread = NEW.thread AND n = NEW.n AND EXISTS
+      (SELECT 1 FROM (${firstDelivery("NEW.session")}) first WHERE first.thread IS NOT NEW.thread OR first.n IS NOT NEW.n);
+  INSERT INTO session_first SELECT NEW.session, NEW.thread, NEW.n
+    WHERE NOT EXISTS (SELECT 1 FROM session_first WHERE session = NEW.session);
+END;`;
+const SESSION_FIRST_DROP = `CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries
+  WHEN EXISTS (SELECT 1 FROM session_first WHERE session = OLD.session AND thread = OLD.thread AND n = OLD.n) BEGIN
+  DELETE FROM session_first WHERE session = OLD.session;
+  INSERT INTO session_first (session, thread, n)
+    SELECT OLD.session, next.thread, next.n FROM (${firstDelivery("OLD.session")}) next
+    WHERE NOT EXISTS (SELECT 1 FROM session_first WHERE session = OLD.session);
+END;`;
 const LIST_STATE = `
 CREATE TABLE thread_state (
   thread INTEGER PRIMARY KEY,
@@ -844,14 +874,8 @@ CREATE TRIGGER thread_state_drop AFTER DELETE ON entries BEGIN
   DELETE FROM thread_state WHERE thread = OLD.thread;
   DELETE FROM thread_people WHERE thread = OLD.thread;
 END;
-CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
-  INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
-END;
-CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries
-  WHEN EXISTS (SELECT 1 FROM session_first WHERE session = OLD.session AND thread = OLD.thread AND n = OLD.n) BEGIN
-  DELETE FROM session_first WHERE session = OLD.session;
-  INSERT OR IGNORE INTO session_first SELECT session, thread, n FROM deliveries WHERE session = OLD.session ORDER BY rowid LIMIT 1;
-END;
+${SESSION_FIRST_ADD}
+${SESSION_FIRST_DROP}
 `;
 
 /// Letters (rows.ts Letter): what two chats' agents write each other, kept in a log of their own beside each chat's,
@@ -1147,10 +1171,16 @@ export function addTellIndexes(db: DatabaseSync): void {
 /// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
 export function addListState(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thread_state'").get() !== undefined;
-  if (made()) return;
+  const firstSafe = (trigger: string) => ((db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?").get(trigger) as { sql: string } | undefined)?.sql ?? "")
+    .includes("WITH RECURSIVE first_threads");
+  if (made() && firstSafe("session_first_add") && firstSafe("session_first_drop")) return;
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!made()) db.exec(LIST_STATE);
+    else {
+      if (!firstSafe("session_first_add")) db.exec(`DROP TRIGGER IF EXISTS session_first_add; ${SESSION_FIRST_ADD}`);
+      if (!firstSafe("session_first_drop")) db.exec(`DROP TRIGGER IF EXISTS session_first_drop; ${SESSION_FIRST_DROP}`);
+    }
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");

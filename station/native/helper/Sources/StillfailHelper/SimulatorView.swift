@@ -334,6 +334,17 @@ final class SimulatorView: ScreenView {
     _ = run(["show", "--last", "boot"], { boot.read() }) { text in
       if let cover = said(text) { boot.said(cover) }
     }
+    // The panel an earlier view here left it on, at once: the boot's log is read whole, longer the longer the device has been up,
+    // and on a busy Mac past the wait below (the first pictures the cover's, then the inner's, side run 41673108710). The log
+    // still says, as it comes, a fold made with no view following it.
+    if let cover = KnownPanels.shared[udid] {
+      await showPanel(cover: cover, opening: true)
+      Task {
+        while !boot.done { try? await Task.sleep(for: .milliseconds(100)) }
+        if let cover = boot.taken() { change.yield(cover) }
+      }
+      return
+    }
     for _ in 0..<150 where !boot.done {
       try? await Task.sleep(for: .milliseconds(20))
     }
@@ -351,6 +362,7 @@ final class SimulatorView: ScreenView {
   func showPanel(cover: Bool, opening: Bool = false) async {
     guard coverShown != cover else { return }
     coverShown = cover
+    KnownPanels.shared[udid] = cover
     if cover { hinge = min(hinge, 0) } else if hinge < 90 { hinge = 180 }
     let size = cover ? (DevicePose.coverWidth, DevicePose.coverHeight) : (DevicePose.innerWidth, DevicePose.innerHeight)
     await capture.setPreferredScreenSize(width: size.0, height: size.1)
@@ -500,5 +512,25 @@ private final class BootPanel: @unchecked Sendable {
     defer { lock.unlock() }
     defer { last = nil }
     return last
+  }
+}
+
+/// The panel each device was last shown on by a view here, by its UDID (true: the cover).
+private final class KnownPanels: @unchecked Sendable {
+  static let shared = KnownPanels()
+  private let lock = NSLock()
+  private var covers: [String: Bool] = [:]
+
+  subscript(udid: String) -> Bool? {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return covers[udid]
+    }
+    set {
+      lock.lock()
+      defer { lock.unlock() }
+      covers[udid] = newValue
+    }
   }
 }

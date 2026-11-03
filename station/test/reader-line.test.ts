@@ -162,7 +162,7 @@ test("a stretch of a history filled in brief is read behind the rest; one read w
   assert.equal(Atomics.load(state, 0), 4);
 });
 
-test("the sidebar and a session's detail are read beside a slow bulk read, before another waiting", { timeout: 30_000 }, async () => {
+test("the sidebar, a session's detail, the machine's sample and the jobs up are read beside a slow bulk read, before another waiting", { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);
   // A slow usage read holds one reader, another waits for the one left.
   const asked = [readers.read("usage", args(true), "en"), readers.read("usage", args(true), "en")];
@@ -170,7 +170,12 @@ test("the sidebar and a session's detail are read beside a slow bulk read, befor
     await started(1);
     assert.equal(await readers.read("chats", args(false), "en"), "{}");
     assert.equal(await readers.read("session", args(false), "en"), "{}");
-    assert.equal(Atomics.load(state, 0), 3, "the usage read waiting still waits");
+    // The machine's sample too: it waited 2 to 6 s behind the usage page's reads on ccvm (2026-11-03).
+    assert.equal(await readers.read("host", args(false), "en"), "{}");
+    // And the jobs up without their chats, read again by every device as a job starts: 40 s behind them on ccvm
+    // (2026-11-03). With their chats, a bulk read (below).
+    assert.equal(await readers.read("openJobs", { ...args(false), chats: false }, "en"), "{}");
+    assert.equal(Atomics.load(state, 0), 5, "the usage read waiting still waits");
   } finally {
     const settled = await open(asked);
     assert.ok(settled.every((s) => s.status === "fulfilled"));
@@ -211,7 +216,7 @@ test("an incomplete old history is omitted without holding a device reader", { t
   }
 });
 
-test("the last reader of what devices ask and of what streams tell is kept idle, started before either is asked", { timeout: 30_000 }, async () => {
+test("the readers of what devices ask and of what streams tell are kept idle, started before either is asked", { timeout: 30_000 }, async () => {
   const { wall } = await import("../src/ops/fibers.ts");
   const after = wall.after;
   const due: (() => void)[] = [];
@@ -223,9 +228,10 @@ test("the last reader of what devices ask and of what streams tell is kept idle,
     const [asked, told] = [lines.asked.slots[0], lines.told.slots[0]];
     assert.ok(asked !== undefined && told !== undefined, "started before anything is asked");
     await readers.read("thread", args(false), "en");
-    // A minute idle, every timer due: the last of each is kept.
+    assert.deepEqual([lines.asked.slots.length, lines.told.slots.length], [2, 1], "as many as each line has");
+    // A minute idle, every timer due: every one of them is kept.
     for (const f of due.splice(0)) f();
-    assert.deepEqual([lines.asked.slots.length, lines.told.slots.length], [1, 1]);
+    assert.deepEqual([lines.asked.slots.length, lines.told.slots.length], [2, 1]);
     await readers.read("thread", args(false), "en");
     assert.equal(lines.asked.slots[0], asked, "the same reader answers");
     assert.equal(Atomics.load(state, 0), 2);
@@ -233,4 +239,51 @@ test("the last reader of what devices ask and of what streams tell is kept idle,
     wall.after = after;
     await open([]);
   }
+});
+
+test("a background read waiting while its line rests is read once it has rested, a timer firing early or not", { timeout: 30_000 }, async () => {
+  const { wall } = await import("../src/ops/fibers.ts");
+  const [now, after] = [wall.now, wall.after];
+  let clock = 1_000;
+  // The line's wakes (a reader idle a minute going is not this test's).
+  const due: (() => void)[] = [];
+  wall.now = () => clock;
+  wall.after = (ms, f) => (ms < 60_000 && due.push(f), () => {});
+  const { readers, state, args, open } = gated(2);
+  try {
+    const background = { background: true };
+    // The first page takes 50 ms (as the clock says): the line rests 50 ms before the second.
+    const first = readers.read("timeline", args(false), "en", background);
+    const second = readers.read("timeline", args(false), "en", background);
+    clock += 50;
+    await first;
+    assert.equal(Atomics.load(state, 0), 1, "the second waits while the line rests");
+    // A timer firing a moment before the rest is over: the line is looked at again later.
+    clock += 49;
+    for (const f of due.splice(0)) f();
+    assert.equal(Atomics.load(state, 0), 1);
+    assert.ok(due.length > 0, "looked at again once it has rested");
+    clock += 1;
+    for (const f of due.splice(0)) f();
+    assert.equal(await second, "{}");
+  } finally {
+    [wall.now, wall.after] = [now, after];
+    await open([]);
+  }
+});
+
+test("a batch's chat reads, in the background, are read one at a time beside what a device asks, not as it is", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(2);
+  const background = { background: true };
+  const asked = [readers.read("thread", args(true), "en", background), readers.read("thread", args(true), "en", background)];
+  try {
+    await started(1);
+    // The second waits: one at a time, a reader left for a chat someone opens.
+    assert.equal(await readers.read("thread", args(false), "en"), "{}");
+    assert.equal(Atomics.load(state, 0), 2, "the second background read still waits");
+  } finally {
+    const settled = await open(asked);
+    assert.ok(settled.every((s) => s.status === "fulfilled"));
+  }
+  assert.equal(Atomics.load(state, 0), 3);
 });

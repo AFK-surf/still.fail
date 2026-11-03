@@ -61,6 +61,60 @@ export function hasCompactUsage(db: DatabaseSync): boolean {
   return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compact_since'").get() !== undefined;
 }
 
+/// A bounded journal of future changes lets a reader reuse its own snapshot of unchanged hours. It starts empty:
+/// installing it neither walks nor modifies existing statistics. A NULL minute invalidates a session's ownership.
+export function installUsageSummaryChanges(db: DatabaseSync): void {
+  const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get() !== undefined;
+  if (!hasCompactUsage(db) || installed()) return;
+  const changed = ["scope", "session", "minute", "thread", "person", "profile", "runtime", "model", "fast"];
+  const sameBucket = "OLD.scope IS NEW.scope AND OLD.session IS NEW.session AND OLD.minute IS NEW.minute";
+  const insert = (r: string, value: string) => `INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${value}, ${r}.session, ${r}.minute);`;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!installed()) db.exec(`
+      CREATE TABLE usage_summary_changes (seq INTEGER PRIMARY KEY, scope TEXT NOT NULL, session TEXT NOT NULL, minute INTEGER);
+      CREATE TRIGGER usage_summary_prune AFTER INSERT ON usage_summary_changes WHEN NEW.seq % 64 = 0 BEGIN
+        DELETE FROM usage_summary_changes WHERE seq <= NEW.seq - 4096;
+      END;
+      -- REPLACE need not fire DELETE triggers. Remember a conflicting bucket's former scope before it is replaced.
+      CREATE TRIGGER usage_summary_replace BEFORE INSERT ON usage_compact BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute)
+          SELECT scope, session, minute FROM usage_compact WHERE session = NEW.session AND minute = NEW.minute
+            AND thread = NEW.thread AND person = NEW.person AND profile = NEW.profile AND runtime = NEW.runtime
+            AND model = NEW.model AND fast = NEW.fast AND scope IS NOT NEW.scope AND (records > 0 OR pending = 1);
+      END;
+      CREATE TRIGGER usage_summary_add AFTER INSERT ON usage_compact WHEN NEW.pending = 0 BEGIN ${insert("NEW", "NEW.scope")} END;
+      CREATE TRIGGER usage_summary_change AFTER UPDATE OF ${changed.join(", ")} ON usage_compact
+        WHEN ${changed.map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ")} BEGIN
+          ${insert("OLD", "OLD.scope")}
+          INSERT INTO usage_summary_changes (scope, session, minute)
+            SELECT NEW.scope, NEW.session, NEW.minute WHERE NOT (${sameBucket});
+      END;
+      -- Inserts and value changes make the bucket pending. Readers check that index on each reuse; accounting the
+      -- bucket records its final state before it leaves the index, in the total worker's already-batched transaction.
+      CREATE TRIGGER usage_summary_accounted AFTER UPDATE OF pending ON usage_compact
+        WHEN OLD.pending = 1 AND NEW.pending = 0 BEGIN ${insert("NEW", "NEW.scope")} END;
+      CREATE TRIGGER usage_summary_drop AFTER DELETE ON usage_compact WHEN OLD.records > 0 OR OLD.pending = 1 BEGIN ${insert("OLD", "OLD.scope")} END;
+      CREATE TRIGGER usage_summary_owner_replace BEFORE INSERT ON usage_minute_scope BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute)
+          SELECT ${scopeOf("ws")}, session, NULL FROM usage_minute_scope
+            WHERE session = NEW.session AND ws IS NOT NEW.ws;
+      END;
+      CREATE TRIGGER usage_summary_owner_add AFTER INSERT ON usage_minute_scope BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${scopeOf("NEW.ws")}, NEW.session, NULL);
+      END;
+      CREATE TRIGGER usage_summary_owner_change AFTER UPDATE OF ws ON usage_minute_scope WHEN OLD.ws IS NOT NEW.ws BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${scopeOf("OLD.ws")}, OLD.session, NULL);
+        INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${scopeOf("NEW.ws")}, NEW.session, NULL);
+      END;
+      CREATE TRIGGER usage_summary_owner_drop AFTER DELETE ON usage_minute_scope BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${scopeOf("OLD.ws")}, OLD.session, NULL);
+      END;
+    `);
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
 export function compactCoverageSince(db: DatabaseSync): number {
   return (db.prepare("SELECT since FROM usage_compact_since WHERE id = 1").get() as { since: number }).since;
 }
@@ -440,11 +494,12 @@ export function moveCompactStep(db: DatabaseSync, batch = 256, scope?: string): 
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null): { sql: string; args: (string | bigint)[] } {
+export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null, countParts = false,
+  trackSelection = false): { sql: string; args: (string | bigint)[] } {
   // Minute totals cannot answer a partial minute exactly. Read original calls only at those two edges, after the
   // statistics have identified which sessions have calls there; the complete minutes still use their totals.
   if (from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n))) {
-    return compactQueryWithEdges(from, to, offset, viewer);
+    return compactQueryWithEdges(from, to, offset, viewer, countParts);
   }
   const floor = (n: bigint) => n >= 0n ? n / 60_000n : -1n - ((-1n - n) / 60_000n);
   const start = from >= to ? 0n : floor(from);
@@ -457,23 +512,29 @@ export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: I
   const eligible = viewer === null ? "SELECT session FROM selected" : `SELECT p.session FROM selected p
     CROSS JOIN usage_minute_scope sc ON sc.session = p.session
     WHERE ${viewer.home === false ? "sc.ws = ?5" : "(sc.ws = ?5 OR sc.ws IS NULL)"}`;
+  // These callbacks touch no rows beyond those the query already reads. The marker runs once after selection, before
+  // the first selected session's buckets; the counter sees candidates including buckets that later contribute nothing.
+  const countCandidate = trackSelection ? " AND usage_summary_candidate()" : "";
+  const marker = trackSelection ? ", selected_marker AS MATERIALIZED (SELECT usage_summary_selected() AS ready)" : "";
+  const markerJoin = trackSelection ? " CROSS JOIN selected_marker marker" : "";
+  const markerWhere = trackSelection ? "marker.ready = 1 AND " : "";
   // Find sessions through the covering time index, then read each session's buckets together in primary-key order.
   // Materializing the eligible sessions keeps the workspace check from being repeated for every minute.
   const sql = `WITH selected AS MATERIALIZED (
     SELECT DISTINCT session FROM usage_compact INDEXED BY ${index}
-    WHERE ${scope}minute >= ?2 AND minute < ?3
-  ), eligible AS MATERIALIZED (${eligible})
+    WHERE ${scope}minute >= ?2 AND minute < ?3${countCandidate}
+  ), eligible AS MATERIALIZED (${eligible})${marker}
     SELECT strftime('%Y-%m-%d', (c.minute + ?1) * 60, 'unixepoch') AS day,
     c.session, NULLIF(c.thread, 0) AS thread, NULLIF(c.person, '') AS person, NULLIF(c.profile, '') AS profile,
     c.runtime, NULLIF(c.model, '') AS model, c.fast, SUM(c.calls) AS calls, SUM(c.input) AS input,
-    SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output
-    FROM eligible p CROSS JOIN usage_compact c ON c.session = p.session AND c.minute >= ?2 AND c.minute < ?3
-    WHERE ${bucketScope}c.records > 0
+    SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
+    FROM eligible p${markerJoin} CROSS JOIN usage_compact c ON c.session = p.session AND c.minute >= ?2 AND c.minute < ?3
+    WHERE ${markerWhere}${bucketScope}c.records > 0
     GROUP BY day, c.session, c.thread, c.person, c.profile, c.runtime, c.model, c.fast`;
   return { sql, args };
 }
 
-function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null): { sql: string; args: (string | bigint)[] } {
+function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null, countParts: boolean): { sql: string; args: (string | bigint)[] } {
   const size = 60_000n;
   const max = 9223372036854775807n;
   const floor = (n: bigint) => n >= 0n ? n / size : -1n - ((-1n - n) / size);
@@ -481,20 +542,27 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
   const last = floor(to);
   const args: (string | bigint)[] = [offset];
   const bind = (value: string | bigint) => { args.push(value); return `?${args.length}`; };
-  let visible = "";
-  const source = viewer === null ? "FROM usage_compact c INDEXED BY usage_compact_time"
-    : "FROM usage_compact c INDEXED BY usage_compact_scope_time CROSS JOIN usage_minute_scope sc ON sc.session = c.session";
+  let selectedScope = "";
+  let bucketScope = "";
+  let eligible = "SELECT session FROM selected";
   if (viewer !== null) {
     const scope = bind(`W${viewer.workspace}`);
     const ws = bind(viewer.workspace);
-    visible = viewer.home !== false ? `c.scope IN (${scope}, 'H') AND (sc.ws = ${ws} OR sc.ws IS NULL) AND `
-      : `c.scope = ${scope} AND sc.ws = ${ws} AND `;
+    selectedScope = viewer.home !== false ? `scope IN (${scope}, 'H') AND ` : `scope = ${scope} AND `;
+    bucketScope = viewer.home !== false ? `c.scope IN (${scope}, 'H') AND ` : `c.scope = ${scope} AND `;
+    eligible = `SELECT p.session FROM selected p CROSS JOIN usage_minute_scope sc ON sc.session = p.session
+      WHERE ${viewer.home !== false ? `(sc.ws = ${ws} OR sc.ws IS NULL)` : `sc.ws = ${ws}`}`;
   }
+  // Include both partial edges when selecting sessions; their original calls are read below only if their bucket exists.
+  const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
+  const selectedStart = bind(first);
+  const selectedEnd = bind(to === max ? max : last + (to === last * size ? 0n : 1n));
   const start = bind(first + (from === first * size ? 0n : 1n));
   const end = bind(to === max ? max : last);
   const parts = [`SELECT c.minute, c.session, c.thread, c.person, c.profile, c.runtime, c.model, c.fast,
     c.calls, c.input, c.cache_read, c.cache_write, c.cache_write_long, c.output
-    ${source} WHERE ${visible}c.minute >= ${start} AND c.minute < ${end} AND c.records > 0`];
+    FROM eligible p CROSS JOIN usage_compact c ON c.session = p.session AND c.minute >= ${start} AND c.minute < ${end}
+    WHERE ${bucketScope}c.records > 0`];
   const edge = (minute: bigint, begin: bigint, until: bigint) => {
     if (begin >= until) return;
     const bucket = bind(minute);
@@ -502,17 +570,22 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
     const high = bind(until);
     parts.push(`SELECT e.minute, u.session, COALESCE(u.thread, 0), COALESCE(u.person, ''), COALESCE(u.profile, ''),
       u.runtime, COALESCE(u.model, ''), u.fast, u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output
-      FROM (SELECT DISTINCT c.session, c.minute ${source} WHERE ${visible}c.minute = ${bucket} AND c.records > 0) e
+      FROM (SELECT DISTINCT c.session, c.minute FROM usage_compact c INDEXED BY ${index}
+        CROSS JOIN eligible p ON p.session = c.session
+        WHERE ${bucketScope}c.minute = ${bucket} AND c.records > 0) e
       CROSS JOIN usage u INDEXED BY usage_session ON u.session = e.session AND u.at >= ${low} AND u.at < ${high}
       WHERE u.compact_counted = 1`);
   };
   if (from !== first * size) edge(first, from, (first + 1n) * size < to ? (first + 1n) * size : to);
   if (to !== max && to !== last * size && (last !== first || from === first * size)) edge(last, last * size, to);
-  const sql = `WITH parts AS (${parts.join(" UNION ALL ")})
+  const sql = `WITH selected AS MATERIALIZED (
+      SELECT DISTINCT session FROM usage_compact INDEXED BY ${index}
+      WHERE ${selectedScope}minute >= ${selectedStart} AND minute < ${selectedEnd}
+    ), eligible AS MATERIALIZED (${eligible}), parts AS (${parts.join(" UNION ALL ")})
     SELECT strftime('%Y-%m-%d', (minute + ?1) * 60, 'unixepoch') AS day,
       session, NULLIF(thread, 0) AS thread, NULLIF(person, '') AS person, NULLIF(profile, '') AS profile,
       runtime, NULLIF(model, '') AS model, fast, SUM(calls) AS calls, SUM(input) AS input,
-      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
     FROM parts GROUP BY day, session, thread, person, profile, runtime, model, fast`;
   return { sql, args };
 }

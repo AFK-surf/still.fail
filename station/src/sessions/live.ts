@@ -9,6 +9,7 @@ import type { Clock } from "effect";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import type { BackgroundTask, LiveEvent, PlanItem } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
+import { log } from "../ops/log.ts";
 import { type PlanState, noPlan, planItems, readPlan, saysWhole } from "../read/plan.ts";
 import { ChainTail, type TailState, type TranscriptRef } from "../read/tail.ts";
 import { type TimelineEntry, brief } from "../read/transcript.ts";
@@ -84,7 +85,9 @@ type Rate = { buckets: [number, number][]; toldAt: number; told: number };
 /// `behind`: the transcript of the runtime session it runs in now is not written yet (a runtime writes it once its
 /// conversation has begun), so where its history goes on is looked for again on each read. `tail` null while where its
 /// transcripts stand is read off the main thread (`ready`).
-type Watched = { tail: ChainTail | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void };
+/// `takeUp`: while the readers are asked where its reading stands, where the process before's stood (carried over as it
+/// was asked): gone on from there at once, whether it was.
+type Watched = { tail: ChainTail | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void; takeUp?: (states: TailState[]) => boolean };
 /// A listener of a session: whether it is told the entries in brief, and what is said while it joins (what it lacks of
 /// the transcript read off the main thread first), held until it has joined.
 type Sub = { id: number; listener: Listener; brief: boolean; queue: LiveMessage[] | null };
@@ -120,6 +123,12 @@ export class LiveHub {
   private saidPlans = new Map<string, PlanItem[]>();
   private listeners = new Map<string, Sub[]>();
   private watched = new Map<string, Watched>();
+  /// Where the reading of transcripts no longer watched stood here (or in the process before, carried over): watched
+  /// again, read on from there, the readers not asked. Asked at each station update, a reader read on from what it kept
+  /// on disk, a session's 1.7 MB in 1.5 s on ccvm short of memory (2026-11-03), its chat waiting on it.
+  private stood = new Map<string, TailState[]>();
+  /// Whether the process before's were taken up (`takeTails`).
+  private tookTails = false;
   /// Its time and its waits (a read put off to gather a burst of writes).
   private time: Fibers;
   private nextId = 0;
@@ -582,11 +591,49 @@ export class LiveHub {
     }
   }
 
+  private keepStood(key: string, states: TailState[]) {
+    this.stood.delete(key);
+    this.stood.set(key, states);
+    while (this.stood.size > 256) this.stood.delete(this.stood.keys().next().value!);
+  }
+
+  /// Where the reading of each transcript stands here, watched or not: what the next station process reads on from
+  /// (carried over at a handover, parts.ts `carry`).
+  carriedTails(): { key: string; states: TailState[] }[] {
+    const out = new Map(this.stood);
+    for (const [key, w] of this.watched) if (w.tail !== null && !w.tail.keeps) out.set(key, w.tail.snapshot());
+    return [...out].map(([key, states]) => ({ key, states }));
+  }
+
+  /// What the process before read of transcripts, where none is watched here yet.
+  takeTails(carried: { key: string; states: TailState[] }[]): void {
+    if (!Array.isArray(carried)) return;
+    // How many were taken up, and why not the rest: one asked of the readers after an update all the same (ccvm,
+    // 2026-11-03), unsaid whether it came.
+    let taken = 0;
+    let watched = 0;
+    for (const c of carried) {
+      if (typeof c?.key !== "string" || !Array.isArray(c.states)) continue;
+      if (!c.states.every((st) => typeof st?.path === "string" && Number.isSafeInteger(st.offset) && Number.isSafeInteger(st.count))) continue;
+      const w = this.watched.get(c.key);
+      if (w !== undefined) {
+        if (w.tail === null && w.takeUp?.(c.states) === true) taken++;
+        else watched++;
+        continue;
+      }
+      this.keepStood(c.key, c.states);
+      taken++;
+    }
+    this.tookTails = true;
+    log.info("live", "transcripts' readings taken up", { carried: carried.length, taken, watched });
+  }
+
   /// A deleted session: nothing of it is watched or kept any more.
   forget(key: string) {
     this.tasks.delete(key);
     this.plans.delete(key);
     this.planAt.delete(key);
+    this.stood.delete(key);
     this.planBack.delete(key);
     this.saidPlans.delete(key);
     this.steps.delete(key);
@@ -676,14 +723,36 @@ export class LiveHub {
       const ref = at.paths[i]!;
       return st.path === (typeof ref === "string" ? ref : ref.path) && (st.runtime ?? at.runtime) === (typeof ref === "string" ? at.runtime : ref.runtime);
     });
-    watched.ready = this.history
+    const stood = this.stood.get(key) ?? null;
+    this.stood.delete(key);
+    if (same(stood)) {
+      begin(ChainTail.from(at.runtime, stood));
+      this.soon(key);
+      return true;
+    }
+    if (this.tookTails) log.info("live", "a transcript's reading asked of the readers", { session: key, kept: stood !== null, carried: this.tookTails });
+    // Begun once, from the readers' answer or from what the process before carried over, whichever is first: carried
+    // over after the sessions at work were watched again, 3 of 7 were read by the readers all the same (2026-11-03).
+    let begun = false;
+    let readyNow = () => {};
+    watched.ready = new Promise<void>((resolve) => (readyNow = resolve));
+    watched.takeUp = (states) => {
+      if (begun || this.watched.get(key) !== watched || !same(states)) return false;
+      begun = true;
+      begin(ChainTail.from(at.runtime, states));
+      this.soon(key);
+      readyNow();
+      return true;
+    };
+    void this.history
       .state(key)
       .then(
         (states) => states,
         () => null,
       )
       .then((states) => {
-        if (this.watched.get(key) !== watched) return;
+        if (this.watched.get(key) !== watched || begun) return readyNow();
+        begun = true;
         if (same(states)) begin(ChainTail.from(at.runtime, states));
         else {
           // Its transcripts are not where the readers found them (or they could not say): read here, kept nowhere.
@@ -693,12 +762,14 @@ export class LiveHub {
         }
         // What was written since the readers read it.
         this.soon(key);
+        readyNow();
       });
     return true;
   }
 
   private unwatch(key: string) {
     const watched = this.watched.get(key);
+    if (watched?.tail != null && !watched.tail.keeps) this.keepStood(key, watched.tail.snapshot());
     this.watched.delete(key);
     this.told.delete(key);
     watched?.watcher?.close();

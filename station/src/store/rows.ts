@@ -577,6 +577,14 @@ export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY
 /// first, by the same index: what a session has up (store.ts `jobsUp`), and the readers' list of them (GET /jobs).
 export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running' UNION ALL SELECT * FROM jobs WHERE state = 'exited' AND port IS NOT NULL) ORDER BY started_at DESC";
 
+/// The latest running service, or one waiting to restart, holding a port. The two state-and-port seeks do not read
+/// other services or commands (jobs.ts startId).
+export const JOB_AT_PORT = `SELECT id, name, port FROM (
+  SELECT id, name, port, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'running' AND port = ?1
+  UNION ALL
+  SELECT id, name, port, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'exited' AND port = ?1
+) ORDER BY started_at DESC LIMIT 1`;
+
 /// A session's jobs, the latest first, by the index on their session (schema.ts jobs_by_session): the main thread's and
 /// the readers'.
 export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY started_at DESC";

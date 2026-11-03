@@ -17,9 +17,10 @@ import type { ColdStorage, Hub } from "./hub.ts";
 
 /// Links followed, never into a folder macOS protects (a session continued there, a job's directory: ops/places.ts).
 /// Each path's kept a minute: followed a folder at a time on the station's thread for every session and job in use, at
-/// each look as a session is packed, 33 of them held the station 2.4 s on ccvm short of memory (2026-11-03).
+/// each look as a session is packed, 33 of them held the station 2.4 s on ccvm short of memory (2026-11-03); kept a
+/// minute, they were followed again at each round of archiving (39 of them, 1.7 s held), a round some minutes apart.
 const followed = new Map<string, { at: number; real: string | null }>();
-const FOLLOWED_MS = 60_000;
+const FOLLOWED_MS = 15 * 60_000;
 const canonical = (path: string): string | null => {
   const now = wall.now();
   const kept = followed.get(path);
@@ -257,24 +258,31 @@ export class ColdRooms implements ColdStorage {
     if (await access(said).then(() => true, () => false)) return;
     let done = 0;
     let failed = false;
-    for (const row of this.hub().store.listSessions()) {
-      if (row.archivedAt === null) continue;
-      let files: string[];
-      try {
-        files = this.historyFiles(row.key, false);
-      } catch {
-        continue;
-      }
-      for (const path of files) {
+    const store = this.hub().store;
+    // Do not load every session before yielding. The upper bound also keeps newly archived sessions from extending
+    // this sweep; archives made now are already put away in segments.
+    const through = store.lastArchivedSession();
+    let after: typeof through = null;
+    while (through !== null) {
+      const page = store.archivedSessions(after, through);
+      if (page.length === 0) break;
+      for (const row of page) {
+        let files: string[] = [];
         try {
-          if (await archive.segmentFile(path)) done++;
-        } catch (error) {
-          failed = true;
-          log.warn("hub", "a put-away transcript not put in segments", { session: row.key, error: (error as Error).message });
+          files = this.historyFiles(row.key, false);
+        } catch {}
+        for (const path of files) {
+          try {
+            if (await archive.segmentFile(path)) done++;
+          } catch (error) {
+            failed = true;
+            log.warn("hub", "a put-away transcript not put in segments", { session: row.key, error: (error as Error).message });
+          }
         }
+        // Between sessions, including one whose files could not be found, the station's other work.
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
-      // Between sessions, the station's other work.
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      after = page[page.length - 1]!;
     }
     if (done > 0) log.info("hub", "put-away transcripts put in segments", { n: done });
     if (!failed) await writeFile(said, "").catch(() => undefined);

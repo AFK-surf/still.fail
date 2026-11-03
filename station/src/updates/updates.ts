@@ -37,6 +37,7 @@
 //   `answerChannelAsk`.
 
 import { createHash } from "node:crypto";
+import { rm } from "node:fs/promises";
 import { type FSWatcher, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, parse } from "node:path";
@@ -921,11 +922,12 @@ export class Updates {
     if (origin === null) throw refused(lang, "station.updates.notJoined");
     const runDir = join(this.data, "run");
     mkdirSync(runDir, { recursive: true });
-    for (const f of ["update.exit", "update.step"]) rmSync(join(runDir, f), { force: true });
     const station = this.items.station;
     // Taken now, so another ask meanwhile finds it updating.
     const before = { updating: station.updating, failed: station.failed, done: station.done };
     station.updating = this.fibers.now();
+    // Off the station's thread: 0.7 s held on ccvm short of memory (2026-11-03), at every update.
+    await Promise.all(["update.exit", "update.step"].map((f) => rm(join(runDir, f), { force: true })));
     const channel = this.channel();
     // The release verified, the installer to run and what it is told (refused in `lang`: not left updating).
     let plan: Plan;

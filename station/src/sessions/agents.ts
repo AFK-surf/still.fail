@@ -63,6 +63,7 @@ import { hubConfig } from "./config.ts";
 import type { TailState } from "../read/tail.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
+import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
 import { roomOf } from "./footprint.ts";
 import { InternalChat } from "./internal.ts";
 import { autoArchive, expireArchived, relieveArchived } from "./lifecycle.ts";
@@ -237,6 +238,11 @@ export const AgentsLive = (control: Control) =>
         cold,
         places,
       });
+      const workspaceActivity = yield* Effect.acquireRelease(
+        Effect.sync(() => buildWorkspaceActivity(store, previous)),
+        (builder) => Effect.promise(() => builder.close()),
+      );
+      hub.waitForWorkspaceActivity = () => workspaceActivity.ready;
       // No turn until the agents' door is open: a runtime started before has no MCP endpoint, and Codex does not
       // connect to it again for that thread.
       hub.hold("starting");
@@ -499,6 +505,8 @@ export const AgentsLive = (control: Control) =>
       };
       // Where each checklist was read to, for the next process to read on from (not back, at each update).
       parts.carry("live.plans", () => hub.live.carriedPlans(), (what) => hub.live.takePlans(what));
+      // And where each transcript's reading stood, for it to read on from there (not ask the readers, at each update).
+      parts.carry("live.tails", () => hub.live.carriedTails(), (what) => hub.live.takeTails(what));
       hub.threadList = async () => JSON.parse(await readers.read("threadList", {}, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
       hub.followRunning();
@@ -746,6 +754,7 @@ export const AgentsLive = (control: Control) =>
         Effect.promise(async () => {
           if (handing) return;
           handing = true;
+          await workspaceActivity.close();
           await time.close();
           await sharing?.close();
           await xshare.close();

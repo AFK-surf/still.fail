@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DISK_LOW_BYTES } from "../src/ops/disk.ts";
+import { ColdRooms } from "../src/sessions/cold.ts";
 import { expireArchived, relieveArchived } from "../src/sessions/lifecycle.ts";
 import { Rig } from "./hub-fakes.ts";
 
@@ -100,4 +101,35 @@ test("low-disk cleanup stops reading archives once it has freed enough room", as
     assert.deepEqual(emptied, ["old-000"]);
     assert.ok(fetched.reduce((a, b) => a + b, 0) <= 64, `archive rows read: ${fetched}`);
   } finally { await r.close(); }
+});
+
+test("segmenting old transcripts reads archived sessions in bounded pages", async () => {
+  const { r, add, fetched } = rig();
+  const cold = new ColdRooms(() => r.hub);
+  const list = r.store.listSessions;
+  try {
+    for (let i = 0; i < 130; i++) add(`old-${String(i).padStart(3, "0")}`, DAY);
+    for (let i = 0; i < 200; i++) r.store.insertSession({ key: `live-${i}`, connect: "cl", runtime: "claude", profile: "cc", workspace: r.dir, token: `live-${i}`, createdAt: DAY, lastActiveAt: DAY });
+    const visited: string[] = [];
+    cold.historyFiles = (key) => {
+      visited.push(key);
+      if (visited.length === 1) add("late", 2 * DAY);
+      return [];
+    };
+    r.store.listSessions = () => { throw new Error("all session history was read"); };
+    let yielded = false;
+    const done = cold.segmentHistories();
+    setImmediate(() => { yielded = true; });
+    await done;
+    assert.equal(yielded, true, "other station work can run while archives are processed");
+    assert.deepEqual(visited, Array.from({ length: 130 }, (_, i) => `old-${String(i).padStart(3, "0")}`));
+    assert.ok(fetched.length > 1 && fetched.every((n) => n <= 64), `archive rows per read: ${fetched}`);
+    assert.equal(fetched.reduce((a, b) => a + b, 0), 130, "live and later-archived sessions are not read");
+    const reads = fetched.length;
+    await cold.segmentHistories();
+    assert.equal(fetched.length, reads, "a completed sweep is not repeated");
+  } finally {
+    r.store.listSessions = list;
+    await r.close();
+  }
 });

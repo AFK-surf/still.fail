@@ -393,7 +393,7 @@ test("where the readers keep a session's history the live view reads none of its
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("a session watched again, or by the next station process, reads its checklist on from where it was read to, not back", async () => {
+test("a session watched again, or by the next station process, reads its transcript and checklist on from where they stood, not back", async () => {
   const dir = temp();
   const path = join(dir, "t.jsonl");
   const todo = (id: string, items: [string, string][]) => `${JSON.stringify({ type: "assistant", timestamp: "2026-11-03T00:00:00Z", message: { id, content: [{ type: "tool_use", id, name: "TodoWrite", input: { todos: items.map(([content, status]) => ({ content, status, activeForm: content })) } }] } })}\n`;
@@ -415,18 +415,37 @@ test("a session watched again, or by the next station process, reads its checkli
   got.length = 0;
   id = hub.subscribe("s", 5, null, (m) => void got.push(m));
   await settle();
-  assert.deepEqual(asked, ["state", "page 5 2 false"]);
+  // Its reading goes on from where it stood here, the readers not asked: what came since read here, the checklist with it.
+  await time.adjust(40);
+  await settle();
+  assert.deepEqual(asked, []);
   assert.deepEqual(plan(got), ["读日志 completed", "修 in_progress"]);
   // The next station process: carried over, nothing read for it where nothing came since.
   const next = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
   const nextAsked: string[] = [];
   next.history = historyOf(path, nextAsked);
   next.takePlans(JSON.parse(JSON.stringify(hub.carriedPlans())));
+  next.takeTails(JSON.parse(JSON.stringify(hub.carriedTails())));
   const nextGot: LiveMessage[] = [];
   next.subscribe("s", 5, null, (m) => void nextGot.push(m));
   await settle();
-  assert.deepEqual(nextAsked, ["state"]);
+  assert.deepEqual(nextAsked, [], "where its reading stood carried over too");
   assert.deepEqual(plan(nextGot), ["读日志 completed", "修 in_progress"]);
+  // Carried over once it is watched already (its readers slow to say): gone on from there at once.
+  let release = () => {};
+  const late = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  late.history = { ...historyOf(path), state: () => new Promise((resolve) => (release = () => resolve(stateOf("claude", [path], null)))) };
+  const lateGot: LiveMessage[] = [];
+  late.subscribe("s", 5, null, (m) => void lateGot.push(m));
+  await settle();
+  assert.equal(lateGot.length, 0, "waiting on the readers");
+  late.takePlans(JSON.parse(JSON.stringify(hub.carriedPlans())));
+  late.takeTails(JSON.parse(JSON.stringify(hub.carriedTails())));
+  await settle();
+  assert.deepEqual(lateGot.map((m) => m.type).slice(0, 1), ["timeline"], "joined without the readers");
+  release();
+  await settle();
+  late.close();
   hub.close();
   next.close();
   rmSync(dir, { recursive: true, force: true });
