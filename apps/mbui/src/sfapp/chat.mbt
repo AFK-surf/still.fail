@@ -280,8 +280,6 @@ fn bar_frame(
 /// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let t = @sf.theme()
-  // (what its menu left to do, the list not being drawn beside it)
-  @sfpages.rows_frame(c, src)
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let jobs = (src.topic)("chatJobs", chat_jobs_summary_params(r))

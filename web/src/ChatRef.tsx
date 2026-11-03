@@ -180,24 +180,6 @@ export function useCopyChatLink(toast: (text: string) => void) {
 }
 
 /**
- * Copying where the agents' sessions keep their transcripts on the station's machine (`keys`: theirs), one per line,
- * to open them or hand them to another tool. `toast` says it is copied, that none is written yet, or why not.
- */
-export function useCopyTranscripts(station: string, toast: (text: string) => void) {
-  const api = stationApi(useStationCall(station));
-  return (keys: string[]) => {
-    void Promise.all(keys.map((key) => api.transcriptPath(key)))
-      .then(async (paths) => {
-        const found = paths.filter((p): p is string => p !== null);
-        if (found.length === 0) return toast(t("web-main.chat.transcriptNone"));
-        await navigator.clipboard.writeText(found.join("\n"));
-        toast(found.length > 1 ? t("web-main.chat.transcriptsCopied", { n: found.length }) : t("web-main.chat.transcriptCopied"));
-      })
-      .catch((e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })));
-  };
-}
-
-/**
  * The chats `query` finds on this station's workspace (an agent reads one on any of its stations), titles first, but
  * not `here` (the chat written in); another station's say which; then the viewer's other workspaces', saying whose. `found` hands them to the composer, whose keys move `active`.
  */
