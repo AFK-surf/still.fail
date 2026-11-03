@@ -12,6 +12,13 @@ test("a commit's lines and fixes come from each paragraph of trailers, not only 
   assert.deepEqual(readMessage("Subject\n\nChangelog: 修复：很长的一行\n  接着写\nSession: ember:c-3\n").text, ["修复：很长的一行 接着写"]);
 });
 
+test("a squash merge's commits each saying the same line tell it once", () => {
+  // b7abff2e: GitHub's squash body repeats each of the PR's four commits, each with the same trailers.
+  const one = "Changelog: 改进：小屏首页顶栏的 workspace 名字字号调小\nChangelog-parts: web, android, desktop\nFixes: FB-7\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n";
+  const squash = `Smaller name (#3712)\n\n* first\n\nWhy.\n\n${one}\n* second\n\nWhy.\n\n${one}\n---------\n`;
+  assert.deepEqual(readMessage(squash), { text: ["改进：小屏首页顶栏的 workspace 名字字号调小"], fixes: [7], parts: ["web", "android", "desktop"] });
+});
+
 test("a subject, or prose that only mentions a trailer, says nothing", () => {
   // 43d5a869's subject.
   assert.deepEqual(readMessage("Changelog: the stable channel's is written once a release\n\nSession: ember:c-4\n"), { text: [], fixes: [], parts: [] });

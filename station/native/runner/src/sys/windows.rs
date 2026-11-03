@@ -124,6 +124,11 @@ fn own_handles() -> Vec<HANDLE> {
 
 pub fn ready() {}
 
+/// Gives back the disk under part of a file: not on Windows (its files would need to be sparse); kept whole.
+pub fn punch(_path: &Path, _at: u64, _len: u64) -> io::Result<()> {
+    Ok(())
+}
+
 pub fn create_dir(dir: &Path) -> io::Result<()> {
     // Under the station's data directory, whose ACL (the user's profile's) it inherits.
     fs::create_dir_all(dir)
