@@ -6,7 +6,8 @@ import { readOnly } from "../mesh/credential.ts";
 import { titleOf } from "../read/views.ts";
 import { Agents } from "../sessions/agents.ts";
 import { wall } from "../ops/fibers.ts";
-import { ControlPlane, Events, Parts, Store } from "../services.ts";
+import { AndroidScreens } from "../screens/android.ts";
+import { ControlPlane, Events, Parts, ScreenRegistry, Store } from "../services.ts";
 import { type PhoneRequest, PhoneGrants, type Scope } from "./grants.ts";
 import { GrantServers } from "./servers.ts";
 import { adbTools, phoneTools, reached } from "./tool.ts";
@@ -19,6 +20,17 @@ export const AdbLive = Layer.effectDiscard(
     const { hub } = yield* Agents;
     const store = yield* Store;
     const events = yield* Events;
+    const screens = yield* ScreenRegistry;
+    // The emulators and phones on this machine's own adb, each a screen while it is.
+    yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        const androids = new AndroidScreens({ screens, adb: adbPath });
+        androids.start();
+        const unrefresh = screens.refresher(() => androids.refresh());
+        return () => (unrefresh(), androids.close());
+      }),
+      (stop) => Effect.sync(stop),
+    );
     const servers = yield* Effect.acquireRelease(Effect.sync(() => new GrantServers(adbPath)), (s) => Effect.promise(() => s.close()));
     // Chats' grants of people's phones (docs/adb-share.md): told to the owner's devices, their phones connected anew in
     // the grants' adb servers, a grant's server stopped as it ends.

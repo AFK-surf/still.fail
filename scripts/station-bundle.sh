@@ -90,6 +90,8 @@ cp "$root/station/dist/usage/"*.js "$app/station/usage/"
 cp -R "$root/station/dist/skills" "$app/station/skills"
 # DeepSeek Harness loads the station's driver from here (agents/dsh.ts); Cursor's runs from here (agents/cursor.ts).
 cp "$root/station/dist/dsh-bridge.mjs" "$root/station/dist/cursor-bridge.mjs" "$root/station/dist/sandbox-bridge.mjs" "$app/station/"
+# scrcpy's program, put on an Android device to see and drive it (screens/android.ts).
+cp "$root/station/dist/scrcpy-server" "$app/station/"
 case "$platform" in linux-*) cp "$root/station/dist/linux-portal.py" "$root/station/dist/linux-x11.py" "$app/station/" ;; esac
 # The bundle is an ES module: said, so Node neither guesses nor takes the type of a package.json above the release
 # (the Electron app had one around the station it carried: every command warned).
