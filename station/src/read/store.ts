@@ -999,7 +999,7 @@ export function decisionCards(s: Store, viewer: InWorkspace | null = null): { ho
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(s: Store): number | null {
-  return one(s, "SELECT MIN(at) AS at FROM usage").at ?? null;
+  return one(s, "SELECT first_at FROM usage_span WHERE id = 1").first_at ?? null;
 }
 
 /// The tasks other stations' chats ran here since `from` (remote_runs), oldest first: when, and whose session.

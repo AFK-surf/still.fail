@@ -31,6 +31,7 @@ import { installUsageCompactions, usageCompactionsReady } from "./usage-compacti
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 import { installUsageMinutes } from "./usage-minutes.ts";
+import { installUsageSpan } from "./usage-span.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
@@ -198,6 +199,7 @@ export class Store {
       addWorkspaceColumns(db);
       addOpenerTitle(db);
       addUsageColumns(db);
+      installUsageSpan(db);
       addUsageTotals(db);
       addUsageCompactions(db);
       installUsageCompactions(db);
