@@ -61,6 +61,36 @@ function heard(store: Store): { changes: StoreChange[]; stop: () => void } {
 
 const archiveFile = (store: Store, thread: number) => join(store.archiveDir(), "threads", `${thread}.jsonl.zst`);
 
+test("a write waits its turn while another of the station's writers writes, not refused at once", () => {
+  // Begun deferred, a transaction that read first was refused at its first write (SQLITE_BUSY_SNAPSHOT, "database is
+  // locked", no wait) where another connection wrote meanwhile: the usage worker filling its statistics, and a person's
+  // message was not sent (ccvm, 2026-11-03).
+  const path = join(tempdir(), "s.db");
+  const store = open(path);
+  const other = new DatabaseSync(path, { timeout: 0 });
+  // SQLite as it is: read, another writes, then write.
+  const raw = new DatabaseSync(path, { timeout: 0 });
+  raw.exec("BEGIN");
+  raw.prepare("SELECT count(*) FROM sessions").get();
+  other.exec("INSERT INTO kept_chats (viewer, thread) VALUES ('x', 1)");
+  assert.throws(() => raw.exec("INSERT INTO kept_chats (viewer, thread) VALUES ('y', 2)"), /locked/);
+  raw.exec("ROLLBACK");
+  // The store's: the writing taken as it begins, so another writer waits for it (or is refused itself) instead.
+  const begun: string[] = [];
+  // (the connection itself's: the store's is a proxy that times what it runs, store/timed.ts)
+  store.db.exec = function (this: DatabaseSync, sql: string) {
+    begun.push(sql);
+    return DatabaseSync.prototype.exec.call(this, sql);
+  };
+  session(store, "k");
+  const thread = store.openThread("ember", "EMBER", "1.0", null, null).id;
+  say(store, thread, "1.1", "person", "a@x", "hi");
+  assert.ok(begun.length > 0 && begun.every((sql) => sql !== "BEGIN"), `every transaction takes the writing as it begins: ${begun.filter((s) => s.startsWith("BEGIN"))}`);
+  assert.ok(begun.includes("BEGIN IMMEDIATE"));
+  raw.close();
+  other.close();
+});
+
 test("a database of another schema version is refused", () => {
   const path = join(tempdir(), "ember.db");
   const db = new DatabaseSync(path);
