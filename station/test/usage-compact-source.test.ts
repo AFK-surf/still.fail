@@ -319,6 +319,31 @@ test("a usage summary checks a session's workspace once for its minutes", () => 
   } finally { store.close(); }
 });
 
+test("usage summary diagnostics count only the statistics that contributed", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["a", "A"], ["other", "B"]] as const) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
+    }
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string, at: number) => ({ id, at, model: "m", subagent: true, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude",
+      [[call("a1", 60_000), owner], [call("a2", 61_000), owner], [call("a3", 120_000), owner]]);
+    store.recordUsage("/other", { session: "other", offset: 1, model: "m" }, "claude", [[call("b", 60_000), owner]]);
+    const reader = makeStore(store.db, ".");
+    const viewer = { workspace: "A", home: false };
+    for (const [from, to, parts, calls] of [[60_000n, 180_000n, 2, 3], [60_001n, 180_001n, 2, 2]] as const) {
+      const diagnostics: { parts?: number } = {};
+      const result = usageGroups(reader, from, to, 0n, viewer, diagnostics);
+      assert.deepEqual(result, usageGroups(reader, from, to, 0n, viewer));
+      assert.equal(result[0]!.calls, calls);
+      assert.equal(diagnostics.parts, parts, "only the visible minute buckets or partial-edge calls are counted");
+    }
+  } finally { store.close(); }
+});
+
 test("a partial minute does not visit other workspaces or calls outside its bounds", () => {
   const store = Store.open(":memory:");
   try {
