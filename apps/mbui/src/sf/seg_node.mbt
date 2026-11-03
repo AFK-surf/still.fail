@@ -10,7 +10,7 @@
 fn seg_node_cols(labels : Array[String], item_w : Double) -> Double {
   let c = @ui.current()
   let size = c.sp(theme().t.ui)
-  labels.fold(init=item_w, fn(m, l) { dmax(m, choice_words_w(c, l, size, weight=500) + 2.0 * segmented_in) })
+  labels.fold(init=item_w, fn(m, l) { dmax(m, choice_words_w(c, l, size, weight=500, tree=true) + 2.0 * segmented_in) })
 }
 
 ///|
@@ -49,7 +49,9 @@ pub fn seg_node(
           Some((w, _)) if w < whole() - 0.5 => {
             track.words_redone() |> ignore
 
-            Some(fitted(@ui.current(), labels(), w - 2.0 * segmented_pad - gaps(), theme().t.ui, 500, segmented_in, segmented_least))
+            Some(
+              fitted(@ui.current(), labels(), w - 2.0 * segmented_pad - gaps(), theme().t.ui, 500, segmented_in, segmented_least, tree=true),
+            )
           }
           _ => None
         }
@@ -314,9 +316,9 @@ pub fn seg_fill_node(
           let base = @ui.tree_theme().text_size(Base).0
           let size = c.sp(base)
           let room = w - 2.0 * seg_inset
-          let need = labels().fold(init=0.0, fn(s, l) { s + choice_words_w(c, l, size) + 2.0 * seg_side })
+          let need = labels().fold(init=0.0, fn(s, l) { s + choice_words_w(c, l, size, tree=true) + 2.0 * seg_side })
           if need > room + 0.5 {
-            Some(fitted(c, labels(), room, base, 400, seg_side, seg_least))
+            Some(fitted(c, labels(), room, base, 400, seg_side, seg_least, tree=true))
           } else {
             None
           }
@@ -515,7 +517,7 @@ pub fn seg_fill_node(
             } else {
               o.words_redone() |> ignore
               let c = @ui.current()
-              Some(choice_words_w(c, label(), c.sp(@ui.tree_theme().text_size(Base).0)) + 2.0 * seg_side)
+              Some(choice_words_w(c, label(), c.sp(@ui.tree_theme().text_size(Base).0), tree=true) + 2.0 * seg_side)
             }
           }))
           // (a basis of none where its width is said: flex's basis would else be taken over it)
@@ -656,9 +658,9 @@ fn seg_room_of(v : @view.View, labels : Array[String]) -> (Double, Double) {
   let c = @ui.current()
   let t = @ui.tree_theme()
   let size = c.sp(t.text_size(Base).0)
-  let whole = labels.fold(init=2.0 * seg_inset, fn(s, l) { s + choice_words_w(c, l, size) + 2.0 * seg_side })
+  let whole = labels.fold(init=2.0 * seg_inset, fn(s, l) { s + choice_words_w(c, l, size, tree=true) + 2.0 * seg_side })
   let menu = c.sp(t.text_size(Body).0)
-  let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, choice_words_w(c, l, menu)) })
+  let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, choice_words_w(c, l, menu, tree=true)) })
   (whole, 2.0 * seg_inset + 2.0 * seg_menu_in + widest + seg_menu_gap + seg_chevron)
 }
 
