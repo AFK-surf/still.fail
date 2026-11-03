@@ -900,7 +900,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
       Some({ "title": "共享调试", "line": "仅安卓 app 支持共享调试", "sharing": false, "lendable": false })
     "screenCard" | "adbCard" => fixture_link_card(name, params)
     // (a chat's agent's run settings, a settings page: the settings' own)
-    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" =>
+    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" || f.mode == "settings-run-runtime" =>
       @settings.fixture_topic(f.mode, name, params)
     "pick" if params.get("of") is Some(String(o)) && o.has_prefix("session:") => Some(fix_session_pick())
     "presets" =>

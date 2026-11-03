@@ -495,7 +495,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-about-flow" => "about"
     "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"
-    "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
+    "settings-run" | "settings-run-models" | "settings-run-accounts" | "settings-run-runtime" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" | "settings-workspace-motion" => "workspace"
     "settings-stations-motion" => "stations"
     "settings-connects-motion" => "connects"
@@ -1964,7 +1964,21 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     "profileFlow" if fx.new_login => Some(fx_profile_flow_plan())
     "profileFlow" => Some(fx_profile_flow(hermes=mode == "settings-new-profile-hermes"))
-    "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => Some(fx_session_pick())
+    "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => {
+      let v = fx_session_pick()
+      if mode == "settings-run-runtime" {
+        match v {
+          Object(o) => {
+            o["runtimeFixed"] = Json::boolean(false)
+            o["runtimes"] = ["claude", "codex"]
+            Some(Json::object(o))
+          }
+          _ => Some(v)
+        }
+      } else {
+        Some(v)
+      }
+    }
     "connectFlow" if fx_connect_step.val != "team" && fx_connect_step.val != "app" =>
       Some(fx_feishu_flow(fx_connect_step.val))
     "connectFlow" =>

@@ -49,6 +49,24 @@ const page = (paths: string[], dir: string | null, from: number, to: number, inB
   return { entries: entriesOf(runtime, chain, from, to, inBrief), end: lengthOf(chain) };
 };
 
+test("a history spanning runtimes keeps both transcripts readable, including after its live reader resumes", () => {
+  forgetKept();
+  const dir = temp();
+  const a = join(dir, "claude.jsonl");
+  const b = join(dir, "codex.jsonl");
+  writeFileSync(a, said("before", "a"));
+  const codex = (text: string) => `${JSON.stringify({ type: "response_item", timestamp: "2026-10-24T00:00:00Z", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text }] } })}\n`;
+  writeFileSync(b, codex("after"));
+  const refs = [{ path: a, runtime: "claude" as const }, { path: b, runtime: "codex" as const }];
+  const chain = chainOf("codex", refs, null);
+  assert.deepEqual(entriesOf("codex", chain, 0, 2, false).map((e) => e.text), ["before", "after"]);
+  const live = ChainTail.from("codex", chain.map((m) => m.state));
+  appendFileSync(b, codex("later"));
+  assert.deepEqual(live.read()[1].map((e) => e.text), ["later"]);
+  forgetKept();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("a page of a history is what a read of it whole gives, from anywhere in it, in brief or whole, as it grows", () => {
   forgetKept();
   const dir = temp();

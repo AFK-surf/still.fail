@@ -31,7 +31,7 @@ import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
-import { homesFirst, iso, sessionPlaces, transcriptPaths } from "../read/transcript.ts";
+import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
 import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
@@ -207,10 +207,10 @@ export class Hub {
       (key) => {
         const row = this.store.getSession(key);
         const runtime = row && runtimeNamed(row.runtime);
-        if (!row || !runtime || this.store.runtimeSessions(key).length === 0) return null;
+        if (!row || !runtime || this.store.runtimeSessionSources(key).length === 0) return null;
         const { dataDir, profiles } = this.config();
         // In its places alone: this is the main thread (read/transcript.ts `anywhere`).
-        const { paths, current } = transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), this.store.runtimeSessions(key), sessionPlaces(row), { anywhere: false });
+        const { paths, current } = transcriptSources(dataDir, profiles, this.store.runtimeSessionSources(key), sessionPlaces(row), { anywhere: false });
         return paths.length === 0 ? null : { runtime, paths, current };
       },
       this.clock,

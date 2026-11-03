@@ -83,7 +83,7 @@ export const PARAMS: Record<string, string> = {
   "session.compact": "key:string",
   "session.clear": "key:string readBack?:boolean",
   "session.delete": "key:string",
-  "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean context?:number repick?:boolean afresh?:boolean",
+  "session.settings": "key:string runtime?:string profile?:string model?:string effort?:string fast?:boolean context?:number repick?:boolean afresh?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
   "chat.keep": "kept?:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
@@ -370,7 +370,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":
-      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["profile", "model", "effort", "fast", "context", "repick", "afresh"]), session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["runtime", "profile", "model", "effort", "fast", "context", "repick", "afresh"]), session("key"));
     case "chat.archive": {
       const method = p.bool("archived") ? "POST" : "DELETE";
       const fallback = op(method, () => `/sessions/${p.at("session")}/archive`, null, session("session"));

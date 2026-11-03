@@ -82,6 +82,7 @@ export type SessionStore = {
   setRuntimeSessionId(key: string, id: string | null): void;
   /// The runtime sessions it ran in, the first first (optional: none known without it).
   runtimeSessions?(key: string): string[];
+  runtimeSessionSources?(key: string): { id: string; runtime: string; profile: string | null }[];
   setWaitFor(turn: string, what: string, watch: boolean): void;
   setNeed(turn: string, what: string): void;
   setAbout(turn: string, about: [number, number, string] | null): void;
@@ -209,6 +210,7 @@ export type Snapshot = {
   restart?: boolean;
   /// Its context was being compacted by hand (optional: a station from before it does not say).
   compacting?: boolean;
+  identity?: { model: string | null; effort: string | null; runtime: RuntimeKind } | null;
 };
 
 const t = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
@@ -223,7 +225,7 @@ const FALLBACK_MOST = 4000;
 
 export class SessionActor {
   readonly key: string;
-  readonly runtime: RuntimeKind;
+  runtime: RuntimeKind;
   private deps: SessionDeps;
   private lock = Semaphore.makeUnsafe(1);
   /// Runs an effect as a fiber of this actor's (its tasks, its wait's timer): they end when it closes.
@@ -247,6 +249,12 @@ export class SessionActor {
   /// What changed is not a model or an effort (the station's variables for its agents): no taking it in place.
   private restart = false;
   private profile: string | null = null;
+  private runningIdentity: { model: string | null; effort: string | null; runtime: RuntimeKind } | null = null;
+
+  /// What the process writing a message actually runs, even while its next settings have already been saved.
+  messageIdentity() {
+    return this.agent ? this.runningIdentity : null;
+  }
   /// Its context cleared to go on afresh (`clear`'s `readBack`): its next runtime session told to read back its work.
   private readBack = false;
   private generation = 0;
@@ -782,6 +790,7 @@ export class SessionActor {
     const snap: Snapshot = {
       key: this.key,
       runtime: this.runtime,
+      identity: this.runningIdentity,
       agent: agent?.snapshot() ?? null,
       turn: this.turn && {
         id: this.turn.id,
@@ -812,6 +821,9 @@ export class SessionActor {
   /// as the generation the caller opened it as (`nextGeneration`, whose `listener` the driver was given), running on
   /// `profile`, the one its process was started on.
   adopt(snap: Snapshot, agent: AgentSession | null, profile: string) {
+    if (agent) this.runtime = snap.runtime;
+    const row = this.deps.store.getSession(this.key);
+    this.runningIdentity = agent ? (snap.identity ?? { runtime: snap.runtime, model: row?.model ?? null, effort: row?.effort ?? null }) : null;
     this.agent = agent ? { generation: this.generation, session: agent } : null;
     this.profile = agent ? profile : null;
     this.turn = snap.turn && {
@@ -828,8 +840,9 @@ export class SessionActor {
     this.notices = [...snap.notices, ...this.notices];
     this.nudges = snap.nudges;
     this.stopRequested = snap.stopRequested;
-    this.stale = snap.stale ?? false;
-    this.restart = snap.restart ?? false;
+    const runtimeChanged = agent !== null && this.deps.store.getSession(this.key)?.runtime !== snap.runtime;
+    this.stale = runtimeChanged || (snap.stale ?? false);
+    this.restart = runtimeChanged || (snap.restart ?? false);
     this.compacting = snap.compacting === true;
     this.idleSince = this.now() - (typeof snap.idleMs === "number" ? snap.idleMs : 0);
     if (snap.waitingMs !== null) this.waitMs(snap.waitingSeconds, snap.waitingMs);
@@ -1143,6 +1156,7 @@ export class SessionActor {
     } catch {}
     if (!this.restart && row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
       this.stale = false;
+      this.runningIdentity = { runtime: this.runtime, model: row.model ?? null, effort: row.effort ?? null };
       log.info("session", "session process takes the change in place", { session: this.key, model: row.model ?? "", effort: row.effort ?? "" });
       return;
     }
@@ -1183,6 +1197,9 @@ export class SessionActor {
     const store = this.deps.store;
     const row = store.getSession(this.key);
     if (!row) throw new Error(`session ${this.key} disappeared`);
+    const runtime = runtimeKind(row.runtime);
+    if (!runtime) throw new Error(`session ${this.key} runs an unknown runtime ${row.runtime}`);
+    this.runtime = runtime;
     const driver = this.deps.driver(this.runtime);
     const profile = this.deps.runOn(this.key);
     const base = openOptions(row, profile, this.deps);
@@ -1210,7 +1227,8 @@ export class SessionActor {
       log.info("session", "going on in a new runtime session on another account", { session: this.key, left: row.runtimeSessionId, profile: profile.id });
       agent = await driver.open(base, this.listener(generation));
       this.afresh = afresh;
-      resumable = this.deps.carrySubagents?.(row.runtimeSessionId!, agent.id(), profile, subagents) ?? [];
+      const from = store.runtimeSessionSources?.(this.key).find((s) => s.id === row.runtimeSessionId);
+      if (from === undefined || from.runtime === row.runtime) resumable = this.deps.carrySubagents?.(row.runtimeSessionId!, agent.id(), profile, subagents) ?? [];
     } else if (row.runtimeSessionId) {
       try {
         agent = await driver.open({ ...base, resume: row.runtimeSessionId }, this.listener(generation));
@@ -1234,6 +1252,7 @@ export class SessionActor {
     this.stopped = [];
     if (stopped.length > 0) this.stoppedNote = backgroundStopped(stopped, resumable);
     this.agent = { generation, session: agent };
+    this.runningIdentity = { runtime: this.runtime, model: row.model ?? null, effort: row.effort ?? null };
     this.stale = false;
     this.restart = false;
     this.profile = profile.id;

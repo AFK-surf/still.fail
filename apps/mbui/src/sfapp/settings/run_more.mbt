@@ -73,8 +73,8 @@ fn run_view(
 ) -> Unit {
   let t = @sf.theme()
   let of = "session:" + key
-  let runtime = text(field(v, "value"), "runtime")
   let draft = field(v, "draft")
+  let runtime = text(draft, "runtime")
   if list == "model" {
     // every model it can move to (SettingParts.kt ModelList)
     model_list(c, "run-session-models/" + key, items(v, "options"), runtime, text(v, "option"), fn(m) {
@@ -160,6 +160,11 @@ fn run_view(
             }
             let was = strings(v, "was")
             let becomes = strings(v, "becomes")
+            if !flag(v, "runtimeFixed") && runtime != text(field(v, "value"), "runtime") {
+              labels.push(@sf.t("web-main.model.runtime"))
+              was.push(runtime_label(text(field(v, "value"), "runtime")))
+              becomes.push(runtime_label(runtime))
+            }
             // (the labels' column as wide as the widest of them, in this language: words of a length known, whole)
             let label_w = labels.fold(init=0.0, fn(m, l) {
               dmax(m, c.words_across(l, run_label).ceil())
@@ -194,6 +199,22 @@ fn run_view(
             @sf.maker_mark(c, text(field(v, "maker"), "id"), runtime, 18.0) |> ignore
           })) {
           run_list[of] = "model"
+        }
+      },
+      fn() {
+        let runtimes = strings(v, "runtimes")
+        if !flag(v, "runtimeFixed") && runtimes.length() > 1 {
+          let label = @sf.t("web-main.model.runtime")
+          group(label)
+          if setting_row("session-run-runtime", runtime_label(runtime), "", "", None) {
+            @sf.pick(
+              label,
+              runtimes.map(fn(r) { @sf.choice(r, runtime_label(r), icon="runtime:" + r) }),
+              runtime,
+              fn(r) { pick([("runtime", str(r))]) },
+              from=Of(c.id("session-run-runtime")),
+            )
+          }
         }
       },
       fn() {

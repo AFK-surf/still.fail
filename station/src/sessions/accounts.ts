@@ -22,7 +22,7 @@ const CALLS_LOOKED_AT = 200;
 
 /// How a session runs from its next turn on. A field left out: unchanged; null: back to the default. `repick`: back to the
 /// station's choice (no profile given), its account picked again now, as a new session's would be (`Accounts.repick`).
-export type SessionChange = { profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null; context?: number | null; repick?: boolean; afresh?: boolean | null };
+export type SessionChange = { runtime?: string; profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null; context?: number | null; repick?: boolean; afresh?: boolean | null };
 
 /// A profile as a session's runtime starts on it, with its spelling of the session's model.
 export type RunOn = Profile & { spelling(model: string): string | null };
@@ -282,9 +282,28 @@ export class Accounts {
     const wantedProfile = change.repick === true && (change.profile === undefined || change.profile === null) ? null : nonEmpty(change.profile);
     const newModel = nonEmpty(change.model);
     const newEffort = nonEmpty(change.effort);
+    const allowed = (p: Profile) => this.allows(key, p);
+    if (change.runtime !== undefined && change.runtime !== row.runtime) {
+      const target = runtimeNamed(change.runtime);
+      if (!target) throw new Error(`unknown runtime ${change.runtime}`);
+      const model = newModel ?? null;
+      const candidates = config.profiles.filter((p) => p.runtimes.includes(target) && this.allows(key, p));
+      if (candidates.length === 0) throw new Error(t("station.session.noProfileHere", { runtime: runtimeTitle(target) }));
+      if (model !== null && !candidates.some((p) => runs(p, model))) throw new Error(t("station.session.noProfileForModel", { model, runtime: runtimeTitle(target) }));
+      const picked = typeof wantedProfile === "string" ? candidates.find((p) => p.id === wantedProfile) : this.pick(candidates, model, true, key);
+      if (!picked) throw new Error(`unknown profile ${wantedProfile}`);
+      if (model !== null && !runs(picked, model)) throw new Error(t("station.session.modelOff", { profile: picked.name, model }));
+      const effort = newEffort ?? null;
+      if (effort !== null) {
+        const efforts = this.modelEfforts(target, model, typeof wantedProfile === "string" ? picked.id : null, allowed);
+        if (!efforts.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: runtimeTitle(target), efforts: efforts.join(t("station.list.separator")) }));
+      }
+      if (change.fast != null && target !== "codex") throw new Error(t("station.session.fastOpenAiOnly"));
+      checkContext(target, change.context, lang);
+      return { row, runtime: target, model, effort, profile: picked.id, pinned: typeof wantedProfile === "string", repick: false };
+    }
     if (change.fast !== undefined && change.fast !== null && runtime !== "codex") throw new Error(t("station.session.fastOpenAiOnly"));
     checkContext(runtime, change.context, lang);
-    const allowed = (p: Profile) => this.allows(key, p);
     if (typeof wantedProfile === "string") {
       const next = config.profiles.find((p) => p.id === wantedProfile);
       if (!next) throw new Error(`unknown profile ${wantedProfile}`);
@@ -308,6 +327,6 @@ export class Accounts {
       if (!efforts.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: name, efforts: efforts.join(t("station.list.separator")) }));
     }
     const profile = wantedProfile !== undefined ? wantedProfile : remodel ? null : undefined;
-    return { row, model, effort, profile, repick: change.repick === true && profile === null };
+    return { row, runtime, model, effort, profile, pinned: undefined, repick: change.repick === true && profile === null };
   }
 }

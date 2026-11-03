@@ -12,7 +12,7 @@ import { createZstdDecompress } from "node:zlib";
 import { segmentsFrom } from "../read/packed.ts";
 import * as store from "../read/store.ts";
 import type { JobRow, MessageRow, SessionRow, Store } from "../read/store.ts";
-import { homesFirst, type ReadState, sessionPlaces, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
+import { type ReadState, sessionPlaces, timelineOf, transcriptSources, type TimelineEntry } from "../read/transcript.ts";
 import { readFrom } from "../usage/counter.ts";
 import { agentHomeOf, memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
@@ -59,6 +59,7 @@ function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string>
   const wantsChat = kinds === null || kinds.has("chat");
   const end = (s.db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread = ?").get(id) as { n: number | null }).n;
   let after: number | null = null;
+  const origins = new Map<string, string | null>();
   for (;;) {
     const messages: MessageRow[] = end === null ? [] : (after === null
         ? all(s, "SELECT * FROM merged WHERE thread = ? AND n <= ? ORDER BY n LIMIT ?", id, end, MESSAGE_BATCH)
@@ -71,11 +72,17 @@ function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string>
       const text = m.text ?? "";
       const files = m.attachments.map((a: any) => (typeof a?.name === "string" ? a.name : "")).filter((n: string) => n !== "");
       if (text.trim() === "" && files.length === 0) continue;
+      let identity = m.agentIdentity;
+      if (m.authorKind === "agent" && typeof identity?.runtime !== "string") {
+        if (!origins.has(m.author)) origins.set(m.author, store.originalRuntime(s, m.author) ?? sessions.find((x) => x.key === m.author)?.runtime ?? null);
+        const runtime = origins.get(m.author);
+        if (runtime) identity = { ...(identity ?? {}), runtime };
+      }
       yield {
         key: `m:${id}:${m.n}`, kind: "message", ws, title: "",
         body: files.length > 0 ? `${text}\n${files.join("\n")}` : text,
         at: m.createdAt ?? null,
-        ref: { thread: id, seq: m.n, chat, chatTitle: title, surface, archived, authorKind: m.authorKind, author: m.author, ...(m.agentIdentity ? { agentIdentity: m.agentIdentity } : {}) },
+        ref: { thread: id, seq: m.n, chat, chatTitle: title, surface, archived, authorKind: m.authorKind, author: m.author, ...(identity ? { agentIdentity: identity } : {}) },
       };
     }
     after = messages.at(-1)!.n;
@@ -150,11 +157,10 @@ function historyText(e: TimelineEntry): string | null {
 }
 
 /// A session's transcript files, and the runtime that wrote them.
-export function transcriptFiles(s: Store, session: SessionRow, profiles: Profiles): { paths: string[]; runtime: NonNullable<ReturnType<typeof runtimeKind>> } | null {
-  const runtime = runtimeKind(session.runtime) ?? null;
-  if (runtime === null || store.runtimeSessions(s, session.key).length === 0) return null;
-  const { paths } = transcriptPaths(runtime, s.dataDir, homesFirst(profiles, session.profile), store.runtimeSessions(s, session.key), sessionPlaces(session));
-  return { paths, runtime };
+export function transcriptFiles(s: Store, session: SessionRow, profiles: Profiles): { paths: { path: string; runtime: NonNullable<ReturnType<typeof runtimeKind>> }[] } | null {
+  const sources = store.runtimeSessionSources(s, session.key);
+  if (sources.length === 0) return null;
+  return transcriptSources(s.dataDir, profiles, sources, sessionPlaces(session));
 }
 
 /// A transcript's entries, each given to `each` as it is read: in parts (a file put away decompressed as a stream), never
@@ -315,20 +321,19 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
     if (files === null) { looked++; continue; }
     let any = false;
     for (const p of files.paths) {
-      if (await mentions(p, words, keep)) any = true;
+      if (await mentions(p.path, words, keep)) any = true;
       if (!keep()) return partial();
       if (any) break;
     }
     if (!any) { looked++; continue; }
     // Its latest steps that have the words, as many as may still be wanted (numbered as they are read).
-    const state: ReadState = { inner: new Map() };
     const room = want - found.length;
     // Keep excerpts, not entire matching entries: one history step can itself contain a very large tool result.
     const latest: { i: number; entry: TimelineEntry["kind"]; tool: TimelineEntry["tool"]; at: number | null; text: string }[] = [];
     let oldest = 0;
     let i = 0;
     for (const p of files.paths) {
-      await entriesOf(files.runtime, p, state, (e) => {
+      await entriesOf(p.runtime, p.path, { inner: new Map() }, (e) => {
         const text = historyText(e);
         if (text !== null && has(text, words)) {
           const time = e.at === null ? null : Date.parse(e.at);

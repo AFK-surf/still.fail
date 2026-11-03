@@ -30,6 +30,8 @@ test("what was said after it brings a thread's summary on: its last entry, its l
   const mine = threadAfter(held(), [said(4, "person", "A@x", "我来"), said(5, "agent", "k", "好", { declared: "final", ending: "all_done" })], "a@x")!;
   assert.equal(mine.unread, 1);
   assert.equal(mine.lastMessage.ending, "all_done");
+  const historical = threadAfter(held(), [said(4, "agent", "k", "好", { authorModel: "opus", authorRuntime: "claude" })], "a@x")!;
+  assert.deepEqual([historical.lastMessage.authorModel, historical.lastMessage.authorRuntime], ["opus", "claude"]);
   // An edit of the latest message is what it says now; of an earlier one, nothing of the summary.
   const edited = threadAfter(held(), [{ ...said(4, "agent", "k", "好了"), kind: "edit", target: 3 }], "a@x")!;
   assert.deepEqual([edited.last, edited.unread, edited.lastMessage.text, edited.lastMessage.editedAt, edited.lastMessage.seq], [4, 0, "好了", 40, 3]);

@@ -132,6 +132,9 @@ export function rowsMade(sessions: readonly unknown[], threads: readonly unknown
       const text = text0 === "" && Array.isArray(m.quotes) && m.quotes.length > 0 ? words.quotedOnly : text0;
       last = { seq: m.seq, authorKind: m.authorKind, author: m.author, authorName: m.authorName ?? null, text: typeof m.text === "string" ? [...text].slice(0, LAST_CHARS).join("") : null, createdAt: m.createdAt };
       if (m.authorPicture !== undefined) last.authorPicture = m.authorPicture;
+      if (m.agentIdentity != null) last.agentIdentity = m.agentIdentity;
+      if (m.authorModel !== undefined) last.authorModel = m.authorModel;
+      if (m.authorRuntime !== undefined) last.authorRuntime = m.authorRuntime;
     }
     const creator = t.creator ?? null;
     const people = Array.isArray(t.people) ? t.people : [];

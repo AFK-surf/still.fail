@@ -189,6 +189,7 @@ export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
   quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; runtime?: string | null; card?: Json | null;
   options?: Json | null; at?: number | null; letter?: Letter;
+  agentIdentity?: Json;
 };
 
 export const newMessage = (thread: number, ts: string, authorKind: AuthorKind, author: string, text: string): NewMessage => ({
@@ -584,8 +585,9 @@ export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY s
 /// active first: by the indexes on them (schema.ts sessions_by_runtime_id, runtime_sessions_by_id), not by asking every
 /// session in turn which it ran in.
 export const SESSION_OF_RUNTIME = `SELECT key FROM (
-    SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
-    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+    SELECT key, last_active_at FROM sessions s WHERE runtime_session_id = ?2 AND runtime = ?1
+      AND NOT EXISTS (SELECT 1 FROM runtime_sessions r WHERE r.session_key = s.key AND r.id = ?2 AND r.runtime IS NOT NULL AND r.runtime != ?1)
+    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND COALESCE(r.runtime, s.runtime) = ?1
   ) ORDER BY last_active_at DESC LIMIT 1`;
 
 /// What each list of chats asks of the cards answered lately (answersSince, the main thread's and the readers'): the

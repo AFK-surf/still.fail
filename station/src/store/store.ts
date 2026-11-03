@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
@@ -187,6 +187,7 @@ export class Store {
       }
       db.exec(SCHEMA);
       addArchiveColumns(db);
+      addRuntimeSessionRuntime(db);
       addThreadIndexes(db);
       addLetterColumn(db);
       addClientColumn(db);
@@ -406,6 +407,11 @@ export class Store {
     this.#updateSession(key, "UPDATE sessions SET profile = ?1, profile_pinned = ?2 WHERE key = ?3", profile, flag(pinned), key);
   }
 
+  /// A runtime change is one setting: readers must never see a runtime paired with another's profile or model.
+  setSessionRuntime(key: string, runtime: string, profile: string, pinned: boolean, model: string | null, effort: string | null, fast: boolean | null, context: number | null): void {
+    this.#updateSession(key, "UPDATE sessions SET runtime = ?1, profile = ?2, profile_pinned = ?3, model = ?4, effort = ?5, fast = ?6, context = ?7 WHERE key = ?8", runtime, profile, flag(pinned), model, effort, optFlag(fast), context, key);
+  }
+
   /// A session's model and effort from its next start on (null: the runtime's default).
   setSessionModel(key: string, model: string | null, effort: string | null): void {
     this.#updateSession(key, "UPDATE sessions SET model = ?1, effort = ?2 WHERE key = ?3", model, effort, key);
@@ -486,7 +492,7 @@ export class Store {
   /// A runtime session the session runs in, on `profile` (null: not known, a profile it had is kept).
   ranIn(key: string, id: string, profile: string | null): void {
     this.#run(
-      `INSERT INTO runtime_sessions (session_key, id, profile, at) VALUES (?1, ?2, ?3, ?4)
+      `INSERT INTO runtime_sessions (session_key, id, profile, at, runtime) VALUES (?1, ?2, ?3, ?4, (SELECT runtime FROM sessions WHERE key = ?1))
        ON CONFLICT (session_key, id) DO UPDATE SET profile = COALESCE(excluded.profile, profile)`,
       key, id, profile, this.now(),
     );
@@ -679,6 +685,18 @@ export class Store {
     const current = this.getSession(key)?.runtimeSessionId ?? null;
     const ids: string[] = this.#all("SELECT id FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key).map((r) => r.id);
     return current === null ? ids : [...ids.filter((id) => id !== current), current];
+  }
+
+  /// Each recorded transcript's runtime and profile, in conversation order.
+  runtimeSessionSources(key: string): { id: string; runtime: string; profile: string | null }[] {
+    const row = this.getSession(key);
+    if (!row) return [];
+    const sources = this.#all("SELECT id, runtime, profile FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key)
+      .map((r) => ({ id: r.id as string, runtime: (r.runtime ?? row.runtime) as string, profile: (r.profile ?? null) as string | null }));
+    const current = row.runtimeSessionId;
+    if (current === null) return sources;
+    const entry = sources.find((s) => s.id === current) ?? { id: current, runtime: row.runtime, profile: row.profile };
+    return [...sources.filter((s) => s.id !== current), entry];
   }
 
   setRunning(key: string, running: boolean): void {
@@ -1039,7 +1057,7 @@ export class Store {
       const options = m.options ?? undefined;
       const entry = this.#append(
         {
-          agentIdentity: undefined, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
+          agentIdentity: m.agentIdentity, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
           author: m.author, text: m.text, attachments: m.attachments ?? [], quotes: m.quotes ?? [], declared: m.declared ?? null,
           client: m.client ?? null, profile: m.profile ?? null, runtime: m.runtime ?? null,
           // An options card is kept as options too (what stations and clients from before cards read).
@@ -2204,9 +2222,9 @@ export class Store {
 
   /// Appends an entry as the thread's next.
   #append(entry: EntryRow, changes: Changes): EntryRow {
-    if (entry.kind === "message" && entry.authorKind === "agent") {
-      const r = this.#one("SELECT model, effort FROM sessions WHERE key = ?", entry.author);
-      entry.agentIdentity = r ? { model: r.model, effort: r.effort } : undefined;
+    if (entry.kind === "message" && entry.authorKind === "agent" && entry.agentIdentity === undefined) {
+      const r = this.#one("SELECT s.model, s.effort, COALESCE(r.runtime, s.runtime) AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
+      entry.agentIdentity = r ? { model: r.model, effort: r.effort, runtime: r.runtime } : undefined;
     }
     this.#tx(() => {
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;
