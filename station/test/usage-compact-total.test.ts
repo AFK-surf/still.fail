@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { makeStore } from "../src/read/store.ts";
 import { usage } from "../src/read/usage.ts";
 import * as compact from "../src/store/usage-compact.ts";
 import { Store } from "../src/store/store.ts";
+import type { UsageCall, UsageFor } from "../src/store/usage.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 
 const a = { workspace: "A", home: false };
@@ -59,6 +63,52 @@ test("a bounded lifetime total does not read future or unrelated minute buckets"
       }
     } finally { store.db.setAuthorizer(null); }
   } finally { store.close(); }
+});
+
+test("bounded totals follow edits and an interrupted workspace move", () => {
+  const dir = mkdtempSync(join(tmpdir(), "compact-prefix-"));
+  const path = join(dir, "station.db");
+  let store = Store.open(path);
+  try {
+    for (const [key, ws] of [["a", "A"], ["b", "B"], ["h", null]] as const) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws,
+        createdAt: 0, lastActiveAt: 0 });
+    }
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    for (const session of ["a", "b", "h"]) {
+      const calls = Array.from({ length: 12 }, (_, i): [UsageCall, UsageFor] => [{ id: `${session}-${i}`, at: (i - 6) * 257 * 60_000,
+        model: "m", subagent: true, fast: false, input: i + 1, cacheRead: 2, cacheWrite: 0, cacheWriteLong: 0,
+        output: 1, calls: 1, context: null, window: null }, owner]);
+      store.recordUsage(`/${session}`, { session, offset: 1, model: "m" }, "claude", calls);
+    }
+    account(store);
+    store.db.exec("UPDATE usage SET at = 15420000, output = 9 WHERE id = 'a-0'; DELETE FROM usage WHERE id = 'a-5'");
+    store.db.exec("UPDATE sessions SET ws = 'B' WHERE key = 'a'");
+    assert.equal(compact.moveCompactStep(store.db, 2).done, false);
+    assert.equal(compact.compactTotal(store.db, b, 1n), null, "a partially moved total stays unavailable");
+    store.close();
+    store = Store.open(path);
+    let moved = false;
+    for (let i = 0; i < 100 && !moved; i++) moved = compact.moveCompactStep(store.db, 2).done;
+    assert.ok(moved, "the move resumes after reopening");
+    account(store);
+    const truth = (end: number, viewer: typeof a | typeof b | typeof home | null) => {
+      const visible = viewer === null ? "" : viewer.home ? "AND (s.ws = ? OR s.ws IS NULL)" : "AND s.ws = ?";
+      const row = store.db.prepare(`SELECT COALESCE(SUM(u.calls), 0) AS calls,
+        COALESCE(SUM(u.input + u.cache_read + u.cache_write + u.cache_write_long + u.output), 0) AS tokens
+        FROM usage u JOIN sessions s ON s.key = u.session WHERE u.compact_counted = 1 AND u.at < ? ${visible}`)
+        .get(end * 60_000, ...(viewer === null ? [] : [viewer.workspace])) as { calls: number; tokens: number };
+      return { calls: row.calls, tokens: row.tokens };
+    };
+    for (const end of [-2_000, -1_542, -257, 0, 1, 257, 1_543, 2_000]) {
+      for (const viewer of [a, b, home, null]) assert.deepEqual(compact.compactTotal(store.db, viewer, BigInt(end)), truth(end, viewer));
+    }
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("a year's usage view reads only its requested days but keeps the all-time total", () => {
