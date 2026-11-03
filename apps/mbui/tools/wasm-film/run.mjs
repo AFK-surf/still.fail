@@ -1,4 +1,5 @@
-// Run a still.fail scene in Wasm with the same Core Text and Metal host used by the native picture exporter.
+// Run a still.fail scene in Wasm with the same Core Text, Metal and film writer host as the native exporter: a picture
+// (MBUI_PICTURE, drawn here), or a film (MBUI_FILM: mbui's own film, src/film, run in the scene over this host).
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -17,7 +18,8 @@ const require = createRequire(import.meta.url);
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const native = require(path.join(directory, 'native.node'));
 const output = process.argv[2];
-if (!output) throw new Error('app-picture.mjs OUTPUT.png');
+if (!output) throw new Error('run.mjs OUTPUT.png|OUTPUT.mp4');
+const filming = !!process.env.MBUI_FILM;
 const size = (process.env.MBUI_WIN ?? '390x844').split('x').map(Number);
 const scale = Number(process.env.MBUI_FILM_SCALE ?? 2);
 const platform = Number(process.env.MBUI_FILM_PLATFORM ?? 0);
@@ -88,7 +90,47 @@ const probe = {
   result(i) { return scratch[i]; },
   optionLength(k) { return strings[k].length; }, optionPoint(k, i) { return strings[k][i]; }, optionNumber(k) { return numbers[k]; },
 };
-const imports = { probe, wasi_snapshot_preview1: { fd_write(fd, iovs, count, written) {
+// The film's needs (src/film/film_wasm.mbt): a string out read through the program's film_text exports, one back a unit
+// at a time; a frame's instances through film_item; the writer and the renderer the Mac host's.
+class Exit {
+  constructor(code) { this.code = code; }
+}
+let got = '', held = '';
+function filmText() {
+  const n = core.film_text_length();
+  let s = '';
+  for (let start = 0; start < n; start += 1024) {
+    const values = [];
+    for (let i = start; i < Math.min(n, start + 1024); i++) values.push(core.film_text_unit(i));
+    s += String.fromCharCode(...values);
+  }
+  return s;
+}
+const film = {
+  gotLength: () => got.length,
+  gotUnit: i => got.charCodeAt(i),
+  hold() { held = filmText(); },
+  arg() { got = process.env[filmText()] ?? ''; },
+  say() { process.stderr.write(`${filmText()}\n`); },
+  read() { try { got = fs.readFileSync(filmText(), 'utf8'); } catch { got = ''; } },
+  write() { try { fs.writeFileSync(held, filmText()); return 1; } catch { return 0; } },
+  exit(code) { throw new Exit(code); },
+  init: (w, h, s) => native.init(w, h, s),
+  view: (w, h, s) => native.view(w, h, s),
+  open: (w, h, fps) => native.filmOpen(filmText(), w, h, fps),
+  draw(count, r, g, b) {
+    const inst = new Float64Array(count * 60);
+    for (let i = 0; i < inst.length; i++) inst[i] = core.film_item(i);
+    return native.filmDraw(inst, count, r, g, b);
+  },
+  put: k => native.filmPut(k),
+  close: n => native.filmClose(n),
+  finish: p => native.filmFinish(p),
+  snapshot: transparent => (transparent ? native.snapshotTransparent(filmText()) : native.snapshot(filmText())),
+  spin: () => native.turn(),
+  now: () => performance.now(),
+};
+const imports = { probe, film, wasi_snapshot_preview1: { fd_write(fd, iovs, count, written) {
   const memory = new DataView(core.memory.buffer); let total = 0;
   for (let i = 0; i < count; i++) {
     const ptr = memory.getUint32(iovs + i * 8, true), len = memory.getUint32(iovs + i * 8 + 4, true);
@@ -106,6 +148,17 @@ const module = await WebAssembly.compile(wasm);
 mark('compile');
 core = new WebAssembly.Instance(module, imports).exports;
 mark('instantiate');
+if (filming) {
+  let code = 1;
+  try {
+    core.film();
+  } catch (e) {
+    if (e instanceof Exit) code = e.code;
+    else throw e;
+  }
+  mark('film');
+  process.exit(code);
+}
 native.init(size[0], size[1], scale);
 mark('renderer');
 try {
