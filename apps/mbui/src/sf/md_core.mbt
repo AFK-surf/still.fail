@@ -12,7 +12,8 @@ priv enum MdInline {
   Emph(Array[MdInline])
   Strong(Array[MdInline])
   Strike(Array[MdInline])
-  Link(String, Array[MdInline])
+  /// its address, its words, and what it is to as the core says (refLinks.ts linkTo: the tree's `to`)
+  Link(String, Array[MdInline], LinkTo)
   Image(String, String)
   SoftBreak
   HardBreak
@@ -44,7 +45,7 @@ fn md_plain(xs : Array[MdInline]) -> String {
   for x in xs {
     match x {
       Text(s) | Code(s) | FileRef(s, _, _, _) | Formula(s, _) | Image(_, s) => out.write_string(s)
-      Emph(c) | Strong(c) | Strike(c) | Link(_, c) => out.write_string(md_plain(c))
+      Emph(c) | Strong(c) | Strike(c) | Link(_, c, _) => out.write_string(md_plain(c))
       SoftBreak | HardBreak => out.write_string(" ")
     }
   }
@@ -88,7 +89,7 @@ fn core_inlines(nodes : Array[Json], text : String) -> Array[MdInline] {
       "b" => out.push(Strong(core_inlines(kids,text)))
       "i" => out.push(Emph(core_inlines(kids,text)))
       "s" => out.push(Strike(core_inlines(kids,text)))
-      "a" => out.push(Link(words("href"),core_inlines(kids,text)))
+      "a" => out.push(Link(words("href"),core_inlines(kids,text),link_to_of(math_field(a,"to"),text~)))
       "img" => out.push(Image(words("src"),words("alt")))
       "br" => out.push(HardBreak)
       _ => out.append(core_inlines(kids,text))
@@ -184,4 +185,40 @@ pub fn md_node_depth(node : Json) -> Int? {
     ("h", _, a) => Some(math_number(math_field(a, "depth")).to_int())
     _ => None
   }
+}
+///|
+/// What a link is to, as the core says (refLinks.ts linkTo, with each link of its Markdown and of a person's words):
+/// a chat's (`chat`: drawn as a reference to it), a screen's, a station's 共享调试 or a chat's web service's (`card`:
+/// "screen", "adb", "service"; a card alone in a paragraph, its title bare in a sentence), and what names it (`station`,
+/// `screen`, `job`). Nothing here reads a link's address for it.
+pub(all) struct LinkTo {
+  chat : Bool
+  card : String
+  station : String
+  screen : String
+  job : String
+} derive(Eq)
+
+///|
+/// A link to none of those: a web page's, a file's.
+pub let no_link_to : LinkTo = { chat: false, card: "", station: "", screen: "", job: "" }
+
+///|
+/// The core's `to` of a link (`text` the words its strings may be runs of).
+pub fn link_to_of(j : Json, text? : String = "") -> LinkTo {
+  guard j is Object(_) else { return no_link_to }
+  let words = fn(key) { md_words(math_field(j, key), text).unwrap_or("") }
+  {
+    chat: math_field(j, "chat") == Json::boolean(true),
+    card: words("card"),
+    station: words("station"),
+    screen: words("screen"),
+    job: words("job"),
+  }
+}
+
+///|
+/// Whether a link is drawn as a card alone in a paragraph, and as its title bare in a sentence.
+pub fn LinkTo::is_card(self : LinkTo) -> Bool {
+  self.card != ""
 }

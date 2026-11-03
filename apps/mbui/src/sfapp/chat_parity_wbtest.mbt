@@ -247,7 +247,8 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
 test "a notice that a chat was opened: its line is its Markdown drawn, the chat's chip in it, and tapped it opens that chat" {
   let calls : Array[Made] = []
   let link = "https://app.still.fail/o/ws1/st1/s-c2"
-  // (as the station says it in a still.fail chat, sessions/opened.ts sayOpened, and the core's tree of its words)
+  // (as the station says it in a still.fail chat, sessions/opened.ts sayOpened, and the core's tree of its words: its
+  // link to a chat, as it says, refLinks.ts linkTo)
   let words = "已创建对话：[共享调试：配对后连不上](\{link})"
   let t = edited_core(
     calls,
@@ -261,7 +262,7 @@ test "a notice that a chat was opened: its line is its Markdown drawn, the chat'
             {
               "failed": false,
               "words": Json::string(words),
-              "md": [["p", [[0, 6], ["a", [[7, 18]], { "href": Json::string(link) }]]]],
+              "md": [["p", [[0, 6], ["a", [[7, 18]], { "href": Json::string(link), "to": { "chat": true } }]]]],
             },
           ),
         ])
@@ -300,7 +301,7 @@ test "an agent's link to an archived chat written bare: its title as the core sa
         // (the core's tree of its words, and the chats they link to as their lists have them: views.ts drawn)
         with_chat_message(v, 11.0, [
           ("text", Json::string(words)),
-          ("md", [["p", [[0, 2], ["a", [[2, 40]], { "href": Json::string(link) }]]]]),
+          ("md", [["p", [[0, 2], ["a", [[2, 40]], { "href": Json::string(link), "to": { "chat": true } }]]]]),
           ("chats", [{ "href": Json::string(link), "title": "旧的对话", "archived": true, "note": "已归档" }]),
         ])
       } else {
@@ -328,7 +329,7 @@ test "a link to one message of a chat written bare: the chat's title, not its ad
     if name == "chat" {
       with_chat_message(v, 11.0, [
         ("text", Json::string(words)),
-        ("md", [["p", [[0, 2], ["a", [[2, 50]], { "href": Json::string(link) }]]]]),
+        ("md", [["p", [[0, 2], ["a", [[2, 50]], { "href": Json::string(link), "to": { "chat": true } }]]]]),
         ("chats", [{ "href": Json::string(link), "title": "旧的对话" }]),
       ])
     } else {

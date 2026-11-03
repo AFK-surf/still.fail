@@ -126,6 +126,36 @@ export function adbOfLink(href: string): string | null {
   }
 }
 
+/// The web service a link names: a chat's item with its service, as its agent links to it
+/// (`…/o/<workspace>/<station>/<chat>?service=<job>`, after a host or alone): its station and its job. Null otherwise.
+export function serviceOfLink(href: string): { station: string; job: string } | null {
+  const m = /^(?:https?:\/\/[^/]+)?\/o\/([^/?#\s]+)\/([^/?#\s]+)\/[^/?#\s]+\/?\?([^#]*)/.exec(href);
+  if (!m) return null;
+  const job = new URLSearchParams(m[3]!).get("service");
+  if (!job) return null;
+  try {
+    return { station: `${decodeURIComponent(m[1]!)}/${decodeURIComponent(m[2]!)}`, job };
+  } catch {
+    return null;
+  }
+}
+
+/// What a link is to, as every client draws it: a chat's (`chat`: a reference to it), a screen's, a station's 共享调试 or
+/// a chat's web service's (`card`: a card alone in a paragraph, its title bare in a sentence), with what names it.
+/// Null for any other link. The clients take it from the core with each link (markdown.ts, personWords), reading none
+/// of it themselves.
+export type LinkTo = { chat?: true; card?: "screen" | "adb" | "service"; station?: string; screen?: string; job?: string };
+export function linkTo(href: string): LinkTo | null {
+  const chat = isChatLink(href) ? { chat: true as const } : {};
+  const screen = screenOfLink(href);
+  if (screen) return { ...chat, card: "screen", station: screen.station, screen: screen.screen };
+  const adb = adbOfLink(href);
+  if (adb) return { ...chat, card: "adb", station: adb };
+  const service = serviceOfLink(href);
+  if (service) return { ...chat, card: "service", station: service.station, job: service.job };
+  return chat.chat ? chat : null;
+}
+
 /// The `@words` the caret is at the end of (`@` and a few letters ask for a chat to refer to), and where its `@` is;
 /// null when it is in none.
 export function refAt(text: string, caret: number): { start: number; query: string } | null {
@@ -160,7 +190,7 @@ export function pastedRefs(pasted: string, here: string): { start: number; end: 
 /// A run of a person's words as the clients draw it: as they wrote it, a web address written bare (`link`), or a
 /// reference to a chat (`ref`: its title is `text` where they wrote one, `[title](its page)`; a chat's page written bare
 /// is one too, `text` its address, the message's `chats` saying its title).
-export type WordsRun = { text: string; link?: string; ref?: true };
+export type WordsRun = { text: string; link?: string; ref?: true; to?: LinkTo };
 
 /// What a person wrote, in runs (WordsRun): references to chats, and web addresses written bare (bareLinks.ts). The one
 /// reading the clients draw a person's words by (apps/mbui sfbase/message_words.mbt for words not the core's yet).
@@ -168,13 +198,17 @@ export function personWords(text: string): WordsRun[] {
   const out: WordsRun[] = [];
   for (const part of splitBy(text, REF_LINK)) {
     if (typeof part !== "string") {
-      out.push({ text: part[1]!, link: part[2]!, ref: true });
+      const to = linkTo(part[2]!);
+      out.push({ text: part[1]!, link: part[2]!, ref: true, ...(to ? { to } : {}) });
       continue;
     }
     for (const bit of bareLinks(part)) {
       if (typeof bit === "string") {
         if (bit !== "") out.push({ text: bit });
-      } else out.push({ text: bit.url, link: bit.url, ...(isChatLink(bit.url) ? { ref: true as const } : {}) });
+      } else {
+        const to = linkTo(bit.url);
+        out.push({ text: bit.url, link: bit.url, ...(to?.chat ? { ref: true as const } : {}), ...(to ? { to } : {}) });
+      }
     }
   }
   return out;

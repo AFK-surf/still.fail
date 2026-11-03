@@ -25,6 +25,7 @@ import { ink } from "./highlight.ts";
 import { mathDrawing } from "./math.ts";
 import { type MdWords, wordsOf } from "./mdWords.ts";
 import { pathAttrs } from "./paths.ts";
+import { linkTo } from "./refLinks.ts";
 import { type Node, read } from "./mdRead.ts";
 import { shaped, sharedValue } from "./util.ts";
 
@@ -360,7 +361,8 @@ function inline(n: Node, cx: Cx): MdNode[] {
 /// does (paths.ts).
 function link(href: string, title: string | null | undefined, children: MdNode[]): MdNode {
   const file = /^[a-z][\w+.-]*:/i.test(href) ? {} : pathAttrs(decoded(href), (path) => path);
-  return ["a", children, { href, ...(title ? { title } : {}), ...file }];
+  const to = linkTo(href);
+  return ["a", children, { href, ...(title ? { title } : {}), ...file, ...(to ? { to } : {}) }];
 }
 
 const decoded = (s: string): string => {
