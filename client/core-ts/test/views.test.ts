@@ -329,7 +329,7 @@ function deciding(id: string, th: number, seq: number, at: number, dismissed: bo
 const ids = (v: J): string[] => v.days.flatMap((d: J) => d.items.map((i: J) => i.id));
 
 /// A value without what the clients show of it: what a view puts together, alone.
-const SHOWN = new Set(["trouble", "settled", "archivable", "swipeArchive", "stateText", "stateLead", "stateRest", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
+const SHOWN = new Set(["trouble", "settled", "archivable", "swipeArchive", "swipeAsk", "stateText", "stateLead", "stateRest", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
 function plain(v: J): J {
   if (Array.isArray(v)) return v.map(plain);
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
@@ -924,6 +924,12 @@ test("any_made_chat_is_swiped_away_regardless_of_its_state_its_station_there", a
   assert.deepEqual(flags(u.value), {
     unread: [true, false], pinned: [true, false], kept: [true, false], reviewed: [true, false],
     running: [true, false], failed: [true, false], watching: [true, false], decision: [true, false], pending: [false, false], empty: [true, false],
+  });
+  // Only one at work or keeping watch is asked about before its swipe archives it.
+  const asks = Object.fromEntries(u.value.days.flatMap((d: J) => d.items).filter((i: J) => i.swipeAsk !== undefined).map((i: J) => [i.id, i.swipeAsk]));
+  assert.deepEqual(asks, {
+    running: "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。",
+    watching: "「CI」仍在监控。归档会停止监控。",
   });
   // Its station offline: nothing there to take it.
   t.set(link("ws/st"), { state: "offline" });
