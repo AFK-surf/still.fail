@@ -629,6 +629,23 @@ test "录屏: started, with the panel in use, and ended" {
 }
 
 ///|
+test "设备: the rest of Device Hub's are there" {
+  let r = screen_rig()
+  simulator_live(r)
+  r.tap_label(tr("web-pages.screen.debug.logs"))
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.debug.device"))
+  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  r.t.draw()
+  for word in ["notEnrolled", "volumeUp", "volumeDown", "memoryWarning", "uninstall"] {
+    assert_true(r.t.find(tr("web-pages.screen.debug." + word)) is Some(_))
+  }
+  screen_done(r.t)
+}
+
+///|
 test "重启 App: the list the first time, and the app chosen at one press after" {
   let r = screen_rig()
   simulator_live(r)

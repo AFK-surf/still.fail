@@ -349,6 +349,8 @@ priv struct DebugLogs {
   mut recording : Bool
   /// the movie of a recording ended, to download (the drive's root and path)
   mut to_save : (String, String)?
+  /// set here (none yet: as `settings` says)
+  mut enrolled : Bool?
 }
 
 ///|
@@ -421,6 +423,7 @@ fn debug_logs_new() -> DebugLogs {
     tidy_bar: false,
     recording: false,
     to_save: None,
+    enrolled: None,
   }
 }
 
@@ -555,6 +558,56 @@ fn debug_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     ("accessibility-large", "web-pages.screen.debug.textLargest"),
   ])
   debug_actions(c, s, u)
+  debug_device_more(c, s, u)
+}
+
+///|
+/// The rest of what Device Hub does of a device: Face ID, its volume, a memory warning, an app taken off it.
+fn debug_device_more(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let d = u.logs
+  let done = @sf.t("web-pages.screen.debug.done")
+  @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.biometrics"), fn() {
+    let at = if d.enrolled.unwrap_or(flag(d.settings, "enrolled")) { 1 } else { 0 }
+    let chosen = @sf.segmented(
+      c,
+      "screen-enrolled",
+      [@sf.t("web-pages.screen.debug.notEnrolled"), @sf.t("web-pages.screen.debug.enrolled")],
+      at,
+    )
+    if chosen != at && chosen >= 0 {
+      d.enrolled = Some(chosen == 1)
+      debug_act(s, d, "screen.biometrics", { "what": Json::string(if chosen == 1 { "enrol" } else { "unenrol" }) }, done)
+    }
+    if at == 1 {
+      if @sf.menu_item(c, @sf.t("web-pages.screen.debug.bioMatch"), key="screen-bio-match", panel=true, icon="check") {
+        debug_act(s, d, "screen.biometrics", { "what": Json::string("match") }, done)
+      }
+      if @sf.menu_item(c, @sf.t("web-pages.screen.debug.bioNoMatch"), key="screen-bio-nomatch", panel=true, icon="close") {
+        debug_act(s, d, "screen.biometrics", { "what": Json::string("nomatch") }, done)
+      }
+    }
+  })
+  @sf.panel_group(c, fn() {
+    let press = fn(name : String) {
+      c.tell("screen-device-act/" + name, fn() {
+        s.input(s.src, Json::object({ "t": Json::string("device"), "name": Json::string(name) }))
+      })
+    }
+    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.volumeUp"), key="screen-volume-up", panel=true, icon="volume") {
+      press("volume_up")
+    }
+    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.volumeDown"), key="screen-volume-down", panel=true, icon="volume-x") {
+      press("volume_down")
+    }
+    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.memoryWarning"), key="screen-memory", panel=true, icon="info") {
+      press("memory_warning")
+      d.acted = done
+    }
+    let key = "screen-uninstall"
+    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.uninstall"), key~, panel=true, icon="trash", end="chevron-right") {
+      debug_apps_open(s, u, Of(c.id(key)), uninstall=true)
+    }
+  })
 }
 
 ///|
@@ -729,12 +782,14 @@ priv struct DebugApps {
   mut going : Bool
   /// the notification the one chosen is sent (none: it is started again)
   push : String?
+  /// the one chosen is taken off the device
+  uninstall : Bool
 }
 
 ///|
 /// 重启 App from 控制中心.
-fn debug_apps_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor, push? : String) -> Unit {
-  let d : DebugApps = { apps: None, said: "", going: false, push }
+fn debug_apps_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor, push? : String, uninstall? : Bool = false) -> Unit {
+  let d : DebugApps = { apps: None, said: "", going: false, push, uninstall }
   let params = { "station": Json::string(s.station), "screen": Json::string(s.screen) }
   (s.src.call)("screen.apps", Json::object(params), fn(r) {
     match r {
@@ -782,6 +837,7 @@ fn debug_apps(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, d : DebugApps) -> Unit 
                 params["text"] = Json::string(words)
                 ("screen.push", @sf.t("web-pages.screen.debug.pushed", args=[("name", name)]))
               }
+              None if d.uninstall => ("screen.uninstall", @sf.t("web-pages.screen.debug.uninstalled", args=[("name", name)]))
               None => {
                 u.logs.last_app = Some((id, name))
                 ("screen.relaunch", @sf.t("web-pages.screen.debug.relaunched", args=[("name", name)]))

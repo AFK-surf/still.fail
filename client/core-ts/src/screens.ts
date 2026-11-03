@@ -222,6 +222,9 @@ export function checkInput(input: unknown): J {
     case "pose":
       if (input.name !== "closed" && input.name !== "book" && input.name !== "open") throw bad();
       return { t: "pose", name: input.name };
+    case "device":
+      if (input.name !== "volume_up" && input.name !== "volume_down" && input.name !== "memory_warning") throw bad();
+      return { t: "device", name: input.name };
     case "text":
       if (typeof input.text !== "string" || input.text === "" || input.text.length > TEXT_MAX) throw bad();
       return { t: "text", text: input.text };

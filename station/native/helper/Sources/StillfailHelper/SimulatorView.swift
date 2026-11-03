@@ -262,9 +262,11 @@ final class SimulatorView: ScreenView {
     case "button":
       switch op["name"] as? String {
       case "keyboard": await injector.toggleSoftwareKeyboard()
-      case let name? where ["home", "lock", "siri", "side_button", "app_switcher"].contains(name): await injector.sendButton(button: name, deviceUDID: udid)
+      case let name? where ["home", "lock", "siri", "side_button", "app_switcher", "volume_up", "volume_down"].contains(name): await injector.sendButton(button: name, deviceUDID: udid)
       default: return
       }
+    case "memory_warning":
+      await injector.simulateMemoryWarning()
     case "pose":
       guard let name = op["name"] as? String, let pose = DevicePose.preset(named: name) else { return }
       guard await injector.setPose(name, fromDegrees: hinge) else { return }

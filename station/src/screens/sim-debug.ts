@@ -20,7 +20,7 @@ export type SimLog = { seq: number; at: string; level: string; app: string; text
 export type SimApp = { id: string; name: string; running: boolean };
 
 /// What can be set of the device from a person's app, each as `simctl ui` calls it.
-export type SimSettings = { appearance: string; textSize: string; recording: boolean };
+export type SimSettings = { appearance: string; textSize: string; recording: boolean; enrolled: boolean };
 const APPEARANCES = ["light", "dark"];
 const TEXT_SIZES = ["extra-small", "small", "medium", "large", "extra-large", "extra-extra-large", "extra-extra-extra-large", "accessibility-medium", "accessibility-large", "accessibility-extra-large", "accessibility-extra-extra-large", "accessibility-extra-extra-extra-large"];
 
@@ -40,6 +40,7 @@ const BUNDLE_ID = /^[A-Za-z0-9][A-Za-z0-9.-]*$/;
 const URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:\S*$/;
 const MAX_URL = 8192;
 const APP_DEPTH = 3;
+const ENROLLED = "com.apple.BiometricKit.enrollmentChanged";
 /// The panels of an iPhone Duo as `simctl io` numbers its displays (and its touches their targets: DTUHIDKeys).
 const DISPLAY_COVER = 1;
 const DISPLAY_INNER = 3;
@@ -259,11 +260,12 @@ export class SimDebug {
   }
 
   async settings(): Promise<SimSettings> {
-    const [appearance, textSize] = await Promise.all([
+    const [appearance, textSize, enrolled] = await Promise.all([
       this.#run(this.#simctl, ["ui", this.#udid, "appearance"]),
       this.#run(this.#simctl, ["ui", this.#udid, "content_size"]),
+      this.#run(this.#simctl, ["spawn", this.#udid, "notifyutil", "-g", ENROLLED]).catch(() => ""),
     ]);
-    return { appearance: appearance.trim(), textSize: textSize.trim(), recording: this.#recording !== null };
+    return { appearance: appearance.trim(), textSize: textSize.trim(), recording: this.#recording !== null, enrolled: enrolled.trim().endsWith(" 1") };
   }
 
   /// Sets one of them; false when it is no such setting or value.
@@ -337,6 +339,27 @@ export class SimDebug {
     } finally {
       await Promise.all([rm(out, { recursive: true, force: true }), rm(path, { force: true })]);
     }
+  }
+
+  /// Takes `app` a person installed off it; false when it is none.
+  async uninstall(app: string): Promise<boolean> {
+    if (!BUNDLE_ID.test(app) || !(await this.apps()).some((a) => a.id === app)) return false;
+    await this.#run(this.#simctl, ["uninstall", this.#udid, app]);
+    return true;
+  }
+
+  /// Face ID or Touch ID, whichever it has: enrolled or not, or the face or finger shown just now to what asks for it (a first
+  /// asking waits on the system's own question first). False when it is no such thing. By what BiometricKit listens for in the device.
+  async biometrics(what: string): Promise<boolean> {
+    const notify = (...args: string[]) => this.#run(this.#simctl, ["spawn", this.#udid, "notifyutil", ...args]);
+    if (what === "enrol" || what === "unenrol") {
+      await notify("-s", ENROLLED, what === "enrol" ? "1" : "0");
+      await notify("-p", ENROLLED);
+      return true;
+    }
+    if (what !== "match" && what !== "nomatch") return false;
+    await notify("-p", `com.apple.BiometricKit_Sim.pearl.${what}`);
+    return true;
   }
 
   /// Starts recording its screen, `panel`'s where it has two ("inner" or "cover"); what it started before goes on.

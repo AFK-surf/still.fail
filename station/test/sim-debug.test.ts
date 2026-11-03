@@ -244,6 +244,21 @@ test("a panel's turn as simctl says it, and a movie told it", async () => {
   assert.equal(await turnMovie(file, 0), false, "nothing recorded");
 });
 
+test("Face ID's and an app's going, told as simctl takes them", async () => {
+  const { debug, runs } = played();
+  assert.equal(await debug.biometrics("--help"), false);
+  assert.equal(runs.length, 0);
+  assert.equal(await debug.biometrics("enrol"), true);
+  assert.deepEqual(runs.at(-2), ["simctl", "spawn", "U", "notifyutil", "-s", "com.apple.BiometricKit.enrollmentChanged", "1"]);
+  assert.deepEqual(runs.at(-1), ["simctl", "spawn", "U", "notifyutil", "-p", "com.apple.BiometricKit.enrollmentChanged"]);
+  assert.equal(await debug.biometrics("nomatch"), true);
+  assert.deepEqual(runs.at(-1), ["simctl", "spawn", "U", "notifyutil", "-p", "com.apple.BiometricKit_Sim.pearl.nomatch"]);
+  assert.equal(await debug.uninstall("com.apple.Preferences"), false);
+  assert.equal(await debug.uninstall("fail.still.a"), true);
+  assert.deepEqual(runs.at(-1), ["simctl", "uninstall", "U", "fail.still.a"]);
+  debug.close();
+});
+
 test("a setting is set only to what simctl takes, and said back", async () => {
   const { debug, runs } = played();
   assert.equal(await debug.setSetting("appearance", "sepia"), false);
