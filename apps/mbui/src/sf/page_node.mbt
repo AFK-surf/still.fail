@@ -413,7 +413,8 @@ pub(all) enum RowLead {
 /// round it: @motion.reveal's). One that `acts` (does something at once where it is): its title in the link's ink, no
 /// chevron. Lit under the hand, rippling under a finger, `press` done as it is pressed; going nowhere where not `goes`
 /// (a value said: none of that). `note_cut`: its note one line, cut short (what is in a memory). `title_after` after its
-/// title on its line (a tag: whose it is), its title cut short where the line has not the room for both. `folds`: it
+/// title on its line while `title_after_shown` says (a tag: whose it is), its title cut short where the line has not
+/// the room for both. `folds`: it
 /// folds open what follows it, its chevron down, up while that is open (as it says), read out so. Its words as they are
 /// said.
 pub fn link_row_node(
@@ -435,6 +436,7 @@ pub fn link_row_node(
   below_open? : () -> Double = fn() { 0.0 },
   note_cut? : Bool = false,
   title_after? : (@view.View) -> Unit,
+  title_after_shown? : () -> Bool = fn() { true },
   folds? : () -> Bool,
 ) -> Unit {
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
@@ -453,7 +455,7 @@ pub fn link_row_node(
   if look_node(parent) is Wide {
     wide_link_row_node(
       parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
-      note_cut, title_after, folds,
+      note_cut, title_after, title_after_shown, folds,
     )
     return
   }
@@ -520,33 +522,30 @@ pub fn link_row_node(
             // (giving way to what it says where the line has not the room, cut short, as link_row's title in a row does;
             // beside what it says, its words' own (pg_row_title_in), the line's room left between them: its line's ends
             // the title's and what it says')
-            let words = match title_after {
-              // (what follows its title on its line, 8 apart across their middle: the title cut short where the line
-              // leaves it less, link_row's title_line)
-              Some(after) => {
-                t.row(Is(true)).gap(Is(8.0)).lines_up(Is(Some(Middle))) |> ignore
-                let w = t.box(fn(w) {
-                  styled_words(w, title, fn() {
-                    (if under() && value() != "" { titled_in } else { titled }).then(cut_words)
-                  })
-                  |> ignore
-                })
-                t.box(fn(a) { after(a) }) |> ignore
-                w
-              }
-              None => {
-                styled_words(t, title, fn() {
-                  let style = if under() && value() != "" { titled_in } else { titled }
-                  if note_cut && value() == "" { style.then(cut_words) } else { style }
-                })
-                |> ignore
-                t
-              }
-            }
             t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-            words.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-            if acts {
-              t.ink(By(fn() { link_ink() })) |> ignore
+            let plain = fn() { if under() && value() != "" { titled_in } else { titled } }
+            // (what follows its title on its line while it is said, 8 apart across their middle: the title cut short
+            // where the line leaves it less, link_row's title_line; its title the same words all along)
+            let after_now = fn() { title_after is Some(_) && title_after_shown() }
+            t.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+            t.box(fn(w) {
+              w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+              styled_words(w, title, fn() {
+                if after_now() || (note_cut && value() == "") { plain().then(cut_words) } else { plain() }
+              })
+              |> ignore
+              if acts {
+                w.ink(By(fn() { link_ink() })) |> ignore
+              }
+            })
+            |> ignore
+            match title_after {
+              Some(after) =>
+                t.show(title_after_shown, fn(a) {
+                  a.margin(Is((8.0, 0.0, 0.0, 0.0))) |> ignore
+                  after(a)
+                })
+              None => ()
             }
           })
           |> ignore

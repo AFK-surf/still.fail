@@ -309,7 +309,7 @@ fn memory_body_node(
         fn() { text(kv(), "name") },
         fn() { text(kv(), "line") },
         fn() { text(kv(), "size") },
-        tag=@signals.untracked(fn() { skill_tag(kv(), names()) }),
+        tag=fn() { skill_tag(kv(), names()) },
         fn() { (core.push)(MemoryDoc(address, text(kv(), "name"), 0)) },
       )
     })
@@ -390,14 +390,14 @@ fn memory_body_node(
 }
 
 ///|
-/// A row of a station's memory made once (memory_row's): its name and whose (`tag`, said as it is made) after it on
+/// A row of a station's memory made once (memory_row's): its name and whose (`tag`, as it changes) after it on
 /// its line, a line under it cut short, how much is in it at its end; `folds` what follows it where it says so.
 fn memory_row_node(
   parent : @view.View,
   title : () -> String,
   sub : () -> String,
   value : () -> String,
-  tag? : String = "",
+  tag? : () -> String = fn() { "" },
   folds? : () -> Bool,
   press : () -> Unit,
 ) -> Unit {
@@ -408,7 +408,8 @@ fn memory_row_node(
     value~,
     note=sub,
     note_cut=true,
-    title_after?=if tag != "" { Some(fn(a) { @sf.words_node(a, fn() { tag }, fn() { mem_tag }) |> ignore }) } else { None },
+    title_after=fn(a) { @sf.words_node(a, tag, fn() { mem_tag }) |> ignore },
+    title_after_shown=fn() { tag() != "" },
     folds?,
   )
 }
