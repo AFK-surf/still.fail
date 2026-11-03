@@ -450,17 +450,25 @@ export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: I
   const start = from >= to ? 0n : floor(from);
   const end = from >= to ? 0n : to === 9223372036854775807n ? 9223372036854775807n : floor(to);
   const args: (string | bigint)[] = [offset, start, end];
-  const scope = viewer === null ? "" : viewer.home === false ? "WHERE c.scope = ?4 AND sc.ws = ?5"
-    : "WHERE c.scope IN (?4, 'H') AND (sc.ws = ?5 OR sc.ws IS NULL)";
   if (viewer !== null) args.push(`W${viewer.workspace}`, viewer.workspace);
-  const source = viewer === null ? "FROM usage_compact c INDEXED BY usage_compact_time"
-    : "FROM usage_compact c INDEXED BY usage_compact_scope_time CROSS JOIN usage_minute_scope sc ON sc.session = c.session";
-  const condition = viewer === null ? "WHERE" : `${scope} AND`;
-  const sql = `SELECT strftime('%Y-%m-%d', (c.minute + ?1) * 60, 'unixepoch') AS day,
+  const scope = viewer === null ? "" : viewer.home === false ? "scope = ?4 AND " : "scope IN (?4, 'H') AND ";
+  const bucketScope = viewer === null ? "" : viewer.home === false ? "c.scope = ?4 AND " : "c.scope IN (?4, 'H') AND ";
+  const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
+  const eligible = viewer === null ? "SELECT session FROM selected" : `SELECT p.session FROM selected p
+    CROSS JOIN usage_minute_scope sc ON sc.session = p.session
+    WHERE ${viewer.home === false ? "sc.ws = ?5" : "(sc.ws = ?5 OR sc.ws IS NULL)"}`;
+  // Find sessions through the covering time index, then read each session's buckets together in primary-key order.
+  // Materializing the eligible sessions keeps the workspace check from being repeated for every minute.
+  const sql = `WITH selected AS MATERIALIZED (
+    SELECT DISTINCT session FROM usage_compact INDEXED BY ${index}
+    WHERE ${scope}minute >= ?2 AND minute < ?3
+  ), eligible AS MATERIALIZED (${eligible})
+    SELECT strftime('%Y-%m-%d', (c.minute + ?1) * 60, 'unixepoch') AS day,
     c.session, NULLIF(c.thread, 0) AS thread, NULLIF(c.person, '') AS person, NULLIF(c.profile, '') AS profile,
     c.runtime, NULLIF(c.model, '') AS model, c.fast, SUM(c.calls) AS calls, SUM(c.input) AS input,
     SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output
-    ${source} ${condition} c.minute >= ?2 AND c.minute < ?3 AND c.records > 0
+    FROM eligible p CROSS JOIN usage_compact c ON c.session = p.session AND c.minute >= ?2 AND c.minute < ?3
+    WHERE ${bucketScope}c.records > 0
     GROUP BY day, c.session, c.thread, c.person, c.profile, c.runtime, c.model, c.fast`;
   return { sql, args };
 }
