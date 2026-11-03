@@ -142,7 +142,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
       if m.author_kind == "person" {
         if m.text != "" {
           picking(here, c, src, m.ts, m.seq, m.by.name, "person", m.text, fn() {
-            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, chat_links=fn() { chat_links_of(m) }), chat_title=chat_title_of(m), runs=m.words)
+            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, chat_link=chat_link_of(m)), chat_title=chat_title_of(m), runs=m.words)
           })
         }
         message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f")
@@ -172,7 +172,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
     message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)), at=message_place(m) + "/f")
     if m.text != "" {
       picking(here, c, src, m.ts, m.seq, @sf.t("web-main.chat.you"), "person", m.text, fn() {
-        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, chat_links=fn() { chat_links_of(m) }), chat_title=chat_title_of(m), runs=m.words)
+        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, chat_link=chat_link_of(m)), chat_title=chat_title_of(m), runs=m.words)
       }, fill=false)
     }
     if !m.followed {
@@ -480,19 +480,21 @@ fn link_peeks(
   here : MessageHere,
   agent? : String = "",
   chats? : Array[LinkedChat] = [],
-  chat_links? : () -> Array[String] = fn() { [] },
+  chat_link? : (String) -> Bool = fn(_) { false },
 ) -> ((String, String, Int) -> Unit)? {
-  Some(fn(href, words, id) { link_peek(c, src, here.station, href, words, id, agent~, chats~, chat_links~) })
+  Some(fn(href, words, id) { link_peek(c, src, here.station, href, words, id, agent~, chats~, chat_link~) })
 }
 
 ///|
-/// The links to chats in message `m` as the core says (each link's `to`): of a person's words' runs, or of an
-/// agent's Markdown.
-fn chat_links_of(m : Message) -> Array[String] {
+/// Whether a link of message `m` is to a chat, as the core says (each link's `to`): of a person's words' runs, or of
+/// an agent's Markdown (read only when a link of it is shown). A person's words the core has not said yet (being sent)
+/// are drawn by the app's own runs (`message_runs`), whose links to chats are `@sf.is_chat_link`'s.
+fn chat_link_of(m : Message) -> (String) -> Bool {
   match m.words {
     Some(Array(runs)) =>
-      runs.filter(fn(r) { field(field(Some(r), "to"), "chat") == Some(Json::boolean(true)) }).map(fn(r) { text(Some(r), "link") })
-    _ => @sf.md_chat_links(m.text, m.md)
+      fn(href) { runs.iter().any(fn(r) { text(Some(r), "link") == href && field(field(Some(r), "to"), "chat") == Some(Json::boolean(true)) }) }
+    _ if m.author_kind == "person" || m.mine => @sf.is_chat_link
+    _ => fn(href) { @sf.md_chat_links(m.text, m.md).contains(href) }
   }
 }
 
@@ -617,7 +619,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         }
       },
       on_link_hold=Some(fn(href, _) { if @sf.path_of_link(href) is None { link_held(c, href) } }),
-      on_link_shown=link_peeks(c, src, here, agent=m.by.agent, chats=m.chats, chat_links=fn() { chat_links_of(m) }),
+      on_link_shown=link_peeks(c, src, here, agent=m.by.agent, chats=m.chats, chat_link=chat_link_of(m)),
       chat_title=chat_title_of(m),
       // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips
       paths=m.by.agent != "",

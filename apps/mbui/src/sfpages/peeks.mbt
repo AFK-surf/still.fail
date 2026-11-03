@@ -19,7 +19,7 @@ pub fn link_peek(
   id : Int,
   agent? : String = "",
   chats? : Array[LinkedChat] = [],
-  chat_links? : () -> Array[String] = fn() { [] },
+  chat_link? : (String) -> Bool = fn(_) { false },
 ) -> Unit {
   if station == "" {
     return
@@ -34,7 +34,7 @@ pub fn link_peek(
     None => ()
   }
   // (a chat's, as the core says of the message's links: its `to`)
-  if chat_links().contains(href) || chats.iter().any(fn(l) { l.href == href }) {
+  if chats.iter().any(fn(l) { l.href == href }) || chat_link(href) {
     chat_peek(c, src, station, href, id, chats.iter().find_first(fn(l) { l.href == href }))
     return
   }
