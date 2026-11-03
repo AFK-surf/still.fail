@@ -149,6 +149,8 @@ pub fn fake_autofill_picks(String, String, String) -> Unit
 
 pub let fake_op : @ref.Ref[((Array[String]) -> (Int32, String, String))?]
 
+pub let fake_op_pending : @ref.Ref[Bool]
+
 pub let fake_op_runs : Array[Array[String]]
 
 pub let fake_passkey : @ref.Ref[((String, String, String, String) -> String)?]
@@ -536,6 +538,8 @@ pub fn set_window_zoom(Double) -> Unit
 pub fn set_work_clock((() -> Double)?) -> Unit
 
 pub fn shape_of(Array[(Array[Double], Bool)], fill? : Int64, even_odd? : Bool, stroke? : Int64, width? : Double) -> @paint.Shape
+
+pub fn shapes_ink_in(Array[@paint.Shape], Double) -> (Double, Double)
 
 pub fn share(String, String, String, Bytes) -> Bool
 
@@ -1322,6 +1326,7 @@ pub fn Ctx::second_pointer(Self) -> (Double, Double)?
 pub fn Ctx::segmented(Self, String, Array[String], Int32, item_w? : Double) -> Int32
 pub fn Ctx::selectable(Self, () -> Unit, color? : Int64) -> Unit
 pub fn Ctx::selected_text(Self) -> String
+pub fn Ctx::selection_by_finger(Self) -> Bool
 pub fn Ctx::selection_box(Self) -> (Double, Double, Double, Double)?
 pub fn Ctx::selection_clear(Self) -> Unit
 pub fn Ctx::selection_end(Self) -> (Double, Double, Double)?

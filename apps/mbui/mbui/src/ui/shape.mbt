@@ -39,8 +39,8 @@ pub fn Ctx::shapes(
 
 ///|
 /// How far in from the left and right of a box `w` wide `shapes` draw: their outlines' points, a stroke's half width
-/// round them.
-fn shapes_ink_in(shapes : Array[Shape], w : Double) -> (Double, Double) {
+/// round them (what a node laid out by its ink, as Ctx::shapes' `by_ink` is, leaves of its box either side).
+pub fn shapes_ink_in(shapes : Array[Shape], w : Double) -> (Double, Double) {
   let mut x0 = w
   let mut x1 = 0.0
   for sh in shapes {

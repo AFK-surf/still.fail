@@ -509,3 +509,19 @@ test "corners of the window's tree: rows in a node that scrolls them up and down
   let pass = fn(r : (Array[String], Array[String])) { (r.0, r.1.length() > 0) }
   assert_eq((pass(scrolled_rows(false)), pass(scrolled_rows(true)), pass(scrolled_rows(true, scale=0.5))), (([], true), ([], true), ([], true)))
 }
+
+///|
+test "corners of the window's tree: in a card said to be a picture (Role Image: another system's screen drawn), its corners what it draws, nothing said; not said so, the same said" {
+  let follow = concentric(20.0, 6.0)
+  let picture = fn(said : Bool) {
+    fn(v : @view.View) {
+      if said {
+        v.parent().unwrap().says(Is(Some(@view.said(Image, label="preview")))) |> ignore
+      }
+      tree_ground(20.0)(v)
+    }
+  }
+  let plain = tree_card(picture(false), corners_held=false).corner_faults()
+  let said = tree_card(picture(true), corners_held=false).corner_faults()
+  assert_eq((wants(plain, follow), said), (true, []), msg=plain.join("\n") + "\n--\n" + said.join("\n"))
+}

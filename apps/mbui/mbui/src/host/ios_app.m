@@ -92,6 +92,8 @@ static CGFloat nav_right(void);
 - (BOOL)isEmpty { return self.a == self.b; }
 @end
 
+static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2 copy, 4 paste, 8 select all)
+
 @interface MBView : UIView <UITextInput, UIEditMenuInteractionDelegate>
 @property(nonatomic, strong) CADisplayLink *link;
 // the system's floating edit menu over a field's words (mb_host_text_menu), and where they are
@@ -182,6 +184,30 @@ static void run_script_step(int step);
 // as they move (scrolled, typed into); what it offers is canPerformAction's.
 - (CGRect)editMenuInteraction:(UIEditMenuInteraction *)i targetRectForConfiguration:(UIEditMenuConfiguration *)c {
   return self.menuRect;
+}
+// Over words picked with no field focused (the page's words a finger held: ui's finger_select.mbt), the view is not the
+// first responder (that would bring the keyboard), so the system offers nothing of its own: copy and select all made
+// here, in the system's words for them, done as the field's keys are (13 copy, 12 select all).
+- (UIMenu *)editMenuInteraction:(UIEditMenuInteraction *)i
+           menuForConfiguration:(UIEditMenuConfiguration *)c
+               suggestedActions:(NSArray<UIMenuElement *> *)suggested {
+  if (self.imeActive) return [UIMenu menuWithChildren:suggested];
+  NSBundle *kit = [NSBundle bundleForClass:UIApplication.class];
+  NSMutableArray<UIMenuElement *> *items = [NSMutableArray array];
+  __weak MBView *me = self;
+  if (menu_can & 2) {
+    [items addObject:[UIAction actionWithTitle:[kit localizedStringForKey:@"Copy" value:@"Copy" table:nil]
+                                         image:nil
+                                    identifier:nil
+                                       handler:^(UIAction *a) { mb_cb.key(13, 0); [me requestFrame]; }]];
+  }
+  if (menu_can & 8) {
+    [items addObject:[UIAction actionWithTitle:[kit localizedStringForKey:@"Select All" value:@"Select All" table:nil]
+                                         image:nil
+                                    identifier:nil
+                                       handler:^(UIAction *a) { mb_cb.key(12, 0); [me requestFrame]; }]];
+  }
+  return [UIMenu menuWithChildren:items];
 }
 - (void)editMenuInteraction:(UIEditMenuInteraction *)i willDismissMenuForConfiguration:(UIEditMenuConfiguration *)c
                    animator:(id<UIEditMenuInteractionAnimating>)a {
@@ -556,7 +582,6 @@ static void touches_sent(int kind, NSSet<UITouch *> *t, UIEvent *e, UIView *v) {
 // sends it, read there and then (@hostapi.clip_read, within the paste the person chose: no "allow paste" asked) and
 // put in as a file where the field takes files. Nothing else of the system's (look up, translate, share…), which
 // Android's menu has none of either.
-static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2 copy, 4 paste, 8 select all)
 - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
   if (!self.imeActive || key_catching) return NO;
   if (action == @selector(paste:)) return UIPasteboard.generalPasteboard.hasStrings || UIPasteboard.generalPasteboard.hasImages;

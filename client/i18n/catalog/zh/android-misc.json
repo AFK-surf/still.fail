@@ -527,6 +527,7 @@
   "android-misc.screen.fill.none": "1Password 里没有 {host} 的登录",
   "android-misc.screen.fill.noOp": "要先装 1Password 命令行工具，并在 1Password › 设置 › 开发者 里打开「与 1Password CLI 集成」",
   "android-misc.screen.fill.failed": "1Password 没有给出：{why}",
+  "android-misc.screen.fill.unreached": "1Password 没连上它的服务器，再试一次",
   "android-misc.screen.fill.empty": "这条登录里没有账号和密码",
   "android-misc.screen.fill.offerAuto": "用密码管理器填入",
   "android-misc.screen.fill.autoPick": "在密码管理器里选一个 {host} 的登录",

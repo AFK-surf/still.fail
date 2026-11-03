@@ -140,13 +140,14 @@ test "an answered secret request can be read again from its outcome without answ
       let reason = if use_secret { "查询中继连接日志，定位拨号失败的原因" } else { "把路由器密码安全保存，方便以后排查网络" }
       assert_true(t.find(reason) is None)
       let (x, y) = t.find(outcome).unwrap()
+      // (a pointer resting on it opens nothing: only a press does)
       if platform == 0 {
         t.move(x, y)
-        t.run_for(@sfpages.hover_open_ms)
-      } else {
-        t.press_at(x, y)
-        t.release(x, y)
+        t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
+        assert_true(t.find(detail) is None)
       }
+      t.press_at(x, y)
+      t.release(x, y)
       t.run_for(@ui.move_most_ms)
       assert_true(t.find(title) is Some(_), msg="platform \{platform}: the original request")
       assert_true(t.find(detail) is Some(_), msg="platform \{platform}: its detail")
@@ -162,15 +163,37 @@ test "an answered secret request can be read again from its outcome without answ
       assert_true(!vc.vaults_asked)
       assert_eq(calls.filter(fn(n) { n.has_prefix("vault.") }), [])
       if platform == 0 {
-        t.move(5.0, 5.0)
-        t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
+        t.key(@ui.key_escape)
       } else {
         t.back()
-        t.run_for(@ui.move_most_ms)
       }
+      t.run_for(@ui.move_most_ms)
       assert_true(t.find(detail) is None, msg="history closes again")
     }
   }
+}
+
+///|
+test "a pointer pressing an answered request's outcome shows its details once, nothing as it rests there" {
+  new_run()
+  let vc : VaultChat = { status: "denied", version: @signals.signal(1), vaults_asked: false, use_secret: false }
+  let calls : Array[String] = []
+  let src = vault_chat_src(vc, calls)
+  open_chat({ station: "ws1/st1", session: "s-v1", title: "存密码", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = t.find("未存入 UniFi UX7").unwrap()
+  let shown = fn() { t.words().filter(fn(w) { w.0.contains("把路由器密码安全保存") && w.5 > 0.0 }).length() }
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
+  assert_eq(shown(), 0, msg="resting on it")
+  t.press_at(x, y)
+  t.release(x, y)
+  t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
+  assert_eq(shown(), 1, msg="pressed: one box of it")
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(shown(), 0, msg="closed")
 }
 
 ///|

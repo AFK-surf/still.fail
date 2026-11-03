@@ -254,7 +254,7 @@ fn face_files(
   let f = Some(files[at])
   let sha = text(f, "sha256")
   let weight = number(f, "weight").to_int()
-  (src.read_bytes)("fonts.file", Json::object({ "sha256": sha.to_json() }), fn(r) {
+  (src.read_bytes)("fonts.file", Json::object({ "sha256": ToJson::to_json(sha) }), fn(r) {
     match r {
       Ok((v, bytes)) => {
         let whole = if flag(Some(v), "zipped") { @zip.gunzip(bytes) } else { Some(bytes) }
@@ -262,7 +262,7 @@ fn face_files(
           Some(b) if @zip.sha256(b) == sha => {
             // kept unzipped from now on
             if flag(Some(v), "zipped") {
-              (src.call_bytes)("fonts.keep", Json::object({ "sha256": sha.to_json() }), b, fn(_) {  })
+              (src.call_bytes)("fonts.keep", Json::object({ "sha256": ToJson::to_json(sha) }), b, fn(_) {  })
             }
             got.push((Held(b), weight))
             face_files(src, id, files, at + 1, got, fetched, had)
@@ -272,7 +272,7 @@ fn face_files(
       }
       Err(e) if text(Some(e), "code") == "not_found" && !fetched => {
         had(Fetching)
-        (src.call)("fonts.fetch", Json::object({ "id": id.to_json() }), fn(r) {
+        (src.call)("fonts.fetch", Json::object({ "id": ToJson::to_json(id) }), fn(r) {
           match r {
             Ok(_) => face_files(src, id, files, 0, [], true, had)
             Err(e) => had(NotHad(text(Some(e), "message")))
@@ -311,7 +311,7 @@ fn face_preview(src : Source, id : String, index : Int, variable : Bool) -> Int 
     Some(f) => if f > 0 { f } else { 0 }
     None => {
       previews[id] = 0
-      (src.read_bytes)("fonts.preview", Json::object({ "id": id.to_json() }), fn(r) {
+      (src.read_bytes)("fonts.preview", Json::object({ "id": ToJson::to_json(id) }), fn(r) {
         match r {
           Ok((_, bytes)) =>
             previews[id] = if @ui.face_add_bytes(host_face, bytes, weight=if variable { 0 } else { 400 }) {
