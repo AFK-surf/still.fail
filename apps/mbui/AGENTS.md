@@ -134,7 +134,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 ## Before a PR
 
 - Run what `check-mbui` runs, with its scripts: `scripts/check.sh` (native), `scripts/test.sh`,
-  `bash scripts/screens.sh test` (on Studio or Mini1 through `station_task`, not on a small VM).
+  `bash scripts/screens.sh test`.
 - Don't `moon fmt` here (it rewrites a hundred files nobody touched).
 - One PR per piece of work. Squash with `git reset --soft $(git merge-base HEAD origin/main)`, never onto
   `origin/main`; check `git diff origin/main --stat` lists only your files.
