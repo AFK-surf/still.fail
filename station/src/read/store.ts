@@ -975,8 +975,43 @@ export const USAGE_DAY_ALL = minutesAtDayEdges(QUARTERS_ALL, "1");
 export const USAGE_DAY_SCOPED = minutesAtDayEdges(QUARTERS_SCOPED, "sc.ws = ?2");
 export const USAGE_DAY_HOME = minutesAtDayEdges(QUARTERS_HOME, "1");
 
+// Once detailed statistics supply the minutes, their scope follows session moves without rewriting old buckets.
+const DETAIL_QUARTERS_SCOPED = QUARTERS_SCOPED.replaceAll("usage_minute_scope", "usage_detail_scope");
+const DETAIL_QUARTERS_HOME = QUARTERS_HOME.replaceAll("usage_minute_scope", "usage_detail_scope");
+function detailMinutesAtDayEdges(from: string, visible: string): string {
+  return `WITH edge(session, quarter) AS (
+      SELECT DISTINCT q.session, q.quarter ${from} WHERE ${visible} AND ${CROSSES_DAY}
+    ), parts AS (
+      SELECT q.session, q.quarter * 15 AS minute, q.runtime, q.model, q.tokens, q.calls
+        ${from} WHERE ${visible} AND NOT (${CROSSES_DAY})
+      UNION ALL
+      SELECT d.session, d.bucket AS minute, d.runtime, d.model,
+        d.input + d.cache_read + d.cache_write + d.cache_write_long + d.output AS tokens, d.calls
+        FROM edge e CROSS JOIN usage_detail d ON d.session = e.session AND d.level = 1
+          AND d.bucket >= e.quarter * 15 AND d.bucket < (e.quarter + 1) * 15
+    )
+    SELECT strftime('%Y-%m-%d', (p.minute + CAST(?1 AS INTEGER)) * 60, 'unixepoch') AS day,
+      p.session, p.runtime, NULLIF(p.model, '') AS model, SUM(p.tokens) AS tokens, SUM(p.calls) AS calls
+      FROM parts p GROUP BY day, p.session, p.runtime, p.model`;
+}
+export const USAGE_DETAIL_DAY_ALL = detailMinutesAtDayEdges(QUARTERS_ALL, "1");
+export const USAGE_DETAIL_DAY_SCOPED = detailMinutesAtDayEdges(DETAIL_QUARTERS_SCOPED, "sc.ws = ?2");
+export const USAGE_DETAIL_DAY_HOME = detailMinutesAtDayEdges(DETAIL_QUARTERS_HOME, "1");
+export const USAGE_DETAIL_QUARTERS_SCOPED = quartersByDay(DETAIL_QUARTERS_SCOPED, "sc.ws = ?2");
+export const USAGE_DETAIL_QUARTERS_HOME = quartersByDay(DETAIL_QUARTERS_HOME, "1");
+
 /// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
 export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
+  const fromDetail = one(s, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'") !== undefined;
+  if (fromDetail) {
+    const generation = usageDetailGeneration(s.db);
+    if (generation !== "legacy" || !usageDetailReady(s.db, viewer, generation)) throw new Error(USAGE_MINUTES_PENDING);
+    const aligned = utcOffsetMin % 15n === 0n;
+    const rows = viewer === null ? all(s, aligned ? USAGE_QUARTERS_ALL : USAGE_DETAIL_DAY_ALL, utcOffsetMin)
+      : all(s, viewer.home === false ? (aligned ? USAGE_DETAIL_QUARTERS_SCOPED : USAGE_DETAIL_DAY_SCOPED)
+        : (aligned ? USAGE_DETAIL_QUARTERS_HOME : USAGE_DETAIL_DAY_HOME), utcOffsetMin, viewer.workspace);
+    return rows.map((r) => ({ day: r.day, session: r.session, runtime: r.runtime, model: r.model, tokens: Number(r.tokens), calls: Number(r.calls) }));
+  }
   // Before the old fill completed, an old session might have no scope row at all. An empty scope is therefore not
   // proof that this workspace's historical total is complete.
   if (one(s, "SELECT done FROM usage_minute_all WHERE id = 1")?.done !== 1) throw new Error(USAGE_MINUTES_PENDING);

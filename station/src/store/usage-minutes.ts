@@ -97,6 +97,7 @@ END;
 
 /// Install only empty structures and triggers. Capturing old session endpoints and filling their calls happens later.
 export function installUsageMinutes(db: DatabaseSync): void {
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'").get()) return;
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_minute_all'").get() !== undefined;
   if (installed()) return;
   db.exec("BEGIN IMMEDIATE");

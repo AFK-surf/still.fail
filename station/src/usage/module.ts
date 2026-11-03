@@ -8,7 +8,8 @@ import { usageNow } from "../read/usage.ts";
 import { Agents } from "../sessions/agents.ts";
 import { hubConfig } from "../sessions/config.ts";
 import type { LiveHub } from "../sessions/live.ts";
-import { Parts, Paths, StationConfig, Store } from "../services.ts";
+import { Parts, Paths, Previous, StationConfig, Store } from "../services.ts";
+import { log } from "../ops/log.ts";
 import type { Store as StationStore } from "../store/store.ts";
 import { UsageCounter } from "./counter.ts";
 
@@ -31,12 +32,22 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
   });
 }
 
+/// An older station may still read the old summaries during handover. Retire their writers only after it actually exits.
+export function retireAfterPrevious(store: StationStore, exited: Promise<void>) {
+  return Effect.promise(() => exited).pipe(Effect.andThen(Effect.sync(() => {
+    try { store.retireDuplicateUsage(); }
+    catch (error) { log.warn("usage", "duplicate usage statistics could not be retired", { error: (error as Error).message }); }
+  })));
+}
+
 export const UsageLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const { data } = yield* Paths;
     const store = yield* Store;
     const config = yield* StationConfig;
     const { hub } = yield* Agents;
+    const previous = yield* Previous;
+    yield* Effect.forkScoped(retireAfterPrevious(store, previous.exited));
     const usage = yield* Effect.acquireRelease(
       Effect.sync(() => new UsageCounter({ store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock })),
       (u) => Effect.promise(() => u.stop()),

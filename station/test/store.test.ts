@@ -1036,7 +1036,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [ARCHIVED_THREADS, []], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
-    [detail.sql, detail.args],
+    [detail.sql, detail.args], [read.USAGE_DETAIL_DAY_SCOPED, [1n, "ws"]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards|threads_archived)\b)/;
   const plans = new Map<string, string[]>();
@@ -1044,7 +1044,10 @@ test("what the station asks again and again is planned by an index, never a scan
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
     // The detail query materializes only keys sought inside the requested range, then scans those keys in session
     // order. It must still seek the underlying lookup below (asserted separately), not scan the historical table.
-    assert.ok(!plan.some((d) => scans.test(d) && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))), `${sql}\n  ${plan.join(" | ")}`);
+    assert.ok(!plan.some((d) => scans.test(d)
+      && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))
+      && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN e" && (plan.includes("MATERIALIZE edge") || plan.includes("CO-ROUTINE edge")))
+      && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN p" && plan.includes("CO-ROUTINE parts"))), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
   }
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
@@ -1060,6 +1063,8 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(REMOTE_RUNS_OF)!.some((d) => d.includes("PRIMARY KEY (ws=? AND at>?)")), plans.get(REMOTE_RUNS_OF)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_ALL)!.some((d) => d.includes("PRIMARY KEY (at>?)")), plans.get(REMOTE_RUNS_ALL)!.join(" | "));
   assert.ok(plans.get(detail.sql)!.some((d) => d.includes("usage_detail_lookup_scope (scope=? AND level=? AND bucket>? AND bucket<?)")), plans.get(detail.sql)!.join(" | "));
+  assert.ok(plans.get(read.USAGE_DETAIL_DAY_SCOPED)!.some((d) => d.includes("usage_detail_scope_ws (ws=?)")), plans.get(read.USAGE_DETAIL_DAY_SCOPED)!.join(" | "));
+  assert.ok(plans.get(read.USAGE_DETAIL_DAY_SCOPED)!.some((d) => d.includes("PRIMARY KEY (session=? AND level=? AND bucket>? AND bucket<?)")), plans.get(read.USAGE_DETAIL_DAY_SCOPED)!.join(" | "));
   // The latest card before a message: by the index of cards, not by going back over the thread to it.
   assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
   assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));
