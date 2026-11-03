@@ -499,6 +499,8 @@ export const AgentsLive = (control: Control) =>
       };
       // Where each checklist was read to, for the next process to read on from (not back, at each update).
       parts.carry("live.plans", () => hub.live.carriedPlans(), (what) => hub.live.takePlans(what));
+      // And where each transcript's reading stood, for it to read on from there (not ask the readers, at each update).
+      parts.carry("live.tails", () => hub.live.carriedTails(), (what) => hub.live.takeTails(what));
       hub.threadList = async () => JSON.parse(await readers.read("threadList", {}, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
       hub.followRunning();
