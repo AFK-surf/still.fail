@@ -40,6 +40,7 @@ import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
+import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -236,6 +237,7 @@ export class Store {
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);
+      installWorkspaceActivity(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
       addSessionTurns(db);
@@ -1437,6 +1439,17 @@ export class Store {
 
   sessionsWithPending(): string[] {
     return this.#all(PENDING_SESSIONS).map((r) => r.session);
+  }
+
+  /// The running or pending sessions of a rejoined workspace; null until an older database's active keys are indexed.
+  returningSessionsIn(ws: string): SessionRow[] | null {
+    this.db.exec("SAVEPOINT returning_workspace");
+    try {
+      if (!workspaceActivityReady(this.db)) return null;
+      return this.#all(WORKSPACE_ACTIVITY, ws).map(toSession)
+        .filter((row) => row.running || this.hasPending(row.key))
+        .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    } finally { this.db.exec("RELEASE returning_workspace"); }
   }
 
   /// The person session `key` works for, as a creator reference (lowercased): whoever its chat was started for, its
