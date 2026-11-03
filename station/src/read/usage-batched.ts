@@ -34,6 +34,8 @@ type Block = { session: string; minute: bigint; groups: Map<string, Part>; bytes
 type Total = { row: Part; refs: number; bytes: number };
 type Cached = { seq: bigint; blocks: Map<string, Block>; totals: Map<string, Total>; width: bigint; cells: number; bytes: number };
 type CacheStatus = "disabled" | "miss" | "expired" | "reused" | "oversized";
+type SqlStage = "journal" | "changes" | "pending" | "selected" | "owner" | "buckets";
+export type UsageSqlTimings = Record<SqlStage, number> & { slowMs: number; slowOp: string };
 const names = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
 const MAX_CELLS = 8192;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -100,7 +102,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   pause: (ms: number) => Promise<void> = (ms) => ms > 0 ? wall.sleep(ms) : new Promise((resolve) => setImmediate(resolve)),
   cache?: UsageSummaryCache, kind: "summary" | "history" = "summary"): Promise<{
     groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; selectedRestMs: number;
-      selectedCpuMs?: number; cpuMs?: number; rests: number; restMs: number; cache: CacheStatus }; ms: number;
+      selectedCpuMs?: number; cpuMs?: number; rests: number; restMs: number; cache: CacheStatus; sql: UsageSqlTimings }; ms: number;
   } | null> {
   const max = 9223372036854775807n;
   if (!hasCompactUsage(s.db) || (from < to && (from % 60_000n !== 0n || (to !== max && to % 60_000n !== 0n)))) return null;
@@ -120,6 +122,27 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   };
   let batchAt = started, steps = 0, rests = 0, restMs = 0, candidates = 0, parts = 0;
   let selectedRestMs = 0, selectedCpuMs: number | undefined;
+  const sql: UsageSqlTimings = { journal: 0, changes: 0, pending: 0, selected: 0, owner: 0, buckets: 0, slowMs: 0, slowOp: "none" };
+  const timeSql = <T>(stage: SqlStage, f: () => T): T => {
+    const at = performance.now();
+    try { return f(); }
+    finally {
+      const ms = performance.now() - at;
+      sql[stage] += ms;
+      if (ms > sql.slowMs) { sql.slowMs = ms; sql.slowOp = stage; }
+    }
+  };
+  function* sqlRows<T>(stage: SqlStage, rows: Iterable<T>): Iterable<T> {
+    const iter = rows[Symbol.iterator]();
+    let done = false;
+    try {
+      for (;;) {
+        const row = timeSql(stage, () => iter.next());
+        if (row.done) { done = true; return; }
+        yield row.value;
+      }
+    } finally { if (!done && iter.return) timeSql(stage, () => iter.return!()); }
+  }
   const rest = async () => {
     const ms = Math.min(100, Math.floor(performance.now() - batchAt));
     const pausedAt = performance.now();
@@ -131,17 +154,19 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   };
   const result = (groups: Part[], selectedMs: number, cache: CacheStatus) => ({ groups: answer(groups),
     diagnostics: { parts, candidates, selectedMs, selectedRestMs, selectedCpuMs, cpuMs: cpuMs(), rests,
-      restMs: Math.round(restMs), cache }, ms: Math.round(performance.now() - started) });
+      restMs: Math.round(restMs), cache, sql: { journal: Math.round(sql.journal), changes: Math.round(sql.changes),
+        pending: Math.round(sql.pending), selected: Math.round(sql.selected), owner: Math.round(sql.owner),
+        buckets: Math.round(sql.buckets), slowMs: Math.round(sql.slowMs), slowOp: sql.slowMs < 0.5 ? "none" : sql.slowOp } }, ms: Math.round(performance.now() - started) });
   const key = JSON.stringify([kind, from.toString(), to.toString(), utcOffsetMin.toString(), viewer?.workspace ?? null,
     viewer === null ? null : viewer.home !== false]);
-  const journal = cache !== undefined && s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get() !== undefined;
+  const journal = cache !== undefined && timeSql("journal", () => s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get()) !== undefined;
   if (kind === "history" && !journal) return null;
   let first = 0n, last = 0n;
   if (journal) {
-    const bounds = s.db.prepare("SELECT (SELECT seq FROM usage_summary_changes ORDER BY seq LIMIT 1) AS first, " +
-      "(SELECT seq FROM usage_summary_changes ORDER BY seq DESC LIMIT 1) AS last");
+    const bounds = timeSql("journal", () => s.db.prepare("SELECT (SELECT seq FROM usage_summary_changes ORDER BY seq LIMIT 1) AS first, " +
+      "(SELECT seq FROM usage_summary_changes ORDER BY seq DESC LIMIT 1) AS last"));
     bounds.setReadBigInts(true);
-    const row = bounds.get() as { first: bigint | null; last: bigint | null };
+    const row = timeSql("journal", () => bounds.get()) as { first: bigint | null; last: bigint | null };
     first = row.first ?? 0n;
     last = row.last ?? 0n;
   }
@@ -241,16 +266,16 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     }
   };
   let bucket: ReturnType<DatabaseSync["prepare"]> | undefined;
-  const visible = viewer === null ? null : s.db.prepare(queries.owner);
+  const visible = viewer === null ? null : timeSql("owner", () => s.db.prepare(queries.owner));
   const readSession = async (session: string, low: bigint, high: bigint, groups?: Map<string, Part>) => {
-    const found = visible?.get(session) as { ws: string | null } | undefined;
+    const found = visible === null ? undefined : timeSql("owner", () => visible.get(session)) as { ws: string | null } | undefined;
     const seen = viewer === null || (found !== undefined && (found.ws === viewer.workspace || (viewer.home !== false && found.ws === null)));
     if (++steps >= 64) await rest();
     if (!seen || low >= high) return true;
-    if (bucket === undefined) { bucket = s.db.prepare(queries.buckets); bucket.setReadBigInts(true); }
+    if (bucket === undefined) { bucket = timeSql("buckets", () => s.db.prepare(queries.buckets)); bucket.setReadBigInts(true); }
     const args: (string | bigint)[] = [utcOffsetMin, session, low, high];
     if (viewer !== null) args.push("W" + viewer.workspace);
-    for (const bucketRow of bucket.iterate(...args) as Iterable<Bucket>) {
+    for (const bucketRow of sqlRows("buckets", timeSql("buckets", () => bucket!.iterate(...args)) as Iterable<Bucket>)) {
       // History groups only by day, session, runtime and model. Do not retain a row for every person or thread.
       const row = kind === "history" ? { ...bucketRow, thread: 0n, person: "", profile: "", fast: 0n } : bucketRow;
       parts++;
@@ -265,7 +290,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
 
   if (usable) {
     const scope = viewer === null ? "" : viewer.home === false ? " AND scope = ?3" : " AND scope IN (?3, 'H')";
-    const changes = s.db.prepare("SELECT session, minute FROM usage_summary_changes WHERE seq > ?1 AND seq <= ?2" + scope);
+    const changes = timeSql("changes", () => s.db.prepare("SELECT session, minute FROM usage_summary_changes WHERE seq > ?1 AND seq <= ?2" + scope));
     changes.setReadBigInts(true);
     const args: (string | bigint)[] = [prior.seq, last];
     if (viewer !== null) args.push("W" + viewer.workspace);
@@ -276,7 +301,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       const block = blockOf(minute, utcOffsetMin, width);
       target.set(blockKey(session, block), { session, minute: block });
     };
-    for (const row of changes.iterate(...args) as Iterable<{ session: string; minute: bigint | null }>) {
+    for (const row of sqlRows("changes", timeSql("changes", () => changes.iterate(...args)) as Iterable<{ session: string; minute: bigint | null }>)) {
       if (row.minute === null) whole.add(row.session);
       else changedMinute(row.session, row.minute);
       if (++steps >= 128) await rest();
@@ -284,39 +309,39 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     // Repeated writes to a pending bucket are coalesced until the totals worker accounts it. A pending bucket may
     // have changed since this snapshot, so refresh its block; accounting it records a change before it disappears.
     const pendingArgs = viewer === null ? [] : ["W" + viewer.workspace];
-    if (s.db.prepare(queries.anyPending).get(...pendingArgs)) {
+    if (timeSql("pending", () => s.db.prepare(queries.anyPending).get(...pendingArgs))) {
       // Usually only a few buckets are pending. If there are many, compare that index with the requested time
       // range and stop as soon as either is exhausted: a narrow request must not walk another year's pending work,
       // and a wide request must not walk every minute merely to find a handful of pending buckets.
       type Pending = { session: string; minute: bigint };
-      const pending = s.db.prepare(queries.pending);
+      const pending = timeSql("pending", () => s.db.prepare(queries.pending));
       pending.setReadBigInts(true);
-      const pendingRows = (pending.iterate(...pendingArgs) as IterableIterator<Pending>)[Symbol.iterator]();
+      const pendingRows = (timeSql("pending", () => pending.iterate(...pendingArgs)) as IterableIterator<Pending>)[Symbol.iterator]();
       let rangeRows: IterableIterator<Pending & { pending: bigint }> | undefined;
       let pendingChanges = new Map<string, { session: string; minute: bigint }>();
       try {
         let complete = false;
         for (let n = 0; n < 64; n++) {
-          const next = pendingRows.next();
+          const next = timeSql("pending", () => pendingRows.next());
           if (next.done) { complete = true; break; }
           candidates++;
           changedMinute(next.value.session, next.value.minute, pendingChanges);
           if (++steps >= 64) await rest();
         }
         if (!complete) {
-          const range = s.db.prepare(queries.pendingRange);
+          const range = timeSql("pending", () => s.db.prepare(queries.pendingRange));
           range.setReadBigInts(true);
           const rangeArgs: (string | bigint)[] = [start, end];
           if (viewer !== null) rangeArgs.push("W" + viewer.workspace);
-          rangeRows = (range.iterate(...rangeArgs) as IterableIterator<Pending & { pending: bigint }>)[Symbol.iterator]();
+          rangeRows = (timeSql("pending", () => range.iterate(...rangeArgs)) as IterableIterator<Pending & { pending: bigint }>)[Symbol.iterator]();
           const rangeChanges = new Map<string, { session: string; minute: bigint }>();
           for (;;) {
-            const inRange = rangeRows.next();
+            const inRange = timeSql("pending", () => rangeRows!.next());
             if (inRange.done) { pendingChanges = rangeChanges; break; }
             candidates++;
             if (inRange.value.pending === 1n) changedMinute(inRange.value.session, inRange.value.minute, rangeChanges);
             if (++steps >= 64) await rest();
-            const next = pendingRows.next();
+            const next = timeSql("pending", () => pendingRows.next());
             if (next.done) break;
             candidates++;
             changedMinute(next.value.session, next.value.minute, pendingChanges);
@@ -324,8 +349,8 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
           }
         }
       } finally {
-        pendingRows.return?.();
-        rangeRows?.return?.();
+        if (pendingRows.return) timeSql("pending", () => pendingRows.return!());
+        if (rangeRows?.return) timeSql("pending", () => rangeRows!.return!());
       }
       for (const [id, change] of pendingChanges) dirty.set(id, change);
     }
@@ -377,9 +402,9 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
 
   const params: (string | bigint)[] = [start, end];
   if (viewer !== null) params.push("W" + viewer.workspace);
-  const selected = s.db.prepare(queries.selected);
+  const selected = timeSql("selected", () => s.db.prepare(queries.selected));
   const sessions = new Set<string>();
-  for (const row of selected.iterate(...params) as Iterable<{ session: string }>) {
+  for (const row of sqlRows("selected", timeSql("selected", () => selected.iterate(...params)) as Iterable<{ session: string }>)) {
     candidates++;
     sessions.add(row.session);
     if (++steps >= 64) await rest();
