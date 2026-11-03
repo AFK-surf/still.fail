@@ -16,7 +16,7 @@ import { Store, newMessage } from "../src/store/store.ts";
 import * as read from "../src/read/store.ts";
 import { outflowChats, outflowMessages, outflowThread, outflowUsage } from "../src/read/outflow.ts";
 import { usageOps } from "../src/read/ops-usage.ts";
-import { peerRead, textOf } from "../src/outflow/peer.ts";
+import { homeRead, peerRead, textOf } from "../src/outflow/peer.ts";
 import { bytesOf } from "../src/mesh/bus.ts";
 
 const dirs: string[] = [];
@@ -356,10 +356,14 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
     store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1, createdBy: "ann@x", ws } as never);
   session("a", null);
   session("b", "other-ws");
+  // Made in the app: it names the home workspace by its id.
+  session("c", "ws-home");
   const home = store.openThreadOf("ember", "EMBER", "100.1", "Fix the build", "ann@x", "a");
   const away = store.openThreadOf("ember", "EMBER", "100.2", "Theirs", "bob@x", "b");
+  const app = store.openThreadOf("ember", "EMBER", "100.6", "From the app", "ann@x", "c");
   store.joinThread(home.id, "a", "ember");
   store.joinThread(away.id, "b", "ember");
+  store.joinThread(app.id, "c", "ember");
   store.insertMessage(newMessage(home.id, "100.3", "person", "ann@x", "a secret plan"));
   store.startTurnFor("t1", "a", "input", { profile: "cc", person: "ann@x", thread: home.id });
   store.endTurn("t1", "done", null, "all_done", null);
@@ -396,6 +400,9 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   assert.deepEqual(theirs.chats.map((c: any) => c.title), ["Theirs"]);
   const spent = usageOps.outflowUsage!(r, { lang: "en", from: 0, to: 365 * 86_400_000, tz: 0, ws: { workspace: "other-ws", home: false } }) as any;
   assert.deepEqual([spent.rows.map((x: any) => x.person), spent.to], [["bob@x"], 31 * 86_400_000], "a span of 31 days at most, whoever asks");
+  // Read here with the home workspace's id: its chats made in the app too, those that say no workspace as well.
+  const own = usageOps.outflowChats!(read.openStore(dir), { since: 0, ws: { workspace: "ws-home", home: true } }) as any;
+  assert.deepEqual(own.chats.map((c: any) => c.title).sort(), ["Fix the build", "From the app", "Ship it"]);
 });
 
 test("messages: a chat's, a page at a time, to a program granted them", async () => {
@@ -500,6 +507,16 @@ test("another station's read: one of the outflow reads, of the workspace it asks
   assert.deepEqual(asked.at(-1)![1].ws, { workspace: "ws-joined", home: false });
   await assert.rejects(answer("peer", { op: "usage", args: {} }, "ws-home"), /no such read/, "none of the station's other reads");
   await assert.rejects(answer("peer", { op: "outflowChats", args: {} }, undefined), /workspace/);
+});
+
+test("this station's own read: of its home workspace by its id, once known", async () => {
+  const asked: any[] = [];
+  let home: string | null = null;
+  const reads = homeRead(async (_op, args) => (asked.push(args), "{}"), () => home);
+  await reads("outflowChats", { since: 1 }, "en");
+  home = "ws-home";
+  await reads("outflowChats", { since: 2 }, "en");
+  assert.deepEqual(asked, [{ since: 1 }, { since: 2, ws: { workspace: "ws-home", home: true } }]);
 });
 
 /// A request on a TCP port of the loopback, as tailcat forwards one there.

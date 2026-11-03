@@ -26,6 +26,15 @@ export function peerRead(read: (op: string, args: unknown, lang: Lang) => Promis
   };
 }
 
+/// What reads this station's own chats for a program granted here: those of its home workspace, named by its id when
+/// known, as a chat made in the app says its workspace (only the chats that say none would be read otherwise).
+export function homeRead(read: (op: string, args: unknown, lang: Lang) => Promise<string>, home: () => string | null) {
+  return (op: string, args: unknown, lang: Lang) => {
+    const ws = home();
+    return read(op, ws === null ? args : { ...(args as object), ws: { workspace: ws, home: true } }, lang);
+  };
+}
+
 /// The bytes after an answer, as text (at most ANSWER_MAX).
 export async function textOf(bytes: Bytes): Promise<string> {
   const chunks: Buffer[] = [];
