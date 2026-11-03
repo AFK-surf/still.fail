@@ -1,13 +1,8 @@
 import {
   "mbui/host",
   "mbui/film",
-  "mbui/ui",
-  "stillfail/sf",
-  "stillfail/sfkept",
   "stillfail/sfapp",
-  "stillfail/sfbase",
-  "stillfail/sffixture",
-  "stillfail/sfkept",
+  "stillfail/sffilmscene",
 }
 
 options(

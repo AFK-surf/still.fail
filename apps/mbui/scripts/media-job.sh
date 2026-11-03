@@ -3,7 +3,7 @@
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
 repo=$(cd "$D/../../.." && pwd)
-usage='media-job.sh figure SCENE.json JOB_DIR | media-job.sh film DRIVE JOB_DIR [PREPARE]'
+usage='media-job.sh figure SCENE.json JOB_DIR | media-job.sh picture|film DRIVE JOB_DIR [PREPARE]'
 [ "$#" -ge 3 ] && [ "$#" -le 4 ] || { echo "$usage" >&2; exit 2; }
 kind=$1
 input=$2
@@ -11,6 +11,7 @@ job=$3
 prepare=${4:-}
 case "$kind" in
   figure) [ "$#" -eq 3 ] || { echo "$usage" >&2; exit 2; }; part=mbui-figure ;;
+  picture) part=mbui-film-wasm ;;
   film) part=mbui-film ;;
   *) echo "$usage" >&2; exit 2 ;;
 esac
@@ -41,9 +42,10 @@ case "$part" in
   mbui-figure)
     [ "$#" -le 2 ] || { echo 'run.sh [OUTPUT [SCENE]]' >&2; exit 2; }
     exec bash "$(dirname "$renderer")/figure-run.sh" --scene "${2:-$D/scene.json}" "${1:-$D/result.png}" ;;
-  mbui-film)
+  mbui-film|mbui-film-wasm)
     kind=${MBUI_MEDIA_KIND:-picture}
     case "$kind" in picture) default_out="$D/result.png" ;; film) default_out="$D/result.mp4" ;; *) echo 'media-job: MBUI_MEDIA_KIND must be picture or film' >&2; exit 2 ;; esac
+    [ "$part" != mbui-film-wasm ] || [ "$kind" = picture ] || { echo 'media-job: use a film job for video' >&2; exit 2; }
     out=${1:-$default_out}
     drive=${2:-$D/action.drive}
     prepare=${3:-}
