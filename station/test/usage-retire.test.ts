@@ -7,7 +7,7 @@ import { Effect, Fiber } from "effect";
 import { makeStore, usageByDay, usageGroups } from "../src/read/store.ts";
 import { Store } from "../src/store/store.ts";
 import { installUsageDetail } from "../src/store/usage-detail.ts";
-import { stopUsageIndexes } from "../src/store/usage-retire.ts";
+import { dropUsageIndexStep, stopUsageIndexes, usageIndexBatchSql } from "../src/store/usage-retire.ts";
 import { retireAfterPrevious } from "../src/usage/module.ts";
 
 const call = (id: string, input: number) => [{ id, at: 1_700_000_000_000, model: "m", subagent: false, fast: false,
@@ -53,6 +53,31 @@ test("retirement also removes the separate live index of an incomplete old datab
     assert.equal(table(store, "usage_detail_live"), undefined);
     write(store, "new", 4);
     assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input]), [[2, 6]]);
+  } finally { store.close(); }
+});
+
+test("retirement deletes at most one primary-key batch before releasing its write lock", () => {
+  const store = Store.open(":memory:");
+  try {
+    session(store);
+    for (let i = 0; i < 100; i++) {
+      const [value, owner] = call(`call-${i}`, 1);
+      store.recordUsage("/a", { session: "a", offset: i, model: "m" }, "claude",
+        [[{ ...value, at: value.at + i * 60_000 }, owner]] as never);
+    }
+    stopUsageIndexes(store.db);
+    const count = () => (store.db.prepare("SELECT COUNT(*) AS n FROM usage_detail").get() as { n: number }).n;
+    const before = count();
+    assert.ok(before > 256);
+    const plan = store.db.prepare(`EXPLAIN QUERY PLAN ${usageIndexBatchSql(store.db, "usage_detail")}`).all(256) as { detail: string }[];
+    assert.ok(plan.some((row) => /SEARCH usage_detail USING PRIMARY KEY/.test(row.detail)), JSON.stringify(plan));
+    assert.equal(dropUsageIndexStep(store.db), false);
+    assert.equal(before - count(), 256);
+    assert.ok(table(store, "usage_detail"), "the table remains until its rows are deleted");
+    while (table(store, "usage_detail")) dropUsageIndexStep(store.db);
+    assert.equal(table(store, "usage_detail"), undefined);
+    write(store, "after", 3);
+    assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage").get() as { n: number }).n, 101);
   } finally { store.close(); }
 });
 

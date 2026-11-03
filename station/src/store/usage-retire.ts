@@ -1,5 +1,5 @@
 // Stop maintaining the per-call usage indexes after the previous station has exited. A durable marker makes the
-// change atomic for readers and prevents a later startup from rebuilding them. Free their pages in separate steps.
+// change atomic for readers and prevents a later startup from rebuilding them. Free their pages in bounded batches.
 import type { DatabaseSync } from "node:sqlite";
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
@@ -22,14 +22,24 @@ export function stopUsageIndexes(db: DatabaseSync): void {
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-/// Drop one object at a time, so foreground writes can run between them. This can resume after a restart.
-export function dropUsageIndexStep(db: DatabaseSync): boolean {
-  const row = db.prepare(`SELECT type, name FROM sqlite_master WHERE
-    ((type = 'index' AND sql IS NOT NULL) OR type = 'table') AND
-    (tbl_name = 'usage_detail' OR tbl_name GLOB 'usage_detail_*' OR tbl_name = 'usage_main_calls')
-    ORDER BY CASE type WHEN 'index' THEN 0 ELSE 1 END, name LIMIT 1`).get() as { type: string; name: string } | undefined;
+/// Seek the first batch by primary key. Every row deletion also releases its index entries; dropping a populated
+/// index or table directly would visit its entire B-tree under one write lock.
+export function usageIndexBatchSql(db: DatabaseSync, table: string): string {
+  const columns = db.prepare(`PRAGMA table_info(${quote(table)})`).all() as { name: string; pk: number }[];
+  const keys = columns.filter((column) => column.pk > 0).sort((a, b) => a.pk - b.pk).map((column) => quote(column.name));
+  if (keys.length === 0) keys.push("rowid");
+  const tuple = keys.length === 1 ? keys[0] : `(${keys.join(", ")})`;
+  return `DELETE FROM ${quote(table)} WHERE ${tuple} IN (SELECT ${keys.join(", ")} FROM ${quote(table)} LIMIT ?)`;
+}
+
+/// One bounded delete is one transaction. Only drop a table and its indexes once every row has been removed.
+export function dropUsageIndexStep(db: DatabaseSync, batch = 256): boolean {
+  const row = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND
+    (name = 'usage_detail' OR name GLOB 'usage_detail_*' OR name = 'usage_main_calls')
+    ORDER BY name LIMIT 1`).get() as { name: string } | undefined;
   if (row === undefined) return true;
-  db.exec(`DROP ${row.type === "index" ? "INDEX" : "TABLE"} IF EXISTS ${quote(row.name)}`);
+  const removed = db.prepare(usageIndexBatchSql(db, row.name)).run(batch).changes;
+  if (removed === 0) db.exec(`DROP TABLE IF EXISTS ${quote(row.name)}`);
   return false;
 }
 
