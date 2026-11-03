@@ -30,8 +30,8 @@ type Part = { day: string | null; session: string; thread: bigint; person: strin
   runtime: string; model: string; fast: bigint; calls: bigint; input: bigint; cache_read: bigint;
   cache_write: bigint; cache_write_long: bigint; output: bigint };
 type Bucket = Part & { minute: bigint };
-type Hour = { session: string; minute: bigint; groups: Map<string, Part>; bytes: number };
-type Cached = { seq: bigint; hours: Map<string, Hour>; cells: number; bytes: number };
+type Block = { session: string; minute: bigint; groups: Map<string, Part>; bytes: number };
+type Cached = { seq: bigint; blocks: Map<string, Block>; width: bigint; cells: number; bytes: number };
 type CacheStatus = "disabled" | "miss" | "expired" | "reused" | "oversized";
 const names = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
 const MAX_CELLS = 8192;
@@ -66,9 +66,9 @@ export class UsageSummaryCache {
 }
 
 const groupKey = (r: Part) => JSON.stringify([r.day, r.thread.toString(), r.person, r.profile, r.runtime, r.model, r.fast.toString()]);
-const hourKey = (session: string, minute: bigint) => JSON.stringify([session, minute.toString()]);
+const blockKey = (session: string, minute: bigint) => JSON.stringify([session, minute.toString()]);
 const floorDiv = (n: bigint, d: bigint) => n >= 0n ? n / d : -1n - ((-1n - n) / d);
-const hourOf = (minute: bigint, offset: bigint) => floorDiv(minute + offset, 60n) * 60n - offset;
+const blockOf = (minute: bigint, offset: bigint, width: bigint) => floorDiv(minute + offset, width) * width - offset;
 
 function add(map: Map<string, Part>, key: string, row: Part): boolean {
   const held = map.get(key);
@@ -92,15 +92,15 @@ function answer(groups: Part[]): UsageGroup[] {
     cache_read: safe(r.cache_read), cache_write: safe(r.cache_write), cache_write_long: safe(r.cache_write_long), output: safe(r.output) }));
 }
 
-function combine(hours: Map<string, Hour>): Part[] {
+function combine(blocks: Map<string, Block>): Part[] {
   const groups = new Map<string, Part>();
-  for (const hour of hours.values()) for (const row of hour.groups.values()) {
+  for (const block of blocks.values()) for (const row of block.groups.values()) {
     add(groups, JSON.stringify([row.session, groupKey(row)]), row);
   }
   return [...groups.values()];
 }
 
-/// An aligned compact summary, read in bounded steps on the caller's snapshot. Cached hours are only reused when
+/// An aligned compact summary, read in bounded steps on the caller's snapshot. Cached blocks are only reused when
 /// the journal still covers every subsequent change; otherwise this takes the ordinary full indexed path.
 export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
   pause: (ms: number) => Promise<void> = (ms) => ms > 0 ? wall.sleep(ms) : new Promise((resolve) => setImmediate(resolve)),
@@ -143,19 +143,20 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   const usable = prior !== undefined && prior.seq <= last && (first === 0n ? prior.seq === last : prior.seq >= first - 1n);
   const cacheStatus: CacheStatus = !journal ? "disabled" : prior === undefined ? "miss" : usable ? "reused" : "expired";
 
-  // A cache is updated only after the complete read succeeds. Unchanged hour maps remain immutable and can be shared
+  // A cache is updated only after the complete read succeeds. Unchanged block maps remain immutable and can be shared
   // with the preceding snapshot while new ones are built.
-  let hours: Map<string, Hour> | null = journal ? new Map(usable ? prior.hours : []) : null;
+  let blocks: Map<string, Block> | null = journal ? new Map(usable ? prior.blocks : []) : null;
+  let width = usable ? prior.width : 1n;
+  let building = !usable;
   let cells = usable ? prior.cells : 0;
   let bytes = usable ? prior.bytes : 0;
-  const putBucket = (row: Bucket) => {
-    if (hours === null) return;
-    const hour = hourOf(row.minute, utcOffsetMin);
-    const key = hourKey(row.session, hour);
-    let held = hours.get(key);
+  const put = (session: string, minute: bigint, row: Part) => {
+    const block = blockOf(minute, utcOffsetMin, width);
+    const key = blockKey(session, block);
+    let held = blocks!.get(key);
     if (!held) {
-      held = { session: row.session, minute: hour, groups: new Map(), bytes: 128 + key.length * 2 };
-      hours.set(key, held);
+      held = { session, minute: block, groups: new Map(), bytes: 128 + key.length * 2 };
+      blocks!.set(key, held);
       bytes += held.bytes;
     }
     const group = groupKey(row);
@@ -167,7 +168,22 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
         + row.profile.length + row.runtime.length + row.model.length);
       held.bytes += size;
       bytes += size;
-      if (cells > MAX_CELLS || bytes > MAX_BYTES) hours = null;
+    }
+  };
+  const putBucket = (row: Bucket) => {
+    if (blocks === null) return;
+    put(row.session, row.minute, row);
+    while (blocks !== null && (cells > MAX_CELLS || bytes > MAX_BYTES)) {
+      // A refresh has already chosen its dirty blocks at the old width. If it no longer fits, start a full read below
+      // rather than mix widths inside that snapshot. Initial reads can coarsen without reading the same minute twice.
+      const wider = !building ? null : width === 1n ? 5n : width === 5n ? 15n : width === 15n ? 60n : null;
+      if (wider === null) { blocks = null; break; }
+      const old: Map<string, Block> = blocks;
+      width = wider;
+      blocks = new Map();
+      cells = 0;
+      bytes = 0;
+      for (const block of old.values()) for (const part of block.groups.values()) put(block.session, block.minute, part);
     }
   };
   let bucket: ReturnType<DatabaseSync["prepare"]> | undefined;
@@ -187,7 +203,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       if (groups) add(groups, groupKey(row), row);
       putBucket(row);
       // A very large history can have far more details than its answer. Leave it to the existing SQL aggregate.
-      if (kind === "history" && hours === null) return false;
+      if (kind === "history" && blocks === null) return false;
       if (++steps >= 64) await rest();
     }
     return true;
@@ -203,8 +219,8 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     const dirty = new Map<string, { session: string; minute: bigint }>();
     const changedMinute = (session: string, minute: bigint, target = dirty) => {
       if (minute < start || minute >= end) return;
-      const hour = hourOf(minute, utcOffsetMin);
-      target.set(hourKey(session, hour), { session, minute: hour });
+      const block = blockOf(minute, utcOffsetMin, width);
+      target.set(blockKey(session, block), { session, minute: block });
     };
     for (const row of changes.iterate(...args) as Iterable<{ session: string; minute: bigint | null }>) {
       if (row.minute === null) whole.add(row.session);
@@ -212,7 +228,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       if (++steps >= 128) await rest();
     }
     // Repeated writes to a pending bucket are coalesced until the totals worker accounts it. A pending bucket may
-    // have changed since this snapshot, so refresh its hour; accounting it records a change before it disappears.
+    // have changed since this snapshot, so refresh its block; accounting it records a change before it disappears.
     const pendingArgs = viewer === null ? [] : ["W" + viewer.workspace];
     if (s.db.prepare(queries.anyPending).get(...pendingArgs)) {
       // Usually only a few buckets are pending. If there are many, compare that index with the requested time
@@ -260,28 +276,45 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       for (const [id, change] of pendingChanges) dirty.set(id, change);
     }
     const selectedMs = Math.round(performance.now() - started);
-    for (const [id, hour] of hours!) if (whole.has(hour.session) || dirty.has(id)) {
-      cells -= hour.groups.size;
-      bytes -= hour.bytes;
-      hours!.delete(id);
+    for (const [id, block] of blocks!) if (whole.has(block.session) || dirty.has(id)) {
+      cells -= block.groups.size;
+      bytes -= block.bytes;
+      blocks!.delete(id);
     }
-    for (const session of whole) if (!(await readSession(session, start, end))) { cache!.drop(s.db, key); return null; }
-    for (const { session, minute } of dirty.values()) if (!whole.has(session)) {
-      if (!(await readSession(session, minute > start ? minute : start, minute + 60n < end ? minute + 60n : end))) {
+    for (const session of whole) {
+      if (!(await readSession(session, start, end))) { cache!.drop(s.db, key); return null; }
+      if (blocks === null) break;
+    }
+    // Adjacent changed blocks of the same session can share both the ownership check and one indexed range read.
+    // A gap still stays unread, so a single changed minute does not pull in the rest of its hour.
+    const changed = [...dirty.values()].filter((block) => !whole.has(block.session)).sort((a, b) =>
+      a.session === b.session ? (a.minute < b.minute ? -1 : a.minute > b.minute ? 1 : 0) : a.session < b.session ? -1 : 1);
+    for (let i = 0; blocks !== null && i < changed.length;) {
+      const { session, minute } = changed[i++]!;
+      let high = minute + width;
+      while (i < changed.length && changed[i]!.session === session && changed[i]!.minute <= high) {
+        high = changed[i++]!.minute + width;
+      }
+      if (!(await readSession(session, minute > start ? minute : start, high < end ? high : end))) {
         cache!.drop(s.db, key);
         return null;
       }
     }
-    if (hours !== null) {
-      const groups = combine(hours);
+    if (blocks !== null) {
+      const groups = combine(blocks);
       // Formatting can fail on integer overflow. Do not publish an entry from a failed answer.
       const done = result(groups, selectedMs, "reused");
-      cache!.put(s.db, key, { seq: last, hours, cells, bytes });
+      cache!.put(s.db, key, { seq: last, blocks, width, cells, bytes });
       return done;
     }
     cache!.drop(s.db, key);
-    // The changed hour made this answer too large to cache. Reread it using the bounded path below, retaining the
+    // The changed block made this answer too large to cache. Reread it using the bounded path below, retaining the
     // work already done in the diagnostics and total duration.
+    blocks = new Map();
+    width = 1n;
+    cells = 0;
+    bytes = 0;
+    building = true;
   }
 
   const params: (string | bigint)[] = [start, end];
@@ -300,8 +333,8 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     if (!(await readSession(session, start, end, ofSession))) { cache!.drop(s.db, key); return null; }
     groups.push(...ofSession.values());
   }
-  const done = result(groups, selectedMs, journal && hours === null ? "oversized" : cacheStatus);
-  if (hours !== null) cache!.put(s.db, key, { seq: last, hours, cells, bytes });
+  const done = result(groups, selectedMs, journal && blocks === null ? "oversized" : cacheStatus);
+  if (blocks !== null) cache!.put(s.db, key, { seq: last, blocks, width, cells, bytes });
   else cache?.drop(s.db, key);
   return done;
 }
