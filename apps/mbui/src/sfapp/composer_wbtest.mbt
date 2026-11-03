@@ -527,6 +527,41 @@ test "the app tells the core it is shown and in front, in which workspace, and w
 }
 
 ///|
+test "words sent as the composer grows a line hold its room where it is drawn, the list's foot not ahead of it" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  t.type_text("第一行")
+  let foot = fn() {
+    let rows = t.rows()
+    rows[rows.length() - 1].2
+  }
+  let before = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let over = foot() - before
+  for line in ["第二行", "第三行", "第四行"] {
+    t.enter()
+    t.type_text(line)
+  }
+  // half way through its growing, sent: the composer held as tall as it shows, the rows over it where they were, with
+  // it, till the words let go of it
+  t.run_for(@ui.row_size_ms / 2.0)
+  let growing = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  assert_true(growing > before)
+  assert_eq(foot(), growing + over)
+  tap_send(t)
+  assert_eq(named(calls, "chat.send").length(), 1)
+  for _ in 0..<4 {
+    t.frame()
+    assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
+    assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), growing)
+  }
+  // (the words flown, the composer let go of)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(draft_keep_ms)
+  t.assert_idle()
+}
+
+///|
 test "the list keeps clear the room the composer takes in the very frame it grows, each frame of its morph" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
@@ -724,4 +759,32 @@ test "words sent fly to their own row though an older page with the viewer's mes
   t.draw()
   assert_true(t.find("刚发的这一句") is Some(_))
   fix_clock.val = None
+}
+
+///|
+test "lines typed while words sent let go of the composer: the list's foot goes where it comes to stand with them, not after" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  t.type_text("第一条")
+  t.enter()
+  t.type_text("两行")
+  tap_send(t)
+  // (as the words fly, two lines more: the composer comes to stand three lines tall, not one)
+  t.run_for(@ui.row_size_ms / 2.0)
+  t.type_text("接着写")
+  t.enter()
+  t.type_text("又一行")
+  t.enter()
+  let foot = fn() {
+    let rows = t.rows()
+    rows[rows.length() - 1].2
+  }
+  // every frame the rows steady (rows_steady.mbt: the foot's room opening at once, as the words' flight was over, put
+  // every row over it up by it in one frame), and the foot where the composer comes to stand
+  t.run_for(@ui.move_most_ms)
+  let over = foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  t.run_for(draft_keep_ms)
+  assert_eq(foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), over)
+  t.assert_idle()
 }
