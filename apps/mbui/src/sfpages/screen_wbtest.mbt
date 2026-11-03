@@ -880,7 +880,25 @@ test "a Linux desktop failure offers reopening without a macOS permissions butto
   r.finish()
   assert_true(r.t.find("重新打开") is Some(_))
   assert_true(r.t.find("前往权限设置") is None)
+  assert_true(r.t.find("安装说明") is None)
   screen_done(r.t)
+}
+
+///|
+test "a Linux component failure offers the installation guide at either page width" {
+  for w in [390.0, 1200.0] {
+    let r = screen_rig(w~, os="Linux 6.8")
+    r.state(
+      "denied",
+      message="无法连接 Wayland 桌面。",
+      access={ "capture": false, "control": false, "message": "无法连接 Wayland 桌面。", "help": "linux-desktop" },
+    )
+    r.finish()
+    assert_true(r.t.find("重新打开") is Some(_))
+    r.t.tap_text("安装说明")
+    assert_true(r.t.opened().contains("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md"))
+    screen_done(r.t)
+  }
 }
 
 ///|

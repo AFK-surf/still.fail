@@ -44,7 +44,7 @@ jobs:
       - name: Linux X11 capture and input
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg xdotool xvfb xauth x11-utils x11-xkb-utils x11-xserver-utils
+          sudo apt-get install -y ffmpeg xdotool xvfb xauth x11-utils x11-xkb-utils x11-xserver-utils python3-gi gir1.2-gtk-3.0 gir1.2-gstreamer-1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good libxtst6
           pnpm --dir station install --frozen-lockfile
           export STILLFAIL_TEST_X11=1 STILLFAIL_TEST_X11_REAL_MESH=1 XDG_SESSION_TYPE=x11
           unset WAYLAND_DISPLAY
@@ -52,5 +52,8 @@ jobs:
           for test in test/x11-desktop.test.ts test/x11-desktop-real.test.ts test/x11-h264.test.ts test/x11-desktop-lifecycle.test.ts; do
             node ../scripts/native.ts run mesh -- xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test "$test"
           done
+          /usr/bin/python3 test/linux-portal-text.py
+          /usr/bin/python3 test/linux-portal-frames.py
+          xvfb-run -a -s '-screen 0 800x600x24' /usr/bin/python3 test/linux-x11-gstreamer.py
           STILLFAIL_TEST_X11_APT=1 xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test --test-name-pattern='private APT pair' test/linux-screen-tools.test.ts
           STILLFAIL_TEST_X11_BROWSER=1 node ../scripts/native.ts run mesh -- xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test test/x11-h264-browser.test.ts

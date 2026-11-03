@@ -2287,6 +2287,7 @@ web-pages.profiles.usedBy
 web-pages.profiles.verifiedAdded
 web-pages.profiles.workspaces.lead
 web-pages.screen.again
+web-pages.screen.linuxSetup
 web-pages.screen.debug.appRunning
 web-pages.screen.debug.appsLoading
 web-pages.screen.debug.appsNone

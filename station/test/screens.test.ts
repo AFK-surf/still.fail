@@ -214,6 +214,25 @@ test("a view: its answer, what it is, then the config and frames as the source g
   await v.served;
 });
 
+test("an actionable failure after opening is sent in the viewer's language", async () => {
+  class FailedView extends FakeView {
+    override next(): Promise<Frame | null> { return Promise.reject(new ScreenRefused(422, "station.screen.linuxTextUnsupported")); }
+  }
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.make = () => new FailedView();
+  hub.add(source);
+  const view = await open(hub, member);
+  const states: any[] = [];
+  for (;;) {
+    const got = await view.frames.next();
+    if (!got) break;
+    if (got.kind === KIND.state) states.push(json(got.payload));
+  }
+  assert.ok(states.some((state) => typeof state.ended === "string" && state.ended.startsWith("This app cannot receive that text")));
+  await view.served;
+});
+
 test("frames go unacknowledged while the link keeps up: two before its round trip is known, none once one waits too long", async () => {
   const hub = new ScreenHub();
   const source = new FakeSource();
