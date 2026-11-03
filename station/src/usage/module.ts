@@ -100,7 +100,7 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
   })));
 }
 
-/// A worker sleeps until session ownership changes or the compact source is installed. Pending moves survive a restart.
+/// A worker sleeps until usage or ownership changes. Pending totals and moves survive a restart.
 export function watchCompactMoves(store: StationStore, exited: Promise<void>): { wake: () => void; close: () => Promise<void> } {
   const path = store.db.location();
   const retries = new Fibers("usage workspace", store.clock);
@@ -111,6 +111,7 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
   let retryMs = 250;
   let cancelRetry: (() => void) | null = null;
   let worker: Worker | null = null;
+  let reporting = false;
   const dispatch = () => {
     if (worker !== null && requested && !outstanding) {
       requested = false;
@@ -137,10 +138,14 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
     let failed = false;
     worker = current;
     current.unref();
-    current.on("message", (answer: { session?: string; error?: string; idle?: boolean }) => {
+    current.on("message", (answer: { session?: string; sessions?: string[]; error?: string; idle?: boolean }) => {
       if (closed) return;
       if (answer.error) { failed = true; log.warn("usage", "a usage workspace move stopped", { error: answer.error }); }
-      if (answer.session) store.usageChanged([answer.session]);
+      const sessions = answer.session ? [answer.session] : answer.sessions;
+      if (sessions?.length) {
+        reporting = true;
+        try { store.usageChanged(sessions); } finally { reporting = false; }
+      }
       if (answer.idle) {
         outstanding = false;
         if (failed) { failed = false; retry(); }
@@ -168,12 +173,14 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
     dispatch();
   };
   const unsubscribe = store.onSessionWorkspaceChange(wake);
+  const unsubscribeUsage = store.subscribe((change) => { if (!reporting && change.type === "usage") wake(); });
   void exited.then(() => { ready = true; start(); }).catch((error) => log.warn("usage", "could not start usage workspace worker", { error: (error as Error).message }));
   return {
     wake,
     close: async () => {
       closed = true;
       unsubscribe();
+      unsubscribeUsage();
       await retries.close();
       if (worker !== null) await worker.terminate();
     },

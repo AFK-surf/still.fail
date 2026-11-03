@@ -39,7 +39,37 @@ test("recording calls does not rewrite the workspace total in every transaction"
   } finally { store.close(); }
 });
 
-test("a worker completes pending totals after new calls and tells the page", async () => {
+test("pending deletions stay invisible and only the affected scope waits", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const ws of ["A", "B"]) store.insertSession({ key: ws, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
+      token: ws, ws, createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string) => ({ id, at: 0, model: "m", subagent: true, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+    for (const ws of ["A", "B"]) store.recordUsage(`/${ws}`, { session: ws, offset: 1, model: "m" }, "claude", [[call(ws), owner]]);
+    assert.equal(compact.compactTotalsStep(store.db, 8).done, true);
+    store.db.prepare("DELETE FROM usage WHERE id = ?").run("A");
+    assert.equal(compact.compactTotal(store.db, { workspace: "A", home: false }), null);
+    assert.equal(compact.compactTotal(store.db, null), null);
+    assert.deepEqual(compact.compactTotal(store.db, { workspace: "B", home: false }), { calls: 1, tokens: 2 });
+    assert.deepEqual(compact.compactHistory(store.db, 0n, { workspace: "A", home: false }), []);
+    const query = compact.compactQuery(0n, 60_000n, 0n, { workspace: "A", home: false });
+    assert.deepEqual(store.db.prepare(query.sql).all(...query.args), []);
+    // A replacement in the same minute keeps the old contribution until the bucket can be accounted once.
+    store.recordUsage("/A", { session: "A", offset: 2, model: "m" }, "claude", [[call("replacement"), owner]]);
+    assert.equal(compact.compactTotalsStep(store.db, 8).done, true);
+    assert.deepEqual(compact.compactTotal(store.db, null), { calls: 2, tokens: 4 });
+    store.db.prepare("DELETE FROM usage WHERE id = ?").run("replacement");
+    assert.equal(compact.compactTotalsStep(store.db, 8).done, true);
+    assert.deepEqual(compact.compactTotal(store.db, null), { calls: 1, tokens: 2 });
+    assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage_compact WHERE session = 'A'").get() as { n: number }).n, 0);
+  } finally { store.close(); }
+});
+
+test("a worker completes pending totals after new calls and tells the page", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "compact-total-worker-"));
   const store = Store.open(join(dir, "station.db"));
   let mover: ReturnType<typeof watchCompactMoves> | null = null;
@@ -52,13 +82,16 @@ test("a worker completes pending totals after new calls and tells the page", asy
     const owner = { turn: null, thread: null, person: "p", profile: "cc" };
     const call = (id: string) => ({ id, at: 0, model: "m", subagent: true, fast: false, input: 1,
       cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
-    const ready = (calls: number) => new Promise<void>((resolve) => {
+    const ready = (calls: number) => new Promise<void>((resolve, reject) => {
+      const abort = () => { unsubscribe(); reject(t.signal.reason); };
       const unsubscribe = store.subscribe((change) => {
         if (change.type !== "usage" || !change.sessions.includes("a")) return;
         if (compact.compactTotal(store.db, { workspace: "A", home: false })?.calls !== calls) return;
         unsubscribe();
+        t.signal.removeEventListener("abort", abort);
         resolve();
       });
+      t.signal.addEventListener("abort", abort, { once: true });
     });
     for (let n = 1; n <= 2; n++) {
       const told = ready(n);

@@ -1,9 +1,9 @@
-// Move compact usage buckets after a session changes workspace. Each transaction is bounded and yields to foreground writes.
+// Move compact usage buckets and apply their totals in bounded transactions, yielding to foreground writes.
 import { DatabaseSync } from "node:sqlite";
 import { parentPort, threadId, workerData } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
 import { giveBackfill, takeBackfill } from "../store/backfill.ts";
-import { hasCompactUsage, moveCompactStep } from "../store/usage-compact.ts";
+import { compactTotalsStep, hasCompactUsage, moveCompactStep } from "../store/usage-compact.ts";
 
 const db = new DatabaseSync(workerData.path as string);
 const priority = new Int32Array(workerData.priority as SharedArrayBuffer);
@@ -18,16 +18,22 @@ async function drain(): Promise<void> {
     do {
       requested = false;
       if (!hasCompactUsage(db)) continue;
+      let movesDone = false;
       for (;;) {
         if (!takeBackfill(priority, threadId)) { await wall.sleep(20); continue; }
-        let result: ReturnType<typeof moveCompactStep> | undefined;
-        try { result = moveCompactStep(db); }
+        let result: { done: boolean; session?: string; sessions?: string[] } | undefined;
+        try { result = movesDone ? compactTotalsStep(db) : moveCompactStep(db); }
         catch (error) {
           const code = (error as { errcode?: number }).errcode;
           if (code === undefined || ![5, 6].includes(code & 255)) throw error;
         } finally { giveBackfill(priority, threadId); }
         if (result?.session !== undefined) parentPort!.postMessage({ session: result.session });
-        if (result?.done) break;
+        if (result?.sessions?.length) parentPort!.postMessage({ sessions: result.sessions });
+        if (result?.done) {
+          if (movesDone) break;
+          movesDone = true;
+          continue;
+        }
         await wall.sleep(20);
       }
     } while (requested);

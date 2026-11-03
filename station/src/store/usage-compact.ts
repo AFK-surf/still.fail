@@ -273,7 +273,7 @@ type PendingBucket = Bucket & { session: string; records: number; calls: number;
 
 // Called within an IMMEDIATE transaction. Each bucket keeps its previously applied contribution, so repeated writes
 // coalesce and a removed bucket remains as a tombstone until its contribution is subtracted.
-function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string): number {
+function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string): { count: number; sessions: string[] } {
   const selected = session === undefined
     ? `INDEXED BY usage_compact_pending_scope WHERE pending = 1 LIMIT ?`
     : `INDEXED BY usage_compact_pending_session WHERE pending = 1 AND session = ? LIMIT ?`;
@@ -310,17 +310,17 @@ function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string
     if (delta.calls !== 0 || delta.tokens !== 0) put.run(scope, delta.calls, delta.tokens);
     clean.run(scope);
   }
-  return rows.length;
+  return { count: rows.length, sessions: [...new Set(rows.map((row) => row.session))] };
 }
 
 /// Apply at most one batch of new buckets; this never reads or reconstructs original calls.
-export function compactTotalsStep(db: DatabaseSync, batch = 256): { done: boolean } {
+export function compactTotalsStep(db: DatabaseSync, batch = 256): { done: boolean; sessions: string[] } {
   if (!Number.isSafeInteger(batch) || batch < 1) throw new RangeError("compact totals batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
-    const count = accountCompactBuckets(db, batch);
+    const { count, sessions } = accountCompactBuckets(db, batch);
     db.exec("COMMIT");
-    return { done: count < batch };
+    return { done: count < batch, sessions };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
@@ -332,7 +332,7 @@ export function moveCompactStep(db: DatabaseSync, batch = 256): { done: boolean;
     if (move === undefined) { db.exec("COMMIT"); return { done: true }; }
     if (move.phase === 1) {
       // Keep every old scope unavailable until the session's pending contributions have actually left its totals.
-      if (accountCompactBuckets(db, batch, move.session) > 0) {
+      if (accountCompactBuckets(db, batch, move.session).count > 0) {
         db.exec("COMMIT");
         return { done: false };
       }
