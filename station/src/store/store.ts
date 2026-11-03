@@ -207,6 +207,7 @@ export class Store {
       installUsageMinutes(db);
       installUsageDetail(db, clock.currentTimeMillisUnsafe());
       installIncrementalUsageTotals(db);
+      usage.installUsageCounter(db, clock.currentTimeMillisUnsafe());
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);
@@ -2092,15 +2093,35 @@ export class Store {
     return retireDuplicateUsage(this.db);
   }
 
+  usageCounter(): { since: number; through: number } {
+    return this.#one("SELECT since, through FROM usage_counter WHERE id = 1") as { since: number; through: number };
+  }
+
+  advanceUsageCounter(through: number): void {
+    this.#run("UPDATE usage_counter SET through = MAX(through, ?) WHERE id = 1", through);
+  }
+
+  usageCounterFile(path: string): number | null {
+    return usage.usageCounterFile(this.db, path);
+  }
+
+  beginUsageCounterFile(path: string, cutoff: number, reset = false): number {
+    return this.#tx(() => usage.beginUsageCounterFile(this.db, path, cutoff, reset));
+  }
+
   /// Every transcript read for usage so far, by path.
   usageFiles(): Map<string, usage.UsageFile> {
     return usage.usageFiles(this.db);
   }
 
+  usageFile(path: string): usage.UsageFile | undefined {
+    return usage.usageFile(this.db, path);
+  }
+
   /// Records a transcript's calls read up to `file.offset`, each with what it was for; a call recorded before keeps its
   /// row (its output grown, when the transcript wrote it again whole). How many were new.
-  recordUsage(path: string, file: usage.UsageFile, runtime: string, calls: [usage.UsageCall, usage.UsageFor][]): number {
-    return this.#tx(() => usage.recordUsage(this.db, path, file, runtime, calls));
+  recordUsage(path: string, file: usage.UsageFile, runtime: string, calls: [usage.UsageCall, usage.UsageFor][], options?: usage.UsageWriteOptions): number {
+    return this.#tx(() => usage.recordUsage(this.db, path, file, runtime, calls, options));
   }
 
   /// A session's last `limit` main-thread calls, oldest first: the context each sent, on what (store/usage.ts).

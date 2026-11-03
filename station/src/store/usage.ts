@@ -33,15 +33,48 @@ export type UsageGroup = {
 /// Stands for i64::MIN as a turn's start: before every call.
 const EARLIEST = Number.MIN_SAFE_INTEGER;
 
+/// The counter starts recording at installation. Its last completed sweep lets a restart find only turns which may
+/// have produced new usage while it was stopped, without walking the station's older sessions.
+export function installUsageCounter(db: DatabaseSync, now: number): void {
+  const has = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
+  if (has("usage_counter") && has("usage_counter_files")) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec("CREATE TABLE IF NOT EXISTS usage_counter (id INTEGER PRIMARY KEY CHECK (id = 1), since INTEGER NOT NULL, through INTEGER NOT NULL)");
+    db.prepare("INSERT OR IGNORE INTO usage_counter VALUES (1, ?, ?)").run(now, now);
+    db.exec("CREATE TABLE IF NOT EXISTS usage_counter_files (path TEXT PRIMARY KEY, cutoff INTEGER NOT NULL) WITHOUT ROWID");
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+/// The byte boundary at which this file began being followed. Earlier complete lines still use the installation time.
+export function usageCounterFile(db: DatabaseSync, path: string): number | null {
+  return (db.prepare("SELECT cutoff FROM usage_counter_files WHERE path = ?").get(path) as { cutoff: number } | undefined)?.cutoff ?? null;
+}
+
+/// Save that boundary before reading, so an interrupted initial read cannot mistake old lines for new ones.
+export function beginUsageCounterFile(db: DatabaseSync, path: string, cutoff: number, reset: boolean): number {
+  if (reset) db.prepare("INSERT INTO usage_counter_files VALUES (?, ?) ON CONFLICT (path) DO UPDATE SET cutoff = excluded.cutoff").run(path, cutoff);
+  else db.prepare("INSERT OR IGNORE INTO usage_counter_files VALUES (?, ?)").run(path, cutoff);
+  return usageCounterFile(db, path)!;
+}
+
 /// usage_files: every transcript read for usage so far, by path.
 export function usageFiles(db: DatabaseSync): Map<string, UsageFile> {
   const rows = db.prepare("SELECT path, session, offset, model FROM usage_files").all() as Json[];
   return new Map(rows.map((r) => [r.path, { session: r.session, offset: r.offset, model: r.model }]));
 }
 
+/// One transcript's saved position, by its path's primary key.
+export function usageFile(db: DatabaseSync, path: string): UsageFile | undefined {
+  return db.prepare("SELECT session, offset, model FROM usage_files WHERE path = ?").get(path) as UsageFile | undefined;
+}
+
+export type UsageWriteOptions = { minNewAt?: number; changed?: { from: number } };
+
 /// record_usage: a transcript's calls read up to `file.offset`, each with what it was for; a call recorded before keeps
 /// its row (its output grown). How many were new. Run in a transaction by the caller.
-export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, runtime: string, calls: [UsageCall, UsageFor][]): number {
+export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, runtime: string, calls: [UsageCall, UsageFor][], options?: UsageWriteOptions): number {
   let added = 0;
   if (file.session !== null) {
     const insert = db.prepare(
@@ -49,14 +82,18 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
        ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)`,
     );
-    const known = db.prepare("SELECT 1 FROM usage WHERE id = ?");
+    const known = db.prepare("SELECT output FROM usage WHERE id = ?");
     for (const [c, of] of calls) {
-      const was = known.get(c.id) !== undefined;
+      const was = known.get(c.id) as { output: number } | undefined;
+      // An old call may grow after the cutover, but an unseen old call is not historical work to fill in.
+      if (was === undefined && options?.minNewAt !== undefined && c.at < options.minNewAt) continue;
+      if (was !== undefined && c.output <= was.output) continue;
       insert.run(
         c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,
         c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
       );
-      if (!was) added++;
+      if (was === undefined) added++;
+      if (options?.changed !== undefined) options.changed.from = Math.min(options.changed.from, c.at);
     }
   }
   db.prepare(
