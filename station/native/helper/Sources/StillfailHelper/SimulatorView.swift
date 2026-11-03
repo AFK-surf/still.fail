@@ -24,6 +24,7 @@ final class SimulatorView: ScreenView {
   let injector = HIDInjector()
   /// A foldable's: what follows its panels, the panel shown, its hinge as far as is known (the cover's until told).
   var panels: Process?
+  var followed: AsyncStream<Bool>.Continuation?
   var coverShown: Bool?
   var hinge = 0.0
   /// How far the picture is turned to stand as its panel's UI does, clockwise in quarter turns (an iPhone Duo's inner panel
@@ -60,7 +61,7 @@ final class SimulatorView: ScreenView {
       do {
         let helper = Bundle.main.resourceURL?.appendingPathComponent("stillfail-duo-hid").path ?? ""
         try await injector.setup(deviceUDID: udid, duoHelper: helper)
-        if await injector.isFoldable() { followPanels() }
+        if await injector.isFoldable() { await followPanels() }
         let first = AsyncStream<(Int, Int)>.makeStream()
         await capture.setReemitsIdle(false)
         try await capture.start(deviceUDID: udid, pixelConsumers: PixelConsumerCount()) { [weak self] buffer, time, _ in
@@ -115,6 +116,7 @@ final class SimulatorView: ScreenView {
 
   override func stop() {
     panels?.terminate()
+    followed?.finish()
     if let rotation { VTPixelRotationSessionInvalidate(rotation) }
     ops?.finish()
     super.stop()
@@ -283,10 +285,10 @@ final class SimulatorView: ScreenView {
 
   /// A foldable's picture is of the panel in use, not the smallest one capture would pick by itself: SpringBoard says which as
   /// it changes (a pose from here, or from Device Hub), and what it last said since the boot says which it is now.
-  func followPanels() {
+  func followPanels() async {
     let simctl = "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl"
     let predicate = "subsystem == \"com.apple.SpringBoard\" AND category == \"DisplayContentMode\""
-    let run = { (arguments: [String], line: @escaping (String) -> Void) -> Process in
+    let run = { (arguments: [String], ended: (() -> Void)?, line: @escaping (String) -> Void) -> Process in
       let process = Process()
       process.executableURL = URL(fileURLWithPath: simctl)
       process.arguments = ["spawn", self.udid, "log"] + arguments + ["--style", "compact", "--predicate", predicate]
@@ -296,7 +298,11 @@ final class SimulatorView: ScreenView {
       var pending = ""
       out.fileHandleForReading.readabilityHandler = { handle in
         let data = handle.availableData
-        if data.isEmpty { handle.readabilityHandler = nil; return }
+        if data.isEmpty {
+          handle.readabilityHandler = nil
+          ended?()
+          return
+        }
         pending += String(decoding: data, as: UTF8.self)
         var parts = pending.components(separatedBy: "\n")
         pending = parts.removeLast()
@@ -305,23 +311,56 @@ final class SimulatorView: ScreenView {
       try? process.run()
       return process
     }
-    let told = { [weak self] (text: String) in
-      let cover = text.contains(".cover:pri") ? true : text.contains(".inner:pri") ? false : nil
-      guard let self, let cover else { return }
-      Task { await self.showPanel(cover: cover) }
+    let said = { (text: String) -> Bool? in
+      text.contains(".cover:pri") ? true : text.contains(".inner:pri") ? false : nil
     }
-    _ = run(["show", "--last", "boot"], told)
-    panels = run(["stream"], told)
+    // As they come, one after another: each its own task, a quick few could end in another order than they came, the capture
+    // left at the size of the panel not in use (its picture stretched to that).
+    let (changes, change) = AsyncStream<Bool>.makeStream()
+    followed = change
+    Task { [weak self] in
+      for await cover in changes { await self?.showPanel(cover: cover) }
+    }
+    let boot = BootPanel()
+    panels = run(["stream"], nil) { text in
+      guard let cover = said(text) else { return }
+      boot.overtaken()
+      change.yield(cover)
+    }
+    // Only the last the boot's log says is what shows now (every fold since the boot, one by one, was the picture going back and
+    // forth as the view opened): before the first picture where it is read in time, unless one has come since.
+    _ = run(["show", "--last", "boot"], { boot.read() }) { text in
+      if let cover = said(text) { boot.said(cover) }
+    }
+    for _ in 0..<150 where !boot.done {
+      try? await Task.sleep(for: .milliseconds(20))
+    }
+    if boot.done {
+      if let cover = boot.taken() { await showPanel(cover: cover, opening: true) }
+    } else {
+      Task {
+        while !boot.done { try? await Task.sleep(for: .milliseconds(100)) }
+        if let cover = boot.taken() { change.yield(cover) }
+      }
+    }
   }
 
   /// The picture to be of the cover or the inner panel; the hinge where a next pose sweeps from.
-  func showPanel(cover: Bool) async {
+  func showPanel(cover: Bool, opening: Bool = false) async {
     guard coverShown != cover else { return }
     coverShown = cover
     if cover { hinge = min(hinge, 0) } else if hinge < 90 { hinge = 180 }
     let size = cover ? (DevicePose.coverWidth, DevicePose.coverHeight) : (DevicePose.innerWidth, DevicePose.innerHeight)
     await capture.setPreferredScreenSize(width: size.0, height: size.1)
-    await lookTurn(cover: cover)
+    if opening {
+      // (as it stands for the first picture, then once it has settled, not holding the view's opening back)
+      if let said = await enumerated() {
+        _ = setTurn(Self.turnOf(said, panel: cover ? "primary" : "primary-1"))
+      }
+      Task { await lookTurn(cover: cover) }
+    } else {
+      await lookTurn(cover: cover)
+    }
   }
 
   /// How the panel's UI stands as CoreSimulator says it, the picture turned to match. Asked as a panel comes up, and again
@@ -421,5 +460,44 @@ final class SimulatorView: ScreenView {
         done.resume(returning: false)
       }
     }
+  }
+}
+
+/// What the boot's log says of the panel in use, as it is read: its last, once all of it has been, unless the live log has
+/// said one since.
+private final class BootPanel: @unchecked Sendable {
+  private let lock = NSLock()
+  private var last: Bool?
+  private var finished = false
+
+  var done: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return finished
+  }
+
+  func said(_ cover: Bool) {
+    lock.lock()
+    defer { lock.unlock() }
+    last = cover
+  }
+
+  func read() {
+    lock.lock()
+    defer { lock.unlock() }
+    finished = true
+  }
+
+  func overtaken() {
+    lock.lock()
+    defer { lock.unlock() }
+    last = nil
+  }
+
+  func taken() -> Bool? {
+    lock.lock()
+    defer { lock.unlock() }
+    defer { last = nil }
+    return last
   }
 }
