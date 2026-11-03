@@ -253,7 +253,7 @@
   "core-logic.format.refill.hours_minutes": "{h} 小时 {m} 分钟后刷新",
   "core-logic.format.refill.minutes": "{n} 分钟后刷新",
   "core-logic.format.refill.now": "即将刷新",
-  "core-logic.format.status.aborted": "出错：被停止",
+  "core-logic.format.status.aborted": "已停止",
   "core-logic.format.status.aborted.what": "被停止",
   "core-logic.format.status.block": "需要你处理",
   "core-logic.format.status.decision": "待你决定",

@@ -183,7 +183,8 @@ test("the same message delivered twice is handled once", async () => {
 
 test("a turn ending without a state is nudged, then reported after max nudges", async () => {
   const r = new Rig({ maxNudges: 1 });
-  await r.accept(message());
+  const m = message();
+  await r.accept(m);
   await settle();
   r.claude.last().complete();
   await settle();
@@ -194,6 +195,9 @@ test("a turn ending without a state is nudged, then reported after max nudges", 
   await settle();
   assert.equal(r.claude.last().prompts.length, 2);
   assert.ok(r.chat.lastText().includes("未产出结果"));
+  const thread = r.thread("C1", m.threadTs);
+  const notice = r.store.entriesBefore(thread.id, null, 1).at(-1)!;
+  assert.deepEqual(r.store.lastTurn(sessionKey("cl", "C1", m.threadTs))!.about, { thread: thread.id, seq: notice.n, ts: notice.ts });
   await r.close();
 });
 
@@ -320,6 +324,9 @@ test("a turn that fails after it said it would wait ends failed, not waiting: no
   assert.deepEqual([last().outcome, last().declared, last().waitSeconds], ["failed", null, null], "shown failed, not waiting");
   // What it means on the first line; what the runtime said under it, as it said it (opened, the notice shows it).
   assert.equal(r.chat.lastText(), "⚠️ 模型服务出错，回复即可重试\n\n```\nAPI Error: Connection dropped (ECONNRESET)\n```");
+  const thread = r.thread("C1", m.threadTs);
+  const notice = r.store.entriesBefore(thread.id, null, 1).at(-1)!;
+  assert.deepEqual(last().about, { thread: thread.id, seq: notice.n, ts: notice.ts }, "the failure points to its own notice");
   // As a station from before recorded it: waiting. The next station, started without a handover, puts it right.
   r.store.endTurn(r.store.listTurns(key).at(-1)!.id, "failed", "model: API Error: Connection dropped (ECONNRESET)", "waiting", 60);
   await r.hub.shutdown();
@@ -2282,6 +2289,9 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   agent.end(spent);
   await settle();
   assert.equal(said().length, 1, "the thread ends with it already");
+  const thread = r.thread("C1", m.threadTs);
+  const notice = r.store.entriesBefore(thread.id, null, 1).at(-1)!;
+  assert.deepEqual(r.store.lastTurn(key)!.about, { thread: thread.id, seq: notice.n, ts: notice.ts });
   assert.equal(agent.prompts.length, 2);
   // A person's message is tried at once, and its failure told them.
   await r.accept(reply(m, "9999.3", "<@UBOT> 还在吗", { addressed: true }));

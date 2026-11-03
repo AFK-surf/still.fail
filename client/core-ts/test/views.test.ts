@@ -2333,6 +2333,50 @@ test("a_chats_page_says_what_its_agent_waits_on_once_in_its_activity_not_again_a
   assert.deepEqual([v.stateText, v.stateLead, v.stateRest], [undefined, undefined, undefined]);
 });
 
+test("a_stopped_turn_is_not_said_again_under_its_notice", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  const stopped = { kind: "input", outcome: "aborted", startedAt: 1, endedAt: 2 };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", process: "warm", lastTurn: stopped })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [entry(1, "开始"), { ...entry(2, "已停止当前任务"), authorKind: "ember", author: "ember" }], thread: null });
+  const r = { ...row("k", now), thread: 7 };
+  r.agents[0].lastTurn = stopped;
+  r.agents[0].process = "warm";
+  t.set(rows("ws/a"), [r]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, undefined);
+});
+
+test("a_failure_is_not_repeated_when_its_notice_is_in_the_chat", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  const failed = { kind: "input", outcome: "failed", detail: "model: failed", startedAt: 1, endedAt: 2, about: { thread: 7, seq: 2, ts: "2" } };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", process: "warm", lastTurn: failed })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const notice = { ...entry(2, "⚠️ 模型服务出错，回复即可重试"), authorKind: "ember", author: "ember" };
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [entry(1, "开始"), notice], thread: null });
+  const r = { ...row("k", now), thread: 7 };
+  r.agents[0].lastTurn = failed;
+  r.agents[0].process = "warm";
+  t.set(rows("ws/a"), [r]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, undefined);
+  r.agents[0].lastTurn = { ...failed, outcome: "completed" };
+  t.set(rows("ws/a"), [{ ...r, agents: [...r.agents] }]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, undefined, "an unexpected end with its own notice is not repeated either");
+  // If no matching notice was recorded, the state must still say why it stopped.
+  r.agents[0].lastTurn = { ...failed, about: null };
+  t.set(rows("ws/a"), [{ ...r, agents: [...r.agents] }]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, "出错：模型服务出错");
+});
+
 test("the_viewers_messages_sent_one_after_another_go_close_together_their_time_under_the_last", async () => {
   const t = setup();
   const u = ui();

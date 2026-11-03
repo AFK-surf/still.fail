@@ -308,7 +308,7 @@ export type Lead = { kind: "need" | "done" | "wait" | "watch" | "decision"; text
 /// not say); what leads it, if anything does. A line that asks for a decision (待处理 · …, 要你帮忙：…) is about none: the
 /// line only says so, and the chat leads to what it asks (`ChatView.asks`). `cards` false: a card waiting is not said
 /// (the chat's page, which shows the card itself).
-export function rowStateLine(row: J, cards = true): [string, number | null, string, Lead | null] | null {
+export function rowStateLine(row: J, cards = true, alreadySaid: (agent: J) => boolean = () => false): [string, number | null, string, Lead | null] | null {
   const thread = u64(get(row, "thread")) ?? null;
   const p = cards ? decisions.pending(row) : null;
   const lead = t("core-logic.decisions.line", { text: "" });
@@ -342,8 +342,11 @@ export function rowStateLine(row: J, cards = true): [string, number | null, stri
       if (card && !need) return card;
       return said(blocked, null);
     }
-    const failed = agents.find((a) => ["failed", "unexpected", "aborted"].includes(shownStatus(a)));
-    if (failed) return said(failed, stateAbout(failed, thread));
+    const failures = agents.filter((a) => ["failed", "unexpected", "aborted"].includes(shownStatus(a)));
+    if (failures.length > 0) {
+      const unsaid = failures.find((a) => !alreadySaid(a));
+      return unsaid ? said(unsaid, stateAbout(unsaid, thread)) : null;
+    }
   }
   if (card) return card;
   if (atWork) return null;

@@ -2049,7 +2049,16 @@ export class Views implements Owner {
     // said at the end of its messages too. A card waiting is not: it shows in the chat itself; nor what an agent waits
     // on: its activity under the messages says it, with how long it has waited.
     const shown = row !== undefined && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : null;
-    const line = shown !== null ? present.rowStateLine(shown, false) : null;
+    const line = shown !== null ? present.rowStateLine(shown, false, (agent) => {
+      const status = present.shownStatus(agent);
+      // A stop is already announced in the conversation; its status still remains on the list row.
+      if (status === "aborted") return true;
+      if (status !== "failed" && status !== "unexpected") return false;
+      // Only the notice explicitly recorded for this turn can replace its state. Do not mistake another agent's
+      // notice (or an earlier one) for it; when the notice isn't loaded the state remains visible.
+      const about = present.stateAbout(agent, u64(thread.id) ?? null);
+      return about !== null && messages.some((m: J) => u64(m.seq) === about && get(get(m, "notice"), "failed") === true);
+    }) : null;
     // What it needed of a person, let go by the viewer (忽略): kept, said as let go, in place of what its row says
     const letGo = shown !== null ? present.rowLetGoNeed(shown) : null;
     if (letGo !== null) {
