@@ -108,6 +108,41 @@ test("a worker completes pending totals after new calls and tells the page", asy
   }
 });
 
+test("a page is told once its requested total is ready, not after each intermediate batch", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "compact-total-batches-"));
+  const store = Store.open(join(dir, "station.db"));
+  let mover: ReturnType<typeof watchCompactMoves> | null = null;
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A",
+      createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    for (let i = 0; i < 130; i++) {
+      const call = { id: `call-${i}`, at: i * 60_000, model: "m", subagent: true, fast: false, input: 1,
+        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+      store.recordUsage("/a", { session: "a", offset: i + 1, model: "m" }, "claude", [[call, owner]]);
+    }
+    const told = new Promise<{ calls: number; tokens: number } | null>((resolve, reject) => {
+      const abort = () => { unsubscribe(); reject(t.signal.reason); };
+      const unsubscribe = store.subscribe((change) => {
+        if (change.type !== "usage" || !change.statisticsOnly) return;
+        unsubscribe();
+        t.signal.removeEventListener("abort", abort);
+        resolve(compact.compactTotal(store.db, { workspace: "A", home: false }));
+      });
+      t.signal.addEventListener("abort", abort, { once: true });
+    });
+    mover = watchCompactMoves(store, Promise.resolve());
+    mover.read({ workspace: "A", home: false });
+    assert.deepEqual(await told, { calls: 130, tokens: 260 });
+  } finally {
+    if (mover !== null) await mover.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a workspace asking for its total does not flush another workspace's pending buckets", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "compact-total-scope-"));
   const store = Store.open(join(dir, "station.db"));
