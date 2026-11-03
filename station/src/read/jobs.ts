@@ -93,12 +93,15 @@ export function rustLines(text: string): string[] {
 /// viewer's workspace's chats. The jobs up by the index of their states, and the chats of their sessions alone: read
 /// with every job the station ever ran, the whole sidebar and (for a session whose own chat is not listed) the whole
 /// archive, a read took 56 s on ccvm short of memory (2026-11-02), as every device read the station again.
-export function openJobs(s: Store, viewer: Viewer, lang: Lang): Json[] {
+/// `chats`: each with the chat it is in; without (a device that names it from the sidebar it holds), the jobs alone: the
+/// sidebar's items made for it held a device reader up to 17 s on ccvm short of memory (2026-11-03).
+export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Json[] {
   setLang(lang);
   const up = store.upJobs(s);
   const seen = store.seenBy(s, viewer, up.map((j) => j.sessionKey));
   const open = up.filter((j) => seen(j.sessionKey));
   if (open.length === 0) return [];
+  if (!named) return open.map((j) => shown(s, j));
   // Each job's chat: the session's own over one it only takes part in, a listed one over an archived one (the last of
   // each, as the sidebar lists them): of the items its session and the chats it takes part in make (views.ts
   // `scopeOf`), each as the whole list has it. The archive's are read only for a session whose own chat is not listed.

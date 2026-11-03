@@ -285,7 +285,8 @@ export const routes = (tools: Tools): Route[] => {
         return noRoute(r);
       },
     },
-    { method: "GET", pattern: /^\/jobs$/, handle: (r) => read(r, "openJobs", { viewer: r.viewer, lang: r.lang }) },
+    // `chats=0`: without the chat each is in, for a device that names it from the sidebar it holds.
+    { method: "GET", pattern: /^\/jobs$/, handle: (r) => read(r, "openJobs", { viewer: r.viewer, lang: r.lang, chats: param(r, "chats") !== "0" }) },
     {
       method: "GET",
       pattern: /^\/*jobs\/+([^/]+)(?:\/+([^/]+))?(?:\/.*)?$/,
