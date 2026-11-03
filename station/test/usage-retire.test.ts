@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
+import { constants, DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -54,6 +55,58 @@ test("retirement also removes the separate live index of an incomplete old datab
     write(store, "new", 4);
     assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input]), [[2, 6]]);
   } finally { store.close(); }
+});
+
+test("the old indexes stop being written even when their cleanup worker cannot start", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-retire-missing-worker-"));
+  const store = Store.open(join(dir, "station.db"));
+  try {
+    session(store);
+    write(store, "before", 2);
+    const count = () => (store.db.prepare("SELECT COALESCE(SUM(calls), 0) AS n FROM usage_detail").get() as { n: number }).n;
+    const before = count();
+    let handover!: () => void;
+    const fiber = Effect.runFork(retireAfterPrevious(store, new Promise<void>((resolve) => { handover = resolve; }),
+      new URL("./no-such-usage-worker.ts", import.meta.url)));
+    write(store, "during", 3);
+    assert.ok(count() > before, "the previous station can use the indexes until handover");
+    const atHandover = count();
+    handover();
+    await Effect.runPromise(Fiber.join(fiber));
+    assert.ok(table(store, "usage_retired_detail"));
+    assert.ok(table(store, "usage_detail"), "the failed worker did not delete the old rows");
+    write(store, "after", 4);
+    assert.equal(count(), atHandover, "new calls no longer write the old detail");
+    assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input]), [[3, 9]]);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("stopping index writers yields to another database writer and retries", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-retire-busy-"));
+  const path = join(dir, "station.db");
+  const store = Store.open(path);
+  const blocker = new DatabaseSync(path);
+  try {
+    session(store);
+    write(store, "before", 2);
+    const timeout = (store.db.prepare("PRAGMA busy_timeout").get() as { timeout: number }).timeout;
+    let attempts = 0;
+    store.db.setAuthorizer((action, operation) => {
+      if (action === constants.SQLITE_TRANSACTION && operation === "BEGIN") attempts++;
+      return constants.SQLITE_OK;
+    });
+    blocker.exec("BEGIN IMMEDIATE");
+    const fiber = Effect.runFork(retireAfterPrevious(store, Promise.resolve(), new URL("./no-such-usage-worker.ts", import.meta.url)));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.ok(attempts > 0, "the stop tried while the other connection held the lock");
+    assert.equal(table(store, "usage_retired_detail"), undefined);
+    assert.equal((store.db.prepare("PRAGMA busy_timeout").get() as { timeout: number }).timeout, timeout);
+    blocker.exec("COMMIT");
+    await Effect.runPromise(Fiber.join(fiber));
+    assert.ok(table(store, "usage_retired_detail"), "stopping is retried after the lock is released");
+    write(store, "after", 3);
+    assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input]), [[2, 5]]);
+  } finally { blocker.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("retirement deletes at most one primary-key batch before releasing its write lock", () => {
