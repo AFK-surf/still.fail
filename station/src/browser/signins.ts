@@ -59,3 +59,6 @@ export function keptOf(s: SignInState): string {
 export function expired(cookies: CookieParam[]): CookieParam[] {
   return cookies.map((c) => ({ ...c, value: "", expires: 1 }));
 }
+
+/// A sign-in put into a chat's browser: the grant's request, its sites, until when (unix seconds).
+export type SignedIn = { request: string; sites: string[]; until: number };
