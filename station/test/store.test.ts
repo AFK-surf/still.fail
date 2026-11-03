@@ -18,6 +18,7 @@ import { backfillUsageCompactions } from "../src/store/usage-compactions.ts";
 import * as read from "../src/read/store.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
+import type { Viewer } from "../src/mesh/credential.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -995,7 +996,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   // as it was read every message of a chat, every turn or delivery of a session, or every row of its table: a notice of
   // a chat of 534 messages read 479 pages, 3 to 16 s on ccvm short of memory (2026-11-02), every telling after it waiting.
   const planned: [string, unknown[]][] = [
-    [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [CC_THREADS_SQL, [1]],
+    [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
     [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]],
     [`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, ['["a"]']], [read.TOLD_BLOCKED, ["a", 0, 9]], [read.RUNNING_OF, ['["a"]']],
   ];
@@ -1012,10 +1013,14 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");
   const stats = `${read.SESSION_STATS} WHERE s.key = ?`;
   has(stats, "c USING PRIMARY KEY (session=?)");
+  has(stats, "w USING PRIMARY KEY (session=?)");
   has(stats, "deliveries_pending (session=?)");
   lacks(stats, "COVERING INDEX turns_by_session");
   lacks(stats, "deliveries_session");
   has(read.LAST_TURN, "turns_by_session (session_key=?)");
+  // A session's latest turns by the index of its turns, from its end: not every turn read and sorted.
+  has(read.LATEST_TURNS, "turns_by_session (session_key=?)");
+  lacks(read.LATEST_TURNS, "TEMP B-TREE");
   has(CC_THREADS_SQL, "e USING INDEX sqlite_autoindex_entries_1 (thread=? AND n=?)");
   lacks(CC_THREADS_SQL, "e USING INDEX sqlite_autoindex_entries_1 (thread=?)");
   has(read.SHARES_OF, "chat_shares USING INDEX sqlite_autoindex_chat_shares_1 (session=?)");
@@ -1053,6 +1058,50 @@ test("a session's turns are counted as they are written and removed, and once fr
   store.close();
   store = open(path);
   assert.deepEqual(turns(store), { a: 3 });
+});
+
+// On ccvm (2026-11-03) a device read a session with its every turn (3,685 of them, 25 s) to add up how long they ran.
+test("a session's work is kept as its turns end and go: how long the ended ones ran, made once from those before", async () => {
+  const time = testClock();
+  await time.adjust(Date.parse("2026-11-03T00:00:00Z"));
+  const path = join(tempdir(), "stillfail.db");
+  const opened = () => {
+    const s = Store.open(path, null, time.clock);
+    stores.push(s);
+    return s;
+  };
+  let store = opened();
+  session(store, "a");
+  session(store, "b");
+  const MIN = 60_000;
+  const work = (s: Store) => Object.fromEntries([...read.sessionStats(read.makeStore(s.db, tempdir()), null)].map(([key, stats]) => [key, stats.workMs]));
+  store.startTurn("t1", "a", "input");
+  await time.adjust(5 * MIN);
+  store.endTurn("t1", "completed", null, null, null);
+  store.startTurn("t2", "a", "input");
+  await time.adjust(2 * MIN);
+  store.startTurn("t3", "b", "input");
+  assert.deepEqual(work(store), { a: 5 * MIN, b: 0 }, "a turn running is not counted yet");
+  store.endTurn("t2", "completed", null, null, null);
+  assert.deepEqual(work(store), { a: 7 * MIN, b: 0 });
+  // Its detail with its latest turn alone, as a device asks it (`?turns=1`); all of them as one from before does.
+  const { session: detail } = await import("../src/read/sessions.ts");
+  const viewer: Viewer = { sub: "u", email: "a@x", name: "A", role: "owner", workspace: "ws", device: "d", home: true };
+  const r = read.makeStore(store.db, tempdir());
+  assert.deepEqual(detail(r, "a", viewer, "en", 1).turns.map((t: any) => t.id), ["t2"]);
+  assert.deepEqual(detail(r, "a", viewer, "en").turns.map((t: any) => t.id), ["t1", "t2"]);
+  assert.deepEqual([detail(r, "a", viewer, "en", 1).session.turns, detail(r, "a", viewer, "en", 1).session.workMs], [2, 7 * MIN]);
+  // A database from before the work was kept: added up from the turns it has, as it opens.
+  store.db.exec("DROP TRIGGER session_work_add; DROP TRIGGER session_work_end; DROP TRIGGER session_work_drop; DROP TABLE session_work;");
+  await time.adjust(MIN);
+  store.endTurn("t3", "completed", null, null, null);
+  store.close();
+  store = opened();
+  assert.deepEqual(work(store), { a: 7 * MIN, b: MIN });
+  // Gone with the session's turns.
+  store.deleteSession("b");
+  assert.deepEqual(work(store), { a: 7 * MIN });
+  assert.deepEqual(store.db.prepare("SELECT session, ms FROM session_work ORDER BY session").all().map((x: any) => [x.session, x.ms]), [["a", 7 * MIN]]);
 });
 
 test("usage: where a model's context was compacted is kept as calls are recorded, and made once from those before", () => {

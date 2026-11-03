@@ -4,6 +4,9 @@ import { job, jobLog, openJobs } from "./jobs.ts";
 import { listThreads, messagesBefore } from "./store.ts";
 import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
+/// `?turns=`: how many of a session's latest turns; none (or not a count): all of them, as a device from before reads.
+const latest = (v: unknown): number | null => (typeof v === "string" && /^\d{1,6}$/.test(v) ? Number(v) : null);
+
 export const sessionOps: Record<string, ReadOp> = {
   /// Every thread as lists have it, for no viewer: chat_list's (sessions/others.ts).
   threadList: (s) => listThreads(s, "", null, null),
@@ -12,7 +15,7 @@ export const sessionOps: Record<string, ReadOp> = {
   /// One session as lists and events have it (views.rs `summary`).
   summary: (s, a) => summary(s, a.key),
   sessions: (s, a) => sessions(s, a.connect ?? null, a.archived, a.lang, a.viewer ?? null),
-  session: (s, a) => session(s, a.key, a.viewer, a.lang),
+  session: (s, a) => session(s, a.key, a.viewer, a.lang, latest(a.turns)),
   timeline: (s, a) => timeline(s, a.key, a.before, a.limit, a.lang, a.from, a.to, a.brief, a.after),
   transcriptState: (s, a) => transcriptState(s, a.key),
   transcriptFile: (s, a) => transcriptFile(s, a.key, a.lang),
