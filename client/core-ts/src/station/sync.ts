@@ -78,7 +78,7 @@ const JOBS = "/jobs?chats=0";
 const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
 /// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
 /// (retold.ts).
-const RETOLD = new Set(["session", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept"]);
+const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
 /// A station's changes ask the searches of it shown again at most this often: a busy station tells of its chats many
@@ -1360,6 +1360,17 @@ export class StationsSync {
     switch (name) {
       case "session":
         return this.#onSession(address, data);
+      case "session-pending": {
+        // Its messages taken (how many it has yet to take): in its summary at once, its summary told after.
+        const key = str(get(data, "key"));
+        const pending = u64(get(data, "pending"));
+        const held = key === null ? undefined : this.#core.data.of(address)?.summary(address, key);
+        if (key === null || pending === null || !isObject(held) || get(held, "pending") === pending) return;
+        const now = { ...held, pending };
+        this.#rowsAfterSession(address, key, held, now);
+        this.#core.data.putSummary(address, now);
+        return;
+      }
       case "session-removed": {
         const key = str(get(data, "key"));
         if (key) this.#onSessionRemoved(address, key);
