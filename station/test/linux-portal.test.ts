@@ -24,6 +24,8 @@ test("Linux component failures offer setup help, while a pending consent does no
 // The real portal and PipeWire are also exercised on a disposable GNOME session in the integration check.
 const fixture = `
 import json, os, struct, sys, time
+if os.environ.get("SF_TEST_PORTAL_PIDS"):
+    with open(os.environ["SF_TEST_PORTAL_PIDS"], "a") as out: out.write(f"{os.getpid()}\\n")
 def send(kind, data):
     if isinstance(data, dict): data = json.dumps(data).encode()
     sys.stdout.buffer.write(struct.pack(">BI", kind, len(data)) + data)
@@ -97,9 +99,9 @@ test("a refused desktop portal reports a retryable failure", { skip: !existsSync
 
 test("simultaneous portal openings prepare separate sessions", { skip: !existsSync(python), timeout: 10_000 }, async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "stillfail-portal-views-"));
-  const helper = join(dir, "helper.py"), go = join(dir, "go"), log = join(dir, "input.jsonl");
+  const helper = join(dir, "helper.py"), go = join(dir, "go"), log = join(dir, "input.jsonl"), pids = join(dir, "pids");
   await Promise.all([writeFile(helper, fixture), writeFile(go, "allow")]);
-  const desktop = new LinuxGstDesktop({ python, helper, env: { ...process.env, SF_TEST_PORTAL_GO: go, SF_TEST_PORTAL_LOG: log }, consentWaitMs: 5_000, changed: () => {} });
+  const desktop = new LinuxGstDesktop({ python, helper, env: { ...process.env, SF_TEST_PORTAL_GO: go, SF_TEST_PORTAL_LOG: log, SF_TEST_PORTAL_PIDS: pids }, consentWaitMs: 5_000, changed: () => {} });
   t.after(async () => { await desktop.close(); await rm(dir, { recursive: true, force: true }); });
   const [first, second] = await Promise.all([desktop.open(options), desktop.open(options)]);
   assert.notEqual(first, second);
@@ -107,6 +109,11 @@ test("simultaneous portal openings prepare separate sessions", { skip: !existsSy
   assert.deepEqual((await second.next())?.config, { codec: "jpeg", width: 400, height: 300 });
   first.close();
   second.close();
+  // The closed helpers still write their last commands; the desktop's close waits until both have exited.
+  await desktop.close();
+  const started = (await readFile(pids, "utf8")).trim().split("\n").map(Number);
+  assert.equal(started.length, 2);
+  for (const pid of started) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
 });
 
 test("unsupported composed text ends the view with an actionable error", { skip: !existsSync(python), timeout: 10_000 }, async (t) => {
