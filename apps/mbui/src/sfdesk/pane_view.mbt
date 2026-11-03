@@ -722,7 +722,8 @@ fn fold_peek_shift(at : FoldLook) -> Double {
 /// (it goes under what cuts the block as it goes).
 fn fold_held(f : FoldLook) -> (Double, Double, Double) {
   match (fold_goes.from, fold_goes.to) {
-    (Some(a), Some(b)) if fold_going(@ui.current().moment()) =>
+    // (not between two looks that both show it, open and shown a while: what it holds would jump as the way ends)
+    (Some(a), Some(b)) if fold_going(@ui.current().moment()) && (a.showing <= 0.0 || b.showing <= 0.0) =>
       (dmax(a.brand, b.brand), dmax(a.side_w, b.side_w), dmin(a.band, b.band))
     _ => (f.brand, f.side_w, f.band)
   }

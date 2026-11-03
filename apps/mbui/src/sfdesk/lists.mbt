@@ -39,7 +39,14 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
   // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
   let away = @sfpages.search_away(c)
   c.box(style=lists_fill, fn() {
-    @sfpages.chats_lists(c, src, w, frame)
+    // (their room for the band held on the block's way: drawn where the band has them as it goes)
+    let drawn_off = band_h(src, w) - band
+    if drawn_off != 0.0 {
+      let lists = c.box(style=lists_fill, fn() { @sfpages.chats_lists(c, src, w, frame) })
+      c.look(lists, @ui.look(dy=drawn_off))
+    } else {
+      @sfpages.chats_lists(c, src, w, frame)
+    }
     let b = c.layer(fn() { lists_band(c, src, w) })
     // with no bell in the rail: the stations' trouble and the services up long, at the foot (the rail's bell has them
     // where it is: cloud/workspace.tsx WorkspaceSidebarFooter)
