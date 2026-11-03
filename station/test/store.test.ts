@@ -11,7 +11,7 @@ import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
-import { addListState, MERGED, SCHEMA } from "../src/store/schema.ts";
+import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
@@ -378,27 +378,111 @@ for (const mode of ["ABORT", "REPLACE"] as const) for (const recursive of [false
   });
 }
 
+for (const recursive of [false, true]) {
+  test(`replacing the first delivery keeps the earliest remaining delivery (recursive triggers ${recursive})`, () => {
+    const store = memory();
+    const db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      session(store, "first");
+      db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first'), (1,2,'first')").run();
+      db.prepare("INSERT OR IGNORE INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+      assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:1,n:1});
+      db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+      assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:1,n:2});
+    } finally { store.close(); }
+  });
+}
+
+test("replacing a sole delivery does not rewrite the unchanged first-message summary", () => {
+  const store = memory();
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = OFF;
+      CREATE TEMP TABLE first_changed (session TEXT);
+      CREATE TEMP TRIGGER watch_first AFTER UPDATE ON main.session_first BEGIN INSERT INTO first_changed VALUES (NEW.session); END;`);
+    session(store, "first");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+    db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+    assert.deepEqual(db.prepare("SELECT session FROM first_changed").all(), []);
+  } finally { store.close(); }
+});
+
+test("deleting a first delivery finds the earliest remaining one across its threads", () => {
+  const store = memory();
+  const db = store.db;
+  try {
+    session(store, "first");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (9,1,'first'), (2,1,'first'), (9,2,'first')").run();
+    db.prepare("DELETE FROM deliveries WHERE thread=9 AND n=1 AND session='first'").run();
+    assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:2,n:1});
+    db.prepare("DELETE FROM deliveries WHERE thread=2 AND n=1 AND session='first'").run();
+    assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:9,n:2});
+    db.prepare("DELETE FROM deliveries WHERE thread=9 AND n=2 AND session='first'").run();
+    assert.equal(db.prepare("SELECT 1 FROM session_first WHERE session='first'").get(), undefined);
+  } finally { store.close(); }
+});
+
+test("finding the first delivery seeks each thread without walking its messages", () => {
+  const store = memory();
+  const db = store.db;
+  try {
+    const put = db.prepare("INSERT INTO deliveries (thread,n,session,delivered_at) VALUES (?,?,?,1)");
+    db.exec("BEGIN");
+    for (let n=0; n<5_000; n++) { put.run(9,n,"target"); put.run(10,n,"other"); }
+    put.run(2,0,"target");
+    db.exec("COMMIT");
+    let visited = 0;
+    db.function("visit_first_delivery", (_row) => { visited++; return 1; });
+    const sql = firstDelivery("?1");
+    const traced = sql.replaceAll("WHERE session = ?1", "WHERE visit_first_delivery(rowid) AND session = ?1");
+    assert.deepEqual({ ...db.prepare(traced).get("target") }, {thread:9,n:0});
+    assert.ok(visited <= 4, `one seek per thread plus its first row (visited ${visited})`);
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("target") as {detail:string}[]).map((r) => r.detail).join(" | ");
+    assert.match(plan, /SEARCH deliveries USING COVERING INDEX deliveries_session \(session=\? AND thread=\?\)/);
+    assert.doesNotMatch(plan, /USE TEMP B-TREE/);
+    db.exec("BEGIN");
+    for (let n=0; n<1_200; n++) put.run(1000+n,0,"target");
+    db.exec("COMMIT");
+    visited = 0;
+    assert.deepEqual({ ...db.prepare(traced).get("target") }, {thread:9,n:0});
+    assert.ok(visited <= 2 * 1_202, `many threads still seek their first rows (visited ${visited})`);
+  } finally { store.close(); }
+});
+
 test("an older database replaces the first-delivery trigger without rebuilding its summary", () => {
   const path = join(tempdir(), "first-delivery.db");
   const before = open(path);
   session(before, "first");
   before.db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
-  before.db.exec(`DROP TRIGGER session_first_add;
+  before.db.exec(`DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop;
     CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
       INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+    END;
+    CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries
+      WHEN EXISTS (SELECT 1 FROM session_first WHERE session=OLD.session AND thread=OLD.thread AND n=OLD.n) BEGIN
+      DELETE FROM session_first WHERE session=OLD.session;
+      INSERT OR IGNORE INTO session_first SELECT session,thread,n FROM deliveries WHERE session=OLD.session ORDER BY rowid LIMIT 1;
     END`);
   before.close();
   const after = open(path);
   after.db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,2,'first')").run();
   assert.deepEqual({ ...after.db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 1 });
+  after.db.prepare("DELETE FROM deliveries WHERE thread=1 AND n=1 AND session='first'").run();
+  assert.deepEqual({ ...after.db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 2 });
+  assert.match((after.db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='session_first_drop'").get() as {sql:string}).sql, /WITH RECURSIVE first_threads/);
 });
 
 test("updating the first-delivery trigger does not read or rewrite old deliveries and summaries", () => {
   const store = memory();
   const db = store.db;
-  db.exec(`DROP TRIGGER session_first_add;
+  db.exec(`DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop;
     CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
       INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+    END;
+    CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries BEGIN
+      DELETE FROM session_first WHERE session=OLD.session;
+      INSERT OR IGNORE INTO session_first SELECT session,thread,n FROM deliveries WHERE session=OLD.session ORDER BY rowid LIMIT 1;
     END`);
   const tables = new Set(["deliveries", "entries", "session_first", "thread_state", "thread_people"]);
   db.setAuthorizer((action, table) => tables.has(table ?? "") && [constants.SQLITE_READ, constants.SQLITE_INSERT, constants.SQLITE_UPDATE, constants.SQLITE_DELETE].includes(action)
