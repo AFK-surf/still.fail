@@ -973,9 +973,10 @@ export const USAGE_DAY_HOME = minutesAtDayEdges(QUARTERS_HOME, "1");
 
 /// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
 export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
-  if (viewer === null || viewer.home !== false) {
-    if (one(s, "SELECT done FROM usage_minute_all WHERE id = 1")?.done !== 1) throw new Error(USAGE_MINUTES_PENDING);
-  } else if (one(s, PENDING_MINUTE_SESSION, viewer.workspace)) {
+  // Before the old fill completed, an old session might have no scope row at all. An empty scope is therefore not
+  // proof that this workspace's historical total is complete.
+  if (one(s, "SELECT done FROM usage_minute_all WHERE id = 1")?.done !== 1) throw new Error(USAGE_MINUTES_PENDING);
+  if (viewer !== null && viewer.home === false && one(s, PENDING_MINUTE_SESSION, viewer.workspace)) {
     throw new Error(USAGE_MINUTES_PENDING);
   }
   const aligned = utcOffsetMin % 15n === 0n;

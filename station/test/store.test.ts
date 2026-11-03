@@ -14,8 +14,7 @@ import {
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
-import { backfillNextUsageDetail, detailQuery } from "../src/store/usage-detail.ts";
-import { backfillUsageCompactions } from "../src/store/usage-compactions.ts";
+import { detailQuery } from "../src/store/usage-detail.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import * as read from "../src/read/store.ts";
 import { fileAway } from "./archived-before.ts";
@@ -1375,16 +1374,16 @@ test("usage: a row is the calls it says, and a database from before says each wa
     CREATE TRIGGER usage_compactions_add AFTER INSERT ON usage BEGIN SELECT 1; END;`);
   before.close();
   store = open(path);
-  // Each call from before is one, its context what it sent (a subagent's none), as before.
-  assert.deepEqual(store.lastContexts("a", 5).map((c) => [c.context, c.window]), [[120_000, null]]);
+  // The old call remains intact; an unfinished context index does not claim it is complete.
+  assert.deepEqual(store.db.prepare("SELECT context, context_window FROM usage WHERE id = 'c1'").get(),
+    Object.assign(Object.create(null), { context: 120_000, context_window: null }));
+  assert.deepEqual(store.lastContexts("a", 5), []);
   // A turn told at once is its calls; the context it ended with is what it says, compacted from the one before.
   store.recordUsage("/a.jsonl", { session: "a", offset: 2, model: "m" }, "claude", [call("c2", 2000, 300_000, { calls: 3, context: 20_000, window: 200_000 })] as never);
   assert.deepEqual(store.usageOfSession("a").map((g) => [g.calls, g.input]), [[5, 420_007]]);
-  while (!backfillNextUsageDetail(store.db).done) { /* old calls are filled by the worker in a running station */ }
-  assert.deepEqual(store.usageGroups(0, 3000, 0).reduce((n, g) => n + g.calls, 0), 5);
-  assert.deepEqual(store.lastContexts("a", 1).map((c) => [c.context, c.window]), [[20_000, 200_000]]);
-  while (!backfillUsageCompactions(store.db).done) { /* old calls are filled by the worker in a running station */ }
-  assert.deepEqual([...store.compactionPoints(0)], [["m", 120_000]]);
+  assert.throws(() => store.usageGroups(0, 3000, 0), /detail statistics.*being filled/);
+  assert.deepEqual(store.lastContexts("a", 1), []);
+  assert.deepEqual([...store.compactionPoints(0)], []);
   store.close();
 });
 

@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { Worker } from "node:worker_threads";
 import { makeStore, remoteRunCount, remoteRunsSince } from "../src/read/store.ts";
 import { backfillRemoteRuns, DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import { Store } from "../src/store/store.ts";
+import { MinuteReader } from "../src/usage/minute-reader.ts";
 
 test("old remote tasks fill in bounded batches and survive concurrent old writes and a restart", () => {
   const dir = mkdtempSync(join(tmpdir(), "remote-runs-"));
@@ -112,7 +111,7 @@ test("a partial remote task index converges after old rows change and new rows a
   } finally { db.close(); }
 });
 
-test("the existing background reader finishes old remote tasks even when minutes are already ready", async () => {
+test("old remote tasks are not filled even when minute statistics are already ready", async () => {
   const dir = mkdtempSync(join(tmpdir(), "remote-runs-worker-"));
   const path = join(dir, "stillfail.db");
   const old = new DatabaseSync(path);
@@ -122,22 +121,17 @@ test("the existing background reader finishes old remote tasks even when minutes
   const store = Store.open(path);
   const priority = new SharedArrayBuffer(8);
   Atomics.store(new Int32Array(priority), 0, 1);
-  const worker = new Worker(new URL("../src/usage/minute-worker.ts", import.meta.url), { workerData: { path, priority } });
+  const worker = new MinuteReader(path, { priority });
   try {
-    const [waiting] = await once(worker, "message");
-    assert.equal(waiting.foreground, true, "the background batch gives a waiting foreground writer priority");
-    worker.postMessage({ id: 1, viewer: { workspace: "A", home: false } });
-    const [ready] = await once(worker, "message");
-    assert.equal(ready.id, 1, "a ready minute history can be read while remote tasks wait to be indexed");
+    await worker.ready({ workspace: "A", home: false });
+    await assert.rejects(worker.readyRemote(), /remote.*unavailable/);
     assert.equal((store.db.prepare("SELECT done FROM remote_run_progress WHERE id = 1").get() as { done: number }).done, 0);
     assert.throws(() => remoteRunCount(makeStore(store.db, dir), { workspace: "A", home: false }), /remote task statistics are still being filled/);
     Atomics.store(new Int32Array(priority), 0, 0);
-    const [message] = await once(worker, "message");
-    assert.deepEqual(message, { complete: true });
-    assert.equal((store.db.prepare("SELECT done FROM remote_run_progress WHERE id = 1").get() as { done: number }).done, 1);
-    assert.equal(remoteRunCount(makeStore(store.db, dir), { workspace: "A", home: false }), 1);
+    await assert.rejects(worker.readyRemote(), /remote.*unavailable/);
+    assert.equal((store.db.prepare("SELECT done FROM remote_run_progress WHERE id = 1").get() as { done: number }).done, 0);
   } finally {
-    await worker.terminate();
+    await worker.close();
     store.close();
     rmSync(dir, { recursive: true, force: true });
   }

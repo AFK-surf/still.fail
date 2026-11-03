@@ -50,7 +50,7 @@ test("usage detail reads statistics for the viewer and exact boundaries, includi
   }
 });
 
-test("a usage request waits for old details outside the reader and resumes after handover", async () => {
+test("an incomplete detail summary is unavailable without holding a reader or rebuilding old calls", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-detail-wait-"));
   const path = join(dir, "stillfail.db");
   let store = Store.open(path);
@@ -73,21 +73,19 @@ test("a usage request waits for old details outside the reader and resumes after
   const previousGone = new Promise<void>((resolve) => { handover = resolve; });
   const readers = new Readers(dir, 1, undefined, 1, { previousGone });
   const args = { from: 0, to: 100, tz: 0, reading: false, viewer: { workspace: "A", home: false } };
-  const pending = readers.read("usage", args, "en");
-  let state = "pending";
-  void pending.then(() => { state = "resolved"; }, () => { state = "rejected"; });
+  const before = store.db.prepare("SELECT * FROM usage_detail_all").get();
+  const unavailable = (error: any) => error.status === 503 && /detail.*unavailable/i.test(error.message);
+  const pending = assert.rejects(readers.read("usage", args, "en"), unavailable);
   try {
     await readers.read("checkpoint", {}, "en");
-    assert.equal(state, "pending");
+    await pending;
+    await assert.rejects(readers.read("outflowUsage", { ...args, ws: args.viewer }, "en"), unavailable);
     handover();
-    const result = JSON.parse(await pending);
-    assert.equal(result.rows[0].input, 3);
-    const exported = JSON.parse(await readers.read("outflowUsage", { ...args, ws: args.viewer }, "en"));
-    assert.equal(exported.rows[0].input, 3);
+    assert.deepEqual(store.db.prepare("SELECT * FROM usage_detail_all").get(), before);
   } finally { handover(); readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a failed detail backfill reports an error rather than leaving readers waiting", async () => {
+test("an incomplete detail summary does not attempt to fill a missing index", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-detail-error-"));
   const path = join(dir, "stillfail.db");
   let store = Store.open(path);
@@ -103,20 +101,20 @@ test("a failed detail backfill reports an error rather than leaving readers wait
   store.db.exec("DROP TABLE usage_detail_lookup");
   const reader = new MinuteReader(path);
   try {
-    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /no such table: (?:main\.)?usage_detail_lookup/);
-    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /no such table: (?:main\.)?usage_detail_lookup/);
+    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /detail.*unavailable/);
+    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /detail.*unavailable/);
     await reader.readyRemote();
   } finally { await reader.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("closing while detail statistics wait for handover rejects the request", async () => {
   const reader = new MinuteReader("unused", { previousGone: new Promise<void>(() => {}) });
-  const pending = reader.readyDetail({ workspace: "A", home: false });
+  const pending = assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /station stopping/);
   await reader.close();
-  await assert.rejects(pending, /station stopping/);
+  await pending;
 });
 
-test("a moved session restarts its detail worker without holding unrelated workspace reads", async () => {
+test("a moved session does not expose stale details to either workspace", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-detail-move-"));
   const path = join(dir, "stillfail.db");
   const store = Store.open(path);
@@ -132,9 +130,11 @@ test("a moved session restarts its detail worker without holding unrelated works
     await reader.readyDetail({ workspace: "A", home: false });
     store.db.prepare("UPDATE sessions SET ws = 'B' WHERE key = 'a'").run();
     assert.deepEqual(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "C", home: false }), []);
-    await reader.readyDetail({ workspace: "B", home: false });
-    assert.equal(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "B", home: false })[0]?.input, 3);
-    assert.deepEqual(usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "A", home: false }), []);
+    await assert.rejects(reader.readyDetail({ workspace: "A", home: false }), /detail.*unavailable/);
+    await assert.rejects(reader.readyDetail({ workspace: "B", home: false }), /detail.*unavailable/);
+    await reader.readyDetail({ workspace: "C", home: false });
+    assert.throws(() => usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "A", home: false }), /detail statistics.*being filled/);
+    assert.throws(() => usageGroups(makeStore(store.db, dir), 0n, 100n, 0n, { workspace: "B", home: false }), /detail statistics.*being filled/);
   } finally { await reader.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { Worker } from "node:worker_threads";
 import { backfillUsageCompactions, installUsageCompactions, usageCompactionsReady } from "../src/store/usage-compactions.ts";
 
 function oldDatabase(path = ":memory:") {
@@ -74,93 +69,19 @@ test("old calls fill in bounded batches and converge with late writes and delete
   }
 });
 
-test("an unfinished disk index resumes in its worker after reopening", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "usage-compactions-"));
-  const path = join(dir, "stillfail.db");
+test("new main calls are kept without rebuilding an incomplete old index", () => {
+  const db = oldDatabase();
   try {
-    let db = oldDatabase(path);
-    add(db, "c", 3_000, 20_000);
-    add(db, "a", 1_000, 120_000);
-    add(db, "b", 2_000, 80_000);
+    add(db, "old-a", 1, 120_000);
+    add(db, "old-b", 2, 20_000);
     installUsageCompactions(db);
-    assert.equal(backfillUsageCompactions(db, 1).processed, 1);
-    db.close();
-    const worker = new Worker(new URL("../src/usage/compaction-worker.ts", import.meta.url), { workerData: { path } });
-    const [code] = await once(worker, "exit");
-    assert.equal(code, 0);
-    db = new DatabaseSync(path);
-    try {
-      assert.equal(usageCompactionsReady(db), true);
-      assert.deepEqual(actual(db), expected(db));
-    } finally {
-      db.close();
-    }
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("the worker resumes the same backfill when another connection releases its write lock", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "usage-compactions-busy-"));
-  const path = join(dir, "stillfail.db");
-  const db = oldDatabase(path);
-  let worker: Worker | null = null;
-  try {
-    db.exec("PRAGMA journal_mode = WAL");
-    add(db, "a", 1, 120_000);
-    add(db, "b", 2, 20_000);
-    installUsageCompactions(db);
-    db.exec("BEGIN IMMEDIATE");
-    worker = new Worker(new URL("../src/usage/compaction-worker.ts", import.meta.url), { workerData: { path } });
-    const [notice] = await once(worker, "message") as [{ waiting?: boolean }];
-    assert.equal(notice.waiting, true);
-    db.exec("COMMIT");
-    const [code] = await once(worker, "exit");
-    worker = null;
-    assert.equal(code, 0);
-    assert.equal(usageCompactionsReady(db), true);
-    assert.deepEqual(actual(db), expected(db));
-  } finally {
-    if (worker !== null) await worker.terminate();
-    try { db.exec("ROLLBACK"); } catch { /* already committed */ }
-    db.close();
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("a waiting foreground writer gets the connection before another backfill batch", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "usage-compactions-priority-"));
-  const path = join(dir, "stillfail.db");
-  const db = oldDatabase(path);
-  const priority = new Int32Array(new SharedArrayBuffer(8));
-  let worker: Worker | null = null;
-  try {
-    db.exec("PRAGMA journal_mode = WAL");
-    db.exec("CREATE TABLE foreground (n INTEGER)");
-    for (let n = 0; n < 100; n++) add(db, `call-${n}`, n, 100_000);
-    installUsageCompactions(db);
-    db.exec("BEGIN IMMEDIATE");
-    worker = new Worker(new URL("../src/usage/compaction-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
-    const [busy] = await once(worker, "message") as [{ waiting?: boolean }];
-    assert.equal(busy.waiting, true, "the worker has encountered the other connection's write lock");
-    Atomics.store(priority, 0, 1); // A write is waiting on the station's connection.
-    db.exec("COMMIT");
-    const [yielded] = await once(worker, "message") as [{ foreground?: boolean }];
-    assert.equal(yielded.foreground, true, "the next batch yields while the station is trying to write");
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_main_calls").get() as { n: number }).n, 0);
-    db.prepare("INSERT INTO foreground VALUES (1)").run();
-    Atomics.store(priority, 0, 0);
-    const [code] = await once(worker, "exit");
-    worker = null;
-    assert.equal(code, 0);
-    assert.equal(usageCompactionsReady(db), true);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM foreground").get() as { n: number }).n, 1);
-  } finally {
-    if (worker !== null) await worker.terminate();
-    try { db.exec("ROLLBACK"); } catch { /* already committed */ }
-    db.close();
-    rmSync(dir, { recursive: true, force: true });
-  }
+    add(db, "new-a", 3, 120_000);
+    add(db, "new-b", 4, 20_000);
+    assert.equal(usageCompactionsReady(db), false);
+    assert.deepEqual((db.prepare("SELECT id FROM usage_main_calls ORDER BY at").all() as { id: string }[]).map((r) => r.id),
+      ["new-a", "new-b"]);
+    assert.deepEqual(actual(db).map((r: any) => [r.id, r.point]), [["new-b", 120_000]]);
+  } finally { db.close(); }
 });
 
 test("neighbors seek only main calls of the requested session", () => {

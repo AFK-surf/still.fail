@@ -8,7 +8,7 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, remoteRunCount, remoteRunsReady, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
@@ -209,10 +209,7 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false, options: { remoteRuns?: boolean } = {}): Json {
-  // A not-yet-complete remote summary is retried once it is ready; do not do the other work twice in the meantime.
   const includeRemoteRuns = options.remoteRuns !== false;
-  if (includeRemoteRuns || history) remoteRunsReady(s);
-  if (history) usageChatsReady(s, viewer);
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
   const started = performance.now();
@@ -244,7 +241,23 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   const since = usageSince(s);
   const prices = priceTable(lang, rows.map((r) => r.model));
   const profiles = configProfiles(s.dataDir);
-  const remoteRuns = includeRemoteRuns ? remoteRunsSince(s, from, viewer) : [];
+  // An older station may not have complete historical statistics. Leave the unavailable part absent so clients can
+  // still show the complete details and distinguish missing history from an actual zero.
+  let remoteRuns: Json | undefined = [];
+  if (includeRemoteRuns) {
+    try { remoteRuns = remoteRunsSince(s, from, viewer); }
+    catch (error) {
+      if (!(error instanceof Error) || error.message !== REMOTE_RUNS_PENDING) throw error;
+      remoteRuns = undefined;
+    }
+  }
+  let historyResult: Json | undefined;
+  if (history) {
+    try { historyResult = usageHistory(s, utcOffsetMin, viewer, mark); }
+    catch (error) {
+      if (!(error instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(error.message)) throw error;
+    }
+  }
   mark("details");
   const answer = {
     from: i64(from),
@@ -258,8 +271,8 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     profiles,
     // the tasks the viewer's workspace's chats on other stations ran here since `from` (the card's 跨设备执行): the
     // workspace their key names (`remote:<workspace>:…`)
-    remoteRuns,
-    ...(history ? { history: usageHistory(s, utcOffsetMin, viewer, mark) } : {}),
+    ...(remoteRuns !== undefined ? { remoteRuns } : {}),
+    ...(historyResult !== undefined ? { history: historyResult } : {}),
   };
   mark("other");
   const ms = Math.round(performance.now() - started);

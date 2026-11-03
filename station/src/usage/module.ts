@@ -3,17 +3,14 @@
 // way it is shown is added up from that record: a chat's execution details and agent card (told as more is recorded,
 // on its live stream and in its session's summary, `usage`) and the usage page (GET /usage).
 import { Effect, Layer } from "effect";
-import { join } from "node:path";
 import { usageRoutes } from "../api/routes/usage.ts";
-import { log } from "../ops/log.ts";
 import { usageNow } from "../read/usage.ts";
 import { Agents } from "../sessions/agents.ts";
 import { hubConfig } from "../sessions/config.ts";
 import type { LiveHub } from "../sessions/live.ts";
-import { Parts, Paths, Previous, StationConfig, Store } from "../services.ts";
+import { Parts, Paths, StationConfig, Store } from "../services.ts";
 import type { Store as StationStore } from "../store/store.ts";
 import { UsageCounter } from "./counter.ts";
-import { CompactionBackfill } from "./compaction-backfill.ts";
 
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
 /// None before a call. `quiet`: not told as a change of the session.
@@ -22,22 +19,15 @@ export function keepUsage(store: StationStore, key: string, quiet = false): void
   if (usage !== null) store.setSessionUsage(key, usage, quiet);
 }
 
-/// Sessions' usage as `counter` records it: the live view tells it and asks the counter to count what a session at work
-/// writes; each session counted anew is kept as counted (its summary). As it starts, every session's is kept again as
-/// this station says it, told where that changed it: what a summary says grows (when its cache is over, #2340), and one
-/// kept by a station from before says it only once its session makes another call, the very call that reads its whole
-/// context again (no device is told otherwise: a device that comes back to a new station process is told what it missed,
-/// not every summary again). Some tens of ms for ccvm's 1,200 sessions. Gives what stops it.
+/// The live view reads each saved summary. Only sessions whose recorded usage changes are updated and told.
 export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCounter): () => void {
-  live.countWith({ of: (key) => usageNow(store, key), ask: (key) => counter.soon(key) });
-  for (const key of store.sessionKeys()) keepUsage(store, key);
+  live.countWith({ of: (key) => store.sessionUsage(key), ask: (key) => counter.soon(key) });
   return store.subscribe((change) => {
     // A session gone on in another conversation (its context cleared, as 换新上下文 does): its context is that one's.
     const sessions = change.type === "usage" ? change.sessions : change.type === "conversation" ? [change.key] : null;
     if (sessions === null) return;
-    // Those it follows told on their streams, then every session counted anew kept as counted.
-    live.usageCounted();
     for (const key of sessions) keepUsage(store, key);
+    live.usageCounted();
   });
 }
 
@@ -45,16 +35,8 @@ export const UsageLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const { data } = yield* Paths;
     const store = yield* Store;
-    const previous = yield* Previous;
     const config = yield* StationConfig;
     const { hub } = yield* Agents;
-    const backfill = yield* Effect.acquireRelease(
-      Effect.sync(() => new CompactionBackfill(join(data, "stillfail.db"), store.backfillPriority)),
-      (index) => Effect.promise(() => index.stop()),
-    );
-    if (!store.compactionsReady()) void previous.exited.then(() => backfill.start()).catch((error) => {
-      log.error("usage", "the compaction history worker could not start", { error: (error as Error).message });
-    });
     const usage = yield* Effect.acquireRelease(
       Effect.sync(() => new UsageCounter({ store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock })),
       (u) => Effect.promise(() => u.stop()),

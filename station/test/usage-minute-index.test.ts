@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
-import { on, once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { Worker } from "node:worker_threads";
 import { backfillNextUsageSession, backfillUsageMinutes, installUsageMinutes, MINUTE_SAME_END, MINUTE_SAME_TIME, PENDING_MINUTE_SESSION } from "../src/store/usage-minutes.ts";
+import { MinuteReader } from "../src/usage/minute-reader.ts";
 
 function oldDatabase(path = ":memory:") {
   const db = new DatabaseSync(path);
@@ -151,40 +150,40 @@ test("checking whether a workspace is ready skips all of its completed sessions"
   }
 });
 
-test("minute backfill waits for a foreground writer, then catches up", async () => {
+test("a coverage check neither waits for a writer nor fills old minutes", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-minute-priority-"));
   const path = join(dir, "old.db");
   const db = oldDatabase(path);
   const priority = new Int32Array(new SharedArrayBuffer(8));
-  let worker: Worker | null = null;
+  let worker: MinuteReader | null = null;
   try {
     db.exec("PRAGMA journal_mode = WAL");
     for (let n = 0; n < 100; n++) add(db, `a${n}`, "a", n * 60_000);
     installUsageMinutes(db);
+    db.exec("BEGIN IMMEDIATE");
     Atomics.store(priority, 0, 1);
-    worker = new Worker(new URL("../src/usage/minute-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
-    const [notice] = await once(worker, "message") as [{ foreground?: boolean }];
-    assert.equal(notice.foreground, true);
+    worker = new MinuteReader(path, { priority: priority.buffer as SharedArrayBuffer });
+    await assert.rejects(worker.ready(null), /minute.*unavailable/);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_minute").get() as { n: number }).n, 0);
     db.prepare("UPDATE sessions SET ws = 'workspace-c' WHERE key = 'a'").run();
+    db.exec("COMMIT");
     Atomics.store(priority, 0, 0);
-    const [complete] = await once(worker, "message") as [{ complete?: boolean }];
-    assert.equal(complete.complete, true);
-    assert.deepEqual(totals(db), expected(db));
+    await assert.rejects(worker.ready(null), /minute.*unavailable/);
+    assert.deepEqual(totals(db), []);
     assert.equal((db.prepare("SELECT ws FROM usage_minute_scope WHERE session = 'a'").get() as { ws: string }).ws, "workspace-c");
   } finally {
-    if (worker !== null) await worker.terminate();
+    if (worker !== null) await worker.close();
     db.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("a workspace whose minutes are ready does not wait for foreground writes or another workspace's backfill", async () => {
+test("a partially checked workspace is not mistaken for complete history", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-minute-ready-"));
   const path = join(dir, "old.db");
   const db = oldDatabase(path);
   const priority = new Int32Array(new SharedArrayBuffer(8));
-  let worker: Worker | null = null;
+  let worker: MinuteReader | null = null;
   try {
     db.exec("PRAGMA journal_mode = WAL; CREATE INDEX sessions_ws ON sessions (key, ws)");
     add(db, "a1", "a", 1);
@@ -194,33 +193,12 @@ test("a workspace whose minutes are ready does not wait for foreground writes or
     const empty = db.prepare("INSERT INTO sessions VALUES (?, 'workspace-a')");
     for (let n = 0; n < 320; n++) empty.run(`empty-${n}`);
     Atomics.store(priority, 0, 1);
-    worker = new Worker(new URL("../src/usage/minute-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
-    const messages = on(worker, "message");
-    const next = async () => (await messages.next()).value![0] as { id?: number; foreground?: boolean; request?: number };
-    const blocked = async (id: number) => {
-      for (;;) {
-        const message = await next();
-        if (message.foreground && message.request === id) return;
-        assert.equal(message.id, undefined, "a different request cannot finish yet");
-      }
-    };
-    const busy = await next();
-    assert.equal(busy.foreground, true);
-    worker.postMessage({ id: 1, viewer: { workspace: "workspace-a", home: false } });
-    const answer = await next();
-    assert.equal(answer.id, 1, "a completed workspace needs no backfill write");
+    worker = new MinuteReader(path, { priority: priority.buffer as SharedArrayBuffer });
+    await assert.rejects(worker.ready({ workspace: "workspace-a", home: false }), /minute.*unavailable/);
+    await assert.rejects(worker.ready({ workspace: "workspace-b", home: false }), /minute.*unavailable/);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_minute WHERE session = 'b'").get() as { n: number }).n, 0);
-
-    worker.postMessage({ id: 2, viewer: { workspace: "workspace-b", home: false } });
-    await blocked(2);
-    worker.postMessage({ id: 3, viewer: { workspace: "workspace-a", home: false } });
-    await blocked(2);
-    worker.postMessage({ id: 4, viewer: { workspace: "workspace-a", home: false } });
-    const behind = await next();
-    assert.equal(behind.id, 3, "a ready workspace passes a different workspace waiting for a write");
-    await messages.return?.();
   } finally {
-    if (worker !== null) await worker.terminate();
+    if (worker !== null) await worker.close();
     db.close();
     rmSync(dir, { recursive: true, force: true });
   }

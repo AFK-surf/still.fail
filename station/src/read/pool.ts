@@ -95,7 +95,7 @@ export class Readers {
     this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
   }
 
-  /// Begin filling old usage without occupying a device reader. The pool can also start it lazily for standalone tests.
+  /// Check statistical coverage without occupying a device reader or writing old history.
   startUsageIndex() {
     if (this.closed) return;
     if (this.minutes === null) this.minutes = new MinuteReader(join(this.data, "stillfail.db"), this.backfill);
@@ -147,32 +147,37 @@ export class Readers {
     return this.enqueue(op, args, lang, told, op === CHECKPOINT);
   }
 
+  private async covered(check: Promise<void>): Promise<void> {
+    try { await check; }
+    catch (error) {
+      if (this.closed) throw new HttpError(502, "station stopping");
+      throw new HttpError(503, (error as Error).message);
+    }
+  }
+
   private async usageRead(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
     const viewer = (args as { viewer?: InWorkspace | null } | null)?.viewer ?? null;
     const history = (args as { history?: unknown } | null)?.history === true;
     while (!this.closed) {
-      if (history) {
-        this.startUsageIndex();
-        await this.minutes!.ready(viewer);
-      }
       try {
         return await this.enqueue("usage", args, lang, told);
       } catch (error) {
-        // The reader checks within its snapshot: a session may have entered the workspace after the worker checked it.
-        if (error instanceof HttpError && error.message === USAGE_MINUTES_PENDING && history) continue;
+        // The reader checks its own snapshot: a session may have moved after the coverage check.
+        if (error instanceof HttpError && error.message === USAGE_MINUTES_PENDING && history)
+          throw new HttpError(503, "historical minute statistics are unavailable");
         if (error instanceof HttpError && error.message === USAGE_DETAIL_PENDING) {
           this.startUsageIndex();
-          await this.minutes!.readyDetail(viewer);
+          await this.covered(this.minutes!.readyDetail(viewer));
           continue;
         }
         if (error instanceof HttpError && error.message === USAGE_CHATS_PENDING && history) {
           this.startUsageIndex();
-          await this.minutes!.readyChats(viewer);
+          await this.covered(this.minutes!.readyChats(viewer));
           continue;
         }
         if (!(error instanceof HttpError) || error.message !== REMOTE_RUNS_PENDING) throw error;
         this.startUsageIndex();
-        await this.minutes!.readyRemote();
+        await this.covered(this.minutes!.readyRemote());
       }
     }
     throw new HttpError(502, "station stopping");
@@ -187,7 +192,7 @@ export class Readers {
       catch (error) {
         if (!(error instanceof HttpError) || error.message !== USAGE_DETAIL_PENDING) throw error;
         this.startUsageIndex();
-        await this.minutes!.readyDetail(viewer);
+        await this.covered(this.minutes!.readyDetail(viewer));
       }
     }
     throw new HttpError(502, "station stopping");

@@ -85,22 +85,19 @@ test("the database's log is written into it before the reads waiting, by the rea
   }
 });
 
-test("a history waiting for old usage to be summarized does not hold a device reader", { timeout: 30_000 }, async () => {
+test("an incomplete old history is omitted without holding a device reader", { timeout: 30_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "reader-minute-"));
   const store = Store.open(join(dir, "stillfail.db"));
-  const readers = new Readers(dir, 1, new URL("./reader-line-worker.mjs", import.meta.url));
-  const state = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
-  store.db.exec("UPDATE usage_minute_all SET done = 0; BEGIN IMMEDIATE");
-  // The write lock keeps the minute worker from finishing while the device reader stays available.
-  const history = readers.read("usage", { state: state.buffer, hold: true, history: true, viewer: null }, "en");
+  const readers = new Readers(dir, 1);
+  store.db.exec("UPDATE usage_minute_all SET done = 0");
+  const history = readers.read("usage", { from: 0, to: 100, tz: 0, reading: false, history: true, viewer: null }, "en");
   try {
-    assert.equal(await readers.read("thread", { state: state.buffer, hold: false }, "en"), "{}");
-    assert.equal(Atomics.load(state, 0), 1, "only the chat read entered a device reader");
+    await readers.read("checkpoint", {}, "en");
+    const result = JSON.parse(await history);
+    assert.equal(result.history, undefined);
+    assert.deepEqual(result.rows, []);
+    assert.equal((store.db.prepare("SELECT done FROM usage_minute_all WHERE id = 1").get() as { done: number }).done, 0);
   } finally {
-    store.db.exec("COMMIT");
-    Atomics.store(state, 2, 1);
-    Atomics.notify(state, 2);
-    await history;
     readers.close();
     store.close();
     rmSync(dir, { recursive: true, force: true });
