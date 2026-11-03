@@ -1,5 +1,8 @@
 # 密钥库（设计稿）
 
+> 下面例子和测量中的机器名经过匿名化，不是对读者环境的要求。
+
+
 > 状态：第 0–2 期在做（分支 vault）；个人库为默认、先不接 1Password/Bitwarden、agent 写入要批准（2026-10-17 用户定）。chat EMBER/1792192607.305000（2026-10-17：「能做一个基于 still.fail 基础设施的 1password 吗」）。
 
 ## 要解决的事
@@ -183,11 +186,11 @@ chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）
 
 ## 在另一台 station 上用（2026-10-24）
 
-有些凭据只在别的 station 上用得上：路由器只有家里的 Studio 连得到，1Password 只在 Studio 的桌面 app 里登录着。`secret_run` 原来只在 agent 自己那台 station 上跑，这些就用不上。
+有些凭据只在别的 station 上用得上：例如某个服务只能从另一台机器访问，或者登录态只保存在那台机器上。`secret_run` 原来只在 agent 自己那台 station 上跑，这些就用不上。
 
-- `secret_use {…, station}`：这次授权的命令在那台 station 上跑。申请里记 `runOn: {id, name}`，卡片多一行「运行在：Studio」（`vault.station`）；批准的人知道值会送到哪台机器。
+- `secret_use {…, station}`：这次授权的命令在那台 station 上跑。申请里记 `runOn: {id, name}`，卡片多一行「运行在：test-a」（`vault.station`）；批准的人知道值会送到哪台机器。
 - `secret_run {grant, command, station?}`：授权带 `runOn` 的，命令到那台跑，在这个 chat 在那台的目录里（和 station_task 同一个，`remote/sessions/<id>/work`，`cwd` 是它下面的路径）；`station` 只能不写或写同一台，写别的就拒绝。没带 `runOn` 的授权不能拿去别处跑。
-- `secret_save {…, command, station}`：在那台跑 `command` 取值（比如 Studio 上的 `op read`），值回到 agent 所在的 station 再封给人的设备；卡片的「来源」写在哪台跑的。
+- `secret_save {…, command, station}`：在那台跑 `command` 取值（比如 test-a 上的 `op read`），值回到 agent 所在的 station 再封给人的设备；卡片的「来源」写在哪台跑的。
 - **传法**：走 station 之间的连接（iroh，端到端加密），请求 `vault.run` / `vault.capture`，带 `secret`（这条的 fields）、方式、域名、命令；对方立刻回 `{started: true}`，跑完再反过来问一次 `vault.done {id, result}`（连接上一次请求只等 30 秒，命令可能跑几分钟）。对方用自己的代理、ssh-agent 或环境变量跑，输出照样按原值遮掉；值只在那条命令跑着的时候在对方进程里，不写盘。
 - **信任**：对方是同一个 workspace 的 station，本来就能替这个 chat 跑任意命令（station_task），多给的只是这一次的值，卡片上写明了是哪台。旧 station 不认 `vault.*`，回错，agent 被告知要先更新那台。
 

@@ -1,5 +1,8 @@
 # still.fail client core
 
+> Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
+
+
 The logic of a still.fail client — accounts, still.fail cloud, the mesh links to
 stations, requests and live streams, everything read kept on the device — lives
 in one TypeScript core, `client/core-ts` (on Effect; docs/core-ts.md for how it
@@ -473,13 +476,13 @@ together from its `live`: each item the transcript entries it draws, what it is 
 // chats
 {
   "me": { "id": "a@b.c", "email": "a@b.c" },
-  "stations": [{ "station": "ws/st", "id": "st", "name": "studio", "state": "online", "message": null }],
+  "stations": [{ "station": "ws/st", "id": "st", "name": "test-a", "state": "online", "message": null }],
   //   state: "online" | "connecting" | "offline" (not connected to still.fail cloud) | "error" (message says why)
   //   error: its rows could not be read, or its link failed; connecting: rows not read yet, or the link
   //   is reconnecting (rows already read stay listed).
   "loading": false,                                // an online station has not answered its rows yet
   "days": [{ "daysAgo": 0, "at": 1790000000000, "items": [{
-    "station": "ws/st", "stationName": "studio",   // added here; the rest is the station's row as it is
+    "station": "ws/st", "stationName": "test-a",   // added here; the rest is the station's row as it is
     "id": "7", "session": "ds:C1:1790000000.000100", "thread": 7, "title": "部署挂了", "agents": [ … ], "last": { … } | null,
     "unread": true, "mine": true, "lastActiveAt": 1790000000000, "connect": "ds" | null, "origin": { … } | null
   }] }]
@@ -507,7 +510,7 @@ thread is called by the first line of the first thing a person said in it
 ```jsonc
 // stations
 [{
-  "station": "ws/st", "id": "st", "name": "studio",
+  "station": "ws/st", "id": "st", "name": "test-a",
   "online": true, "lastSeen": 1790000000, "version": "0.4.0",   // from the workspace
   "link": { "state": "online", "message": null },
   "overview": { … } | null,                                      // null while offline or not yet read

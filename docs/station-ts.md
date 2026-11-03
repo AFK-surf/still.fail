@@ -110,7 +110,7 @@ launchd / 桌面 app
 2. **读接口全量 + 事件流**：所有 GET、`/events`（带序号）。完成标志：客户端只读地用 TS station 一切正常，对照测试全过。
 3. **agent**：会话状态机、claude/codex 适配器、MCP 工具、站内聊天、jobs、预览。完成标志：在测试 workspace 里网页 chat 完整可用，假 agent 规则测试全过，重启不断轮次。
 4. **其余**：Slack、账号（Profile、登录、额度、续期）、更新、adb、站间任务、遥测、反馈。
-5. **切换**：安装器和桌面 app 改为装 TS 版（带 Node）；先在一台测试 station 上跑，再到 studio、bft；保留退回 Rust 版的路径一段时间。
+5. **切换**：安装器和桌面 app 改为装 TS 版（带 Node）；先在一台测试 station 上跑，再逐步推广；保留退回 Rust 版的路径一段时间。
 
 规模估计：3.2 万行 Rust → 约 2 万多行 TS；每期都在分支上做完、给证据、你认可再合。
 
