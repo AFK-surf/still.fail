@@ -215,6 +215,11 @@ fn pane_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
           })
         _ => None
       }
+    // (by its station: another station's another page, not this one become it)
+    Setting(Memory(address)) =>
+      made("memory/" + address, fn(a, core, here, frame, width) {
+        @sfpages.memory_node(a, core, here, address, on_back=core.pop, frame~, width~)
+      })
     _ => None
   }
 }

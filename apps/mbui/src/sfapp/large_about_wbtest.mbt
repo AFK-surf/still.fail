@@ -389,3 +389,63 @@ test "更新日志 made once, narrow: words picked dragged past the page's foot 
   // (what was picked kept till a press elsewhere lets it go, the page gone or not: desktop.mbt select_none)
   assert_eq(left, let_go, msg="the page left")
 }
+
+
+///|
+test "大屏 一台 station 的记忆 made once: every instance drawn as its old view's, wide, with keyboard and mouse and with a finger, at the system's larger words, the window wider; its rows the tree's own" {
+  for case in [(0, 1.0, 1280.0), (2, 1.0, 1280.0), (0, 2.0, 1280.0), (0, 1.0, 1800.0)] {
+    let (platform, scale, w) = case
+    let old = large_about_tester(false, platform, scale~, w~, mode="settings-memory")
+    let old_drawn = instances_sorted(old)
+    let old_words = words_where(old)
+    let made = large_about_tester(true, platform, scale~, w~, mode="settings-memory")
+    assert_true(app.nav.top() == Setting(@settings.Route::Memory("ws1/st1")), msg="\{case}")
+    let own = tree_words_drawn()
+    assert_true(own.iter().any(fn(o) { o.contains("发布流程") }), msg="its rows the tree's: \{own}")
+    same_drawn(words_where(made), old_words, "words at \{case}")
+    same_drawn(instances_sorted(made), old_drawn, "instances at \{case}")
+  }
+}
+
+///|
+test "大屏 一台 station 的记忆 made once, its own skills folded open and shut, wide: each as its old view's" {
+  for platform in [0, 2] {
+    let at = fn(tree : Bool) {
+      let t = large_about_tester(tree, platform, mode="settings-memory")
+      t.tap_text(@sf.t("web-main.memory.builtin"))
+      t.run_for(@motion.ripple_tap_ms)
+      let open = (instances_sorted(t), words_where(t))
+      t.tap_text(@sf.t("web-main.memory.builtin"))
+      t.run_for(@motion.ripple_tap_ms)
+      (open, instances_sorted(t), words_where(t))
+    }
+    let (old_open, old_shut, old_shut_words) = at(false)
+    let (open, shut, shut_words) = at(true)
+    same_drawn(open.1, old_open.1, "open, words at \{platform}")
+    same_drawn(open.0, old_open.0, "open, instances at \{platform}")
+    same_drawn(shut_words, old_shut_words, "shut, words at \{platform}")
+    same_drawn(shut, old_shut, "shut, instances at \{platform}")
+  }
+}
+
+///|
+test "大屏 一台 station 的记忆 made once, the language changed and the station renamed: its words said anew in the same nodes" {
+  let lang = Ref("")
+  let t = large_about_tester(true, 0, mode="settings-memory", lang~)
+  let global = @sf.t("web-main.memory.global")
+  let section = tree_node_of(global)
+  let row = tree_node_of("发布流程")
+  let title = tree_node_of("Studio")
+  assert_true(section is Some(_) && row is Some(_) && title is Some(_), msg="the tree's own: \{tree_words_drawn()}")
+  lang.val = "en"
+  t.run_for(@ui.move_most_ms)
+  let global_en = @sf.t("web-main.memory.global")
+  assert_true(global_en != global, msg="in English: \{global_en}")
+  assert_true(tree_node_of(global_en) == section && tree_node_of("发布流程") == row, msg="the same nodes")
+  lang.val = ""
+  @sf.set_language(None)
+  t.run_for(@ui.move_most_ms)
+  @settings.fixture_call("workspace.renameStation", { "station": Json::string("st1"), "name": Json::string("工作室") }) |> ignore
+  t.run_for(@ui.move_most_ms)
+  assert_true(tree_node_of("工作室") == title, msg="renamed in the same node: \{tree_words_drawn()}")
+}

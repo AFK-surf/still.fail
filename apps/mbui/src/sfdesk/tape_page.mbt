@@ -307,6 +307,12 @@ fn tape_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Pag
           })
         _ => None
       }
+    // (by its station: another station's another page, not this one become it)
+    Setting(Memory(address)) if pane_makes.val =>
+      made("memory/" + address, fn(p, core, here, _stint, told) {
+        context_node(p)
+        @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
     // (the others narrow ones alone: wider, their old view)
     _ if !narrow => None
     Setting(Archiving) =>
