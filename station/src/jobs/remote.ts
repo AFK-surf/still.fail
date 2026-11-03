@@ -142,6 +142,27 @@ export function readJson(path: string): Json {
 /// (`writeJson` keeps it current); null: none written.
 const used = new Map<string, Json | null>();
 
+/// How many times each record was written here (`writeJson`): one read before a write is not kept after it.
+const writes = new Map<string, number>();
+
+/// Every chat's record read in, off the station's thread, as the station starts: read on it as each chat is first
+/// shown after every update, 9 of them held it 0.9 s on ccvm short of memory (2026-11-03).
+async function readAllUsed(dir: string): Promise<void> {
+  for (const name of await readdir(dir).catch(() => [] as string[])) {
+    if (!name.endsWith(".json")) continue;
+    const path = join(dir, name);
+    if (used.has(path)) continue;
+    const before = writes.get(path) ?? 0;
+    let read: Json | null;
+    try {
+      read = JSON.parse(await readFile(path, "utf8"));
+    } catch {
+      continue;
+    }
+    if (!used.has(path) && (writes.get(path) ?? 0) === before) used.set(path, read);
+  }
+}
+
 /// A chat's record (null: none), not to be changed in place: a copy is written (`writeJson`).
 function readUsed(path: string): Json | null {
   const kept = used.get(path);
@@ -180,6 +201,7 @@ export function writeJson(path: string, value: Json): void {
     closeSync(fd);
   }
   renameSync(temp, path);
+  writes.set(path, (writes.get(path) ?? 0) + 1);
   if (used.has(path)) used.set(path, JSON.parse(JSON.stringify(value)));
 }
 
@@ -288,6 +310,7 @@ export class Remote {
     this.removeMirror = options.removeMirror ?? ((path) => rm(path, { recursive: true, force: true }));
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
+    void readAllUsed(join(this.root, "used"));
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
@@ -999,6 +1022,7 @@ export class Remote {
           if (readJson(path).closing === true) {
             rmSync(path, { force: true });
             used.delete(path);
+            writes.set(path, (writes.get(path) ?? 0) + 1);
           }
         } catch {}
         return true;
