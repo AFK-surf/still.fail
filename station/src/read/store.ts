@@ -694,8 +694,8 @@ export function blockedAsk(s: Store, thread: number, key: string, turn: TurnSumm
 /// order: by its cards, each with the first person's message after it (none between: a card after it is the one asked).
 function answersOf(s: Store, thread: number, since: number): { thread: number; n: number }[] {
   const cards = [...new Set([
-    ...all(s, "SELECT n FROM entries INDEXED BY entries_cards WHERE thread = ? AND kind = 'message' AND card IS NOT NULL", thread),
-    ...all(s, "SELECT n FROM entries INDEXED BY entries_options WHERE thread = ? AND kind = 'message' AND options IS NOT NULL", thread),
+    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND card IS NOT NULL", thread),
+    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND options IS NOT NULL", thread),
   ].map((r) => r.n as number))].sort((a, b) => a - b);
   const out: { thread: number; n: number }[] = [];
   cards.forEach((card, i) => {
