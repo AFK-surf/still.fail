@@ -2531,7 +2531,7 @@ let zh : Map[String, String] = {
   "web-pages.settings.stations.restartWhat": "重启 station",
   "web-pages.settings.stations.restarting": "正在重启，进行中的会话不受影响",
   "web-main.outflow.title": "数据外流",
-  "web-main.outflow.lead": "这台 station 所在机器上申请或已获准读取 still.fail 数据的程序。由 workspace 的管理员在这里批准；取消授权后，它下一次读取就会被拒绝。",
+  "web-main.outflow.lead": "这台 station 所在机器上（打开 Tailcat 后也有别的机器上）申请或已获准读取 still.fail 数据的程序。由 workspace 的管理员在这里批准；取消授权后，它下一次读取就会被拒绝。",
   "web-main.outflow.and": "、",
   "web-main.outflow.revoke": "取消授权",
   "web-main.outflow.revokeConfirm": "取消 {program} 的授权？",

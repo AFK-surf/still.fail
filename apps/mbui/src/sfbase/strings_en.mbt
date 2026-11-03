@@ -2558,7 +2558,7 @@ let en : Map[String, String] = {
   "web-pages.settings.stations.restartWhat": "restart the station",
   "web-pages.settings.stations.restarting": "Restarting; running sessions carry on",
   "web-main.outflow.title": "Data outflow",
-  "web-main.outflow.lead": "Programs on this station’s machine that ask for or were allowed to read your still.fail data. An admin of the workspace answers them here; revoked, their next read is refused.",
+  "web-main.outflow.lead": "Programs on this station’s machine (and, with Tailcat on, on other machines) that ask for or were allowed to read your still.fail data. An admin of the workspace answers them here; revoked, their next read is refused.",
   "web-main.outflow.and": ", ",
   "web-main.outflow.revoke": "Revoke",
   "web-main.outflow.revokeConfirm": "Revoke {program}'s access?",
