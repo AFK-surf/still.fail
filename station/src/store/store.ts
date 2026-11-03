@@ -869,6 +869,8 @@ export class Store {
         const threads: number[] = this.#all("SELECT thread FROM thread_sessions WHERE session = ?", key).map((r) => r.thread);
         this.#run("DELETE FROM thread_sessions WHERE session = ?", key);
         this.#run("DELETE FROM slack_stops WHERE session = ?", key);
+        // All of this session's deliveries go: clear its first one once instead of finding the next after every deletion.
+        this.#run("DELETE FROM session_first WHERE session = ?", key);
         this.#run("DELETE FROM deliveries WHERE session = ?", key);
         this.#run("DELETE FROM letter_deliveries WHERE session = ?", key);
         this.#run("DELETE FROM turns WHERE session_key = ?", key);
