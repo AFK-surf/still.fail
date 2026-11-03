@@ -626,6 +626,13 @@ export function pendingCards(s: Store, threads: number[]): { at: Map<number, num
   return { at, before };
 }
 
+/// Of `threads`, those that ever had a card or options posted, each by their own indexes.
+export function threadsWithCards(s: Store, threads: number[]): number[] {
+  return threads.filter((t) =>
+    one(s, "SELECT 1 FROM entries INDEXED BY entries_cards WHERE thread = ? AND card IS NOT NULL LIMIT 1", t) !== undefined ||
+    one(s, "SELECT 1 FROM entries INDEXED BY entries_options WHERE thread = ? AND options IS NOT NULL LIMIT 1", t) !== undefined);
+}
+
 /// The card a thread waits on as kept (`n`, pendingCards), as `pendingCard` gives it; null where it no longer waits
 /// (closed, or a person wrote since).
 export function cardAt(s: Store, thread: number, n: number): [MessageRow, Json] | null {
