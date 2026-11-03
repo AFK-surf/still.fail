@@ -19,7 +19,7 @@ import type { Identify, OutflowServer } from "./server.ts";
 /// publish, Homebrew's bottle of the same release), each by its SHA-256.
 export const TAILCAT_VERSION = "0.7.0";
 const BUILDS: Record<string, { url: string; sha256: string; inner: string; headers?: Record<string, string> }> = {
-  "darwin-arm64": {
+  "macos-arm64": {
     url: "https://ghcr.io/v2/homebrew/core/tailcat/blobs/sha256:6b9a79a9c847a94c7ac4544ef8b975db39fcc5db94dc9285b9a15ae24e52e6d4",
     sha256: "6b9a79a9c847a94c7ac4544ef8b975db39fcc5db94dc9285b9a15ae24e52e6d4",
     inner: `tailcat/${TAILCAT_VERSION}/bin/tailcat`,
@@ -29,8 +29,8 @@ const BUILDS: Record<string, { url: string; sha256: string; inner: string; heade
   "linux-x64": release("linux_amd64.tar.gz", "23c0b1887a5ec422f0d18a9c52b4f5357815febdaae738a1eb54036d10bd9ee6", "tailcat"),
   "linux-arm64": release("linux_arm64.tar.gz", "bbb1ab50f24f00effe1e1fd86d0501803fb80793a90785a2a16ff3428f03d8ef", "tailcat"),
   "linux-arm": release("linux_armv7.tar.gz", "cad3994b1f336b67e8a3a5273a9cecb44331d14d57eb32bfe7d0919adeab22b7", "tailcat"),
-  "win32-x64": release("windows_amd64.zip", "f04cac07e3bf6c700b0b543df0d3315a3b312cd5a05ee76714e1cc848e9b2dff", "tailcat.exe"),
-  "win32-arm64": release("windows_arm64.zip", "1c2d081375ade2365402f9fcf611e89dbb2c5c5ee06936aaff2b205dbe427578", "tailcat.exe"),
+  "windows-x64": release("windows_amd64.zip", "f04cac07e3bf6c700b0b543df0d3315a3b312cd5a05ee76714e1cc848e9b2dff", "tailcat.exe"),
+  "windows-arm64": release("windows_arm64.zip", "1c2d081375ade2365402f9fcf611e89dbb2c5c5ee06936aaff2b205dbe427578", "tailcat.exe"),
 };
 function release(file: string, sha256: string, inner: string) {
   return { url: `https://github.com/tailscale/tailcat/releases/download/v${TAILCAT_VERSION}/tailcat_${TAILCAT_VERSION}_${file}`, sha256, inner };
@@ -109,7 +109,7 @@ export class TailcatLink {
     const child = this.#child?.pid;
     const port = socket.remotePort;
     if (child === undefined || port === undefined) return null;
-    const holders = await (this.#o.holders ?? ((p) => platform.tcpPortPids(p)))(port).catch(() => []);
+    const holders = await (this.#o.holders ?? ((p) => platform.tcpPortPids(p)))(port).catch((): number[] => []);
     return holders.includes(child) ? VIA_TAILCAT : null;
   };
 
@@ -206,8 +206,8 @@ export class TailcatLink {
   async #command(): Promise<string> {
     const found = platform.findCommand("tailcat", process.env);
     if (found !== null) return found.real;
-    const build = BUILDS[`${platform.buildOs}-${process.arch}`];
-    if (build === undefined) throw new Error(`no tailcat for ${platform.buildOs}-${process.arch}: install it (https://github.com/tailscale/tailcat)`);
+    const build = BUILDS[`${platform.os}-${process.arch}`];
+    if (build === undefined) throw new Error(`no tailcat for ${platform.os}-${process.arch}: install it (https://github.com/tailscale/tailcat)`);
     const bin = join(this.#dir, TAILCAT_VERSION, platform.exe("tailcat"));
     if (existsSync(bin)) return bin;
     mkdirSync(this.#dir, { recursive: true, mode: 0o700 });
