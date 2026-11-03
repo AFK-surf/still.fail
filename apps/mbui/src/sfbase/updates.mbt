@@ -483,7 +483,13 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Ready(v, away~) =>
       (
         @sf.t("android-misc.updates.ready", args=version(v)),
-        @sf.t(if away { "android-misc.updates.readyAway" } else { "android-misc.updates.readyQuit" }, args=[app]),
+        // (which build is downloaded, from this one to it: 2026-11-03 the user, 「让用户知道已经有一个什么版本下载了，从哪个
+        // 升级到哪个」)
+        @sf.t(if away { "android-misc.updates.readyAway" } else { "android-misc.updates.readyQuit" }, args=[
+          ("from", "0.1.\{this_version()}"),
+          ("to", text(Some(v), "versionName")),
+          app,
+        ]),
         false,
         None,
       )

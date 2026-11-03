@@ -109,7 +109,7 @@ test "关于's version rows, at each width and with either hand: this build alon
     // ready, put in place by itself while away (Android's): said so; pressed, put in place now
     t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":true}")
     t.draw()
-    assert_true(t.find("已下载，离开 still.fail 一段时间后自动安装") is Some(_), msg=at)
+    assert_true(t.find("0.1.1300 → 0.1.1 已下载，离开 still.fail 一段时间后自动安装") is Some(_), msg=at)
     t.click(Link, label="重启以更新到 0.1.1")
     assert_eq(
       t.update_asked(),
