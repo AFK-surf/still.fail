@@ -406,16 +406,16 @@ test("a session watched again, or by the next station process, reads its checkli
   const got: LiveMessage[] = [];
   let id = hub.subscribe("s", 3, null, (m) => void got.push(m));
   await settle();
-  assert.deepEqual(asked, ["state", "page 4 4 false"], "read back as it was first watched");
+  assert.deepEqual(asked, ["state", "page 3 3 false"], "read back as it was first watched");
   assert.deepEqual(plan(got), ["读日志 in_progress", "修 pending"]);
   hub.unsubscribe("s", id);
   // Written on while no one watched: watched again, only what came since is read for it.
   appendFileSync(path, line("four", "m4") + todo("t2", [["读日志", "completed"], ["修", "in_progress"]]));
   asked.length = 0;
   got.length = 0;
-  id = hub.subscribe("s", 6, null, (m) => void got.push(m));
+  id = hub.subscribe("s", 5, null, (m) => void got.push(m));
   await settle();
-  assert.deepEqual(asked, ["state", "page 6 2 false"]);
+  assert.deepEqual(asked, ["state", "page 5 2 false"]);
   assert.deepEqual(plan(got), ["读日志 completed", "修 in_progress"]);
   // The next station process: carried over, nothing read for it where nothing came since.
   const next = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
@@ -423,7 +423,7 @@ test("a session watched again, or by the next station process, reads its checkli
   next.history = historyOf(path, nextAsked);
   next.takePlans(JSON.parse(JSON.stringify(hub.carriedPlans())));
   const nextGot: LiveMessage[] = [];
-  next.subscribe("s", 6, null, (m) => void nextGot.push(m));
+  next.subscribe("s", 5, null, (m) => void nextGot.push(m));
   await settle();
   assert.deepEqual(nextAsked, ["state"]);
   assert.deepEqual(plan(nextGot), ["读日志 completed", "修 in_progress"]);
