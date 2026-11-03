@@ -4,6 +4,7 @@ import type { ReadOp } from "./ops.ts";
 import { hostInfo } from "./host.ts";
 import { machineSession, machineSessions } from "./machine.ts";
 import { memory } from "./memory.ts";
+import { HttpError } from "./views.ts";
 import { resourceChats, usage } from "./usage.ts";
 import { HOME, type Of, outflowChats, outflowMessages, outflowThread, outflowUsage } from "./outflow.ts";
 
@@ -33,6 +34,12 @@ export const usageOps: Record<string, ReadOp> = {
   },
   machineSessions: (store) => machineSessions(store),
   machineSession: (store, a) => machineSession(store, a.lang, a.runtime, a.id, a.limit),
-  memory: (store) => memory(store.dataDir),
+  memory: (store, a) => {
+    try { return memory(store.dataDir, a.workspace); }
+    catch (error) {
+      if (a.workspace !== undefined) throw new HttpError(400, (error as Error).message);
+      throw error;
+    }
+  },
   host: (store, a) => hostInfo(store.dataDir, a.seen),
 };
