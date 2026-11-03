@@ -120,6 +120,10 @@ export class LiveHub {
   private saidPlans = new Map<string, PlanItem[]>();
   private listeners = new Map<string, Sub[]>();
   private watched = new Map<string, Watched>();
+  /// Where the reading of transcripts no longer watched stood here (or in the process before, carried over): watched
+  /// again, read on from there, the readers not asked. Asked at each station update, a reader read on from what it kept
+  /// on disk, a session's 1.7 MB in 1.5 s on ccvm short of memory (2026-11-03), its chat waiting on it.
+  private stood = new Map<string, TailState[]>();
   /// Its time and its waits (a read put off to gather a burst of writes).
   private time: Fibers;
   private nextId = 0;
@@ -582,11 +586,36 @@ export class LiveHub {
     }
   }
 
+  private keepStood(key: string, states: TailState[]) {
+    this.stood.delete(key);
+    this.stood.set(key, states);
+    while (this.stood.size > 256) this.stood.delete(this.stood.keys().next().value!);
+  }
+
+  /// Where the reading of each transcript stands here, watched or not: what the next station process reads on from
+  /// (carried over at a handover, parts.ts `carry`).
+  carriedTails(): { key: string; states: TailState[] }[] {
+    const out = new Map(this.stood);
+    for (const [key, w] of this.watched) if (w.tail !== null && !w.tail.keeps) out.set(key, w.tail.snapshot());
+    return [...out].map(([key, states]) => ({ key, states }));
+  }
+
+  /// What the process before read of transcripts, where none is watched here yet.
+  takeTails(carried: { key: string; states: TailState[] }[]): void {
+    if (!Array.isArray(carried)) return;
+    for (const c of carried) {
+      if (typeof c?.key !== "string" || !Array.isArray(c.states) || this.watched.has(c.key)) continue;
+      if (!c.states.every((st) => typeof st?.path === "string" && Number.isSafeInteger(st.offset) && Number.isSafeInteger(st.count))) continue;
+      this.keepStood(c.key, c.states);
+    }
+  }
+
   /// A deleted session: nothing of it is watched or kept any more.
   forget(key: string) {
     this.tasks.delete(key);
     this.plans.delete(key);
     this.planAt.delete(key);
+    this.stood.delete(key);
     this.planBack.delete(key);
     this.saidPlans.delete(key);
     this.steps.delete(key);
@@ -676,6 +705,13 @@ export class LiveHub {
       const ref = at.paths[i]!;
       return st.path === (typeof ref === "string" ? ref : ref.path) && (st.runtime ?? at.runtime) === (typeof ref === "string" ? at.runtime : ref.runtime);
     });
+    const stood = this.stood.get(key) ?? null;
+    this.stood.delete(key);
+    if (same(stood)) {
+      begin(ChainTail.from(at.runtime, stood));
+      this.soon(key);
+      return true;
+    }
     watched.ready = this.history
       .state(key)
       .then(
@@ -699,6 +735,7 @@ export class LiveHub {
 
   private unwatch(key: string) {
     const watched = this.watched.get(key);
+    if (watched?.tail != null && !watched.tail.keeps) this.keepStood(key, watched.tail.snapshot());
     this.watched.delete(key);
     this.told.delete(key);
     watched?.watcher?.close();
