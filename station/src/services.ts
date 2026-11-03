@@ -102,6 +102,7 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
       return yield* Effect.acquireRelease(Effect.sync(() => {
         const pool = new ReaderPool(data, undefined, undefined, undefined, { previousGone: previous.exited, priority: store.backfillPriority });
         pool.startUsageIndex();
+        pool.warm();
         return pool;
       }), (pool) => Effect.sync(() => pool.close()));
     }),
