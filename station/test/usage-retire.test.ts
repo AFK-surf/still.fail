@@ -11,6 +11,16 @@ import { installUsageDetail } from "../src/store/usage-detail.ts";
 import { dropUsageIndexStep, stopUsageIndexes, usageIndexBatchSql } from "../src/store/usage-retire.ts";
 import { retireAfterPrevious } from "../src/usage/module.ts";
 
+test("installing compact statistics tells a waiting page even with no calls", async () => {
+  const store = Store.open(":memory:");
+  const told: unknown[] = [];
+  const stop = store.subscribe((change) => { if (change.type === "usage") told.push(change); });
+  try {
+    await Effect.runPromise(retireAfterPrevious(store, Promise.resolve()));
+    assert.deepEqual(told, [{ type: "usage", sessions: [], statisticsOnly: true }]);
+  } finally { stop(); store.close(); }
+});
+
 const call = (id: string, input: number) => [{ id, at: 1_700_000_000_000, model: "m", subagent: false, fast: false,
   input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100, window: 1000 },
   { turn: null, person: null, thread: null, profile: "cc" }] as const;

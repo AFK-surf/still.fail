@@ -77,7 +77,11 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
       yield* Effect.sleep(50);
     }
     stopped = true;
-    if (hasCompactUsage(store.db)) installed();
+    if (hasCompactUsage(store.db)) {
+      installed();
+      // A page may have opened before handover and received unavailable statistics. Wake it even if no call follows.
+      store.usageChanged([], undefined, true);
+    }
     const path = store.db.location();
     if (path === null) { retireUsageIndexes(store.db); return; }
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./retire-worker.ts" : "./usage/retire-worker.js", import.meta.url);
