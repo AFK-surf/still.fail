@@ -10,7 +10,7 @@ import { usageRoutes } from "../src/api/routes/usage.ts";
 import { makeStore, USAGE_CALLS_EARLIER, USAGE_CALLS_SAME, usageByDay, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
 import { usage, usageNow } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
-import { compactQuery, compactScopeReady, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
+import { compactQuery, compactScopeReady, compactTotal, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { keepUsage, retireAfterPrevious, watchCompactMoves } from "../src/usage/module.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -326,6 +326,10 @@ test("a moved session's statistics are re-scoped in bounded batches and follow a
     assert.deepEqual(usageGroups(reader, 0n, 600_000n, 0n, { workspace: "A", home: false }), []);
     assert.deepEqual(usageGroups(reader, 0n, 600_000n, 0n, { workspace: "B", home: false }), []);
     assert.equal(usageGroups(reader, 0n, 600_000n, 0n, { workspace: "C", home: false })[0]!.calls, 8);
+    assert.deepEqual(compactTotal(store.db, { workspace: "A", home: false }), { calls: 0, tokens: 0 });
+    assert.deepEqual(compactTotal(store.db, { workspace: "B", home: false }), { calls: 0, tokens: 0 });
+    assert.deepEqual(compactTotal(store.db, { workspace: "C", home: false }), { calls: 8, tokens: 16 });
+    assert.deepEqual(compactTotal(store.db, null), { calls: 8, tokens: 16 });
   } finally { store.close(); }
 });
 
