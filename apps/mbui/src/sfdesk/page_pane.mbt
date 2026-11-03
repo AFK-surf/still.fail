@@ -235,7 +235,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -262,6 +262,11 @@ fn pane_made(
       // (recording while it is the one on top of the stack: its stay there, stint's)
       made("shortcuts", fn(a, core, _here, stint, frame, width) {
         @sfpages.shortcuts_node(a, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stint() }, width~)
+      })
+    Setting(Notifications) =>
+      // (a workspace's picture asked for again each time it is come back to: nav_flat_view's stint)
+      made("notifications", fn(a, core, here, stint, frame, width) {
+        @sfpages.notify_node(a, core, here, on_back=core.pop, frame~, stint~, width~)
       })
     Setting(Usage) =>
       made("usage", fn(a, core, here, _stint, frame, width) {
