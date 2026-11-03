@@ -59,6 +59,13 @@ test("a repeated usage summary rereads only minutes whose statistics changed", a
     assert.equal(slow.fields.summarySelectedRestMs, first.diagnostics.selectedRestMs);
     assert.equal(slow.fields.summarySelectedCpuMs, first.diagnostics.selectedCpuMs);
     assert.equal(slow.fields.summaryCpuMs, first.diagnostics.cpuMs);
+    const sql = (first.diagnostics as any).sql;
+    for (const [name, field] of [["journal", "summarySqlJournalMs"], ["changes", "summarySqlChangesMs"], ["pending", "summarySqlPendingMs"],
+      ["selected", "summarySqlSelectedMs"], ["owner", "summarySqlOwnerMs"], ["buckets", "summarySqlBucketsMs"], ["slowMs", "summarySqlSlowMs"]] as const) {
+      assert.equal(typeof sql?.[name], "number");
+      assert.equal(slow.fields[field], sql[name]);
+    }
+    assert.equal(slow.fields.summarySqlSlowOp, sql.slowOp);
     const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
     db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && values.has(column ?? "")
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
@@ -101,6 +108,43 @@ test("a repeated usage summary rereads only minutes whose statistics changed", a
     db?.close();
     writer.close();
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("slow usage diagnostics attribute database time to the step that took it", async () => {
+  const writer = Store.open(":memory:");
+  const descriptor = Object.getOwnPropertyDescriptor(performance, "now");
+  let now = 0;
+  try {
+    writer.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "s", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(writer.db, () => 0);
+    retireUsageIndexes(writer.db);
+    writer.recordUsage("/s", { session: "s", offset: 1, model: "m" }, "claude", [[
+      { id: "call", at: 0, model: "m", subagent: false, fast: false, input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null },
+      { turn: null, thread: null, person: "p", profile: "cc" },
+    ]]);
+    while (!compact.compactTotalsStep(writer.db, 64).done) {}
+    compact.installUsageSummaryChanges(writer.db);
+    writer.db.function("timing_bucket", (day) => { now += 7; return day; });
+    const db = new Proxy(writer.db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => target.prepare(sql.startsWith("SELECT strftime(")
+          ? sql.replace("SELECT strftime(", "SELECT timing_bucket(strftime(").replace(" AS day, minute, session", ") AS day, minute, session") : sql);
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    Object.defineProperty(performance, "now", { value: () => now, configurable: true });
+    const result = await reads.usageGroupsBatched(reads.makeStore(db, "/tmp"), 0n, 60_000n, 0n,
+      { workspace: "A", home: false }, async () => {}, new reads.UsageSummaryCache());
+    assert.ok(result);
+    assert.equal(result.diagnostics.sql.buckets, 7);
+    assert.deepEqual([result.diagnostics.sql.slowOp, result.diagnostics.sql.slowMs], ["buckets", 7]);
+    assert.equal(result.groups.length, 1);
+  } finally {
+    if (descriptor === undefined) delete (performance as any).now;
+    else Object.defineProperty(performance, "now", descriptor);
+    writer.close();
   }
 });
 
