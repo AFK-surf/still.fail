@@ -142,7 +142,8 @@ export class Admin {
     const tools: Tools = {
       read: async (r, op, args) => {
         try {
-          return json(200, await this.readers.read(op, args, r.lang, { background: r.background === true }));
+          const signal = r.method === "GET" || (r.method === "POST" && READS.test(r.path)) ? r.signal : undefined;
+          return json(200, await this.readers.read(op, args, r.lang, { background: r.background === true, signal }));
         } catch (e) {
           return error(e instanceof HttpError ? e.status : 500, (e as Error).message);
         }
@@ -334,6 +335,7 @@ export class Admin {
     let next = 0;
     const work = async () => {
       for (let i = next++; i < paths.length; i = next++) {
+        if (r.signal?.aborted) return;
         const at = paths[i]!.indexOf("?");
         const path = at < 0 ? paths[i]! : paths[i]!.slice(0, at);
         const a = BATCHED.some((p) => p.test(path))
@@ -345,6 +347,8 @@ export class Admin {
       }
     };
     await Promise.all(Array.from({ length: Math.min(BATCH_AT_ONCE, paths.length) }, work));
+    // A cancelled batch has no answer to keep under an idempotency key; a retry must read its pages again.
+    if (r.signal?.aborted) return error(503, "read cancelled");
     return json(200, `{"answers":[${answers.join(",")}]}`);
   }
 }

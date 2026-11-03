@@ -495,6 +495,12 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     const [status, said] = lockRoute(m.cloud, method, at < 0 ? [] : queryPairs(rest.slice(at + 1)), body, viewer);
     return answer(status, said);
   }
+  // A device that stops reading or loses its connection no longer needs its pending reads. Do not cancel writes: their
+  // effects and idempotency answers must be finished even when their caller goes away.
+  const reads = method === "GET" || (method === "POST" && /^\/*(batch|changed\/(chats|threads|sessions))$/.test(at < 0 ? rest : rest.slice(0, at)));
+  const controller = reads ? new AbortController() : null;
+  let handling = true;
+  if (controller) void stream.stopped().then(() => { if (handling) controller.abort(); }, () => { if (handling) controller.abort(); });
   const handled = await m.admin.handle({
     method,
     path: at < 0 ? rest : rest.slice(0, at),
@@ -505,7 +511,8 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     ...(streamed ? { upload: reader.chunks() } : {}),
     viewer,
     lang: langOfCore(headers),
-  });
+    ...(controller ? { signal: controller.signal } : {}),
+  }).finally(() => { handling = false; });
   // Compressed, for a client that asks so (compress.ts).
   const sent = await compressed(handled, headers, rest);
   const ready = wall.now();

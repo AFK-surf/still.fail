@@ -23,7 +23,7 @@ const IDLE_MS = 60_000;
 const SLOW_MS = 2_000;
 
 /// `held`: the read it is answering, if any.
-type Slot = { worker: Worker; held: Asked | null; idle?: () => void };
+type Slot = { worker: Worker; held: Asked | null; idle?: () => void; retiring?: boolean };
 
 /// A read in line or being answered: when it was asked and when a reader took it, and the reader it is best read in (a
 /// session's history, where its reading stands in memory).
@@ -53,6 +53,7 @@ const CHECKPOINT_MS = 2_000;
 /// disk; going before them in their readers, it held the one left for a chat 53 s as it reached a disk short of memory
 /// (2026-11-03), devices' reads waiting 40 s and more behind it.
 const CHECKPOINT = "checkpoint";
+const cancelled = () => new HttpError(503, "read cancelled");
 /// The scoped reads on the path to showing a chat, and those a device's lists are made of, each of a few rows and the
 /// statistics kept of them (the sidebar, a session's detail and summary, a chat's latest messages). Other page reads,
 /// including new kinds not yet classified, leave room for these, and these go before them: a slow transcript or resource
@@ -133,6 +134,8 @@ export class Readers {
     const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null };
     worker.on("message", (answer: Answer) => {
+      // An abandoned read may finish while its worker is being stopped. Do not give that worker another read until it exits.
+      if (slot.retiring) return;
       const asked = slot.held;
       slot.held = null;
       if (asked !== null && asked.ask.id === answer.id) {
@@ -169,66 +172,76 @@ export class Readers {
   /// page): after every other read waiting, and one at a time. In line with the rest, a sweep's pages (1 to 4 s each on
   /// ccvm, 2 to 7 MB of a Codex transcript read: 2026-11-03) held the sidebar, a session opened and the rest 10 s and
   /// more behind them, four at once from each device.
-  read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false }: { told?: boolean; background?: boolean } = {}): Promise<string> {
-    if (op === "usage") return this.usageRead(args, lang, told);
-    if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told);
-    return this.enqueue(op, args, lang, told, op === CHECKPOINT, background || filling(op, args));
+  read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false, signal }: { told?: boolean; background?: boolean; signal?: AbortSignal } = {}): Promise<string> {
+    if (op === "usage") return this.usageRead(args, lang, told, signal);
+    if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
+    return this.enqueue(op, args, lang, told, op === CHECKPOINT, background || filling(op, args), signal);
   }
 
-  private async covered(check: Promise<void>): Promise<void> {
-    try { await check; }
+  private async covered(check: Promise<void>, signal?: AbortSignal): Promise<void> {
+    try {
+      if (!signal) await check;
+      else await new Promise<void>((resolve, reject) => {
+        const abort = () => { signal.removeEventListener("abort", abort); reject(cancelled()); };
+        if (signal.aborted) abort();
+        else signal.addEventListener("abort", abort, { once: true });
+        check.then(() => { signal.removeEventListener("abort", abort); resolve(); }, (error) => { signal.removeEventListener("abort", abort); reject(error); });
+      });
+    }
     catch (error) {
+      if (error instanceof HttpError && error.message === "read cancelled") throw error;
       if (this.closed) throw new HttpError(502, "station stopping");
       throw new HttpError(503, (error as Error).message);
     }
   }
 
-  private async usageRead(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
+  private async usageRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
     const viewer = (args as { viewer?: InWorkspace | null } | null)?.viewer ?? null;
     const history = (args as { history?: unknown } | null)?.history === true;
     while (!this.closed) {
       try {
-        return await this.enqueue("usage", args, lang, told);
+        return await this.enqueue("usage", args, lang, told, false, false, signal);
       } catch (error) {
         // The reader checks its own snapshot: a session may have moved after the coverage check.
         if (error instanceof HttpError && error.message === USAGE_MINUTES_PENDING && history)
           throw new HttpError(503, "historical minute statistics are unavailable");
         if (error instanceof HttpError && error.message === USAGE_DETAIL_PENDING) {
           this.startUsageIndex();
-          await this.covered(this.minutes!.readyDetail(viewer));
+          await this.covered(this.minutes!.readyDetail(viewer), signal);
           continue;
         }
         if (error instanceof HttpError && error.message === USAGE_CHATS_PENDING && history) {
           this.startUsageIndex();
-          await this.covered(this.minutes!.readyChats(viewer));
+          await this.covered(this.minutes!.readyChats(viewer), signal);
           continue;
         }
         if (!(error instanceof HttpError) || error.message !== REMOTE_RUNS_PENDING) throw error;
         this.startUsageIndex();
-        await this.covered(this.minutes!.readyRemote());
+        await this.covered(this.minutes!.readyRemote(), signal);
       }
     }
     throw new HttpError(502, "station stopping");
   }
 
-  private async outflowUsageRead(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
+  private async outflowUsageRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
     const ws = (args as { ws?: InWorkspace } | null)?.ws;
     const viewer: InWorkspace = ws !== null && typeof ws === "object" && typeof ws.workspace === "string"
       ? { workspace: ws.workspace, home: ws.home === true } : { workspace: "\u0000home", home: true };
     while (!this.closed) {
-      try { return await this.enqueue("outflowUsage", args, lang, told); }
+      try { return await this.enqueue("outflowUsage", args, lang, told, false, false, signal); }
       catch (error) {
         if (!(error instanceof HttpError) || error.message !== USAGE_DETAIL_PENDING) throw error;
         this.startUsageIndex();
-        await this.covered(this.minutes!.readyDetail(viewer));
+        await this.covered(this.minutes!.readyDetail(viewer), signal);
       }
     }
     throw new HttpError(502, "station stopping");
   }
 
   /// `first`: before the reads waiting (CHECKPOINT).
-  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false): Promise<string> {
+  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    if (signal?.aborted) return Promise.reject(cancelled());
     const line = op === CHECKPOINT ? this.log : told ? this.told : op === "timeline" ? this.pages : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
@@ -236,7 +249,25 @@ export class Readers {
     const home = session !== null ? this.homes.get(session) : undefined;
     const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
-      const asked = { ask, session, home: home !== undefined && line.slots.includes(home) ? home : null, background, at: wall.now(), took: 0, resolve, reject };
+      let finished = false;
+      const done = () => { finished = true; signal?.removeEventListener("abort", abort); };
+      const asked: Asked = {
+        ask, session, home: home !== undefined && line.slots.includes(home) ? home : null, background, at: wall.now(), took: 0,
+        resolve: (text) => { if (!finished) { done(); resolve(text); } },
+        reject: (error) => { if (!finished) { done(); reject(error); } },
+      };
+      const abort = () => {
+        if (finished) return;
+        const at = line.waiting.indexOf(asked);
+        if (at >= 0) line.waiting.splice(at, 1);
+        else {
+          const slot = line.slots.find((s) => s.held === asked);
+          if (slot) { slot.retiring = true; void slot.worker.terminate(); }
+        }
+        asked.reject(cancelled());
+        if (at >= 0) this.pump(line);
+      };
+      signal?.addEventListener("abort", abort, { once: true });
       if (first) line.waiting.unshift(asked);
       else line.waiting.push(asked);
       this.pump(line);
