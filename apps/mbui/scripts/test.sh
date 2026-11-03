@@ -2,7 +2,8 @@
 # This module's tests against mbui's fake host (no window): still.fail's design system, its pages (over the fixtures),
 # the media screens' parts and the core client's, the screens (src/sfapp/screens_wbtest.mbt, scripts/screens.sh), then the flows seen
 # again over their runs' cores (src/sfreplay/steps.mbt). UPDATE=1 refreshes snapshots. TARGETS: the targets they run
-# on (native by default, as the apps are built; CI's check-mbui: native on Linux, and on macOS on main). PARTS: which
+# on (in development wasm-gc, no C compiled (the user, 2026-11-03); in CI (GITHUB_ACTIONS) native, as the apps are built:
+# check-mbui's native on Linux, and on macOS on main). PARTS: which
 # of the two (app: the design system, the pages, the screens, gallery and player; replay: the core and the flows seen
 # again), both by default; check-mbui runs each on a runner of its own. SFAPP_SHARDS: how many processes sfapp's test
 # files are run in side by side (5); 1, the pages' files all in one (the screen sweeps a process each beside them):
@@ -17,7 +18,8 @@ D="$(cd "$(dirname "$0")" && pwd)"
 cd "$A"
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
 code=0
-for t in ${TARGETS:-native}; do
+if [ -n "${GITHUB_ACTIONS:-}" ]; then targets=${TARGETS:-native}; else targets=${TARGETS:-wasm-gc}; fi
+for t in $targets; do
   echo "=== $t"
   # (native, on any system: a test's program links no host's code, its host the Tester's fake (mbui/hostapi). Built
   # --release as the apps are, its C split and compiled in parallel by mbui's scripts/mbc (moon's cc on PATH): on
@@ -28,6 +30,10 @@ for t in ${TARGETS:-native}; do
   mode="--target $t"
   # (mbui's scripts/env.sh native_tests: the C split by mbui's scripts/mbc, units kept by content in MBC_STORE)
   if [ $t = native ] && [ -z "${APP_EXE:-}" ]; then native_tests "$A"; mode=$NATIVE; fi
+  # (wasm-gc: --release, as native's; wasm-gc rather than classic Wasm, whose memory is freed by counting alone: what
+  # holds itself is never freed, 3.7 MB a screen opened in a Tester, and the corner and contrast sweeps outgrew its
+  # 4 GiB (2026-11-03))
+  [ $t = wasm-gc ] && mode="--target wasm-gc --release"
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
   # side. The flows in one package, src/sfreplay/flows: each test package is a program of the whole app, its C
   # compiled apart, and five of them compiled the same change five times over; on CI's four cores the replay part was
@@ -91,6 +97,21 @@ for t in ${TARGETS:-native}; do
   s=$(date +%s)
   [ -n "${APP_EXE:-}" ] || moon test $mode $pkgs --build-only > /dev/null 2>&1
   [ -z "${TIMES:-}" ] || [ -n "${APP_EXE:-}" ] || echo "test.sh: built in $(( $(date +%s) - s )) s"
+  # (wasm-gc: the whole app's programs (sfapp's, the flows') run as a native one built elsewhere is (APP_EXE, exe_run),
+  # their files side by side, each part a moonrun of the program (scripts/wasmtest.mjs): moon test runs a program's
+  # tests one after another. UPDATE's are moon test's own, to write the snapshots)
+  wasm_exe() {
+    local dir=_build/wasm-gc/release/test/stillfail/$1 kind=$2 pkg=stillfail/$1
+    [ -f "$dir/$(basename "$1").${kind}_test.wasm" ] || return 1
+    printf '#!/bin/sh\nexec node "%s/wasmtest.mjs" "%s" %s "$1"\n' "$D" "$A/$dir/$(basename "$1").${kind}_test.wasm" "$pkg" \
+      > "$dir/run-$kind"
+    chmod +x "$dir/run-$kind"
+    echo "$A/$dir/run-$kind"
+  }
+  if [ $t = wasm-gc ] && [ -z "${UPDATE:-}" ] && [ -z "${APP_EXE:-}" ] && [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
+    APP_EXE=$(wasm_exe sfapp whitebox) && APP_INFO=$A/_build/wasm-gc/release/test/stillfail/sfapp/__whitebox_test_info.json \
+      || APP_EXE=""
+  fi
   # (sfapp's test program and its tests' list put where APP_BUILD_OUT says, for the jobs that run it: nothing run)
   if [ -n "${APP_BUILD_OUT:-}" ]; then
     b=_build/native/release/test/stillfail/sfapp
@@ -166,7 +187,8 @@ for t in ${TARGETS:-native}; do
     for r in "${runs[@]}"; do rest+=("$(echo " $r " | sed 's| -p stillfail/sfreplay/flows | |')"); done
     runs=("${rest[@]}")
     fx=_build/native/release/test/stillfail/sfreplay/flows/flows.blackbox_test.exe
-    if [ $t = native ] && [ -z "${UPDATE:-}" ] && [ -f $fx ]; then
+    [ $t = wasm-gc ] && fx=$(wasm_exe sfreplay/flows blackbox)
+    if [ $t != js ] && [ -z "${UPDATE:-}" ] && [ -n "$fx" ] && [ -f "$fx" ]; then
       # (native: their files in one run of the program built above, whose n programs each take the next file
       # (exe_run's xargs -P), not dealt out beforehand: dealt by name round three, 68 s, 43 and 41, the replay
       # part's 183 s the pipeline's longest job, chat-opener-links 41248997629, 2026-11-01)
@@ -249,7 +271,9 @@ for t in ${TARGETS:-native}; do
   }
   # (the tool, built before the runs side by side, not by each: TESTEXE, or scripts/testexe's)
   if [ -n "${APP_EXE:-}" ] || [[ " ${runs[*]} " = *" @flows "* ]]; then
-    [ -n "${TESTEXE:-}" ] || TESTEXE=$(bash "$D/testexe" path) || exit 1
+    # (in development the script itself: its program is Wasm, run by node)
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then [ -n "${TESTEXE:-}" ] || TESTEXE=$(bash "$D/testexe" path) || exit 1
+    else TESTEXE=${TESTEXE:-$D/testexe}; fi
   fi
   pids=()
   for i in "${!runs[@]}"; do
@@ -257,10 +281,11 @@ for t in ${TARGETS:-native}; do
     [ -n "${runs[i]// /}" ] || continue
     # (each run's time with TIMES: the part's run is the longest of them, and which one it is is said)
     { if [ "${runs[i]%% *}" = @flows ]; then
-        f=_build/native/release/test/stillfail/sfreplay/flows
-        exe_run $f/flows.blackbox_test.exe $f/__blackbox_test_info.json ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
+        f=_build/$t/release/test/stillfail/sfreplay/flows
+        exe_run "$fx" $f/__blackbox_test_info.json ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
           ${runs[i]#@flows } > "$out.$i" 2>&1
-      elif [ -n "${APP_EXE:-}" ]; then
+      # (the packages' run is moon test's even then: only sfapp's program is APP_EXE)
+      elif [ -n "${APP_EXE:-}" ] && [[ " ${runs[i]} " != *" -p "* ]]; then
         exe_run "$APP_EXE" "$APP_INFO" ${APP_JOBS:-1} stillfail/sfapp ${runs[i]} > "$out.$i" 2>&1
       else moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; fi; c=$?
       echo "$(( $(date +%s) - s )) s: $(run_name ${runs[i]})" > "$out.time.$i"

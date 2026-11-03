@@ -15,10 +15,10 @@ pub struct ReactiveNode {
   priv mut subs_tail : Link?
   priv mut flags : Int
   priv kind : NodeKind
-  /// a signal's SignalState, a computed's ComputedState, an effect's fn (`no_own` for a scope's and a trigger's)
+  /// an effect's fn, a watch's own (NoOwn for a signal's, a computed's, a scope's and a trigger's: a signal's and a
+  /// computed's state is its Signal's and Computed's, and its update's)
   priv own : Own
-  /// a signal's or a computed's update of its own (updateSignal, updateComputed): one function a type of value, not a
-  /// closure a node
+  /// a signal's or a computed's update of its own (updateSignal, updateComputed), over its state
   priv update : ((ReactiveNode) -> Bool)?
   /// an effect's cleanup, as its fn returned it (EffectNode.cleanup)
   priv mut cleanup : (() -> Unit)?
@@ -38,16 +38,14 @@ enum NodeKind {
 }
 
 ///|
-/// A node's own (its SignalState[T], ComputedState[T] or fn) with its type left out, the node being the same for every
-/// type of value: what knows the type (Signal[T], Computed[T], the update the node was made with) says it back
-/// (signals.mbt's `coerce`). Made only as `no_own`; a reference, as what it stands for is.
-priv struct Own {
-  own : Own?
+/// What a node holds besides the graph's fields that is not a value of a type of its own: an effect's fn, a watch's
+/// own (signals.mbt's WatchOwn). (A signal's and a computed's state, of their value's type, are held by their Signal and
+/// Computed and their update: as one reference of another type (`%identity`) the Wasm GC's types do not take it.)
+priv enum Own {
+  NoOwn
+  EffectOwn(() -> (() -> Unit)?)
+  WatchOwned(WatchOwn)
 }
-
-///|
-/// The own of a node that has none (a scope, a trigger's reader).
-let no_own : Own = { own: None }
 
 ///|
 /// An edge: `sub` read `dep` (Link), in `dep`'s subs and `sub`'s deps both; `version` the cycle it was read in.
@@ -97,7 +95,7 @@ pub const PENDING : Int = 32
 fn ReactiveNode::new(
   flags : Int,
   kind : NodeKind,
-  own? : Own = no_own,
+  own? : Own = NoOwn,
   update? : (ReactiveNode) -> Bool,
 ) -> ReactiveNode {
   { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None }

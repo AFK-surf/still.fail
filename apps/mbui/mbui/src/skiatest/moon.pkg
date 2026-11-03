@@ -2,9 +2,10 @@ import {
   "mbui/skia",
   "mbui/pixels",
   "moonbitlang/core/encoding/utf8",
+  "mbui/runfs",
 }
 
 options(
-  targets: { "files.mbt": [ "native" ], "files_js.mbt": [ "js" ] },
+  targets: { "files.mbt": [ "native" ], "files_js.mbt": [ "js" ], "files_wasm.mbt": [ "wasm", "wasm-gc" ] },
   "native-stub": [ "read_file.c" ],
 )

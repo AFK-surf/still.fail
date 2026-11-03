@@ -61,7 +61,7 @@ for n in "$@"; do
   [ -z "$t" ] || [ -z "$tag" ] || [ "$tag" = "$t" ] || die "$n was recorded with the mark $t, the others before it $tag: rerecord them apart"
   [ -n "$t" ] && tag=$t; [ -n "$s" ] && station=$s
   echo "rerecord: $n ← $test (trace $trace, mark ${t:-none of its own}${s:+, station $s})"
-  FLOW_EMIT="$TMP/$idx-$n.drive" moon_test_native "$test" > "$TMP/$idx-$n.test.log" 2>&1
+  FLOW_EMIT="$TMP/$idx-$n.drive" moon_tests "$test" > "$TMP/$idx-$n.test.log" 2>&1
   [ -s "$TMP/$idx-$n.drive" ] || { grep -a 'Error\]\|error:\|failed\|^flow:' "$TMP/$idx-$n.test.log" | head -20 | cut -c1-300; die "$test wrote no script"; }
   # (from a starting point (E2E_START), the app's core already made: the first start's `migrate`, which a test over a
   # first start's trace waits for, is not asked again)
@@ -140,7 +140,7 @@ NODE
   "$D/trace" diff "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
   # (what the new trace has the app ask of the core's pure calls that is not kept yet (src/sfkept: a text the run typed,
   # read by the core): worked out by the core and kept, as scripts/kept does, for this test alone, then run again)
-  moon_test_native "$test" > "$TMP/$name.after.log" 2>&1
+  moon_tests "$test" > "$TMP/$name.after.log" 2>&1
   ok=$?
   for _ in 1 2 3 4 5 6 7 8; do
     [ $ok = 0 ] && break
@@ -148,7 +148,7 @@ NODE
     grep -a 'kept-answers-ask {' "$TMP/$name.after.log" > "$TMP/$name.asks"
     [ -s "$TMP/$name.asks" ] || break
     node "$A/../../client/core-ts/scripts/kept-answers.ts" "$TMP/$name.asks" > /dev/null || break
-    moon_test_native "$test" > "$TMP/$name.after.log" 2>&1
+    moon_tests "$test" > "$TMP/$name.after.log" 2>&1
     ok=$?
   done
   if [ $ok = 0 ]; then echo "  $test: passes"; else
