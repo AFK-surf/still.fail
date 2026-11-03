@@ -452,9 +452,12 @@ pub fn Tester::keyboard_gone(self : Tester) -> Unit {
 /// The keyboard's trackpad (iOS's floating cursor) begins at (`x`, `y`), moves to (`x1`, `y1`) and is let go; the
 /// frames it causes drawn.
 pub fn Tester::ime_trackpad(self : Tester, x : Int, y : Int, x1 : Int, y1 : Int) -> Unit {
-  on_text(text_float_begin, "", x, y)
+  let u = text_float_unit.to_int()
+  on_text(text_float_begin, "", x * u, y * u)
   self.draw()
-  on_text(text_float_move, "", x1, y1)
+  on_text(text_float_move, "", x1 * u, y1 * u)
+  self.draw()
+  on_text(text_float_end, "", 0, 0)
   self.draw()
 }
 
@@ -497,13 +500,22 @@ let text_paste = 8
 
 ///|
 /// The host's text event saying the keyboard's trackpad (iOS's floating cursor: a long press on the space bar) begins,
-/// at (`a`, `b`) in the window, in points.
+/// at (`a`, `b`) in the window, in text_float_unit of a point.
 let text_float_begin = 9
 
 ///|
-/// The host's text event saying the keyboard's trackpad moved to (`a`, `b`) in the window, in points: the caret goes as
-/// far from where it was when it began as that is from where it began.
+/// The host's text event saying the keyboard's trackpad moved to (`a`, `b`) in the window, in text_float_unit of a
+/// point: the caret goes as far from where it was when it began as that is from where it began.
 let text_float_move = 10
+
+///|
+/// The host's text event saying the keyboard's trackpad was let go: the caret stays where it went.
+let text_float_end = 11
+
+///|
+/// What the keyboard's trackpad's points are counted in (text_float_begin, text_float_move): a 64th of a point, the
+/// finger's way as finely as the host has it (whole points would step the caret it draws 3 pixels at a time).
+let text_float_unit : Double = 64.0
 
 ///|
 fn h_ime_action(kind : Int) -> Unit {

@@ -40,6 +40,8 @@
 //                               home, end, pageup, pagedown, backspace, a character; cmd+ (⌘ on macOS, Ctrl
 //                               elsewhere), ctrl+, alt+, shift+ (cmd+k, shift+enter, alt+down)
 //   resize W H                  the window's content resized to W by H (the host's own window, where it can)
+//   trackpad begin|DX DY|end    the keyboard's trackpad (iOS's floating cursor) begun, its finger at DX DY from where it
+//                               began, let go
 //   ime H                       under a Tester (a film's run), the soft keyboard H points over the window's foot, as a
 //                               host says it while it moves (Tester::set_ime_inset); a real host's is its own
 //   viewsaid JSON               under a Tester (a film's run), its host says JSON of a native view, as Tester::view_said
@@ -1362,6 +1364,22 @@ fn drive_steps(c : Ctx) -> Unit {
           }
           None => {
             drive_fail(c, d, "viewsaid: only a Tester's host says what a script tells it of its views")
+            return
+          }
+        }
+        acted()
+        return
+      }
+      "trackpad" => {
+        // (the keyboard's trackpad: begun at the window's top left, its finger moved to DX DY from there, let go)
+        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let u = text_float_unit
+        match words {
+          ["begin"] => on_text(text_float_begin, "", 0, 0)
+          ["end"] => on_text(text_float_end, "", 0, 0)
+          [dx, dy] => on_text(text_float_move, "", (number(dx) * u).to_int(), (number(dy) * u).to_int())
+          _ => {
+            drive_fail(c, d, "trackpad begin | DX DY | end")
             return
           }
         }
