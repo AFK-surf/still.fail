@@ -14,7 +14,7 @@ import { CoreError, HostError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh, IrohConnection } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, CONNECT_TIMEOUT_MS, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -1129,6 +1129,27 @@ sim("a_station_said_tailnet_is_kept_and_reached_with_the_relays_down", async (s)
   const link = await s.run(next.link(id, grants("ok", { n: 0 })));
   assert.equal(link.path(), "direct");
   assert.ok(s.time.now() - started < 5_000, `reached ${s.time.now() - started} ms after it was asked`);
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  await close(s, station, next);
+});
+
+/// 2026-11-03: a station in WSL with mirrored networking says the Windows machine's own addresses; the Windows app's
+/// packets to them reach it, its answers go back into WSL. Each dial given them went unanswered (CONNECT_TIMEOUT_MS,
+/// again and again for hours) while a phone came through a relay. After one such dial the next goes through the relays
+/// on their own endpoints too, and comes through.
+sim("a_station_said_addresses_that_answer_no_handshake_is_reached_through_a_relay", async (s) => {
+  const { station, mesh, id, a, b } = await onTailnet(s, 1);
+  s.net.oneWay = true;
+  station.tailnet = [];
+  station.lan = station.addr().ips;
+  await reach(s, mesh, id);
+  await s.run(mesh.close());
+  // The next run dials it at the addresses it said.
+  const next = await s.run(Mesh.make(env(s), [a, b]));
+  const started = s.time.now();
+  const link = await s.run(Effect.retry(next.link(id, grants("ok", { n: 0 })), { times: 3 }), 5 * 60_000);
+  assert.ok(s.time.now() - started <= 2 * CONNECT_TIMEOUT_MS + 5_000, `reached ${s.time.now() - started} ms after it was asked`);
+  assert.ok(s.net.tries.some((t) => t.to === id && t.ips), "the addresses it said were dialled");
   assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
   await close(s, station, next);
 });
