@@ -55,6 +55,38 @@ test "a shared subscription's main switch and its station details remain usable 
 }
 
 ///|
+test "a profile's workspace row shows its own mark, but no repeated initial without one" {
+  for (w, platform) in page_cases {
+    for (emoji, icon) in [("", ""), ("🌱", ""), ("", "glyph:star")] {
+      let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, h=2400.0, over=fn(base) {
+        {
+          ..base,
+          topic: fn(name, params) {
+            if name == "memberships" {
+              {
+                value: Some({
+                  "manages": true,
+                  "workspaces": [{ "workspace": "ws2", "name": "个人", "home": false, "emoji": Json::string(emoji), "icon": Json::string(icon) }],
+                }),
+                error: None,
+                version: 1,
+              }
+            } else {
+              (base.topic)(name, params)
+            }
+          },
+        }
+      })
+      let at = "\{w} platform \{platform}, emoji \{emoji}, icon \{icon}"
+      assert_true(t.get(Switch, label="个人").check is Some(_), msg=at)
+      assert_true(t.boxes().filter(fn(b) { b.text == "个" }).is_empty(), msg=at)
+      assert_eq(t.boxes().iter().any(fn(b) { b.text == "🌱" }), emoji != "", msg=at)
+      assert_eq(t.shape_boxes().iter().any(fn(b) { b.0.has_prefix("sf/pic/glyph/star/") }), icon != "", msg=at)
+    }
+  }
+}
+
+///|
 /// The fixture's Claude subscription before it is shared.
 fn unshared_claude(s : Source) -> Source {
   fn without_share(v : Json) -> Json {

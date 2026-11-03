@@ -12,6 +12,17 @@ fn station_tester(address : String, part? : String = "overview", w? : Double = 3
 }
 
 ///|
+test "a station's workspace rows do not repeat an unmarked workspace's initial" {
+  for (w, platform) in page_cases {
+    let t = station_tester("ws1/st1", part="settings", w~, platform~)
+    let boxes = t.boxes()
+    let at = "\{w} platform \{platform}"
+    assert_true(boxes.iter().any(fn(b) { b.text == "个人" }), msg=at)
+    assert_true(boxes.filter(fn(b) { b.text == "个" }).is_empty(), msg=at)
+  }
+}
+
+///|
 test "a station's page in three parts: 概览 what runs on it, 设置 what it is let do, 软件与设备 its software and the machine" {
   let t = station_tester("ws1/st1")
   // 概览: what runs on it, and what else of it has a page (its memory, this phone's adb)

@@ -248,6 +248,8 @@ fn notify_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, notify : Js
             let wv = Some(w)
             let id = text(wv, "id")
             let name = text(wv, "name")
+            let emoji = text(wv, "emoji")
+            let icon = text(wv, "icon")
             let heard = flag(wv, "on")
             let now = @sf.switch_row(
               c,
@@ -255,8 +257,12 @@ fn notify_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, notify : Js
               name,
               heard,
               disabled=!on,
-              // its mark before it, as the workspace is named everywhere
-              lead=fn(c) { @sf.workspace_badge(c, name, text(wv, "emoji"), text(wv, "icon"), profile_ws_mark) },
+              // A mark it chose, or just its name when it has none.
+              lead?=if @sf.has_station_mark(emoji, icon) {
+                Some(fn(c) { @sf.workspace_badge(c, name, emoji, icon, profile_ws_mark) })
+              } else {
+                None
+              },
             )
             if now != heard {
               c.after_build("notify-ws/" + id, fn() {

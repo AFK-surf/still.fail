@@ -21,6 +21,17 @@ test "通知, at each width and with either hand: the ways, each kind with what 
 }
 
 ///|
+test "notification workspace rows do not repeat an unmarked workspace's initial" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Notifications, w, platform~, h=2400.0)
+    let boxes = t.boxes()
+    let at = "\{w} platform \{platform}"
+    assert_true(boxes.iter().any(fn(b) { b.text == "个人" }), msg=at)
+    assert_true(boxes.filter(fn(b) { b.text == "个" }).is_empty(), msg=at)
+  }
+}
+
+///|
 test "通知, the system having refused them: the banner's way to allow them opens the system's settings of the app's notifications" {
   for case in page_cases {
     let (w, platform) = case
