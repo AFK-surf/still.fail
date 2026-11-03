@@ -93,6 +93,24 @@ test("a history brought on in the background is read after every other read, one
   assert.equal(Atomics.load(state, 0), 4);
 });
 
+test("a stretch of a history filled in brief is read behind the rest; one read whole is not", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(2);
+  const stretch = (whole: boolean) => ({ ...args(true), from: "0", to: "999", ...(whole ? {} : { brief: "1" }) });
+  const asked = [readers.read("timeline", stretch(false), "en"), readers.read("timeline", stretch(false), "en")];
+  try {
+    await started(1);
+    assert.equal(await readers.read("chats", args(false), "en"), "{}", "the sidebar beside the stretch, the other stretch waiting");
+    assert.equal(Atomics.load(state, 0), 2);
+    // A step opened: read whole, someone waits on it; it goes before the stretch waiting.
+    asked.push(readers.read("timeline", stretch(true), "en"));
+    await started(3);
+  } finally {
+    const settled = await open(asked);
+    assert.ok(settled.every((s) => s.status === "fulfilled"));
+  }
+  assert.equal(Atomics.load(state, 0), 4);
+});
+
 // On ccvm (2026-11-02) the log waited up to 98 s behind bulk reads, growing until the main connection wrote it itself.
 test("the database's log is written into it before the reads waiting, by the reader left for a chat", { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);
