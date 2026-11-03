@@ -31,6 +31,7 @@ import { installUsageCompactions, usageCompactionsReady } from "./usage-compacti
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 import { installUsageMinutes } from "./usage-minutes.ts";
+import { installUsageDetail } from "./usage-detail.ts";
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
@@ -206,6 +207,7 @@ export class Store {
       installUsageCompactions(db);
       addUsageQuarters(db);
       installUsageMinutes(db);
+      installUsageDetail(db);
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);

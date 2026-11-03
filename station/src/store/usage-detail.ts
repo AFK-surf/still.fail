@@ -1,0 +1,360 @@
+// Detailed usage distributions. The finest buckets preserve the exact time of a call while combining calls with the
+// same dimensions; coarser buckets let a read cover a long interval without visiting each finer bucket.
+import type { DatabaseSync } from "node:sqlite";
+import type { InWorkspace } from "./rows.ts";
+
+const SIZES = [900_000, 60_000, 1_000, 1] as const;
+const COLUMNS = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+const CHANGES = ["id", "at", "session", "thread", "person", "profile", "runtime", "model", "fast", ...COLUMNS];
+const CHANGED = CHANGES.map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ");
+const bucket = (row: string, size: number) => size === 1 ? `${row}.at`
+  : `(CASE WHEN ${row}.at >= 0 THEN ${row}.at / ${size} ELSE -1 - ((-1 - ${row}.at) / ${size}) END)`;
+const fields = (row: string) => `${row}.session, COALESCE(${row}.thread, 0), COALESCE(${row}.person, ''),
+  COALESCE(${row}.profile, ''), ${row}.runtime, COALESCE(${row}.model, ''), ${row}.fast`;
+const key = (row: string, level: number) => `usage_detail.session = ${row}.session AND usage_detail.level = ${level} AND usage_detail.bucket = ${bucket(row, SIZES[level]!)}
+  AND usage_detail.thread = COALESCE(${row}.thread, 0) AND usage_detail.person = COALESCE(${row}.person, '') AND usage_detail.profile = COALESCE(${row}.profile, '')
+  AND usage_detail.runtime = ${row}.runtime AND usage_detail.model = COALESCE(${row}.model, '') AND usage_detail.fast = ${row}.fast`;
+const indexed = (row: string) => `EXISTS (SELECT 1 FROM usage_detail_sessions st WHERE st.session = ${row}.session AND
+  (st.done = 1 OR (st.after_at IS NOT NULL AND (${row}.at, ${row}.rowid) <= (st.after_at, st.after_rowid))
+    OR (st.end_at IS NOT NULL AND (${row}.at, ${row}.rowid) > (st.end_at, st.end_rowid))
+    OR EXISTS (SELECT 1 FROM usage_detail_seen WHERE id = ${row}.id)))`;
+
+// UPDATE then INSERT WHERE NOT EXISTS keeps the sum even when an older writer uses INSERT OR REPLACE: the outer
+// statement's conflict policy would otherwise replace an existing bucket inside this trigger.
+const add = (row: string) => SIZES.map((_, level) => `
+  UPDATE usage_detail SET records = records + 1, ${COLUMNS.map((c) => `${c} = ${c} + ${row}.${c}`).join(", ")}
+    WHERE ${key(row, level)};
+  INSERT INTO usage_detail (session, thread, person, profile, runtime, model, fast, level, bucket, records, ${COLUMNS.join(", ")})
+    SELECT ${fields(row)}, ${level}, ${bucket(row, SIZES[level]!)}, 1, ${COLUMNS.map((c) => `${row}.${c}`).join(", ")}
+    WHERE NOT EXISTS (SELECT 1 FROM usage_detail WHERE ${key(row, level)});`).join("");
+const remove = (row: string) => SIZES.map((_, level) => `
+  UPDATE usage_detail SET records = records - 1, ${COLUMNS.map((c) => `${c} = ${c} - ${row}.${c}`).join(", ")}
+    WHERE ${key(row, level)} AND ${indexed(row)};
+  DELETE FROM usage_detail WHERE ${key(row, level)} AND records = 0;`).join("");
+// REPLACE can remove the old row without a DELETE trigger on an older connection. A single staging row captures it
+// before INSERT; UPSERT's UPDATE consumes it without using it, while an ignored INSERT can leave at most that one row.
+const removeReplaced = SIZES.map((_, level) => `
+  UPDATE usage_detail SET records = records - 1,
+    ${COLUMNS.map((c) => `${c} = ${c} - (SELECT ${c} FROM usage_detail_replace)`).join(", ")}
+    WHERE EXISTS (SELECT 1 FROM usage_detail_replace x WHERE x.id = NEW.id AND x.counted = 1 AND ${key("x", level)});
+  DELETE FROM usage_detail WHERE records = 0 AND EXISTS
+    (SELECT 1 FROM usage_detail_replace x WHERE x.id = NEW.id AND x.counted = 1 AND ${key("x", level)});`).join("");
+const ensureSession = (row: string) => `
+  INSERT INTO usage_detail_sessions
+    SELECT ${row}.session, NULL, NULL,
+      (SELECT at FROM usage WHERE session = ${row}.session ORDER BY at DESC, rowid DESC LIMIT 1),
+      (SELECT rowid FROM usage WHERE session = ${row}.session ORDER BY at DESC, rowid DESC LIMIT 1),
+      NOT EXISTS (SELECT 1 FROM usage WHERE session = ${row}.session AND id <> ${row}.id LIMIT 1)
+    WHERE NOT EXISTS (SELECT 1 FROM usage_detail_sessions WHERE session = ${row}.session);
+  INSERT INTO usage_detail_seen SELECT ${row}.id FROM usage_detail_sessions st
+    WHERE st.session = ${row}.session AND st.done = 0
+      AND (st.after_at IS NULL OR (${row}.at, ${row}.rowid) > (st.after_at, st.after_rowid))
+      AND (${row}.at, ${row}.rowid) <= (st.end_at, st.end_rowid)
+      AND NOT EXISTS (SELECT 1 FROM usage_detail_seen WHERE id = ${row}.id);
+  INSERT INTO usage_detail_scope VALUES (${row}.session, (SELECT ws FROM sessions WHERE key = ${row}.session),
+    (SELECT done FROM usage_detail_sessions WHERE session = ${row}.session))
+    ON CONFLICT (session) DO UPDATE SET ws = excluded.ws, done = excluded.done;`;
+const scope = (ws: string) => `(CASE WHEN ${ws} IS NULL THEN 'H' ELSE 'W' || ${ws} END)`;
+const dirty = (session: string, oldWs: string, newWs: string, when = "1") => `
+  INSERT INTO usage_detail_dirty SELECT ${session}, NULL, NULL
+    WHERE (${when}) AND EXISTS (SELECT 1 FROM usage_detail_lookup WHERE session = ${session})
+    ON CONFLICT (session) DO UPDATE SET after_level = NULL, after_bucket = NULL;
+  INSERT INTO usage_detail_dirty_scope SELECT ${session}, ${scope(oldWs)}
+    WHERE (${when}) AND EXISTS (SELECT 1 FROM usage_detail_dirty WHERE session = ${session})
+      AND NOT EXISTS (SELECT 1 FROM usage_detail_dirty_scope WHERE session = ${session} AND scope = ${scope(oldWs)});
+  INSERT INTO usage_detail_dirty_scope SELECT ${session}, ${scope(newWs)}
+    WHERE (${when}) AND EXISTS (SELECT 1 FROM usage_detail_dirty WHERE session = ${session})
+      AND NOT EXISTS (SELECT 1 FROM usage_detail_dirty_scope WHERE session = ${session} AND scope = ${scope(newWs)});`;
+
+const SCHEMA = `
+CREATE TABLE usage_detail (
+  session TEXT NOT NULL, thread INTEGER NOT NULL, person TEXT NOT NULL, profile TEXT NOT NULL,
+  runtime TEXT NOT NULL, model TEXT NOT NULL, fast INTEGER NOT NULL, level INTEGER NOT NULL, bucket INTEGER NOT NULL,
+  records INTEGER NOT NULL, calls INTEGER NOT NULL, input INTEGER NOT NULL, cache_read INTEGER NOT NULL,
+  cache_write INTEGER NOT NULL, cache_write_long INTEGER NOT NULL, output INTEGER NOT NULL,
+  PRIMARY KEY (session, level, bucket, thread, person, profile, runtime, model, fast)
+) WITHOUT ROWID;
+CREATE TABLE usage_detail_scope (session TEXT PRIMARY KEY, ws TEXT, done INTEGER NOT NULL) WITHOUT ROWID;
+CREATE INDEX usage_detail_scope_ws ON usage_detail_scope (ws, done, session);
+CREATE TABLE usage_detail_lookup (session TEXT NOT NULL, level INTEGER NOT NULL, bucket INTEGER NOT NULL, scope TEXT NOT NULL,
+  PRIMARY KEY (session, level, bucket)) WITHOUT ROWID;
+CREATE INDEX usage_detail_lookup_scope ON usage_detail_lookup (scope, level, bucket, session);
+CREATE INDEX usage_detail_lookup_time ON usage_detail_lookup (level, bucket, session);
+CREATE TABLE usage_detail_dirty (session TEXT PRIMARY KEY, after_level INTEGER, after_bucket INTEGER) WITHOUT ROWID;
+CREATE TABLE usage_detail_dirty_scope (session TEXT NOT NULL, scope TEXT NOT NULL, PRIMARY KEY (session, scope)) WITHOUT ROWID;
+CREATE INDEX usage_detail_dirty_by_scope ON usage_detail_dirty_scope (scope, session);
+CREATE TABLE usage_detail_sessions (session TEXT PRIMARY KEY, after_at INTEGER, after_rowid INTEGER,
+  end_at INTEGER, end_rowid INTEGER, done INTEGER NOT NULL) WITHOUT ROWID;
+CREATE TABLE usage_detail_seen (id TEXT PRIMARY KEY) WITHOUT ROWID;
+CREATE TABLE usage_detail_replace (id TEXT PRIMARY KEY, at INTEGER NOT NULL, session TEXT NOT NULL, thread INTEGER,
+  person TEXT, profile TEXT, runtime TEXT NOT NULL, model TEXT, fast INTEGER NOT NULL, calls INTEGER NOT NULL,
+  input INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL, cache_write_long INTEGER NOT NULL,
+  output INTEGER NOT NULL, counted INTEGER NOT NULL) WITHOUT ROWID;
+CREATE TABLE usage_detail_ready (ws TEXT PRIMARY KEY) WITHOUT ROWID;
+CREATE TABLE usage_detail_all (id INTEGER PRIMARY KEY CHECK (id = 1), after_session TEXT, done INTEGER NOT NULL);
+INSERT INTO usage_detail_all VALUES (1, NULL, NOT EXISTS (SELECT 1 FROM usage LIMIT 1));
+
+CREATE TRIGGER usage_detail_bucket_add AFTER INSERT ON usage_detail BEGIN
+  INSERT INTO usage_detail_lookup SELECT NEW.session, NEW.level, NEW.bucket,
+    ${scope("(SELECT ws FROM sessions WHERE key = NEW.session)")}
+    WHERE NOT EXISTS (SELECT 1 FROM usage_detail_lookup WHERE session = NEW.session AND level = NEW.level AND bucket = NEW.bucket);
+END;
+CREATE TRIGGER usage_detail_bucket_drop AFTER DELETE ON usage_detail BEGIN
+  DELETE FROM usage_detail_lookup WHERE session = OLD.session AND level = OLD.level AND bucket = OLD.bucket
+    AND NOT EXISTS (SELECT 1 FROM usage_detail WHERE session = OLD.session AND level = OLD.level AND bucket = OLD.bucket);
+END;
+CREATE TRIGGER usage_detail_session_token_add BEFORE INSERT ON sessions
+  WHEN EXISTS (SELECT 1 FROM sessions WHERE token = NEW.token AND key <> NEW.key) BEGIN
+  ${dirty("(SELECT key FROM sessions WHERE token = NEW.token)", "(SELECT ws FROM sessions WHERE token = NEW.token)", "NULL",
+    "(SELECT ws FROM sessions WHERE token = NEW.token) IS NOT NULL")}
+  UPDATE usage_detail_scope SET ws = NULL WHERE session = (SELECT key FROM sessions WHERE token = NEW.token AND key <> NEW.key);
+END;
+CREATE TRIGGER usage_detail_session_token_change BEFORE UPDATE OF token ON sessions
+  WHEN OLD.token IS NOT NEW.token AND EXISTS (SELECT 1 FROM sessions WHERE token = NEW.token AND key <> NEW.key) BEGIN
+  ${dirty("(SELECT key FROM sessions WHERE token = NEW.token)", "(SELECT ws FROM sessions WHERE token = NEW.token)", "NULL",
+    "(SELECT ws FROM sessions WHERE token = NEW.token) IS NOT NULL")}
+  UPDATE usage_detail_scope SET ws = NULL WHERE session = (SELECT key FROM sessions WHERE token = NEW.token AND key <> NEW.key);
+END;
+CREATE TRIGGER usage_detail_session_add AFTER INSERT ON sessions BEGIN
+  ${dirty("NEW.key", "(SELECT ws FROM usage_detail_scope WHERE session = NEW.key)", "NEW.ws",
+    "EXISTS (SELECT 1 FROM usage_detail_scope WHERE session = NEW.key AND ws IS NOT NEW.ws)")}
+  INSERT INTO usage_detail_sessions SELECT NEW.key, NULL, NULL,
+    (SELECT at FROM usage WHERE session = NEW.key ORDER BY at DESC, rowid DESC LIMIT 1),
+    (SELECT rowid FROM usage WHERE session = NEW.key ORDER BY at DESC, rowid DESC LIMIT 1),
+    NOT EXISTS (SELECT 1 FROM usage WHERE session = NEW.key LIMIT 1)
+    WHERE NOT EXISTS (SELECT 1 FROM usage_detail_sessions WHERE session = NEW.key);
+  INSERT INTO usage_detail_scope SELECT NEW.key, NEW.ws, done FROM usage_detail_sessions WHERE session = NEW.key
+    AND EXISTS (SELECT 1 FROM usage WHERE session = NEW.key LIMIT 1)
+    ON CONFLICT (session) DO UPDATE SET ws = excluded.ws, done = excluded.done;
+END;
+CREATE TRIGGER usage_detail_session_move AFTER UPDATE OF key, ws ON sessions BEGIN
+  ${dirty("OLD.key", "OLD.ws", "NULL", "OLD.key IS NOT NEW.key AND OLD.ws IS NOT NULL")}
+  UPDATE usage_detail_scope SET ws = NULL WHERE session = OLD.key AND OLD.key IS NOT NEW.key;
+  ${dirty("NEW.key", "(SELECT ws FROM usage_detail_scope WHERE session = NEW.key)", "NEW.ws",
+    "EXISTS (SELECT 1 FROM usage_detail_scope WHERE session = NEW.key AND ws IS NOT NEW.ws)")}
+  INSERT INTO usage_detail_sessions SELECT NEW.key, NULL, NULL,
+    (SELECT at FROM usage WHERE session = NEW.key ORDER BY at DESC, rowid DESC LIMIT 1),
+    (SELECT rowid FROM usage WHERE session = NEW.key ORDER BY at DESC, rowid DESC LIMIT 1),
+    NOT EXISTS (SELECT 1 FROM usage WHERE session = NEW.key LIMIT 1)
+    WHERE NOT EXISTS (SELECT 1 FROM usage_detail_sessions WHERE session = NEW.key);
+  INSERT INTO usage_detail_scope SELECT NEW.key, NEW.ws, done FROM usage_detail_sessions WHERE session = NEW.key
+    AND EXISTS (SELECT 1 FROM usage WHERE session = NEW.key LIMIT 1)
+    ON CONFLICT (session) DO UPDATE SET ws = excluded.ws, done = excluded.done;
+END;
+CREATE TRIGGER usage_detail_session_drop AFTER DELETE ON sessions BEGIN
+  ${dirty("OLD.key", "OLD.ws", "NULL", "OLD.ws IS NOT NULL")}
+  UPDATE usage_detail_scope SET ws = NULL WHERE session = OLD.key;
+END;
+CREATE TRIGGER usage_detail_before_add BEFORE INSERT ON usage BEGIN
+  DELETE FROM usage_detail_replace;
+  INSERT INTO usage_detail_replace SELECT u.id, u.at, u.session, u.thread, u.person, u.profile, u.runtime, u.model, u.fast,
+    u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output, ${indexed("u")}
+    FROM usage u WHERE u.id = NEW.id;
+END;
+CREATE TRIGGER usage_detail_add AFTER INSERT ON usage BEGIN
+  ${removeReplaced}
+  DELETE FROM usage_detail_seen WHERE id IN (SELECT id FROM usage_detail_replace WHERE id = NEW.id);
+  DELETE FROM usage_detail_replace;
+  ${ensureSession("NEW")}
+  ${add("NEW")}
+END;
+CREATE TRIGGER usage_detail_drop BEFORE DELETE ON usage BEGIN
+  ${remove("OLD")}
+  DELETE FROM usage_detail_seen WHERE id = OLD.id;
+  DELETE FROM usage_detail_replace WHERE id = OLD.id;
+END;
+CREATE TRIGGER usage_detail_change BEFORE UPDATE OF ${CHANGES.join(", ")} ON usage WHEN ${CHANGED} BEGIN
+  ${remove("OLD")}
+  DELETE FROM usage_detail_seen WHERE id = OLD.id;
+END;
+CREATE TRIGGER usage_detail_changed AFTER UPDATE OF ${CHANGES.join(", ")} ON usage WHEN ${CHANGED} BEGIN
+  DELETE FROM usage_detail_replace WHERE id = NEW.id;
+  ${ensureSession("NEW")}
+  ${add("NEW")}
+END;
+CREATE TRIGGER usage_detail_unchanged AFTER UPDATE ON usage WHEN NOT (${CHANGED}) BEGIN
+  DELETE FROM usage_detail_replace WHERE id = NEW.id;
+END;
+`;
+
+/// Install empty structures only; old calls are read later by the background worker.
+export function installUsageDetail(db: DatabaseSync): void {
+  const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_detail_all'").get() !== undefined;
+  if (installed()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!installed()) db.exec(SCHEMA);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+type State = { after_at: number | null; after_rowid: number | null; end_at: number | null; end_rowid: number | null; done: number };
+type Source = { id: string; at: number; rowid: number };
+export const PENDING_DETAIL_SESSION = `SELECT session FROM usage_detail_scope INDEXED BY usage_detail_scope_ws
+  WHERE ws = ? AND done = 0 LIMIT 1`;
+
+export const USAGE_DETAIL_PENDING = "usage detail statistics are still being filled";
+export function usageDetailReady(db: DatabaseSync, viewer: InWorkspace | null): boolean {
+  if (viewer === null) {
+    if (db.prepare("SELECT 1 FROM usage_detail_dirty LIMIT 1").get()) return false;
+  } else {
+    if (db.prepare("SELECT 1 FROM usage_detail_dirty_scope INDEXED BY usage_detail_dirty_by_scope WHERE scope = ? LIMIT 1").get(`W${viewer.workspace}`)) return false;
+    if (viewer.home !== false && db.prepare("SELECT 1 FROM usage_detail_dirty_scope INDEXED BY usage_detail_dirty_by_scope WHERE scope = 'H' LIMIT 1").get()) return false;
+  }
+  if ((db.prepare("SELECT done FROM usage_detail_all WHERE id = 1").get() as { done: number }).done === 1) return true;
+  if (viewer === null || viewer.home !== false) return false;
+  return db.prepare("SELECT 1 FROM usage_detail_ready WHERE ws = ?").get(viewer.workspace) !== undefined
+    && db.prepare(PENDING_DETAIL_SESSION).get(viewer.workspace) === undefined;
+}
+
+/// A move changes at most one bounded batch of lookup entries, leaving unrelated workspaces readable.
+export function backfillUsageDetailMove(db: DatabaseSync, limit = 32, requested?: string): { done: boolean; processed: number } {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const state = (requested === undefined
+      ? db.prepare("SELECT session, after_level, after_bucket FROM usage_detail_dirty ORDER BY session LIMIT 1").get()
+      : db.prepare("SELECT session, after_level, after_bucket FROM usage_detail_dirty WHERE session = ?").get(requested)) as
+      { session: string; after_level: number | null; after_bucket: number | null } | undefined;
+    if (!state) { db.exec("COMMIT"); return { done: true, processed: 0 }; }
+    const rows = (state.after_level === null
+      ? db.prepare("SELECT level, bucket FROM usage_detail_lookup WHERE session = ? ORDER BY level, bucket LIMIT ?").all(state.session, limit)
+      : db.prepare("SELECT level, bucket FROM usage_detail_lookup WHERE session = ? AND (level, bucket) > (?, ?) ORDER BY level, bucket LIMIT ?")
+        .all(state.session, state.after_level, state.after_bucket, limit)) as { level: number; bucket: number }[];
+    const target = (db.prepare(`SELECT ${scope("ws")} AS scope FROM sessions WHERE key = ?`).get(state.session) as { scope: string } | undefined)?.scope ?? "H";
+    const move = db.prepare("UPDATE usage_detail_lookup SET scope = ? WHERE session = ? AND level = ? AND bucket = ? AND scope <> ?");
+    for (const row of rows) move.run(target, state.session, row.level, row.bucket, target);
+    db.prepare("UPDATE usage_detail_scope SET ws = (SELECT ws FROM sessions WHERE key = ?) WHERE session = ?").run(state.session, state.session);
+    if (rows.length < limit) {
+      db.prepare("DELETE FROM usage_detail_dirty_scope WHERE session = ?").run(state.session);
+      db.prepare("DELETE FROM usage_detail_dirty WHERE session = ?").run(state.session);
+    } else {
+      const last = rows.at(-1)!;
+      db.prepare("UPDATE usage_detail_dirty SET after_level = ?, after_bucket = ? WHERE session = ?").run(last.level, last.bucket, state.session);
+    }
+    db.exec("COMMIT");
+    return { done: db.prepare("SELECT 1 FROM usage_detail_dirty LIMIT 1").get() === undefined, processed: rows.length };
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+/// Add at most `limit` old calls. Each call updates four levels, so the default keeps a transaction small.
+/// Writes made during the fill are marked and are not counted twice.
+export function backfillUsageDetail(db: DatabaseSync, session: string, limit = 8): { done: boolean; processed: number } {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`INSERT INTO usage_detail_sessions SELECT ?1, NULL, NULL,
+      (SELECT at FROM usage WHERE session = ?1 ORDER BY at DESC, rowid DESC LIMIT 1),
+      (SELECT rowid FROM usage WHERE session = ?1 ORDER BY at DESC, rowid DESC LIMIT 1),
+      NOT EXISTS (SELECT 1 FROM usage WHERE session = ?1 LIMIT 1)
+      WHERE NOT EXISTS (SELECT 1 FROM usage_detail_sessions WHERE session = ?1)`).run(session);
+    const state = db.prepare("SELECT * FROM usage_detail_sessions WHERE session = ?").get(session) as State;
+    if (state.done) { db.exec("COMMIT"); return { done: true, processed: 0 }; }
+    db.prepare(`INSERT INTO usage_detail_scope VALUES (?1, (SELECT ws FROM sessions WHERE key = ?1), 0)
+      ON CONFLICT (session) DO UPDATE SET ws = excluded.ws, done = 0`).run(session);
+    const rows: Source[] = [];
+    const end = state.end_at!;
+    if (state.after_at !== null) {
+      const same = state.after_at === end
+        ? db.prepare(`SELECT id, at, rowid FROM usage INDEXED BY usage_session WHERE session = ?1 AND at = ?2
+            AND rowid > ?3 AND rowid <= ?4 ORDER BY rowid LIMIT ?5`).all(session, state.after_at, state.after_rowid, state.end_rowid, limit)
+        : db.prepare(`SELECT id, at, rowid FROM usage INDEXED BY usage_session WHERE session = ?1 AND at = ?2
+            AND rowid > ?3 ORDER BY rowid LIMIT ?4`).all(session, state.after_at, state.after_rowid, limit);
+      rows.push(...same as Source[]);
+    }
+    if (rows.length < limit && (state.after_at === null || state.after_at < end)) {
+      const middle = state.after_at === null
+        ? db.prepare(`SELECT id, at, rowid FROM usage INDEXED BY usage_session WHERE session = ?1 AND at < ?2 ORDER BY at, rowid LIMIT ?3`)
+          .all(session, end, limit - rows.length)
+        : db.prepare(`SELECT id, at, rowid FROM usage INDEXED BY usage_session WHERE session = ?1 AND at > ?2 AND at < ?3 ORDER BY at, rowid LIMIT ?4`)
+          .all(session, state.after_at, end, limit - rows.length);
+      rows.push(...middle as Source[]);
+      if (rows.length < limit) rows.push(...db.prepare(`SELECT id, at, rowid FROM usage INDEXED BY usage_session
+        WHERE session = ?1 AND at = ?2 AND rowid <= ?3 ORDER BY rowid LIMIT ?4`).all(session, end, state.end_rowid, limit - rows.length) as Source[]);
+    }
+    const unmark = db.prepare("DELETE FROM usage_detail_seen WHERE id = ?");
+    const addRow = SIZES.map((size, level) => db.prepare(`INSERT INTO usage_detail
+      SELECT u.session, COALESCE(u.thread, 0), COALESCE(u.person, ''), COALESCE(u.profile, ''), u.runtime,
+        COALESCE(u.model, ''), u.fast, ${level}, ${bucket("u", size)}, 1, ${COLUMNS.map((c) => `u.${c}`).join(", ")}
+      FROM usage u WHERE u.id = ?
+      ON CONFLICT (session, level, bucket, thread, person, profile, runtime, model, fast) DO UPDATE SET
+        records = records + 1, ${COLUMNS.map((c) => `${c} = ${c} + excluded.${c}`).join(", ")}`));
+    for (const row of rows) if (unmark.run(row.id).changes === 0) for (const stmt of addRow) stmt.run(row.id);
+    const last = rows.at(-1);
+    const done = rows.length < limit;
+    db.prepare("UPDATE usage_detail_sessions SET after_at = ?, after_rowid = ?, done = ? WHERE session = ?")
+      .run(last?.at ?? state.after_at, last?.rowid ?? state.after_rowid, done ? 1 : 0, session);
+    if (done) db.prepare("UPDATE usage_detail_scope SET done = 1 WHERE session = ?").run(session);
+    db.exec("COMMIT");
+    return { done, processed: rows.length };
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+export function backfillNextUsageDetail(db: DatabaseSync, limit = 8): { done: boolean; processed: number } {
+  const state = db.prepare("SELECT after_session, done FROM usage_detail_all WHERE id = 1").get() as { after_session: string | null; done: number };
+  if (state.done) return { done: true, processed: 0 };
+  const next = (state.after_session === null
+    ? db.prepare("SELECT session FROM usage INDEXED BY usage_session ORDER BY session LIMIT 1").get()
+    : db.prepare("SELECT session FROM usage INDEXED BY usage_session WHERE session > ? ORDER BY session LIMIT 1").get(state.after_session)) as { session: string } | undefined;
+  if (!next) {
+    db.prepare("UPDATE usage_detail_all SET done = 1 WHERE id = 1 AND after_session IS ?").run(state.after_session);
+    return { done: true, processed: 0 };
+  }
+  const step = backfillUsageDetail(db, next.session, limit);
+  if (step.done) db.prepare("UPDATE usage_detail_all SET after_session = ? WHERE id = 1 AND after_session IS ?").run(next.session, state.after_session);
+  return { done: false, processed: step.processed };
+}
+
+type Range = { level: number; from: bigint; to: bigint };
+const floor = (n: bigint, d: bigint) => n >= 0n ? n / d : -1n - ((-1n - n) / d);
+
+/// Cover [from, to) with the largest whole buckets available. A local midnight can fall inside a quarter, so
+/// non-quarter-hour zones use minute buckets for the interior; their midnights are always minute-aligned.
+export function detailRanges(from: bigint, to: bigint, offset: bigint): Range[] {
+  if (from >= to) return [];
+  const levels = offset % 15n === 0n ? [0, 1, 2, 3] : [1, 2, 3];
+  const ranges: Range[] = [];
+  const visit = (a: bigint, b: bigint, index: number): void => {
+    if (a >= b) return;
+    const level = levels[index]!;
+    const size = BigInt(SIZES[level]!);
+    const first = -floor(-a, size);
+    const last = floor(b, size);
+    if (first >= last) {
+      if (index + 1 < levels.length) visit(a, b, index + 1);
+      return;
+    }
+    if (index + 1 < levels.length) visit(a, first * size, index + 1);
+    ranges.push({ level, from: first, to: last });
+    if (index + 1 < levels.length) visit(last * size, b, index + 1);
+  };
+  visit(from, to, 0);
+  return ranges;
+}
+
+/// Build a scoped query from statistics, not per-call facts. It visits only bucket ranges intersecting the request.
+export function detailQuery(from: bigint, to: bigint, offset: bigint, viewer: InWorkspace | null): { sql: string; args: (string | bigint)[] } | null {
+  const ranges = detailRanges(from, to, offset);
+  if (ranges.length === 0) return null;
+  const args: (string | bigint)[] = [offset];
+  let whereScope = "";
+  if (viewer !== null) {
+    args.push(`W${viewer.workspace}`);
+    whereScope = viewer.home === false ? "l.scope = ?2 AND " : "l.scope IN (?2, 'H') AND ";
+  }
+  const parts = ranges.map((range) => {
+    const start = args.push(range.from);
+    const end = args.push(range.to);
+    return `SELECT d.bucket * ${SIZES[range.level]} AS at, d.* FROM usage_detail_lookup l
+      INDEXED BY ${viewer === null ? "usage_detail_lookup_time" : "usage_detail_lookup_scope"}
+      CROSS JOIN usage_detail d ON d.session = l.session AND d.level = l.level AND d.bucket = l.bucket
+      WHERE ${whereScope}l.level = ${range.level} AND l.bucket >= ?${start} AND l.bucket < ?${end}`;
+  });
+  return { sql: `WITH parts AS (${parts.join(" UNION ALL ")})
+    SELECT strftime('%Y-%m-%d', (at + ?1 * 60000) / 1000.0, 'unixepoch') AS day,
+      session, NULLIF(thread, 0) AS thread, NULLIF(person, '') AS person, NULLIF(profile, '') AS profile,
+      runtime, NULLIF(model, '') AS model, fast, SUM(calls) AS calls, SUM(input) AS input,
+      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+    FROM parts GROUP BY day, session, thread, person, profile, runtime, model, fast`, args };
+}
