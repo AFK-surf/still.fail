@@ -93,6 +93,22 @@ test("a history brought on in the background is read after every other read, one
   assert.equal(Atomics.load(state, 0), 4);
 });
 
+test("a history's pages are read by readers of their own: what devices ask is read beside them", { timeout: 30_000 }, async () => {
+  // In line with what devices ask, the sidebar and a chat opened waited 20 s and more behind them on ccvm (2026-11-03).
+  const { readers, state, args, started, open } = gated(2);
+  const asked = [readers.read("timeline", args(true), "en"), readers.read("timeline", args(true), "en")];
+  try {
+    await started(2);
+    // Both of the pages' readers held: a bulk read and a chat's are read all the same.
+    asked.push(readers.read("usage", args(true), "en"));
+    await started(3);
+    assert.equal(await readers.read("thread", args(false), "en"), "{}");
+  } finally {
+    const settled = await open(asked);
+    assert.ok(settled.every((s) => s.status === "fulfilled"));
+  }
+});
+
 test("a stretch of a history filled in brief is read behind the rest; one read whole is not", { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);
   const stretch = (whole: boolean) => ({ ...args(true), from: "0", to: "999", ...(whole ? {} : { brief: "1" }) });
