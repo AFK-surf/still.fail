@@ -33,3 +33,17 @@ test "a passkey's parts between the host's hex and the wire's base64url, both wa
   assert_eq(@hostapi.hex_of_b64url("-_8="), "fbff")
   assert_eq(@hostapi.hex_of_b64url("a+b"), "")
 }
+
+///|
+test "why op gave nothing: no tool, its servers not reached, or its own words" {
+  let done = fn(code : Int, err : String) -> @hostapi.OpDone { { code, out: "", err } }
+  assert_eq(done(0, "").trouble(), None)
+  assert_eq(done(-1, "op not found").trouble(), Some(NoTool))
+  assert_eq(done(1, "[ERROR] 2026/11/03 16:43:31 You are not currently signed in.").trouble(), Some(NoTool))
+  // (allowed in 1Password, then a request of its to its servers cut off: as it said on 2026-11-03)
+  assert_eq(
+    done(1, "[ERROR] 2026/11/03 16:43:31 Get \"https://my.1password.com/api/v2/account/keysets?__t=1793695358.038\": unexpected EOF\n").trouble(),
+    Some(Unreached),
+  )
+  assert_eq(done(1, "[ERROR] 2026/11/03 16:43:31 authorization prompt dismissed").trouble(), Some(Other("[ERROR] 2026/11/03 16:43:31 authorization prompt dismissed")))
+}

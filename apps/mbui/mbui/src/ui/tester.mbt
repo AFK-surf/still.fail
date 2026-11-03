@@ -113,6 +113,7 @@ fn reset_globals() -> Unit {
   drop_reset()
   fake_op.val = None
   fake_op_runs.clear()
+  fake_op_pending.val = false
   fake_autofill.val = false
   fake_autofill_asks.clear()
   fake_autofill_picked.val = ""

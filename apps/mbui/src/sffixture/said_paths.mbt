@@ -744,6 +744,11 @@ pub let said_paths : Map[String, Array[String]] = {
     "pairing.*.deviceText",
     "pairing.*.workspaces.*.name",
     "pairing.*.untilText",
+    "asks.*.workspaceName",
+    "asks.*.vaultName",
+    "asks.*.deviceText",
+    "asks.*.atText",
+    "asks.*.byText",
   ],
   "longJobs": [
     "groups.*.jobs.*.name",

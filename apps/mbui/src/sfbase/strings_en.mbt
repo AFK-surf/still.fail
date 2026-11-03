@@ -552,6 +552,7 @@ let en : Map[String, String] = {
   "android-misc.screen.fill.none": "1Password has no login for {host}",
   "android-misc.screen.fill.noOp": "Install 1Password's command-line tool, then turn on Integrate with 1Password CLI in 1Password › Settings › Developer",
   "android-misc.screen.fill.failed": "1Password did not give it: {why}",
+  "android-misc.screen.fill.unreached": "1Password could not reach its servers. Try again",
   "android-misc.screen.fill.empty": "This login has no account or password",
   "android-misc.screen.fill.offerAuto": "Fill from your password manager",
   "android-misc.screen.fill.autoPick": "Pick a login for {host} in your password manager",

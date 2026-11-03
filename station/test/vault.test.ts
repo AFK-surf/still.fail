@@ -6,7 +6,7 @@ import { createPrivateKey, createPublicKey, generateKeyPairSync, sign as nodeSig
 import { readFileSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { type Entry, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
+import { type Entry, apply, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { routes } from "../src/api/routes/vault.ts";
 import { type To, isFor } from "../src/api/events.ts";
@@ -15,7 +15,7 @@ import { PlainStore } from "../src/vault/plain.ts";
 import type { Request } from "../src/api/request.ts";
 import {
   type BoxCert, type Grant, type Item, type Sig, type Vault, TAG, boxPublic, decrypt, encryptWith, grantContext, itemContext, itemOk,
-  keyContext, newBoxPair, openSeal, recoveryPair, seal, sealWith, signedBytes, signedOk, signerOf, vaultOk,
+  certOk, keyContext, newBoxPair, openSeal, recoveryPair, seal, sealWith, signedBytes, signedOk, signerOf, vaultOk,
 } from "../src/vault/crypto.ts";
 import { VaultStore } from "../src/vault/store.ts";
 
@@ -197,6 +197,58 @@ test("a vault's keys go to box certificates of members' app devices in the lock,
   // Another workspace's.
   assert.match(vaultOk(w.state, null, vaultOf(w, { certs: [{ ...good, ws: "OTHER" }] }))!, /of this workspace/);
   assert.equal(vaultOk(w.state, null, vaultOf(w, { certs: [good, boxOf(w.alice2)] })), null);
+});
+
+test("a device back in the lock under a new signing key keeps the key it was given: a vault's keys are checked against every signing key the lock has named for their device, the same on every station", () => {
+  const w = lock();
+  const [a1, a2] = [boxOf(w.alice), boxOf(w.alice2)];
+  const first = vaultOf(w, { certs: [a1, a2] });
+  assert.equal(vaultOk(w.state, null, first), null);
+  // alice's second device installed anew: in the lock again under the same id with a new signing key (2026-11-03,
+  // an iPhone's), so its certificate from before is signed by a key the lock no longer names as its current one.
+  const renewed = { ...w.alice2, signer: ed() };
+  const body = { id: w.alice2.base.hex, sub: "alice", kind: "app", label: "alice2 again", sign_key: renewed.signer.id };
+  const e = { v: 1, ws: WS, seq: 1, prev: w.state.head, at: 1100, kind: "device", body } as Omit<Entry, "sig">;
+  const state = apply(w.state, { ...e, sig: { key: w.alice.signer.id, alg: "Ed25519" as const, sig: w.alice.signer.sign(lockBytes(entryHash(e as Entry))) } } as Entry, null);
+  assert.equal(state.devices.get(w.alice2.base.hex)!.sign_key, renewed.signer.id);
+  assert.deepEqual(state.signKeys.get(w.alice2.base.hex), [w.alice2.signer.id, renewed.signer.id]);
+  // The version the owner signs to give a third device its key, the old certificate carried: taken (it was refused
+  // for that certificate before, and no device could be given any); as a copy on a station that held no version or an
+  // older one all the same (every station folds the same lock); as a first version too.
+  const { sig: _, ...v0 } = first;
+  const next = (keys: Vault["keys"], members = ["alice", "bob"]) => signed({ ...v0, seq: 1, members, keys }, TAG.vault, w.alice.signer);
+  const bob = boxOf(w.bob);
+  const third = next([...first.keys, { cert: bob, wrapped: seal(bob.box, fill(4), keyContext(WS, VAULT, 0)) }]);
+  assert.equal(vaultOk(state, first, third), null);
+  assert.equal(vaultOk(state, null, third, true), null, "a copy, on a station that held none");
+  assert.equal(vaultOk(state, null, vaultOf(w, { certs: [a1, a2] })), null, "a first version under the old certificate");
+  // The old certificate changed after signing: refused as ever; one signed by a key the lock never named for the
+  // device: refused.
+  assert.match(vaultOk(state, first, next(first.keys.map((k) => (k.cert.device === w.alice2.base.hex ? { ...k, cert: { ...k.cert, box: newBoxPair().pub } } : k))))!, /signature is invalid/);
+  assert.match(vaultOk(state, first, next([...first.keys.filter((k) => k.cert.device !== w.alice2.base.hex), { cert: certOf(ed(), w.alice2.base.hex, a2.box, 1200), wrapped: first.keys[1]!.wrapped }]))!, /its own device's key/);
+  // Its fresh certificate (signed by its new key) takes the old one's place as the owner's device next gives a key.
+  const fresh = certOf(renewed.signer, w.alice2.base.hex, a2.box, 1200);
+  assert.equal(vaultOk(state, first, next(first.keys.map((k) => (k.cert.device === w.alice2.base.hex ? { ...k, cert: fresh } : k)), ["alice"])), null);
+  // Published anew (PUT vault/boxes), a certificate is its device's current key's: the old one is not taken there.
+  assert.match(certOk(state, a2)!, /its own device's key/);
+  assert.equal(certOk(state, fresh), null);
+  // A device no longer in the lock at all: its key is no key (taking it out takes a new epoch).
+  const gone = { ...state, devices: new Map([...state.devices].filter(([id]) => id !== w.alice2.base.hex)) };
+  assert.match(vaultOk(gone, first, third)!, /not an app device in the lock/);
+  // Taken out of the lock and put back under the same id (the same device) with a third key: the keys it had stay
+  // named for it, so a version still carrying its first certificate is taken.
+  const out = { v: 1, ws: WS, seq: 2, prev: state.head, at: 1300, kind: "device.remove", body: { id: w.alice2.base.hex } } as Omit<Entry, "sig">;
+  const removed = apply(state, { ...out, sig: { key: w.alice.signer.id, alg: "Ed25519" as const, sig: w.alice.signer.sign(lockBytes(entryHash(out as Entry))) } } as Entry, null);
+  assert.match(vaultOk(removed, first, third)!, /not an app device in the lock/);
+  const third_key = ed();
+  const back = { v: 1, ws: WS, seq: 3, prev: removed.head, at: 1400, kind: "device", body: { ...body, label: "alice2 once more", sign_key: third_key.id } } as Omit<Entry, "sig">;
+  const again = apply(removed, { ...back, sig: { key: w.alice.signer.id, alg: "Ed25519" as const, sig: w.alice.signer.sign(lockBytes(entryHash(back as Entry))) } } as Entry, null);
+  assert.deepEqual(again.signKeys.get(w.alice2.base.hex), [w.alice2.signer.id, renewed.signer.id, third_key.id]);
+  assert.equal(vaultOk(again, first, third), null);
+  // Who put each device in the lock (`by`): alice2 the owner's, in the genesis and again; the vault's keys and what a
+  // station seals to a person's devices go to those they added themselves (vault/secrets.ts `#certsOf`).
+  assert.equal(again.devices.get(w.alice2.base.hex)!.by, "alice");
+  assert.equal(w.state.devices.get(w.bob.base.hex)!.by, "alice", "the genesis's devices the owner's");
 });
 
 test("an item is written by a member's device, version after version, under the vault's epoch", () => {

@@ -20,7 +20,7 @@ import { VaultActions } from "../VaultApproval.tsx";
 import { AskCard } from "../VaultAsk.tsx";
 import {
   KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, itemPath, lastsChoice, lastsName, fileSize, formOf, formProblem, kindName, masked, modeName, modesOf, pickInto, putOf, useForm,
-  useVaultCall, useVaultItems, useVaults, useVaultsItems, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
+  useVaultCall, useVaultItems, useVaultPrompts, useVaults, useVaultsItems, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { sampleVaultItems, sampleVaults } from "../samples.ts";
 import { t } from "../i18n.ts";
@@ -333,8 +333,8 @@ function Request({ entry, r }: { entry: WorkspaceEntry; r: VaultRequest }) {
   );
 }
 
-/** A vault this device has no key to, under its name: that it has none, and the recovery words typed where they can
- * give it one. */
+/** A vault this device has no key to, under its name: that it has none, asking for it (the owner's other devices
+ * prompted, or giving it at once: `vault.ask`), and the recovery words typed where they can give it one. */
 function NoKey({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
   const [recovering, setRecovering] = useState(false);
   return (
@@ -342,10 +342,42 @@ function NoKey({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
       <div className={pagesCss.card}>
         <div className={css.state}>{t("web-pages.vault.notKeyed")}</div>
         <p className={css.sub}>{t("web-pages.vault.notKeyedWhy")}</p>
-        {v.recoverable && v.mine && <div className={css.actions}><Button variant="primary" onClick={() => setRecovering(true)}>{t("web-pages.vault.recover")}</Button></div>}
+        <NoKeyActions entry={entry} v={v} onRecover={() => setRecovering(true)} />
       </div>
       {recovering && <Recover entry={entry} onClose={() => setRecovering(false)} />}
     </Section>
+  );
+}
+
+/** 申请授权 (`vault.ask`: this device's certificate published anew, so the owner's devices are prompted or give the key
+ * at once), and 使用恢复码 where the words can give it. */
+function NoKeyActions({ entry, v, onRecover }: { entry: WorkspaceEntry; v: VaultRow; onRecover(): void }) {
+  const run = useVaultCall();
+  const asking = useDoing("vault.ask", { workspace: entry.id });
+  return (
+    <div className={css.actions}>
+      <Button variant="primary" busy={asking} onClick={() => void run("vault.ask", { workspace: entry.id }, t("web-pages.vault.askWhat"), t("web-pages.vault.asked"))}>{t("web-pages.vault.ask")}</Button>
+      {v.recoverable && v.mine && <Button variant="ghost" onClick={onRecover}>{t("web-pages.vault.recover")}</Button>}
+    </div>
+  );
+}
+
+/** A member's device set up without a vault's key, waiting on this one (the core's `lockPrompts` `asks`): put up wherever
+ * the person is, the latest asking first. 授权 gives it the key (`vault.addDevice`, this device's key unsealed: the
+ * person asked once); 稍后 puts it away until that device asks again (`vault.hidePrompt`). */
+export function VaultPrompt() {
+  const run = useVaultCall();
+  const r = useVaultPrompts()?.asks[0] ?? null;
+  const giving = useDoing("vault.addDevice", r ? { workspace: r.workspace, vault: r.vault, device: r.device } : { workspace: "" });
+  const later = () => { if (r) void run("vault.hidePrompt", { workspace: r.workspace, device: r.device, at: r.at }, t("web-pages.vault.promptLater")); };
+  const give = () => { if (r) void run("vault.addDevice", { workspace: r.workspace, vault: r.vault, device: r.device }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice")); };
+  return (
+    <Dialog open={r !== null} onClose={later} title={r ? t("web-pages.vault.promptTitle", { device: r.deviceText }) : ""}
+      description={r ? t("web-pages.vault.promptBody", { vault: r.vaultName, at: r.atText }) : ""}
+      footer={r && <><Button variant="ghost" onClick={later}>{t("web-pages.vault.promptLater")}</Button><Button variant="primary" busy={giving} onClick={give}>{t("web-pages.vault.promptGive")}</Button></>}>
+      {r && <p className={css.note}>{r.workspaceName} · {r.vaultName}</p>}
+      {r && !r.own && <p className={css.warn}>{t("web-pages.vault.promptBy", { by: r.byText ?? "" })}</p>}
+    </Dialog>
   );
 }
 
@@ -493,7 +525,7 @@ function VaultSection({ entry, v, readOnly = false }: { entry: WorkspaceEntry; v
         <div className={pagesCss.card}>
           <div className={css.state}>{t("web-pages.vault.notKeyed")}</div>
           <p className={css.sub}>{t("web-pages.vault.notKeyedWhy")}</p>
-          {v.recoverable && v.mine && <div className={css.actions}><Button variant="primary" onClick={() => setRecovering(true)}>{t("web-pages.vault.recover")}</Button></div>}
+          <NoKeyActions entry={entry} v={v} onRecover={() => setRecovering(true)} />
         </div>
       ) : !items ? <Waiting sample={<ul className={pagesCss.list}>{SAMPLE_ITEMS.map((row) => <ItemRow key={row.id} entry={entry} row={row} readOnly onOpen={() => undefined} />)}</ul>} />
         : items.items.length === 0 ? <p className={css.note}>{t("web-pages.vault.empty")}</p>

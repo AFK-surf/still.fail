@@ -277,3 +277,18 @@ test "words picked in a page's list, let go, then the page laid out nowhere: wha
   t.frame_at(t.time() + move_most_ms)
   assert_eq(t.ctx().selected_text(), kept, msg="laid out nowhere")
 }
+
+///|
+test "a node's words in pieces in a page whose words are picked: a finger held still on them a long press's time picks the word under it, the menu over it once lifted; a tap elsewhere lets it go" {
+  let t = tree_picked_tester(true, platform=2)
+  t.press_at(60.0, 51.0)
+  assert_eq(t.ctx().selected_text(), "")
+  t.run_for(long_press_ms)
+  assert_eq(t.ctx().selected_text(), "wide")
+  t.release(60.0, 51.0)
+  t.draw()
+  assert_true(t.text_menu().0)
+  t.tap(200.0, 250.0)
+  t.draw()
+  assert_eq(t.ctx().selected_text(), "")
+}

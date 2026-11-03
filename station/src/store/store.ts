@@ -123,6 +123,8 @@ const CACHE_KIB = 32 * 1024;
 /// How long the log may grow, in pages, before the main connection writes it into the database itself: well past what
 /// the readers' checkpoints let it come to.
 const WAL_PAGES = 10_000;
+/// How much of the log's file is kept once written into the database (`journal_size_limit`).
+const WAL_KEEP_BYTES = 64 << 20;
 /// How many of a job's notices are kept.
 const JOB_NOTICES = 50;
 /// How long a task another station's chat ran here is remembered (remote_runs): past the card's week and the usage
@@ -188,6 +190,9 @@ export class Store {
       // Left to SQLite, this connection did it itself at every thousandth page: one commit held every device for the
       // 6 s that took on ccvm (2026-10-25). Here only if the readers' fall behind, at WAL_PAGES.
       db.exec(`PRAGMA cache_size = -${CACHE_KIB}; PRAGMA wal_autocheckpoint = ${WAL_PAGES};`);
+      // The log's file cut back to WAL_KEEP_BYTES each time it is written into the database from its start: SQLite keeps
+      // it at the most it ever grew to otherwise, 520 MB on ccvm (2026-11-03) with 1 GB of its disk left.
+      db.exec(`PRAGMA journal_size_limit = ${WAL_KEEP_BYTES};`);
       const hasTables = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
       if (hasTables) {
         from = (db.prepare("PRAGMA user_version").get() as Json).user_version;
@@ -354,6 +359,13 @@ export class Store {
   }
 
   /// Every session, most recently active first.
+  /// The archived sessions, the longest archived first, by the index of those archived alone (schema.ts
+  /// sessions_put_away): what the emptying of their workspaces goes over (sessions/lifecycle.ts). Every session read
+  /// whole for it held the station 8 to 13 s on ccvm short of memory (2026-11-03), each time the disk was low.
+  archivedSessions(): { key: string; archivedAt: number }[] {
+    return this.#all("SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL ORDER BY archived_at, key").map((r) => ({ key: r.key, archivedAt: r.archived_at }));
+  }
+
   listSessions(): SessionRow[] {
     return this.#all("SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
   }

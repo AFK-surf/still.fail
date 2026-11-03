@@ -122,6 +122,26 @@ test "关于's version rows, at each width and with either hand: this build alon
 }
 
 ///|
+test "关于's update row stays usable with the pointer over it as a download becomes ready between frames" {
+  let t = setting_tester(About, 1280.0, platform=0, host=fn(_) { @sffixture.fixture_updates() })
+  @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk", "size": 23515867 }))
+  t.draw()
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  t.draw()
+  let (x, y, w, h) = t.query(Link, label="正在下载 0.1.1").unwrap().rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  let now = t.time()
+  t.frame_shown_at(now + 20.0, now + 36.0)
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":false}")
+  t.draw()
+  let now = t.time()
+  t.frame_shown_at(now, now + 16.0)
+  t.click(Link, label="重启以更新到 0.1.1")
+  assert_true(t.update_asked().contains("apply"), msg="the update was handed to the host")
+  @sfbase.update_reset()
+}
+
+///|
 test "关于 where newer builds are not asked for (no source, as on iOS; no version, run from the sources): this build, no 检查更新" {
   let t = setting_tester(About, 390.0, platform=2)
   assert_true(t.find("still.fail 0.1") is Some(_))

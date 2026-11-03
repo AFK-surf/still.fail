@@ -2234,7 +2234,8 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
         }
         None => None
       }
-    _ => None
+    // (words a finger picked with the pointer, let go of: finger_select.mbt)
+    _ => finger_menu()
   }
   let sig = match want {
     Some((x, y, w, h, can)) => "\{x.to_int()},\{y.to_int()},\{w.to_int()},\{h.to_int()},\{can}"

@@ -334,7 +334,7 @@ export const SHAPES: Record<string, Shape> = {
     ["scope", opt("String"), { doc: "Granted: once | hour | chat." }],
     ["save", opt("VaultSave"), { doc: "A request to keep a secret (secret_save) rather than use one: approved, it is kept (granted)." }],
     ["station", opt("String"), { doc: "Another station of the workspace its commands run on (a secret to keep: the one its command read it on), by name." }],
-    ["answer", opt("String"), { doc: "How it is answered on this device, from the vault as the core holds it (views/vault.ts askAnswers): approve\n(允许 / 存入), setUp (a secret to keep while this device's vault is not on: 开启密钥库 first), elsewhere (approved only in an\napp that keeps keys). The chat's cards; absent on a core from before." }],
+    ["answer", opt("String"), { doc: "How it is answered on this device, from the vault as the core holds it (views/vault.ts askAnswers): approve\n(允许 / 存入), setUp (a secret to keep while this device's vault is not on: 开启密钥库 first), elsewhere (approved only in an\napp that keeps keys), notHere (a secret to keep not sealed to this device: approved on another, VaultRequest `notHere`). The chat's cards; absent on a core from before." }],
     ["lasts", opt("String"), { doc: "With answer approve, a use: the longest it may be given for (once | hour | chat)." }],
   ], { doc: "An agent's request to use a vault item, or to keep one, as its card in the chat says it (station/src/vault/secrets.ts)." }),
   VaultSave: struct([
@@ -1629,7 +1629,8 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A new device met face to face, showing a code of this one's to type there (views/pair.ts)." }),
   LockPromptsView: struct([
     ["pairing", vec("LockPairing"), { doc: "The new devices showing this one's code now, wherever the person is." }],
-  ], { doc: "What waits on this device to approve new ones face to face (the `lockPrompts` topic; views/pair.ts)." }),
+    ["asks", vec("VaultKeyAsk"), { default: true, doc: "The members' devices set up that wait on this one for a vault's key, the latest asking first, wherever the person is; none put away (views/vault.ts `vaultAsks`; none from a core of before)." }],
+  ], { doc: "What waits on this device from new devices: to approve them face to face (views/pair.ts), to give them a vault's key (the `lockPrompts` topic)." }),
   LockPair: struct([
     ["state", "String", { doc: "`finding` (dialling the person's trusted devices), `code` (one shows a code: type it), `checking`,\n`wrong` (that code was not it), `none` (no trusted device answered), `failed` (`error`), `done`." }],
     ["devices", "u32", { doc: "How many trusted devices show a code now." }],
@@ -1718,6 +1719,7 @@ export const SHAPES: Record<string, Shape> = {
     ["hosts", vec("String"), { said: true }],
     ["at", "i64", { client: "I54" }],
     ["save", opt("VaultSave"), { doc: "A request to keep a secret rather than use one: `vault.approve` keeps it (its scope unused)." }],
+    ["notHere", opt("bool"), { doc: "A secret to keep its station sealed to the person's devices set up then, this device not among them: approved on one of those, or here once the station has this device's certificate (the core brings it as the station is read) and seals it again." }],
     ["howText", "String", { said: true, default: true, doc: "How it would be given, in a line (代理 · 限 api.github.com)." }],
   ], { doc: "An agent's request to use an item, or to keep one, waiting on the viewer (`vault.approve`, `vault.deny`)." }),
   VaultRefusal: struct([
@@ -1738,6 +1740,18 @@ export const SHAPES: Record<string, Shape> = {
     ["statusText", "String", { default: true, doc: "What the settings say of it at their row's end: how many wait to be approved, else how many items, else 未开启." }],
     ["statusBad", "bool", { default: true, doc: "`statusText` says some wait to be approved." }],
   ], { doc: "The workspace's vaults as the viewer sees them (the `vaults` topic; client/core-ts/src/views/vault.ts, docs/vault.md)." }),
+  VaultKeyAsk: struct([
+    ["workspace", "String"],
+    ["workspaceName", "String", { said: true }],
+    ["vault", "String", { doc: "The vault whose key it lacks, one of the viewer's own that this device holds the key to." }],
+    ["vaultName", "String", { said: true }],
+    ["device", "String", { doc: "The device set up without the key (its id in the lock): what `vault.addDevice {vault, device}` gives it to, and `vault.hidePrompt {device}` puts away." }],
+    ["deviceText", "String", { said: true, doc: "Its name as people know it (LockDevice `fullText`)." }],
+    ["at", "i64", { client: "I54", doc: "When it was set up, or last asked (its certificate's date, unix seconds)." }],
+    ["atText", "String", { said: true, doc: "That, in words (3 分钟前)." }],
+    ["own", "bool", { doc: "Its person put it in the lock themselves (a device of theirs signed its entry). Else an admin did, under their name: it is given the key only as the person asks here (not by itself as its certificate comes), and the prompt says who put it in." }],
+    ["byText", opt("String"), { said: true, doc: "Not `own`: who put it in the lock, by name." }],
+  ], { doc: "A member's device set up that waits on this one for a vault's key (views/vault.ts `vaultAsks`, LockPromptsView `asks`)." }),
   VaultItemRow: struct([
     ["id", "String"],
     ["version", "u32"],
