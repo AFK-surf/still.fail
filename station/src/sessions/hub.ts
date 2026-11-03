@@ -37,7 +37,7 @@ import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
 import { threadCommand } from "./args.ts";
-import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "./chat.ts";
+import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, Person, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
 import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle } from "./config.ts";
 import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
@@ -150,6 +150,9 @@ export class Hub {
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
   /// (review.ts), up to 400 of them through the merged view, 3 seconds held on ccvm. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
+  /// The station's logins (logins/module.ts sets it): whether one waits for a code from its page (a Slack login card
+  /// takes one only then), and that code handed to it, entered by `by` on its card. Unset: no logins here.
+  logins: { pastes(id: string): boolean; answer(id: string, code: string, by?: Person): void } | null = null;
   /// Stops following the store's sessions starting and stopping (live.ts `running`).
   private unlistenRunning: () => void = () => {};
   readonly actors = new Map<string, SessionActor>();
@@ -450,6 +453,7 @@ export class Hub {
   /// Takes one event from a connect's platform. Resolves once it is durably recorded (or deliberately ignored).
   async receive(connectId: string, event: ChatEvent) {
     if (event.type === "message") return this.accept(connectId, event.message);
+    if (event.type === "loginCode") return this.enterCode(connectId, event);
     if (event.type === "stop") {
       const thread = this.store.threadAt(this.surface(connectId), event.channel, event.threadTs);
       if (!thread) return;
@@ -461,6 +465,19 @@ export class Hub {
       return;
     }
     this.store.editMessage(this.surface(connectId), event.channel, event.threadTs, event.ts, event.text);
+  }
+
+  /// A login card's field answered on a platform (Slack): the code goes to the login that card is of, and only if the
+  /// message is one of the thread's with that card. Never recorded as a message. Throws what refused it.
+  private async enterCode(connectId: string, event: Extract<ChatEvent, { type: "loginCode" }>) {
+    const thread = this.store.threadAt(this.surface(connectId), event.channel, event.threadTs);
+    const card = thread ? this.store.cardAt(thread.id, event.ts) : null;
+    if (card?.type !== "login" || typeof card.login !== "string" || card.station !== undefined) throw new Error("this message is no login card");
+    if (!this.logins) throw new Error("this station has no logins");
+    const chat = this.chatOf(connectId);
+    const email = (await chat?.userEmail?.(event.user).catch(() => null)) ?? null;
+    const name = (await chat?.userName?.(event.user).catch(() => null)) ?? null;
+    this.logins.answer(card.login, event.code, email ? { name: name ?? email, email } : undefined);
   }
 
   /// Accepts one message seen by a connect, one at a time per thread. Resolves once it is durably recorded (or

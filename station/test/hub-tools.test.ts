@@ -1525,3 +1525,26 @@ test("a chat is headed as the chat list calls it: its name, the agent's, else �
   assert.equal(sender(r.hub, child)[0], "安卓发版");
   await r.close();
 });
+
+test("a login card in Slack: only for a login here waiting for its page's code; its field goes to that login alone", async () => {
+  const r = new Rig();
+  Object.assign(r.chat, { cards: true, loginCards: true });
+  const m = message();
+  await r.accept(m);
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const to = `C1/${m.threadTs}`;
+  const answered: [string, string, unknown][] = [];
+  r.hub.logins = { pastes: (id) => id === "l1", answer: (id, code, by) => void answered.push([id, code, by]) };
+  // A login that waits for no code: no card here.
+  assert.match(await r.refused(key, "chat_post", { to, text: "登录", card: { type: "login", login: "l2" } }), /waits for a code from its page/);
+  await r.call(key, "chat_post", { to, text: "登录 gcloud", card: { type: "login", login: "l1" } });
+  const thread = r.store.threadAt(r.hub.surface("cl"), "C1", m.threadTs)!;
+  const posted = r.store.messagesBefore(thread.id, null, 1)[0]!.ts;
+  // Pressed on any other message: refused, nothing handed over.
+  await assert.rejects(r.hub.receive("cl", { type: "loginCode", channel: "C1", threadTs: m.threadTs, ts: m.ts, user: "U1", code: "c0" }), /no login card/);
+  await r.hub.receive("cl", { type: "loginCode", channel: "C1", threadTs: m.threadTs, ts: posted, user: "U1", code: "c1" });
+  assert.deepEqual(answered.map(([id, code]) => [id, code]), [["l1", "c1"]]);
+  assert.equal(r.store.messagesBefore(thread.id, null, 1)[0]!.ts, posted, "the code is no message of the thread");
+  await settle();
+  await r.close();
+});

@@ -250,11 +250,15 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   const thread = target(hub, key, args.to);
   if (store.manuallyArchived(thread.thread.id)) throw new Error(`${threadAddress(thread.thread.channel, thread.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
   const chat = hub.chat(thread.connect);
-  if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE && !(chat.cards === true && (card.type === "options" || card.type === "text"))) {
+  // A login card on a platform: a field for its page's code, so only for a login of this station that waits for one.
+  const loginHere = card?.type === "login" && chat.loginCards === true && card.station === undefined && hub.logins?.pastes(String(card.login)) === true;
+  if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE && !(chat.cards === true && (card.type === "options" || card.type === "text")) && !loginHere) {
     throw new Error(
-      chat.cards === true
-        ? 'a login card is shown only in still.fail chats (EMBER/…); here post its link in the text and end with kind "need_human"'
-        : 'cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"',
+      card.type === "login" && chat.loginCards === true
+        ? 'a login card is shown here only for a login of this station that waits for a code from its page (paste: true); otherwise post its link in the text and end with kind "need_human"'
+        : chat.cards === true
+          ? 'a login card is shown only in still.fail chats (EMBER/…); here post its link in the text and end with kind "need_human"'
+          : 'cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"',
     );
   }
   if (card !== null && text === "") throw new Error("text is required with a card: what it asks and the facts it turns on, so it can be answered from this message alone");

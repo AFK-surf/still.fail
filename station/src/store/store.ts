@@ -1176,6 +1176,12 @@ export class Store {
     return this.#messageAt(thread, ts);
   }
 
+  /// The card the message at `ts` in a thread was posted with, if any (a Slack login card's field answered: whose login).
+  cardAt(thread: number, ts: string): Json | null {
+    const row = this.#one("SELECT card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread, ts);
+    return parsed(row?.card) ?? null;
+  }
+
   /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
   messagesBefore(thread: number, n: number | null, limit: number): MessageRow[] {
     const before = n ?? I64_MAX;
