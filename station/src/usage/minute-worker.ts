@@ -7,6 +7,8 @@ import { log } from "../ops/log.ts";
 import { BACKFILL_PAUSE_MS, REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { backfillNextUsageSession, backfillUsageMinutes, PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { backfillRemoteRuns } from "../store/remote-runs.ts";
+import { backfillUsageChatStats, usageChatStatsReady } from "../store/usage-chat-stats.ts";
+import type { InWorkspace } from "../store/rows.ts";
 import type { MinuteRequest, MinuteResponse } from "./minute-reader.ts";
 
 type Waiting = { request: Extract<MinuteRequest, { viewer: unknown }>; after: string | null; sessions: string[]; scanned: boolean };
@@ -14,11 +16,15 @@ const db = new DatabaseSync(workerData.path as string, { timeout: 100 });
 db.exec("PRAGMA synchronous = NORMAL");
 const waiting: Waiting[] = [];
 const remoteWaiting: number[] = [];
+const chatWaiting: { id: number; viewer: InWorkspace | null }[] = [];
 const scanned = new Set<string>();
 let complete = (db.prepare("SELECT done FROM usage_minute_all WHERE id = 1").get() as { done: number }).done === 1;
 const remoteInstalled = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'remote_run_progress'").get() !== undefined;
 let remoteComplete = !remoteInstalled || (db.prepare("SELECT done FROM remote_run_progress WHERE id = 1").get() as { done: number }).done === 1;
-let remoteTurn = true;
+const chatInstalled = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_chat_progress'").get() !== undefined;
+const chatsReady = (viewer: InWorkspace | null = null) => !chatInstalled || usageChatStatsReady(db, viewer);
+let chatComplete = chatsReady();
+let backgroundTurn = 0;
 let scheduled = false;
 let foreground = 0;
 let backgroundFailed = false;
@@ -27,8 +33,16 @@ let foregroundWaiting = false;
 const priority = workerData.priority instanceof SharedArrayBuffer ? new Int32Array(workerData.priority) : null;
 
 function signalComplete() {
+  if (chatComplete) chatComplete = chatsReady();
   if (remoteComplete) for (const id of remoteWaiting.splice(0)) parentPort!.postMessage({ id } satisfies MinuteResponse);
-  if (complete && remoteComplete) parentPort!.postMessage({ complete: true } satisfies MinuteResponse);
+  for (let i = chatWaiting.length - 1; i >= 0; i--) {
+    const q = chatWaiting[i]!;
+    if (chatsReady(q.viewer)) {
+      chatWaiting.splice(i, 1);
+      parentPort!.postMessage({ id: q.id } satisfies MinuteResponse);
+    }
+  }
+  if (complete && remoteComplete && chatComplete) parentPort!.postMessage({ complete: true } satisfies MinuteResponse);
 }
 
 // A ready workspace can be checked with reads alone, even while a foreground writer is waiting. Return null only
@@ -79,7 +93,7 @@ function schedule(delay = 0) {
   scheduled = true;
   const step = () => {
     scheduled = false;
-    const q = waiting.length && (foreground < 8 || backgroundFailed || (complete && remoteComplete) || (priority !== null && Atomics.load(priority, 0) !== 0))
+    const q = waiting.length && (foreground < 8 || backgroundFailed || (complete && remoteComplete && chatComplete) || (priority !== null && Atomics.load(priority, 0) !== 0))
       ? waiting.shift() : undefined;
     let held = false;
     const take = () => {
@@ -108,17 +122,20 @@ function schedule(delay = 0) {
         foreground++;
         if (done) parentPort!.postMessage({ id: q.request.id } satisfies MinuteResponse);
         else waiting.push(q);
-      } else if ((!complete || !remoteComplete) && !backgroundFailed) {
+      } else if ((!complete || !remoteComplete || !chatComplete) && !backgroundFailed) {
         if (!take()) {
           // The background turn cannot write now; let waiting requests try their read-only steps.
           if (waiting.length) foreground = 0;
-          schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
+          schedule(waiting.length || remoteWaiting.length || chatWaiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
           return;
         }
         foreground = 0;
-        if (!remoteComplete && (complete || remoteTurn)) remoteComplete = backfillRemoteRuns(db).done;
-        else complete = backfillNextUsageSession(db).done;
-        remoteTurn = !remoteTurn;
+        for (let i = 0; i < 3; i++) {
+          const turn = backgroundTurn++ % 3;
+          if (turn === 0 && !complete) { complete = backfillNextUsageSession(db).done; break; }
+          if (turn === 1 && !remoteComplete) { remoteComplete = backfillRemoteRuns(db).done; break; }
+          if (turn === 2 && !chatComplete) { chatComplete = backfillUsageChatStats(db).done; break; }
+        }
         signalComplete();
       }
     } catch (error) {
@@ -133,12 +150,14 @@ function schedule(delay = 0) {
         backgroundFailed = true;
         backgroundError = (error as Error).message;
         for (const id of remoteWaiting.splice(0)) parentPort!.postMessage({ id, error: backgroundError } satisfies MinuteResponse);
+        for (const q of chatWaiting.splice(0)) parentPort!.postMessage({ id: q.id, error: backgroundError } satisfies MinuteResponse);
         log.error("usage", "the minute summary backfill stopped", { error: backgroundError });
       }
     } finally {
       if (held) giveBackfill(priority, threadId);
     }
-    if (waiting.length || ((!complete || !remoteComplete) && !backgroundFailed)) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
+    if (waiting.length || ((!complete || !remoteComplete || !chatComplete) && !backgroundFailed))
+      schedule(waiting.length || remoteWaiting.length || chatWaiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
   };
   if (delay > 0) wall.after(delay, step);
   else setImmediate(step);
@@ -151,9 +170,16 @@ parentPort!.on("message", (request: MinuteRequest) => {
     else remoteWaiting.push(request.id);
     return;
   }
+  if ("chats" in request) {
+    if (chatComplete) chatComplete = chatsReady();
+    const ready = chatsReady(request.chats);
+    if (ready || backgroundError !== null) parentPort!.postMessage({ id: request.id, ...(backgroundError !== null && !ready ? { error: backgroundError } : {}) } satisfies MinuteResponse);
+    else { chatWaiting.push({ id: request.id, viewer: request.chats }); schedule(); }
+    return;
+  }
   const viewer = request.viewer;
   waiting.push({ request, after: null, sessions: [], scanned: viewer !== null && viewer.home === false && scanned.has(viewer.workspace) });
   schedule();
 });
-if (complete && remoteComplete) signalComplete();
+if (complete && remoteComplete && chatComplete) signalComplete();
 else schedule();

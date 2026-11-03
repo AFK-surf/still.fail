@@ -12,6 +12,7 @@ import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
 import { archiveEntries } from "../store/archive.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
+import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { USAGE_GROUPS, type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
@@ -1014,6 +1015,31 @@ export function decisionCards(s: Store, viewer: InWorkspace | null = null): { ho
        FROM card_outcomes c LEFT JOIN threads t ON t.id = c.thread`)
     : all(s, VISIBLE_USAGE_CARDS, viewer.workspace, viewer.home === false ? 0 : 1);
   return found.map((r) => ({ home: r.home ?? null, picked: r.picked === 1 }));
+}
+
+export const USAGE_CHATS_PENDING = "usage chat statistics are still being filled";
+
+export function usageChatsReady(s: Store, viewer: InWorkspace | null): void {
+  if (!usageChatStatsReady(s.db, viewer)) throw new Error(USAGE_CHATS_PENDING);
+}
+
+/// The totals are kept by place and visibility, not gathered from every chat and card on each request.
+export function usageChatTotals(s: Store, viewer: InWorkspace | null): { places: Record<string, number>; archived: number; cards: number; picked: number } {
+  usageChatsReady(s, viewer);
+  const places: Record<string, number> = {};
+  let archived = 0, cards = 0, picked = 0;
+  const scopes: [number, string, number][] = viewer === null ? [[0, "", 1]] : viewer.home === false
+    ? [[2, viewer.workspace, 1]] : [[1, "", 1], [2, viewer.workspace, 1], [3, viewer.workspace, -1]];
+  for (const [kind, workspace, sign] of scopes) {
+    for (const row of all(s, "SELECT place, chats, archived, cards, picked FROM usage_chat_totals WHERE kind = ? AND ws = ?", kind, workspace)) {
+      places[row.place] = (places[row.place] ?? 0) + sign * Number(row.chats);
+      archived += sign * Number(row.archived);
+      cards += sign * Number(row.cards);
+      picked += sign * Number(row.picked);
+    }
+  }
+  for (const place of Object.keys(places)) if (places[place] === 0) delete places[place];
+  return { places, archived, cards, picked };
 }
 
 /// usage_since: when the earliest call recorded was made.

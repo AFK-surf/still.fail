@@ -3,7 +3,7 @@ import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 
-export type MinuteRequest = { id: number; viewer: InWorkspace | null } | { id: number; remote: true };
+export type MinuteRequest = { id: number; viewer: InWorkspace | null } | { id: number; remote: true } | { id: number; chats: InWorkspace | null };
 export type MinuteResponse = { id?: number; error?: string; complete?: boolean; foreground?: boolean };
 
 /// A history waits here, away from all of the readers, while its old minute summaries are filled.
@@ -65,8 +65,9 @@ export class MinuteReader {
       log.error("usage", "the minute summary worker stopped", { error: error.message });
     });
     worker.on("exit", (code) => {
-      if (this.#worker === worker) this.#worker = null;
-      if (!this.#complete && !this.#closed) {
+      const current = this.#worker === worker;
+      if (current) this.#worker = null;
+      if (current && !this.#complete && !this.#closed) {
         for (const waiting of this.#waiting.values()) waiting.reject(failure ?? new Error(`the minute summary worker stopped (exit ${code})`));
         this.#waiting.clear();
       }
@@ -111,6 +112,24 @@ export class MinuteReader {
       const id = ++this.#next;
       try {
         this.#waiting.set(id, { resolve, reject, request: { id, remote: true }, sent: false });
+        this.start();
+        this.#sendWaiting();
+      } catch (error) {
+        this.#waiting.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  /// Old chat and card totals are filled in the background without taking a device reader while they are pending.
+  readyChats(viewer: InWorkspace | null = null): Promise<void> {
+    if (this.#closed) return Promise.reject(new Error("station stopping"));
+    // A session can move after an earlier fill finished. The calling reader saw pending work in its own snapshot.
+    this.#complete = false;
+    return new Promise((resolve, reject) => {
+      const id = ++this.#next;
+      try {
+        this.#waiting.set(id, { resolve, reject, request: { id, chats: viewer }, sent: false });
         this.start();
         this.#sendWaiting();
       } catch (error) {

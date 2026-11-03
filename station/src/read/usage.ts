@@ -8,7 +8,7 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, decisionCards, remoteRunCount, remoteRunsReady, remoteRunsSince, seenBy, threadsByPlace, sessionThreads, usageByDay, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, remoteRunCount, remoteRunsReady, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
@@ -212,6 +212,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   // A not-yet-complete remote summary is retried once it is ready; do not do the other work twice in the meantime.
   const includeRemoteRuns = options.remoteRuns !== false;
   if (includeRemoteRuns || history) remoteRunsReady(s);
+  if (history) usageChatsReady(s, viewer);
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
   const started = performance.now();
@@ -271,6 +272,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
 /// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's chat
 /// working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
 export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}): Json {
+  usageChatsReady(s, viewer);
   mark("historyVisibility");
   const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
   for (const r of usageByDay(s, utcOffsetMin, viewer)) {
@@ -282,26 +284,19 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
   }
   mark("historyDays");
   // the chats of each place (still.fail's own, a Slack workspace's, a Feishu one's), and those archived
-  const places: Record<string, number> = {};
-  let archived = 0;
-  for (const t of threadsByPlace(s, viewer)) {
-    const place = t.surface.split(":")[0] ?? t.surface;
-    places[place] = (places[place] ?? 0) + 1;
-    if (t.archived) archived++;
-  }
+  const chats = usageChatTotals(s, viewer);
   mark("historyPlaces");
   // the tasks the viewer's chats on other stations ran here, as long as they are kept (remote_runs: 90 days)
   const remoteRuns = remoteRunCount(s, viewer);
   mark("historyRemoteRuns");
   // the decision cards the viewer's chats were asked with, and those answered by an option pressed
-  const cards = decisionCards(s, viewer);
   mark("historyCards");
   return {
     days: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),
-    cards: cards.length,
-    picked: cards.filter((c) => c.picked).length,
-    places,
-    archived,
+    cards: chats.cards,
+    picked: chats.picked,
+    places: chats.places,
+    archived: chats.archived,
     remoteRuns,
   };
 }
