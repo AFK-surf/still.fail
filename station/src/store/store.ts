@@ -36,6 +36,7 @@ import { installIncrementalUsageTotals, installUsageDetail, usageTotalsComplete 
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { retireDuplicateUsage } from "./usage-unified.ts";
+import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
@@ -144,6 +145,7 @@ export class Store {
   /// Entries of archived threads read lately (they never change), the most recent last.
   #archived: [number, EntryRow[]][] = [];
   #listeners: ((change: StoreChange) => void)[] = [];
+  #workspaceListeners = new Set<() => void>();
   #statements = new Map<string, StatementSync>();
   /// How many times the decision checks or the archive policy were written in this process (decisionsVersion).
   #decisions = 0;
@@ -250,6 +252,19 @@ export class Store {
     return () => {
       this.#listeners = this.#listeners.filter((l) => l !== listener);
     };
+  }
+
+  /// Tells internal workers when session ownership changes, after the database write has committed.
+  onSessionWorkspaceChange(listener: () => void): () => void {
+    this.#workspaceListeners.add(listener);
+    return () => { this.#workspaceListeners.delete(listener); };
+  }
+
+  #sessionWorkspaceChanged(): void {
+    for (const listener of this.#workspaceListeners) {
+      try { listener(); }
+      catch (error) { console.error("session workspace listener:", error); }
+    }
   }
 
   /// Where archived threads and transcript copies go (`threads/`, `transcripts/`).
@@ -381,6 +396,7 @@ export class Store {
       if (from === null) this.#run("UPDATE sessions SET ws = ? WHERE ws IS NULL", to);
       else this.#run("UPDATE sessions SET ws = ? WHERE ws = ?", to, from);
       for (const key of keys) changes.push({ type: "session", key });
+      if (keys.length > 0 && from !== to) this.#sessionWorkspaceChanged();
     });
   }
 
@@ -395,6 +411,7 @@ export class Store {
         latestNote(), optFlag(s.fast), s.ws ?? null, s.context ?? null,
       );
       changes.push({ type: "session", key: s.key });
+      this.#sessionWorkspaceChanged();
     });
   }
 
@@ -770,7 +787,8 @@ export class Store {
   deleteSession(key: string): void {
     this.#with((changes) => {
       // Which workspace's it was, for those its going is told to.
-      const ws: string | null = this.#one("SELECT ws FROM sessions WHERE key = ?", key)?.ws ?? null;
+      const session = this.#one("SELECT ws FROM sessions WHERE key = ?", key);
+      const ws: string | null = session?.ws ?? null;
       const kept: number[] = [];
       const removed: number[] = [];
       const unpublished: string[] = [];
@@ -811,6 +829,7 @@ export class Store {
           this.#run("DELETE FROM threads WHERE id = ?", thread);
         }
       });
+      if (session !== undefined) this.#sessionWorkspaceChanged();
       for (const thread of removed) {
         this.#archived = this.#archived.filter(([id]) => id !== thread);
         rmSync(this.#threadFile(thread), { force: true });
@@ -2071,6 +2090,14 @@ export class Store {
   /// A session's last `limit` main-thread calls, oldest first: the context each sent, on what (store/usage.ts).
   lastContexts(session: string, limit: number): usage.ContextCall[] {
     return usage.lastContexts(this.db, session, limit);
+  }
+
+  recentlyCompacted(session: string): boolean {
+    return hasCompactUsage(this.db) && compactRecentlyCompacted(this.db, session);
+  }
+
+  savedCompactContext(session: string) {
+    return hasCompactUsage(this.db) ? savedCompactContext(this.db, session) : null;
   }
 
   /// Where each model's context was compacted on this station since `since` (store/usage.ts).

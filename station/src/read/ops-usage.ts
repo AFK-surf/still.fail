@@ -7,6 +7,7 @@ import { memory } from "./memory.ts";
 import { platform } from "../platform/index.ts";
 import { HttpError } from "./views.ts";
 import { resourceChats, usage } from "./usage.ts";
+import { usageCallsPage } from "./store.ts";
 import { HOME, type Of, outflowChats, outflowMessages, outflowThread, outflowUsage } from "./outflow.ts";
 
 /// A whole number from the args (another station's may say anything), else 0.
@@ -21,6 +22,8 @@ export const usageOps: Record<string, ReadOp> = {
   // `reading`: the counter's readingAll (absent: true).
   // `history`: the whole of it by day as well (usage.ts usageHistory).
   usage: (store, a) => usage(store, a.lang, BigInt(a.from), BigInt(a.to), BigInt(a.tz), typeof a.reading === "boolean" ? a.reading : true, a.viewer ?? null, a.history === true),
+  usageCalls: (store, a) => usageCallsPage(store, String(a.session), BigInt(a.from), BigInt(a.to), [BigInt(a.beforeAt), BigInt(a.beforeSeq)],
+    Math.min(Math.max(num(a.limit), 1), 200), a.viewer ?? null),
   resourceChats: (store, a) => resourceChats(store, a.sessions ?? [], a.viewer ?? null),
   // What a program granted data outflow reads (docs/data-outflow.md), in its version's shape.
   // `ws`: another station's program reads the chats of that workspace (outflow/module.ts); absent, the home one's.

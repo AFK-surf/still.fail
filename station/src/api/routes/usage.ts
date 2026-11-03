@@ -1,7 +1,7 @@
 // What the agents spent, the machine's own sessions, the agents' memory, the machine itself, and the retired footprint
 // (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint), and what
 // still.fail uses of the machine (GET /resources, POST /resources/processes/:pid/end).
-import { type Request, type Answer, error, json, param, segment } from "../request.ts";
+import { type Request, type Answer, error, json, param, Refused, segment } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { cpus, totalmem } from "node:os";
 import { NotEndable, type ResourceWatch } from "../../resources/watch.ts";
@@ -21,6 +21,16 @@ function number(r: Request, name: string): bigint | null {
   if (x >= 2 ** 63) return I64_MAX;
   if (x < -(2 ** 63)) return I64_MIN;
   return BigInt(Math.trunc(x));
+}
+
+/// A page cursor is an exact SQLite i64. Going through a JavaScript number can skip rows above 2^53.
+function cursorInteger(r: Request, name: string): bigint | null {
+  const value = param(r, name);
+  if (value === undefined) return null;
+  if (!/^[+-]?\d{1,19}$/.test(value)) throw new Refused(400, `${name} must be an integer`);
+  const n = BigInt(value);
+  if (n < I64_MIN || n > I64_MAX) throw new Refused(400, `${name} is out of range`);
+  return n;
 }
 
 /// A path segment (admin/mod.rs segment_decode): `+` stays itself there.
@@ -79,6 +89,16 @@ export const routes = (tools: Tools): Route[] => {
 
 /// GET /usage, the usage part's (usage/module.ts): `reading`, whether the counter is still reading what was spent.
 export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] => [
+  // A bounded page of one session's original calls; aggregates remain a separate, statistics-only read.
+  {
+    method: "GET",
+    pattern: /^\/usage\/calls\/([^/]+)\/?$/,
+    handle: (r: Request, [session]: string[]) => read(r, "usageCalls", {
+      session: segment(session!), from: String(cursorInteger(r, "from") ?? I64_MIN), to: String(cursorInteger(r, "to") ?? I64_MAX),
+      beforeAt: String(cursorInteger(r, "beforeAt") ?? I64_MAX), beforeSeq: String(cursorInteger(r, "beforeSeq") ?? I64_MAX),
+      limit: Number(number(r, "limit") ?? 100n), viewer: r.viewer,
+    }),
+  },
   // What the agents spent from `from` until `to` (ms), by day as the asker's clock has them (`tz`: minutes east of
   // UTC), with whom, where and on what; `history=1`, everything since counting began by day as well (a station from
   // before answers without it).

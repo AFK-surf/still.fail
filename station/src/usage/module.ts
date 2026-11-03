@@ -11,9 +11,11 @@ import { hubConfig } from "../sessions/config.ts";
 import type { LiveHub } from "../sessions/live.ts";
 import { Parts, Paths, Previous, StationConfig, Store } from "../services.ts";
 import { log } from "../ops/log.ts";
+import { Fibers, wall } from "../ops/fibers.ts";
 import type { Store as StationStore } from "../store/store.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 import { retireUsageIndexes } from "../store/usage-retire.ts";
+import { installCompactUsage } from "../store/usage-compact.ts";
 import { UsageCounter } from "./counter.ts";
 
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
@@ -36,20 +38,23 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
 }
 
 /// An older station may still use these indexes during handover. Stop their writers only after it actually exits.
-export function retireAfterPrevious(store: StationStore, exited: Promise<void>) {
+export function retireAfterPrevious(store: StationStore, exited: Promise<void>, installed: () => void = () => {}) {
   return Effect.promise(async () => {
     try {
       await exited;
       const path = store.db.location();
-      if (path === null) { retireUsageIndexes(store.db); return; }
+      if (path === null) { installCompactUsage(store.db, () => store.now()); installed(); retireUsageIndexes(store.db); return; }
       const file = new URL(import.meta.url.endsWith(".ts") ? "./retire-worker.ts" : "./usage/retire-worker.js", import.meta.url);
-      const worker = new Worker(file, { workerData: { path, priority: store.backfillPriority } });
+      const worker = new Worker(file, { workerData: { path, priority: store.backfillPriority, now: store.now(), capturedAt: wall.now() } });
       const owner = worker.threadId;
       worker.unref();
       await new Promise<void>((resolve, reject) => {
         let failure: Error | null = null;
         let complete = false;
-        worker.on("message", (answer: { complete?: boolean }) => { complete ||= answer.complete === true; });
+        worker.on("message", (answer: { installed?: boolean; complete?: boolean }) => {
+          if (answer.installed) installed();
+          complete ||= answer.complete === true;
+        });
         worker.once("error", (error) => { failure = error; });
         worker.once("exit", (code) => {
           releaseStoppedBackfill(store.backfillPriority, owner);
@@ -63,6 +68,86 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>) 
   });
 }
 
+/// A worker sleeps until session ownership changes or the compact source is installed. Pending moves survive a restart.
+export function watchCompactMoves(store: StationStore, exited: Promise<void>): { wake: () => void; close: () => Promise<void> } {
+  const path = store.db.location();
+  const retries = new Fibers("usage workspace", store.clock);
+  let closed = false;
+  let ready = false;
+  let requested = true;
+  let outstanding = false;
+  let retryMs = 250;
+  let cancelRetry: (() => void) | null = null;
+  let worker: Worker | null = null;
+  const dispatch = () => {
+    if (worker !== null && requested && !outstanding) {
+      requested = false;
+      outstanding = true;
+      worker.postMessage({ wake: true });
+    }
+  };
+  const retry = () => {
+    if (closed || cancelRetry !== null) return;
+    const delay = retryMs;
+    retryMs = Math.min(retryMs * 2, 30_000);
+    cancelRetry = retries.after(delay, () => {
+      cancelRetry = null;
+      requested = true;
+      start();
+      dispatch();
+    });
+  };
+  const start = () => {
+    if (closed || !ready || path === null || worker !== null) return;
+    const file = new URL(import.meta.url.endsWith(".ts") ? "./scope-worker.ts" : "./usage/scope-worker.js", import.meta.url);
+    const current = new Worker(file, { workerData: { path, priority: store.backfillPriority } });
+    const owner = current.threadId;
+    let failed = false;
+    worker = current;
+    current.unref();
+    current.on("message", (answer: { session?: string; error?: string; idle?: boolean }) => {
+      if (closed) return;
+      if (answer.error) { failed = true; log.warn("usage", "a usage workspace move stopped", { error: answer.error }); }
+      if (answer.session) store.usageChanged([answer.session]);
+      if (answer.idle) {
+        outstanding = false;
+        if (failed) { failed = false; retry(); }
+        else { retryMs = 250; dispatch(); }
+      }
+    });
+    current.once("error", (error) => log.warn("usage", "the usage workspace worker failed", { error: error.message }));
+    current.once("exit", (code) => {
+      releaseStoppedBackfill(store.backfillPriority, owner);
+      if (worker === current) worker = null;
+      outstanding = false;
+      requested = true;
+      if (!closed) {
+        log.warn("usage", "the usage workspace worker stopped", { code });
+        retry();
+      }
+    });
+    dispatch();
+  };
+  const wake = () => {
+    cancelRetry?.();
+    cancelRetry = null;
+    requested = true;
+    start();
+    dispatch();
+  };
+  const unsubscribe = store.onSessionWorkspaceChange(wake);
+  void exited.then(() => { ready = true; start(); }).catch((error) => log.warn("usage", "could not start usage workspace worker", { error: (error as Error).message }));
+  return {
+    wake,
+    close: async () => {
+      closed = true;
+      unsubscribe();
+      await retries.close();
+      if (worker !== null) await worker.terminate();
+    },
+  };
+}
+
 export const UsageLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const { data } = yield* Paths;
@@ -70,7 +155,11 @@ export const UsageLive = Layer.effectDiscard(
     const config = yield* StationConfig;
     const { hub } = yield* Agents;
     const previous = yield* Previous;
-    yield* Effect.forkScoped(retireAfterPrevious(store, previous.exited));
+    const mover = yield* Effect.acquireRelease(
+      Effect.sync(() => watchCompactMoves(store, previous.exited)),
+      (m) => Effect.promise(() => m.close()),
+    );
+    yield* Effect.forkScoped(retireAfterPrevious(store, previous.exited, mover.wake));
     const usage = yield* Effect.acquireRelease(
       Effect.sync(() => new UsageCounter({ store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock })),
       (u) => Effect.promise(() => u.stop()),

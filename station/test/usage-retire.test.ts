@@ -34,10 +34,9 @@ test("retirement waits for handover, removes the large indexes and keeps recordi
     write(store, "new", 4);
     assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage").get() as { n: number }).n, 3);
     assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input, r.output]), [[3, 9, 3]]);
-    assert.deepEqual(store.lastContexts("a", 5), []);
-    assert.throws(() => usageGroups(makeStore(store.db, "."), 0n, 2_000_000_000_000n, 0n),
-      (error: unknown) => (error as { status?: number }).status === 503 && /unavailable/.test((error as Error).message));
-    assert.throws(() => usageByDay(makeStore(store.db, "."), 0n), /being indexed|unavailable/);
+    assert.equal(store.lastContexts("a", 5).length, 1);
+    assert.deepEqual(usageGroups(makeStore(store.db, "."), 0n, 9_223_372_036_854_775_807n, 0n).map((r) => [r.calls, r.input]), [[1, 4]]);
+    assert.deepEqual(usageByDay(makeStore(store.db, "."), 0n).map((r) => [r.calls, r.tokens]), [[3, 12]]);
   } finally { store.close(); }
 });
 

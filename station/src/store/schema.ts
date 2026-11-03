@@ -718,6 +718,7 @@ ${USAGE_QUARTERS_KEPT}`;
 /// Keep an existing quarter index for older station processes. A fresh database can start one empty; current readers
 /// use usage_detail, so an older database without it does not need an incomplete replacement.
 export function addUsageQuarters(db: DatabaseSync): void {
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compact_since'").get()) return;
   if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'").get()) return;
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_quarters'").get() !== undefined;
   if (!made()) {

@@ -129,6 +129,8 @@ type SessionCalls = {
   usageOfSession(session: string): UsageGroup[];
   lastContexts(session: string, limit: number): ContextCall[];
   conversationSince(session: string): number | null;
+  savedCompactContext?(session: string): { model: string | null; contextWindow: number | null; lastCallAt: number;
+    contextTokens?: number; cacheMs?: number; rereadCost?: number } | null;
 };
 
 /// How long a prompt cache keeps what was written to it: five minutes, or an hour where it was asked to.
@@ -149,16 +151,29 @@ export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
   const since = s.conversationSince(key);
   const calls = since === null ? [] : all.filter((c) => c.at >= since);
   const last = calls.at(-1);
-  if (last === undefined) return out;
-  if (last.context !== null) out.contextTokens = last.context;
-  out.lastCallAt = last.at;
-  // A read keeps it for as long again as it was written for: as the latest write asked.
-  const wrote = calls.findLast((c) => c.cacheWrite + c.cacheWriteLong > 0);
-  if (wrote === undefined) return out;
-  const long = wrote.cacheWriteLong > 0;
-  out.cacheMs = long ? CACHE_LONG_MS : CACHE_SHORT_MS;
-  const p = last.model === null ? null : price(last.model);
-  if (p !== null && last.context !== null) out.rereadCost = ((last.context * p.input * (long ? 2.0 : 1.25)) / 1e6) * (last.fast ? 2.0 : 1.0);
+  if (last !== undefined) {
+    if (last.context !== null) out.contextTokens = last.context;
+    out.lastCallAt = last.at;
+    // A read keeps it for as long again as it was written for: as the latest write asked.
+    const wrote = calls.findLast((c) => c.cacheWrite + c.cacheWriteLong > 0);
+    if (wrote !== undefined) {
+      const long = wrote.cacheWriteLong > 0;
+      out.cacheMs = long ? CACHE_LONG_MS : CACHE_SHORT_MS;
+      const p = last.model === null ? null : price(last.model);
+      if (p !== null && last.context !== null) out.rereadCost = ((last.context * p.input * (long ? 2.0 : 1.25)) / 1e6) * (last.fast ? 2.0 : 1.0);
+    }
+  }
+  const saved = s.savedCompactContext?.(key) ?? null;
+  const latest = all.at(-1);
+  if (saved !== null && since !== null && saved.lastCallAt >= since && (latest === undefined || saved.lastCallAt > latest.at)) {
+    out.model = saved.model;
+    out.contextWindow = saved.contextWindow;
+    out.lastCallAt = saved.lastCallAt;
+    for (const name of ["contextTokens", "cacheMs", "rereadCost"] as const) {
+      if (saved[name] !== undefined) out[name] = saved[name];
+      else delete out[name];
+    }
+  }
   return out;
 }
 
