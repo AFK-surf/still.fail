@@ -149,7 +149,8 @@ fn run_view(
   let fast = flag(v, "fastAvailable")
   // (in the page's room, 12 from its sides, as every page's blocks: it stood 18 in)
   c.box(style=run_body, fn() {
-    scroll_page(c, "run-session/" + key, [
+    // (what it shows the run as it would be: changed as a pick is, it goes to its new height)
+    scroll_page(c, "run-session/" + key, keys=["run"], versions=[json_sign(v)], [
       fn() {
         // what it was and what it becomes, a line each property, the changes marked
         c.box(w=Fill(1.0), pt=8.0, fn() {
