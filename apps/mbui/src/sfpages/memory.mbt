@@ -188,7 +188,7 @@ fn memory_body(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
               @sf.t("web-main.memory.count", args=[("n", builtin.length().to_string())]),
               open~,
             ) {
-            builtin_open[address] = !open
+            @settings.builtin_turn(address)
           }
           if open {
             for k in builtin {
@@ -222,6 +222,194 @@ fn memory_row(
     value~,
     title_after?=if tag != "" { Some(fn() { c.text(tag, style=mem_tag) |> ignore }) } else { None },
     folds?=if key.has_suffix("/builtin") { Some(open) } else { None },
+  )
+}
+
+///|
+/// One station's memory made once as nodes (memory_page's: page_node, laid out by the `width` its frame gives it,
+/// narrow where none is given) in node `v`, titled by the station's name as `here`'s stations say it: its global
+/// memory by its parts, its projects', the other skills (its built-in ones folded in a row, open as it was left), each
+/// row opening its page, followed as the core says them; while it is read the first time, all of it in its bones
+/// (waiting_node: made up, the core asked nothing for it), what could not be read said over it.
+pub fn memory_node(
+  v : @view.View,
+  core : Core,
+  here : () -> @settings.Here,
+  address : String,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+) -> Unit {
+  let stations = fn() {
+    match @settings.stations_of(core, here()).value {
+      Some(Array(a)) => a
+      _ => []
+    }
+  }
+  let title = fn() {
+    let mut name = @settings.station_name(address)
+    for s in stations() {
+      if text(Some(s), "station") == address {
+        name = text(Some(s), "name")
+      }
+    }
+    name
+  }
+  let names = fn() { station_names(stations()) }
+  let read = fn() { memory_of(core, address) }
+  @sf.page_node(
+    v,
+    title,
+    on_back~,
+    frame~,
+    said?,
+    width?,
+    about=fn() { @sf.t("web-pages.settings.memory.lead") },
+    fn() { ["memory"] },
+    fn(b, _) {
+      b.pick(fn() { read().value is None }, fn(p, reading) {
+        if reading {
+          @sf.waiting_node(
+            p,
+            fn(s) { memory_body_node(s, core.quiet(), "sample", names, fn() { Some(memory_sample()) }) },
+            error=fn() {
+              let e = read().error
+              if e == "" {
+                ""
+              } else {
+                @sf.t("web-main.memory.failed", args=[("error", e)])
+              }
+            },
+          )
+        } else {
+          memory_body_node(p, core, address, names, fn() { read().value })
+        }
+      })
+    },
+  )
+}
+
+///|
+/// A station's memory (`m`, as the core reads it, as it changes) as nodes (memory_body's): its global memory by its
+/// parts, its projects', the other skills with its built-in ones folded in a row, each row opening its page.
+fn memory_body_node(
+  v : @view.View,
+  core : Core,
+  address : String,
+  names : () -> Map[String, String],
+  m : () -> Json?,
+) -> Unit {
+  let skills = fn(group : String) { items(m(), "skills").filter(fn(k) { text(Some(k), "group") == group }) }
+  let skill_rows = fn(g : @view.View, group : () -> Array[Json]) {
+    g.each(group, fn(k) { text(Some(k), "name") }, fn(row, k) {
+      let kv = fn() { Some(k.get()) }
+      memory_row_node(
+        row,
+        fn() { text(kv(), "name") },
+        fn() { text(kv(), "line") },
+        fn() { text(kv(), "size") },
+        tag=@signals.untracked(fn() { skill_tag(kv(), names()) }),
+        fn() { (core.push)(MemoryDoc(address, text(kv(), "name"), 0)) },
+      )
+    })
+  }
+  // (what a section says where it has nothing)
+  let none = fn(p : @view.View, words : () -> String) {
+    p.box(fn(n) {
+      match @sf.look_node(n) {
+        Narrow => {
+          n.padding(Is((12.0, 0.0, 12.0, 8.0))) |> ignore
+          @sf.words_node(n, words, fn() { mem_narrow_none_words }) |> ignore
+        }
+        Wide => @sf.words_node(n, words, fn() { desk_muted }) |> ignore
+      }
+    })
+    |> ignore
+  }
+  @sf.section_node(
+    v,
+    fn() { @sf.t("web-main.memory.global") },
+    note=fn() { join([@sf.t("web-main.memory.global.when"), text(field(m(), "global"), "size")], " · ") },
+    fn(s) {
+      s.pick(fn() { sections_of(m()).length() == 0 }, fn(p, empty) {
+        if empty {
+          none(p, fn() { @sf.t("web-main.memory.empty") })
+        } else {
+          @sf.group_node(p, fn(g) {
+            g.each(fn() { sections_of(m()).mapi(fn(i, x) { (i, x) }) }, fn(x) { x.0.to_string() }, fn(row, x) {
+              let i = @signals.untracked(fn() { x.get().0 })
+              memory_row_node(row, fn() { x.get().1.0 }, fn() { "" }, fn() { x.get().1.2 }, fn() {
+                (core.push)(MemoryDoc(address, "", i))
+              })
+            })
+          })
+        }
+      })
+    },
+  )
+  @sf.section_node(v, fn() { @sf.t("web-main.memory.projects") }, note=fn() { @sf.t("web-main.memory.projects.when") }, fn(
+    s,
+  ) {
+    s.pick(fn() { skills("project").length() == 0 }, fn(p, empty) {
+      if empty {
+        none(p, fn() { @sf.t("web-main.memory.projects.none") })
+      } else {
+        @sf.group_node(p, fn(g) { skill_rows(g, fn() { skills("project") }) })
+      }
+    })
+  })
+  v.show(fn() { skills("skill").length() + skills("builtin").length() > 0 }, fn(o) {
+    @sf.section_node(o, fn() { @sf.t("web-main.memory.others") }, fn(s) {
+      @sf.group_node(s, fn(g) {
+        skill_rows(g, fn() { skills("skill") })
+        // (the station's own, folded in a row: open as it was left, @settings.builtin_open_of)
+        g.show(fn() { skills("builtin").length() > 0 }, fn(f) {
+          let open = fn() { @settings.builtin_open_of(address) }
+          memory_row_node(
+            f,
+            fn() { @sf.t("web-main.memory.builtin") },
+            fn() {
+              if open() {
+                ""
+              } else {
+                join(skills("builtin").map(fn(k) { text(Some(k), "name") }), @sf.t("web-main.list.separator"))
+              }
+            },
+            fn() { @sf.t("web-main.memory.count", args=[("n", skills("builtin").length().to_string())]) },
+            folds=open,
+            fn() { @settings.builtin_turn(address) },
+          )
+        })
+        g.show(fn() { skills("builtin").length() > 0 && @settings.builtin_open_of(address) }, fn(f) {
+          skill_rows(f, fn() { skills("builtin") })
+        })
+      })
+    })
+  })
+}
+
+///|
+/// A row of a station's memory made once (memory_row's): its name and whose (`tag`, said as it is made) after it on
+/// its line, a line under it cut short, how much is in it at its end; `folds` what follows it where it says so.
+fn memory_row_node(
+  parent : @view.View,
+  title : () -> String,
+  sub : () -> String,
+  value : () -> String,
+  tag? : String = "",
+  folds? : () -> Bool,
+  press : () -> Unit,
+) -> Unit {
+  @sf.link_row_node(
+    parent,
+    title,
+    press,
+    value~,
+    note=sub,
+    note_cut=true,
+    title_after?=if tag != "" { Some(fn(a) { @sf.words_node(a, fn() { tag }, fn() { mem_tag }) |> ignore }) } else { None },
+    folds?,
   )
 }
 

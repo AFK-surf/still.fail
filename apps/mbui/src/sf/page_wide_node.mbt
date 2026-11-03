@@ -295,10 +295,13 @@ fn wide_link_row_node(
   lead : RowLead,
   goes : Bool,
   ends : Bool,
-  mark : String,
+  mark : () -> String,
   acts : Bool,
   below : ((@view.View) -> Unit)?,
   below_open : () -> Double,
+  note_cut : Bool,
+  title_after : ((@view.View) -> Unit)?,
+  folds : (() -> Bool)?,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
@@ -315,7 +318,7 @@ fn wide_link_row_node(
     if goes {
       r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
       presses_node(r, press)
-      r.says(By(fn() { Some(@view.said(Link, label=title())) })) |> ignore
+      r.says(By(fn() { Some(@view.said(Link, label=title(), expanded?=folds.map(fn(f) { f() }))) })) |> ignore
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as a list's title's line at least,
     // across its middle)
@@ -345,7 +348,21 @@ fn wide_link_row_node(
       words.box(fn(first) {
         first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
         first.box(fn(t) {
-          styled_words(t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))), title, fn() { titled }) |> ignore
+          t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          match title_after {
+            // (what follows its title on its line, 8 apart across their middle, the title cut short where the line
+            // leaves it less: link_row's title_line)
+            Some(after) => {
+              t.row(Is(true)).gap(Is(8.0)).lines_up(Is(Some(Middle))) |> ignore
+              t.box(fn(w) {
+                w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+                styled_words(w, title, fn() { titled.then(cut_words) }) |> ignore
+              })
+              |> ignore
+              t.box(fn(a) { after(a) }) |> ignore
+            }
+            None => styled_words(t, title, fn() { titled }) |> ignore
+          }
           if acts {
             t.ink(By(fn() { link_ink() })) |> ignore
           }
@@ -358,11 +375,13 @@ fn wide_link_row_node(
           |> ignore
         })
         if ends {
-          icon_node(first, mark, desk_chevron, By(fn() { theme().p.muted })) |> ignore
+          icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore
         }
       })
       |> ignore
-      words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { wide_list_note }) |> ignore })
+      words.show(fn() { note() != "" }, fn(n) {
+        styled_words(n, note, fn() { if note_cut { wide_list_note.then(cut_words) } else { wide_list_note } }) |> ignore
+      })
       words.show(fn() { trouble() != "" }, fn(n) { styled_words(n, trouble, fn() { desk_note_bad }) |> ignore })
       match below {
         Some(f) => row_below_node(words, f, below_open)

@@ -434,6 +434,10 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
       })
     Setting(Memories) =>
       made("memories", fn(p, core, here, frame, _stint) { @sfpages.memories_node(p, core, here, on_back=core.pop, frame~) })
+    Setting(Memory(address)) =>
+      made("memory", fn(p, core, here, frame, _stint) {
+        @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame~)
+      })
     // (a place of the bottom bar's whose page is one of those: place_page's, made once as they are)
     Place(name) =>
       match @settings.route_of(name) {
