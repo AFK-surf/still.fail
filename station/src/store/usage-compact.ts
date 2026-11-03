@@ -245,14 +245,14 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
 export function compactScopeReady(db: DatabaseSync, viewer: InWorkspace | null): boolean {
   if (viewer === null) return db.prepare("SELECT 1 FROM usage_compact_moving LIMIT 1").get() === undefined;
   const ws = `W${viewer.workspace}`;
-  const sql = viewer.home ? "SELECT 1 FROM usage_compact_moving_scope WHERE scope IN (?, 'H') LIMIT 1"
+  const sql = viewer.home !== false ? "SELECT 1 FROM usage_compact_moving_scope WHERE scope IN (?, 'H') LIMIT 1"
     : "SELECT 1 FROM usage_compact_moving_scope WHERE scope = ? LIMIT 1";
   return db.prepare(sql).get(ws) === undefined;
 }
 
 /// The lifetime total of compacted calls alone. Never serve a total until its pending buckets and scope moves finish.
 export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null, before?: bigint): { calls: number; tokens: number } | null {
-  const scope = viewer === null ? "scope = 'G'" : viewer.home ? "scope IN (?1, 'H')" : "scope = ?1";
+  const scope = viewer === null ? "scope = 'G'" : viewer.home !== false ? "scope IN (?1, 'H')" : "scope = ?1";
   const moving = viewer === null ? "SELECT 1 FROM usage_compact_moving LIMIT 1"
     : `SELECT 1 FROM usage_compact_moving_scope WHERE ${scope} LIMIT 1`;
   const dirty = viewer === null ? "SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_session WHERE pending = 1 LIMIT 1"
@@ -282,13 +282,13 @@ type PendingBucket = Bucket & { session: string; records: number; calls: number;
 
 // Called within an IMMEDIATE transaction. Each bucket keeps its previously applied contribution, so repeated writes
 // coalesce and a removed bucket remains as a tombstone until its contribution is subtracted.
-function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string): { count: number; sessions: string[]; from?: number } {
-  const selected = session === undefined
-    ? `INDEXED BY usage_compact_pending_scope WHERE pending = 1 LIMIT ?`
-    : `INDEXED BY usage_compact_pending_session WHERE pending = 1 AND session = ? LIMIT ?`;
+function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string, scope?: string): { count: number; sessions: string[]; from?: number } {
+  const selected = session !== undefined ? `INDEXED BY usage_compact_pending_session WHERE pending = 1 AND session = ? LIMIT ?`
+    : scope !== undefined ? `INDEXED BY usage_compact_pending_scope WHERE pending = 1 AND scope = ? LIMIT ?`
+    : `INDEXED BY usage_compact_pending_scope WHERE pending = 1 LIMIT ?`;
   const rows = db.prepare(`SELECT session, minute, thread, person, profile, runtime, model, fast, scope, records, calls,
     ${tokens("usage_compact")} AS tokens, accounted_scope, accounted_calls, accounted_tokens FROM usage_compact ${selected}`)
-    .all(...(session === undefined ? [batch] : [session, batch])) as PendingBucket[];
+    .all(...(session !== undefined ? [session, batch] : scope !== undefined ? [scope, batch] : [batch])) as PendingBucket[];
   const changes = new Map<string, { calls: number; tokens: number }>();
   const add = (scope: string, calls: number, tokens: number) => {
     const prior = changes.get(scope) ?? { calls: 0, tokens: 0 };
@@ -325,24 +325,26 @@ function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string
 }
 
 /// Apply at most one batch of new buckets; this never reads or reconstructs original calls.
-export function compactTotalsStep(db: DatabaseSync, batch = 256): { done: boolean; sessions: string[]; from?: number } {
+export function compactTotalsStep(db: DatabaseSync, batch = 256, scope?: string): { done: boolean; sessions: string[]; from?: number } {
   if (!Number.isSafeInteger(batch) || batch < 1) throw new RangeError("compact totals batch must be positive");
   batch = Math.min(batch, 256);
   db.exec("BEGIN IMMEDIATE");
   try {
-    const { count, sessions, from } = accountCompactBuckets(db, batch);
+    const { count, sessions, from } = accountCompactBuckets(db, batch, undefined, scope);
     db.exec("COMMIT");
     return { done: count < batch, sessions, ...(from !== undefined ? { from } : {}) };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
 /// Re-scope at most one batch. The cursor is reset if the session moves again; writes during a move use its current scope.
-export function moveCompactStep(db: DatabaseSync, batch = 256): { done: boolean; session?: string } {
+export function moveCompactStep(db: DatabaseSync, batch = 256, scope?: string): { done: boolean; session?: string } {
   if (!Number.isSafeInteger(batch) || batch < 1) throw new RangeError("compact workspace batch must be positive");
   batch = Math.min(batch, 256);
   db.exec("BEGIN IMMEDIATE");
   try {
-    const move = db.prepare("SELECT * FROM usage_compact_moving ORDER BY session LIMIT 1").get() as Moving | undefined;
+    const move = (scope === undefined ? db.prepare("SELECT * FROM usage_compact_moving ORDER BY session LIMIT 1").get()
+      : db.prepare(`SELECT m.* FROM usage_compact_moving_scope sc CROSS JOIN usage_compact_moving m ON m.session = sc.session
+          WHERE sc.scope = ? ORDER BY sc.session LIMIT 1`).get(scope)) as Moving | undefined;
     if (move === undefined) { db.exec("COMMIT"); return { done: true }; }
     if (move.phase === 1) {
       // Keep every old scope unavailable until the session's pending contributions have actually left its totals.
@@ -424,7 +426,7 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
   if (viewer !== null) {
     const scope = bind(`W${viewer.workspace}`);
     const ws = bind(viewer.workspace);
-    visible = viewer.home ? `c.scope IN (${scope}, 'H') AND (sc.ws = ${ws} OR sc.ws IS NULL) AND `
+    visible = viewer.home !== false ? `c.scope IN (${scope}, 'H') AND (sc.ws = ${ws} OR sc.ws IS NULL) AND `
       : `c.scope = ${scope} AND sc.ws = ${ws} AND `;
   }
   const start = bind(first + (from === first * size ? 0n : 1n));
@@ -479,7 +481,7 @@ export function compactHistory(db: DatabaseSync, offset: bigint, viewer: InWorks
   const oldMinute = oldQuarter ? "q.quarter * 15" : "q.minute";
   const compactSource = viewer === null ? "FROM usage_compact c" :
     "FROM usage_compact c INDEXED BY usage_compact_scope_time CROSS JOIN usage_minute_scope sc ON sc.session = c.session";
-  let compactWhere = viewer === null ? "WHERE c.records > 0" : viewer.home ? "WHERE c.scope IN (?3, 'H') AND (sc.ws = ?2 OR sc.ws IS NULL) AND c.records > 0"
+  let compactWhere = viewer === null ? "WHERE c.records > 0" : viewer.home !== false ? "WHERE c.scope IN (?3, 'H') AND (sc.ws = ?2 OR sc.ws IS NULL) AND c.records > 0"
     : "WHERE c.scope = ?3 AND sc.ws = ?2 AND c.records > 0";
   let oldWhere = where;
   if (range !== undefined) {

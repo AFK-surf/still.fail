@@ -99,6 +99,7 @@ for (const recursive of [false, true]) test(`compact totals follow changes and w
       assert.deepEqual(compact.compactTotal(store.db, a), { calls: 2, tokens: 31 });
       assert.deepEqual(compact.compactTotal(store.db, b), { calls: 1, tokens: 30 });
       assert.deepEqual(compact.compactTotal(store.db, home), { calls: 3, tokens: 71 });
+      assert.deepEqual(compact.compactTotal(store.db, { workspace: "A" }), { calls: 3, tokens: 71 }, "an omitted home flag means the home workspace");
       assert.deepEqual(compact.compactTotal(store.db, null), { calls: 4, tokens: 101 });
     } finally { store.db.setAuthorizer(null); }
 

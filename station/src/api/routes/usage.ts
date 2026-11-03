@@ -6,6 +6,7 @@ import type { Route, Tools } from "../admin.ts";
 import { cpus, totalmem } from "node:os";
 import { NotEndable, type ResourceWatch } from "../../resources/watch.ts";
 import { log } from "../../ops/log.ts";
+import type { InWorkspace } from "../../store/rows.ts";
 
 const I64_MIN = -9223372036854775808n;
 const I64_MAX = 9223372036854775807n;
@@ -88,7 +89,7 @@ export const routes = (tools: Tools): Route[] => {
 };
 
 /// GET /usage, the usage part's (usage/module.ts): `reading`, whether the counter is still reading what was spent.
-export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals: () => void = () => {}): Route[] => [
+export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals: (viewer: InWorkspace | null) => void = () => {}): Route[] => [
   // A bounded page of one session's original calls; aggregates remain a separate, statistics-only read.
   {
     method: "GET",
@@ -117,7 +118,7 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals:
         if (historyFrom > historyTo || historyTo - historyFrom > 370n * 86_400_000n || historyFrom % 60_000n !== 0n
           || historyTo % 60_000n !== 0n || localEnd % 86_400_000n !== 0n
           || localEnd < -8_640_000_000_000_000n || localEnd > 8_640_000_000_000_000n) throw new Refused(400, "invalid history range");
-        wakeTotals();
+        wakeTotals(r.viewer);
       }
       return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history: param(r, "history") === "1",
         ...(historyFrom !== null && historyTo !== null ? { historyRange: { from: String(historyFrom), to: String(historyTo) } } : {}) });

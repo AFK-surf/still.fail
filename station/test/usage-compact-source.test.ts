@@ -337,6 +337,25 @@ test("a moved session's statistics are re-scoped in bounded batches and follow a
   } finally { store.close(); }
 });
 
+test("an omitted home flag includes home usage in compact histories, time edges and moving checks", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "h", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "h", ws: null,
+      createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "home", at: 1_000, model: "m", subagent: true, fast: false, input: 1, cacheRead: 0,
+      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    store.recordUsage("/h", { session: "h", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    const viewer = { workspace: "A" };
+    assert.deepEqual(compactHistory(store.db, 0n, viewer)?.map((row) => row.tokens), [2]);
+    assert.deepEqual(usageGroups(makeStore(store.db, "."), 500n, 2_000n, 0n, viewer).map((row) => row.input), [1]);
+    store.db.exec("UPDATE sessions SET ws = 'B' WHERE key = 'h'");
+    assert.equal(compactScopeReady(store.db, viewer), false);
+    assert.equal(compactScopeReady(store.db, { workspace: "A", home: false }), true);
+  } finally { store.close(); }
+});
+
 test("a worker resumes an interrupted workspace move and wakes for the next one", async () => {
   const dir = mkdtempSync(join(tmpdir(), "compact-scope-worker-"));
   const path = join(dir, "station.db");
@@ -789,15 +808,16 @@ test("the call-page cursor preserves SQLite rowids beyond JavaScript's integer p
 });
 
 test("the optional usage chart range reaches the reader and wakes pending totals", async () => {
-  let captured: unknown, wakes = 0;
+  let captured: unknown, woken: unknown, wakes = 0;
   const route = usageRoutes({ read: (_request: unknown, _operation: string, args: unknown) => {
     captured = args;
     return Promise.resolve({ status: 200, headers: {}, body: Buffer.alloc(0) });
-  } } as never, () => false, () => { wakes++; })[1]!;
+  } } as never, () => false, (viewer) => { wakes++; woken = viewer; })[1]!;
   const request = { lang: "en", query: [["history", "1"], ["historyFrom", "0"], ["historyTo", "86400000"]], viewer: { workspace: "A", home: false } };
   await route.handle(request as never, []);
   assert.deepEqual((captured as { historyRange: unknown }).historyRange, { from: "0", to: "86400000" });
   assert.equal(wakes, 1);
+  assert.deepEqual(woken, request.viewer);
   assert.throws(() => route.handle({ ...request, query: [["historyFrom", "0"]] } as never, []), /both bounds/);
   assert.throws(() => route.handle({ ...request, query: [["historyFrom", "0"], ["historyTo", "60000"]] } as never, []), /invalid history range/);
   assert.equal(wakes, 1);

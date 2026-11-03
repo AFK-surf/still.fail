@@ -13,6 +13,7 @@ import { Parts, Paths, Previous, StationConfig, Store } from "../services.ts";
 import { log } from "../ops/log.ts";
 import { Fibers } from "../ops/fibers.ts";
 import type { Store as StationStore } from "../store/store.ts";
+import type { InWorkspace } from "../store/rows.ts";
 import { giveBackfill, releaseStoppedBackfill, takeBackfill } from "../store/backfill.ts";
 import { retireUsageIndexes, stopUsageIndexes } from "../store/usage-retire.ts";
 import { hasCompactUsage, installCompactUsage } from "../store/usage-compact.ts";
@@ -101,24 +102,34 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
   })));
 }
 
-/// A worker sleeps until usage or ownership changes. Pending totals and moves survive a restart.
-export function watchCompactMoves(store: StationStore, exited: Promise<void>): { wake: () => void; close: () => Promise<void> } {
+/// A worker moves changed ownership and accounts a workspace's totals when that workspace asks for them.
+export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
+  wake: () => void; read: (viewer: InWorkspace | null) => void; close: () => Promise<void>;
+} {
   const path = store.db.location();
   const retries = new Fibers("usage workspace", store.clock);
   let closed = false;
   let ready = false;
-  let requested = true;
-  let outstanding = false;
+  let moves = true;
+  const scopes = new Set<string>();
+  let held: { scope?: string } | null = null;
+  let preferMoves = false;
   let retryMs = 250;
   let cancelRetry: (() => void) | null = null;
   let worker: Worker | null = null;
-  let reporting = false;
+  const requeue = (work: { scope?: string }) => { if (work.scope === undefined) moves = true; else scopes.add(work.scope); };
   const dispatch = () => {
-    if (worker !== null && requested && !outstanding) {
-      requested = false;
-      outstanding = true;
-      worker.postMessage({ wake: true });
-    }
+    if (worker === null || held !== null || cancelRetry !== null) return;
+    let work: { scope?: string };
+    if (moves && (preferMoves || scopes.size === 0)) { moves = false; preferMoves = false; work = {}; }
+    else if (scopes.size > 0) {
+      const scope = scopes.values().next().value!;
+      scopes.delete(scope);
+      preferMoves = true;
+      work = { scope };
+    } else return;
+    held = work;
+    worker.postMessage({ wake: true, ...work });
   };
   const retry = () => {
     if (closed || cancelRetry !== null) return;
@@ -126,7 +137,6 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
     retryMs = Math.min(retryMs * 2, 30_000);
     cancelRetry = retries.after(delay, () => {
       cancelRetry = null;
-      requested = true;
       start();
       dispatch();
     });
@@ -136,29 +146,31 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
     const file = new URL(import.meta.url.endsWith(".ts") ? "./scope-worker.ts" : "./usage/scope-worker.js", import.meta.url);
     const current = new Worker(file, { workerData: { path, priority: store.backfillPriority } });
     const owner = current.threadId;
-    let failed = false;
     worker = current;
     current.unref();
-    current.on("message", (answer: { session?: string; sessions?: string[]; from?: number; error?: string; idle?: boolean }) => {
+    current.on("message", (answer: { done: boolean; session?: string; sessions?: string[]; from?: number; error?: string }) => {
       if (closed) return;
-      if (answer.error) { failed = true; log.warn("usage", "a usage workspace move stopped", { error: answer.error }); }
+      const work = held;
+      held = null;
+      if (work === null) return;
+      if (!answer.done) requeue(work);
+      if (answer.error) {
+        log.warn("usage", "a usage statistics batch stopped", { error: answer.error });
+        retry();
+        return;
+      }
       const sessions = answer.session ? [answer.session] : answer.sessions;
-      if (sessions?.length) {
-        reporting = true;
-        try { store.usageChanged(sessions, answer.from, true); } finally { reporting = false; }
-      }
-      if (answer.idle) {
-        outstanding = false;
-        if (failed) { failed = false; retry(); }
-        else { retryMs = 250; dispatch(); }
-      }
+      if (sessions?.length) store.usageChanged(sessions, answer.from, true);
+      retryMs = 250;
+      dispatch();
     });
     current.once("error", (error) => log.warn("usage", "the usage workspace worker failed", { error: error.message }));
     current.once("exit", (code) => {
       releaseStoppedBackfill(store.backfillPriority, owner);
       if (worker === current) worker = null;
-      outstanding = false;
-      requested = true;
+      if (held !== null) requeue(held);
+      held = null;
+      moves = true;
       if (!closed) {
         log.warn("usage", "the usage workspace worker stopped", { code });
         retry();
@@ -169,19 +181,29 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
   const wake = () => {
     cancelRetry?.();
     cancelRetry = null;
-    requested = true;
+    moves = true;
+    start();
+    dispatch();
+  };
+  const read = (viewer: InWorkspace | null) => {
+    cancelRetry?.();
+    cancelRetry = null;
+    if (viewer === null) scopes.add("G");
+    else {
+      scopes.add(`W${viewer.workspace}`);
+      if (viewer.home !== false) scopes.add("H");
+    }
     start();
     dispatch();
   };
   const unsubscribe = store.onSessionWorkspaceChange(wake);
-  const unsubscribeUsage = store.subscribe((change) => { if (!reporting && change.type === "usage") wake(); });
   void exited.then(() => { ready = true; start(); }).catch((error) => log.warn("usage", "could not start usage workspace worker", { error: (error as Error).message }));
   return {
     wake,
+    read,
     close: async () => {
       closed = true;
       unsubscribe();
-      unsubscribeUsage();
       await retries.close();
       if (worker !== null) await worker.terminate();
     },
@@ -209,6 +231,6 @@ export const UsageLive = Layer.effectDiscard(
       Effect.sync(() => keepCounted(store, hub.live, usage)),
       (unsubscribe) => Effect.sync(unsubscribe),
     );
-    (yield* Parts).routes((tools) => usageRoutes(tools, () => usage.readingAll(), mover.wake));
+    (yield* Parts).routes((tools) => usageRoutes(tools, () => usage.readingAll(), mover.read));
   }),
 );

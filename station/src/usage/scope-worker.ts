@@ -1,4 +1,4 @@
-// Move compact usage buckets and apply their totals in bounded transactions, yielding to foreground writes.
+// Process one bounded workspace move or total batch, then let the station choose who goes next.
 import { DatabaseSync } from "node:sqlite";
 import { parentPort, threadId, workerData } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
@@ -8,46 +8,37 @@ import { compactTotalsStep, hasCompactUsage, moveCompactStep } from "../store/us
 const db = new DatabaseSync(workerData.path as string);
 const priority = new Int32Array(workerData.priority as SharedArrayBuffer);
 db.exec("PRAGMA busy_timeout = 250; PRAGMA synchronous = NORMAL");
-let requested = false;
-let running = false;
 
-async function drain(): Promise<void> {
-  if (running) return;
-  running = true;
+parentPort!.on("message", async (message: { wake?: boolean; scope?: string }) => {
+  if (!message.wake) return;
+  const scope = message.scope;
+  let result: { done: boolean; session?: string; sessions?: string[]; from?: number; error?: string } = { done: true };
   try {
-    do {
-      requested = false;
-      if (!hasCompactUsage(db)) continue;
-      let movesDone = false;
-      for (;;) {
-        // An idle read request can wake us too; do not acquire the writer just to discover there is no work.
-        if (!movesDone && db.prepare("SELECT 1 FROM usage_compact_moving LIMIT 1").get() === undefined) movesDone = true;
-        if (movesDone && db.prepare("SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_session WHERE pending = 1 LIMIT 1").get() === undefined) break;
-        if (!takeBackfill(priority, threadId)) { await wall.sleep(20); continue; }
-        let result: { done: boolean; session?: string; sessions?: string[]; from?: number } | undefined;
-        try { result = movesDone ? compactTotalsStep(db) : moveCompactStep(db); }
-        catch (error) {
-          const code = (error as { errcode?: number }).errcode;
-          if (code === undefined || ![5, 6].includes(code & 255)) throw error;
-        } finally { giveBackfill(priority, threadId); }
-        if (result?.session !== undefined) parentPort!.postMessage({ session: result.session });
-        if (result?.sessions?.length) parentPort!.postMessage({ sessions: result.sessions, ...(result.from !== undefined ? { from: result.from } : {}) });
-        if (result?.done) {
-          if (movesDone) break;
-          movesDone = true;
-          continue;
+    if (hasCompactUsage(db)) {
+      const all = scope === undefined || scope === "G";
+      const moving = all ? db.prepare("SELECT 1 FROM usage_compact_moving LIMIT 1").get()
+        : db.prepare("SELECT 1 FROM usage_compact_moving_scope WHERE scope = ? LIMIT 1").get(scope);
+      const pending = scope === undefined ? undefined : all
+        ? db.prepare("SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_session WHERE pending = 1 LIMIT 1").get()
+        : db.prepare("SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_scope WHERE pending = 1 AND scope = ? LIMIT 1").get(scope);
+      if (moving !== undefined || pending !== undefined) {
+        if (!takeBackfill(priority, threadId)) result = { done: false };
+        else {
+          try {
+            result = moving !== undefined ? moveCompactStep(db, 256, all ? undefined : scope)
+              : compactTotalsStep(db, 256, all ? undefined : scope);
+          } catch (error) {
+            const code = (error as { errcode?: number }).errcode;
+            if (code === undefined || ![5, 6].includes(code & 255)) throw error;
+            result = { done: false };
+          } finally { giveBackfill(priority, threadId); }
         }
-        await wall.sleep(20);
       }
-    } while (requested);
+    }
   } catch (error) {
-    parentPort!.postMessage({ error: (error as Error).message });
-  } finally {
-    running = false;
-    parentPort!.postMessage({ idle: true });
+    result = { done: false, error: (error as Error).message };
   }
-}
-
-parentPort!.on("message", (message: { wake?: boolean }) => {
-  if (message.wake) { requested = true; void drain(); }
+  // Leave a gap for foreground work and other requested scopes between batches.
+  if (!result.done && !result.error) await wall.sleep(20);
+  parentPort!.postMessage(result);
 });
