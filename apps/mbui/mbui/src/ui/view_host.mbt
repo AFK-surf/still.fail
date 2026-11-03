@@ -1091,8 +1091,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       unseen()
       return
     }
-    // (its edge after what it holds, where it holds something drawn: border_over's)
-    let edge_after = c.edge.0 > 0.0 && (c.edge.1 & 0xFFL) != 0L && tree.holds_drawn(c.id)
+    // (its edge after what it holds, where it holds something drawn: border_over's, a clear one too: its ground inside
+    // it, its band left clear, as an old view's box with a border of no colour)
+    let edge_after = c.edge.0 > 0.0 && tree.holds_drawn(c.id)
     let block = match view_blocks.get(c.id) {
       // (made as glass was drawn then: solid or not; a picture for the pixels it is drawn at now; its edge where it was)
       Some(b) if (c.glass is None || b.solid == glass_paint.solid) &&
@@ -1361,7 +1362,8 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   // (where its edge is drawn after what it holds: its ground stops at the edge's inside, the edge's band left clear, as
   // an old view's box with a border over what it holds draws its ground (scene.mbt's border_over))
   let mut ring_at = -1
-  if edged && edge_after {
+  // (a clear edge too, as a border of no colour: its band left clear, its ring drawn with no colour)
+  if ew > 0.0 && edge_after {
     if (ground_c & 0xFFL) != 0L {
       self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, ground_c, ew, 0L, 1.0)
       each()

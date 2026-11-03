@@ -139,6 +139,12 @@ pub fn Tree::said_label(self : Tree, id : NodeId) -> String {
 }
 
 ///|
+/// Whether node `id` says it is a picture (View::says: Role Image; no live node, not).
+pub fn Tree::says_picture(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].said is Some({ role: Image, .. })
+}
+
+///|
 /// The nodes that say what they are, and those hosting an old view, in the tree's order (each before what it holds, what
 /// it holds in its order): what is read out of the window's tree (ui's semantics_tree splices each old
 /// view's in at its node), as it is now (what was told since the last frame said, no frame waited for).

@@ -361,7 +361,7 @@ pub fn no_workspace(@ui.Ctx, @sfbase.Source, Json?, () -> Unit) -> Unit
 
 pub fn no_workspace_node(@view.View, @sfbase.Source, () -> Json?, () -> Unit) -> @view.View
 
-pub fn notify_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn notify_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn offered_image() -> String
 
