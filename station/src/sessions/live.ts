@@ -9,6 +9,7 @@ import type { Clock } from "effect";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import type { BackgroundTask, LiveEvent, PlanItem } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
+import { log } from "../ops/log.ts";
 import { type PlanState, noPlan, planItems, readPlan, saysWhole } from "../read/plan.ts";
 import { ChainTail, type TailState, type TranscriptRef } from "../read/tail.ts";
 import { type TimelineEntry, brief } from "../read/transcript.ts";
@@ -124,6 +125,8 @@ export class LiveHub {
   /// again, read on from there, the readers not asked. Asked at each station update, a reader read on from what it kept
   /// on disk, a session's 1.7 MB in 1.5 s on ccvm short of memory (2026-11-03), its chat waiting on it.
   private stood = new Map<string, TailState[]>();
+  /// Whether the process before's were taken up (`takeTails`).
+  private tookTails = false;
   /// Its time and its waits (a read put off to gather a burst of writes).
   private time: Fibers;
   private nextId = 0;
@@ -603,11 +606,19 @@ export class LiveHub {
   /// What the process before read of transcripts, where none is watched here yet.
   takeTails(carried: { key: string; states: TailState[] }[]): void {
     if (!Array.isArray(carried)) return;
+    // How many were taken up, and why not the rest: one asked of the readers after an update all the same (ccvm,
+    // 2026-11-03), unsaid whether it came.
+    let taken = 0;
+    let watched = 0;
     for (const c of carried) {
-      if (typeof c?.key !== "string" || !Array.isArray(c.states) || this.watched.has(c.key)) continue;
+      if (typeof c?.key !== "string" || !Array.isArray(c.states)) continue;
+      if (this.watched.has(c.key)) { watched++; continue; }
       if (!c.states.every((st) => typeof st?.path === "string" && Number.isSafeInteger(st.offset) && Number.isSafeInteger(st.count))) continue;
       this.keepStood(c.key, c.states);
+      taken++;
     }
+    this.tookTails = true;
+    log.info("live", "transcripts' readings taken up", { carried: carried.length, taken, watched });
   }
 
   /// A deleted session: nothing of it is watched or kept any more.
@@ -712,6 +723,7 @@ export class LiveHub {
       this.soon(key);
       return true;
     }
+    if (this.tookTails) log.info("live", "a transcript's reading asked of the readers", { session: key, kept: stood !== null, carried: this.tookTails });
     watched.ready = this.history
       .state(key)
       .then(
