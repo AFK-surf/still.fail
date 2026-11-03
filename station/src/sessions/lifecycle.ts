@@ -316,7 +316,9 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
     if (free() >= DISK_LOW_BYTES) return;
     try {
       // Shown and archived again since, it is not the one looked at: `expire` leaves it.
-      if (await cold.holdsMore(s.key)) await cold.expire(s.key, s.archivedAt);
+      if (!(await cold.holdsMore(s.key))) continue;
+      if (free() >= DISK_LOW_BYTES) return;
+      await cold.expire(s.key, s.archivedAt);
     } catch (error) {
       log.warn("hub", "the workspace of an archived session was not emptied", { session: s.key, error: (error as Error).message });
     }
