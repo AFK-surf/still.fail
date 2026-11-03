@@ -1379,7 +1379,9 @@ export class Store {
     this.#with((changes) => {
       if (pinned) this.#run("INSERT OR IGNORE INTO pins (viewer, session, at) VALUES (?, ?, ?)", viewer, session, this.now());
       else this.#run("DELETE FROM pins WHERE viewer = ? AND session = ?", viewer, session);
-      changes.push({ type: "pins", viewer });
+      // As it stands now (pinned again, it keeps when it was first).
+      const at = pinned ? (this.#one("SELECT at FROM pins WHERE viewer = ? AND session = ?", viewer, session)?.at ?? null) : null;
+      changes.push({ type: "pins", viewer, session, at });
     });
   }
 
@@ -1401,7 +1403,7 @@ export class Store {
   keepChat(viewer: string, thread: number): void {
     this.#with((changes) => {
       this.#run("INSERT OR IGNORE INTO kept_chats (viewer, thread) VALUES (?, ?)", viewer, thread);
-      changes.push({ type: "dismissed", viewer });
+      changes.push({ type: "dismissed", viewer, kept: { thread, kept: true } });
     });
   }
 
@@ -1410,7 +1412,7 @@ export class Store {
   unkeepChat(viewer: string, thread: number): void {
     this.#with((changes) => {
       this.#run("DELETE FROM kept_chats WHERE viewer = ? AND thread = ?", viewer, thread);
-      changes.push({ type: "dismissed", viewer });
+      changes.push({ type: "dismissed", viewer, kept: { thread, kept: false } });
     });
   }
 
@@ -1525,7 +1527,7 @@ export class Store {
   dismiss(viewer: string, thread: number, n: number): void {
     this.#with((changes) => {
       this.#run("INSERT OR IGNORE INTO dismissed (viewer, thread, n, at) VALUES (?, ?, ?, ?)", viewer, thread, n, this.now());
-      changes.push({ type: "dismissed", viewer });
+      changes.push({ type: "dismissed", viewer, card: { thread, n } });
     });
   }
 

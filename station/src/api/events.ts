@@ -739,6 +739,11 @@ export class Events {
         break;
       case "pins":
       case "dismissed":
+        // What the viewer wrote, as written, to their own streams: a device that makes its sidebar rows itself puts it in
+        // place (`pin`, `dismiss`, `kept`); those that do not read their rows again.
+        if (change.type === "pins" && change.session !== undefined) this.emit("pin", { session: change.session, at: change.at ?? null }, { email: change.viewer });
+        if (change.type === "dismissed" && change.card !== undefined) this.emit("dismiss", change.card, { email: change.viewer, sees: { thread: change.card.thread } });
+        if (change.type === "dismissed" && change.kept !== undefined) this.emit("kept", change.kept, { email: change.viewer, sees: { thread: change.kept.thread } });
         this.rowsChanged(change.viewer);
         break;
       case "job":
