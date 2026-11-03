@@ -471,8 +471,10 @@ let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle
 /// (a value said: none of that). `note_cut`: its note one line, cut short (what is in a memory). `title_after` after its
 /// title on its line while `title_after_shown` says (a tag: whose it is), its title cut short where the line has not
 /// the room for both. `folds`: it
-/// folds open what follows it, its chevron down, up while that is open (as it says), read out so. Its words as they are
-/// said.
+/// folds open what follows it, its chevron down, up while that is open (as it says), read out so. `title_style`: a wide
+/// row's title's size and the rest where it is not a list's own (a setting's: setting_link_node). `danger`: its title
+/// in red (what takes something away). `control`: what is done here, at its end, last (a button, a switch: no chevron),
+/// on its first line where lines are under it (row_end_node). Its words as they are said.
 pub fn link_row_node(
   parent : @view.View,
   title : () -> String,
@@ -495,11 +497,15 @@ pub fn link_row_node(
   title_after? : (@view.View) -> Unit,
   title_after_shown? : () -> Bool = fn() { true },
   folds? : () -> Bool,
+  title_style? : @ui.TextStyle,
+  danger? : Bool = false,
+  control? : (@view.View) -> Unit,
 ) -> Unit {
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
   let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
   let titled_in = if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in }
+  let (titled, titled_in) = if danger { (titled.then(bad), titled_in.then(bad)) } else { (titled, titled_in) }
   // (its chevron: down where it folds what follows it, up while that is open, as link_row's `folds`)
   let mark = fn() {
     match (out, folds) {
@@ -508,7 +514,7 @@ pub fn link_row_node(
       (false, None) => "chevron-right"
     }
   }
-  let ends = goes && (out || (chevron && !acts))
+  let ends = goes && (out || (chevron && !acts && control is None))
   if look_node(parent) is Wide {
     // (its note as a wide page says it, where it says it otherwise: `wide_note`)
     let note = match wide_note {
@@ -517,7 +523,7 @@ pub fn link_row_node(
     }
     wide_link_row_node(
       parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
-      note_cut, title_after, title_after_shown, folds,
+      note_cut, title_after, title_after_shown, folds, title_style, danger, control,
     )
     return
   }
@@ -624,6 +630,10 @@ pub fn link_row_node(
         if ends {
           icon_node(first, mark(), pg_chevron, By(fn() { theme().p.subtle }), name_now=mark) |> ignore
         }
+        match control {
+          Some(f) => row_end_node(first, f, under, Narrow)
+          None => ()
+        }
       })
       |> ignore
       words.show(fn() { note() != "" }, fn(n) {
@@ -639,6 +649,46 @@ pub fn link_row_node(
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What is done at a row's end (link_row_node's `control`), `make` making it in `first`, the row's first line: on that
+/// line where lines are under it (`under`: as high as it, line_end's, what is made across its middle), else across the
+/// row's middle; a button of words alone there standing its words where the row's value would end (at_row_end_node).
+fn row_end_node(first : @view.View, make : (@view.View) -> Unit, under : () -> Bool, look : Look) -> Unit {
+  first.box(fn(e) {
+    e
+    .row(Is(true))
+    .gap(Is(12.0))
+    .lines_up(Is(Some(Middle)))
+    .height(By(fn() {
+      if under() {
+        let t = @ui.tree_theme()
+        let line = match look {
+          Narrow => t.text_size(Body).1
+          Wide => t.leading(L6).unwrap_or(t.text_size(Ui).1)
+        }
+        e.words_redone() |> ignore
+        Some(@ui.current().sp(line))
+      } else {
+        None
+      }
+    }))
+    .lends(row_end_at, true)
+    |> ignore
+    make(e)
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: what each row's end lends (View::lends), let go with it
+let row_end_at : @view.Lent[Bool] = @view.Lent::new()
+
+///|
+/// Whether node `v` stands at a row's end (row_end_node's: at_row_end's, as a node).
+fn at_row_end_node(v : @view.View) -> Bool {
+  v.lent(row_end_at).unwrap_or(false)
 }
 
 ///|
@@ -687,7 +737,14 @@ let status_dot_side : Double = 7.0
 /// press: `turn` told what it is to be (the caller says it so: `on` follows it), a light tick felt under a finger. Its
 /// knob slides to its side (switch_ms, eased out) and its track's colour with it, from where it is at that moment;
 /// held by a finger, the knob a lens growing as a lift does. In the room a finger's press takes round it, up and down.
-pub fn switch_node(parent : @view.View, on : () -> Bool, turn : (Bool) -> Unit, label : () -> String) -> Unit {
+/// `small`: a setting's control's size (switch's `small`: switch_size).
+pub fn switch_node(
+  parent : @view.View,
+  on : () -> Bool,
+  turn : (Bool) -> Unit,
+  label : () -> String,
+  small? : Bool = false,
+) -> Unit {
   parent.box(fn(at) {
     at.lines_up(Is(Some(Start))) |> ignore
     at.box(fn(v) {
@@ -720,10 +777,7 @@ pub fn switch_node(parent : @view.View, on : () -> Bool, turn : (Bool) -> Unit, 
         drag=fn(d) { if d.kind == Up && on_it(d) { press() } },
       )
       |> ignore
-      let size = fn() {
-        let r = theme().rows
-        (r.switch_w, r.switch_h)
-      }
+      let size = fn() { switch_size(small) }
       v.box(fn(track) {
         track
         .width(By(fn() { Some(size().0) }))

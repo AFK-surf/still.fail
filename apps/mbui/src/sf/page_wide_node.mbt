@@ -396,10 +396,20 @@ fn wide_link_row_node(
   title_after : ((@view.View) -> Unit)?,
   title_after_shown : () -> Bool,
   folds : (() -> Bool)?,
+  title_style : @ui.TextStyle?,
+  danger : Bool,
+  control : ((@view.View) -> Unit)?,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
-  let titled = if strong { desk_list_title.then(row_strong) } else { desk_list_title }
+  // (its title's size and the rest `title_style`'s where it says one (a setting's: setting_title), its weight a row
+  // title's: link_row's)
+  let title_look = match title_style {
+    Some(s) => s.then(row_title_weight)
+    None => desk_list_title
+  }
+  let titled = if strong { title_look.then(row_strong) } else { title_look }
+  let titled = if danger { titled.then(bad) } else { titled }
   parent.box(fn(r) {
     r
     .row(Is(true))
@@ -476,6 +486,10 @@ fn wide_link_row_node(
         if ends {
           icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore
         }
+        match control {
+          Some(f) => row_end_node(first, f, under, Wide)
+          None => ()
+        }
       })
       |> ignore
       words.show(fn() { note() != "" }, fn(n) {
@@ -493,10 +507,8 @@ fn wide_link_row_node(
 }
 
 ///|
-/// A switch's row on a wide page (switch_row's, wide): its title, `note` quieter under it (the theme's rows'), the
-/// switch at its end across their middle, 16 apart; on a list's card (part_of) a row of it (wide_in_list: as far in as
-/// its rows' words, 10 over and under, as high as one at least, its corner concentric with the card's), its title as
-/// strong as the list's other rows' (setting_title). The switch alone answers.
+/// A switch's row on a wide page (switch_row's, wide): wide_control_row_node's, the switch its control. The switch
+/// alone answers.
 fn wide_switch_row_node(
   parent : @view.View,
   title : () -> String,
@@ -505,15 +517,35 @@ fn wide_switch_row_node(
   note : () -> String,
 ) -> Unit {
   let at = part_of(parent)
+  wide_control_row_node(parent, title, note, fn() { if at.list { setting_title() } else { theme().rows.title } }, fn(r) {
+    switch_node(r, on, turn, title)
+  })
+}
+
+///|
+/// A row on a wide page with a control at its end (control_row's): its title (`titled`), `note` quieter under it (the
+/// theme's rows'), what `control` makes at its end across their middle, 16 apart; on a list's card (part_of) a row of
+/// it (wide_in_list: as far in as its rows' words, 10 over and under, as high as one at least, its corner concentric
+/// with the card's, what is in it cut to it: the corner its control stands in, as an old view's row of a corner said
+/// Inner is). What the control makes stands as in a section (no room of its own under it): the row's.
+fn wide_control_row_node(
+  parent : @view.View,
+  title : () -> String,
+  note : () -> String,
+  titled : () -> @ui.TextStyle,
+  control : (@view.View) -> Unit,
+) -> Unit {
+  let at = part_of(parent)
   let row = fn(r : @view.View) {
     r.row(Is(true)).gap(Is(16.0)).lines_up(Is(Some(Middle))) |> ignore
     r.box(fn(words) {
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(desk_list_gap)) |> ignore
-      words_node(words, title, fn() { if at.list { setting_title() } else { theme().rows.title } }) |> ignore
+      words_node(words, title, titled) |> ignore
       words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { theme().rows.note }) |> ignore })
     })
     |> ignore
-    switch_node(r, on, turn, title)
+    r.lends(part_at, { ..at, section: true }) |> ignore
+    control(r)
   }
   if at.list {
     parent.box(fn(cell) {
@@ -521,6 +553,7 @@ fn wide_switch_row_node(
       .padding(Is((text_in, text_in, text_in, text_in)))
       .lies_along(Is(Middle))
       .radius(Is(inner_corner(list_card_corner, list_pad)))
+      .clips(Is(true))
       .min_height(By(fn() { Some(theme().items.least) }))
       |> ignore
       cell.box(row) |> ignore

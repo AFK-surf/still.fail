@@ -235,7 +235,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Appearance | Me) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -262,6 +262,16 @@ fn pane_made(
       // (recording while it is the one on top of the stack: its stay there, stint's)
       made("shortcuts", fn(a, core, _here, stint, frame, width) {
         @sfpages.shortcuts_node(a, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stint() }, width~)
+      })
+    // (the settings come to beside their list as well: its first row's page, settings_landing)
+    Setting(Me) | Settings =>
+      // (its pictures asked for again each time it is come back to, not each frame it stays: nav_flat_view's stint)
+      made("me", fn(a, core, here, stint, frame, width) {
+        @sfpages.me_node(a, core, here, on_back=core.pop, frame~, stint~, width~)
+      })
+    Setting(Appearance) =>
+      made("appearance", fn(a, core, _here, _stint, frame, width) {
+        @sfpages.appearance_node(a, core, on_back=core.pop, frame~, width~)
       })
     Setting(Usage) =>
       made("usage", fn(a, core, here, _stint, frame, width) {

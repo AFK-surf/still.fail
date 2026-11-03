@@ -6,20 +6,45 @@
 // asked first (@sf.confirm).
 
 ///|
-/// 账号 (AccountSettings, MeScreen).
-pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let look = look_of(c)
-  let name = if here.person != "" { here.person } else { here.email }
-  let how = if here.sub.has_prefix("em-") || here.sub.has_prefix("pw-") {
-    @sf.t("web-pages.settings.account.email")
-  } else {
-    @sf.t("web-pages.settings.account.google")
+/// 账号 (AccountSettings, MeScreen) made once as nodes in node `v`, laid out by the `width` its frame gives it (narrow
+/// where none is given): the accounts on this device on one card (the one in view first with who it is, signed out of
+/// at its end; the others each signed out of by itself; another added), where it is signed in, deleting it at the foot;
+/// all followed as the core says it. `here`: who and where, as that changes; `stint`: the page's time on top, what the
+/// pictures are asked for on. What it says of itself told `said`.
+pub fn me_node(
+  v : @view.View,
+  core : Core,
+  here : () -> Here,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  stint~ : () -> Int,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+) -> Unit {
+  let name = fn() {
+    let h = here()
+    if h.person != "" {
+      h.person
+    } else {
+      h.email
+    }
   }
-  let accounts = match (core.topic)("accounts", Map::new()).value {
-    Some(Array(a)) => a
-    _ => []
+  let how = fn() {
+    let sub = here().sub
+    if sub.has_prefix("em-") || sub.has_prefix("pw-") {
+      @sf.t("web-pages.settings.account.email")
+    } else {
+      @sf.t("web-pages.settings.account.google")
+    }
   }
-  let others = accounts.filter(fn(a) { text(Some(a), "sub") != here.sub })
+  let others = fn() {
+    let sub = here().sub
+    match (core.topic)("accounts", Map::new()).value {
+      Some(Array(a)) => a.filter(fn(a) { text(Some(a), "sub") != sub })
+      _ => []
+    }
+  }
+  let picture = fn(p : String) { if p == "" { "" } else { (core.picture)(p, stint()) } }
   // signing out of one: asked first, then the chats (the account in view goes with it)
   let sign_out = fn(sub : String, email : String) {
     @sf.confirm(
@@ -27,7 +52,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
       @sf.t("web-pages.settings.account.signOutConfirmBody"),
       @sf.t("web-pages.settings.account.signOutAction"),
       fn() {
-        if sub == here.sub {
+        if sub == here().sub {
           (core.home)()
         }
         @settings.act(
@@ -41,9 +66,10 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
     )
   }
   let delete = fn() {
+    let h = here()
     @sf.confirm(
       @sf.t("web-pages.settings.account.delete"),
-      @sf.t("web-pages.settings.account.deleteConfirmBody", args=[("email", here.email)]),
+      @sf.t("web-pages.settings.account.deleteConfirmBody", args=[("email", h.email)]),
       @sf.t("web-pages.settings.account.deleteAction"),
       danger=true,
       fn() {
@@ -52,132 +78,190 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
           core,
           @sf.t("web-pages.settings.account.deleteAction"),
           "auth.deleteAccount",
-          obj([("account", str(here.sub))]),
-          done=@sf.t("web-pages.settings.account.deleted", args=[("email", here.email)]),
+          obj([("account", str(h.sub))]),
+          done=@sf.t("web-pages.settings.account.deleted", args=[("email", h.email)]),
         )
       },
     )
   }
-  let blocks : Array[() -> Unit] = []
-  // the accounts on this device on one card (Me.tsx): the one in view with who it is, then the others, each signed out
-  // of by itself, another added
-  blocks.push(fn() {
-    @sf.group(c, fn() {
-      @sf.link_row(
-        c,
-        "",
-        name,
-        note=here.email + " · " + how,
-        strong=true,
-        goes=false,
-        lead=fn() { avatar(c, core, here.email, name, acc_picture, picture=here.picture) },
-        control=fn() {
-          let words = if others.length() > 0 {
-            @sf.t("android-settings.me.signOut")
-          } else {
-            @sf.t("android-settings.me.signOutOnly")
-          }
-          if @sf.button(c, words, key="sign-out/" + here.sub, tone=Ghost) {
-            sign_out(here.sub, here.email)
-          }
-        },
-      )
-      |> ignore
-      for a in others {
-        let sub = text(Some(a), "sub")
-        let email = text(Some(a), "email")
-        let shown = if text(Some(a), "name") != "" { text(Some(a), "name") } else { email }
-        // each with their face, as the one in view
-        let lead = fn() { avatar(c, core, email, shown, acc_picture, picture=text(Some(a), "picture")) }
-        @sf.link_row(c, "", email, goes=false, lead~, control=fn() {
-          if @sf.button(c, @sf.t("android-settings.me.signOut"), key="sign-out/" + sub, tone=Ghost) {
-            sign_out(sub, email)
-          }
+  @sf.page_node(v, fn() { @sf.t("android-settings.me.title") }, on_back~, frame~, said?, width?, fn() {
+    ["accounts", "sessions", "delete"]
+  }, fn(b, key) {
+    match key {
+      // the accounts on this device on one card (Me.tsx): the one in view with who it is, then the others, each signed
+      // out of by itself, another added
+      "accounts" =>
+        @sf.group_node(b, fn(g) {
+          @sf.link_row_node(
+            g,
+            name,
+            fn() {  },
+            note=fn() { here().email + " · " + how() },
+            strong=true,
+            goes=false,
+            lead=LeadMade(fn(l) {
+              @sf.avatar_node(l, fn() { here().email }, name, fn() { picture(here().picture) }, acc_picture)
+            }),
+            control=fn(e) {
+              @sf.button_node(
+                e,
+                fn() {
+                  if others().length() > 0 {
+                    @sf.t("android-settings.me.signOut")
+                  } else {
+                    @sf.t("android-settings.me.signOutOnly")
+                  }
+                },
+                fn() {
+                  let h = here()
+                  sign_out(h.sub, h.email)
+                },
+                tone=Ghost,
+              )
+              |> ignore
+            },
+          )
+          g.each(others, fn(a) { text(Some(a), "sub") }, fn(r, a) {
+            let at = fn() { Some(a.get()) }
+            let email = fn() { text(at(), "email") }
+            let shown = fn() { if text(at(), "name") != "" { text(at(), "name") } else { email() } }
+            // (each with their face, as the one in view)
+            @sf.link_row_node(
+              r,
+              email,
+              fn() {  },
+              goes=false,
+              lead=LeadMade(fn(l) { @sf.avatar_node(l, email, shown, fn() { picture(text(at(), "picture")) }, acc_picture) }),
+              control=fn(e) {
+                @sf.button_node(e, fn() { @sf.t("android-settings.me.signOut") }, fn() {
+                  sign_out(text(@signals.untracked(at), "sub"), @signals.untracked(email))
+                }, tone=Ghost)
+                |> ignore
+              },
+            )
+          })
+          @sf.link_row_node(g, fn() { @sf.t("android-settings.me.addAccount") }, fn() { (core.sign_in)() }, chevron=false)
         })
-        |> ignore
-      }
-      if @sf.link_row(c, "add-account", @sf.t("android-settings.me.addAccount"), chevron=false) {
-        (core.sign_in)()
-      }
-    })
+      "sessions" =>
+        @sf.section_node(
+          b,
+          fn() { @sf.t("web-pages.settings.account.sessions") },
+          note=fn() { @sf.t("web-pages.settings.account.sessionsLead", args=[("name", "still.fail")]) },
+          fn(sec) { acc_devices_node(sec, core, here) },
+        )
+      // deleting the account in view, at the foot, in red (Me.tsx)
+      _ =>
+        @sf.group_node(b, fn(g) {
+          @sf.link_row_node(g, fn() { @sf.t("android-settings.me.delete") }, delete, danger=true, chevron=false)
+        })
+    }
   })
-  blocks.push(fn() {
-    @sf.section(c, @sf.t("web-pages.settings.account.sessions"), heads=true, note=@sf.t("web-pages.settings.account.sessionsLead", args=[("name", "still.fail")]), fn() {
-      acc_devices(c, core, here)
-    })
-  })
-  // deleting the account in view, at the foot, in red (Me.tsx)
-  blocks.push(fn() {
-    @sf.group(c, fn() {
-      if @sf.link_row(c, "delete-account", @sf.t("android-settings.me.delete"), danger=true, chevron=false) {
-        delete()
-      }
-    })
-  })
-  @sf.page(c, on_back=core.pop, frame~, "me", @sf.t("android-settings.me.title"), blocks)
 }
 
 ///|
-/// Where the account is signed in (the `loginSessions` topic): each device's name (this one marked 当前), when it signed
-/// in and until when; 退出 on the others (`loginSession.revoke`). Narrow, on a card. Read the first time, rows' shapes
-/// where their card's rows will be (settings.tsx: Waiting, 3).
-fn acc_devices(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let topic = (core.topic)("loginSessions", { "account": str(here.sub) })
-  let list = match topic.value {
-    Some(Array(a)) => a
-    _ => {
-      match topic.error {
-        Some(e) => @sf.page_note(c, @sf.t("web-pages.settings.account.sessionsFailed", args=[("error", error_text(e))]), bad=true)
-        None => @sf.waiting(c, fn() { devices_list(c, core.quiet(), here, devices_sample()) }, text=@sf.t("common.reading"))
-      }
-      return
+/// Where the account is signed in (the `loginSessions` topic) as nodes in `v`: each device's row (devices_node); its
+/// error said in red where it has one; read the first time, rows' shapes where their card's rows will be (settings.tsx:
+/// Waiting, 3).
+fn acc_devices_node(v : @view.View, core : Core, here : () -> Here) -> Unit {
+  let topic = fn() { (core.topic)("loginSessions", { "account": str(here().sub) }) }
+  let list = fn() {
+    match topic().value {
+      Some(Array(a)) => Some(a)
+      _ => None
     }
   }
-  devices_list(c, core, here, list)
+  let failed = fn() {
+    match topic().error {
+      Some(e) => @sf.t("web-pages.settings.account.sessionsFailed", args=[("error", error_text(e))])
+      None => ""
+    }
+  }
+  v.pick(fn() { if list() is Some(_) { 0 } else if failed() != "" { 1 } else { 2 } }, fn(p, which) {
+    match which {
+      0 => devices_node(p, core, here, fn() { list().unwrap_or([]) })
+      1 => @sf.page_note_node(p, failed, bad=fn() { true })
+      _ =>
+        @sf.waiting_node(p, fn(s) { devices_node(s, core.quiet(), here, devices_sample) }, note=fn() {
+          { reading: true, text: @sf.t("common.reading"), failing: [] }
+        })
+    }
+  })
 }
 
 ///|
-/// The devices the account is signed in on (`list`): each a row of its own, its name (当前 after it on this one), 退出
-/// at its end on the others, when it signed in and until when under them.
-fn devices_list(c : @ui.Ctx, core : Core, here : Here, list : Array[Json]) -> Unit {
-  @sf.group(c, fn() {
-    for d in list {
-      let dv = Some(d)
-      let id = text(dv, "id")
-      let current = flag(dv, "current")
-      let name = match text(dv, "name") {
-        "" => @sf.t("web-pages.settings.account.unnamedDevice")
-        n => n
-      }
-      let times = @sf.t("web-pages.settings.account.sessionTimes", args=[("time", stamp(dv, "created_at", "ago")), ("until", stamp(dv, "expires_at", "until"))])
-      @sf.link_row(
-        c,
-        "device/" + id,
-        name,
-        note=times,
+/// The devices the account is signed in on (`list`) as nodes in `v`, on a card: each a row of its own by its id, its
+/// name (当前 after it on this one), 退出 at its end on the others (`loginSession.revoke`), when it signed in and until
+/// when under them.
+fn devices_node(v : @view.View, core : Core, here : () -> Here, list : () -> Array[Json]) -> Unit {
+  @sf.group_node(v, fn(g) {
+    g.each(list, fn(d) { text(Some(d), "id") }, fn(r, d) {
+      let dv = fn() { Some(d.get()) }
+      let id = text(@signals.untracked(dv), "id")
+      let current = fn() { flag(dv(), "current") }
+      @sf.link_row_node(
+        r,
+        fn() {
+          match text(dv(), "name") {
+            "" => @sf.t("web-pages.settings.account.unnamedDevice")
+            n => n
+          }
+        },
+        fn() {  },
+        note=fn() {
+          @sf.t("web-pages.settings.account.sessionTimes", args=[
+            ("time", stamp(dv(), "created_at", "ago")),
+            ("until", stamp(dv(), "expires_at", "until")),
+          ])
+        },
         goes=false,
-        title_after?=if current { Some(fn() { you(c, @sf.t("web-pages.settings.account.here")) }) } else { None },
-        control?=if current {
-          None
-        } else {
-          Some(fn() {
-            let revoking = is_doing(core, ["loginSession.revoke"], [("id", id)])
-            if @sf.button(c, @sf.t("web-pages.settings.account.revoke"), key="revoke/" + id, tone=Ghost, busy=revoking) {
-              @settings.act(
-                core,
-                @sf.t("web-pages.settings.account.revoke"),
-                "loginSession.revoke",
-                obj([("id", str(id)), ("account", str(here.sub))]),
-                done=@sf.t("web-pages.settings.account.revoked"),
-              )
-            }
+        title_after=fn(a) { you_node(a, fn() { @sf.t("web-pages.settings.account.here") }) },
+        title_after_shown=current,
+        control=fn(e) {
+          e.show(fn() { !current() }, fn(k) {
+            @sf.button_node(
+              k,
+              fn() { @sf.t("web-pages.settings.account.revoke") },
+              fn() {
+                @settings.act(
+                  core,
+                  @sf.t("web-pages.settings.account.revoke"),
+                  "loginSession.revoke",
+                  obj([("id", str(id)), ("account", str(@signals.untracked(here).sub))]),
+                  done=@sf.t("web-pages.settings.account.revoked"),
+                )
+              },
+              tone=Ghost,
+              busy=fn() { is_doing(core, ["loginSession.revoke"], [("id", id)]) },
+            )
+            |> ignore
           })
         },
       )
-      |> ignore
-    }
+    })
   })
 }
+
+///|
+/// A word in the accent's wash as a node (@settings.you's: 当前), `words` as it says it now.
+fn you_node(parent : @view.View, words : () -> String) -> Unit {
+  parent.box(fn(w) {
+    w.padding(Is((you_in, 0.0, you_in, 0.0))).radius(By(fn() { @ui.tree_theme().corner(Md) })).ground(By(fn() {
+      @ui.tree_theme().color(AccentBg)
+    }))
+    |> ignore
+    @sf.words_node(w, words, fn() { you_words }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// You's wash: 6 in at its sides (px=S1_5).
+let you_in : Double = 6.0
+
+///|
+/// Small words in the accent's ink (@settings.you's).
+// kept across runs: a value (no field of it changes)
+let you_words : @ui.TextStyle = @sf.caption.then(@ui.text_style(color=AccentText))
 
 ///|
 let acc_picture : Double = @sf.identity_mark

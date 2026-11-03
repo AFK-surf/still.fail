@@ -72,6 +72,11 @@ pub fn button_node(
       }
     }
     let gap = fn() { if theme().touch { 8.0 } else { 6.0 } }
+    // (one of words alone at a row's end: its words where the row's value would end, its ground reaching past them,
+    // button's `reach`)
+    if (tone == Ghost || tone == GhostDanger) && icon == "" && at_row_end_node(parent) {
+      v.margin(Is((0.0, 0.0, -button_padx, 0.0))) |> ignore
+    }
     v
     .row(Is(true))
     .height(Is(Some(height)))

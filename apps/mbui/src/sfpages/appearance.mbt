@@ -6,108 +6,175 @@
 // 归档's (archiving.mbt), as the web's.
 
 ///|
-/// The page (AppearancePage, AppearanceScreen), in the frame it is given.
-pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
-  let look = look_of(c)
-  let prefs = (core.topic)("prefs", Map::new()).value
-  // a choice of a few (Segmented, Seg), its kept value or the one just chosen while the core takes it
-  let choice = fn(key : String, options : Array[(String, String)], now : String) {
-    let at = options.search_by(fn(o) { o.0 == now }).unwrap_or(0)
-    let picked = @sf.page_choice(c, "appearance/" + key, options.map(fn(o) { @sf.t(o.1) }), at)
-    if picked != at {
-      // another theme picked: it spreads from where it was picked (mbui reveal.mbt)
-      if key == "appearance" {
-        let (x, y, _) = c.pointer()
-        c.tell("appearance/reveal", fn() { c.reveal_from(x, y, dark=fn() { @sf.theme().dark }) })
-      }
-      c.after_build("appearance/" + key, fn() { @settings.set_pref(core, key, options[picked].0) })
+/// 外观 (AppearancePage, AppearanceScreen) made once as nodes in node `v`, laid out by the `width` its frame gives it
+/// (narrow where none is given): its settings (settings_node: wide, one list card; narrow, a section each), each choice
+/// the core's prefs as they are now, set as it is chosen. Another theme chosen spreads from where it was chosen (mbui
+/// reveal.mbt). What it says of itself told `said`.
+pub fn appearance_node(
+  v : @view.View,
+  core : Core,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+) -> Unit {
+  let look = fn() {
+    match width {
+      Some(w) => @sf.look_for(w())
+      None => Narrow
     }
   }
-  let settings : Array[() -> Unit] = [
-    fn() {
-      @sf.setting(c, @sf.t("web-pages.appearance.theme.title"), note=@sf.t("web-pages.appearance.theme.description"), fn() {
-        choice(
-          "appearance",
-          [("system", "web-main.appearance.system"), ("light", "web-main.appearance.light"), ("dark", "web-main.appearance.dark")],
-          @settings.appearance(prefs),
-        )
-      })
-    },
-    // the faces chosen, opening their page (a chat as they set it and their list are a page's own, on every screen)
-    fn() {
-      if @sf.setting_link(
-          c,
-          "appearance/fonts",
-          @sf.t("web-pages.appearance.fonts.title"),
-          fonts_said(prefs),
-          note=@sf.t("web-pages.appearance.fonts.description"),
-        ) {
-        (core.push)(Fonts)
+  let prefs = fn() { (core.topic)("prefs", Map::new()).value }
+  // (the rail changed where it is: laid out wide, where the rail is beside the page, the web's wideOnly; the window's
+  // zoom where the host has one; files dragged in where they can be: @ui.takes_drops)
+  let keys = fn() {
+    let keys = ["theme", "fonts", "motion", "haptics", "language"]
+    if @ui.window_zoom_supported() {
+      keys.push("zoom")
+    }
+    if @ui.takes_drops() {
+      keys.push("drop")
+    }
+    if look() is Wide {
+      keys.push("rail")
+    }
+    keys
+  }
+  // a choice of a few (Segmented, Seg): its kept value or the one just chosen while the core takes it
+  let choice = fn(
+    p : @view.View,
+    key : String,
+    options : Array[(String, String)],
+    now : () -> String,
+  ) {
+    let at = fn() { options.search_by(fn(o) { o.0 == now() }).unwrap_or(0) }
+    @sf.page_choice_node(p, fn() { options.map(fn(o) { @sf.t(o.1) }) }, at, fn(i) {
+      if i == @signals.untracked(at) || i < 0 || i >= options.length() {
+        return
       }
-    },
-    fn() {
-      @sf.setting(c, @sf.t("web-pages.appearance.motion.title"), note=@sf.t("web-pages.appearance.motion.description"), fn() {
-        choice(
-          "motion",
-          [("", "web-pages.appearance.motion.system"), ("reduce", "web-pages.appearance.motion.reduce"), ("full", "web-pages.appearance.motion.full")],
-          @settings.pref(core, "motion"),
-        )
-      })
-    },
-    // haptics, all of them (on unless turned off: @ui.set_haptics, app_frame.mbt)
-    fn() {
-      let title = @sf.t("web-pages.appearance.haptics.title")
-      @sf.setting(c, title, note=@sf.t("web-pages.appearance.haptics.description"), fn() {
-        let on = @settings.pref(core, "haptics") != "off"
-        let now = @sf.switch(c, "appearance/haptics", on, label=title, small=true)
-        if now != on {
-          c.tell("appearance/haptics", fn() { @settings.set_pref(core, "haptics", if now { "" } else { "off" }) })
-        }
-      })
-    },
-    fn() {
-      @sf.setting(c, @sf.t("common.language"), note=@sf.t("web-pages.appearance.language.description"), fn() {
-        choice("language", [("", "common.language.system"), ("zh", "common.language.zh"), ("en", "common.language.en")], @settings.pref(core, "language"))
-      })
-    },
-  ]
-  if @ui.window_zoom_supported() {
-    settings.push(fn() {
-      let zoom = @settings.pref(core, "windowZoom")
-      let label = if zoom == "" { "100%" } else { zoom + "%" }
-      let id = c.id("appearance/window-zoom")
-      @sf.setting(c, @sf.t("desktop.menu.zoom"), fn() {
-        if @sf.button(c, label, key="appearance/window-zoom") {
-          let choices = @sfbase.window_zoom_levels.map(fn(z) {
-            @sf.choice(z.0, (if z.0 == "" { "100" } else { z.0 }) + "%")
+      // (another theme chosen: it spreads from where it was chosen)
+      if key == "appearance" {
+        let c = @ui.current()
+        let (x, y, _) = c.pointer()
+        c.reveal_from(x, y, dark=fn() { @sf.theme().dark })
+      }
+      @settings.set_pref(core, key, options[i].0)
+    })
+  }
+  @sf.page_node(v, fn() { @sf.t("web-pages.appearance.title") }, on_back~, frame~, said?, width?, fn() {
+    @sf.settings_blocks(look(), keys())
+  }, fn(b, block) {
+    @sf.settings_node(b, block, keys, fn(r, key) {
+      match key {
+        "theme" =>
+          @sf.setting_node(
+            r,
+            fn() { @sf.t("web-pages.appearance.theme.title") },
+            note=fn() { @sf.t("web-pages.appearance.theme.description") },
+            fn(p) {
+              choice(
+                p,
+                "appearance",
+                [("system", "web-main.appearance.system"), ("light", "web-main.appearance.light"), ("dark", "web-main.appearance.dark")],
+                fn() { @settings.appearance(prefs()) },
+              )
+            },
+          )
+        // (the faces chosen, opening their page: a chat as they set it and their list are a page's own)
+        "fonts" =>
+          @sf.setting_link_node(
+            r,
+            fn() { @sf.t("web-pages.appearance.fonts.title") },
+            fn() { fonts_said(prefs()) },
+            fn() { (core.push)(Fonts) },
+            note=fn() { @sf.t("web-pages.appearance.fonts.description") },
+          )
+        "motion" =>
+          @sf.setting_node(
+            r,
+            fn() { @sf.t("web-pages.appearance.motion.title") },
+            note=fn() { @sf.t("web-pages.appearance.motion.description") },
+            fn(p) {
+              choice(
+                p,
+                "motion",
+                [("", "web-pages.appearance.motion.system"), ("reduce", "web-pages.appearance.motion.reduce"), ("full", "web-pages.appearance.motion.full")],
+                fn() { @settings.pref(core, "motion") },
+              )
+            },
+          )
+        // (haptics, all of them: on unless turned off, @ui.set_haptics, app_frame.mbt)
+        "haptics" => {
+          let title = fn() { @sf.t("web-pages.appearance.haptics.title") }
+          @sf.setting_node(r, title, note=fn() { @sf.t("web-pages.appearance.haptics.description") }, fn(p) {
+            @sf.switch_node(
+              p,
+              fn() { @settings.pref(core, "haptics") != "off" },
+              fn(now) { @settings.set_pref(core, "haptics", if now { "" } else { "off" }) },
+              title,
+              small=true,
+            )
           })
-          @sf.pick(@sf.t("desktop.menu.zoom"), choices, zoom, fn(value) {
-            @settings.set_pref(core, "windowZoom", value)
-          }, from=Of(id), search=false)
         }
-      })
+        "language" =>
+          @sf.setting_node(
+            r,
+            fn() { @sf.t("common.language") },
+            note=fn() { @sf.t("web-pages.appearance.language.description") },
+            fn(p) {
+              choice(
+                p,
+                "language",
+                [("", "common.language.system"), ("zh", "common.language.zh"), ("en", "common.language.en")],
+                fn() { @settings.pref(core, "language") },
+              )
+            },
+          )
+        // (the window's zoom, picked beside its key)
+        "zoom" =>
+          @sf.setting_node(r, fn() { @sf.t("desktop.menu.zoom") }, fn(p) {
+            let zoom = fn() { @settings.pref(core, "windowZoom") }
+            let key : Ref[@view.View?] = Ref(None)
+            key.val = Some(
+              @sf.button_node(p, fn() { if zoom() == "" { "100%" } else { zoom() + "%" } }, fn() {
+                let choices = @sfbase.window_zoom_levels.map(fn(z) {
+                  @sf.choice(z.0, (if z.0 == "" { "100" } else { z.0 }) + "%")
+                })
+                let (x, y, w, h) = key.val.map(fn(k) { k.placed_window_now() }).unwrap_or((0.0, 0.0, 0.0, 0.0))
+                @sf.pick(
+                  @sf.t("desktop.menu.zoom"),
+                  choices,
+                  @signals.untracked(zoom),
+                  fn(value) { @settings.set_pref(core, "windowZoom", value) },
+                  from=At(x, y, w, h),
+                  search=false,
+                )
+              }),
+            )
+          })
+        // (files dragged into a chat from outside: named by their path (the default), or sent as files)
+        "drop" =>
+          @sf.setting_node(
+            r,
+            fn() { @sf.t("web-pages.appearance.drop.title") },
+            note=fn() { @sf.t("web-pages.appearance.drop.description") },
+            fn(p) {
+              choice(
+                p,
+                "dropAs",
+                [("", "web-pages.appearance.drop.path"), ("file", "web-pages.appearance.drop.file")],
+                fn() { @settings.pref(core, "dropAs") },
+              )
+            },
+          )
+        // (the rail, changed where it is: rail.mbt)
+        _ =>
+          @sf.setting_node(r, fn() { @sf.t("web-main.rail.title") }, note=fn() { @sf.t("web-main.rail.lead") }, fn(p) {
+            @sf.button_node(p, fn() { @sf.t("web-main.rail.customize") }, @sfbase.edit_rail) |> ignore
+          })
+      }
     })
-  }
-  // files dragged into a chat from outside (where they can be: @ui.takes_drops): named by their path (the default), or
-  // sent as files
-  if @ui.takes_drops() {
-    settings.push(fn() {
-      @sf.setting(c, @sf.t("web-pages.appearance.drop.title"), note=@sf.t("web-pages.appearance.drop.description"), fn() {
-        choice("dropAs", [("", "web-pages.appearance.drop.path"), ("file", "web-pages.appearance.drop.file")], @settings.pref(core, "dropAs"))
-      })
-    })
-  }
-  // the rail, changed where it is (rail.mbt): laid out wide, where the rail is beside the page (the web's wideOnly)
-  if look == Wide {
-    settings.push(fn() {
-      @sf.setting(c, @sf.t("web-main.rail.title"), note=@sf.t("web-main.rail.lead"), fn() {
-        if @sf.button(c, @sf.t("web-main.rail.customize"), key="appearance/rail") {
-          @sfbase.edit_rail()
-        }
-      })
-    })
-  }
-  @sf.page(c, on_back=core.pop, frame~, "appearance", @sf.t("web-pages.appearance.title"), @sf.settings(c, settings))
+  })
 }
 
 ///|

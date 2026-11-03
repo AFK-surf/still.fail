@@ -342,7 +342,7 @@ fn tape_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Appearance | Me) =>
           tape_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -359,6 +359,17 @@ fn tape_made(
         @sfpages.shortcuts_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, active=fn() {
           app.nav.top_stay().1 == stint()
         }, said=told, width~)
+      })
+    // (the settings come to beside their list as well: its first row's page, settings_landing)
+    Setting(Me) | Settings if pane_makes.val =>
+      made("me", fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        @sfpages.me_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~)
+      })
+    Setting(Appearance) if pane_makes.val =>
+      made("appearance", fn(p, core, _here, _stint, told, _acts) {
+        context_node(p)
+        @sfpages.appearance_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
     Setting(Usage) if pane_makes.val =>
       made("usage", fn(p, core, here, _stint, told, acts) {
