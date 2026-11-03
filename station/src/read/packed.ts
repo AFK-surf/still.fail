@@ -11,10 +11,8 @@
 // `segmentHistories`).
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import { type FileHandle, open } from "node:fs/promises";
-import { promisify } from "node:util";
-import { zstdDecompress, zstdDecompressSync } from "node:zlib";
-
-const unzstd = promisify(zstdDecompress);
+import { Readable } from "node:stream";
+import { createZstdDecompress, zstdDecompressSync } from "node:zlib";
 
 /// How much of a transcript a frame holds.
 export const SEGMENT = 16 << 20;
@@ -25,6 +23,8 @@ const STORED = 0xe0;
 const SKIPPABLE = 0x184d2a5e;
 const SEEKABLE = 0x8f92eab1;
 const FOOTER = 9;
+const FRAME_INPUT = 64 << 10;
+const FRAME_OUTPUT = 256 << 10;
 
 /// A frame of a put-away transcript: where it is in the file (`at`, `packed` bytes) and what it holds of the transcript
 /// (`size` bytes from `from`).
@@ -114,8 +114,86 @@ export async function writtenLength(path: string): Promise<number | null> {
   }
 }
 
-/// What a put-away transcript holds from `from` on (as written), a segment's worth at a time, decompressed off the
-/// thread that asks; null when it has no table (it is to be read whole).
+// Node's streaming zstd decoder can end quietly when a frame is cut after its last output byte but before its checksum.
+// Follow its headers as the bytes pass instead of reading the whole frame first; the decoder still verifies the checksum.
+class FrameEnd {
+  #state: "descriptor" | "header" | "block" | "body" | "checksum" | "done" = "descriptor";
+  #small = Buffer.alloc(5);
+  #have = 0;
+  #left = 0;
+  #last = false;
+  #checksummed = false;
+
+  add(bytes: Buffer): void {
+    for (let pos = 0; pos < bytes.length;) {
+      if (this.#state === "done") throw new Error("a put-away transcript frame has trailing bytes");
+      if (this.#state === "descriptor" || this.#state === "block") {
+        const need = this.#state === "descriptor" ? 5 : 3;
+        const n = Math.min(need - this.#have, bytes.length - pos);
+        bytes.copy(this.#small, this.#have, pos, pos + n);
+        pos += n;
+        this.#have += n;
+        if (this.#have < need) continue;
+        this.#have = 0;
+        if (this.#state === "descriptor") {
+          if (this.#small.readUInt32LE(0) !== FRAME_MAGIC) throw new Error("not a zstd frame");
+          const descriptor = this.#small[4]!;
+          const flag = descriptor >> 6;
+          const single = (descriptor >> 5) & 1;
+          this.#checksummed = (descriptor & 4) !== 0;
+          this.#left = (single ? 0 : 1) + [0, 1, 2, 4][descriptor & 3]! + (flag === 0 ? single : [0, 2, 4, 8][flag]!);
+          this.#state = this.#left ? "header" : "block";
+        } else {
+          const block = this.#small[0]! | (this.#small[1]! << 8) | (this.#small[2]! << 16);
+          const type = (block >> 1) & 3;
+          if (type === 3) throw new Error("a put-away transcript has a reserved zstd block");
+          this.#last = (block & 1) !== 0;
+          this.#left = type === 1 ? 1 : block >>> 3;
+          this.#state = "body";
+          if (!this.#left) this.#afterBody();
+        }
+      } else {
+        const n = Math.min(this.#left, bytes.length - pos);
+        this.#left -= n;
+        pos += n;
+        if (this.#left) continue;
+        if (this.#state === "header") this.#state = "block";
+        else if (this.#state === "body") this.#afterBody();
+        else this.#state = "done";
+      }
+    }
+  }
+
+  #afterBody(): void {
+    if (!this.#last) this.#state = "block";
+    else if (this.#checksummed) { this.#state = "checksum"; this.#left = 4; }
+    else this.#state = "done";
+  }
+
+  finish(): void {
+    if (this.#state !== "done") throw new Error("a put-away transcript ended early");
+  }
+}
+
+/// Read one compressed frame in bounded pieces. Some older put-away files have a single frame for the entire history.
+async function* frameInput(file: FileHandle, frame: Frame): AsyncGenerator<Buffer> {
+  const end = frame.at + frame.packed;
+  const frameEnd = new FrameEnd();
+  for (let pos = frame.at; pos < end;) {
+    const bytes = Buffer.allocUnsafe(Math.min(FRAME_INPUT, end - pos));
+    const { bytesRead } = await file.read(bytes, 0, bytes.length, pos);
+    if (bytesRead === 0) throw new Error("a put-away transcript ended early");
+    pos += bytesRead;
+    const chunk = bytes.subarray(0, bytesRead);
+    frameEnd.add(chunk);
+    if (pos === end) frameEnd.finish();
+    yield chunk;
+  }
+  if (frame.packed === 0) frameEnd.finish();
+}
+
+/// What a put-away transcript holds from `from` on (as written), decompressed in bounded pieces; null when it has no
+/// table. Each frame gets its own decoder because older Node versions stop at the first frame.
 export async function segmentsFrom(path: string, from: number): Promise<AsyncGenerator<Buffer> | null> {
   const file = await open(path, "r");
   let frames: Frame[] | null;
@@ -134,11 +212,22 @@ export async function segmentsFrom(path: string, from: number): Promise<AsyncGen
     try {
       for (const f of these) {
         if (f.from + f.size <= from) continue;
-        const packed = Buffer.alloc(f.packed);
-        const { bytesRead } = await file.read(packed, 0, f.packed, f.at);
-        if (bytesRead < f.packed) throw new Error("a put-away transcript ended early");
-        const bytes = await unzstd(packed);
-        yield bytes.subarray(Math.max(0, from - f.from));
+        const raw = Readable.from(frameInput(file, f), { objectMode: false, highWaterMark: FRAME_INPUT });
+        const stream = raw.pipe(createZstdDecompress({ chunkSize: FRAME_OUTPUT }));
+        raw.on("error", (error) => stream.destroy(error));
+        let size = 0;
+        try {
+          for await (const chunk of stream as AsyncIterable<Buffer>) {
+            const skip = Math.max(0, from - f.from - size);
+            size += chunk.length;
+            if (size > f.size) throw new Error("a put-away transcript frame has the wrong size");
+            if (skip < chunk.length) yield chunk.subarray(skip);
+          }
+          if (size !== f.size) throw new Error("a put-away transcript frame has the wrong size");
+        } finally {
+          raw.destroy();
+          stream.destroy();
+        }
       }
     } finally {
       await file.close();
