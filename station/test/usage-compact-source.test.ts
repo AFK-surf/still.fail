@@ -60,6 +60,26 @@ test("recording another call leaves an unchanged workspace scope alone", () => {
   } finally { store.close(); }
 });
 
+test("reading the same call and transcript position again writes nothing", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "one", at: 60_000, model: "m", subagent: false, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    const file = { session: "a", offset: 1, model: "m" };
+    store.recordUsage("/a", file, "claude", [[call, owner]]);
+    const changes = () => (store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
+    const before = changes();
+    store.recordUsage("/a", file, "claude", [[call, owner]]);
+    assert.equal(changes(), before, "unchanged calls and positions do not cause a database write");
+    store.recordUsage("/a", { ...file, offset: 2 }, "claude", [[{ ...call, output: 4 }, owner]]);
+    assert.deepEqual(store.usageOfSession("a").map((row) => [row.calls, row.output]), [[1, 4]]);
+    assert.equal(store.usageFiles().get("/a")?.offset, 2);
+  } finally { store.close(); }
+});
+
 test("a time range does not visit sessions with only older statistics", () => {
   const store = Store.open(":memory:");
   try {

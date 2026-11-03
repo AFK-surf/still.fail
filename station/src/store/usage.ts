@@ -54,7 +54,7 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
        ${compact ? "" : "ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)"}`,
     );
     const known = db.prepare("SELECT 1 FROM usage WHERE id = ?");
-    const grow = compact ? db.prepare("UPDATE usage SET output = MAX(output, ?1) WHERE id = ?2") : null;
+    const grow = compact ? db.prepare("UPDATE usage SET output = ?1 WHERE id = ?2 AND output < ?1") : null;
     for (const [c, of] of calls) {
       const was = known.get(c.id) !== undefined;
       if (was && grow !== null) grow.run(c.output, c.id);
@@ -68,7 +68,8 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
   }
   db.prepare(
     `INSERT INTO usage_files (path, session, offset, model) VALUES (?1, ?2, ?3, ?4)
-     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model`,
+     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model
+       WHERE usage_files.session IS NOT excluded.session OR usage_files.offset IS NOT excluded.offset OR usage_files.model IS NOT excluded.model`,
   ).run(path, file.session, file.offset, file.model);
   return added;
 }
