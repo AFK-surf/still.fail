@@ -69,6 +69,16 @@ test("a low-disk sweep finishes at the last archive it saw when it began", async
   } finally { await r.close(); }
 });
 
+test("cleanup rechecks free space before emptying a workspace", async () => {
+  const { r, add, emptied } = rig();
+  try {
+    add("old", DAY);
+    let checks = 0;
+    await relieveArchived(r.hub, () => ++checks <= 2 ? DISK_LOW_BYTES - 1 : DISK_LOW_BYTES);
+    assert.deepEqual(emptied, [], "room recovered after the sweep began");
+  } finally { await r.close(); }
+});
+
 test("low-disk cleanup stops reading archives once it has freed enough room", async () => {
   const { r, add, emptied, fetched } = rig();
   try {

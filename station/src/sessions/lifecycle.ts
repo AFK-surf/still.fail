@@ -272,9 +272,10 @@ export function archiveChat(hub: Hub, thread: number, archived: boolean): void |
 }
 
 /// A snapshot-bounded walk of archived workspaces; no main-thread query returns more than a page.
-async function* archivedWorkspaces(hub: Hub, through: number | ArchivedWorkspace): AsyncGenerator<ArchivedWorkspace> {
+async function* archivedWorkspaces(hub: Hub, through: number | ArchivedWorkspace, needed: () => boolean = () => true): AsyncGenerator<ArchivedWorkspace> {
   let after: ArchivedWorkspace | null = null;
   for (;;) {
+    if (!needed()) return;
     const page = hub.store.archivedSessions(after, through);
     for (const s of page) yield s;
     if (page.length < ARCHIVED_WORKSPACE_BATCH) return;
@@ -311,14 +312,14 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
   if (free() >= DISK_LOW_BYTES) return;
   const through = hub.store.lastArchivedSession();
   if (through === null) return;
-  for await (const s of archivedWorkspaces(hub, through)) {
+  for await (const s of archivedWorkspaces(hub, through, () => free() < DISK_LOW_BYTES)) {
+    if (free() >= DISK_LOW_BYTES) return;
     try {
       // Shown and archived again since, it is not the one looked at: `expire` leaves it.
       if (await cold.holdsMore(s.key)) await cold.expire(s.key, s.archivedAt);
     } catch (error) {
       log.warn("hub", "the workspace of an archived session was not emptied", { session: s.key, error: (error as Error).message });
     }
-    if (free() >= DISK_LOW_BYTES) return;
   }
 }
 
