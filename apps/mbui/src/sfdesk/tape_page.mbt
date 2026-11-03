@@ -309,6 +309,12 @@ fn tape_made(
             context_node(p)
             @sfpages.changelog_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
           })
+        // (by its station: another station's another page, not this one become it)
+        Some(Memory(address)) =>
+          made("place/memory/" + address, fn(p, core, here, _stint, told) {
+            context_node(p)
+            @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
+          })
         _ => None
       }
     // (by its station: another station's another page, not this one become it)

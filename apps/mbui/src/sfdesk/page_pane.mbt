@@ -217,6 +217,11 @@ fn pane_made(
           made("place/changelog", fn(a, core, _here, frame, width) {
             @sfpages.changelog_node(a, core, on_back=core.pop, frame~, width~)
           })
+        // (by its station: another station's another page, not this one become it)
+        Some(Memory(address)) =>
+          made("place/memory/" + address, fn(a, core, here, frame, width) {
+            @sfpages.memory_node(a, core, here, address, on_back=core.pop, frame~, width~, tips~)
+          })
         _ => None
       }
     // (by its station: another station's another page, not this one become it)
