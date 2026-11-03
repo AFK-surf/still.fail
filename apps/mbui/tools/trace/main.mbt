@@ -13,60 +13,25 @@
 //     trace maxbytes TRACE…      the most bytes beside a message the traces kept (at least 16384)
 
 ///|
-#borrow(path)
-extern "C" fn c_read(path : Bytes) -> Bytes = "sft_read"
-
-///|
-extern "C" fn c_ok() -> Int = "sft_ok"
-
-///|
-#borrow(path, data)
-extern "C" fn c_write(path : Bytes, data : Bytes) -> Int = "sft_write"
-
-///|
-#borrow(s)
-extern "C" fn c_out(s : Bytes, err : Int) -> Unit = "sft_out"
-
-///|
-#borrow(name)
-extern "C" fn c_getenv(name : Bytes) -> Bytes = "sft_getenv"
-
-///|
-extern "C" fn c_getcwd() -> Bytes = "sft_getcwd"
-
-///|
-extern "C" fn c_exit(code : Int) -> Unit = "sft_exit"
-
-///|
 fn read(path : String) -> String? {
-  let b = c_read(@utf8.encode(path))
-  if c_ok() == 0 {
-    None
-  } else {
-    Some(@utf8.decode_lossy(b[:]))
-  }
+  @sys.read_text(path)
 }
 
 ///|
 fn say(s : String) -> Unit {
-  c_out(@utf8.encode(s + "\n"), 0)
+  @sys.println_out(s)
 }
 
 ///|
 fn die(s : String) -> Unit {
-  c_out(@utf8.encode(s + "\n"), 1)
-  c_exit(1)
+  @sys.eprintln(s)
+  @sys.exit(1)
   panic()
 }
 
 ///|
 fn env(name : String) -> String? {
-  let v = c_getenv(@utf8.encode(name))
-  if c_ok() == 0 {
-    None
-  } else {
-    Some(@utf8.decode_lossy(v[:]))
-  }
+  @sys.getenv(name)
 }
 
 ///|
@@ -300,7 +265,7 @@ fn abspath(p : String) -> String {
   let full = if p.has_prefix("/") {
     p
   } else {
-    @utf8.decode_lossy(c_getcwd()[:]) + "/" + p
+    @sys.cwd() + "/" + p
   }
   let parts = []
   for part in full.split("/") {
@@ -443,7 +408,7 @@ fn make(args : Array[String]) -> Unit {
     )
   }
   let path = root() + "/e2e/traces/" + name + ".trace"
-  if c_write(@utf8.encode(path), @utf8.encode(lines.join("\n") + "\n")) == 0 {
+  if !@sys.write_text(path, lines.join("\n") + "\n") {
     die("trace: cannot write \{path}")
   }
   say("\{lines.length()} messages: e2e/traces/\{name}.trace")
