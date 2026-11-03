@@ -53,6 +53,17 @@ const say = (store: Store, thread: number, ts: string, text: string, kind: "pers
 
 const kinds = (groups: { kind: string; hits: { key: string }[] }[]) => Object.fromEntries(groups.map((g) => [g.kind, g.hits.map((h) => h.key)]));
 
+test("a search result keeps an older message's runtime after its chat switches", () => {
+  const s = station();
+  const t = chat(s.store, "k1", null);
+  s.store.ranIn("k1", "old-session", "cc");
+  s.store.insertMessage({ ...newMessage(t, "1", "agent", "k1", "earlier"), agentIdentity: { model: "opus", effort: null } });
+  s.store.db.prepare("UPDATE sessions SET runtime = ?, model = ? WHERE key = ?").run("codex", "gpt-5", "k1");
+  const read = s.read();
+  assert.deepEqual(threadDocs(read, t).find((d) => d.kind === "message")?.ref.agentIdentity, { model: "opus", effort: null, runtime: "claude" });
+  read.db.close();
+});
+
 test("a chat's messages are found by any part of their words, in any script, case aside, as they read now", () => {
   const s = station();
   const t = chat(s.store, "k1", null);

@@ -289,6 +289,9 @@ test("the_last_speaker_is_named_and_an_agents_state_rides_on_it", () => {
   const legacy = row("agent", "k");
   delete legacy.last.agentIdentity;
   assert.equal(p.lastBy(legacy, me, [], members).name, "GPT-6 Astra");
+  legacy.last.authorRuntime = "claude";
+  legacy.last.authorModel = "claude-opus-5-5";
+  assert.deepEqual([p.lastBy(legacy, me, [], members).name, p.lastBy(legacy, me, [], members).runtime], ["Opus 5.5", "claude"]);
   const other = p.lastBy(row("person", "b@x.com"), me, [], members);
   assert.deepEqual([other.name, other.picture, other.mine], ["阿二", "https://p/b", false]);
   assert.equal(p.lastBy(row("person", "A@x.com"), me, [], members).name, "你");

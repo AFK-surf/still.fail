@@ -197,7 +197,7 @@ function threadView(
   const v = threadJson(t.thread);
   v.sessions = t.sessions.map((m) => ({ thread: m.thread, session: m.session, connect: m.connect, joinedAt: m.joinedAt }));
   v.last = t.last;
-  v.lastMessage = t.lastMessage === null ? null : messageView(t.lastMessage, names);
+  v.lastMessage = t.lastMessage === null ? null : messageView(t.lastMessage, names, s);
   v.read = t.read;
   v.unread = t.unread;
   v.people = people(s, t.people);
