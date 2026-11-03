@@ -1498,11 +1498,16 @@ export class Store {
     return this.#cardPost(thread, asked);
   }
 
-  /// A card closed without a message (closed_cards): its post, its card, and who closed it (its own agent withdrawing
-  /// it, or a person's choice).
+  /// A card closed without a message (closed_cards) while it waited (no person had written after it, nor a newer card
+  /// replaced it: one answered and withdrawn after is not closed again): its post, its card, and who closed it (its own
+  /// agent withdrawing it, or a person's choice).
   closedCard(thread: number, n: number): [MessageRow, Json, string] | null {
     const by = this.#one("SELECT viewer FROM closed_cards WHERE thread = ? AND n = ?", thread, n);
-    const found = by === undefined ? null : this.#cardPost(thread, n);
+    const after = this.#one(
+      "SELECT 1 FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND (author_kind = 'person' OR card IS NOT NULL OR options IS NOT NULL) LIMIT 1",
+      thread, n,
+    );
+    const found = by === undefined || after !== undefined ? null : this.#cardPost(thread, n);
     return found === null ? null : [...found, by.viewer as string];
   }
 
@@ -1594,8 +1599,8 @@ export class Store {
         thread, ts, agent,
       );
       if (r === undefined) return false;
-      this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, r.n, agent, this.now());
-      changes.push({ type: "thread", id: thread, entries: [], closed: r.n });
+      const closed = this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, r.n, agent, this.now()) > 0;
+      changes.push({ type: "thread", id: thread, entries: [], ...(closed ? { closed: r.n } : {}) });
       return true;
     });
   }

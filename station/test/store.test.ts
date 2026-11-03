@@ -17,7 +17,7 @@ import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/
 import { detailQuery } from "../src/store/usage-detail.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import * as read from "../src/read/store.ts";
-import { cardsEnded } from "../src/connects/card-ends.ts";
+import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
@@ -864,6 +864,12 @@ test("a card stops waiting as a person writes, a newer card comes, its agent wit
   assert.deepEqual(ended(), [["1.7", { why: "closed" }]]);
   say(store, thread.id, "1.8", "person", "U1", "好");
   assert.deepEqual(ended(), [], "one closed is not closed again by a message");
+  store.insertMessage({ ...newMessage(thread.id, "1.9", "agent", "a", "最后？"), card: options });
+  say(store, thread.id, "1.10", "person", "U1", "嗯");
+  assert.deepEqual(ended().map(([, e]) => (e as CardEnd).why), ["message"]);
+  assert.equal(store.withdrawCard("a", thread.id, "1.9"), true);
+  assert.equal(store.withdrawCard("a", thread.id, "1.9"), true);
+  assert.deepEqual(ended(), [], "one answered and withdrawn after keeps its answer");
   h.stop();
 });
 
