@@ -17,9 +17,10 @@ import type { ColdStorage, Hub } from "./hub.ts";
 
 /// Links followed, never into a folder macOS protects (a session continued there, a job's directory: ops/places.ts).
 /// Each path's kept a minute: followed a folder at a time on the station's thread for every session and job in use, at
-/// each look as a session is packed, 33 of them held the station 2.4 s on ccvm short of memory (2026-11-03).
+/// each look as a session is packed, 33 of them held the station 2.4 s on ccvm short of memory (2026-11-03); kept a
+/// minute, they were followed again at each round of archiving (39 of them, 1.7 s held), a round some minutes apart.
 const followed = new Map<string, { at: number; real: string | null }>();
-const FOLLOWED_MS = 60_000;
+const FOLLOWED_MS = 15 * 60_000;
 const canonical = (path: string): string | null => {
   const now = wall.now();
   const kept = followed.get(path);
