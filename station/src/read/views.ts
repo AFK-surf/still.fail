@@ -464,7 +464,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   const selves = store.slackIdentities(s, viewer.email);
   stage("rest");
   const ms = Math.round(performance.now() - started);
-  if (ms >= 1_000) log.warn("readers", "a chat marks read's stages", { ms, chats: own.length, scoped: scope !== null, ...stages });
+  if (ms >= 1_000) log.warn("readers", "a chat marks read's stages", { ms, chats: own.length, scoped: scope !== null, ...(scope !== null ? { sessions: scope.sessions.length, threads: scope.threads.length } : {}), ...stages });
   return { card, need, answered, suggested, verdicts, reviews: api.reviews, kept, pins, openers, opened, shares, clientKeys, teams, selves };
 }
 

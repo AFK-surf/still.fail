@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { threadId } from "node:worker_threads";
 import { zstdDecompressSync } from "node:zlib";
 import type { RuntimeKind } from "../agents/runtime.ts";
+import { log } from "../ops/log.ts";
 import { readSegments } from "./packed.ts";
 import { type Mark, type TailState, type TranscriptRef, TranscriptTail, recordOf } from "./tail.ts";
 import { READING, type ReadState, type TimelineEntry, brief, storage, timelineOf, utf8 } from "./transcript.ts";
@@ -54,7 +55,10 @@ export function forgetMarks(dir: string, paths: string[]): void {
 /// A transcript's reading, read on to where it is written now: from what is kept, else from disk, else from its start.
 /// `dir`: where readings are kept on disk (null: nowhere, as in tests).
 function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marked {
+  // What a slow one read, and from where: 2 to 6 s for a chat opened on ccvm (2026-11-03), unsaid of which.
+  const started = performance.now();
   let had = kept.get(path) ?? null;
+  const from = had !== null ? "memory" : "disk";
   kept.delete(path);
   if (had === null && dir !== null) {
     try {
@@ -67,8 +71,16 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
   }
   if (had !== null && (had.state.runtime ?? runtime) !== runtime) had = null;
   const tail = had === null ? new TranscriptTail(runtime, path, null, false, true) : TranscriptTail.from(runtime, had.state, had.marks);
+  const marked = performance.now();
   tail.read();
   const now: Marked = { reading: READING, state: tail.snapshot(), marks: tail.marks };
+  const ms = Math.round(performance.now() - started);
+  if (ms >= 1_000) {
+    log.warn("readers", "a transcript's reading went slowly", {
+      ms, markedMs: Math.round(marked - started), from: had === null ? "start" : from, bytes: now.state.offset - (had?.state.offset ?? 0),
+      entries: now.state.count - (had?.state.count ?? 0), anew: tail.anew, packed: now.state.packedStamp !== null, path,
+    });
+  }
   kept.set(path, now);
   if (kept.size > KEPT) kept.delete(kept.keys().next().value!);
   // Written down when there is a mark more (or it was written anew, or put away or back), or it read on KEPT_BYTES past
