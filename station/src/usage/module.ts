@@ -30,7 +30,9 @@ export function keepUsage(store: StationStore, key: string, quiet = false): void
 /// writes; each session counted anew is kept as counted. A summary format upgrade visits one session at a time after
 /// the previous process exits, and remembers its progress, rather than revisiting all sessions at each station start.
 export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCounter, previous: Promise<void> = Promise.resolve()): () => void {
-  live.countWith({ of: (key) => usageNow(store, key), ask: (key) => counter.soon(key) });
+  // A live view reads the kept summary. In particular, opening it or receiving a batch of counts must not revisit
+  // every watched session's individual calls; the refresh below tells the view when each new summary is ready.
+  live.countWith({ of: (key) => store.sessionUsage(key), ask: (key) => counter.soon(key) });
   let closed = false;
   let ready = false;
   let initialized = false;
@@ -76,12 +78,13 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
     // A session gone on in another conversation (its context cleared, as 换新上下文 does): its context is that one's.
     const sessions = change.type === "usage" ? change.sessions : change.type === "conversation" ? [change.key] : null;
     if (sessions === null) return;
-    // Those it follows told on their streams, then every session counted anew kept as counted.
-    live.usageCounted(sessions);
     try {
       // A first transcript read can report thousands of sessions at once. Their dirty marks are already durable;
       // one session is kept immediately, while a larger set is refreshed a session at a time by the worker.
-      if (sessions.length === 1) keepUsage(store, sessions[0]!);
+      if (sessions.length === 1) {
+        keepUsage(store, sessions[0]!);
+        live.usageCounted(sessions);
+      }
     } finally {
       // If a count failed, its dirty mark remains and the background refresh can try again.
       wake();

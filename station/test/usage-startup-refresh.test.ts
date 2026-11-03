@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { constants } from "node:sqlite";
 import { test } from "node:test";
 import type { LiveHub } from "../src/sessions/live.ts";
 import { Store, USAGE_SUMMARY_AFTER } from "../src/store/store.ts";
@@ -91,6 +92,41 @@ test("a first count of many sessions does not synchronously recount all their su
     assert.ok(calculations <= 1, "the notice does not count the whole history before returning");
     await done;
     unsubscribe();
+  } finally {
+    stop();
+    store.close();
+  }
+});
+
+test("the live view reads saved summaries and tells each changed summary after it is kept", () => {
+  const store = Store.open(":memory:");
+  let of: ((key: string) => unknown) | undefined;
+  const told: unknown[] = [];
+  const live = {
+    countWith(count: { of: (key: string) => unknown }) { of = count.of; },
+    usageCounted(keys: readonly string[]) { for (const key of keys) told.push(of!(key)); },
+  } as unknown as LiveHub;
+  let stop = () => {};
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", createdAt: 1, lastActiveAt: 1 });
+    const call = { id: "call", at: 1000, model: "claude-opus-5-5", subagent: false, fast: false,
+      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 1, window: 100 };
+    const owner = { turn: null, thread: null, person: null, profile: "cc" };
+    store.recordUsage("/a", { session: "a", offset: 1, model: null }, "claude", [[call, owner]]);
+    keepUsage(store, "a", true);
+    const saved = store.sessionUsage("a");
+    stop = keepCounted(store, live, {} as UsageCounter, new Promise<void>(() => {}));
+    store.db.setAuthorizer((action, table) => action === constants.SQLITE_READ && (table === "usage" || table === "usage_main_calls")
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try {
+      assert.deepEqual(of!("a"), saved, "opening a live view needs only the saved summary");
+    } finally { store.db.setAuthorizer(null); }
+    store.db.prepare("UPDATE usage SET output = 9 WHERE id = 'call'").run();
+    store.usageChanged(["a"]);
+    assert.equal((told.at(-1) as { outputTokens: number }).outputTokens, 9, "the live view hears the new summary");
+    told.length = 0;
+    store.usageChanged(["a", "another"]);
+    assert.equal(told.length, 0, "a batch is told as each saved summary is refreshed, not synchronously");
   } finally {
     stop();
     store.close();
