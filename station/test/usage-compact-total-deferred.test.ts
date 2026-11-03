@@ -108,7 +108,7 @@ test("a worker completes pending totals after new calls and tells the page", asy
   }
 });
 
-test("a page is told once its requested total is ready, not after each intermediate batch", async (t) => {
+for (const count of [128, 130]) test(`a page is told when its total of ${count} buckets is ready, not after each intermediate batch`, async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "compact-total-batches-"));
   const store = Store.open(join(dir, "station.db"));
   let mover: ReturnType<typeof watchCompactMoves> | null = null;
@@ -118,7 +118,7 @@ test("a page is told once its requested total is ready, not after each intermedi
     compact.installCompactUsage(store.db, () => store.now());
     retireUsageIndexes(store.db);
     const owner = { turn: null, thread: null, person: "p", profile: "cc" };
-    for (let i = 0; i < 130; i++) {
+    for (let i = 0; i < count; i++) {
       const call = { id: `call-${i}`, at: i * 60_000, model: "m", subagent: true, fast: false, input: 1,
         cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
       store.recordUsage("/a", { session: "a", offset: i + 1, model: "m" }, "claude", [[call, owner]]);
@@ -135,7 +135,7 @@ test("a page is told once its requested total is ready, not after each intermedi
     });
     mover = watchCompactMoves(store, Promise.resolve());
     mover.read({ workspace: "A", home: false });
-    assert.deepEqual(await told, { calls: 130, tokens: 260 });
+    assert.deepEqual(await told, { calls: count, tokens: count * 2 });
   } finally {
     if (mover !== null) await mover.close();
     store.close();
