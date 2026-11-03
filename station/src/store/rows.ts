@@ -238,9 +238,10 @@ export type StoreChange =
   /// The Slack users a viewer said are them changed.
   | { type: "identities"; viewer: string }
   /// The chats a viewer pinned changed.
-  | { type: "pins"; viewer: string }
+  | { type: "pins"; viewer: string; session?: string; at?: number | null }
   /// The decisions a viewer dismissed changed.
-  | { type: "dismissed"; viewer: string }
+  /// `card`: the card dismissed (its thread and entry); `kept`: a chat kept from archiving, or let go again.
+  | { type: "dismissed"; viewer: string; card?: { thread: number; n: number }; kept?: { thread: number; kept: boolean } }
   /// The recorded runtime processes changed.
   | { type: "processes" }
   | { type: "decisionChecks" }

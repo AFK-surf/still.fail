@@ -121,6 +121,22 @@ test("changes are told as events, rows by what changed, read only to its viewer"
   assert.equal(events.inUse(), false);
 });
 
+test("what a viewer marks (a pin, a card dismissed, a chat kept) is told as written to their streams alone", async () => {
+  const { events, change } = setup(testClock().clock);
+  const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  const b = reader((await events.open(viewer("b@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  change({ type: "pins", viewer: "a@x", session: "s", at: 5 });
+  change({ type: "dismissed", viewer: "a@x", card: { thread: 3, n: 7 } });
+  change({ type: "dismissed", viewer: "a@x", kept: { thread: 3, kept: false } });
+  await settle();
+  const told = (got: { event?: string; data?: any }[]) => got.filter((e) => e.event === "pin" || e.event === "dismiss" || e.event === "kept").map((e) => [e.event, e.data]);
+  assert.deepEqual(told(a.got), [["pin", { session: "s", at: 5 }], ["dismiss", { thread: 3, n: 7 }], ["kept", { thread: 3, kept: false }]]);
+  assert.deepEqual(told(b.got), []);
+  await a.close();
+  await b.close();
+});
+
 test("a stream that takes over is told first what was told to everyone after the last id its predecessor gave", async () => {
   const time = testClock();
   const { events, change } = setup(time.clock);
