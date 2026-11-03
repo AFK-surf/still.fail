@@ -71,6 +71,19 @@ export const STATS_OF = `SELECT
   LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC, t2.rowid DESC LIMIT 1)
   WHERE s.key = ?`;
 
+// Periodic work needs the latest turn, and archiving only needs to know whether anything is undelivered. Neither needs
+// to count the whole pending queue. Keep the sessions join: a removed session's remaining turns do not belong to it.
+const SESSION_TURN_COLUMNS = `l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need,
+  l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at`;
+const SESSION_TURN_JOIN = `FROM sessions s
+  LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC, t2.rowid DESC LIMIT 1)
+  WHERE s.key = ?`;
+export const LAST_TURN_OF_SESSION = `SELECT ${SESSION_TURN_COLUMNS} ${SESSION_TURN_JOIN}`;
+export const WORK_OF_SESSION = `SELECT
+  CASE WHEN EXISTS (SELECT 1 FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL)
+    THEN 1 ELSE EXISTS (SELECT 1 FROM letter_deliveries d INDEXED BY letter_deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) END AS pending,
+  ${SESSION_TURN_COLUMNS} ${SESSION_TURN_JOIN}`;
+
 // Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
 // an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
 // The checks are grouped by `+session`: by `session`, the station's SQLite went over every check in order of session.
@@ -1949,6 +1962,22 @@ export class Store {
 
   listTurns(session: string): TurnRow[] {
     return this.#all("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
+  }
+
+  /// Latest turns for the named sessions: a missing session is omitted, even if an old turn remains for it.
+  lastTurnsOf(keys: Iterable<string>): Map<string, TurnSummary | null> {
+    const out = new Map<string, TurnSummary | null>();
+    for (const key of new Set(keys)) {
+      const r = this.#one(LAST_TURN_OF_SESSION, key);
+      if (r !== undefined) out.set(key, r.started_at === null ? null : toTurnSummary(r));
+    }
+    return out;
+  }
+
+  /// A session's latest turn and whether anything is undelivered, including orphaned deliveries, without counting them.
+  workOf(key: string): { pending: boolean; lastTurn: TurnSummary | null } | undefined {
+    const r = this.#one(WORK_OF_SESSION, key);
+    return r === undefined ? undefined : { pending: r.pending !== 0, lastTurn: r.started_at === null ? null : toTurnSummary(r) };
   }
 
   /// For each of `keys` that is a session: its latest turn and undelivered messages as sessionStats says them (STATS_OF),
