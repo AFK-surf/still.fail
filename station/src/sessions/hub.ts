@@ -297,7 +297,9 @@ export class Hub {
   /// The station left one of its workspaces but is still in others (docs/multi-workspace.md): that workspace's
   /// sessions end their processes as `suspendAll` ends everyone's; `backIn` resumes them once it is back.
   async leftWorkspace(ws: string) {
-    const keys = new Set(this.store.listSessions().filter((s) => s.ws === ws).map((s) => s.key));
+    // Only actors and their eviction deadlines have anything to suspend. Historical sessions have neither.
+    const candidates = new Set([...this.deadlines.keys(), ...this.actors.keys()]);
+    const keys = new Set([...candidates].filter((key) => this.store.getSession(key)?.ws === ws));
     for (const [key, fiber] of this.deadlines) if (keys.has(key)) (this.interrupt(fiber), this.deadlines.delete(key));
     await Promise.all([...this.actors.values()].filter((a) => keys.has(a.key)).map((a) => a.suspend()));
   }
