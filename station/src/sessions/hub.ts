@@ -1140,12 +1140,12 @@ export class Hub {
       endJobs: async (key) => {
         const jobs = this.jobs;
         if (!jobs) return;
-        for (const job of this.store.listJobs(key).filter((j) => j.state === "running" || (j.state === "exited" && j.port !== null))) {
+        for (const id of this.store.upJobIds(key)) {
           try {
-            await jobs.stop(job.id);
-            log.info("hub", "job stopped with its session archived", { session: key, job: job.id });
+            await jobs.stop(id);
+            log.info("hub", "job stopped with its session archived", { session: key, job: id });
           } catch (error) {
-            log.warn("hub", "job not stopped", { session: key, job: job.id, error: (error as Error).message });
+            log.warn("hub", "job not stopped", { session: key, job: id, error: (error as Error).message });
           }
         }
       },

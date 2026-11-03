@@ -15,6 +15,17 @@ export const RUNNING_WAIT_JOBS = `SELECT j.id FROM (
 ) active CROSS JOIN jobs j ON j.id = active.job
 WHERE j.watch <> 0 OR j.port IS NULL
 ORDER BY j.started_at DESC`;
+/// An archived session stops every running job and each service waiting to restart. The second seek visits only
+/// exited services station-wide, not the session's completed commands (which can grow with its history).
+export const UP_JOBS_OF_SESSION = `SELECT id FROM (
+  SELECT j.id, j.started_at FROM (
+    SELECT job FROM active_watch_jobs INDEXED BY active_watch_jobs_session WHERE session = ?1
+    UNION ALL
+    SELECT job FROM active_other_jobs WHERE session = ?1
+  ) active CROSS JOIN jobs j ON j.id = active.job
+  UNION ALL
+  SELECT id, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'exited' AND port IS NOT NULL AND session_key = ?1
+) ORDER BY started_at DESC`;
 export const OTHER_JOBS_AT_INSTALL = "SELECT session_key, id FROM jobs INDEXED BY jobs_state WHERE state = 'running' AND watch = 0";
 
 /// Install the lookup and its writers atomically. Only currently running jobs are read on upgrade.

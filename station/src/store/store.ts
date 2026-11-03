@@ -39,7 +39,7 @@ import { retireDuplicateUsage } from "./usage-unified.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
-import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, installOtherActiveJobs } from "./active-jobs.ts";
+import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -2106,6 +2106,11 @@ export class Store {
   /// Running jobs stopped with a wait, newest first; completed jobs and other sessions are not read.
   runningWaitJobIds(session: string): string[] {
     return this.#all(RUNNING_WAIT_JOBS, session).map((r) => r.id);
+  }
+
+  /// Its running jobs and services waiting to restart: what must stop when it is archived.
+  upJobIds(session: string): string[] {
+    return this.#all(UP_JOBS_OF_SESSION, session).map((r) => r.id);
   }
 
   /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and
