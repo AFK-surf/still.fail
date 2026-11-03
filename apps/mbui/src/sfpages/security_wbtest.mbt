@@ -74,6 +74,119 @@ test "安全, at each width and with either hand: its people, devices and statio
 }
 
 ///|
+test "protecting a station keeps its button and label, with the spinner inside and no repeated press" {
+  for (w, platform) in page_cases {
+    let at = "\{w} platform \{platform}"
+    let idle = setting_tester(Security, w, platform~)
+    scrolled_to(idle, w, "MBA")
+    assert_false(idle.get(Button, label="保护").disabled, msg=at)
+    tap_words(idle, "保护")
+    idle.frame()
+    assert_true(@sf.presenting(), msg=at)
+    assert_true(idle.find("保护 MBA？") is Some(_), msg=at)
+    @sf.close_presented()
+
+    let busy = setting_tester(Security, w, platform~, mode="settings-security-protecting")
+    scrolled_to(busy, w, "MBA")
+    busy.run_for(@ui.move_most_ms)
+    let button = busy.get(Button, label="保护")
+    assert_true(button.disabled, msg=at)
+    assert_true(busy.find("保护") is Some(_), msg=at)
+    let (x, y, width, height) = button.rect
+    assert_true(busy.drawn_rects().iter().any(fn(r) {
+      r.4 == @sf.theme().p.chip && r.0 <= x && r.1 <= y && r.0 + r.2 >= x + width && r.1 + r.3 >= y + height
+    }), msg="button ground: \{at}")
+    assert_true(busy.drawn_instances().iter().any(fn(i) {
+      i[5] == 10.0 && i[0] >= x && i[1] >= y && i[0] + i[2] <= x + width && i[1] + i[3] <= y + height
+    }), msg="spinner inside the button: \{at}")
+    busy.tap(x + width / 2.0, y + height / 2.0)
+    busy.frame()
+    assert_false(@sf.presenting(), msg=at)
+  }
+}
+
+///|
+test "a station's protect button follows its request through failure, retry and success" {
+  for (w, platform) in page_cases {
+    let running = Ref(false)
+    let joined = Ref(false)
+    let requests : Array[Json] = []
+    let answers : Array[(Result[Json, Json]) -> Unit] = []
+    let t = setting_tester(Security, w, platform~, over=fn(base) {
+      {
+        ..base,
+        call: fn(name, params, done) {
+          if name == "lock.joinStation" {
+            requests.push(params)
+            running.val = true
+            answers.push(done)
+            @settings.fixture_changed()
+          } else {
+            (base.call)(name, params, done)
+          }
+        },
+        topic: fn(name, params) {
+          let read = (base.topic)(name, params)
+          if name == "doing" && running.val {
+            { ..read, value: Some({ "doing": [{ "call": "lock.joinStation", "stage": "running", "params": { "workspace": "ws1", "station": "st2" } }] }) }
+          } else if name == "lock" && joined.val {
+            match read.value {
+              Some(Object(lock)) => {
+                let changed = lock.copy()
+                changed["stations"] = Json::array(items(read.value, "stations").map(fn(st) {
+                  match st {
+                    Object(fields) if text(Some(st), "id") == "st2" => {
+                      let fields = fields.copy()
+                      fields["protected"] = Json::boolean(true)
+                      Json::object(fields)
+                    }
+                    _ => st
+                  }
+                }))
+                { ..read, value: Some(Json::object(changed)) }
+              }
+              _ => read
+            }
+          } else {
+            read
+          }
+        },
+      }
+    })
+    scrolled_to(t, w, "MBA")
+    tap_words(t, "保护")
+    t.frame()
+    let (x, y, width, height) = t.get(Button, label="保护").rect
+    t.tap(x + width / 2.0, y + height / 2.0)
+    t.frame()
+    assert_eq(answers.length(), 1)
+    assert_eq(requests[0], { "workspace": "ws1", "station": "st2" })
+    assert_true(t.get(Button, label="保护").disabled)
+    running.val = false
+    @settings.fixture_changed()
+    answers[0](Err({ "message": "offline" }))
+    t.frame()
+    assert_false(t.get(Button, label="保护").disabled)
+    // The first confirmation is still drawn as it closes; retry at a declared later moment.
+    t.run_for(@ui.move_most_ms)
+    tap_words(t, "保护")
+    t.frame()
+    assert_true(@sf.presenting())
+    let (x, y, width, height) = t.get(Button, label="保护").rect
+    t.tap(x + width / 2.0, y + height / 2.0)
+    t.frame()
+    assert_eq(answers.length(), 2)
+    joined.val = true
+    running.val = false
+    @settings.fixture_changed()
+    answers[1](Ok({}))
+    t.frame()
+    assert_true(t.query(Button, label="保护") is None)
+    assert_eq(t.words().filter(fn(word) { word.0 == "受保护" && word.5 > 0.5 }).length(), 2)
+  }
+}
+
+///|
 test "安全, at each width and with either hand: another device taken out of the lock, asked first; not this one" {
   for case in page_cases {
     let (w, platform) = case
