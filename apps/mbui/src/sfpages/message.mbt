@@ -67,14 +67,15 @@ pub fn picking(
   words : String,
   body : () -> Unit,
   fill? : Bool = true,
+  key? : String = "",
 ) -> Unit {
   match here.list {
     Some(_) => {
-      let share = here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(turn)) } })
-      let link = @sfbase.message_link(here.station, here.session, turn)
+      let share = if turn >= 0.0 { here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(turn)) } }) } else { None }
+      let link = if turn >= 0.0 { @sfbase.message_link(here.station, here.session, turn) } else { "" }
       // gone to by a quote of it: the passage quoted lit as it flashes (chat_list.mbt passage_lit)
-      let lit = passage_lit(c, here, ts)
-      @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(), body, keep=passage_wanted(here, ts), share~, link~, lit~)
+      let lit = if ts != "" { passage_lit(c, here, ts) } else { None }
+      @sfbase.pickable(c, if key == "" { ts } else { key }, author, role, words, fill, @sfbase.mouse_picks(), body, keep=ts != "" && passage_wanted(here, ts), share~, link~, lit~, source_ts=if key == "" || key == ts { None } else { Some(ts) })
     }
     None => body()
   }
@@ -171,9 +172,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
     quotes(c, src, here, m.quotes, m.attachments, mine=true, at=message_place(m))
     message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)), at=message_place(m) + "/f")
     if m.text != "" {
-      picking(here, c, src, m.ts, m.seq, @sf.t("web-main.chat.you"), "person", m.text, fn() {
-        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, link_to=link_to_in(m)), chat_title=chat_title_of(m), runs=m.words)
-      }, fill=false)
+      mine_bubble(c, src, here, m.text, "m:" + m.ts, m.ts, m.seq, if m.outgoing == "" { m.ts } else { "o:" + m.outgoing }, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, link_to=link_to_in(m)), chat_title=chat_title_of(m), runs=m.words)
     }
     if !m.followed {
       match m.blocked {
@@ -529,45 +528,51 @@ fn mine_most(c : @ui.Ctx) -> Double {
 /// neutral ground).
 fn mine_bubble(
   c : @ui.Ctx,
+  src : Source,
   here : MessageHere,
   words : String,
   key : String,
+  ts : String,
+  turn : Double,
+  pick_key : String,
   found? : Array[String] = [],
   peek? : ((String, String, Int) -> Unit)? = None,
   chat_title? : (String) -> String? = fn(_) { None },
   runs? : Json? = None,
 ) -> Unit {
-  // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
-  let flight = flight_here(here)
-  let ground = match flight {
-    Some(f) if f.placed => flight_ground_of(c, f)
-    _ => 1.0
-  }
-  // (the bubble, for what is drawn in it as it flies: flight_pieces_in)
-  let bubble_node = Ref::new(-1)
-  let b = c.box(
-    style=(if ground < 1.0 { bubble_bare } else { bubble }).then(@ui.style(max_w=Fixed(mine_most(c)))),
-    fn() {
-      if ground < 1.0 {
-        let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
-        c.look(g, @ui.look(alpha=ground))
-      }
-      // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
-      match flight {
-        Some(f) => {
-          let w = c.box(fn() { person_words(c, words, key, found~, peek~, chat_title~, runs~) })
-          flight_landing_words(c, f, w)
-          flight_pieces_in(c, f, bubble_node)
+  picking(here, c, src, ts, turn, @sf.t("web-main.chat.you"), "person", words, fn() {
+    // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
+    let flight = flight_here(here)
+    let ground = match flight {
+      Some(f) if f.placed => flight_ground_of(c, f)
+      _ => 1.0
+    }
+    // (the bubble, for what is drawn in it as it flies: flight_pieces_in)
+    let bubble_node = Ref::new(-1)
+    let b = c.box(
+      style=(if ground < 1.0 { bubble_bare } else { bubble }).then(@ui.style(max_w=Fixed(mine_most(c)))),
+      fn() {
+        if ground < 1.0 {
+          let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
+          c.look(g, @ui.look(alpha=ground))
         }
-        None => person_words(c, words, key, found~, peek~, chat_title~, runs~)
-      }
-    },
-  )
-  bubble_node.val = b
-  match flight {
-    Some(f) => flight_bubble(c, f, b)
-    None => ()
-  }
+        // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
+        match flight {
+          Some(f) => {
+            let w = c.box(fn() { person_words(c, words, key, found~, peek~, chat_title~, runs~) })
+            flight_landing_words(c, f, w)
+            flight_pieces_in(c, f, bubble_node)
+          }
+          None => person_words(c, words, key, found~, peek~, chat_title~, runs~)
+        }
+      },
+    )
+    bubble_node.val = b
+    match flight {
+      Some(f) => flight_bubble(c, f, b)
+      None => ()
+    }
+  }, fill=false, key=pick_key)
 }
 
 ///|

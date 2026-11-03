@@ -1166,7 +1166,7 @@ pub fn pick_told_given() -> Unit
 
 pub fn pick_workspace(Source, String) -> Unit
 
-pub fn pickable(@ui.Ctx, String, String, String, String, Bool, Bool, () -> Unit, keep? : Bool, marks? : (Int32) -> Unit, share? : (() -> Unit)?, link? : String, lit? : (Int32, Int32, Int64)?) -> Unit
+pub fn pickable(@ui.Ctx, String, String, String, String, Bool, Bool, () -> Unit, keep? : Bool, marks? : (Int32) -> Unit, share? : (() -> Unit)?, link? : String, lit? : (Int32, Int32, Int64)?, source_ts? : String?) -> Unit
 
 pub let picked : @signals.Signal[Picked]
 
@@ -2009,6 +2009,7 @@ pub(all) struct ChatItem {
 
 pub(all) struct ChatPick {
   mut ts : String
+  mut source_ts : String?
   mut author : String
   mut role : String
   mut share : (() -> Unit)?
