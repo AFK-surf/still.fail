@@ -1752,6 +1752,7 @@ let zh : Map[String, String] = {
   "web-main.versions.checkingVersions": "正在检查版本",
   "web-main.versions.install": "安装",
   "web-main.versions.lastChecked": "上次检查：{time}",
+  "web-main.versions.repairNpm": "用 npm 修复",
   "web-main.versions.update": "更新",
   "web-main.video.pauseKey": "暂停（空格）",
   "web-main.video.playKey": "播放（空格）",

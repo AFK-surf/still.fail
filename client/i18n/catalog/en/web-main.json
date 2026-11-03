@@ -1174,6 +1174,7 @@
   "web-main.versions.nameState": "{name}: {state}",
   "web-main.versions.notInstalled": "Not installed",
   "web-main.versions.pending": "Pending",
+  "web-main.versions.repairNpm": "Repair with npm",
   "web-main.versions.unknown": "Unknown",
   "web-main.versions.update": "Update",
   "web-main.versions.updateFailed": "Update failed",

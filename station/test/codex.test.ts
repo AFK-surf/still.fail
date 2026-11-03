@@ -192,6 +192,26 @@ describe("the Codex driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
+  test("an incomplete Codex is reported before it starts a turn and its status is refreshed", async () => {
+    let refreshed = 0;
+    const d = driver({
+      missingHost: async () => ({ binary: "/codex", helper: "/codex-code-mode-host" }),
+      incompleteInstallation: () => { refreshed++; },
+    });
+    const p = profile();
+    await assert.rejects(d.open(options(p), () => {}), /Codex.*缺少执行组件/);
+    assert.equal(refreshed, 1);
+    assert.equal(existsSync(p.dump), false, "the broken app-server is not started");
+  });
+
+  test("a text-only request does not need the code-mode host", async () => {
+    let probed = false;
+    const d = driver({ missingHost: async () => { probed = true; return { binary: "/codex", helper: "/codex-code-mode-host" }; } });
+    const session = await d.open(options(profile(), { textOnly: true }), listen().push);
+    assert.equal(probed, false);
+    await session.dispose();
+  });
+
   test("a new sign-in replaces the app-server after its running turn, and new requests wait for it", async () => {
     const d = driver();
     const p = profile();
@@ -498,6 +518,30 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(starts(p.dump).length, 2);
     await three.prompt("say:back");
     await c.until(ended(1));
+  });
+
+  test("a same-version replacement waits for its turn and starts a new app-server", async () => {
+    const d = driver({ installedVersion: async () => "1.0.0" });
+    const p = profile();
+    writeFileSync(`${p.dump}.version`, "1.0.0");
+    const a = listen();
+    const one = await d.open(options(p), a.push);
+    await one.prompt("hold:1");
+    await a.until((e) => deltas(e).length >= 1);
+
+    // A repaired installation can have the same version while its executable and helpers have changed.
+    await d.runtimeChanged(true);
+    const b = listen();
+    const next = d.open(options(p), b.push);
+    assert.equal(starts(p.dump).length, 1, "the running turn is not interrupted");
+    assert.equal(await one.steer("finish"), true);
+    await a.until(ended(1));
+    assert.equal(outcome(a.events).kind, "completed");
+    const two = await next;
+    assert.equal(starts(p.dump).length, 2);
+    await two.prompt("say:back");
+    await b.until(ended(1));
+    assert.equal(outcome(b.events).kind, "completed");
   });
 
   test("an app-server whose output has grown long is replaced once its turn ends, its sessions opened again", async () => {

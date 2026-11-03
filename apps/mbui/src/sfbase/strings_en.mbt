@@ -1773,6 +1773,7 @@ let en : Map[String, String] = {
   "web-main.versions.checkingVersions": "Checking versions",
   "web-main.versions.install": "Install",
   "web-main.versions.lastChecked": "Last checked: {time}",
+  "web-main.versions.repairNpm": "Repair with npm",
   "web-main.versions.update": "Update",
   "web-main.video.pauseKey": "Pause (Space)",
   "web-main.video.playKey": "Play (Space)",

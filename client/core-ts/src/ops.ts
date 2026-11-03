@@ -184,7 +184,7 @@ export const PARAMS: Record<string, string> = {
   "footprint.rebuild": "keys?:strings",
   "footprint.delete": "keys?:strings",
   "footprint.evict": "keys?:strings",
-  "software.update": "id?:string",
+  "software.update": "id?:string repair?:boolean",
   "software.updateAll": "",
   "software.check": "",
   "software.channel": "channel?:string",
@@ -658,7 +658,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "footprint.evict":
       return op("POST", () => "/footprint/evict", p.pick(["keys"]), FOOTPRINT);
     case "software.update":
-      return op("POST", () => "/updates", p.pick(["id"]), OVERVIEW);
+      return op("POST", () => "/updates", p.pick(["id", "repair"]), OVERVIEW);
     case "software.updateAll":
       return op("POST", () => "/updates/all", null, OVERVIEW);
     case "software.check":

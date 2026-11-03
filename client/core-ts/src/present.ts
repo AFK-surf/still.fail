@@ -1384,7 +1384,7 @@ export function software(u: J): J {
   const latest = typeof get(u, "latest") === "string" ? (get(u, "latest") as string) : null;
   const shownText = installed ? (version ?? t(get(u, "id") === "station" ? "core-views.software.dev" : "core-views.software.unknown")) : t("core-views.software.not_installed");
   const tips = [
-    installed && get(u, "newer") !== true && get(u, "downgrade") !== true && latest !== null ? t("core-views.software.latest") : null,
+    installed && get(u, "repairable") !== true && get(u, "newer") !== true && get(u, "downgrade") !== true && latest !== null ? t("core-views.software.latest") : null,
     installed && latest === null && typeof get(u, "checkedAt") === "number" ? t("core-views.software.check_failed_retry") : null,
   ].filter((x): x is string => x !== null);
   const progress = get(u, "progress");

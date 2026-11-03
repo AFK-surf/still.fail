@@ -119,7 +119,7 @@ export interface OperationParams {
   "footprint.rebuild": { keys?: string[] | null | undefined };
   "footprint.delete": { keys?: string[] | null | undefined };
   "footprint.evict": { keys?: string[] | null | undefined };
-  "software.update": { id?: string | null | undefined };
+  "software.update": { id?: string | null | undefined; repair?: boolean | null | undefined };
   "software.updateAll": {  };
   "software.check": {  };
   "software.channel": { channel?: string | null | undefined };

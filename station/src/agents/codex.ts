@@ -19,8 +19,10 @@ import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profile
 import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
+import { Said, stationLang, tr } from "../ops/i18n.ts";
 import { run } from "../updates/runtimes.ts";
 import { versionIn } from "../updates/versions.ts";
+import { findMissingCodexHost } from "../updates/codex-repair.ts";
 
 type Json = any;
 
@@ -200,6 +202,8 @@ class Host {
   readonly turns = new Set<string>();
   /// A sign-in replaced the credentials this process loaded. Existing turns may finish on it.
   loginStale = false;
+  /// Its installation was replaced here, even if the replacement has the same version.
+  runtimeStale = false;
   private idleWaiters = new Set<() => void>();
 
   whenIdle(): Promise<void> {
@@ -382,12 +386,12 @@ class Host {
   }
 
   snapshot(): CodexHostSnapshot {
-    return { runner: this.proc.info.id, signature: this.signature, nextId: this.nextId, ready: this.ready, ...(this.key !== this.profile ? { key: this.key } : {}), ...(this.loginStale ? { loginStale: true } : {}) };
+    return { runner: this.proc.info.id, signature: this.signature, nextId: this.nextId, ready: this.ready, ...(this.key !== this.profile ? { key: this.key } : {}), ...(this.loginStale ? { loginStale: true } : {}), ...(this.runtimeStale ? { runtimeStale: true } : {}) };
   }
 }
 
 /// `key`: the driver's key for it when not its profile's (`hostKey`); none from a station before it.
-export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean; key?: string; loginStale?: boolean };
+export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean; key?: string; loginStale?: boolean; runtimeStale?: boolean };
 
 /// A thread as a next station takes it up (codex.rs HandedThread), with what its app-server needs (HandedHost).
 export type CodexSnapshot = {
@@ -426,6 +430,9 @@ export type CodexDriverOptions = {
   lent?: { borrowed(profile: Profile): boolean; write(profile: Profile): Promise<number> };
   /// The version of Codex `codex` on the PATH is now (null: not known); `codex --version` by default.
   installedVersion?: () => Promise<string | null>;
+  /// A missing code-mode host (tests can supply a probe); told so the station refreshes its software status.
+  missingHost?: typeof findMissingCodexHost;
+  incompleteInstallation?: () => void;
   /// Bytes of output an app-server may have before it is replaced (OUTPUT_LIMIT).
   outputLimit?: number;
   /// Settled once what the station before this one left is taken up (sessions/agents.ts `start`). Until then an
@@ -525,7 +532,7 @@ export class CodexDriver implements AgentDriver {
   /// An app-server running a Codex other than the one installed now: updated under it.
   private stale(host: Host): boolean {
     const installed = this.installed?.version ?? null;
-    return host.version !== null && installed !== null && host.version !== installed;
+    return host.runtimeStale || (host.version !== null && installed !== null && host.version !== installed);
   }
 
   /// An app-server whose output has grown past the limit (OUTPUT_LIMIT).
@@ -557,7 +564,9 @@ export class CodexDriver implements AgentDriver {
   }
 
   /// Codex installed or updated (from the station's pages): app-servers of the old one are replaced once idle.
-  async runtimeChanged() {
+  async runtimeChanged(replaced = false) {
+    // Mark the old hosts before probing the new version, so a concurrent turn cannot join one during the probe.
+    if (replaced) await this.serial(async () => { for (const host of this.hosts.values()) host.runtimeStale = true; });
     const installed = await this.installedVersion(true);
     await this.serial(async () => {
       for (const id of [...this.hosts.keys()]) await this.retireStale(id, installed);
@@ -611,7 +620,7 @@ export class CodexDriver implements AgentDriver {
         await this.retireStale(key, installed);
         const current = this.hosts.get(key);
         // A new caller waits for old turns, rather than joining the process with the previous login.
-        if (current && current.alive() && current.loginStale) return { waiting: current };
+        if (current && current.alive() && (current.loginStale || current.runtimeStale)) return { waiting: current };
         if (current && current.alive()) await this.renewLent(current, profile);
         if (current && current.alive() && current.signature !== hostSignature(profile)) {
           // The profile (or the station's variables for its agents) changed. Replace the process once no turn runs on it,
@@ -710,6 +719,15 @@ export class CodexDriver implements AgentDriver {
   }
 
   async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
+    // A text-only request uses no tools; in a sandbox the command belongs to that environment, not this filesystem.
+    if (!options.textOnly && !sandboxed(this.data)) {
+      const env = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "codex"), options.profile.id), CODEX_HOME: options.profile.home };
+      const missing = await (this.options.missingHost ?? findMissingCodexHost)(this.command, env);
+      if (missing) {
+        this.options.incompleteInstallation?.();
+        throw new Said(tr(stationLang(), "station.updates.codexMissingHostChat"));
+      }
+    }
     const host = await this.host(options.profile, options.key, options.cwd);
     const model = options.model ?? profileModel(options.profile);
     const skillsOff = hostSkillsOff(this.hostSkills);
@@ -806,6 +824,7 @@ export class CodexDriver implements AgentDriver {
       const current = this.hosts.get(key);
       if (current && current.alive()) {
         if (handed?.host.loginStale) current.loginStale = true;
+        if (handed?.host.runtimeStale) current.runtimeStale = true;
         return current;
       }
       if (current) await current.proc.released();
@@ -816,6 +835,7 @@ export class CodexDriver implements AgentDriver {
         ? Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready, undefined, key)
         : await this.takeUp(options.profile, info, key);
       if (handed?.host.loginStale) host.loginStale = true;
+      if (handed?.host.runtimeStale) host.runtimeStale = true;
       if (handed) host.version = versionInOutput(outFile(this.data, info.id));
       this.hosts.set(key, host);
       return host;
@@ -867,6 +887,7 @@ export class CodexDriver implements AgentDriver {
   /// station's variables for its agents) said before.
   async outdated(host: Host, profile: Profile | undefined): Promise<boolean> {
     if (profile !== undefined && host.signature !== hostSignature(profile)) return true;
+    if (host.runtimeStale) return true;
     if (host.version === null) return false;
     await this.installedVersion();
     return this.stale(host);
@@ -1025,7 +1046,7 @@ export class CodexSession implements AgentSession {
     const p = this.driver.options.currentProfile ? this.driver.options.currentProfile(this.host.profile) : this.profile;
     // Codex was updated under its app-server, whose tools would all fail, or it runs with what its profile said before:
     // opened again on a new one, unless another turn runs on it yet.
-    const outdated = this.host.loginStale || (this.host.turns.size === 0 && (await this.driver.outdated(this.host, p)));
+    const outdated = this.host.loginStale || this.host.runtimeStale || (this.host.turns.size === 0 && (await this.driver.outdated(this.host, p)));
     await this.driver.renewLent(this.host, this.profile);
     if (this.state.closed) throw new Error("codex session is closed");
     if (this.state.busy) throw new Error("a turn is already running");

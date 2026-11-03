@@ -51,6 +51,12 @@ test("a_chat_is_kept_by_put_and_let_go_by_delete", () => {
   assert.deepEqual([keep({ kept: false })?.method, keep({ kept: false })?.path], ["DELETE", "/threads/3/keep"]);
 });
 
+test("a Codex repair is an explicit software update request", () => {
+  const update = (params: Record<string, unknown>) => request("software.update", { station: "w/s", id: "codex", ...params });
+  assert.deepEqual(update({ repair: true })?.body, { id: "codex", repair: true });
+  assert.deepEqual(update({})?.body, { id: "codex" });
+});
+
 test("a_slack_apps_form_writes_only_what_differs_from_what_it_started_from", () => {
   const from = { name: "still.fail", description: "Coding agent", groups: { base: true, dm: true } };
   const put = (params: Record<string, unknown>) => request("connect.putSlackApp", { station: "w/s", connect: "c1", ...params });

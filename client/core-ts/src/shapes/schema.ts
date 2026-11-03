@@ -751,6 +751,7 @@ export const SHAPES: Record<string, Shape> = {
     ["auto", opt("bool"), { doc: "The station's: whether it updates itself when a newer release of its channel is out (自动更新); none where it\ncannot be updated from here, and from a station older than it." }],
     ["idleOnly", opt("bool"), { doc: "Automatic updates wait for clients and running turns to leave, then five quiet minutes." }],
     ["updatable", "bool", { doc: "The pages can update it (or install it, when it is not installed)." }],
+    ["repairable", "bool", { default: true, doc: "An incomplete Codex can be repaired with npm after a person chooses it; the existing command is backed up." }],
     ["note", opt("String"), { said: true, doc: "Why it cannot be updated from here (the desktop app's station, a runtime installed another way…)." }],
     ["state", "String", { doc: "idle | updating | failed" }],
     ["progress", opt("String"), { doc: "The station's, while it is updating: where the update is, in a line (正在下载新版本…). None from a station\nolder than it, or an installer that does not say." }],
