@@ -31,6 +31,8 @@ type Asked = {
   ask: Ask;
   session: string | null;
   home: Slot | null;
+  /// After every other read waiting, one at a time (`read`).
+  background: boolean;
   at: number;
   took: number;
   resolve: (text: string) => void;
@@ -141,10 +143,14 @@ export class Readers {
   }
 
   /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
-  read(op: string, args: unknown, lang: Ask["lang"], { told = false }: { told?: boolean } = {}): Promise<string> {
+  /// `background`: what a client brings onto its device in the background (POST /batch: a session's history page after
+  /// page): after every other read waiting, and one at a time. In line with the rest, a sweep's pages (1 to 4 s each on
+  /// ccvm, 2 to 7 MB of a Codex transcript read: 2026-11-03) held the sidebar, a session opened and the rest 10 s and
+  /// more behind them, four at once from each device.
+  read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false }: { told?: boolean; background?: boolean } = {}): Promise<string> {
     if (op === "usage") return this.usageRead(args, lang, told);
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told);
-    return this.enqueue(op, args, lang, told, op === CHECKPOINT);
+    return this.enqueue(op, args, lang, told, op === CHECKPOINT, background);
   }
 
   private async usageRead(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
@@ -194,7 +200,7 @@ export class Readers {
   }
 
   /// `first`: before the reads waiting (CHECKPOINT).
-  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false): Promise<string> {
+  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     const line = told ? this.told : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
@@ -203,7 +209,7 @@ export class Readers {
     const home = session !== null ? this.homes.get(session) : undefined;
     const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
-      const asked = { ask, session, home: home !== undefined && line.slots.includes(home) ? home : null, at: wall.now(), took: 0, resolve, reject };
+      const asked = { ask, session, home: home !== undefined && line.slots.includes(home) ? home : null, background, at: wall.now(), took: 0, resolve, reject };
       if (first) line.waiting.unshift(asked);
       else line.waiting.push(asked);
       this.pump(line);
@@ -216,9 +222,13 @@ export class Readers {
   private pump(line: Line) {
     if (this.closed) return;
     while (line.waiting.length > 0) {
-      const bulkHeld = line.slots.filter((s) => s.held !== null && !interactive(s.held)).length;
+      const bulkHeld = line.slots.filter((s) => s.held !== null && !interactive(s.held) && !s.held.background).length;
       const limited = line.room && line.size > 1 && bulkHeld >= line.size - 1;
-      const at = limited ? line.waiting.findIndex((a) => interactive(a) || a.ask.op === CHECKPOINT) : 0;
+      // A background read only when no other waits, none of its kind is being read, and a reader is left beside it.
+      const foreground = line.waiting.findIndex((a) => !a.background);
+      const free = line.slots.filter((s) => s.held === null).length + (line.size - line.slots.length);
+      const behind = line.slots.some((s) => s.held?.background === true) || (free < 2 && line.size > 1) ? -1 : line.waiting.findIndex((a) => a.background);
+      const at = limited ? line.waiting.findIndex((a) => interactive(a) || a.ask.op === CHECKPOINT) : foreground >= 0 ? foreground : behind;
       if (at < 0) break;
       const asked = line.waiting[at]!;
       const home = asked.home !== null && asked.home.held === null && line.slots.includes(asked.home) ? asked.home : null;

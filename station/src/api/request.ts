@@ -15,6 +15,9 @@ export type Request = {
   upload?: AsyncIterable<Buffer>;
   viewer: Viewer;
   lang: Lang;
+  /// Read in the background (a part of POST /batch: the history a client brings onto its device): after every other read
+  /// waiting, one at a time (read/pool.ts).
+  background?: boolean;
 };
 
 export type Answer = {
