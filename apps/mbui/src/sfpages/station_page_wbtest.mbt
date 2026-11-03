@@ -12,6 +12,50 @@ fn station_tester(address : String, part? : String = "overview", w? : Double = 3
 }
 
 ///|
+test "an incomplete Codex offers its manager an explicit npm repair" {
+  for (w, platform) in page_cases {
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let calls : Array[Json] = []
+    let base = @sffixture.fixture("settings")
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        if name == "software.update" { calls.push(params) }
+        done(Ok(Json::null()))
+      },
+    }
+    let codex : Json = {
+      "id": Json::string("codex"),
+      "name": Json::string("Codex"),
+      "installed": Json::boolean(true),
+      "repairable": Json::boolean(true),
+      "state": Json::string("idle"),
+      "shownText": Json::string("0.166.0"),
+      "note": Json::string("Codex 缺少执行组件"),
+    }
+    let t = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        let core = @sfbase.settings_core(src, rig_workspace)
+        software_row(c, core, "ws1/st1", Some(codex), true, false, false)
+      })
+    }, w~, h=300.0, platform~)
+    t.draw()
+    assert_true(t.query(Button, label="用 npm 修复") is Some(_), msg="\{w} platform \{platform}")
+    t.click(Button, label="用 npm 修复")
+    t.frame()
+    assert_eq(calls.length(), 1)
+    assert_eq(text(Some(calls[0]), "id"), "codex")
+    assert_true(flag(Some(calls[0]), "repair"))
+  }
+}
+
+///|
 test "a station's workspace rows do not repeat an unmarked workspace's initial" {
   for (w, platform) in page_cases {
     let t = station_tester("ws1/st1", part="settings", w~, platform~)

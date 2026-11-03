@@ -36,11 +36,11 @@
 // - `stillfail-station channel` reaches this process as the launcher's `{"op":"hup"}` (it holds SIGHUP for it):
 //   `answerChannelAsk`.
 
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { type FSWatcher, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, parse } from "node:path";
+import { dirname, join, parse } from "node:path";
 import { type Clock, Effect, Fiber } from "effect";
 import { Fibers } from "../ops/fibers.ts";
 import type { ConfigFile } from "../ops/config.ts";
@@ -52,6 +52,7 @@ import { platform as machine } from "../platform/index.ts";
 import { holding, onLetGo } from "./holds.ts";
 import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
 import { SDK_PACKAGE, sdkPrefix, sdkVersion } from "../agents/cursor.ts";
+import { canSwitchCodex, captureCodex, codexBinary, hasCodexHost, missingCodexHost, restoreCodex, switchCodex, type CodexEntry } from "./codex-repair.ts";
 import {
   DEVIN_MANIFEST, type Env, type How, type Kind, KINDS, NotFinished, type OwnNode, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, isNpmInstall,
   kindCommand, kindName, kindPackage, linkBesideNpm, npmInstall, ownNode, ownNodeHome, pinNpmVersion, putOwnNodes, removeOwnNodeLinks, run,
@@ -74,6 +75,7 @@ export type SoftwareVersion = {
   channel?: string;
   auto?: boolean;
   updatable: boolean;
+  repairable?: boolean;
   note?: string;
   state: "idle" | "updating" | "failed";
   progress?: string;
@@ -140,7 +142,9 @@ export type UpdatesOptions = {
   /// How many turns run now (the hub's), for what a drain waits on and an automatic update waits for.
   running?: () => number;
   /// Told when a runtime was installed or updated here (the machine's logins read again), and whether it is there now.
-  runtimeChanged?: (kind: RuntimeKind, installed: boolean) => void;
+  runtimeChanged?: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void;
+  /// The Codex installation's code-mode host (tests can supply a probe).
+  codexHostProbe?: typeof missingCodexHost;
   timing?: Partial<Timing>;
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
@@ -153,6 +157,7 @@ type Item = {
   version: string | null;
   latest: string | null;
   how: How | null;
+  repairable: boolean;
   /// Why it cannot be updated from here.
   note: Words | null;
   /// When an update started, while it runs.
@@ -170,7 +175,7 @@ type Item = {
   channel: Channel | null;
 };
 
-const empty = (): Item => ({ installed: false, version: null, latest: null, how: null, note: null, updating: null, progress: null, step: null, percent: null, done: null, failed: null, channel: null });
+const empty = (): Item => ({ installed: false, version: null, latest: null, how: null, repairable: false, note: null, updating: null, progress: null, step: null, percent: null, done: null, failed: null, channel: null });
 
 /// What the station's update started from the pages leaves in <data>/run/update.started, for whichever process runs
 /// the station when it ends.
@@ -252,7 +257,8 @@ export class Updates {
   tried: string | null = null;
   private lastCheck: number | null = null;
   private running: () => number;
-  private runtimeChanged: (kind: RuntimeKind, installed: boolean) => void;
+  private runtimeChanged: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void;
+  private codexHostProbe: typeof missingCodexHost;
   // Long-lived work, and time: fibers in this part's scope on its clock, ended with it.
   private fibers: Fibers;
   private closed = false;
@@ -282,6 +288,7 @@ export class Updates {
     this.trusted = o.trusted;
     this.running = o.running ?? (() => 0);
     this.runtimeChanged = o.runtimeChanged ?? (() => {});
+    this.codexHostProbe = o.codexHostProbe ?? missingCodexHost;
     // Read before an update can replace the release.
     this.installed = releaseChannel(this.app) ?? channelOf(this.config.raw(), this.app);
     this.fibers = new Fibers("updates", o.clock);
@@ -295,7 +302,7 @@ export class Updates {
   }
 
   /// What to do when a runtime was installed or updated from here.
-  onRuntimeChanged(f: (kind: RuntimeKind, installed: boolean) => void) {
+  onRuntimeChanged(f: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void) {
     this.runtimeChanged = f;
   }
 
@@ -451,6 +458,7 @@ export class Updates {
         channel: here ? channel : undefined,
         auto: here ? this.auto() : undefined,
         updatable: item.how !== null || here,
+        repairable: item.repairable || undefined,
         note: item.note ? say(item.note, lang) : undefined,
         state: item.updating !== null ? "updating" : item.failed !== null ? "failed" : "idle",
         progress: progress ? say(progress, lang) : undefined,
@@ -538,14 +546,19 @@ export class Updates {
     } catch (e) {
       log.warn("updates", "the runtime's latest version not read", { runtime: kind, error: (e as Error).message });
     }
-    const how = found ? howToUpdate(kind, found, env) : howToInstall(kind, this.env, this.ownNode());
+    const missing = kind === "codex" && found && version !== null ? await this.codexHostProbe(found, env) : null;
+    const npmEnv = missing ? await withShellCommand("npm", env) : env;
+    const npm = missing ? npmInstall(npmEnv, this.ownNode(), ["install", "-g", "@openai/codex@latest"], kindName("codex")) : null;
+    const repairable = missing !== null && found !== null && canSwitchCodex(found, env) && !(npm instanceof Unable);
+    const how = missing ? null : found ? howToUpdate(kind, found, env) : howToInstall(kind, this.env, this.ownNode());
     return {
       ...empty(),
       installed: found !== null,
       version,
       latest,
       how: how instanceof Unable ? null : how,
-      note: how instanceof Unable ? { key: how.key, args: how.args } : null,
+      repairable,
+      note: missing ? { key: repairable ? "station.updates.codexMissingHostRepair" : "station.updates.codexMissingHost", args: { path: missing.helper } } : how instanceof Unable ? { key: how.key, args: how.args } : null,
     };
   }
 
@@ -682,6 +695,88 @@ export class Updates {
     this.spawn(() => this.updateRuntime(kind, how));
   }
 
+  /// A person chose to replace an incomplete Codex with an npm installation. Unknown installations are never changed
+  /// by an ordinary update: this separate action preserves the old entry and validates the replacement before use.
+  async repairCodex(lang: Lang = stationLang()): Promise<void> {
+    const item = this.items.codex;
+    if (item.updating !== null) throw refused(lang, "station.updates.alreadyUpdating", { name: "Codex" });
+    if (this.items.station.updating !== null) throw refused(lang, "station.updates.stationBusyUpdate", { name: "Codex" });
+    // Reserve the runtime before probing: two repair requests, or a station update, must not pass each other here.
+    this.set("codex", (i) => {
+      i.updating = this.fibers.now();
+      i.progress = null;
+      i.percent = null;
+      i.failed = null;
+      i.done = null;
+    });
+    try {
+      const env = await withShellCommand("codex", this.env);
+      const found = findCommand("codex", env);
+      if (!item.repairable || !found || !canSwitchCodex(found, env) || !(await this.codexHostProbe(found, env))) {
+        throw refused(lang, "station.updates.codexRepairUnavailable");
+      }
+      const captured = captureCodex(found, env);
+      if (!captured) throw refused(lang, "station.updates.codexRepairUnavailable");
+      const npmEnv = await withShellCommand("npm", env);
+      const prefix = join(this.data, "runtimes", "codex", `npm-${randomBytes(8).toString("hex")}`);
+      const how = npmInstall(npmEnv, this.ownNode(), ["install", "-g", "--prefix", prefix, "@openai/codex@latest"], "Codex");
+      if (how instanceof Unable) throw refused(lang, how.key, how.args);
+      this.spawn(() => this.repairCodexInBackground(captured, how, prefix, npmEnv));
+    } catch (error) {
+      this.set("codex", (i) => { i.updating = null; });
+      throw error;
+    }
+  }
+
+  private async repairCodexInBackground(captured: CodexEntry, how: How, prefix: string, npmEnv: Env) {
+    const { found } = captured;
+    const launcher = join(prefix, "bin", "codex");
+    let backup: string | null = null;
+    let failure: Words | null = null;
+    let keepPrefix = false;
+    try {
+      const [ok, said] = await this.install("codex", how, npmEnv);
+      if (!ok) throw new Error(tail(said, stationLang()));
+      const newFound = { onPath: launcher, real: realpathSync(launcher) };
+      const binary = codexBinary(newFound);
+      const env = how.node ? machine.prependPath(npmEnv, how.node.bin) : npmEnv;
+      const [runs, output] = await run(launcher, ["--version"], env, 20_000);
+      const [hostRuns] = binary !== null && hasCodexHost(binary) ? await run(join(dirname(binary), machine.exe("codex-code-mode-host")), ["--help"], env, 20_000) : [false];
+      if (!runs || versionIn(output) === null || !hostRuns) {
+        throw new Failed({ key: "station.updates.codexRepairIncomplete" });
+      }
+      backup = switchCodex(captured, launcher, env);
+      const actualEnv = await withShellCommand("codex", this.env);
+      const actual = findCommand("codex", actualEnv);
+      if (!actual || actual.real !== newFound.real) throw new Failed({ key: "station.updates.codexRepairNotOnPath" });
+      keepPrefix = true;
+    } catch (e) {
+      failure = e instanceof NotFinished ? { key: "station.updates.timedOut" } : e instanceof Failed ? e.words : { text: (e as Error).message };
+      if (backup !== null) {
+        try {
+          restoreCodex(found.onPath, launcher, backup);
+          backup = null;
+        } catch (restoreError) {
+          keepPrefix = true;
+          failure = { text: `${say(failure, stationLang())}; ${(restoreError as Error).message}` };
+        }
+      }
+    }
+    if (!keepPrefix) {
+      try { rmSync(prefix, { recursive: true, force: true }); } catch (error) { log.warn("updates", "the unused Codex repair not removed", { prefix, error: String(error) }); }
+    }
+    // Retire the old app-servers as soon as the switch succeeds; reading the registry below can take longer.
+    if (failure === null) {
+      try { this.runtimeChanged("codex", true, true); } catch {}
+    }
+    const read = await this.readRuntime("codex");
+    this.set("codex", (i) => Object.assign(i, read, { failed: failure, done: failure === null && backup ? { key: "station.updates.codexRepaired", args: { path: backup } } : null }));
+    if (failure !== null) {
+      try { this.runtimeChanged("codex", read.installed, false); } catch {}
+    }
+    this.autoUpdate("a newer release out, waited for a runtime");
+  }
+
   private async updateRuntime(kind: Kind, how: How) {
     log.info("updates", "updating or installing a runtime", { runtime: kind, program: how.program, args: how.args });
     let failed: Words | null = null;
@@ -709,7 +804,7 @@ export class Updates {
     }
     this.set(kind, (i) => Object.assign(i, read, { failed }));
     try {
-      this.runtimeChanged(kind as RuntimeKind, read.installed);
+      this.runtimeChanged(kind as RuntimeKind, read.installed, false);
     } catch {}
     // The station's own update waited for this one.
     this.autoUpdate("a newer release out, waited for a runtime");
@@ -718,9 +813,9 @@ export class Updates {
   /// Runs `how`, saying where it is as it goes: a download that can be measured, by how much of it is in (Codex's
   /// build for this machine, fetched here first; Claude Code's, as its installer writes it), else the step the command
   /// says it is at (Homebrew's, Claude Code's installer's).
-  private async install(kind: Kind, how: How): Promise<[boolean, string, number | null]> {
+  private async install(kind: Kind, how: How, givenEnv?: Env): Promise<[boolean, string, number | null]> {
     if (how.node) await this.installNode(kind, how.node);
-    const runtimeEnv = await withShellCommand(kindCommand(kind), this.env);
+    const runtimeEnv = givenEnv ?? await withShellCommand(kindCommand(kind), this.env);
     const npm = isNpmInstall(how);
     if (kind === "codex" && npm) {
       const version = await this.fetchCodex(how.program, runtimeEnv);

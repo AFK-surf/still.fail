@@ -11,6 +11,13 @@ holdLanguage();
 type J = any;
 const GIB = 1024 ** 3;
 
+test("an incomplete Codex is not labelled up to date", () => {
+  const raw = { id: "codex", name: "Codex", installed: true, version: "0.166.0", latest: "0.166.0", newer: false, downgrade: false, updatable: false, repairable: true, state: "idle" };
+  const shown = p.software(raw) as J;
+  assert.equal(shown.tipText, "");
+  assert.equal((conform("SoftwareVersion", shown) as J).ok.repairable, true);
+});
+
 test("reset credits show the expiries known for each available card", () => {
   const now = 1_900_000_000_000;
   const day = 86_400_000;

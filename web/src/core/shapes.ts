@@ -5399,6 +5399,8 @@ export interface SoftwareVersion {
 	idleOnly?: boolean;
 	/** The pages can update it (or install it, when it is not installed). */
 	updatable: boolean;
+	/** An incomplete Codex can be repaired with npm after a person chooses it; the existing command is backed up. */
+	repairable?: boolean;
 	/** Why it cannot be updated from here (the desktop app's station, a runtime installed another way…). */
 	note?: string;
 	/** idle | updating | failed */

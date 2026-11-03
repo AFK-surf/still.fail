@@ -189,8 +189,10 @@ export const AgentsLive = (control: Control) =>
       // What the station before this one left, taken up (`start`): until then the codex app-servers its runners keep are
       // the sessions' that ran on them (agents/codex.ts `takenUp`).
       const takenUp = Promise.withResolvers<void>();
+      let codexIncomplete = () => {};
       const codex = new CodexDriver({
         data,
+        incompleteInstallation: () => codexIncomplete(),
         takenUp: takenUp.promise,
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
         lent: {
@@ -445,6 +447,7 @@ export const AgentsLive = (control: Control) =>
         origin: () => plane.releaseBase(),
         running: () => hub.running(),
       });
+      codexIncomplete = () => { void updates.check().catch((error) => log.warn("updates", "Codex installation not checked", { error: String(error) })); };
       // The packages of the modules the station installs itself, read and updated with the rest (a line each).
       updates.add(yield* ModulePackages);
       updates.start();
@@ -526,12 +529,12 @@ export const AgentsLive = (control: Control) =>
         followed: () => accounts.followed(),
       });
       // A runtime installed or updated from the pages: the machine's logins read again.
-      updates.onRuntimeChanged((kind, installed) => {
+      updates.onRuntimeChanged((kind, installed, replaced) => {
         void accounts.machine?.refresh();
         // Installed: the sessions whose start found it missing take what waits.
         if (installed) hub.installed(kind);
         // Codex updated: its app-servers of the old version are replaced (their files are gone).
-        void codex.runtimeChanged().catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
+        void codex.runtimeChanged(kind === "codex" && replaced).catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
       });
       // A session found its runtime not installed: the pages read it again (removed since they last did).
       hub.onRuntimeMissing((runtime) => updates.missing(runtime));

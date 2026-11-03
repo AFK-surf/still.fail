@@ -124,6 +124,8 @@ test "on the tape 用量 made once: its bar the tree's, its title where a chat's
   // (the workspaces as `listed` says: none while it says so)
   let listed = @signals.signal(true)
   let shared : Array[String] = []
+  let share_card_before = @sfbase.share_card_of.val
+  defer { @sfbase.share_card_of.val = share_card_before }
   @sfbase.share_card_of.val = fn(_, w) { shared.push(w.id) }
   let src : Ref[Source?] = Ref(None)
   let t = tape_bar_in("settings-usage", Ref(""), wrap=fn(base) {
@@ -167,7 +169,6 @@ test "on the tape 用量 made once: its bar the tree's, its title where a chat's
   t.run_for(@ui.move_most_ms)
   assert_eq(share().length(), 0, msg="its share left over")
   assert_eq(bar_words_drawn(t, "7 天").length(), 0, msg="its days left over")
-  @sfbase.share_card_of.val = fn(_, _) {  }
 }
 
 ///|

@@ -1743,6 +1743,7 @@ web-main.versions.checking
 web-main.versions.checkingVersions
 web-main.versions.install
 web-main.versions.lastChecked
+web-main.versions.repairNpm
 web-main.versions.update
 web-main.video.pauseKey
 web-main.video.playKey

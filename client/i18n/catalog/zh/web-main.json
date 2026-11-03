@@ -1117,6 +1117,7 @@
   "web-main.versions.nameState": "{name} {state}",
   "web-main.versions.notInstalled": "未安装",
   "web-main.versions.pending": "待更新",
+  "web-main.versions.repairNpm": "用 npm 修复",
   "web-main.versions.unknown": "版本未知",
   "web-main.versions.update": "更新",
   "web-main.versions.updateFailed": "更新失败",

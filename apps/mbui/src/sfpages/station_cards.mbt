@@ -235,6 +235,13 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
       }
     }
   }
+  let repair = fn(label : String) {
+    if manager && flag(v, "repairable") {
+      if @sf.button(c, label, key="software/" + station + "/" + id, tone=Primary, disabled=busy) {
+        software_call(core, station, "software.update", [("id", str(id)), ("repair", Json::boolean(true))])
+      }
+    }
+  }
   let own = id == "station"
   let switches = own && manager && ((beta && has(v, "channel")) || has(v, "auto"))
   @sf.item_row(c, fn() {
@@ -269,7 +276,13 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
           if text(v, "message") != "" {
             @sf.tip(c, "software-failed-tip/" + station + "/" + id, fid, text(v, "message"))
           }
-          button(@sf.t("common.retry"), false)
+          if flag(v, "repairable") {
+            repair(@sf.t("common.retry"))
+          } else {
+            button(@sf.t("common.retry"), false)
+          }
+        } else if flag(v, "repairable") {
+          repair(@sf.t("web-main.versions.repairNpm"))
         } else if !installed {
           button(@sf.t("web-main.versions.install"), false)
         } else if flag(v, "newer") && latest != "" {
