@@ -1,7 +1,7 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The host's and the text's contracts on macOS (docs/determinism.md, "What is compared, and where"; scripts/
-# host_contract.sh), on Mini1 (mbui's runner there, label mbui-render): kitdemo's controls page run in a window with its
-# scripted taps, its tape made a Tester's test and run here (every frame the same), then the tape Mini1 kept
+# host_contract.sh), on macos-ci (mbui's runner there, label mbui-render): kitdemo's controls page run in a window with its
+# scripted taps, its tape made a Tester's test and run here (every frame the same), then the tape macos-ci kept
 # (mini1_controls) asked of Core Text again (every answer the same). When the macOS host changes.
 name: mbui-host-mac
 on:
@@ -123,7 +123,7 @@ jobs:
       - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/mac.png"
         if: (success() || failure()) && steps.f.outputs.marks != 'false'
         run: scripts/host_contract.sh mac marks
-      # (the pictures are for people, not the contract: mini1's connection to GitHub's artifact service reset once and
+      # (the pictures are for people, not the contract: macos-ci's connection to GitHub's artifact service reset once and
       # failed a contract that had passed, main acb00686, 41356526828, 2026-11-01)
       - uses: actions/upload-artifact@v4
         if: always()

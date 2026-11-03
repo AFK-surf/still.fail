@@ -1,4 +1,4 @@
-# Untrusted PR code runs only on disposable GitHub-hosted machines, never mini1/studio.
+# Untrusted PR code runs only on disposable GitHub-hosted machines, never macos-ci/test station.
 name: contributions
 on:
   pull_request:

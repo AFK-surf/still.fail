@@ -131,14 +131,14 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
 - **A draw list** (`.dl`, src/ui/drawlist.mbt) names what it draws by what it is: a glyph by its font, words and
   cluster, an image by its source and size. The same screen reached by other steps is the same list to the byte.
 - **Offscreen is the picture.** A Tester's draw list drawn offscreen by `mbui-render` is the host's own picture of
-  that screen to the byte (scripts/render_check.sh: kitdemo's controls page, on Mini1 and on Studio). When offscreen
+  that screen to the byte (scripts/render_check.sh: kitdemo's controls page, on the CI Mac and on a test Mac). When offscreen
   is wrong it is fixed, not replaced by what a window shows.
-- **Pixel references belong to one machine: Mini1, offscreen.** The same draw list drawn offscreen is the same picture
-  to the byte on every run on one machine, and another on another kind (Mini1, M4 on macOS 26.5, and Studio, M2 Max on
-  macOS 27.0.1: 6910 pixels of a 960×720 page apart; GitHub's macOS runner: 149 from Mini1). The references
-  (goldens/render/mini1-*.png) are made and checked on Mini1 only, by mbui's own runner there (`mini1-mbui`, label
-  `mbui-render`: the render workflow), on the macOS and GPU they were made on (goldens/render/mini1.txt); the workflow
-  fails when either is another (Mini1 updated), and then every reference is made again in one PR from its artifact,
+- **Pixel references belong to one machine: the CI Mac, offscreen.** The same draw list drawn offscreen is the same picture
+  to the byte on every run on one machine, and another on another kind (the CI Mac, M4 on macOS 26.5, and a test Mac, M2 Max on
+  macOS 27.0.1: 6910 pixels of a 960×720 page apart; GitHub's macOS runner: 149 from the CI Mac). The references
+  (goldens/render/macos-ci-*.png) are made and checked on the CI Mac only, by mbui's own runner there (the dedicated runner, label
+  `mbui-render`: the render workflow), on the macOS and GPU they were made on (goldens/render/macos-ci.txt); the workflow
+  fails when either is another (the CI Mac updated), and then every reference is made again in one PR from its artifact,
   saying so. Other machines check draw lists only. The draw list they are of is kept beside them
   (goldens/render/controls.dl, scripts/render_dl.sh), not printed from the controls page each run: so only a renderer
   or the list's format changes the pictures, never a control drawn otherwise. A PR that changes references commits the workflow's artifact and
@@ -171,7 +171,7 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   - An image a list names is decoded by the host while the renderer waits (Android: its uploads done on the GL
     thread as it asks; Windows: WIC's pool); in the browser nothing is told while the page's one thread draws, so a
     list with images is drawn without them there (the fixed list has none).
-- **On screen = offscreen** is checked on Mini1 (scripts/render_check.sh), by still.fail's mbui CI on its own runner,
+- **On screen = offscreen** is checked on the CI Mac (scripts/render_check.sh), by still.fail's mbui CI on its own runner,
   when mbui is bumped there and the bump changes the macOS drawing
   (src/host/apple_render.m, apple_text.m): rarely.
 - **The host's and the text's contracts, host by host** (`scripts/host_contract.sh HOST build|record|text`):
@@ -191,8 +191,8 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   | Android | `host-android.yml`: an x86_64 emulator (API 34, google_apis, pixel_7; `ABI=x86_64` build) on ubuntu-24.04 | 9 frames the same | each answer the same | `android_controls` |
   | Windows | `host-windows.yml`: windows-latest, WARP | 9 frames the same | each answer the same | `windows_controls` |
   | web | `host-web.yml`: headless Chromium (SwiftShader's WebGL2) on ubuntu-24.04 | 9 frames the same | each answer the same | `web_controls` |
-  | macOS | `host-mac.yml`: Mini1 (mbui's runner, `[self-hosted, mbui-render]`; never a fork's pull request), a window | 9 frames the same (also on Studio, by hand) | each answer of `mini1_controls` the same (Mini1's own; Studio's text was the same too) | `mini1_*`, `drive_controls` (Mini1's) |
-  | iOS | `host-ios.yml`: Mini1's simulator (iOS 26.5, `ios-mbui-sf`, scripts/ios.sh; the same runner as macOS'), which the iOS host's own runs use too: booted with an app of theirs running, the job fails at once (`host_contract.sh ios free`), and it shuts the simulator again only when it booted it (`done`) | 9 frames the same | each of 147 answers the same | `ios_controls` |
+  | macOS | `host-mac.yml`: the CI Mac (mbui's runner, `[self-hosted, mbui-render]`; never a fork's pull request), a window | 9 frames the same (also on a test Mac, by hand) | each answer of `mini1_controls` the same (the CI Mac's own; a test Mac's text was the same too) | `mini1_*`, `drive_controls` (the CI Mac's) |
+  | iOS | `host-ios.yml`: the CI Mac's simulator (iOS 26.5, `ios-mbui-sf`, scripts/ios.sh; the same runner as macOS'), which the iOS host's own runs use too: booted with an app of theirs running, the job fails at once (`host_contract.sh ios free`), and it shuts the simulator again only when it booted it (`done`) | 9 frames the same | each of 147 answers the same | `ios_controls` |
 
   Each workflow runs when its host's code changes (the host's files in src/host, its scripts, these scripts, its kept
   run). The system's settings a run is drawn by (motion and transparency reduced, dark, the window's inset) are on
@@ -205,8 +205,8 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   (made by test/marks/base.py, flat colours), kitdemo's MBUI_MARKS, twice on the host; the two PNGs the same to the
   byte, and the same as goldens/marks/`<host>`.png, made on what goldens/marks/`<host>`.txt says (checked: `system`,
   the system's build that draws it, and `fonts`, the system font's bytes; the rest only said). Either another: the
-  reference made again from the workflow's artifact (out/host/`<host>`/marks.png, marks.txt). macOS (Mini1, Core
-  Graphics), iOS (Mini1's simulator) and Android (the emulator's Canvas) draw marks; Windows and the web draw none
+  reference made again from the workflow's artifact (out/host/`<host>`/marks.png, marks.txt). macOS (the CI Mac, Core
+  Graphics), iOS (the CI Mac's simulator) and Android (the emulator's Canvas) draw marks; Windows and the web draw none
   (`draw_marks` is None there), so they have no such contract.
 - **Image decoding** is checked apart: each host's decoded pixels of a fixed set of images, to the byte.
 - **The system's own views** (a web page, a video) are outside mbui's drawing: only where and how large they are
@@ -227,7 +227,7 @@ The migration ends when each of detlint's rules is at 0 (docs/detlint.md). What 
 1. The tests' `settle` (mbui's, still.fail's): each to `draw`, `run_for(<a declared time>)`, `finish(<a ticket>)`,
    and `assert_idle` at its end.
 2. still.fail's `c.stable()`: gone with `Ctx::stable` (mbui #36); the app draws in a screenshot's run as in any.
-3. still.fail's screens: compared as draw lists (`.dl`, every PR) and drawn offscreen against the Mini1
+3. still.fail's screens: compared as draw lists (`.dl`, every PR) and drawn offscreen against the CI Mac
    references; its Mac real-window screenshots are taken at a declared moment, and the end-to-end drive waits for
    nothing settling (mbui#91).
 4. A Tester's outside work finished by the test only (`finish`, a seed for the order): `auto_finish` off by default.
