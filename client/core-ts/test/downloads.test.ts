@@ -362,6 +362,24 @@ test("a drive's file downloaded as its folder lists it, read off the device to b
   r.core.close();
 });
 
+test("a drive's file whose size nobody said is read before it is ready, an empty one too", async () => {
+  const movie = bytesOf(5 * MB, 23);
+  const drive: Drive = { files: new Map([["/tmp/rec\nmovie.mp4", { bytes: movie, mtime: 1800 }], ["/tmp/rec\nempty.mp4", { bytes: new Uint8Array(), mtime: 1801 }]]), zips: new Map() };
+  const t = await started();
+  files(t.host, new Map(), new Set(), new Set(), drive);
+  const r = await watch(t);
+  const id = (await r.ask("download.start", { station: ST, root: "/tmp/rec", path: "movie.mp4", name: "recording.mp4", size: 0, mtime: 0 })).ok.download.id;
+  const [d] = await r.view();
+  assert.deepEqual([d.state, d.size, d.loaded], ["ready", movie.length, movie.length]);
+  await r.ask("download.take", { id });
+  const read = await r.ask("download.read", { id, offset: 0, length: 4 * MB });
+  assert.deepEqual(read.bytes, movie.subarray(0, 4 * MB));
+  await r.ask("download.start", { station: ST, root: "/tmp/rec", path: "empty.mp4", name: "empty.mp4", size: 0, mtime: 0 });
+  const empty = (await r.view()).find((entry) => entry.name === "empty.mp4");
+  assert.deepEqual([empty.state, empty.size], ["ready", 0]);
+  r.core.close();
+});
+
 test("a folder downloaded: zipped on the station first (正在打包), then fetched as a file of the drive", async () => {
   const zip = bytesOf(2 * MB, 23);
   const drive: Drive = {
