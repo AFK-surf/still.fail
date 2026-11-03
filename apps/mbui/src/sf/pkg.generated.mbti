@@ -1868,6 +1868,8 @@ pub fn setting(@ui.Ctx, String, () -> Unit, note? : String) -> Unit
 
 pub fn setting_link(@ui.Ctx, String, String, String, note? : String) -> Bool
 
+pub fn setting_switch(@ui.Ctx, String, String, Bool, note? : String) -> Bool
+
 pub fn settings(@ui.Ctx, Array[() -> Unit]) -> Array[() -> Unit]
 
 pub let share_bar : Int64
