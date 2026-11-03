@@ -1193,12 +1193,21 @@ test("a_station_that_leaves_its_rows_to_the_device_has_them_made_here_from_what_
   push("dismiss", { thread: 7, n: 5 });
   await coalesce(host);
   assert.equal(held().card.dismissed, true);
+  // Its sessions changed: that chat's rows read; gone with its thread: out.
+  answers["GET /chats?thread=7"] = { rows: [{ ...held(), title: "部署（二）" }], scope: ["k1"] };
+  push("chat-changed", { thread: 7 });
+  await coalesce(host);
+  assert.deepEqual([asked().slice(before), held().title], [["/chats?thread=7", "/chats?thread=7"], "部署（二）"]);
   // Gone from the list as the station says (archived): out.
   answers["GET /chats?session=k1"] = { rows: [], scope: ["k1"] };
   push("session", { ...session("k1"), archivedAt: 20 });
   await coalesce(host);
-  assert.deepEqual(asked().slice(before), ["/chats?thread=7", "/chats?session=k1"]);
+  assert.deepEqual(asked().slice(before), ["/chats?thread=7", "/chats?thread=7", "/chats?session=k1"]);
   assert.equal(held(), undefined);
+  // Settings changed (nothing said of what): the list read whole.
+  push("chat-changed", {});
+  await coalesce(host);
+  assert.deepEqual(asked().slice(before).slice(3), ["/chats"]);
   core.close();
 });
 

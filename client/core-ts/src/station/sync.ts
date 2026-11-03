@@ -1290,6 +1290,7 @@ export class StationsSync {
       }
       case "made":
       case "chat-mark":
+      case "chat-changed":
         return this.#held(address, name, data);
       // The stream that took over could not be told all that came since the last its predecessor gave: read again.
       case "missed":
@@ -1368,7 +1369,10 @@ export class StationsSync {
       }
       case "thread-removed": {
         const id = u64(get(data, "id"));
-        if (id !== null) this.#threadGone(address, id);
+        if (id === null) return;
+        this.#threadGone(address, id);
+        // Its rows go with it, where the station leaves them to the device.
+        if (this.#links.get(address)?.makesRows) for (const row of core.data.chatsOf(address, { thread: id })) this.#dropRow(address, row);
         return;
       }
       case "read": {
@@ -1431,6 +1435,15 @@ export class StationsSync {
         // The station leaves its sidebar rows' changes to the device (`rows=1`): made here from now (rows-after.ts).
         const link = this.#links.get(address);
         if (link) link.makesRows = get(data, "rows") === true;
+        return;
+      }
+      case "chat-changed": {
+        // What changes which rows there are and what they say, and only the station can say (a chat's sessions, its
+        // settings, who the viewer is on Slack): those of a chat read again, or all of them.
+        if (!this.#links.get(address)?.makesRows) return;
+        const thread = u64(get(data, "thread"));
+        if (thread !== null) this.#rowsRead(address, { threads: [thread] });
+        else this.#enqueue(address, "chats", Priority.shown, this.#read(address, { topic: "chatRows", station: address }, "/chats"));
         return;
       }
       case "chat-mark": {
@@ -1532,8 +1545,22 @@ export class StationsSync {
     })));
   }
 
+  /// A row gone from the list, by its id.
+  #dropRow(address: string, row: unknown): void {
+    const id = str(get(row, "id"));
+    if (id !== null) this.#core.data.dropChat(address, id);
+  }
+
   #onSessionRemoved(address: string, key: string): void {
     const core = this.#core;
+    // Where the station leaves the rows to the device: its own goes, and those it was among the agents of are read.
+    if (this.#links.get(address)?.makesRows) {
+      for (const row of core.data.chatsOf(address, { session: key })) {
+        const thread = u64(get(row, "thread"));
+        if (str(get(row, "id")) === key) this.#dropRow(address, row);
+        if (thread !== null) this.#rowsRead(address, { threads: [thread] });
+      }
+    }
     core.data.dropSession(address, key);
     const link = this.#links.get(address);
     if (link) {
