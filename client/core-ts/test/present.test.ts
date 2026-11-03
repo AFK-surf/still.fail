@@ -315,7 +315,7 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "需要你处理");
   assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出错：额度已用完");
   assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：账号认证失败");
-  assert.equal(words({ outcome: "aborted" }), "出错：被停止");
+  assert.equal(words({ outcome: "aborted" }), "已停止");
   assert.equal(words({ outcome: "completed" }), "出错：意外停止");
   // Without its lead (the 待处理 list's line, its dot says that much): what it needs, why it stopped.
   const what = (turn: J) => p.rowStateLine({ agents: [p.session({ process: "warm", lastTurn: turn })] })?.[2];
@@ -324,6 +324,9 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(what({ outcome: "failed", detail: "auth: 401" }), "账号认证失败");
   assert.equal(what({ outcome: "aborted" }), "被停止");
   assert.equal(what({ outcome: "completed" }), "意外停止");
+  const stopped = p.session({ process: "warm", lastTurn: { outcome: "aborted" } });
+  const failed = p.session({ process: "warm", lastTurn: { outcome: "failed", detail: "auth: 401" } });
+  assert.equal(p.rowStateLine({ agents: [stopped, failed] }, false, (a) => a === stopped)?.[0], "出错：账号认证失败");
   let decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
   decided = p.session(decided);
   assert.equal(decided.mark, "block");

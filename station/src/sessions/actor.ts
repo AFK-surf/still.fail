@@ -1084,7 +1084,9 @@ export class SessionActor {
       // Nothing said since it last could not start: not said again, for another reason either (two taking turns as the
       // station restarted filled a chat, 2026-11-02). A person's word in between is answered.
       const cannotStart = `⚠️ ${t("station.notice.cannotStart")}`;
-      if (!this.saidLast((last) => last === said || (!missing && last.startsWith(cannotStart)))) await this.notice(said, null, missing ? this.runtime : null);
+      if (!this.saidLast((last) => last === said || (!missing && last.startsWith(cannotStart)))) {
+        await this.notice(said, null, missing ? this.runtime : null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
+      }
       throw error;
     }
   }
@@ -1361,7 +1363,17 @@ export class SessionActor {
         return this.startTurn("resume", GO_ON_AFTER_SPENT);
       }
       // Said once: what wakes it meanwhile (a job's notice, a wait over) would only run into it again.
-      if (!this.saidLast((said) => [SPENT_NOTICE(), ...SPENT_BEFORE].some((s) => said.startsWith(s)))) await this.notice(failureNotice(outcome), this.profile);
+      if (!this.saidLast((said) => [SPENT_NOTICE(), ...SPENT_BEFORE].some((s) => said.startsWith(s)))) {
+        await this.notice(failureNotice(outcome), this.profile, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
+      } else if (turn) {
+        // The existing notice is deliberately reused for this turn; retain its identity as for a new notice.
+        const latest = store.latestThread(this.key);
+        const last = latest ? store.entriesBefore(latest.thread.id, null, 1).at(-1) : undefined;
+        if (latest && last) {
+          store.setAbout(turn.id, [latest.thread.id, last.n, last.ts]);
+          store.notify(this.key);
+        }
+      }
       this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
     } else if (overloaded) {
       this.nudges = 0;
@@ -1378,7 +1390,7 @@ export class SessionActor {
       this.nudges = 0;
       // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
       // notice points there.
-      await this.notice(failureNotice(outcome), outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null);
+      await this.notice(failureNotice(outcome), outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
     } else if (outcome.kind === "aborted") {
       this.nudges = 0;
       if (stopRequested) {
@@ -1433,7 +1445,7 @@ export class SessionActor {
         return this.startTurn("resume", TOOLS_LOST);
       }
       this.toolsRestarts = 0;
-      return this.giveUp();
+      return this.giveUp(turn?.id ?? null);
     }
     if (this.nudges < this.deps.maxNudges()) {
       this.nudges++;
@@ -1441,18 +1453,20 @@ export class SessionActor {
       return this.startTurn("nudge", NUDGE);
     }
     this.nudges = 0;
-    await this.giveUp();
+    await this.giveUp(turn?.id ?? null);
   }
 
   /// No turn ended in a state, and no more are asked for: the thread is told so, with the agent's last words when it
   /// posted none (it may have answered where nobody reads: its tools out of reach), marked as the station's.
-  private async giveUp() {
+  private async giveUp(turnId: string | null) {
     const said = this.posted ? "" : this.lastSaid;
     this.lastSaid = "";
-    if (said === "") return this.notice(`⚠️ ${t("station.notice.noResult")}`);
+    const store = this.deps.store;
+    const recorded = turnId !== null ? (where: [number, number, string]) => { store.setAbout(turnId, where); store.notify(this.key); } : undefined;
+    if (said === "") return this.notice(`⚠️ ${t("station.notice.noResult")}`, null, null, recorded);
     log.info("session", "the turn reached nobody; its last words are shown in its place", { session: this.key });
     const quoted = chars(said, FALLBACK_MOST).split("\n").map((line) => `> ${line}`).join("\n");
-    await this.notice(`⚠️ ${t("station.notice.noResultSaid")}\n\n${quoted}`);
+    await this.notice(`⚠️ ${t("station.notice.noResultSaid")}\n\n${quoted}`, null, null, recorded);
   }
 
   /// Stopped while it waits: the wait ends, and so does the work that would bring it back (session.rs `stop_waiting`).
