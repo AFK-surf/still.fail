@@ -79,15 +79,17 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
       await v.input({ t: "pointer", kind: "down", x, y, buttons: 1 });
       await sleep(80);
       await v.input({ t: "pointer", kind: "up", x, y, buttons: 0 });
-      await sleep(5000);
     };
     // Settings opened by a finger on its icon: a picture of the app's own, then back to the home screen (⇧⌘H).
     const opens = async (x: number, y: number, name: string) => {
       const home = await picture(name + "-home");
+      // Waited for by its picture, not a fixed 5 s: Settings had not shown in 5 s on mini1 once (side run 41554130845);
+      // how long it took is said, and one not shown in a minute fails as before.
+      const asked = Date.now();
       await tap(x, y);
-      const app = await picture(name + "-settings");
-      const changed = differs(home, app);
-      console.log(name, "changed", changed);
+      let changed = 0;
+      while ((changed = differs(home, await picture(name + "-settings"))) <= 0.2 && Date.now() - asked < 60_000) await sleep(1000);
+      console.log(name, "changed", changed, "in", Date.now() - asked, "ms");
       assert.ok(changed > 0.2, `${name}: its picture did not change (${changed})`);
       assert.equal(backboardd(), running, `a touch in ${name} took backboardd down`);
       await v.input({ t: "key", kind: "down", key: "h", code: "KeyH", mods: 12 });
