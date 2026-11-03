@@ -319,7 +319,7 @@ test("a usage summary checks a session's workspace once for its minutes", () => 
   } finally { store.close(); }
 });
 
-test("usage summary diagnostics count only the statistics that contributed", () => {
+test("usage summary diagnostics distinguish candidates from contributing statistics", () => {
   const store = Store.open(":memory:");
   try {
     for (const [key, ws] of [["a", "A"], ["other", "B"]] as const) {
@@ -349,6 +349,17 @@ test("usage summary diagnostics count only the statistics that contributed", () 
         assert.equal(typeof diagnostics.selectedMs, "number", "the query records when selection finished");
       }
     }
+    const query = compactQuery(60_000n, 180_000n, 0n, viewer, true);
+    let candidates = 0;
+    let whenSelected = -1;
+    store.db.function("usage_summary_candidate", () => { candidates++; return 1; });
+    store.db.function("usage_summary_selected", () => { whenSelected = candidates; return 1; });
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.args) as { detail: string }[]).map((r) => r.detail).join(" | ");
+    assert.match(plan, /SEARCH usage_compact USING COVERING INDEX usage_compact_scope_time/);
+    assert.match(plan, /SEARCH c USING PRIMARY KEY/);
+    store.db.prepare(query.sql).all(...query.args);
+    assert.equal(candidates, 3);
+    assert.equal(whenSelected, 3, "selection is marked only after every indexed candidate has been examined");
   } finally { store.close(); }
 });
 
