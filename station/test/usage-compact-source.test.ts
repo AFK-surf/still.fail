@@ -338,6 +338,7 @@ test("usage summary diagnostics distinguish candidates from contributing statist
       VALUES ('a', 1, 0, 'tombstone', 'cc', 'claude', 'm', 0, 0, 0, 0, 0, 0, 0, 0, 'WA')`).run();
     const reader = makeStore(store.db, ".");
     const viewer = { workspace: "A", home: false };
+    const before = (store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
     for (const [from, to, parts, calls] of [[60_000n, 180_000n, 2, 3], [60_001n, 180_001n, 2, 2]] as const) {
       const diagnostics: { parts?: number; candidates?: number; selectedMs?: number } = {};
       const result = usageGroups(reader, from, to, 0n, viewer, diagnostics);
@@ -360,6 +361,7 @@ test("usage summary diagnostics distinguish candidates from contributing statist
     store.db.prepare(query.sql).all(...query.args);
     assert.equal(candidates, 3);
     assert.equal(whenSelected, 3, "selection is marked only after every indexed candidate has been examined");
+    assert.equal((store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n, before, "diagnostics write nothing");
   } finally { store.close(); }
 });
 
