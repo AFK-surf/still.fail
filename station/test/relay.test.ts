@@ -88,8 +88,10 @@ test("a chat's places: those relayed to before come first, the latest first, the
 test("relaying starts the conversation there, makes it the agent's, says so where the chat came from and tells the agent", async () => {
   const { r, begun } = relayRig();
   const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
-  // Each turn ends with a state, as an agent's does (else it is nudged).
+  // Each turn names the chat it is in and ends with a state, as an agent's does (else it is nudged or asked to).
   const end = async () => {
+    const latest = r.store.latestThread(key)!.thread;
+    await r.call(key, "chat_post", { to: `${latest.channel}/${latest.threadTs}`, title: "规划转发功能" });
     await r.call(key, "chat_state", { kind: "all_done", done: "answered" });
     r.claude.last().complete();
     await settle();
