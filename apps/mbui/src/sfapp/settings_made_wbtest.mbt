@@ -1278,13 +1278,9 @@ fn topic_asked(base : Source, name : String, key : String, asked : Array[String]
     topic: fn(n, params) {
       if n == name {
         asked.push(
-          match params {
-            Object(o) =>
-              match o.get(key) {
-                Some(String(s)) => s
-                Some(Number(d, ..)) => d.to_int().to_string()
-                _ => ""
-              }
+          match params.get(key) {
+            Some(String(s)) => s
+            Some(Number(d, ..)) => d.to_int().to_string()
             _ => ""
           },
         )
