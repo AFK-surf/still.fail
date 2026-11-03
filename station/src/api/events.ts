@@ -759,6 +759,12 @@ export class Events {
         this.usageFrom = this.usageFrom === null || change.from === undefined ? null : Math.min(this.usageFrom ?? Infinity, change.from);
         this.usageChanged();
         break;
+      case "chatMark": {
+        // As written, to those who see the chat (`chat-mark`): a device that makes its sidebar itself puts it in place.
+        const { type: _, ...mark } = change;
+        this.emit("chat-mark", mark, { sees: change.thread !== null ? { thread: change.thread } : { session: change.session } });
+        break;
+      }
       case "processes":
       case "decisionChecks":
         this.overviewChanged();

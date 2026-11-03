@@ -133,6 +133,10 @@ test("what a viewer marks (a pin, a card dismissed, a chat kept) is told as writ
   const told = (got: { event?: string; data?: any }[]) => got.filter((e) => e.event === "pin" || e.event === "dismiss" || e.event === "kept").map((e) => [e.event, e.data]);
   assert.deepEqual(told(a.got), [["pin", { session: "s", at: 5 }], ["dismiss", { thread: 3, n: 7 }], ["kept", { thread: 3, kept: false }]]);
   assert.deepEqual(told(b.got), []);
+  // What is written of a chat beside what is said in it, to those who see it.
+  change({ type: "chatMark", thread: 3, session: "s", archive: { suggested: 4 } });
+  await settle();
+  assert.deepEqual(a.got.filter((e) => e.event === "chat-mark").map((e) => e.data), [{ thread: 3, session: "s", archive: { suggested: 4 } }]);
   await a.close();
   await b.close();
 });
