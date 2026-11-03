@@ -36,7 +36,7 @@ test("an update started inside the station restarts it in the background, and on
   const script = installScript("https://ember.test");
   // The drain waits for the caller's own turn: waiting on it there would wait on itself.
   assert.match(script, /if \[ -z "\$handed" \] && \[ -n "\$pid" \] && inside_station; then/);
-  assert.match(script, /set -m\n  \( trap '' HUP; restart_and_finish; rm -rf "\$tmp" \) > "\$cur\/run\/update.log" 2>&1 < \/dev\/null &\n  exit 0/);
+  assert.match(script, /set -m\n(  #.*\n)*  \( trap '' HUP; restart_and_finish; rm -rf "\$tmp" "\$lock_dir" \) > "\$cur\/run\/update.log" 2>&1 < \/dev\/null &\n  echo \$! > "\$lock_dir\/pid"\n  exit 0/);
   assert.match(script, /cmp -s "\$tmp\/stillfail\/VERSION" "\$app\/VERSION" && same_service; then/);
 });
 
