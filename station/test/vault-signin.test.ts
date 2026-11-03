@@ -113,6 +113,24 @@ test("an active sign-in is found without reading the session's completed sign-in
   assert.equal(w.signIns.get("g1")!.status, "ended");
 });
 
+test("a vault decision finds its sign-in without reading the session's completed sign-ins", async () => {
+  const w = world();
+  const insert = w.db.prepare("INSERT INTO signin_asks (id,session,owner,status,body) VALUES (?,'s1','pat@example.com','done',?)");
+  for (let n=0; n<500; n++) insert.run(`old-${n}`, JSON.stringify({ id: `old-${n}`, session: "s1", site: "github.com", status: "done" }));
+  await w.signIns.ask("s1", { site: "github.com", reason: "看 PR" });
+  w.signIns.fill("pat@example.com", "ws", "g1", { username: "pat", password: "pw", keep: true });
+  await tick();
+  await w.signIns.ask("s1", { site: "github.com", done: true });
+  let examined = 0;
+  w.db.function("json_extract", { deterministic: true }, (body, path) => {
+    if (path === "$.save") examined++;
+    return JSON.parse(String(body))[String(path).slice(2)] ?? null;
+  });
+  w.signIns.heard({ id: "r_save", session: "s1", status: "granted", save: { kind: "browser" } } as unknown as Request);
+  assert.equal(w.cards[0]!.card.signin.outcome.kept, "granted");
+  assert.equal(examined, 1, "only the sign-in for this save is examined");
+});
+
 test("a site as asked: its host, without scheme, path, port or www.", () => {
   assert.equal(siteOf("https://www.GitHub.com/login?x=1"), "github.com");
   assert.equal(siteOf("accounts.google.com:443"), "accounts.google.com");
