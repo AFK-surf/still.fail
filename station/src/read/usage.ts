@@ -231,14 +231,17 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
+type BatchedHistory = { range: { from: bigint; to: bigint }; result: BatchedUsage };
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
-  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage } = {}): Json {
+  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage; batchedHistory?: BatchedHistory; historyPrepassMs?: number } = {}): Json {
   const includeRemoteRuns = options.remoteRuns !== false;
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
-  const started = performance.now() - (options.batched?.ms ?? 0);
-  let last = started;
+  const historyPrepass = options.historyPrepassMs ?? options.batchedHistory?.result.ms ?? 0;
+  const started = performance.now() - (options.batched?.ms ?? 0) - historyPrepass;
+  let last = started + historyPrepass;
   const stages: Record<string, number> = {};
+  if (options.historyPrepassMs !== undefined || options.batchedHistory !== undefined) stages.historyQuery = historyPrepass;
   const mark = (stage: string) => {
     const now = performance.now();
     stages[stage] = Math.round(now - last);
@@ -297,7 +300,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
       // Old clients continue to see history as unavailable; newer clients can use the separately named, explicitly
       // incomplete history without treating missing earlier calls as zero.
       if (error.message === USAGE_MINUTES_PENDING) {
-        try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange); }
+        try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange, options.batchedHistory); }
         catch (partialError) {
           if (!(partialError instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(partialError.message)) throw partialError;
           historyPending = partialError.message === USAGE_MINUTES_PENDING && options.historyRange !== undefined && hasCompactUsage(s.db);
@@ -340,16 +343,42 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
 /// in the asker's time zone, runtime and model (the year, as Codex's usage summary has it); the chats of each place
 /// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's chat
 /// working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
-export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}, partial = false,
-  requested?: { from: bigint; to: bigint }): Json {
-  usageChatsReady(s, viewer);
-  mark("historyVisibility");
+export function validHistoryRange(requested: { from: bigint; to: bigint } | undefined, utcOffsetMin: bigint): boolean {
   const day = 86_400_000n;
-  const valid = requested !== undefined && requested.from <= requested.to && requested.to - requested.from <= 370n * day
+  return requested !== undefined && requested.from <= requested.to && requested.to - requested.from <= 370n * day
     && requested.from % 60_000n === 0n && requested.to % 60_000n === 0n
     && (requested.to + utcOffsetMin * 60_000n) % day === 0n
     && requested.to + utcOffsetMin * 60_000n >= -8_640_000_000_000_000n
     && requested.to + utcOffsetMin * 60_000n <= 8_640_000_000_000_000n;
+}
+
+/// A cached detail summary contains the same new minutes as an incomplete compact history. Group it in the same
+/// order as SQLite and keep integer arithmetic exact until each session/model total is converted.
+function historyFromSummary(groups: UsageGroup[]): ReturnType<typeof usageByDay> | null {
+  if (groups.some((g) => g.day === "")) return null;
+  type History = { day: string; session: string; runtime: string; model: string | null; tokens: bigint; calls: bigint };
+  const grouped = new Map<string, History>();
+  for (const g of groups) {
+    const key = JSON.stringify([g.day, g.session, g.runtime, g.model]);
+    let row = grouped.get(key);
+    if (!row) { row = { day: g.day, session: g.session, runtime: g.runtime, model: g.model, tokens: 0n, calls: 0n }; grouped.set(key, row); }
+    row.tokens += BigInt(g.input) + BigInt(g.cacheRead) + BigInt(g.cacheWrite) + BigInt(g.cacheWriteLong) + BigInt(g.output);
+    row.calls += BigInt(g.calls);
+  }
+  const cmp = (a: string | null, b: string | null) => a === b ? 0 : a === null ? -1 : b === null ? 1 : byBytes(a, b);
+  const safe = (n: bigint) => {
+    if (n > BigInt(Number.MAX_SAFE_INTEGER) || n < BigInt(Number.MIN_SAFE_INTEGER)) throw new RangeError("integer is too large to be represented as a JavaScript number");
+    return Number(n);
+  };
+  return [...grouped.values()].sort((a, b) => cmp(a.day, b.day) || cmp(a.session, b.session) || cmp(a.runtime, b.runtime) || cmp(a.model, b.model))
+    .map((r) => ({ ...r, tokens: safe(r.tokens), calls: safe(r.calls) }));
+}
+
+export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}, partial = false,
+  requested?: { from: bigint; to: bigint }, batched?: BatchedHistory): Json {
+  usageChatsReady(s, viewer);
+  mark("historyVisibility");
+  const valid = validHistoryRange(requested, utcOffsetMin);
   // Preserve a complete pre-existing history until it has its own bounded source. Incomplete history has only the
   // new compact buckets; a fresh database has no older daily rows to consult.
   const bounded = valid && hasCompactUsage(s.db) && (partial ||
@@ -358,7 +387,12 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
   const total = range === undefined ? null : compactTotal(s.db, viewer, range.to);
   if (range !== undefined && total === null) throw new Error(USAGE_MINUTES_PENDING);
   const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
-  for (const r of usageByDay(s, utcOffsetMin, viewer, partial, range)) {
+  // Old complete totals have a separate source. Only substitute when the stored coverage says there are none.
+  const compactOnly = partial && range !== undefined && requested !== undefined && batched !== undefined &&
+    batched.range.from === requested.from && batched.range.to === requested.to &&
+    (s.db.prepare("SELECT old_days FROM usage_compact_since WHERE id = 1").get() as { old_days: number }).old_days === 0;
+  const cachedDays = compactOnly ? historyFromSummary(batched!.result.groups) : null;
+  for (const r of cachedDays ?? usageByDay(s, utcOffsetMin, viewer, partial, range)) {
     const key = `${r.day}\n${r.runtime}\n${r.model ?? ""}`;
     const d = days.get(key) ?? { day: r.day, runtime: r.runtime, model: r.model, tokens: 0, calls: 0 };
     d.tokens += r.tokens;
