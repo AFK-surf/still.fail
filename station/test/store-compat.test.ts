@@ -1,7 +1,6 @@
-// The write side over a COPY of a real station's data (the Rust station's ~/.stillfail, or $STILLFAIL_COMPAT_DATA): it
-// opens as it is (version 12, nothing added), reads as read/store.ts reads it, and a write cycle leaves the database as
-// the Rust schema has it, the threads the Rust wrote out to archive files brought back as they read. Skipped where there
-// is no station.
+// The write side over a COPY of a real station's data (~/.stillfail, or $STILLFAIL_COMPAT_DATA): it opens (one of the
+// Rust station's version 12 brought up, the threads it wrote out to archive files back in the database as they read),
+// reads as read/store.ts reads it, and takes a write cycle. Skipped where there is no station.
 // The live database is never opened: the copy is made with cp (db, -wal, -shm, archive/threads) and removed after.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -12,7 +11,8 @@ import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import * as read from "../src/read/store.ts";
 import { cardOf } from "../src/store/rows.ts";
-import { SCHEMA } from "../src/store/schema.ts";
+import { SCHEMA_VERSION } from "../src/store/schema.ts";
+import { readArchive } from "../src/store/archive.ts";
 import { MANUAL, Store, newMessage, turnSummaryJson } from "../src/store/store.ts";
 
 const live = process.env.STILLFAIL_COMPAT_DATA ?? join(homedir(), ".stillfail");
@@ -42,28 +42,6 @@ function shape(path: string): string[] {
   }
 }
 
-/// Columns the TS station adds to tables the Rust station made (schema.ts), by table: a station's in several workspaces
-/// (docs/multi-workspace.md). A table's latest first: each is taken off the end of its table's SQL in turn.
-const ADDED: [string, string][] = [
-  ["turns", "wait_watch"], ["sessions", "ws"], ["sessions", "context"], ["sessions", "afresh"], ["archive_policy", "ws"], ["entries", "letter"], ["entries", "runtime"], ["jobs", "small"], ["jobs", "size"], ["jobs", "screen"], ["jobs", "queued"],
-  ["usage", "context_window"], ["usage", "context"], ["usage", "calls"], ["opened_chats", "opener_title"],
-];
-/// What those columns bring with them: an index of its own (letters; the sessions counted by connect and workspace; the
-/// threads' homes), and the `merged` view saying the column (letters).
-const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home", "threads_own", "entries_said", "entries_agent_at", "sessions_ws", "turns_by_end", "threads_archived", "sessions_models", "sessions_put_away", "threads_put_away"];
-const MERGED_ADDS = [", m.letter"];
-/// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`, `addUsageQuarters`): each with its columns,
-/// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes
-/// (`addUsageColumns`).
-const MADE = ["usage_chat", "usage_chat_stats", "usage_chat_members", "usage_chat_cards", "usage_chat_scopes", "usage_chat_totals", "usage_chat_progress", "usage_chat_dirty", "usage_chat_dirty_scope", "usage_detail", "usage_detail_scope", "usage_detail_lookup", "usage_detail_dirty", "usage_detail_dirty_scope", "usage_detail_sessions", "usage_detail_seen", "usage_detail_replace", "usage_detail_ready", "usage_detail_all", "usage_totals", "usage_span", "usage_compactions", "usage_main_calls", "usage_compaction_events", "usage_compaction_backfill", "usage_quarters", "usage_day_quarters", "usage_minute", "usage_minute_scope", "usage_minute_sessions", "usage_minute_seen", "usage_minute_all", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries", "card_outcomes", "session_turns", "session_work", "session_work_from", "remote_run", "remote_run_progress", "remote_run_lookup", "remote_run_by_time", "remote_run_by_job", "remote_run_counts", "remote_run_total"];
-MADE.push("usage_detail_live", "usage_detail_live_scope", "usage_detail_live_lookup", "usage_detail_live_dirty",
-  "usage_detail_live_dirty_scope", "usage_detail_live_sessions", "usage_detail_live_seen", "usage_detail_live_ignored",
-  "usage_detail_live_update", "usage_detail_live_replace", "usage_detail_live_ready", "usage_detail_live_all", "usage_detail_live_since");
-MADE.push("usage_totals_incremental", "usage_totals_source", "usage_totals_source_scope", "usage_totals_source_lookup",
-  "usage_totals_source_dirty", "usage_totals_source_dirty_scope", "usage_totals_source_sessions", "usage_totals_source_seen",
-  "usage_totals_source_ignored", "usage_totals_source_update", "usage_totals_source_replace", "usage_totals_source_ready", "usage_totals_source_all");
-const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
-
 const noToken = <T extends { token: string }>(r: T) => {
   const { token: _, ...rest } = r;
   return rest;
@@ -75,32 +53,27 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
   }
   if (existsSync(join(live, "archive", "threads"))) cpSync(join(live, "archive", "threads"), join(dir, "archive", "threads"), { recursive: true });
   const path = join(dir, "stillfail.db");
-  const before = shape(path);
+  const filed = (() => {
+    const db = new DatabaseSync(path, { readOnly: true });
+    try {
+      const ids = (db.prepare("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id").all() as any[]).map((r) => r.id as number);
+      return ids.filter((id) => existsSync(join(dir, "archive", "threads", `${id}.jsonl.zst`)));
+    } finally {
+      db.close();
+    }
+  })();
+  const fromFiles = new Map(filed.map((id) => [id, readArchive(join(dir, "archive", "threads", `${id}.jsonl.zst`))]));
 
   const store = Store.open(path);
   let opened: string[] = [];
   try {
     assert.equal(store.archiveDir(), join(dir, "archive"));
-    // Opening adds nothing to what the Rust station keeps, beyond the tables and indexes of the Rust SCHEMA a station
-    // older than that source had not made yet (CREATE … IF NOT EXISTS, as the Rust's open makes them).
     opened = shape(path);
-    // Besides the columns the TS station adds on open itself (schema.ts `add*Columns`), as later ones are: a table's SQL
-    // then says them after its last column (at its end, or before its PRIMARY KEY), and each is a column line of its own.
-    const plain = (l: string) => {
-      const columns = ADDED.reduce((t, [table, column]) => (t.startsWith(`table ${table}:`) ? t.replace(new RegExp(`, ${column} [A-Z][A-Z0-9 ]*(?=\\)$|,\\s*PRIMARY KEY)`), "") : t), l);
-      return columns.startsWith("view merged:") ? MERGED_ADDS.reduce((t, add) => t.replace(add, ""), columns) : columns;
-    };
-    const mine = (l: string) => ADDED.some(([table, column]) => l.startsWith(`  ${table}.${column} `)) || ADDED_INDEXES.some((index) => l.startsWith(`index ${index}:`));
-    const was = before.map(plain);
-    // Ignore only newly added columns; columns already present must still survive opening.
-    const now = opened.filter((l) => !mine(l) || before.includes(l)).map(plain);
-    // (The triggers of the TS station's own tables aside: it makes them anew.)
-    assert.deepEqual(was.filter((l) => !now.includes(l) && !(made(l) && l.startsWith("trigger "))), [], "nothing changed or gone");
-    const added = now.filter((l) => !was.includes(l) && !made(l));
-    for (const line of added) {
-      const name = /^(?:table|index) (\w+):/.exec(line)?.[1] ?? /^  (\w+)\./.exec(line)?.[1];
-      assert.ok(name && new RegExp(`CREATE (TABLE|INDEX) IF NOT EXISTS ${name} `).test(SCHEMA), `only the Rust SCHEMA's own: ${line.split("\n")[0]}`);
-      assert.ok(!before.some((l) => l.startsWith(`table ${name}:`)), "no column added to a table the station had");
+    assert.ok(opened.includes(`user_version ${SCHEMA_VERSION}`));
+    // The threads the Rust station wrote out: back in the database, each as it read from its file.
+    for (const [id, entries] of fromFiles) {
+      assert.ok(!existsSync(join(dir, "archive", "threads", `${id}.jsonl.zst`)));
+      assert.deepEqual(store.entriesAfter(id, 0), entries, `thread ${id}`);
     }
 
     // Reads: the same as read/store.ts over the same file.
@@ -171,7 +144,7 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     const live = store.db
       .prepare(
         `SELECT ts.thread, ts.session FROM thread_sessions ts JOIN threads t ON t.id = ts.thread JOIN sessions s ON s.key = ts.session
-         WHERE t.archived_at IS NULL AND t.hidden_at IS NULL AND s.archived_at IS NULL ORDER BY t.id DESC LIMIT 1`,
+         WHERE t.hidden_at IS NULL AND s.archived_at IS NULL ORDER BY t.id DESC LIMIT 1`,
       )
       .get() as any ??
       // A station whose chats are all in the archive: any thread with a session.
@@ -200,46 +173,9 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
       assert.equal(store.lastTurn(live.session)!.ending, "all_done");
     }
 
-    // An archived session's threads, written out to their files by the Rust station: brought back as it is shown again,
-    // and archived again, left in the database.
-    const archived = store.db
-      .prepare(
-        `SELECT s.key FROM sessions s WHERE s.archived_at IS NOT NULL AND EXISTS (SELECT 1 FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
-           WHERE ts.session = s.key AND t.archived_at IS NOT NULL) ORDER BY s.archived_at DESC LIMIT 3`,
-      )
-      .all() as any[];
-    if (archived.length === 0) t.diagnostic("no archived session with archived threads: bringing them back was not run");
-    for (const { key } of archived) {
-      const files = new Set<number>();
-      for (const t of store.sessionThreads(key)) if (existsSync(join(dir, "archive", "threads", `${t.thread.id}.jsonl.zst`))) files.add(t.thread.id);
-      const entries = new Map([...files].map((id) => [id, store.entriesAfter(id, 0)]));
-      const by = store.getSession(key)!.archivedBy ?? MANUAL;
-      store.setArchived(key, false, MANUAL);
-      for (const id of files) {
-        assert.ok(!existsSync(join(dir, "archive", "threads", `${id}.jsonl.zst`)), "brought back into the database");
-        assert.deepEqual(store.entriesAfter(id, 0), entries.get(id));
-      }
-      store.setArchived(key, true, by);
-      for (const id of files) {
-        assert.ok(!existsSync(join(dir, "archive", "threads", `${id}.jsonl.zst`)), "archived again, left in the database");
-        assert.deepEqual(store.entriesAfter(id, 0), entries.get(id));
-      }
-    }
-
-    // Every other thread the Rust station wrote out: brought back a few at a time, each as it read from its file.
-    const filed = (store.db.prepare("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id").all() as any[]).map((r) => r.id as number);
-    const fromFiles = new Map(filed.map((id) => [id, store.entriesAfter(id, 0)]));
-    let left = filed.length;
-    while (left > 0) left = store.bringInArchived(100).left;
-    for (const [id, entries] of fromFiles) {
-      assert.ok(!existsSync(join(dir, "archive", "threads", `${id}.jsonl.zst`)));
-      assert.deepEqual(store.entriesAfter(id, 0), entries, `thread ${id}`);
-    }
-    assert.deepEqual(store.lostArchives(), []);
-
     // A chat hidden by hand and shown again: its entries where they were.
     const chat = store.db
-      .prepare("SELECT id FROM threads t WHERE hidden_at IS NULL AND archived_at IS NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread = t.id) ORDER BY id DESC LIMIT 1")
+      .prepare("SELECT id FROM threads t WHERE hidden_at IS NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread = t.id) ORDER BY id DESC LIMIT 1")
       .get() as any;
     assert.ok(chat, "a thread to hide");
     {
@@ -254,7 +190,7 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     store.close();
   }
 
-  // The database is as the Rust schema has it: nothing new since it was opened, and whole.
+  // The database as it was opened: nothing new since, and whole.
   assert.deepEqual(shape(path), opened);
   const db = new DatabaseSync(path, { readOnly: true });
   assert.equal((db.prepare("PRAGMA integrity_check").get() as any).integrity_check, "ok");

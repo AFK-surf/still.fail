@@ -22,7 +22,6 @@ import { openStore } from "../src/read/store.ts";
 import { chatRows, chats } from "../src/read/views.ts";
 import { marksOf, rowsMade } from "../../client/core-ts/src/station/rows-made.ts";
 import { isDeepStrictEqual } from "node:util";
-import { fileAway } from "./archived-before.ts";
 import { FakeDriver, settle } from "./hub-fakes.ts";
 import { UsageCounter, claudeProject } from "../src/usage/counter.ts";
 import { keepCounted } from "../src/usage/module.ts";
@@ -904,7 +903,7 @@ test("writing in an agent's Slack thread makes its item the viewer's (我参与�
   }
 });
 
-test("an archived chat is listed as it was, from the database or from the file a station before wrote it out to", async () => {
+test("an archived chat is listed as it was, from the database", async () => {
   const r = rig();
   try {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
@@ -918,13 +917,8 @@ test("an archived chat is listed as it was, from the database or from the file a
     assert.ok(!existsSync(file));
     const archived = await listed();
     assert.deepEqual([archived.last, archived.lastMessage.text, archived.unread, archived.people], [before.last, "first", before.unread, before.people]);
-    // Written out to its file by a station before: read from there the same (once: a second list is the same).
-    fileAway(r.store, id);
-    assert.deepEqual(await listed(), archived);
-    assert.deepEqual(await listed(), archived);
-    // Brought back by what is said in it and archived again: listed as it is now.
+    // Said in again and archived again: listed as it is now.
     r.store.insertMessage(newMessage(id, "1.3", "person", "b@x", "second"));
-    assert.ok(!existsSync(file));
     assert.equal((await r.ask("POST", `/sessions/${made.key}/archive`))[0], 200);
     const again = await listed();
     assert.deepEqual([again.last, again.lastMessage.text, again.people.map((p: any) => p.email)], [archived.last + 1, "second", ["a@x", "b@x"]]);
