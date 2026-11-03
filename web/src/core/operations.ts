@@ -18,7 +18,7 @@ export interface OperationParams {
   "session.compact": { key: string };
   "session.clear": { key: string; readBack?: boolean | null | undefined };
   "session.delete": { key: string };
-  "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; context?: number | null | undefined; repick?: boolean | null | undefined; afresh?: boolean | null | undefined };
+  "session.settings": { key: string; runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; context?: number | null | undefined; repick?: boolean | null | undefined; afresh?: boolean | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
   "chat.keep": { kept?: boolean | null | undefined; thread: number };
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
