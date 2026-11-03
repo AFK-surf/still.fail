@@ -102,6 +102,9 @@ export type History = {
 /// (`current`: whether that one's is among them; when not given, it is).
 export type Locate = (key: string) => { runtime: RuntimeKind; paths: TranscriptRef[]; current?: boolean } | null;
 
+/// A session's checklist as carried over to the next station process (`carriedPlans`).
+export type CarriedPlan = { key: string; at: number; items: PlanState["items"]; creating: [string, number][] };
+
 export class LiveHub {
   private steps = new Map<string, LiveStep[]>();
   private phase = new Map<string, [Phase, number]>();
@@ -111,6 +114,8 @@ export class LiveHub {
   /// held, `planBack`), or as its runtime says it apart (an ACP runtime's, which wins). Kept past its turns.
   private tasks = new Map<string, BackgroundTask[]>();
   private plans = new Map<string, PlanState>();
+  /// How far into its transcripts each checklist is read (entries): watched again, it reads on from there, not back.
+  private planAt = new Map<string, number>();
   private planBack = new Map<string, TimelineEntry[]>();
   private saidPlans = new Map<string, PlanItem[]>();
   private listeners = new Map<string, Sub[]>();
@@ -192,7 +197,8 @@ export class LiveHub {
   }
 
   /// A transcript's entries read for its checklist: told when it changed (held while it is read back).
-  private readForPlan(key: string, entries: TimelineEntry[]) {
+  /// `start`: where `entries` begin in its transcripts.
+  private readForPlan(key: string, start: number, entries: TimelineEntry[]) {
     const back = this.planBack.get(key);
     if (back !== undefined) {
       back.push(...entries);
@@ -200,14 +206,46 @@ export class LiveHub {
     }
     let state = this.plans.get(key);
     if (!state) this.plans.set(key, (state = noPlan()));
+    if (this.planAt.get(key) === start) this.planAt.set(key, start + entries.length);
+    else this.planAt.delete(key);
     if (readPlan(state, entries) && !this.saidPlans.has(key)) this.emit(key, this.workNow(key));
   }
 
-  /// Its checklist read back from its transcript's entries before `end`, as it begins to be watched: the latest pages
-  /// back to where a call says it whole (or PLAN_PAGES of them), then what was gained meanwhile.
+  /// Its checklist as it begins to be watched, its transcripts `end` entries long: read on from where it was read to
+  /// before (watched again: a turn after HELD_AFTER_MS, a device opening it, the next station process), else read back
+  /// from the latest pages to where a call says it whole (or PLAN_PAGES of them); then what was gained meanwhile. Read
+  /// back each time, 4 pages of a long Claude transcript were 30 to 50 MB read at every station update on ccvm short of
+  /// memory (2026-11-03), every read waiting on the disk meanwhile.
   private readPlanBack(key: string, end: number) {
     if (this.history === null) return;
     const history = this.history;
+    const at = this.planAt.get(key);
+    const had = this.plans.get(key);
+    if (had !== undefined && at !== undefined && at <= end && end - at <= PLAN_PAGE * PLAN_PAGES) {
+      if (at === end) return;
+      this.planBack.set(key, []);
+      void (async () => {
+        const pages: TimelineEntry[][] = [];
+        for (let from = at; from < end; ) {
+          const upto = Math.min(end, from + PLAN_PAGE);
+          const page = await history.page(key, upto, upto - from, false);
+          const got = page.start === from ? page.entries.slice(0, upto - from) : [];
+          if (got.length === 0) throw new Error("not read on");
+          pages.push(got);
+          from += got.length;
+        }
+        return pages.flat();
+      })().then(
+        (gap) => this.planRead(key, end, gap, had),
+        () => {
+          // Not read on from there: read back.
+          this.planBack.delete(key);
+          this.planAt.delete(key);
+          this.readPlanBack(key, end);
+        },
+      );
+      return;
+    }
     this.planBack.set(key, []);
     void (async () => {
       const pages: TimelineEntry[][] = [];
@@ -221,18 +259,22 @@ export class LiveHub {
       }
       return pages.flat();
     })().then(
-      (past) => this.planRead(key, past),
-      () => this.planRead(key, []),
+      (past) => this.planRead(key, end, past),
+      () => this.planRead(key, null, []),
     );
   }
 
-  private planRead(key: string, past: TimelineEntry[]) {
+  /// Its checklist read from `past` (the entries just before `end`, null: not read) and what was gained meanwhile, on
+  /// from `from` (else afresh).
+  private planRead(key: string, end: number | null, past: TimelineEntry[], from?: PlanState) {
     const meanwhile = this.planBack.get(key) ?? [];
     this.planBack.delete(key);
-    const state = noPlan();
+    const before = JSON.stringify(planItems(this.plans.get(key) ?? noPlan()));
+    const state = from ?? noPlan();
     readPlan(state, past);
     readPlan(state, meanwhile);
-    const before = JSON.stringify(planItems(this.plans.get(key) ?? noPlan()));
+    if (end !== null) this.planAt.set(key, end + meanwhile.length);
+    else this.planAt.delete(key);
     this.plans.set(key, state);
     if (JSON.stringify(planItems(state)) !== before && !this.saidPlans.has(key)) this.emit(key, this.workNow(key));
   }
@@ -372,7 +414,7 @@ export class LiveHub {
     if (entries.length === 0) return;
     this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key) });
     this.count?.ask(key);
-    this.readForPlan(key, entries);
+    this.readForPlan(key, start, entries);
   }
 
   /// A watched transcript's length, kept where its summary reads it, as it changes.
@@ -515,10 +557,36 @@ export class LiveHub {
     this.unwatch(key);
   }
 
+  /// The checklists read from transcripts and how far each was read: what the next station process reads on from
+  /// (carried over at a handover, parts.ts `carry`).
+  carriedPlans(): CarriedPlan[] {
+    const out: CarriedPlan[] = [];
+    for (const [key, at] of this.planAt) {
+      const state = this.plans.get(key);
+      if (state !== undefined && !this.planBack.has(key)) out.push({ key, at, items: state.items, creating: [...state.creating].flatMap(([id, made]) => (state.items.includes(made) ? [[id, state.items.indexOf(made)] as [string, number]] : [])) });
+    }
+    return out;
+  }
+
+  /// What the process before read of checklists, where none is read here yet.
+  takePlans(carried: CarriedPlan[]): void {
+    if (!Array.isArray(carried)) return;
+    for (const c of carried) {
+      if (typeof c?.key !== "string" || !Number.isSafeInteger(c.at) || !Array.isArray(c.items) || !Array.isArray(c.creating)) continue;
+      if (this.plans.has(c.key) || this.planBack.has(c.key)) continue;
+      // A task tool's call waiting on its result names its item by where it is among them.
+      const items = c.items.map((i) => ({ ...i }));
+      const creating = new Map(c.creating.flatMap(([id, at]) => (typeof id === "string" && items[at] !== undefined ? [[id, items[at]!] as const] : [])));
+      this.plans.set(c.key, { items, creating });
+      this.planAt.set(c.key, c.at);
+    }
+  }
+
   /// A deleted session: nothing of it is watched or kept any more.
   forget(key: string) {
     this.tasks.delete(key);
     this.plans.delete(key);
+    this.planAt.delete(key);
     this.planBack.delete(key);
     this.saidPlans.delete(key);
     this.steps.delete(key);
@@ -593,7 +661,8 @@ export class LiveHub {
       // Its checklist read again from what is written of it: kept here, from it; else read back where it is read.
       if (tail.keeps) {
         this.plans.set(key, noPlan());
-        this.readForPlan(key, tail.entries);
+        this.planAt.set(key, 0);
+        this.readForPlan(key, 0, tail.entries);
       } else this.readPlanBack(key, tail.length);
       arm();
     };

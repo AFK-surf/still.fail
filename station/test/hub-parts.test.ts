@@ -393,6 +393,45 @@ test("where the readers keep a session's history the live view reads none of its
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a session watched again, or by the next station process, reads its checklist on from where it was read to, not back", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const todo = (id: string, items: [string, string][]) => `${JSON.stringify({ type: "assistant", timestamp: "2026-11-03T00:00:00Z", message: { id, content: [{ type: "tool_use", id, name: "TodoWrite", input: { todos: items.map(([content, status]) => ({ content, status, activeForm: content })) } }] } })}\n`;
+  writeFileSync(path, todo("t1", [["读日志", "in_progress"], ["修", "pending"]]) + line("two", "m2") + line("three", "m3"));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const asked: string[] = [];
+  hub.history = historyOf(path, asked);
+  const plan = (got: LiveMessage[]) => (got.filter((m): m is Extract<LiveMessage, { type: "work" }> => m.type === "work").at(-1)?.plan ?? []).map((i) => `${i.text} ${i.status}`);
+  const got: LiveMessage[] = [];
+  let id = hub.subscribe("s", 3, null, (m) => void got.push(m));
+  await settle();
+  assert.deepEqual(asked, ["state", "page 4 4 false"], "read back as it was first watched");
+  assert.deepEqual(plan(got), ["读日志 in_progress", "修 pending"]);
+  hub.unsubscribe("s", id);
+  // Written on while no one watched: watched again, only what came since is read for it.
+  appendFileSync(path, line("four", "m4") + todo("t2", [["读日志", "completed"], ["修", "in_progress"]]));
+  asked.length = 0;
+  got.length = 0;
+  id = hub.subscribe("s", 6, null, (m) => void got.push(m));
+  await settle();
+  assert.deepEqual(asked, ["state", "page 6 2 false"]);
+  assert.deepEqual(plan(got), ["读日志 completed", "修 in_progress"]);
+  // The next station process: carried over, nothing read for it where nothing came since.
+  const next = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const nextAsked: string[] = [];
+  next.history = historyOf(path, nextAsked);
+  next.takePlans(JSON.parse(JSON.stringify(hub.carriedPlans())));
+  const nextGot: LiveMessage[] = [];
+  next.subscribe("s", 6, null, (m) => void nextGot.push(m));
+  await settle();
+  assert.deepEqual(nextAsked, ["state"]);
+  assert.deepEqual(plan(nextGot), ["读日志 completed", "修 in_progress"]);
+  hub.close();
+  next.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("what is said while a listener joins is told it after what it lacks", async () => {
   const dir = temp();
   const path = join(dir, "t.jsonl");
