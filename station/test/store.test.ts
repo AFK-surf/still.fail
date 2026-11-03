@@ -1046,6 +1046,35 @@ test("the archived sessions by the index of those archived, the longest archived
   assert.equal((store.db.prepare("PRAGMA journal_size_limit").get() as { journal_size_limit: number }).journal_size_limit, 64 << 20);
 });
 
+test("the card each chat waits on is kept as it is posted, answered and closed; one from before is worked out as it was", () => {
+  // Worked out at each read of the sidebar's marks, a dozen lookups a chat, 26 s for 68 chats on ccvm (2026-11-03).
+  const path = join(tempdir(), "s.db");
+  const before = Store.open(path, null);
+  session(before, "a");
+  const old = before.openThread("ember", "EMBER", "old", null, null).id;
+  before.insertMessage({ ...newMessage(old, "1.1", "agent", "a", "选一个"), card: { type: "options", options: [{ label: "好" }] } } as any);
+  // As a database from before the cards were kept: made again on what is there.
+  before.db.exec("DROP TABLE pending_cards; DROP TABLE pending_cards_from; DROP TRIGGER IF EXISTS pending_cards_post; DROP TRIGGER IF EXISTS pending_cards_answered; DROP TRIGGER IF EXISTS pending_cards_closed; DROP TRIGGER IF EXISTS pending_cards_gone");
+  before.close();
+  const store = open(path);
+  const r = read.makeStore(store.db, tempdir());
+  const chat = store.openThread("ember", "EMBER", "new", null, null).id;
+  const card = { ...newMessage(chat, "2.1", "agent", "a", "选一个"), card: { type: "options", options: [{ label: "好" }] } } as any;
+  const [n] = store.insertMessage(card);
+  let kept = read.pendingCards(r, [old, chat])!;
+  assert.deepEqual([[...kept.at], [...kept.before]], [[[chat, n]], [old]]);
+  assert.equal(read.cardAt(r, chat, n)?.[0].n, n);
+  // A person writes: it waits no more.
+  say(store, chat, "2.2", "person", "a@x", "好");
+  assert.deepEqual([...read.pendingCards(r, [chat])!.at], []);
+  // Posted again, then closed: none.
+  const [m] = store.insertMessage({ ...card, ts: "2.3" });
+  assert.deepEqual([...read.pendingCards(r, [chat])!.at], [[chat, m]]);
+  store.db.prepare("INSERT INTO closed_cards VALUES (?, ?, 'a@x', 1)").run(chat, m);
+  kept = read.pendingCards(r, [chat])!;
+  assert.deepEqual([...kept.at], []);
+});
+
 test("jobs: started, said, ended and cleared", () => {
   const store = memory();
   session(store, "a");
