@@ -50,6 +50,15 @@ test("a repeated usage summary rereads only minutes whose statistics changed", a
     assert.ok(first);
     assert.equal(first.diagnostics.cache, "miss");
     assert.deepEqual(first.groups, reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer));
+    const lines: Line[] = [];
+    hearLines((line) => lines.push(line));
+    try { usage(store, "en", 0n, 120n * 60_000n, 0n, false, viewer, false, { batched: { ...first, ms: 1_001 }, remoteRuns: false }); }
+    finally { hearLines(null); }
+    const slow = lines.find((line) => line.message === "a usage read's stages");
+    assert.ok(slow);
+    assert.equal(slow.fields.summarySelectedRestMs, first.diagnostics.selectedRestMs);
+    assert.equal(slow.fields.summarySelectedCpuMs, first.diagnostics.selectedCpuMs);
+    assert.equal(slow.fields.summaryCpuMs, first.diagnostics.cpuMs);
     const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
     db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && values.has(column ?? "")
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
