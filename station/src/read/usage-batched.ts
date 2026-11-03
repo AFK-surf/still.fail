@@ -31,7 +31,8 @@ type Part = { day: string | null; session: string; thread: bigint; person: strin
   cache_write: bigint; cache_write_long: bigint; output: bigint };
 type Bucket = Part & { minute: bigint };
 type Block = { session: string; minute: bigint; groups: Map<string, Part>; bytes: number };
-type Cached = { seq: bigint; blocks: Map<string, Block>; width: bigint; cells: number; bytes: number };
+type Total = { row: Part; refs: number; bytes: number };
+type Cached = { seq: bigint; blocks: Map<string, Block>; totals: Map<string, Total>; width: bigint; cells: number; bytes: number };
 type CacheStatus = "disabled" | "miss" | "expired" | "reused" | "oversized";
 const names = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
 const MAX_CELLS = 8192;
@@ -67,6 +68,7 @@ export class UsageSummaryCache {
 
 const groupKey = (r: Part) => JSON.stringify([r.day, r.thread.toString(), r.person, r.profile, r.runtime, r.model, r.fast.toString()]);
 const blockKey = (session: string, minute: bigint) => JSON.stringify([session, minute.toString()]);
+const totalKey = (session: string, group: string) => JSON.stringify([session, group]);
 const floorDiv = (n: bigint, d: bigint) => n >= 0n ? n / d : -1n - ((-1n - n) / d);
 const blockOf = (minute: bigint, offset: bigint, width: bigint) => floorDiv(minute + offset, width) * width - offset;
 
@@ -90,14 +92,6 @@ function answer(groups: Part[]): UsageGroup[] {
   return groups.map((r) => usageGroupOf({ ...r, thread: r.thread === 0n ? null : safe(r.thread), person: r.person || null,
     profile: r.profile || null, model: r.model || null, fast: safe(r.fast), calls: safe(r.calls), input: safe(r.input),
     cache_read: safe(r.cache_read), cache_write: safe(r.cache_write), cache_write_long: safe(r.cache_write_long), output: safe(r.output) }));
-}
-
-function combine(blocks: Map<string, Block>): Part[] {
-  const groups = new Map<string, Part>();
-  for (const block of blocks.values()) for (const row of block.groups.values()) {
-    add(groups, JSON.stringify([row.session, groupKey(row)]), row);
-  }
-  return [...groups.values()];
 }
 
 /// An aligned compact summary, read in bounded steps on the caller's snapshot. Cached blocks are only reused when
@@ -146,10 +140,54 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   // A cache is updated only after the complete read succeeds. Unchanged block maps remain immutable and can be shared
   // with the preceding snapshot while new ones are built.
   let blocks: Map<string, Block> | null = journal ? new Map(usable ? prior.blocks : []) : null;
+  let totals: Map<string, Total> = new Map(usable ? prior.totals : []);
+  let copied = new Set<string>();
   let width = usable ? prior.width : 1n;
   let building = !usable;
   let cells = usable ? prior.cells : 0;
   let bytes = usable ? prior.bytes : 0;
+  // The totals for a snapshot share rows with the previous cache until a changed block actually touches them.
+  const writable = (key: string, total: Total): Total => {
+    if (copied.has(key)) return total;
+    const copy = { ...total, row: { ...total.row } };
+    totals.set(key, copy);
+    copied.add(key);
+    return copy;
+  };
+  const addTotal = (group: string, row: Part, newBlockGroup: boolean) => {
+    const key = totalKey(row.session, group);
+    let total = totals.get(key);
+    if (!total) {
+      const size = 256 + 2 * (key.length + row.session.length + (row.day?.length ?? 0) + row.person.length
+        + row.profile.length + row.runtime.length + row.model.length);
+      total = { row: { ...row }, refs: 1, bytes: size };
+      totals.set(key, total);
+      copied.add(key);
+      bytes += size;
+      return;
+    }
+    total = writable(key, total);
+    for (const name of names) total.row[name] += row[name];
+    if (newBlockGroup) total.refs++;
+  };
+  const remove = (key: string, block: Block) => {
+    cells -= block.groups.size;
+    bytes -= block.bytes;
+    blocks!.delete(key);
+    for (const [group, row] of block.groups) {
+      const id = totalKey(row.session, group);
+      let total = totals.get(id)!;
+      if (total.refs === 1) {
+        totals.delete(id);
+        copied.delete(id);
+        bytes -= total.bytes;
+      } else {
+        total = writable(id, total);
+        total.refs--;
+        for (const name of names) total.row[name] -= row[name];
+      }
+    }
+  };
   const put = (session: string, minute: bigint, row: Part) => {
     const block = blockOf(minute, utcOffsetMin, width);
     const key = blockKey(session, block);
@@ -160,7 +198,9 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       bytes += held.bytes;
     }
     const group = groupKey(row);
-    if (add(held.groups, group, row)) {
+    const newBlockGroup = add(held.groups, group, row);
+    addTotal(group, row, newBlockGroup);
+    if (newBlockGroup) {
       cells++;
       // Count the key, retained strings, bigint fields and object overhead conservatively. Long names cannot make
       // an otherwise small number of groups retain an unbounded share of a reader's 128 MB heap.
@@ -177,10 +217,12 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       // A refresh has already chosen its dirty blocks at the old width. If it no longer fits, start a full read below
       // rather than mix widths inside that snapshot. Initial reads can coarsen without reading the same minute twice.
       const wider = !building ? null : width === 1n ? 5n : width === 5n ? 15n : width === 15n ? 60n : null;
-      if (wider === null) { blocks = null; break; }
+      if (wider === null) { blocks = null; totals.clear(); copied.clear(); break; }
       const old: Map<string, Block> = blocks;
       width = wider;
       blocks = new Map();
+      totals = new Map();
+      copied = new Set();
       cells = 0;
       bytes = 0;
       for (const block of old.values()) for (const part of block.groups.values()) put(block.session, block.minute, part);
@@ -276,10 +318,10 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       for (const [id, change] of pendingChanges) dirty.set(id, change);
     }
     const selectedMs = Math.round(performance.now() - started);
-    for (const [id, block] of blocks!) if (whole.has(block.session) || dirty.has(id)) {
-      cells -= block.groups.size;
-      bytes -= block.bytes;
-      blocks!.delete(id);
+    if (whole.size) for (const [id, block] of blocks!) if (whole.has(block.session)) remove(id, block);
+    for (const id of dirty.keys()) {
+      const block = blocks!.get(id);
+      if (block) remove(id, block);
     }
     for (const session of whole) {
       if (!(await readSession(session, start, end))) { cache!.drop(s.db, key); return null; }
@@ -301,16 +343,18 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       }
     }
     if (blocks !== null) {
-      const groups = combine(blocks);
+      const groups = [...totals.values()].map((total) => total.row);
       // Formatting can fail on integer overflow. Do not publish an entry from a failed answer.
       const done = result(groups, selectedMs, "reused");
-      cache!.put(s.db, key, { seq: last, blocks, width, cells, bytes });
+      cache!.put(s.db, key, { seq: last, blocks, totals, width, cells, bytes });
       return done;
     }
     cache!.drop(s.db, key);
     // The changed block made this answer too large to cache. Reread it using the bounded path below, retaining the
     // work already done in the diagnostics and total duration.
     blocks = new Map();
+    totals = new Map();
+    copied = new Set();
     width = 1n;
     cells = 0;
     bytes = 0;
@@ -334,7 +378,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     groups.push(...ofSession.values());
   }
   const done = result(groups, selectedMs, journal && blocks === null ? "oversized" : cacheStatus);
-  if (blocks !== null) cache!.put(s.db, key, { seq: last, blocks, width, cells, bytes });
+  if (blocks !== null) cache!.put(s.db, key, { seq: last, blocks, totals, width, cells, bytes });
   else cache?.drop(s.db, key);
   return done;
 }

@@ -67,6 +67,10 @@ test("a repeated usage summary rereads only minutes whose statistics changed", a
     assert.equal(next.diagnostics.candidates, 1, "a small pending set does not read the other minutes in the range");
     writer.recordUsage("/a", { session: "a", offset: 3, model: "m" }, "claude",
       Array.from({ length: 70 }, (_, n) => [call(`a-${n}`, n * 60_000, 2), owner] as [ReturnType<typeof call>, typeof owner]));
+    db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && column === "output"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { await assert.rejects(read(), /prohibited/); }
+    finally { db.setAuthorizer(null); }
     const beforeConcurrentWrite = reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer);
     let paused = false;
     db.exec("BEGIN");
@@ -89,6 +93,41 @@ test("a repeated usage summary rereads only minutes whose statistics changed", a
     writer.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("cached groups survive removed blocks until their last minute is removed", async () => {
+  const writer = Store.open(":memory:");
+  try {
+    writer.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(writer.db, () => 0);
+    retireUsageIndexes(writer.db);
+    writer.db.exec("INSERT INTO usage_minute_scope (session, ws, done) VALUES ('a', 'A', 1)");
+    const insert = writer.db.prepare(`INSERT INTO usage_compact
+      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope, pending)
+      VALUES ('a', ?, 0, 'p', 'cc', 'claude', ?, 0, 1, 0, 0, 0, 0, 0, ?, 'WA', 0)`);
+    insert.run(0, "m", 3);
+    insert.run(1, "m", 7);
+    insert.run(2, "m", 0);
+    insert.run(2, "other", 4);
+    compact.installUsageSummaryChanges(writer.db);
+    const reader = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache(), viewer = { workspace: "A", home: false };
+    const read = async () => {
+      const actual = await reads.usageGroupsBatched(reader, 0n, 180_000n, 0n, viewer, async () => {}, cache);
+      assert.ok(actual);
+      assert.deepEqual(actual.groups, reads.usageGroups(reader, 0n, 180_000n, 0n, viewer));
+      return actual.groups;
+    };
+    await read();
+    writer.db.exec("DELETE FROM usage_compact WHERE session='a' AND minute=0 AND model='m'");
+    assert.equal((await read()).find((group) => group.model === "m")?.output, 7);
+    writer.db.exec("DELETE FROM usage_compact WHERE session='a' AND minute=1 AND model='m'");
+    assert.equal((await read()).find((group) => group.model === "m")?.output, 0,
+      "an existing all-zero group remains present");
+    writer.db.exec("DELETE FROM usage_compact WHERE session='a' AND minute=2 AND model='m'");
+    assert.equal((await read()).some((group) => group.model === "m"), false);
+    insert.run(1, "m", 5);
+    assert.equal((await read()).find((group) => group.model === "m")?.output, 5);
+  } finally { writer.close(); }
 });
 
 test("an unbounded history settles its workspace's new statistics so its cache can reuse them", async (t) => {
