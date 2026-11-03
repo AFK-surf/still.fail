@@ -131,6 +131,10 @@ pub fn page_node(
   }
   // (a page's list: it moves as the platform's lists do, its slop the host's)
   let own_scroll = @view.Scroll::list()
+  // (what is said of what the pointer rests on, its about's mark's: in a layer of its own over the page, past its list,
+  // which cuts what it holds to it)
+  let tips_at : Ref[@view.View?] = Ref(None)
+  let tips = TipLayer::new(fn() { tips_at.val })
   v.pick(look, fn(p, l) {
     p.grow(Is(1.0)).min_height(Is(Some(0.0))).lends(part_at, { look: l, section: false, list: false }) |> ignore
     // (where its list is scrolled to, kept by whoever holds the page where it says (a part of a page a page each,
@@ -141,9 +145,10 @@ pub fn page_node(
     }
     match l {
       Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll)
-      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll)
+      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips)
     }
   })
+  tips_at.val = Some(v.box(fn(t) { t.over(Is(true)) |> ignore }))
 }
 
 ///|

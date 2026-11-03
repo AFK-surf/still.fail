@@ -31,6 +31,8 @@ fn wide_page_node(
   lead : () -> String,
   actions : ((@view.View) -> Unit)?,
   scroll : @view.Scroll,
+  about : () -> String,
+  tips : TipLayer,
 ) -> Unit {
   let items = fn() -> Array[WideItem] {
     let f = frame()
@@ -55,7 +57,7 @@ fn wide_page_node(
       match item {
         // the room the frame keeps over it (a status bar's)
         WideTop => s.height(By(fn() { Some(frame().top) })) |> ignore
-        WideHead => lane_node(s, fn(col) { wide_head_node(col, title, on_back, frame, lead, actions) })
+        WideHead => lane_node(s, fn(col) { wide_head_node(col, title, on_back, frame, lead, actions, about, tips) })
         // what it is for under the frame's bar that names it (barred_page's: desk_barred_lead, 16 in, 12 under)
         WideLead =>
           lane_node(s, fn(col) {
@@ -114,6 +116,8 @@ fn wide_head_node(
   frame : () -> PageFrame,
   lead : () -> String,
   actions : ((@view.View) -> Unit)?,
+  about : () -> String,
+  tips : TipLayer,
 ) -> Unit {
   col
   .padding(By(fn() {
@@ -128,9 +132,17 @@ fn wide_head_node(
   })
   col.box(fn(l) {
     l.row(Is(true)).gap(Is(desk_title_gap)).lines_up(Is(Some(Middle))) |> ignore
+    // (its title, and what it is for by a mark after it where it says (desk_title_about: 6 apart, across their middle),
+    // the title cut short before it)
     l.box(fn(w) {
-      w.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(pg_title_least))) |> ignore
-      styled_words(w, title, fn() { desk_title }) |> ignore
+      w.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(pg_title_least))).row(Is(true)).gap(Is(desk_about_gap)).lines_up(Is(Some(Middle)))
+      |> ignore
+      w.box(fn(t) {
+        t.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        styled_words(t, title, fn() { desk_title }) |> ignore
+      })
+      |> ignore
+      w.show(fn() { about() != "" }, fn(m) { about_mark_node(m, about, fn() { t("web-main.about") }, tips) |> ignore })
     })
     |> ignore
     match actions {
@@ -169,6 +181,10 @@ let desk_lead_top : Double = 6.0
 
 ///|
 let desk_back_foot : Double = 8.0
+
+///|
+/// A wide title's mark after it (desk_title_about's gap=S1_5).
+let desk_about_gap : Double = 6.0
 
 ///|
 /// Back over a wide page's head (desk_back's, as a node): its chevron and where it goes (`label`), muted, the text's

@@ -449,3 +449,23 @@ test "大屏 一台 station 的记忆 made once, the language changed and the st
   t.run_for(@ui.move_most_ms)
   assert_true(tree_node_of("工作室") == title, msg="renamed in the same node: \{tree_words_drawn()}")
 }
+
+///|
+test "大屏 一台 station 的记忆 made once: what it is for by a mark after its title, its tip as the pointer rests on it, as its old view's" {
+  let at = fn(tree : Bool) raise {
+    let t = large_about_tester(tree, 0, mode="settings-memory")
+    let mark = match t.semantics().search_by(fn(n) { n.role == Button && n.label == @sf.t("web-main.about") }) {
+      Some(i) => t.semantics()[i].rect
+      None => fail("its mark read out")
+    }
+    t.move(mark.0 + mark.2 / 2.0, mark.1 + mark.3 / 2.0)
+    t.run_for(@kit.tooltip_delay_ms + @ui.move_most_ms)
+    (mark, words_where(t), instances_sorted(t))
+  }
+  let (old_mark, old_words, old_drawn) = at(false)
+  let (mark, words, drawn) = at(true)
+  assert_eq(mark, old_mark)
+  assert_true(words.iter().any(fn(w) { w.has_prefix(@sf.t("web-pages.settings.memory.lead")) }), msg="its tip: \{words}")
+  same_drawn(words, old_words, "words, its tip shown")
+  same_drawn(drawn, old_drawn, "instances, its tip shown")
+}
