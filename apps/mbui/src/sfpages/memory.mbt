@@ -130,7 +130,7 @@ fn memory_body(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
   let projects = part("project")
   let others = part("skill")
   let builtin = part("builtin")
-  let open = builtin_open.get(address).unwrap_or(false)
+  let open = @settings.builtin_open_of(address)
   let skill_row = fn(k : Json) {
     let kv = Some(k)
     // (the core's: when it is read, in a line)

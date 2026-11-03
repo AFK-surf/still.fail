@@ -1185,7 +1185,8 @@ test "一台 station 的记忆 made once, its own skills' row pressed: folded op
       t.run_for(@motion.ripple_tap_ms)
       let open = (instances_sorted(t), words_where(t))
       let said = t.semantics().filter(fn(n) { n.label == @sf.t("web-main.memory.builtin") }).map(fn(n) { n.expanded })
-      // (back to 记忆, and in again)
+      // (back to 记忆, and in again: the pointer gone from the window first, nothing under it as the pages go)
+      t.leave()
       app.nav.pop() |> ignore
       t.run_for(@ui.move_most_ms)
       app.nav.push(Setting(@settings.Route::Memory("ws1/st1")))
