@@ -138,7 +138,7 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
     t.drag(p.x + 6.0, p.y + 20.0, p.x + 400.0, p.y + 20.0, steps=10)
     t.run_for(@ui.move_most_ms)
     @sfdesk.pane_makes.val = true
-    (app.nav.depth() - depth, app.nav.top() == Setting(About))
+    (app.nav.depth() - depth, app.nav.top() == Setting(About), @sfdesk.wide.tape_at.get())
   }
   // (across and back where it began, let go there: taken by the stack's own back over 关于 (the tape not pulled), called
   // off, 更新日志 still on top, as its old view's is)
@@ -147,5 +147,5 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
   assert_eq(made_back, (false, 0, false, @sfdesk.TapePane::Page), msg="\{made_back}")
   let made = across(true)
   assert_eq(made, across(false))
-  assert_eq(made, (-1, true))
+  assert_eq(made, (-1, true, @sfdesk.TapePane::Page), msg="\{made}")
 }
