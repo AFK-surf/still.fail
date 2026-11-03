@@ -77,6 +77,8 @@ export type OpenOptions = {
   mcpUrl: string;
   /// Stable per-session routing id for provider affinity headers.
   route: string;
+  /// An isolated, temporary text-only request. Drivers must explicitly support this without exposing their tools.
+  textOnly?: boolean;
 };
 
 export interface AgentSession {

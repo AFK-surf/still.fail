@@ -835,6 +835,10 @@ web-main.chat.pinFailed
 web-main.chat.quote
 web-main.chat.shareTurn
 web-main.chat.rename
+web-main.chat.regenerateTitle
+web-main.chat.regenerateTitle.done
+web-main.chat.regenerateTitle.start
+web-main.chat.regenerateTitle.verb
 web-main.chat.resendFailed
 web-main.chat.sending
 web-main.chat.toLatest

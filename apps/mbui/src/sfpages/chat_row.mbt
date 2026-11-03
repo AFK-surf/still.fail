@@ -678,6 +678,27 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
     ),
   )
   match item.thread {
+    Some(th) if !item.connect && item.agents.length() > 0 =>
+      items.push(
+        Some(
+          @sf.menu_item_of(@sf.t("web-main.chat.regenerateTitle"), icon="refresh", fn() {
+            if !src.read_only {
+              toast_later(@sf.t("web-main.chat.regenerateTitle.start"))
+            }
+            act(
+              src,
+              @sf.t("web-main.chat.regenerateTitle.verb"),
+              "",
+              "chat.regenerateTitle",
+              { "station": Json::string(item.station), "thread": Json::number(th) },
+              done=@sf.t("web-main.chat.regenerateTitle.done"),
+            )
+          }),
+        ),
+      )
+    _ => ()
+  }
+  match item.thread {
     Some(th) if item.pinned != Some(true) =>
       items.push(
         Some(

@@ -710,15 +710,44 @@ export class CodexDriver implements AgentDriver {
     const host = await this.host(options.profile, options.key, options.cwd);
     const model = options.model ?? profileModel(options.profile);
     const skillsOff = hostSkillsOff(this.hostSkills);
-    const config: Json = {
+    const config: Json = options.textOnly ? {
+      "features.shell_tool": false,
+      "features.unified_exec": false,
+      "features.multi_agent": false,
+      "features.apps": false,
+      "features.plugins": false,
+      "features.browser_use": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.view_image": false,
+      "features.goals": false,
+      "web_search": "disabled",
+      "mcp_servers": {},
+    } : {
       "mcp_servers.stillfail.url": options.mcpUrl,
       "mcp_servers.stillfail.http_headers": { Authorization: `Bearer ${options.mcpToken}` },
     };
+    if (options.textOnly) {
+      // An empty table is merged with the profile's configured servers. Read their names without config/read, whose
+      // reply can contain credentials and would be kept in the runner's output. The thread's inventory is checked too,
+      // since its working directory may add servers absent from this host-level inventory.
+      try {
+        const servers = await mcpInventory(host);
+        config.mcp_servers = Object.fromEntries(servers.map((s) => [s.name, { enabled: false }]));
+      } catch {
+        throw new Error("cannot open a text-only Codex session");
+      }
+    }
     if (options.effort !== undefined) config.model_reasoning_effort = options.effort;
     // The most context it runs with: it compacts on its own at it.
     if (options.context !== undefined) config.model_auto_compact_token_limit = options.context;
     if (skillsOff.length > 0) config["skills.config"] = skillsOff;
     const common: Json = { cwd: options.cwd, approvalPolicy: "never", sandbox: "danger-full-access", developerInstructions: options.instructions, config };
+    if (options.textOnly) {
+      common.sandbox = "read-only";
+      common.ephemeral = true;
+      common.environments = [];
+    }
     if (model !== undefined) common.model = model;
     // None for a thread continued from a terminal: it keeps its own, so its cache holds.
     if (options.instructions === "") delete common.developerInstructions;
@@ -736,8 +765,27 @@ export class CodexDriver implements AgentDriver {
     } else {
       opened = await host.request("thread/start", common);
     }
-    const threadId = opened?.thread?.id;
+    let threadId = opened?.thread?.id;
     if (typeof threadId !== "string") throw new Error("codex gave no thread id");
+    if (options.textOnly) {
+      // A directory can add servers that were absent from the host's inventory. Open another thread with those
+      // disabled too; neither thread gets any conversation text until its effective inventory is entirely disabled.
+      try {
+        const servers = await mcpInventory(host, threadId);
+        if (servers.some((s) => s.runtimeStatus !== "disabled")) {
+          if (options.resume !== undefined) throw new Error("cannot disable a resumed thread's MCP servers");
+          await host.request("thread/unsubscribe", { threadId });
+          config.mcp_servers = { ...config.mcp_servers, ...Object.fromEntries(servers.map((s) => [s.name, { enabled: false }])) };
+          opened = await host.request("thread/start", common);
+          threadId = opened?.thread?.id;
+          if (typeof threadId !== "string") throw new Error("codex gave no thread id");
+          if ((await mcpInventory(host, threadId)).some((s) => s.runtimeStatus !== "disabled")) throw new Error("MCP servers are enabled");
+        }
+      } catch {
+        if (typeof threadId === "string") await host.request("thread/unsubscribe", { threadId }).catch(() => {});
+        throw new Error("cannot open a text-only Codex session");
+      }
+    }
     const session = new CodexSession(this, threadId, host, options.profile, { busy: false, turnId: null, closed: false }, new LiveFromCodex(), events);
     session.running = { model, effort: options.effort };
     session.toolsUrl = options.mcpUrl;
@@ -828,6 +876,19 @@ export class CodexDriver implements AgentDriver {
     for (const host of this.hosts.values()) host.detach();
     this.hosts.clear();
   }
+}
+
+/// Names and runtime states only: unlike config/read this does not return configured MCP credentials.
+async function mcpInventory(host: Host, threadId?: string): Promise<{ name: string; runtimeStatus: unknown }[]> {
+  const servers: { name: string; runtimeStatus: unknown }[] = [];
+  let cursor: string | null = null;
+  do {
+    const inventory = await host.request("mcpServerStatus/list", { ...(threadId === undefined ? {} : { threadId }), cursor, detail: "toolsAndAuthOnly" });
+    if (!Array.isArray(inventory?.data) || inventory.data.some((s: Json) => typeof s?.name !== "string")) throw new Error("invalid MCP inventory");
+    servers.push(...inventory.data.map((s: Json) => ({ name: s.name, runtimeStatus: s.runtimeStatus })));
+    cursor = typeof inventory.nextCursor === "string" ? inventory.nextCursor : null;
+  } while (cursor !== null);
+  return servers;
 }
 
 /// Whether thread `threadId`'s connection to the station's MCP endpoint failed, as its app-server says (once its startup
