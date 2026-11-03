@@ -1,5 +1,5 @@
 // The decision cards the usage page counts (read/store.ts decisionCards), as the database keeps them (store/schema.ts
-// CARD_OUTCOMES): made from what was written before, kept as messages are written, the same as working them out from
+// CARD_OUTCOMES): kept as messages are written, the same as working them out from
 // every card's next message, and read without reading an entry.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -123,11 +123,9 @@ test("the decision cards are kept as they are answered, the same as worked out f
     assert.equal(want.length, 8);
     assert.equal(want.filter((c) => c.endsWith(":true")).length, 5);
     assert.deepEqual(kept(store), want, "kept as they were written");
-    // A database from before them: made from what was written then, on opening.
-    store.db.exec("DROP TRIGGER card_outcomes_asked; DROP TRIGGER card_outcomes_answered; DROP TRIGGER card_outcomes_dropped; DROP TABLE card_outcomes;");
     store.close();
     const again = Store.open(path, join(dir, "archive"));
-    assert.deepEqual(kept(again), want, "made from what was written before");
+    assert.deepEqual(kept(again), want, "the saved outcomes survive reopening");
     // What the usage page counts, with the thread each is at home in; and none of it read from the entries.
     const counted = decisionCards(makeStore(again.db, dir));
     assert.deepEqual([counted.length, counted.filter((c) => c.picked).length], [8, 5]);

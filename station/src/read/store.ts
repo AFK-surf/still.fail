@@ -11,7 +11,7 @@ import { retiredUsage } from "../store/usage-retire.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
 import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
-import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
+import { usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -1107,6 +1107,7 @@ export function threadsByPlace(s: Store, viewer: InWorkspace | null = null): { s
 /// not (answered in their own words, or not yet): the usage page's 决策点击率. With the session its thread is at home in.
 /// As the database keeps them (store/schema.ts CARD_OUTCOMES): no entry is read.
 export function decisionCards(s: Store, viewer: InWorkspace | null = null): { home: string | null; picked: boolean }[] {
+  if (!usageCardOutcomesComplete(s.db)) throw new Error(USAGE_CHATS_PENDING);
   const found = viewer === null
     ? all(s, `SELECT t.home AS home, c.said OR EXISTS (SELECT 1 FROM closed_cards x WHERE x.thread = c.thread AND x.n = c.n AND x.viewer != c.author) AS picked
        FROM card_outcomes c LEFT JOIN threads t ON t.id = c.thread`)
