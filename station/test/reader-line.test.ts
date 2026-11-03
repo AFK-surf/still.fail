@@ -172,8 +172,9 @@ test("the sidebar, a session's detail, the machine's sample and the jobs up are 
     assert.equal(await readers.read("session", args(false), "en"), "{}");
     // The machine's sample too: it waited 2 to 6 s behind the usage page's reads on ccvm (2026-11-03).
     assert.equal(await readers.read("host", args(false), "en"), "{}");
-    // And the jobs up, read again by every device as a job starts: 40 s behind them on ccvm (2026-11-03).
-    assert.equal(await readers.read("openJobs", args(false), "en"), "{}");
+    // And the jobs up without their chats, read again by every device as a job starts: 40 s behind them on ccvm
+    // (2026-11-03). With their chats, a bulk read (below).
+    assert.equal(await readers.read("openJobs", { ...args(false), chats: false }, "en"), "{}");
     assert.equal(Atomics.load(state, 0), 5, "the usage read waiting still waits");
   } finally {
     const settled = await open(asked);
