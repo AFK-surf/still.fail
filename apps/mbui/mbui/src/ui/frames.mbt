@@ -61,6 +61,31 @@ fn drawn_text() -> String {
 }
 
 ///|
+/// Every instance drawn in the last frame in the order drawn, as drawn_text says them: a shape's band (kind 11) its
+/// pieces by what they are (shape_pieces_key) in the place of where they stand among the frame's, the pieces' own
+/// instances (kind 12, none drawn) left out. What draws the same reads the same, whatever drew before it.
+pub fn Tester::drawn_instances_keyed(self : Tester) -> Array[Array[Double]] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    if c.inst[k * inst_size + 5] == 12.0 {
+      continue
+    }
+    out.push(
+      Array::makei(inst_size, fn(j) {
+        if j == 12 && c.inst[k * inst_size + 5] == 11.0 {
+          shape_pieces_key(c, k)
+        } else {
+          c.inst[k * inst_size + j]
+        }
+      }),
+    )
+  }
+  out
+}
+
+///|
 /// A shape's band (instance `k`, kind 11): its pieces by what they are (a hash of them, in 64ths), not where they stand
 /// among the frame's (shape.mbt: what drew before it, kept or built, puts them elsewhere).
 fn shape_pieces_key(c : Ctx, k : Int) -> Double {

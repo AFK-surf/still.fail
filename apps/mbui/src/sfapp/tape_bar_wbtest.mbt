@@ -219,11 +219,11 @@ test "on the tape a finger's tap on the bar's mark shows what the page is for ti
 ///|
 /// A station's memory a level further in from 记忆 on the tape of a window 600 × 760 of `platform` (a Mac's; else a
 /// finger's, its host saying Medium), its page in use: back to 记忆 there.
-fn tape_station_memory(platform? : Int = 0, said? : Bool = false, font? : Double = 1.0) -> @ui.Tester raise {
+fn tape_station_memory(platform? : Int = 0, said? : Bool = false, font? : Double = 1.0, w? : Double = 600.0) -> @ui.Tester raise {
   new_run()
   let src = fixture("settings")
   let src = if said { @sffixture.said_longest_source(src) } else { src }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=600.0, h=760.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=760.0, platform~)
   if platform != 0 {
     say_room(t, "medium", "medium")
   }
@@ -235,7 +235,7 @@ fn tape_station_memory(platform? : Int = 0, said? : Bool = false, font? : Double
   t.run_for(@ui.move_most_ms)
   t.click(Link, label="记忆")
   t.run_for(@ui.move_most_ms)
-  page_over(t, 600.0)
+  page_over(t, w)
   // (the station's row: its name as it wrote it, the first line of it)
   match t.words().search_by(fn(w) { w.0.has_prefix("Studio") }) {
     Some(i) => {
@@ -246,7 +246,7 @@ fn tape_station_memory(platform? : Int = 0, said? : Bool = false, font? : Double
   }
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "发布流程", 600.0))
+  assert_true(settings_page_whole(t, "发布流程", w))
   t
 }
 
