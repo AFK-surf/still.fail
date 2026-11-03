@@ -15,14 +15,6 @@ test("work_counts_turns_and_the_time_finished_ones_took", () => {
   assert.equal(workText([turn(0, 50), turn(60 * MIN, 22)]), "2 轮 · 共工作 1 小时 12 分");
 });
 
-test("work_as_its_summary_counts_it_where_its_station_says_so", () => {
-  // Its detail lists its latest turn alone; its summary says how many and how long all of them ran.
-  assert.equal(workText([turn(0, 5)], { turns: 2, workMs: 72 * MIN }), "2 轮 · 共工作 1 小时 12 分");
-  assert.equal(workText([], { turns: 0, workMs: 0 }), null);
-  // A station from before says no work: what its detail lists, all its turns, added up.
-  assert.equal(workText([turn(0, 5)], { turns: 2 }), "1 轮 · 共工作 5 分钟");
-});
-
 test("jobs_at_work_by_what_they_are", () => {
   const job = (name: string, patch: object = {}) => ({ name, state: "running", port: null, ...patch });
   assert.equal(jobsText([]), null);

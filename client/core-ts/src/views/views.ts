@@ -2392,11 +2392,9 @@ export class Views implements Owner {
       account = { id: profile.id ?? null, name: profile.name ?? null, current: true, kind: get(profile.access, "kind") ?? null, runtime: profile.runtime ?? null, quota: profile.quota ?? null };
       if (typeof profile.providerMark === "string") account.mark = profile.providerMark;
     }
-    // Its latest turn as its summary has it (its detail may list only the latest turns, read before this one began);
-    // else the last its detail lists.
     const turns = arr(get(detail, "turns"));
-    const lastTurn = get(get(detail, "session"), "lastTurn") ?? turns[turns.length - 1];
-    const since = isObject(lastTurn) && (lastTurn.endedAt === undefined || lastTurn.endedAt === null) ? (lastTurn.startedAt ?? null) : null;
+    const lastTurn = turns[turns.length - 1];
+    const since = lastTurn !== undefined && (lastTurn.endedAt === undefined || lastTurn.endedAt === null) ? (lastTurn.startedAt ?? null) : null;
     return {
       status: present.shownStatus(session),
       badge: present.markOf(session),

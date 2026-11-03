@@ -55,7 +55,7 @@ const MERGED_ADDS = [", m.letter"];
 /// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`, `addUsageQuarters`): each with its columns,
 /// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes
 /// (`addUsageColumns`).
-const MADE = ["usage_totals", "usage_compactions", "usage_main_calls", "usage_compaction_events", "usage_compaction_backfill", "usage_quarters", "usage_day_quarters", "usage_minute", "usage_minute_scope", "usage_minute_sessions", "usage_minute_seen", "usage_minute_all", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries", "card_outcomes", "session_turns", "session_work", "remote_run", "remote_run_progress", "remote_run_lookup", "remote_run_by_time", "remote_run_by_job", "remote_run_counts", "remote_run_total"];
+const MADE = ["usage_totals", "usage_compactions", "usage_main_calls", "usage_compaction_events", "usage_compaction_backfill", "usage_quarters", "usage_day_quarters", "usage_minute", "usage_minute_scope", "usage_minute_sessions", "usage_minute_seen", "usage_minute_all", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries", "card_outcomes", "session_turns", "remote_run", "remote_run_progress", "remote_run_lookup", "remote_run_by_time", "remote_run_by_job", "remote_run_counts", "remote_run_total"];
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {
@@ -148,8 +148,6 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
       assert.deepEqual((store.db.prepare("SELECT thread, n, answered, said FROM card_outcomes ORDER BY thread, n").all() as any[]).map((r) => JSON.stringify([r.thread, r.n, r.answered === 1, r.said === 1])), cards);
       // Each session's turns, counted (schema.ts SESSION_TURNS), as its turns are.
       assert.deepEqual(rows("SELECT session, n FROM session_turns ORDER BY session"), rows("SELECT session_key AS session, COUNT(*) AS n FROM turns GROUP BY session_key ORDER BY session_key"));
-      // And how long their ended turns ran (SESSION_WORK).
-      assert.deepEqual(rows("SELECT session, ms FROM session_work ORDER BY session"), rows("SELECT session_key AS session, SUM(ended_at - started_at) AS ms FROM turns WHERE ended_at > started_at GROUP BY session_key ORDER BY session_key"));
       assert.deepEqual(
         rows("SELECT session, thread, n FROM session_first ORDER BY session"),
         rows("SELECT d.session, d.thread, d.n FROM deliveries d WHERE d.rowid = (SELECT MIN(rowid) FROM deliveries x WHERE x.session = d.session) ORDER BY d.session"),

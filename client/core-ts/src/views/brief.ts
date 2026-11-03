@@ -19,27 +19,17 @@ const get = (v: unknown, k: string): J => getU(v, k);
 
 const MINUTE = 60_000;
 
-/// Its turns, and how long the finished ones took together: 8 轮 · 共 1 小时 12 分. None before its first turn. As its
-/// summary (`session`) counts them where its station says so (`turns`, `workMs`): its detail lists only its latest turns
-/// then. Else added up from the turns its detail lists (a station from before lists them all).
-export function workText(turns: unknown, session?: unknown): string | null {
-  const counted = get(session, "turns");
-  const worked = get(session, "workMs");
-  let n = 0;
+/// Its turns, and how long the finished ones took together: 8 轮 · 共 1 小时 12 分. None before its first turn.
+export function workText(turns: unknown): string | null {
+  const all = arr(turns);
+  if (all.length === 0) return null;
   let ms = 0;
-  if (typeof counted === "number" && typeof worked === "number") {
-    n = counted;
-    ms = worked;
-  } else {
-    const all = arr(turns);
-    n = all.length;
-    for (const turn of all) {
-      const from = get(turn, "startedAt");
-      const to = get(turn, "endedAt");
-      if (typeof from === "number" && typeof to === "number" && to > from) ms += to - from;
-    }
+  for (const turn of all) {
+    const from = get(turn, "startedAt");
+    const to = get(turn, "endedAt");
+    if (typeof from === "number" && typeof to === "number" && to > from) ms += to - from;
   }
-  if (n === 0) return null;
+  const n = all.length;
   const minutes = Math.round(ms / MINUTE);
   if (minutes < 1) return t("core-views.agent.turns", { n });
   const time = minutes < 60
@@ -226,7 +216,7 @@ export function workOf(live: unknown): J {
 /// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live view (none before it is read): each part
 /// only when it has one. Its account and what is left of it the card takes from the agent as it is.
 export function card(agent: J, live: J, stations?: ReadonlyMap<string, string>): J {
-  const out: J = { work: workText(get(agent, "turns"), get(agent, "session")), jobs: jobsText(get(agent, "jobs")), latest: latestOf(agent, live, stations), attention: [], ...workOf(live) };
+  const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), latest: latestOf(agent, live, stations), attention: [], ...workOf(live) };
   const u = usageNow(get(agent, "session"), live);
   const n = (k: string): number => (typeof get(u, k) === "number" ? u[k] : 0);
   if (n("modelCalls") > 0) {

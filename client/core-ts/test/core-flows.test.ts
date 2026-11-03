@@ -1656,7 +1656,7 @@ test("a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_i
   now = Math.round(s.host.nowMs());
   stationReplies(s.host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (path === "/sessions/k1?turns=1")
+    if (path === "/sessions/k1")
       return {
         session: session("k1"), threads: [], turns: [],
         jobs: [job("w", { notices: [{ at: now - 120_000, text: "CI 还在跑" }] }), job("s", { port: 4817, state: "exited", restarts: 1 }), job("done", { state: "exited", exitCode: 0, endedAt: now - 30_000 })],
