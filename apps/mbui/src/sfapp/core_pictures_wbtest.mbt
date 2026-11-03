@@ -86,7 +86,7 @@ test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one bef
   new_run()
   let src = fixture("home")
   let person = fn(id : String, name : String) -> Json {
-    { "id": id.to_json(), "shown": { "name": name.to_json(), "display": name.to_json(), "mine": false.to_json() } }
+    { "id": @json.to_json(id), "shown": { "name": @json.to_json(name), "display": @json.to_json(name), "mine": @json.to_json(false) } }
   }
   let item = chat_item({
     "id": "c1",

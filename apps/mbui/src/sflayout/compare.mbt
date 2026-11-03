@@ -169,24 +169,24 @@ fn El::who(self : El) -> String {
 
 ///|
 fn El::to_json(self : El) -> Json {
-  let rect = fn(r : Rect) { Json::array([r.x.to_json(), r.y.to_json(), r.w.to_json(), r.h.to_json()]) }
+  let rect = fn(r : Rect) { Json::array([@json.to_json(r.x), @json.to_json(r.y), @json.to_json(r.w), @json.to_json(r.h)]) }
   let rgba = fn(c : (Int, Int, Int, Int)) {
-    Json::array([c.0.to_json(), c.1.to_json(), c.2.to_json(), c.3.to_json()])
+    Json::array([@json.to_json(c.0), @json.to_json(c.1), @json.to_json(c.2), @json.to_json(c.3)])
   }
   Json::object({
-    "index": self.index.to_json(),
+    "index": @json.to_json(self.index),
     "kind": Json::string(self.tag),
     "names": Json::array(self.names.map(Json::string)),
     "label": Json::string(self.label),
     "text": Json::string(self.text),
     "box": rect(self.box),
     "cut": rect(self.cut),
-    "radius": self.radius.to_json(),
+    "radius": @json.to_json(self.radius),
     "bg": rgba(self.bg),
-    "border_w": self.border_w.to_json(),
-    "font_size": self.font_size.to_json(),
+    "border_w": @json.to_json(self.border_w),
+    "font_size": @json.to_json(self.font_size),
     "color": rgba(self.color),
-    "opacity": self.opacity.to_json(),
+    "opacity": @json.to_json(self.opacity),
   })
 }
 

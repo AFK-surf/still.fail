@@ -53,7 +53,7 @@ test "a mermaid chart the core makes is drawn as a picture in the theme's colour
     call: fn(name, params, done) {
       if name == "mermaid.chart" {
         asked.push(params)
-        done(Ok({ "svg": svg.to_json(), "width": 200.0.to_json(), "height": 100.0.to_json() }))
+        done(Ok({ "svg": @json.to_json(svg), "width": @json.to_json(200.0), "height": @json.to_json(100.0) }))
       } else {
         (fixture.call)(name, params, done)
       }
