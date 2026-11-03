@@ -732,7 +732,8 @@ let stacks_said : @signals.Signal[Int] = @signals.signal(0)
 /// moved to x, 2 let go there (back if past a third or flung), 3 called
 /// off, 4 back (the system decided: from where a gesture had it, or a back
 /// with none); `t` the time; `progress` the system's (-1 none: mbui's own
-/// edge). Never past its floor (Ctx::nav's `floor`).
+/// edge). Never past its floor (Ctx::nav's `floor`; `floor`, where what tells it the steps says where that is now: the
+/// one it asked whether back is the stack's by, Nav::backs_over's).
 fn[P] Nav::gesture(
   self : Nav[P],
   kind : Int,
@@ -740,11 +741,13 @@ fn[P] Nav::gesture(
   w : Double,
   t : Double,
   progress? : Double = -1.0,
+  floor? : Int,
 ) -> Unit {
   let w = dmax(w, 1.0)
+  let floor = floor.unwrap_or(self.floor)
   match kind {
     0 =>
-      if self.mode == 0 && self.pages.length() > self.floor + 1 {
+      if self.mode == 0 && self.pages.length() > floor + 1 {
         self.mode = 3
         self.p = 0.0
         self.finger.set(0.0)
@@ -799,7 +802,7 @@ fn[P] Nav::gesture(
     _ =>
       if self.mode == 3 {
         self.let_go(0.0)
-      } else if self.pages.length() > self.floor + 1 {
+      } else if self.pages.length() > floor + 1 {
         let e = self.pages[self.pages.length() - 1]
         if self.pop() {
           (self.went_back)(e.page, e.over, e.rise, self.pages())
