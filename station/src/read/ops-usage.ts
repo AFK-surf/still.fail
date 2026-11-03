@@ -4,6 +4,7 @@ import type { ReadOp } from "./ops.ts";
 import { hostInfo } from "./host.ts";
 import { machineSession, machineSessions } from "./machine.ts";
 import { memory } from "./memory.ts";
+import { platform } from "../platform/index.ts";
 import { HttpError } from "./views.ts";
 import { resourceChats, usage } from "./usage.ts";
 import { HOME, type Of, outflowChats, outflowMessages, outflowThread, outflowUsage } from "./outflow.ts";
@@ -42,4 +43,5 @@ export const usageOps: Record<string, ReadOp> = {
     }
   },
   host: (store, a) => hostInfo(store.dataDir, a.seen),
+  hostTicks: () => platform.host.cpuTicks(),
 };

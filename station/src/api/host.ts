@@ -6,6 +6,7 @@ import type { Seen, Ticks } from "../read/host.ts";
 import type { Readers } from "../read/pool.ts";
 import { wall } from "../ops/fibers.ts";
 import { platform } from "../platform/index.ts";
+import { cpuShare } from "../platform/cpu-share.ts";
 
 /// How often the CPUs' ticks are noted for their recent average, and over how long that is.
 export const CPU_EVERY_MS = 15_000;
@@ -70,8 +71,30 @@ export class Host {
     const last = this.seen !== null && wall.now() - this.seen.at < 60_000 ? this.seen : (this.cpu.latest() ?? this.seen);
     this.reading ??= this.readers
       .read("host", { seen: last }, lang)
-      .then((text) => {
-        const { info, seen } = JSON.parse(text);
+      .then(async (text) => {
+        const parsed: { info: any; seen: Seen; needsTicks: boolean } = JSON.parse(text);
+        const { info, needsTicks } = parsed;
+        let { seen } = parsed;
+        if (needsTicks && seen !== null) {
+          // macOS can leave ticks unchanged for 500 ms or more. Wait outside the reader, then ask for ticks alone;
+          // the reader can serve other requests between samples. As before, give up after two seconds.
+          const first = seen.ticks;
+          const start = wall.now();
+          await wall.sleep(500);
+          for (;;) {
+            const ticks: Ticks | null = JSON.parse(await this.readers.read("hostTicks", {}, lang));
+            if (ticks === null) { seen = last; break; }
+            const busy = cpuShare(first, ticks);
+            if (busy !== null) {
+              info.cpuBusy = Math.round(busy * 100) / 100;
+              seen = { at: wall.now(), ticks };
+              break;
+            }
+            if (wall.now() - start >= 2_000) { seen = last; break; }
+            await wall.sleep(100);
+          }
+          info.checkedAt = wall.now();
+        }
         this.seen = seen;
         this.cached = { at: info.checkedAt, info };
         return info;
