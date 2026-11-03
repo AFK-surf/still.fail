@@ -404,6 +404,9 @@ test("updating the first-delivery trigger does not read or rewrite old deliverie
   db.setAuthorizer((action, table) => tables.has(table ?? "") && [constants.SQLITE_READ, constants.SQLITE_INSERT, constants.SQLITE_UPDATE, constants.SQLITE_DELETE].includes(action)
     ? constants.SQLITE_DENY : constants.SQLITE_OK);
   try { addListState(db); } finally { db.setAuthorizer(null); }
+  db.setAuthorizer((action) => action === constants.SQLITE_CREATE_TRIGGER || action === constants.SQLITE_DROP_TRIGGER
+    ? constants.SQLITE_DENY : constants.SQLITE_OK);
+  try { addListState(db); } finally { db.setAuthorizer(null); }
 });
 
 test("what two chats' agents wrote each other is neither a chat's unread nor what lists show of it, archived or not", () => {
