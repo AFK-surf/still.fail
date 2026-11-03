@@ -500,6 +500,7 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
       WHERE ${viewer.home !== false ? `(sc.ws = ${ws} OR sc.ws IS NULL)` : `sc.ws = ${ws}`}`;
   }
   // Include both partial edges when selecting sessions; their original calls are read below only if their bucket exists.
+  const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
   const selectedStart = bind(first);
   const selectedEnd = bind(to === max ? max : last + (to === last * size ? 0n : 1n));
   const start = bind(first + (from === first * size ? 0n : 1n));
@@ -515,15 +516,14 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
     const high = bind(until);
     parts.push(`SELECT e.minute, u.session, COALESCE(u.thread, 0), COALESCE(u.person, ''), COALESCE(u.profile, ''),
       u.runtime, COALESCE(u.model, ''), u.fast, u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output
-      FROM (SELECT DISTINCT c.session, c.minute FROM eligible p
-        CROSS JOIN usage_compact c ON c.session = p.session AND c.minute = ${bucket}
-        WHERE ${bucketScope}c.records > 0) e
+      FROM (SELECT DISTINCT c.session, c.minute FROM usage_compact c INDEXED BY ${index}
+        CROSS JOIN eligible p ON p.session = c.session
+        WHERE ${bucketScope}c.minute = ${bucket} AND c.records > 0) e
       CROSS JOIN usage u INDEXED BY usage_session ON u.session = e.session AND u.at >= ${low} AND u.at < ${high}
       WHERE u.compact_counted = 1`);
   };
   if (from !== first * size) edge(first, from, (first + 1n) * size < to ? (first + 1n) * size : to);
   if (to !== max && to !== last * size && (last !== first || from === first * size)) edge(last, last * size, to);
-  const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
   const sql = `WITH selected AS MATERIALIZED (
       SELECT DISTINCT session FROM usage_compact INDEXED BY ${index}
       WHERE ${selectedScope}minute >= ${selectedStart} AND minute < ${selectedEnd}
