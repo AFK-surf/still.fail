@@ -1,11 +1,8 @@
 import {
   "mbui/ui",
   "mbui/hostapi",
-  "stillfail/sf",
   "stillfail/sfapp",
-  "stillfail/sfkept",
-  "stillfail/sfbase",
-  "stillfail/sffixture",
+  "stillfail/sffilmscene",
   "mbui/view",
 }
 

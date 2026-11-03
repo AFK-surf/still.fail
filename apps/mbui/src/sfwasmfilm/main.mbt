@@ -167,33 +167,25 @@ let ground : Ref[(Double, Double, Double)] = Ref((0.0, 0.0, 0.0))
 let current_tester : Ref[@ui.Tester?] = Ref(None)
 
 ///|
-pub fn draw() -> Int {
-  @sf.kept_call.val = Some(@sfkept.answer)
-  let src : Ref[@sfapp.Source?] = Ref(None)
-  let source = fn() {
-    match src.val {
-      Some(s) => s
-      None => {
-        if option(15) == "1" { @ui.fake_autofill.val = true }
-        let s = @sfapp.fixture_app(option(0))
-        if option(9) != "" { @sfbase.lone_page.val = @sfbase.window_page(option(9)) }
-        if option_number(14) >= 0.0 { @sffixture.fixture_updates(ms=option_number(14)) }
-        if option(14) != "" { @sffixture.fixture_update(option(14)) }
-        let s = if option_number(13) > 0.0 { @sffixture.round_trip(s, option_number(13)) } else { s }
-        let held = option(10)
-        let s = if held != "" { @sffixture.held_topics(s, held.split(",").map(fn(x) { x.to_string() }).collect()) } else { s }
-        let failed = option(11)
-        let s = if failed != "" {
-          @sffixture.failed_topics(s, failed.split(",").map(fn(x) { x.to_string() }).collect(), option(12))
-        } else { s }
-        let s = if option(13) == "1" { @sffixture.said_longest_source(s) } else { s }
-        if option_number(4) == 1.0 { @sf.set_dark(Some(true)) }
-        @sf.give_faces()
-        src.val = Some(s)
-        s
-      }
-    }
+fn scene_arg(name : String) -> String {
+  match name {
+    "MBUI_FIXTURE" => option(0)
+    "MBUI_DARK" => option(2)
+    "MBUI_WINDOW" => option(9)
+    "MBUI_HOLD" => option(10)
+    "MBUI_FAILED" => option(11)
+    "MBUI_FAILED_WHY" => option(12)
+    "MBUI_SAID" => option(13)
+    "MBUI_UPDATE" => option(14)
+    "MBUI_FILM_AUTOFILL" => option(15)
+    "MBUI_CORE_MS" => option(16)
+    "MBUI_UPDATES_MS" => option(17)
+    _ => ""
   }
+}
+///|
+pub fn draw() -> Int {
+  let source = @sffilmscene.source(scene_arg)
   let view = fn(c : @ui.Ctx) { @sfapp.view(c, source()) }
   let t = @ui.Tester::new(view, tree=fn(root : @view.View) { @sfapp.app_tree(source())(root) },
     w=option_number(0), h=option_number(1), scale=option_number(2),
