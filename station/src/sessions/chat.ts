@@ -1,5 +1,6 @@
 // What the station needs from a chat platform (the Rust station's chat/mod.rs): Slack is one, the station's own chat
 // (./internal.ts) another. The hub routes what a surface says to sessions, and posts what agents write through it.
+import type { CardEnd } from "../connects/card-ends.ts";
 import type { BotIdentity } from "../connects/connections.ts";
 import type { Attachment } from "../store/store.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
@@ -77,6 +78,9 @@ export interface ChatSurface {
   /// Whether it shows a login card whose page gives a code with a field for that code (Slack), answered as a
   /// `loginCode` event; absent, none but the station's chats.
   loginCards?: boolean;
+  /// A card it showed stopped waiting other than by a press of its own button (connects/card-ends.ts): its message
+  /// (`ts` the post's, as `post` gave it, and its words) changed to say so, with nothing left to press. Best effort.
+  cardEnded?(thread: ThreadRef, ts: string, text: string, card: Json, end: CardEnd): Promise<void>;
   /// How a new session's link is said as it starts (null: it is not said: Feishu's status card has it); absent: Slack's
   /// `<url|label>`.
   sessionLink?(url: string, label: string): string | null;

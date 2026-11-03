@@ -1483,6 +1483,37 @@ export class Store {
     return card === undefined || !message ? null : [toMessage(message), card];
   }
 
+  /// The card a new card (the post at `n`) replaced: the thread's card before it, if it was still pending then (no
+  /// person wrote after it, nor was it closed or withdrawn).
+  cardReplacedBy(thread: number, n: number): [MessageRow, Json] | null {
+    const carded = this.#one("SELECT 1 FROM entries WHERE thread = ? AND n = ? AND kind = 'message' AND (card IS NOT NULL OR options IS NOT NULL)", thread, n);
+    if (!carded) return null;
+    const cardN: number | null = this.#one(CARD_BEFORE, thread, n).n;
+    const optionsN: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
+    const asked = cardN === null ? optionsN : optionsN === null ? cardN : Math.max(cardN, optionsN);
+    if (asked === null) return null;
+    const answered = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n);
+    const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked);
+    if (answered || closed) return null;
+    return this.#cardPost(thread, asked);
+  }
+
+  /// A card closed without a message (closed_cards): its post, its card, and who closed it (its own agent withdrawing
+  /// it, or a person's choice).
+  closedCard(thread: number, n: number): [MessageRow, Json, string] | null {
+    const by = this.#one("SELECT viewer FROM closed_cards WHERE thread = ? AND n = ?", thread, n);
+    const found = by === undefined ? null : this.#cardPost(thread, n);
+    return found === null ? null : [...found, by.viewer as string];
+  }
+
+  /// The post at `n` as merged, and its card; null where it has none.
+  #cardPost(thread: number, n: number): [MessageRow, Json] | null {
+    const row = this.#one("SELECT card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+    const card = row ? cardOf(row.card, row.options) : undefined;
+    const message = card === undefined ? undefined : this.#one("SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
+    return card === undefined || !message ? null : [toMessage(message), card];
+  }
+
   /// The message an agent's need without a card asks with, while no person has written after it: the one its turn is
   /// about (`about`, an entry n), else the agent's latest message during the turn (`during`: from, to, ms); with the two
   /// messages before it. Null in an archived chat, or when that message has a card.
@@ -1564,7 +1595,7 @@ export class Store {
       );
       if (r === undefined) return false;
       this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, r.n, agent, this.now());
-      changes.push({ type: "thread", id: thread, entries: [] });
+      changes.push({ type: "thread", id: thread, entries: [], closed: r.n });
       return true;
     });
   }
@@ -1598,7 +1629,7 @@ export class Store {
       const rows = this.#all(LOGIN_CARDS, `%"login":${JSON.stringify(login)}%`);
       for (const r of rows) {
         this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", r.thread, r.n, r.author, this.now());
-        changes.push({ type: "thread", id: r.thread, entries: [] });
+        changes.push({ type: "thread", id: r.thread, entries: [], closed: r.n });
       }
       return [...new Set(rows.map((r) => r.author as string))];
     });
@@ -1642,7 +1673,7 @@ export class Store {
       const told = closed as { agent: string; changed: boolean } | null;
       if (told !== null) {
         if (told.changed) changes.push({ type: "session", key: told.agent });
-        changes.push({ type: "thread", id: thread, entries: [] });
+        changes.push({ type: "thread", id: thread, entries: [], closed: n });
       }
       return done;
     });

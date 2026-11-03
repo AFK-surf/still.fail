@@ -454,6 +454,7 @@ describe("slack", { concurrency: true }, () => {
     }
   });
 
+<<<<<<< HEAD
   test("a login card posts a field for its page's code; its button hands the code over, never said in the thread", async () => {
     const fake = await FakeSlack.start();
     bot(fake);
@@ -500,6 +501,48 @@ describe("slack", { concurrency: true }, () => {
       assert.deepEqual(JSON.parse(update.blocks!).map((b: any) => b.type), ["markdown", "context"], "no field any more");
       assert.doesNotMatch(update.blocks!, /4\/0Ab-code/);
       assert.equal(fake.calls("chat.postMessage").length, 1, "the code is never posted");
+=======
+  test("a question that stops waiting otherwise says why, its buttons gone; one pressed or closed already is left as it is", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    const here = { channel: "C1", threadTs: "1.1" };
+    const options = { type: "options", options: [{ label: "合并", recommended: true }, { label: "先不" }] };
+    try {
+      await surface.start(quiet);
+      await fake.until("a socket", () => fake.sockets.length === 1 && surface.socket().connected);
+      const asked = await surface.post(here, "选一个", [], options);
+      await surface.cardEnded(here, asked, "选一个", options, { why: "message", by: "U1", byTs: "1.3" });
+      const update = fake.calls("chat.update")[0]!.params;
+      assert.deepEqual([update.channel, update.ts, update.text], ["C1", asked, "选一个"]);
+      assert.deepEqual(JSON.parse(update.blocks!).map((b: any) => b.type), ["markdown", "context"], "nothing to press any more");
+      assert.match(update.blocks!, /Ada 发了新消息，这张卡已关闭/);
+      await surface.cardEnded(here, asked, "选一个", options, { why: "withdrawn" });
+      assert.equal(fake.calls("chat.update").length, 1, "closed once");
+      // Pressed after it closed: not said as an answer.
+      fake.send({
+        type: "interactive",
+        envelope_id: "i1",
+        payload: {
+          type: "block_actions", user: { id: "U1" }, channel: { id: "C1" }, message: { ts: asked, thread_ts: "1.1", text: "选一个" },
+          actions: [{ action_id: "sf_answer", value: '{"l":["先不","合并"]}', action_ts: "9.5" }], state: { values: { b1: { sf_pick: { selected_option: { value: "1" } } } } },
+        },
+      });
+      await fake.until("told it was answered", () => fake.calls("chat.postEphemeral").length === 1);
+      assert.equal(fake.calls("chat.postEphemeral")[0]!.params.text, "这个问题已经回答过了");
+      // After words too long for it, the question is a message of its own: that one changes, with its own words.
+      const long = `${"长".repeat(8_001)}\n\n选哪个`;
+      const first = await surface.post(here, long, [], { type: "text" });
+      const posts = fake.calls("chat.postMessage");
+      await surface.cardEnded(here, first, long, { type: "text" }, { why: "replaced" });
+      const changed = fake.calls("chat.update")[1]!.params;
+      // (the stand-in numbers its posts in order: the question is the last of this one's parts)
+      const parts = posts.length - posts.findIndex((p) => p.params.text!.startsWith("长"));
+      assert.ok(parts > 1);
+      assert.equal(changed.ts, `${Number(first.split(".")[0]) + parts - 1}.000100`);
+      assert.equal(changed.text, posts.at(-1)!.params.text);
+      assert.match(changed.blocks!, /有了新的问题，这张卡已关闭/);
+>>>>>>> 9b6b731f60 (Slack and Feishu: a card that stops waiting says why, its buttons gone)
     } finally {
       await surface.stop();
       await fake.close();

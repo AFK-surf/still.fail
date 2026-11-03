@@ -227,8 +227,9 @@ export type StoreChange =
   | { type: "session"; key: string }
   /// It was deleted; `ws` the workspace its chat was in (null: the home one).
   | { type: "sessionRemoved"; key: string; ws?: string | null }
-  /// Entries were appended there (contiguous, in order), or its sessions changed (none).
-  | { type: "thread"; id: number; entries: EntryRow[] }
+  /// Entries were appended there (contiguous, in order), or its sessions changed (none); `closed`: the post (its n)
+  /// whose card was closed or withdrawn without a message (closed_cards).
+  | { type: "thread"; id: number; entries: EntryRow[]; closed?: number }
   /// Letters were kept in its own log of them (schema.ts LETTERS; contiguous, in order).
   | { type: "letters"; id: number; letters: EntryRow[] }
   /// It went, with every entry it had; `ws` as its session's.

@@ -98,6 +98,13 @@ export function answeredBlocks(text: string, who: string, said: string, lang: La
   return [markdownOf(text.trim() === "" ? [] : [text]), answered].filter((b) => b !== null);
 }
 
+/// A question that stopped waiting other than by its button (connects/card-ends.ts): its words, and why it is closed;
+/// nothing to press any more.
+export function endedBlocks(text: string, words: string): Json[] {
+  const ended = { type: "context", elements: [{ type: "mrkdwn", text: escape(words) }] };
+  return [markdownOf(text.trim() === "" ? [] : [text]), ended].filter((b) => b !== null);
+}
+
 /// Where a thread stands once its agent's turn ended (the line still.fail's chat shows at its end, and its row): done,
 /// or what it needs of a person; in small grey words under its last message (a context block), led as the app leads it.
 export type Stands = { kind: "done" | "need"; words: string | null };
