@@ -90,7 +90,22 @@ pub fn chat_list(
   }
   // the message gone to lit whole, or only what a quote that led there quoted, where its words have it (passage_lit)
   let whole = flash_whole(c, rd)
-  let list_box = c.box(style=chat_list_box, fn() {
+  // on the page's way to another width, in the column's middle as it is at each: its rows as wide as where it goes, moved
+  // there, kept (at either end the column whole, nothing in it laid out otherwise; else laid out as the page goes)
+  let way = @sfbase.page_way
+  let held = way.id != "" && !narrow && !@sf.native_on() && dmin(c.width, way.to) >= chat_column_w + 2.0 * row_side_least
+  let frame_w = c.width
+  let list_w = if held { way.to } else { c.width }
+  let side = if held { dmax(row_side_least, (list_w - chat_column_w) / 2.0) } else { side }
+  let gutter = side
+  let rows_key = way.id +
+    " " +
+    [list_w, c.height, list_top, foot_room, foot, ask_clear, bar].map(fn(x) { x.to_string() }).join(" ") +
+    " " +
+    n.to_string()
+  let list_box = c.box(style=chat_list_box, tx=(frame_w - list_w) / 2.0, fn() {
+    c.sized(list_w, c.height, fn() {
+    let rows = fn() {
     c.list(
       key,
       n,
@@ -206,6 +221,12 @@ pub fn chat_list(
       clear_foot=foot_room + ask_clear,
     )
     |> ignore
+    }
+    if held {
+      c.kept_part(c.id(key + "/rows"), rows_key, rows, read_out=true, rows_stay=true)
+    } else {
+      rows()
+    }
     let la = list_after(
       c,
       src,
@@ -229,6 +250,7 @@ pub fn chat_list(
     rd.ask = to_ask(c, r, v, la.ask_rows, la.info, la.away || v.newer, room)
     // the picture flying out of an activity to its message and back, over the list
     emit_flyer(c, rk, em, v, src, r)
+    })
   })
   // (where it is, for what a quote led to to be put in its middle: passage_centre)
   @motion.measure(c, list_box, "chat-list/" + key)

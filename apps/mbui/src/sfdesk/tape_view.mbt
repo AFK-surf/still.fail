@@ -1304,6 +1304,8 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   wide.bar_ml = 0.0
   wide.bar_mr = 0.0
   wide.brand_h = side_brand_h(false, r.top)
+  wide.list_top = wide.brand_h
+  wide.list_band = 1.0
   wide.band = 1.0
   wide.mark = 0.0
   land(src, w)

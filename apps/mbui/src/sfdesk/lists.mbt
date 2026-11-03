@@ -29,11 +29,12 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
     archive_side.landed = false
   }
   // (read now: the rows are made as the list is laid out, after the closed bar's drawing is over)
-  let band = band_h(src, w)
+  let band = list_band_h(src, w)
   let t = @sf.theme()
   let frame : @sfpages.ListsFrame = {
-    ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode, Side),
+    ..@sfpages.bare_lists(band, 0.0, list_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode, Side),
     others: [fn() { archive_pane(c, src, w) }],
+    kept: true,
   }
   // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
   let away = @sfpages.search_away(c)

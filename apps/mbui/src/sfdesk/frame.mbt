@@ -55,6 +55,9 @@ pub(all) struct Wide {
   /// where the move has got to this frame: the sidebar's top row's height, its frosted bands' ground (0 the sidebar's,
   /// 1 the closed bar's), the lists' marks on the rail (0 gone, 1 in)
   mut brand_h : Double
+  /// the room the lists leave for it (list_top_h), and how far the band over them is to the closed bar's for that
+  mut list_top : Double
+  mut list_band : Double
   mut band : Double
   mut mark : Double
   /// the page's bars' padding at its left (clear of the closed bar) and their margins while the folded sidebar is shown
@@ -127,6 +130,8 @@ pub let wide : Wide = {
   in_bar: false,
   closed: @signals.signal(false, same=fn(a, b) { a == b }),
   brand_h: 0.0,
+  list_top: 0.0,
+  list_band: 0.0,
   band: 0.0,
   mark: 0.0,
   bar_pl: 0.0,
@@ -193,6 +198,8 @@ fn wide_reset() -> Unit {
   wide.in_bar = false
   wide.closed.set(false)
   wide.brand_h = 0.0
+  wide.list_top = 0.0
+  wide.list_band = 0.0
   wide.band = 0.0
   wide.mark = 0.0
   wide.bar_pl = 0.0

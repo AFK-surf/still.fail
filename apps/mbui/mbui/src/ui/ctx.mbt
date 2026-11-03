@@ -77,6 +77,9 @@ struct ListState {
   /// whether its rows show only what they read (Ctx::list's `rows_read`): kept as what builds it is built again,
   /// built again only where what they read changed
   mut rows_read : Bool
+  /// the part it is in whose lists' rows go on as it does (Ctx::kept_part's `rows_stay`, its id), 0 none: built from that
+  /// part's key and what it reads alone, whatever else the frame built anew
+  mut island : Int
   // gliding to its end where it showed as the glide set out: its scroll bar shows meanwhile (not where it is put)
   mut glide_shows : Bool
   // its key and where Ctx::list was said, as the last frame built it: what the performance record names a row of it by
