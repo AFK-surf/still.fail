@@ -44,8 +44,16 @@ pub fn station_lead(online : () -> Bool, emoji : () -> String, icon : () -> Stri
   LeadMade(fn(l) {
     l.row(Is(true)).gap(Is(station_lead_gap)).lines_up(Is(Some(Middle))) |> ignore
     match look_node(l) {
-      // (wide: as tall as what it holds, the row standing it across its first line's middle)
-      Wide => state_dot_node(l, fn() { if online() { "online" } else { "offline" } })
+      // (wide: as tall as a list's title's line at least, a lead icon's row_lead's)
+      Wide => {
+        l
+        .min_height(By(fn() {
+          l.words_redone() |> ignore
+          Some(@ui.current().sp(@ui.tree_theme().leading(L6).unwrap_or(@ui.tree_theme().text_size(Ui).1)))
+        }))
+        |> ignore
+        state_dot_node(l, fn() { if online() { "online" } else { "offline" } })
+      }
       // (narrow: as tall as its name's line at least, the system's size of words applied as it changes)
       Narrow =>
         l
