@@ -141,7 +141,9 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
       if u.box_w > 0.0 && u.box_h > 0.0 && size == u.fit_for && size is Some(_) {
         // Turned, or a fitted view given a new width by the system column: fit again.
         // Height alone (the keyboard) keeps the picture and pointer as before.
-        if (u.box_w > u.box_h) != (bw > bh) || (bw != u.box_w && u.zoom.fitted) {
+        // (a device's page gives the stage's height to what comes as its state does, its poses: its picture fitted to what
+        // is left, or it would be taken for zoomed in, its body gone)
+        if (u.box_w > u.box_h) != (bw > bh) || (u.zoom.fitted && (bw != u.box_w || s.simulator())) {
           u.zoom.fit_now()
         } else {
           u.zoom.resize_keeping(bw, bh, pointer_now(s, u), screen_keep_margin)

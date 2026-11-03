@@ -357,10 +357,9 @@ final class SimulatorView: ScreenView {
       if let said = await enumerated() {
         _ = setTurn(Self.turnOf(said, panel: cover ? "primary" : "primary-1"))
       }
-      Task { await lookTurn(cover: cover) }
-    } else {
-      await lookTurn(cover: cover)
     }
+    // (not waited for: the next press would wait for all of it, seconds, behind it)
+    Task { await lookTurn(cover: cover) }
   }
 
   /// How the panel's UI stands as CoreSimulator says it, the picture turned to match. Asked as a panel comes up, and again

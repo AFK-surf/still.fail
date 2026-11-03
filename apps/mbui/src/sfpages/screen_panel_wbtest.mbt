@@ -466,6 +466,39 @@ test "an iPhone Duo's poses are by its picture, each a press; another device has
 }
 
 ///|
+test "a device's picture fitted still once its poses take room from the stage: its body round it" {
+  let r = screen_rig()
+  simulator_live(r)
+  // tall enough that the stage's height is what it is fitted to
+  r.say({ "config": { "codec": "jpeg", "width": 1000.0, "height": 2040.0 } })
+  r.t.draw()
+  assert_true(!r.ui().zoom.zoomed())
+  r.state("live", more={ "kind": Json::string("simulator"), "poses": Json::boolean(true) })
+  r.t.draw()
+  r.t.draw()
+  assert_true(!r.ui().zoom.zoomed())
+  screen_done(r.t)
+}
+
+///|
+test "a pose pressed shows as chosen at once, before the picture has come" {
+  let r = screen_rig()
+  simulator_live(r)
+  r.state("live", more={ "kind": Json::string("simulator"), "poses": Json::boolean(true) })
+  r.say({ "config": { "codec": "jpeg", "width": 1000.0, "height": 1460.0 } })
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.device.pose.open"))
+  r.t.draw()
+  assert_eq(r.ui().logs.pose_asked, 2)
+  // the picture of the inner panel come: it says which, nothing asked any longer
+  r.say({ "config": { "codec": "jpeg", "width": 1426.0, "height": 1004.0 } })
+  r.t.draw()
+  assert_eq(r.ui().logs.pose_asked, -1)
+  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  screen_done(r.t)
+}
+
+///|
 test "a device's body has the corners of the panel its picture is of" {
   let duo = Some(
     Json::array([

@@ -88,7 +88,15 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
       const asked = Date.now();
       await tap(x, y);
       let changed = 0;
-      while ((changed = differs(home, await picture(name + "-settings"))) <= 0.2 && Date.now() - asked < 60_000) await sleep(1000);
+      let tapped = asked;
+      while ((changed = differs(home, await picture(name + "-settings"))) <= 0.2 && Date.now() - asked < 60_000) {
+        await sleep(1000);
+        // (a tap as the device still turns to the pose lands on nothing, as a person's: tried again)
+        if (Date.now() - tapped > 10_000) {
+          tapped = Date.now();
+          await tap(x, y);
+        }
+      }
       console.log(name, "changed", changed, "in", Date.now() - asked, "ms");
       assert.ok(changed > 0.2, `${name}: its picture did not change (${changed})`);
       assert.equal(backboardd(), running, `a touch in ${name} took backboardd down`);
