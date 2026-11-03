@@ -598,6 +598,41 @@ export function pendingCard(s: Store, thread: number): [MessageRow, Json] | null
   return m ? [toMessage(m), card] : null;
 }
 
+/// The cards `threads` wait on as kept (store/schema.ts PENDING_CARDS): by thread, the post's entry (`at`); and those of
+/// them with a card posted before it was kept (`before`), whose card is read as `pendingCard` reads it. Null where a
+/// database from before keeps none.
+export function pendingCards(s: Store, threads: number[]): { at: Map<number, number>; before: Set<number> } | null {
+  let from: number;
+  try {
+    from = one(s, "SELECT entry FROM pending_cards_from WHERE id = 1")?.entry ?? 0;
+  } catch {
+    return null;
+  }
+  const list = JSON.stringify(threads);
+  const at = new Map<number, number>(all(s, "SELECT thread, n FROM pending_cards WHERE thread IN (SELECT value FROM json_each(?))", list).map((r) => [r.thread, r.n]));
+  // A card or options posted before the cards were kept, by their own indexes: the chat's first of each.
+  const before = new Set<number>(
+    threads.filter((t) => !at.has(t) && (
+      one(s, "SELECT rowid FROM entries INDEXED BY entries_cards WHERE thread = ? AND card IS NOT NULL ORDER BY n LIMIT 1", t)?.rowid <= from ||
+      one(s, "SELECT rowid FROM entries INDEXED BY entries_options WHERE thread = ? AND options IS NOT NULL ORDER BY n LIMIT 1", t)?.rowid <= from)),
+  );
+  return { at, before };
+}
+
+/// The card a thread waits on as kept (`n`, pendingCards), as `pendingCard` gives it; null where it no longer waits
+/// (closed, or a person wrote since).
+export function cardAt(s: Store, thread: number, n: number): [MessageRow, Json] | null {
+  const asked = one(s, "SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, n);
+  if (!asked) return null;
+  const answered = one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
+  const closed = one(s, "SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined;
+  if (answered || closed) return null;
+  const card = cardOf(asked.card, asked.options);
+  if (card === undefined) return null;
+  const m = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
+  return m ? [toMessage(m), card] : null;
+}
+
 /// An agent's latest message in a chat during a turn (`?2` to `?3`, ms), by the index of agents' messages by time (store/
 /// schema.ts entries_agent_at): by the chat alone, all it had was read for it.
 export const ASKED_DURING = "SELECT max(n) AS n FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?";
