@@ -2525,8 +2525,28 @@ export class Store {
       const entries = readArchive(file);
       if (entries.length === 0) lost.push(thread);
       brought++;
+      let oldCards = false;
+      let lastPerson: number | null = null;
+      for (const e of entries) {
+        if (e.kind === "message" && e.authorKind === "agent") {
+          const card = e.card ?? (Array.isArray(e.options) ? { type: "options", options: e.options } : null);
+          if (card?.type === "options" && Array.isArray(card.options)) oldCards = true;
+        }
+        if (e.kind === "message" && e.authorKind === "person") lastPerson = Math.max(lastPerson ?? e.n, e.n);
+      }
       this.#tx(() => {
+        // Restoring old messages is required for the chat, but it must not rebuild historical usage statistics. Drop
+        // and restore the affected triggers inside this write transaction, so another writer never sees them missing.
+        // Keep their installed definitions rather than replacing another station's version.
+        const mayAnswer = lastPerson !== null && this.#one("SELECT 1 FROM card_outcomes WHERE thread = ? AND n < ? LIMIT 1", thread, lastPerson) !== undefined;
+        const outcomes = oldCards || mayAnswer ? (this.#all(`SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name IN
+          ('card_outcomes_asked', 'card_outcomes_answered') ORDER BY name`) as { name: string; sql: string }[])
+          .filter((t) => t.name === "card_outcomes_asked" ? oldCards : mayAnswer) : [];
+        if (oldCards) this.db.exec("DROP TRIGGER IF EXISTS card_outcomes_asked");
+        if (mayAnswer) this.db.exec("DROP TRIGGER IF EXISTS card_outcomes_answered");
         for (const e of entries) this.#insertEntry(e);
+        if (entries.length === 0 || oldCards || mayAnswer) this.db.exec("CREATE TABLE IF NOT EXISTS card_outcomes_incomplete (id INTEGER PRIMARY KEY)");
+        for (const trigger of outcomes) this.db.exec(trigger.sql);
         this.#run("UPDATE threads SET archived_at = NULL WHERE id = ?", thread);
       });
       rmSync(file, { force: true });

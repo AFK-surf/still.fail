@@ -96,3 +96,48 @@ test("restoring old archived chats does not reconstruct their decision statistic
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("an old archive without decisions leaves existing decision statistics available", () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-archive-empty-"));
+  const path = join(dir, "stillfail.db");
+  let store: Store | null = null;
+  try {
+    store = Store.open(path);
+    const thread = store.openThread("ember", "EMBER", "plain", null, null).id;
+    store.insertMessage(newMessage(thread, "1", "person", "person", "hello"));
+    store.insertMessage(newMessage(thread, "2", "agent", "agent", "hello"));
+    fileAway(store, thread);
+    store.close();
+    store = Store.open(path);
+    assert.equal(store.entriesAfter(thread, 0).length, 2);
+    assert.deepEqual(decisionCards(makeStore(store.db, dir)), []);
+    store.insertMessage({ ...newMessage(thread, "3", "agent", "agent", "pick"), card });
+    assert.equal(decisionCards(makeStore(store.db, dir)).length, 1);
+  } finally {
+    store?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an archived answer does not change an existing decision outcome", () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-archive-answer-"));
+  const path = join(dir, "stillfail.db");
+  let store: Store | null = null;
+  try {
+    store = Store.open(path);
+    const thread = store.openThread("ember", "EMBER", "plain", null, null).id;
+    store.insertMessage(newMessage(thread, "1", "agent", "agent", "question"));
+    store.insertMessage(newMessage(thread, "2", "person", "person", "yes"));
+    fileAway(store, thread);
+    // An earlier decision may still be in a legacy store while its answer is in the archived log.
+    store.db.prepare("INSERT INTO card_outcomes (thread, n, author, labels, answered, said) VALUES (?, 1, 'agent', '[\"yes\"]', 0, 0)").run(thread);
+    store.close();
+    store = Store.open(path);
+    const outcome = store.db.prepare("SELECT answered, said FROM card_outcomes WHERE thread = ? AND n = 1").get(thread) as { answered: number; said: number };
+    assert.deepEqual([outcome.answered, outcome.said], [0, 0]);
+    assert.throws(() => decisionCards(makeStore(store!.db, dir)), /usage chat statistics/);
+  } finally {
+    store?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
