@@ -257,8 +257,8 @@ export function compactScopeReady(db: DatabaseSync, viewer: InWorkspace | null):
   return db.prepare(sql).get(ws) === undefined;
 }
 
-/// The lifetime total of compacted calls alone. Never serve a total until its pending buckets and scope moves finish.
-export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null, before?: bigint): { calls: number; tokens: number } | null {
+/// The lifetime total of compacted calls alone, with readiness and value read from the same snapshot.
+export function compactTotalQuery(viewer: InWorkspace | null, before?: bigint): { sql: string; args: string[] } {
   const scope = viewer === null ? "scope = 'G'" : viewer.home !== false ? "scope IN (?1, 'H')" : "scope = ?1";
   const moving = viewer === null ? "SELECT 1 FROM usage_compact_moving LIMIT 1"
     : `SELECT 1 FROM usage_compact_moving_scope WHERE ${scope} LIMIT 1`;
@@ -291,11 +291,17 @@ export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null, befor
   )`;
   const value = (column: string) => ranges === null
     ? `(SELECT COALESCE(SUM(${column}), 0) FROM usage_compact_total WHERE ${scope})` : `(SELECT ${column} FROM prefix)`;
-  // The readiness checks and value must share one SQLite snapshot, including when another connection is moving rows.
-  const row = db.prepare(`${prefix} SELECT NOT EXISTS (${moving}) AND NOT EXISTS (${dirty}) AS ready,
-    ${value("calls")} AS calls, ${value("tokens")} AS tokens`)
-    .get(...(viewer === null ? [] : [`W${viewer.workspace}`]), ...(ranges === null ? [] : [JSON.stringify(ranges)])) as
-    { ready: number; calls: number; tokens: number };
+  return {
+    sql: `${prefix} SELECT NOT EXISTS (${moving}) AND NOT EXISTS (${dirty}) AS ready,
+      ${value("calls")} AS calls, ${value("tokens")} AS tokens`,
+    args: [...(viewer === null ? [] : [`W${viewer.workspace}`]), ...(ranges === null ? [] : [JSON.stringify(ranges)])],
+  };
+}
+
+/// Never serve a total until its pending buckets and scope moves finish.
+export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null, before?: bigint): { calls: number; tokens: number } | null {
+  const query = compactTotalQuery(viewer, before);
+  const row = db.prepare(query.sql).get(...query.args) as { ready: number; calls: number; tokens: number };
   return row.ready ? { calls: Number(row.calls), tokens: Number(row.tokens) } : null;
 }
 

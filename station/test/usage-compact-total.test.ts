@@ -38,6 +38,12 @@ test("a bounded lifetime total does not read future or unrelated minute buckets"
       store.recordUsage(`/${row.session}`, { session: row.session, offset: i + 1, model: "m" }, "claude", [[call, owner]]);
     }
     account(store);
+    for (const viewer of [a, home, null]) {
+      const query = compact.compactTotalQuery(viewer, 100_100n);
+      const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.args) as { detail: string }[])
+        .map((row) => row.detail).join(" | ");
+      assert.match(plan, /SEARCH t USING PRIMARY KEY \(scope=\? AND level=\? AND bucket>\? AND bucket<\?\)/, plan);
+    }
     // Readiness may check scope and pending, but the answer must not enumerate minute buckets on either side of the cutoff.
     const denied = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
     store.db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && denied.has(column ?? "")
