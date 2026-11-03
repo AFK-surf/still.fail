@@ -197,8 +197,9 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 }
 
 ///|
-/// A result's read-only history: a pointer can rest on the line, while a press opens the same contents in a panel
-/// (a sheet on a small screen). Both use the original card's content rather than its now-inactive actions.
+/// A result's read-only history: a press on the line opens it in a panel (a sheet on a small screen), the original
+/// card's content rather than its now-inactive actions. Only a press: no hover card as well, two boxes of the same
+/// (the user, 2026-11-03: 「改成只允许点击吧」).
 fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body : (@ui.Ctx) -> Unit) -> Unit {
   if c.clicked(id) {
     @sf.panel(
@@ -213,7 +214,6 @@ fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body
       from=Of(id),
     )
   }
-  hover(c, "history/" + key, id, padded~, fn() { body(c) }) |> ignore
 }
 
 ///|
