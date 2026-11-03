@@ -158,13 +158,14 @@ export function sessions(s: Store, connect: string | null, archived: boolean, la
 /// GET /sessions/:key (views.rs `session`): the session, its threads, turns and jobs (newest first). `turns`: only that
 /// many of its latest turns (`?turns=`), for a device that knows how many it had and how long they ran from its summary
 /// (`turns`, `workMs`): all of them were read for that, 3,685 of one session in 25 s on ccvm (2026-11-03).
-export function session(s: Store, key: string, viewer: Viewer, lang: Lang, turns: number | null = null): Json {
+/// `now`: only its jobs that may matter now (`jobsNow`, `?jobs=now`), not its every one.
+export function session(s: Store, key: string, viewer: Viewer, lang: Lang, turns: number | null = null, now = false): Json {
   setLang(lang);
   // One of another workspace is none (docs/multi-workspace.md).
   const row = store.getSession(s, key);
   if (row !== null && !sees(viewer, row.ws)) throw new HttpError(404, `unknown session ${key}`);
   const listed = store.listTurns(s, key, turns);
-  const jobs = store.listJobs(s, key).map((j) => shown(s, j));
+  const jobs = (now ? store.jobsNow(s, key) : store.listJobs(s, key)).map((j) => shown(s, j));
   return { session: summary(s, key), threads: threadViews(s, viewer, key), turns: listed, jobs };
 }
 

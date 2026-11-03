@@ -886,6 +886,31 @@ test("bindings tell both sessions; delivered can be taken back", () => {
   assert.deepEqual([...store.heardThreads("a", [thread.id])], []);
 });
 
+// On ccvm (2026-11-03) a session's detail read its 378 jobs, each with its notices and its log looked at.
+test("jobs: a session's detail as a device asks it lists its latest and those still up, by indexes", async () => {
+  const store = memory();
+  session(store, "a");
+  const job = (i: number, over: Partial<JobRow> = {}): JobRow => ({
+    id: `j${i}`, sessionKey: "a", name: `job ${i}`, command: "make", cwd: "/w/a", port: null, token: `t${i}`, state: "exited", pgid: null,
+    exitCode: 0, startedAt: 10 + i, endedAt: 20 + i, restarts: 0, log: `/w/a/j${i}.log`, watch: false, ...over,
+  });
+  // The first a service still up, the second running: both from long ago; then 60 over.
+  store.insertJob(job(0, { port: 4000 }));
+  store.insertJob(job(1, { state: "running", endedAt: null, exitCode: null }));
+  for (let i = 2; i < 62; i++) store.insertJob(job(i));
+  const { session: detail } = await import("../src/read/sessions.ts");
+  const viewer: Viewer = { sub: "u", email: "a@x", name: "A", role: "owner", workspace: "ws", device: "d", home: true };
+  const r = read.makeStore(store.db, tempdir());
+  const ids = (now: boolean) => detail(r, "a", viewer, "en", 0, now).jobs.map((j: any) => j.id);
+  const latest = Array.from({ length: read.JOBS_NOW }, (_, k) => `j${61 - k}`);
+  assert.deepEqual(ids(true), [...latest, "j1", "j0"], "the latest, newest first, then the old ones still up");
+  assert.equal(ids(false).length, 62, "all of them, as a device from before asks");
+  for (const [sql, args] of [[read.LATEST_JOBS, ["a", 5]], [read.UP_JOBS_OF, ["a"]]] as const) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((p) => p.detail);
+    assert.ok(plan.every((d) => !/^SCAN jobs/.test(d)) && !plan.some((d) => d.includes("TEMP B-TREE")), plan.join(" | "));
+  }
+});
+
 test("jobs: started, said, ended and cleared", () => {
   const store = memory();
   session(store, "a");

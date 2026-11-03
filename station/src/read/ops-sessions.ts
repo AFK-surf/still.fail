@@ -15,7 +15,7 @@ export const sessionOps: Record<string, ReadOp> = {
   /// One session as lists and events have it (views.rs `summary`).
   summary: (s, a) => summary(s, a.key),
   sessions: (s, a) => sessions(s, a.connect ?? null, a.archived, a.lang, a.viewer ?? null),
-  session: (s, a) => session(s, a.key, a.viewer, a.lang, latest(a.turns)),
+  session: (s, a) => session(s, a.key, a.viewer, a.lang, latest(a.turns), a.jobs === "now"),
   timeline: (s, a) => timeline(s, a.key, a.before, a.limit, a.lang, a.from, a.to, a.brief, a.after),
   transcriptState: (s, a) => transcriptState(s, a.key),
   transcriptFile: (s, a) => transcriptFile(s, a.key, a.lang),
