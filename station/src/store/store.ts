@@ -2101,12 +2101,12 @@ export class Store {
     this.#run("UPDATE usage_counter SET through = MAX(through, ?) WHERE id = 1", through);
   }
 
-  usageCounterFile(path: string): number | null {
+  usageCounterFile(path: string): usage.CounterFile | null {
     return usage.usageCounterFile(this.db, path);
   }
 
-  beginUsageCounterFile(path: string, cutoff: number, reset = false): number {
-    return this.#tx(() => usage.beginUsageCounterFile(this.db, path, cutoff, reset));
+  beginUsageCounterFile(path: string, file: usage.UsageFile, counter: usage.CounterFile, reset = false): usage.CounterFile {
+    return this.#tx(() => usage.beginUsageCounterFile(this.db, path, file, counter, reset));
   }
 
   /// Every transcript read for usage so far, by path.

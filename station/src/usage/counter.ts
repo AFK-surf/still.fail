@@ -34,6 +34,8 @@ export const SETTLE_MS = 2_000;
 export const SAFETY_MS = 10 * 60_000;
 /// How much of a transcript is read and parsed at a time.
 const CHUNK = 1 << 20;
+/// Bytes before a saved position: a file can be replaced and grow past that position between reads.
+const ANCHOR = 256;
 /// How many calls are recorded in one transaction before the event loop is let through.
 const WRITE_BATCH = 64;
 
@@ -248,14 +250,16 @@ function* partsOf(bytes: Buffer, from: number): Generator<Part> {
 }
 
 /// A line already begun at the cutoff belongs to the old part; complete later lines belong to the followed suffix.
-function sectionsOf(part: Part, cutoff: number): { text: string; from: number; offset: number; followed: boolean }[] {
+function sectionsOf(part: Part, cutoff: number): (Part & { followed: boolean })[] {
   if (part.offset <= cutoff) return [{ ...part, followed: false }];
   if (part.from >= cutoff) return [{ ...part, followed: true }];
   const at = cutoff - part.from;
   const end = part.bytes[at - 1] === 0x0a ? at : part.bytes.indexOf(0x0a, at) + 1;
+  const old = part.bytes.subarray(0, end);
+  const next = part.bytes.subarray(end);
   return [
-    { text: part.bytes.toString("utf8", 0, end), from: part.from, offset: part.from + end, followed: false },
-    ...(end < part.bytes.length ? [{ text: part.bytes.toString("utf8", end), from: part.from + end, offset: part.offset, followed: true }] : []),
+    { text: old.toString("utf8"), bytes: old, from: part.from, offset: part.from + end, followed: false },
+    ...(end < part.bytes.length ? [{ text: next.toString("utf8"), bytes: next, from: part.from + end, offset: part.offset, followed: true }] : []),
   ];
 }
 
@@ -484,7 +488,52 @@ async function unpackedLength(path: string, keep: () => boolean): Promise<number
   } finally { raw.destroy(); stream.destroy(); }
 }
 
-type CountedFile = UsageFile & { cutoff: number | null; path: string };
+/// Bytes immediately before a saved offset, from the raw transcript or the segment containing it.
+async function anchorAt(path: string, offset: number, archived: boolean, keep: () => boolean): Promise<string | null> {
+  const length = Math.min(ANCHOR, offset);
+  if (length === 0) return "";
+  const start = offset - length;
+  if (!archived) {
+    let file: FileHandle | undefined;
+    try {
+      file = await open(path, "r");
+      const out = Buffer.alloc(length);
+      const { bytesRead } = await file.read(out, 0, length, start);
+      return bytesRead === length ? out.toString("hex") : null;
+    } catch { return null; } finally { await file?.close(); }
+  }
+  let source: AsyncIterable<Buffer> | null;
+  try { source = await segmentsFrom(packed(path), start); } catch { return null; }
+  let raw: ReturnType<typeof createReadStream> | null = null;
+  let stream: ReturnType<typeof createZstdDecompress> | null = null;
+  let skip = 0;
+  if (source === null) {
+    raw = createReadStream(packed(path), { highWaterMark: CHUNK });
+    stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
+    raw.on("error", (error) => stream!.destroy(error));
+    source = stream as AsyncIterable<Buffer>;
+    skip = start;
+  }
+  const pieces: Buffer[] = [];
+  let got = 0;
+  try {
+    for await (const piece of source) {
+      if (!keep()) throw new Stopped();
+      if (skip >= piece.length) { skip -= piece.length; continue; }
+      const bytes = piece.subarray(skip, skip + length - got);
+      skip = 0;
+      pieces.push(bytes);
+      got += bytes.length;
+      if (got === length) break;
+    }
+    return got === length ? Buffer.concat(pieces, length).toString("hex") : null;
+  } catch (error) {
+    if (error instanceof Stopped) throw error;
+    return null;
+  } finally { raw?.destroy(); stream?.destroy(); }
+}
+
+type CountedFile = UsageFile & { cutoff: number | null; anchor: string | null; path: string };
 
 // ── the counter ──
 
@@ -515,6 +564,8 @@ export class UsageCounter {
   #from = Infinity;
   /// Positions of transcripts this counter has needed, read from the store by path and kept as it writes them.
   #files: Map<string, CountedFile> | null = null;
+  /// Codex's path for a runtime session, remembered by session rather than searched through all known files.
+  #codexPaths = new Map<string, Map<string, string>>();
 
   constructor(options: UsageCounterOptions) {
     this.#store = options.store;
@@ -654,9 +705,9 @@ export class UsageCounter {
         const cached = known.get(name);
         if (cached !== undefined) return cached;
         const file = store.usageFile(name);
-        const cutoff = store.usageCounterFile(name);
-        if (file === undefined && cutoff === null) return undefined;
-        const saved = { ...(file ?? { session: null, offset: 0, model: null }), cutoff, path: name };
+        const counter = store.usageCounterFile(name);
+        if (file === undefined && counter === null) return undefined;
+        const saved = { ...(file ?? { session: null, offset: 0, model: null }), cutoff: counter?.cutoff ?? null, anchor: counter?.anchor ?? null, path: name };
         known.set(name, saved);
         return saved;
       };
@@ -691,13 +742,14 @@ export class UsageCounter {
     // Read of a few sessions alone (every few seconds while they work), not every one is walked: those of their
     // runtime sessions, as read before or found by their ids.
     const codex = sessions.filter((s) => s.runtime === "codex");
-    const readOf = new Map<string, string>();
-    for (const [path, file] of known) if (file.session !== null && wanted.has(file.session)) readOf.set(basename(path), path);
     const found = new Map<string, SessionRow>();
     for (const s of codex) for (const id of store.runtimeSessions(s.key)) {
-      const had = [...readOf].find(([name]) => name.endsWith(`${id}.jsonl`))?.[1];
+      const paths = this.#codexPaths.get(s.key) ?? new Map<string, string>();
+      this.#codexPaths.set(s.key, paths);
+      let had = paths.get(id);
+      if (had !== undefined && !(await isFile(had)) && !(await isFile(packed(had)))) { paths.delete(id); had = undefined; }
       const path = had ?? transcriptPaths("codex", config.dataDir, homes, [id]).paths[0];
-      if (path !== undefined) found.set(path, s);
+      if (path !== undefined) { paths.set(id, path); found.set(path, s); }
     }
     for (const [path, s] of found) {
       const file = readBefore(path, "codex");
@@ -745,14 +797,22 @@ export class UsageCounter {
     } else {
       try { size = (await stat(path)).size; } catch { return 0; }
     }
-    if (archived && was !== undefined && size === was.offset) return 0;
+    let anchor = "";
     const shortened = was !== undefined && size < was.offset;
-    const before = shortened ? { session: was.session, offset: 0, model: null } : (was ?? { session: null, offset: 0, model: null });
+    if (!shortened && was !== undefined) {
+      const found = await anchorAt(path, was.offset, archived, () => !this.#abort.signal.aborted);
+      if (found === null) return 0;
+      anchor = found;
+    }
+    const replaced = was !== undefined && (shortened || (was.anchor !== null && anchor !== was.anchor));
+    const before = replaced ? { session: was.session, offset: 0, model: null } : (was ?? { session: null, offset: 0, model: null });
+    if (replaced) anchor = "";
     let cutoff = was?.cutoff ?? null;
-    if (shortened) cutoff = this.#store.beginUsageCounterFile(path, size, true);
-    else if (cutoff === null) cutoff = this.#store.beginUsageCounterFile(path, size);
-    else if (was?.path !== path) cutoff = this.#store.beginUsageCounterFile(path, cutoff);
-    this.#files?.set(path, { ...before, cutoff, path });
+    if (replaced || cutoff === null || was?.anchor === null || was?.path !== path) {
+      cutoff = this.#store.beginUsageCounterFile(path, before, { cutoff: replaced ? size : (cutoff ?? size), anchor }, replaced).cutoff;
+    }
+    this.#files?.set(path, { ...before, cutoff, anchor, path });
+    if (archived && !replaced && size === before.offset) return 0;
     const state: CallState = { model: before.model, codexId: null };
     let added = 0;
     let first = true;
@@ -764,9 +824,11 @@ export class UsageCounter {
         first = false;
       }
       for (const section of sectionsOf(part, cutoff)) {
+        const nextAnchor = (section.bytes.length >= ANCHOR ? section.bytes.subarray(-ANCHOR)
+          : Buffer.concat([Buffer.from(anchor, "hex"), section.bytes]).subarray(-ANCHOR)).toString("hex");
         // What ran before the station had the session (a terminal's, continued here) is not the station's.
         const modelBefore = state.model;
-        const fromKnownSuffix = was !== undefined && !shortened && section.from >= before.offset;
+        const fromKnownSuffix = was !== undefined && !replaced && section.from >= before.offset;
         const calls = callsOf(runtime, section.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS && (section.followed || c.at >= since || fromKnownSuffix));
         // The turns they were made in, those alone (store/usage.ts usageTurns).
         const of = calls.length === 0 ? [] : this.#store.usageTurns(session.key, calls.reduce((m, c) => Math.min(m, c.at), Infinity), calls.reduce((m, c) => Math.max(m, c.at), -Infinity));
@@ -790,8 +852,9 @@ export class UsageCounter {
           const file = { session: session.key, offset: complete ? section.offset : section.from, model: complete ? state.model : modelBefore };
           const batch = withFor.slice(i, i + WRITE_BATCH);
           const changed = { from: Infinity };
-          const recorded = this.#store.recordUsage(path, file, runtime, batch, { changed, ...(section.followed ? {} : { minNewAt: since }) });
-          this.#files?.set(path, { ...file, cutoff, path });
+          const savedAnchor = complete ? nextAnchor : anchor;
+          const recorded = this.#store.recordUsage(path, file, runtime, batch, { changed, counter: { cutoff, anchor: savedAnchor }, ...(section.followed ? {} : { minNewAt: since }) });
+          this.#files?.set(path, { ...file, cutoff, anchor: savedAnchor, path });
           if (Number.isFinite(changed.from)) {
             this.#counted.add(session.key);
             this.#from = Math.min(this.#from, changed.from);
@@ -799,6 +862,7 @@ export class UsageCounter {
           added += recorded;
           await breathe();
         }
+        anchor = nextAnchor;
       }
     }
     return added;

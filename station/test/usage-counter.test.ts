@@ -305,6 +305,48 @@ test("a shortened tracked transcript does not bring old calls into the count", a
   assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), [first, "new"]);
 });
 
+for (const format of ["raw", "single-frame", "segmented"] as const) test(`a replaced tracked ${format} transcript does not count its older calls after restart`, async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "replaced");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("first", now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  const replacement = [0, 1, 2].map((i) => claudeLine(`old-${i}`, now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1)));
+  replacement.push(claudeLine("new", now + 2, "claude-opus-5-5", usage(3, 0, 0, 0, 1)));
+  writeFileSync(path, replacement.join("\n") + "\n");
+  if (format === "single-frame") pack(path);
+  if (format === "segmented") await packFile(path);
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
+  counters.push(again);
+  assert.equal(await again.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["first", "new"]);
+});
+
+test("a replacement checkpoint resumes from the new file after an interrupted read", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "replaced-interrupted");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("first", now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  const replacement = [0, 1, 2].map((i) => claudeLine(`old-${i}`, now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1)));
+  replacement.push(claudeLine("new", now + 2, "claude-opus-5-5", usage(3, 0, 0, 0, 1)));
+  writeFileSync(path, replacement.join("\n") + "\n");
+  const record = r.store.recordUsage.bind(r.store);
+  r.store.recordUsage = () => { throw new Error("interrupted"); };
+  await assert.rejects(r.usage.read(new Set(["active"])), /interrupted/);
+  r.store.recordUsage = record;
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
+  counters.push(again);
+  assert.equal(await again.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["first", "new"]);
+});
+
 test("a line already started at the tracking boundary is not mistaken for a new call", async () => {
   const time = await today();
   const r = rig({ clock: time.clock });
