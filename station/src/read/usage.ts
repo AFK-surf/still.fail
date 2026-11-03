@@ -231,10 +231,28 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
-type BatchedHistory = { range: { from: bigint; to: bigint }; result: BatchedUsage };
+type BatchedHistory = { range: { from: bigint; to: bigint }; result: BatchedUsage; all?: boolean };
 // A reader says once when its cache actually serves a request. Fast reads otherwise leave no trace in the slow-read
 // log, so the absence of that warning alone cannot show whether the cache is used.
 let reportedSummaryReuse = false;
+
+/// An indexed existence check is enough to know whether an unbounded history has minutes before a summary.
+/// Count even an empty bucket: that can only make us retain the ordinary history query.
+export function compactHistoryBeforeQuery(viewer: InWorkspace | null): string {
+  return viewer === null
+    ? "SELECT 1 FROM usage_compact INDEXED BY usage_compact_time WHERE minute < ?1 LIMIT 1"
+    : `SELECT 1 FROM usage_compact INDEXED BY usage_compact_scope_time WHERE ${viewer.home === false ? "scope = ?2" : "scope IN (?2, 'H')"} AND minute < ?1 LIMIT 1`;
+}
+
+function summaryCoversHistory(s: Store, from: bigint, to: bigint, viewer: InWorkspace | null): boolean {
+  if (from >= to || from % 60_000n !== 0n || to !== 9223372036854775807n || !hasCompactUsage(s.db)) return false;
+  const coverage = s.db.prepare("SELECT old_days FROM usage_compact_since WHERE id = 1").get() as { old_days: number };
+  if (coverage.old_days !== 0) return false;
+  const args: (string | bigint)[] = [from / 60_000n];
+  if (viewer !== null) args.push("W" + viewer.workspace);
+  return s.db.prepare(compactHistoryBeforeQuery(viewer)).get(...args) === undefined;
+}
+
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
   options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage; batchedHistory?: BatchedHistory; historyPrepassMs?: number } = {}): Json {
   const includeRemoteRuns = options.remoteRuns !== false;
@@ -303,7 +321,11 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
       // Old clients continue to see history as unavailable; newer clients can use the separately named, explicitly
       // incomplete history without treating missing earlier calls as zero.
       if (error.message === USAGE_MINUTES_PENDING) {
-        try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange, options.batchedHistory); }
+        let batchedHistory = options.batchedHistory;
+        if (batchedHistory === undefined && options.historyRange === undefined && options.batched !== undefined && summaryCoversHistory(s, from, to, viewer)) {
+          batchedHistory = { range: { from, to }, result: options.batched, all: true };
+        }
+        try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange, batchedHistory); }
         catch (partialError) {
           if (!(partialError instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(partialError.message)) throw partialError;
           historyPending = partialError.message === USAGE_MINUTES_PENDING && options.historyRange !== undefined && hasCompactUsage(s.db);
@@ -397,8 +419,9 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
   if (range !== undefined && total === null) throw new Error(USAGE_MINUTES_PENDING);
   const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
   // Old complete totals have a separate source. Only substitute when the stored coverage says there are none.
-  const compactOnly = partial && range !== undefined && requested !== undefined && batched !== undefined &&
-    batched.range.from === requested.from && batched.range.to === requested.to &&
+  const compactOnly = partial && batched !== undefined &&
+    (batched.all === true ? requested === undefined : range !== undefined && requested !== undefined &&
+      batched.range.from === requested.from && batched.range.to === requested.to) &&
     (s.db.prepare("SELECT old_days FROM usage_compact_since WHERE id = 1").get() as { old_days: number }).old_days === 0;
   const cachedDays = compactOnly ? historyFromSummary(batched!.result.groups) : null;
   for (const r of cachedDays ?? usageByDay(s, utcOffsetMin, viewer, partial, range)) {

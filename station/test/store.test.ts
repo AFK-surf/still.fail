@@ -20,6 +20,7 @@ import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
+import { compactHistoryBeforeQuery } from "../src/read/usage.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -1146,6 +1147,8 @@ test("what the station asks again and again is planned by an index, never a scan
     [usageBatch.selected, [0n, 100n, "Wws"]], [usageBatch.owner, ["a"]],
     [usageBatch.buckets, [0n, "a", 0n, 100n, "Wws"]], [usageBatch.anyPending, ["Wws"]], [usageBatch.pending, ["Wws"]],
     [usageBatch.pendingRange, [0n, 100n, "Wws"]],
+    [compactHistoryBeforeQuery(null), [0n]], [compactHistoryBeforeQuery({ workspace: "ws", home: false }), [0n, "Wws"]],
+    [compactHistoryBeforeQuery({ workspace: "ws", home: true }), [0n, "Wws"]],
   ] as [string, unknown[]][];
   for (const [sql, args] of usagePlans) {
     const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
