@@ -40,6 +40,7 @@ import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
+import { installWorkspaceActivity } from "./workspace-activity.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -236,6 +237,7 @@ export class Store {
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);
+      installWorkspaceActivity(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
       addSessionTurns(db);
