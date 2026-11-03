@@ -38,6 +38,22 @@ export function nameChat(hub: Hub, thread: ThreadRow, given: string): string {
   return ` Titled the chat "${title}".`;
 }
 
+/// The chat session `key` last heard from, as its address, when it still has no name and nobody is at work in it:
+/// neither people nor an agent named it (nor waits to), a person has said something there, and none of its other
+/// agents is running, waiting or about to be handed a message.
+export function untitledChat(hub: Hub, key: string): string | null {
+  const thread = hub.store.latestThread(key)?.thread;
+  if (!thread || thread.hiddenAt !== null) return null;
+  if ((thread.title !== null && thread.title.trim() !== "") || thread.autoTitle !== null || hub.titles.has(thread.id)) return null;
+  if (hub.store.firstText(thread.id) === null) return null;
+  const atWork = hub.store.threadSessions(thread.id).some(({ session }) => {
+    if (session === key) return false;
+    const last = hub.store.lastTurn(session);
+    return hub.processState(session) === "running" || hub.store.hasPending(session) || (last !== null && (last.endedAt === null || last.declared === "waiting"));
+  });
+  return atWork ? null : `${thread.channel}/${thread.threadTs}`;
+}
+
 /// Whether `title` may name the chat now (false: it already does), or why not.
 function mayName(hub: Hub, thread: number, title: string): boolean | string {
   const row = hub.store.getThread(thread);
