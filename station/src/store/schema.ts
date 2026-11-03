@@ -664,8 +664,8 @@ export function addUsageTotals(db: DatabaseSync): void {
 
 /// The calls added up by quarter of an hour (`quarter`: their time, ms, over QUARTER_MS) and by session, thread, person,
 /// profile, runtime, model and speed (none of them said: 0 or ''), kept by the database itself as calls are recorded (or
-/// their output grows), as the totals are: what the usage page reads (store/usage.ts USAGE_GROUPS), days in any time
-/// zone being whole quarters. Adding up its 30 days read every call of them, 440,000 on ccvm, each time a page showing
+/// their output grows), as the totals are. Kept for older station processes during handover; the current usage page
+/// reads the finer statistics in usage-detail.ts. Adding up its 30 days read every call of them, 440,000 on ccvm, each time a page showing
 /// it was told usage changed (every minute while agents work): 30 to 100 seconds a read on a machine short of memory,
 /// both of the station's readers held by it and every other read waiting.
 const USAGE_QUARTERS_DROP = `

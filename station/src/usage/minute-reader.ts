@@ -3,7 +3,8 @@ import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 
-export type MinuteRequest = { id: number; viewer: InWorkspace | null } | { id: number; remote: true } | { id: number; chats: InWorkspace | null };
+export type MinuteRequest = { id: number; viewer: InWorkspace | null } | { id: number; detail: InWorkspace | null }
+  | { id: number; remote: true } | { id: number; chats: InWorkspace | null };
 export type MinuteResponse = { id?: number; error?: string; complete?: boolean; foreground?: boolean };
 
 /// A history waits here, away from all of the readers, while its old minute summaries are filled.
@@ -95,6 +96,24 @@ export class MinuteReader {
       const id = ++this.#next;
       try {
         this.#waiting.set(id, { resolve, reject, request: { id, viewer }, sent: false });
+        this.start();
+        this.#sendWaiting();
+      } catch (error) {
+        this.#waiting.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  /// Detail statistics have their own cursor and may be ready before other summaries.
+  readyDetail(viewer: InWorkspace | null): Promise<void> {
+    if (this.#closed) return Promise.reject(new Error("station stopping"));
+    // A session can move after the original fill finished; the requesting reader has seen pending work.
+    this.#complete = false;
+    return new Promise((resolve, reject) => {
+      const id = ++this.#next;
+      try {
+        this.#waiting.set(id, { resolve, reject, request: { id, detail: viewer }, sent: false });
         this.start();
         this.#sendWaiting();
       } catch (error) {
