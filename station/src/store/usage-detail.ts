@@ -455,14 +455,18 @@ export function detailQuery(from: bigint, to: bigint, offset: bigint, viewer: In
       CROSS JOIN usage_detail_lookup l ON l.session = sc.session`
     : `FROM usage_detail_lookup l INDEXED BY ${viewer === null ? "usage_detail_lookup_time" : "usage_detail_lookup_scope"}`;
   if (bySession && viewer !== null) whereScope = "";
-  const parts = ranges.map((range) => {
+  const targets = ranges.map((range) => {
     const start = args.push(range.from);
     const end = args.push(range.to);
-    return `SELECT d.bucket * ${SIZES[range.level]} AS at, d.* ${source}
-      CROSS JOIN usage_detail d ON d.session = l.session AND d.level = l.level AND d.bucket = l.bucket
+    return `SELECT l.session, l.level, l.bucket ${source}
       WHERE ${whereScope}l.level = ${range.level} AND l.bucket >= ?${start} AND l.bucket < ?${end}`;
   });
-  const sql = `WITH parts AS (${parts.join(" UNION ALL ")})
+  // The lookup is ordered by time, while detail's primary key starts with session. Visiting the keys in time order
+  // repeatedly jumps between sessions' pages; group them first so a range uses each session's nearby pages together.
+  const sizes = SIZES.map((size, level) => `WHEN ${level} THEN ${size}`).join(" ");
+  const sql = `WITH targets AS MATERIALIZED (${targets.join(" UNION ALL ")} ORDER BY 1, 2, 3),
+    parts AS (SELECT d.bucket * (CASE d.level ${sizes} END) AS at, d.* FROM targets l
+      CROSS JOIN usage_detail d ON d.session = l.session AND d.level = l.level AND d.bucket = l.bucket)
     SELECT strftime('%Y-%m-%d', (at + ?1 * 60000) / 1000.0, 'unixepoch') AS day,
       session, NULLIF(thread, 0) AS thread, NULLIF(person, '') AS person, NULLIF(profile, '') AS profile,
       runtime, NULLIF(model, '') AS model, fast, SUM(calls) AS calls, SUM(input) AS input,

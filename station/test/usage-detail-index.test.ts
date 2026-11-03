@@ -29,6 +29,22 @@ function expected(db: DatabaseSync, size: number) {
     FROM usage GROUP BY session, bucket ORDER BY session, bucket`).all();
 }
 
+test("a time range reads each session's nearby detail buckets together", () => {
+  const db = older();
+  try {
+    db.exec("UPDATE sessions SET ws = 'A' WHERE key = 'b'");
+    installUsageDetail(db, 0);
+    for (let i = 0; i < 6; i++) for (const session of ["a", "b"]) add(db, `${session}${i}`, session, i * 900_000);
+    const visited: string[] = [];
+    db.function("inspect_session", (session) => { visited.push(String(session)); return session; });
+    const query = detailQuery(0n, 5_400_000n, 0n, { workspace: "A", home: false })!;
+    const sql = query.sql.replaceAll("d.session = l.session", "d.session = inspect_session(l.session)");
+    const rows = db.prepare(sql).all(...query.args) as { session: string; calls: number }[];
+    assert.deepEqual(rows.map((r) => [r.session, r.calls]), [["a", 6], ["b", 6]]);
+    assert.deepEqual(visited, [...visited].sort(), "the lookup does not alternate sessions at every time bucket");
+  } finally { db.close(); }
+});
+
 test("a moved session's range is sought through its current workspace without rewriting buckets", () => {
   const db = older();
   try {
