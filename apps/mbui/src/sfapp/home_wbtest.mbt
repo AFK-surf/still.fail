@@ -457,10 +457,9 @@ test "a row with nothing left in it, swiped left past a third: off, then archive
 }
 
 ///|
-test "a finger swipes a running, waiting, failed or unread chat to archive it on both small and large screens" {
+test "a finger swipes a waiting, failed or unread chat to archive it on both small and large screens" {
   for w in [390.0, 1100.0] {
     for (title, session) in [
-      ("整理发布清单", "s-c1"),
       ("首页的列表改成按天分组", "s-c2"),
       ("夜里的构建又失败了", "s-c3"),
       ("给设置页加一个深色模式开关", "s-c4"),
@@ -483,6 +482,28 @@ test "a finger swipes a running, waiting, failed or unread chat to archive it on
       assert_eq(field(Some(asked[0].params), "archived"), Some(Json::boolean(true)))
     }
   }
+}
+
+///|
+test "a finger swiping a chat at work asks before archiving it, in the core's words; its menu's 归档 does not ask" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.drag(x + 190.0, y, x + 10.0, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  assert_true(t.find("归档「整理发布清单」？") is Some(_))
+  assert_true(t.find("此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。") is Some(_))
+  let (cx, cy, cw, ch) = t.rect_of("取消").unwrap()
+  t.tap(cx + cw + 40.0, cy + ch / 2.0)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+  // held for its menu, its 归档 archives it at once
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  hold_row(t, "整理发布清单")
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
+  assert_eq(named(calls, "chat.archive").length(), 1)
 }
 
 ///|

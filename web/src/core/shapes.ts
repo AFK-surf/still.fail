@@ -2074,6 +2074,11 @@ export interface ChatItem {
 	 * unread, pinned, kept or not recommended by its station's archive review alike. Absent otherwise.
 	 */
 	swipeArchive?: boolean;
+	/**
+	 * Swiped away, asked first in these words (only the swipe asks so): its watch's while one of its agents keeps
+	 * watch, else while one is at work or waits on work it started. Absent otherwise.
+	 */
+	swipeAsk?: string;
 	/** The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise. */
 	kept?: boolean;
 	/**
@@ -7142,6 +7147,11 @@ export interface StatusView {
 	state?: string;
 	text?: string;
 	items: StatusItem[];
+	/**
+	 * What a page still loading says under its words, a line each: what lasts and is why it is slow (the device's
+	 * data not opened, still.fail cloud down); what is read is not said.
+	 */
+	lines?: string[];
 }
 
 /** A subscription on the usage page: its allowance as its profile shows it, what its copies spent in the days. */

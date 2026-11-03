@@ -1629,7 +1629,11 @@ export class Views implements Owner {
     }
     // A swipe is the viewer's own choice: every made chat can be archived this way while its station is there,
     // regardless of the chat's state or whether it is recommended for archiving.
-    if (row.offline === undefined && row.pending !== true) row.swipeArchive = true;
+    if (row.offline === undefined && row.pending !== true) {
+      row.swipeArchive = true;
+      const ask = present.swipeAsk(agents);
+      if (ask !== null) row.swipeAsk = ask;
+    }
     const line = present.rowStateLine(row);
     if (line !== null) {
       row.stateText = line[0];

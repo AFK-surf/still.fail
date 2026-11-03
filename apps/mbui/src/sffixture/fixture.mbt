@@ -220,6 +220,18 @@ pub fn row(
   // The core lets any made chat on an online station be swiped to archive, regardless of its state.
   if !more.contains("offline") && more.get("pending") != Some(Json::boolean(true)) {
     r["swipeArchive"] = Json::boolean(true)
+    // its swipe asks first (the core's swipeAsk): keeping watch, in its watch's words; at work, that it is
+    match more.get("watch") {
+      Some(Object(w)) =>
+        match w.get("ask") {
+          Some(ask) => r["swipeAsk"] = ask
+          None => ()
+        }
+      _ =>
+        if more.get("state") == Some(Json::string("run")) {
+          r["swipeAsk"] = "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。"
+        }
+    }
   }
   Json::object(r)
 }
@@ -880,6 +892,14 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
         // what the badge counts, as the core says it (the prefs' badgeKinds, or their defaults)
         "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false, "services": true },
+      })
+    // (the workspaces read slowly, the device's data not opened: with MBUI_HOLD=workspaces, the splash saying so)
+    "status" if f.mode == "reading-slow" =>
+      Some({
+        "state": "trouble",
+        "text": "本机数据无法打开，只能从网络读取 · 共 4 项 · 172 KB/s",
+        "items": [],
+        "lines": ["本机数据无法打开，只能从网络读取"],
       })
     "status" => Some({ "items": [] })
     // what the last update brought (home_news.mbt): said on MBUI_FIXTURE=home-news only
