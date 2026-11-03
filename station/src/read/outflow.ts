@@ -5,6 +5,7 @@
 import type { Json, Store } from "./store.ts";
 import * as store from "./store.ts";
 import { ending, sees } from "../store/rows.ts";
+import { outflowChatIndexReady, outflowChatScopes } from "../store/outflow-index.ts";
 import { titleOf } from "./views.ts";
 import { slackCreator } from "./slack-known.ts";
 import { usage } from "./usage.ts";
@@ -50,29 +51,55 @@ function state(turn: Json | null): string | null {
 
 /// A page of chats: at most `limit`, those after `before` (the `next` of the page before).
 export type ChatsPage = { limit: number; before: string | null };
+export const OUTFLOW_CHATS_PENDING = "outflow chat order is still being prepared";
+
+/// A scope's next chats: the compound seek starts at the cursor, including when many chats share a timestamp.
+export const OUTFLOW_CHAT_PAGE = `SELECT thread, at FROM outflow_chat_order INDEXED BY outflow_chat_scope_order
+  WHERE scope = ?1 AND dirty = 0 AND at >= ?2 AND (at, thread) < (?3, ?4) ORDER BY at DESC, thread DESC LIMIT ?5`;
+const OUTFLOW_CHAT_FIRST = `SELECT thread, at FROM outflow_chat_order INDEXED BY outflow_chat_scope_order
+  WHERE scope = ?1 AND dirty = 0 AND at >= ?2 ORDER BY at DESC, thread DESC LIMIT ?3`;
 
 /// v1 `chats`: the chats with something new since `since` (ms), the latest active first: each one's thread (what
 /// `usage` rows name), where it is (`stillfail`, `slack`, `feishu`), title, how it stands, who started it, when, its
 /// latest activity, whether it is archived, and its agents' runtimes and models. With `page`, at most its `limit`,
 /// `more` when there are more and `next` to ask for them with; without, all of them.
 export function outflowChats(s: Store, since: number, of: Of = HOME, page: ChatsPage | null = null): Json {
-  const sessions = new Map(store.listSessions(s).filter((x) => sees(of, x.ws ?? null)).map((x) => [x.key, x]));
-  // Only the workspace's threads with something new are summed up: the others cost nothing.
-  const threads = store.threadsActiveSince(s, store.threadsOfSessions(s, [...sessions.keys()]), since);
+  // The read and this coverage check share the reader's snapshot. A concurrent write is settled before a retry.
+  if (!outflowChatIndexReady(s.db, of)) throw new Error(OUTFLOW_CHATS_PENDING);
+  const [at, beforeThread] = (page?.before ?? "").split(".").map(Number);
+  const cursor = page?.before != null && Number.isFinite(at) && Number.isFinite(beforeThread);
+  const limit = page === null ? -1 : page.limit + 1;
+  const candidates = new Map<number, { thread: number; at: number }>();
+  for (const scope of outflowChatScopes(of)) {
+    const rows = (cursor
+      ? s.db.prepare(OUTFLOW_CHAT_PAGE).all(scope, since, at!, beforeThread!, limit)
+      : s.db.prepare(OUTFLOW_CHAT_FIRST).all(scope, since, limit)) as { thread: number; at: number }[];
+    for (const row of rows) candidates.set(row.thread, row);
+  }
+  const ordered = [...candidates.values()].sort((a, b) => b.at - a.at || b.thread - a.thread);
+  const more = page !== null && ordered.length > page.limit;
+  const threads = page === null ? ordered : ordered.slice(0, page.limit);
+  const sessions = new Map<string, ReturnType<typeof store.getSession>>();
   // Outflow needs no viewer's unread count, people list, letters or message bodies. A sidebar summary computes those
   // from the chat's messages, including an unread count that grows with its history.
-  const listed = threads.flatMap((id) => {
+  const listed = threads.flatMap(({ thread: id, at: lastActiveAt }) => {
     const thread = store.getThread(s, id);
     if (thread === null) return [];
-    const members = store.threadSessions(s, id).filter((m) => sessions.has(m.session));
+    const members = store.threadSessions(s, id).filter((m) => {
+      if (!sessions.has(m.session)) sessions.set(m.session, store.getSession(s, m.session));
+      const session = sessions.get(m.session);
+      return session !== null && session !== undefined && sees(of, session.ws ?? null);
+    });
     if (members.length === 0) return [];
-    const lastActiveAt = Math.max(thread.createdAt, store.lastSaidAt(s, id) ?? 0);
-    return lastActiveAt < since ? [] : [{ thread, members, lastActiveAt }];
+    return [{ thread, members, lastActiveAt }];
   });
-  const stats = store.sessionStats(s, [...new Set(listed.flatMap((t) => t.members.map((m) => m.session)))]);
+  // Outflow only uses the latest turn. A full session summary also counts pending deliveries, which may be unbounded.
+  const turnsBySession = new Map<string, ReturnType<typeof store.lastTurn>>();
+  for (const { members } of listed) for (const { session } of members)
+    if (!turnsBySession.has(session)) turnsBySession.set(session, store.lastTurn(s, session));
   const chats: Json[] = [];
   for (const { thread, members, lastActiveAt } of listed) {
-    const turns = members.map((m) => stats.get(m.session)?.lastTurn ?? null).filter((x): x is Json => x !== null);
+    const turns = members.map((m) => turnsBySession.get(m.session) ?? null).filter((x): x is NonNullable<typeof x> => x !== null);
     const latest = turns.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))[0] ?? null;
     const creator = thread.createdBy ?? sessions.get(members[0]!.session)?.createdBy ?? null;
     chats.push({
@@ -87,16 +114,9 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
       agents: members.map((m) => ({ runtime: sessions.get(m.session)!.runtime, model: sessions.get(m.session)!.model })),
     });
   }
-  chats.sort((a, b) => b.lastActiveAt - a.lastActiveAt || b.thread - a.thread);
   if (page === null) return { since, chats };
-  const [at, thread] = (page.before ?? "").split(".").map(Number);
-  const rest = page.before === null || !Number.isFinite(at) || !Number.isFinite(thread)
-    ? chats
-    : chats.filter((c) => c.lastActiveAt < at! || (c.lastActiveAt === at && c.thread < thread!));
-  const shown = rest.slice(0, page.limit);
-  const last = shown.at(-1);
-  const more = rest.length > shown.length;
-  return { since, chats: shown, more, next: more && last ? `${last.lastActiveAt}.${last.thread}` : null };
+  const last = chats.at(-1);
+  return { since, chats, more, next: more && last ? `${last.lastActiveAt}.${last.thread}` : null };
 }
 
 /// Which chat a program names for its messages: its `thread` (as `chats` and `usage` say it), a `session` of it (as
