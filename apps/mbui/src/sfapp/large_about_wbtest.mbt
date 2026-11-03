@@ -468,3 +468,12 @@ test "归档, 一台 station 的归档 and 自动决策 made once on a large scr
     }
   }
 }
+
+///|
+test "zz debug station archiving words at 839" {
+  let old = large_about_tester(false, 2, w=839.0, mode="settings-archiving:ws1/st1")
+  let ow = old.words().filter(fn(w) { w.2 > 395.0 && w.2 < 425.0 }).map(fn(w) { "\{w.0}@\{w.1},\{w.2} w\{w.3}" })
+  let made = large_about_tester(true, 2, w=839.0, mode="settings-archiving:ws1/st1")
+  let mw = made.words().filter(fn(w) { w.2 > 395.0 && w.2 < 425.0 }).map(fn(w) { "\{w.0}@\{w.1},\{w.2} w\{w.3}" })
+  fail("old \{ow}\nmade \{mw}")
+}
