@@ -19,7 +19,8 @@ pub fn state_dot_node(parent : @view.View, state : () -> String) -> Unit {
     d
     .width(Is(Some(dot_across)))
     .height(Is(Some(dot_across)))
-    .radius(Is(dot_across / 2.0))
+    // (round as a pill is said to be, Full: as round as it can be)
+    .radius(Is(1.0e6))
     .ground(By(fn() { look().0 }))
     .edge(By(fn() {
       match look() {
@@ -41,17 +42,18 @@ let dot_across : Double = 7.0
 /// has one; narrow, its mark alone; 8 apart, across the middle of its name's line; each as it is now.
 pub fn station_lead(online : () -> Bool, emoji : () -> String, icon : () -> String, stint : () -> Int) -> RowLead {
   LeadMade(fn(l) {
-    l
-    .row(Is(true))
-    .gap(Is(station_lead_gap))
-    .lines_up(Is(Some(Middle)))
-    .min_height(By(fn() {
-      l.words_redone() |> ignore
-      Some(@ui.current().sp(@ui.tree_theme().text_size(Body).1))
-    }))
-    |> ignore
-    if look_node(l) is Wide {
-      state_dot_node(l, fn() { if online() { "online" } else { "offline" } })
+    l.row(Is(true)).gap(Is(station_lead_gap)).lines_up(Is(Some(Middle))) |> ignore
+    match look_node(l) {
+      // (wide: as tall as what it holds, the row standing it across its first line's middle)
+      Wide => state_dot_node(l, fn() { if online() { "online" } else { "offline" } })
+      // (narrow: as tall as its name's line at least, the system's size of words applied as it changes)
+      Narrow =>
+        l
+        .min_height(By(fn() {
+          l.words_redone() |> ignore
+          Some(@ui.current().sp(@ui.tree_theme().text_size(Body).1))
+        }))
+        |> ignore
     }
     l.show(fn() { has_station_mark(emoji(), icon()) }, fn(m) {
       station_mark_node(m, emoji, icon, row_mark, fn() { theme().p.text }, stint)
