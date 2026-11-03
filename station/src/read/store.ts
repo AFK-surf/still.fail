@@ -13,6 +13,7 @@ import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeB
 import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
 import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
+import { hasRuntimeOrderIndex } from "../store/schema.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
@@ -159,10 +160,19 @@ export function sessionOfRuntime(s: Store, runtime: string, id: string): string 
   try {
     return one(s, SESSION_OF_RUNTIME, runtime, id)?.key ?? null;
   } catch {
-    return one(s, `SELECT key FROM (
-      SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
-      UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
-    ) ORDER BY last_active_at DESC LIMIT 1`, runtime, id)?.key ?? null;
+    try {
+      // A station with per-transcript runtimes may still be running while this version opens its database.
+      return one(s, `SELECT key FROM (
+        SELECT key, last_active_at FROM sessions s WHERE runtime_session_id = ?2 AND runtime = ?1
+          AND NOT EXISTS (SELECT 1 FROM runtime_sessions r WHERE r.session_key = s.key AND r.id = ?2 AND r.runtime IS NOT NULL AND r.runtime != ?1)
+        UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND COALESCE(r.runtime, s.runtime) = ?1
+      ) ORDER BY last_active_at DESC LIMIT 1`, runtime, id)?.key ?? null;
+    } catch {
+      return one(s, `SELECT key FROM (
+        SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
+        UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+      ) ORDER BY last_active_at DESC LIMIT 1`, runtime, id)?.key ?? null;
+    }
   }
 }
 
@@ -182,10 +192,16 @@ export function runtimeSessionSources(s: Store, key: string): { id: string; runt
   if (!row) return [];
   let sources: { id: string; runtime: string; profile: string | null }[] = [];
   try {
-    sources = all(s, "SELECT id, runtime, profile FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key)
-      .map((r) => ({ id: r.id, runtime: r.runtime ?? row.runtime, profile: r.profile ?? null }));
+    sources = all(s, `SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile
+      FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid`, key)
+      .map((r) => ({ id: r.id, runtime: r.runtime, profile: r.profile ?? null }));
   } catch {
-    sources = runtimeSessions(s, key).map((id) => ({ id, runtime: row.runtime, profile: row.profile }));
+    try {
+      sources = all(s, "SELECT id, runtime, profile FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key)
+        .map((r) => ({ id: r.id, runtime: r.runtime ?? row.runtime, profile: r.profile ?? null }));
+    } catch {
+      sources = runtimeSessions(s, key).map((id) => ({ id, runtime: row.runtime, profile: row.profile }));
+    }
   }
   if (row.runtimeSessionId === null) return sources;
   const current = sources.find((x) => x.id === row.runtimeSessionId) ?? { id: row.runtimeSessionId, runtime: row.runtime, profile: row.profile };
@@ -193,12 +209,21 @@ export function runtimeSessionSources(s: Store, key: string): { id: string; runt
 }
 
 /// Before per-message runtime was recorded, every message belonged to the session's first runtime.
-export const ORIGINAL_RUNTIME = "SELECT runtime FROM runtime_sessions INDEXED BY runtime_sessions_ordered WHERE session_key = ? ORDER BY at, rowid LIMIT 1";
+export const ORIGINAL_RUNTIME = "SELECT COALESCE(original_runtime, runtime) AS runtime FROM sessions WHERE key = ?";
+export const ORIGINAL_RUNTIME_ORDERED = `SELECT COALESCE(s.original_runtime,
+  (SELECT r.runtime FROM runtime_sessions r INDEXED BY runtime_sessions_ordered WHERE r.session_key = s.key ORDER BY r.at, r.rowid LIMIT 1),
+  s.runtime) AS runtime FROM sessions s WHERE s.key = ?`;
 export function originalRuntime(s: Store, key: string): string | null {
   try {
-    return one(s, ORIGINAL_RUNTIME, key)?.runtime ?? null;
+    return one(s, hasRuntimeOrderIndex(s.db) ? ORIGINAL_RUNTIME_ORDERED : ORIGINAL_RUNTIME, key)?.runtime ?? null;
   } catch {
-    return null;
+    if (hasRuntimeOrderIndex(s.db)) {
+      try {
+        return one(s, "SELECT runtime FROM runtime_sessions INDEXED BY runtime_sessions_ordered WHERE session_key = ? ORDER BY at, rowid LIMIT 1", key)?.runtime
+          ?? one(s, "SELECT runtime FROM sessions WHERE key = ?", key)?.runtime ?? null;
+      } catch {} // a database from before per-transcript runtimes
+    }
+    return one(s, "SELECT runtime FROM sessions WHERE key = ?", key)?.runtime ?? null;
   }
 }
 
