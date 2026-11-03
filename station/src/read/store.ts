@@ -769,17 +769,21 @@ export function watching(s: Store, sessions: string[] | null = null): Map<string
 /// The calls of one day for one thread, person, profile and model, added up (store/usage.ts).
 export type { UsageGroup };
 
-/// A page of one session's original calls, newest first. The existing session/time index also orders ties by rowid.
-export const USAGE_CALLS_PAGE = `SELECT CAST(rowid AS TEXT) AS seq, id, at, session, turn, thread, person, profile, runtime, model, subagent, fast,
-  input, cache_read, cache_write, cache_write_long, output, calls, context, context_window
-  FROM usage INDEXED BY usage_session WHERE session = ?1 AND at >= ?2 AND at < ?3 AND (at, rowid) < (?4, ?5)
-  ORDER BY at DESC, rowid DESC LIMIT ?6`;
+/// A page of one session's original calls, newest first. Seek a timestamp tie by rowid before seeking older times:
+/// a tuple comparison alone can start at the range's end and revisit every call newer than the cursor.
+const USAGE_CALL_COLUMNS = `SELECT CAST(rowid AS TEXT) AS seq, id, CAST(at AS TEXT) AS at, session, turn, thread, person, profile, runtime, model, subagent, fast,
+  input, cache_read, cache_write, cache_write_long, output, calls, context, context_window FROM usage INDEXED BY usage_session`;
+export const USAGE_CALLS_SAME = `${USAGE_CALL_COLUMNS} WHERE session = ?1 AND at = ?2 AND rowid < ?3 ORDER BY rowid DESC LIMIT ?4`;
+export const USAGE_CALLS_EARLIER = `${USAGE_CALL_COLUMNS} WHERE session = ?1 AND at >= ?2 AND at < ?3 ORDER BY usage.at DESC, rowid DESC LIMIT ?4`;
 export function usageCallsPage(s: Store, session: string, from: bigint, to: bigint, before: [bigint, bigint], limit: number,
   viewer: InWorkspace | null): { rows: Json[]; next: { at: string; seq: string } | null } {
   const row = viewer === null ? undefined : one(s, "SELECT ws FROM sessions WHERE key = ?", session);
   if (viewer !== null && (row === undefined || !sees(viewer, row.ws))) return { rows: [], next: null };
   const size = Math.max(1, Math.min(limit, 200));
-  const page = all(s, USAGE_CALLS_PAGE, session, from, to, before[0], before[1], size);
+  const page: Json[] = [];
+  if (before[0] >= from && before[0] < to) page.push(...all(s, USAGE_CALLS_SAME, session, before[0], before[1], size));
+  const end = before[0] < to ? before[0] : to;
+  if (page.length < size && end > from) page.push(...all(s, USAGE_CALLS_EARLIER, session, from, end, size - page.length));
   const rows = page.map((r) => ({ id: r.id, at: Number(r.at), session: r.session, turn: r.turn, thread: r.thread,
     person: r.person, profile: r.profile, runtime: r.runtime, model: r.model, subagent: r.subagent !== 0, fast: r.fast !== 0,
     input: Number(r.input), cacheRead: Number(r.cache_read), cacheWrite: Number(r.cache_write), cacheWriteLong: Number(r.cache_write_long),

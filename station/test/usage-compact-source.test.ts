@@ -7,7 +7,7 @@ import { mock, test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { Effect, Fiber } from "effect";
 import { usageRoutes } from "../src/api/routes/usage.ts";
-import { makeStore, USAGE_CALLS_PAGE, usageByDay, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
+import { makeStore, USAGE_CALLS_EARLIER, USAGE_CALLS_SAME, usageByDay, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
 import { usageNow } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import { compactQuery, compactScopeReady, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
@@ -475,6 +475,35 @@ test("a file-backed station retires the old indexes on a worker after handover",
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a deep call page does not revisit newer calls with the same or a later timestamp", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string, at: number) => ({ id, at, model: "m", subagent: false, fast: false, input: 1,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [0, 1, 2].map((i) => [call(`a${i}`, 1_000), owner]));
+    const seq = (store.db.prepare("SELECT rowid AS n FROM usage WHERE id = 'a2'").get() as { n: number }).n;
+    let visited = 0;
+    store.db.function("page_visit", (_rowid) => { visited++; return 1; });
+    const db = new Proxy(store.db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => target.prepare(
+        sql === USAGE_CALLS_SAME || sql === USAGE_CALLS_EARLIER ? sql.replace("WHERE session = ?1", "WHERE page_visit(rowid) AND session = ?1") : sql);
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    const read = () => usageCallsPage(makeStore(db, "."), "a", 0n, 2_000n, [1_000n, BigInt(seq)], 2, { workspace: "A", home: false }).rows.map((row) => row.id);
+    assert.deepEqual(read(), ["a1", "a0"]);
+    const before = visited;
+    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude",
+      Array.from({ length: 1_000 }, (_, i) => [call(`later-${i}`, i % 2 ? 1_000 : 1_500), owner]));
+    visited = 0;
+    assert.deepEqual(read(), ["a1", "a0"]);
+    assert.equal(visited, before, "newer calls do not add work to the same page");
+  } finally { store.close(); }
+});
+
 test("original usage is paged by session with exact bounds and workspace isolation", () => {
   const store = Store.open(":memory:");
   try {
@@ -508,9 +537,11 @@ test("original usage is paged by session with exact bounds and workspace isolati
     store.db.prepare("DELETE FROM sessions WHERE key = ?").run("b");
     assert.deepEqual(usageCallsPage(reader, "b", 0n, max, [max, max], 2, { workspace: "A", home: true }), { rows: [], next: null },
       "a deleted session's orphaned calls do not become home-workspace data");
-    const plan = store.db.prepare(`EXPLAIN QUERY PLAN ${USAGE_CALLS_PAGE}`).all("a", 1_000n, 1_002n, max, max, 2) as { detail: string }[];
-    assert.match(plan.map((row) => row.detail).join(" | "), /SEARCH usage USING INDEX usage_session \(session=\? AND at/);
-    assert.ok(!plan.some((row) => row.detail.includes("TEMP B-TREE")));
+    const same = store.db.prepare(`EXPLAIN QUERY PLAN ${USAGE_CALLS_SAME}`).all("a", 1_000n, max, 2) as { detail: string }[];
+    const earlier = store.db.prepare(`EXPLAIN QUERY PLAN ${USAGE_CALLS_EARLIER}`).all("a", 1_000n, 1_002n, 2) as { detail: string }[];
+    assert.match(same.map((row) => row.detail).join(" | "), /SEARCH usage USING INDEX usage_session \(session=\? AND at=\? AND rowid<\?\)/);
+    assert.match(earlier.map((row) => row.detail).join(" | "), /SEARCH usage USING INDEX usage_session \(session=\? AND at>\? AND at<\?\)/);
+    assert.ok(![...same, ...earlier].some((row) => row.detail.includes("TEMP B-TREE")));
   } finally { store.close(); }
 });
 
