@@ -435,7 +435,9 @@ export class Remote {
     const path = join(this.root, "outgoing", `${ref}.json`);
     let entry: Json;
     try {
-      entry = readJson(path);
+      // Off the station's thread: a task's station tells this at each change, 3 read on it held it 1.3 s on ccvm short
+      // of memory (2026-11-03).
+      entry = await readJsonSoon(path);
     } catch {
       throw new Error("unknown task");
     }
