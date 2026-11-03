@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
+import { makeStore } from "../src/read/store.ts";
+import { usage } from "../src/read/usage.ts";
 import * as compact from "../src/store/usage-compact.ts";
 import { Store } from "../src/store/store.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
@@ -8,6 +10,29 @@ import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 const a = { workspace: "A", home: false };
 const b = { workspace: "B", home: false };
 const home = { workspace: "A", home: true };
+
+test("a year's usage view reads only its requested days but keeps the all-time total", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["a", "A"], ["b", "B"]] as const) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws,
+        createdAt: 0, lastActiveAt: 0 });
+    }
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string, at: number, input: number) => ({ id, at, model: "m", subagent: true, fast: false,
+      input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [
+      [call("old", -86_400_000, 10), owner], [call("new", 60_000, 19), owner], [call("future", 86_400_000, 6), owner],
+    ]);
+    store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [[call("other", 60_000, 999), owner]]);
+    const answer = usage(makeStore(store.db, "."), "en", 0n, 86_400_000n, 0n, false, a, true,
+      { historyRange: { from: 0n, to: 86_400_000n } } as never);
+    assert.deepEqual(answer.history.days.map((d: { day: string; tokens: number }) => [d.day, d.tokens]), [["1970-01-01", 20]]);
+    assert.equal(answer.history.tokens, 31, "the older day remains in the total, while tomorrow's call is not yet included");
+  } finally { store.close(); }
+});
 
 for (const recursive of [false, true]) test(`compact totals follow changes and workspace moves (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:");
