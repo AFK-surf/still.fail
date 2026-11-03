@@ -13,12 +13,13 @@ const fields = (r: string) => `${r}.session, ${minute(r)}, COALESCE(${r}.thread,
 const key = (r: string) => `session = ${r}.session AND minute = ${minute(r)} AND thread = COALESCE(${r}.thread, 0)
   AND person = COALESCE(${r}.person, '') AND profile = COALESCE(${r}.profile, '') AND runtime = ${r}.runtime
   AND model = COALESCE(${r}.model, '') AND fast = ${r}.fast`;
-const add = (r: string) => `INSERT INTO usage_compact SELECT ${fields(r)}, 1, ${cols.map((c) => `${r}.${c}`).join(", ")}, ${sessionScope(r)}
+const add = (r: string) => `INSERT INTO usage_compact
+  (session, minute, thread, person, profile, runtime, model, fast, records, ${cols.join(", ")}, scope)
+  SELECT ${fields(r)}, 1, ${cols.map((c) => `${r}.${c}`).join(", ")}, ${sessionScope(r)}
   WHERE ${r}.compact_counted = 1 ON CONFLICT (session, minute, thread, person, profile, runtime, model, fast) DO UPDATE SET
   records = records + 1, ${cols.map((c) => `${c} = ${c} + excluded.${c}`).join(", ")};`;
 const remove = (r: string) => `UPDATE usage_compact SET records = records - 1, ${cols.map((c) => `${c} = ${c} - ${r}.${c}`).join(", ")}
-  WHERE ${r}.compact_counted = 1 AND ${key(r)};
-  DELETE FROM usage_compact WHERE ${r}.compact_counted = 1 AND ${key(r)} AND records = 0;`;
+  WHERE ${r}.compact_counted = 1 AND ${key(r)};`;
 const scope = (r: string) => `INSERT INTO usage_minute_scope (session, ws, done)
   SELECT ${r}.session, (SELECT ws FROM sessions WHERE key = ${r}.session), 1 WHERE ${r}.compact_counted = 1
   ON CONFLICT (session) DO UPDATE SET ws = excluded.ws WHERE ws IS NOT excluded.ws;`;
@@ -112,34 +113,21 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
         profile TEXT NOT NULL, runtime TEXT NOT NULL, model TEXT NOT NULL, fast INTEGER NOT NULL, records INTEGER NOT NULL,
         calls INTEGER NOT NULL, input INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL,
         cache_write_long INTEGER NOT NULL, output INTEGER NOT NULL, scope TEXT NOT NULL,
+        accounted_scope TEXT, accounted_calls INTEGER NOT NULL DEFAULT 0, accounted_tokens INTEGER NOT NULL DEFAULT 0,
+        pending INTEGER NOT NULL DEFAULT 1,
         PRIMARY KEY (session, minute, thread, person, profile, runtime, model, fast)) WITHOUT ROWID;
       CREATE INDEX usage_compact_time ON usage_compact (minute, session);
       CREATE INDEX usage_compact_scope_time ON usage_compact (scope, minute, session);
+      CREATE INDEX usage_compact_pending_scope ON usage_compact (scope, session) WHERE pending = 1;
+      CREATE INDEX usage_compact_pending_session ON usage_compact (session) WHERE pending = 1;
       -- 'G' is all scopes, 'H' is the home-only scope and 'W' prefixes a workspace id. New buckets start empty, so
       -- this total is maintained only from later writes; installing it never reads or reconstructs old usage.
       CREATE TABLE usage_compact_total (scope TEXT PRIMARY KEY, calls INTEGER NOT NULL, tokens INTEGER NOT NULL) WITHOUT ROWID;
-      CREATE TRIGGER usage_compact_total_add AFTER INSERT ON usage_compact BEGIN
-        INSERT INTO usage_compact_total VALUES (NEW.scope, NEW.calls, ${tokens("NEW")}), ('G', NEW.calls, ${tokens("NEW")})
-          ON CONFLICT (scope) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;
-      END;
-      CREATE TRIGGER usage_compact_total_drop AFTER DELETE ON usage_compact BEGIN
-        UPDATE usage_compact_total SET calls = calls - OLD.calls, tokens = tokens - ${tokens("OLD")}
-          WHERE scope IN (OLD.scope, 'G');
-        DELETE FROM usage_compact_total WHERE scope IN (OLD.scope, 'G') AND calls = 0 AND tokens = 0;
-      END;
-      CREATE TRIGGER usage_compact_total_change AFTER UPDATE OF scope, calls, input, cache_read, cache_write, cache_write_long, output ON usage_compact
-        WHEN OLD.scope IS NOT NEW.scope OR OLD.calls IS NOT NEW.calls OR ${cols.slice(1).map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ")} BEGIN
-        INSERT INTO usage_compact_total SELECT OLD.scope, -OLD.calls, -${tokens("OLD")} WHERE OLD.scope IS NOT NEW.scope
-          ON CONFLICT (scope) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;
-        INSERT INTO usage_compact_total SELECT NEW.scope,
-          CASE WHEN OLD.scope IS NEW.scope THEN NEW.calls - OLD.calls ELSE NEW.calls END,
-          CASE WHEN OLD.scope IS NEW.scope THEN ${tokens("NEW")} - ${tokens("OLD")} ELSE ${tokens("NEW")} END
-          WHERE 1
-          ON CONFLICT (scope) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;
-        INSERT INTO usage_compact_total SELECT 'G', NEW.calls - OLD.calls, ${tokens("NEW")} - ${tokens("OLD")}
-          WHERE OLD.calls IS NOT NEW.calls OR ${cols.slice(1).map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ")}
-          ON CONFLICT (scope) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;
-        DELETE FROM usage_compact_total WHERE scope IN (OLD.scope, NEW.scope, 'G') AND calls = 0 AND tokens = 0;
+      CREATE TRIGGER usage_compact_total_dirty AFTER UPDATE OF scope, records, calls, input, cache_read, cache_write, cache_write_long, output ON usage_compact
+        WHEN OLD.pending = 0 AND (OLD.scope IS NOT NEW.scope OR OLD.records IS NOT NEW.records OR OLD.calls IS NOT NEW.calls
+          OR ${cols.slice(1).map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ")}) BEGIN
+        UPDATE usage_compact SET pending = 1 WHERE session = NEW.session AND minute = NEW.minute AND thread = NEW.thread
+          AND person = NEW.person AND profile = NEW.profile AND runtime = NEW.runtime AND model = NEW.model AND fast = NEW.fast;
       END;
       CREATE TABLE usage_compact_moving (session TEXT PRIMARY KEY, target TEXT NOT NULL, phase INTEGER NOT NULL DEFAULT 0, after_minute INTEGER,
         after_thread INTEGER, after_person TEXT, after_profile TEXT, after_runtime TEXT, after_model TEXT, after_fast INTEGER) WITHOUT ROWID;
@@ -262,19 +250,79 @@ export function compactScopeReady(db: DatabaseSync, viewer: InWorkspace | null):
   return db.prepare(sql).get(ws) === undefined;
 }
 
-/// The lifetime total of compacted calls alone. Scope moves must finish before any affected viewer sees the result.
+/// The lifetime total of compacted calls alone. Never serve a total until its pending buckets and scope moves finish.
 export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null): { calls: number; tokens: number } | null {
-  if (!compactScopeReady(db, viewer)) return null;
-  const scopes = viewer === null ? ["G"] : viewer.home ? [`W${viewer.workspace}`, "H"] : [`W${viewer.workspace}`];
-  const rows = db.prepare(`SELECT calls, tokens FROM usage_compact_total WHERE scope IN (${scopes.map(() => "?").join(", ")})`)
-    .all(...scopes) as { calls: number; tokens: number }[];
-  return rows.reduce((total, row) => ({ calls: total.calls + Number(row.calls), tokens: total.tokens + Number(row.tokens) }),
-    { calls: 0, tokens: 0 });
+  const scope = viewer === null ? "scope = 'G'" : viewer.home ? "scope IN (?1, 'H')" : "scope = ?1";
+  const moving = viewer === null ? "SELECT 1 FROM usage_compact_moving LIMIT 1"
+    : `SELECT 1 FROM usage_compact_moving_scope WHERE ${scope} LIMIT 1`;
+  const dirty = viewer === null ? "SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_session WHERE pending = 1 LIMIT 1"
+    : `SELECT 1 FROM usage_compact INDEXED BY usage_compact_pending_scope WHERE pending = 1 AND ${scope} LIMIT 1`;
+  // The readiness checks and value must share one SQLite snapshot, including when another connection is moving rows.
+  const row = db.prepare(`SELECT NOT EXISTS (${moving}) AND NOT EXISTS (${dirty}) AS ready,
+    (SELECT COALESCE(SUM(calls), 0) FROM usage_compact_total WHERE ${scope}) AS calls,
+    (SELECT COALESCE(SUM(tokens), 0) FROM usage_compact_total WHERE ${scope}) AS tokens`)
+    .get(...(viewer === null ? [] : [`W${viewer.workspace}`])) as { ready: number; calls: number; tokens: number };
+  return row.ready ? { calls: Number(row.calls), tokens: Number(row.tokens) } : null;
 }
 
 type Moving = { session: string; target: string; phase: number; after_minute: number | null; after_thread: number | null;
   after_person: string | null; after_profile: string | null; after_runtime: string | null; after_model: string | null; after_fast: number | null };
 type Bucket = { minute: number; thread: number; person: string; profile: string; runtime: string; model: string; fast: number; scope: string };
+type PendingBucket = Bucket & { session: string; records: number; calls: number; tokens: number;
+  accounted_scope: string | null; accounted_calls: number; accounted_tokens: number };
+
+// Called within an IMMEDIATE transaction. Each bucket keeps its previously applied contribution, so repeated writes
+// coalesce and a removed bucket remains as a tombstone until its contribution is subtracted.
+function accountCompactBuckets(db: DatabaseSync, batch: number, session?: string): number {
+  const selected = session === undefined
+    ? `INDEXED BY usage_compact_pending_scope WHERE pending = 1 LIMIT ?`
+    : `INDEXED BY usage_compact_pending_session WHERE pending = 1 AND session = ? LIMIT ?`;
+  const rows = db.prepare(`SELECT session, minute, thread, person, profile, runtime, model, fast, scope, records, calls,
+    ${tokens("usage_compact")} AS tokens, accounted_scope, accounted_calls, accounted_tokens FROM usage_compact ${selected}`)
+    .all(...(session === undefined ? [batch] : [session, batch])) as PendingBucket[];
+  const changes = new Map<string, { calls: number; tokens: number }>();
+  const add = (scope: string, calls: number, tokens: number) => {
+    const prior = changes.get(scope) ?? { calls: 0, tokens: 0 };
+    prior.calls += calls;
+    prior.tokens += tokens;
+    changes.set(scope, prior);
+  };
+  const update = db.prepare(`UPDATE usage_compact SET accounted_scope = scope, accounted_calls = calls,
+    accounted_tokens = ${tokens("usage_compact")}, pending = 0 WHERE session = ? AND minute = ? AND thread = ?
+    AND person = ? AND profile = ? AND runtime = ? AND model = ? AND fast = ?`);
+  const drop = db.prepare(`DELETE FROM usage_compact WHERE session = ? AND minute = ? AND thread = ? AND person = ?
+    AND profile = ? AND runtime = ? AND model = ? AND fast = ? AND records = 0`);
+  for (const row of rows) {
+    if (row.accounted_scope !== null) {
+      add(row.accounted_scope, -row.accounted_calls, -row.accounted_tokens);
+      add("G", -row.accounted_calls, -row.accounted_tokens);
+    }
+    add(row.scope, row.calls, row.tokens);
+    add("G", row.calls, row.tokens);
+    const key = [row.session, row.minute, row.thread, row.person, row.profile, row.runtime, row.model, row.fast] as const;
+    update.run(...key);
+    if (row.records === 0) drop.run(...key);
+  }
+  const put = db.prepare(`INSERT INTO usage_compact_total (scope, calls, tokens) VALUES (?, ?, ?)
+    ON CONFLICT (scope) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens`);
+  const clean = db.prepare("DELETE FROM usage_compact_total WHERE scope = ? AND calls = 0 AND tokens = 0");
+  for (const [scope, delta] of changes) {
+    if (delta.calls !== 0 || delta.tokens !== 0) put.run(scope, delta.calls, delta.tokens);
+    clean.run(scope);
+  }
+  return rows.length;
+}
+
+/// Apply at most one batch of new buckets; this never reads or reconstructs original calls.
+export function compactTotalsStep(db: DatabaseSync, batch = 256): { done: boolean } {
+  if (!Number.isSafeInteger(batch) || batch < 1) throw new RangeError("compact totals batch must be positive");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const count = accountCompactBuckets(db, batch);
+    db.exec("COMMIT");
+    return { done: count < batch };
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
 
 /// Re-scope at most one batch. The cursor is reset if the session moves again; writes during a move use its current scope.
 export function moveCompactStep(db: DatabaseSync, batch = 256): { done: boolean; session?: string } {
@@ -283,6 +331,11 @@ export function moveCompactStep(db: DatabaseSync, batch = 256): { done: boolean;
     const move = db.prepare("SELECT * FROM usage_compact_moving ORDER BY session LIMIT 1").get() as Moving | undefined;
     if (move === undefined) { db.exec("COMMIT"); return { done: true }; }
     if (move.phase === 1) {
+      // Keep every old scope unavailable until the session's pending contributions have actually left its totals.
+      if (accountCompactBuckets(db, batch, move.session) > 0) {
+        db.exec("COMMIT");
+        return { done: false };
+      }
       const removed = db.prepare(`DELETE FROM usage_compact_moving_scope WHERE (scope, session) IN (
         SELECT scope, session FROM usage_compact_moving_scope INDEXED BY usage_compact_moving_by_session
         WHERE session = ? AND scope <> ? LIMIT ?)`).run(move.session, move.target, batch).changes;
@@ -338,7 +391,7 @@ export function compactQuery(from: bigint, to: bigint, offset: bigint, viewer: I
     c.session, NULLIF(c.thread, 0) AS thread, NULLIF(c.person, '') AS person, NULLIF(c.profile, '') AS profile,
     c.runtime, NULLIF(c.model, '') AS model, c.fast, SUM(c.calls) AS calls, SUM(c.input) AS input,
     SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output
-    ${source} ${condition} c.minute >= ?2 AND c.minute < ?3
+    ${source} ${condition} c.minute >= ?2 AND c.minute < ?3 AND c.records > 0
     GROUP BY day, c.session, c.thread, c.person, c.profile, c.runtime, c.model, c.fast`;
   return { sql, args };
 }
@@ -364,7 +417,7 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
   const end = bind(to === max ? max : last);
   const parts = [`SELECT c.minute, c.session, c.thread, c.person, c.profile, c.runtime, c.model, c.fast,
     c.calls, c.input, c.cache_read, c.cache_write, c.cache_write_long, c.output
-    ${source} WHERE ${visible}c.minute >= ${start} AND c.minute < ${end}`];
+    ${source} WHERE ${visible}c.minute >= ${start} AND c.minute < ${end} AND c.records > 0`];
   const edge = (minute: bigint, begin: bigint, until: bigint) => {
     if (begin >= until) return;
     const bucket = bind(minute);
@@ -372,7 +425,7 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
     const high = bind(until);
     parts.push(`SELECT e.minute, u.session, COALESCE(u.thread, 0), COALESCE(u.person, ''), COALESCE(u.profile, ''),
       u.runtime, COALESCE(u.model, ''), u.fast, u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output
-      FROM (SELECT DISTINCT c.session, c.minute ${source} WHERE ${visible}c.minute = ${bucket}) e
+      FROM (SELECT DISTINCT c.session, c.minute ${source} WHERE ${visible}c.minute = ${bucket} AND c.records > 0) e
       CROSS JOIN usage u INDEXED BY usage_session ON u.session = e.session AND u.at >= ${low} AND u.at < ${high}
       WHERE u.compact_counted = 1`);
   };
@@ -410,8 +463,8 @@ export function compactHistory(db: DatabaseSync, offset: bigint, viewer: InWorks
   const oldMinute = oldQuarter ? "q.quarter * 15" : "q.minute";
   const compactSource = viewer === null ? "FROM usage_compact c" :
     "FROM usage_compact c INDEXED BY usage_compact_scope_time CROSS JOIN usage_minute_scope sc ON sc.session = c.session";
-  let compactWhere = viewer === null ? "" : viewer.home ? "WHERE c.scope IN (?3, 'H') AND (sc.ws = ?2 OR sc.ws IS NULL)"
-    : "WHERE c.scope = ?3 AND sc.ws = ?2";
+  let compactWhere = viewer === null ? "WHERE c.records > 0" : viewer.home ? "WHERE c.scope IN (?3, 'H') AND (sc.ws = ?2 OR sc.ws IS NULL) AND c.records > 0"
+    : "WHERE c.scope = ?3 AND sc.ws = ?2 AND c.records > 0";
   let oldWhere = where;
   if (range !== undefined) {
     if (range.from > range.to) throw new RangeError("usage history range is reversed");

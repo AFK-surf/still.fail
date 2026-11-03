@@ -11,6 +11,11 @@ const a = { workspace: "A", home: false };
 const b = { workspace: "B", home: false };
 const home = { workspace: "A", home: true };
 
+function account(store: Store): void {
+  for (let i = 0; i < 100; i++) if (compact.compactTotalsStep(store.db, 2).done) return;
+  assert.fail("compact totals did not finish in bounded batches");
+}
+
 test("a year's usage view reads only its requested days but keeps the all-time total", () => {
   const store = Store.open(":memory:");
   try {
@@ -52,8 +57,9 @@ for (const recursive of [false, true]) test(`compact totals follow changes and w
     store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call("old", -60_000, 10), owner], [call("new", 60_000, 19), owner]]);
     store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [[call("other", 60_000, 29), owner]]);
     store.recordUsage("/h", { session: "h", offset: 1, model: "m" }, "claude", [[call("home", 60_000, 39), owner]]);
+    account(store);
     // The total is a maintained statistic, so older minutes, calls and other workspaces are not enumerated.
-    store.db.setAuthorizer((action, name) => action === constants.SQLITE_READ && (name === "usage" || name === "usage_compact")
+    store.db.setAuthorizer((action, name) => action === constants.SQLITE_READ && name === "usage"
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
     try {
       assert.deepEqual(compact.compactTotal(store.db, a), { calls: 2, tokens: 31 });
@@ -64,6 +70,8 @@ for (const recursive of [false, true]) test(`compact totals follow changes and w
 
     store.db.prepare("UPDATE usage SET output = 5 WHERE id = ?").run("new");
     store.db.prepare("DELETE FROM usage WHERE id = ?").run("old");
+    assert.equal(compact.compactTotal(store.db, a), null);
+    account(store);
     assert.deepEqual(compact.compactTotal(store.db, a), { calls: 1, tokens: 24 });
 
     store.db.exec("UPDATE sessions SET ws = 'B' WHERE key = 'a'");
@@ -82,6 +90,7 @@ for (const recursive of [false, true]) test(`compact totals follow changes and w
       ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)`);
     oldWriter.run(1);
     oldWriter.run(4);
+    account(store);
     assert.deepEqual(compact.compactTotal(store.db, b), { calls: 3, tokens: 60 });
   } finally { store.close(); }
 });
@@ -98,8 +107,10 @@ test("a zeroed compact bucket can later contribute to both its workspace and the
       cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
     store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
     store.db.exec("UPDATE usage SET calls = 0, input = 0, output = 0 WHERE id = 'call'");
+    account(store);
     assert.deepEqual(compact.compactTotal(store.db, null), { calls: 0, tokens: 0 });
     store.db.exec("UPDATE usage SET calls = 1, output = 4 WHERE id = 'call'");
+    account(store);
     assert.deepEqual(compact.compactTotal(store.db, a), { calls: 1, tokens: 4 });
     assert.deepEqual(compact.compactTotal(store.db, null), { calls: 1, tokens: 4 });
   } finally { store.close(); }
@@ -120,6 +131,7 @@ test("compact totals begin empty on an older database and do not absorb old call
     assert.deepEqual(compact.compactTotal(store.db, a), { calls: 0, tokens: 0 });
     store.db.exec("UPDATE usage SET output = 9 WHERE id = 'old'");
     store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", input: 2 }, owner]]);
+    account(store);
     assert.deepEqual(compact.compactTotal(store.db, a), { calls: 1, tokens: 3 });
   } finally { store.close(); }
 });

@@ -168,9 +168,9 @@ test("a time range does not visit sessions with only older statistics", () => {
       ?.map((row) => [row.session, row.calls, row.tokens]);
     assert.deepEqual(history(), [["a", 1, 2]]);
     const scope = store.db.prepare("INSERT INTO usage_minute_scope (session, ws, done) VALUES (?, 'A', 1)");
-    const old = store.db.prepare("INSERT INTO usage_compact VALUES (?, -1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WA')");
+    const old = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, -1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WA')");
     for (let n = 0; n < 200; n++) { scope.run(`old-${n}`); old.run(`old-${n}`); }
-    const other = store.db.prepare("INSERT INTO usage_compact VALUES (?, 1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WB')");
+    const other = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, 1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WB')");
     for (let n = 0; n < 200; n++) other.run(`other-${n}`);
     assert.equal(read(), before, "older sessions outside the requested range do not increase lookup work");
     assert.deepEqual(history(), [["a", 1, 2]], "history excludes older days and other workspaces too");
@@ -279,7 +279,7 @@ test("a partial minute does not visit other workspaces or calls outside its boun
     };
     const before = read();
     const scope = store.db.prepare("INSERT INTO usage_minute_scope (session, ws, done) VALUES (?, ?, 1)");
-    const bucket = store.db.prepare("INSERT INTO usage_compact VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 0, ?)");
+    const bucket = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 0, ?)");
     for (let n = 0; n < 200; n++) {
       scope.run(`old-${n}`, "A");
       bucket.run(`old-${n}`, -1, "WA");
