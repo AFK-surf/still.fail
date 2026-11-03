@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
@@ -409,7 +409,11 @@ export class Store {
 
   /// A runtime change is one setting: readers must never see a runtime paired with another's profile or model.
   setSessionRuntime(key: string, runtime: string, profile: string, pinned: boolean, model: string | null, effort: string | null, fast: boolean | null, context: number | null): void {
-    this.#updateSession(key, "UPDATE sessions SET runtime = ?1, profile = ?2, profile_pinned = ?3, model = ?4, effort = ?5, fast = ?6, context = ?7 WHERE key = ?8", runtime, profile, flag(pinned), model, effort, optFlag(fast), context, key);
+    // Before this field existed a station with the ordered index could already have changed runtime. Its first
+    // transcript recovers the original. Without the index no older station could have made such a change.
+    const first = hasRuntimeOrderIndex(this.db)
+      ? "(SELECT runtime FROM runtime_sessions INDEXED BY runtime_sessions_ordered WHERE session_key = ?8 ORDER BY at, rowid LIMIT 1), " : "";
+    this.#updateSession(key, `UPDATE sessions SET original_runtime = COALESCE(original_runtime, ${first}runtime), runtime = ?1, profile = ?2, profile_pinned = ?3, model = ?4, effort = ?5, fast = ?6, context = ?7 WHERE key = ?8`, runtime, profile, flag(pinned), model, effort, optFlag(fast), context, key);
   }
 
   /// A session's model and effort from its next start on (null: the runtime's default).
@@ -691,8 +695,9 @@ export class Store {
   runtimeSessionSources(key: string): { id: string; runtime: string; profile: string | null }[] {
     const row = this.getSession(key);
     if (!row) return [];
-    const sources = this.#all("SELECT id, runtime, profile FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key)
-      .map((r) => ({ id: r.id as string, runtime: (r.runtime ?? row.runtime) as string, profile: (r.profile ?? null) as string | null }));
+    const sources = this.#all(`SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile
+      FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid`, key)
+      .map((r) => ({ id: r.id as string, runtime: r.runtime as string, profile: (r.profile ?? null) as string | null }));
     const current = row.runtimeSessionId;
     if (current === null) return sources;
     const entry = sources.find((s) => s.id === current) ?? { id: current, runtime: row.runtime, profile: row.profile };
@@ -2223,7 +2228,7 @@ export class Store {
   /// Appends an entry as the thread's next.
   #append(entry: EntryRow, changes: Changes): EntryRow {
     if (entry.kind === "message" && entry.authorKind === "agent" && entry.agentIdentity === undefined) {
-      const r = this.#one("SELECT s.model, s.effort, COALESCE(r.runtime, s.runtime) AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
+      const r = this.#one("SELECT s.model, s.effort, CASE WHEN r.session_key IS NULL THEN s.runtime ELSE COALESCE(r.runtime, s.original_runtime, s.runtime) END AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
       entry.agentIdentity = r ? { model: r.model, effort: r.effort, runtime: r.runtime } : undefined;
     }
     this.#tx(() => {
