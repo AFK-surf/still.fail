@@ -18,7 +18,7 @@ import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
   CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, type Membership, type MessageRow, OPTIONS_BEFORE,
-  PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
+  PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
 
@@ -690,16 +690,34 @@ export function blockedAsk(s: Store, thread: number, key: string, turn: TurnSumm
   return { asked, fresh: !told };
 }
 
+/// The people's messages since `since` (ms) in a thread that each are the first after a card (the last before it), in
+/// order: by its cards, each with the first person's message after it (none between: a card after it is the one asked).
+function answersOf(s: Store, thread: number, since: number): { thread: number; n: number }[] {
+  const cards = [...new Set([
+    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND card IS NOT NULL", thread),
+    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND options IS NOT NULL", thread),
+  ].map((r) => r.n as number))].sort((a, b) => a - b);
+  const out: { thread: number; n: number }[] = [];
+  cards.forEach((card, i) => {
+    const next = one(s, "SELECT n, at FROM entries WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND n > ? ORDER BY n LIMIT 1", thread, card);
+    if (next === undefined || next.at < since) return;
+    if (i + 1 < cards.length && cards[i + 1]! < next.n) return;
+    out.push({ thread, n: next.n });
+  });
+  return out;
+}
+
 /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card, or a
 /// choice that closed it (closed_cards, by a person: not its agent withdrawing it).
 export function answersSince(s: Store, since: number, threads: number[] | null = null): CardAnswer[] {
   const out: CardAnswer[] = [];
-  // Of some threads alone (the items of a sidebar a change touched), each by the index of its people's messages: every
-  // person's message of the last day and a half on the station, each with a few lookups, was some 2,600 statements.
+  // Of some threads alone (the items of a sidebar a change touched), each by its cards (a few) and the first person's
+  // message after each: every person's message of the last day and a half on the station, each with a few lookups, was
+  // some 2,600 statements; one chat's 76 of them, with its 3 cards, 1 to 1.5 s on ccvm short of memory (2026-11-03).
   const said: Json[] =
     threads === null
       ? all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since)
-      : threads.flatMap((thread) => all(s, SAID_SINCE, thread, since));
+      : threads.flatMap((thread) => answersOf(s, thread, since));
   const of = threads === null ? null : new Set(threads);
   const askedBefore = (thread: number, n: number): number | null => {
     const card: number | null = one(s, CARD_BEFORE, thread, n).n;
