@@ -382,7 +382,11 @@ export class Hub {
     // A crash left runners without a snapshot: what they keep is taken up as it stands.
     const runners = new Set(this.options.runners ? this.options.runners() : existingRunners(this.config().dataDir).map((r) => r.id));
     const taken = new Set(handed.sessions.map((s) => s.key));
-    for (const row of this.store.listSessions()) {
+    // A shared Codex host can only have a session to recover when that session was marked running. Without a
+    // session-owned runner there is no reason to load the station's idle and archived sessions.
+    const ownRunners = [...runners].some((id) => !id.startsWith("codex-"));
+    const candidates = ownRunners ? this.store.listSessions() : this.store.runningSessions();
+    for (const row of candidates) {
       if (taken.has(row.key)) continue;
       const runtime = runtimeNamed(row.runtime);
       // Claude's and dsh's runner is the session's own (an idle one is taken up too); codex sessions share their

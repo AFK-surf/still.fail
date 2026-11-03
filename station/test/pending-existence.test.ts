@@ -155,6 +155,29 @@ test("leaving a workspace checks its live actors without reading session history
   }
 });
 
+test("a restart with only a shared runtime host reads only running sessions", async () => {
+  for (const runners of [[], ["codex-cx"]]) {
+    const rig = new Rig();
+    const list = rig.store.listSessions;
+    const hub = rig.newHub({ chats: () => undefined, runners });
+    try {
+      for (let i = 0; i < 200; i++) rig.store.insertSession({ key: `old${i}`, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${i}`,
+        token: `old${i}`, createdAt: 1, lastActiveAt: 1 });
+      rig.store.insertSession({ key: "running-codex", connect: "ember", runtime: "codex", profile: "cx", workspace: rig.dir,
+        token: "running-codex", runtimeSessionId: "running-runtime", createdAt: 1, lastActiveAt: 1 });
+      rig.store.db.prepare("UPDATE sessions SET running = 1 WHERE key = ?").run("running-codex");
+      rig.codex.left = { id: "running-runtime", busy: true };
+      rig.store.listSessions = () => { throw new Error("session history was read"); };
+      await hub.takeUp();
+      assert.equal(rig.codex.last().sessionId, "running-runtime", "the running shared-host session is still taken up");
+    } finally {
+      rig.store.listSessions = list;
+      await hub.shutdown();
+      await rig.close();
+    }
+  }
+});
+
 test("resuming an idle session checks for pending work without loading its messages", async () => {
   const rig = new Rig();
   try {
