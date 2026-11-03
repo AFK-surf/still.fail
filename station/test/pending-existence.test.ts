@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
+import { Effect } from "effect";
 import * as stores from "../src/store/store.ts";
 import { Rig } from "./hub-fakes.ts";
 
@@ -116,6 +117,42 @@ test("rejoining one workspace does not enumerate every workspace's pending sessi
     try { assert.doesNotThrow(() => rig.hub.backIn("W2")); }
     finally { rig.store.sessionsWithPending = all; }
   } finally { await rig.close(); }
+});
+
+test("leaving a workspace checks its live actors without reading session history", async () => {
+  const rig = new Rig();
+  const list = rig.store.listSessions;
+  const get = rig.store.getSession;
+  try {
+    for (let i = 0; i < 200; i++) rig.store.insertSession({ key: `old${i}`, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${i}`,
+      token: `old${i}`, createdAt: 1, lastActiveAt: 1, ws: "W1" });
+    for (const [key, ws] of [["here", "W2"], ["elsewhere", "W1"], ["timer-here", "W2"], ["timer-elsewhere", "W1"]] as const) rig.store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`,
+      token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const suspended: string[] = [];
+    for (const key of ["here", "elsewhere"]) {
+      const actor = rig.hub.actor(rig.store.getSession(key)!);
+      actor.suspend = async () => { suspended.push(key); };
+    }
+    const deadlines = (rig.hub as any).deadlines as Map<string, unknown>;
+    deadlines.set("here", Effect.runFork(Effect.never));
+    deadlines.set("elsewhere", Effect.runFork(Effect.never));
+    deadlines.set("timer-here", Effect.runFork(Effect.never));
+    deadlines.set("timer-elsewhere", Effect.runFork(Effect.never));
+    const checked: string[] = [];
+    rig.store.listSessions = () => { throw new Error("session history was read"); };
+    rig.store.getSession = function (key) { checked.push(key); return get.call(this, key); };
+    await rig.hub.leftWorkspace("W2");
+    assert.deepEqual(suspended, ["here"]);
+    assert.equal(deadlines.has("here"), false);
+    assert.equal(deadlines.has("elsewhere"), true);
+    assert.equal(deadlines.has("timer-here"), false, "a deadline can outlive its actor");
+    assert.equal(deadlines.has("timer-elsewhere"), true);
+    assert.deepEqual([...new Set(checked)].sort(), ["elsewhere", "here", "timer-elsewhere", "timer-here"]);
+  } finally {
+    rig.store.listSessions = list;
+    rig.store.getSession = get;
+    await rig.close();
+  }
 });
 
 test("resuming an idle session checks for pending work without loading its messages", async () => {
