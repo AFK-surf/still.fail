@@ -19,7 +19,7 @@ pub fn link_peek(
   id : Int,
   agent? : String = "",
   chats? : Array[LinkedChat] = [],
-  chat_link? : (String) -> Bool = fn(_) { false },
+  link_to? : (String) -> @sf.LinkTo = fn(_) { @sf.no_link_to },
 ) -> Unit {
   if station == "" {
     return
@@ -34,11 +34,12 @@ pub fn link_peek(
     None => ()
   }
   // (a chat's, as the core says of the message's links: its `to`)
-  if chats.iter().any(fn(l) { l.href == href }) || chat_link(href) {
+  let to = link_to(href)
+  if chats.iter().any(fn(l) { l.href == href }) || to.chat {
     chat_peek(c, src, station, href, id, chats.iter().find_first(fn(l) { l.href == href }))
     return
   }
-  web_peek(c, src, station, href, words, id)
+  web_peek(c, src, station, href, words, id, peek=to.peek)
 }
 
 ///|
@@ -54,6 +55,7 @@ pub fn web_peek(
   words : String,
   id : Int,
   side? : @ui.Side = Bottom,
+  peek? : String = "",
 ) -> Unit {
   if station == "" || !(href.has_prefix("https://") || href.has_prefix("http://")) {
     return
@@ -61,9 +63,9 @@ pub fn web_peek(
   let scope = "link-peek/" + id.to_string()
   let params = link_params(station, href)
   peek_read(c, src, scope, "linkPreview", params, id, fn(read) {
-    hover(c, scope, id, tile=!rich_link(href), side~, fn() {
+    hover(c, scope, id, tile=peek == "", side~, fn() {
       read()
-      link_card(c, src, scope, params, href, words, copy=fn() { link_copy(c, href) })
+      link_card(c, src, scope, params, href, words, peek~, copy=fn() { link_copy(c, href) })
     })
     |> ignore
   })
@@ -118,29 +120,6 @@ fn link_params(station : String, href : String) -> Map[String, Json] {
   { "station": Json::string(station), "url": Json::string(href) }
 }
 
-///|
-/// Whether a link's card is a rich one (read before it shows, bars meanwhile): a GitHub pull request's or issue's
-/// (Peeks.tsx RICH); any other shows its tile at once.
-fn rich_link(href : String) -> Bool {
-  guard href.has_prefix("https://github.com/") else { return false }
-  let parts = href.view(start_offset="https://github.com/".length()).split("/").to_array()
-  parts.length() >= 4 &&
-  parts[0].length() > 0 &&
-  parts[1].length() > 0 &&
-  (parts[2] == "pull" || parts[2] == "issues") &&
-  {
-    let n = parts[3].to_owned()
-    let digits = match n.find("?") {
-      Some(i) => n.view(end_offset=i).to_owned()
-      None =>
-        match n.find("#") {
-          Some(i) => n.view(end_offset=i).to_owned()
-          None => n
-        }
-    }
-    digits.length() > 0 && digits.iter().all(fn(ch) { ch >= '0' && ch <= '9' })
-  }
-}
 
 ///|
 /// The card (LinkCard): a pull request's or an issue's; else a page's tile (its picture over it where it has one);
@@ -152,6 +131,7 @@ fn link_card(
   params : Map[String, Json],
   href : String,
   words : String,
+  peek? : String = "",
   copy? : () -> Unit = fn() {  },
 ) -> Unit {
   let read = @sfbase.hold(src, scope, "linkPreview", params)
@@ -163,7 +143,7 @@ fn link_card(
     "github_pull_request" => change_card(c, v, true, copy)
     "github_issue" => change_card(c, v, false, copy)
     _ =>
-      if v is None && read.error is None && rich_link(href) {
+      if v is None && read.error is None && peek != "" {
         // (while it is read: a made-up one's, in its bones)
         @sf.bones(c, fn() {
           change_card(c, Some({
@@ -171,7 +151,7 @@ fn link_card(
             "number": 1,
             "title": Json::string(@sf.sample_words(18)),
             "time": { "updatedAt": { "ago": Json::string(@sf.sample_words(3)) } },
-          }), href.contains("/pull/"), fn() {  })
+          }), peek == "pull", fn() {  })
         })
       } else {
         page_tile(c, href, words, if text(v, "kind") == "page" { v } else { None }, copy)

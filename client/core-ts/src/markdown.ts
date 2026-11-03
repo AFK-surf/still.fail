@@ -16,8 +16,8 @@
 //           to copy, as Markdown and as CSV: tableMarkdown, tableCsv) · tr · th · td · hr
 //   inline  b · i · s · ["code", {content, path?, line?, shown?}] (words as a run is; `path` where it names a file, a
 //           run too, `line` the line it points at, `shown` a chip's words where they are not its path's: paths.ts) ·
-//           ["a", […], {href, title?, path?, line?, shown?, to?}] (`to`: what it is to, written bare or not: refLinks.ts
-//           linkTo) · ["img", {src, alt?, title?}] · br
+//           ["a", […], {href, title?, path?, line?, shown?, bare?, to?}] (`bare`: its words its address; `to`: what it
+//           is to, written bare or not: refLinks.ts linkTo) · ["img", {src, alt?, title?}] · br
 // Math uses the existing pre/code nodes with `math: true`: $$ or \[ blocks and \( inline spans. Other clients can still
 // show the TeX as code. Escaped dollars and dollars inside code keep Markdown's usual meaning.
 // Raw HTML is left out, as the web left it out. An address is as written: a client keeps what it may open.
@@ -38,7 +38,7 @@ export type MdStore = { has(key: string): boolean; get(key: string): string | nu
 
 /// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
 /// trees of a set of texts: markdown.test.ts). A drawable older tree can be shown while it is read again in the background.
-export const MD_READING = 6;
+export const MD_READING = 7;
 
 /// Earlier readings whose tree format this core can still draw while they are read again. Raise this independently of
 /// MD_READING if a future change makes an old tree impossible to draw; a change in interpretation alone need not.
@@ -327,7 +327,7 @@ function inline(n: Node, cx: Cx): MdNode[] {
         at += words.length;
         if (typeof part === "string") return piece;
         const to = linkTo(part.url);
-        return ["a", [piece], { href: part.url, ...(to ? { to } : {}) }];
+        return ["a", [piece], { href: part.url, bare: true, ...(to ? { to } : {}) }];
       });
     }
     case "strong":
@@ -344,14 +344,14 @@ function inline(n: Node, cx: Cx): MdNode[] {
     case "break":
       return [["br"]];
     case "link":
-      return [link(n.url ?? "", n.title, inlines(n.children ?? [], { ...cx, inLink: true }))];
+      return [link(n.url ?? "", n.title, inlines(n.children ?? [], { ...cx, inLink: true }), plainOfNode(n))];
     case "image":
       return [image(n.url ?? "", n.alt, n.title)];
     case "linkReference":
     case "imageReference": {
       const def = n.identifier ? cx.defs.get(normal(n.identifier)) : undefined;
       if (!def) return [run(`${n.type === "imageReference" ? "!" : ""}[${n.label ?? n.alt ?? ""}]${n.referenceType === "full" ? `[${n.label ?? ""}]` : ""}`, n, cx)];
-      return n.type === "imageReference" ? [image(def.url ?? "", n.alt, def.title)] : [link(def.url ?? "", def.title, inlines(n.children ?? [], { ...cx, inLink: true }))];
+      return n.type === "imageReference" ? [image(def.url ?? "", n.alt, def.title)] : [link(def.url ?? "", def.title, inlines(n.children ?? [], { ...cx, inLink: true }), plainOfNode(n))];
     }
     case "html":
       return [];
@@ -361,11 +361,19 @@ function inline(n: Node, cx: Cx): MdNode[] {
 }
 
 /// A link; one to a file by its path (no scheme: `src/a.ts`, `./notes.md#L3`) says that file as an inline code naming it
-/// does (paths.ts).
-function link(href: string, title: string | null | undefined, children: MdNode[]): MdNode {
+/// does (paths.ts). `bare`: its words are its address (as written, or decoded), so a client may say it as what it names
+/// (a chat's or a screen's title).
+function link(href: string, title: string | null | undefined, children: MdNode[], words: string): MdNode {
   const file = /^[a-z][\w+.-]*:/i.test(href) ? {} : pathAttrs(decoded(href), (path) => path);
   const to = linkTo(href);
-  return ["a", children, { href, ...(title ? { title } : {}), ...file, ...(to ? { to } : {}) }];
+  const plain = words.trim();
+  const bare = plain === href || plain === decoded(href);
+  return ["a", children, { href, ...(title ? { title } : {}), ...file, ...(bare ? { bare: true } : {}), ...(to ? { to } : {}) }];
+}
+
+/// The words of a node of the Markdown read, as written (a link's: what its brackets hold, its code's too).
+function plainOfNode(n: Node): string {
+  return n.children ? n.children.map(plainOfNode).join("") : (n.value ?? "");
 }
 
 const decoded = (s: string): string => {

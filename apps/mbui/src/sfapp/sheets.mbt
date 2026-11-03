@@ -438,7 +438,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             close()
             go_to(r, seq)
           })
-          @sfpages.web_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid, side=Left)
+          @sfpages.web_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid, side=Left, peek=text(pv, "peek"))
           if info_row(c, "info/pull/" + text(pv, "key"), fn() {
               @sfpages.pull_mark(c, pv, 16.0)
               c.box(style=@sf.full_width, fn() { c.text(@sfpages.pull_title(pv), style=info_pull_title) |> ignore }) |> ignore

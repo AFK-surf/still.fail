@@ -5,6 +5,7 @@
 // links nothing), a person's those written bare in their words (bareLinks.ts), as each is drawn. Self-contained: the
 // web's demo makes its chats' with it, typechecked as the web is.
 import { bareLinks } from "./bareLinks.ts";
+import { githubOf, linkTo } from "./refLinks.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -16,7 +17,7 @@ export type Kind = (typeof KINDS)[number];
 /// A message's part in it: when it was said, by whom, the message (its seq).
 type Said = { seq: number; createdAt: number | null; by: string };
 
-export type Thing = Said & { key: string; file?: J; words?: string; url?: string; title?: string; site?: string; count?: number; repository?: string; number?: number };
+export type Thing = Said & { key: string; file?: J; words?: string; url?: string; title?: string; site?: string; count?: number; repository?: string; number?: number; peek?: "pull" | "issue" };
 
 /// A day's pictures and videos (`day`: 今天, 昨天, 9月20日; none where when is not known), message by message.
 export type ThingDay = { day: string; groups: ThingGroup[] };
@@ -33,9 +34,8 @@ export const isVideo = (name: string): boolean => VIDEO.test(name);
 /// A pull request's link (`https://github.com/<owner>/<repo>/pull/<n>`, with anything after its number): its
 /// repository and number, else null.
 export function pullOf(url: string): { repository: string; number: number } | null {
-  const m = /^https?:\/\/(?:www\.)?github\.com\/([^/\s?#]+)\/([^/\s?#]+)\/pull\/(\d+)(?:[/?#]|$)/i.exec(url);
-  if (m === null) return null;
-  return { repository: `${m[1]}/${m[2]}`, number: Number(m[3]) };
+  const github = githubOf(url);
+  return github?.kind === "pull" ? { repository: github.repository, number: github.number } : null;
 }
 
 /// A link's host and path, as its card says where it goes (Peeks.tsx destination).
@@ -122,14 +122,15 @@ export function thingsOf(messages: readonly J[]): Record<Kind, Thing[]> {
         const key = `${pr.repository.toLowerCase()}#${pr.number}`;
         const was = pulls.get(key);
         pulls.delete(key);
-        pulls.set(key, { ...said, key, url: `https://github.com/${pr.repository}/pull/${pr.number}`, ...pr, count: (was?.count ?? 0) + 1 });
+        pulls.set(key, { ...said, key, url: `https://github.com/${pr.repository}/pull/${pr.number}`, ...pr, peek: "pull", count: (was?.count ?? 0) + 1 });
         continue;
       }
       const key = linkKey(url);
       const was = links.get(key);
       const title = words !== "" && linkKey(words) !== key && words !== url ? words : (was?.title ?? "");
       links.delete(key);
-      links.set(key, { ...said, key, url, site: siteOf(url), ...(title !== "" ? { title } : {}), count: (was?.count ?? 0) + 1 });
+      const peek = linkTo(url)?.peek;
+      links.set(key, { ...said, key, url, site: siteOf(url), ...(title !== "" ? { title } : {}), ...(peek ? { peek } : {}), count: (was?.count ?? 0) + 1 });
     }
   }
   return { media: media.reverse(), files: files.reverse(), links: [...links.values()].reverse(), pulls: [...pulls.values()].reverse() };

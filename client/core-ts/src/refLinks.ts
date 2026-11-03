@@ -141,11 +141,21 @@ export function serviceOfLink(href: string): { station: string; job: string } | 
   }
 }
 
+/// A GitHub pull request's or issue's link (`https://github.com/<owner>/<repo>/pull/<n>`, `…/issues/<n>`, anything
+/// after its number): which, its repository and its number; else null. Its card is a rich one (linkTo `peek`), and a
+/// pull request is one of a chat's things (things.ts).
+export function githubOf(url: string): { kind: "pull" | "issue"; repository: string; number: number } | null {
+  const m = /^https?:\/\/(?:www\.)?github\.com\/([^/\s?#]+)\/([^/\s?#]+)\/(pull|issues)\/(\d+)(?:[/?#]|$)/i.exec(url);
+  if (m === null) return null;
+  return { kind: m[3]!.toLowerCase() === "pull" ? "pull" : "issue", repository: `${m[1]}/${m[2]}`, number: Number(m[4]) };
+}
+
 /// What a link is to, as every client draws it: a chat's (`chat`: a reference to it), a screen's, a station's 共享调试 or
-/// a chat's web service's (`card`: a card alone in a paragraph, its title bare in a sentence), with what names it.
-/// Null for any other link. The clients take it from the core with each link (markdown.ts, personWords), reading none
-/// of it themselves.
-export type LinkTo = { chat?: true; card?: "screen" | "adb" | "service"; station?: string; screen?: string; job?: string };
+/// a chat's web service's (`card`: a card alone in a paragraph, its title bare in a sentence), with what names it; a
+/// pull request's or an issue's (`peek`: its card over it is that one's, bars while it is read). Null for any other
+/// link. The clients take it from the core with each link (markdown.ts, personWords, things.ts), reading none of it
+/// themselves.
+export type LinkTo = { chat?: true; card?: "screen" | "adb" | "service"; station?: string; screen?: string; job?: string; peek?: "pull" | "issue" };
 export function linkTo(href: string): LinkTo | null {
   const chat = isChatLink(href) ? { chat: true as const } : {};
   const screen = screenOfLink(href);
@@ -154,6 +164,8 @@ export function linkTo(href: string): LinkTo | null {
   if (adb) return { ...chat, card: "adb", station: adb };
   const service = serviceOfLink(href);
   if (service) return { ...chat, card: "service", station: service.station, job: service.job };
+  const github = githubOf(href);
+  if (github) return { ...chat, peek: github.kind };
   return chat.chat ? chat : null;
 }
 

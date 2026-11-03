@@ -309,13 +309,6 @@ pub fn file_name_of(url : String) -> String {
   u.view(start_offset=i).to_string()
 }
 
-///|
-/// A link written bare (Markdown.kt isBareLink): its words its address (as
-/// written, or decoded).
-pub fn is_bare_link(words : String, href : String) -> Bool {
-  let w = words.trim(chars=" \t\n").to_string()
-  w == href || @codec.decode_uri_component(href) == Some(w)
-}
 
 ///|
 /// Links to a station's screens and 共享调试 (is_card_link), as a chat draws
@@ -351,7 +344,7 @@ fn screen_alone(xs : Array[MdInline]) -> (String, LinkTo, String?)? {
   match parts[0] {
     Link(href, c, to) if to.is_card() => {
       let words = md_plain(c)
-      Some((href, to, if is_bare_link(words, href) { None } else { Some(words) }))
+      Some((href, to, if to.bare { None } else { Some(words) }))
     }
     _ => None
   }
@@ -364,8 +357,8 @@ fn screen_alone(xs : Array[MdInline]) -> (String, LinkTo, String?)? {
 fn bare_screens(xs : Array[MdInline], out : Array[(String, LinkTo)]) -> Unit {
   for x in xs {
     match x {
-      Link(href, c, to) =>
-        if to.is_card() && is_bare_link(md_plain(c), href) && !out.iter().any(fn(o) { o.0 == href }) {
+      Link(href, _, to) =>
+        if to.is_card() && to.bare && !out.iter().any(fn(o) { o.0 == href }) {
           out.push((href, to))
         }
       Emph(c) | Strong(c) | Strike(c) => bare_screens(c, out)
@@ -379,8 +372,8 @@ fn bare_screens(xs : Array[MdInline], out : Array[(String, LinkTo)]) -> Unit {
 fn bare_chats(xs : Array[MdInline], out : Array[String]) -> Unit {
   for x in xs {
     match x {
-      Link(href, c, to) =>
-        if to.chat && is_bare_link(md_plain(c), href) && !out.contains(href) {
+      Link(href, _, to) =>
+        if to.chat && to.bare && !out.contains(href) {
           out.push(href)
         }
       Emph(c) | Strong(c) | Strike(c) => bare_chats(c, out)
@@ -1175,14 +1168,14 @@ fn runs_of(
         // ink (the `@` not lighter: at 70% it was 2.5 to 1)
         let words = md_plain(c)
         let shown = match titles.get(href) {
-          Some(title) if is_bare_link(words, href) => title
+          Some(title) if to.bare => title
           _ => words
         }
         out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=accent))
         out.push(@ui.span(shown, bold~, italic~, strike~, link=href, color=accent))
       }
       // a bare link to a screen or a station's 共享调试: its title, leading where it does
-      Link(href, c, _) if link == "" && titles.get(href) is Some(title) && is_bare_link(md_plain(c), href) =>
+      Link(href, _, to) if link == "" && titles.get(href) is Some(title) && to.bare =>
         out.push(@ui.span(title, bold~, italic~, strike~, link=href))
       Link(href, c, _) => runs_of(c, out, bold, italic, strike, href, accent, titles, paths)
       Image(src, alt) => {
@@ -1643,16 +1636,16 @@ fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
 }
 
 ///|
-/// The links to chats in an agent's words (`tree`, the core's reading of `text`), each once: those it says are to a
-/// chat (their `to`), for what is shown as a link is pointed at (a chat's card).
-pub fn md_chat_links(text : String, tree : Json?) -> Array[String] {
-  let out : Array[String] = []
+/// The links in an agent's words (`tree`, the core's reading of `text`), each once, with what the core says each is to
+/// (their `to`), for what is shown as a link is pointed at (a chat's card, a pull request's).
+pub fn md_links_to(text : String, tree : Json?) -> Map[String, LinkTo] {
+  let out : Map[String, LinkTo] = {}
   fn inl(xs : Array[MdInline]) -> Unit {
     for x in xs {
       match x {
         Link(href, c, to) => {
-          if to.chat && !out.contains(href) {
-            out.push(href)
+          if !out.contains(href) {
+            out[href] = to
           }
           inl(c)
         }
