@@ -253,6 +253,45 @@ test("compact usage agrees with calls across dates and arbitrary bounds", () => 
   } finally { store.close(); }
 });
 
+test("compact usage does not read sessions again after selecting its workspace", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["a", "A"], ["b", "B"], ["home", null]] as const) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
+    }
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: null, profile: "cc" };
+    for (const key of ["a", "b", "home"]) {
+      const call = { id: key, at: 60_000, model: "m", subagent: false, fast: false, input: 1,
+        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+      store.recordUsage(`/${key}`, { session: key, offset: 1, model: "m" }, "claude", [[call, owner]]);
+    }
+    const reader = makeStore(store.db, ".");
+    const read = (workspace: string, home: boolean) => {
+      store.db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "sessions"
+        ? constants.SQLITE_DENY : constants.SQLITE_OK);
+      try {
+        const answer = usage(reader, "en", 0n, 120_000n, 0n, false, { workspace, home }, false, { remoteRuns: false });
+        return answer.rows.map((r: { session: string }) => r.session).sort();
+      } finally { store.db.setAuthorizer(null); }
+    };
+    assert.deepEqual(read("A", false), ["a"]);
+    assert.deepEqual(read("A", true), ["a", "home"]);
+    assert.deepEqual(read("B", false), ["b"]);
+
+    store.db.prepare("UPDATE sessions SET ws = 'B' WHERE key = 'a'").run();
+    assert.throws(() => read("A", false), /moving between workspaces/);
+    while (!moveCompactStep(store.db, 2).done) { /* One bounded batch at a time. */ }
+    assert.deepEqual(read("A", false), []);
+    assert.deepEqual(read("B", false), ["a", "b"]);
+
+    store.deleteSession("b");
+    while (!moveCompactStep(store.db, 2).done) { /* Its usage becomes home usage. */ }
+    assert.deepEqual(read("B", false), ["a"]);
+    assert.deepEqual(read("A", true), ["b", "home"]);
+  } finally { store.close(); }
+});
+
 test("a usage summary checks a session's workspace once for its minutes", () => {
   const store = Store.open(":memory:");
   try {
