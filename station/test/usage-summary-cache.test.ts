@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { constants, DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { usageRoutes } from "../src/api/routes/usage.ts";
 import { Readers } from "../src/read/pool.ts";
 import * as reads from "../src/read/store.ts";
 import { usage } from "../src/read/usage.ts";
 import * as compact from "../src/store/usage-compact.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { Store } from "../src/store/store.ts";
+import { watchCompactMoves } from "../src/usage/module.ts";
 
 test("a repeated usage summary rereads only hours whose statistics changed", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-summary-cache-"));
@@ -82,6 +84,68 @@ test("a repeated usage summary rereads only hours whose statistics changed", asy
     assert.deepEqual(afterConcurrentWrite.groups, reads.usageGroups(store, 0n, 120n * 60_000n, 0n, viewer),
       "the following read sees the write that happened while the first snapshot was open");
   } finally {
+    db?.close();
+    writer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an unbounded history settles its workspace's new statistics so its cache can reuse them", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-unbounded-pending-"));
+  const path = join(dir, "stillfail.db");
+  const writer = Store.open(path);
+  let db: DatabaseSync | null = null;
+  let mover: ReturnType<typeof watchCompactMoves> | null = null;
+  try {
+    for (const key of ["A", "B"]) writer.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/w", token: key, ws: key, createdAt: 0, lastActiveAt: 0 });
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = (id: string, at: number) => ({ id, at, model: "m", subagent: false, fast: false,
+      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+    writer.recordUsage("/A", { session: "A", offset: 0, model: "m" }, "claude", [[call("old", -60_000), owner]]);
+    compact.installCompactUsage(writer.db, () => 0);
+    retireUsageIndexes(writer.db);
+    compact.installUsageSummaryChanges(writer.db);
+    for (const key of ["A", "B"]) writer.recordUsage(`/${key}`, { session: key, offset: 1, model: "m" }, "claude",
+      Array.from({ length: 128 }, (_, n) => [call(`${key}-${n}`, n * 60_000), owner] as [ReturnType<typeof call>, typeof owner]));
+    db = new DatabaseSync(path, { readOnly: true });
+    const reader = reads.makeStore(db, dir), cache = new reads.UsageSummaryCache(), viewer = { workspace: "A", home: false };
+    const read = async () => {
+      db!.exec("BEGIN");
+      try { return await reads.usageGroupsBatched(reader, 0n, 128n * 60_000n, 0n, viewer, async () => {}, cache); }
+      finally { db!.exec("COMMIT"); }
+    };
+    const first = await read(), pending = await read();
+    assert.ok(first && pending);
+    assert.equal(pending.diagnostics.parts, 128, "pending buckets have to be checked before they are settled");
+    mover = watchCompactMoves(writer, Promise.resolve());
+    const settled = new Promise<void>((resolve, reject) => {
+      const abort = () => { unsubscribe(); reject(t.signal.reason); };
+      const unsubscribe = writer.subscribe((change) => {
+        if (change.type !== "usage" || !change.statisticsOnly || compact.compactTotal(writer.db, viewer) === null) return;
+        unsubscribe();
+        t.signal.removeEventListener("abort", abort);
+        resolve();
+      });
+      t.signal.addEventListener("abort", abort, { once: true });
+    });
+    const route = usageRoutes({ read: () => Promise.resolve({ status: 200, headers: {}, body: Buffer.alloc(0) }) } as never,
+      () => false, (scope) => mover!.read(scope))[1]!;
+    await route.handle({ lang: "en", query: [["history", "1"]], viewer } as never, []);
+    await settled;
+    assert.deepEqual(compact.compactTotal(writer.db, viewer), { calls: 128, tokens: 256 },
+      "a call from before compact statistics is not added to the new total");
+    assert.equal((writer.db.prepare("SELECT COUNT(*) AS n FROM usage_compact WHERE scope = 'WB' AND pending = 1").get() as { n: number }).n, 128,
+      "the other workspace is not settled by this request");
+    const refreshed = await read(), reused = await read();
+    assert.ok(refreshed && reused);
+    assert.deepEqual(refreshed.groups, first.groups);
+    assert.deepEqual(reused.groups, first.groups);
+    assert.equal(reused.diagnostics.cache, "reused");
+    assert.equal(reused.diagnostics.parts, 0);
+    assert.equal(reused.diagnostics.candidates, 0);
+  } finally {
+    if (mover !== null) await mover.close();
     db?.close();
     writer.close();
     rmSync(dir, { recursive: true, force: true });
