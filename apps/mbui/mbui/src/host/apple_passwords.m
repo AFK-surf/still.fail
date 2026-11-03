@@ -31,9 +31,12 @@ void mb_host_passkeys_end(int32_t id) { (void)id; }
 static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *runs;
 static int run_next;
 
-/// Where `op` is: Homebrew's (Apple silicon, Intel), 1Password's own installer's, else the first on PATH.
+/// Where `op` is: a scene's own (MBUI_OP: a picture of a card while 1Password is asked, with no 1Password asked),
+/// Homebrew's (Apple silicon, Intel), 1Password's own installer's, else the first on PATH.
 static NSString *op_path(void) {
   NSMutableArray<NSString *> *places = [@[ @"/opt/homebrew/bin/op", @"/usr/local/bin/op", @"/usr/bin/op" ] mutableCopy];
+  NSString *own = NSProcessInfo.processInfo.environment[@"MBUI_OP"];
+  if (own.length) [places insertObject:own atIndex:0];
   NSString *path = NSProcessInfo.processInfo.environment[@"PATH"] ?: @"";
   for (NSString *dir in [path componentsSeparatedByString:@":"])
     if (dir.length) [places addObject:[dir stringByAppendingPathComponent:@"op"]];
