@@ -279,8 +279,7 @@ export async function expireArchived(hub: Hub, now: number): Promise<number | nu
   const { cold } = hub;
   if (after <= 0 || !cold.expire || !cold.holdsMore) return null;
   let next: number | null = null;
-  for (const s of hub.store.listSessions()) {
-    if (s.archivedAt === null) continue;
+  for (const s of hub.store.archivedSessions()) {
     const due = s.archivedAt + after;
     if (due > now) {
       if (next === null || due < next) next = due;
@@ -301,15 +300,11 @@ export async function expireArchived(hub: Hub, now: number): Promise<number | nu
 export async function relieveArchived(hub: Hub, free: () => number): Promise<void> {
   const { cold } = hub;
   if (hub.config().archivedWorkspaceMs <= 0 || !cold.expire || !cold.holdsMore) return;
-  const archived = hub.store
-    .listSessions()
-    .filter((s) => s.archivedAt !== null)
-    .sort((a, b) => a.archivedAt! - b.archivedAt!);
-  for (const s of archived) {
+  for (const s of hub.store.archivedSessions()) {
     if (free() >= DISK_LOW_BYTES) return;
     try {
       // Shown and archived again since, it is not the one looked at: `expire` leaves it.
-      if (await cold.holdsMore(s.key)) await cold.expire(s.key, s.archivedAt!);
+      if (await cold.holdsMore(s.key)) await cold.expire(s.key, s.archivedAt);
     } catch (error) {
       log.warn("hub", "the workspace of an archived session was not emptied", { session: s.key, error: (error as Error).message });
     }

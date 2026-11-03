@@ -56,3 +56,40 @@ test "signed in and to be kept: approved here once, in place; kept, one line onc
   assert_true(t.find("已登录 github.com · 已存入密钥库") is Some(_))
   assert_eq(named(calls, "vault.approve").length(), 0)
 }
+
+///|
+test "1Password slow to answer: the card says it is asked, and the screen is there to sign in on instead" {
+  let calls : Array[Made] = []
+  let t = cards_core(calls, mode="chat-signin")
+  @ui.fake_op.val = Some(fn(_) { (0, "[]", "") })
+  @ui.fake_op_pending.val = true
+  t.draw()
+  t.tap_text("用 1Password 登录")
+  t.draw()
+  assert_true(t.find("正在问 1Password…") is Some(_))
+  assert_false(t.get(Button, label="在画面中登录").disabled)
+  t.tap_text("在画面中登录")
+  t.draw()
+  let self = named(calls, "signin.self")
+  assert_eq(self.length(), 1)
+  assert_eq(self[0].params.as_object().unwrap().get("done"), Some(Json::boolean(false)))
+  // (1Password let go of: what it would have said no more taken)
+  assert_true(t.find("正在问 1Password…") is None)
+}
+
+///|
+test "1Password allowed but its servers not reached: the card says so, in no words of op's own" {
+  let calls : Array[Made] = []
+  let t = cards_core(calls, mode="chat-signin")
+  @ui.fake_op.val = Some(fn(_) {
+    (1, "", "[ERROR] 2026/11/03 16:43:31 Get \"https://my.1password.com/api/v2/account/keysets?__t=1793695358.038\": unexpected EOF\n")
+  })
+  t.draw()
+  t.tap_text("用 1Password 登录")
+  t.draw()
+  t.draw()
+  t.draw()
+  assert_true(t.find("1Password 没连上它的服务器，再试一次") is Some(_))
+  assert_true(t.find("unexpected EOF") is None)
+  assert_false(t.get(Button, label="用 1Password 登录").disabled)
+}

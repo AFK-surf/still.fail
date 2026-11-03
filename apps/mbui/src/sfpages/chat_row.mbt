@@ -1100,8 +1100,7 @@ pub fn rename_escape(c : @ui.Ctx) -> Bool {
 
 
 ///|
-/// The chat in view's "…" (a menu from `from`): what a row's menu offers (chat_menu_items) for the row the core's list
-/// has of it, else (an archived one, one it does not list) its link alone; `extra` the page's own (chat_extra_items).
+/// The chat in view's "…" (a menu from `from`): its items (chat_menu_of) shown.
 pub fn open_chat_menu(
   src : Source,
   scope : String,
@@ -1109,6 +1108,14 @@ pub fn open_chat_menu(
   extra : Array[@sf.MenuItem?],
   from~ : @sf.Beside,
 ) -> Unit {
+  @sf.menu(chat_menu_of(src, scope, r, extra), from~)
+}
+
+///|
+/// What the chat in view's "…" offers: what a row's menu offers (chat_menu_items) for the row the core's list has of
+/// it, else (an archived one, one it does not list) its link alone; `extra` the page's own (chat_extra_items). Apart
+/// from showing them: the system's bars take them as a menu of their own (rail_native.mbt bar_chat).
+pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
   let mut found : ChatItem? = None
   match @sfbase.chats_of(src, scope, "all").0 {
     Some(view) =>
@@ -1139,7 +1146,7 @@ pub fn open_chat_menu(
       items
     }
   }
-  @sf.menu(items, from~)
+  items
 }
 
 ///|

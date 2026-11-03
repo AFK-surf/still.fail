@@ -100,3 +100,28 @@ fn last_words(t : @ui.Tester, s : String) -> (Double, Double)? {
   }
   found
 }
+
+///|
+test "an admin lets other machines ask through Tailcat with a switch, then has the line to give them, copied in one press" {
+  new_run()
+  @settings.reset()
+  @settings.fixture_outflow_link(Some({ "on": false, "state": "off" }))
+  let src = fixture("settings")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=3200.0, platform=2)
+  t.draw()
+  assert_true(open_target(src, link_target({ "opens": "login", "workspace": "ws1", "station": "st1", "login": "login-2" }), false, None))
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  // no program asks or holds a grant: the section is there for the switch alone
+  assert_true(t.find(tr("web-main.outflow.title")) is Some(_), msg="the section")
+  assert_true(t.find(tr("web-main.outflow.linkLine")) is Some(_), msg="what the switch does")
+  t.click(Switch, label=tr("web-main.outflow.link"))
+  t.frame()
+  t.frame()
+  assert_eq(@settings.fixture_outflow_link_set(), Some(true))
+  // on: the line to give the program on the other machine
+  @settings.fixture_outflow_link(Some({ "on": true, "state": "running", "address": "tcADDRESS", "port": 7480 }))
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(tr("web-main.outflow.linkRunning")) is Some(_), msg="said on")
+  assert_true(t.find("tailcat tcADDRESS 7480") is Some(_), msg="the line")
+}

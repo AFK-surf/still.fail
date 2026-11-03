@@ -24,8 +24,8 @@ const B64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
 const published = (id: string, at: number, by: string, byName: string) => ({ id, key: `key-${id}`, title: "部署", at, by, byName, size: 10, upto: 3 });
 
 /// The viewer (a@x.com, as the fixture signs in) is `role` in `ws`, whose members are named.
-async function setUp(role = "member", thread: J = threadView(7, 3)) {
-  const s = await started({ ...base(), "GET /threads": [thread] }, 0, undefined, ({ host }) => {
+async function setUp(role = "member", thread: J = threadView(7, 3), answers: J = {}) {
+  const s = await started({ ...base(), "GET /threads": [thread], ...answers }, 0, undefined, ({ host }) => {
     const fetch = host.fetch.bind(host);
     host.fetch = (req: HttpRequest) => {
       const path = req.url.replace(ORIGIN, "");
@@ -152,72 +152,55 @@ test("the_chats_links_are_listed_newest_first_and_each_is_revoked_by_its_publish
   core.close();
 });
 
-test("a_preview_is_asked_with_the_workspaces_names_and_a_station_from_before_says_so", async () => {
-  const { host, core } = await setUp();
-  let refusal: unknown = null;
-  stationReplies(host, (req) => {
-    if (!(req.method === "POST" && req.url === `${ORIGIN}/admin/api/threads/7/publish/preview`)) return undefined;
-    if (refusal !== null) return refusal;
-    return {
-      upto: 3, title: "部署",
-      entries: [{ n: 3, at: 3, authorKind: "person", author: "安", text: "[已隐藏]", files: [] }],
-      redacted: [{ n: 3, count: 1 }],
-      files: [],
-    };
-  });
-  const ui = core.connect();
+/// The viewer's chat 7 as its station gives its entries, held once its page has been open.
+async function holding(entries: J[]) {
+  const last = Math.max(...entries.map((e) => e.n));
+  const s = await setUp("member", threadView(7, last), { "GET /threads/7/entries?limit=50": { first: Math.min(...entries.map((e) => e.n)), last, entries } });
+  const ui = s.core.connect();
   const values = new Map<number, unknown>();
-  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
-  subscribe(core, ui, 2, { topic: "doing" });
-  await host.settle();
+  subscribe(s.core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  await s.host.settle();
+  await s.host.time.pass(500);
+  return { ...s, ui, values };
+}
+
+const message = (n: number, authorKind: string, text: string, more: J = {}) => ({
+  kind: "message", n, at: n, ts: `t${n}`, thread: 7, authorKind, author: authorKind === "person" ? "a@x.com" : "k1", text, attachments: [], quotes: [], ...more,
+});
+
+test("a_preview_is_made_of_what_the_device_holds_of_the_chat_its_secrets_hidden_and_its_station_not_asked", async () => {
+  const { host, core, ui, values } = await holding([
+    message(1, "person", "部署一下"),
+    message(2, "person", "key: sk-ant-abcdefghijklmnopqrstuvwx", { attachments: [{ name: "a.png", path: "/w/uploads/a.png", size: 1 }] }),
+    message(3, "agent", "好了"),
+  ]);
+  // The station busy with something else: nothing of it is waited on.
+  const release = host.hold("/threads/7/publish");
   call(core, ui, 3, "chat.publishPreview", { station: "ws/st", thread: 7 });
   await host.settle();
-  const answered = answerOf(host, values, 3);
-  assert.equal(answered.ok.upto, 3);
-  assert.equal(answered.ok.messages[0].hiddenText, "已隐藏 1 处");
-  // Members by their names (one with none is left to the station), nothing kept, nothing under way.
-  assert.deepEqual(asked(host, "/threads/7/publish"), [{ method: "POST", path: "/threads/7/publish/preview", body: { names: { "a@x.com": "安", "b@x.com": "Bo" } } }]);
-  assert.deepEqual(v(values, 2).doing, []);
-
-  // A station from before publishing has no such route; its own refusals are said as it says them.
-  refusal = status(404, { error: "no route POST /threads/7/publish/preview" });
-  call(core, ui, 4, "chat.publishPreview", { station: "ws/st", thread: 7 });
-  await host.settle();
-  assert.equal(answerOf(host, values, 4).error.message, "此 station 需要更新");
-  refusal = status(400, { error: "还没有可以发布的消息" });
-  call(core, ui, 5, "chat.publishPreview", { station: "ws/st", thread: 7 });
-  await host.settle();
-  assert.equal(answerOf(host, values, 5).error.message, "还没有可以发布的消息");
+  const answered = answerOf(host, values, 3).ok;
+  assert.equal(answered.upto, 3);
+  assert.deepEqual(answered.list.map((m: J) => [m.seq, m.text]), [[1, "部署一下"], [2, "key: [已隐藏]"], [3, "好了"]]);
+  assert.deepEqual(answered.messages.map((m: J) => [m.n, m.hidden]), [[1, 0], [2, 1], [3, 0]]);
+  assert.equal(answered.messages[1].hiddenText, "已隐藏 1 处");
+  assert.deepEqual(answered.files.map((f: J) => [f.k, f.n, f.file.path]), [["f0", 2, "/w/uploads/a.png"]]);
+  assert.equal(answered.hidden, 1);
+  assert.deepEqual(asked(host, "/threads/7/publish"), []);
+  release();
   core.close();
 });
 
 test("a_previews_messages_are_the_chats_as_its_page_draws_them_cards_and_the_viewers_own_included", async () => {
-  const { host, core } = await setUp();
-  let views = true;
-  stationReplies(host, (req) => {
-    if (!(req.method === "POST" && req.url === `${ORIGIN}/admin/api/threads/7/publish/preview`)) return undefined;
-    const entries = [
-      { kind: "message", n: 3, at: 3, ts: "t3", thread: 7, authorKind: "person", author: "a@x.com", authorName: "安", text: "key: [已隐藏]", attachments: [], quotes: [] },
-      { kind: "message", n: 4, at: 4, ts: "t4", thread: 7, authorKind: "agent", author: "s-1", authorModel: "claude-opus-4-1", authorRuntime: "claude", text: "申请使用「Axiom」", attachments: [], quotes: [],
-        card: { type: "options", options: [], vault: { request: "r1", name: "Axiom", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -H \"Authorization: Bearer [已隐藏]\"" } } },
-      { kind: "message", n: 5, at: 5, ts: "t5", thread: 7, authorKind: "agent", author: "s-1", text: "**好了**", attachments: [], quotes: [] },
-      // An edit of the agent's words since, and its request's card restated with how it ended: as the chat shows them.
-      { kind: "edit", n: 6, target: 5, at: 6, thread: 7, authorKind: "agent", author: "s-1", text: "**都好了**", attachments: [], quotes: [] },
-      { kind: "edit", n: 7, target: 4, at: 7, thread: 7, authorKind: "agent", author: "s-1", text: "申请使用「Axiom」", attachments: [], quotes: [],
-        card: { type: "options", options: [], vault: { request: "r1", name: "Axiom", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -H \"Authorization: Bearer [已隐藏]\"", outcome: { status: "granted", scope: "chat" } } } },
-    ];
-    return {
-      upto: 5, title: "部署",
-      entries: [{ n: 3, at: 3, authorKind: "person", author: "安", text: "key: [已隐藏]", files: [], person: "a@x.com" }],
-      redacted: [{ n: 3, count: 1 }],
-      files: [],
-      ...(views ? { views: { entries, hidden: [{ n: 3, count: 1 }, { n: 4, count: 1 }] } } : {}),
-    };
-  });
-  const ui = core.connect();
-  const values = new Map<number, unknown>();
-  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
-  await host.settle();
+  const { host, core, ui, values } = await holding([
+    message(3, "person", "key: sk-ant-abcdefghijklmnopqrstuvwx"),
+    message(4, "agent", "申请使用「Axiom」", { authorModel: "claude-opus-4-1", authorRuntime: "claude",
+      card: { type: "options", options: [], vault: { request: "r1", name: "Axiom", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -H \"Authorization: Bearer abcdefghijklmnopqrstuvwxyz\"" } } }),
+    message(5, "agent", "**好了**"),
+    // An edit of the agent's words since, and its request's card restated with how it ended: as the chat shows them.
+    { kind: "edit", n: 6, target: 5, at: 6, thread: 7, authorKind: "agent", author: "k1", text: "**都好了**", attachments: [], quotes: [] },
+    { kind: "edit", n: 7, target: 4, at: 7, thread: 7, authorKind: "agent", author: "k1", text: "申请使用「Axiom」", attachments: [], quotes: [],
+      card: { type: "options", options: [], vault: { request: "r1", name: "Axiom", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -H \"Authorization: Bearer abcdefghijklmnopqrstuvwxyz\"", outcome: { status: "granted", scope: "chat" } } } },
+  ]);
   call(core, ui, 2, "chat.publishPreview", { station: "ws/st", thread: 7 });
   await host.settle();
   const answered = answerOf(host, values, 2).ok;
@@ -233,12 +216,6 @@ test("a_previews_messages_are_the_chats_as_its_page_draws_them_cards_and_the_vie
   assert.deepEqual([list[1].card.vaultAsk.status, list[1].card.vaultAsk.scope], ["granted", "chat"], "how it ended, as the chat says it");
   assert.ok(list[0].time.createdAt.ago, "its time in words");
   assert.equal(answered.hidden, 2);
-
-  // A station from before it gave them: drawn of the snapshot's words, the viewer's own told by their address.
-  views = false;
-  call(core, ui, 3, "chat.publishPreview", { station: "ws/st", thread: 7 });
-  await host.settle();
-  assert.deepEqual(answerOf(host, values, 3).ok.list.map((m: J) => [m.seq, m.mine, m.text]), [[3, true, "key: [已隐藏]"]]);
   core.close();
 });
 
@@ -255,34 +232,14 @@ test("a_turn_is_the_persons_words_that_began_it_and_all_said_after_them_until_a_
 });
 
 test("a_turns_preview_holds_its_messages_their_attachments_and_edits_alone", async () => {
-  const { host, core } = await setUp();
-  stationReplies(host, (req) => {
-    if (!(req.method === "POST" && req.url === `${ORIGIN}/admin/api/threads/7/publish/preview`)) return undefined;
-    const message = (n: number, authorKind: string, text: string) => ({ kind: "message", n, at: n, ts: `t${n}`, thread: 7, authorKind, author: authorKind === "person" ? "a@x.com" : "s-1", text, attachments: [], quotes: [] });
-    return {
-      upto: 5, title: "部署",
-      entries: [
-        { n: 2, at: 2, authorKind: "person", author: "安", text: "先查日志", files: [] },
-        { n: 3, at: 3, authorKind: "person", author: "安", text: "key: [已隐藏]", files: [] },
-        { n: 4, at: 4, authorKind: "agent", author: "Claude", text: "好了", files: ["f0"] },
-        { n: 5, at: 5, authorKind: "person", author: "安", text: "谢谢", files: ["f1"] },
-      ],
-      redacted: [{ n: 3, count: 1 }],
-      files: [
-        { k: "f0", name: "a.png", size: 1, type: "image/png", n: 4, path: "/w/uploads/a.png", owner: "s-1" },
-        { k: "f1", name: "b.png", size: 1, type: "image/png", n: 5, path: "/w/uploads/b.png", owner: "s-1" },
-      ],
-      views: {
-        entries: [message(2, "person", "先查日志"), message(3, "person", "key: [已隐藏]"), message(4, "agent", "好"),
-          { kind: "edit", n: 6, target: 4, at: 6, thread: 7, authorKind: "agent", author: "s-1", text: "好了", attachments: [], quotes: [] }, message(5, "person", "谢谢")],
-        hidden: [{ n: 3, count: 1 }],
-      },
-    };
-  });
-  const ui = core.connect();
-  const values = new Map<number, unknown>();
-  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
-  await host.settle();
+  const png = (name: string) => ({ name, path: `/w/uploads/${name}`, size: 1 });
+  const { host, core, ui, values } = await holding([
+    message(2, "person", "先查日志"),
+    message(3, "person", "key: sk-ant-abcdefghijklmnopqrstuvwx"),
+    message(4, "agent", "好", { attachments: [png("a.png")] }),
+    message(5, "person", "谢谢", { attachments: [png("b.png")] }),
+    { kind: "edit", n: 6, target: 4, at: 6, thread: 7, authorKind: "agent", author: "k1", text: "好了", attachments: [png("a.png")], quotes: [] },
+  ]);
   call(core, ui, 2, "chat.publishPreview", { station: "ws/st", thread: 7, turn: 4 });
   await host.settle();
   const answered = answerOf(host, values, 2).ok;
@@ -291,8 +248,6 @@ test("a_turns_preview_holds_its_messages_their_attachments_and_edits_alone", asy
   assert.deepEqual(answered.messages.map((m: J) => m.n), [2, 3, 4]);
   assert.deepEqual(answered.files.map((f: J) => f.k), ["f0"]);
   assert.equal(answered.hidden, 1);
-  // The station is asked for the chat as ever: the turn is cut out of it here.
-  assert.deepEqual(asked(host, "/threads/7/publish").map((r) => r.body), [{ names: { "a@x.com": "安", "b@x.com": "Bo" } }]);
   core.close();
 });
 

@@ -237,13 +237,15 @@ echo "You are now logged in as [a@x.com]."
 test("Devin's sign-in (env and its variables before it, a page longer than the terminal is wide, then a masked field read key by key): named devin, the whole page given, and a field on the card once its agent says so", { skip: skipped }, async () => {
   const m = machine();
   // As Devin draws it: the line broken at the terminal's width by the program, the code read in raw mode with no echo,
-  // a dot drawn for each key.
+  // a dot drawn for each key. Raw before the field is drawn, as a program reading keys is: switched after, the code
+  // typed once the field showed could reach the terminal still in line mode, its Enter turned into a newline the field
+  // never ends on (a station run waited minutes on it).
   script(join(m.bin, "fakedevin"), `#!/usr/bin/env node
 const out = (s) => process.stdout.write(s);
 const line = ${JSON.stringify(`Visit ${DEVIN_PAGE} to sign in, then copy the code and paste it below.`)};
 const cols = Number(process.env.COLUMNS) || 80;
-out(line.slice(0, cols) + "\\r\\n" + line.slice(cols) + "\\r\\n\\r\\n Code:\\r\\n ❭ " + "•".repeat(42) + "\\r\\n ↵ submit · esc cancel\\u001b[1A\\r\\u001b[3C");
 process.stdin.setRawMode(true);
+out(line.slice(0, cols) + "\\r\\n" + line.slice(cols) + "\\r\\n\\r\\n Code:\\r\\n ❭ " + "•".repeat(42) + "\\r\\n ↵ submit · esc cancel\\u001b[1A\\r\\u001b[3C");
 let code = "";
 process.stdin.on("data", (d) => {
   for (const c of d.toString()) {

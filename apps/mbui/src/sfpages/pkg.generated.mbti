@@ -75,6 +75,8 @@ pub fn chat_list(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, Arr
 
 pub fn chat_mark(@ui.Ctx, String) -> Int32
 
+pub fn chat_menu_of(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?]
+
 pub fn chat_messages_sample(@ui.Ctx, Double) -> Unit
 
 pub let chat_narrow_w : Double
@@ -93,7 +95,7 @@ pub let coming_after_ms : Double
 
 pub let coming_in_ms : Double
 
-pub fn completion_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn completion_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer, bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit) -> Unit
 
 pub fn composer(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, ComposerSpec, (@sfbase.Writing) -> Unit, place? : ComposerPlace) -> Unit
 
@@ -361,7 +363,7 @@ pub fn no_workspace(@ui.Ctx, @sfbase.Source, Json?, () -> Unit) -> Unit
 
 pub fn no_workspace_node(@view.View, @sfbase.Source, () -> Json?, () -> Unit) -> @view.View
 
-pub fn notify_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn notify_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn offered_image() -> String
 
@@ -512,7 +514,6 @@ pub let row_last : @ui.Style
 pub fn row_mark(@ui.Ctx, String, String) -> Unit
 
 pub let row_more : @ui.Style
-
 
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
 

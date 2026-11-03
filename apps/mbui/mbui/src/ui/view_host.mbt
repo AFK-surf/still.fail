@@ -392,6 +392,7 @@ fn view_forget() -> Unit {
   view_held.val = None
   view_nothing_down.val = None
   view_down.val = None
+  tree_finger_off()
   old_focus_shown.val = 0
   old_show_due.val = None
   view_handed.val = None
@@ -1091,8 +1092,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       unseen()
       return
     }
-    // (its edge after what it holds, where it holds something drawn: border_over's)
-    let edge_after = c.edge.0 > 0.0 && (c.edge.1 & 0xFFL) != 0L && tree.holds_drawn(c.id)
+    // (its edge after what it holds, where it holds something drawn: border_over's, a clear one too: its ground inside
+    // it, its band left clear, as an old view's box with a border of no colour)
+    let edge_after = c.edge.0 > 0.0 && tree.holds_drawn(c.id)
     let block = match view_blocks.get(c.id) {
       // (made as glass was drawn then: solid or not; a picture for the pixels it is drawn at now; its edge where it was)
       Some(b) if (c.glass is None || b.solid == glass_paint.solid) &&
@@ -1361,7 +1363,8 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   // (where its edge is drawn after what it holds: its ground stops at the edge's inside, the edge's band left clear, as
   // an old view's box with a border over what it holds draws its ground (scene.mbt's border_over))
   let mut ring_at = -1
-  if edged && edge_after {
+  // (a clear edge too, as a border of no colour: its band left clear, its ring drawn with no colour)
+  if ew > 0.0 && edge_after {
     if (ground_c & 0xFFL) != 0L {
       self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, ground_c, ew, 0L, 1.0)
       each()
@@ -1923,6 +1926,13 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     _ if kind == 0 || kind >= 4 => view_nothing_down.val = None
     _ => ()
   }
+  // (a finger held on words of the tree's to pick them: its hold's moment set going as it goes down, called off as it
+  // moves past the slop, goes or another comes, tree_finger_down)
+  match (kind, view_down.val) {
+    (1, Some((x0, y0, _, _))) if (x - x0).abs() <= touch_slop() && (y - y0).abs() <= touch_slop() => ()
+    (0, _) => ()
+    _ => tree_finger_off()
+  }
   // (what the old frame put over all of it at its root (its overlays) is painted over the tree, whatever it draws:
   // what it takes there, a press or a pointer's move with none held, is its own before anything of the tree's under it)
   let over = (kind == 0 || (kind == 1 && view_held.val is None)) &&
@@ -1983,11 +1993,21 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     }
     // (a handle of the focused field of the tree's under it (Android's), before what is under it: that field's)
     (0, _) if button != 2 && tree_field_handle_down(x, y, at) => true
+    // (a handle of words a finger picked with the pointer, the tree's or an old view's, over everything: the old frame's,
+    // which moves that end, finger_select.mbt)
+    (0, _) if button != 2 && finger_end_at(x, y) => {
+      view_held.val = Some(Old(-1, None))
+      view_input_went(-1)
+      false
+    }
     (0, _) => {
       // (a press of the primary button, wherever on the tree: words of its picked with the pointer let go, as an old
       // view's page's are by a press elsewhere (Ctx::select_press); on words to pick, picked anew from there below)
-      if button != 2 && tree_picking() {
+      if button != 2 && tree_picking() && !picked.finger {
         select_none()
+      }
+      if button != 2 {
+        tree_finger_down(tree, x, y, at)
       }
       match tree.target_at(x, y) {
         // (held by a node of the tree's: the finger its, each event at its moment)
@@ -2195,6 +2215,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   }
   if tapped.val {
     tree.tapped(at)
+    // (words a finger picked let go by a tap anywhere else, as an old view's tap lets them go: finger_select.mbt)
+    if picked.finger {
+      select_none()
+    }
   }
   took
 }

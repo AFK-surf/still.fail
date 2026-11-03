@@ -114,7 +114,20 @@ running() {
 below() { for c in $(pgrep -P "$1" 2>/dev/null); do echo "$c"; below "$c"; done; }
 open_tests() {
   for p in $(below $$); do ps -o etime= -o args= -p "$p" 2>/dev/null; done | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") == 1 { for (i = 2; i <= NF; i++) if ($i ~ /\.test\.(ts|mts|mjs|js)$/) print "  ◦ " $1 " " $i }'
+  # Each of them asked which of its tests runs, or what it still has open (station/test/setup-env.mjs), and the
+  # processes under it: the file alone did not say which test hung (41597210040, test/sandbox.test.ts).
+  hung=""
+  # (One file each: the runner above them names them all.)
+  for p in $(below $$); do ps -o args= -p "$p" 2>/dev/null | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") != 1 { exit 1 }' && kill -USR2 "$p" 2>/dev/null && hung="$hung $p"; done
+  [ -n "$hung" ] || return 0
+  sleep 1
+  for p in $hung; do
+    sed 's/^/    /' "$STILLFAIL_TEST_HUNG/$p" 2>/dev/null
+    for c in $(below "$p"); do ps -o pid= -o etime= -o args= -p "$c" 2>/dev/null | cut -c1-200 | sed 's/^/      under it: /'; done
+  done
 }
+export STILLFAIL_TEST_HUNG="$tmp/hung"
+mkdir -p "$STILLFAIL_TEST_HUNG"
 trap 'echo "stopped; still running:"; running tail; open_tests; exit 1' INT TERM
 # Says each step, in order, as it is done; every minute spent waiting, the ones still running.
 report() {

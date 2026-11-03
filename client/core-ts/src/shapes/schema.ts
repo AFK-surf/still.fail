@@ -334,7 +334,7 @@ export const SHAPES: Record<string, Shape> = {
     ["scope", opt("String"), { doc: "Granted: once | hour | chat." }],
     ["save", opt("VaultSave"), { doc: "A request to keep a secret (secret_save) rather than use one: approved, it is kept (granted)." }],
     ["station", opt("String"), { doc: "Another station of the workspace its commands run on (a secret to keep: the one its command read it on), by name." }],
-    ["answer", opt("String"), { doc: "How it is answered on this device, from the vault as the core holds it (views/vault.ts askAnswers): approve\n(允许 / 存入), setUp (a secret to keep while this device's vault is not on: 开启密钥库 first), elsewhere (approved only in an\napp that keeps keys). The chat's cards; absent on a core from before." }],
+    ["answer", opt("String"), { doc: "How it is answered on this device, from the vault as the core holds it (views/vault.ts askAnswers): approve\n(允许 / 存入), setUp (a secret to keep while this device's vault is not on: 开启密钥库 first), elsewhere (approved only in an\napp that keeps keys), notHere (a secret to keep not sealed to this device: approved on another, VaultRequest `notHere`). The chat's cards; absent on a core from before." }],
     ["lasts", opt("String"), { doc: "With answer approve, a use: the longest it may be given for (once | hour | chat)." }],
   ], { doc: "An agent's request to use a vault item, or to keep one, as its card in the chat says it (station/src/vault/secrets.ts)." }),
   VaultSave: struct([
@@ -859,6 +859,7 @@ export const SHAPES: Record<string, Shape> = {
     ["elevation", opt("StationElevation"), { doc: "Whether it runs as the machine's administrator (a Windows station only; none from one older than it, which\nthen shows nothing)." }],
     ["outflowGrants", opt("i64"), { client: opt("I54"), doc: "How many programs of its machine hold or ask for a grant of its data (docs/data-outflow.md): its page reads\nthem (`outflowGrants`) only when there are some. None from a station older than them." }],
     ["outflowAnswers", opt("bool"), { doc: "The viewer answers those asking (an owner or admin of its home workspace); none from a station older than\nthat." }],
+    ["outflowTailcat", opt("OutflowTailcat"), { doc: "Its Tailcat link, which lets programs of other machines ask for its data (docs/data-outflow.md): for an\nadmin of its home workspace only. None for others, or from a station older than it." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
   StationElevation: struct([
     ["on", "bool", { doc: "Where its switch stands: the setting, or what a change under way goes to (`elevation.set`)." }],
@@ -1628,7 +1629,8 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A new device met face to face, showing a code of this one's to type there (views/pair.ts)." }),
   LockPromptsView: struct([
     ["pairing", vec("LockPairing"), { doc: "The new devices showing this one's code now, wherever the person is." }],
-  ], { doc: "What waits on this device to approve new ones face to face (the `lockPrompts` topic; views/pair.ts)." }),
+    ["asks", vec("VaultKeyAsk"), { default: true, doc: "The members' devices set up that wait on this one for a vault's key, the latest asking first, wherever the person is; none put away (views/vault.ts `vaultAsks`; none from a core of before)." }],
+  ], { doc: "What waits on this device from new devices: to approve them face to face (views/pair.ts), to give them a vault's key (the `lockPrompts` topic)." }),
   LockPair: struct([
     ["state", "String", { doc: "`finding` (dialling the person's trusted devices), `code` (one shows a code: type it), `checking`,\n`wrong` (that code was not it), `none` (no trusted device answered), `failed` (`error`), `done`." }],
     ["devices", "u32", { doc: "How many trusted devices show a code now." }],
@@ -1717,6 +1719,7 @@ export const SHAPES: Record<string, Shape> = {
     ["hosts", vec("String"), { said: true }],
     ["at", "i64", { client: "I54" }],
     ["save", opt("VaultSave"), { doc: "A request to keep a secret rather than use one: `vault.approve` keeps it (its scope unused)." }],
+    ["notHere", opt("bool"), { doc: "A secret to keep its station sealed to the person's devices set up then, this device not among them: approved on one of those, or here once the station has this device's certificate (the core brings it as the station is read) and seals it again." }],
     ["howText", "String", { said: true, default: true, doc: "How it would be given, in a line (代理 · 限 api.github.com)." }],
   ], { doc: "An agent's request to use an item, or to keep one, waiting on the viewer (`vault.approve`, `vault.deny`)." }),
   VaultRefusal: struct([
@@ -1737,6 +1740,18 @@ export const SHAPES: Record<string, Shape> = {
     ["statusText", "String", { default: true, doc: "What the settings say of it at their row's end: how many wait to be approved, else how many items, else 未开启." }],
     ["statusBad", "bool", { default: true, doc: "`statusText` says some wait to be approved." }],
   ], { doc: "The workspace's vaults as the viewer sees them (the `vaults` topic; client/core-ts/src/views/vault.ts, docs/vault.md)." }),
+  VaultKeyAsk: struct([
+    ["workspace", "String"],
+    ["workspaceName", "String", { said: true }],
+    ["vault", "String", { doc: "The vault whose key it lacks, one of the viewer's own that this device holds the key to." }],
+    ["vaultName", "String", { said: true }],
+    ["device", "String", { doc: "The device set up without the key (its id in the lock): what `vault.addDevice {vault, device}` gives it to, and `vault.hidePrompt {device}` puts away." }],
+    ["deviceText", "String", { said: true, doc: "Its name as people know it (LockDevice `fullText`)." }],
+    ["at", "i64", { client: "I54", doc: "When it was set up, or last asked (its certificate's date, unix seconds)." }],
+    ["atText", "String", { said: true, doc: "That, in words (3 分钟前)." }],
+    ["own", "bool", { doc: "Its person put it in the lock themselves (a device of theirs signed its entry). Else an admin did, under their name: it is given the key only as the person asks here (not by itself as its certificate comes), and the prompt says who put it in." }],
+    ["byText", opt("String"), { said: true, doc: "Not `own`: who put it in the lock, by name." }],
+  ], { doc: "A member's device set up that waits on this one for a vault's key (views/vault.ts `vaultAsks`, LockPromptsView `asks`)." }),
   VaultItemRow: struct([
     ["id", "String"],
     ["version", "u32"],
@@ -2342,6 +2357,13 @@ export const SHAPES: Record<string, Shape> = {
     ["afreshWhenCold", "bool", { doc: "A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its\ncontext cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`)." }],
     ["afreshAbove", opt("f64"), { doc: "The estimated USD cost of rereading a cold context at or above which the station starts it afresh.\nAbsent on an older station, whose on/off setting applies regardless of cost." }],
   ], { doc: "How a station goes on with a session whose prompt cache is over (`Overview.context`)." }),
+  OutflowTailcat: struct([
+    ["on", "bool", { doc: "An admin turned it on (`outflow.tailcat`)." }],
+    ["state", "String", { doc: "off | starting (getting tailcat, its key or its address) | running | failed (why in `error`)" }],
+    ["address", opt("String"), { doc: "Running: the Tailcat address to give the program on the other machine." }],
+    ["port", opt("i64"), { client: opt("I54"), doc: "Running: the port to ask at, at that address." }],
+    ["error", opt("String"), { doc: "Failed: why." }],
+  ], { doc: "A station's Tailcat link of data outflow (`Overview.outflowTailcat`)." }),
   StationDiagnostics: struct([
     ["logs", "bool", { doc: "It sends its log to still.fail, scrubbed (no paths under home directories, emails, keys, quoted text or what\npeople wrote), for problems to be found from our side (`diagnostics.setLogs`)." }],
   ], { doc: "What a station sends still.fail to find its problems by (`Overview.diagnostics`)." }),
@@ -3376,7 +3398,7 @@ export const SHAPES: Record<string, Shape> = {
     ["files", vec("PublishFile"), { doc: "Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`; a `list` message's by its `n`\nand `file.path`)." }],
     ["hidden", "u32", { doc: "How many things in all were hidden as looking secret." }],
     ["hiddenText", opt("String"), { doc: "That in words (隐藏了 3 处); absent when none." }],
-  ], { doc: "What a snapshot of a chat would hold now (`chat.publishPreview`): nothing is kept until it is published." }),
+  ], { doc: "What a picture of a chat holds now (`chat.publishPreview`), made of what the device holds of it: nothing is asked of its station or kept." }),
   PublishMessage: struct([
     ["n", "i64", { client: "I54" }],
     ["author", "String", { doc: "As the snapshot names them (no emails)." }],

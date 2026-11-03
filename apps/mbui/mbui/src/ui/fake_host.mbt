@@ -615,8 +615,12 @@ impl @hostapi.Host for FakeHost with pw_run(_, args) {
 }
 
 ///|
+/// Whether the runs of `op` are still under way in a test (none has ended: 1Password slow to answer).
+pub let fake_op_pending : Ref[Bool] = Ref(false)
+
+///|
 impl @hostapi.Host for FakeHost with pw_out(_, id) {
-  guard fake_op.val is Some(answer) && id >= 1 && id <= fake_op_runs.length() else { return "" }
+  guard fake_op.val is Some(answer) && id >= 1 && id <= fake_op_runs.length() && !fake_op_pending.val else { return "" }
   let (code, out, err) = answer(fake_op_runs[id - 1])
   "\{code}\u{1f}\{out}\u{1f}\{err}\u{1f}"
 }

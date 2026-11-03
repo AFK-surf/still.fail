@@ -18,7 +18,7 @@ import { type Identity, type OutflowGrants, type Reach, SCOPES, type Scope, type
 export type Reads = (op: string, args: unknown, lang: Lang) => Promise<string>;
 
 /// Who is at the other end of a connection, as the system says it; null when it cannot say.
-export type Identify = (socket: Socket) => Promise<Identity | null>;
+export type Identify = (socket: Socket, req?: IncomingMessage) => Promise<Identity | null>;
 
 /// A station of the workspace as a program granted it is told it: `here` is this one.
 export type StationEntry = { id: string; name: string; here: boolean };
@@ -100,6 +100,8 @@ export class OutflowServer {
   #server: Server | null = null;
   /// The socket this process listens on, which `path` links to (see `listen`).
   #own: string | null = null;
+  /// The TCP servers of `listenTcp` open now.
+  readonly #tcp = new Set<Server>();
   /// The requests being answered, waited for as it closes (a window asking is called off: their sockets close).
   readonly #answering = new Set<Promise<void>>();
 
@@ -117,18 +119,7 @@ export class OutflowServer {
     this.#removeLeftovers(dir, stem);
     const own = join(dir, `${stem}-${process.pid}-${randomBytes(4).toString("hex")}.sock`);
     this.#own = own;
-    const server = createServer((req, res) => {
-      const answering = this.#answer(req, res)
-        .catch((e) => {
-          if (e instanceof Refused) send(res, e.status, { error: e.message, ...e.more });
-          else {
-            log.warn("outflow", "a request was not answered", { error: (e as Error).message });
-            send(res, 500, { error: "the station could not answer" });
-          }
-        })
-        .finally(() => this.#answering.delete(answering));
-      this.#answering.add(answering);
-    });
+    const server = this.#serve(this.#o.identify);
     this.#server = server;
     return new Promise((resolve, reject) => {
       server.once("error", reject);
@@ -141,6 +132,42 @@ export class OutflowServer {
     });
   }
 
+  /// The same requests answered on a TCP port of this machine's loopback (port 0: one the system picks), each caller
+  /// as `identify` says it: the way in a tunnel such as Tailcat forwards to (tailcat.ts). Resolved with the port.
+  listenTcp(port: number, identify: Identify): Promise<{ port: number; close: () => Promise<void> }> {
+    const server = this.#serve(identify);
+    this.#tcp.add(server);
+    const close = async () => {
+      if (!this.#tcp.delete(server)) return;
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    };
+    return new Promise((resolve, reject) => {
+      server.once("error", (e) => (this.#tcp.delete(server), reject(e)));
+      server.listen(port, "127.0.0.1", () => {
+        server.removeAllListeners("error");
+        const at = server.address();
+        resolve({ port: typeof at === "object" && at !== null ? at.port : port, close });
+      });
+    });
+  }
+
+  /// A server answering each request, its caller as `identify` says it.
+  #serve(identify: Identify): Server {
+    return createServer((req, res) => {
+      const answering = this.#answer(req, res, identify)
+        .catch((e) => {
+          if (e instanceof Refused) send(res, e.status, { error: e.message, ...e.more });
+          else {
+            log.warn("outflow", "a request was not answered", { error: (e as Error).message });
+            send(res, 500, { error: "the station could not answer" });
+          }
+        })
+        .finally(() => this.#answering.delete(answering));
+      this.#answering.add(answering);
+    });
+  }
+
   /// Closed, once what it was answering is answered.
   async close(): Promise<void> {
     const server = this.#server;
@@ -148,6 +175,11 @@ export class OutflowServer {
     if (server) {
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+    for (const tcp of [...this.#tcp]) {
+      this.#tcp.delete(tcp);
+      tcp.closeAllConnections();
+      await new Promise<void>((resolve) => tcp.close(() => resolve()));
     }
     // The link goes only while it is still this process's: the next process's stays.
     const own = this.#own;
@@ -202,25 +234,29 @@ export class OutflowServer {
     }
   }
 
-  async #answer(req: IncomingMessage, res: ServerResponse) {
+  async #answer(req: IncomingMessage, res: ServerResponse, identify: Identify) {
     const url = new URL(req.url ?? "/", "http://outflow");
-    if (req.method === "POST" && url.pathname === "/v1/request") return this.#request(req, res);
-    if (req.method === "GET" && ["/v1/stations", "/v1/usage", "/v1/chats", "/v1/messages"].includes(url.pathname)) return this.#read(req, res, url);
+    if (req.method === "POST" && url.pathname === "/v1/request") return this.#request(req, res, identify);
+    if (req.method === "GET" && ["/v1/stations", "/v1/usage", "/v1/chats", "/v1/messages"].includes(url.pathname)) {
+      // On a way in other than the socket, a read too comes by that way's own proof (a link's code).
+      if (identify !== this.#o.identify) await this.#caller(req, identify);
+      return this.#read(req, res, url);
+    }
     throw new Refused(404, "no such request");
   }
 
-  async #caller(req: IncomingMessage): Promise<Identity> {
-    const identity = await this.#o.identify(req.socket);
+  async #caller(req: IncomingMessage, identify: Identify): Promise<Identity> {
+    const identity = await identify(req.socket, req);
     if (identity === null) throw new Refused(403, "the station cannot tell which program this is");
     return identity;
   }
 
-  async #request(req: IncomingMessage, res: ServerResponse) {
+  async #request(req: IncomingMessage, res: ServerResponse, identify: Identify) {
     const given = await body(req);
     const asked = Array.isArray(given?.scopes) ? [...new Set(given.scopes)] : [];
     if (asked.length === 0 || !asked.every((s): s is Scope => SCOPES.includes(s as Scope))) throw new Refused(400, `scopes are some of ${SCOPES.join(", ")}`);
     const reach: Reach = given?.workspace === true ? "workspace" : "station";
-    const caller = await this.#caller(req);
+    const caller = await this.#caller(req, identify);
     // What it already holds is given at once: a program asks once, not for each read.
     const held = this.#o.grants.held(caller, asked, reach);
     if (held !== null) return send(res, 200, { token: held.token, grant: held.grant.id, scopes: held.grant.scopes, reach: held.grant.reach });

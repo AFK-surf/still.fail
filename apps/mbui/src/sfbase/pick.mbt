@@ -319,8 +319,10 @@ pub fn pickable(
     pk.role = role
     pk.share = share
     pk.link = link
-    // (picked anew, its metadata said first: told once)
+    // (picked anew, its metadata said first: told once); what a finger held elsewhere picked let go (@ui's: one thing
+    // picked at a time)
     pick_told_new(ts, pk.sel.a, pk.sel.b)
+    c.selection_clear()
     // the press is the pick's: the list holds still, lifting it taps nothing
     c.take_press()
     let at = press.frame
@@ -365,6 +367,11 @@ pub fn pick_layer(
     return
   }
   if pk.ts == "" {
+    return
+  }
+  // (words held elsewhere since, picked as @ui picks them: this let go, one thing picked at a time)
+  if c.selection_by_finger() {
+    pick_clear()
     return
   }
   let words = match c.words_of(pk.sel.key) {

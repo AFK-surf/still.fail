@@ -211,6 +211,9 @@ function fakeStation() {
         if (copy && prev && body.seq <= prev.seq) return { vault: prev };
         if (!copy && body.seq !== (prev ? prev.seq + 1 : 0)) return status(409, { error: "seq", code: "vault_conflict", vault: prev ?? null });
         if (!signedOk(body, TAG.vault)) return status(400, { error: "signature", code: "vault_invalid" });
+        // (each key's certificate as its device signed it, as the station checks: a field added breaks it; the
+        // certificate as the core keeps it carries whose it is, which must not be sealed in, review of #3624)
+        for (const k of body.keys ?? []) if (!signedOk(k.cert, TAG.box) || "sub" in k.cert || "own" in k.cert) return status(400, { error: "a key's certificate", code: "vault_invalid" });
         vaults.set(body.id, body);
         return { vault: body };
       }
@@ -329,7 +332,18 @@ async function rig(web = false, two = false, more: Answers = {}) {
       return values.get(n) as any;
     };
   };
-  return { ...s, st, st2, phone, other, lock, ask, watch, take, putLock: () => s.core.inner.data.put("lock", "ws", lock) };
+  return { ...s, st, st2, phone, other, lock, me, ask, watch, take, putLock: () => s.core.inner.data.put("lock", "ws", lock) };
+}
+
+/// One more entry of the rig's lock, signed by `by` (this device's signer, the owner's, by default), the lock put in
+/// place anew: the core checks it again as it is next asked.
+function grow(r: Awaited<ReturnType<typeof rig>>, kind: string, body: unknown, by?: ReturnType<typeof key>): void {
+  const signer = by ?? { id: r.me.signer!.id, signBytes: (b: Uint8Array) => r.me.signer!.signBytes(b) };
+  const e = next("ws", r.lock.head, 3000 + r.lock.entries.length, kind, body);
+  const entry: Entry = { ...e, sig: { key: signer.id, alg: "Ed25519", sig: signer.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e))])) } };
+  r.lock.entries.push(entry);
+  r.lock.head = { seq: entry.seq, hash: entryHash(entry), genesis: r.lock.head.genesis };
+  r.putLock();
 }
 
 const fails = async (p: Promise<unknown>, code: string) => {
@@ -441,14 +455,17 @@ test("vault calls: another device keyed in by the owner, a device keyed back in 
   const forged = sign({ v: 1 as const, ws: "ws", device: "ef".repeat(32), box: boxPublic(fill(8)), at: 2000 }, TAG.box, key(fill(9)));
   r.push("vault-box", forged);
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
-  assert.equal(vaults().vaults[0].missing, 1);
-  assert.deepEqual(await r.ask("vault.addDevice", { vault: id }), { added: 1 });
+  // (given at once: the key is in hand here since the vault was made; 授权新设备 then finds none to give)
+  assert.equal(vaults().vaults[0].missing, 0);
+  assert.deepEqual(await r.ask("vault.addDevice", { vault: id }), { added: 0 });
   const v1 = r.st.vaults.get(id)!;
   assert.equal(v1.seq, 1);
   const phoneKey = v1.keys.find((k) => k.cert.device === r.phone.hex)!;
   assert.equal(openSeal(phoneBox, phoneKey.wrapped, keyContext("ws", id, 0)).length, 32);
   assert.equal(vaults().vaults[0].missing, 0);
-  // This device loses its box key (the app was installed anew): set up again, no new words (its person has them).
+  // This device loses its box key (the app was installed anew): set up again, no new words (its person has them). The
+  // vault's key locked away first: in hand still, it would be given to the new box key at once.
+  await r.ask("vault.lock", {});
   r.host.secure.delete(BOX_KEY);
   r.host.storage.delete(BOX_PUB);
   const again = await r.ask("vault.setup", {});
@@ -764,30 +781,95 @@ test("vault calls: a secret an agent asks the person to type in: what they typed
   r.core.close();
 });
 
-test("one vault of one's own: a device set up later makes none, and is given its key as soon as one of the owner's devices that has it unseals it", async () => {
+test("one vault of one's own: a device set up later makes none, and is given its key as soon as one of the owner's devices has it in hand: at once, or as it next unseals it; till then it waits on that device, which it may ask again", async () => {
   const r = await rig();
   r.putLock();
   const { made: id } = await r.ask("vault.setup", {});
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
-  // The phone sets itself up: no key to the vault yet.
+  const prompts = await r.watch(2, { topic: "lockPrompts" });
+  assert.deepEqual(prompts(), { pairing: [], asks: [] });
+  // The phone sets itself up: its certificate comes as the station tells it, and the key, unsealed here since the
+  // vault was made, is given to it at once (2026-11-03: it waited for the person to unseal the key for something
+  // else), the person asked nothing.
   const phoneBox = fill(7);
   const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(phoneBox), at: 2000 }, TAG.box, r.phone);
   r.st.boxes.set(r.phone.hex, phoneCert);
-  r.push("vault-box", phoneCert);
-  await r.host.time.pass(100);
-  assert.equal(vaults().vaults[0].missing, 1);
-  // Its key in hand here as the person writes into it (unsealed when it was made): the phone given its key with it,
-  // the person asked nothing more.
   const asked = r.host.secureAsked.length;
-  await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } } });
+  r.push("vault-box", phoneCert);
   await r.host.time.pass(500);
   r.take();
   assert.equal(r.host.secureAsked.length, asked);
   const v1 = r.st.vaults.get(id)!;
   assert.ok(signedOk(v1, TAG.vault));
   assert.equal(v1.seq, 1);
-  assert.equal(openSeal(phoneBox, v1.keys.find((k) => k.cert.device === r.phone.hex)!.wrapped, keyContext("ws", id, 0)).length, 32);
+  const phoneKey = v1.keys.find((k) => k.cert.device === r.phone.hex)!;
+  assert.equal(openSeal(phoneBox, phoneKey.wrapped, keyContext("ws", id, 0)).length, 32);
+  // (the certificate carried as the phone signed it: a station checks its signature, which a field more breaks)
+  assert.deepEqual(phoneKey.cert, phoneCert);
+  assert.ok(v1.keys.every((k) => signedOk(k.cert, TAG.box)));
   assert.equal(vaults().vaults[0].missing, 0);
+  // The phone's certificate published anew under the same key (`vault.ask`): nothing to change, no version written.
+  const { sig: _p, ...phoneRest } = phoneCert;
+  const phoneAgain = sign({ ...phoneRest, at: 2050 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneAgain);
+  r.push("vault-box", phoneAgain);
+  await r.host.time.pass(500);
+  r.take();
+  assert.equal(r.st.vaults.get(id)!.seq, 1, "the same key: no version written for it");
+  // The phone installed again, its box key kept and its signing key new (back in the lock under it): its fresh
+  // certificate takes the old one's place in the vault's keys, the key wrapped as it was (a station checks each
+  // certificate of a version against the lock).
+  const phone2 = key(fill(12));
+  grow(r, "device", { id: r.phone.hex, sub: "s1", kind: "app", label: "phone again", sign_key: phone2.id });
+  const phoneCert2 = sign({ ...phoneRest, at: 2060 }, TAG.box, phone2);
+  r.st.boxes.set(r.phone.hex, phoneCert2);
+  r.push("vault-box", phoneCert2);
+  await r.host.time.pass(500);
+  r.take();
+  const v2 = r.st.vaults.get(id)!;
+  assert.equal(v2.seq, 2);
+  assert.deepEqual(v2.keys.find((k) => k.cert.device === r.phone.hex), { cert: phoneCert2, wrapped: phoneKey.wrapped });
+  assert.equal(r.host.secureAsked.length, asked);
+  // The key locked away here; this person's other device set up: not given (no key in hand to give), and waiting on
+  // this device, wherever the person is (`lockPrompts` `asks`); the station fixture's phone is the owner's second device,
+  // `other` another member's (no member of this vault: it waits for nothing).
+  await r.ask("vault.lock", {});
+  const otherCert = sign({ v: 1 as const, ws: "ws", device: r.other.hex, box: boxPublic(fill(8)), at: 2100 }, TAG.box, r.other);
+  r.st.boxes.set(r.other.hex, otherCert);
+  r.push("vault-box", otherCert);
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual([vaults().vaults[0].missing, r.st.vaults.get(id)!.seq, prompts().asks.length], [0, 2, 0], "another member's device: no key of this vault for it");
+  // The phone installed anew with a new box key: no key, waiting on this device.
+  const phoneBox3 = fill(9);
+  const phoneCert3 = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(phoneBox3), at: 2200 }, TAG.box, phone2);
+  r.st.boxes.set(r.phone.hex, phoneCert3);
+  r.push("vault-box", phoneCert3);
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual([vaults().vaults[0].missing, r.st.vaults.get(id)!.seq], [1, 2]);
+  assert.equal(prompts().asks.length, 1);
+  const ask = prompts().asks[0];
+  assert.deepEqual([ask.workspace, ask.vault, ask.device, ask.deviceText, ask.at], ["ws", id, r.phone.hex, "phone again", 2200]);
+  // Put away (the one shown, by its date): shown no more, till the phone asks again (its certificate published anew,
+  // dated later).
+  await r.ask("vault.hidePrompt", { device: r.phone.hex, at: ask.at });
+  assert.equal(prompts().asks.length, 0);
+  const { sig: _q, ...phoneRest3 } = phoneCert3;
+  const phoneCert4 = sign({ ...phoneRest3, at: 2300 }, TAG.box, phone2);
+  r.st.boxes.set(r.phone.hex, phoneCert4);
+  r.push("vault-box", phoneCert4);
+  await r.host.time.pass(500);
+  r.take();
+  assert.equal(prompts().asks.length, 1);
+  // Given from the prompt (`vault.addDevice {vault, device}`): the key unsealed here (the person asked once), sealed
+  // to it; the prompt gone.
+  assert.deepEqual(await r.ask("vault.addDevice", { vault: id, device: r.phone.hex }), { added: 1 });
+  assert.equal(r.host.secureAsked.length, asked + 1);
+  const v3 = r.st.vaults.get(id)!;
+  assert.equal(v3.seq, 3);
+  assert.equal(openSeal(phoneBox3, v3.keys.find((k) => k.cert.device === r.phone.hex)!.wrapped, keyContext("ws", id, 0)).length, 32);
+  assert.deepEqual([vaults().vaults[0].missing, prompts().asks.length], [0, 0]);
 
   // This device installed anew: set up again, no key to the vault and no second one made; a secret to keep approved
   // here is refused (before the person is asked) till a device that has the key gives it.
@@ -796,6 +878,11 @@ test("one vault of one's own: a device set up later makes none, and is given its
   await r.ask("vault.lock", {});
   const again = await r.ask("vault.setup", {});
   assert.deepEqual([again.made, r.st.vaults.size], [null, 1]);
+  // Asking for the key (`vault.ask`): this device's certificate published anew, dated later, so that the owner's
+  // devices hearing of it give the key or prompt for it again.
+  const at = r.st.boxes.get("ab".repeat(32))!.at;
+  assert.deepEqual(await r.ask("vault.ask", {}), { asked: 1 });
+  assert.ok(r.st.boxes.get("ab".repeat(32))!.at > at);
   const box = r.st.boxes.get("ab".repeat(32))!.box;
   const rid = "r_k";
   const save: Request = {
@@ -805,10 +892,93 @@ test("one vault of one's own: a device set up later makes none, and is given its
   };
   r.st.requests.push(save);
   r.push("vault-request", save);
+  // One its station sealed to the phone alone (this device not set up there then): said on its row, approved elsewhere.
+  const elsewhere: Request = { ...save, id: "r_e", item: "i_01JAKEEP000000000000000ELS", sealed: [{ device: r.phone.hex, box: boxPublic(phoneBox3), secret: "x" }] };
+  r.st.requests.push(elsewhere);
+  r.push("vault-request", elsewhere);
   await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(vaults().requests.map((x: any) => [x.id, x.notHere]).sort((a: [string], b: [string]) => (a[0] < b[0] ? -1 : 1)), [["r_e", true], [rid, undefined]]);
   const before = r.host.secureAsked.length;
   await fails(r.ask("vault.approve", { request: rid, scope: "once" }), "vault_no_key");
   assert.deepEqual([r.host.secureAsked.length, r.st.vaults.size, r.st.items.has(save.item)], [before, 1, false]);
+  r.core.close();
+});
+
+test("certificates coming one upon another while a key is being given: given in turn, the key sealed to the last one's box key in the end", async () => {
+  // A certificate heard while the vault's next version was being written for the one before was dropped, and only
+  // the next event brought it (review of #3624): now each giving waits for the one under way, and reads anew.
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const [a, b] = [fill(7), fill(8)];
+  const certA = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(a), at: 2000 }, TAG.box, r.phone);
+  const certB = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(b), at: 2010 }, TAG.box, r.phone);
+  const asked = r.host.secureAsked.length;
+  r.st.boxes.set(r.phone.hex, certA);
+  r.push("vault-box", certA);
+  r.st.boxes.set(r.phone.hex, certB);
+  r.push("vault-box", certB);
+  await r.host.time.pass(1000);
+  r.take();
+  const v = r.st.vaults.get(id)!;
+  const k = v.keys.find((x) => x.cert.device === r.phone.hex)!;
+  assert.equal(k.cert.box, boxPublic(b), "the box key it has now");
+  assert.equal(openSeal(b, k.wrapped, keyContext("ws", id, 0)).length, 32);
+  assert.equal(r.host.secureAsked.length, asked);
+  r.core.close();
+});
+
+test("a device an admin put in the lock under the person's name is given no key by itself: it waits, saying who put it in, till the person gives it", async () => {
+  // An admin adds devices under any member's name with no code typed (lock-check.ts `device`): one under the owner's
+  // name, signing with a key of the admin's own, was given the vault's key as its certificate came (review of #3624).
+  // The lock does not tell it from one the admin approved for the person face to face, so it is not refused: given as
+  // the person asks, told who put it in.
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const prompts = await r.watch(2, { topic: "lockPrompts" });
+  grow(r, "member", { sub: "s2", email: "b@x.com", role: "admin" });
+  const evil = key(fill(13));
+  grow(r, "device", { id: evil.hex, sub: "s1", kind: "app", label: "iPhone", sign_key: evil.id }, r.other);
+  const evilCert = sign({ v: 1 as const, ws: "ws", device: evil.hex, box: boxPublic(fill(14)), at: 2000 }, TAG.box, evil);
+  r.st.boxes.set(evil.hex, evilCert);
+  r.push("vault-box", evilCert);
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual([r.st.vaults.get(id)!.seq, vaults().vaults[0].missing, prompts().asks.length], [0, 1, 1], "not given by itself; waiting");
+  assert.deepEqual([prompts().asks[0].own, prompts().asks[0].byText], [false, "s2"]);
+  // Given as the person asks (授权 on the prompt): the key sealed to it, the certificate as its device signed it.
+  assert.deepEqual(await r.ask("vault.addDevice", { vault: id, device: evil.hex }), { added: 1 });
+  const given = r.st.vaults.get(id)!.keys.find((k) => k.cert.device === evil.hex)!;
+  assert.ok(signedOk(given.cert, TAG.box), "the certificate carried as signed, nothing added to it");
+  assert.deepEqual(Object.keys(given.cert).sort(), ["at", "box", "device", "sig", "v", "ws"]);
+  assert.deepEqual([vaults().vaults[0].missing, prompts().asks.length], [0, 0]);
+  // The owner's own phone, added by themselves: given at once, as before.
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2001 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(r.st.vaults.get(id)!.keys.map((k) => k.cert.device).sort(), ["ab".repeat(32), evil.hex, r.phone.hex].sort());
+  for (const k of r.st.vaults.get(id)!.keys) assert.ok(signedOk(k.cert, TAG.box) && !("own" in k.cert) && !("sub" in k.cert), "each certificate as its device signed it");
+  r.core.close();
+});
+
+test("a station that lacks this device's certificate (one added since this device was set up) is brought it as it is read", async () => {
+  // A request a station made without it could be approved on no page of this device (2026-11-03: 「此申请提出时此设备
+  // 尚未开启密钥库」): the station seals what its agents ask to keep to the certificates it holds.
+  const r = await rig(false, true);
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  assert.deepEqual(r.st2.boxes.get("ab".repeat(32)), mine);
+  r.st2.boxes.delete("ab".repeat(32));
+  // The vaults page opened: every station read, the second given the certificate it lacks.
+  await r.watch(3, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  assert.deepEqual(r.st2.boxes.get("ab".repeat(32)), mine);
   r.core.close();
 });
 

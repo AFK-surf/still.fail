@@ -1878,7 +1878,7 @@ export interface VaultAsk {
 	/**
 	 * How it is answered on this device, from the vault as the core holds it (views/vault.ts askAnswers): approve
 	 * (允许 / 存入), setUp (a secret to keep while this device's vault is not on: 开启密钥库 first), elsewhere (approved only in an
-	 * app that keeps keys). The chat's cards; absent on a core from before.
+	 * app that keeps keys), notHere (a secret to keep not sealed to this device: approved on another, VaultRequest `notHere`). The chat's cards; absent on a core from before.
 	 */
 	answer?: string;
 	/** With answer approve, a use: the longest it may be given for (once | hour | chat). */
@@ -4913,10 +4913,33 @@ export interface LockPerson {
 	groups: LockGroup[];
 }
 
-/** What waits on this device to approve new ones face to face (the `lockPrompts` topic; views/pair.ts). */
+/** A member's device set up that waits on this one for a vault's key (views/vault.ts `vaultAsks`, LockPromptsView `asks`). */
+export interface VaultKeyAsk {
+	workspace: string;
+	workspaceName: string;
+	/** The vault whose key it lacks, one of the viewer's own that this device holds the key to. */
+	vault: string;
+	vaultName: string;
+	/** The device set up without the key (its id in the lock): what `vault.addDevice {vault, device}` gives it to, and `vault.hidePrompt {device}` puts away. */
+	device: string;
+	/** Its name as people know it (LockDevice `fullText`). */
+	deviceText: string;
+	/** When it was set up, or last asked (its certificate's date, unix seconds). */
+	at: number;
+	/** That, in words (3 分钟前). */
+	atText: string;
+	/** Its person put it in the lock themselves (a device of theirs signed its entry). Else an admin did, under their name: it is given the key only as the person asks here (not by itself as its certificate comes), and the prompt says who put it in. */
+	own: boolean;
+	/** Not `own`: who put it in the lock, by name. */
+	byText?: string;
+}
+
+/** What waits on this device from new devices: to approve them face to face (views/pair.ts), to give them a vault's key (the `lockPrompts` topic). */
 export interface LockPromptsView {
 	/** The new devices showing this one's code now, wherever the person is. */
 	pairing: LockPairing[];
+	/** The members' devices set up that wait on this one for a vault's key, the latest asking first, wherever the person is; none put away (views/vault.ts `vaultAsks`; none from a core of before). */
+	asks?: VaultKeyAsk[];
 }
 
 /** A station of the workspace and whether the lock protects it. */
@@ -5491,6 +5514,20 @@ export interface StationElevation {
 	canChange: boolean;
 }
 
+/** A station's Tailcat link of data outflow (`Overview.outflowTailcat`). */
+export interface OutflowTailcat {
+	/** An admin turned it on (`outflow.tailcat`). */
+	on: boolean;
+	/** off | starting (getting tailcat, its key or its address) | running | failed (why in `error`) */
+	state: string;
+	/** Running: the Tailcat address to give the program on the other machine. */
+	address?: string;
+	/** Running: the port to ask at, at that address. */
+	port?: number;
+	/** Failed: why. */
+	error?: string;
+}
+
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
 	automaticDecisions?: AutomaticDecisionView;
@@ -5573,6 +5610,11 @@ export interface Overview {
 	 * that.
 	 */
 	outflowAnswers?: boolean;
+	/**
+	 * Its Tailcat link, which lets programs of other machines ask for its data (docs/data-outflow.md): for an
+	 * admin of its home workspace only. None for others, or from a station older than it.
+	 */
+	outflowTailcat?: OutflowTailcat;
 }
 
 export interface StationProfileGroup {
@@ -6341,7 +6383,7 @@ export interface PublishMessage {
 	time?: Record<string, Stamp>;
 }
 
-/** What a snapshot of a chat would hold now (`chat.publishPreview`): nothing is kept until it is published. */
+/** What a picture of a chat holds now (`chat.publishPreview`), made of what the device holds of it: nothing is asked of its station or kept. */
 export interface PublishPreview {
 	/** The last message it holds: `chat.publish` takes it, so what is kept is what was seen. */
 	upto: number;
@@ -7458,6 +7500,8 @@ export interface VaultRequest {
 	at: number;
 	/** A request to keep a secret rather than use one: `vault.approve` keeps it (its scope unused). */
 	save?: VaultSave;
+	/** A secret to keep its station sealed to the person's devices set up then, this device not among them: approved on one of those, or here once the station has this device's certificate (the core brings it as the station is read) and seals it again. */
+	notHere?: boolean;
 	/** How it would be given, in a line (代理 · 限 api.github.com). */
 	howText?: string;
 }

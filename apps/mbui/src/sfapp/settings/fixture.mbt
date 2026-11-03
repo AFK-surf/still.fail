@@ -25,6 +25,10 @@ priv struct SettingsFixture {
   mut outflow : Bool
   /// what an admin answered the program asking (`outflow.answer`'s params)
   mut outflow_answer : Json?
+  /// Studio's Tailcat link as an admin sees it (its overview's `outflowTailcat`), as a test sets it; none: not shown
+  mut outflow_link : Json?
+  /// what an admin turned the link to (`outflow.tailcat`'s `on`)
+  mut outflow_link_set : Bool?
   /// a Windows station's running as administrator, as the core shows it (its overview's `elevation`), as a test sets
   /// it; none: not a Windows station
   mut elevation : Json?
@@ -62,6 +66,11 @@ priv struct SettingsFixture {
   mut pairing : Bool
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
   mut pair_ended : String
+  /// a device of lin's (Pixel 9) set up without the key to 林的库, waiting on this one for it (settings-vault-prompt),
+  /// until given it or put away
+  mut key_ask : Bool
+  /// how that went: "give" (授权), "hide" (稍后, or closed), "" while it is up
+  mut key_ask_ended : String
   /// MBA online too (settings-profiles-pick: Profile's ＋ asks which station)
   mut mba_online : Bool
   /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
@@ -96,6 +105,8 @@ let fx : SettingsFixture = {
   logs: true,
   outflow: false,
   outflow_answer: None,
+  outflow_link: None,
+  outflow_link_set: None,
   elevation: None,
   gpus: false,
   more_gpus: false,
@@ -112,6 +123,8 @@ let fx : SettingsFixture = {
   models_added: [],
   pairing: false,
   pair_ended: "",
+  key_ask: false,
+  key_ask_ended: "",
   mba_online: false,
   monthly: false,
   profile_hosts: false,
@@ -193,6 +206,8 @@ fn fixture_reset() -> Unit {
   fx.logs = true
   fx.outflow = false
   fx.outflow_answer = None
+  fx.outflow_link = None
+  fx.outflow_link_set = None
   fx.elevation = None
   fx.gpus = false
   fx.more_gpus = false
@@ -207,6 +222,8 @@ fn fixture_reset() -> Unit {
   fx.plain_left = 0
   fx.pairing = false
   fx.pair_ended = ""
+  fx.key_ask = false
+  fx.key_ask_ended = ""
   fx.mba_online = false
   fx.monthly = false
   fx.profile_hosts = false
@@ -308,6 +325,12 @@ pub fn fixture_pair_ended() -> String {
 }
 
 ///|
+/// How the prompt for a vault's key went (`vault.addDevice` "give", `vault.hidePrompt` "hide"; "" while it is up).
+pub fn fixture_key_ask_ended() -> String {
+  fx.key_ask_ended
+}
+
+///|
 /// Studio with a program granted its data and one asking for it (its page's 数据外流), or not.
 pub fn fixture_outflow(on : Bool) -> Unit {
   fx.outflow = on
@@ -317,6 +340,19 @@ pub fn fixture_outflow(on : Bool) -> Unit {
 /// What an admin answered the program asking for Studio's data, if they did.
 pub fn fixture_outflow_answer() -> Json? {
   fx.outflow_answer
+}
+
+///|
+/// Studio's Tailcat link of data outflow as an admin sees it (the core's `OutflowTailcat`), or none.
+pub fn fixture_outflow_link(v : Json?) -> Unit {
+  fx.outflow_link = v
+  fx_changed()
+}
+
+///|
+/// What an admin turned Studio's Tailcat link to, if they did.
+pub fn fixture_outflow_link_set() -> Bool? {
+  fx.outflow_link_set
 }
 
 ///|
@@ -430,6 +466,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-off" => fx.vault_off = true
     "settings-vault-plain" => fx.plain_left = 2
     "settings-lock-prompt" => fx.pairing = true
+    "settings-vault-prompt" => fx.key_ask = true
     "settings-vault-words" => recovery_words["ws1"] = fx_words()
     "settings-vault-add" => fixture_open.desk = "vault-add"
     "settings-vault-editor" => fixture_open.desk = "vault-editor"
@@ -502,7 +539,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
     "settings-security-join" | "settings-security-off" => "security"
-    "settings-notify-off" | "settings-lock-prompt" => "home"
+    "settings-notify-off" | "settings-lock-prompt" | "settings-vault-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
     "settings-station" | "settings-station-many-profiles" => "station:ws1/st1"
@@ -1234,6 +1271,7 @@ fn fx_station(address : String) -> Json {
           ("network", obj([("congestion", str(fx.congestion))])),
           ("outflowGrants", Json::number(if fx.outflow { 2.0 } else { 0.0 })),
           ("outflowAnswers", Json::boolean(true)),
+          ("outflowTailcat", fx.outflow_link.unwrap_or(Json::null())),
           ("elevation", fx.elevation.unwrap_or(Json::null())),
           ("sharing", Json::boolean(true)),
           (
@@ -1913,6 +1951,26 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               []
             },
           ),
+          // a device of lin's waiting on this one for the key to 林的库 (vault_prompts.mbt)
+          (
+            "asks",
+            if fx.key_ask {
+              [
+                obj([
+                  ("workspace", str("ws1")),
+                  ("workspaceName", str("星火工作室")),
+                  ("vault", str("v1")),
+                  ("vaultName", str("林的库")),
+                  ("device", str("d-new")),
+                  ("deviceText", str("Pixel 9")),
+                  ("at", Json::number(0.0)),
+                  ("atText", str("3 分钟前")),
+                ]),
+              ]
+            } else {
+              []
+            },
+          ),
         ]),
       )
     "screens" =>
@@ -2525,6 +2583,12 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           ]),
         ),
       )
+    // an admin turning Studio's Tailcat link on or off
+    "outflow.tailcat" => {
+      fx.outflow_link_set = Some(flag(Some(params), "on"))
+      fx_changed()
+      Some(Ok(obj([])))
+    }
     // an admin's answer to the program asking for Studio's data
     "outflow.answer" => {
       fx.outflow_answer = Some(params)
@@ -2537,6 +2601,15 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       fx_changed()
       Some(Ok(obj([])))
     }
+    // the device waiting for a key given it (the vault's key unsealed here), or its prompt put away: no longer shown
+    "vault.addDevice" | "vault.hidePrompt" => {
+      fx.key_ask = false
+      fx.key_ask_ended = if name == "vault.addDevice" { "give" } else { "hide" }
+      fx_changed()
+      Some(Ok(obj([("added", Json::number(1.0))])))
+    }
+    // this device asking for the keys it lacks: its other devices told
+    "vault.ask" => Some(Ok(obj([("asked", Json::number(1.0))])))
     // the new device turned away, or its prompt closed: no longer shown
     "lockPrompt.deny" | "lockPrompt.hide" => {
       fx.pairing = false

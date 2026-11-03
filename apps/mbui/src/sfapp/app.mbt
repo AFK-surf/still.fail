@@ -705,18 +705,15 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // most)
         app.nav.comes_when(fn() { page_ready(src, w, app.nav.top()) }, page_local_ms)
         narrow_lists(c)
-        let finger = stack_by_finger()
         let page_took = c.took_back(fn() {
           let pages = fn() {
             c.nav(app.nav, fn(page) { narrow_page(c, src, w, page) }, bg=t.p.bg) |> ignore
             // ⌘K's search over a page other than the lists (sfdesk's keys.mbt, sfpages' search.mbt), under the bars
             @sfpages.search_over(c, src, w, status_top())
           }
-          if finger {
-            pages()
-          } else {
-            c.selectable(color=@sf.alpha(t.p.blue, 0.28), pages)
-          }
+          // (words picked with a mouse's drag, or a finger's hold: @ui's selection; a chat's messages pick their own with
+          // a finger, pick.mbt)
+          c.selectable(color=@sf.alpha(t.p.blue, 0.28), pages)
         })
         if !page_took {
           narrow_root_back(c)

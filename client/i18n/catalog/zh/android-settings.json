@@ -624,7 +624,7 @@
   "android-settings.vault.mode.file": "文件",
   "android-settings.vault.mode.browser": "浏览器",
   "android-settings.vault.noKey": "此设备未获此库授权",
-  "android-settings.vault.noKeyHow": "请在已授权的设备上授权此设备",
+  "android-settings.vault.noKeyHow": "点「申请授权」，你的其他设备会收到提示；或使用恢复码",
   "android-settings.vault.recover": "使用恢复码",
   "android-settings.vault.recoverLead": "输入 24 个词，以空格分隔",
   "android-settings.vault.recoverCount": "{n} / 24",

@@ -49,19 +49,22 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
        ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)`,
     );
-    const known = db.prepare("SELECT 1 FROM usage WHERE id = ?");
+    const known = db.prepare("SELECT output FROM usage WHERE id = ?");
     for (const [c, of] of calls) {
-      const was = known.get(c.id) !== undefined;
+      const was = known.get(c.id) as { output: number } | undefined;
+      // The same response can occur in several transcript lines or be replayed after an interrupted read.
+      if (was !== undefined && c.output <= was.output) continue;
       insert.run(
         c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,
         c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
       );
-      if (!was) added++;
+      if (was === undefined) added++;
     }
   }
   db.prepare(
     `INSERT INTO usage_files (path, session, offset, model) VALUES (?1, ?2, ?3, ?4)
-     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model`,
+     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model
+       WHERE usage_files.session IS NOT excluded.session OR usage_files.offset IS NOT excluded.offset OR usage_files.model IS NOT excluded.model`,
   ).run(path, file.session, file.offset, file.model);
   return added;
 }
