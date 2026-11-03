@@ -6383,7 +6383,7 @@ export interface PublishMessage {
 	time?: Record<string, Stamp>;
 }
 
-/** What a snapshot of a chat would hold now (`chat.publishPreview`): nothing is kept until it is published. */
+/** What a picture of a chat holds now (`chat.publishPreview`), made of what the device holds of it: nothing is asked of its station or kept. */
 export interface PublishPreview {
 	/** The last message it holds: `chat.publish` takes it, so what is kept is what was seen. */
 	upto: number;
