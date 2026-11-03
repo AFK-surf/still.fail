@@ -487,14 +487,17 @@ fn link_peeks(
 
 ///|
 /// Whether a link of message `m` is to a chat, as the core says (each link's `to`): of a person's words' runs, or of
-/// an agent's Markdown (read only when a link of it is shown). A person's words the core has not said yet (being sent)
+/// an agent's Markdown (read as the row is, as its words are). A person's words the core has not said yet (being sent)
 /// are drawn by the app's own runs (`message_runs`), whose links to chats are `@sf.is_chat_link`'s.
 fn chat_link_of(m : Message) -> (String) -> Bool {
   match m.words {
     Some(Array(runs)) =>
       fn(href) { runs.iter().any(fn(r) { text(Some(r), "link") == href && field(field(Some(r), "to"), "chat") == Some(Json::boolean(true)) }) }
     _ if m.author_kind == "person" || m.mine => @sf.is_chat_link
-    _ => fn(href) { @sf.md_chat_links(m.text, m.md).contains(href) }
+    _ => {
+      let links = @sf.md_chat_links(m.text, m.md)
+      fn(href) { links.contains(href) }
+    }
   }
 }
 
