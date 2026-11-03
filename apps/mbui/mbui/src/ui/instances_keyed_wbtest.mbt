@@ -1,6 +1,6 @@
 // What drawn_instances_keyed says a shape's band is: its pieces by what they are (in 64ths), not where they stand among
 // the frame's. The same shape reads the same though another drew before it; a shape changed in itself, in the same
-// box, does not.
+// box, does not (pieces read in 64ths and hashed: a change smaller than that is none).
 
 ///|
 /// A row: a box 100 by 100 drawing `before` (nothing, or another shape), then one drawing `shape` (where it is the same
@@ -34,11 +34,11 @@ test "a shape's bands, keyed: the same though another shape drew its pieces firs
   // (its pieces stand elsewhere among the frame's, the other's before them: the raw instances differ, the keyed not)
   assert_true(alone_raw != after_raw)
   assert_eq(alone, after)
-  // (its right side dented in, in the same box, as wide and as high: a band's pieces differ, and only they)
-  let dented = sq([10.0, 10.0, 50.0, 10.0, 46.0, 30.0, 50.0, 50.0, 10.0, 50.0])
-  let (bent, _) = keyed_bands([], dented)
-  assert_true(bent != alone)
-  assert_eq(bent.length(), alone.length())
-  let only_pieces = fn(a : Array[Double]) { a.mapi(fn(j, x) { if j == 12 { 0.0 } else { x } }) }
-  assert_eq(bent.map(only_pieces), alone.map(only_pieces))
+  // (its right side leaning in 0.9 at its foot, in the same box (49.1 drawn in the pixel 50 is): the same corners, the
+  // same bands over the same pixels with as many pieces each; what the pieces are differs, so the keyed bands do)
+  let leaning = sq([10.0, 10.0, 50.0, 10.0, 49.1, 50.0, 10.0, 50.0])
+  let (leant, _) = keyed_bands([], leaning)
+  let but_pieces = fn(a : Array[Double]) { a.mapi(fn(j, x) { if j == 12 { 0.0 } else { x } }) }
+  assert_eq(leant.map(but_pieces), alone.map(but_pieces))
+  assert_true(leant != alone)
 }
