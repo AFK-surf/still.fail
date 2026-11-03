@@ -1,4 +1,10 @@
 {
+  "station.title.noAgent": "This chat has no available agent",
+  "station.title.unsupported": "This chat's agent cannot regenerate titles yet",
+  "station.title.empty": "There is no conversation text to make a title from yet",
+  "station.title.failed": "Couldn't generate a title; try again",
+  "station.title.changed": "The title changed while it was being generated; try again",
+  "station.title.timeout": "Generating a title timed out; try again",
   "station.network.managersOnly": "Only owners and admins can change network settings",
   "station.restart.managersOnly": "Only owners and admins can restart the station",
   "station.restart.cannot": "This station isn't run by its launcher, so it can't be restarted from here",

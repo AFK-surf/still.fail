@@ -231,6 +231,11 @@ test("renaming_a_chat_names_its_thread_or_its_session", () => {
   assert.deepEqual([r.method, r.path, r.body], ["POST", "/sessions/k/title", { title: "" }]);
 });
 
+test("regenerating_a_chat_title_asks_its_thread", () => {
+  const r = req("chat.regenerateTitle", { station: "ws/st", thread: 7 });
+  assert.deepEqual([r.method, r.path, r.body], ["POST", "/threads/7/regenerate-title", null]);
+});
+
 test("unknown_names_and_missing_params", () => {
   assert.equal(request("nothing.here", {}), null);
   assert.equal(request("station.request", {}), null);

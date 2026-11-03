@@ -710,15 +710,46 @@ export class CodexDriver implements AgentDriver {
     const host = await this.host(options.profile, options.key, options.cwd);
     const model = options.model ?? profileModel(options.profile);
     const skillsOff = hostSkillsOff(this.hostSkills);
-    const config: Json = {
+    const config: Json = options.textOnly ? {
+      "features.shell_tool": false,
+      "features.unified_exec": false,
+      "features.multi_agent": false,
+      "features.apps": false,
+      "features.plugins": false,
+      "features.browser_use": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.view_image": false,
+      "features.goals": false,
+      "web_search": "disabled",
+      "mcp_servers": {},
+    } : {
       "mcp_servers.stillfail.url": options.mcpUrl,
       "mcp_servers.stillfail.http_headers": { Authorization: `Bearer ${options.mcpToken}` },
     };
+    if (options.textOnly) {
+      // An empty table alone is merged with a profile's configured servers. Disable each one for this thread before
+      // opening it, then verify the effective inventory below before giving it any conversation text.
+      try {
+        const read = await host.request("config/read", { cwd: options.cwd });
+        if (read?.config === null || typeof read?.config !== "object") throw new Error("missing config");
+        const servers = read.config.mcp_servers;
+        if (servers !== undefined && servers !== null && (typeof servers !== "object" || Array.isArray(servers))) throw new Error("invalid MCP config");
+        config.mcp_servers = Object.fromEntries(Object.keys(servers ?? {}).map((name) => [name, { enabled: false }]));
+      } catch {
+        throw new Error("cannot open a text-only Codex session");
+      }
+    }
     if (options.effort !== undefined) config.model_reasoning_effort = options.effort;
     // The most context it runs with: it compacts on its own at it.
     if (options.context !== undefined) config.model_auto_compact_token_limit = options.context;
     if (skillsOff.length > 0) config["skills.config"] = skillsOff;
     const common: Json = { cwd: options.cwd, approvalPolicy: "never", sandbox: "danger-full-access", developerInstructions: options.instructions, config };
+    if (options.textOnly) {
+      common.sandbox = "read-only";
+      common.ephemeral = true;
+      common.environments = [];
+    }
     if (model !== undefined) common.model = model;
     // None for a thread continued from a terminal: it keeps its own, so its cache holds.
     if (options.instructions === "") delete common.developerInstructions;
@@ -738,6 +769,21 @@ export class CodexDriver implements AgentDriver {
     }
     const threadId = opened?.thread?.id;
     if (typeof threadId !== "string") throw new Error("codex gave no thread id");
+    if (options.textOnly) {
+      // Profile-level MCP servers can be merged into a thread's config. Do not give untrusted chat text to a model
+      // with any of them available, even when an older app-server ignores the empty override above.
+      try {
+        let cursor: string | null = null;
+        do {
+          const inventory = await host.request("mcpServerStatus/list", { threadId, cursor, detail: "toolsAndAuthOnly" });
+          if (!Array.isArray(inventory?.data) || inventory.data.some((s: Json) => s?.runtimeStatus !== "disabled")) throw new Error("MCP servers are enabled");
+          cursor = typeof inventory.nextCursor === "string" ? inventory.nextCursor : null;
+        } while (cursor !== null);
+      } catch {
+        await host.request("thread/unsubscribe", { threadId }).catch(() => {});
+        throw new Error("cannot open a text-only Codex session");
+      }
+    }
     const session = new CodexSession(this, threadId, host, options.profile, { busy: false, turnId: null, closed: false }, new LiveFromCodex(), events);
     session.running = { model, effort: options.effort };
     session.toolsUrl = options.mcpUrl;

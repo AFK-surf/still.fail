@@ -147,6 +147,8 @@ export class Store {
   #statements = new Map<string, StatementSync>();
   /// How many times the decision checks or the archive policy were written in this process (decisionsVersion).
   #decisions = 0;
+  /// Hand-written title changes in this process, for requests that must not overwrite a later rename.
+  #titleRevisions = new Map<number, number>();
 
   /// Its time: what the rows say things happened at (a TestClock in tests).
   readonly clock: Clock.Clock;
@@ -717,6 +719,24 @@ export class Store {
   setThreadTitle(thread: number, title: string | null): void {
     this.#with((changes) => {
       this.#run("UPDATE threads SET title = ?1 WHERE id = ?2", title, thread);
+      this.#titleRevisions.set(thread, this.titleRevision(thread) + 1);
+      changes.push({ type: "thread", id: thread, entries: [] });
+    });
+  }
+
+  /// Changes even when a person writes the same title again; a pending generation must respect that choice.
+  titleRevision(thread: number): number {
+    return this.#titleRevisions.get(thread) ?? 0;
+  }
+
+  /// An explicitly requested generated title replaces the manual title in a single visible update.
+  setGeneratedTitle(thread: number, title: string): void {
+    this.#with((changes) => {
+      const n = this.lastEntry(thread);
+      this.#run(
+        "UPDATE threads SET title = NULL, auto_title = ?1, auto_title_n = ?2, auto_title_changes = auto_title_changes + CASE WHEN auto_title IS NULL THEN 0 ELSE 1 END WHERE id = ?3",
+        title, n, thread,
+      );
       changes.push({ type: "thread", id: thread, entries: [] });
     });
   }

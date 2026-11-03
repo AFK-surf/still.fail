@@ -1,4 +1,10 @@
 {
+  "station.title.noAgent": "这个对话没有可用的 agent",
+  "station.title.unsupported": "此对话的 agent 暂不支持重新生成标题",
+  "station.title.empty": "对话还没有可以用来生成标题的文字",
+  "station.title.failed": "生成标题失败，请稍后重试",
+  "station.title.changed": "标题在生成期间已被修改，请重试",
+  "station.title.timeout": "生成标题超时，请重试",
   "station.network.managersOnly": "只有管理员可以修改网络设置",
   "station.restart.managersOnly": "只有管理员可以重启 station",
   "station.restart.cannot": "这台 station 不是由启动器运行的，无法从这里重启",

@@ -217,3 +217,23 @@ test "wide: a chat opened while settings are in view is opened in the chats; the
     _ => fail("no chat open")
   }
 }
+
+///|
+test "a row asks its station to regenerate its title from both menu gestures" {
+  for case in one_page_cases {
+    let (w, platform, regular, _) = case
+    let calls : Array[Made] = []
+    let t = lists_tester(calls, w, platform, regular)
+    let (x, y) = t.find("夜里的构建又失败了").unwrap()
+    if platform == 2 {
+      t.press_at(x, y)
+      t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
+      t.release(x, y)
+    } else {
+      t.right_click(x, y)
+    }
+    t.frame()
+    t.tap_text("重新生成标题")
+    assert_eq(named(calls, "chat.regenerateTitle").length(), 1, msg="\{w} platform \{platform}")
+  }
+}

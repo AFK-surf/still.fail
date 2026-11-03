@@ -285,9 +285,10 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
       throw new Error(`no claude transcript for session ${options.resume}`);
     }
     const sessionId = options.resume ?? uuid();
-    const mcpConfig = { mcpServers: { stillfail: { type: "http", url: options.mcpUrl, headers: { Authorization: `Bearer \${${MCP_TOKEN_VAR}}` } } } };
+    const mcpConfig = options.textOnly ? { mcpServers: {} } : { mcpServers: { stillfail: { type: "http", url: options.mcpUrl, headers: { Authorization: `Bearer \${${MCP_TOKEN_VAR}}` } } } };
     const model = options.model ?? profileModel(options.profile);
-    const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--dangerously-skip-permissions"];
+    const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"];
+    if (!options.textOnly) args.push("--dangerously-skip-permissions");
     if (options.resume !== undefined) args.push("--resume", sessionId);
     else args.push("--session-id", sessionId);
     if (model !== undefined) args.push("--model", model);
@@ -296,6 +297,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     const ours = options.instructions !== "";
     if (ours) args.push("--append-system-prompt", options.instructions);
     args.push("--mcp-config", JSON.stringify(mcpConfig));
+    if (options.textOnly) args.push("--strict-mcp-config", "--tools", "", "--setting-sources", "", "--no-session-persistence", "--disable-slash-commands", "--no-chrome");
     if (ours) args.push("--disallowedTools", DISALLOWED.join(","));
     // A key the station renews in a file (a Kimi sign-in's token, minutes long): Claude Code's key helper reads it,
     // again every minute and after a 401 (Claude Code runs it in a POSIX shell, Git Bash on Windows).
