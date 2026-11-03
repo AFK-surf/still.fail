@@ -211,5 +211,5 @@ export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] 
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(db: DatabaseSync): number | null {
-  return (db.prepare("SELECT MIN(at) AS at FROM usage").get() as Json).at ?? null;
+  return (db.prepare("SELECT first_at FROM usage_span WHERE id = 1").get() as Json).first_at ?? null;
 }
