@@ -961,6 +961,8 @@ pub fn look() -> Look
 
 pub fn look_for(Double) -> Look
 
+pub fn look_lent(@view.View, Look) -> Unit
+
 pub fn look_node(@view.View) -> Look
 
 pub fn loose(@ui.Ctx, () -> Unit) -> Unit
@@ -1317,6 +1319,8 @@ pub let page_narrow_most : Double
 
 pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, scroll? : @view.Scroll, tips? : TipLayer) -> Unit
 
+pub fn page_none_node(@view.View, () -> String) -> Unit
+
 pub fn page_note(@ui.Ctx, String, bad? : Bool) -> Unit
 
 pub fn page_note_node(@view.View, () -> String, bad? : () -> Bool) -> Unit
@@ -1338,6 +1342,10 @@ pub fn palette_of(Bool) -> Palette
 pub fn pane_at_window_right() -> Bool
 
 pub let pane_bar : @ref.Ref[((@ui.Ctx, PageBar, () -> Unit) -> Unit)?]
+
+pub fn pane_bar_actions_lent(@view.View) -> Unit
+
+pub fn pane_bar_actions_side((Look) -> Double) -> Double
 
 pub fn pane_composer_corner() -> Double
 
@@ -1729,6 +1737,8 @@ pub fn room_of(Double) -> @ui.Space
 
 pub fn round_face() -> @ui.Style
 
+pub fn round_key_node(@view.View, String, () -> String, () -> Unit, side? : Double, icon_size? : Double) -> Unit
+
 pub let row_caption : @ui.TextStyle
 
 pub let row_corner : Double
@@ -1810,6 +1820,10 @@ pub fn segmented(@ui.Ctx, String, Array[String], Int32, item_w? : Double, ink? :
 pub fn segmented_height() -> Double
 
 pub fn segmented_item_w(Double, Int32) -> Double
+
+pub fn segmented_node(@view.View, () -> Array[String], () -> Int32, (Int32) -> Unit, head? : Bool, said? : String) -> Unit
+
+pub fn segmented_node_height(Look) -> Double
 
 pub fn segments(@ui.Ctx, Double, Double, Int64, Int64) -> Int32
 
@@ -2180,6 +2194,12 @@ pub let tools_apart : Double
 pub fn tools_line() -> @ui.Style
 
 pub fn tools_row(@ui.Ctx, String, Array[Tool], more? : Array[MenuItem?], label~ : String, style? : @ui.Style) -> Unit
+
+pub fn top_bar_actions_lent(@view.View) -> Unit
+
+pub let top_bar_title_look : @view.WordsLook
+
+pub fn top_bar_title_node(@view.View, () -> String) -> @view.View
 
 pub let touch_chat_list : ChatList
 

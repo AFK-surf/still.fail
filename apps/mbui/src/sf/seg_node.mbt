@@ -687,3 +687,36 @@ pub fn seg_head_node(
     seg_fill_node(b, labels, chosen, choose, said~) |> ignore
   })
 }
+
+///|
+/// A choice of a few on a page made once (segmented's), by how the page is laid out (look_node), in `slot`, which it
+/// lays out: narrow, Seg (seg_fill_node) sharing its line, the slot growing from none to what the line leaves it, or
+/// at a head's end (`head`) as wide as its options (seg_head_node); wide, the web's Segmented (seg_node), as wide as
+/// its options, the slot as wide as it. `labels`, `chosen`, `choose`, `said`: theirs.
+pub fn segmented_node(
+  slot : @view.View,
+  labels : () -> Array[String],
+  chosen : () -> Int,
+  choose : (Int) -> Unit,
+  head? : Bool = false,
+  said? : String = "",
+) -> Unit {
+  match look_node(slot) {
+    Wide => seg_node(slot, labels, chosen, choose, said~) |> ignore
+    Narrow if head => seg_head_node(slot, labels, chosen, choose, said~) |> ignore
+    Narrow => {
+      slot.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+      seg_fill_node(slot, labels, chosen, choose, said~) |> ignore
+    }
+  }
+}
+
+///|
+/// How high segmented_node stands in a page laid out `look`: wide, the web's Segmented's track round its options; narrow,
+/// Seg's (segmented_height's).
+pub fn segmented_node_height(look : Look) -> Double {
+  match look {
+    Narrow => segmented_narrow_h
+    Wide => segmented_h + 2.0 * segmented_pad
+  }
+}

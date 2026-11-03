@@ -344,8 +344,7 @@ fn usage_split_node(parent : @view.View, v : () -> Json?) -> Unit {
     })
     |> ignore
     line.show(fn() { choices().length() > 1 }, fn(s) {
-      s.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-      @sf.seg_fill_node(
+      @sf.segmented_node(
         s,
         split_labels,
         fn() { choices().search(text(v(), "split")).unwrap_or(0) },
@@ -361,7 +360,6 @@ fn usage_split_node(parent : @view.View, v : () -> Json?) -> Unit {
           })
         },
       )
-      |> ignore
     })
   })
   |> ignore
@@ -608,10 +606,10 @@ fn usage_narrowed_node(parent : @view.View, v : () -> Json?, tips? : @sf.TipLaye
 /// The page's body under its head (usage_body's): the summary, the overview, then (once something was spent) the chats,
 /// or that none was spent (in its bones while it is still read, what failed said over it); how it is counted last; 16
 /// apart.
-fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, tips? : @sf.TipLayer) -> Unit {
+fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, page_w : () -> Double, tips? : @sf.TipLayer) -> Unit {
   parent.box(fn(b) {
     b.gap(Is(ug_body_gap)) |> ignore
-    usage_summary_node(b, v, tips?)
+    usage_summary_node(b, v, page_w, tips?)
     usage_overview_node(b, core, v, tips?)
     b.pick(fn() { flag(v(), "empty") }, fn(p, empty) {
       if empty {
@@ -639,7 +637,7 @@ fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, tips? : @s
 /// column 760 at most in the card's middle, 24 apart, its title, its figures side by side (as many to a line as have 96
 /// across, 16 apart, in lines), the year, each device's work and where the chats came from (side by side where they
 /// have the room), when it is as of, what is missing.
-fn usage_summary_node(parent : @view.View, v : () -> Json?, tips? : @sf.TipLayer) -> Unit {
+fn usage_summary_node(parent : @view.View, v : () -> Json?, page_w : () -> Double, tips? : @sf.TipLayer) -> Unit {
   let sv = fn() { field(v(), "summary") }
   parent.show(fn() { sv() is Some(Object(_)) }, fn(at) {
     ug_card_node(at, fn(k) {
@@ -665,7 +663,7 @@ fn usage_summary_node(parent : @view.View, v : () -> Json?, tips? : @sf.TipLayer
           })
         })
         |> ignore
-        usage_year_node(sum, fn() { field(sv(), "activity") }, fn() { if sum.window().0 < 600.0 { 26 } else { 52 } }, tips?)
+        usage_year_node(sum, fn() { field(sv(), "activity") }, fn() { if page_w() < 600.0 { 26 } else { 52 } }, tips?)
         sum.box(fn(lists) {
           lists.row(Is(true)).gap(Is(32.0)).wraps(Is(Some(32.0))).lines_up(Is(Some(Start))) |> ignore
           lists.box(fn(n) { usage_named_node(n, fn() { field(sv(), "stations") }) }) |> ignore
@@ -739,10 +737,7 @@ fn usage_year_node(parent : @view.View, av : () -> Json?, weeks : () -> Int, tip
         ug_grow_words(h, fn() { text(av(), "sub") }, ug_named_name) |> ignore
       })
       |> ignore
-      l.show(fn() { views().length() > 1 }, fn(s) {
-        s.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-        @sf.seg_fill_node(s, views, shown, fn(k) { usage_pick.year.set(k) }) |> ignore
-      })
+      l.show(fn() { views().length() > 1 }, fn(s) { @sf.segmented_node(s, views, shown, fn(k) { usage_pick.year.set(k) }) })
     })
     // the grid: the months' names, then a row a weekday, 2 apart
     y.box(fn(grid) {
@@ -880,16 +875,59 @@ fn ug_grid_row_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
 }
 
 ///|
-/// 用量 as nodes (usage_page's, narrow): its title, at its line's end 分享卡片 once something was spent and the days
-/// (7 or 30); the core's view once read (usage_body_node), what failed while it is not, a wait till then (the view
-/// made up, in its bones, nothing of the core's asked for it).
-pub fn usage_node(v : @view.View, core : Core, here : () -> Here, on_back~ : () -> Unit, frame~ : () -> PageFrame) -> Unit {
-  // (what is said of what the pointer rests on, over the page: in a layer of its own past the page's list, which cuts
-  // what it holds to it)
+/// 用量 (UsageSettings, UsageScreen) made once as nodes (page_node, laid out by the `width` its frame gives it, narrow
+/// where none is given): its title, at its line's end 分享卡片 once something was spent and the days (7 or 30); the
+/// core's view once read (usage_body_node), what failed while it is not, a wait till then (the view made up, in its
+/// bones, nothing of the core's asked for it). What it says of itself told `said`; what is said of what the pointer
+/// rests on in the frame's layer of tips over the window where it gives one (`tips`), else in its own over the page.
+pub fn usage_node(
+  v : @view.View,
+  core : Core,
+  here : () -> Here,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+  tips? : @sf.TipLayer,
+  bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
+) -> Unit {
+  // (what is said of what the pointer rests on: the frame's, over the window; else in a layer of its own past the
+  // page's list, which cuts what it holds to it)
   let tips_at : Ref[@view.View?] = Ref(None)
-  let tips = @sf.TipLayer::new(fn() { tips_at.val })
+  let own_tips = tips is None
+  let tips = match tips {
+    Some(t) => t
+    None => @sf.TipLayer::new(fn() { tips_at.val })
+  }
+  // (how wide the page is: the frame's where it gives one, else the window's (a phone's page): half the year's
+  // weeks where it is narrower than 600, as the old view's were by the width it was drawn in)
+  let page_w = match width {
+    Some(w) => w
+    None => fn() { v.window().0 }
+  }
   let read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get())) }
   let value = fn() { read().value }
+  // (at its title's line's end; where a frame's bar names it, in that bar, as tall as its days' choice stands there)
+  let actions = fn(l : @view.View) {
+    // (the card to share of the agents' week, once something was spent, before the days)
+    l.show(fn() { value() is Some(_) && !flag(value(), "empty") }, fn(s) {
+      @sf.icon_button_node(s, "share", fn() { @sf.t("web-main.stations.shareCard") }, fn() { (core.share_card)() }, tips~) |> ignore
+    })
+    @sf.segmented_node(
+      l,
+      head=true,
+      fn() { usage_days_choices.map(fn(n) { @sf.t("web-main.usage.days", args=[("n", n.to_string())]) }) },
+      fn() { if usage_pick.days.get() == 30 { 1 } else { 0 } },
+      fn(k) {
+        usage_pick.days.set(usage_days_choices[k])
+        usage_pick.day.set("")
+      },
+    )
+  }
+  match bar_actions {
+    Some(f) => f(actions, @sf.segmented_node_height)
+    None => ()
+  }
   @sf.page_node(
     v,
     fn() { @sf.t("web-pages.settings.usage.title") },
@@ -905,7 +943,7 @@ pub fn usage_node(v : @view.View, core : Core, here : () -> Here, on_back~ : () 
         },
         fn(p, state) {
           match state {
-            0 => usage_body_node(p, core, value, tips~)
+            0 => usage_body_node(p, core, value, page_w, tips~)
             1 =>
               @sf.words_node(p, fn() {
                 match read().error {
@@ -916,7 +954,7 @@ pub fn usage_node(v : @view.View, core : Core, here : () -> Here, on_back~ : () 
               |> ignore
             _ => {
               let quiet = core.quiet()
-              @sf.waiting_node(p, fn(s) { usage_body_node(s, quiet, fn() { Some(usage_sample()) }) })
+              @sf.waiting_node(p, fn(s) { usage_body_node(s, quiet, fn() { Some(usage_sample()) }, page_w) })
             }
           }
         },
@@ -924,24 +962,15 @@ pub fn usage_node(v : @view.View, core : Core, here : () -> Here, on_back~ : () 
     },
     on_back~,
     frame~,
-    actions=fn(l) {
-      // (the card to share of the agents' week, once something was spent, before the days)
-      l.show(fn() { value() is Some(_) && !flag(value(), "empty") }, fn(s) {
-        @sf.icon_button_node(s, "share", fn() { @sf.t("web-main.stations.shareCard") }, fn() { (core.share_card)() }, tips~) |> ignore
-      })
-      @sf.seg_head_node(
-        l,
-        fn() { usage_days_choices.map(fn(n) { @sf.t("web-main.usage.days", args=[("n", n.to_string())]) }) },
-        fn() { if usage_pick.days.get() == 30 { 1 } else { 0 } },
-        fn(k) {
-          usage_pick.days.set(usage_days_choices[k])
-          usage_pick.day.set("")
-        },
-      )
-      |> ignore
-    },
+    about=fn() { @sf.t("web-pages.settings.usage.lead") },
+    said?,
+    width?,
+    tips~,
+    actions~,
   )
-  tips_at.val = Some(v.box(fn(l) { l.over(Is(true)) |> ignore }))
+  if own_tips {
+    tips_at.val = Some(v.box(fn(l) { l.over(Is(true)) |> ignore }))
+  }
 }
 
 ///|
@@ -962,10 +991,12 @@ fn ug_centered_words(parent : @view.View, words : () -> String, style : @ui.Text
 
 
 ///|
-/// 价目表 made once (usage_prices_page's, narrow) as nodes of the window's tree: each station's prices on a card of its
-/// own, its name, what its prices are, and a table of its models and their rates (@sf.table_node, as a message's
-/// table is drawn), 20 past the card's words either side to its corner's inset; none, said; while they are read, a
-/// made-up station's card in its bones (no core asked for it); the core's `usage` view at `days` read as it changes.
+/// 价目表 (UsagePricesSettings, UsagePricesScreen) made once as nodes of the window's tree (page_node, laid out by the
+/// `width` its frame gives it, narrow where none is given): each station's prices on a card of its own, its name, what
+/// its prices are, and a table of its models and their rates (@sf.table_node, as a message's table is drawn), 20 past
+/// the card's words either side to its corner's inset; none, said; while they are read, a made-up station's card in
+/// its bones (no core asked for it); the core's `usage` view at `days` read as it changes. What it says of itself told
+/// `said`.
 pub fn usage_prices_node(
   v : @view.View,
   core : Core,
@@ -973,6 +1004,8 @@ pub fn usage_prices_node(
   days : Int,
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
 ) -> Unit {
   let topic = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(days.to_double()) }) }
   let tables = fn() { items(topic().value, "prices") }
@@ -1008,12 +1041,7 @@ pub fn usage_prices_node(
             let failing = failing_of(wait())
             { reading: failing.length() == 0, text: "", failing }
           })
-        "none" =>
-          b.box(fn(n) {
-            n.padding(Is((12.0, 0.0, 12.0, 10.0))) |> ignore
-            @sf.words_node(n, fn() { @sf.t("web-main.usage.noPrices") }, fn() { @sf.pg_lead }) |> ignore
-          })
-          |> ignore
+        "none" => @sf.page_none_node(b, fn() { @sf.t("web-main.usage.noPrices") })
         _ => {
           let i = @string.parse_int(key[5:]) catch { _ => 0 }
           up_card_node(b, fn() { tables().get(i) })
@@ -1023,6 +1051,8 @@ pub fn usage_prices_node(
     on_back~,
     frame~,
     lead=fn() { @sf.t("web-pages.settings.prices.lead") },
+    said?,
+    width?,
   )
 }
 

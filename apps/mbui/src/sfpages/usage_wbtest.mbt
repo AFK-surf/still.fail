@@ -56,16 +56,29 @@ fn usage_faded_bars(t : @ui.Tester) -> Array[(Double, Double, Double, Double, In
 }
 
 ///|
-/// usage_chart over `v` in a card's width (282: a phone's 346 less the page's 12 and the card's 20 each side).
+/// usage_chart_node over `v` in a card's width (282: a phone's 346 less the page's 12 and the card's 20 each side), made
+/// once in the window's tree, the page's look narrow.
 fn days_tester(v : Json) -> @ui.Tester {
   usage_reset()
   @sf.set_dark(Some(false))
-  let t = @ui.Tester::new(fn(c) {
-    @sf.begin(c) |> ignore
-    c.with_theme(@sf.ui_theme(), fn() {
-      c.box(align=AStart, fn() { c.box(w=Px(282.0), fn() { usage_chart(c, Some(v)) |> ignore }) |> ignore }) |> ignore
-    })
-  }, platform=2)
+  let t = @ui.Tester::new(fn(_c) {  }, platform=2)
+  @ui.set_view_app(
+    fn(root) {
+      // (its nodes drawn in still.fail's theme, as the app's are: app_tree's; told as the tree is made, set_view_app
+      // having forgotten what was told before it)
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      root.box(fn(b) {
+        b.width(Is(Some(282.0))) |> ignore
+        @sf.look_lent(b, @sf.Look::Narrow)
+        usage_chart_node(b, fn() { Some(v) })
+      })
+      |> ignore
+    },
+    around=fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+    },
+  )
   t.draw()
   t
 }
@@ -167,40 +180,51 @@ fn usage_year_now() -> Json {
 test "the year: a month whose weeks have not the room for its name says none, not an ellipsis; a day pointed at says its date and tokens" {
   usage_reset()
   @sf.set_dark(Some(false))
-  let cell = Ref(None)
-  let t = @ui.Tester::new(
-    fn(c) {
-      @sf.begin(c) |> ignore
-      c.with_theme(@sf.ui_theme(), fn() {
-        c.box(align=AStart, fn() {
-          c.box(w=Px(720.0), fn() {
-            usage_year(c, Some(usage_year_now()), 52)
-            cell.val = c.rect_of(c.id("usage-year/50/3"))
-          })
-          |> ignore
-        })
-        |> ignore
+  let t = @ui.Tester::new(fn(_c) {  }, w=800.0, h=600.0, native=Mouse, pointing=Mouse)
+  @ui.set_view_app(
+    fn(root) {
+      // (its nodes drawn in still.fail's theme, as the app's are: app_tree's; told as the tree is made, set_view_app
+      // having forgotten what was told before it)
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      let tips_at : Ref[@view.View?] = Ref(None)
+      let tips = @sf.TipLayer::new(fn() { tips_at.val })
+      root.box(fn(b) {
+        b.width(Is(Some(720.0))) |> ignore
+        @sf.look_lent(b, @sf.Look::Wide)
+        usage_year_node(b, fn() { Some(usage_year_now()) }, fn() { 52 }, tips~)
       })
+      |> ignore
+      tips_at.val = Some(root.box(fn(l) { l.over(Is(true)) |> ignore }))
     },
-    w=800.0,
-    h=600.0,
-    native=Mouse,
-    pointing=Mouse,
+    around=fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+    },
   )
   t.draw()
   t.draw()
   assert_true(t.rect_of("10月") is Some(_))
   let last = t.lines_of("11月")
   assert_true(last.iter().all(fn(l) { !l.has_suffix("…") }), msg="\{last}")
-  // a day pointed at: its date and tokens a moment later
-  let (x, y, w, h) = cell.val.unwrap()
-  t.move(x + w / 2.0, y + h / 2.0)
+  // a day pointed at: its date and tokens a moment later (week 50's fourth day: its column and row among the cells,
+  // each a square under the months' row)
+  let squares = t.drawn_rects().filter(fn(r) { r.2 == r.3 && r.2 > 4.0 && r.2 < 20.0 })
+  let ys = squares.map(fn(r) { r.1 })
+  ys.sort()
+  ys.dedup()
+  // (the weekdays' rows: the first seven down; the levels' squares under them none of the grid's)
+  let cells = squares.filter(fn(r) { ys.length() >= 7 && r.1 <= ys[6] })
+  let xs = cells.map(fn(r) { r.0 })
+  xs.sort()
+  xs.dedup()
+  assert_true(xs.length() >= 52 && ys.length() >= 7, msg="the grid's columns \{xs.length()}, rows \{ys.length()}")
+  let side = cells[0].2
+  t.move(xs[50] + side / 2.0, ys[3] + side / 2.0)
   t.run_for(@sf.tip_delay_ms * 2.0)
-  assert_true(t.find("第 \{50 * 7 + 3} 天 · 1 token") is Some(_))
+  assert_true(t.find("第 \{50 * 7 + 3} 天 · 1 token") is Some(_), msg="\{t.drawn_text()}")
   t.leave()
   t.run_for(@sf.tip_delay_ms * 2.0)
 }
-
 ///|
 test "用量, at each width and with either hand: the cost and its change, the days split by person or by model, the chats; a day picked, then let go; 30 天 picked" {
   for case in page_cases {
@@ -281,10 +305,8 @@ test "用量: the overview follows the page's theme, including after a day is pi
 test "价目表: the first column starts in line with the card's note at every width" {
   for w in [390.0, 1280.0] {
     let t = setting_tester(UsagePrices(7), w, platform=0)
-    t.draw()
-    t.draw()
-    let (note, _, _, _) = t.rect_of("每百万 token 的美元价格").unwrap()
-    let (first, _) = t.drawn_of("Opus 5.5").unwrap()
+    guard t.rect_of("每百万 token 的美元价格") is Some((note, _, _, _)) else { fail("\{w}: no note") }
+    guard t.rect_of("Opus 5.5") is Some((first, _, _, _)) else { fail("\{w}: no first column") }
     assert_true((first - note).abs() < 0.5, msg="\{w}: table \{first}, note \{note}")
   }
 }

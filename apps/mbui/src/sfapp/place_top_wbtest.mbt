@@ -102,9 +102,16 @@ test "a page's name kept whole: 用量's share and days as wide as they are afte
 ///|
 test "a place's page: its actions in its top bar, at the end of the title's line (用量's days)" {
   let t = place_tester("usage")
-  // the middle of the bar's line under the status bar: 24 + 8 + 34 / 2
-  match t.find("7 天") {
-    Some((x, y)) => if (y - 49.0).abs() >= 0.5 || x <= 195.0 { fail("7 天 at (\{x}, \{y})") }
+  // the middle of the bar's line under the status bar: 24 + 8 + 34 / 2 (its choice's words, not the page's that say
+  // the days: 比前 7 天)
+  match t.words().search_by(fn(w) { w.0 == "7 天" && w.5 > 0.5 }) {
+    Some(i) => {
+      let (_, x, y, w, h, _) = t.words()[i]
+      let (x, y) = (x + w / 2.0, y + h / 2.0)
+      if (y - 49.0).abs() >= 0.5 || x <= 195.0 {
+        fail("7 天 at (\{x}, \{y})")
+      }
+    }
     None => fail("no 7 天")
   }
 }

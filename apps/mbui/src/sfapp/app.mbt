@@ -64,6 +64,7 @@ fn reset() -> Unit {
   bar_reset()
   bar_timing.val = None
   bar_timed.val = None
+  place_switch.put(1.0)
   home_sheet_at_start.val = false
   peeks_reset()
   share_in.shared.set(None)
@@ -797,7 +798,7 @@ fn page_view(
   // page at the stack's root is so with a page sliding in over it or back off it too (where it stands, not how deep
   // the stack is: Nav::under), its place's top bar kept
   let root = app.nav.under() is None
-  let e = if root { place_switch(c).get() } else { 1.0 }
+  let e = if root { place_switch.get() } else { 1.0 }
   if root {
     bar_built(c, page)
   }
@@ -882,14 +883,17 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
     -1
   }
   // the shell's (sfbase's shell.mbt), then the bar's own: timed from here (BarTiming), the page coming in from its side
-  // (Arrive)
+  // (Arrive), from this moment
   if !@sfbase.go_place(place, way~) {
     return
   }
   bar_placed(from, place)
-  let fade = place_switch(c)
-  fade.snap(0.0)
-  fade.animate(1.0, if way == 0 { @motion.tween(switch_fade_ms, ease=Out) } else { @motion.move(points=switch_slide) })
+  place_switch.put(0.0)
+  place_switch.go(
+    1.0,
+    if way == 0 { @motion.tween(switch_fade_ms, ease=Out) } else { @motion.move(points=switch_slide) },
+    at=c.moment(),
+  )
 }
 
 ///|
@@ -955,10 +959,11 @@ pub let switch_fade_ms : Double = 180.0
 pub let switch_slide : Double = 30.0
 
 ///|
-/// How far a place switched to on the bar has come in (0 … 1).
-fn place_switch(c : @ui.Ctx) -> @motion.Anim {
-  @motion.anim(c, "place/switch", 1.0, global=true)
-}
+/// How far the page at the stack's root has come in as its place was switched to on the bar (0 … 1, go_place's way
+/// from the moment it was switched to, from the side app.switch_way says): its old view's (page_view) and its nodes'
+/// where it is made once (place_comes_in) read this one, whenever made.
+// kept across runs: put back as a run begins (reset)
+let place_switch : @motion.Way = @motion.Way::new(1.0)
 
 ///|
 /// What a write said (sfbase's toasts), where the frame has it: the wide frame's 24 over the window's foot (the web's),

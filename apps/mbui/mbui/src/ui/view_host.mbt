@@ -358,10 +358,6 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
-  @signals.untracked(fn() {
-    tree_theme_of.set(None)
-    tree_inset_said.set(None)
-  })
   view_shape_of.val = OfOld
   let c = g()
   targets_forget()
@@ -387,6 +383,12 @@ fn view_forget() -> Unit {
   // (what was said of its nodes' corners its own: tree_corners_linked)
   tree_links.clear()
   view_app.val = None
+  // (the tree's theme and its window's inset forgotten once it is let go: what of it still read them told of none of
+  // it, no tree laid out again as it goes)
+  @signals.untracked(fn() {
+    tree_theme_of.set(None)
+    tree_inset_said.set(None)
+  })
   view_held.val = None
   view_nothing_down.val = None
   view_down.val = None
@@ -4731,6 +4733,7 @@ fn view_spacing(c : Ctx, look : @view.WordsLook) -> Double {
   match look.tracking {
     Ems(e) => e * c.sp(look.size)
     Points(p) => p
+    ScaledPoints(p) => c.sp(p)
   }
 }
 

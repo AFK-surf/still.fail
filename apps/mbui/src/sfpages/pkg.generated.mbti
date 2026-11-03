@@ -635,13 +635,9 @@ pub fn update_card(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn update_card_shown() -> Bool
 
-pub fn usage_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
+pub fn usage_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer, bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit) -> Unit
 
-pub fn usage_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
-
-pub fn usage_prices_node(@view.View, @settings.Core, () -> @settings.Here, Int32, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame) -> Unit
-
-pub fn usage_prices_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, Int32) -> Unit
+pub fn usage_prices_node(@view.View, @settings.Core, () -> @settings.Here, Int32, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn usage_tiles(@ui.Ctx, Json?, entry? : ContextEntry) -> Unit
 

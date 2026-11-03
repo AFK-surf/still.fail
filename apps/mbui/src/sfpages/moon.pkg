@@ -20,4 +20,4 @@ import {
   "stillfail/gallery",
 }
 
-import { "stillfail/sffixture" } for "wbtest"
+import { "stillfail/sffixture", "stillfail/sfkept" } for "wbtest"
