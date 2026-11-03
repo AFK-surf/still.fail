@@ -275,14 +275,14 @@ fn sent_words_of(s : String) -> String {
 
 ///|
 /// The runs the words of draft `key`'s field `now` will be drawn in once sent (the core's `ref.words`: refLinks.ts
-/// draftWords), asked once for them. Words with no address, mark or link in them are their own one run, asked of none.
+/// draftWords), asked once for them (of words that may hold more than one: @sf.words_may_link).
 fn refs_ask_words(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit {
   let f = ref_field(key)
   let words = sent_words_of(now)
   if f.runs_of == words || f.runs_asked == words {
     return
   }
-  if !(words.contains("://") || words.contains("@[") || words.contains("](")) {
+  if !@sf.words_may_link(words) {
     f.runs = Json::null()
     f.runs_of = words
     return

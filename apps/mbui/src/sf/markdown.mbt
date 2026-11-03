@@ -92,6 +92,28 @@ pub let markdown_read : Ref[((String, (Json?) -> Unit) -> Unit)?] = Ref(None)
 pub let kept_call : Ref[((String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?)?] = Ref(None)
 
 ///|
+/// Whether a person's words may hold more than one run as the core reads them (refLinks.ts draftWords: an address, a
+/// composer's mark, a link to a chat): words holding none of `://`, `@[`, `](` are their own one run, asked of none.
+pub fn words_may_link(text : String) -> Bool {
+  text.contains("://") || text.contains("@[") || text.contains("](")
+}
+
+///|
+/// A person's `text` in the runs the real core reads it in (`ref.words`: refLinks.ts draftWords), kept (`kept_call`),
+/// if it was: for a run without a core, whose messages have no `words` of their own.
+pub fn kept_words(text : String) -> Json? {
+  guard words_may_link(text) else { return None }
+  match kept_call.val {
+    Some(kept) =>
+      match kept("ref.words", { "text": Json::string(text) }, None) {
+        Some(Ok((Object(m), _))) => m.get("runs")
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
 /// `text`'s tree as the real core read it, kept (`kept_call`), if it was.
 fn kept_tree(text : String) -> Json? {
   match kept_call.val {
