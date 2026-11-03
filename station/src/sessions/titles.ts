@@ -55,7 +55,7 @@ function mayName(hub: Hub, thread: number, title: string): boolean | string {
 }
 
 /// Whether one of the chat's agents keeps watch (a watch job of its runs).
-const watchingIn = (hub: Hub, thread: number) => hub.store.threadSessions(thread).some((m) => hub.store.listJobs(m.session).some((j) => j.watch && j.state === "running"));
+const watchingIn = (hub: Hub, thread: number) => hub.store.hasActiveWatch(thread);
 
 const isOpen = (hub: Hub, thread: number) => {
   const at = hub.store.lastReadAt(thread);

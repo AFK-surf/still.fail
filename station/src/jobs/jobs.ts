@@ -259,7 +259,7 @@ export function chatOf(session: string): string {
 }
 
 /// How a job is named to its agent.
-export function named(job: JobRow): string {
+export function named(job: Pick<JobRow, "id" | "name" | "port">): string {
   return job.port !== null ? `Service "${job.name}" (${job.id}, port ${job.port})` : `Job "${job.name}" (${job.id})`;
 }
 
@@ -418,12 +418,12 @@ export class Jobs {
     if (size !== null && (port !== null || queue !== null || !sandboxed(this.data))) {
       throw new Error("only a job this station runs in a sandbox has a size: not a service, not another station's task, and only while the station runs jobs in sandboxes");
     }
-    if (this.store.listJobs(session).filter((j) => j.state === "running").length >= MAX_RUNNING) {
+    if (this.store.runningJobsAtLeast(session, MAX_RUNNING)) {
       throw new Error(`this session runs ${MAX_RUNNING} jobs already; stop some first`);
     }
     if (port !== null) {
       // A service holds its port until it is stopped (between its restarts too).
-      const taken = this.store.jobsUp().find((j) => j.port === port);
+      const taken = this.store.jobAtPort(port);
       if (taken) throw new Error(`port ${port} is ${named(taken)}'s already`);
     }
     const jobId = id ?? `job_${hex(4)}`;

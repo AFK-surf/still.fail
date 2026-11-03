@@ -3,12 +3,16 @@ import {
   "mbui/film",
   "stillfail/sfapp",
   "stillfail/sffilmscene",
+  "mbui/wasmrt",
 }
 
 options(
   "is-main": true,
+  targets: { "wasm_shell.mbt": [ "wasm" ] },
   link: {
     "js": { "format": "iife" },
+    // (run by mbui's native shell for a preview, scripts/wasm-app.sh: what it calls of the program, wasm_shell.mbt)
+    "wasm": { "exports": ["mbw_string", "mbw_bytes", "film_text_length", "film_text_unit"], "export-memory-name": "memory" },
     "native": {
       "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
     },

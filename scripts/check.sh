@@ -251,6 +251,10 @@ if part ts; then
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
+  # the Wasm side of the native host's calls (x_wasm.mbt beside each x_native.mbt) as their declarations make it
+  if touches '^apps/mbui/(mbui/src/host|src/(core|stillfail|pinyin|sfreplay))/.*native\.mbt$|^apps/mbui/mbui/tools/wasmhost/'; then
+    step "wasm host calls" bash apps/mbui/scripts/wasm-app.sh check
+  fi
   if touches '^(web/src|web/ui|apps/mbui/src)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/mbui/src'
   fi

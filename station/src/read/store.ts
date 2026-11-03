@@ -18,7 +18,7 @@ import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
   CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, type Membership, type MessageRow, OPTIONS_BEFORE,
-  PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
+  PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
 
@@ -390,6 +390,11 @@ export function lastSaid(s: Store, thread: number): MessageRow | null {
   return r ? toMessage(r) : null;
 }
 
+/// When the latest message was written, without loading its text or edits.
+export function lastSaidAt(s: Store, thread: number): number | null {
+  return one(s, "SELECT e.at FROM thread_state t JOIN entries e ON e.thread = t.thread AND e.n = t.said_n AND e.kind = 'message' WHERE t.thread = ?", thread)?.at ?? null;
+}
+
 /// Messages after the read position that are not the viewer's own (nor of a Slack user they are).
 function unreadCount(s: Store, viewer: string, thread: number, read: number): number {
   const t = getThread(s, thread);
@@ -570,9 +575,12 @@ export function publishedByThread(s: Store, threads: number[] | null = null): Ma
 
 // ── pins, kept chats ──
 
-/// The chats a viewer pinned (by their session's key), with when.
-export function pins(s: Store, viewer: string): Map<string, number> {
-  return new Map(all(s, "SELECT session, at FROM pins WHERE viewer = ?", viewer).map((r) => [r.session, r.at]));
+/// The chats a viewer pinned (by their session's key), with when. For an incremental read, seek only its keys.
+export const PINS_OF = "SELECT session, at FROM pins WHERE viewer = ?1 AND session IN (SELECT value FROM json_each(?2))";
+export function pins(s: Store, viewer: string, sessions: string[] | null = null): Map<string, number> {
+  const found = sessions === null ? all(s, "SELECT session, at FROM pins WHERE viewer = ?", viewer)
+    : sessions.length === 0 ? [] : all(s, PINS_OF, viewer, JSON.stringify(sessions));
+  return new Map(found.map((r) => [r.session, r.at]));
 }
 
 /// Chats kept instead of offered for archiving. Null selects every viewer.
@@ -687,16 +695,34 @@ export function blockedAsk(s: Store, thread: number, key: string, turn: TurnSumm
   return { asked, fresh: !told };
 }
 
+/// The people's messages since `since` (ms) in a thread that each are the first after a card (the last before it), in
+/// order: by its cards, each with the first person's message after it (none between: a card after it is the one asked).
+function answersOf(s: Store, thread: number, since: number): { thread: number; n: number }[] {
+  const cards = [...new Set([
+    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND card IS NOT NULL", thread),
+    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND options IS NOT NULL", thread),
+  ].map((r) => r.n as number))].sort((a, b) => a - b);
+  const out: { thread: number; n: number }[] = [];
+  cards.forEach((card, i) => {
+    const next = one(s, "SELECT n, at FROM entries WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND n > ? ORDER BY n LIMIT 1", thread, card);
+    if (next === undefined || next.at < since) return;
+    if (i + 1 < cards.length && cards[i + 1]! < next.n) return;
+    out.push({ thread, n: next.n });
+  });
+  return out;
+}
+
 /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card, or a
 /// choice that closed it (closed_cards, by a person: not its agent withdrawing it).
 export function answersSince(s: Store, since: number, threads: number[] | null = null): CardAnswer[] {
   const out: CardAnswer[] = [];
-  // Of some threads alone (the items of a sidebar a change touched), each by the index of its people's messages: every
-  // person's message of the last day and a half on the station, each with a few lookups, was some 2,600 statements.
+  // Of some threads alone (the items of a sidebar a change touched), each by its cards (a few) and the first person's
+  // message after each: every person's message of the last day and a half on the station, each with a few lookups, was
+  // some 2,600 statements; one chat's 76 of them, with its 3 cards, 1 to 1.5 s on ccvm short of memory (2026-11-03).
   const said: Json[] =
     threads === null
       ? all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since)
-      : threads.flatMap((thread) => all(s, SAID_SINCE, thread, since));
+      : threads.flatMap((thread) => answersOf(s, thread, since));
   const of = threads === null ? null : new Set(threads);
   const askedBefore = (thread: number, n: number): number | null => {
     const card: number | null = one(s, CARD_BEFORE, thread, n).n;
@@ -909,11 +935,21 @@ export function usageCallsPage(s: Store, session: string, from: bigint, to: bigi
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and by
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export { USAGE_DETAIL_PENDING };
-export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
+export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
+  diagnostics?: { parts?: number; candidates?: number; selectedMs?: number }): UsageGroup[] {
   if (hasCompactUsage(s.db)) {
     if (!compactScopeReady(s.db, viewer)) throw new Refused(503, "usage statistics are moving between workspaces");
-    const query = compactQuery(from, to, utcOffsetMin, viewer);
-    return all(s, query.sql, ...query.args).map(usageGroupOf);
+    const query = compactQuery(from, to, utcOffsetMin, viewer, diagnostics !== undefined, diagnostics !== undefined);
+    if (diagnostics !== undefined && query.sql.includes("usage_summary_candidate()")) {
+      diagnostics.candidates = 0;
+      const started = performance.now();
+      s.db.function("usage_summary_candidate", () => { diagnostics.candidates!++; return 1; });
+      s.db.function("usage_summary_selected", () => { diagnostics.selectedMs = Math.round(performance.now() - started); return 1; });
+    }
+    const rows = all(s, query.sql, ...query.args);
+    // Count only rows already used by this read; asking the database for another count would repeat the slow work.
+    if (diagnostics !== undefined) diagnostics.parts = rows.reduce((n, row) => n + Number(row.source_parts), 0);
+    return rows.map(usageGroupOf);
   }
   if (retiredUsage(s.db)) throw new Refused(503, "usage detail statistics are unavailable");
   const generation = usageDetailGeneration(s.db);
@@ -921,6 +957,9 @@ export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bi
   const query = detailQuery(from, to, utcOffsetMin, viewer, generation, usageDetailScopeBySession(s.db, viewer, generation));
   return query === null ? [] : all(s, query.sql, ...query.args).map(usageGroupOf);
 }
+
+export { batchedUsageQueries, usageGroupsBatched, UsageSummaryCache } from "./usage-batched.ts";
+export type { BatchedUsage } from "./usage-batched.ts";
 
 /// usage_threads: the threads usage names, each with the first thing a person said in it (for its title; none where
 /// its archive cannot be read). Those gone are left out.

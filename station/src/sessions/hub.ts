@@ -156,6 +156,9 @@ export class Hub {
   /// Stops following the store's sessions starting and stopping (live.ts `running`).
   private unlistenRunning: () => void = () => {};
   readonly actors = new Map<string, SessionActor>();
+  /// Installed by the agents' side: older stores finish indexing active keys without holding the station thread.
+  waitForWorkspaceActivity: (() => Promise<boolean>) | null = null;
+  private awaitingWorkspaceActivity = new Set<string>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
   /// Fibers of the hub's own (title waits, archive reviews): interrupted at shutdown.
@@ -297,16 +300,39 @@ export class Hub {
   /// The station left one of its workspaces but is still in others (docs/multi-workspace.md): that workspace's
   /// sessions end their processes as `suspendAll` ends everyone's; `backIn` resumes them once it is back.
   async leftWorkspace(ws: string) {
-    const keys = new Set(this.store.listSessions().filter((s) => s.ws === ws).map((s) => s.key));
+    // Only actors and their eviction deadlines have anything to suspend. Historical sessions have neither.
+    const candidates = new Set([...this.deadlines.keys(), ...this.actors.keys()]);
+    const keys = new Set([...candidates].filter((key) => this.store.getSession(key)?.ws === ws));
     for (const [key, fiber] of this.deadlines) if (keys.has(key)) (this.interrupt(fiber), this.deadlines.delete(key));
     await Promise.all([...this.actors.values()].filter((a) => keys.has(a.key)).map((a) => a.suspend()));
   }
 
   /// The station is in a workspace again: its sessions' cut-off turns resume, and what waited goes on.
   backIn(ws: string) {
-    for (const row of this.store.listSessions().filter((s) => s.ws === ws)) {
-      if (row.running && this.online(row)) void this.actor(row).recover();
-      else if (this.store.hasPending(row.key) && this.online(row)) void this.actor(row).kick();
+    let rows = this.store.returningSessionsIn(ws);
+    if (rows === null && this.waitForWorkspaceActivity !== null) {
+      if (!this.awaitingWorkspaceActivity.has(ws)) {
+        this.awaitingWorkspaceActivity.add(ws);
+        void this.waitForWorkspaceActivity().then((ready) => {
+          this.awaitingWorkspaceActivity.delete(ws);
+          if (ready && this.workspaces().includes(ws)) this.backIn(ws);
+        }).catch((error) => {
+          this.awaitingWorkspaceActivity.delete(ws);
+          log.warn("hub", "could not find a rejoined workspace's active sessions", { error: (error as Error).message });
+        });
+      }
+      return;
+    }
+    // A standalone hub without the agents' worker can still open an older store.
+    if (rows === null) {
+      const keys = new Set([...this.store.runningSessions().map((row) => row.key), ...this.store.sessionsWithPending()]);
+      rows = [...keys].map((key) => this.store.getSession(key)).filter((row): row is SessionRow =>
+        row !== null && row.ws === ws && (row.running || this.store.hasPending(row.key))).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    }
+    for (const row of rows) {
+      if (!this.online(row)) continue;
+      if (row.running) void this.actor(row).recover();
+      else void this.actor(row).kick();
     }
   }
 
@@ -380,7 +406,11 @@ export class Hub {
     // A crash left runners without a snapshot: what they keep is taken up as it stands.
     const runners = new Set(this.options.runners ? this.options.runners() : existingRunners(this.config().dataDir).map((r) => r.id));
     const taken = new Set(handed.sessions.map((s) => s.key));
-    for (const row of this.store.listSessions()) {
+    // A shared Codex host can only have a session to recover when that session was marked running. Without a
+    // session-owned runner there is no reason to load the station's idle and archived sessions.
+    const ownRunners = [...runners].some((id) => !id.startsWith("codex-"));
+    const candidates = ownRunners ? this.store.listSessions() : this.store.runningSessions();
+    for (const row of candidates) {
       if (taken.has(row.key)) continue;
       const runtime = runtimeNamed(row.runtime);
       // Claude's and dsh's runner is the session's own (an idle one is taken up too); codex sessions share their
@@ -1121,26 +1151,25 @@ export class Hub {
       held: (key) => this.holdsNow.size > 0 || !this.inAWorkspace(key),
       stopJobs: async (key) => {
         const jobs = this.jobs;
-        const running = this.store.listJobs(key).filter((j) => j.state === "running" && (j.watch || j.port === null));
         if (!jobs) return;
-        for (const job of running) {
+        for (const id of this.store.runningWaitJobIds(key)) {
           try {
-            await jobs.stop(job.id);
-            log.info("hub", "job stopped with its session's wait", { session: key, job: job.id });
+            await jobs.stop(id);
+            log.info("hub", "job stopped with its session's wait", { session: key, job: id });
           } catch (error) {
-            log.warn("hub", "job not stopped", { session: key, job: job.id, error: (error as Error).message });
+            log.warn("hub", "job not stopped", { session: key, job: id, error: (error as Error).message });
           }
         }
       },
       endJobs: async (key) => {
         const jobs = this.jobs;
         if (!jobs) return;
-        for (const job of this.store.listJobs(key).filter((j) => j.state === "running" || (j.state === "exited" && j.port !== null))) {
+        for (const id of this.store.upJobIds(key)) {
           try {
-            await jobs.stop(job.id);
-            log.info("hub", "job stopped with its session archived", { session: key, job: job.id });
+            await jobs.stop(id);
+            log.info("hub", "job stopped with its session archived", { session: key, job: id });
           } catch (error) {
-            log.warn("hub", "job not stopped", { session: key, job: job.id, error: (error as Error).message });
+            log.warn("hub", "job not stopped", { session: key, job: id, error: (error as Error).message });
           }
         }
       },

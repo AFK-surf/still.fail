@@ -4,19 +4,23 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { constants, DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
-import { MERGED, SCHEMA } from "../src/store/schema.ts";
+import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
+import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
+import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
+import { compactHistoryBeforeQuery } from "../src/read/usage.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -360,6 +364,133 @@ test("deleting a session removes its first-message summary once, not once per de
   store.deleteSession("a");
   assert.deepEqual(store.db.prepare("SELECT session FROM first_removed").all().map((r) => r.session), ["a"]);
   assert.equal(store.sessionStats("b").get("b")!.firstText, "message 0", "the other participant keeps its summary");
+});
+
+for (const mode of ["ABORT", "REPLACE"] as const) for (const recursive of [false, true]) {
+  test(`a delivery written with ${mode} keeps the session's first message (recursive triggers ${recursive})`, () => {
+    const store = memory();
+    const db = store.db;
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    session(store, "first");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+    db.prepare(`INSERT OR ${mode} INTO deliveries (thread,n,session) VALUES (1,2,'first')`).run();
+    assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 1 });
+  });
+}
+
+for (const recursive of [false, true]) {
+  test(`replacing the first delivery keeps the earliest remaining delivery (recursive triggers ${recursive})`, () => {
+    const store = memory();
+    const db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      session(store, "first");
+      db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first'), (1,2,'first')").run();
+      db.prepare("INSERT OR IGNORE INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+      assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:1,n:1});
+      db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+      assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:1,n:2});
+    } finally { store.close(); }
+  });
+}
+
+test("replacing a sole delivery does not rewrite the unchanged first-message summary", () => {
+  const store = memory();
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = OFF;
+      CREATE TEMP TABLE first_changed (session TEXT);
+      CREATE TEMP TRIGGER watch_first AFTER UPDATE ON main.session_first BEGIN INSERT INTO first_changed VALUES (NEW.session); END;`);
+    session(store, "first");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+    db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+    assert.deepEqual(db.prepare("SELECT session FROM first_changed").all(), []);
+  } finally { store.close(); }
+});
+
+test("deleting a first delivery finds the earliest remaining one across its threads", () => {
+  const store = memory();
+  const db = store.db;
+  try {
+    session(store, "first");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (9,1,'first'), (2,1,'first'), (9,2,'first')").run();
+    db.prepare("DELETE FROM deliveries WHERE thread=9 AND n=1 AND session='first'").run();
+    assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:2,n:1});
+    db.prepare("DELETE FROM deliveries WHERE thread=2 AND n=1 AND session='first'").run();
+    assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:9,n:2});
+    db.prepare("DELETE FROM deliveries WHERE thread=9 AND n=2 AND session='first'").run();
+    assert.equal(db.prepare("SELECT 1 FROM session_first WHERE session='first'").get(), undefined);
+  } finally { store.close(); }
+});
+
+test("finding the first delivery seeks each thread without walking its messages", () => {
+  const store = memory();
+  const db = store.db;
+  try {
+    const put = db.prepare("INSERT INTO deliveries (thread,n,session,delivered_at) VALUES (?,?,?,1)");
+    db.exec("BEGIN");
+    for (let n=0; n<5_000; n++) { put.run(9,n,"target"); put.run(10,n,"other"); }
+    put.run(2,0,"target");
+    db.exec("COMMIT");
+    let visited = 0;
+    db.function("visit_first_delivery", (_row) => { visited++; return 1; });
+    const sql = firstDelivery("?1");
+    const traced = sql.replaceAll("WHERE session = ?1", "WHERE visit_first_delivery(rowid) AND session = ?1");
+    assert.deepEqual({ ...db.prepare(traced).get("target") }, {thread:9,n:0});
+    assert.ok(visited <= 4, `one seek per thread plus its first row (visited ${visited})`);
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("target") as {detail:string}[]).map((r) => r.detail).join(" | ");
+    assert.match(plan, /SEARCH deliveries USING COVERING INDEX deliveries_session \(session=\? AND thread=\?\)/);
+    assert.doesNotMatch(plan, /USE TEMP B-TREE/);
+    db.exec("BEGIN");
+    for (let n=0; n<1_200; n++) put.run(1000+n,0,"target");
+    db.exec("COMMIT");
+    visited = 0;
+    assert.deepEqual({ ...db.prepare(traced).get("target") }, {thread:9,n:0});
+    assert.ok(visited <= 2 * 1_202, `many threads still seek their first rows (visited ${visited})`);
+  } finally { store.close(); }
+});
+
+test("an older database replaces the first-delivery trigger without rebuilding its summary", () => {
+  const path = join(tempdir(), "first-delivery.db");
+  const before = open(path);
+  session(before, "first");
+  before.db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+  before.db.exec(`DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop;
+    CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+      INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+    END;
+    CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries
+      WHEN EXISTS (SELECT 1 FROM session_first WHERE session=OLD.session AND thread=OLD.thread AND n=OLD.n) BEGIN
+      DELETE FROM session_first WHERE session=OLD.session;
+      INSERT OR IGNORE INTO session_first SELECT session,thread,n FROM deliveries WHERE session=OLD.session ORDER BY rowid LIMIT 1;
+    END`);
+  before.close();
+  const after = open(path);
+  after.db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,2,'first')").run();
+  assert.deepEqual({ ...after.db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 1 });
+  after.db.prepare("DELETE FROM deliveries WHERE thread=1 AND n=1 AND session='first'").run();
+  assert.deepEqual({ ...after.db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 2 });
+  assert.match((after.db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='session_first_drop'").get() as {sql:string}).sql, /WITH RECURSIVE first_threads/);
+});
+
+test("updating the first-delivery trigger does not read or rewrite old deliveries and summaries", () => {
+  const store = memory();
+  const db = store.db;
+  db.exec(`DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop;
+    CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+      INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+    END;
+    CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries BEGIN
+      DELETE FROM session_first WHERE session=OLD.session;
+      INSERT OR IGNORE INTO session_first SELECT session,thread,n FROM deliveries WHERE session=OLD.session ORDER BY rowid LIMIT 1;
+    END`);
+  const tables = new Set(["deliveries", "entries", "session_first", "thread_state", "thread_people"]);
+  db.setAuthorizer((action, table) => tables.has(table ?? "") && [constants.SQLITE_READ, constants.SQLITE_INSERT, constants.SQLITE_UPDATE, constants.SQLITE_DELETE].includes(action)
+    ? constants.SQLITE_DENY : constants.SQLITE_OK);
+  try { addListState(db); } finally { db.setAuthorizer(null); }
+  db.setAuthorizer((action) => action === constants.SQLITE_CREATE_TRIGGER || action === constants.SQLITE_DROP_TRIGGER
+    ? constants.SQLITE_DENY : constants.SQLITE_OK);
+  try { addListState(db); } finally { db.setAuthorizer(null); }
 });
 
 test("what two chats' agents wrote each other is neither a chat's unread nor what lists show of it, archived or not", () => {
@@ -1136,12 +1267,27 @@ test("usage: the sessions at work are found by when their turns ended, once each
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
   const store = memory();
   const detail = detailQuery(1n, 1_000_001n, 1n, { workspace: "ws", home: false })!;
+  const compact = memory();
+  installCompactUsage(compact.db, () => 0);
+  const usageBatch = read.batchedUsageQueries({ workspace: "ws", home: false });
+  const usagePlans = [
+    [usageBatch.selected, [0n, 100n, "Wws"]], [usageBatch.owner, ["a"]],
+    [usageBatch.buckets, [0n, "a", 0n, 100n, "Wws"]], [usageBatch.anyPending, ["Wws"]], [usageBatch.pending, ["Wws"]],
+    [usageBatch.pendingRange, [0n, 100n, "Wws"]],
+    [compactHistoryBeforeQuery(null), [0n]], [compactHistoryBeforeQuery({ workspace: "ws", home: false }), [0n, "Wws"]],
+    [compactHistoryBeforeQuery({ workspace: "ws", home: true }), [0n, "Wws"]],
+  ] as [string, unknown[]][];
+  for (const [sql, args] of usagePlans) {
+    const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.every((d) => !d.startsWith("SCAN ")), `${sql}\n  ${plan.join(" | ")}`);
+  }
   // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the
   // login cards, or of the small one that counts sessions (or of what a subquery found); a table, or an index of every
   // turn, job or entry, never.
   const planned: [string, unknown[]][] = [
     [read.ORIGINAL_RUNTIME, ["a"]],
-    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
+    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [JOB_AT_PORT, [5100]], [SESSION_JOBS, ["a"]],
+    [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
@@ -1155,10 +1301,13 @@ test("what the station asks again and again is planned by an index, never a scan
     // order. It must still seek the underlying lookup below (asserted separately), not scan the historical table.
     assert.ok(!plan.some((d) => scans.test(d)
       && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))
+      && !(sql === RUNNING_WAIT_JOBS && d === "SCAN active" && plan.includes("CO-ROUTINE active"))
       && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN e" && (plan.includes("MATERIALIZE edge") || plan.includes("CO-ROUTINE edge")))
       && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN p" && plan.includes("CO-ROUTINE parts"))), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
   }
+  assert.equal(plans.get(JOB_AT_PORT)!.filter((d) => d.includes("jobs_up (state=? AND port=?)")).length, 2,
+    "a port is sought among running and restarting services");
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
   // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on ccvm).
   assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));
@@ -1220,7 +1369,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   // a chat of 534 messages read 479 pages, 3 to 16 s on ccvm short of memory (2026-11-02), every telling after it waiting.
   const planned: [string, unknown[]][] = [
     [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
-    [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]],
+    [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]], [read.PINS_OF, ["a@x", '["a"]']],
     [`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, ['["a"]']], [read.TOLD_BLOCKED, ["a", 0, 9]], [read.RUNNING_OF, ['["a"]']],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
@@ -1252,6 +1401,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(read.OPENERS_OF, "o USING INDEX sqlite_autoindex_opened_chats_1 (child_station=? AND child=?)");
   has(read.OPENED_OF, "o USING INDEX opened_chats_by_key (parent_station=? AND parent=?)");
   has(read.PUBLISHED_OF, "published USING INDEX published_by_thread (thread=?)");
+  has(read.PINS_OF, "pins USING INDEX sqlite_autoindex_pins_1 (viewer=? AND session=?)");
   has(read.TOLD_BLOCKED, "turns_by_end (session_key=? AND ended_at>? AND ended_at<?)");
   // The jobs running of some sessions: by an index (of those running, or of their sessions' jobs), never every job.
   has(read.RUNNING_OF, "SEARCH jobs USING INDEX");

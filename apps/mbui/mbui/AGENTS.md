@@ -39,7 +39,10 @@ yet and you can add one, add it.
   native on any system: CI runs the native tests on Linux. detlint's `host-import` holds it.
 - A new host call: a method of `Host` in `src/hostapi/host.mbt` (its default is what a host with nothing for it
   answers) and its wrapper there, the platform's in `src/host/native_host.mbt` over the function each target has, and
-  the fake's in `src/ui/fake_host.mbt` where a test needs another answer than the default.
+  the fake's in `src/ui/fake_host.mbt` where a test needs another answer than the default. Its `extern "C"`
+  declaration's Wasm side (`x_wasm.mbt` beside `x_native.mbt`, for an app run in Wasm by the native shell,
+  `src/host/wasm_shell.c`) is written by `tools/wasmhost`: still.fail's `scripts/wasm-app.sh build` writes it,
+  `check` says where it is not what the declarations make.
 
 ## There are no flaky failures
 

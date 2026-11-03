@@ -35,8 +35,14 @@ append() {
 [ -z "$prepare" ] || append "$prepare"
 append "$drive"
 printf 'exit\n' >> "$work/drive"
-APP="$app" MODE=release bash "$D/mac.sh" build
-exe="./_build/native/release/build/stillfail/$app/$app.exe"
+if [ "$app" = sffilm ]; then
+  # (the scene in Wasm in mbui's native shell: no C of the app compiled, the user 2026-11-03)
+  APP=sffilm bash "$D/wasm-app.sh" build
+  exe="$A/out/wasm-app/sffilm"
+else
+  APP="$app" MODE=release bash "$D/mac.sh" build
+  exe="./_build/native/release/build/stillfail/$app/$app.exe"
+fi
 [ -x "$exe" ] || { echo "media preview: no executable for $app" >&2; exit 1; }
 export MBUI_WIN="${MBUI_WIN:-390x844}" MBUI_MEDIA_PREVIEW=1 MBUI_DRIVE_KEEP_OPEN=1
 export MBUI_DRIVE="$(cat "$work/drive")"

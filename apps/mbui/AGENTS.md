@@ -96,6 +96,13 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     or the tier does to a thing is no motion of its own.
   - No time window is a cause, and no logic reads whether a motion runs.
 
+## Running the app in development
+
+- `scripts/wasm-app.sh run` runs the Mac app built for Wasm in mbui's native shell (the user, 2026-11-03: no C of the
+  app compiled in development); `build` alone builds it (6 s after a change of the app; the shell is built again only
+  when the host's C, the core's parts or the declarations change). `e2e/run.sh mac` runs it too outside CI. The
+  native app (`scripts/mac.sh`) is CI's and the releases'.
+
 ## What is checked, and where
 
 - The app's screens are tested in the Tester: its draw list at the declared moment.

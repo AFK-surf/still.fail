@@ -66,6 +66,7 @@
   "station.screen.linuxX11FallbackUnavailable": "无法启动 X11 桌面控制。请确认桌面已登录，并安装 Python GI、GStreamer 的 X11/JPEG 组件和 XTest 库。",
   "station.screen.linuxTextUnsupported": "当前应用无法接收这段文字，或输入框中有选中的内容。请取消选择后重试；网页也可通过浏览器画面输入。",
   "station.screen.codec": "该画面以 {codec} 格式发送，此 app 无法显示",
+  "station.screen.debugFailed": "没有成功：{said}",
   "station.screen.failed": "无法打开画面：{said}",
   "station.screen.captureOff": "这台 Mac 尚未允许 {app} 录制屏幕。",
   "station.screen.controlOff": "这台 Mac 尚未允许 {app} 进行操作（辅助功能），只能查看，无法操作。",

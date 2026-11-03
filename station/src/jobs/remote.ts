@@ -138,13 +138,21 @@ export function readJson(path: string): Json {
 
 /// What chats used of other stations' workspaces (`usedPath`), as last written or read here: what `workspaceTargets`
 /// says of every chat shown, again and again, read from the disk each time on the station's thread, 16 of them held it
-/// 2.5 s on ccvm short of memory (2026-11-03). Written only by this station (`writeJson` keeps it current).
-const used = new Map<string, Json>();
+/// 2.5 s on ccvm short of memory (2026-11-03), and `recordUse` at each of their tool calls. Written only by this station
+/// (`writeJson` keeps it current); null: none written.
+const used = new Map<string, Json | null>();
 
-function readUsed(path: string): Json {
+/// A chat's record (null: none), not to be changed in place: a copy is written (`writeJson`).
+function readUsed(path: string): Json | null {
   const kept = used.get(path);
   if (kept !== undefined) return kept;
-  const read = readJson(path);
+  let read: Json | null;
+  try {
+    read = readJson(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    read = null;
+  }
   used.set(path, read);
   if (used.size > 4096) used.delete(used.keys().next().value!);
   return read;
@@ -427,7 +435,9 @@ export class Remote {
     const path = join(this.root, "outgoing", `${ref}.json`);
     let entry: Json;
     try {
-      entry = readJson(path);
+      // Off the station's thread: a task's station tells this at each change, 3 read on it held it 1.3 s on ccvm short
+      // of memory (2026-11-03).
+      entry = await readJsonSoon(path);
     } catch {
       throw new Error("unknown task");
     }
@@ -878,7 +888,7 @@ export class Remote {
     try {
       const workspace = this.workspace(row.ws ?? null);
       const record = readUsed(this.usedPath(session));
-      if (record.closing === true || record.workspace !== workspace || !Array.isArray(record.stations)) return null;
+      if (record === null || record.closing === true || record.workspace !== workspace || !Array.isArray(record.stations)) return null;
       return { workspace, stations: record.stations.filter((s: unknown): s is string => typeof s === "string" && s !== "") };
     } catch {
       return null;
@@ -912,14 +922,15 @@ export class Remote {
   /// The source remembers which stations a session ran tasks on, to ask them to clean up when it closes.
   recordUse(workspace: string, session: string, station: string): void {
     const path = this.usedPath(session);
-    let v: Json;
+    let had: Json | null;
     try {
-      v = readJson(path);
+      had = readUsed(path);
     } catch {
-      v = { session, workspace, stations: [] };
+      had = null;
     }
-    const known = Array.isArray(v.stations) && v.stations.some((s: Json) => s === station);
-    if (known && v.closing !== true) return;
+    const known = had !== null && Array.isArray(had.stations) && had.stations.some((s: Json) => s === station);
+    if (known && had.closing !== true) return;
+    const v: Json = had === null ? { session, workspace, stations: [] } : structuredClone(had);
     if (!known) {
       if (!Array.isArray(v.stations)) throw new Error("bad record");
       v.stations.push(station);
@@ -2027,14 +2038,13 @@ export class Remote {
       }
       let synced: Synced | null = null;
       if (action === "start") {
+        // Read off the station's thread: only this start reads it (76 ms on ccvm short of memory, 2026-11-03).
         let local: Json = null;
         try {
-          local = readJson(prepared);
+          local = await readJsonSoon(prepared);
         } catch {
-          // Not moved into its session's directory yet (movePrepared).
-          try {
-            local = readJson(join(this.root, "prepared", preparedName));
-          } catch {}
+          // Not moved into its session's directory yet (movePrepared), or moved meanwhile.
+          local = await readJsonSoon(join(this.root, "prepared", preparedName)).catch(() => readJsonSoon(prepared)).catch(() => null);
         }
         if (typeof local?.dir === "string") {
           const dir: string = local.dir;

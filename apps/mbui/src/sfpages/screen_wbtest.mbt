@@ -171,13 +171,20 @@ fn screen_rig(
 ///|
 fn ScreenRig::sess(self : ScreenRig) -> ScreenSess {
   ignore(self)
-  screens_open.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  // (the one this rig opened, whichever screen it was asked for)
+  for _, sess in screens_open {
+    return sess
+  }
+  abort("no screen open")
 }
 
 ///|
 fn ScreenRig::ui(self : ScreenRig) -> ScreenUi {
   ignore(self)
-  screen_uis.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  for _, ui in screen_uis {
+    return ui
+  }
+  abort("no screen open")
 }
 
 ///|

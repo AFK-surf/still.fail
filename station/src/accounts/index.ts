@@ -40,7 +40,7 @@ import type { Store } from "../store/store.ts";
 import { joinPath } from "../ops/paths.ts";
 import { modelName } from "../ops/model-name.ts";
 import { titleOf } from "../read/views.ts";
-import { currentPolicy, LEGACY_OPTIONS, savePolicy } from "../sessions/archive-policy.ts";
+import { LEGACY_OPTIONS, policyFrom, savePolicy } from "../sessions/archive-policy.ts";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
 import { CONSOLE_FILE, consoleIn, readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
@@ -1308,18 +1308,19 @@ export class Accounts {
     return this.deps.store.getSession(session)?.title ?? session;
   }
 
-  /// The overview's `automaticDecisions`.
-  automaticDecisionsView(viewer: Viewer): Json {
+  /// The overview's `automaticDecisions`. A workspace overview supplies its own policy and names, and filters the
+  /// already limited recent checks before naming them; direct callers keep the station-wide policy and checks.
+  automaticDecisionsView(viewer: Viewer, options: { includePolicy?: boolean; visible?: (session: string) => boolean; title?: (session: string) => string } = {}): Json {
     if (!manages(viewer)) return { canEdit: false, settings: {}, models: [], recent: [] };
     const lang = stationLang();
     const titles = new Map<string, string>();
     const title = (session: string) => {
       let t = titles.get(session);
-      if (t === undefined) titles.set(session, (t = this.chatTitleOf(session)));
+      if (t === undefined) titles.set(session, (t = options.title?.(session) ?? this.chatTitleOf(session)));
       return t;
     };
     // For pages from before the policy: the checks one by one.
-    const recent = this.deps.store.recentDecisions().map((row: Json) => {
+    const recent = this.deps.store.recentDecisions().filter((row: Json) => options.visible?.(typeof row.session === "string" ? row.session : "") ?? true).map((row: Json) => {
       const d = row.detail ?? {};
       const session = typeof row.session === "string" ? row.session : "";
       return {
@@ -1335,7 +1336,7 @@ export class Accounts {
       settings: { completion: { enabled: completion.enabled === true, model: typeof completion.model === "string" ? completion.model : null } },
       models: this.decisionModels(),
       recent,
-      policy: this.policyView(title),
+      ...(options.includePolicy === false ? {} : { policy: this.policyView(title) }),
     };
   }
 
@@ -1343,8 +1344,8 @@ export class Accounts {
   /// put there (by their latest check), who changed it last, and how many checks failed.
   private policyView(title: (session: string) => string): Json {
     const store = this.deps.store;
-    const policy = currentPolicy(store);
     const saved = store.archivePolicy();
+    const policy = policyFrom(saved);
     const latest = new Map<string, Json>();
     for (const row of store.latestDecisionsSince(store.now() - POLICY_DAYS * 86_400_000)) if (typeof row.session === "string") latest.set(row.session, row);
     const byOption = new Map<string, Json[]>();

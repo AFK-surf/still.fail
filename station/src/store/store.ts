@@ -24,7 +24,7 @@ import {
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
-  CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
+  CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
@@ -38,6 +38,9 @@ import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { retireDuplicateUsage } from "./usage-unified.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
+import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
+import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
+import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -133,6 +136,9 @@ const JOB_NOTICES = 50;
 const REMOTE_RUNS_MS = 90 * 24 * 3600 * 1000;
 /// A chat shared with another workspace being used there is noted at most this often (chat_shares `used`).
 const USED_NOTE_MS = 60_000;
+/// The most archived workspaces the cleanup reads in one main-thread query.
+export const ARCHIVED_WORKSPACE_BATCH = 64;
+export type ArchivedWorkspace = { key: string; archivedAt: number };
 
 type Changes = StoreChange[];
 type Arg = SQLInputValue;
@@ -210,6 +216,8 @@ export class Store {
       addClientColumn(db);
       addAutoTitleColumns(db);
       addWatchColumn(db);
+      installActiveWatches(db);
+      installOtherActiveJobs(db);
       addQueueColumns(db);
       addSizeColumn(db);
       addSmallJobColumn(db);
@@ -229,6 +237,7 @@ export class Store {
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);
+      installWorkspaceActivity(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
       addSessionTurns(db);
@@ -375,14 +384,30 @@ export class Store {
     return r ? toSession(r) : null;
   }
 
-  /// Every session, most recently active first.
-  /// The archived sessions, the longest archived first, by the index of those archived alone (schema.ts
-  /// sessions_put_away): what the emptying of their workspaces goes over (sessions/lifecycle.ts). Every session read
-  /// whole for it held the station 8 to 13 s on ccvm short of memory (2026-11-03), each time the disk was low.
-  archivedSessions(): { key: string; archivedAt: number }[] {
-    return this.#all("SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL ORDER BY archived_at, key").map((r) => ({ key: r.key, archivedAt: r.archived_at }));
+  /// A page of archived workspaces, longest archived first. `through` is a time inclusive, or the last row included in
+  /// a snapshot; `after` resumes past the previous page, even when several workspaces were archived at the same time.
+  archivedSessions(after: ArchivedWorkspace | null = null, through: number | ArchivedWorkspace | null = null): ArchivedWorkspace[] {
+    let sql = "SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL";
+    const args: Arg[] = [];
+    if (typeof through === "number") { sql += " AND archived_at <= ?"; args.push(through); }
+    else if (through !== null) { sql += " AND (archived_at, key) <= (?, ?)"; args.push(through.archivedAt, through.key); }
+    if (after !== null) { sql += " AND (archived_at, key) > (?, ?)"; args.push(after.archivedAt, after.key); }
+    return this.#all(`${sql} ORDER BY archived_at, key LIMIT ${ARCHIVED_WORKSPACE_BATCH}`, ...args)
+      .map((r) => ({ key: r.key, archivedAt: r.archived_at }));
   }
 
+  /// The latest archived workspace when a low-disk cleanup began, so newly archived work does not extend that sweep.
+  lastArchivedSession(): ArchivedWorkspace | null {
+    const r = this.#one("SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL ORDER BY archived_at DESC, key DESC LIMIT 1");
+    return r ? { key: r.key, archivedAt: r.archived_at } : null;
+  }
+
+  /// The first archive after a time, when a timed cleanup should next wake.
+  nextArchivedAt(after: number): number | null {
+    return this.#one("SELECT archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at > ? ORDER BY archived_at, key LIMIT 1", after)?.archived_at ?? null;
+  }
+
+  /// Every session, most recently active first.
   listSessions(): SessionRow[] {
     return this.#all("SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
   }
@@ -996,6 +1021,16 @@ export class Store {
     return this.#all("SELECT * FROM thread_sessions WHERE thread = ? ORDER BY joined_at, rowid", thread).map(toMembership);
   }
 
+  /// Whether an agent in this thread has a watch running, without reading its completed jobs.
+  hasActiveWatch(thread: number): boolean {
+    return this.#one(HAS_ACTIVE_WATCH, thread) !== undefined;
+  }
+
+  /// Whether this session has a watch running, without reading its completed jobs.
+  hasSessionActiveWatch(session: string): boolean {
+    return this.#one(HAS_SESSION_ACTIVE_WATCH, session) !== undefined;
+  }
+
   /// A thread of this session by the address the agent names it with, and how the session posts there.
   sessionThread(session: string, channel: string, threadTs: string): SessionThread | null {
     const r = this.#one(
@@ -1373,6 +1408,12 @@ export class Store {
     return this.#one(HAS_PENDING_MESSAGE, session) !== undefined || this.#one(HAS_PENDING_LETTER, session) !== undefined;
   }
 
+  /// Whether any delivery is undelivered, including an orphan: what statsOf's pending count tests, without counting it.
+  hasUndelivered(session: string): boolean {
+    return this.#one("SELECT 1 FROM deliveries INDEXED BY deliveries_pending WHERE session = ? AND delivered_at IS NULL LIMIT 1", session) !== undefined
+      || this.#one("SELECT 1 FROM letter_deliveries INDEXED BY letter_deliveries_pending WHERE session = ? AND delivered_at IS NULL LIMIT 1", session) !== undefined;
+  }
+
   /// Marks messages read by the session.
   markDelivered(session: string, messages: Handed[]): void {
     this.#with((changes) => {
@@ -1404,6 +1445,17 @@ export class Store {
 
   sessionsWithPending(): string[] {
     return this.#all(PENDING_SESSIONS).map((r) => r.session);
+  }
+
+  /// The running or pending sessions of a rejoined workspace; null until an older database's active keys are indexed.
+  returningSessionsIn(ws: string): SessionRow[] | null {
+    this.db.exec("SAVEPOINT returning_workspace");
+    try {
+      if (!workspaceActivityReady(this.db)) return null;
+      return this.#all(WORKSPACE_ACTIVITY, ws).map(toSession)
+        .filter((row) => row.running || this.hasPending(row.key))
+        .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    } finally { this.db.exec("RELEASE returning_workspace"); }
   }
 
   /// The person session `key` works for, as a creator reference (lowercased): whoever its chat was started for, its
@@ -2046,6 +2098,12 @@ export class Store {
     return this.#all(JOBS_UP).map(toJob);
   }
 
+  /// The service holding a port, including one waiting to restart.
+  jobAtPort(port: number): Pick<JobRow, "id" | "name" | "port"> | null {
+    const r = this.#one(JOB_AT_PORT, port);
+    return r ? { id: r.id, name: r.name, port: r.port } : null;
+  }
+
   /// A session's jobs (all sessions' with null), newest first. A session's by its index: asked as one statement for
   /// both (`?1 IS NULL OR session_key = ?1`), each read every job the station ever ran (5 s on ccvm with its pages put
   /// out, 2026-10-25).
@@ -2057,6 +2115,21 @@ export class Store {
   /// each second a command waits for the screen, jobs/jobs.ts `line`).
   jobsRunning(): JobRow[] {
     return this.#all(JOBS_RUNNING).map(toJob);
+  }
+
+  /// Whether this session has at least `limit` jobs running. The lookup reads at most that many active jobs.
+  runningJobsAtLeast(session: string, limit: number): boolean {
+    return limit <= 0 || this.#one(RUNNING_LIMIT, session, limit - 1) !== undefined;
+  }
+
+  /// Running jobs stopped with a wait, newest first; completed jobs and other sessions are not read.
+  runningWaitJobIds(session: string): string[] {
+    return this.#all(RUNNING_WAIT_JOBS, session).map((r) => r.id);
+  }
+
+  /// Its running jobs and services waiting to restart: what must stop when it is archived.
+  upJobIds(session: string): string[] {
+    return this.#all(UP_JOBS_OF_SESSION, session).map((r) => r.id);
   }
 
   /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and

@@ -279,6 +279,33 @@ export function segmented(path: string): boolean {
   }
 }
 
+/// `segmented` off the thread that asks: the station's sweep of the transcripts put away (sessions/cold.ts
+/// `segmentHistories`), 50 frames' heads read on its thread were 3.3 s held on ccvm short of memory (2026-11-03).
+export async function segmentedSoon(path: string): Promise<boolean> {
+  let file: FileHandle;
+  try {
+    file = await open(path, "r");
+  } catch {
+    return false;
+  }
+  try {
+    const frames = await framesOfHandle(file);
+    if (frames === null) return false;
+    const head = Buffer.alloc(5);
+    for (const f of frames) {
+      if (f.packed < 5) continue;
+      const { bytesRead } = await file.read(head, 0, 5, f.at);
+      if (bytesRead < 5) return false;
+      if (head.readUInt32LE(0) === FRAME_MAGIC && head[4] === STORED) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await file.close();
+  }
+}
+
 /// How long a put-away transcript is as written, from its table: null without one.
 export function writtenSize(path: string): number | null {
   const file = openSync(path, "r");

@@ -2598,3 +2598,7 @@ web-main.preset.browse
 web-main.preset.pickFolder
 web-main.preset.useFolder
 web-main.preset.search
+web-pages.screen.debug.app
+web-pages.screen.device.back
+web-pages.screen.debug.paneHide
+web-pages.screen.debug.paneShow

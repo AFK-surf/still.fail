@@ -240,12 +240,23 @@ const DECISIONS_KEPT_MS = 60_000;
 const decisionsKept = new WeakMap<object, Map<string, { at: number; stamp: string; view: unknown }>>();
 
 function madeDecisionsView(d: OverviewDeps, viewer: Viewer): unknown {
-  const view = d.accounts!.automaticDecisionsView(viewer);
-  const mine = (session: unknown) => typeof session === "string" && sees(viewer, d.store.getSession(session)?.ws ?? null);
+  const visible = new Map<string, boolean>();
+  const mine = (session: unknown) => {
+    if (typeof session !== "string") return false;
+    let isMine = visible.get(session);
+    if (isMine === undefined) visible.set(session, (isMine = sees(viewer, d.store.getSession(session)?.ws ?? null)));
+    return isMine;
+  };
+  const titles = new Map<string, string>();
+  const title = (session: string) => {
+    let named = titles.get(session);
+    if (named === undefined) titles.set(session, (named = chatTitleOf(d.store, session)));
+    return named;
+  };
+  const view = d.accounts!.automaticDecisionsView(viewer, { includePolicy: false, visible: mine, title });
   const manages = viewer.role === "owner" || viewer.role === "admin";
-  if (Array.isArray(view?.recent)) view.recent = view.recent.filter((row: any) => mine(row?.session));
-  if (view?.policy !== undefined || (manages && viewer.home === false)) {
-    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, (session) => chatTitleOf(d.store, session));
+  if (manages) {
+    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, title);
     view.canEditPolicy = manages;
   }
   return view;

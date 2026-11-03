@@ -771,6 +771,8 @@ pub let history_rail_in : @ui.Space
 
 pub fn holds_least(Double) -> Double
 
+pub let home_workspace_title_look : @view.WordsLook
+
 pub let hover_card_w : @ui.Len
 
 pub let hover_tile_least : @ui.Len
@@ -1865,6 +1867,8 @@ pub fn set_words((String, Array[(String, String)]) -> String) -> Unit
 pub fn setting(@ui.Ctx, String, () -> Unit, note? : String) -> Unit
 
 pub fn setting_link(@ui.Ctx, String, String, String, note? : String) -> Bool
+
+pub fn setting_switch(@ui.Ctx, String, String, Bool, note? : String) -> Bool
 
 pub fn settings(@ui.Ctx, Array[() -> Unit]) -> Array[() -> Unit]
 

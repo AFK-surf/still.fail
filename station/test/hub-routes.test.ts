@@ -18,8 +18,8 @@ import { Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import { digest } from "../src/read/digest.ts";
-import { openStore } from "../src/read/store.ts";
-import { chatRows, chats } from "../src/read/views.ts";
+import { answersSince, openStore } from "../src/read/store.ts";
+import { chatMarks, chatRows, chats } from "../src/read/views.ts";
 import { marksOf, rowsMade } from "../../client/core-ts/src/station/rows-made.ts";
 import { isDeepStrictEqual } from "node:util";
 import { FakeDriver, settle } from "./hub-fakes.ts";
@@ -790,6 +790,8 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
     // b brought into a's chat: a's item has both; c alone.
     assert.equal((await r.ask("POST", `/threads/${made[0].thread.id}/sessions`, { session: made[1].key }))[0], 200);
     r.store.insertMessage(newMessage(made[0].thread.id, "1.2", "person", "a@x", "hi"));
+    r.store.setPin(viewer.email, made[0].key, true);
+    r.store.setPin(viewer.email, made[2].key, true);
     const store = openStore(r.data);
     const whole = chats(store, viewer, false);
     const byId = new Map(whole.map((row: any) => [String(row.id), row]));
@@ -798,11 +800,13 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
     const mark = r.store.db.prepare("INSERT INTO dismissed VALUES (?, ?, 1, ?)");
     const keep = r.store.db.prepare("INSERT INTO kept_chats VALUES (?, ?)");
     const closeCard = r.store.db.prepare("INSERT INTO closed_cards VALUES (?, 1, ?, ?)");
+    const pin = r.store.db.prepare("INSERT INTO pins VALUES (?, ?, ?)");
     for (let i = 0; i < 500; i++) {
       const thread = 100_000 + i;
       mark.run(viewer.email, thread, Date.now());
       keep.run(viewer.email, thread);
       closeCard.run(thread, viewer.email, Date.now());
+      pin.run(viewer.email, `unrelated-${i}`, i);
     }
     let unrelated = 0;
     const db = store.db;
@@ -815,6 +819,7 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
               if (method === "all") return (...args: any[]) => {
                 const result = query.all(...args);
                 if (/\bFROM (dismissed|kept_chats|closed_cards)\b/i.test(sql)) unrelated += result.filter((row) => Number(row.thread) >= 100_000).length;
+                if (/\bFROM pins\b/i.test(sql)) unrelated += result.filter((row) => String(row.session).startsWith("unrelated-")).length;
                 return result;
               };
               const value = Reflect.get(query, method, query);
@@ -832,11 +837,97 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
       for (const row of some.rows) assert.deepEqual(row, byId.get(String(row.id)));
       for (const row of some.rows) assert.ok(some.scope.includes(String(row.id)));
     }
-    assert.equal(unrelated, 0, "a scoped row update did not read marks or answers of unrelated chats");
+    const marks = chatMarks(store, viewer, { sessions: [made[0].key], threads: [made[0].thread.id] });
+    assert.deepEqual(Object.keys(marks.pins), [made[0].key]);
+    assert.equal(unrelated, 0, "a scoped update did not read marks, pins or answers of unrelated chats");
     store.db.close();
   } finally {
     await r.close();
   }
+});
+
+test("sidebar answers read only chats that can have a card answer", async () => {
+  const r = rig();
+  try {
+    const quiet = (await r.ask("POST", "/sessions", { runtime: "claude", title: "No cards" }))[1] as any;
+    const asked = (await r.ask("POST", "/sessions", { runtime: "claude", title: "A card" }))[1] as any;
+    for (let i = 0; i < 40; i++) r.store.insertMessage(newMessage(quiet.thread.id, `quiet-${i}`, "person", viewer.email, `message ${i}`));
+    r.store.insertMessage({ ...newMessage(asked.thread.id, "card", "agent", asked.key, "Choose"), card: { type: "options", options: [{ label: "Yes" }] } });
+    r.store.insertMessage(newMessage(asked.thread.id, "answer", "person", viewer.email, "Yes"));
+    const store = openStore(r.data);
+    let quietMessages = 0;
+    const db = store.db;
+    store.db = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          return new Proxy(statement, {
+            get(query, method) {
+              if (method === "all") return (...args: any[]) => {
+                const rows = query.all(...args);
+                if (/SELECT thread, n FROM entries WHERE (?:thread = \? AND )?author_kind = 'person' AND kind = 'message' AND at >= \?/i.test(sql))
+                  quietMessages += rows.filter((row) => Number(row.thread) === quiet.thread.id).length;
+                return rows;
+              };
+              const value = Reflect.get(query, method, query);
+              return typeof value === "function" ? value.bind(query) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const whole = chats(store, viewer, false);
+    const scoped = chatRows(store, viewer, [quiet.key], []);
+    assert.deepEqual(scoped.rows, whole.filter((row: any) => row.id === quiet.key));
+    assert.equal(whole.find((row: any) => row.id === asked.key).answered.length, 1);
+    assert.equal(quietMessages, 0, "neither a full nor a scoped sidebar reads people’s messages from a chat with no cards");
+    store.db.close();
+  } finally { await r.close(); }
+});
+
+test("the cards answered in some chats are those the whole station's say, read by their cards", async () => {
+  const r = rig();
+  try {
+    const made = (await r.ask("POST", "/sessions", { runtime: "claude", title: "Cards" }))[1] as any;
+    const id = made.thread.id;
+    const card = (ts: string, text: string) => ({ ...newMessage(id, ts, "agent", made.key, text), card: { type: "options", options: [{ label: "Yes" }] } });
+    // Said before any card; a card answered, then said more; a card followed by another before anyone answered; that
+    // one answered; a card no one answered yet.
+    r.store.insertMessage(newMessage(id, "p0", "person", viewer.email, "hi"));
+    r.store.insertMessage(card("c1", "One?"));
+    r.store.insertMessage(newMessage(id, "p1", "person", viewer.email, "Yes"));
+    r.store.insertMessage(newMessage(id, "p2", "person", viewer.email, "and more"));
+    r.store.insertMessage(card("c2", "Two?"));
+    r.store.insertMessage(card("c3", "Three?"));
+    r.store.insertMessage(newMessage(id, "p3", "person", viewer.email, "Three it is"));
+    r.store.insertMessage(card("c4", "Four?"));
+    const store = openStore(r.data);
+    const said = (a: any[]) => a.filter((x) => x.answer !== null && x.question.thread === id).map((x) => [x.question.text, x.answer.text]);
+    const whole = answersSince(store, 0);
+    const scoped = answersSince(store, 0, [id]);
+    assert.deepEqual(said(scoped), [["One?", "Yes"], ["Three?", "Three it is"]]);
+    assert.deepEqual(said(scoped), said(whole));
+    store.db.close();
+  } finally { await r.close(); }
+});
+
+test("a job's chat named from the sidebar's items as they are, none of their messages, cards or marks read for it", async () => {
+  const r = rig();
+  try {
+    const a = (await r.ask("POST", "/sessions", { runtime: "claude", title: "Deploy" }))[1] as any;
+    const b = (await r.ask("POST", "/sessions", { runtime: "claude" }))[1] as any;
+    r.store.insertMessage(newMessage(b.thread.id, "1.1", "person", viewer.email, "what do we do first"));
+    r.store.insertMessage({ ...newMessage(a.thread.id, "card", "agent", a.key, "Choose"), card: { type: "options", options: [{ label: "Yes" }] } });
+    const store = openStore(r.data);
+    const look = (rows: any[]) => rows.map((row) => [row.id, row.title, row.agents.map((x: any) => x.key)]);
+    const full = chats(store, viewer, false);
+    const named = chats(store, viewer, false, null, true);
+    assert.deepEqual(look(named), look(full));
+    assert.ok(full.some((row: any) => row.card !== undefined) && named.every((row: any) => row.card === undefined && row.last === null), "nothing else read for them");
+    store.db.close();
+  } finally { await r.close(); }
 });
 
 test("a device makes the sidebar from the summaries and marks as the station makes it", async () => {

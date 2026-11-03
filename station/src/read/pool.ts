@@ -12,7 +12,9 @@ import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
-import type { Answer, Ask } from "./worker.ts";
+import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
+import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
+import type { Answer, Ask, Ready } from "./worker.ts";
 import { REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
@@ -42,7 +44,8 @@ type Asked = {
 /// A line of reads and the readers that answer it, at most `size` of them, the first read first. `room`: bulk reads leave
 /// one of them for a chat read (what devices ask).
 /// `rested`: when a background read may be taken again (one just read rests as long as it took).
-type Line = { told: boolean; size: number; room: boolean; slots: Slot[]; waiting: Asked[]; rested?: number };
+/// `wake`: the line looked at again once it has rested (one at a time).
+type Line = { told: boolean; size: number; room: boolean; slots: Slot[]; waiting: Asked[]; rested?: number; wake?: () => void };
 
 /// How many sessions' readers are remembered (the most recently read).
 const HOMES = 4096;
@@ -59,13 +62,19 @@ const cancelled = () => new HttpError(503, "read cancelled");
 /// statistics kept of them (the sidebar, a session's detail and summary, a chat's latest messages). Other page reads,
 /// including new kinds not yet classified, leave room for these, and these go before them: a slow transcript or resource
 /// snapshot can block just as a slow aggregate can. Behind a usage read of 76 s and a history's pages, the sidebar
-/// waited 7 s and a session opened 9 s on ccvm (2026-11-03), their own reads 0.2 s.
-const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages"]);
+/// waited 7 s and a session opened 9 s on ccvm (2026-11-03), their own reads 0.2 s. And the machine's sample (api/host.ts,
+/// once in 10 s however many ask: a station's page, a task's start waiting on its queue), 0.3 to 0.9 s itself, that
+/// waited 2 to 6 s behind the usage page's reads.
+/// And a job, and the list of jobs up without their chats (GET /jobs?chats=0, a few rows: 9 on ccvm), read again by
+/// every device as a job starts, that waited up to 40 s behind the usage page's reads one after another (2026-11-03);
+/// with their chats (an older device's, the sidebar made for it), a bulk read.
+const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "host", "hostTicks", "job"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
 /// older clients, so it remains in the background until that request is paged end to end.
 function interactive(a: Asked): boolean {
   if (INTERACTIVE.has(a.ask.op)) return true;
+  if (a.ask.op === "openJobs") return a.ask.args?.chats === false;
   if (a.ask.op !== "entries" && a.ask.op !== "letters") return false;
   const params = a.ask.args?.params;
   const keys = Array.isArray(params) ? params.map((p: unknown) => Array.isArray(p) ? p[0] : null) : Object.keys(params ?? {});
@@ -101,6 +110,7 @@ export class Readers {
   private next = 0;
   private closed = false;
   private minutes: MinuteReader | null = null;
+  private outflowChats: OutflowChatIndex | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -139,7 +149,15 @@ export class Readers {
     // A reader's heap stays small: what it builds is answered and dropped.
     const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null };
-    worker.on("message", (answer: Answer) => {
+    const begun = wall.now();
+    worker.on("message", (answer: Answer | Ready) => {
+      // How long a reader took to start: a read given it as it starts waits on that (one read of 1.9 s took 18 s on
+      // ccvm short of memory, 2026-11-03, a reader started for it).
+      if ("ready" in answer) {
+        const ms = wall.now() - begun;
+        if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : "told", ...answer.ready });
+        return;
+      }
       // An abandoned read may finish while its worker is being stopped. Do not give that worker another read until it exits.
       if (slot.retiring) return;
       const asked = slot.held;
@@ -150,10 +168,7 @@ export class Readers {
         // A background read rests its line as long as it took before the next: one after another, a history brought on
         // read 40 MB of a transcript in 10 s on ccvm short of memory (2026-11-03), every write and read waiting on the
         // disk meanwhile.
-        if (asked.background) {
-          line.rested = now + (now - asked.took);
-          wall.after(now - asked.took, () => this.pump(line));
-        }
+        if (asked.background) line.rested = now + (now - asked.took);
         if (answer.text !== undefined) asked.resolve(answer.text);
         else asked.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
       }
@@ -171,13 +186,28 @@ export class Readers {
     return slot;
   }
 
-  private letGoLater(slot: Slot) {
+  /// A reader with nothing to do goes after IDLE_MS, but not those of a line someone waits on (what devices ask, what
+  /// streams tell): one started for a read took 3 s on ccvm short of memory (2026-11-03, its code read in again), the
+  /// read itself 40 ms; the second of what devices ask, started as the first was busy, 16 s.
+  private letGoLater(slot: Slot, line: Line) {
     if (slot.idle) return;
     // A thread's resources: the machine's time.
     slot.idle = wall.after(IDLE_MS, () => {
       slot.idle = undefined;
-      if (slot.held === null) void slot.worker.terminate();
+      if (slot.held !== null) return;
+      if (this.kept(line)) return;
+      void slot.worker.terminate();
     });
+  }
+
+  private kept(line: Line): boolean {
+    return line === this.asked || line === this.told;
+  }
+
+  /// The readers of what devices ask and of what streams tell, started before either is asked anything: the first
+  /// reads after the station starts (an update), and one beside a slow one, need not wait on them.
+  warm() {
+    for (const line of [this.asked, this.told]) while (!this.closed && line.slots.length < line.size) this.start(line);
   }
 
   /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
@@ -188,6 +218,7 @@ export class Readers {
   read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false, signal }: { told?: boolean; background?: boolean; signal?: AbortSignal } = {}): Promise<string> {
     if (op === "usage") return this.usageRead(args, lang, told, signal);
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
+    if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
     return this.enqueue(op, args, lang, told, op === CHECKPOINT, background || filling(op, args), signal);
   }
 
@@ -251,6 +282,21 @@ export class Readers {
     throw new HttpError(502, "station stopping");
   }
 
+  private async outflowChatsRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+    const ws = (args as { ws?: InWorkspace } | null)?.ws;
+    const viewer: InWorkspace = ws !== null && typeof ws === "object" && typeof ws.workspace === "string"
+      ? { workspace: ws.workspace, home: ws.home === true } : { workspace: "\u0000home", home: true };
+    while (!this.closed) {
+      try { return await this.enqueue("outflowChats", args, lang, told, false, false, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== OUTFLOW_CHATS_PENDING) throw error;
+        this.outflowChats ??= new OutflowChatIndex(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.outflowChats.ready(viewer, signal), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
   /// `first`: before the reads waiting (CHECKPOINT).
   private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
@@ -300,9 +346,20 @@ export class Readers {
       const free = line.slots.filter((s) => s.held === null).length + (line.size - line.slots.length);
       const resting = line.rested !== undefined && wall.now() < line.rested;
       const behind = resting || line.slots.some((s) => s.held?.background === true) || (free < 2 && line.size > 1) ? -1 : line.waiting.findIndex((a) => a.background);
-      const first = line.waiting.findIndex((a) => interactive(a) || a.ask.op === CHECKPOINT);
+      // (a background read of a kind someone waits on, a batch's chat, is a background read: one at a time, after a rest)
+      const first = line.waiting.findIndex((a) => !a.background && (interactive(a) || a.ask.op === CHECKPOINT));
       const at = limited || first >= 0 ? first : foreground >= 0 ? foreground : behind;
-      if (at < 0) break;
+      if (at < 0) {
+        // A background read waiting while the line rests: looked at again once it has, however early a timer fires
+        // (one armed for as long as the read took woke a moment before it was over, the read left waiting for good).
+        if (resting && line.wake === undefined && line.waiting.some((a) => a.background)) {
+          line.wake = wall.after(Math.max(1, line.rested! - wall.now()), () => {
+            line.wake = undefined;
+            this.pump(line);
+          });
+        }
+        break;
+      }
       const asked = line.waiting[at]!;
       const home = asked.home !== null && asked.home.held === null && line.slots.includes(asked.home) ? asked.home : null;
       const slot = home ?? line.slots.find((s) => s.held === null) ?? (line.slots.length < line.size ? this.start(line) : null);
@@ -310,7 +367,7 @@ export class Readers {
       line.waiting.splice(at, 1);
       this.give(slot, asked);
     }
-    for (const slot of line.slots) if (slot.held === null) this.letGoLater(slot);
+    for (const slot of line.slots) if (slot.held === null) this.letGoLater(slot, line);
   }
 
   private give(slot: Slot, asked: Asked) {
@@ -357,6 +414,7 @@ export class Readers {
   close() {
     this.closed = true;
     if (this.minutes !== null) void this.minutes.close();
+    if (this.outflowChats !== null) void this.outflowChats.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();

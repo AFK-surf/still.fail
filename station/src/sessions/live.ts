@@ -9,6 +9,7 @@ import type { Clock } from "effect";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import type { BackgroundTask, LiveEvent, PlanItem } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
+import { log } from "../ops/log.ts";
 import { type PlanState, noPlan, planItems, readPlan, saysWhole } from "../read/plan.ts";
 import { ChainTail, type TailState, type TranscriptRef } from "../read/tail.ts";
 import { type TimelineEntry, brief } from "../read/transcript.ts";
@@ -84,7 +85,9 @@ type Rate = { buckets: [number, number][]; toldAt: number; told: number };
 /// `behind`: the transcript of the runtime session it runs in now is not written yet (a runtime writes it once its
 /// conversation has begun), so where its history goes on is looked for again on each read. `tail` null while where its
 /// transcripts stand is read off the main thread (`ready`).
-type Watched = { tail: ChainTail | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void };
+/// `takeUp`: while the readers are asked where its reading stands, where the process before's stood (carried over as it
+/// was asked): gone on from there at once, whether it was.
+type Watched = { tail: ChainTail | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void; takeUp?: (states: TailState[]) => boolean };
 /// A listener of a session: whether it is told the entries in brief, and what is said while it joins (what it lacks of
 /// the transcript read off the main thread first), held until it has joined.
 type Sub = { id: number; listener: Listener; brief: boolean; queue: LiveMessage[] | null };
@@ -102,6 +105,9 @@ export type History = {
 /// (`current`: whether that one's is among them; when not given, it is).
 export type Locate = (key: string) => { runtime: RuntimeKind; paths: TranscriptRef[]; current?: boolean } | null;
 
+/// A session's checklist as carried over to the next station process (`carriedPlans`).
+export type CarriedPlan = { key: string; at: number; items: PlanState["items"]; creating: [string, number][] };
+
 export class LiveHub {
   private steps = new Map<string, LiveStep[]>();
   private phase = new Map<string, [Phase, number]>();
@@ -111,10 +117,18 @@ export class LiveHub {
   /// held, `planBack`), or as its runtime says it apart (an ACP runtime's, which wins). Kept past its turns.
   private tasks = new Map<string, BackgroundTask[]>();
   private plans = new Map<string, PlanState>();
+  /// How far into its transcripts each checklist is read (entries): watched again, it reads on from there, not back.
+  private planAt = new Map<string, number>();
   private planBack = new Map<string, TimelineEntry[]>();
   private saidPlans = new Map<string, PlanItem[]>();
   private listeners = new Map<string, Sub[]>();
   private watched = new Map<string, Watched>();
+  /// Where the reading of transcripts no longer watched stood here (or in the process before, carried over): watched
+  /// again, read on from there, the readers not asked. Asked at each station update, a reader read on from what it kept
+  /// on disk, a session's 1.7 MB in 1.5 s on ccvm short of memory (2026-11-03), its chat waiting on it.
+  private stood = new Map<string, TailState[]>();
+  /// Whether the process before's were taken up (`takeTails`).
+  private tookTails = false;
   /// Its time and its waits (a read put off to gather a burst of writes).
   private time: Fibers;
   private nextId = 0;
@@ -192,7 +206,8 @@ export class LiveHub {
   }
 
   /// A transcript's entries read for its checklist: told when it changed (held while it is read back).
-  private readForPlan(key: string, entries: TimelineEntry[]) {
+  /// `start`: where `entries` begin in its transcripts.
+  private readForPlan(key: string, start: number, entries: TimelineEntry[]) {
     const back = this.planBack.get(key);
     if (back !== undefined) {
       back.push(...entries);
@@ -200,14 +215,46 @@ export class LiveHub {
     }
     let state = this.plans.get(key);
     if (!state) this.plans.set(key, (state = noPlan()));
+    if (this.planAt.get(key) === start) this.planAt.set(key, start + entries.length);
+    else this.planAt.delete(key);
     if (readPlan(state, entries) && !this.saidPlans.has(key)) this.emit(key, this.workNow(key));
   }
 
-  /// Its checklist read back from its transcript's entries before `end`, as it begins to be watched: the latest pages
-  /// back to where a call says it whole (or PLAN_PAGES of them), then what was gained meanwhile.
+  /// Its checklist as it begins to be watched, its transcripts `end` entries long: read on from where it was read to
+  /// before (watched again: a turn after HELD_AFTER_MS, a device opening it, the next station process), else read back
+  /// from the latest pages to where a call says it whole (or PLAN_PAGES of them); then what was gained meanwhile. Read
+  /// back each time, 4 pages of a long Claude transcript were 30 to 50 MB read at every station update on ccvm short of
+  /// memory (2026-11-03), every read waiting on the disk meanwhile.
   private readPlanBack(key: string, end: number) {
     if (this.history === null) return;
     const history = this.history;
+    const at = this.planAt.get(key);
+    const had = this.plans.get(key);
+    if (had !== undefined && at !== undefined && at <= end && end - at <= PLAN_PAGE * PLAN_PAGES) {
+      if (at === end) return;
+      this.planBack.set(key, []);
+      void (async () => {
+        const pages: TimelineEntry[][] = [];
+        for (let from = at; from < end; ) {
+          const upto = Math.min(end, from + PLAN_PAGE);
+          const page = await history.page(key, upto, upto - from, false);
+          const got = page.start === from ? page.entries.slice(0, upto - from) : [];
+          if (got.length === 0) throw new Error("not read on");
+          pages.push(got);
+          from += got.length;
+        }
+        return pages.flat();
+      })().then(
+        (gap) => this.planRead(key, end, gap, had),
+        () => {
+          // Not read on from there: read back.
+          this.planBack.delete(key);
+          this.planAt.delete(key);
+          this.readPlanBack(key, end);
+        },
+      );
+      return;
+    }
     this.planBack.set(key, []);
     void (async () => {
       const pages: TimelineEntry[][] = [];
@@ -221,18 +268,22 @@ export class LiveHub {
       }
       return pages.flat();
     })().then(
-      (past) => this.planRead(key, past),
-      () => this.planRead(key, []),
+      (past) => this.planRead(key, end, past),
+      () => this.planRead(key, null, []),
     );
   }
 
-  private planRead(key: string, past: TimelineEntry[]) {
+  /// Its checklist read from `past` (the entries just before `end`, null: not read) and what was gained meanwhile, on
+  /// from `from` (else afresh).
+  private planRead(key: string, end: number | null, past: TimelineEntry[], from?: PlanState) {
     const meanwhile = this.planBack.get(key) ?? [];
     this.planBack.delete(key);
-    const state = noPlan();
+    const before = JSON.stringify(planItems(this.plans.get(key) ?? noPlan()));
+    const state = from ?? noPlan();
     readPlan(state, past);
     readPlan(state, meanwhile);
-    const before = JSON.stringify(planItems(this.plans.get(key) ?? noPlan()));
+    if (end !== null) this.planAt.set(key, end + meanwhile.length);
+    else this.planAt.delete(key);
     this.plans.set(key, state);
     if (JSON.stringify(planItems(state)) !== before && !this.saidPlans.has(key)) this.emit(key, this.workNow(key));
   }
@@ -372,7 +423,7 @@ export class LiveHub {
     if (entries.length === 0) return;
     this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key) });
     this.count?.ask(key);
-    this.readForPlan(key, entries);
+    this.readForPlan(key, start, entries);
   }
 
   /// A watched transcript's length, kept where its summary reads it, as it changes.
@@ -515,10 +566,74 @@ export class LiveHub {
     this.unwatch(key);
   }
 
+  /// The checklists read from transcripts and how far each was read: what the next station process reads on from
+  /// (carried over at a handover, parts.ts `carry`).
+  carriedPlans(): CarriedPlan[] {
+    const out: CarriedPlan[] = [];
+    for (const [key, at] of this.planAt) {
+      const state = this.plans.get(key);
+      if (state !== undefined && !this.planBack.has(key)) out.push({ key, at, items: state.items, creating: [...state.creating].flatMap(([id, made]) => (state.items.includes(made) ? [[id, state.items.indexOf(made)] as [string, number]] : [])) });
+    }
+    return out;
+  }
+
+  /// What the process before read of checklists, where none is read here yet.
+  takePlans(carried: CarriedPlan[]): void {
+    if (!Array.isArray(carried)) return;
+    for (const c of carried) {
+      if (typeof c?.key !== "string" || !Number.isSafeInteger(c.at) || !Array.isArray(c.items) || !Array.isArray(c.creating)) continue;
+      if (this.plans.has(c.key) || this.planBack.has(c.key)) continue;
+      // A task tool's call waiting on its result names its item by where it is among them.
+      const items = c.items.map((i) => ({ ...i }));
+      const creating = new Map(c.creating.flatMap(([id, at]) => (typeof id === "string" && items[at] !== undefined ? [[id, items[at]!] as const] : [])));
+      this.plans.set(c.key, { items, creating });
+      this.planAt.set(c.key, c.at);
+    }
+  }
+
+  private keepStood(key: string, states: TailState[]) {
+    this.stood.delete(key);
+    this.stood.set(key, states);
+    while (this.stood.size > 256) this.stood.delete(this.stood.keys().next().value!);
+  }
+
+  /// Where the reading of each transcript stands here, watched or not: what the next station process reads on from
+  /// (carried over at a handover, parts.ts `carry`).
+  carriedTails(): { key: string; states: TailState[] }[] {
+    const out = new Map(this.stood);
+    for (const [key, w] of this.watched) if (w.tail !== null && !w.tail.keeps) out.set(key, w.tail.snapshot());
+    return [...out].map(([key, states]) => ({ key, states }));
+  }
+
+  /// What the process before read of transcripts, where none is watched here yet.
+  takeTails(carried: { key: string; states: TailState[] }[]): void {
+    if (!Array.isArray(carried)) return;
+    // How many were taken up, and why not the rest: one asked of the readers after an update all the same (ccvm,
+    // 2026-11-03), unsaid whether it came.
+    let taken = 0;
+    let watched = 0;
+    for (const c of carried) {
+      if (typeof c?.key !== "string" || !Array.isArray(c.states)) continue;
+      if (!c.states.every((st) => typeof st?.path === "string" && Number.isSafeInteger(st.offset) && Number.isSafeInteger(st.count))) continue;
+      const w = this.watched.get(c.key);
+      if (w !== undefined) {
+        if (w.tail === null && w.takeUp?.(c.states) === true) taken++;
+        else watched++;
+        continue;
+      }
+      this.keepStood(c.key, c.states);
+      taken++;
+    }
+    this.tookTails = true;
+    log.info("live", "transcripts' readings taken up", { carried: carried.length, taken, watched });
+  }
+
   /// A deleted session: nothing of it is watched or kept any more.
   forget(key: string) {
     this.tasks.delete(key);
     this.plans.delete(key);
+    this.planAt.delete(key);
+    this.stood.delete(key);
     this.planBack.delete(key);
     this.saidPlans.delete(key);
     this.steps.delete(key);
@@ -593,7 +708,8 @@ export class LiveHub {
       // Its checklist read again from what is written of it: kept here, from it; else read back where it is read.
       if (tail.keeps) {
         this.plans.set(key, noPlan());
-        this.readForPlan(key, tail.entries);
+        this.planAt.set(key, 0);
+        this.readForPlan(key, 0, tail.entries);
       } else this.readPlanBack(key, tail.length);
       arm();
     };
@@ -607,14 +723,36 @@ export class LiveHub {
       const ref = at.paths[i]!;
       return st.path === (typeof ref === "string" ? ref : ref.path) && (st.runtime ?? at.runtime) === (typeof ref === "string" ? at.runtime : ref.runtime);
     });
-    watched.ready = this.history
+    const stood = this.stood.get(key) ?? null;
+    this.stood.delete(key);
+    if (same(stood)) {
+      begin(ChainTail.from(at.runtime, stood));
+      this.soon(key);
+      return true;
+    }
+    if (this.tookTails) log.info("live", "a transcript's reading asked of the readers", { session: key, kept: stood !== null, carried: this.tookTails });
+    // Begun once, from the readers' answer or from what the process before carried over, whichever is first: carried
+    // over after the sessions at work were watched again, 3 of 7 were read by the readers all the same (2026-11-03).
+    let begun = false;
+    let readyNow = () => {};
+    watched.ready = new Promise<void>((resolve) => (readyNow = resolve));
+    watched.takeUp = (states) => {
+      if (begun || this.watched.get(key) !== watched || !same(states)) return false;
+      begun = true;
+      begin(ChainTail.from(at.runtime, states));
+      this.soon(key);
+      readyNow();
+      return true;
+    };
+    void this.history
       .state(key)
       .then(
         (states) => states,
         () => null,
       )
       .then((states) => {
-        if (this.watched.get(key) !== watched) return;
+        if (this.watched.get(key) !== watched || begun) return readyNow();
+        begun = true;
         if (same(states)) begin(ChainTail.from(at.runtime, states));
         else {
           // Its transcripts are not where the readers found them (or they could not say): read here, kept nowhere.
@@ -624,12 +762,14 @@ export class LiveHub {
         }
         // What was written since the readers read it.
         this.soon(key);
+        readyNow();
       });
     return true;
   }
 
   private unwatch(key: string) {
     const watched = this.watched.get(key);
+    if (watched?.tail != null && !watched.tail.keeps) this.keepStood(key, watched.tail.snapshot());
     this.watched.delete(key);
     this.told.delete(key);
     watched?.watcher?.close();

@@ -433,7 +433,9 @@ async function screenDebug(screens: ScreenHub, r: Request, raw: string, answer: 
     return json(200, JSON.stringify(await answer(screens.debugOf(id))));
   } catch (e) {
     if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
-    return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
+    // (simctl's own last line: what is before it is the command it ran and how it came to that)
+    const said = (e as Error).message.split("\n").map((l) => l.trim()).filter(Boolean).at(-1) ?? "";
+    return error(502, tr(r.lang, "station.screen.debugFailed", { said }));
   }
 }
 
