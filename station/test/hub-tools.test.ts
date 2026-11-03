@@ -3,6 +3,7 @@
 // chats, session_send, slack_api, files, titles, the archive suggestion after all_done.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { constants } from "node:sqlite";
 import type { AddressInfo } from "node:net";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -24,7 +25,7 @@ import { claudeProject } from "../src/read/transcript.ts";
 import { Refused } from "../src/sessions/neighbours.ts";
 import { archive, newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
-import { cleanTitle } from "../src/sessions/titles.ts";
+import { cleanTitle, nameChat } from "../src/sessions/titles.ts";
 import { adbTools } from "../src/adb/tool.ts";
 import { archiveTools } from "../src/tools/archive.ts";
 import { chatTools } from "../src/tools/chat.ts";
@@ -779,6 +780,22 @@ test("a chat that starts a watch may be renamed for it at once", async () => {
   r.store.insertJob({ id: "job_w", sessionKey: key, name: "盯 CI", command: "sleep 600", cwd: "/", port: null, token: "tw", state: "running", pgid: null, exitCode: null, startedAt: Date.now(), endedAt: null, restarts: 0, log: "/dev/null", watch: true });
   assert.ok((await post("监控 · CI")).endsWith('Titled the chat "监控 · CI".'), "a watch runs: at once");
   await r.close();
+});
+
+test("a watch permits renaming without reading its session's job history", async () => {
+  const r = new Rig();
+  const [key, thread] = newSession(r.hub, web("local"));
+  try {
+    r.store.setAutoTitle(thread.id, "CI", false);
+    const job = (id: string, state: string, watch: boolean) => ({ id, sessionKey: key, name: id, command: "true", cwd: "/", port: null,
+      token: id, state, pgid: null, exitCode: null, startedAt: 1, endedAt: null, restarts: 0, log: "/dev/null", watch });
+    for (let i = 0; i < 100; i++) r.store.insertJob(job(`ended-${i}`, "exited", true));
+    r.store.insertJob(job("active-watch", "running", true));
+    r.store.db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "jobs" ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try {
+      assert.equal(nameChat(r.hub, thread, "监控 · CI"), ' Titled the chat "监控 · CI".');
+    } finally { r.store.db.setAuthorizer(null); }
+  } finally { await r.close(); }
 });
 
 test("titles are one short line", () => {
