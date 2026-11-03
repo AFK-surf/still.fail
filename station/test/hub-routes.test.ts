@@ -519,6 +519,9 @@ test("going on with one of the machine's own sessions", async () => {
     assert.deepEqual([row.runtimeSessionId, row.cwd, row.title], [id, project, "fix the build"]);
     // Asked again: the session already going on with it.
     assert.equal((await r.ask("POST", "/machine-sessions", { runtime: "claude", id }))[1].key, made.key);
+    // Listed with it, by the index of runtime sessions alone.
+    const [, listed] = await r.ask("GET", "/machine-sessions");
+    assert.equal(listed.sessions.find((x: any) => x.id === id)?.session, made.key);
   } finally {
     process.env.HOME = home;
     await r.close();

@@ -80,6 +80,11 @@ function filling(op: string, args: unknown): boolean {
   return op === "timeline" && a !== null && typeof a.from === "string" && typeof a.to === "string" && a.brief === "1";
 }
 
+/// Reads by the pages' readers (`pages`): a history's pages, and the machine's own sessions (GET /machine-sessions, a walk
+/// of every Claude and Codex project there, 14 s on ccvm, 2026-11-03), each of the files on the disk rather than the
+/// database.
+const PAGES = new Set(["timeline", "machineSessions"]);
+
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
   private asked: Line;
@@ -242,7 +247,7 @@ export class Readers {
   private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     if (signal?.aborted) return Promise.reject(cancelled());
-    const line = op === CHECKPOINT ? this.log : told ? this.told : op === "timeline" ? this.pages : this.asked;
+    const line = op === CHECKPOINT ? this.log : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
