@@ -97,10 +97,7 @@ export class ColdRooms implements ColdStorage {
     if (!row) throw new Error(`unknown session ${key}`);
     const sources = hub.store.runtimeSessionSources(key);
     if (sources.length === 0) return [];
-    if (
-      packing &&
-      hub.store.sessionsInUse().some((s) => s.key !== key && hub.store.runtimeSessionSources(s.key).some((other) => sources.some((own) => own.runtime === other.runtime && own.id === other.id)))
-    )
+    if (packing && sources.some((source) => hub.store.transcriptInUse(source.runtime, source.id, key)))
       return [];
     const config = hub.config();
     const root = realpathSync(config.dataDir);
