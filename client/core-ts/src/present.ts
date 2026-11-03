@@ -234,6 +234,15 @@ export function rowWatch(agents: J[]): J {
   return { text: t("core-views.present.watching_names", { names: names.join(separator) }), ask: t("core-views.present.watch_ask", { names: named }) };
 }
 
+/// What a finger's swipe asks before archiving a chat (only the swipe: its menu's and its key's 归档 ask only for a watch):
+/// its watch's words while one of its agents keeps watch, else while one is at work or waits on work it started (an
+/// archived one finishes its turn and waits on nothing after); null otherwise.
+export function swipeAsk(agents: J[]): string | null {
+  const watch = rowWatch(agents);
+  if (watch !== null) return watch.ask;
+  return agents.some((a) => markOf(a) === "run") ? t("core-views.present.run_ask") : null;
+}
+
 /// Waiting on its watch: one runs and the agent said its wait is that (`waitWatch`; said before it, taken so). Waiting on
 /// anything else, a watch running or not, it waits as any.
 export function watching(s: J): boolean {

@@ -220,6 +220,18 @@ pub fn row(
   // The core lets any made chat on an online station be swiped to archive, regardless of its state.
   if !more.contains("offline") && more.get("pending") != Some(Json::boolean(true)) {
     r["swipeArchive"] = Json::boolean(true)
+    // its swipe asks first (the core's swipeAsk): keeping watch, in its watch's words; at work, that it is
+    match more.get("watch") {
+      Some(Object(w)) =>
+        match w.get("ask") {
+          Some(ask) => r["swipeAsk"] = ask
+          None => ()
+        }
+      _ =>
+        if more.get("state") == Some(Json::string("run")) {
+          r["swipeAsk"] = "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。"
+        }
+    }
   }
   Json::object(r)
 }

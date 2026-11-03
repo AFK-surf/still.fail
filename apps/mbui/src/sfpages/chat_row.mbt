@@ -877,10 +877,16 @@ let listed : Ref[Array[ChatItem]] = Ref([])
 
 ///|
 /// Archives a row's chat (Sidebar.tsx useArchive, mobile/Home.tsx useRowArchive): its 归档 key, its menu's, its swipe;
-/// one keeping watch only once asked, in the core's words. Its chat in view goes to
+/// one keeping watch only once asked, in the core's words (its swipe also one at work: `ask`, the core's swipeAsk). Its chat in view goes to
 /// the chat after it in the list (else before it; else the list alone) at once. Said at once, by its title (the core's
 /// list has it gone); why not, when not (`failed` told then).
-fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, failed? : () -> Unit = fn() {  }) -> Unit {
+fn archive_row(
+  src : Source,
+  item : ChatItem,
+  ask? : String? = item.watch_ask,
+  then? : () -> Unit = fn() {  },
+  failed? : () -> Unit = fn() {  },
+) -> Unit {
   let params : Map[String, Json] = {
     "station": Json::string(item.station),
     "session": Json::string(item.session),
@@ -906,7 +912,7 @@ fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, fa
       failed~,
     )
   }
-  match item.watch_ask {
+  match ask {
     Some(ask) =>
       @sf.confirm(@sf.t("android-chat.archive.ask", args=[("title", item.title)]), ask, @sf.t("android-chat.archive"), run)
     None => run()
@@ -956,8 +962,8 @@ let swipe_fill_ms : Double = 140.0
 /// A finger's row (mobile/Home.tsx SwipeArchive), swiped left to archive it: it follows the finger in its
 /// slot (cut to its corners where its list stands, `at`), uncovering 归档 at the right edge (filled in ink once letting
 /// go would archive it); let go past `archive_at_share` of its width or flung left, it goes off to the left and is
-/// archived, else it springs back. Archiving refused, it comes back; one keeping watch springs back and asks first, as
-/// its menu's 归档. Across first it is the swipe (the row's tap and hold let go); up or down first it is the list's.
+/// archived, else it springs back. Archiving refused, it comes back; one the core asks about (keeping watch, at work)
+/// springs back and asks first. Across first it is the swipe (the row's tap and hold let go); up or down first it is the list's.
 /// `row` draws the row moved across by so much; `unghost` says whether it leaves the list without a copy (swiped off),
 /// or with one again (its archiving refused). Its answer is the box holding it all.
 fn swipe_to_archive(
@@ -990,9 +996,9 @@ fn swipe_to_archive(
         if at < -width * archive_at_share || fling {
           if busy {
             back(v)
-          } else if item.watch_ask is Some(_) {
+          } else if item.swipe_ask is Some(_) {
             back(v)
-            archive_row(src, item)
+            archive_row(src, item, ask=item.swipe_ask)
           } else {
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
