@@ -531,6 +531,8 @@ pub fn Message::linked(self : Message, href : String) -> LinkedChat? {
 pub(all) struct Outgoing {
   id : String
   text : String
+  /// its words in runs, as the core read them (refLinks.ts personWords; one sent from here: draftWords)
+  words : Json?
   attachments : Array[Attachment]
   quotes : Array[Quote]
   /// sending | sent (the station has it: `seq`) | failed
@@ -733,6 +735,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
       {
         id: text(s, "id"),
         text: text(s, "text"),
+        words: field(s, "words"),
         attachments: items(s, "attachments").map(attachment_of),
         quotes: items(s, "quotes").map(quote_of),
         state: text(s, "state"),

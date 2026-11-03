@@ -336,7 +336,6 @@ test "a link to one message of a chat written bare: the chat's title, not its ad
       v
     }
   })
-  assert_true(@sf.is_chat_link(link))
   assert_true(t.find("看 @旧的对话") is Some(_), msg="its title, not its link")
   assert_true(t.find(link) is None)
 }

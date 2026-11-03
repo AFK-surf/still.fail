@@ -234,62 +234,6 @@ let file_chip_share : Double = 0.13
 // kept across runs: a value (no field of it changes)
 let file_chip_ground : @ui.Ground = { room: 6.0 / 13.2, height: 20.0 / 13.2, corner: 6.0 / 13.2, after: 0.0 }
 
-///|
-/// A link to a chat's page (Markdown.kt isChatLink): …/chats/<key>, or
-/// still.fail cloud's /o/<workspace>/<station>/<key>.
-pub fn is_chat_link(href : String) -> Bool {
-  // …/chats/<key> with nothing after it but a slash, a query or a fragment
-  match href.find("/chats/") {
-    Some(i) => {
-      let rest = href.view(start_offset=i + 7).to_string()
-      let mut k = 0
-      while k < rest.length() {
-        let ch = rest.at(k).to_int()
-        if ch == 47 || ch == 63 || ch == 35 || ch == 32 {
-          break
-        }
-        k = k + 1
-      }
-      if k > 0 {
-        let tail = rest.view(start_offset=k).to_string()
-        if tail == "" || tail == "/" || tail.has_prefix("?") || tail.has_prefix("#") ||
-          tail.has_prefix("/?") ||
-          tail.has_prefix("/#") {
-          return true
-        }
-      }
-    }
-    None => ()
-  }
-  // https://<host>/o/<workspace>/<station>/<key>
-  let scheme = if href.has_prefix("https://") {
-    8
-  } else if href.has_prefix("http://") {
-    7
-  } else {
-    return false
-  }
-  let after = href.view(start_offset=scheme).to_string()
-  let path = match after.find("/") {
-    Some(i) => after.view(start_offset=i).to_string()
-    None => return false
-  }
-  if !path.has_prefix("/o/") {
-    return false
-  }
-  // what follows its key, a query (one of its messages, its agent's history) or a fragment, is still the chat's
-  let body = match path.find("#") {
-    Some(i) => path.view(end_offset=i).to_string()
-    None => path
-  }
-  let body = match body.find("?") {
-    Some(i) => body.view(end_offset=i).to_string()
-    None => body
-  }
-  let parts = body.view(start_offset=3).to_string().split("/").map(fn(v) { v.to_string() }).to_array()
-  let parts = if parts.length() == 4 && parts[3] == "" { parts[:3].to_array() } else { parts }
-  parts.length() == 3 && parts.iter().all(fn(x) { x != "" })
-}
 
 ///|
 /// The file a link or an image names, by its name (the last part of its

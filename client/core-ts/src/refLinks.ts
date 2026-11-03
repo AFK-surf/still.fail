@@ -206,7 +206,7 @@ export function pastedRefs(pasted: string, here: string): { start: number; end: 
 export type WordsRun = { text: string; link?: string; ref?: true; to?: LinkTo };
 
 /// What a person wrote, in runs (WordsRun): references to chats, and web addresses written bare (bareLinks.ts). The one
-/// reading the clients draw a person's words by (apps/mbui sfbase/message_words.mbt for words not the core's yet).
+/// reading the clients draw a person's words by (what is not a message yet: draftWords).
 export function personWords(text: string): WordsRun[] {
   const out: WordsRun[] = [];
   for (const part of splitBy(text, REF_LINK)) {
@@ -223,6 +223,18 @@ export function personWords(text: string): WordsRun[] {
         out.push({ text: bit.url, link: bit.url, ...(to?.chat ? { ref: true as const } : {}), ...(to ? { to } : {}) });
       }
     }
+  }
+  return out;
+}
+
+/// What is being written, and what was sent from here before the core has it as a message (its outbox's `words`
+/// otherwise), in the runs its message will be drawn in: the composer's marks (`@[its title]`) references to their chats
+/// (their links the core's till sent: refs.ts), the rest read as personWords.
+export function draftWords(text: string): WordsRun[] {
+  const out: WordsRun[] = [];
+  for (const part of splitBy(text, REF_MARK)) {
+    if (typeof part === "string") out.push(...personWords(part));
+    else out.push({ text: part[1]!, ref: true });
   }
   return out;
 }

@@ -98,7 +98,7 @@ pub fn has(name : String, params : Json) -> Bool {
     "reader.book" | "reader.text" | "reader.search" => true
     // what is written, read (refLinks.ts, pasted.ts): a pure function of the words, answered here whatever a run's
     // tape has of it (a field's edits ask it as they come, in an order of their own)
-    "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => true
+    "ref.at" | "ref.before" | "ref.marks" | "ref.words" | "ref.pasted" | "paste.info" => true
     // a name typed for a file or folder (drive.ts nameProblem): a pure function of it
     "drive.check" => true
     // answered here once kept, by what is asked as said (answer): never the run's core's to give then, so never
@@ -198,7 +198,7 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
     // where a chat's find goes (chat-find.ts): from what was found and where the reader is, which way, what shows
     // what is written, read (refLinks.ts refAt, markBefore, marksIn, pastedRefs; pasted.ts; a name typed for a file or
     // folder, drive.ts nameProblem): by the call and its words
-    "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" | "drive.check" => {
+    "ref.at" | "ref.before" | "ref.marks" | "ref.words" | "ref.pasted" | "paste.info" | "drive.check" => {
       let ask : Map[String, Json] = { "call": Json::string(name), "text": Json::string(word(params, "text")) }
       match param(params, "caret") {
         Some(Number(_, ..) as n) => ask["caret"] = n

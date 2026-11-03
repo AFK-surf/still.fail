@@ -983,7 +983,6 @@ pub fn row_keys(
       still.push(l)
       continue
     }
-    local_marks.remove(l.row.id)
     if !rd.known.contains(came) && !rd.known.contains("o:" + l.row.id) {
       came_new.push(came)
     }

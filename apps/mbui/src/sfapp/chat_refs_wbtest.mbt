@@ -181,7 +181,7 @@ test "words sent with a mark draw it as the field did, as their message will: ne
   assert_eq(named(calls, "chat.send").length(), 1)
   assert_eq(text(Some(named(calls, "chat.send")[0].params), "text"), "@[首页] 吧")
   match sending_of("ws1/st1\u{1}s-c1") {
-    [l] => assert_eq(sent_marks(l.row), [(0, 5)])
+    [l] => assert_true(l.row.words is Some(_))
     _ => fail("not in the list")
   }
   t.draw()

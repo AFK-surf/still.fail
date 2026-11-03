@@ -857,8 +857,9 @@ fn new_send(
   let up = up_files(d)
   let going = going_files(d)
   let quotes = sent_quotes(d)
-  // (its references as the field's marks till the core makes them links: drawn as the field drew them)
+  // (its references as the field's marks, which its flight takes off as; its row's runs as the core read its words)
   let marks = @sfbase.refs_sent_marks(d.key, words)
+  let runs = @sfbase.refs_sent_runs(d.key, words)
   let draft = station + ":" + key
   let rk = station + "\u{1}" + key
   // called what the page was (新对话) until someone names it, as the core calls it
@@ -877,8 +878,9 @@ fn new_send(
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
     marks~,
+    runs~,
   )
-  let row = sent_local(rk, None, words, up, going~, quotes~, marks~)
+  let row = sent_local(rk, None, words, up, going~, quotes~, runs~)
   @sfbase.flight_carry_into(d.key, draft, rk, row, hold=fn(ms) { composer_hold(draft, 0.0, box, ms) })
   let sig = @sfbase.picked_sig(v)
   fresh.starting.set(true)
