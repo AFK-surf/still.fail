@@ -72,7 +72,7 @@ function tildePairs(state: J): boolean {
 
 // ── formulas ──
 
-/// `$$` fenced, as a code fence is (its meta without a `$`).
+/// `$$` alone on its line, fenced as a code fence is.
 function mathFence(state: J, startLine: number, endLine: number, silent: boolean): boolean {
   let pos = state.bMarks[startLine] + state.tShift[startLine];
   let max = state.eMarks[startLine];
@@ -83,7 +83,8 @@ function mathFence(state: J, startLine: number, endLine: number, silent: boolean
   if (size < 2) return false;
   const markup = state.src.slice(mem, pos);
   const params = state.src.slice(pos, max);
-  if (params.includes("$")) return false;
+  // (words after it: the formula starts there, mathBracket)
+  if (params.trim() !== "") return false;
   if (silent) return true;
   let next = startLine;
   let closed = false;
@@ -113,29 +114,34 @@ function mathFence(state: J, startLine: number, endLine: number, silent: boolean
 /// `\[` at a line's start, to `\]` with nothing after it on its line; a backslash takes the character after it with it
 /// (`\\]` closes nothing). It interrupts a paragraph on its opening alone, as micromark's did; open, it is no formula
 /// (its `\[` an escaped bracket), nor where a line of it is not its container's (a lazy line, one left of a list).
+/// `$$` read so too where the formula starts on its line (`$$x$$`, `$$x` … `y$$`), as agents write it: a `$$` alone
+/// on its line is a fence (mathFence). Its opening interrupts a paragraph only closed (`$$5 和 $10` stays words).
 function mathBracket(state: J, startLine: number, endLine: number, silent: boolean): boolean {
   const src: string = state.src;
   const first = state.bMarks[startLine] + state.tShift[startLine];
-  if (state.sCount[startLine] - state.blkIndent >= 4 || src.charCodeAt(first) !== 0x5c || src.charCodeAt(first + 1) !== 0x5b) return false;
-  if (silent) return true;
+  if (state.sCount[startLine] - state.blkIndent >= 4) return false;
+  const dollars = src.startsWith("$$", first);
+  if (dollars ? src.charCodeAt(first + 2) === 0x24 || src.slice(first + 2, state.eMarks[startLine]).trim() === "" : src.charCodeAt(first) !== 0x5c || src.charCodeAt(first + 1) !== 0x5b) return false;
+  if (silent && !dollars) return true;
   let value = "";
   let line = startLine;
   let at = first + 2;
   let end = state.eMarks[line];
   for (;;) {
     while (at < end) {
+      if (dollars ? src.startsWith("$$", at) : src.charCodeAt(at) === 0x5c && src.charCodeAt(at + 1) === 0x5d) {
+        let after = at + 2;
+        while (after < end && isSpace(src.charCodeAt(after))) after++;
+        if (after < end) return false;
+        if (silent) return true;
+        state.line = line + 1;
+        const token = state.push("math_bracket", "math", 0);
+        token.content = value;
+        token.markup = dollars ? "$$" : "\\[";
+        token.map = [startLine, state.line];
+        return true;
+      }
       if (src.charCodeAt(at) === 0x5c) {
-        if (src.charCodeAt(at + 1) === 0x5d) {
-          let after = at + 2;
-          while (after < end && isSpace(src.charCodeAt(after))) after++;
-          if (after < end) return false;
-          state.line = line + 1;
-          const token = state.push("math_bracket", "math", 0);
-          token.content = value;
-          token.markup = "\\[";
-          token.map = [startLine, state.line];
-          return true;
-        }
         const step = Math.min(2, end - at);
         value += src.slice(at, at + step);
         at += step;
