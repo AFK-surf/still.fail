@@ -206,3 +206,74 @@ test "an edge drawn bigger, a mouse's let go 10 across the window from where it 
     )
   }
 }
+
+///|
+/// A window 400 by 300 (`platform`: 0 a mouse's, 2 a finger's) holding an edge 20 by 200 at (100, 20), of a column
+/// 240 wide between 200 and 300: pressed at (105, 100) at `t0`, held still long_press_ms twice over, moved `moves`
+/// along (each slow_drag_ms after the one before), let go at the last. What was felt, in order, and the widths said.
+fn edge_felt(platform : Int, moves : Array[Double]) -> (Array[@ui.Haptic], Array[Double]) {
+  let widths : Array[Double] = []
+  let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform~)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.over(Is(true)).offset(Is((100.0, 20.0))) |> ignore
+      h.box(fn(e) {
+        e.width(Is(Some(20.0))).height(Is(Some(200.0))) |> ignore
+        edge_node(
+          e,
+          fn() { "调整宽度" },
+          fn() { 240.0 },
+          fn() { 200.0 },
+          fn() { 300.0 },
+          Right,
+          fn(r, _) {
+            match r {
+              Dragging(w) | Dropped(w) => widths.push(w)
+              _ => ()
+            }
+          },
+          fn(_) {  },
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let tree = @ui.view_tree().unwrap()
+  let t0 = t.time() + edge_gap_ms
+  t.advance(edge_gap_ms)
+  t.touch_at(0, 105.0, 100.0, t0)
+  let held_at = t0 + @ui.long_press_ms * 2.0
+  t.advance(held_at - t.time())
+  tree.bring_to(held_at)
+  let mut at = held_at
+  for m in moves {
+    at = at + edge_slow_ms
+    t.advance(at - t.time())
+    t.touch_at(1, 105.0 + m, 100.0, at)
+  }
+  at = at + edge_slow_ms
+  t.advance(at - t.time())
+  t.touch_at(2, 105.0 + (if moves.length() > 0 { moves[moves.length() - 1] } else { 0.0 }), 100.0, at)
+  (t.haptics(), widths)
+}
+
+///|
+let edge_slow_ms : Double = 50.0
+
+///|
+test "an edge felt: a finger's hold taken (LongPress), then its most reached (TextHandleMove), its least (again), the way between felt no more; a mouse's needs no hold and nothing is felt but the ends" {
+  // (a finger: +60 is its most (300), +70 past it still there (felt once), -40 back between, -100 its least (200))
+  let (felt, widths) = edge_felt(2, [30.0, 60.0, 70.0, -40.0, -100.0])
+  assert_eq(felt, [LongPress, TextHandleMove, TextHandleMove], msg="\{felt} \{widths}")
+  assert_eq(widths, [270.0, 300.0, 300.0, 200.0, 200.0, 200.0])
+  // (a mouse: no hold, the ends alone)
+  let (felt, _) = edge_felt(0, [60.0, -100.0])
+  assert_eq(felt, [TextHandleMove, TextHandleMove], msg="\{felt}")
+  // (held and let go where it went down: nothing felt but the hold; let go after a hold, a drag's end at its width)
+  let (felt, widths) = edge_felt(2, [])
+  assert_eq((felt, widths), ([LongPress], [240.0]))
+}
