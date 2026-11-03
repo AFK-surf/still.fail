@@ -137,7 +137,7 @@ fn top_bar(
             @sf.workspace_badge(c, w.name, w.emoji, w.icon, home_ws_mark, still=false)
           }
           // A long name gives way to the controls actually present, including the sync mark while it exits.
-          top_bar_title(c, w.name, cut=true) |> ignore
+          top_bar_title(c, w.name, look=home_ws_title_look, cut=true) |> ignore
           let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
           match field(marks.value, "others") {
             // what the others have waiting, as their rows' marks (sfpages' chat_mark), said as the core says it; else an
@@ -164,8 +164,7 @@ fn top_bar(
 
 ///|
 /// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, its letters 0.4 closer, on one line.
-fn top_bar_title(c : @ui.Ctx, s : String, cut? : Bool = false) -> Int {
-  let look = @sf.top_bar_title_look
+fn top_bar_title(c : @ui.Ctx, s : String, look? : @view.WordsLook = @sf.top_bar_title_look, cut? : Bool = false) -> Int {
   // (said as it is: Ctx::text makes it larger at the system's size of words, as view_spacing does a ScaledPoints)
   guard look.tracking is ScaledPoints(tracking) else { abort("top_bar_title_look's tracking: ScaledPoints") }
   c.text(s, size=look.size, weight=look.weight, color=@sf.theme().p.text, wrap=look.wrap, line=look.line, tracking~, w=if cut {
@@ -255,3 +254,7 @@ let home_sheet_at_start : Ref[Bool] = Ref(false)
 ///|
 /// The workspace's mark before its name in Home's bar (Home.tsx WorkspaceBadge: 20).
 let home_ws_mark : Double = 20.0
+
+///|
+/// The workspace's name in Home's bar: a place's title made smaller, its mark's size (asked 2026-11-03).
+let home_ws_title_look : @view.WordsLook = { ..@sf.top_bar_title_look, size: 20.0, line: 26.0 }
