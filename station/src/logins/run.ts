@@ -12,6 +12,7 @@ import xterm from "@xterm/headless";
 import type { Fibers } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
 import { started } from "../platform/processes.ts";
@@ -137,7 +138,7 @@ export class LoginRun {
     const given = assignmentsOf(this.command, platform.home(this.#o.env));
     const [program, ...args] = given.rest;
     if (program === undefined) return this.#fail(tr(this.#o.lang, "station.machineLogin.badCommand"));
-    const env: Record<string, string> = { ...(platform.prependPath(this.#o.env, this.#o.shims) as Record<string, string>) };
+    let env: Record<string, string> = { ...(platform.prependPath(this.#o.env, this.#o.shims) as Record<string, string>) };
     const browser = `${this.#o.shims}/${platform.exe("browser")}`;
     // What it is given, but not the stand-ins for the browser: the page it opens is the person's to open.
     Object.assign(env, given.env, {
@@ -148,6 +149,9 @@ export class LoginRun {
       GH_BROWSER: browser,
       STILLFAIL_LOGIN_OPENED: this.#o.opened,
     });
+    const foundEnv = await withShellCommand(program, env);
+    if (!this.active) return;
+    if (foundEnv !== env) env = platform.prependPath(foundEnv, this.#o.shims) as Record<string, string>;
     keychainOutOfGit(env);
     const wrapped = platform.terminal(program!, args, COLS, ROWS) ?? [program!, args];
     const r = platform.runnable(wrapped[0], wrapped[1], env);

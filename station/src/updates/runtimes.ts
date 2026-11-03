@@ -7,6 +7,7 @@ import { basename, dirname, join, sep } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { wall } from "../ops/fibers.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { type Found as PlatformFound, type NodeBuild, platform } from "../platform/index.ts";
 import { RUNTIME_KINDS, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 
@@ -266,7 +267,8 @@ export function run(program: string, args: string[], env: Env, timeoutMs: number
   return runBoth(program, args, env, timeoutMs, () => {}, lang).then(([ok, , out, err]) => [ok, out + err]);
 }
 
-function runBoth(program: string, args: string[], env: Env, timeoutMs: number, onLine: (line: string) => void, lang: Lang): Promise<[boolean, string, string, string, number | null]> {
+async function runBoth(program: string, args: string[], env: Env, timeoutMs: number, onLine: (line: string) => void, lang: Lang): Promise<[boolean, string, string, string, number | null]> {
+  env = await withShellCommand(program, env);
   return new Promise((resolve, reject) => {
     const clean: Record<string, string> = {};
     for (const [k, v] of Object.entries(env)) if (v !== undefined) clean[k] = v;

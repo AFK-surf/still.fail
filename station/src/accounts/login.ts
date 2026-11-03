@@ -32,6 +32,7 @@ import { devinData } from "../agents/devin.ts";
 import type { Runtime } from "../agents/profiles.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { platform } from "../platform/index.ts";
 import { started } from "../platform/processes.ts";
@@ -86,7 +87,7 @@ export class LoginManager {
   private noBrowserDir: string;
   private commands: LoginCommands;
   private background: Fibers;
-  /// The environment the commands start from (the station's, less what points elsewhere).
+  /// The environment the commands start from; variables that point a login elsewhere are removed at start.
   private env: () => Record<string, string>;
 
   /// The OpenCode Console signed in to (console.ts CONSOLE; a test's stand-in).
@@ -99,7 +100,7 @@ export class LoginManager {
   /// Where a sign-in's page opens in the station's browser (none until the browser's part attaches it).
   private pages: LoginPages | null = null;
 
-  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock, console = CONSOLE, cursor: CursorUrls = CURSOR, keyName: () => string = () => "still.fail", kimi = KIMI_AUTH) {
+  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv([]), clock?: Clock.Clock, console = CONSOLE, cursor: CursorUrls = CURSOR, keyName: () => string = () => "still.fail", kimi = KIMI_AUTH) {
     this.console = console;
     this.kimi = kimi;
     this.cursor = cursor;
@@ -107,7 +108,7 @@ export class LoginManager {
     this.background = new Fibers("login", clock);
     this.noBrowserDir = join(data, "run", "no-browser");
     this.commands = commands;
-    this.env = () => Object.fromEntries(Object.entries(env()).filter(([k]) => !SCRUBBED.includes(k)));
+    this.env = env;
   }
 
   /// Hears the profile id of each login job that changes; gives the function that stops it.
@@ -184,7 +185,9 @@ export class LoginManager {
     this.finished.delete(profile.id);
     mkdirSync(profile.home, { recursive: true });
     const [noBrowser, open] = this.noBrowser();
-    const env = platform.prependPath(this.env(), noBrowser) as Record<string, string>;
+    const sourceEnv = this.env();
+    const clean = Object.fromEntries(Object.entries(sourceEnv).filter(([k]) => !SCRUBBED.includes(k)));
+    let env = platform.prependPath(clean, noBrowser) as Record<string, string>;
     env.BROWSER = open;
     // The pages it opens, written down for the station's browser (one file a sign-in).
     const opened = join(noBrowser, `${profile.id}.opened`);
@@ -192,6 +195,7 @@ export class LoginManager {
     env.STILLFAIL_LOGIN_OPENED = opened;
     let command: string;
     let args: string[];
+    let pathCommand: string | undefined;
     if (profile.runtime === "claude") {
       env.CLAUDE_CONFIG_DIR = profile.home;
       fileCredentials(env);
@@ -204,7 +208,8 @@ export class LoginManager {
     } else if (profile.runtime === "devin") {
       env.XDG_DATA_HOME = devinData(profile.home);
       mkdirSync(env.XDG_DATA_HOME, { recursive: true });
-      const wrapped = platform.terminal(this.commands.devin ?? "devin", ["auth", "login", "--force-manual-token-flow"], DEVIN_COLS, DEVIN_ROWS);
+      pathCommand = this.commands.devin ?? "devin";
+      const wrapped = platform.terminal(pathCommand, ["auth", "login", "--force-manual-token-flow"], DEVIN_COLS, DEVIN_ROWS);
       if (wrapped === null) return this.refused(profile.id, profile.runtime, tr(lang, "station.login.devinNoTerminal"));
       [command, args] = wrapped;
     } else {
@@ -215,30 +220,32 @@ export class LoginManager {
     const job: LoginJob = { profile: profile.id, runtime: profile.runtime, state: "starting", url: null, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
     const run = ++this.runs;
     const id = profile.id;
-    const r = platform.runnable(command, args, env);
-    const child = spawn(r.file, r.args, { cwd: profile.home, env, stdio: ["pipe", "pipe", "pipe"], windowsVerbatimArguments: r.windowsVerbatimArguments, windowsHide: true });
-    const spawned = await started(child);
-    if (spawned) {
-      // Recorded like any other failure, so the page shows why.
-      const failed: LoginJob = { ...job, state: "failed", error: tr(lang, "station.login.cannotRun", { error: spawned.message }) };
-      this.finished.set(id, failed);
-      this.emit(id);
-      return { ...failed };
-    }
-    // A later failure to write (the command gone) is its end's to say.
-    child.stdin?.on("error", () => {});
+    // The shell lookup can take time. Record the sign-in first so cancelling or replacing it stops this start too.
     const running: Running = {
-      run,
-      job,
-      child,
-      raw: "",
-      output: "",
-      exited: false,
-      opened,
-      lang,
+      run, job, child: null, raw: "", output: "", exited: true, opened, lang,
       cancelTimer: this.background.after(TIMEOUT_MS, () => this.failRun(id, run, tr(lang, "station.login.timedOut"))),
     };
     this.jobs.set(id, running);
+    this.emit(id);
+    const foundEnv = await withShellCommand(pathCommand ?? command, env, sourceEnv);
+    if (this.jobs.get(id) !== running) return { ...job, state: "cancelled" };
+    // The browser stand-ins must stay ahead of any Node bin added for the login command.
+    if (foundEnv !== env) env = platform.prependPath(foundEnv, noBrowser) as Record<string, string>;
+    const r = platform.runnable(command, args, env);
+    const child = spawn(r.file, r.args, { cwd: profile.home, env, stdio: ["pipe", "pipe", "pipe"], windowsVerbatimArguments: r.windowsVerbatimArguments, windowsHide: true });
+    running.child = child;
+    running.exited = false;
+    const spawned = await started(child);
+    if (this.jobs.get(id) !== running) return { ...job, state: "cancelled" };
+    if (spawned) {
+      // Recorded like any other failure, so the page shows why.
+      running.exited = true;
+      const error = tr(lang, "station.login.cannotRun", { error: spawned.message });
+      this.finish(id, "failed", error);
+      return { ...job, state: "failed", error };
+    }
+    // A later failure to write (the command gone) is its end's to say.
+    child.stdin?.on("error", () => {});
     for (const stream of [child.stdout, child.stderr]) stream?.on("data", (chunk: Buffer) => this.output(id, run, chunk.toString("utf8")));
     // Everything it said is in before its end is judged: `close` comes after its output ends.
     child.once("close", (code, signal) => {

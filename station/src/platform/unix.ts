@@ -2,7 +2,7 @@
 // differ in (how the machine reads: sysctl and vm_stat, or /proc; the keychain and QuickLook) is said here too.
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
 import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { release, type as osType } from "node:os";
+import { release, type as osType, userInfo } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import { readdir } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -307,6 +307,16 @@ export const unix: Platform = {
       if (executable(onPath)) return { onPath, real: real(onPath) ?? onPath };
     }
     return null;
+  },
+  userShell(env) {
+    if (env.SHELL) return env.SHELL;
+    try {
+      const user = userInfo();
+      // A caller with another HOME (a test or another account) did not supply this user's shell.
+      return !env.HOME || env.HOME === user.homedir ? user.shell : null;
+    } catch {
+      return null;
+    }
   },
   runnable: (command, args) => ({ file: command, args }),
   posixShell: () => "/bin/sh",

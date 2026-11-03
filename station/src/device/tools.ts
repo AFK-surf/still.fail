@@ -16,6 +16,7 @@ import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.t
 import { findCommand } from "../updates/runtimes.ts";
 import { versionIn } from "../updates/versions.ts";
 import { wall } from "../ops/fibers.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
 
@@ -413,10 +414,10 @@ export class DeviceTools {
   // ── runtimes ──
 
   private probe() {
-    const env = this.env;
     return Effect.promise(async () => {
       const runtimes = [];
       for (const kind of ["claude", "codex"] as const) {
+        const env = await withShellCommand(kind, this.env);
         const found = findCommand(kind, env);
         if (found === null) continue;
         const r = platform.runnable(found.real, ["--version"], env as NodeJS.ProcessEnv);

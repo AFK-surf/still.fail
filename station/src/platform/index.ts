@@ -65,6 +65,8 @@ export type Platform = {
   appendPath(env: Env, dir: string): void;
   /// A command on `env`'s PATH as a shell finds it (with PATHEXT's extensions on Windows).
   findCommand(name: string, env: Env): Found | null;
+  /// The user's interactive shell, when this machine has one to read a PATH from.
+  userShell(env: Env): string | null;
   /// How Node runs a command (a name on PATH, or a path) with `args`: on Windows a .cmd is run around cmd when it can
   /// be (npm's, Vite+'s), else through it, quoted.
   runnable(command: string, args: string[], env: NodeJS.ProcessEnv): { file: string; args: string[]; windowsVerbatimArguments?: true };
