@@ -37,6 +37,58 @@ test "beside: below its anchor, its middle on its anchor's; above it where there
 }
 
 ///|
+test "beside: leaving, or its anchor gone, it stays where it last went beside it as it fades: never after its anchor, never where it is laid out" {
+  let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let anchor_on = @signals.signal(true, same=fn(a, b) { a == b })
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let fade = @signals.signal(1.0, same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = {}
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(fn() { anchor_on.get() }, fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(By(fn() { (100.0, ay.get()) })) |> ignore
+      })
+      root.show(fn() { on.get() }, leave=100.0, fn(b) {
+        ids["b"] = b.id()
+        b
+        .width(Is(Some(60.0)))
+        .height(Is(Some(30.0)))
+        .alpha(By(fn() { fade.get() }))
+        .beside(ids["a"], side=Bottom, along=Middle, offset=6.0)
+        |> ignore
+      })
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  let at = fn() {
+    let d = t.drawn_of(ids["b"]).unwrap()
+    (d.x, d.y)
+  }
+  assert_eq(at(), (90.0, 126.0), msg="below its anchor")
+  t.event(10.0, fn() { ay.set(140.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (90.0, 166.0), msg="following its anchor while both are there")
+  // (leaving: its anchor moves on, it fades where it was)
+  t.event(20.0, fn() { on.set(false) })
+  t.event(30.0, fn() {
+    ay.set(40.0)
+    fade.set(0.5)
+  })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (90.0, 166.0), msg="leaving: where it was")
+  // (back, then its anchor gone: placed again by its own fading, where it was)
+  t.event(40.0, fn() { on.set(true) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (90.0, 66.0), msg="back: beside its anchor again")
+  t.event(50.0, fn() { anchor_on.set(false) })
+  t.event(60.0, fn() { fade.set(0.25) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (90.0, 66.0), msg="its anchor gone: where it was")
+}
+
+///|
 test "lives_with: a node held elsewhere let go with its owner" {
   let owner_on = @signals.signal(true, same=fn(a, b) { a == b })
   let made : Ref[@view.View?] = Ref(None)
