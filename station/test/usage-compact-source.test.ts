@@ -584,10 +584,12 @@ test("a station with incomplete old totals can report its new history without cl
     store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [[{ ...call, id: "other", at: 120_000, input: 50 }, owner]]);
     store.db.setAuthorizer((action, name) => action === constants.SQLITE_READ && name === "usage" ? constants.SQLITE_DENY : constants.SQLITE_OK);
     try {
-      const answer = usage(makeStore(store.db, "."), "en", 0n, 180_000n, 0n, false, { workspace: "A", home: false }, true);
-      assert.equal(answer.history, undefined, "older clients must not mistake the new records for complete history");
-      assert.equal(answer.historyUnavailable, true);
-      assert.deepEqual(answer.partialHistory.days.map((d: { calls: number; tokens: number }) => [d.calls, d.tokens]), [[1, 3]]);
+      for (const offset of [0n, 1n]) {
+        const answer = usage(makeStore(store.db, "."), "en", 0n, 180_000n, offset, false, { workspace: "A", home: false }, true);
+        assert.equal(answer.history, undefined, "older clients must not mistake the new records for complete history");
+        assert.equal(answer.historyUnavailable, true);
+        assert.deepEqual(answer.partialHistory.days.map((d: { calls: number; tokens: number }) => [d.calls, d.tokens]), [[1, 3]]);
+      }
     } finally { store.db.setAuthorizer(null); }
   } finally { store.close(); }
 });

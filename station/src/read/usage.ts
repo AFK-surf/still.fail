@@ -274,6 +274,8 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     try { historyResult = usageHistory(s, utcOffsetMin, viewer, mark); }
     catch (error) {
       if (!(error instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(error.message)) throw error;
+      // Old clients continue to see history as unavailable; newer clients can use the separately named, explicitly
+      // incomplete history without treating missing earlier calls as zero.
       if (error.message === USAGE_MINUTES_PENDING) {
         try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true); }
         catch (partialError) {

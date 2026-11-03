@@ -352,7 +352,8 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
 }
 
 /// Preserve a complete old daily summary and add only the new minute buckets. If the old minute coverage was already
-/// retired, a non-quarter-hour zone cannot infer where the old quarter crossed midnight.
+/// retired, a non-quarter-hour zone cannot infer where the old quarter crossed midnight. A partial read contains only
+/// the newer buckets; it never includes an old summary whose local-day values cannot be proven complete.
 export function compactHistory(db: DatabaseSync, offset: bigint, viewer: InWorkspace | null, partial = false): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] | null {
   if (!compactScopeReady(db, viewer)) return null;
   const coverage = db.prepare("SELECT old_days, old_minutes FROM usage_compact_since WHERE id = 1").get() as { old_days: number; old_minutes: number };
