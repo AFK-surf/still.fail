@@ -123,7 +123,7 @@ fn[P] Nav::shift_of(self : Nav[P], serial : Int, now : () -> Double) -> (Double,
 }
 
 ///|
-/// The stacks the window's tree holds, each told as a frame of the old view begins (nav_views_framed): by a number of
+/// The stacks the window's tree holds, each told as every frame ends (nav_views_framed): by a number of
 /// its own.
 // kept across runs: put back as a run begins (view_forget)
 let nav_views : Array[(Int, (Ctx) -> Unit)] = []
@@ -133,8 +133,9 @@ let nav_views : Array[(Int, (Ctx) -> Unit)] = []
 let nav_views_made : Ref[Int] = Ref(0)
 
 ///|
-/// As a frame of the old view begins: each stack the tree holds says what a frame says of a stack (Ctx::nav: when it
-/// rests, a page held by a finger), for what reads it of the frame (a test's nav_rest, the corners' checks).
+/// As every frame ends (built whole, painted alone or of its looks alone): each stack the tree holds says what a
+/// frame says of a stack (Ctx::nav: when it rests, a page held by a finger), for what reads it of the frame (a test's
+/// nav_rest, the corners' checks).
 fn nav_views_framed(c : Ctx) -> Unit {
   for e in nav_views {
     (e.1)(c)

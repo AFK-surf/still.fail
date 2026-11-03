@@ -702,8 +702,6 @@ fn view_island_said() -> String {
 /// The old frame's build where the window is a tree: the one old view's own where it is the whole window; else each
 /// old view in a box of its own where it is placed, cut to it, its subtree made once there by its own watch.
 fn old_frame(c : Ctx) -> Unit {
-  // (what the stacks the tree holds say of a frame: nav_view.mbt)
-  nav_views_framed(c)
   // (told since the frame began (what the frame took as it went: a core's answer, the system's bars), or old views made
   // or let go: the tree brought and each placed as it is, so that the frame builds those there are where they are)
   match view_app.val {
