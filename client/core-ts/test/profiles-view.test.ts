@@ -245,7 +245,7 @@ test("a pending copy names the station cut off from still.fail cloud instead of 
   const mba = station(B, "MBA", true, []);
   const cut = (s: any) => ({ ...s, overview: { ...s.overview, mesh: { state: "running", reached: false } } });
   const placeOf = (stations: any[]) => workspaceProfiles(stations).items[0].places[1].state;
-  assert.deepEqual(placeOf([host, cut(mba)]), { text: "MBA 无法连接 still.fail cloud", tone: "amber" });
+  assert.deepEqual(placeOf([host, cut(mba)]), { text: "无法连接 still.fail cloud", tone: "amber" });
   assert.deepEqual(placeOf([cut(host), mba]), { text: "Studio 无法连接 still.fail cloud", tone: "amber" });
   assert.deepEqual(placeOf([host, mba]), { text: "等待同步", tone: "neutral" });
 });

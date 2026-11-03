@@ -854,7 +854,7 @@ fn fx_profile_places() -> Array[Json] {
       ("online", Json::boolean(!offline)), ("usable", Json::boolean(!offline && !unavailable && !pending)),
       ("sourceName", str(if unavailable || pending { "Studio" } else { "" })),
       ("state", if pending && fx.profile_cut_off {
-        obj([("text", str(text(v, "stationName") + " 无法连接 still.fail cloud")), ("tone", str("amber"))])
+        obj([("text", str("无法连接 still.fail cloud")), ("tone", str("amber"))])
       } else if pending {
         obj([("text", str("等待同步")), ("tone", str("neutral"))])
       } else {

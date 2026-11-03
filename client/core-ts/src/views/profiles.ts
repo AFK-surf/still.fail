@@ -130,7 +130,8 @@ export function workspaceProfiles(stations: J[]): J {
         station: String(station.station), stationId: id, stationName: String(station.name), profileId: "",
         online, usable: false, sourceName: id === String(share.host) ? "" : name(String(share.host)),
         state: !online ? null
-          : cutOff !== undefined ? { text: t("core-views.profiles.cutOff", { station: name(cutOff) }), tone: "amber" }
+          : cutOff === id ? { text: t("core-views.profiles.cutOff"), tone: "amber" }
+          : cutOff !== undefined ? { text: t("core-views.profiles.hostCutOff", { station: name(cutOff) }), tone: "amber" }
           : { text: t(isObject(station.overview) ? "core-views.profiles.waitSync" : "core-views.profiles.reading"), tone: "neutral" },
       });
     }
