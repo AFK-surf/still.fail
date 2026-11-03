@@ -11,7 +11,7 @@ import {
   ANY_RUNNING, ARCHIVED_THREADS, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
-import { MERGED, SCHEMA } from "../src/store/schema.ts";
+import { MERGED, SCHEMA, SESSION_WORK_MADE } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM, USAGE_GROUPS } from "../src/store/usage.ts";
 import { backfillUsageCompactions } from "../src/store/usage-compactions.ts";
@@ -1105,6 +1105,9 @@ test("a session's work is kept as its turns end and go: how long the ended ones 
   store.deleteSession("b");
   assert.deepEqual(work(store), { a: 7 * MIN });
   assert.deepEqual(store.db.prepare("SELECT session, ms FROM session_work ORDER BY session").all().map((x: any) => [x.session, x.ms]), [["a", 7 * MIN]]);
+  // Made by reading the turns in the table's own order, none looked up by an index entry by entry, as the write is held.
+  const made = (store.db.prepare(`EXPLAIN QUERY PLAN ${SESSION_WORK_MADE}`).all() as { detail: string }[]).map((r) => r.detail);
+  assert.ok(made.some((d) => d === "SCAN turns") && !made.some((d) => d.includes("INDEX")), made.join(" | "));
 });
 
 test("usage: where a model's context was compacted is kept as calls are recorded, and made once from those before", () => {

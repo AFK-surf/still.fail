@@ -1031,12 +1031,17 @@ export function addSessionTurns(db: DatabaseSync): void {
 /// (`workMs`), which a device shows as the work done ("12 turns, 3 h") instead of adding up its every turn. To add them
 /// up, a device read the session with all its turns, again after each one: one of 3,685 turns took 25 s on ccvm short of
 /// memory (2026-11-03), holding a reader that devices wait for.
+/// Added up once, in the write the triggers are made in (so that none ends between): over the table in its own order, not
+/// by an index with the turn looked up for each entry. By the index of turns by their end, SQLite would read the table's
+/// 2,451 pages at random, holding the write all the while: on ccvm short of memory, at a station's start beside the one
+/// handing over to it, whose writes would wait out their time and fail (2026-11-03).
+export const SESSION_WORK_MADE = "SELECT session_key, SUM(ended_at - started_at) FROM turns NOT INDEXED WHERE ended_at > started_at GROUP BY session_key";
 const SESSION_WORK = `
 CREATE TABLE session_work (
   session TEXT PRIMARY KEY,
   ms INTEGER NOT NULL
 ) WITHOUT ROWID;
-INSERT INTO session_work SELECT session_key, SUM(ended_at - started_at) FROM turns WHERE ended_at > started_at GROUP BY session_key;
+INSERT INTO session_work ${SESSION_WORK_MADE};
 CREATE TRIGGER session_work_add AFTER INSERT ON turns WHEN NEW.ended_at > NEW.started_at BEGIN
   INSERT INTO session_work VALUES (NEW.session_key, NEW.ended_at - NEW.started_at) ON CONFLICT (session) DO UPDATE SET ms = ms + excluded.ms;
 END;
