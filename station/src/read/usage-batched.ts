@@ -95,7 +95,7 @@ function combine(hours: Map<string, Hour>): Part[] {
 /// the journal still covers every subsequent change; otherwise this takes the ordinary full indexed path.
 export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
   pause: (ms: number) => Promise<void> = (ms) => ms > 0 ? wall.sleep(ms) : new Promise((resolve) => setImmediate(resolve)),
-  cache?: UsageSummaryCache): Promise<{
+  cache?: UsageSummaryCache, kind: "summary" | "history" = "summary"): Promise<{
     groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; rests: number; restMs: number }; ms: number;
   } | null> {
   const max = 9223372036854775807n;
@@ -117,9 +117,10 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   };
   const result = (groups: Part[], selectedMs: number) => ({ groups: answer(groups),
     diagnostics: { parts, candidates, selectedMs, rests, restMs: Math.round(restMs) }, ms: Math.round(performance.now() - started) });
-  const key = JSON.stringify([from.toString(), to.toString(), utcOffsetMin.toString(), viewer?.workspace ?? null,
+  const key = JSON.stringify([kind, from.toString(), to.toString(), utcOffsetMin.toString(), viewer?.workspace ?? null,
     viewer === null ? null : viewer.home !== false]);
   const journal = cache !== undefined && s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get() !== undefined;
+  if (kind === "history" && !journal) return null;
   let first = 0n, last = 0n;
   if (journal) {
     const bounds = s.db.prepare("SELECT (SELECT seq FROM usage_summary_changes ORDER BY seq LIMIT 1) AS first, " +
@@ -150,16 +151,21 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     const found = visible?.get(session) as { ws: string | null } | undefined;
     const seen = viewer === null || (found !== undefined && (found.ws === viewer.workspace || (viewer.home !== false && found.ws === null)));
     if (++steps >= 64) await rest();
-    if (!seen || low >= high) return;
+    if (!seen || low >= high) return true;
     if (bucket === undefined) { bucket = s.db.prepare(queries.buckets); bucket.setReadBigInts(true); }
     const args: (string | bigint)[] = [utcOffsetMin, session, low, high];
     if (viewer !== null) args.push("W" + viewer.workspace);
-    for (const row of bucket.iterate(...args) as Iterable<Bucket>) {
+    for (const bucketRow of bucket.iterate(...args) as Iterable<Bucket>) {
+      // History groups only by day, session, runtime and model. Do not retain a row for every person or thread.
+      const row = kind === "history" ? { ...bucketRow, thread: 0n, person: "", profile: "", fast: 0n } : bucketRow;
       parts++;
       if (groups) add(groups, groupKey(row), row);
       putBucket(row);
+      // A very large history can have far more details than its answer. Leave it to the existing SQL aggregate.
+      if (kind === "history" && hours === null) return false;
       if (++steps >= 64) await rest();
     }
+    return true;
   };
 
   if (usable) {
@@ -183,9 +189,12 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       cells -= hour.groups.size;
       hours!.delete(id);
     }
-    for (const session of whole) await readSession(session, start, end);
+    for (const session of whole) if (!(await readSession(session, start, end))) { cache!.drop(s.db, key); return null; }
     for (const { session, minute } of dirty.values()) if (!whole.has(session)) {
-      await readSession(session, minute > start ? minute : start, minute + 60n < end ? minute + 60n : end);
+      if (!(await readSession(session, minute > start ? minute : start, minute + 60n < end ? minute + 60n : end))) {
+        cache!.drop(s.db, key);
+        return null;
+      }
     }
     if (hours !== null) {
       const groups = combine(hours);
@@ -195,8 +204,8 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       return done;
     }
     cache!.drop(s.db, key);
-    // The changed hour made this answer too large to cache. Reread it using the existing bounded path.
-    return usageGroupsBatched(s, from, to, utcOffsetMin, viewer, pause);
+    // The changed hour made this answer too large to cache. Reread it using the bounded path below, retaining the
+    // work already done in the diagnostics and total duration.
   }
 
   const params: (string | bigint)[] = [start, end];
@@ -212,7 +221,7 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
   const groups: Part[] = [];
   for (const session of sessions) {
     const ofSession = new Map<string, Part>();
-    await readSession(session, start, end, ofSession);
+    if (!(await readSession(session, start, end, ofSession))) { cache!.drop(s.db, key); return null; }
     groups.push(...ofSession.values());
   }
   const done = result(groups, selectedMs);
