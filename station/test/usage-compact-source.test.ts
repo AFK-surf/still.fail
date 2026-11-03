@@ -230,7 +230,7 @@ test("compact usage agrees with calls across dates and arbitrary bounds", () => 
     }
     const reader = makeStore(store.db, ".");
     const ranges: [bigint, bigint][] = [[-86_400_003n, -86_400_001n], [-60_001n, 60_001n], [-1n, 1n],
-      [0n, 59_999n], [1n, 60_000n], [0n, 9_223_372_036_854_775_807n], [-60_000n, 120_000n],
+      [0n, 59_999n], [1n, 60_000n], [0n, 9_223_372_036_854_775_807n], [1n, 9_223_372_036_854_775_807n], [-60_000n, 120_000n],
       [1n, 1n], [-86_399_999n, 86_400_001n]];
     for (const [from, to] of ranges) for (const offset of [-31, 0, 1, 345]) for (const home of [false, true]) {
       const expected = new Map<string, { day: string; session: string; calls: number; input: number; output: number }>();
@@ -249,6 +249,28 @@ test("compact usage agrees with calls across dates and arbitrary bounds", () => 
       const actual = usageGroups(reader, from, to, BigInt(offset), { workspace: "A", home })
         .map(({ day, session, calls, input, output }) => ({ day, session, calls, input, output })).sort(order);
       assert.deepEqual(actual, [...expected.values()].sort(order), `${from}..${to}, offset ${offset}, home ${home}`);
+    }
+  } finally { store.close(); }
+});
+
+test("partial-minute reads find sessions occurring only at either edge", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const key of ["first", "last", "outside"]) store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/w", token: key, ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    for (const [key, at] of [["first", 10], ["last", 120_010], ["outside", 180_000]] as const) {
+      const call = { id: key, at, model: "m", subagent: false, fast: false, input: 1,
+        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null };
+      store.recordUsage(`/${key}`, { session: key, offset: 1, model: "m" }, "claude", [[call, owner]]);
+    }
+    const reader = makeStore(store.db, ".");
+    for (const viewer of [null, { workspace: "A", home: false }]) {
+      const rows = (from: bigint, to: bigint) => usageGroups(reader, from, to, 0n, viewer).map((r) => r.session).sort();
+      assert.deepEqual(rows(1n, 120_011n), ["first", "last"]);
+      assert.deepEqual(rows(10n, 11n), ["first"]);
+      assert.deepEqual(rows(120_010n, 120_011n), ["last"]);
     }
   } finally { store.close(); }
 });
@@ -409,7 +431,8 @@ test("a partial minute does not visit other workspaces or calls outside its boun
       Array.from({ length: 300 }, (_, n) => [call(`earlier-${n}`, 500), owner]));
     assert.deepEqual(read(), before, "unrelated statistics and calls do not increase edge work");
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.args) as { detail: string }[]).map((r) => r.detail).join(" | ");
-    assert.match(plan, /usage_compact_scope_time \(scope=\? AND minute=\?\)/);
+    assert.match(plan, /SEARCH usage_compact USING COVERING INDEX usage_compact_scope_time/);
+    assert.match(plan, /SEARCH c USING PRIMARY KEY/);
     assert.match(plan, /usage_session \(session=\? AND at>\? AND at<\?\)/);
   } finally { store.close(); }
 });
