@@ -48,6 +48,7 @@ export class Host {
   private cached: { at: number; info: any } | null = null;
   private seen: Seen = null;
   private reading: Promise<any> | null = null;
+  private sampling: Promise<any> | null = null;
   private cpu = new CpuWindow();
 
   constructor(readers: Readers, gpus: Pick<Gpus, "read"> = new Gpus()) {
@@ -67,10 +68,13 @@ export class Host {
     return this.cpu.busy(wall.now(), platform.host.cpuTicks());
   }
 
-  /// The machine sample and its GPUs. GPU failures do not prevent the other measurements from being shown.
-  async sample(lang: Lang = "zh"): Promise<any> {
-    const [info, gpus] = await Promise.all([this.info(lang), this.gpus.read().catch(() => null)]);
-    return { ...info, gpus };
+  /// The machine sample and its GPUs, one at a time however many ask. GPU failures do not prevent the other
+  /// measurements from being shown.
+  sample(lang: Lang = "zh"): Promise<any> {
+    this.sampling ??= Promise.all([this.info(lang), this.gpus.read().catch(() => null)])
+      .then(([info, gpus]) => ({ ...info, gpus }))
+      .finally(() => (this.sampling = null));
+    return this.sampling;
   }
 
   /// At most ten seconds old; one read at a time however many ask.
