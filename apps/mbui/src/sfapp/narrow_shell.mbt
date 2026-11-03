@@ -429,13 +429,13 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
     Setting(Usage) =>
       made("usage", fn(p, core, here, frame, _stint) { @sfpages.usage_node(p, core, here, on_back=core.pop, frame~) })
     Setting(UsagePrices(days)) =>
-      made("usage-prices", fn(p, core, here, frame, _stint) {
+      made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint) {
         @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame~)
       })
     Setting(Memories) =>
       made("memories", fn(p, core, here, frame, _stint) { @sfpages.memories_node(p, core, here, on_back=core.pop, frame~) })
     Setting(Memory(address)) =>
-      made("memory", fn(p, core, here, frame, _stint) {
+      made("memory/" + address, fn(p, core, here, frame, _stint) {
         @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame~)
       })
     // (a place of the bottom bar's whose page is one of those: place_page's, made once as they are)

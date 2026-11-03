@@ -301,6 +301,7 @@ fn wide_link_row_node(
   below_open : () -> Double,
   note_cut : Bool,
   title_after : ((@view.View) -> Unit)?,
+  title_after_shown : () -> Bool,
   folds : (() -> Bool)?,
 ) -> Unit {
   let at = part_of(parent)
@@ -349,22 +350,27 @@ fn wide_link_row_node(
         first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
         first.box(fn(t) {
           t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-          match title_after {
-            // (what follows its title on its line, 8 apart across their middle, the title cut short where the line
-            // leaves it less: link_row's title_line)
-            Some(after) => {
-              t.row(Is(true)).gap(Is(8.0)).lines_up(Is(Some(Middle))) |> ignore
-              t.box(fn(w) {
-                w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-                styled_words(w, title, fn() { titled.then(cut_words) }) |> ignore
-              })
-              |> ignore
-              t.box(fn(a) { after(a) }) |> ignore
+          // (what follows its title on its line while it is said, 8 apart across their middle, the title cut short where
+          // the line leaves it less: link_row's title_line; its title the same words all along)
+          t.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+          t.box(fn(w) {
+            w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+            styled_words(w, title, fn() {
+              if title_after is Some(_) && title_after_shown() { titled.then(cut_words) } else { titled }
+            })
+            |> ignore
+            if acts {
+              w.ink(By(fn() { link_ink() })) |> ignore
             }
-            None => styled_words(t, title, fn() { titled }) |> ignore
-          }
-          if acts {
-            t.ink(By(fn() { link_ink() })) |> ignore
+          })
+          |> ignore
+          match title_after {
+            Some(after) =>
+              t.show(title_after_shown, fn(a) {
+                a.margin(Is((8.0, 0.0, 0.0, 0.0))) |> ignore
+                after(a)
+              })
+            None => ()
           }
         })
         |> ignore

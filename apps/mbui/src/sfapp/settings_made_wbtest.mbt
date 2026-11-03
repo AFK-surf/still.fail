@@ -1181,7 +1181,8 @@ test "一台 station 的记忆 made once, its own skills' row pressed: folded op
     let at = fn(tree : Bool) raise {
       let t = memories_tester(tree, platform, mode="settings-memory")
       t.tap_text(@sf.t("web-main.memory.builtin"))
-      t.run_for(@ui.move_most_ms)
+      // (its press's ripple gone: an old view's drawn where the row was as it went down, a node's where it is)
+      t.run_for(@motion.ripple_tap_ms)
       let open = (instances_sorted(t), words_where(t))
       let said = t.semantics().filter(fn(n) { n.label == @sf.t("web-main.memory.builtin") }).map(fn(n) { n.expanded })
       // (back to 记忆, and in again)
@@ -1191,7 +1192,7 @@ test "一台 station 的记忆 made once, its own skills' row pressed: folded op
       t.run_for(@ui.move_most_ms)
       let again = (instances_sorted(t), words_where(t))
       t.tap_text(@sf.t("web-main.memory.builtin"))
-      t.run_for(@ui.move_most_ms)
+      t.run_for(@motion.ripple_tap_ms)
       (open, said, again, words_where(t))
     }
     let (old_open, old_said, old_again, old_shut) = at(false)
@@ -1248,4 +1249,76 @@ test "一台 station 的记忆 made once: a part of its global memory pressed op
   assert_true(app.nav.top() == Setting(@settings.Route::Memory("ws1/st1")), msg="on top \{@sfbase.page_kind(app.nav.top())}")
   let own = tree_words_drawn()
   assert_true(own.iter().any(fn(o) { o.contains("习惯") }), msg="not the tree's own: \{own}")
+}
+
+///|
+test "一台 station 的记忆 made once, a skill shared and no longer and again: its tag said, gone with no room left for it, said again, the same row all along" {
+  let t = memories_tester(true, 2, mode="settings-memory")
+  let shared = @sf.t("web-main.memory.share.shared")
+  let row = fn() { @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words == "发布流程" }).map(fn(d) { (d.id.at, d.id.gen) }) }
+  let tagged = fn() { tree_words_drawn().iter().any(fn(o) { o == shared }) }
+  let at = fn() { t.words().filter(fn(w) { w.0 == "发布流程" }).map(fn(w) { (w.1, w.3) }) }
+  let first = (row(), tagged(), at())
+  @settings.fixture_call("skill.share", { "name": Json::string("发布流程"), "on": Json::boolean(false) }) |> ignore
+  t.run_for(@ui.move_most_ms)
+  let off = (row(), tagged(), at())
+  @settings.fixture_call("skill.share", { "name": Json::string("发布流程"), "on": Json::boolean(true) }) |> ignore
+  t.run_for(@ui.move_most_ms)
+  let on = (row(), tagged(), at())
+  assert_true(first.0.length() == 1 && first.0 == off.0 && off.0 == on.0, msg="the same row: \{first.0} \{off.0} \{on.0}")
+  assert_eq((first.1, off.1, on.1), (true, false, true))
+  assert_eq(on.2, first.2)
+}
+
+///|
+/// The core's topic `name` as it is read, its params' `key` each time (the source `base` otherwise as it is).
+fn topic_asked(base : Source, name : String, key : String, asked : Array[String]) -> Source {
+  {
+    ..base,
+    topic: fn(n, params) {
+      if n == name {
+        asked.push(
+          match params {
+            Object(o) =>
+              match o.get(key) {
+                Some(String(s)) => s
+                Some(Number(d, ..)) => d.to_int().to_string()
+                _ => ""
+              }
+            _ => ""
+          },
+        )
+      }
+      (base.topic)(n, params)
+    },
+  }
+}
+
+///|
+test "a station's memory made once become another's in its place: its title that station's, its memory read of it, its rows there" {
+  let asked : Array[String] = []
+  let t = memories_tester(true, 2, mode="settings-memory", wrap=fn(b) { topic_asked(b, "memory", "station", asked) })
+  let first = (asked.last(), tree_words_drawn().contains("Studio"))
+  app.nav.become(Setting(@settings.Route::Memory("ws1/st2")))
+  t.run_for(@ui.move_most_ms)
+  let own = tree_words_drawn()
+  assert_eq(
+    (first, asked.last(), own.contains("MBA"), own.iter().any(fn(o) { o.contains("发布流程") })),
+    ((Some("ws1/st1"), true), Some("ws1/st2"), true, true),
+    msg="\{own}",
+  )
+}
+
+///|
+test "价目表 made once become another's of other days in its place: its usage read for those days, its tables there" {
+  let asked : Array[String] = []
+  let t = memories_tester(true, 2, mode="settings-usage", wrap=fn(b) { topic_asked(b, "usage", "days", asked) })
+  t.tap_text("查看价目表 →")
+  t.run_for(@ui.move_most_ms)
+  guard app.nav.top() is Setting(@settings.Route::UsagePrices(days)) else { fail("not on 价目表") }
+  let other = if days == 7 { 30 } else { 7 }
+  app.nav.become(Setting(@settings.Route::UsagePrices(other)))
+  t.run_for(@ui.move_most_ms)
+  let own = tree_words_drawn()
+  assert_eq((asked.last(), own.iter().any(fn(o) { o.contains("Opus") })), (Some(other.to_string()), true), msg="\{asked} \{own}")
 }
