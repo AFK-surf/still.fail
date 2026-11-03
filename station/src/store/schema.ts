@@ -1075,6 +1075,53 @@ export function addSessionWork(db: DatabaseSync, now: number): void {
   }
 }
 
+/// The card each chat waits on (its latest post with a card or options, no person having written since, not closed), as
+/// it is posted, answered and closed: what the sidebar's marks read for every chat shown, one row each (read/views.ts
+/// `chatMarks`). Kept from when it was made on (`pending_cards_from`, the entries there were then), never worked out of
+/// what was said before: a chat with a card from before is read the way it was (read/store.ts `pendingCard`). Worked
+/// out at each read, it was a dozen lookups a chat, 26 s for 68 chats on ccvm short of memory (2026-11-03).
+const PENDING_CARDS = `
+CREATE TABLE pending_cards (
+  thread INTEGER PRIMARY KEY,
+  n INTEGER NOT NULL
+);
+CREATE TABLE pending_cards_from (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  entry INTEGER NOT NULL
+);
+CREATE TRIGGER pending_cards_post AFTER INSERT ON entries
+WHEN NEW.kind = 'message' AND (NEW.card IS NOT NULL OR NEW.options IS NOT NULL) BEGIN
+  INSERT INTO pending_cards VALUES (NEW.thread, NEW.n) ON CONFLICT (thread) DO UPDATE SET n = excluded.n WHERE excluded.n > pending_cards.n;
+END;
+CREATE TRIGGER pending_cards_answered AFTER INSERT ON entries WHEN NEW.kind = 'message' AND NEW.author_kind = 'person' BEGIN
+  DELETE FROM pending_cards WHERE thread = NEW.thread AND n < NEW.n;
+END;
+CREATE TRIGGER pending_cards_closed AFTER INSERT ON closed_cards BEGIN
+  DELETE FROM pending_cards WHERE thread = NEW.thread AND n = NEW.n;
+END;
+CREATE TRIGGER pending_cards_gone AFTER DELETE ON threads BEGIN
+  DELETE FROM pending_cards WHERE thread = OLD.id;
+END;
+`;
+
+/// The cards chats wait on (PENDING_CARDS), kept from now on: its tables and the triggers that keep it, nothing read but
+/// where the entries stand.
+export function addPendingCards(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pending_cards_from'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) {
+      db.exec(PENDING_CARDS);
+      db.exec("INSERT INTO pending_cards_from VALUES (1, COALESCE((SELECT MAX(rowid) FROM entries), 0))");
+    }
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 /// What is told as chats change (a chat's row and how it stands for each viewer, a turn's end) is read by these, each
 /// lookup the size of what it finds rather than of the chat's history:
 /// - entries_said: a chat's messages after where a viewer read, counted from the index alone (read/store.ts `unreadOf`;

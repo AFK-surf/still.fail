@@ -32,6 +32,13 @@ pub let archive_tween : @motion.Spec = @motion.tween(archive_ms, ease=archive_ea
 pub let under_ends : Map[String, @motion.Anim] = {}
 
 ///|
+/// The list's way each block under a post last went on (Ctx::row_way: its start and how long), by its key: the way set
+/// out again (another change in the list come while it goes), it goes on from where it is on the new one, as every row
+/// does, so that the rows' sum goes one way (docs/list-motion.md)
+// kept across runs: put back by under_reset (sfbase's reset)
+let under_ways : Map[String, (Double, Double)] = {}
+
+///|
 /// When what comes and goes under the posts (options, how a card went, 忽略, the archive buttons) is at rest, their
 /// rooms opening or closing on their springs and tweens (the frames' clock; -1: none moves; +inf: told to go, not
 /// started yet): a test runs to it.
@@ -77,7 +84,10 @@ pub fn under_post(
   // (in a row of a list as what it shows changes: on the way its rows go then, from its start and as long, so that
   // what is over and under it moves one way with it: @ui.Ctx::row_way)
   match (c.row_way(), start_at) {
-    (Some(way), _) if h.target() != to => on_row_way(c, h, to, way)
+    (Some(way), _) if h.target() != to || (!h.over() && under_ways.get(key) is Some(w) && w != way) => {
+      under_ways[key] = way
+      on_row_way(c, h, to, way)
+    }
     (_, Some(at)) if h.target() != to => h.animate(to, spec, start_at=at)
     _ => h.follow(to, spec)
   }
@@ -140,4 +150,5 @@ let under_room_lead : @ui.Style = @ui.css("w=Full pt=S1_5")
 /// What the rooms under the posts keep put back as the app begins anew (sfbase's reset).
 pub fn under_reset() -> Unit {
   under_ends.clear()
+  under_ways.clear()
 }

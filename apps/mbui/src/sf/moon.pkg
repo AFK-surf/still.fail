@@ -23,15 +23,15 @@ import { "stillfail/sfkept" } for "test"
 options(
   targets: {
     "math_env_js_wbtest.mbt": [ "js" ],
-    "math_env_native_wbtest.mbt": [ "native" ],
+    "math_env_native_wbtest.mbt": [ "native", "wasm", "wasm-gc" ],
     // (the files the app carries: in its code on the native hosts, fetched beside its script in a browser)
-    "font_assets.mbt": [ "native", "wasm" ],
+    "font_assets.mbt": [ "native", "wasm", "wasm-gc" ],
     "font_assets_js.mbt": [ "js" ],
-    "font_assets_native.mbt": [ "native", "wasm" ],
-    "math_glyphs.mbt": [ "native", "wasm" ],
-    "math_glyphs_native.mbt": [ "native", "wasm" ],
+    "font_assets_native.mbt": [ "native", "wasm", "wasm-gc" ],
+    "math_glyphs.mbt": [ "native", "wasm", "wasm-gc" ],
+    "math_glyphs_native.mbt": [ "native", "wasm", "wasm-gc" ],
     "math_glyphs_js.mbt": [ "js" ],
-    "faces_wbtest.mbt": [ "native" ],
+    "faces_wbtest.mbt": [ "native", "wasm", "wasm-gc" ],
   },
   "pre-build": [
     { "input": "math.json", "output": "math_fixture_wbtest.mbt", "command": ":embed -i $input -o $output --name math_fixture" },

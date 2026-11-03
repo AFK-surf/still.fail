@@ -50,6 +50,14 @@ native_tests() {
 # (in a subshell: nothing else of the script's environment changed).
 moon_test_native() { ( native_tests "$PWD"; moon test $NATIVE "$@" ); }
 
+# `moon_tests ARGS…`: `moon test ARGS…` as development runs it, on wasm-gc (--release, as native's: no C compiled, the
+# user 2026-11-03; wasm-gc rather than classic Wasm, whose memory, freed by counting alone, never frees what holds
+# itself), and in CI (GITHUB_ACTIONS) or with MBUI_NATIVE_TESTS=1 on native as moon_test_native does.
+moon_tests() {
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${MBUI_NATIVE_TESTS:-}" = 1 ]; then moon_test_native "$@"
+  else moon test --target wasm-gc --release "$@"; fi
+}
+
 # `on_screen COMMAND…`: a command that opens a window (an app run on the host: a shot, a recording, a scripted run)
 # run with the machine's screen. Run as a job of a still.fail station (a task another station sent, an agent's job),
 # it waits while another task has the screen and gives it back once the command ends (`stillfail-job screen`), so the

@@ -1,8 +1,9 @@
 import {
   "moonbitlang/core/encoding/utf8",
+  "mbui/runfs",
 }
 
 options(
-  targets: { "load_native.mbt": [ "native" ], "load_js.mbt": [ "js" ], "words_native_wbtest.mbt": [ "native" ] },
+  targets: { "load_native.mbt": [ "native" ], "load_js.mbt": [ "js" ], "load_wasm.mbt": [ "wasm", "wasm-gc" ], "words_native_wbtest.mbt": [ "native", "wasm", "wasm-gc" ] },
   "native-stub": [ "read_file.c" ],
 )

@@ -277,8 +277,10 @@ function answeredView(a: store.CardAnswer): Json {
 
 /// A chat's card still pending, for its row: `seq`, the `card`, the post itself (`message`) and the two messages
 /// before it (`before`), `dismissed` when the viewer will not take it up.
-function cardView(api: Api, thread: number, dismissed: Set<string>, names: Names): Json | null {
-  const pending = store.pendingCard(api.store, thread);
+/// `kept`: the card's entry as kept (null: none waits), or undefined to work it out (`pendingCard`).
+function cardView(api: Api, thread: number, dismissed: Set<string>, names: Names, kept?: number | null): Json | null {
+  if (kept === null) return null;
+  const pending = kept === undefined ? store.pendingCard(api.store, thread) : store.cardAt(api.store, thread, kept);
   if (pending === null) return null;
   const [m, card] = pending;
   const message = messageView(m, names, api.store);
@@ -403,13 +405,16 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   // The review's marks of these chats, by its two small tables: a chat's last entry read only where one has any.
   const ids = own.map((t) => t.thread.id);
   const reviewed = ids.length === 0 ? new Set<number>() : new Set<number>(store.reviewedThreads(s, ids));
+  // The cards they wait on as kept; a chat with a card from before they were kept, worked out as it was.
+  const cards = store.pendingCards(s, ids);
+  const keptCard = (id: number): number | null | undefined => (cards === null || cards.before.has(id) ? undefined : (cards.at.get(id) ?? null));
   for (const t of own) {
     const id = t.thread.id;
     // Who wrote in it, read only where something waits there to be shown with its authors.
     let known: Names | null = null;
     const namesOf = () => (known ??= authorNames(api, id));
     const names = Object.assign((kind: AuthorKind, author: string) => namesOf()(kind, author), { picture: (kind: AuthorKind, author: string) => namesOf().picture?.(kind, author) ?? null });
-    const c = cardView(api, id, dismissed, names);
+    const c = cardView(api, id, dismissed, names, keptCard(id));
     if (c !== null) card[id] = c;
     else {
       // its agents in lists, as its row has them (`chats`)

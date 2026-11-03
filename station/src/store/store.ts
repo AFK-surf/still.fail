@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
@@ -233,6 +233,7 @@ export class Store {
       installUsageChatStats(db);
       addSessionTurns(db);
       addSessionWork(db, clock.currentTimeMillisUnsafe());
+      addPendingCards(db);
       addTellIndexes(db);
     } catch (e) {
       db.close();
