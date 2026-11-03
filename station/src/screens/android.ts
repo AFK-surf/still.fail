@@ -21,6 +21,8 @@ const CONNECT_TIMEOUT = 15_000;
 const ADB_TIMEOUT = 15_000;
 /// How long after `adb track-devices` ended it is started again.
 const FOLLOW_AGAIN = 5_000;
+/// How long after a device could not be looked at it is looked at again (adb has an emulator long before it has booted).
+const LOOK_AGAIN = 3_000;
 /// Encoded frames kept for a view that asks slowly: past this they are dropped up to a new key frame (a delta dropped
 /// alone would break every frame after it).
 const QUEUE_MOST = 30;
@@ -586,10 +588,13 @@ export class AndroidScreens {
   #closed = false;
   #serials: string[] = [];
   #looking = Promise.resolve();
+  #lookAgain: (() => void) | null = null;
+  readonly #again_ms: number;
 
-  constructor(o: { screens: Screens & { changed(): void }; adb: () => string | null; file?: string }) {
+  constructor(o: { screens: Screens & { changed(): void }; adb: () => string | null; file?: string; lookAgain?: number }) {
     this.#screens = o.screens;
     this.#adb = o.adb;
+    this.#again_ms = o.lookAgain ?? LOOK_AGAIN;
     this.#file = o.file ?? fileURLToPath(new URL("./scrcpy-server", import.meta.url));
   }
 
@@ -637,21 +642,27 @@ export class AndroidScreens {
       listed.remove();
       listed.source.gone();
     }
+    let unseen = false;
     for (const serial of serials) {
       if (this.#closed || this.#listed.has(serial)) continue;
       // (a phone both on USB and over Wi-Fi: the one screen)
       const source = await this.#screen(path, serial).catch((error) => {
-        log.warn("screens", "an Android device could not be looked at", { serial, error: (error as Error).message });
+        unseen = true;
+        log.info("screens", "an Android device could not be looked at yet", { serial, error: (error as Error).message });
         return null;
       });
       if (source === null || [...this.#listed.values()].some((l) => l.id === source.id)) continue;
       if (this.#closed || !this.#serials.includes(serial)) continue;
       this.#listed.set(serial, { id: source.id, source, remove: this.#screens.add(source) });
     }
+    this.#lookAgain?.();
+    this.#lookAgain = unseen && !this.#closed ? wall.after(this.#again_ms, () => this.#heard(path, this.#serials)) : null;
   }
 
   async #screen(path: string, serial: string): Promise<AndroidScreen> {
     const adb = adbOf(path, serial);
+    // (what is asked below is not there until it has booted)
+    if ((await adb.run(["shell", "getprop sys.boot_completed"])).trim() !== "1") throw new Error("still booting");
     const emulator = serial.startsWith("emulator-");
     const props = await adb.run(["shell", "getprop ro.serialno; getprop ro.product.model; getprop ro.build.version.release; settings get global device_name"]);
     const [serialno, model, release, named] = props.split("\n").map((l) => l.trim());
@@ -674,6 +685,7 @@ export class AndroidScreens {
   close() {
     this.#closed = true;
     this.#again?.();
+    this.#lookAgain?.();
     this.#follow?.kill();
     for (const listed of this.#listed.values()) {
       listed.remove();
