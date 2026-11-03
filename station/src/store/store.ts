@@ -1941,6 +1941,18 @@ export class Store {
   }
 
   /// The session's latest turn.
+  /// Of some sessions, those whose latest turn said it waits (`declared` 'waiting'), in one statement: one each, 21 of
+  /// them took 5 s on the station's thread on ccvm short of memory (2026-11-03), as the workspaces in use were looked at.
+  waitingOf(sessions: string[]): Set<string> {
+    if (sessions.length === 0) return new Set();
+    return new Set(
+      this.#all(
+        "SELECT j.value AS k FROM json_each(?) j WHERE (SELECT declared FROM turns WHERE session_key = j.value ORDER BY started_at DESC, rowid DESC LIMIT 1) = 'waiting'",
+        JSON.stringify(sessions),
+      ).map((r) => r.k as string),
+    );
+  }
+
   lastTurn(session: string): TurnSummary | null {
     const r = this.#one("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC, rowid DESC LIMIT 1", session);
     return r ? toTurnSummary(r) : null;
