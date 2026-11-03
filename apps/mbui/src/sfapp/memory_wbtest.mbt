@@ -76,7 +76,7 @@ test "一台 station 的记忆 as a place over another place, wide: no back over
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform=0)
     t.draw()
     let back = @sfbase.back_label(Place("memories"))
-    let backs = fn() { t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label.contains(back) && !s.hidden }).length() }
+    let backs = fn() { t.semantics().filter(fn(s) { s.label == back && !s.hidden }).length() }
     app.nav.replace(Place("memories"))
     t.run_for(@ui.move_most_ms)
     let alone = backs()
