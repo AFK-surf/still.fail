@@ -16,6 +16,8 @@ import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
+import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
@@ -1142,6 +1144,7 @@ test("what the station asks again and again is planned by an index, never a scan
   const planned: [string, unknown[]][] = [
     [read.ORIGINAL_RUNTIME, ["a"]],
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
+    [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
@@ -1155,6 +1158,7 @@ test("what the station asks again and again is planned by an index, never a scan
     // order. It must still seek the underlying lookup below (asserted separately), not scan the historical table.
     assert.ok(!plan.some((d) => scans.test(d)
       && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))
+      && !(sql === RUNNING_WAIT_JOBS && d === "SCAN active" && plan.includes("CO-ROUTINE active"))
       && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN e" && (plan.includes("MATERIALIZE edge") || plan.includes("CO-ROUTINE edge")))
       && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN p" && plan.includes("CO-ROUTINE parts"))), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);

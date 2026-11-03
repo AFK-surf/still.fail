@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { ACTIVE_WATCHES_AT_INSTALL, HAS_ACTIVE_WATCH, installActiveWatches } from "../src/store/watch-jobs.ts";
+import { ACTIVE_WATCHES_AT_INSTALL, HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "../src/store/watch-jobs.ts";
 
 for (const recursive of [false, true]) test(`active watch lookup follows job changes and older writers (recursive triggers ${recursive})`, () => {
   const db = new DatabaseSync(":memory:");
@@ -25,17 +25,25 @@ for (const recursive of [false, true]) test(`active watch lookup follows job cha
     const lookupPlan = (db.prepare(`EXPLAIN QUERY PLAN ${HAS_ACTIVE_WATCH}`).all(1) as { detail: string }[]).map((r) => r.detail).join(" | ");
     assert.match(lookupPlan, /SEARCH t USING COVERING INDEX .* \(thread=\?\)/);
     assert.match(lookupPlan, /SEARCH w USING COVERING INDEX active_watch_jobs_session \(session=\?\)/);
+    const sessionPlan = (db.prepare(`EXPLAIN QUERY PLAN ${HAS_SESSION_ACTIVE_WATCH}`).all("a") as { detail: string }[]).map((r) => r.detail).join(" | ");
+    assert.match(sessionPlan, /SEARCH active_watch_jobs USING COVERING INDEX active_watch_jobs_session \(session=\?\)/);
     const has = (thread: number) => db.prepare(HAS_ACTIVE_WATCH).get(thread) !== undefined;
+    const hasSession = (session: string) => db.prepare(HAS_SESSION_ACTIVE_WATCH).get(session) !== undefined;
     assert.equal(has(1), true);
     assert.equal(has(2), false);
+    assert.equal(hasSession("a"), true);
+    assert.equal(hasSession("b"), false);
 
     add("b-watch", "b", "running", 2);
     assert.equal(has(2), true, "nonzero watch values follow the original job reader");
     db.prepare("UPDATE jobs SET state = 'exited' WHERE id = ?").run("a-watch");
     assert.equal(has(1), false);
+    assert.equal(hasSession("a"), false);
     db.prepare("UPDATE jobs SET session_key = 'a' WHERE id = ?").run("b-watch");
     assert.equal(has(1), true);
     assert.equal(has(2), false);
+    assert.equal(hasSession("a"), true);
+    assert.equal(hasSession("b"), false);
     db.prepare("INSERT OR REPLACE INTO jobs VALUES (?, ?, ?, ?, ?)").run("b-watch", "a", "exited", 1, "token-b-watch");
     assert.equal(has(1), false, "replacing a running watch cannot leave a stale lookup");
     db.prepare("UPDATE jobs SET state = 'running' WHERE id = ?").run("b-watch");

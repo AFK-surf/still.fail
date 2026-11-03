@@ -91,7 +91,7 @@ export type SessionStore = {
   rememberSlackStop(session: string, connect: string, channel: string, threadTs: string, ts: string, turn: string | null): void;
   stopWait(key: string, refill?: boolean): void;
   forgetWait(key: string): void;
-  listJobs(session: string | null): any[];
+  hasSessionActiveWatch(session: string): boolean;
   latestThread(key: string): any | null;
   entriesBefore(thread: number, n: number | null, limit: number): any[];
   insertMessage(message: any): [number, boolean];
@@ -1602,7 +1602,7 @@ export class SessionActor {
                 log.info("session", "trying again a turn the provider had no room for", { session: this.key, seconds });
                 return this.startTurn("resume", GO_ON_AFTER_OVERLOADED);
               }
-              if (last?.waitWatch !== false && this.deps.store.listJobs(this.key).some((j) => j.watch && j.state === "running")) return this.wait(seconds);
+              if (last?.waitWatch !== false && this.deps.store.hasSessionActiveWatch(this.key)) return this.wait(seconds);
               log.info("session", "the wait is over without word; asking again", { session: this.key, seconds });
               await this.startTurn("nudge", waitOver(seconds));
             }),

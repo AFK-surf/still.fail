@@ -7,6 +7,14 @@ export const RUNNING_LIMIT = `SELECT job FROM (
   UNION ALL
   SELECT job FROM active_other_jobs WHERE session = ?1
 ) LIMIT 1 OFFSET ?2`;
+/// A stopped wait ends its running watches and commands, but leaves services running.
+export const RUNNING_WAIT_JOBS = `SELECT j.id FROM (
+  SELECT job FROM active_watch_jobs INDEXED BY active_watch_jobs_session WHERE session = ?1
+  UNION ALL
+  SELECT job FROM active_other_jobs WHERE session = ?1
+) active CROSS JOIN jobs j ON j.id = active.job
+WHERE j.watch <> 0 OR j.port IS NULL
+ORDER BY j.started_at DESC`;
 export const OTHER_JOBS_AT_INSTALL = "SELECT session_key, id FROM jobs INDEXED BY jobs_state WHERE state = 'running' AND watch = 0";
 
 /// Install the lookup and its writers atomically. Only currently running jobs are read on upgrade.
