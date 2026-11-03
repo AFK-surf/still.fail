@@ -107,15 +107,18 @@ export function stateOf(runtime: RuntimeKind, paths: string[], dir: string | nul
 /// Entries `from ..< to` of a chain of transcripts as `chainOf` read it (fewer where it has fewer, or where one could not
 /// be read: none after it, which would be given as others), whole or in brief (transcript.ts `brief`): each read from
 /// the mark before it.
-export function entriesOf(runtime: RuntimeKind, chain: Marked[], from: number, to: number, inBrief: boolean): TimelineEntry[] {
+/// `read`: what was read for them, added to (bytes from the marks on, lines parsed, whether of a transcript put away).
+export type Read = { bytes: number; lines: number; packed: number };
+
+export function entriesOf(runtime: RuntimeKind, chain: Marked[], from: number, to: number, inBrief: boolean, read: Read = { bytes: 0, lines: 0, packed: 0 }): TimelineEntry[] {
   const entries: TimelineEntry[] = [];
   let first = 0;
   for (const m of chain) {
     const [a, b] = [Math.max(from, first), Math.min(to, first + m.state.count)];
     if (a < b) {
-      const read = readBetween(runtime, m, a - first, b - first);
-      for (const e of read) entries.push(inBrief ? brief(e) : e);
-      if (read.length < b - a) break;
+      const got = readBetween(runtime, m, a - first, b - first, read);
+      for (const e of got) entries.push(inBrief ? brief(e) : e);
+      if (got.length < b - a) break;
     }
     first += m.state.count;
   }
@@ -123,7 +126,7 @@ export function entriesOf(runtime: RuntimeKind, chain: Marked[], from: number, t
 }
 
 /// Entries `from ..< to` of one transcript, read from the last mark at or before `from` up to where its reading stands.
-function readBetween(runtime: RuntimeKind, m: Marked, from: number, to: number): TimelineEntry[] {
+function readBetween(runtime: RuntimeKind, m: Marked, from: number, to: number, read: Read): TimelineEntry[] {
   let mark: Mark = { offset: 0, index: 0, inner: [] };
   for (const each of m.marks) {
     if (each.index > from) break;
@@ -137,6 +140,8 @@ function readBetween(runtime: RuntimeKind, m: Marked, from: number, to: number):
   let index = mark.index;
   /// A line read: whether more are wanted.
   const line = (bytes: Buffer): boolean => {
+    read.bytes += bytes.length + 1;
+    read.lines++;
     const record = recordOf(utf8.decode(bytes));
     if (record === undefined) return true;
     const entries: TimelineEntry[] = [];
@@ -158,6 +163,7 @@ function readBetween(runtime: RuntimeKind, m: Marked, from: number, to: number):
   };
   const disk = storage(path);
   if (disk !== path) {
+    read.packed++;
     // Put away: the segments from the mark on, while more are wanted (read/packed.ts); one put away before there were
     // segments decompressed once while its history is read.
     try {
