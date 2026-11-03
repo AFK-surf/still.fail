@@ -16,7 +16,7 @@ import type { Store as StationStore } from "../store/store.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { giveBackfill, releaseStoppedBackfill, takeBackfill } from "../store/backfill.ts";
 import { retireUsageIndexes, stopUsageIndexes } from "../store/usage-retire.ts";
-import { hasCompactUsage, installCompactUsage } from "../store/usage-compact.ts";
+import { hasCompactUsage, installCompactUsage, installUsageSummaryChanges } from "../store/usage-compact.ts";
 import { UsageCounter } from "./counter.ts";
 
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
@@ -50,6 +50,7 @@ function tryStopUsageIndexes(store: StationStore): boolean {
     try {
       try {
         installCompactUsage(store.db, () => store.now());
+        installUsageSummaryChanges(store.db);
       } catch (error) {
         const code = (error as { errcode?: number }).errcode;
         if (code !== undefined && [5, 6].includes(code & 255)) throw error;

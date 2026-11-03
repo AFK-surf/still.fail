@@ -61,6 +61,56 @@ export function hasCompactUsage(db: DatabaseSync): boolean {
   return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compact_since'").get() !== undefined;
 }
 
+/// A bounded journal of future changes lets a reader reuse its own snapshot of unchanged hours. It starts empty:
+/// installing it neither walks nor modifies existing statistics. A NULL minute invalidates a session's ownership.
+export function installUsageSummaryChanges(db: DatabaseSync): void {
+  const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get() !== undefined;
+  if (!hasCompactUsage(db) || installed()) return;
+  const changed = ["scope", "session", "minute", "thread", "person", "profile", "runtime", "model", "fast", "records", ...cols];
+  const sameBucket = "OLD.scope IS NEW.scope AND OLD.session IS NEW.session AND OLD.minute IS NEW.minute";
+  const insert = (r: string, value: string) => `INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${value}, ${r}.session, ${r}.minute);`;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!installed()) db.exec(`
+      CREATE TABLE usage_summary_changes (seq INTEGER PRIMARY KEY, scope TEXT NOT NULL, session TEXT NOT NULL, minute INTEGER);
+      CREATE TRIGGER usage_summary_prune AFTER INSERT ON usage_summary_changes WHEN NEW.seq % 64 = 0 BEGIN
+        DELETE FROM usage_summary_changes WHERE seq <= NEW.seq - 4096;
+      END;
+      -- REPLACE need not fire DELETE triggers. Remember a conflicting bucket's former scope before it is replaced.
+      CREATE TRIGGER usage_summary_replace BEFORE INSERT ON usage_compact BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute)
+          SELECT scope, session, minute FROM usage_compact WHERE session = NEW.session AND minute = NEW.minute
+            AND thread = NEW.thread AND person = NEW.person AND profile = NEW.profile AND runtime = NEW.runtime
+            AND model = NEW.model AND fast = NEW.fast AND scope IS NOT NEW.scope AND records > 0;
+      END;
+      CREATE TRIGGER usage_summary_add AFTER INSERT ON usage_compact BEGIN ${insert("NEW", "NEW.scope")} END;
+      CREATE TRIGGER usage_summary_change AFTER UPDATE OF ${changed.join(", ")} ON usage_compact
+        WHEN ${changed.map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ")} BEGIN
+          ${insert("OLD", "OLD.scope")}
+          INSERT INTO usage_summary_changes (scope, session, minute)
+            SELECT NEW.scope, NEW.session, NEW.minute WHERE NOT (${sameBucket});
+      END;
+      CREATE TRIGGER usage_summary_drop AFTER DELETE ON usage_compact WHEN OLD.records > 0 BEGIN ${insert("OLD", "OLD.scope")} END;
+      CREATE TRIGGER usage_summary_owner_replace BEFORE INSERT ON usage_minute_scope BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute)
+          SELECT ${scopeOf("ws")}, session, NULL FROM usage_minute_scope
+            WHERE session = NEW.session AND ws IS NOT NEW.ws;
+      END;
+      CREATE TRIGGER usage_summary_owner_add AFTER INSERT ON usage_minute_scope BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${scopeOf("NEW.ws")}, NEW.session, NULL);
+      END;
+      CREATE TRIGGER usage_summary_owner_change AFTER UPDATE OF ws ON usage_minute_scope WHEN OLD.ws IS NOT NEW.ws BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${scopeOf("OLD.ws")}, OLD.session, NULL);
+        INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${scopeOf("NEW.ws")}, NEW.session, NULL);
+      END;
+      CREATE TRIGGER usage_summary_owner_drop AFTER DELETE ON usage_minute_scope BEGIN
+        INSERT INTO usage_summary_changes (scope, session, minute) VALUES (${scopeOf("OLD.ws")}, OLD.session, NULL);
+      END;
+    `);
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
 export function compactCoverageSince(db: DatabaseSync): number {
   return (db.prepare("SELECT since FROM usage_compact_since WHERE id = 1").get() as { since: number }).since;
 }
