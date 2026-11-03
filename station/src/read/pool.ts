@@ -82,6 +82,10 @@ function filling(op: string, args: unknown): boolean {
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
   private asked: Line;
+  /// The pages of sessions' histories (`timeline`), by a reader of their own: a page is read from the mark before it
+  /// (read/transcripts.ts), megabytes of a long transcript, seconds from a disk short of memory; in line with what
+  /// devices ask, the sidebar and a chat opened waited 20 s and more behind them on ccvm (2026-11-03).
+  private pages: Line;
   private told: Line;
   /// The store's log written into the database (CHECKPOINT), by a reader of its own.
   private log: Line;
@@ -109,6 +113,8 @@ export class Readers {
     this.workerFile = workerFile;
     this.backfill = backfill;
     this.asked = { told: false, size, room: true, slots: [], waiting: [] };
+    // Two: one a background page (a history brought on, a stretch filled) may hold, one left for a page someone waits on.
+    this.pages = { told: false, size: 2, room: false, slots: [], waiting: [] };
     this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
     this.log = { told: true, size: 1, room: false, slots: [], waiting: [] };
   }
@@ -223,7 +229,7 @@ export class Readers {
   /// `first`: before the reads waiting (CHECKPOINT).
   private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
-    const line = op === CHECKPOINT ? this.log : told ? this.told : this.asked;
+    const line = op === CHECKPOINT ? this.log : told ? this.told : op === "timeline" ? this.pages : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
@@ -300,13 +306,13 @@ export class Readers {
 
   /// Each running reader's JS heap in use, in bytes (for the memory log).
   heaps(): Promise<number[]> {
-    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
+    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots, ...this.pages.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
   }
 
   close() {
     this.closed = true;
     if (this.minutes !== null) void this.minutes.close();
-    for (const line of [this.asked, this.told, this.log]) {
+    for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
     }
