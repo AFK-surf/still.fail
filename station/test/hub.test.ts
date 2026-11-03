@@ -2626,6 +2626,7 @@ test("taken up by the next station, a process runs on the account it was started
   assert.ok(busyOld!.options.profile.id === "cc" && idleOld!.options.profile.id === "cc");
   idleOld!.complete();
   await settle();
+  await r.call(idleKey, "chat_post", { to: `C1/${idle.threadTs}`, title: "答问题" });
   await r.call(idleKey, "chat_state", { kind: "all_done", done: "answered" });
   idleOld!.complete();
   await settle();
@@ -2678,7 +2679,7 @@ test("changing runtime lets the running turn finish and the next reads back the 
   assert.equal(old.disposed, false);
   assert.equal(r.store.sessionOfRuntime("claude", old.id())?.key, key);
   assert.equal(r.store.sessionOfRuntime("codex", old.id()), null);
-  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", title: "接着做", kind: "final" });
   const sent = r.said(r.thread("C1", m.threadTs).id).find((x) => x.text === "done");
   assert.deepEqual(sent?.agentIdentity, { runtime: "claude", model: "opus", effort: "high" });
   old.complete();
