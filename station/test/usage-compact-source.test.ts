@@ -253,6 +253,33 @@ test("compact usage agrees with calls across dates and arbitrary bounds", () => 
   } finally { store.close(); }
 });
 
+test("a usage summary checks a session's workspace once for its minutes", () => {
+  const store = Store.open(":memory:");
+  try {
+    const sessions = [["a", "A"], ["b", "A"], ["other", "B"], ["old", "A"]] as const;
+    for (const [key, ws] of sessions) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
+    }
+    compactUsage(store);
+    const scope = store.db.prepare("INSERT INTO usage_minute_scope (session, ws, done) VALUES (?, ?, 1)");
+    const bucket = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 0, ?)");
+    for (const [key, ws] of sessions) {
+      scope.run(key, ws);
+      for (let minute = 0; minute < 60; minute++) bucket.run(key, key === "old" ? minute - 120 : minute, `W${ws}`);
+    }
+    let visits = 0;
+    store.db.function("inspected_scope_session", (session) => { visits++; return session; });
+    const query = compactQuery(0n, 3_600_000n, 0n, { workspace: "A", home: false });
+    const counted = query.sql.replace(/sc\.session = ([a-z]+)\.session/, "sc.session = inspected_scope_session($1.session)");
+    assert.notEqual(counted, query.sql, "the test counts lookups of a session's workspace");
+    const before = (store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
+    const rows = store.db.prepare(counted).all(...query.args) as { session: string; calls: number; input: number }[];
+    assert.deepEqual(rows.map((r) => [r.session, r.calls, r.input]).sort(), [["a", 60, 60], ["b", 60, 60]]);
+    assert.equal(visits, 2, "each relevant session's scope is looked up once, not once per minute");
+    assert.equal((store.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n, before, "reading writes nothing");
+  } finally { store.close(); }
+});
+
 test("a partial minute does not visit other workspaces or calls outside its bounds", () => {
   const store = Store.open(":memory:");
   try {
