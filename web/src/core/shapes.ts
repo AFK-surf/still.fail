@@ -7143,8 +7143,8 @@ export interface StatusView {
 	text?: string;
 	items: StatusItem[];
 	/**
-	 * What a page still loading says under its words, a line each: the first few things read with how much came and
-	 * how long, then what lasts (the device's data, a connection down).
+	 * What a page still loading says under its words, a line each: what lasts and is why it is slow (the device's
+	 * data not opened, still.fail cloud down); what is read is not said.
 	 */
 	lines?: string[];
 }
