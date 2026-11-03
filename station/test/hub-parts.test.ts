@@ -431,6 +431,21 @@ test("a session watched again, or by the next station process, reads its transcr
   await settle();
   assert.deepEqual(nextAsked, [], "where its reading stood carried over too");
   assert.deepEqual(plan(nextGot), ["读日志 completed", "修 in_progress"]);
+  // Carried over once it is watched already (its readers slow to say): gone on from there at once.
+  let release = () => {};
+  const late = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  late.history = { ...historyOf(path), state: () => new Promise((resolve) => (release = () => resolve(stateOf("claude", [path], null)))) };
+  const lateGot: LiveMessage[] = [];
+  late.subscribe("s", 5, null, (m) => void lateGot.push(m));
+  await settle();
+  assert.equal(lateGot.length, 0, "waiting on the readers");
+  late.takePlans(JSON.parse(JSON.stringify(hub.carriedPlans())));
+  late.takeTails(JSON.parse(JSON.stringify(hub.carriedTails())));
+  await settle();
+  assert.deepEqual(lateGot.map((m) => m.type).slice(0, 1), ["timeline"], "joined without the readers");
+  release();
+  await settle();
+  late.close();
   hub.close();
   next.close();
   rmSync(dir, { recursive: true, force: true });

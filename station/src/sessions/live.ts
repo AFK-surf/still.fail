@@ -85,7 +85,9 @@ type Rate = { buckets: [number, number][]; toldAt: number; told: number };
 /// `behind`: the transcript of the runtime session it runs in now is not written yet (a runtime writes it once its
 /// conversation has begun), so where its history goes on is looked for again on each read. `tail` null while where its
 /// transcripts stand is read off the main thread (`ready`).
-type Watched = { tail: ChainTail | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void };
+/// `takeUp`: while the readers are asked where its reading stands, where the process before's stood (carried over as it
+/// was asked): gone on from there at once, whether it was.
+type Watched = { tail: ChainTail | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void; takeUp?: (states: TailState[]) => boolean };
 /// A listener of a session: whether it is told the entries in brief, and what is said while it joins (what it lacks of
 /// the transcript read off the main thread first), held until it has joined.
 type Sub = { id: number; listener: Listener; brief: boolean; queue: LiveMessage[] | null };
@@ -612,8 +614,13 @@ export class LiveHub {
     let watched = 0;
     for (const c of carried) {
       if (typeof c?.key !== "string" || !Array.isArray(c.states)) continue;
-      if (this.watched.has(c.key)) { watched++; continue; }
       if (!c.states.every((st) => typeof st?.path === "string" && Number.isSafeInteger(st.offset) && Number.isSafeInteger(st.count))) continue;
+      const w = this.watched.get(c.key);
+      if (w !== undefined) {
+        if (w.tail === null && w.takeUp?.(c.states) === true) taken++;
+        else watched++;
+        continue;
+      }
       this.keepStood(c.key, c.states);
       taken++;
     }
@@ -724,14 +731,28 @@ export class LiveHub {
       return true;
     }
     if (this.tookTails) log.info("live", "a transcript's reading asked of the readers", { session: key, kept: stood !== null, carried: this.tookTails });
-    watched.ready = this.history
+    // Begun once, from the readers' answer or from what the process before carried over, whichever is first: carried
+    // over after the sessions at work were watched again, 3 of 7 were read by the readers all the same (2026-11-03).
+    let begun = false;
+    let readyNow = () => {};
+    watched.ready = new Promise<void>((resolve) => (readyNow = resolve));
+    watched.takeUp = (states) => {
+      if (begun || this.watched.get(key) !== watched || !same(states)) return false;
+      begun = true;
+      begin(ChainTail.from(at.runtime, states));
+      this.soon(key);
+      readyNow();
+      return true;
+    };
+    void this.history
       .state(key)
       .then(
         (states) => states,
         () => null,
       )
       .then((states) => {
-        if (this.watched.get(key) !== watched) return;
+        if (this.watched.get(key) !== watched || begun) return readyNow();
+        begun = true;
         if (same(states)) begin(ChainTail.from(at.runtime, states));
         else {
           // Its transcripts are not where the readers found them (or they could not say): read here, kept nowhere.
@@ -741,6 +762,7 @@ export class LiveHub {
         }
         // What was written since the readers read it.
         this.soon(key);
+        readyNow();
       });
     return true;
   }
