@@ -80,6 +80,27 @@ test("reading the same call and transcript position again writes nothing", () =>
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) test(`an older station can still record and grow a call after compact statistics are installed (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    compactUsage(store);
+    store.db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    // The previous station does not know compact_counted and uses an upsert to grow the output.
+    const write = store.db.prepare(`INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast,
+      input, cache_read, cache_write, cache_write_long, output, calls, context, context_window)
+      VALUES ('legacy', 60000, 'a', NULL, NULL, 'p', 'cc', 'claude', 'm', 0, 0, 10, 0, 0, 0, ?, 1, NULL, NULL)
+      ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)`);
+    write.run(1);
+    const read = () => usageGroups(makeStore(store.db, "."), 0n, 120_000n, 0n, { workspace: "A", home: false });
+    assert.deepEqual(read().map((row) => [row.calls, row.input, row.output]), [[1, 10, 1]], "a new call from an older writer enters the compact statistics");
+    assert.doesNotThrow(() => write.run(4), "an older writer can grow a recorded response");
+    assert.deepEqual(read().map((row) => [row.calls, row.input, row.output]), [[1, 10, 4]], "the response contributes its growth exactly once");
+    write.run(2);
+    assert.deepEqual(read().map((row) => [row.calls, row.input, row.output]), [[1, 10, 4]], "an older response cannot reduce the output");
+  } finally { store.close(); }
+});
+
 test("a time range does not visit sessions with only older statistics", () => {
   const store = Store.open(":memory:");
   try {

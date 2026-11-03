@@ -41,13 +41,13 @@ const oldRemove = (r: string, table: string, period: string, value: string, cove
     AND ${legacyKey(r, period, value)} AND calls = 0 AND tokens = 0;`;
 const oldAddAll = (r: string) => oldAdd(r, "usage_day_quarters", "quarter", quarter(r), "old_days") + oldAdd(r, "usage_minute", "minute", minute(r), "old_minutes");
 const oldRemoveAll = (r: string) => oldRemove(r, "usage_day_quarters", "quarter", quarter(r), "old_days") + oldRemove(r, "usage_minute", "minute", minute(r), "old_minutes");
-const invalidateContext = (session: string) => `
-  UPDATE usage_totals SET compact_context = NULL WHERE session = ${session}
+const invalidateContext = (session: string, when = "1") => `
+  UPDATE usage_totals SET compact_context = NULL WHERE session = ${session} AND (${when})
     AND (runtime, model, fast) = (SELECT context_runtime, context_model, context_fast FROM usage_minute_scope WHERE session = ${session})
     AND compact_context IS NOT NULL;
   UPDATE usage_minute_scope SET context_runtime = NULL, context_model = NULL, context_fast = NULL, context_uncertain = 1,
     context_after = (SELECT at FROM usage INDEXED BY usage_session WHERE session = ${session} ORDER BY at DESC LIMIT 1)
-    WHERE session = ${session};`;
+    WHERE session = ${session} AND (${when});`;
 const contextColumns = ["id", "at", "session", "turn", "profile", "runtime", "model", "subagent", "fast", "context", "context_window", "cache_write", "cache_write_long", "compact_counted"];
 const contextChanged = contextColumns.map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ");
 
@@ -153,10 +153,22 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
           UPDATE usage_compact_since SET first_at = NEW.at WHERE id = 1 AND first_unknown = 0
             AND NEW.compact_counted = 1 AND (first_at IS NULL OR NEW.at < first_at);
       END;
-      -- REPLACE can delete a call without running DELETE triggers. The station updates an existing call in place,
-      -- so reject duplicate inserts rather than letting the raw row and its statistics disagree.
+      -- Older stations omit compact_counted and grow responses with an upsert. Route their new calls through the
+      -- compact writers and preserve their output-only update semantics, even after this station is replaced.
+      CREATE TRIGGER usage_compact_legacy_insert BEFORE INSERT ON usage WHEN NEW.compact_counted = 0 BEGIN
+        ${invalidateContext("NEW.session", "NEW.subagent = 0 AND NOT EXISTS (SELECT 1 FROM usage WHERE id = NEW.id)")}
+        UPDATE usage SET output = NEW.output WHERE id = NEW.id AND output < NEW.output;
+        INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read,
+          cache_write, cache_write_long, output, calls, context, context_window, compact_counted)
+          SELECT NEW.id, NEW.at, NEW.session, NEW.turn, NEW.thread, NEW.person, NEW.profile, NEW.runtime, NEW.model,
+            NEW.subagent, NEW.fast, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output,
+            NEW.calls, NEW.context, NEW.context_window, 1 WHERE NOT EXISTS (SELECT 1 FROM usage WHERE id = NEW.id);
+        SELECT RAISE(IGNORE);
+      END;
+      -- REPLACE can delete a call without running DELETE triggers. New writers update existing calls in place,
+      -- so reject their duplicate inserts rather than letting the raw row and its statistics disagree.
       CREATE TRIGGER usage_compact_no_replace BEFORE INSERT ON usage
-        WHEN EXISTS (SELECT 1 FROM usage WHERE id = NEW.id) BEGIN
+        WHEN NEW.compact_counted = 1 AND EXISTS (SELECT 1 FROM usage WHERE id = NEW.id) BEGIN
           SELECT RAISE(ABORT, 'recorded usage must be updated in place');
       END;
       -- A bounded tail cannot reconstruct a removed or edited main call. Stop presenting the old context as current;
