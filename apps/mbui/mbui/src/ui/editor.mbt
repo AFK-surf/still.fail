@@ -690,6 +690,9 @@ fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Un
   let grown = n - self.display().length()
   if self.limit > 0 && grown >= self.limit && sa == sb && sa >= grown {
     self.pasted = Some(sub(s, sa - grown, sa))
+    // (the host's words now hold it, the field's do not: unless told the field's again, each word typed after it
+    // comes with it, the whole of it a paste again and nothing typed taken)
+    self.retell = true
     return
   }
   if ca >= 0 && cb > ca && cb <= n && sa == sb && sa >= ca && sa <= cb {
@@ -1622,8 +1625,9 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
           let (x, y, w, h) = st.drawn_box(x, y, 2.0, tl.line_h)
           let (a, b) = st.sel()
           let sig = "\{x.to_int()},\{y.to_int()},\{w},\{h},\{a},\{b},\{st.text.length()},\{stable_hash(st.text)}"
-          if sig != self.ime_sig {
+          if sig != self.ime_sig || st.retell {
             self.ime_sig = sig
+            st.retell = false
             h_set_ime(true, x, y, w, h, st.text, a, b)
           }
         }
@@ -1676,6 +1680,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     scroll_x: 0.0,
     followed: (-1, -1, -1),
     pasted: None,
+    retell: false,
     limit: 0,
     enter_sends: true,
     leaves: [],

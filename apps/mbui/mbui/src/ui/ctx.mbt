@@ -222,6 +222,8 @@ struct EditorState {
   mut followed : (Int, Int, Int)
   /// what was put in at once that was `limit` characters or more, not put in (a long paste the app takes instead)
   mut pasted : String?
+  /// the host's copy of its words holds what it did not take (a long paste kept from it: text_set): told it again
+  mut retell : Bool
   mut limit : Int
   /// Enter sends (the words go to `submitted`, none too, and stay in it); else it is a new line
   mut enter_sends : Bool
