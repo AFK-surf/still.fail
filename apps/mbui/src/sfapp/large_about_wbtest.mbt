@@ -477,15 +477,21 @@ test "归档, 一台 station 的归档 and 自动决策 made once on a large scr
       same_drawn(words_where(made), old_words, "words, \{mode} at \{case}")
       // (one known apart: 一台 station 的归档 at 839 with a finger, 「30 天」's three glyphs, its words laid out at
       // 335.74999999999994 by the old view and at 335.75 by the node, snapped half a pixel apart at twice its pixels)
-      let apart = if mode == "settings-archiving:ws1/st1" && case == (2, 1.0, 839.0) {
-        [(335.5, 336.0, 412.5), (343.0, 343.5, 412.5), (358.0, 358.5, 412.5)]
-      } else {
-        []
+      // (every difference collected, said at the end: what is apart, where)
+      let m = instances_sorted(made)
+      if m != old_drawn {
+        let left = old_drawn.filter(fn(o) { !m.contains(o) })
+        let extra = m.filter(fn(o) { !old_drawn.contains(o) })
+        apart_seen.push("\{mode} at \{case}: old \{left.map(fn(x) { x.split(",").to_array()[:6].to_array().map(fn(v) { v.to_string() }).join(",") })} made \{extra.map(fn(x) { x.split(",").to_array()[:6].to_array().map(fn(v) { v.to_string() }).join(",") })}")
       }
-      same_drawn_but(instances_sorted(made), old_drawn, apart, "instances, \{mode} at \{case}")
     }
   }
+  assert_eq(apart_seen, [], msg="\{apart_seen}")
 }
+
+///|
+// kept across runs: a test's
+let apart_seen : Array[String] = []
 
 ///|
 /// `made` drawn as `old` (same_drawn), but for the glyphs listed (`apart`: each one's place across in the old view's and
