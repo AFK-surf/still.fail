@@ -63,7 +63,9 @@ const cancelled = () => new HttpError(503, "read cancelled");
 /// waited 7 s and a session opened 9 s on ccvm (2026-11-03), their own reads 0.2 s. And the machine's sample (api/host.ts,
 /// once in 10 s however many ask: a station's page, a task's start waiting on its queue), 0.3 to 0.9 s itself, that
 /// waited 2 to 6 s behind the usage page's reads.
-const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "host", "hostTicks"]);
+/// And the list of jobs up (GET /jobs, a few rows: 9 on ccvm), read again by every device as a job starts, that waited
+/// up to 40 s behind the usage page's reads one after another (2026-11-03).
+const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "host", "hostTicks", "openJobs", "job"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
 /// older clients, so it remains in the background until that request is paged end to end.
