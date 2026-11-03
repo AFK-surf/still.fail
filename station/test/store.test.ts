@@ -15,6 +15,7 @@ import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
+import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
@@ -1138,6 +1139,17 @@ test("usage: the sessions at work are found by when their turns ended, once each
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
   const store = memory();
   const detail = detailQuery(1n, 1_000_001n, 1n, { workspace: "ws", home: false })!;
+  const compact = memory();
+  installCompactUsage(compact.db, () => 0);
+  const usageBatch = read.batchedUsageQueries({ workspace: "ws", home: false });
+  const usagePlans = [
+    [usageBatch.selected, [0n, 100n, "Wws"]], [usageBatch.owner, ["a"]],
+    [usageBatch.buckets, [0n, "a", 0n, 100n, "Wws"]],
+  ] as [string, unknown[]][];
+  for (const [sql, args] of usagePlans) {
+    const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.every((d) => !d.startsWith("SCAN ")), `${sql}\n  ${plan.join(" | ")}`);
+  }
   // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the
   // login cards, or of the small one that counts sessions (or of what a subquery found); a table, or an index of every
   // turn, job or entry, never.

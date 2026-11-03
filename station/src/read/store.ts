@@ -953,6 +953,99 @@ export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bi
   return query === null ? [] : all(s, query.sql, ...query.args).map(usageGroupOf);
 }
 
+/// The two index walks of a batched usage summary: the requested time range, then one selected session's range.
+export function batchedUsageQueries(viewer: InWorkspace | null): { selected: string; owner: string; buckets: string } {
+  const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
+  const scope = viewer === null ? "" : viewer.home === false ? "scope = ?3 AND " : "scope IN (?3, 'H') AND ";
+  const bucketScope = viewer === null ? "" : viewer.home === false ? " AND scope = ?5" : " AND scope IN (?5, 'H')";
+  return {
+    selected: `SELECT session FROM usage_compact INDEXED BY ${index} WHERE ${scope}minute >= ?1 AND minute < ?2`,
+    owner: "SELECT ws FROM usage_minute_scope WHERE session = ?",
+    buckets: `SELECT strftime('%Y-%m-%d', (minute + ?1) * 60, 'unixepoch') AS day,
+      session, thread, person, profile, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output
+      FROM usage_compact WHERE session = ?2 AND minute >= ?3 AND minute < ?4${bucketScope} AND records > 0`,
+  };
+}
+
+/// An aligned compact summary, read in small batches on the caller's snapshot. A cold scan can otherwise read enough
+/// pages at once to evict what the station is using. Both the time-index pass and the per-session pass yield; no old
+/// calls are reconstructed and no new statistics are written. Partial-minute edges keep their existing exact query.
+export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
+  pause: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => { if (ms > 0) setTimeout(resolve, ms); else setImmediate(resolve); })): Promise<{
+    groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; rests: number; restMs: number }; ms: number;
+  } | null> {
+  const max = 9223372036854775807n;
+  if (!hasCompactUsage(s.db) || (from < to && (from % 60_000n !== 0n || (to !== max && to % 60_000n !== 0n)))) return null;
+  if (!compactScopeReady(s.db, viewer)) throw new Refused(503, "usage statistics are moving between workspaces");
+  const floor = (n: bigint) => n >= 0n ? n / 60_000n : -1n - ((-1n - n) / 60_000n);
+  const start = from >= to ? 0n : floor(from);
+  const end = from >= to ? 0n : to === max ? max : floor(to);
+  const queries = batchedUsageQueries(viewer);
+  const params: (string | bigint)[] = [start, end];
+  if (viewer !== null) params.push(`W${viewer.workspace}`);
+  const selected = s.db.prepare(queries.selected);
+  const started = performance.now();
+  let batchAt = started, steps = 0, rests = 0, restMs = 0, candidates = 0, parts = 0;
+  const rest = async () => {
+    const ms = Math.min(100, Math.floor(performance.now() - batchAt));
+    const pausedAt = performance.now();
+    await pause(ms);
+    restMs += performance.now() - pausedAt;
+    rests++;
+    steps = 0;
+    batchAt = performance.now();
+  };
+  const sessions = new Set<string>();
+  for (const row of selected.iterate(...params) as Iterable<{ session: string }>) {
+    candidates++;
+    sessions.add(row.session);
+    if (++steps >= 64) await rest();
+  }
+  const selectedMs = Math.round(performance.now() - started);
+  const visible = viewer === null ? null : s.db.prepare(queries.owner);
+  const bucket = s.db.prepare(queries.buckets);
+  bucket.setReadBigInts(true);
+  type Part = { day: string | null; session: string; thread: bigint; person: string; profile: string;
+    runtime: string; model: string; fast: bigint; calls: bigint; input: bigint; cache_read: bigint;
+    cache_write: bigint; cache_write_long: bigint; output: bigint };
+  const names = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+  const groups: Part[] = [];
+  for (const session of sessions) {
+    const found = visible?.get(session) as { ws: string | null } | undefined;
+    const sees = viewer === null || (found !== undefined && (found.ws === viewer.workspace || (viewer.home !== false && found.ws === null)));
+    if (++steps >= 64) await rest();
+    if (!sees) continue;
+    const args: (string | bigint)[] = [utcOffsetMin, session, start, end];
+    if (viewer !== null) args.push(`W${viewer.workspace}`);
+    const ofSession = new Map<string, Part>();
+    for (const row of bucket.iterate(...args) as Iterable<Part>) {
+      parts++;
+      const key = JSON.stringify([row.day, row.thread.toString(), row.person, row.profile, row.runtime, row.model, row.fast.toString()]);
+      const held = ofSession.get(key);
+      if (held === undefined) ofSession.set(key, { ...row });
+      else for (const name of names) held[name] += row[name];
+      if (++steps >= 64) await rest();
+    }
+    for (const group of ofSession.values()) groups.push(group);
+  }
+  const safe = (n: bigint) => {
+    if (n > BigInt(Number.MAX_SAFE_INTEGER) || n < BigInt(Number.MIN_SAFE_INTEGER)) throw new RangeError("integer is too large to be represented as a JavaScript number");
+    return Number(n);
+  };
+  // SQLite's GROUP BY returns its groups in this order, using binary text comparison and NULL before other values.
+  const cmp = (a: string | bigint | null, b: string | bigint | null): number => a === b ? 0 : a === null ? -1 : b === null ? 1
+    : typeof a === "bigint" && typeof b === "bigint" ? (a < b ? -1 : 1) : Buffer.compare(Buffer.from(String(a)), Buffer.from(String(b)));
+  const ordered = groups.sort((a, b) => cmp(a.day, b.day) || cmp(a.session, b.session) || cmp(a.thread, b.thread)
+    || cmp(a.person, b.person) || cmp(a.profile, b.profile) || cmp(a.runtime, b.runtime) || cmp(a.model, b.model) || cmp(a.fast, b.fast));
+  return { groups: ordered.map((r) => usageGroupOf({ ...r, thread: r.thread === 0n ? null : safe(r.thread), person: r.person || null,
+    profile: r.profile || null, model: r.model || null, fast: safe(r.fast),
+    calls: safe(r.calls), input: safe(r.input), cache_read: safe(r.cache_read), cache_write: safe(r.cache_write),
+    cache_write_long: safe(r.cache_write_long), output: safe(r.output) })),
+    diagnostics: { parts, candidates, selectedMs, rests, restMs: Math.round(restMs) }, ms: Math.round(performance.now() - started) };
+}
+
+export type BatchedUsage = NonNullable<Awaited<ReturnType<typeof usageGroupsBatched>>>;
+
 /// usage_threads: the threads usage names, each with the first thing a person said in it (for its title; none where
 /// its archive cannot be read). Those gone are left out.
 export function usageThreads(s: Store, ids: number[]): [ThreadRow, string | null][] {

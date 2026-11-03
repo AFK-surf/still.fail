@@ -8,7 +8,7 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type BatchedUsage, type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { usageDetailSince } from "../store/usage-detail.ts";
 import { compactTotal, hasCompactUsage } from "../store/usage-compact.ts";
@@ -180,11 +180,12 @@ export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
 
 /// Usage::summary: every day's calls from `from` until `to`, by thread, person, profile and model (UsageRow).
 function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null,
-  queryTime: (ms: number, diagnostics: { parts?: number; candidates?: number; selectedMs?: number }) => void): Json[] {
+  queryTime: (ms: number, diagnostics: { parts?: number; candidates?: number; selectedMs?: number; rests?: number; restMs?: number }) => void,
+  batched?: BatchedUsage): Json[] {
   const started = performance.now();
   const diagnostics: { parts?: number; candidates?: number; selectedMs?: number } = {};
-  const groups = usageGroups(s, from, to, utcOffsetMin, viewer, diagnostics);
-  queryTime(Math.round(performance.now() - started), diagnostics);
+  const groups = batched?.groups ?? usageGroups(s, from, to, utcOffsetMin, viewer, diagnostics);
+  queryTime(batched?.ms ?? Math.round(performance.now() - started), batched?.diagnostics ?? diagnostics);
   return groups.map((g) => ({
     day: g.day, session: g.session, thread: g.thread, person: g.person, profile: g.profile, runtime: g.runtime, model: g.model,
     calls: g.calls, input: g.input, cacheRead: g.cacheRead, cacheWrite: g.cacheWrite + g.cacheWriteLong, output: g.output, cost: cost(g),
@@ -231,11 +232,11 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
-  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint } } = {}): Json {
+  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage } = {}): Json {
   const includeRemoteRuns = options.remoteRuns !== false;
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
-  const started = performance.now();
+  const started = performance.now() - (options.batched?.ms ?? 0);
   let last = started;
   const stages: Record<string, number> = {};
   const mark = (stage: string) => {
@@ -248,9 +249,11 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   const groups = summary(s, from, to, utcOffsetMin, viewer, (ms, diagnostics) => {
     stages.summaryQuery = ms;
     if (diagnostics.selectedMs !== undefined) stages.summarySelected = diagnostics.selectedMs;
+    if (diagnostics.rests !== undefined) stages.summaryRests = diagnostics.rests;
+    if (diagnostics.restMs !== undefined) stages.summaryRestMs = diagnostics.restMs;
     summaryParts = diagnostics.parts;
     summaryCandidates = diagnostics.candidates;
-  });
+  }, options.batched);
   mark("summary");
   // Compact groups have already checked each session's current workspace in the same read snapshot. Looking them
   // up again here needlessly rereads the sessions index for every usage page, including on a cold database.
