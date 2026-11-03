@@ -119,6 +119,30 @@ test("a first call written by an older station is not skipped when reconstructin
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) test(`an older writer grows calls recorded on either side of compact installation (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "before", at: 60_000, model: "m", subagent: true, fast: false, input: 10,
+      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    compactUsage(store);
+    store.db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    const write = store.db.prepare(`INSERT INTO usage (id, at, session, person, profile, runtime, model, subagent,
+      input, cache_read, cache_write, cache_write_long, output) VALUES (?, ?, 'a', 'p', 'cc', 'claude', 'm', 1, 10, 0, 0, 0, ?)
+      ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)`);
+    write.run("before", 60_000, 4);
+    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "after", at: 120_000 }, owner]]);
+    write.run("after", 120_000, 4);
+    const reader = makeStore(store.db, ".");
+    assert.deepEqual(usageGroups(reader, 120_000n, 180_000n, 0n, { workspace: "A", home: false })
+      .map((row) => [row.calls, row.input, row.output]), [[1, 10, 4]], "the later call's compact bucket includes its growth once");
+    assert.deepEqual(usageByDay(reader, 0n, { workspace: "A", home: false })
+      .map((row) => [row.calls, row.tokens]), [[2, 28]], "the preserved historical total and the compact total both stay accurate");
+  } finally { store.close(); }
+});
+
 test("a time range does not visit sessions with only older statistics", () => {
   const store = Store.open(":memory:");
   try {
