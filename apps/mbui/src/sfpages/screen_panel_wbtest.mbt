@@ -606,35 +606,54 @@ test "安装 App: offered where the state says; a file gone up asked to be insta
 }
 
 ///|
-test "beside the device: the device's own by it, App first, what is below a short window's fold scrolled to and pressed" {
+test "a device wider than tall: what it has itself in a row under it, App first; put away for it to have the room" {
   let r = screen_rig()
   r.t.resize(1280.0, 600.0)
   simulator_live(r)
   r.t.draw()
-  // by the device, in words, once each
   for word in ["device.home", "device.appSwitcher", "device.lock", "debug.volumeUp", "device.shot", "debug.recordStart"] {
-    assert_true(r.t.rect_of(tr("web-pages.screen." + word)) is Some(_), msg=word)
+    assert_true(r.labelled(tr("web-pages.screen." + word)) is Some(_), msg=word)
   }
   r.tap_label(tr("web-pages.screen.debug.volumeUp"))
   r.t.draw()
   let ins = r.inputs()
   assert_eq(text(Some(ins[ins.length() - 1]), "name"), "volume_up")
+  // under the device, not over it
+  let (_, by, _, _) = r.labelled(tr("web-pages.screen.device.home")).map(fn(p) { (p.0, p.1, 0.0, 0.0) }).unwrap()
+  let shown = r.ui().shown()
+  assert_true(by > shown.y + shown.h)
   // App first, its log asked for only once it is looked at
   assert_true(r.told("screen.logs").is_empty())
-  let word = tr("web-pages.screen.debug.uninstall")
-  let (px, _, _, _) = r.t.rect_of(tr("web-pages.screen.debug.relaunch")).unwrap()
-  for _ in 0..<40 {
-    r.t.wheel(px, 300.0, 200.0)
-    r.t.draw()
-  }
-  let (_, y, _, h) = r.t.rect_of(word).unwrap()
-  assert_true(y + h <= 600.0)
-  r.tap_label(tr("web-pages.screen.debug.logs"))
-  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  assert_true(r.t.rect_of(tr("web-pages.screen.debug.install")) is Some(_) || r.t.rect_of(tr("web-pages.screen.debug.relaunch")) is Some(_))
+  let wide = shown.w
+  r.tap_label(tr("web-pages.screen.debug.paneHide"))
   r.t.draw()
-  assert_true(r.told("screen.logs").length() > 0)
+  r.t.draw()
+  assert_true(r.t.rect_of(tr("web-pages.screen.debug.relaunch")) is None)
+  assert_true(r.ui().shown().w >= wide)
   r.t.resize(390.0, 844.0)
   r.ui().logs.tab = 0
+  r.t.run_for(@sf.toast_ms)
+  screen_done(r.t)
+}
+
+///|
+test "a device taller than wide: as large as the window's height leaves it, what it has itself right beside it" {
+  let r = screen_rig(w=1280.0, h=800.0)
+  r.state("live", more={ "kind": Json::string("simulator"), "debug": Json::boolean(true) })
+  r.say({ "config": { "codec": "jpeg", "width": 1398.0, "height": 2034.0 } })
+  r.say({ "frame": { "key": true, "ts": 1.0 } }, bytes=b"\xFF\xD8\xFF\xE0jpeg")
+  r.t.stream_shows(r.sess().stream.unwrap().id(), 1.0, 1398, 2034)
+  r.t.draw()
+  r.t.draw()
+  r.t.draw()
+  let shown = r.ui().shown()
+  let (rx, _) = r.labelled(tr("web-pages.screen.device.home")).unwrap()
+  assert_true(shown.h > 600.0)
+  // right by the device's body, a button's width away
+  // (where the picture's right edge is in the window: the stage has its own place in it)
+  let (edge, _) = r.at(1.0, 0.5)
+  assert_true(rx > edge && rx - edge < sim_bezel + debug_rail_gap + debug_rail_w, msg="\{rx} \{edge}")
   r.t.run_for(@sf.toast_ms)
   screen_done(r.t)
 }
@@ -646,11 +665,11 @@ test "an Android device: its back and its volume by it, nothing it has not" {
   r.config()
   r.frame(1.0)
   r.t.draw()
-  assert_true(r.t.rect_of(tr("web-pages.screen.device.back")) is Some(_))
-  assert_true(r.t.rect_of(tr("web-pages.screen.debug.volumeUp")) is Some(_))
-  assert_true(r.t.rect_of(tr("web-pages.screen.device.softKeyboard")) is None)
+  assert_true(r.labelled(tr("web-pages.screen.device.back")) is Some(_))
+  assert_true(r.labelled(tr("web-pages.screen.debug.volumeUp")) is Some(_))
+  assert_true(r.labelled(tr("web-pages.screen.device.softKeyboard")) is None)
   assert_true(r.t.rect_of(tr("web-pages.screen.debug.uninstall")) is None)
-  assert_true(r.t.rect_of(tr("web-pages.screen.device.shot")) is None)
+  assert_true(r.labelled(tr("web-pages.screen.device.shot")) is None)
   r.tap_label(tr("web-pages.screen.device.back"))
   r.t.draw()
   let ins = r.inputs()

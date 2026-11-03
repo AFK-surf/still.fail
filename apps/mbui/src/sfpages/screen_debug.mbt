@@ -20,11 +20,19 @@ let debug_panel_w : Double = 420.0
 
 ///|
 /// How wide a wide page's log is beside the device.
-let debug_pane_w : Double = 380.0
+let debug_pane_w : Double = 320.0
 
 ///|
-/// How wide what the device has itself is, by the device: 形态's three words in a row.
-let debug_rail_w : Double = 176.0
+/// How wide what the device has itself is, by a device taller than wide: a column of round buttons.
+let debug_rail_w : Double = 48.0
+
+///|
+/// How tall it is as a row under a device wider than tall: a row of round buttons.
+let debug_row_h : Double = 56.0
+
+///|
+/// What is between the device's body and the column by it.
+let debug_rail_gap : Double = 8.0
 
 ///|
 /// App or 设备 as tall as it is about, until it is laid out.
@@ -67,13 +75,10 @@ fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Un
     if u.in_tab { 0.0 } else { c.window_size().0 },
     wide=fn() {
       u.logs.beside = flag(s.state, "debug")
+      u.logs.by_device = true
       c.box(style=screen_row, fn() {
-        c.box(style=debug_stage_side, fn() {
-          c.box(style=debug_stage_body, fn() { screen_stage(c, s, u, key) }) |> ignore
-          debug_rail(c, s, u)
-        })
-        |> ignore
-        if flag(s.state, "debug") {
+        c.box(style=debug_stage_body, fn() { screen_stage(c, s, u, key) }) |> ignore
+        if u.logs.beside && u.logs.shown {
           debug_pane(c, s, u)
         }
       })
@@ -81,6 +86,7 @@ fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Un
     },
     narrow=fn() {
       u.logs.beside = false
+      u.logs.by_device = false
       c.box(style=debug_stage_body, fn() { screen_stage(c, s, u, key) }) |> ignore
       // (a row of its own: with the buttons there is no room for all of them on a narrow page)
       if s.driving() && flag(s.state, "poses") {
@@ -89,6 +95,91 @@ fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Un
       c.box(style=debug_tools_bar, fn() { debug_tools(c, s, u) }) |> ignore
     },
   )
+}
+
+///|
+/// The room the stage keeps for what the device has itself, out of what the picture is fitted into (the picture and it
+/// then lie in the middle as one, not a pixel between them): by a device taller than wide, a column at its side; under
+/// one wider than tall (an unfolded one, one turned), a row. None but on a wide page.
+fn debug_room(u : ScreenUi, size : (Int, Int)?) -> (Double, Double) {
+  match size {
+    Some((w, h)) if u.logs.by_device => if w > h { (0.0, debug_row_h) } else { (debug_rail_w + debug_rail_gap, 0.0) }
+    _ => (0.0, 0.0)
+  }
+}
+
+///|
+/// What the device has itself, where debug_room kept room for it by the picture.
+fn debug_by_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect, size : (Int, Int)?) -> Unit {
+  guard u.logs.by_device && size is Some((w, h)) else { return }
+  c.layer(fn() {
+    if w > h {
+      c.box(style=debug_row_place, ty=shown.y + shown.h + sim_bezel, fn() { debug_row(c, s, u, false) }) |> ignore
+    } else {
+      c.box(
+        style=@ui.style(w=Fixed(debug_rail_w)),
+        tx=shown.x + shown.w + sim_bezel + debug_rail_gap,
+        ty=shown.y,
+        fn() { debug_row(c, s, u, true) },
+      )
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// What the device has itself as round buttons, their names when pressed or pointed at: a row under a device wider than
+/// tall, a column by one taller than wide.
+fn debug_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, column : Bool) -> Unit {
+  let d = u.logs
+  if flag(s.state, "debug") {
+    debug_settings_asked(c, s, d)
+  }
+  debug_record_saved(c, s, d)
+  if d.shot_said {
+    d.shot_said = false
+    d.acted = @sf.t("web-pages.screen.debug.shotCopied")
+  }
+  c.box(style=if column { debug_tools_column } else { debug_tools_bar }, fn() {
+    if s.driving() {
+      for k in device_combos(s) {
+        if round_button(c, "screen-device/" + k.keys, k.icon, k.name) {
+          debug_press(c, s, k)
+        }
+      }
+      if round_button(c, "screen-volume-up", "volume", @sf.t("web-pages.screen.debug.volumeUp")) {
+        debug_device_input(c, s, "volume_up")
+      }
+      if round_button(c, "screen-volume-down", "volume-x", @sf.t("web-pages.screen.debug.volumeDown")) {
+        debug_device_input(c, s, "volume_down")
+      }
+      if flag(s.state, "poses") {
+        debug_poses(c, s, u, icons=column)
+      }
+    }
+    if flag(s.state, "debug") {
+      if round_button(c, "screen-shot", "camera", @sf.t("web-pages.screen.device.shot")) {
+        debug_shot(s, d)
+      }
+      let going = d.recording || flag(d.settings, "recording")
+      let word = @sf.t(if going { "web-pages.screen.debug.recordStop" } else { "web-pages.screen.debug.recordStart" })
+      if round_button(c, "screen-record", if going { "stop" } else { "play" }, word, on=going) {
+        debug_record_pressed(s, d, going)
+      }
+      debug_pane_button(c, d)
+    }
+  })
+  |> ignore
+}
+
+///|
+/// What is done with the device put away for it to have all the room, or brought back.
+fn debug_pane_button(c : @ui.Ctx, d : DebugLogs) -> Unit {
+  let word = @sf.t(if d.shown { "web-pages.screen.debug.paneHide" } else { "web-pages.screen.debug.paneShow" })
+  if round_button(c, "screen-pane", if d.shown { "shrink" } else { "expand" }, word) {
+    d.shown = !d.shown
+  }
 }
 
 ///|
@@ -110,50 +201,6 @@ fn debug_device_input(c : @ui.Ctx, s : ScreenSess, name : String) -> Unit {
   c.tell("screen-device-act/" + name, fn() {
     s.input(s.src, Json::object({ "t": Json::string("device"), "name": Json::string(name) }))
   })
-}
-
-///|
-/// What the device has itself, by it: its buttons while it is driven, its hinge, and its picture or a movie kept.
-fn debug_rail(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  let d = u.logs
-  if flag(s.state, "debug") {
-    debug_settings_asked(c, s, d)
-  }
-  c.box(style=@ui.style(w=Fixed(debug_rail_w), h=Full), fn() {
-    c.list("screen-rail/" + s.screen, 1, debug_device_est, fn(_) {
-      c.box(style=debug_device_box, fn() {
-        if s.driving() {
-          @sf.panel_group(c, fn() {
-            for k in device_combos(s) {
-              if @sf.menu_item(c, k.name, key="screen-device/" + k.keys, panel=true, icon=k.icon) {
-                debug_press(c, s, k)
-              }
-            }
-            if @sf.menu_item(c, @sf.t("web-pages.screen.debug.volumeUp"), key="screen-volume-up", panel=true, icon="volume") {
-              debug_device_input(c, s, "volume_up")
-            }
-            if @sf.menu_item(c, @sf.t("web-pages.screen.debug.volumeDown"), key="screen-volume-down", panel=true, icon="volume-x") {
-              debug_device_input(c, s, "volume_down")
-            }
-          })
-          if flag(s.state, "poses") {
-            @sf.panel_group(c, label=@sf.t("web-pages.screen.device.pose"), fn() { debug_poses(c, s, u) })
-          }
-        }
-        if flag(s.state, "debug") {
-          @sf.panel_group(c, fn() {
-            if @sf.menu_item(c, @sf.t("web-pages.screen.device.shot"), key="screen-shot", panel=true, icon="camera") {
-              debug_shot(s, d)
-            }
-            debug_record(c, s, d)
-          })
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|
@@ -206,7 +253,7 @@ fn debug_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// An iPhone Duo's hinge: which it is as its picture says (the cover's is closed, the inner panel's half open only when
 /// asked for here, Device Hub's own being told by none), and each its press.
-fn debug_poses(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+fn debug_poses(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, icons? : Bool = false) -> Unit {
   let names = ["closed", "book", "open"]
   let cover = match s.frame_size() {
     Some((w, h)) => w.to_double() / h.to_double() < duo_cover_shape
@@ -226,18 +273,23 @@ fn debug_poses(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   } else {
     2
   }
-  let pick = @sf.segmented(
-    c,
-    "screen-pose",
-    [
-      @sf.t("web-pages.screen.device.pose.closed"),
-      @sf.t("web-pages.screen.device.pose.book"),
-      @sf.t("web-pages.screen.device.pose.open"),
-    ],
-    chosen,
-    bar=true,
-    said=@sf.t("web-pages.screen.device.pose"),
-  )
+  let words = [
+    @sf.t("web-pages.screen.device.pose.closed"),
+    @sf.t("web-pages.screen.device.pose.book"),
+    @sf.t("web-pages.screen.device.pose.open"),
+  ]
+  let pick = if icons {
+    // (each its own button, in a column of them)
+    let mut pressed = chosen
+    for i, icon in ["phone", "panel-open", "landscape"] {
+      if round_button(c, "screen-pose/\{i}", icon, words[i], on=i == chosen) {
+        pressed = i
+      }
+    }
+    pressed
+  } else {
+    @sf.segmented(c, "screen-pose", words, chosen, bar=true, said=@sf.t("web-pages.screen.device.pose"))
+  }
   if pick != chosen {
     u.logs.half_open = pick == 1
     u.logs.pose_asked = pick
@@ -423,6 +475,10 @@ priv struct DebugLogs {
   mut shot_said : Bool
   /// what is done with the device is beside it, its foot saying what came of it (the files gone up to it among that)
   mut beside : Bool
+  /// what the device has itself is by it (a wide page), not under its picture
+  mut by_device : Bool
+  /// what is done with it shows beside the device, or is put away for the device to have the room
+  mut shown : Bool
   /// the app 重启 App is for (id, name), once one was chosen
   mut last_app : (String, String)?
   mut relaunch_said : String
@@ -503,6 +559,8 @@ fn debug_logs_new() -> DebugLogs {
     settings: None,
     settings_asked: false,
     beside: false,
+    by_device: false,
+    shown: true,
     shot_said: false,
     last_app: None,
     relaunch_said: "",
@@ -763,8 +821,8 @@ fn debug_said(c : @ui.Ctx, d : DebugLogs) -> Unit {
 }
 
 ///|
-/// 录屏: started and ended here, its movie downloaded as a file of the station's once it has ended.
-fn debug_record(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
+/// A recording's movie, once it has ended, downloaded.
+fn debug_record_saved(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
   match d.to_save {
     Some((root, path)) => {
       d.to_save = None
@@ -772,6 +830,12 @@ fn debug_record(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// 录屏: started and ended here, its movie downloaded as a file of the station's once it has ended.
+fn debug_record(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
+  debug_record_saved(c, s, d)
   let going = d.recording || flag(d.settings, "recording")
   let label = @sf.t(if going { "web-pages.screen.debug.recordStop" } else { "web-pages.screen.debug.recordStart" })
   let note = if going { @sf.t("web-pages.screen.debug.recordNote") } else { "" }
