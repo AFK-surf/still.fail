@@ -442,6 +442,7 @@ pub fn link_row_node(
   value_bad? : () -> Bool = fn() { false },
   value_dot? : () -> Bool = fn() { false },
   note? : () -> String = fn() { "" },
+  wide_note? : () -> String,
   trouble? : () -> String = fn() { "" },
   strong? : Bool = false,
   lead? : RowLead = NoLead,
@@ -470,6 +471,11 @@ pub fn link_row_node(
   }
   let ends = goes && (out || (chevron && !acts))
   if look_node(parent) is Wide {
+    // (its note as a wide page says it, where it says it otherwise: `wide_note`)
+    let note = match wide_note {
+      Some(w) => w
+      None => note
+    }
     wide_link_row_node(
       parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
       note_cut, title_after, title_after_shown, folds,
@@ -810,14 +816,25 @@ pub fn page_block(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
 }
 
 ///|
-/// What the part over it does, in a line or two (page_note's, narrow: mSegNote, 12 in, 8 over and 4 under, the meta's
-/// muted; in red where it says what is wrong, `bad`), as `words` says it now.
+/// What the part over it does, in a line or two (page_note's), as `words` says it now: narrow, mSegNote (12 in, 8 over
+/// and 4 under, the meta's muted); wide, desk_hint (8 over, 624 at most, the meta's muted); in red where it says what is
+/// wrong, `bad`.
 pub fn page_note_node(parent : @view.View, words : () -> String, bad? : () -> Bool = fn() { false }) -> Unit {
-  parent.box(fn(n) {
-    n.padding(Is((pg_note_x, pg_note_top, pg_note_x, pg_note_foot))) |> ignore
-    n.box(fn(w) { styled_words(w, words, fn() { if bad() { pg_note_bad } else { pg_note } }) |> ignore }) |> ignore
-  })
-  |> ignore
+  match look_node(parent) {
+    Narrow =>
+      parent.box(fn(n) {
+        n.padding(Is((pg_note_x, pg_note_top, pg_note_x, pg_note_foot))) |> ignore
+        n.box(fn(w) { styled_words(w, words, fn() { if bad() { pg_note_bad } else { pg_note } }) |> ignore }) |> ignore
+      })
+      |> ignore
+    Wide =>
+      parent.box(fn(n) {
+        n.padding(Is((0.0, pg_note_top, 0.0, 0.0))).max_width(Is(Some(desk_hint_most))) |> ignore
+        n.box(fn(w) { styled_words(w, words, fn() { if bad() { desk_note_bad } else { desk_hint_words } }) |> ignore })
+        |> ignore
+      })
+      |> ignore
+  }
 }
 
 ///|

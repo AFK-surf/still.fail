@@ -202,6 +202,7 @@ pub fn archiving_node(
   frame~ : () -> PageFrame,
   stint~ : () -> Int,
   said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
 ) -> Unit {
   // (what it says of itself to a frame's bar that names it: page_node's)
   let told = said
@@ -214,89 +215,66 @@ pub fn archiving_node(
   }
   let read = fn() { @settings.stations_of(core, here()).value }
   let said = fn() { (core.topic)("settings", { "scope": str(here().workspace) }).value }
-  @sf.page_node(v, fn() { @sf.t("web-pages.archiving.title") }, on_back~, frame~, said?=told, fn() { ["hint", "auto"] }, fn(b, key) {
+  @sf.page_node(v, fn() { @sf.t("web-pages.archiving.title") }, on_back~, frame~, said?=told, width?, fn() { ["hint", "auto"] }, fn(b, key) {
     match key {
-      "hint" => {
-        @sf.heading_node(b, fn() { @sf.t("web-pages.appearance.archive.title") })
-        @sf.page_choice_node(
-          b,
-          fn() { hints.map(fn(h) { @sf.t("web-pages.appearance.archive." + h) }) },
-          fn() { hints.search(hint_now()).unwrap_or(1) },
-          fn(i) {
-            // (the one set chosen again: nothing said; 按模型判断 not to be picked while no station reviews, unless it is
-            // what is set)
-            let at = hints.search(@signals.untracked(hint_now)).unwrap_or(1)
-            if i != at && i >= 0 && i < hints.length() && !(hints[i] == "reviewed" && flag(said(), "hintNoReview")) {
-              set_pref(core, "archiveHint", if hints[i] == "done" { "" } else { hints[i] })
-            }
-          },
-        )
-        @sf.page_note_node(b, fn() { @sf.t("web-pages.appearance.archive." + hint_now() + "Hint") })
-        b.show(
-          fn() { text(said(), "hintReviewText") != "" && (hint_now() == "reviewed" || flag(said(), "hintNoReview")) },
-          fn(n) {
-            n.padding(Is((archiving_note_x, archiving_note_top, archiving_note_x, archiving_note_foot))) |> ignore
-            n.box(fn(w) {
-              w
-              .words(By(fn() { text(said(), "hintReviewText") }))
-              .words_look(By(fn() { @ui.style_words(@sf.pg_note) }))
-              .ink(By(fn() { @ui.style_ink(@sf.pg_note) }))
-              |> ignore
-            })
-            |> ignore
-            n.box(fn(l) {
-              l.lines_up(Is(Some(Start))) |> ignore
-              @sf.tap_text_node(l, fn() { @sf.t("web-pages.archiving.reviewGo") }, fn() { (core.push)(AutoCompletion) }, size=link_size)
-            })
-            |> ignore
-          },
-        )
-        @sf.page_note_node(b, fn() { @sf.t("web-pages.appearance.archive.description") })
-      }
-      _ => {
-        @sf.heading_node(b, fn() { @sf.t("web-pages.archiving.auto.title") })
-        b.pick(fn() { read() is None }, fn(p, reading) {
-          if reading {
-            @sf.waiting_node(
-              p,
-              fn(s) {
-                archiving_rows_node(s, core.quiet(), stint, fn() {
-                  [5, 3].mapi(fn(i, n) {
-                    Json::object({
-                      "station": Json::string("sample/" + i.to_string()),
-                      "name": Json::string(@sf.sample_words(n)),
-                      "online": true,
-                      "overview": { "archiving": { "lineText": Json::string(@sf.sample_words(12)) } },
+      "hint" =>
+        @sf.section_node(b, fn() { @sf.t("web-pages.appearance.archive.title") }, about=fn() { @sf.t("web-pages.appearance.archive.description") }, fn(sec) {
+          @sf.page_choice_node(
+            sec,
+            fn() { hints.map(fn(h) { @sf.t("web-pages.appearance.archive." + h) }) },
+            fn() { hints.search(hint_now()).unwrap_or(1) },
+            fn(i) {
+              // (the one set chosen again: nothing said; 按模型判断 not to be picked while no station reviews, unless it
+              // is what is set)
+              let at = hints.search(@signals.untracked(hint_now)).unwrap_or(1)
+              if i != at && i >= 0 && i < hints.length() && !(hints[i] == "reviewed" && flag(said(), "hintNoReview")) {
+                set_pref(core, "archiveHint", if hints[i] == "done" { "" } else { hints[i] })
+              }
+            },
+          )
+          @sf.page_note_node(sec, fn() { @sf.t("web-pages.appearance.archive." + hint_now() + "Hint") })
+          sec.show(
+            fn() { text(said(), "hintReviewText") != "" && (hint_now() == "reviewed" || flag(said(), "hintNoReview")) },
+            fn(n) {
+              @sf.note_link_node(n, fn() { text(said(), "hintReviewText") }, fn() { @sf.t("web-pages.archiving.reviewGo") }, fn() {
+                (core.push)(AutoCompletion)
+              })
+            },
+          )
+        })
+      _ =>
+        @sf.section_node(b, fn() { @sf.t("web-pages.archiving.auto.title") }, about=fn() { @sf.t("web-pages.archiving.auto.description") }, fn(sec) {
+          sec.pick(fn() { read() is None }, fn(p, reading) {
+            if reading {
+              @sf.waiting_node(
+                p,
+                fn(s) {
+                  archiving_rows_node(s, core.quiet(), stint, fn() {
+                    [5, 3].mapi(fn(i, n) {
+                      Json::object({
+                        "station": Json::string("sample/" + i.to_string()),
+                        "name": Json::string(@sf.sample_words(n)),
+                        "online": true,
+                        "overview": { "archiving": { "lineText": Json::string(@sf.sample_words(12)) } },
+                      })
                     })
                   })
-                })
-              },
-              note=fn() { { reading: true, text: @sf.t("common.readingStations"), failing: [] } },
-            )
-          } else {
-            archiving_rows_node(p, core, stint, fn() {
-              match read() {
-                Some(Array(a)) => a
-                _ => []
-              }
-            })
-          }
+                },
+                note=fn() { { reading: true, text: @sf.t("common.readingStations"), failing: [] } },
+              )
+            } else {
+              archiving_rows_node(p, core, stint, fn() {
+                match read() {
+                  Some(Array(a)) => a
+                  _ => []
+                }
+              })
+            }
+          })
         })
-        @sf.page_note_node(b, fn() { @sf.t("web-pages.archiving.auto.description") })
-      }
     }
   })
 }
-
-///|
-/// archiving's note of the stations' reviews (narrow_note_box: pg_note_box's room, px=S3, pt=S2, pb=S1).
-let archiving_note_x : Double = 12.0
-
-///|
-let archiving_note_top : Double = 8.0
-
-///|
-let archiving_note_foot : Double = 4.0
 
 ///|
 /// `stations`' rows on a card as they are now, by their addresses (archiving_row's, as nodes).
@@ -327,27 +305,9 @@ fn archiving_row_node(v : @view.View, core : Core, stint : () -> Int, s : () -> 
   }
   let bad = fn() { flag(view(), "stalled") }
   let opens = fn() { view() is Some(Object(_)) }
-  let marked = fn() { @sf.has_station_mark(text(s(), "emoji"), text(s(), "icon")) }
-  v.pick(fn() { (opens(), marked()) }, fn(r, how) {
-    let (goes, mark) = how
-    // (what is before its name, always there, its mark in it where it has one: archiving_lead's row, across the middle of
-    // its name's line where lines are under it, as a row's lead is)
-    let lead = @sf.LeadMade(fn(l) {
-      l
-      .row(Is(true))
-      .gap(Is(8.0))
-      .lines_up(Is(Some(Middle)))
-      .min_height(By(fn() {
-        l.words_redone() |> ignore
-        Some(@ui.current().sp(@ui.tree_theme().text_size(Body).1))
-      }))
-      |> ignore
-      if mark {
-        @sf.station_mark_node(l, fn() { text(s(), "emoji") }, fn() { text(s(), "icon") }, @sf.row_mark, fn() {
-          @sf.theme().p.text
-        }, stint)
-      }
-    })
+  v.pick(opens, fn(r, goes) {
+    // (what is before its name: online or not where the page is wide, its mark where it has one)
+    let lead = @sf.station_lead(fn() { flag(s(), "online") }, fn() { text(s(), "emoji") }, fn() { text(s(), "icon") }, stint)
     @sf.link_row_node(
       r,
       fn() { text(s(), "name") },
@@ -538,6 +498,7 @@ pub fn station_archiving_node(
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
   said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
 ) -> Unit {
   let s = fn() { station_of(core, here(), station) }
   let view = fn() { if flag(s(), "online") { field(field(s(), "overview"), "archiving") } else { None } }
@@ -595,69 +556,55 @@ pub fn station_archiving_node(
       _ => ["said"]
     }
   }
-  @sf.page_node(v, title, on_back~, frame~, said?, blocks, fn(b, key) {
+  @sf.page_node(v, title, on_back~, frame~, said?, width?, blocks, fn(b, key) {
     match key.split("/").to_array()[0].to_string() {
       "admin" => @sf.page_note_node(b, fn() { @sf.t("web-pages.archiving.adminOnly") })
-      "review" => {
-        @sf.heading_node(b, fn() { @sf.t("web-pages.archiving.review") })
-        // its review: how it stands, the way to it right after its words
-        b.box(fn(n) {
-          n.padding(Is((archiving_note_x, archiving_note_top, archiving_note_x, archiving_note_foot))) |> ignore
-          n.box(fn(line) {
-            line.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
-            line.box(fn(w) {
-              w
-              .words(By(fn() { text(view(), "reviewText") + " · " }))
-              .words_look(By(fn() { @ui.style_words(review_line_words) }))
-              .ink(By(fn() { @ui.style_ink(review_line_words) }))
-              |> ignore
-            })
-            |> ignore
-            @sf.tap_text_node(line, fn() { @sf.t("web-pages.archiving.reviewGo") }, fn() { (core.push)(AutoCompletion) }, size=link_size)
-          })
-          |> ignore
+      // its review: how it stands, the way to it right after its words
+      "review" =>
+        @sf.section_node(b, fn() { @sf.t("web-pages.archiving.review") }, fn(sec) {
+          @sf.note_link_node(sec, fn() { text(view(), "reviewText") + " · " }, fn() { @sf.t("web-pages.archiving.reviewGo") }, fn() {
+            (core.push)(AutoCompletion)
+          }, inline=true)
         })
-        |> ignore
-      }
-      "mode" => {
-        @sf.heading_node(b, fn() { @sf.t("web-pages.archiving.mode") })
-        let modes = fn() { items(view(), "modes") }
-        let at = fn() { modes().search_by(fn(m) { text(Some(m), "mode") == mode() }).unwrap_or(0) }
-        @sf.page_choice_node(b, fn() { modes().map(fn(m) { text(Some(m), "label") }) }, at, fn(i) {
-          let now = @signals.untracked(at)
-          if i != now && !locked() {
-            match @signals.untracked(modes).get(i) {
-              Some(m) if flag(Some(m), "allowed") =>
-                save(number(Some(m), "days"), @signals.untracked(fn() { number(view(), "slackDays") }), flag(Some(m), "reviewed"))
-              _ => ()
+      "mode" =>
+        @sf.section_node(b, fn() { @sf.t("web-pages.archiving.mode") }, fn(sec) {
+          let modes = fn() { items(view(), "modes") }
+          let at = fn() { modes().search_by(fn(m) { text(Some(m), "mode") == mode() }).unwrap_or(0) }
+          @sf.page_choice_node(sec, fn() { modes().map(fn(m) { text(Some(m), "label") }) }, at, fn(i) {
+            let now = @signals.untracked(at)
+            if i != now && !locked() {
+              match @signals.untracked(modes).get(i) {
+                Some(m) if flag(Some(m), "allowed") =>
+                  save(number(Some(m), "days"), @signals.untracked(fn() { number(view(), "slackDays") }), flag(Some(m), "reviewed"))
+                _ => ()
+              }
             }
-          }
+          })
+          @sf.page_note_node(sec, fn() { text(view(), "modeNote") })
         })
-        @sf.page_note_node(b, fn() { text(view(), "modeNote") })
-      }
-      "idle" => {
-        @sf.heading_node(b, fn() { @sf.t("web-pages.archiving.idle") })
-        let at = fn() { days_offered().search(number(view(), "days")).unwrap_or(0) }
-        @sf.page_choice_node(b, fn() { strings(view(), "daysOfferedText") }, at, fn(i) {
-          let now = @signals.untracked(at)
-          let offered = @signals.untracked(days_offered)
-          if i != now && !locked() && i < offered.length() {
-            @signals.untracked(fn() { save(offered[i], number(view(), "slackDays"), flag(view(), "reviewed")) })
-          }
+      "idle" =>
+        @sf.section_node(b, fn() { @sf.t("web-pages.archiving.idle") }, fn(sec) {
+          let at = fn() { days_offered().search(number(view(), "days")).unwrap_or(0) }
+          @sf.page_choice_node(sec, fn() { strings(view(), "daysOfferedText") }, at, fn(i) {
+            let now = @signals.untracked(at)
+            let offered = @signals.untracked(days_offered)
+            if i != now && !locked() && i < offered.length() {
+              @signals.untracked(fn() { save(offered[i], number(view(), "slackDays"), flag(view(), "reviewed")) })
+            }
+          })
         })
-      }
-      "slack" => {
-        @sf.heading_node(b, fn() { @sf.t("web-pages.archiving.slack") })
-        let at = fn() { slack_offered().search(number(view(), "slackDays")).unwrap_or(0) }
-        @sf.page_choice_node(b, fn() { strings(view(), "slackDaysOfferedText") }, at, fn(i) {
-          let now = @signals.untracked(at)
-          let offered = @signals.untracked(slack_offered)
-          if i != now && !locked() && i < offered.length() {
-            @signals.untracked(fn() { save(number(view(), "days"), offered[i], flag(view(), "reviewed")) })
-          }
+      "slack" =>
+        @sf.section_node(b, fn() { @sf.t("web-pages.archiving.slack") }, fn(sec) {
+          let at = fn() { slack_offered().search(number(view(), "slackDays")).unwrap_or(0) }
+          @sf.page_choice_node(sec, fn() { strings(view(), "slackDaysOfferedText") }, at, fn(i) {
+            let now = @signals.untracked(at)
+            let offered = @signals.untracked(slack_offered)
+            if i != now && !locked() && i < offered.length() {
+              @signals.untracked(fn() { save(number(view(), "days"), offered[i], flag(view(), "reviewed")) })
+            }
+          })
+          @sf.page_note_node(sec, fn() { @sf.t("web-pages.archiving.slackHint") })
         })
-        @sf.page_note_node(b, fn() { @sf.t("web-pages.archiving.slackHint") })
-      }
       _ =>
         @sf.page_note_node(b, fn() {
           if !flag(s(), "online") {
@@ -671,11 +618,6 @@ pub fn station_archiving_node(
     }
   })
 }
-
-///|
-/// A station's review in a line (narrow_note_inline's: the secondary words, on one line).
-// kept across runs: a value (no field of it changes)
-let review_line_words : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
 
 ///|
 /// A link in a note's words (12).

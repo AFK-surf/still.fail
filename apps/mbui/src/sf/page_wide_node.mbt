@@ -207,13 +207,15 @@ fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit) 
 /// not: what it holds alone, as the web's mobile pages leave a group's title out), what it holds said under it
 /// (`note`); wide, wide_section's whatever it `heads` (its title, 14 on 22, 600; `note` under it, the meta's muted, 3
 /// under, 624 at most; 10 over what it holds, 28 under all of it), what is made in it a section's (part_of). `body`
-/// makes what it holds.
+/// makes what it holds. `about`: what it is for, as the web's pages say it: wide under its title (`note`'s, where it
+/// says none), narrow under what it holds (the mobile pages' note at a section's foot).
 pub fn section_node(
   parent : @view.View,
   title : () -> String,
   body : (@view.View) -> Unit,
   heads? : Bool = true,
   note? : () -> String = fn() { "" },
+  about? : () -> String = fn() { "" },
 ) -> Unit {
   let at = part_of(parent)
   match at.look {
@@ -225,6 +227,7 @@ pub fn section_node(
         })
       }
       body(parent)
+      parent.show(fn() { about() != "" }, fn(n) { page_note_node(n, about) })
     }
     Wide =>
       parent.box(fn(sec) {
@@ -232,9 +235,16 @@ pub fn section_node(
         sec.box(fn(head) {
           head.padding(Is((0.0, 0.0, 0.0, title_card_wide))) |> ignore
           words_node(head, title, fn() { section_title }) |> ignore
-          head.show(fn() { note() != "" }, fn(n) {
+          // (what it holds said, and what it is for: under its title)
+          let said = fn() {
+            match (note(), about()) {
+              ("", a) => a
+              (n, _) => n
+            }
+          }
+          head.show(fn() { said() != "" }, fn(n) {
             n.padding(Is((0.0, section_note_gap, 0.0, 0.0))).max_width(Is(Some(section_note_w))) |> ignore
-            words_node(n, note, fn() { section_note }) |> ignore
+            words_node(n, said, fn() { section_note }) |> ignore
           })
         })
         |> ignore

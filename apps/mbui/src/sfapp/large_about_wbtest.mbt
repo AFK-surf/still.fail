@@ -455,3 +455,16 @@ test "大屏 一台 station 的记忆 made once: what it is for by one mark afte
   let words = words_where(t)
   assert_true(words.iter().any(fn(w) { w.has_prefix(@sf.t("web-pages.settings.memory.lead")) }), msg="its tip: \{words}")
 }
+test "归档, 一台 station 的归档 and 自动决策 made once on a large screen and on the tape, wide: every instance drawn as its old view's, with keyboard and mouse and with a finger, at the system's larger words" {
+  for mode in ["settings-archiving", "settings-archiving:ws1/st1", "settings-decisions"] {
+    for case in [(0, 1.0, 1280.0), (2, 1.0, 1280.0), (0, 2.0, 1280.0), (2, 1.0, 839.0), (0, 1.0, 760.0)] {
+      let (platform, scale, w) = case
+      let old = large_about_tester(false, platform, scale~, w~, mode~)
+      let old_drawn = instances_sorted(old)
+      let old_words = words_where(old)
+      let made = large_about_tester(true, platform, scale~, w~, mode~)
+      same_drawn(words_where(made), old_words, "words, \{mode} at \{case}")
+      same_drawn(instances_sorted(made), old_drawn, "instances, \{mode} at \{case}")
+    }
+  }
+}

@@ -138,9 +138,10 @@ fn pane_stack(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
 
 ///|
 /// The pages of the library's made once as nodes in the pane off the tape (Large), in the place of their old view
-/// (nav_flat_view's `made`): 关于, 记忆, 更新日志. Laid out by the width the frame gives the pane (the window's less the block's column
-/// where its move goes: fold_target's, never what the page last laid out), narrow or wide (page_node), each made again
-/// only as that arrangement changes. What the old view's island did for the page done by its node (pane_made_host).
+/// (nav_flat_view's `made`): 关于, 记忆, 更新日志; 归档, a station's own archiving, 自动决策. Laid out by the width the
+/// frame gives the pane (the window's less the block's column where its move goes: fold_target's, never what the page
+/// last laid out), narrow or wide (page_node), each made again only as that arrangement changes. What the old view's
+/// island did for the page done by its node (pane_made_host).
 fn pane_made(
   src : Source,
   page : Page,
@@ -223,6 +224,19 @@ fn pane_made(
     Setting(Memory(address)) =>
       made("memory/" + address, fn(a, core, here, frame, width) {
         @sfpages.memory_node(a, core, here, address, on_back=core.pop, frame~, width~, tips~)
+      })
+    Setting(Archiving) =>
+      made("archiving", fn(a, core, here, frame, width) {
+        @sfpages.archiving_node(a, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+      })
+    Setting(AutoDecisions) =>
+      made("auto-decisions", fn(a, core, here, frame, width) {
+        @sfpages.decisions_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
+      })
+    // (by its station: another station's another page, not this one become it)
+    Setting(StationArchiving(st)) =>
+      made("station-archiving/" + st, fn(a, core, here, frame, width) {
+        @sfpages.station_archiving_node(a, core, here, st, on_back=core.pop, frame~, width~)
       })
     _ => None
   }

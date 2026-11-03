@@ -37,6 +37,8 @@ pub fn decisions_node(
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
   said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+  tips? : @sf.TipLayer,
 ) -> Unit {
   // (what it says of itself to a frame's bar that names it, what it is for with it: decisions_page's `about`)
   let told = said
@@ -52,6 +54,7 @@ pub fn decisions_node(
           fn() { @sf.t("web-pages.automaticDecisions.completion") },
           fn() { (core.push)(AutoCompletion) },
           note=fn() { @sf.t("web-pages.automaticDecisions.completionShort") },
+          wide_note=fn() { @sf.t("web-pages.automaticDecisions.completionNote") },
           value=fn() { text(said(), "decisionsText") },
         )
       })
@@ -60,6 +63,8 @@ pub fn decisions_node(
     frame~,
     about=fn() { @sf.t("web-pages.automaticDecisions.choosePoint") },
     said?=told,
+    width?,
+    tips?,
   )
 }
 
