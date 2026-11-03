@@ -697,6 +697,13 @@ test("the latest turn is the last inserted when start times tie", () => {
   assert.equal(latest.kind, "resume");
   assert.equal(latest.outcome, "completed");
   assert.equal(latest.detail, null);
+  assert.equal(store.statsOf(["same-ms"]).get("same-ms")!.lastTurn!.outcome, "completed");
+  assert.equal(store.stopWait("same-ms", true), false, "stopping an allowance wait does not change an older turn");
+  store.startTurn("third", "same-ms", "resume");
+  store.endTurn("third", "failed", "rate_limit: quota", null, null);
+  store.db.exec("UPDATE turns SET started_at = 123 WHERE session_key = 'same-ms'");
+  assert.equal(store.stopWait("same-ms", true), true);
+  assert.equal(store.lastTurn("same-ms")!.outcome, "aborted");
 });
 
 test("a message keeps its model after switching, editing and archiving", () => {

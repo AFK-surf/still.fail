@@ -2312,6 +2312,77 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   await r.close();
 });
 
+test("a manual allowance reset wakes only waiting sessions on that account, including a second profile", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2" }, { ...raw.profiles[0], id: "other" });
+  });
+  const now = time.clock.currentTimeMillisUnsafe();
+  r.hub.accounts.setHealth((id) => ({ account: id === "other" ? "other" : "same", quota: { state: "ok", checkedAt: now, windows: [{ usedPercent: 100, resetsAt: now + 7200_000 }] } }));
+  const agents = [];
+  for (const id of ["cc", "cc2", "other", "cc"]) {
+    r.edit((raw) => { raw.connects[0].bind.profile = id; });
+    await r.accept(message());
+    await settle();
+    const agent = r.claude.last();
+    r.store.setSessionProfile(agent.options.route, id, true);
+    agents.push(agent);
+  }
+  const spent = { kind: "failed" as const, reason: "rate_limit" as const, message: "usage limit reached" };
+  for (const agent of agents) agent.end(spent);
+  await settle();
+  await r.hub.stop(agents[3]!.options.route);
+  r.hub.hold("drain");
+  await r.hub.allowanceReset("cc");
+  assert.deepEqual(agents.map((a) => a.prompts.length), [1, 1, 1, 1], "a hold still prevents turns");
+  r.hub.release("drain");
+  await time.adjust(1);
+  await settle();
+  assert.deepEqual(agents.map((a) => a.prompts.length), [2, 2, 1, 1]);
+  assert.equal(agents[0]!.prompts[1], GO_ON_AFTER_REFILL);
+  assert.equal(agents[1]!.prompts[1], GO_ON_AFTER_REFILL);
+  await r.hub.allowanceReset("cc");
+  await time.adjust(7200_000);
+  await settle();
+  assert.deepEqual(agents.map((a) => a.prompts.length), [2, 2, 2, 1], "old timers do not start the resumed or stopped sessions again");
+  await r.close();
+});
+
+test("after a station restart, a reset resumes a recorded allowance wait but not one stopped by hand", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const now = time.clock.currentTimeMillisUnsafe();
+  const health = () => ({ quota: { state: "ok", checkedAt: now, windows: [{ usedPercent: 100, resetsAt: now + 7200_000 }] } });
+  r.hub.accounts.setHealth(health);
+  const first = message(), stopped = message();
+  await r.accept(first);
+  await r.accept(stopped);
+  await settle();
+  const [waitingAgent, stoppedAgent] = r.claude.sessions;
+  const spent = { kind: "failed" as const, reason: "rate_limit" as const, message: "usage limit reached" };
+  waitingAgent!.end(spent);
+  stoppedAgent!.end(spent);
+  await settle();
+  await r.hub.stop(stoppedAgent!.options.route);
+  assert.equal(r.store.lastTurn(stoppedAgent!.options.route)!.outcome, "aborted");
+  await r.hub.shutdown();
+  const claude = new FakeDriver("claude");
+  const hub = r.newHub({ chats: (id) => (id === "cl" ? r.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
+  hub.accounts.setHealth(health);
+  hub.recover();
+  await settle();
+  assert.equal(claude.count(), 0);
+  await hub.allowanceReset("cc");
+  await settle();
+  assert.equal(claude.count(), 1);
+  assert.equal(claude.last().options.route, waitingAgent!.options.route);
+  assert.equal(claude.last().prompts[0], GO_ON_AFTER_REFILL);
+  await hub.shutdown();
+  await r.close();
+});
+
 test("an overload notice identifies the retry it can cancel, even after another attempt", async () => {
   const time = testClock();
   const r = new Rig({ clock: time.clock });
