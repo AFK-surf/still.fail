@@ -16,7 +16,8 @@
 //           to copy, as Markdown and as CSV: tableMarkdown, tableCsv) · tr · th · td · hr
 //   inline  b · i · s · ["code", {content, path?, line?, shown?}] (words as a run is; `path` where it names a file, a
 //           run too, `line` the line it points at, `shown` a chip's words where they are not its path's: paths.ts) ·
-//           ["a", […], {href, title?, path?, line?, shown?}] · ["img", {src, alt?, title?}] · br
+//           ["a", […], {href, title?, path?, line?, shown?, to?}] (`to`: what it is to, written bare or not: refLinks.ts
+//           linkTo) · ["img", {src, alt?, title?}] · br
 // Math uses the existing pre/code nodes with `math: true`: $$ or \[ blocks and \( inline spans. Other clients can still
 // show the TeX as code. Escaped dollars and dollars inside code keep Markdown's usual meaning.
 // Raw HTML is left out, as the web left it out. An address is as written: a client keeps what it may open.
@@ -25,6 +26,7 @@ import { ink } from "./highlight.ts";
 import { mathDrawing } from "./math.ts";
 import { type MdWords, wordsOf } from "./mdWords.ts";
 import { pathAttrs } from "./paths.ts";
+import { linkTo } from "./refLinks.ts";
 import { type Node, read } from "./mdRead.ts";
 import { shaped, sharedValue } from "./util.ts";
 
@@ -323,7 +325,9 @@ function inline(n: Node, cx: Cx): MdNode[] {
         const words = typeof part === "string" ? part : part.url;
         const piece: MdWords = typeof whole === "string" ? words : [whole[0] + at, whole[0] + at + words.length];
         at += words.length;
-        return typeof part === "string" ? piece : ["a", [piece], { href: part.url }];
+        if (typeof part === "string") return piece;
+        const to = linkTo(part.url);
+        return ["a", [piece], { href: part.url, ...(to ? { to } : {}) }];
       });
     }
     case "strong":
@@ -360,7 +364,8 @@ function inline(n: Node, cx: Cx): MdNode[] {
 /// does (paths.ts).
 function link(href: string, title: string | null | undefined, children: MdNode[]): MdNode {
   const file = /^[a-z][\w+.-]*:/i.test(href) ? {} : pathAttrs(decoded(href), (path) => path);
-  return ["a", children, { href, ...(title ? { title } : {}), ...file }];
+  const to = linkTo(href);
+  return ["a", children, { href, ...(title ? { title } : {}), ...file, ...(to ? { to } : {}) }];
 }
 
 const decoded = (s: string): string => {

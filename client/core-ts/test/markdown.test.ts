@@ -104,6 +104,13 @@ test("markdown_links_as_written_and_bare_addresses_where_a_reader_sees_them_end"
     ["p", ["（", ["a", ["https://github.com/a/b/pull/2854"], { href: "https://github.com/a/b/pull/2854" }], "）已改到"]],
   ]);
   assert.deepEqual(read("www.x.dev 和 a@b.dev"), [["p", ["www.x.dev 和 a@b.dev"]]]);
+  // What a link is to, the same written bare as in brackets.
+  const screen = "https://still.fail/w/ws1/s/st1/screen/browser%3AT0";
+  const to = { card: "screen", station: "ws1/st1", screen: "browser:T0" };
+  assert.deepEqual(read(`${screen}\n\n[标签页](${screen})`), [
+    ["p", [["a", [screen], { href: screen, to }]]],
+    ["p", [["a", ["标签页"], { href: screen, to }]]],
+  ]);
   // Within a link's words an address is words.
   assert.deepEqual(read("[https://a.dev](https://b.dev)"), [["p", [["a", ["https://a.dev"], { href: "https://b.dev" }]]]]);
   assert.deepEqual(read("看 [这里][1]，图 ![图][2]，[没有][3]\n\n[1]: https://a.dev\n[2]: shot.png \"截图\""), [

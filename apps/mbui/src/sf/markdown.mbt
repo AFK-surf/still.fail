@@ -310,115 +310,6 @@ pub fn file_name_of(url : String) -> String {
 }
 
 ///|
-/// A link's path past its host (`https://still.fail/w/…`, or `/w/…` alone) cut
-/// at the slashes after `/w/`, as Markdown.kt's SCREEN_LINK and ADB_LINK read
-/// it: each part none of `/?#` and not empty, a slash at the end let be. None
-/// when it is no such path.
-fn w_parts(href : String) -> Array[String]? {
-  let mut rest = href
-  for scheme in ["https://", "http://"] {
-    if rest.has_prefix(scheme) {
-      let after = rest.view(start_offset=scheme.length()).to_string()
-      match after.find("/") {
-        Some(i) if i > 0 => rest = after.view(start_offset=i).to_string()
-        _ => return None
-      }
-      break
-    }
-  }
-  guard rest.has_prefix("/w/") else { return None }
-  let parts = rest.view(start_offset=3).to_string().split("/").map(fn(v) { v.to_string() }).to_array()
-  let parts = if parts.length() > 1 && parts[parts.length() - 1] == "" {
-    parts[:parts.length() - 1].to_array()
-  } else {
-    parts
-  }
-  if parts.iter().any(fn(p) { p == "" || p.contains("?") || p.contains("#") }) {
-    return None
-  }
-  Some(parts)
-}
-
-///|
-/// The screen a link names (Markdown.kt screenOfLink: a screen's page as its
-/// agents link to it, `/w/<workspace>/s/<station>/screen/<id>` after a host or
-/// alone): its station (`<workspace>/<station>`) and its id; None for any
-/// other link.
-pub fn screen_of_link(href : String) -> (String, String)? {
-  guard w_parts(href) is Some(p) && p.length() == 5 && p[1] == "s" && p[3] == "screen" else {
-    return None
-  }
-  guard @codec.decode_uri_component(p[0]) is Some(ws) && @codec.decode_uri_component(p[2]) is Some(st) && @codec.decode_uri_component(p[4]) is Some(id) else {
-    return None
-  }
-  Some((ws + "/" + st, id))
-}
-
-///|
-/// The station (`<workspace>/<station>`) a link to its 共享调试 names
-/// (Markdown.kt adbOfLink: `/w/<workspace>/s/<station>/adb`, after a host or
-/// alone); None for any other link.
-pub fn adb_of_link(href : String) -> String? {
-  guard w_parts(href) is Some(p) && p.length() == 4 && p[1] == "s" && p[3] == "adb" else {
-    return None
-  }
-  guard @codec.decode_uri_component(p[0]) is Some(ws) && @codec.decode_uri_component(p[2]) is Some(st) else { return None }
-  Some(ws + "/" + st)
-}
-
-///|
-/// The web service a link names (a chat's item with its service, as its agent
-/// links to it: `/o/<workspace>/<station>/<chat>?service=<job>`, after a host or
-/// alone): its station (`<workspace>/<station>`) and its job; None for any other
-/// link.
-pub fn service_of_link(href : String) -> (String, String)? {
-  let mut rest = href
-  for scheme in ["https://", "http://"] {
-    if rest.has_prefix(scheme) {
-      let after = rest.view(start_offset=scheme.length()).to_string()
-      match after.find("/") {
-        Some(i) if i > 0 => rest = after.view(start_offset=i).to_string()
-        _ => return None
-      }
-      break
-    }
-  }
-  guard rest.has_prefix("/o/") else { return None }
-  let (path, query) = match rest.find("?") {
-    Some(i) => (rest.view(start_offset=3, end_offset=i).to_string(), rest.view(start_offset=i + 1).to_string())
-    None => return None
-  }
-  let query = match query.find("#") {
-    Some(i) => query.view(end_offset=i).to_string()
-    None => query
-  }
-  let parts = path.split("/").map(fn(v) { v.to_string() }).to_array()
-  let parts = if parts.length() == 4 && parts[3] == "" { parts[:3].to_array() } else { parts }
-  guard parts.length() == 3 && parts.iter().all(fn(x) { x != "" && !x.contains("#") }) else { return None }
-  guard @codec.decode_uri_component(parts[0]) is Some(ws) && @codec.decode_uri_component(parts[1]) is Some(st) else {
-    return None
-  }
-  for kv in query.split("&") {
-    let kv = kv.to_string()
-    if kv.has_prefix("service=") {
-      match @codec.decode_uri_component(kv.view(start_offset=8).to_string()) {
-        Some(job) if job != "" => return Some((ws + "/" + st, job))
-        _ => return None
-      }
-    }
-  }
-  None
-}
-
-///|
-/// A link drawn as a card alone in a paragraph, and as its title bare in a
-/// sentence (Markdown.kt isCardLink): a screen's, a station's 共享调试, or a
-/// chat's web service's.
-pub fn is_card_link(href : String) -> Bool {
-  screen_of_link(href) is Some(_) || adb_of_link(href) is Some(_) || service_of_link(href) is Some(_)
-}
-
-///|
 /// A link written bare (Markdown.kt isBareLink): its words its address (as
 /// written, or decoded).
 pub fn is_bare_link(words : String, href : String) -> Bool {
@@ -432,8 +323,8 @@ pub fn is_bare_link(words : String, href : String) -> Bool {
 /// or None when it is bare); `title` the words a bare one within a sentence
 /// reads as (it still leads where it did).
 pub(all) struct Screens {
-  card : (String, String?) -> Unit
-  title : (String) -> String
+  card : (String, LinkTo, String?) -> Unit
+  title : (String, LinkTo) -> String
 }
 
 ///|
@@ -448,7 +339,7 @@ pub(all) struct Placed {
 ///|
 /// A paragraph of only a link with a card (Markdown.kt screenAlone): its
 /// address, and its words unless it is bare.
-fn screen_alone(xs : Array[MdInline]) -> (String, String?)? {
+fn screen_alone(xs : Array[MdInline]) -> (String, LinkTo, String?)? {
   let parts = xs.filter(fn(x) {
     match x {
       Text(t) => t.trim(chars=" \n\t").to_string() != ""
@@ -458,9 +349,9 @@ fn screen_alone(xs : Array[MdInline]) -> (String, String?)? {
   })
   guard parts.length() == 1 else { return None }
   match parts[0] {
-    Link(href, c) if is_card_link(href) => {
+    Link(href, c, to) if to.is_card() => {
       let words = md_plain(c)
-      Some((href, if is_bare_link(words, href) { None } else { Some(words) }))
+      Some((href, to, if is_bare_link(words, href) { None } else { Some(words) }))
     }
     _ => None
   }
@@ -470,12 +361,12 @@ fn screen_alone(xs : Array[MdInline]) -> (String, String?)? {
 /// The links with cards written bare among these words (Markdown.kt
 /// bareScreens), which read as their titles; not within an image, nor a
 /// link's own words.
-fn bare_screens(xs : Array[MdInline], out : Array[String]) -> Unit {
+fn bare_screens(xs : Array[MdInline], out : Array[(String, LinkTo)]) -> Unit {
   for x in xs {
     match x {
-      Link(href, c) =>
-        if is_card_link(href) && is_bare_link(md_plain(c), href) && !out.contains(href) {
-          out.push(href)
+      Link(href, c, to) =>
+        if to.is_card() && is_bare_link(md_plain(c), href) && !out.iter().any(fn(o) { o.0 == href }) {
+          out.push((href, to))
         }
       Emph(c) | Strong(c) | Strike(c) => bare_screens(c, out)
       _ => ()
@@ -488,8 +379,8 @@ fn bare_screens(xs : Array[MdInline], out : Array[String]) -> Unit {
 fn bare_chats(xs : Array[MdInline], out : Array[String]) -> Unit {
   for x in xs {
     match x {
-      Link(href, c) =>
-        if is_chat_link(href) && is_bare_link(md_plain(c), href) && !out.contains(href) {
+      Link(href, c, to) =>
+        if to.chat && is_bare_link(md_plain(c), href) && !out.contains(href) {
           out.push(href)
         }
       Emph(c) | Strong(c) | Strike(c) => bare_chats(c, out)
@@ -765,7 +656,7 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
       match (self.screens, task) {
         (Some(sc), None) =>
           match screen_alone(xs) {
-            Some((href, words)) => return [{ top: 8.0, bottom: 8.0, draw: fn() { (sc.card)(href, words) } }]
+            Some((href, to, words)) => return [{ top: 8.0, bottom: 8.0, draw: fn() { (sc.card)(href, to, words) } }]
             None => ()
           }
         _ => ()
@@ -889,7 +780,7 @@ fn Md::placed(
 ) -> Array[Piece]? {
   let file_of = fn(x : MdInline) -> (() -> Unit)? {
     match x {
-      Link(href, _) => (self.files)(file_name_of(href)).map(fn(p) { p.draw })
+      Link(href, _, _) => (self.files)(file_name_of(href)).map(fn(p) { p.draw })
       Image(src, _) => (self.files)(file_name_of(src)).map(fn(p) { p.draw })
       _ => None
     }
@@ -903,7 +794,7 @@ fn Md::placed(
   })
   if parts.length() == 1 && task is None {
     match parts[0] {
-      Link(_, _) =>
+      Link(_, _, _) =>
         match file_of(parts[0]) {
           Some(draw) => return Some([{ top: 8.0, bottom: 8.0, draw }])
           None => ()
@@ -1179,8 +1070,8 @@ fn Md::words(
     Some(sc) => {
       let bare = []
       bare_screens(xs, bare)
-      for href in bare {
-        titles[href] = (sc.title)(href)
+      for b in bare {
+        titles[b.0] = (sc.title)(b.0, b.1)
       }
     }
     None => ()
@@ -1279,7 +1170,7 @@ fn runs_of(
       Emph(c) => runs_of(c, out, bold, true, strike, link, accent, titles, paths)
       Strong(c) => runs_of(c, out, true, italic, strike, link, accent, titles, paths)
       Strike(c) => runs_of(c, out, bold, italic, true, link, accent, titles, paths)
-      Link(href, c) if link == "" && is_chat_link(href) => {
+      Link(href, c, to) if link == "" && to.chat => {
         // a reference to another chat: `@` and its title (a bare link's as the message says it), in the accent's
         // ink (the `@` not lighter: at 70% it was 2.5 to 1)
         let words = md_plain(c)
@@ -1291,9 +1182,9 @@ fn runs_of(
         out.push(@ui.span(shown, bold~, italic~, strike~, link=href, color=accent))
       }
       // a bare link to a screen or a station's 共享调试: its title, leading where it does
-      Link(href, c) if link == "" && titles.get(href) is Some(title) && is_bare_link(md_plain(c), href) =>
+      Link(href, c, _) if link == "" && titles.get(href) is Some(title) && is_bare_link(md_plain(c), href) =>
         out.push(@ui.span(title, bold~, italic~, strike~, link=href))
-      Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent, titles, paths)
+      Link(href, c, _) => runs_of(c, out, bold, italic, strike, href, accent, titles, paths)
       Image(src, alt) => {
         // its file's name, as read (`web%2Dfolded.png` is web-folded.png: Markdown.kt fileNameOf)
         let words = if alt != "" { alt } else { file_name_of(src) }
@@ -1749,4 +1640,47 @@ fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
     w = w + cell_image_width(im.0) + (if i > 0 { 6.0 } else { 0.0 })
   }
   w
+}
+
+///|
+/// The links to chats in an agent's words (`tree`, the core's reading of `text`), each once: those it says are to a
+/// chat (their `to`), for what is shown as a link is pointed at (a chat's card).
+pub fn md_chat_links(text : String, tree : Json?) -> Array[String] {
+  let out : Array[String] = []
+  fn inl(xs : Array[MdInline]) -> Unit {
+    for x in xs {
+      match x {
+        Link(href, c, to) => {
+          if to.chat && !out.contains(href) {
+            out.push(href)
+          }
+          inl(c)
+        }
+        Emph(c) | Strong(c) | Strike(c) => inl(c)
+        _ => ()
+      }
+    }
+  }
+  fn blocks(bs : Array[MdBlock]) -> Unit {
+    for b in bs {
+      match b {
+        Paragraph(xs) | Heading(_, xs) => inl(xs)
+        Quote(inner) => blocks(inner)
+        List(l) => for item in l.items { blocks(item.blocks) }
+        Table(t) => {
+          for cell in t.head {
+            inl(cell)
+          }
+          for row in t.rows {
+            for cell in row {
+              inl(cell)
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+  blocks(blocks_of(text, tree))
+  out
 }

@@ -1,7 +1,7 @@
 // still.fail's links as what is written names them (src/refLinks.ts), as every client reads them.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { adbOfLink, chatOfLink, copiedRef, isChatLink, personWords, REF_LINK, REF_MARK, screenOfLink, shareLink, splitBy, stationOfLink } from "../src/refLinks.ts";
+import { adbOfLink, chatOfLink, copiedRef, isChatLink, linkTo, personWords, REF_LINK, REF_MARK, screenOfLink, shareLink, splitBy, stationOfLink } from "../src/refLinks.ts";
 
 const runs = (text: string, pattern: RegExp) => splitBy(text, pattern).map((p) => (typeof p === "string" ? p : [...p]));
 
@@ -70,11 +70,16 @@ test("a person's words in runs: a chat referenced, a web address written bare, a
   const page = "https://app.still.fail/w/ws1/s/st1/chats/s-c2";
   assert.deepEqual(personWords(`看 [首页](${page}) 和 https://example.com/a。还有 ${page}`), [
     { text: "看 " },
-    { text: "首页", link: page, ref: true },
+    { text: "首页", link: page, ref: true, to: { chat: true } },
     { text: " 和 " },
     { text: "https://example.com/a", link: "https://example.com/a" },
     { text: "。还有 " },
-    { text: page, link: page, ref: true },
+    { text: page, link: page, ref: true, to: { chat: true } },
   ]);
   assert.deepEqual(personWords("没有链接"), [{ text: "没有链接" }]);
+  // What a link is to, as every client draws it: a screen's, a station's 共享调试, a chat's web service's.
+  assert.deepEqual(linkTo("https://app.still.fail/w/ws1/s/st1/screen/browser%3Atab1"), { card: "screen", station: "ws1/st1", screen: "browser:tab1" });
+  assert.deepEqual(linkTo("/w/ws1/s/st1/adb"), { card: "adb", station: "ws1/st1" });
+  assert.deepEqual(linkTo("https://app.still.fail/o/ws1/st1/c-1?service=job_1"), { chat: true, card: "service", station: "ws1/st1", job: "job_1" });
+  assert.equal(linkTo("https://example.com/a"), null);
 });
