@@ -420,6 +420,11 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
   may keep simctl from). The app puts a file picked there with the drive's upload, then `POST /admin/api/screens/<id>/install`
   `{path}` → `{app}`: an .ipa, or a .zip with a .app in it, unpacked, `simctl install`ed and started, the file let go of. 400 when
   there is no app in it; 502 what simctl said (built for a device, not a simulator).
+- **Record**: `POST /admin/api/screens/<id>/record` `{panel?}` starts `simctl io recordVideo` (an iPhone Duo must be told which
+  display, `cover` 1 or `inner` 3; the panel in use when it starts is the one recorded, folding on goes unseen), ended by
+  `.../record/stop` → `{root, path}`, which the app downloads as any file of the drive (ten minutes at most, some 20 to
+  80 MB a minute; the next one's start removes it). An inner panel's framebuffer is upright with its UI on its side, so its
+  movie is said to be turned (its track's matrix, nothing encoded again). `settings` says `recording`.
 - **Restart**: `POST /admin/api/screens/<id>/relaunch` `{app}` → `{}` (`simctl launch --terminate-running-process`), 404
   for what is not an app a person installed there. Building it again is the agent's: the station does not know the project.
 

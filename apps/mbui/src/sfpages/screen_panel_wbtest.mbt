@@ -604,6 +604,31 @@ test "安装 App: offered where the state says; a file gone up asked to be insta
 }
 
 ///|
+test "录屏: started, with the panel in use, and ended" {
+  let r = screen_rig()
+  r.state("live", more={ "kind": Json::string("simulator"), "debug": Json::boolean(true), "poses": Json::boolean(true) })
+  r.say({ "config": { "codec": "jpeg", "width": 1426.0, "height": 1004.0 } })
+  r.frame(1.0)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.debug.logs"))
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.debug.device"))
+  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  r.t.draw()
+  assert_true(r.t.find(tr("web-pages.screen.debug.recordStart")) is Some(_))
+  let (sess, d) = (r.sess(), r.ui().logs)
+  debug_record_pressed(sess, d, false)
+  assert_eq(text(Some(r.told("screen.recordStart")[0]), "panel"), "inner")
+  assert_true(d.recording)
+  debug_record_pressed(sess, d, true)
+  assert_eq(r.told("screen.recordStop").length(), 1)
+  assert_true(!d.recording)
+  screen_done(r.t)
+}
+
+///|
 test "重启 App: the list the first time, and the app chosen at one press after" {
   let r = screen_rig()
   simulator_live(r)

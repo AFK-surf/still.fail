@@ -345,6 +345,10 @@ priv struct DebugLogs {
   mut acted : String
   /// whether its status bar was made tidy here (simctl does not say)
   mut tidy_bar : Bool
+  /// started here and not ended yet (`settings` says one started before this page)
+  mut recording : Bool
+  /// the movie of a recording ended, to download (the drive's root and path)
+  mut to_save : (String, String)?
 }
 
 ///|
@@ -415,6 +419,8 @@ fn debug_logs_new() -> DebugLogs {
     pose_asked: -1,
     acted: "",
     tidy_bar: false,
+    recording: false,
+    to_save: None,
   }
 }
 
@@ -537,6 +543,7 @@ fn debug_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     @sf.menu_item(c, @sf.t("web-pages.screen.debug.install"), key="screen-install", panel=true, icon="upload", note=@sf.t("web-pages.screen.debug.installKinds")) {
     install_asked(c, s, u)
   }
+  debug_record(c, s, d)
   debug_setting(c, s, d, @sf.t("web-pages.screen.debug.appearance"), "appearance", [
     ("light", "web-pages.screen.debug.light"),
     ("dark", "web-pages.screen.debug.dark"),
@@ -548,6 +555,65 @@ fn debug_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     ("accessibility-large", "web-pages.screen.debug.textLargest"),
   ])
   debug_actions(c, s, u)
+}
+
+///|
+/// 录屏: started and ended here, its movie downloaded as a file of the station's once it has ended.
+fn debug_record(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
+  match d.to_save {
+    Some((root, path)) => {
+      d.to_save = None
+      @sfbase.download_drive_file(c, s.src, s.station, root, path, "recording.mp4")
+    }
+    None => ()
+  }
+  let going = d.recording || flag(d.settings, "recording")
+  let label = @sf.t(if going { "web-pages.screen.debug.recordStop" } else { "web-pages.screen.debug.recordStart" })
+  let note = if going { @sf.t("web-pages.screen.debug.recordNote") } else { "" }
+  if @sf.menu_item(c, label, key="screen-record", panel=true, icon=if going { "stop" } else { "play" }, note~) {
+    debug_record_pressed(s, d, going)
+  }
+}
+
+///|
+/// 录屏 started, of the panel in use where the device has two, or ended.
+fn debug_record_pressed(s : ScreenSess, d : DebugLogs, going : Bool) -> Unit {
+  let params : Map[String, Json] = { "station": Json::string(s.station), "screen": Json::string(s.screen) }
+  if !going {
+    if flag(s.state, "poses") {
+      let cover = match s.frame_size() {
+        Some((w, h)) => w.to_double() / h.to_double() < duo_cover_shape
+        None => true
+      }
+      params["panel"] = Json::string(if cover { "cover" } else { "inner" })
+    }
+    d.recording = true
+    d.acted = ""
+    (s.src.call)("screen.recordStart", Json::object(params), fn(r) {
+      match r {
+        Ok(_) => ()
+        Err(e) => {
+          d.recording = false
+          d.acted = text(Some(e), "message")
+        }
+      }
+    })
+    return
+  }
+  d.recording = false
+  d.settings = None
+  d.settings_asked = false
+  d.acted = @sf.t("web-pages.screen.debug.recordSaving")
+  (s.src.call)("screen.recordStop", Json::object(params), fn(r) {
+    match r {
+      Ok(v) if text(Some(v), "path") != "" => {
+        d.acted = @sf.t("web-pages.screen.debug.recordSaved")
+        d.to_save = Some((text(Some(v), "root"), text(Some(v), "path")))
+      }
+      Ok(_) => d.acted = ""
+      Err(e) => d.acted = text(Some(e), "message")
+    }
+  })
 }
 
 ///|
