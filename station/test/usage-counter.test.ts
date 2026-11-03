@@ -189,6 +189,25 @@ async function today() {
   return time;
 }
 
+test("a turn finishing after its chat switches runtime is counted on its original account", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const workspace = join(r.data, "sessions/ember/c-switch/workspace");
+  const key = "ember:c-switch";
+  session(r.store, key, workspace, r.store.now());
+  r.store.startTurnFor("t1", key, "input", { profile: "cc", person: "a@x", thread: null });
+  r.store.setRuntimeSessionId(key, "r1");
+  r.store.ranIn(key, "r1", "cc");
+  r.store.setSessionRuntime(key, "codex", "cx", false, null, null, null, null);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r1.jsonl");
+  append(path, [claudeLine("m1", r.store.now(), "claude-opus-5-5", usage(10, 0, 0, 0, 1))]);
+  r.store.endTurn("t1", "completed", null, null, null);
+  assert.equal(await r.usage.read(), 1);
+  const rows = r.store.usageGroups(0, MAX, 0);
+  assert.deepEqual(rows.map((g) => [g.input, g.profile]), [[10, "cc"]]);
+  assert.equal(await r.usage.read(), 0);
+});
+
 test("each call is counted once, for whom its turn worked, where and on what", async () => {
   const time = await today();
   const pause = () => time.adjust(15);

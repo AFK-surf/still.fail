@@ -13,7 +13,8 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
 import type { ChatEvent, ChatMessage, Handler, InboundFile, Member, Person, Place, ThreadRef } from "../sessions/chat.ts";
-import { type Answer, answeredCard, inline, questionCard, textCards } from "./cards.ts";
+import { type CardEnd, endedWords } from "../connects/card-ends.ts";
+import { type Answer, answeredCard, endedCard, inline, questionCard, textCards } from "./cards.ts";
 import { CONTROL, DATA, type Frame, Parts, decode, encode, header } from "./frame.ts";
 import { type FeishuMessage, cardAnswerOf, listedAsEvent, messageOf, resourceOf } from "./parse.ts";
 import { FeishuStatus } from "./status.ts";
@@ -413,6 +414,19 @@ export class FeishuSurface extends ConnectedSurface {
     }
     if (thread === null) throw new Error("nothing to post");
     return { thread, ts: text(first?.message_id) };
+  }
+
+  /// A question that stopped waiting other than by its buttons (connects/card-ends.ts): its card changed to say why,
+  /// nothing left to press. One answered by a press (its answer, a message `card-…`) shows that answer already.
+  async cardEnded(_thread: ThreadRef, ts: string, said: string, card: Json, end: CardEnd): Promise<void> {
+    if (card?.type !== "options" && card?.type !== "text") return;
+    if (end.why === "message" && end.byTs.startsWith("card-")) return;
+    const asked = this.asked.get(ts);
+    if (asked?.answered) return;
+    if (asked) asked.answered = true;
+    const lang = stationLang();
+    const who = end.why === "message" ? this.names.get(end.by)?.name || this.knownPerson(end.by)?.name || null : null;
+    await this.client.api("PATCH", `/open-apis/im/v1/messages/${encodeURIComponent(ts)}`, { content: inline(endedCard(asked?.text ?? said, endedWords(card, end, who, lang))) });
   }
 
   /// A card changed in place (its message patched: the station's cards are shared, `update_multi`), as `post` writes one.

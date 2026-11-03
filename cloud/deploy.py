@@ -237,7 +237,7 @@ def beta_ready(account: str) -> bool:
         else:
             headers["authorization"] = f"Bearer {auth['token']}"
         url = f"https://api.cloudflare.com/client/v4/zones?name={zone}&account.id={account}"
-        # (a connection broken off asked again: Mini1's to the API ended mid-handshake, SSL's UNEXPECTED_EOF, and
+        # (a connection broken off asked again: the CI Mac's to the API ended mid-handshake, SSL's UNEXPECTED_EOF, and
         # stopped main's deploy, 441b768f, 2026-10-30)
         for tries in range(3):
             try:

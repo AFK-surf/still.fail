@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { isPlanTool } from "./plan.ts";
 import { tr } from "./spoken.ts";
 import type { Json } from "./store.ts";
-import type { RuntimeKind } from "../agents/runtime.ts";
+import { runtimeKind, type RuntimeKind } from "../agents/runtime.ts";
 import { unpackedWhole } from "./packed.ts";
 
 /// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none; `brief` when what it says is
@@ -322,6 +322,19 @@ export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: st
   const placed = places.length > 0;
   const found = ids.map((id) => inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id, placed, anywhere)));
   return { paths: found.filter((p) => p !== null), current: found.at(-1) != null };
+}
+
+/// Resolve each segment with the runtime and account that wrote it, keeping their conversation order.
+export function transcriptSources(dataDir: string, profiles: readonly { id: string; home: string }[], sources: readonly { id: string; runtime: string; profile: string | null }[], places: readonly string[] = [], options: { anywhere?: boolean } = {}): { paths: { path: string; runtime: RuntimeKind }[]; current: boolean } {
+  const paths: { path: string; runtime: RuntimeKind }[] = [];
+  let current = false;
+  for (const source of sources) {
+    const runtime = runtimeKind(source.runtime);
+    const found = runtime ? transcriptPaths(runtime, dataDir, homesFirst(profiles, source.profile), [source.id], places, options) : null;
+    current = found?.current === true;
+    if (runtime && found?.paths[0]) paths.push({ path: found.paths[0], runtime });
+  }
+  return { paths, current };
 }
 
 /// Where a session works and worked, for `transcriptPaths`: the directory it was moved to, and its workspace.

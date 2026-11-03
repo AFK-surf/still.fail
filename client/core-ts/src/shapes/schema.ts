@@ -859,6 +859,7 @@ export const SHAPES: Record<string, Shape> = {
     ["elevation", opt("StationElevation"), { doc: "Whether it runs as the machine's administrator (a Windows station only; none from one older than it, which\nthen shows nothing)." }],
     ["outflowGrants", opt("i64"), { client: opt("I54"), doc: "How many programs of its machine hold or ask for a grant of its data (docs/data-outflow.md): its page reads\nthem (`outflowGrants`) only when there are some. None from a station older than them." }],
     ["outflowAnswers", opt("bool"), { doc: "The viewer answers those asking (an owner or admin of its home workspace); none from a station older than\nthat." }],
+    ["outflowTailcat", opt("OutflowTailcat"), { doc: "Its Tailcat link, which lets programs of other machines ask for its data (docs/data-outflow.md): for an\nadmin of its home workspace only. None for others, or from a station older than it." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
   StationElevation: struct([
     ["on", "bool", { doc: "Where its switch stands: the setting, or what a change under way goes to (`elevation.set`)." }],
@@ -2342,6 +2343,13 @@ export const SHAPES: Record<string, Shape> = {
     ["afreshWhenCold", "bool", { doc: "A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its\ncontext cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`)." }],
     ["afreshAbove", opt("f64"), { doc: "The estimated USD cost of rereading a cold context at or above which the station starts it afresh.\nAbsent on an older station, whose on/off setting applies regardless of cost." }],
   ], { doc: "How a station goes on with a session whose prompt cache is over (`Overview.context`)." }),
+  OutflowTailcat: struct([
+    ["on", "bool", { doc: "An admin turned it on (`outflow.tailcat`)." }],
+    ["state", "String", { doc: "off | starting (getting tailcat, its key or its address) | running | failed (why in `error`)" }],
+    ["address", opt("String"), { doc: "Running: the Tailcat address to give the program on the other machine." }],
+    ["port", opt("i64"), { client: opt("I54"), doc: "Running: the port to ask at, at that address." }],
+    ["error", opt("String"), { doc: "Failed: why." }],
+  ], { doc: "A station's Tailcat link of data outflow (`Overview.outflowTailcat`)." }),
   StationDiagnostics: struct([
     ["logs", "bool", { doc: "It sends its log to still.fail, scrubbed (no paths under home directories, emails, keys, quoted text or what\npeople wrote), for problems to be found from our side (`diagnostics.setLogs`)." }],
   ], { doc: "What a station sends still.fail to find its problems by (`Overview.diagnostics`)." }),

@@ -113,7 +113,7 @@ running() {
 # the one that hung never does (the station's tests stopped at 5 minutes, feat/outflow-tailcat, 41570711413).
 below() { for c in $(pgrep -P "$1" 2>/dev/null); do echo "$c"; below "$c"; done; }
 open_tests() {
-  for p in $(below $$); do ps -o etime= -o args= -p "$p" 2>/dev/null; done | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") == 1' | cut -c1-200 | sed 's/^/  ◦ /'
+  for p in $(below $$); do ps -o etime= -o args= -p "$p" 2>/dev/null; done | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") == 1 { for (i = 2; i <= NF; i++) if ($i ~ /\.test\.(ts|mts|mjs|js)$/) print "  ◦ " $1 " " $i }'
 }
 trap 'echo "stopped; still running:"; running tail; open_tests; exit 1' INT TERM
 # Says each step, in order, as it is done; every minute spent waiting, the ones still running.

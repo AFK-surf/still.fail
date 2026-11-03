@@ -4,12 +4,13 @@
 import assert from "node:assert/strict";
 import { request as http } from "node:http";
 import type { Socket } from "node:net";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { type Identity, OutflowGrants, REQUEST_KEPT_MS } from "../src/outflow/grants.ts";
 import { OutflowServer, type Workspace } from "../src/outflow/server.ts";
+import { TAILCAT_PORT, TailcatLink, VIA_TAILCAT } from "../src/outflow/tailcat.ts";
 import { routes } from "../src/api/routes/outflow.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import * as read from "../src/read/store.ts";
@@ -499,4 +500,72 @@ test("another station's read: one of the outflow reads, of the workspace it asks
   assert.deepEqual(asked.at(-1)![1].ws, { workspace: "ws-joined", home: false });
   await assert.rejects(answer("peer", { op: "usage", args: {} }, "ws-home"), /no such read/, "none of the station's other reads");
   await assert.rejects(answer("peer", { op: "outflowChats", args: {} }, undefined), /workspace/);
+});
+
+/// A request on a TCP port of the loopback, as tailcat forwards one there.
+function tcp(port: number, method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; body: any }> {
+  return new Promise((resolve, reject) => {
+    const req = http({ host: "127.0.0.1", port, method, path, headers: token ? { authorization: `Bearer ${token}` } : {} }, (res) => {
+      let text = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => (text += c));
+      res.on("end", () => resolve({ status: res.statusCode!, body: text ? JSON.parse(text) : null }));
+    });
+    req.on("error", reject);
+    req.end(body === undefined ? undefined : JSON.stringify(body));
+  });
+}
+
+test("through the Tailcat link: a program of another machine asks and reads as one here does; anything else on the port is turned away", async () => {
+  const r = await rig();
+  const m = members(r);
+  const through = { now: true };
+  const { port, close } = await r.server.listenTcp(0, async () => (through.now ? VIA_TAILCAT : null));
+  after(close);
+  const asking = tcp(port, "POST", "/v1/request", { name: "Comma", purpose: "usage for the team", scopes: ["usage"], workspace: true, key: "comma" });
+  while (r.waited.count < 1) await new Promise((resolve) => setImmediate(resolve));
+  const [request] = (await m.list()).requests;
+  assert.deepEqual(request.identity, VIA_TAILCAT, "shown as come through Tailcat, nothing it says of itself taken for who it is");
+  assert.equal(await m.answer(request.id, { allow: true, scopes: ["usage"], workspace: true }), 200);
+  const granted = await asking;
+  assert.deepEqual([granted.status, granted.body.reach], [200, "workspace"]);
+  assert.equal((await tcp(port, "GET", "/v1/usage?from=0&to=1", undefined, granted.body.token)).status, 200);
+  // Not the link's tailcat at the other end (a program of this machine on the port): neither asks nor reads, token or not.
+  through.now = false;
+  assert.equal((await tcp(port, "GET", "/v1/usage?from=0&to=1", undefined, granted.body.token)).status, 403);
+  assert.equal((await tcp(port, "POST", "/v1/request", { scopes: ["usage"] })).status, 403);
+  // The socket's programs are not the link's: the link's grant is not theirs to take.
+  assert.equal(r.grants.held(COMMA, ["usage"], "workspace"), null);
+});
+
+test("the Tailcat link: off until an admin turns it on, kept so; its address once tailcat says it; only the link's tailcat counts on its port", async () => {
+  const r = await rig();
+  const dir = tempdir();
+  // A tailcat that makes its key and, serving, says its address and stays.
+  const fake = join(dir, "tailcat");
+  writeFileSync(
+    fake,
+    `#!/bin/sh\nif [ "$1" = genkey ]; then echo '{}' > "$3"; exit 0; fi\necho '{"listenAddr":"tcFAKEADDRESS"}'\nexec sleep 600\n`,
+    { mode: 0o755 },
+  );
+  const changes = { count: 0 };
+  const link = new TailcatLink({ data: r.data, server: r.server, command: fake, changed: () => changes.count++, holders: async () => [process.pid] });
+  after(() => link.close());
+  link.start();
+  assert.deepEqual(link.view(), { on: false, state: "off", address: null, port: null, error: null });
+  await link.set(true);
+  while (link.view().state !== "running") await new Promise((resolve) => setTimeout(resolve, 10));
+  const view = link.view();
+  assert.equal(view.address, "tcFAKEADDRESS");
+  assert.ok(view.port! >= TAILCAT_PORT && view.port! < TAILCAT_PORT + 10);
+  assert.ok(statSync(join(r.data, "tailcat", "outflow.private.json")).isFile(), "its key made once, for the same address each start");
+  assert.ok(changes.count > 0);
+  // This test's process is not the link's tailcat: its requests on the port are refused.
+  assert.equal((await tcp(view.port!, "POST", "/v1/request", { scopes: ["usage"] })).status, 403);
+  // Kept for the next start; off, the port closes.
+  assert.equal(new TailcatLink({ data: r.data, server: r.server, changed: () => {} }).view().on, true);
+  await link.set(false);
+  assert.deepEqual(link.view(), { on: false, state: "off", address: null, port: null, error: null });
+  await assert.rejects(tcp(view.port!, "GET", "/v1/stations"));
+  assert.equal(new TailcatLink({ data: r.data, server: r.server, changed: () => {} }).view().on, false);
 });

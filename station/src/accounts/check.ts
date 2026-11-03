@@ -12,6 +12,8 @@ import { checkSandbox } from "../agents/sandbox.ts";
 const ACCESS_KINDS = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
 const RUNTIMES: string[] = RUNTIME_KINDS;
 const MODES = ["multi-session", "single-session"];
+/// The connects the station has a part for (slack/, feishu/).
+const CONNECT_KINDS = ["slack", "feishu"];
 
 /// config.rs `id_ok`: a lowercase letter or digit, then those and dashes.
 export const idOk = (id: string) => /^[a-z0-9][a-z0-9-]*$/.test(id);
@@ -130,7 +132,7 @@ export function checkConfig(raw: any, _data: string): void {
 
     if (!idOk(c.id)) throw new Error(`connect id ${JSON.stringify(c.id)}: use lowercase letters, digits and dashes`);
     const kind = c.kind ?? "slack";
-    if (kind !== "slack") throw new Error(`connect ${c.id}: unknown kind ${kind}`);
+    if (!CONNECT_KINDS.includes(kind)) throw new Error(`connect ${c.id}: unknown kind ${kind}`);
     const runtime: string = c.bind.runtime;
     const effort = c.bind.effort;
     if (typeof effort === "string" && effort !== "") {

@@ -3,6 +3,7 @@
 # lint (mbui's tools/detlint, docs/detlint.md, with apps/mbui/detlint.json) reports errors before type-checking.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+node --test "$D/waitfor.test.mjs" || exit 1
 # A warm native build must use the current checkout's core, including when several release runners share its outputs.
 bash "$D/core-cache-test.sh" || exit 1
 "$MBUI_DIR/scripts/detlint" "$A" || exit 1

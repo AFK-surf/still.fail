@@ -117,6 +117,22 @@ fn scrub(v : @rjson.Value) -> @rjson.Value {
 }
 
 ///|
+/// Keep paths consistent across the recording without keeping the recording machine's checkout or home.
+fn recording_paths(v : @rjson.Value, checkout : String, home : String) -> @rjson.Value {
+  match v {
+    Obj(kvs) => Obj(kvs.map(fn(kv) { (kv.0, recording_paths(kv.1, checkout, home)) }))
+    Arr(xs) => Arr(xs.map(fn(x) { recording_paths(x, checkout, home) }))
+    Str(s) => {
+      let s = if checkout.length() > 1 {
+        s.replace_all(old=checkout, new="/test-worktree")
+      } else { s }
+      Str(if home.length() > 1 { s.replace_all(old=home, new="/test-home") } else { s })
+    }
+    x => x
+  }
+}
+
+///|
 /// A credential's name: a header's (Authorization, Cookie, Set-Cookie, a name saying token, key, secret, auth,
 /// session, password, sig), a query's or a body's field
 fn secret_name(name : String) -> Bool {
@@ -349,6 +365,8 @@ fn make(args : Array[String]) -> Unit {
     }
   }
   let src_abs = abspath(src)
+  let checkout = abspath(root() + "/../..")
+  let home = env("HOME").unwrap_or("")
   let lines : Array[String] = []
   let texts : Array[String] = []
   for line in log.split("\n") {
@@ -357,7 +375,7 @@ fn make(args : Array[String]) -> Unit {
     match line.find("TEXTREC ") {
       Some(t) => {
         match parse(line.view(start_offset=t + 8).to_string()) {
-          Some(j) => texts.push(compact(Obj([("textrec", j)])))
+          Some(j) => texts.push(compact(Obj([("textrec", recording_paths(j, checkout, home))])))
           None => ()
         }
         continue
@@ -414,7 +432,7 @@ fn make(args : Array[String]) -> Unit {
         ev = ev.remove("b").set("bn", Num((b.length() / 2).to_string()))
       _ => ()
     }
-    lines.push(compact(ev))
+    lines.push(compact(recording_paths(ev, checkout, home)))
   }
   for t in texts {
     lines.push(t)

@@ -156,7 +156,14 @@ export function archivedPage(s: Store, before: [number, string], limit: number):
 
 /// Store::sessionOfRuntime: the session that went on with `runtime`'s session `id`, the latest active if more did.
 export function sessionOfRuntime(s: Store, runtime: string, id: string): string | null {
-  return one(s, SESSION_OF_RUNTIME, runtime, id)?.key ?? null;
+  try {
+    return one(s, SESSION_OF_RUNTIME, runtime, id)?.key ?? null;
+  } catch {
+    return one(s, `SELECT key FROM (
+      SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
+      UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+    ) ORDER BY last_active_at DESC LIMIT 1`, runtime, id)?.key ?? null;
+  }
 }
 
 /// Store::runtimeSessions: the runtime sessions a session has run in, the first first, ending with its current one.
@@ -167,6 +174,32 @@ export function runtimeSessions(s: Store, key: string): string[] {
     ids = all(s, "SELECT id FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key).map((r) => r.id);
   } catch {} // a database no station of this version has opened yet
   return current === null ? ids : [...ids.filter((id) => id !== current), current];
+}
+
+/// The runtime and profile of each transcript, including those from before runtime changes were supported.
+export function runtimeSessionSources(s: Store, key: string): { id: string; runtime: string; profile: string | null }[] {
+  const row = getSession(s, key);
+  if (!row) return [];
+  let sources: { id: string; runtime: string; profile: string | null }[] = [];
+  try {
+    sources = all(s, "SELECT id, runtime, profile FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key)
+      .map((r) => ({ id: r.id, runtime: r.runtime ?? row.runtime, profile: r.profile ?? null }));
+  } catch {
+    sources = runtimeSessions(s, key).map((id) => ({ id, runtime: row.runtime, profile: row.profile }));
+  }
+  if (row.runtimeSessionId === null) return sources;
+  const current = sources.find((x) => x.id === row.runtimeSessionId) ?? { id: row.runtimeSessionId, runtime: row.runtime, profile: row.profile };
+  return [...sources.filter((x) => x.id !== row.runtimeSessionId), current];
+}
+
+/// Before per-message runtime was recorded, every message belonged to the session's first runtime.
+export const ORIGINAL_RUNTIME = "SELECT runtime FROM runtime_sessions INDEXED BY runtime_sessions_ordered WHERE session_key = ? ORDER BY at, rowid LIMIT 1";
+export function originalRuntime(s: Store, key: string): string | null {
+  try {
+    return one(s, ORIGINAL_RUNTIME, key)?.runtime ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /// How many entries sessions' transcripts have, as the station last read them while they were at work (one, or every

@@ -1,5 +1,8 @@
 # Development
 
+> Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
+
+
 The commands below run from the repository root unless noted. The station, the client core, the web UI and the Cloudflare Workers are TypeScript (Node.js); a few native parts are Rust, prebuilt. Start with cloud tests if you do not need to build a client.
 
 ## Prerequisites
@@ -67,9 +70,9 @@ STILLFAIL_NATIVE=offline …                       # neither download nor build
 
 **Prebuilt, built when asked: the mbui app's shell and engine.** `shell` and `engine` (`msvc` in `scripts/native.ts`: Windows' are MSVC's) are what the mbui app's jobs only fetch, Android's and Windows'; CI builds them only when asked. A branch whose change makes a new one (`apps/mbui/engine`, `client/shell`, …) fails in those jobs (mbui's `android` and `windows`, the pipeline's `windows-natives`) with what to run: `gh workflow run prebuild.yml -R AFK-surf/still.fail --ref <branch>`. That workflow (`.github/workflows/prebuild.yml`) builds each that neither the store nor the release has from the branch's checkout, Windows' on GitHub's Windows (MSVC's environment with clang-cl, CMake and Ninja; under Git Bash `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER` naming MSVC's `link.exe`), Android's on Linux with the NDK, puts them in the release `native-artifacts` (`node scripts/native.ts prebuild --release`), and runs the failed jobs of the commit's pipeline and mbui runs again (not on main). A Mac can prebuild them too, cross-building the Windows ones with cargo-xwin (the shell, which carries its tests' executables in `tests/`) and with clang-cl on xwin's Windows SDK (Hermes and the engine; Hermes's own hermesc is built for the Mac first), into the releases bucket's `natives/` by their keys: `node scripts/native.ts prebuild` (the Windows ones; or `prebuild shell:win32-x64`), with the bucket's `CLOUDFLARE_API_TOKEN` as `scripts/release-put.sh` takes it, or `--release` to the release with gh. It needs Homebrew's `llvm` and `lld`; cargo-xwin, the SDK (1.1 GB), cargo's target and Hermes's builds stay in the cache's `.build/` (`$STILLFAIL_NATIVE_BUILD`), so a change rebuilds only itself. Everyone fetches them from `https://app.still.fail/releases/natives/` (`$STILLFAIL_NATIVE_STORE`; still.fail cloud serves it, `cloud/src/install.ts`), else the release; main's `natives-store` copies the Windows ones from the release into the store. The pipeline's `windows-natives` job fetches both Windows ones on GitHub's Windows for a change to what they are made of and runs the shell's tests there.
 
-**Publishing** happens only in CI, on main: the pipeline's `natives` job (mini1) runs `node scripts/native.ts ensure --publish`, which builds every part (and target) whose key the release lacks and uploads it with the run's token, then `prune 20` keeps the newest 20 assets of each part and target. A branch publishes nothing: its `natives` job builds what the release lacks of what its checks and builds use, and hands it to its other jobs as the run artifact `natives-<sha>` (`STILLFAIL_NATIVE_INBOX`, `.github/actions/natives`); on mini1 the jobs share the cache anyway. Every job after it (checks, the web build, Android on Blacksmith, the desktop and station on mini1) then compiles no Rust; the station's releases (all three platforms) take the parts main's natives job published. The release is a prerelease, made once by hand (`gh release create native-artifacts --prerelease --target <a main commit> -t "Prebuilt native parts"`): GitHub refuses the run's token a new tag at a commit that changes a workflow.
+**Publishing** happens only in CI, on main: the pipeline's `natives` job runs `node scripts/native.ts ensure --publish`, which builds every part (and target) whose key the release lacks and uploads it with the run's token, then `prune 20` keeps the newest 20 assets of each part and target. A branch publishes nothing: its `natives` job builds what the release lacks of what its checks and builds use, and hands it to its other jobs as the run artifact `natives-<sha>` (`STILLFAIL_NATIVE_INBOX`, `.github/actions/natives`); jobs on the same runner share its cache. Every job after it (checks, the web build, Android on Blacksmith, the desktop and station) then compiles no Rust; the station's releases (all three platforms) take the parts main's natives job published. The release is a prerelease, made once by hand (`gh release create native-artifacts --prerelease --target <a main commit> -t "Prebuilt native parts"`): GitHub refuses the run's token a new tag at a commit that changes a workflow.
 
-Measured on studio, a fresh worktree each, step by step (seconds; rustc calls in brackets where there were any):
+Measured on test-a, a fresh worktree each, step by step (seconds; rustc calls in brackets where there were any):
 
 | Step | Parts in the machine's cache (39eced35) | Nothing prebuilt, built here through sccache (39eced35) | Rust era (b98a7f6e) |
 | --- | --- | --- | --- |
@@ -83,7 +86,7 @@ Measured on studio, a fresh worktree each, step by step (seconds; rustc calls in
 | Android debug build | 21.5 | 79.4 (374) | 81.6 (454) |
 | **total** | **85.9** | **339.0 (1,530)** | **478.3 (2,642)** |
 
-With the parts published and an empty cache, the first column plus their download (33 MB, about 12 s; measured at f5b84fbf, when the core tests still took 58 s: 144 s on studio, 150 s on mini1). A worktree takes 2.1 GB (no Cargo target) against 4.8 GB building the parts and 11.1 GB in the Rust era; the shared cache 0.09 GB. A TypeScript-only commit's full check, part by part as CI runs it, made no rustc call and ran no cargo.
+With the parts published and an empty cache, the first column plus their download (33 MB, about 12 s; measured at f5b84fbf, when the core tests still took 58 s: 144 s on test-a, 150 s on test-b). A worktree takes 2.1 GB (no Cargo target) against 4.8 GB building the parts and 11.1 GB in the Rust era; the shared cache 0.09 GB. A TypeScript-only commit's full check, part by part as CI runs it, made no rustc call and ran no cargo.
 
 ## Node
 
@@ -105,7 +108,7 @@ Where a seed decides what a simulated run leaves open (jitter, how writes are cu
 
 What cannot be made the same every run (real processes and signals, the native addon and iroh-relay over real
 sockets, networks made up at random) is the side run's: `sh scripts/side.sh` (each package's `side/`; Rust's
-`#[ignore = "side: …"]`), every four hours on main in CI (`.github/workflows/side.yml`, on mini1, each part on a runner of
+`#[ignore = "side: …"]`), every four hours on main in CI (`.github/workflows/side.yml`, each part on a runner of
 its own; run it by hand with `gh workflow run side`), blocking nothing. A side failure goes to an agent, which
 reproduces it as a test CI runs, failing the same way every time, and fixes it; one it cannot reproduce is let be.
 Never a retry, a longer deadline or a looser bound to make a test pass.
@@ -124,7 +127,7 @@ ending, against a budget, in the run's summary, with a warning when over. The bu
 
 `node scripts/ci-time.ts <run id>` prints any run's jobs and longest steps. A run over its budget is a regression to
 find the cause of, as one that fails is: what got slower (a step, a cache missed, a test waiting in real time, jobs
-queued behind one another on mini1), fixed or the budget changed on purpose, not left. The check's Rust tests are
+queued behind one another on the runner), fixed or the budget changed on purpose, not left. The check's Rust tests are
 remembered by their inputs (`scripts/check.sh`, `rust_step`), and CI keeps Gradle's caches (`.github/actions/setup`):
 a run that missed them is the usual first suspect.
 

@@ -29,7 +29,7 @@ permissions:
   contents: read
 jobs:
   # A branch's push runs them only when it changed the renderers' own code (their packages, the film tool, their
-  # scripts, this workflow): every push touching mbui ran both on mini1, two of its runners' work in all, and the
+  # scripts, this workflow): every push touching mbui ran both on the CI Mac, two of its runners' work in all, and the
   # pipeline's check waited 6-20 minutes for one (2026-11-03, as asked: "分支只在改到渲染器时跑"). Main runs them on
   # every change above, and publishes what it built.
   what:
@@ -53,7 +53,7 @@ jobs:
   renderer:
     needs: what
     if: needs.what.outputs.run == 'yes'
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     timeout-minutes: 5
     permissions:
       contents: write # On main only, publish the tested part to the existing native-artifacts release.
@@ -76,7 +76,7 @@ jobs:
   film:
     needs: what
     if: needs.what.outputs.run == 'yes'
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     timeout-minutes: 5
     permissions:
       contents: write

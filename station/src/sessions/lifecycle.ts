@@ -13,7 +13,7 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { checkContext } from "./context-cap.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
-import { homesFirst, readTimeline, sessionPlaces, sharedTranscripts, transcriptPaths } from "../read/transcript.ts";
+import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
 import { AUTO, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import type { SessionChange } from "./accounts.ts";
@@ -209,23 +209,29 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
     log.info("hub", "going on afresh once its cache is over set", { session: key, afresh: afresh ?? "station's" });
     if (Object.keys(rest).length === 0) return;
   }
-  const { row, model, effort, profile, repick } = hub.accounts.change(key, change, lang);
-  if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
-  if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
-  if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
+  const { row, runtime, model, effort, profile, pinned, repick } = hub.accounts.change(key, change, lang);
+  const movedRuntime = runtime !== row.runtime && typeof profile === "string";
+  const recapped = change.context !== undefined && change.context !== row.context;
+  if (movedRuntime) {
+    if (row.runtimeSessionId) hub.store.ranIn(key, row.runtimeSessionId, row.profile);
+    hub.store.setSessionRuntime(key, runtime, profile, pinned === true, model, effort, change.fast ?? null, change.context ?? null);
+  } else {
+    if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
+    if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
+    if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
+    if (recapped) hub.store.setSessionContext(key, change.context ?? null);
+    if (repick) hub.accounts.repick(key);
+    else if (profile === null) hub.accounts.runOn(key);
+  }
   // Another most context is what its process starts with (Claude Code's settings, a Codex thread's config): only a new
   // one takes it.
-  const recapped = change.context !== undefined && change.context !== row.context;
-  if (recapped) hub.store.setSessionContext(key, change.context ?? null);
-  if (repick) hub.accounts.repick(key);
-  else if (profile === null) hub.accounts.runOn(key);
-  await hub.changed(key, recapped);
+  await hub.changed(key, movedRuntime || recapped);
   log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort, context: hub.store.getSession(key)?.context ?? "" });
   // Its last turn stopped at the allowance, or waits to be tried again on a model at capacity: changed, it goes on by
   // itself (at once).
   const last = hub.store.lastTurn(key);
   const detail = last?.outcome === "failed" ? (last.detail ?? "") : "";
-  if (detail.startsWith("rate_limit") || (detail.startsWith("overloaded") && last?.declared === "waiting")) void hub.actor(row).goOn();
+  if (detail.startsWith("rate_limit") || (detail.startsWith("overloaded") && last?.declared === "waiting")) void hub.actor(hub.store.getSession(key) ?? row).goOn();
 }
 
 /// Where an archived session's transcript copy is.
@@ -380,8 +386,7 @@ export async function deleteSession(hub: Hub, key: string) {
   await actor?.dispose();
   hub.live.forget(key);
   const { dataDir, profiles } = hub.config();
-  const runtime = runtimeNamed(row.runtime);
-  const transcripts = runtime ? transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), hub.store.runtimeSessions(key), sessionPlaces(row)).paths : [];
+  const transcripts = transcriptSources(dataDir, profiles, hub.store.runtimeSessionSources(key), sessionPlaces(row)).paths.map((p) => p.path);
   hub.store.deleteSession(key);
   hub.closed(key);
   rmSync(transcriptCopy(hub, key), { force: true });

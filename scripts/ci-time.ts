@@ -15,7 +15,7 @@ export const BUDGET = {
   main: 180,
   /** A branch or main that checked the Android app (check-android, its build, and check-android-lint beside it on
    * GitHub's runners): lint, which reads each module whole on one of their four cores, takes 240-250 s of Gradle on a
-   * branch that changes the app, about 300 with its job's setup, and stays there as asked (2026-10-17: not mini1's);
+   * branch that changes the app, about 300 with its job's setup, and stays there as asked (2026-10-17: not the CI Mac's);
    * nothing deploys after it (2026-10-18, #607). */
   android: 330,
   /** main, releasing apps or the station: the check, the API, then the releases side by side (Android's the longest). */

@@ -83,7 +83,7 @@ export const PARAMS: Record<string, string> = {
   "session.compact": "key:string",
   "session.clear": "key:string readBack?:boolean",
   "session.delete": "key:string",
-  "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean context?:number repick?:boolean afresh?:boolean",
+  "session.settings": "key:string runtime?:string profile?:string model?:string effort?:string fast?:boolean context?:number repick?:boolean afresh?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
   "chat.keep": "kept?:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
@@ -178,6 +178,7 @@ export const PARAMS: Record<string, string> = {
   "memory.get": "",
   "outflow.revoke": "id:string",
   "outflow.answer": "id:string allow:boolean scopes?:strings workspace?:boolean",
+  "outflow.tailcat": "on:boolean",
   "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
@@ -370,7 +371,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":
-      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["profile", "model", "effort", "fast", "context", "repick", "afresh"]), session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["runtime", "profile", "model", "effort", "fast", "context", "repick", "afresh"]), session("key"));
     case "chat.archive": {
       const method = p.bool("archived") ? "POST" : "DELETE";
       const fallback = op(method, () => `/sessions/${p.at("session")}/archive`, null, session("session"));
@@ -641,6 +642,10 @@ function stationOp(name: string, params: unknown): Request | null {
     // refused (docs/data-outflow.md). Its program takes the token the next time it asks.
     case "outflow.answer":
       return op("POST", () => `/outflow/requests/${p.at("id")}`, p.pick(["allow", "scopes", "workspace"]), { kind: "outflowGrants" });
+    // Programs of other machines let ask through Tailcat, or no longer (docs/data-outflow.md): an admin's switch; how
+    // it is, with the address to give, comes back in the overview (`outflowTailcat`).
+    case "outflow.tailcat":
+      return op("POST", () => "/outflow/tailcat", p.pick(["on"]), OVERVIEW);
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);

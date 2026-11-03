@@ -12,7 +12,8 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
 import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Member, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
-import { type Stands, answerOf, answeredBlocks, loginBlocks, loginCodeOf, loginEnteredBlocks, markdown, questionBlocks, standsBlock, standsText } from "./cards.ts";
+import { type CardEnd, endedWords } from "../connects/card-ends.ts";
+import { type Stands, answerOf, answeredBlocks, endedBlocks, loginBlocks, loginCodeOf, loginEnteredBlocks, markdown, questionBlocks, standsBlock, standsText } from "./cards.ts";
 import { ThreadStatus } from "./status.ts";
 import { type Params, SlackClient, field } from "./web.ts";
 import { wall } from "../ops/fibers.ts";
@@ -246,8 +247,11 @@ export class SlackSurface extends ConnectedSurface {
   readonly botToken: string;
   readonly client: SlackClient;
   private channels = new Map<string, string | null>();
-  /// The questions answered (their messages' ts): a second press before the card changed is not said again.
+  /// The questions answered or closed (their messages' ts): a second press before the card changed is not said again.
   private answered = new Set<string>();
+  /// The questions posted after words too long for them (by the ts `post` gave, the first part's): their own message's
+  /// ts and words. One within QUESTION_CHARS is the message `post` gave. Kept while connected.
+  private questions = new Map<string, { ts: string; text: string }>();
   /// Each thread's newest message as the station saw it (by `channel/threadTs`), the bot's with what it posted (to be
   /// changed: `standsAt`), anyone else's with null; and where the thread stands said at its end: on the bot's message
   /// (`mine`, what it said before) or in a message of its own (null). Kept while connected: a restart forgets them.
@@ -359,7 +363,16 @@ export class SlackSurface extends ConnectedSurface {
       else asking = parts.pop() ?? "";
     }
     for (const part of parts) await send(part, [markdown(part)]);
-    if (question) await send(asking, question.type === "login" ? loginBlocks(asking, stationLang()) : questionBlocks(asking, question, stationLang()), true);
+    if (question) {
+      const before = first;
+      await send(asking, question.type === "login" ? loginBlocks(asking, stationLang()) : questionBlocks(asking, question, stationLang()), true);
+      const ts = this.ends.get(`${thread.channel}/${thread.threadTs}`)?.ts;
+      if (before !== null && ts !== undefined) {
+        this.questions.set(before, { ts, text: asking });
+        // (the oldest go once there are many: long answered or closed)
+        if (this.questions.size > 500) this.questions.delete(this.questions.keys().next().value!);
+      }
+    }
     if (uploaded.length > 0) {
       const list = JSON.stringify(uploaded.map(([id, title]) => ({ id, title })));
       const shared = await this.client.api(
@@ -413,6 +426,9 @@ export class SlackSurface extends ConnectedSurface {
     } catch (error) {
       return void (await tell(tr(lang, "station.slack.loginRefused", { error: (error as Error).message })));
     }
+    // (entered: the login's end leaves it saying so)
+    this.answered.add(asked);
+    if (this.answered.size > 500) this.answered.delete(this.answered.values().next().value!);
     const asking = text(payload?.message?.text);
     const entered = loginEnteredBlocks(asking, (await this.userName(user)) ?? "", lang);
     const key = `${channel}/${threadTs}`;
@@ -485,6 +501,26 @@ export class SlackSurface extends ConnectedSurface {
       ],
       this.botToken,
     );
+  }
+
+  /// A question that stopped waiting other than by its button (connects/card-ends.ts), a login's field among them:
+  /// changed to say why, its buttons gone. One pressed is changed by `answer` (a login's by `enterCode`); one after words too long for it, whose own message is not known any more
+  /// (a restart since), stays as it is.
+  async cardEnded(thread: ThreadRef, ts: string, said: string, card: Json, end: CardEnd): Promise<void> {
+    if (card?.type !== "options" && card?.type !== "text" && card?.type !== "login") return;
+    const asked = this.questions.get(ts) ?? (Array.from(said).length <= QUESTION_CHARS ? { ts, text: said } : null);
+    if (asked === null || this.answered.has(asked.ts)) return;
+    this.answered.add(asked.ts);
+    if (this.answered.size > 500) this.answered.delete(this.answered.values().next().value!);
+    const lang = stationLang();
+    const who = end.why === "message" ? await this.userName(end.by).catch(() => null) : null;
+    const blocks = endedBlocks(asked.text, endedWords(card, end, who, lang));
+    // (its buttons gone for good: never put back with where the thread stands)
+    const key = `${thread.channel}/${thread.threadTs}`;
+    if (this.stands.get(key)?.ts === asked.ts) this.stands.delete(key);
+    const last = this.ends.get(key);
+    if (last?.ts === asked.ts && last.mine !== null) last.mine = { text: asked.text, blocks };
+    await this.update(thread.channel, asked.ts, asked.text, blocks);
   }
 
   /// The channels the bot is in, public and private (users.conversations), at most a couple of thousand.

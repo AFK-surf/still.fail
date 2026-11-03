@@ -10,7 +10,7 @@ export type Watcher = { name: string; control: boolean; tell(state: Record<strin
 
 /// What a person is told of a source's access when something is missing: whether it can be seen and driven, why not,
 /// in their language, and what to turn on.
-export type AccessShown = { capture: boolean; control: boolean; message: string; app?: string; path?: string; asking?: boolean };
+export type AccessShown = { capture: boolean; control: boolean; message: string; app?: string; path?: string; asking?: boolean; help?: "linux-desktop" };
 
 /// A source that cannot be opened now, and why, in words a person reads (`key` of client/i18n's station part).
 export class ScreenRefused extends Error {
@@ -43,7 +43,8 @@ export function accessShown(access: ScreenAccess | undefined, lang: Lang): Acces
         // Where it is granted: the window on the machine, up now or once the screen is opened.
         tr(lang, access.asking ? "station.screen.asking" : "station.screen.toAsk", named),
       ].join(" ");
-  return { capture: access.capture, control: access.control, message, ...(access.app ? { app: access.app } : {}), ...(access.path ? { path: access.path } : {}), ...(access.asking ? { asking: true } : {}) };
+  const help = access.reason && ["linuxNoDisplay", "linuxTools", "linuxToolsFailed", "linuxUnavailable", "linuxPortalUnavailable", "linuxX11FallbackUnavailable"].includes(access.reason);
+  return { capture: access.capture, control: access.control, message, ...(access.app ? { app: access.app } : {}), ...(access.path ? { path: access.path } : {}), ...(access.asking ? { asking: true } : {}), ...(help ? { help: "linux-desktop" as const } : {}) };
 }
 
 export type HubOptions = {

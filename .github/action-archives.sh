@@ -1,8 +1,8 @@
 #!/bin/sh
-# Mini1's runners' action archive cache (ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE in each runner's .env, docs/operations.md):
+# macos-ci's runners' action archive cache (ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE in each runner's .env, docs/operations.md):
 # the archive of every action the repository's workflows use, at the commit its ref is now, as the runner looks for it
 # (<owner>_<repo>/<sha>.tar.gz). A job's runner copies it from there instead of downloading it, every job, through the
-# proxy mini1's DNS sends GitHub to (~0.7 GB a day, 2026-10-23). Filled by .github/actions/setup-mac, once an hour at most.
+# proxy macos-ci's DNS sends GitHub to (~0.7 GB a day, 2026-10-23). Filled by .github/actions/setup-mac, once an hour at most.
 #   sh .github/action-archives.sh <a checkout of the repository> <cache directory>
 set -eu
 repo=$1; cache=$2

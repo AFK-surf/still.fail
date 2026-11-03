@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
@@ -189,6 +189,7 @@ export class Store {
       }
       db.exec(SCHEMA);
       addArchiveColumns(db);
+      addRuntimeSessionRuntime(db);
       addThreadIndexes(db);
       addLetterColumn(db);
       addClientColumn(db);
@@ -423,6 +424,11 @@ export class Store {
     this.#updateSession(key, "UPDATE sessions SET profile = ?1, profile_pinned = ?2 WHERE key = ?3", profile, flag(pinned), key);
   }
 
+  /// A runtime change is one setting: readers must never see a runtime paired with another's profile or model.
+  setSessionRuntime(key: string, runtime: string, profile: string, pinned: boolean, model: string | null, effort: string | null, fast: boolean | null, context: number | null): void {
+    this.#updateSession(key, "UPDATE sessions SET runtime = ?1, profile = ?2, profile_pinned = ?3, model = ?4, effort = ?5, fast = ?6, context = ?7 WHERE key = ?8", runtime, profile, flag(pinned), model, effort, optFlag(fast), context, key);
+  }
+
   /// A session's model and effort from its next start on (null: the runtime's default).
   setSessionModel(key: string, model: string | null, effort: string | null): void {
     this.#updateSession(key, "UPDATE sessions SET model = ?1, effort = ?2 WHERE key = ?3", model, effort, key);
@@ -503,7 +509,7 @@ export class Store {
   /// A runtime session the session runs in, on `profile` (null: not known, a profile it had is kept).
   ranIn(key: string, id: string, profile: string | null): void {
     this.#run(
-      `INSERT INTO runtime_sessions (session_key, id, profile, at) VALUES (?1, ?2, ?3, ?4)
+      `INSERT INTO runtime_sessions (session_key, id, profile, at, runtime) VALUES (?1, ?2, ?3, ?4, (SELECT runtime FROM sessions WHERE key = ?1))
        ON CONFLICT (session_key, id) DO UPDATE SET profile = COALESCE(excluded.profile, profile)`,
       key, id, profile, this.now(),
     );
@@ -696,6 +702,18 @@ export class Store {
     const current = this.getSession(key)?.runtimeSessionId ?? null;
     const ids: string[] = this.#all("SELECT id FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key).map((r) => r.id);
     return current === null ? ids : [...ids.filter((id) => id !== current), current];
+  }
+
+  /// Each recorded transcript's runtime and profile, in conversation order.
+  runtimeSessionSources(key: string): { id: string; runtime: string; profile: string | null }[] {
+    const row = this.getSession(key);
+    if (!row) return [];
+    const sources = this.#all("SELECT id, runtime, profile FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key)
+      .map((r) => ({ id: r.id as string, runtime: (r.runtime ?? row.runtime) as string, profile: (r.profile ?? null) as string | null }));
+    const current = row.runtimeSessionId;
+    if (current === null) return sources;
+    const entry = sources.find((s) => s.id === current) ?? { id: current, runtime: row.runtime, profile: row.profile };
+    return [...sources.filter((s) => s.id !== current), entry];
   }
 
   setRunning(key: string, running: boolean): void {
@@ -1058,7 +1076,7 @@ export class Store {
       const options = m.options ?? undefined;
       const entry = this.#append(
         {
-          agentIdentity: undefined, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
+          agentIdentity: m.agentIdentity, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
           author: m.author, text: m.text, attachments: m.attachments ?? [], quotes: m.quotes ?? [], declared: m.declared ?? null,
           client: m.client ?? null, profile: m.profile ?? null, runtime: m.runtime ?? null,
           // An options card is kept as options too (what stations and clients from before cards read).
@@ -1502,6 +1520,42 @@ export class Store {
     return card === undefined || !message ? null : [toMessage(message), card];
   }
 
+  /// The card a new card (the post at `n`) replaced: the thread's card before it, if it was still pending then (no
+  /// person wrote after it, nor was it closed or withdrawn).
+  cardReplacedBy(thread: number, n: number): [MessageRow, Json] | null {
+    const carded = this.#one("SELECT 1 FROM entries WHERE thread = ? AND n = ? AND kind = 'message' AND (card IS NOT NULL OR options IS NOT NULL)", thread, n);
+    if (!carded) return null;
+    const cardN: number | null = this.#one(CARD_BEFORE, thread, n).n;
+    const optionsN: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
+    const asked = cardN === null ? optionsN : optionsN === null ? cardN : Math.max(cardN, optionsN);
+    if (asked === null) return null;
+    const answered = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n);
+    const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked);
+    if (answered || closed) return null;
+    return this.#cardPost(thread, asked);
+  }
+
+  /// A card closed without a message (closed_cards) while it waited (no person had written after it, nor a newer card
+  /// replaced it: one answered and withdrawn after is not closed again): its post, its card, and who closed it (its own
+  /// agent withdrawing it, or a person's choice).
+  closedCard(thread: number, n: number): [MessageRow, Json, string] | null {
+    const by = this.#one("SELECT viewer FROM closed_cards WHERE thread = ? AND n = ?", thread, n);
+    const after = this.#one(
+      "SELECT 1 FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND (author_kind = 'person' OR card IS NOT NULL OR options IS NOT NULL) LIMIT 1",
+      thread, n,
+    );
+    const found = by === undefined || after !== undefined ? null : this.#cardPost(thread, n);
+    return found === null ? null : [...found, by.viewer as string];
+  }
+
+  /// The post at `n` as merged, and its card; null where it has none.
+  #cardPost(thread: number, n: number): [MessageRow, Json] | null {
+    const row = this.#one("SELECT card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+    const card = row ? cardOf(row.card, row.options) : undefined;
+    const message = card === undefined ? undefined : this.#one("SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
+    return card === undefined || !message ? null : [toMessage(message), card];
+  }
+
   /// The message an agent's need without a card asks with, while no person has written after it: the one its turn is
   /// about (`about`, an entry n), else the agent's latest message during the turn (`during`: from, to, ms); with the two
   /// messages before it. Null in an archived chat, or when that message has a card.
@@ -1582,8 +1636,8 @@ export class Store {
         thread, ts, agent,
       );
       if (r === undefined) return false;
-      this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, r.n, agent, this.now());
-      changes.push({ type: "thread", id: thread, entries: [] });
+      const closed = this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, r.n, agent, this.now()) > 0;
+      changes.push({ type: "thread", id: thread, entries: [], ...(closed ? { closed: r.n } : {}) });
       return true;
     });
   }
@@ -1617,7 +1671,7 @@ export class Store {
       const rows = this.#all(LOGIN_CARDS, `%"login":${JSON.stringify(login)}%`);
       for (const r of rows) {
         this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", r.thread, r.n, r.author, this.now());
-        changes.push({ type: "thread", id: r.thread, entries: [] });
+        changes.push({ type: "thread", id: r.thread, entries: [], closed: r.n });
       }
       return [...new Set(rows.map((r) => r.author as string))];
     });
@@ -1661,7 +1715,7 @@ export class Store {
       const told = closed as { agent: string; changed: boolean } | null;
       if (told !== null) {
         if (told.changed) changes.push({ type: "session", key: told.agent });
-        changes.push({ type: "thread", id: thread, entries: [] });
+        changes.push({ type: "thread", id: thread, entries: [], closed: n });
       }
       return done;
     });
@@ -2195,9 +2249,9 @@ export class Store {
 
   /// Appends an entry as the thread's next.
   #append(entry: EntryRow, changes: Changes): EntryRow {
-    if (entry.kind === "message" && entry.authorKind === "agent") {
-      const r = this.#one("SELECT model, effort FROM sessions WHERE key = ?", entry.author);
-      entry.agentIdentity = r ? { model: r.model, effort: r.effort } : undefined;
+    if (entry.kind === "message" && entry.authorKind === "agent" && entry.agentIdentity === undefined) {
+      const r = this.#one("SELECT s.model, s.effort, COALESCE(r.runtime, s.runtime) AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
+      entry.agentIdentity = r ? { model: r.model, effort: r.effort, runtime: r.runtime } : undefined;
     }
     this.#tx(() => {
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;

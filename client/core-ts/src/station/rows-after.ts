@@ -34,6 +34,9 @@ function lastOf(e: J): J {
   const text = typeof e.text === "string" ? [...trim(e.text)].slice(0, LAST_CHARS).join("") : null;
   const last: J = { seq: e.n, authorKind: e.authorKind, author: e.author, authorName: e.authorName ?? null, text, createdAt: e.at };
   if (e.authorPicture !== undefined) last.authorPicture = e.authorPicture;
+  if (e.agentIdentity != null) last.agentIdentity = e.agentIdentity;
+  if (e.authorModel !== undefined) last.authorModel = e.authorModel;
+  if (e.authorRuntime !== undefined) last.authorRuntime = e.authorRuntime;
   return last;
 }
 

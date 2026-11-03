@@ -81,6 +81,7 @@ async function keptMemory(d: OverviewDeps, pgids: number[]): Promise<Map<number,
 
 /// The data disk's room: what clients warn of when it runs low.
 function diskRoom(path: string): unknown {
+  if (process.env.STILLFAIL_TEST_HOST === "1") return { freeBytes: 50_000_000_000, totalBytes: 100_000_000_000 };
   try {
     const s = statfsSync(path);
     return { freeBytes: s.bavail * s.bsize, totalBytes: s.blocks * s.bsize };
@@ -133,6 +134,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     mesh: meshStatus(d.cloud, viewer),
     connects,
     profiles,
+    sessionRuntimeChange: true,
     // Who made each model its profiles run, and its series, as the model catalog says (accounts/catalog.ts): the
     // clients group and mark models by them, and by the names alone where it says none.
     modelMakers: modelMakers(profiles),

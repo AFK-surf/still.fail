@@ -553,6 +553,10 @@ export const routes = (tools: Tools): Route[] => {
               const i = input(r);
               const pick = (name: string): string | null | undefined => (!(name in i) ? undefined : i[name] === null ? null : text(i[name]));
               const change: SessionChange = {};
+              if ("runtime" in i) {
+                if (typeof i.runtime !== "string" || i.runtime === "") throw new Refused(400, "runtime must be a name");
+                change.runtime = i.runtime;
+              }
               const model = pick("model");
               const effort = pick("effort");
               if (model !== undefined) change.model = model;

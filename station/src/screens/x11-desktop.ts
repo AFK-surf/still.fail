@@ -162,7 +162,7 @@ function fitted(size: Size, maxWidth: number, maxHeight: number): Size {
 
 // DOM KeyboardEvent.code is a physical position. Xorg's evdev keycodes are Linux input codes plus 8: sending
 // keysyms instead would move the key on a different layout (KeyQ, for example, is 'a' on French AZERTY).
-const EVDEV: Record<string, number> = {
+export const EVDEV: Record<string, number> = {
   Escape: 1, Digit1: 2, Digit2: 3, Digit3: 4, Digit4: 5, Digit5: 6, Digit6: 7, Digit7: 8, Digit8: 9, Digit9: 10, Digit0: 11,
   Minus: 12, Equal: 13, Backspace: 14, Tab: 15,
   KeyQ: 16, KeyW: 17, KeyE: 18, KeyR: 19, KeyT: 20, KeyY: 21, KeyU: 22, KeyI: 23, KeyO: 24, KeyP: 25,

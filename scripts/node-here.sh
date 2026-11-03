@@ -1,7 +1,7 @@
 #!/bin/sh
 # The Node the station runs on (.node-version), on this machine: ~/.local/node-v<version>-<platform>, got from
 # nodejs.org once (checked against its SHASUMS256) when it is not there. Prints its bin directory, for PATH: what the
-# Macs that build and check (mini1's runners: .github/actions/setup-mac; studio) run what they run on.
+# Macs that build and check (the CI Mac's runners: .github/actions/setup-mac; a test Mac) run what they run on.
 #   node-here.sh
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)

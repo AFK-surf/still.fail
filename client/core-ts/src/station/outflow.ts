@@ -19,13 +19,15 @@ function programShown(g: J): J {
   const identity = isObject(get(g, "identity")) ? (get(g, "identity") as J) : {};
   const path = str(identity.path) ?? "";
   const signed = identity.valid === true && str(identity.teamId) !== null;
+  // Come from another machine through the Tailcat link: no program the system can name, only one given the address.
+  const tailcat = identity.via === "tailcat";
   const said = isObject(get(g, "said")) ? (get(g, "said") as J) : {};
   return {
     id: String(get(g, "id")),
-    program: str(identity.app) ?? str(identity.identifier) ?? path.split("/").at(-1) ?? path,
+    program: tailcat ? (str(said.name) ?? "Tailcat") : (str(identity.app) ?? str(identity.identifier) ?? path.split("/").at(-1) ?? path),
     signed,
     signer: signed ? (str(identity.signer) ?? str(identity.teamId)) : null,
-    signedText: signed ? t("core-views.outflow.signedBy", { signer: str(identity.signer) ?? str(identity.teamId) ?? "" }) : t("core-views.outflow.unsigned"),
+    signedText: tailcat ? t("core-views.outflow.viaTailcat") : signed ? t("core-views.outflow.signedBy", { signer: str(identity.signer) ?? str(identity.teamId) ?? "" }) : t("core-views.outflow.unsigned"),
     teamId: str(identity.teamId),
     identifier: str(identity.identifier),
     path,
