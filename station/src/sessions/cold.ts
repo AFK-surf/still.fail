@@ -7,6 +7,7 @@ import { existsSync, realpathSync, statSync } from "node:fs";
 import { access, readdir, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { log } from "../ops/log.ts";
+import { wall } from "../ops/fibers.ts";
 import { realOutside } from "../ops/places.ts";
 import { homesFirst, sessionPlaces, transcriptPaths } from "../read/transcript.ts";
 import * as archive from "./archive.ts";
@@ -15,7 +16,19 @@ import { measureRoom, roomOf, roomOfSoon, safeToRemove, within } from "./footpri
 import type { ColdStorage, Hub } from "./hub.ts";
 
 /// Links followed, never into a folder macOS protects (a session continued there, a job's directory: ops/places.ts).
-const canonical = (path: string): string | null => realOutside(path);
+/// Each path's kept a minute: followed a folder at a time on the station's thread for every session and job in use, at
+/// each look as a session is packed, 33 of them held the station 2.4 s on ccvm short of memory (2026-11-03).
+const followed = new Map<string, { at: number; real: string | null }>();
+const FOLLOWED_MS = 60_000;
+const canonical = (path: string): string | null => {
+  const now = wall.now();
+  const kept = followed.get(path);
+  if (kept !== undefined && now - kept.at < FOLLOWED_MS) return kept.real;
+  const real = realOutside(path);
+  followed.set(path, { at: now, real });
+  if (followed.size > 1024) followed.delete(followed.keys().next().value!);
+  return real;
+};
 
 export class ColdRooms implements ColdStorage {
   /// The hub it works for (made after it).
