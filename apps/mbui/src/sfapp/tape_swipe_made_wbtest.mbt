@@ -111,7 +111,7 @@ fn tape_changelog_made(made? : Bool = true) -> (@ui.Tester, @ui.Laid, Int) raise
 }
 
 ///|
-test "on the tape 更新日志 made once over 关于, a swipe from its edge as its old view takes one: across and back where it began, 关于 again as its old view; across, 关于 again" {
+test "on the tape 更新日志 made once over 关于, a swipe from its edge as its old view takes one: across and back where it began, the page in use; across, 关于 again" {
   // (across and back where it began, let go there: what is shown then, how deep, the tape's pane)
   let back = fn(made : Bool) raise {
     let (t, p, depth) = tape_changelog_made(made~)
@@ -140,11 +140,11 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge as i
     @sfdesk.pane_makes.val = true
     (app.nav.depth() - depth, app.nav.top() == Setting(About))
   }
-  // (across and back where it began, let go there: 关于 again all the same, as its old view's swipe does there (the
-  // stack's own back over 关于, not the tape's): no calling it off so)
+  // (across and back where it began, let go there: taken by the stack's own back over 关于 (the tape not pulled), called
+  // off, 更新日志 still on top, as its old view's is)
   let made_back = back(true)
   assert_eq(made_back, back(false))
-  assert_eq(made_back, (false, -1, true, @sfdesk.TapePane::Page), msg="\{made_back}")
+  assert_eq(made_back, (false, 0, false, @sfdesk.TapePane::Page), msg="\{made_back}")
   let made = across(true)
   assert_eq(made, across(false))
   assert_eq(made, (-1, true))
