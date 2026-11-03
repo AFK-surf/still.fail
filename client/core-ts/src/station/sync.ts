@@ -36,7 +36,7 @@ import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
-import { dayOf, holdsWhole, sameDetailCoverage, withPart } from "./usage-part.ts";
+import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "./usage-part.ts";
 import { threadAfter, threadAfterLetters } from "./thread-after.ts";
 import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "./rows-after.ts";
 import { type Marks, marksOf, marksWith, rowsMade } from "./rows-made.ts";
@@ -972,7 +972,8 @@ export class StationsSync {
         };
         return this.#read(address, topic, `/usage?from=${part.from}&tz=${offset}`, put, ctx);
       }
-      return this.#read(address, topic, `/usage?from=${from}&tz=${offset}&history=1`, undefined, ctx);
+      const range = usageHistoryRange(now, offset);
+      return this.#read(address, topic, `/usage?from=${from}&tz=${offset}&history=1&historyFrom=${range.from}&historyTo=${range.to}`, undefined, ctx);
     });
   }
 

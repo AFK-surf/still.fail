@@ -11,6 +11,16 @@ import { installUsageDetail } from "../src/store/usage-detail.ts";
 import { dropUsageIndexStep, stopUsageIndexes, usageIndexBatchSql } from "../src/store/usage-retire.ts";
 import { retireAfterPrevious } from "../src/usage/module.ts";
 
+test("installing compact statistics tells a waiting page even with no calls", async () => {
+  const store = Store.open(":memory:");
+  const told: unknown[] = [];
+  const stop = store.subscribe((change) => { if (change.type === "usage") told.push(change); });
+  try {
+    await Effect.runPromise(retireAfterPrevious(store, Promise.resolve()));
+    assert.deepEqual(told, [{ type: "usage", sessions: [], statisticsOnly: true }]);
+  } finally { stop(); store.close(); }
+});
+
 const call = (id: string, input: number) => [{ id, at: 1_700_000_000_000, model: "m", subagent: false, fast: false,
   input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100, window: 1000 },
   { turn: null, person: null, thread: null, profile: "cc" }] as const;
@@ -35,10 +45,9 @@ test("retirement waits for handover, removes the large indexes and keeps recordi
     write(store, "new", 4);
     assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage").get() as { n: number }).n, 3);
     assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input, r.output]), [[3, 9, 3]]);
-    assert.deepEqual(store.lastContexts("a", 5), []);
-    assert.throws(() => usageGroups(makeStore(store.db, "."), 0n, 2_000_000_000_000n, 0n),
-      (error: unknown) => (error as { status?: number }).status === 503 && /unavailable/.test((error as Error).message));
-    assert.throws(() => usageByDay(makeStore(store.db, "."), 0n), /being indexed|unavailable/);
+    assert.equal(store.lastContexts("a", 5).length, 1);
+    assert.deepEqual(usageGroups(makeStore(store.db, "."), 0n, 9_223_372_036_854_775_807n, 0n).map((r) => [r.calls, r.input]), [[1, 4]]);
+    assert.deepEqual(usageByDay(makeStore(store.db, "."), 0n).map((r) => [r.calls, r.tokens]), [[3, 12]]);
   } finally { store.close(); }
 });
 
@@ -74,10 +83,13 @@ test("the old indexes stop being written even when their cleanup worker cannot s
     handover();
     await Effect.runPromise(Fiber.join(fiber));
     assert.ok(table(store, "usage_retired_detail"));
+    assert.ok(table(store, "usage_compact"), "new statistics start even when cleanup cannot start");
     assert.ok(table(store, "usage_detail"), "the failed worker did not delete the old rows");
     write(store, "after", 4);
     assert.equal(count(), atHandover, "new calls no longer write the old detail");
     assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input]), [[3, 9]]);
+    assert.deepEqual(usageByDay(makeStore(store.db, dir), 0n).map((r) => [r.calls, r.tokens]), [[3, 12]],
+      "the previous complete daily totals and the new call are both kept");
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -107,6 +119,24 @@ test("stopping index writers yields to another database writer and retries", asy
     write(store, "after", 3);
     assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input]), [[2, 5]]);
   } finally { blocker.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a failed compact installation still stops the old index writers", async () => {
+  const store = Store.open(":memory:");
+  try {
+    session(store);
+    write(store, "before", 2);
+    store.db.setAuthorizer((action, name) =>
+      action === constants.SQLITE_CREATE_TABLE && name === "usage_compact" ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    await Effect.runPromise(retireAfterPrevious(store, Promise.resolve()));
+    store.db.setAuthorizer(null);
+    assert.ok(table(store, "usage_retired_detail"));
+    assert.equal(table(store, "usage_compact"), undefined);
+    assert.equal(table(store, "usage_detail"), undefined, "in-memory cleanup still removes the old index");
+    write(store, "after", 3);
+    assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM usage").get() as { n: number }).n, 2);
+    assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input]), [[2, 5]]);
+  } finally { store.db.setAuthorizer(null); store.close(); }
 });
 
 test("retirement deletes at most one primary-key batch before releasing its write lock", () => {
