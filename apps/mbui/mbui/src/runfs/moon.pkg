@@ -1,0 +1,3 @@
+options(
+  targets: { "runfs.mbt": [ "wasm", "wasm-gc" ] },
+)

@@ -11,9 +11,10 @@ import {
 import {
   "moonbitlang/core/env",
   "mbui/dmath",
+  "mbui/runfs",
 } for "wbtest"
 
 options(
-  targets: { "dl_print_js_wbtest.mbt": [ "js" ], "dl_print_native_wbtest.mbt": [ "native" ] },
+  targets: { "dl_print_js_wbtest.mbt": [ "js" ], "dl_print_native_wbtest.mbt": [ "native" ], "dl_print_wasm_wbtest.mbt": [ "wasm", "wasm-gc" ] },
   "native-stub": [ "read_file.c" ],
 )

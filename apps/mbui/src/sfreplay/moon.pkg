@@ -11,6 +11,8 @@ import {
   "mbui/motion",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+  "mbui/runfs",
 }
 
 options(
@@ -19,6 +21,8 @@ options(
     "emit_native.mbt": [ "native" ],
     "trace_js.mbt": [ "js" ],
     "trace_native.mbt": [ "native" ],
+    "emit_wasm.mbt": [ "wasm", "wasm-gc" ],
+    "trace_wasm.mbt": [ "wasm", "wasm-gc" ],
   },
   "native-stub": [ "trace_files.c" ],
 )
