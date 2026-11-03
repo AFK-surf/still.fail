@@ -2735,7 +2735,7 @@ test("on another account a conversation goes on in a new runtime session, its hi
   transcript(second.id(), "second", 1_000);
   assert.deepEqual(r.hub.live.before(key, 100, 100)![1].filter((e) => e.kind === "user").map((e) => e.text), ["first", "second"]);
   // Its process gone, on the same account: taken up as before.
-  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", title: "接着做", kind: "final" });
   second.complete();
   await settle();
   await r.hub.evict(key);
@@ -2841,6 +2841,7 @@ test("a session from before a change is told it once, and a new one never", asyn
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
   assert.ok(!r.claude.last().prompts[0]!.includes("still.fail changed how you work"), "a new session has today's instructions");
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, title: "两件事" });
   await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   r.claude.last().complete();
   await settle();
