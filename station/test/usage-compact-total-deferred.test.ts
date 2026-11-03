@@ -123,19 +123,19 @@ for (const count of [128, 130]) test(`a page is told when its total of ${count} 
         cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
       store.recordUsage("/a", { session: "a", offset: i + 1, model: "m" }, "claude", [[call, owner]]);
     }
-    const told = new Promise<{ calls: number; tokens: number } | null>((resolve, reject) => {
+    const told = new Promise<{ total: { calls: number; tokens: number } | null; from: number | undefined }>((resolve, reject) => {
       const abort = () => { unsubscribe(); reject(t.signal.reason); };
       const unsubscribe = store.subscribe((change) => {
         if (change.type !== "usage" || !change.statisticsOnly) return;
         unsubscribe();
         t.signal.removeEventListener("abort", abort);
-        resolve(compact.compactTotal(store.db, { workspace: "A", home: false }));
+        resolve({ total: compact.compactTotal(store.db, { workspace: "A", home: false }), from: change.from });
       });
       t.signal.addEventListener("abort", abort, { once: true });
     });
     mover = watchCompactMoves(store, Promise.resolve());
     mover.read({ workspace: "A", home: false });
-    assert.deepEqual(await told, { calls: count, tokens: count * 2 });
+    assert.deepEqual(await told, { total: { calls: count, tokens: count * 2 }, from: 0 });
   } finally {
     if (mover !== null) await mover.close();
     store.close();
