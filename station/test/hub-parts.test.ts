@@ -228,6 +228,21 @@ test("a watched session's usage is what the counter recorded, told again as it r
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("usage changes read only the affected watched sessions", () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  writeFileSync(path, line("one", "m1"));
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }));
+  const read: string[] = [];
+  hub.countWith({ of: (key) => { read.push(key); return null; }, ask: () => {} });
+  hub.subscribe("a", 0, null, () => {});
+  hub.subscribe("b", 0, null, () => {});
+  read.length = 0;
+  hub.usageCounted(["a"]);
+  assert.deepEqual(read, ["a"]);
+  rmSync(dir, { recursive: true, force: true });
+});
+
 /// What a LiveHub's watch on a transcript does when the file changes.
 const watched = (hub: LiveHub, key: string) => (hub as any).soon(key);
 

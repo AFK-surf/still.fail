@@ -34,6 +34,7 @@ import { installUsageMinutes } from "./usage-minutes.ts";
 import { installUsageDetail } from "./usage-detail.ts";
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
+import { installUsageSummaryRefresh } from "./usage-summary-refresh.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
@@ -43,6 +44,8 @@ export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL O
 export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+/// The next old session to upgrade (one indexed seek, independent of the number already visited).
+export const USAGE_SUMMARY_AFTER = "SELECT key FROM sessions WHERE key > ? ORDER BY key LIMIT 1";
 /// A session's messages not delivered yet and its latest turn (`statsOf`): what is not delivered by the index of those
 /// alone. By (session, thread), SQLite went over every message the session was ever given, and every turn was counted
 /// besides, for no one: auto-archiving looked at each session shown so, on the main thread, 13 s and 22 s on ccvm short
@@ -213,6 +216,7 @@ export class Store {
       addLetters(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
+      installUsageSummaryRefresh(db);
       addSessionTurns(db);
       addSessionWork(db, clock.currentTimeMillisUnsafe());
       addTellIndexes(db);
@@ -278,9 +282,9 @@ export class Store {
     }
   }
 
-  /// rusqlite's transaction(): BEGIN (deferred), committed when `run` returns, rolled back when it throws.
-  #tx<T>(run: () => T): T {
-    this.db.exec("BEGIN");
+  /// A transaction, deferred unless a read-modify-write needs the writer first; rolled back when `run` throws.
+  #tx<T>(run: () => T, immediate = false): T {
+    this.db.exec(immediate ? "BEGIN IMMEDIATE" : "BEGIN");
     let result: T;
     try {
       result = run();
@@ -459,6 +463,46 @@ export class Store {
       this.#run("INSERT INTO session_usage (session, usage) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET usage = excluded.usage", key, json);
       if (!quiet && !session.running) changes.push({ type: "session", key });
     });
+  }
+
+  /// Recount one summary and clear its dirty mark in the same write transaction. A previous process cannot write a
+  /// call between the count and clearing that mark. An upgrade cursor is committed with the summary it just visited.
+  refreshSessionUsage(key: string, calculate: () => Json | null, quiet = false, version?: number): void {
+    this.#with((changes) => this.#tx(() => {
+      const session = this.getSession(key);
+      const previous = this.#one("SELECT usage FROM session_usage WHERE session = ?", key)?.usage;
+      const value = session === null ? null : calculate();
+      const json = value === null ? null : JSON.stringify(value);
+      if (json === null && previous !== undefined) this.#run("DELETE FROM session_usage WHERE session = ?", key);
+      else if (json !== null && previous !== json) {
+        this.#run("INSERT INTO session_usage (session, usage) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET usage = excluded.usage", key, json);
+      }
+      if (!quiet && session !== null && (previous ?? null) !== json && !session.running) changes.push({ type: "session", key });
+      this.#run("DELETE FROM usage_summary_dirty WHERE session = ?", key);
+      if (version !== undefined) this.#run("UPDATE usage_summary_refresh SET after_key = ? WHERE id = 1 AND version = ? AND done = 0", key, version);
+    }, true));
+  }
+
+  /// Start or resume a one-time summary format upgrade. A completed version is not walked again at each start.
+  startUsageSummaryRefresh(version: number): void {
+    this.#run(`INSERT INTO usage_summary_refresh (id, version, after_key, done) VALUES (1, ?, NULL, 0)
+      ON CONFLICT (id) DO UPDATE SET version = excluded.version, after_key = NULL, done = 0
+      WHERE usage_summary_refresh.version <> excluded.version`, version);
+  }
+
+  /// One session to upgrade, or one changed by another writer. Each lookup takes at most one indexed row.
+  nextUsageSummaryRefresh(preferDirty: boolean): { key: string; upgrade: boolean } | null {
+    const progress = this.#one("SELECT after_key, done FROM usage_summary_refresh WHERE id = 1");
+    let next: Json | undefined;
+    if (progress !== undefined && progress.done === 0) {
+      next = progress.after_key === null
+        ? this.#one("SELECT key FROM sessions ORDER BY key LIMIT 1")
+        : this.#one(USAGE_SUMMARY_AFTER, progress.after_key);
+      if (next === undefined) this.#run("UPDATE usage_summary_refresh SET done = 1 WHERE id = 1");
+    }
+    const dirty = preferDirty || next === undefined ? this.#one("SELECT session FROM usage_summary_dirty ORDER BY rowid LIMIT 1") : undefined;
+    if (dirty !== undefined) return { key: dirty.session, upgrade: next?.key === dirty.session };
+    return next === undefined ? null : { key: next.key, upgrade: true };
   }
 
   /// What a session's calls used as last kept (`setSessionUsage`); null before any.

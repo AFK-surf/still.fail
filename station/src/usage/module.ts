@@ -15,30 +15,85 @@ import type { Store as StationStore } from "../store/store.ts";
 import { UsageCounter } from "./counter.ts";
 import { CompactionBackfill } from "./compaction-backfill.ts";
 
+/// Bump when the stored session summary or its prices need to be recalculated for existing sessions.
+const SUMMARY_VERSION = 1;
+/// A previous-version writer has no in-process event to wake this station; look for its dirty marks at this interval.
+const SUMMARY_POLL_MS = 1_000;
+
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
 /// None before a call. `quiet`: not told as a change of the session.
 export function keepUsage(store: StationStore, key: string, quiet = false): void {
-  const usage = usageNow(store, key);
-  if (usage !== null) store.setSessionUsage(key, usage, quiet);
+  store.refreshSessionUsage(key, () => usageNow(store, key), quiet);
 }
 
 /// Sessions' usage as `counter` records it: the live view tells it and asks the counter to count what a session at work
-/// writes; each session counted anew is kept as counted (its summary). As it starts, every session's is kept again as
-/// this station says it, told where that changed it: what a summary says grows (when its cache is over, #2340), and one
-/// kept by a station from before says it only once its session makes another call, the very call that reads its whole
-/// context again (no device is told otherwise: a device that comes back to a new station process is told what it missed,
-/// not every summary again). Some tens of ms for ccvm's 1,200 sessions. Gives what stops it.
-export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCounter): () => void {
+/// writes; each session counted anew is kept as counted. A summary format upgrade visits one session at a time after
+/// the previous process exits, and remembers its progress, rather than revisiting all sessions at each station start.
+export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCounter, previous: Promise<void> = Promise.resolve()): () => void {
   live.countWith({ of: (key) => usageNow(store, key), ask: (key) => counter.soon(key) });
-  for (const key of store.sessionKeys()) keepUsage(store, key);
-  return store.subscribe((change) => {
+  let closed = false;
+  let ready = false;
+  let preferDirty = true;
+  let pending: NodeJS.Immediate | null = null;
+  let retry: NodeJS.Timeout | null = null;
+  const schedule = () => {
+    if (ready && !closed && pending === null && retry === null) pending = setImmediate(step);
+  };
+  const wake = () => {
+    if (retry !== null) clearTimeout(retry);
+    retry = null;
+    schedule();
+  };
+  const step = () => {
+    pending = null;
+    if (closed) return;
+    try {
+      // Alternate dirty sessions with the old-format sweep so a busy session cannot hold the upgrade back.
+      const next = store.nextUsageSummaryRefresh(preferDirty);
+      preferDirty = !preferDirty;
+      if (next === null) {
+        retry = setTimeout(() => { retry = null; schedule(); }, SUMMARY_POLL_MS);
+        retry.unref();
+        return;
+      }
+      store.refreshSessionUsage(next.key, () => usageNow(store, next.key), false, next.upgrade ? SUMMARY_VERSION : undefined);
+      if (!closed) live.usageCounted([next.key]);
+      schedule();
+    } catch (error) {
+      log.error("usage", "a session summary could not be refreshed", { error: (error as Error).message });
+      if (!closed) {
+        retry = setTimeout(() => { retry = null; schedule(); }, 5_000);
+        retry.unref();
+      }
+    }
+  };
+  const unsubscribe = store.subscribe((change) => {
     // A session gone on in another conversation (its context cleared, as 换新上下文 does): its context is that one's.
     const sessions = change.type === "usage" ? change.sessions : change.type === "conversation" ? [change.key] : null;
     if (sessions === null) return;
     // Those it follows told on their streams, then every session counted anew kept as counted.
-    live.usageCounted();
-    for (const key of sessions) keepUsage(store, key);
+    live.usageCounted(sessions);
+    try {
+      // A first transcript read can report thousands of sessions at once. Their dirty marks are already durable;
+      // one session is kept immediately, while a larger set is refreshed a session at a time by the worker.
+      if (sessions.length === 1) keepUsage(store, sessions[0]!);
+    } finally {
+      // If a count failed, its dirty mark remains and the background refresh can try again.
+      wake();
+    }
   });
+  void previous.then(() => {
+    if (closed) return;
+    store.startUsageSummaryRefresh(SUMMARY_VERSION);
+    ready = true;
+    schedule();
+  }).catch((error) => log.error("usage", "session summaries could not start", { error: (error as Error).message }));
+  return () => {
+    closed = true;
+    unsubscribe();
+    if (pending !== null) clearImmediate(pending);
+    if (retry !== null) clearTimeout(retry);
+  };
 }
 
 export const UsageLive = Layer.effectDiscard(
@@ -61,7 +116,7 @@ export const UsageLive = Layer.effectDiscard(
     );
     usage.start();
     yield* Effect.acquireRelease(
-      Effect.sync(() => keepCounted(store, hub.live, usage)),
+      Effect.sync(() => keepCounted(store, hub.live, usage, previous.exited)),
       (unsubscribe) => Effect.sync(unsubscribe),
     );
     (yield* Parts).routes((tools) => usageRoutes(tools, () => usage.readingAll()));

@@ -732,6 +732,7 @@ test("as the station starts, a summary a station from before kept is kept as it 
       if (c.type === "session") told.push(c.key);
     });
     stop = keepCounted(r.store, r.hub.live, counter);
+    await until("the old usage summary is refreshed", () => r.store.sessionUsage(key)?.cacheMs === now.cacheMs);
     unsubscribe();
     assert.deepEqual(r.store.sessionUsage(key), now, "kept as this station says it");
     assert.deepEqual(told, [key], "told, as a device holds the summary from before");
@@ -741,6 +742,8 @@ test("as the station starts, a summary a station from before kept is kept as it 
       if (c.type === "session") told.push(c.key);
     });
     stop = keepCounted(r.store, r.hub.live, counter);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
     again();
     assert.deepEqual(told, [], "the same again: nothing told");
   } finally {

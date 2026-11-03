@@ -158,9 +158,11 @@ export class LiveHub {
     return usage;
   }
 
-  /// The usage counter counted more: each watched session whose usage changed is told it.
-  usageCounted() {
-    for (const [key, watched] of this.watched) {
+  /// The usage counter counted more: each affected watched session whose usage changed is told it.
+  usageCounted(keys?: readonly string[]) {
+    const watchedSessions = keys === undefined ? this.watched : keys.map((key) => [key, this.watched.get(key)] as const);
+    for (const [key, watched] of watchedSessions) {
+      if (watched === undefined) continue;
       if (watched.tail === null) continue;
       const before = this.told.get(key);
       const usage = this.usageOf(key);
