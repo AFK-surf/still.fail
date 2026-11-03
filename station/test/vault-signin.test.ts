@@ -53,8 +53,9 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
     notify: (_s: string, text: string) => void told.push(text),
   };
   const timers: (() => void)[] = [];
+  const db = new DatabaseSync(":memory:");
   const signIns = new SignIns({
-    db: new DatabaseSync(":memory:"), hub, now: () => now, after: (_ms, f) => (timers.push(f), () => {}),
+    db, hub, now: () => now, after: (_ms, f) => (timers.push(f), () => {}),
     workspace: () => "ws", screenLink: (tab) => `https://app/w/ws/s/st/screen/browser%3A${tab}`, id: () => "g1",
     browser: {
       tabs: () => tabs,
@@ -78,7 +79,7 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
     },
   });
   return {
-    signIns, cards, withdrawn, told, driven, kept, used, answers, timers, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; }, pass: (ms: number) => { now += ms; },
+    db, signIns, cards, withdrawn, told, driven, kept, used, answers, timers, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; }, pass: (ms: number) => { now += ms; },
     setTabs: (t: typeof tabs) => void (tabs = t), setForm: (f: typeof form) => void (form = f),
     archive: (s: string) => {
       sessions.set(s, { archivedAt: 1 });
@@ -86,6 +87,24 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
     },
   };
 }
+
+test("an active sign-in is found without reading the session's completed sign-ins", async () => {
+  const w = world();
+  await w.signIns.ask("s1", { site: "github.com", reason: "看 PR" });
+  const insert = w.db.prepare("INSERT INTO signin_asks (id, session, owner, status, body) VALUES (?, 's1', 'pat@example.com', 'done', ?)");
+  for (let n = 0; n < 200; n++) insert.run(`old-${n}`, JSON.stringify({ id: `old-${n}`, session: "s1", site: "github.com", status: "done" }));
+  let read = 0;
+  w.db.function("count_signin", (body) => { read++; return body; });
+  const prepare = w.db.prepare.bind(w.db);
+  w.db.prepare = ((sql: string) => prepare(sql.replace("SELECT body FROM signin_asks WHERE session = ?",
+    "SELECT count_signin(body) AS body FROM signin_asks WHERE session = ?"))) as typeof w.db.prepare;
+  assert.match(await w.signIns.ask("s1", { site: "github.com" }), /waits for pat@example.com/);
+  assert.equal(read, 1, "only the active sign-in is read");
+  read = 0;
+  w.archive("s1");
+  assert.equal(read, 1, "archiving also reads only active sign-ins");
+  assert.equal(w.signIns.get("g1")!.status, "ended");
+});
 
 test("a site as asked: its host, without scheme, path, port or www.", () => {
   assert.equal(siteOf("https://www.GitHub.com/login?x=1"), "github.com");
