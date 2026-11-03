@@ -12,7 +12,7 @@ import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
-import type { Answer, Ask } from "./worker.ts";
+import type { Answer, Ask, Ready } from "./worker.ts";
 import { REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
@@ -139,7 +139,15 @@ export class Readers {
     // A reader's heap stays small: what it builds is answered and dropped.
     const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null };
-    worker.on("message", (answer: Answer) => {
+    const begun = wall.now();
+    worker.on("message", (answer: Answer | Ready) => {
+      // How long a reader took to start: a read given it as it starts waits on that (one read of 1.9 s took 18 s on
+      // ccvm short of memory, 2026-11-03, a reader started for it).
+      if ("ready" in answer) {
+        const ms = wall.now() - begun;
+        if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : "told", ...answer.ready });
+        return;
+      }
       // An abandoned read may finish while its worker is being stopped. Do not give that worker another read until it exits.
       if (slot.retiring) return;
       const asked = slot.held;

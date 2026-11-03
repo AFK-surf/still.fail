@@ -10,8 +10,12 @@ import { HttpError, setSpoken } from "./views.ts";
 
 export type Ask = { id: number; op: string; args: any; lang: Lang; names: [string, string][]; processes: [string, string][]; clientKeys: [string, string][] };
 export type Answer = { id: number; text?: string; status?: number; error?: string };
+/// Said once, as a reader is ready: how long it took from its first line (its code read in) to its store opened.
+export type Ready = { ready: { loadedMs: number; openedMs: number } };
 
+const loaded = performance.now();
 const store = openStore(workerData.data as string);
+parentPort!.postMessage({ ready: { loadedMs: Math.round(loaded), openedMs: Math.round(performance.now() - loaded) } } satisfies Ready);
 
 /// The connection a checkpoint is made on: one that may write (a read-only one may not), made at the first, and used
 /// for nothing else.

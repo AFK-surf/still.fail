@@ -395,7 +395,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
     const thread = store.getThread(s, id);
     return thread !== null && thread.surface === STILLFAIL_SURFACE && thread.hiddenAt === null ? [{ thread, sessions: store.threadSessions(s, id) }] : [];
   });
-  stage("chats");
+  stage("found");
   const listed = new Set(keys);
   const listedOne = (key: string) => {
     if (scope === null) return listed.has(key);
