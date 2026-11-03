@@ -89,15 +89,53 @@ PNG or film to inspect those settings and frame-accurate timing.
 ## Prebuilt scene renderer
 
 The macOS Apple Silicon offscreen application renderer is also available as the `mbui-film` native part. To prepare a
-small remote job from a source checkout, without synchronizing the checkout or building it on the remote station:
+small job from a source checkout, without synchronizing the checkout or building on the machine drawing the picture:
 
 ```sh
-bash scripts/media-job.sh film out/scene.drive /absolute/path/to/a-new-job [out/prepare.drive]
+job=/absolute/path/to/a-new-job
+bash scripts/media-job.sh film out/scene.drive "$job"
+# Optionally add a preparation drive as the fourth argument.
 ```
 
-Use that directory as `station_task`'s `dir`. Run `MBUI_FIXTURE=home MBUI_WIN=320x560 bash run.sh` and return
-`result.png` and `result.png.scene.json`; set `MBUI_MEDIA_KIND=film` to return `result.mp4`,
+Run `MBUI_FIXTURE=home MBUI_WIN=320x560 bash /absolute/path/to/a-new-job/run.sh` locally, or use that directory as
+`station_task`'s `dir` and run `bash run.sh`. Return `result.png` and `result.png.scene.json`; set
+`MBUI_MEDIA_KIND=film` to return `result.mp4`,
 `result.mp4.last.png`, `result.mp4.textrec` and `result.mp4.scene.json`. The ordinary `MBUI_*` scene settings still
 apply. The job obtains its exact prebuilt renderer by the source key, with the station's shared native-part cache;
-it does not build one. If the component sources have changed and that version has not been published, it fails rather
-than showing an old component. Build that changed checkout with `scripts/media.sh` instead.
+it does not build one. Each new source state needs a newly prepared job: the job always uses the key it was created
+with, even if the original checkout changes. Missing versions fail rather than showing an old component.
+
+A single prepared job can capture different fixtures, sizes and action scripts without building or preparing another
+renderer for each picture. The first argument selects a distinct output; the second and third optionally replace the
+action and preparation scripts (an empty third argument omits preparation):
+
+```sh
+MBUI_FIXTURE=home MBUI_WIN=390x844 bash "$job/run.sh" out/home-small.png
+MBUI_FIXTURE=chat-info MBUI_WIN=800x900 bash "$job/run.sh" out/info.png out/info.drive ''
+```
+
+Each picture still gets its own scene record. Capture before and after with jobs prepared from the two corresponding
+source states; use the same scene, settings and host for the comparison. Return an early picture separately from long
+test or batch tasks. A single prebuilt, offscreen picture can run on a small station or as `station_task small: true`;
+builds, videos and substantial batches are ordinary tasks.
+
+When a development version is missing from the cache, build it once on an Apple Silicon build station. Sync the same
+working tree there and pass the prepared job's `runtime.key` and the original checkout's base commit. Put the values
+in the submitted station command; local shell variables do not automatically carry over:
+
+```sh
+# In the original checkout, before submitting the station task:
+key=$(cat "$job/runtime.key")
+base=$(git rev-parse HEAD)
+# In the synced repository on the build station:
+bash apps/mbui/scripts/media-dev-build.sh "$key" apps/mbui/out/media-inbox "$base"
+```
+
+It checks the synced sources against the requested key before and after the build, reuses an existing matching
+artifact, writes `mbui-film-darwin-arm64-<key>.tar.gz` to the inbox, and installs it in the build station's shared
+cache. A station mirror without Git metadata gets
+a temporary snapshot for the source-key calculation; that snapshot is removed afterwards. Retrieve the archive and
+set `STILLFAIL_NATIVE_INBOX` to its directory for the first run of the prepared job. The native-part client validates
+the manifest and puts it in the machine's shared cache for subsequent runs. The base commit identifies the starting
+revision; the source key also identifies uncommitted component changes. Do not substitute a different key or use a
+previous binary after a source change.
