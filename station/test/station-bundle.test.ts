@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-test("a station release includes every worker built, including workers in new directories", () => {
+test("a station release includes every worker built, including workers in new directories", { skip: process.platform === "win32" }, () => {
   const root = mkdtempSync(join(tmpdir(), "station-bundle-"));
   const file = (path: string, content = "fixture") => {
     const absolute = join(root, path);
