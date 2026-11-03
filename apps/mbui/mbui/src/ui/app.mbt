@@ -946,7 +946,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     if !c.editors.contains(target) && !keeps_selection_on(target) {
       c.select_press(x, y, c.clicks)
       match c.editors.get(c.focus_allowed()) {
-        Some(st) if picked.from.base != 0 => st.anchor = st.caret
+        Some(st) if picked.from.base != NoSel => st.anchor = st.caret
         _ => ()
       }
     }

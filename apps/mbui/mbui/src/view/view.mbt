@@ -60,6 +60,8 @@ pub(all) struct Look {
   mut runs_look : RunsLook
   /// the link of its pieces held, by its first piece (-1 none): its pressed ground under it (View::runs_pressed)
   mut runs_pressed : Int
+  /// what of its words is picked with the pointer, from until (none: the same): its pieces' (View::runs_picked)
+  mut runs_picked : (Int, Int)
   /// the shadow it casts under its ground (blur, how far down, colour; 0 blur: none): View::shadow
   mut shadow : (Double, Double, Int64)
   /// the shapes it draws over its ground (their outlines, as said: what they come to drawn kept by them), and the one
@@ -145,6 +147,7 @@ pub(all) struct Content {
   runs : Array[@text.Run]
   runs_look : RunsLook
   runs_pressed : Int
+  runs_picked : (Int, Int)
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
@@ -216,6 +219,7 @@ pub(all) struct Drawn {
   runs : Array[@text.Run]
   runs_look : RunsLook
   runs_pressed : Int
+  runs_picked : (Int, Int)
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
@@ -340,6 +344,8 @@ struct Node {
   mut here_cell : @signals.Signal[(Double, Double)?]?
   /// how many times how its words are set was said (their words, pieces, look: View::words_said), made as first read
   mut said_cell : @signals.Signal[Int]?
+  /// a row of a list made by its key (View::each): the same while its key is there, whatever is made in it anew
+  mut each_row : Bool
   /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
   mut input_cell : @signals.Signal[Bool]?
   /// whether it can take the keyboard's focus, which of Enter (1) and Space (2) press it as it has it (View::focusable;
@@ -898,6 +904,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.runs = []
       n.look.runs_look = runs_plain
       n.look.runs_pressed = -1
+      n.look.runs_picked = (0, 0)
       n.look.shapes = []
       n.look.tint = 0L
       n.look.radius = 0.0
@@ -958,6 +965,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.within_cell = None
       n.here_cell = None
       n.said_cell = None
+      n.each_row = false
       n.focusable = false
       n.focus_keys = 0
       n.focus_tab = true
@@ -1015,7 +1023,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -1042,6 +1050,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         within_cell: None,
         here_cell: None,
         said_cell: None,
+        each_row: false,
         focusable: false,
         input_cell: None,
         cursor: None,
@@ -1669,6 +1678,7 @@ priv enum Prop {
   RunsSet
   RunsInk
   RunsPressed
+  RunsPicked
   Over
   Shift
   Presses
@@ -3368,6 +3378,11 @@ pub fn View::words_runs(
     // (how its words are set said: what follows it told, once this is)
     self.words_told()
   })
+  // (what of them is picked with the pointer, where what holds it says so: View::runs_picker's)
+  match self.lent(runs_picker) {
+    Some(f) => self.runs_picked(f(self)) |> ignore
+    None => ()
+  }
   self
 }
 
@@ -4717,7 +4732,11 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
             _ => {
               gone_rows.remove(k)
               let item = @signals.signal(it, same=fn(a, b) { a == b })
-              let v = slot.box(fn(v) { row(v, item) })
+              let v = slot.box(fn(v) {
+                // (a row by its key: what is made in it known by it, View::row_place)
+                v.tree.nodes[v.at].each_row = true
+                row(v, item)
+              })
               rows[k] = (v, item)
               order.push(v.at)
             }
@@ -6020,6 +6039,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     runs: n.look.runs,
     runs_look: n.look.runs_look,
     runs_pressed: n.look.runs_pressed,
+    runs_picked: n.look.runs_picked,
     shadow: n.look.shadow,
     hosted: n.hosted,
     clips: n.look.clips,
@@ -6259,6 +6279,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     runs: c.runs,
     runs_look: c.runs_look,
     runs_pressed: c.runs_pressed,
+    runs_picked: c.runs_picked,
     shadow: c.shadow,
     hosted: c.hosted,
     clips: c.clips,

@@ -2058,6 +2058,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                   "days",
                   [
                     obj([
+                      ("day", Json::number(20380.0)),
                       ("label", str("10 月 19 日")),
                       (
                         "entries",

@@ -80,6 +80,23 @@ fn link_first(runs : Array[Run], k : Int) -> Int {
 }
 
 ///|
+/// How far the line of a paragraph laid out in `lay` at `y` (in its terms; the last where under all of them) is moved
+/// across where each line stands in the middle of `center_in` (rich_line_x's; none where not given).
+fn rich_shift_at(lay : RichLayout, y : Double, center_in : Double) -> Double {
+  if center_in < 0.0 || lay.line_y.length() == 0 {
+    return 0.0
+  }
+  let mut l = lay.line_y.length() - 1
+  for k in 0..<lay.line_y.length() {
+    if y < lay.line_y[k] + lay.line_h[k] {
+      l = k
+      break
+    }
+  }
+  rich_line_x(lay, l, 0.0, center_in)
+}
+
+///|
 /// The pieces of line a paragraph's links laid out in `lay` are drawn on, at (ox, oy) (each line in the middle of
 /// `center_in` where given): each by its link's first run (link_first) and where it is (x0, y0, x1, y1), as
 /// paint_run_grounds tells them: what a press on one of them presses, its words' own place on their line, not the
@@ -1060,8 +1077,8 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   keep_rich_runs(lay, ox, oy, cy0, cy1)
   // its words picked with the pointer: where it is for the next press, what of it is picked under its words
   if r.select {
-    selectable_painted(r.base, self.layer_of(i), n.island, self.page_order(i), lay, n.text, ox, oy, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
-    for rect in selected_rects(r.base, lay) {
+    selectable_painted(Para(r.base), OldLayer(self.layer_of(i)), n.island, self.page_order(i), lay, n.text, ox, oy, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
+    for rect in selected_rects(Para(r.base), lay) {
       self.emit_rect(ox + rect.0, oy + rect.1, rect.2, rect.3, 0.0, desk.sel_color, 0.0, 0L, alpha)
     }
   }

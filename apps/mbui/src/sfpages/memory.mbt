@@ -5,35 +5,8 @@
 // station's own folded in a row), each row opening its page; which part a skill is under is the core's (`group`).
 
 ///|
-/// 记忆 (MemorySettings, MemoriesScreen): a row to each station's memory; one offline says so.
-pub fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let topic = @settings.stations_of(core, here)
-  let stations = match topic.value {
-    Some(Array(a)) => a
-    _ => []
-  }
-  let body : Array[() -> Unit] = [
-    fn() {
-      if topic.value is None {
-        block_waiting(
-          c,
-          fn() { memories_list(c, core.quiet(), sample_stations()) },
-          error=match topic.error {
-            Some(e) => error_text(e)
-            None => ""
-          },
-        )
-        return
-      }
-      memories_list(c, core, stations)
-    },
-  ]
-  @sf.page(c, on_back=core.pop, frame~, "memories", @sf.t("web-pages.settings.memory.title"), body, lead=@sf.t("android-misc.memory.note"))
-}
-
-///|
-/// 记忆 made once as nodes (memories_page's: page_node, laid out by the `width` its frame gives it, narrow where none
-/// is given) in node `v`: what it is for over its list, a row to each
+/// 记忆 (MemorySettings, MemoriesScreen) made once as nodes (page_node, laid out by the `width` its frame gives it,
+/// narrow where none is given) in node `v`: what it is for over its list, a row to each
 /// station's memory (its name, opening it), one offline saying so, followed as the core says them; while the stations
 /// are read the first time, the list in its bones (waiting_node: three made up, the core asked nothing for them), what
 /// could not be read said over them. `here`: who and where, as that changes.
@@ -83,7 +56,7 @@ pub fn memories_node(
 }
 
 ///|
-/// A row to each of `stations`' memory as they are now, by its address (memories_list's, as nodes): online, its name
+/// A row to each of `stations`' memory as they are now, by its address: online, its name
 /// and 查看 opening it; offline, its name and that it is.
 fn memories_list_node(v : @view.View, core : Core, stations : () -> Array[Json]) -> Unit {
   @sf.group_node(v, fn(g) {
@@ -121,23 +94,6 @@ pub fn memory_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, add
   @sf.page(c, on_back=core.pop, frame~, "memory/" + address, name, about=@sf.t("web-pages.settings.memory.lead"), [
     fn() { memory_view(c, core, look, address, station_names(stations)) },
   ])
-}
-
-///|
-/// A row to each station's memory; one offline says so.
-fn memories_list(c : @ui.Ctx, core : Core, stations : Array[Json]) -> Unit {
-  @sf.group(c, fn() {
-    for s in stations {
-      let sv = Some(s)
-      if flag(sv, "online") {
-        if @sf.link_row(c, "memory/" + text(sv, "station"), text(sv, "name"), value=@sf.t("android-misc.memory.row")) {
-          (core.push)(Memory(text(sv, "station")))
-        }
-      } else {
-        @sf.said_row(c, text(sv, "name"), @sf.t("web-pages.settings.memory.offline"))
-      }
-    }
-  })
 }
 
 ///|

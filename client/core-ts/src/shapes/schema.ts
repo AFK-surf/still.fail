@@ -1499,9 +1499,10 @@ export const SHAPES: Record<string, Shape> = {
     ["days", vec("ChangelogDay")],
   ], { doc: "A part's changes (`part`: desktop, web, android, station or cloud; the desktop's include the web's), under\nits name.", keepNone: true }),
   ChangelogDay: struct([
+    ["day", "i64", { client: "I54" }],
     ["label", "String"],
     ["entries", vec("ChangelogItem")],
-  ], { doc: "A day's changes, under its heading (今天, 昨天, 9月20日).", keepNone: true }),
+  ], { doc: "A day's changes, under its heading (今天, 昨天, 9月20日): which day it is where the device is (`day`: days since\n1970 there, the same day whatever else it lists or the list leaves off; its heading only says it).", keepNone: true }),
   ChangelogItem: struct([
     ["version", "i64", { client: "I54" }],
     ["versionName", "String"],
