@@ -31,7 +31,7 @@ reader.inline.ruler.before("escape", "math_paren", mathParen);
 const interrupts = { alt: ["paragraph", "reference", "blockquote", "list"] };
 reader.block.ruler.before("fence", "math_fence", mathFence, interrupts);
 reader.block.ruler.before("fence", "math_bracket", mathBracket, interrupts);
-const gfmTable = reader.block.ruler.__rules__.find((r: J) => r.name === "table").fn;
+const gfmTable = (reader.block.ruler as J).__rules__.find((r: J) => r.name === "table").fn;
 reader.block.ruler.at("table", mathTable, { alt: ["paragraph", "reference"] });
 
 const isSpace = (c: number) => c === 0x20 || c === 0x09;
