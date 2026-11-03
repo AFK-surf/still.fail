@@ -115,8 +115,8 @@ export class X11Desktop implements ScreenSource {
       // person reopen it; preparation continues even if the view was closed in the meantime.
       const preparing = this.#preparing;
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, this.#o.prepareWaitMs ?? 8_000);
-        preparing.then(() => { clearTimeout(timer); resolve(); });
+        const stop = wall.after(this.#o.prepareWaitMs ?? 8_000, resolve);
+        preparing.then(() => { stop(); resolve(); });
       });
       await this.refresh(true);
     }
