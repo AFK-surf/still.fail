@@ -19,7 +19,7 @@ import { InternalChat } from "../src/sessions/internal.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import { digest } from "../src/read/digest.ts";
 import { openStore } from "../src/read/store.ts";
-import { chatRows, chats } from "../src/read/views.ts";
+import { chatMarks, chatRows, chats } from "../src/read/views.ts";
 import { marksOf, rowsMade } from "../../client/core-ts/src/station/rows-made.ts";
 import { isDeepStrictEqual } from "node:util";
 import { FakeDriver, settle } from "./hub-fakes.ts";
@@ -790,6 +790,8 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
     // b brought into a's chat: a's item has both; c alone.
     assert.equal((await r.ask("POST", `/threads/${made[0].thread.id}/sessions`, { session: made[1].key }))[0], 200);
     r.store.insertMessage(newMessage(made[0].thread.id, "1.2", "person", "a@x", "hi"));
+    r.store.setPin(viewer.email, made[0].key, true);
+    r.store.setPin(viewer.email, made[2].key, true);
     const store = openStore(r.data);
     const whole = chats(store, viewer, false);
     const byId = new Map(whole.map((row: any) => [String(row.id), row]));
@@ -798,11 +800,13 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
     const mark = r.store.db.prepare("INSERT INTO dismissed VALUES (?, ?, 1, ?)");
     const keep = r.store.db.prepare("INSERT INTO kept_chats VALUES (?, ?)");
     const closeCard = r.store.db.prepare("INSERT INTO closed_cards VALUES (?, 1, ?, ?)");
+    const pin = r.store.db.prepare("INSERT INTO pins VALUES (?, ?, ?)");
     for (let i = 0; i < 500; i++) {
       const thread = 100_000 + i;
       mark.run(viewer.email, thread, Date.now());
       keep.run(viewer.email, thread);
       closeCard.run(thread, viewer.email, Date.now());
+      pin.run(viewer.email, `unrelated-${i}`, i);
     }
     let unrelated = 0;
     const db = store.db;
@@ -815,6 +819,7 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
               if (method === "all") return (...args: any[]) => {
                 const result = query.all(...args);
                 if (/\bFROM (dismissed|kept_chats|closed_cards)\b/i.test(sql)) unrelated += result.filter((row) => Number(row.thread) >= 100_000).length;
+                if (/\bFROM pins\b/i.test(sql)) unrelated += result.filter((row) => String(row.session).startsWith("unrelated-")).length;
                 return result;
               };
               const value = Reflect.get(query, method, query);
@@ -832,7 +837,9 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
       for (const row of some.rows) assert.deepEqual(row, byId.get(String(row.id)));
       for (const row of some.rows) assert.ok(some.scope.includes(String(row.id)));
     }
-    assert.equal(unrelated, 0, "a scoped row update did not read marks or answers of unrelated chats");
+    const marks = chatMarks(store, viewer, { sessions: [made[0].key], threads: [made[0].thread.id] });
+    assert.deepEqual(Object.keys(marks.pins), [made[0].key]);
+    assert.equal(unrelated, 0, "a scoped update did not read marks, pins or answers of unrelated chats");
     store.db.close();
   } finally {
     await r.close();
