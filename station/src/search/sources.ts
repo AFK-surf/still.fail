@@ -47,29 +47,20 @@ function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string>
   if (row === null) return;
   const { ws, chat, sessions } = chatOf(s, id);
   if (asker && !sees({ ws }, asker)) return;
-  // Filed away (its entries in its archive file), or archived as people see it (by hand, or idle): out of the lists.
-  const filed = store.isArchived(s, id);
-  const archived = filed || row.hiddenAt !== null || (sessions.length > 0 && sessions.every((x) => x.archivedAt !== null));
+  // Archived as people see it (by hand, or idle): out of the lists.
+  const archived = row.hiddenAt !== null || (sessions.length > 0 && sessions.every((x) => x.archivedAt !== null));
   const surface = row.surface === STILLFAIL_SURFACE ? "stillfail" : "slack";
-  const archivedMessages = filed ? store.messagesBefore(s, id, null, 1_000_000) : null;
-  const firstText = archivedMessages !== null
-    ? archivedMessages.find((m) => m.authorKind === "person")?.text ?? null
-    : (s.db.prepare("SELECT m.text FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?").get(id) as { text: string | null } | undefined)?.text ?? null;
+  const firstText = (s.db.prepare("SELECT m.text FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?").get(id) as { text: string | null } | undefined)?.text ?? null;
   // As the chat list calls it (read/views.ts titleOf).
   const title = titleOf(row, firstText, null);
   const ref = { thread: id, chat, surface, archived, ...(row.channel ? { channel: row.channel } : {}) };
   let lastAt: number | null = null;
   const wantsMessages = kinds === null || kinds.has("message");
   const wantsChat = kinds === null || kinds.has("chat");
-  const end = archivedMessages === null
-    ? (s.db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread = ?").get(id) as { n: number | null }).n
-    : null;
+  const end = (s.db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread = ?").get(id) as { n: number | null }).n;
   let after: number | null = null;
-  let archivedAt = 0;
   for (;;) {
-    const messages: MessageRow[] = archivedMessages !== null
-      ? archivedMessages.slice(archivedAt, archivedAt + MESSAGE_BATCH)
-      : end === null ? [] : (after === null
+    const messages: MessageRow[] = end === null ? [] : (after === null
         ? all(s, "SELECT * FROM merged WHERE thread = ? AND n <= ? ORDER BY n LIMIT ?", id, end, MESSAGE_BATCH)
         : all(s, "SELECT * FROM merged WHERE thread = ? AND n > ? AND n <= ? ORDER BY n LIMIT ?", id, after, end, MESSAGE_BATCH)).map(toMessage);
     if (messages.length === 0) break;
@@ -88,7 +79,6 @@ function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string>
       };
     }
     after = messages.at(-1)!.n;
-    archivedAt += messages.length;
     yield undefined;
     if (messages.length < MESSAGE_BATCH) break;
   }

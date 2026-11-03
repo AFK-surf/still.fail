@@ -78,9 +78,6 @@ const encode = encodeURIComponent;
 
 /// How often the sandboxes nothing runs in are looked for (hub.ts `sweepSandboxes`).
 const SWEEP_MS = 3 * 60_000;
-/// How many threads archived to files are brought back into the database at a time, a second apart (store.ts
-/// `bringInArchived`): each a file read and its entries written, the main thread's.
-const BRING_IN = 20;
 
 export type AgentsParts = {
   /// The agents' predecessor-exit wait, also used before binding the mesh socket.
@@ -714,24 +711,6 @@ export const AgentsLive = (control: Control) =>
         time.after(DISK_EVERY_MS, relieving);
       };
       time.after(DISK_EVERY_MS, relieving);
-
-      // The threads a station before wrote out to their archive files, back into the database a few at a time
-      // (store.ts `bringInArchived`), once the devices have come back from the start.
-      let broughtIn = 0;
-      const bringingIn = () => {
-        let left: number;
-        try {
-          const step = store.bringInArchived(BRING_IN);
-          broughtIn += step.brought;
-          left = step.left;
-        } catch (error) {
-          log.warn("store", "archived threads not brought back into the database", { error: (error as Error).message });
-          return;
-        }
-        if (left > 0) time.after(1_000, bringingIn);
-        else if (broughtIn > 0) log.info("store", "the threads archived to files are back in the database", { n: broughtIn });
-      };
-      time.after(120_000, bringingIn);
 
       // What the Rust station's archiving left (the transcripts kept twice): once, when the devices have come back.
       time.after(180_000, () => cold.finishLegacyCopies().then(() => cold.segmentHistories()));

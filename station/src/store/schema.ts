@@ -1,12 +1,11 @@
-// The store's schema (the Rust station's store.rs `// ── schema`): the tables as CREATE … IF NOT EXISTS, and the columns that
-// came after schema version 12 without changing it, added in place on open (add_*_columns), the same way and in the
-// same order as the Rust station does, so either station opens what the other kept.
+// The store's schema (once the Rust station's store.rs `// ── schema`): the tables as CREATE … IF NOT EXISTS, and the
+// columns that came after, added in place on open (add_*_columns).
 import type { DatabaseSync } from "node:sqlite";
 import { COMPACTED_FROM, QUARTER_MS } from "./rows.ts";
 
-/// Bump on schema changes. A database of another version is refused: there is one station, and its data is moved by
-/// hand when the schema changes (no migrations are kept in the code).
-export const SCHEMA_VERSION = 12;
+/// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
+/// `#upgradeFrom12`); a database of another version is refused.
+export const SCHEMA_VERSION = 13;
 
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS archive_suggestions (
@@ -254,21 +253,6 @@ CREATE TABLE IF NOT EXISTS widget_states (
   updated_at INTEGER NOT NULL,
   told_at INTEGER,
   PRIMARY KEY (session, path)
-);
--- The pieces of work in a chat, as its agents declare them (chat_post items): each waiting on someone or not.
-CREATE TABLE IF NOT EXISTS items (
-  thread INTEGER NOT NULL,
-  key TEXT NOT NULL,
-  session TEXT NOT NULL,
-  title TEXT NOT NULL,
-  state TEXT NOT NULL,
-  waiting_on TEXT,
-  ask TEXT,
-  detail TEXT,
-  evidence INTEGER,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  PRIMARY KEY (thread, key)
 );
 -- Pending decisions (an agent's block post with options) a viewer said they will not take up: not on their list
 -- any more, still pending for everyone else. By the post's thread and entry number.
@@ -1076,14 +1060,11 @@ export function addSessionWork(db: DatabaseSync, now: number): void {
 ///   it had was read.
 /// - turns_by_end: a session's turns by when they ended (`TOLD_BLOCKED`, whether a blocked ask was told already): by
 ///   when they started, every turn the session had was read.
-/// - threads_archived: the threads an older station wrote out to files (store.ts ARCHIVED_THREADS), none once all are
-///   brought back: by every thread there is, looked for again after each start.
 /// - sessions_models: the chats someone started by when, with their runtime and model (store.ts MODELS_USED_BY).
 export function addTellIndexes(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL");
   db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
   db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
-  db.exec("CREATE INDEX IF NOT EXISTS threads_archived ON threads (id, archived_at) WHERE archived_at IS NOT NULL");
   // The archive's, a page at a time by
   // when each was archived (ARCHIVED_PAGE): its whole list was made at once, 60 s on ccvm (2026-11-03).
   db.exec("CREATE INDEX IF NOT EXISTS sessions_put_away ON sessions (archived_at, key) WHERE archived_at IS NOT NULL");

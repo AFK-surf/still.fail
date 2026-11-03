@@ -409,19 +409,15 @@ keeps its entries in the database, as one in a list does: entries are small
 (all of ccvm's 26,000 come to some 20 MB), and every list reads what it shows
 of every thread by an index, some 10 ms for all of a station's (2026-10-25).
 
-Stations before wrote such a thread's entries out to
-`<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd) in one step
-with deleting their rows, and marked the thread row (`archived_at`). Then every
-list of chats, sessions and threads read each archived thread's file (some 850
-on ccvm), decompressed again whenever a reader had let go of what it kept of
-them. Those files are read as they are (the same API and summaries, answered
-from the decompressed entries; what lists show of each read from its file once
-a reader and kept by the file as it is) until the station brings each back
-into the database: a few at a time, two minutes after it starts
-(`Store.bringInArchived`, 20 a second), and at once when one is said in (an
-edit too) or a session of it is shown again. Since entries never change, they
-are the same either way, and clients' kept copies stay valid. Bringing one back
-writes its entries into the database first and removes the file.
+Stations before (the Rust station's database, version 12) wrote such a
+thread's entries out to `<data>/archive/threads/<id>.jsonl.zst` (one entry per
+line, zstd) in one step with deleting their rows, and marked the thread row
+(`archived_at`). Opening such a database brings every one of them back at once
+and takes it to version 13 (`Store.#upgradeFrom12`): each file's entries are
+written into the database, then the file removed. Since entries never change,
+clients' kept copies stay valid. A file lost with its disk leaves a thread with
+no entries, numbered on from what was read and delivered of it. Nothing reads
+those files after that.
 
 An archived, idle session's transcripts are packed in place (cold storage,
 under Housekeeping). The Rust station instead wrote a copy of them,

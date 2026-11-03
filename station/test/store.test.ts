@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, ARCHIVED_THREADS, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
@@ -95,10 +95,10 @@ test("a database of another schema version is refused", () => {
   const db = new DatabaseSync(path);
   db.exec("CREATE TABLE sessions (key TEXT); PRAGMA user_version = 8;");
   db.close();
-  assert.throws(() => Store.open(path), /schema version 8; this station uses 12/);
+  assert.throws(() => Store.open(path), /schema version 8; this station uses 13/);
 });
 
-test("a new database is made at version 12", () => {
+test("a new database is made at version 13", () => {
   const path = join(tempdir(), "new.db");
   open(path).close();
   const db = new DatabaseSync(path, { readOnly: true });
@@ -252,9 +252,27 @@ test("reads move forward only and unread counts skip the viewer's own", () => {
   assert.deepEqual(store.listThreads("me@x", null, null).map((t) => t.thread.id), [slack.id, thread.id], "the latest said first");
 });
 
-test("an archived thread keeps its entries in the database; one a station before wrote out to its file is read from it, and brought back", () => {
+test("an archived thread keeps its entries in the database", () => {
   const archive = tempdir();
   const store = open(":memory:", archive);
+  session(store, "a");
+  const own = store.openThread("ember", "EMBER", "2.1", null, null);
+  store.joinThread(own.id, "a", "ember");
+  say(store, own.id, "2.2", "person", "local", "看看");
+  say(store, own.id, "2.3", "agent", "a", "好");
+  const before = store.listThreads("local", null, own.id)[0];
+  const entries = store.entriesAfter(own.id, 0);
+  store.setArchived("a", true, MANUAL);
+  assert.ok(!existsSync(join(archive, "threads", `${own.id}.jsonl.zst`)), "archived, its entries stay where they are");
+  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
+  assert.deepEqual(store.listThreads("local", null, own.id)[0], before);
+});
+
+test("a database of version 12 has the threads a station before wrote out to files brought back, and goes to 13", () => {
+  const data = tempdir();
+  const path = join(data, "stillfail.db");
+  const archive = join(data, "archive");
+  const store = open(path, archive);
   session(store, "a");
   session(store, "b");
   const shared = store.openThread("slack:T1", "C1", "1.1", null, null);
@@ -266,64 +284,27 @@ test("an archived thread keeps its entries in the database; one a station before
   store.insertMessage(at(newMessage(own.id, "2.2", "person", "local", "看看"), 1));
   store.insertMessage(at(newMessage(own.id, "2.3", "agent", "a", "好"), 2));
   store.insertMessage(at(newMessage(shared.id, "1.1", "person", "U1", "hi"), 3));
-  const before = store.listThreads("local", null, own.id)[0];
-  const entries = store.entriesAfter(own.id, 0);
-  const file = join(archive, "threads", `${own.id}.jsonl.zst`);
-
-  store.setArchived("a", true, MANUAL);
-  assert.ok(!existsSync(file), "archived, its entries stay where they are");
-  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
-  assert.deepEqual(store.listThreads("local", null, own.id)[0], before);
-
-  // As a station before archived it: written out to its file, out of the database.
-  assert.equal(fileAway(store, own.id), file);
-  const text = zstdDecompressSync(readFileSync(file)).toString("utf8");
-  // The shape the Rust station writes (serde's EntryRow): its archives read here, and back.
-  assert.ok(text.split("\n")[0]!.startsWith(`{"thread":${own.id},"n":1,"kind":"message","target":null,"ts":"2.2","authorKind":"person"`), text);
-  assert.ok(text.split("\n")[1]!.startsWith(`{"agentIdentity":{"model":null,"effort":null},"thread":${own.id},"n":2,`), text);
-  // Out of the database, read from the file the same way.
-  assert.equal((store.db.prepare("SELECT COUNT(*) AS c FROM entries WHERE thread = ?").get(own.id) as any).c, 0);
-  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
-  assert.deepEqual(store.entriesBefore(own.id, null, 1), entries.slice(1));
-  assert.deepEqual(store.entriesBetween(own.id, 2, 2), entries.slice(1));
-  assert.deepEqual(store.listThreads("local", null, own.id)[0], before);
-  assert.deepEqual(store.participants("a").get("a"), ["local", "slack:ds:U1"]);
-
-  store.setArchived("a", false, MANUAL);
-  assert.ok(!existsSync(file), "shown again: back in the database");
-  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
-
-  // Someone writing in one written out brings it back first.
-  store.setArchived("a", true, MANUAL);
-  fileAway(store, own.id);
-  const h = heard(store);
-  assert.deepEqual(say(store, own.id, "2.4", "person", "local", "还在吗"), [3, true]);
-  assert.ok(!existsSync(file));
-  assert.deepEqual(store.entriesAfter(own.id, 0).map((e) => e.n), [1, 2, 3]);
-  const appended = h.changes.flatMap((c) => (c.type === "thread" && c.entries.length > 0 ? [c.entries.map((e) => e.n)] : []));
-  assert.deepEqual(appended, [[3]]);
-  h.stop();
-
-  // Those written out are brought back a few at a time, the oldest first, as they read from their files.
+  const before = store.listThreads("local", null, null);
+  const entries = [store.entriesAfter(own.id, 0), store.entriesAfter(shared.id, 0)];
   store.setArchived("a", true, MANUAL);
   store.setArchived("b", true, MANUAL);
-  const sharedEntries = store.entriesAfter(shared.id, 0);
-  fileAway(store, shared.id);
-  fileAway(store, own.id);
-  assert.deepEqual(store.bringInArchived(1), { brought: 1, left: 1 });
-  assert.ok(!existsSync(join(archive, "threads", `${shared.id}.jsonl.zst`)) && existsSync(file));
-  assert.deepEqual(store.bringInArchived(5), { brought: 1, left: 0 });
-  assert.deepEqual(store.bringInArchived(5), { brought: 0, left: 0 });
-  assert.ok(!existsSync(file));
-  assert.deepEqual([store.entriesAfter(shared.id, 0), store.entriesAfter(own.id, 0).length], [sharedEntries, 3]);
+  const files = [fileAway(store, own.id), fileAway(store, shared.id)];
+  // The shape the Rust station wrote (serde's EntryRow).
+  const text = zstdDecompressSync(readFileSync(files[0]!)).toString("utf8");
+  assert.ok(text.split("\n")[0]!.startsWith(`{"thread":${own.id},"n":1,"kind":"message","target":null,"ts":"2.2","authorKind":"person"`), text);
+  store.db.exec("CREATE TABLE IF NOT EXISTS items (thread INTEGER)");
+  store.close();
 
-  // Deleting the session removes an archived thread's file with it.
-  fileAway(store, own.id);
-  const removed = heard(store);
-  store.deleteSession("a");
-  assert.deepEqual(removed.changes.flatMap((c) => (c.type === "threadRemoved" ? [c.id] : [])), [own.id]);
-  assert.ok(!existsSync(file));
-  assert.deepEqual(store.entriesAfter(shared.id, 0).map((e) => e.text), ["hi"], "b's archived thread stays");
+  const again = open(path, archive);
+  assert.deepEqual([again.entriesAfter(own.id, 0), again.entriesAfter(shared.id, 0)], entries);
+  assert.deepEqual(again.listThreads("local", null, null), before);
+  assert.deepEqual(again.participants("a").get("a"), ["local", "slack:ds:U1"]);
+  assert.ok(files.every((f) => !existsSync(f)), "the files go once their entries are back");
+  const has = (type: string, name: string) => again.db.prepare("SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?").get(type, name) !== undefined;
+  assert.ok(!has("table", "items") && !has("index", "threads_archived"));
+  assert.equal((again.db.prepare("PRAGMA user_version").get() as any).user_version, SCHEMA_VERSION);
+  // Said in again, numbered on.
+  assert.deepEqual(say(again, own.id, "2.4", "person", "local", "还在吗"), [3, true]);
 });
 
 test("what lists say of a thread and a session is kept as its messages are written, and goes with them", () => {
@@ -380,10 +361,8 @@ test("what two chats' agents wrote each other is neither a chat's unread nor wha
   // This chat's own agent quoting one in the chat says it in the chat.
   say(store, thread.id, "1.7", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
   for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
-  // Archived: the same; written out to its file by a station before, read from it: the same.
+  // Archived: the same.
   store.setArchived("a", true, MANUAL);
-  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
-  fileAway(store, thread.id);
   for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
   reader.db.close();
 });
@@ -419,25 +398,25 @@ test("letters from before they were marked are marked as the column comes, by th
   assert.equal(again.listThreads("local", null, null)[0]?.letters, 2);
 });
 
-test("an archived thread whose file is lost reads as empty, and is counted on from what was read of it", () => {
+test("an archived thread whose file is lost comes back empty, and is counted on from what was read of it", () => {
   const data = tempdir();
-  const store = open(join(data, "stillfail.db"), join(data, "archive"));
-  session(store, "a");
-  session(store, "b");
-  const lost = store.openThread("ember", "EMBER", "1.1", null, null);
-  const kept = store.openThread("ember", "EMBER", "2.1", null, null);
-  store.joinThread(lost.id, "a", "ember");
-  store.joinThread(kept.id, "b", "ember");
-  say(store, lost.id, "1.2", "person", "local", "看看");
-  say(store, lost.id, "1.3", "agent", "a", "好");
-  say(store, lost.id, "1.4", "agent", "a", "做完了");
-  say(store, kept.id, "2.2", "person", "local", "还有这个");
-  store.setRead("local", lost.id, 3);
-  store.setArchived("a", true, MANUAL);
-  fileAway(store, lost.id);
-  assert.deepEqual(store.lostArchives(), []);
-  rmSync(archiveFile(store, lost.id));
-  assert.deepEqual(store.lostArchives(), [lost.id]);
+  const path = join(data, "stillfail.db");
+  const before = open(path, join(data, "archive"));
+  session(before, "a");
+  session(before, "b");
+  const lost = before.openThread("ember", "EMBER", "1.1", null, null);
+  const kept = before.openThread("ember", "EMBER", "2.1", null, null);
+  before.joinThread(lost.id, "a", "ember");
+  before.joinThread(kept.id, "b", "ember");
+  say(before, lost.id, "1.2", "person", "local", "看看");
+  say(before, lost.id, "1.3", "agent", "a", "好");
+  say(before, lost.id, "1.4", "agent", "a", "做完了");
+  say(before, kept.id, "2.2", "person", "local", "还有这个");
+  before.setRead("local", lost.id, 3);
+  before.setArchived("a", true, MANUAL);
+  rmSync(fileAway(before, lost.id));
+  before.close();
+  const store = open(path, join(data, "archive"));
 
   // Every list it is in is still read, by the station and by its readers (another connection over the same file).
   const reader = read.openStore(data);
@@ -453,7 +432,6 @@ test("an archived thread whose file is lost reads as empty, and is counted on fr
   // thread (1 to 3) is not numbered again.
   assert.deepEqual(say(store, lost.id, "1.5", "person", "local", "还在吗"), [4, true]);
   assert.deepEqual(store.entriesAfter(lost.id, 0).map((e) => [e.n, e.text]), [[4, "还在吗"]]);
-  assert.deepEqual(store.lostArchives(), []);
   // A thread nothing was said in starts at 1 as before.
   const fresh = store.openThread("ember", "EMBER", "3.1", null, null);
   assert.deepEqual(say(store, fresh.id, "3.2", "person", "local", "新的"), [1, true]);
@@ -654,7 +632,6 @@ test("a database made before clients gains the column and a message keeps its ap
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
   assert.equal(store.pendingMessages("a")[0]!.message.client, "android 0.1.1123");
   store.setArchived("a", true, MANUAL);
-  fileAway(store, thread.id);
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
   store.setArchived("a", false, MANUAL);
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
@@ -1035,10 +1012,10 @@ test("what the station asks again and again is planned by an index, never a scan
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
-    [HEARD_IN, ["a", 1]], [ARCHIVED_THREADS, []], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
+    [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
     [detail.sql, detail.args], [read.USAGE_DETAIL_DAY_SCOPED, [1n, "ws"]],
   ];
-  const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards|threads_archived)\b)/;
+  const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
   const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
@@ -1055,10 +1032,8 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));
   assert.ok(!plans.get(STATS_OF)!.some((d) => d.includes("COVERING INDEX turns_by_session")), plans.get(STATS_OF)!.join(" | "));
   // Whether a session heard from a thread: by its deliveries there alone, not every message it was ever given (3.3 s on
-  // the main thread on ccvm); the threads still in archive files by the index of those alone; the models someone's
-  // chats ran on from the index alone.
+  // the main thread on ccvm); the models someone's chats ran on from the index alone.
   assert.ok(plans.get(HEARD_IN)!.some((d) => d.includes("deliveries_session (session=? AND thread=?)")), plans.get(HEARD_IN)!.join(" | "));
-  assert.deepEqual(plans.get(ARCHIVED_THREADS), ["SCAN threads USING COVERING INDEX threads_archived"]);
   assert.ok(plans.get(MODELS_USED_BY)!.some((d) => d.includes("COVERING INDEX sessions_models (created_by=? AND created_at>?)")), plans.get(MODELS_USED_BY)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_OF)!.some((d) => d.includes("PRIMARY KEY (ws=? AND at>?)")), plans.get(REMOTE_RUNS_OF)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_ALL)!.some((d) => d.includes("PRIMARY KEY (at>?)")), plans.get(REMOTE_RUNS_ALL)!.join(" | "));
