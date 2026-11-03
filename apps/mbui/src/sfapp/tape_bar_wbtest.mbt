@@ -549,3 +549,19 @@ test "on the tape 记忆, 归档 and 自动决策 made once under the tape's bar
     assert_eq(marks, if page.0 == "settings-decisions" { 1 } else { 0 }, msg="\{page.0}: its mark")
   }
 }
+
+///|
+test "on the tape 一台 station 的记忆 swiped from its edge by a scripted run's drag (its steps taken as each frame ends, as a film's): each frame held to the corner rule where the page is not in the hand; across, the page under it, short, the page stays" {
+  // (Tester::hold_corners on every frame drawn: a frame with the page off its place and not said to be in the hand
+  // fails the test where it is drawn)
+  for case in [(300.0, -1), (60.0, 0)] {
+    let (across, went) = case
+    let t = tape_station_memory(platform=1)
+    let depth = app.nav.depth()
+    guard tape_page_panel(t) is Some(p) else { fail("no page") }
+    let x = (p.x + 6.0).to_int()
+    let y = (p.y + 300.0).to_int()
+    t.drive("drag \{x} \{y} \{across.to_int()} 0 600\nwait 800\nexit") |> ignore
+    assert_eq(app.nav.depth(), depth + went, msg="\{across} across")
+  }
+}
