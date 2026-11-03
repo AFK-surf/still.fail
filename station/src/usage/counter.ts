@@ -465,6 +465,25 @@ const breathe = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 class Stopped extends Error {}
 
+/// Old single-frame archives have no seek table. Count their uncompressed bytes as a stream when a recent session
+/// needs one, so the following byte boundary is saved before any part is recorded.
+async function unpackedLength(path: string, keep: () => boolean): Promise<number | null> {
+  const raw = createReadStream(path, { highWaterMark: CHUNK });
+  const stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
+  raw.on("error", (error) => stream.destroy(error));
+  let size = 0;
+  try {
+    for await (const bytes of stream as AsyncIterable<Buffer>) {
+      if (!keep()) throw new Stopped();
+      size += bytes.length;
+    }
+    return size;
+  } catch (error) {
+    if (error instanceof Stopped) throw error;
+    return null;
+  } finally { raw.destroy(); stream.destroy(); }
+}
+
 type CountedFile = UsageFile & { cutoff: number | null; path: string };
 
 // ── the counter ──
@@ -715,10 +734,18 @@ export class UsageCounter {
 
   /// Reads one transcript of `session` on from where it was left, and records its calls, a part at a time.
   async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: CountedFile | undefined, since: number): Promise<number> {
-    // A packed transcript is idle history. It is restored before its runtime writes to it again.
-    if (await putAway(path)) return 0;
-    let size: number;
-    try { size = (await stat(path)).size; } catch { return 0; }
+    // A transcript may have been put away after its turn ended but before its last new calls were read. A seekable
+    // archive tells its original size without decompression; an older archive is measured only for a wanted session.
+    const archived = await putAway(path);
+    let size: number | null;
+    if (archived) {
+      size = await writtenLength(packed(path)).catch(() => null)
+        ?? await unpackedLength(packed(path), () => !this.#abort.signal.aborted);
+      if (size === null) return 0;
+    } else {
+      try { size = (await stat(path)).size; } catch { return 0; }
+    }
+    if (archived && was !== undefined && size === was.offset) return 0;
     const shortened = was !== undefined && size < was.offset;
     const before = shortened ? { session: was.session, offset: 0, model: null } : (was ?? { session: null, offset: 0, model: null });
     let cutoff = was?.cutoff ?? null;

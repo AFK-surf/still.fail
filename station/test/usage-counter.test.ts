@@ -240,6 +240,38 @@ test("an already counted response can grow after the counter's starting time", a
   unsubscribe();
 });
 
+test("new usage is counted when its transcript was put away before the counter read it", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "packed-before-reading");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("old", now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1)),
+    claudeLine("new", now + 1, "claude-opus-5-5", usage(3, 0, 0, 0, 1))]);
+  pack(path);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["new"]);
+});
+
+for (const segmented of [false, true]) test(`a tracked ${segmented ? "segmented" : "single-frame"} archive counts a new call despite clock skew`, async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "packed-tracked");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("first", now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  append(path, [claudeLine("second", now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  if (segmented) await packFile(path);
+  else pack(path);
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
+  counters.push(again);
+  assert.equal(await again.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["first", "second"]);
+});
+
 test("a new call in a tracked transcript is counted despite clock skew", async () => {
   const time = await today();
   const r = rig({ clock: time.clock });
