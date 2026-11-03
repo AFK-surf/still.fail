@@ -625,6 +625,15 @@ fn view_arrived() -> Unit {
 fn view_brought(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
   @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) |> ignore })
+  view_changes_taken(tree)
+  old_place(tree)
+}
+
+///|
+/// What the tree changed of its instances since they were last taken, taken: each made again as it is painted, what was
+/// let go letting go of what it drew. Whoever brought the tree to its moment (view_brought, Tree::bring_to as an input
+/// finds things), what it changed is the paint's to take.
+fn view_changes_taken(tree : @view.Tree) -> Unit {
   for id in tree.take_changed() {
     view_blocks.remove(id)
   }
@@ -635,7 +644,6 @@ fn view_brought(tree : @view.Tree) -> Unit {
     view_pictures.remove(id)
     inst_owners.tree_words.remove(id)
   }
-  old_place(tree)
 }
 
 ///|
@@ -854,6 +862,10 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   if tree.told_since() {
     view_brought(tree)
   }
+  // (what the tree changed taken, whoever brought it to its moment, before anything of it is painted: by this frame's
+  // bringing, or by an input's finding things meanwhile, Tree::bring_to, with nothing told after: what is painted is
+  // what it is now)
+  view_changes_taken(tree)
   dr.targets_said = true
   // (what is composed of content made before kept in the atlas, before anything this frame places a glyph)
   view_glyphs_held(tree)
