@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import * as compact from "../src/store/usage-compact.ts";
 import { Store } from "../src/store/store.ts";
+import type { UsageCall, UsageFor } from "../src/store/usage.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { watchCompactMoves } from "../src/usage/module.ts";
 
@@ -118,11 +119,10 @@ for (const count of [128, 130]) test(`a page is told when its total of ${count} 
     compact.installCompactUsage(store.db, () => store.now());
     retireUsageIndexes(store.db);
     const owner = { turn: null, thread: null, person: "p", profile: "cc" };
-    for (let i = 0; i < count; i++) {
-      const call = { id: `call-${i}`, at: i * 60_000, model: "m", subagent: true, fast: false, input: 1,
-        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
-      store.recordUsage("/a", { session: "a", offset: i + 1, model: "m" }, "claude", [[call, owner]]);
-    }
+    const calls = Array.from({ length: count }, (_, i): [UsageCall, UsageFor] => [{ id: `call-${i}`, at: i * 60_000,
+      model: "m", subagent: true, fast: false, input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1,
+      calls: 1, context: null, window: null }, owner]);
+    store.recordUsage("/a", { session: "a", offset: count, model: "m" }, "claude", calls);
     const told = new Promise<{ total: { calls: number; tokens: number } | null; from: number | undefined }>((resolve, reject) => {
       const abort = () => { unsubscribe(); reject(t.signal.reason); };
       const unsubscribe = store.subscribe((change) => {
