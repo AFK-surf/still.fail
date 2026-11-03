@@ -10,7 +10,7 @@ import { usageRoutes } from "../src/api/routes/usage.ts";
 import { makeStore, USAGE_CALLS_EARLIER, USAGE_CALLS_SAME, usageByDay, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
 import { usage, usageNow } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
-import { compactQuery, compactScopeReady, compactTotal, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
+import { compactHistory, compactQuery, compactScopeReady, compactTotal, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { keepUsage, retireAfterPrevious, watchCompactMoves } from "../src/usage/module.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -164,12 +164,16 @@ test("a time range does not visit sessions with only older statistics", () => {
       return visits;
     };
     const before = read();
+    const history = () => compactHistory(store.db, 0n, { workspace: "A", home: false }, false, { from: 1n, to: 2n })
+      ?.map((row) => [row.session, row.calls, row.tokens]);
+    assert.deepEqual(history(), [["a", 1, 2]]);
     const scope = store.db.prepare("INSERT INTO usage_minute_scope (session, ws, done) VALUES (?, 'A', 1)");
     const old = store.db.prepare("INSERT INTO usage_compact VALUES (?, -1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WA')");
     for (let n = 0; n < 200; n++) { scope.run(`old-${n}`); old.run(`old-${n}`); }
     const other = store.db.prepare("INSERT INTO usage_compact VALUES (?, 1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WB')");
     for (let n = 0; n < 200; n++) other.run(`other-${n}`);
     assert.equal(read(), before, "older sessions outside the requested range do not increase lookup work");
+    assert.deepEqual(history(), [["a", 1, 2]], "history excludes older days and other workspaces too");
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.args) as { detail: string }[]).map((row) => row.detail).join(" | ");
     assert.match(plan, /usage_compact_scope_time \(scope=\? AND minute>\? AND minute<\?\)/);
   } finally { store.close(); }
