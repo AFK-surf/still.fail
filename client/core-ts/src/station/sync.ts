@@ -38,6 +38,7 @@ import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
 import { dayOf, holdsWhole, withPart } from "./usage-part.ts";
 import { threadAfter, threadAfterLetters } from "./thread-after.ts";
+import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "./rows-after.ts";
 import { timed } from "../spent.ts";
 
 export { HOST_KEY, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
@@ -72,7 +73,7 @@ export const RECHECKING = "等它回来确认";
 const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
 /// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
 /// (retold.ts).
-const RETOLD = new Set(["session", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "job", "job-removed", "overview", "footprint"]);
+const RETOLD = new Set(["session", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
 /// A station's changes ask the searches of it shown again at most this often: a busy station tells of its chats many
@@ -1235,6 +1236,9 @@ export class StationsSync {
         const was = this.#core.data.of(address)?.thread(address, id);
         const before = isObject(was) ? { ...was } : undefined;
         this.onTold(address, id, entries);
+        // Its rows, as what was said makes them (told again on top of a read asked before it, as the station's own were).
+        this.#retold.told(address, "said", data);
+        this.#held(address, "said", data);
         // Into its channel: the thread goes that far at once (the rest of its summary is read below), and a gap what
         // was told left is read. A chat let go for room (and not opened since) is not kept current: what it said is
         // read when it is opened. History older than what is held comes with the station's (#history).
@@ -1284,6 +1288,9 @@ export class StationsSync {
         }
         return;
       }
+      case "made":
+      case "chat-mark":
+        return this.#held(address, name, data);
       // The stream that took over could not be told all that came since the last its predecessor gave: read again.
       case "missed":
         return this.snapshot(address);
@@ -1370,8 +1377,70 @@ export class StationsSync {
         if (thread !== null && n !== null) this.putRead(address, thread, n);
         return;
       }
+      case "pin": {
+        // What the viewer pinned (or let go), into its row (rows-after.ts).
+        const session = str(get(data, "session"));
+        const at = u64(get(data, "at"));
+        const row = session === null ? undefined : core.data.chat(address, session);
+        const after = rowAfterPin(row, at);
+        if (after !== null && after !== "read") core.data.putChat(address, after);
+        return;
+      }
+      case "dismiss": {
+        // What waits in a chat the viewer will not take up (its card, its agent's need), in its rows.
+        const thread = u64(get(data, "thread"));
+        const n = u64(get(data, "n"));
+        if (thread === null || n === null) return;
+        for (const row of core.data.chatsOf(address, { thread })) {
+          const after = rowAfterDismiss(row, n);
+          if (after !== null && after !== "read") core.data.putChat(address, after);
+        }
+        return;
+      }
+      case "kept": {
+        // A chat the viewer kept from being offered for archiving, or let be again.
+        const thread = u64(get(data, "thread"));
+        if (thread === null || typeof get(data, "kept") !== "boolean") return;
+        for (const row of core.data.chatsOf(address, { thread })) {
+          const after = rowAfterKept(row, get(data, "kept") === true);
+          if (after !== null && after !== "read") core.data.putChat(address, after);
+        }
+        return;
+      }
+      case "said": {
+        // What was said in a chat, into the rows it touches (rows-after.ts), where the station leaves them to the device.
+        const link = this.#links.get(address);
+        const id = u64(get(data, "id"));
+        const me = this.#me(address);
+        if (!link?.makesRows || id === null || me === null) return;
+        const entries = (get(data, "entries") as unknown[] | undefined) ?? [];
+        const rows = core.data.chatsOf(address, { thread: id });
+        // A chat new to the list, or one whose rows only lend their title (a Slack thread): the station's to say, once
+        // a person wrote in it.
+        if (rows.length === 0) {
+          const own = get(core.data.of(address)?.thread(address, id), "surface") === "ember";
+          if (own || entries.some((e) => get(e, "authorKind") === "person")) this.#rowsRead(address, { threads: [id] });
+          return;
+        }
+        for (const row of rows) this.#rowAfter(address, row, rowAfterSaid(row, entries, me), { threads: [id] });
+        return;
+      }
       case "chat":
         return core.data.putChat(address, data);
+      case "made": {
+        // The station leaves its sidebar rows' changes to the device (`rows=1`): made here from now (rows-after.ts).
+        const link = this.#links.get(address);
+        if (link) link.makesRows = get(data, "rows") === true;
+        return;
+      }
+      case "chat-mark": {
+        // What was written of a chat beside what is said in it (the review's marks, who it is shared with, a chat opened
+        // from it): its rows as the station has them now, where it leaves them to the device.
+        const session = str(get(data, "session"));
+        const thread = u64(get(data, "thread"));
+        if (this.#links.get(address)?.makesRows && session !== null) this.#rowsRead(address, { sessions: [session], threads: thread === null ? [] : [thread] });
+        return;
+      }
       case "chat-removed": {
         const id = str(get(data, "id"));
         if (id) core.data.dropChat(address, id);
@@ -1405,10 +1474,62 @@ export class StationsSync {
   #onSession(address: string, summary: unknown): void {
     const key = str(get(summary, "key"));
     if (!key) return;
+    const before = this.#core.data.of(address)?.summary(address, key);
+    this.#rowsAfterSession(address, key, before, summary);
     if (this.#core.data.putSummary(address, summary)) this.#enqueue(address, `session/${key}`, Priority.shown, this.#session(address, key));
     // How far its transcript goes: what the device lacks of it after what it holds is read (channels.ts `settle`).
     const length = u64(get(summary, "transcriptLength"));
     if (length !== null && length > 0) this.channels.goesTo(transcriptOf(address, key), length - 1);
+  }
+
+  /// A session's summary into the rows it is among the agents of, where the station leaves them to the device
+  /// (rows-after.ts); a session listed and in none is new to the list: its row is the station's to say.
+  #rowsAfterSession(address: string, key: string, before: unknown, summary: unknown): void {
+    if (!this.#links.get(address)?.makesRows) return;
+    const rows = this.#core.data.chatsOf(address, { session: key });
+    const archived = (get(summary, "archivedAt") ?? null) !== null;
+    if (rows.length === 0) {
+      if (!archived && JSON.stringify(before ?? null) !== JSON.stringify(summary)) this.#rowsRead(address, { sessions: [key] });
+      return;
+    }
+    for (const row of rows) this.#rowAfter(address, row, rowAfterSession(row, before, summary), { sessions: [key] });
+  }
+
+  /// A row as a change of the station's makes it (rows-after.ts): in place, read where only the station can say it
+  /// (`of`: what changed).
+  #rowAfter(address: string, row: unknown, after: After, of: { sessions?: string[]; threads?: number[] }): void {
+    if (after === "read") this.#rowsRead(address, of);
+    else if (after !== null) this.#core.data.putChat(address, after);
+  }
+
+  /// The rows a change of these sessions and threads touches, read from the station (GET /chats?sessions=&threads=,
+  /// read/views.ts `chatRows`): what it asks is gathered while the read waits, one read for all of it.
+  #rowsRead(address: string, of: { sessions?: string[]; threads?: number[] }): void {
+    const link = this.#links.get(address);
+    if (!link) return;
+    for (const key of of.sessions ?? []) link.rowsWanted.sessions.add(key);
+    for (const id of of.threads ?? []) link.rowsWanted.threads.add(id);
+    this.#enqueue(address, "rows", Priority.shown, this.#asked((asked) => Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const sessions = [...link.rowsWanted.sessions];
+      const threads = [...link.rowsWanted.threads];
+      link.rowsWanted.sessions.clear();
+      link.rowsWanted.threads.clear();
+      if (sessions.length === 0 && threads.length === 0) return;
+      const query = [...sessions.map((k) => `session=${encode(k)}`), ...threads.map((id) => `thread=${id}`)].join("&");
+      const answer = yield* this.requests.call(link.addr, "GET", `/chats?${query}`, null, { quiet: true });
+      // A station from before answers its whole list: as such.
+      if (Array.isArray(answer)) {
+        this.#core.data.set({ topic: "chatRows", station: address }, answer);
+      } else {
+        const rows = arr(get(answer, "rows"));
+        const now = new Set(rows.map((r) => str(get(r, "id"))));
+        for (const row of rows) this.#core.data.putChat(address, row);
+        for (const id of arr(get(answer, "scope"))) if (typeof id === "string" && !now.has(id)) this.#core.data.dropChat(address, id);
+      }
+      this.#retell(address, asked);
+    })));
   }
 
   #onSessionRemoved(address: string, key: string): void {

@@ -1049,6 +1049,11 @@ export class Data {
     return this.of(station)?.chatOfThread(station, thread);
   }
 
+  /// The sidebar rows a thread's or a session's changes touch (account.ts `chatsOf`), for what the station's stream tells.
+  chatsOf(station: string, of: { thread: number } | { session: string }): unknown[] {
+    return this.of(station)?.chatsOf(station, of) ?? [];
+  }
+
   chatOfSession(station: string, session: string): unknown {
     void this.listed(station, "chats");
     this.#readQuery({ topic: "$chat-session", station, session });
