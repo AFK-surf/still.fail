@@ -26,6 +26,7 @@ import { platform } from "../platform/index.ts";
 import { isDeepStrictEqual } from "node:util";
 import { Clock, Duration, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
+import { wall } from "../ops/fibers.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
@@ -179,6 +180,29 @@ function readUsed(path: string): Json | null {
   return read;
 }
 
+/// How long what a task brought back is kept once nothing in it changed (`tidyBack`), and how often that is looked at.
+const BACK_KEPT_MS = 6 * 3600_000;
+const BACK_TIDY_MS = 3600_000;
+
+/// When anything under `path` last changed (its own time for a file), off the thread; Infinity where it cannot be said
+/// (kept).
+async function latestIn(path: string): Promise<number> {
+  let st;
+  try {
+    st = await stat(path);
+  } catch {
+    return Infinity;
+  }
+  if (!st.isDirectory()) return st.mtimeMs;
+  let latest = st.mtimeMs;
+  for (const name of await readdir(path).catch(() => null) ?? [""]) {
+    if (name === "") return Infinity;
+    latest = Math.max(latest, await latestIn(join(path, name)));
+    if (latest === Infinity) return latest;
+  }
+  return latest;
+}
+
 /// readJson off the station's thread (fs/promises): what is read again on a schedule, or all the records at once.
 const readJsonSoon = async (path: string): Promise<Json> => JSON.parse(await readFile(path, "utf8"));
 
@@ -276,6 +300,7 @@ export class Remote {
   private following = new Map<string, Set<string>>();
   /// The station is stopping: nothing more is followed.
   private stopped = false;
+  private stopTidying: () => void = () => {};
   /// Tasks asked about after their station said something (`check`), each with whether it said more meanwhile.
   private checking = new Map<string, boolean>();
   /// Tasks here whose source is being told they changed (`pushOut`), each with whether they changed again meanwhile.
@@ -311,6 +336,7 @@ export class Remote {
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
     void readAllUsed(join(this.root, "used"));
+    this.stopTidying = wall.every(BACK_TIDY_MS, () => void this.tidyBack());
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
@@ -470,9 +496,25 @@ export class Remote {
     return { taken: true };
   }
 
+  /// What tasks brought back (`station-back/<key>` of each session's workspace in use) let go of once nothing in it
+  /// changed for BACK_KEPT_MS: kept for good, they were 5.9 GB of ccvm's disk, 1.3 GB left (2026-11-04, the user's
+  /// call: 6 hours). Off the station's thread.
+  private async tidyBack(): Promise<void> {
+    const now = wall.now();
+    for (const row of this.store.liveSessions()) {
+      if (this.stopped) return;
+      const back = join(row.workspace, "station-back");
+      for (const name of await readdir(back).catch(() => [] as string[])) {
+        const dir = join(back, name);
+        if ((await latestIn(dir)) < now - BACK_KEPT_MS) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+      }
+    }
+  }
+
   /// Its schedules end (the station stops).
   async close(): Promise<void> {
     this.stopped = true;
+    this.stopTidying();
     this.workspaceReader.close();
     await Effect.runPromise(Scope.close(this.scope, Exit.void));
   }

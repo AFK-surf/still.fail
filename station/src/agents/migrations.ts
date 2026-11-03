@@ -112,6 +112,7 @@ export const NOTES: [number, string][] = [
   [105, "station_task prepare takes small: true for a brief offscreen task such as one picture made with a prebuilt renderer. One such task may run alongside busy builds without the CPU sampling wait; it is told to use one CPU and still waits for memory pressure or another small task. Do not use it for builds, test suites, video or screen work. An older target says it cannot run small tasks."],
   [106, "phone_use {done: true} hands a granted phone back (or withdraws a request not yet decided): call it once you are done with the phone, so it is no longer lent for your chat and its comings and goings no longer wake you."],
   [107, "For shared Android debugging, the current app pairs its own adb once and stations borrow that connection; older apps may still pair each station. An unpaired phone's card continues to guide its person through pairing."],
+  [108, "What a remote task brought back (station-back/<key>/) is removed once nothing in it changed for 6 hours: move what you keep into your workspace."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
