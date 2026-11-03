@@ -535,6 +535,34 @@ test("stop while waiting ends the jobs that would bring it back, but not its ser
   await r.close();
 });
 
+test("archiving stops its active jobs without reading its job history", async () => {
+  const r = new Rig();
+  const list = r.store.listJobs;
+  try {
+    const key = "archive-jobs";
+    r.store.insertSession({ key, connect: "cl", runtime: "claude", profile: "cc", workspace: r.dir, token: key, createdAt: 1, lastActiveAt: 1 });
+    const add = (id: string, state: string, port: number | null, watch: boolean, startedAt: number, sessionKey = key) =>
+      r.store.insertJob({ ...watchJob(sessionKey), id, token: `t-${id}`, state, port, watch, startedAt });
+    for (let i = 0; i < 200; i++) add(`old-${i}`, "exited", null, false, i);
+    add("watch", "running", null, true, 201);
+    add("command", "running", null, false, 202);
+    add("service", "running", 47123, false, 203);
+    add("restarting", "exited", 47124, false, 204);
+    add("stopped", "stopped", 47125, false, 205);
+    add("other", "running", null, false, 206, "another-session");
+    const stopped: string[] = [];
+    r.hub.setJobs({ stop: async (id) => { stopped.push(id); r.store.jobEnded(id, "stopped", null); return r.store.getJob(id)!; } });
+    r.store.listJobs = () => { throw new Error("the session's job history was read"); };
+    await r.hub.actor(r.store.getSession(key)!).putAway();
+    assert.deepEqual(stopped, ["restarting", "service", "command", "watch"]);
+    assert.equal(r.store.getJob("other")!.state, "running");
+    assert.equal(r.store.getJob("stopped")!.state, "stopped");
+  } finally {
+    r.store.listJobs = list;
+    await r.close();
+  }
+});
+
 test("a turn that cannot start is not left starting, and stop clears what is still said to be under way", async () => {
   const r = new Rig();
   r.claude.refuses = "the station this subscription is signed in on did not lend it: station mesh is not ready";
