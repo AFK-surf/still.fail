@@ -109,7 +109,21 @@ for x in $tests; do
     continue
   fi
   cp "$trace" "$TMP/$(basename "$trace").old"
-  "$D/trace" make "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"
+  if ! "$D/trace" make "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"; then
+    cp "$TMP/$(basename "$trace").old" "$trace"
+    echo "  $test: recording failed; its old trace was kept"
+    code=1
+    continue
+  fi
+  # Refuse to keep this machine's identity even if another source is added to the recording later.
+  machine=$(hostname -s)
+  if { [ -n "${HOME:-}" ] && [ "$HOME" != / ] && grep -Fq "$HOME" "$trace"; } ||
+     { [ -n "$machine" ] && grep -Fq "$machine" "$trace"; }; then
+    cp "$TMP/$(basename "$trace").old" "$trace"
+    echo "  $test: recording contains local machine information; its old trace was kept"
+    code=1
+    continue
+  fi
   "$D/trace" diff "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
   # (what the new trace has the app ask of the core's pure calls that is not kept yet (src/sfkept: a text the run typed,
   # read by the core): worked out by the core and kept, as scripts/kept does, for this test alone, then run again)
