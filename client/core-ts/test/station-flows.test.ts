@@ -1713,12 +1713,26 @@ test("what_the_agents_spent_is_read_again_from_the_day_a_change_touched", async 
   core.close();
 });
 
+// On ccvm (2026-11-03) the whole archive was made at once: 1,398 chats in 60 s, every other read of devices waiting.
+test("the archive is read a page at a time, each on from where the one before ended, all of it held at its end", async () => {
+  const row = (id: string, at: number) => ({ id, session: id, thread: null, title: id, last: null, lastActiveAt: at, archived: { at, by: "manual", alone: false } });
+  const s = await ui({
+    ...base(),
+    "GET /chats?archived=1&page=": { rows: [row("c", 30), row("b", 20)], next: "20:b" },
+    "GET /chats?archived=1&page=20%3Ab": { rows: [row("a", 10)], next: null },
+  });
+  subscribe(s.core, s.ui, 2, { topic: "archive", scope: "ws" });
+  await s.read();
+  assert.deepEqual((s.core.inner.data.get({ topic: "archivedRows", station: ST }) as J[]).map((r) => r.id), ["c", "b", "a"]);
+  assert.equal(gets(s.host, "/chats?archived=1"), 0, "never whole");
+});
+
 test("the_archive_is_read_only_while_a_page_shows_it", async () => {
   const s = await ui({ ...base(), "POST /threads/7/archive": { ok: true } });
   // Its stream comes back told what it missed, as in the test before.
   s.gate.resumes = true;
   Queue.offerUnsafe(s.streams.at(-1)!.queue, new TextEncoder().encode(`id: 1f2e3d4c.1\nevent: overview\ndata: {}\n\n`));
-  const archived = () => gets(s.host, "/chats?archived=1");
+  const archived = () => gets(s.host, "/chats?archived=1&page=");
   const archive = async (id: number) => {
     call(s.core, s.ui, id, "chat.archive", { station: ST, session: "k1", thread: 7, archived: true });
     await s.read();

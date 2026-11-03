@@ -85,6 +85,7 @@ const RESOURCES_SILENT_MS = 4 * RESOURCES_EVERY_MS;
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /// A row's id as text (sessions' and chats' are strings, threads' numbers).
 const idText = (v: unknown): string | null => (typeof v === "string" ? v : typeof v === "number" ? String(v) : null);
 
@@ -778,12 +779,40 @@ export class StationsSync {
     if (link && !link.archivedCurrent) this.#enqueue(address, "archived", Priority.shown, this.#archived(address));
   }
 
+  /// The station's archive, read a page at a time from its latest (`?page=`, its next where the one before ended): each
+  /// page put in with what is held of those older than it, until its end, then what was read alone. Read whole at once,
+  /// the archive of 1,398 chats took 60 s on ccvm, every other read of devices waiting (2026-11-03). A station from
+  /// before pages none: its answer, the whole list, is put in as it was.
   #archived(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const link = this.#links.get(address);
       if (link) link.archivedCurrent = true;
-      return this.#read(address, { topic: "archivedRows", station: address }, "/chats?archived=1", undefined, ctx);
+      const topic = { topic: "archivedRows", station: address };
+      return this.#archivedFrom(address, topic, "", [], ctx);
     });
+  }
+
+  #archivedFrom(address: string, topic: Topic, page: string, read: unknown[], ctx: SpanContext | null): Effect.Effect<void, CoreError> {
+    return this.#asked((asked) => Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const answer = yield* this.requests.call(link.addr, "GET", `/chats?archived=1&page=${encode(page)}`, null, { quiet: true, ctx });
+      const key = topicKey(topic);
+      link.errors.delete(key);
+      if (Array.isArray(answer)) {
+        this.#core.data.set(topic, answer);
+        this.#retell(address, asked);
+        return;
+      }
+      const rows = [...read, ...arr(get(answer, "rows"))];
+      const next = str(get(answer, "next"));
+      const seen = new Set(rows.map((r) => str(get(r, "id"))));
+      const end = next === null ? null : Number(next.slice(0, next.indexOf(":")));
+      const held = end === null ? [] : arr(this.#core.data.shared(topic)).filter((r) => !seen.has(str(get(r, "id"))) && (u64(get(get(r, "archived"), "at")) ?? 0) < end);
+      this.#core.data.set(topic, [...rows, ...held]);
+      this.#retell(address, asked);
+      if (next !== null) this.#enqueue(address, `archived/${next}`, Priority.background, this.#archivedFrom(address, topic, next, rows, null));
+    }));
   }
 
   /// A page shows the station's usage: read, unless what is held is as the station has it.

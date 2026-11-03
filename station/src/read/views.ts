@@ -320,6 +320,22 @@ function needView(api: Api, thread: number, agents: Json[], dismissed: Set<strin
 /// threads those take part in, the Slack ones they came from among them).
 export type Scope = { rows: Set<string>; sessions: Set<string>; threads: number[] };
 
+/// How many of the archive's items a page of it has (`archivedPage`).
+export const ARCHIVE_PAGE = 50;
+
+/// GET /chats?archived=1&before=…: a page of the archive, the latest archived first, before `before` (when, and the
+/// session key or chat id; none: from the latest), and where the next one goes on from (none at its end). Its items, by
+/// the indexes of those archived, and their rows made of them alone (`scopeOf`). The whole archive was made at once: its
+/// 1,398 chats on ccvm in 60 s, every other read of devices waiting behind it (2026-11-03).
+export function archivedPage(station: Store, viewer: Viewer, before: [number, string] | null, limit = ARCHIVE_PAGE): Json {
+  const items = store.archivedPage(station, before ?? [Number.MAX_SAFE_INTEGER, "\uffff"], limit);
+  const sessions = items.filter((i) => i.kind === "s").map((i) => i.id);
+  const threads = items.filter((i) => i.kind === "t").map((i) => Number(i.id));
+  const rows = items.length === 0 ? [] : chats(station, viewer, true, scopeOf(station, sessions, threads));
+  const last = items.at(-1);
+  return { rows, next: items.length < limit || last === undefined ? null : `${last.at}:${last.id}` };
+}
+
 export function scopeOf(s: Store, sessions: string[], threads: number[]): Scope {
   const members = (ids: Iterable<number>) => {
     const out = new Set<string>();
@@ -356,7 +372,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   // of alone: each change read every session the station ever had.
   const sessions = (
     scope === null
-      ? store.listSessions(s)
+      // The sidebar's by the index of those not archived, not every session the station ever had.
+      ? (archived ? store.listSessions(s) : store.shownSessions(s))
       : [...scope.sessions].flatMap((key) => store.getSession(s, key) ?? []).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   ).filter((x) => sees(viewer, x.ws));
   const shown = new Map(sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => [x.key, x]));

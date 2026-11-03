@@ -3,7 +3,8 @@ import { type Request, error, param } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { changed } from "./changed.ts";
 
-const chatsOf = (r: Request) => ({ viewer: r.viewer, archived: param(r, "archived") === "1" });
+/// `page`: the archive a page at a time (read/views.ts `archivedPage`), from its first (`page=`) or on from where one ended.
+const chatsOf = (r: Request) => ({ viewer: r.viewer, archived: param(r, "archived") === "1", page: param(r, "page") ?? undefined });
 
 export const routes = ({ read }: Tools): Route[] => [
   { method: "GET", pattern: /^\/chats$/, handle: (r: Request) => read(r, "chats", chatsOf(r)) },

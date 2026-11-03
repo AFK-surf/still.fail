@@ -1902,7 +1902,7 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   now = Math.round(s.host.nowMs());
   stationReplies(s.host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (req.method === "GET" && path === "/chats?archived=1") return all();
+    if (req.method === "GET" && path.startsWith("/chats?archived=1")) return all();
     if (req.method === "DELETE" && path === "/threads/7/archive") {
       gone.push("k1");
       return { ok: true };
