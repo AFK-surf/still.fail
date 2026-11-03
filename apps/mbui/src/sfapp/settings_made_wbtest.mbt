@@ -1218,7 +1218,7 @@ test "一台 station 的记忆 made once, read the first time or failing to be: 
     let words = words_where(made)
     assert_true(!words.iter().any(fn(w) { w.contains("字") }), msg="its bones drawn, failed \{failed}: \{words}")
     assert_true(!said.iter().any(fn(w) { w.contains("字") }), msg="its bones read out, failed \{failed}: \{said}")
-    assert_eq(said.contains("网络连接失败"), failed, msg="\{said}")
+    assert_eq(said.iter().any(fn(w) { w.contains("网络连接失败") }), failed, msg="\{said}")
   }
 }
 
