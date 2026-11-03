@@ -1947,6 +1947,46 @@ test("a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after", async
   third.core.close();
 });
 
+test("an unread chat waits for its opening position before showing a newly read window", async () => {
+  const answers: J = {
+    ...base(),
+    "GET /threads": [threadView(7, 300, 200, 100)],
+    "GET /threads/7/entries?limit=50": { last: 300, entries: entries(251, 300) },
+    "GET /threads/7/entries?from=151&to=250": { last: 300, entries: entries(151, 250) },
+    "GET /threads/7/entries?from=151&to=200": { last: 300, entries: entries(151, 200) },
+    "GET /threads/7/entries?from=201&to=250": { last: 300, entries: entries(201, 250) },
+  };
+  let background!: () => void;
+  const s = await ui(answers, (state) => { background = state.host.hold("/admin/api/batch"); });
+  // Hold either the previous one-request opening or its second half. The earlier half may arrive, but the first
+  // unread entry (201) has not, so a new window cannot yet open at its requested position.
+  const whole = s.host.hold("/admin/api/threads/7/entries?from=151&to=250");
+  const second = s.host.hold("/admin/api/threads/7/entries?from=201&to=250");
+  try {
+    subscribe(s.core, s.ui, 1, thread7);
+    await s.read();
+    await s.read();
+    if (gets(s.host, "/admin/api/threads/7/entries?from=201&to=250")) {
+      assert.equal(s.core.inner.data.logCount("entry", ST, "7", 151, 200), 50, "the earlier half has arrived");
+    } else {
+      assert.equal(gets(s.host, "/admin/api/threads/7/entries?from=151&to=250"), 1, "the whole opening is held");
+    }
+    assert.equal(s.core.inner.data.logCount("entry", ST, "7", 201, 201), 0, `the opening position has not arrived; requests: ${JSON.stringify(entryReads(s.host, 0))}`);
+    const shown = page(s.values);
+    assert.ok(!shown?.entries?.length || shown.entries.some((e: J) => e.n === 201), "the opening position has not arrived yet");
+    whole();
+    second();
+    await s.read();
+    await s.read();
+    assert.deepEqual(windowOf(s.values), [151, 250, false]);
+  } finally {
+    whole();
+    second();
+    background();
+    s.core.close();
+  }
+});
+
 test("a_chat_with_something_unread_opens_whole_at_it_and_pages_either_way", async () => {
   // 300 entries, read up to 200: the window is the page before the first unread and the page from it.
   const answers: J = {
