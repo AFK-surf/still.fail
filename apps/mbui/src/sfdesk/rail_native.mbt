@@ -700,6 +700,22 @@ let column_short_below : Double = 600.0
 let nav_held : Ref[() -> (Source, Workspace, Array[Workspace])?] = Ref(fn() { None })
 
 ///|
+/// The bars held by the frame made once in the window's tree (the tape's, the pane's): what is under it is an island,
+/// built as what it reads changes, not each frame; handed none in a frame that did not build it, the host would take
+/// the app's view out of the tabs and put it back, and a finger on it would never be told it went up.
+fn nav_hold(src : Source) -> Unit {
+  nav_held.val = fn() {
+    if !@sf.native_able() {
+      return None
+    }
+    match @sfbase.workspace_in_view(src) {
+      (Some(w), all, _, _) => Some((src, w, all))
+      _ => None
+    }
+  }
+}
+
+///|
 /// What this file keeps put back as the app begins anew (desk.mbt reset).
 fn rail_native_reset() -> Unit {
   native_workspace_anchor.val = 0
