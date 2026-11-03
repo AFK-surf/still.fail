@@ -911,6 +911,26 @@ test("jobs: a session's detail as a device asks it lists its latest and those st
   }
 });
 
+test("what is written of a chat beside what is said in it is told as written: archive review, shares, chats opened from it", () => {
+  const store = memory();
+  session(store, "a");
+  const h = heard(store);
+  store.suggestArchive("a", 7, 12);
+  store.setArchiveVerdict("a", 7, 12, { picked: "archive" });
+  store.clearArchiveSuggestion("a", 7);
+  store.setChatShare("a", [{ workspace: "w2", name: "Two" }], true, "a@x");
+  store.insertOpened({ childStation: "", child: "b", parentStation: "", parent: "a", key: "k", title: "子对话", link: null, openerTitle: null });
+  h.stop();
+  const marks = h.changes.filter((c) => c.type === "chatMark").map(({ type: _, ...m }: any) => m);
+  assert.deepEqual(marks.map((m: any) => m.opened ? { ...m, opened: { ...m.opened, createdAt: 0 } } : m), [
+    { thread: 7, session: "a", archive: { suggested: 12 } },
+    { thread: 7, session: "a", archive: { verdict: { picked: "archive" } } },
+    { thread: 7, session: "a", archive: { suggested: null } },
+    { thread: null, session: "a", share: { to: [{ workspace: "w2", name: "Two" }], write: true } },
+    { thread: null, session: "a", opened: { childStation: "", child: "b", parent: "a", title: "子对话", openerTitle: null, createdAt: 0 } },
+  ]);
+});
+
 test("jobs: started, said, ended and cleared", () => {
   const store = memory();
   session(store, "a");

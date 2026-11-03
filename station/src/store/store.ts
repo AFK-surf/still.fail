@@ -533,7 +533,9 @@ export class Store {
         const ends = toChatShare(r).to.map((t) => t.used + XSHARE_IDLE_MS);
         if (ends.some((end) => end > since && end <= now)) {
           for (const t of this.sessionThreads(r.session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
-          changes.push({ type: "session", key: r.session });
+          const share = toChatShare(r);
+          const live = share.to.filter((t) => shareLive(t, now)).map((t) => ({ workspace: t.workspace, name: t.name }));
+          changes.push({ type: "session", key: r.session }, { type: "chatMark", thread: null, session: r.session, share: { to: live, write: share.write } });
         }
         for (const end of ends) if (end > now && (next === null || end < next)) next = end;
       }
@@ -553,7 +555,7 @@ export class Store {
         );
       }
       for (const t of this.sessionThreads(session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
-      changes.push({ type: "session", key: session });
+      changes.push({ type: "session", key: session }, { type: "chatMark", thread: null, session, share: { to: to.map((t) => ({ workspace: t.workspace, name: t.name })), write } });
     });
   }
 
@@ -602,10 +604,18 @@ export class Store {
 
   /// Records a chat opened for a session: by its station and key, and its parent's ('' for this station).
   insertOpened(o: Omit<Opened, "state" | "createdAt" | "openerTitle"> & { openerTitle?: string | null }): void {
-    this.#run(
-      `INSERT INTO opened_chats (child_station, child, parent_station, parent, key, title, link, opener_title, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      o.childStation, o.child, o.parentStation, o.parent, o.key, o.title, o.link, o.openerTitle ?? null, this.now(),
-    );
+    this.#with((changes) => {
+      const at = this.now();
+      this.#run(
+        `INSERT INTO opened_chats (child_station, child, parent_station, parent, key, title, link, opener_title, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        o.childStation, o.child, o.parentStation, o.parent, o.key, o.title, o.link, o.openerTitle ?? null, at,
+      );
+      // Told of the chat it was opened from, here (the parent's station is this one: '').
+      if (o.parentStation === "") {
+        const opened = { childStation: o.childStation, child: o.child, parent: o.parent, title: o.title, openerTitle: o.openerTitle ?? null, createdAt: at };
+        changes.push({ type: "chatMark", thread: null, session: o.parent, opened });
+      }
+    });
   }
 
   /// The chat a parent opened with `key` on `childStation`, if it has.
@@ -1104,7 +1114,7 @@ export class Store {
         "INSERT INTO archive_verdicts(thread, version, at, verdict) VALUES (?, ?, ?, ?) ON CONFLICT(thread) DO UPDATE SET version = excluded.version, at = excluded.at, verdict = excluded.verdict",
         thread, version, this.now(), JSON.stringify(verdict),
       );
-      changes.push({ type: "session", key: session });
+      changes.push({ type: "session", key: session }, { type: "chatMark", thread, session, archive: { verdict } });
     });
   }
 
@@ -1115,14 +1125,16 @@ export class Store {
         "INSERT INTO archive_suggestions(thread, version, at) VALUES (?, ?, ?) ON CONFLICT(thread) DO UPDATE SET version = excluded.version, at = excluded.at",
         thread, version, this.now(),
       );
-      changes.push({ type: "session", key: session });
+      changes.push({ type: "session", key: session }, { type: "chatMark", thread, session, archive: { suggested: version } });
     });
   }
 
   /// The decision no longer says so (it found something left, or could not tell).
   clearArchiveSuggestion(session: string, thread: number): void {
     this.#with((changes) => {
-      if (this.#run("DELETE FROM archive_suggestions WHERE thread = ?", thread) > 0) changes.push({ type: "session", key: session });
+      if (this.#run("DELETE FROM archive_suggestions WHERE thread = ?", thread) > 0) {
+        changes.push({ type: "session", key: session }, { type: "chatMark", thread, session, archive: { suggested: null } });
+      }
     });
   }
 

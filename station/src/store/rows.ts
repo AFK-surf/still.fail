@@ -249,6 +249,11 @@ export type StoreChange =
   | { type: "job"; id: string }
   /// A job that was over was taken off its session's record.
   | { type: "jobRemoved"; id: string; session: string }
+  /// What was written of a chat beside what is said in it, as written: a device that makes its sidebar itself puts it
+  /// in place (api/events.ts `chat-mark`). `archive`: the review's suggestion (the version it looked at; null: none
+  /// now) or what it found (`verdict`); `share`: who the chat is shared with now (none: no one); `opened`: a chat an
+  /// agent opened from it.
+  | { type: "chatMark"; thread: number | null; session: string; archive?: { suggested?: number | null; verdict?: Json }; share?: { to: { workspace: string; name: string }[]; write: boolean }; opened?: Json }
   /// Model calls were recorded (store/usage.ts), of these sessions; `from`, when the earliest of them was made (ms):
   /// what a page holding the usage reads again of it, from that day on.
   | { type: "usage"; sessions: string[]; from?: number }
