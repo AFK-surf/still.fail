@@ -11,7 +11,7 @@ import { isAbsolute, join } from "node:path";
 import { createZstdDecompress } from "node:zlib";
 import { segmentsFrom } from "../read/packed.ts";
 import * as store from "../read/store.ts";
-import type { MessageRow, SessionRow, Store } from "../read/store.ts";
+import type { JobRow, MessageRow, SessionRow, Store } from "../read/store.ts";
 import { homesFirst, type ReadState, sessionPlaces, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
 import { readFrom } from "../usage/counter.ts";
 import { agentHomeOf, memory } from "../read/memory.ts";
@@ -373,12 +373,42 @@ export function jobDocs(s: Store, key: string): Doc[] {
   const session = store.getSession(s, key);
   const jobs = store.listJobs(s, key);
   const thread = session ? (store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null) : null;
-  return jobs.map((j) => ({
+  return jobs.map((j) => jobDoc(j, key, session, thread));
+}
+
+function jobDoc(j: Pick<JobRow, "id" | "name" | "command" | "cwd" | "port" | "state" | "startedAt">,
+  key: string, session: SessionRow | null, thread: ReturnType<typeof store.sessionThreads>[number] | null): Doc {
+  return {
     key: `j:${j.id}`, kind: "job", ws: session?.ws ?? null, title: j.name,
     body: [j.command, j.cwd ?? "", j.port !== null && j.port !== undefined ? `:${j.port}` : ""].filter((w) => w !== "").join("\n"),
     at: j.startedAt ?? null,
     ref: { job: j.id, session: key, chat: key, state: j.state, ...(j.port !== null && j.port !== undefined ? { port: j.port } : {}), ...(thread ? { thread: thread.id } : {}) },
-  }));
+  };
+}
+
+/// Read a session's jobs by their rowid, which jobs_by_session orders after the session key. `pick` ranks by startedAt;
+/// rowid order preserves the old stable order for ties while avoiding a sort and an array of all the session's jobs.
+function* jobDocSteps(s: Store, key: string, session: SessionRow, asker?: Asker): Generator<Doc | undefined> {
+  const end = (s.db.prepare("SELECT MAX(rowid) AS n FROM jobs INDEXED BY jobs_by_session WHERE session_key = ?").get(key) as { n: number | null }).n;
+  if (end === null) return;
+  const thread = store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
+  let current = session;
+  let after: number | null = null;
+  for (;;) {
+    const rows = after === null
+      ? all(s, "SELECT rowid AS seq, id, name, command, cwd, port, state, started_at FROM jobs WHERE session_key = ? AND rowid <= ? ORDER BY rowid LIMIT ?", key, end, MESSAGE_BATCH)
+      : all(s, "SELECT rowid AS seq, id, name, command, cwd, port, state, started_at FROM jobs WHERE session_key = ? AND rowid > ? AND rowid <= ? ORDER BY rowid LIMIT ?", key, after, end, MESSAGE_BATCH);
+    if (rows.length === 0) return;
+    for (const r of rows) yield jobDoc({ id: r.id, name: r.name, command: r.command, cwd: r.cwd, port: r.port, state: r.state, startedAt: r.started_at }, key, current, thread);
+    after = rows.at(-1)!.seq as number;
+    yield undefined;
+    // A session can move or go while another search is running between batches. Never read its next batch for its old
+    // workspace, nor return an apparently complete result assembled before access changed.
+    const latest = store.getSession(s, key);
+    if (!latest || (asker && !sees({ ws: latest.ws }, asker))) throw new Error("the session changed while searching; search again");
+    if (rows.length < MESSAGE_BATCH) return;
+    current = latest;
+  }
 }
 
 // ── memory, skills, profiles ──
@@ -444,10 +474,22 @@ export function* stationDocSteps(s: Store, data: string, config: unknown, kinds:
       if (rows.length < MESSAGE_BATCH) break;
     }
   }
-  if (wants("job")) for (const key of sessionKeys(s)) {
-    const session = store.getSession(s, key);
-    if (!asker || sees({ ws: session?.ws ?? null }, asker)) yield* jobDocs(s, key);
-    yield undefined;
+  if (wants("job")) {
+    // Seek to the next session in the jobs index, rather than visiting every session without a job or counting a
+    // session once for each of its jobs. The saved end keeps newly created sessions from extending a search forever.
+    const end = (s.db.prepare("SELECT MAX(session_key) AS key FROM jobs INDEXED BY jobs_by_session").get() as { key: string | null }).key;
+    let after: string | null = null;
+    while (end !== null) {
+      const row = (after === null
+        ? s.db.prepare("SELECT session_key FROM jobs INDEXED BY jobs_by_session WHERE session_key <= ? ORDER BY session_key LIMIT 1").get(end)
+        : s.db.prepare("SELECT session_key FROM jobs INDEXED BY jobs_by_session WHERE session_key > ? AND session_key <= ? ORDER BY session_key LIMIT 1").get(after, end)) as { session_key: string } | undefined;
+      if (!row) break;
+      const key = row.session_key;
+      after = key;
+      const session = store.getSession(s, key);
+      if (session && (!asker || sees({ ws: session.ws }, asker))) yield* jobDocSteps(s, key, session, asker);
+      yield undefined;
+    }
   }
   if (wants("skill") || wants("memory")) {
     for (const ws of [null, ...memoryWorkspaces(agentHomeOf(data))]) {
