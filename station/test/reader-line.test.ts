@@ -242,9 +242,10 @@ test("a background read waiting while its line rests is read once it has rested,
   const { wall } = await import("../src/ops/fibers.ts");
   const [now, after] = [wall.now, wall.after];
   let clock = 1_000;
+  // The line's wakes (a reader idle a minute going is not this test's).
   const due: (() => void)[] = [];
   wall.now = () => clock;
-  wall.after = (_ms, f) => (due.push(f), () => {});
+  wall.after = (ms, f) => (ms < 60_000 && due.push(f), () => {});
   const { readers, state, args, open } = gated(2);
   try {
     const background = { background: true };
