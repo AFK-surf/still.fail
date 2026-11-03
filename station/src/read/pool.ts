@@ -66,6 +66,15 @@ function interactive(a: Asked): boolean {
   return !keys.includes("after") && !keys.includes("from") && !keys.includes("to");
 }
 
+/// A stretch of a session's history in brief (`from` and `to`): what a client fills in of it in the background, where its
+/// stream left a hole or it holds less than there is (client/core-ts/src/station/channel-kinds.ts TRANSCRIPT). Up to
+/// 1,000 items a read, 16 MB of a Codex transcript and 6 s on ccvm (2026-11-03), the sidebar waiting 9 s behind them.
+/// One read whole (a step opened) is someone's waiting on it.
+function filling(op: string, args: unknown): boolean {
+  const a = args as { from?: unknown; to?: unknown; brief?: unknown } | null;
+  return op === "timeline" && a !== null && typeof a.from === "string" && typeof a.to === "string" && a.brief === "1";
+}
+
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
   private asked: Line;
@@ -150,7 +159,7 @@ export class Readers {
   read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false }: { told?: boolean; background?: boolean } = {}): Promise<string> {
     if (op === "usage") return this.usageRead(args, lang, told);
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told);
-    return this.enqueue(op, args, lang, told, op === CHECKPOINT, background);
+    return this.enqueue(op, args, lang, told, op === CHECKPOINT, background || filling(op, args));
   }
 
   private async usageRead(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
