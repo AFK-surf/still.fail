@@ -427,6 +427,7 @@ export function accessOf(v: unknown): J | null {
   if (!isObject(v)) return null;
   const out: J = { capture: v.capture !== false, control: v.control !== false };
   for (const k of ["message", "app", "path"]) if (typeof v[k] === "string" && v[k] !== "") out[k] = v[k];
+  if (v.help === "linux-desktop") out.help = v.help;
   return out;
 }
 

@@ -9,7 +9,7 @@ import { linkTarget } from "../src/asks.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { CoreError } from "../src/error.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, FrameReader, ackFrame, clipboardFrame, configFrame, copiedFrame, inputFrame, keyframeFrame, lookFrame, readClientFrames, stateFrame, videoFrame, type ClientFrame, type StationFrame } from "../src/screen-frames.ts";
-import { LOOK_MS, checkInput, othersOf } from "../src/screens.ts";
+import { LOOK_MS, accessOf, checkInput, othersOf } from "../src/screens.ts";
 import { HostWire, type RequestHead, type ScreenAsk, type StationWire } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { base64 } from "../src/util.ts";
@@ -19,6 +19,11 @@ import { base, started } from "./station-fixture.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
+
+test("desktop setup help crosses the screen state without accepting arbitrary links", () => {
+  assert.deepEqual(accessOf({ capture: false, control: false, help: "linux-desktop" }), { capture: false, control: false, help: "linux-desktop" });
+  assert.deepEqual(accessOf({ capture: false, control: false, help: "https://example.com" }), { capture: false, control: false });
+});
 
 /// Draws from a seed (xorshift): the same seed, the same cuts.
 function random(seed: number): () => number {

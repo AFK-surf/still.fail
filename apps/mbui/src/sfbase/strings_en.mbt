@@ -2333,6 +2333,7 @@ let en : Map[String, String] = {
   "web-pages.profiles.verifiedAdded": "Verified and added",
   "web-pages.profiles.workspaces.lead": "This station is also in other workspaces; by default, a profile is used in all of them",
   "web-pages.screen.again": "Open again",
+  "web-pages.screen.linuxSetup": "Installation guide",
   "web-pages.screen.debug.appRunning": "Running",
   "web-pages.screen.debug.appsLoading": "Reading apps…",
   "web-pages.screen.debug.appsNone": "No apps are installed on this simulator yet.",

@@ -2308,6 +2308,7 @@ let zh : Map[String, String] = {
   "web-pages.profiles.verifiedAdded": "已验证并添加 Profile",
   "web-pages.profiles.workspaces.lead": "此 station 也属于其他 workspace；Profile 默认同时用于这些 workspace",
   "web-pages.screen.again": "重新打开",
+  "web-pages.screen.linuxSetup": "安装说明",
   "web-pages.screen.debug.appRunning": "运行中",
   "web-pages.screen.debug.appsLoading": "正在读取 App…",
   "web-pages.screen.debug.appsNone": "这台模拟器上还没有装 App。",
