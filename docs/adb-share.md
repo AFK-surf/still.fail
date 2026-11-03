@@ -23,6 +23,10 @@
 >   (`ANDROID_ADB_SERVER_PORT`); the phone's tunnel listener takes connections from that server's process alone (the
 >   peer of a loopback TCP connection, found by its ports in the processes' sockets). Another chat's agent, knowing the
 >   port, is not let in.
+> - **Nothing here connects by itself** (2026-11-03): on the phone's network, with its Wireless debugging on and this
+>   machine's key trusted, adb's server connects to it directly, not through the tunnel and whatever is granted (seen on
+>   the default server and in a grant's). The station runs with `ADB_MDNS_AUTO_CONNECT=0`, which what it starts inherits. A
+>   server started outside it (a person's terminal) still does: an agent's command then finds the phone on it.
 > - **The phone lends while a grant is live**, to the station of that chat (one offer per station, its grants listed):
 >   its foreground service and notification say which chats it is lent to, each with 停止. No per-station switch.
 > - **Lent with no one at it** (2026-10-30: granted once, the phone is the chat's without its person at it): the grants the phone is lent for are
