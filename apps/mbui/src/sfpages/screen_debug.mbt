@@ -126,7 +126,14 @@ fn debug_poses(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     Some((w, h)) => w.to_double() / h.to_double() < duo_cover_shape
     None => true
   }
-  let chosen = if cover {
+  // (the one pressed as chosen until the picture has come: a fold takes a second or more)
+  let asked = u.logs.pose_asked
+  if asked >= 0 && (asked == 0) == cover {
+    u.logs.pose_asked = -1
+  }
+  let chosen = if u.logs.pose_asked >= 0 {
+    u.logs.pose_asked
+  } else if cover {
     0
   } else if u.logs.half_open {
     1
@@ -147,6 +154,7 @@ fn debug_poses(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   )
   if pick != chosen {
     u.logs.half_open = pick == 1
+    u.logs.pose_asked = pick
     let name = names[pick]
     c.tell("screen-pose/" + s.view + "/" + name, fn() {
       s.input(s.src, Json::object({ "t": Json::string("pose"), "name": Json::string(name) }))
@@ -331,6 +339,8 @@ priv struct DebugLogs {
   mut relaunch_said : String
   /// asked here for an iPhone Duo's half open (the inner panel's picture says the rest)
   mut half_open : Bool
+  /// the pose last pressed, until the picture says it (-1: none)
+  mut pose_asked : Int
 }
 
 ///|
@@ -398,6 +408,7 @@ fn debug_logs_new() -> DebugLogs {
     last_app: None,
     relaunch_said: "",
     half_open: false,
+    pose_asked: -1,
   }
 }
 
