@@ -623,6 +623,7 @@ pub fn panel_list(
   row : (Int) -> Unit,
   stick_end? : Bool = false,
   fills? : Bool = false,
+  rows? : @ui.RowCauses,
 ) -> Int {
   let arrangement = look()
   let (sides, out, words, body, small) = (
@@ -654,7 +655,7 @@ pub fn panel_list(
     None => sheet_grows.then(@ui.style(mx=room(-out)))
   }
   let room_box = c.box(style=room_at, id=room_id, taps=false, fn() {
-    list = c.list(key, count, est, stick_end~, fn(i) {
+    list = c.list(key, count, est, stick_end~, sized?=rows, fn(i) {
       with_look(arrangement, fn() {
         let was = (panel_sides_in.val, rows_out.val, words_in_now.val, panel_body_now.val, small_panel_now.val)
         panel_sides_in.val = sides - out

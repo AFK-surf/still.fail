@@ -71,10 +71,19 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
   }
   let editing_busy = opening && vi_reveal.get(item) is None
   let blocks = item_blocks(c, core, look, ws, key, item, vv, rv, uses, plain, opened, opening, open)
+  // (each block by what it is and what it shows: its content opened or not, how it is used; one come or gone opens or
+  // closes where it is, one showing another thing goes to its height, @sf.page's `keys`)
+  let shown = json_sign(rv)
+  let keys = (if plain { [("risk", "")] } else { [] }) +
+    [
+      ("content", (if opened is Some(_) { "open" } else if opening { "opening" } else { "shut" }) + shown),
+      ("use", shown),
+      ("uses", json_sign(uses)),
+    ]
   let sub = join([text(rv, "kindText"), @sf.t("web-pages.vault.storedOn", args=[("station", text(vv, "stationName"))])], " · ")
   match look {
     Wide =>
-      @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, small=@sf.t("web-pages.vault.title"), head=fn() {
+      @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, keys~, small=@sf.t("web-pages.vault.title"), head=fn() {
         c.box(style=pf_head, fn() {
           c.box(style=pf_mark, fn() {
             @sf.icon(c, @settings.kind_icon(text(rv, "kind")), size=vi_mark_glyph, color=t.p.text) |> ignore
@@ -93,7 +102,7 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
       })
     // (narrow: its name the large title, what it is and where under it, 编辑 at the title's end)
     Narrow =>
-      @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, lead=sub, actions=fn() {
+      @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, keys~, lead=sub, actions=fn() {
         if editing_busy {
           @sf.spinner(c, size=pf_spin) |> ignore
         } else if @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit")) {

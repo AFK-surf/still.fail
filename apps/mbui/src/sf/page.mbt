@@ -449,12 +449,13 @@ fn narrow_page(
   if !lead.is_empty() {
     blocks.push(fn() { c.box(style=pg_lead_box, fn() { lead.draw(c, pg_lead) }) |> ignore })
   }
+  let own = blocks.length()
   for b in content {
     blocks.push(b)
   }
   // (each drawn as its list lays it out, after this returns: its back, its title's line and what it does there in the
   // page's arrangement, as what it holds is)
-  narrow_list(c, key, blocks.map(fn(b) { fn() { with_look(Narrow, b) } }), foot, chrome~)
+  narrow_list(c, key, blocks.map(fn(b) { fn() { with_look(Narrow, b) } }), foot, chrome~, own~)
 }
 
 ///|
@@ -528,8 +529,16 @@ fn keyed_blocks(
 /// A narrow page's blocks in its list, those from `chrome` on (what it holds: its own head, what it is for, its
 /// groups, cards, headings, notes) in the page's room 12 from its sides (pg_room), as a panel's are in the room it
 /// leaves; the frame's own over them (back, the large title) from the page's edges; 30 under the last, then `foot`.
-fn narrow_list(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot : Double, chrome? : Int = 0) -> Unit {
-  let (blocks, sized) = keyed_blocks(c, "settings/" + key, blocks, chrome)
+fn narrow_list(
+  c : @ui.Ctx,
+  key : String,
+  blocks : Array[() -> Unit],
+  foot : Double,
+  chrome? : Int = 0,
+  own? : Int = chrome,
+) -> Unit {
+  // (`own`: how many of them are the page's own, before what it holds: its keys are those after)
+  let (blocks, sized) = keyed_blocks(c, "settings/" + key, blocks, own)
   let n = blocks.length()
   c.list("settings/" + key, n + 1, 80.0, sized?, fn(i) {
     if i == n {

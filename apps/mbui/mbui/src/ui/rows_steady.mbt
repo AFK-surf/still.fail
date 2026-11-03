@@ -198,7 +198,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
               }
               None => ""
             }
-            out.push("row " + key + " " + f + " seen=\{seen}" + why)
+            out.push("row " + key + " (list " + st.named + ") " + f + " seen=\{seen}" + why)
             said = true
           }
           None => ()
