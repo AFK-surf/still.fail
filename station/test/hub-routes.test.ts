@@ -18,7 +18,7 @@ import { Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import { digest } from "../src/read/digest.ts";
-import { openStore } from "../src/read/store.ts";
+import { answersSince, openStore } from "../src/read/store.ts";
 import { chatMarks, chatRows, chats } from "../src/read/views.ts";
 import { marksOf, rowsMade } from "../../client/core-ts/src/station/rows-made.ts";
 import { isDeepStrictEqual } from "node:util";
@@ -883,6 +883,32 @@ test("sidebar answers read only chats that can have a card answer", async () => 
     assert.deepEqual(scoped.rows, whole.filter((row: any) => row.id === quiet.key));
     assert.equal(whole.find((row: any) => row.id === asked.key).answered.length, 1);
     assert.equal(quietMessages, 0, "neither a full nor a scoped sidebar reads people’s messages from a chat with no cards");
+    store.db.close();
+  } finally { await r.close(); }
+});
+
+test("the cards answered in some chats are those the whole station's say, read by their cards", async () => {
+  const r = rig();
+  try {
+    const made = (await r.ask("POST", "/sessions", { runtime: "claude", title: "Cards" }))[1] as any;
+    const id = made.thread.id;
+    const card = (ts: string, text: string) => ({ ...newMessage(id, ts, "agent", made.key, text), card: { type: "options", options: [{ label: "Yes" }] } });
+    // Said before any card; a card answered, then said more; a card followed by another before anyone answered; that
+    // one answered; a card no one answered yet.
+    r.store.insertMessage(newMessage(id, "p0", "person", viewer.email, "hi"));
+    r.store.insertMessage(card("c1", "One?"));
+    r.store.insertMessage(newMessage(id, "p1", "person", viewer.email, "Yes"));
+    r.store.insertMessage(newMessage(id, "p2", "person", viewer.email, "and more"));
+    r.store.insertMessage(card("c2", "Two?"));
+    r.store.insertMessage(card("c3", "Three?"));
+    r.store.insertMessage(newMessage(id, "p3", "person", viewer.email, "Three it is"));
+    r.store.insertMessage(card("c4", "Four?"));
+    const store = openStore(r.data);
+    const said = (a: any[]) => a.filter((x) => x.answer !== null && x.question.thread === id).map((x) => [x.question.text, x.answer.text]);
+    const whole = answersSince(store, 0);
+    const scoped = answersSince(store, 0, [id]);
+    assert.deepEqual(said(scoped), [["One?", "Yes"], ["Three?", "Three it is"]]);
+    assert.deepEqual(said(scoped), said(whole));
     store.db.close();
   } finally { await r.close(); }
 });
