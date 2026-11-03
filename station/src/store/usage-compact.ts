@@ -115,6 +115,32 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
         PRIMARY KEY (session, minute, thread, person, profile, runtime, model, fast)) WITHOUT ROWID;
       CREATE INDEX usage_compact_time ON usage_compact (minute, session);
       CREATE INDEX usage_compact_scope_time ON usage_compact (scope, minute, session);
+      -- 'G' is all scopes, 'H' is the home-only scope and 'W' prefixes a workspace id. New buckets start empty, so
+      -- this total is maintained only from later writes; installing it never reads or reconstructs old usage.
+      CREATE TABLE usage_compact_total (scope TEXT PRIMARY KEY, calls INTEGER NOT NULL, tokens INTEGER NOT NULL) WITHOUT ROWID;
+      CREATE TRIGGER usage_compact_total_add AFTER INSERT ON usage_compact BEGIN
+        INSERT INTO usage_compact_total VALUES (NEW.scope, NEW.calls, ${tokens("NEW")}), ('G', NEW.calls, ${tokens("NEW")})
+          ON CONFLICT (scope) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;
+      END;
+      CREATE TRIGGER usage_compact_total_drop AFTER DELETE ON usage_compact BEGIN
+        UPDATE usage_compact_total SET calls = calls - OLD.calls, tokens = tokens - ${tokens("OLD")}
+          WHERE scope IN (OLD.scope, 'G');
+        DELETE FROM usage_compact_total WHERE scope IN (OLD.scope, 'G') AND calls = 0 AND tokens = 0;
+      END;
+      CREATE TRIGGER usage_compact_total_change AFTER UPDATE OF scope, calls, input, cache_read, cache_write, cache_write_long, output ON usage_compact
+        WHEN OLD.scope IS NOT NEW.scope OR OLD.calls IS NOT NEW.calls OR ${cols.slice(1).map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ")} BEGIN
+        INSERT INTO usage_compact_total SELECT OLD.scope, -OLD.calls, -${tokens("OLD")} WHERE OLD.scope IS NOT NEW.scope
+          ON CONFLICT (scope) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;
+        INSERT INTO usage_compact_total SELECT NEW.scope,
+          CASE WHEN OLD.scope IS NEW.scope THEN NEW.calls - OLD.calls ELSE NEW.calls END,
+          CASE WHEN OLD.scope IS NEW.scope THEN ${tokens("NEW")} - ${tokens("OLD")} ELSE ${tokens("NEW")} END
+          WHERE 1
+          ON CONFLICT (scope) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;
+        INSERT INTO usage_compact_total SELECT 'G', NEW.calls - OLD.calls, ${tokens("NEW")} - ${tokens("OLD")}
+          WHERE OLD.calls IS NOT NEW.calls OR ${cols.slice(1).map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ")}
+          ON CONFLICT (scope) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;
+        DELETE FROM usage_compact_total WHERE scope IN (OLD.scope, NEW.scope, 'G') AND calls = 0 AND tokens = 0;
+      END;
       CREATE TABLE usage_compact_moving (session TEXT PRIMARY KEY, target TEXT NOT NULL, phase INTEGER NOT NULL DEFAULT 0, after_minute INTEGER,
         after_thread INTEGER, after_person TEXT, after_profile TEXT, after_runtime TEXT, after_model TEXT, after_fast INTEGER) WITHOUT ROWID;
       CREATE TABLE usage_compact_moving_scope (scope TEXT NOT NULL, session TEXT NOT NULL, PRIMARY KEY (scope, session)) WITHOUT ROWID;
@@ -234,6 +260,16 @@ export function compactScopeReady(db: DatabaseSync, viewer: InWorkspace | null):
   const sql = viewer.home ? "SELECT 1 FROM usage_compact_moving_scope WHERE scope IN (?, 'H') LIMIT 1"
     : "SELECT 1 FROM usage_compact_moving_scope WHERE scope = ? LIMIT 1";
   return db.prepare(sql).get(ws) === undefined;
+}
+
+/// The lifetime total of compacted calls alone. Scope moves must finish before any affected viewer sees the result.
+export function compactTotal(db: DatabaseSync, viewer: InWorkspace | null): { calls: number; tokens: number } | null {
+  if (!compactScopeReady(db, viewer)) return null;
+  const scopes = viewer === null ? ["G"] : viewer.home ? [`W${viewer.workspace}`, "H"] : [`W${viewer.workspace}`];
+  const rows = db.prepare(`SELECT calls, tokens FROM usage_compact_total WHERE scope IN (${scopes.map(() => "?").join(", ")})`)
+    .all(...scopes) as { calls: number; tokens: number }[];
+  return rows.reduce((total, row) => ({ calls: total.calls + Number(row.calls), tokens: total.tokens + Number(row.tokens) }),
+    { calls: 0, tokens: 0 });
 }
 
 type Moving = { session: string; target: string; phase: number; after_minute: number | null; after_thread: number | null;

@@ -83,3 +83,22 @@ for (const recursive of [false, true]) test(`compact totals follow changes and w
     assert.deepEqual(compact.compactTotal(store.db, b), { calls: 3, tokens: 60 });
   } finally { store.close(); }
 });
+
+test("a zeroed compact bucket can later contribute to both its workspace and the overall total", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A",
+      createdAt: 0, lastActiveAt: 0 });
+    compact.installCompactUsage(store.db, () => store.now());
+    retireUsageIndexes(store.db);
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "call", at: 0, model: "m", subagent: true, fast: false, input: 1, cacheRead: 0,
+      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    store.db.exec("UPDATE usage SET calls = 0, input = 0, output = 0 WHERE id = 'call'");
+    assert.deepEqual(compact.compactTotal(store.db, null), { calls: 0, tokens: 0 });
+    store.db.exec("UPDATE usage SET calls = 1, output = 4 WHERE id = 'call'");
+    assert.deepEqual(compact.compactTotal(store.db, a), { calls: 1, tokens: 4 });
+    assert.deepEqual(compact.compactTotal(store.db, null), { calls: 1, tokens: 4 });
+  } finally { store.close(); }
+});
