@@ -136,3 +136,20 @@ test("refreshing a bounded history changes its lifetime total without counting t
   assert.equal(updated.partialHistory.beforeDay, "2026-11-03");
   assert.deepEqual(updated.partialHistory.days.map((d: J) => d.day), ["2026-11-02"]);
 });
+
+test("a partial refresh includes the long-lived cache writes in history and its lifetime total", () => {
+  const from = Date.UTC(2026, 8, 5, 16), since = Date.UTC(2026, 10, 1, 16);
+  const before = row("2026-11-02", "s", "m", 1, { cacheWriteLong: 20 });
+  const after = row("2026-11-02", "s", "m", 1, { cacheWriteLong: 35 });
+  for (const complete of [false, true]) for (const detailSince of [undefined, since]) {
+    const key = complete ? "history" : "partialHistory";
+    const held: J = { from, rows: [before], ...(detailSince === undefined ? {} : { detailSince }),
+      ...(!complete ? { historyUnavailable: true } : {}),
+      [key]: { days: [{ day: "2026-11-02", runtime: "claude", model: "m", tokens: 126, calls: 1 }],
+        tokens: 1_000, beforeDay: "2026-11-03" } };
+    const part = { rows: [after], ...(detailSince === undefined ? {} : { detailSince }) };
+    const result: J = withPart(held, part, "2026-11-02", since);
+    assert.equal(result[key].days[0].tokens, 141, "the daily total matches a whole usage read");
+    assert.equal(result[key].tokens, 1_015, "the lifetime total includes the change to long-lived cache writes");
+  }
+});

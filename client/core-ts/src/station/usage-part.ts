@@ -33,6 +33,8 @@ export function holdsWhole(held: unknown, from: number): held is J {
 
 const arr = (v: unknown): J[] => (Array.isArray(v) ? (v.filter(isObject) as J[]) : []);
 const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+const tokensOfRow = (r: J): number => n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite"))
+  + n(get(r, "cacheWriteLong")) + n(get(r, "output"));
 
 /// An update from a different statistics generation cannot be spliced into what was held from the old one.
 export function sameDetailCoverage(held: unknown, part: unknown): boolean {
@@ -56,7 +58,7 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
     const model = typeof get(r, "model") === "string" ? (get(r, "model") as string) : null;
     const key = `${d}\n${runtime}\n${model ?? ""}`;
     const at = target.get(key) ?? { day: d, runtime, model, tokens: 0, calls: 0 };
-    at.tokens += sign * (n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite")) + n(get(r, "output")));
+    at.tokens += sign * tokensOfRow(r);
     at.calls += sign * n(get(r, "calls"));
     target.set(key, at);
   } };
@@ -89,7 +91,7 @@ export function withPart(held: J, part: unknown, day: string, since: number): J 
   let total: number | undefined;
   if (typeof beforeDay === "string" && typeof previousTotal === "number" && Number.isFinite(previousTotal)) {
     const tokensOf = (records: J[]) => records.filter((r) => String(get(r, "day")) >= day && String(get(r, "day")) < beforeDay)
-      .reduce((sum, r) => sum + n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite")) + n(get(r, "output")), 0);
+      .reduce((sum, r) => sum + tokensOfRow(r), 0);
     total = previousTotal - tokensOf(arr(get(held, "rows"))) + tokensOf(arr(get(part, "rows")));
     updatedDays = updatedDays.filter((d) => String(get(d, "day")) < beforeDay);
   }
