@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { constants, DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { usageRoutes } from "../src/api/routes/usage.ts";
+import { hearLines, type Line } from "../src/ops/log.ts";
 import { Readers } from "../src/read/pool.ts";
 import * as reads from "../src/read/store.ts";
 import { usage } from "../src/read/usage.ts";
@@ -96,6 +97,8 @@ test("an unbounded history settles its workspace's new statistics so its cache c
   const writer = Store.open(path);
   let db: DatabaseSync | null = null;
   let mover: ReturnType<typeof watchCompactMoves> | null = null;
+  const lines: Line[] = [];
+  hearLines((line) => lines.push(line));
   try {
     for (const key of ["A", "B"]) writer.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
       workspace: "/w", token: key, ws: key, createdAt: 0, lastActiveAt: 0 });
@@ -118,6 +121,7 @@ test("an unbounded history settles its workspace's new statistics so its cache c
     const first = await read(), pending = await read();
     assert.ok(first && pending);
     assert.equal(pending.diagnostics.parts, 128, "pending buckets have to be checked before they are settled");
+    usage(reader, "en", 0n, 128n * 60_000n, 0n, false, viewer, false, { batched: pending, remoteRuns: false });
     mover = watchCompactMoves(writer, Promise.resolve());
     const settled = new Promise<void>((resolve, reject) => {
       const abort = () => { unsubscribe(); reject(t.signal.reason); };
@@ -144,7 +148,12 @@ test("an unbounded history settles its workspace's new statistics so its cache c
     assert.equal(reused.diagnostics.cache, "reused");
     assert.equal(reused.diagnostics.parts, 0);
     assert.equal(reused.diagnostics.candidates, 0);
+    for (let n = 0; n < 2; n++) usage(reader, "en", 0n, 128n * 60_000n, 0n, false, viewer, false, { batched: reused, remoteRuns: false });
+    assert.deepEqual(lines.filter((line) => line.message === "a usage read reused its summary")
+      .map((line) => [line.fields.summaryParts, line.fields.summaryClean]), [[128, false], [0, true]],
+      "the first clean reuse is recorded once even if an earlier reuse still read pending buckets");
   } finally {
+    hearLines(null);
     if (mover !== null) await mover.close();
     db?.close();
     writer.close();
