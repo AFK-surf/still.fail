@@ -340,6 +340,28 @@ test("what lists say of a thread and a session is kept as its messages are writt
   assert.deepEqual(people(), []);
 });
 
+test("deleting a session removes its first-message summary once, not once per delivery", () => {
+  const store = memory();
+  session(store, "a");
+  session(store, "b");
+  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  store.joinThread(thread.id, "a", "ember");
+  store.joinThread(thread.id, "b", "ember");
+  for (let i = 0; i < 32; i++) {
+    const [n] = say(store, thread.id, `1.${i + 2}`, "person", "x@a", `message ${i}`);
+    store.deliver(thread.id, n, i === 0 ? ["a", "b"] : ["a"]);
+  }
+  store.db.exec(`
+    CREATE TEMP TABLE first_removed (session TEXT);
+    CREATE TEMP TRIGGER count_first_removed AFTER DELETE ON main.session_first BEGIN
+      INSERT INTO first_removed VALUES (OLD.session);
+    END;
+  `);
+  store.deleteSession("a");
+  assert.deepEqual(store.db.prepare("SELECT session FROM first_removed").all().map((r) => r.session), ["a"]);
+  assert.equal(store.sessionStats("b").get("b")!.firstText, "message 0", "the other participant keeps its summary");
+});
+
 test("what two chats' agents wrote each other is neither a chat's unread nor what lists show of it, archived or not", () => {
   const data = tempdir();
   const store = open(join(data, "stillfail.db"), join(data, "archive"));
