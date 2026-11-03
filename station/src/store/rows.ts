@@ -175,7 +175,7 @@ export type TurnSummary = {
 
 export type TurnRow = { id: string; summary: TurnSummary };
 
-export type SessionStats = { turns: number; pending: number; firstText: string | null; lastTurn: TurnSummary | null };
+export type SessionStats = { turns: number; workMs: number; pending: number; firstText: string | null; lastTurn: TurnSummary | null };
 /// Whether a session has something going: its messages not delivered yet, and its latest turn (store.ts `statsOf`).
 export type SessionBusy = Pick<SessionStats, "pending" | "lastTurn">;
 

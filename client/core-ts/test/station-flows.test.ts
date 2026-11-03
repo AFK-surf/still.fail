@@ -21,6 +21,8 @@ import { dayOf } from "../src/station/usage-part.ts";
 import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
+import { card } from "../src/views/brief.ts";
+import { t } from "../src/i18n.ts";
 import { JSON_IDLE_MS, SOCKET_OPEN_MS } from "../src/station/requests.ts";
 import { HostWire, concat, encodeFrame, takeFrames, type LinkNet } from "../src/station/wire.ts";
 import { NET_EVERY_MS } from "../src/station/topics.ts";
@@ -501,7 +503,7 @@ test("a_stations_history_comes_in_batches", async () => {
   // nothing read alone.
   const batches = batchesIn(host).map((r) => JSON.parse(new TextDecoder().decode(r.body!)).gets as string[]);
   assert.deepEqual(batches.map((b) => b.length), [40, 22]);
-  assert.deepEqual(batches[0]!.slice(0, 3), ["/sessions/k1", "/threads/60/entries?limit=50", "/threads/59/entries?limit=50"], "the latest chats first");
+  assert.deepEqual(batches[0]!.slice(0, 3), ["/sessions/k1?turns=1", "/threads/60/entries?limit=50", "/threads/59/entries?limit=50"], "the latest chats first");
   assert.equal(batches[1]!.at(-1), "/sessions/k1/timeline?before=1000000000000000&limit=200&brief=1");
   assert.equal(host.requests.filter((r) => r.method === "GET" && r.url.includes("/entries")).length, 0);
   for (const id of [1, 30, 60]) assert.deepEqual(core.inner.data.logNumbers("entry", ST, String(id)), [1, 2, 3]);
@@ -686,7 +688,7 @@ test("a_station_from_before_batches_is_read_a_request_a_read", async () => {
   const alone = (path: string) => host.requests.filter((r) => r.method === "GET" && r.url.endsWith(path)).length;
   assert.equal(batchesIn(host).length, 1);
   assert.deepEqual([1, 2, 3].map((id) => alone(`/admin/api/threads/${id}/entries?limit=50`)), [1, 1, 1]);
-  assert.equal(alone("/admin/api/sessions/k1"), 1);
+  assert.equal(alone("/admin/api/sessions/k1?turns=1"), 1);
   for (const id of [1, 2, 3]) assert.deepEqual(core.inner.data.logNumbers("entry", ST, String(id)), [1, 2, 3]);
   core.close();
 });
@@ -802,15 +804,15 @@ test("writes_bring_what_they_touch_up_to_date", async () => {
   const perform = (name: string, params: J) => run(core.inner.stations.perform(op(name, params), null));
   await host.settle();
   assert.notEqual(core.inner.data.get({ topic: "session", station: ST, key: "k 1" }), undefined);
-  const [s, k, o, other, chats] = ["/admin/api/sessions", "/admin/api/sessions/k%201", "/admin/api/overview", "/admin/api/sessions/other", "/admin/api/chats"].map((p) => gets(host, p));
+  const [s, k, o, other, chats] = ["/admin/api/sessions", "/admin/api/sessions/k%201?turns=1", "/admin/api/overview", "/admin/api/sessions/other?turns=1", "/admin/api/chats"].map((p) => gets(host, p));
   await perform("session.stop", { key: "k 1" });
   await host.settle();
   // Its process stopped: its own detail read again before the call answers; the lists that show it its station tells
   // as they change, and are not read whole again.
   assert.equal(gets(host, "/admin/api/sessions"), s);
-  assert.equal(gets(host, "/admin/api/sessions/k%201"), k + 1);
+  assert.equal(gets(host, "/admin/api/sessions/k%201?turns=1"), k + 1);
   assert.equal(gets(host, "/admin/api/chats"), chats);
-  assert.equal(gets(host, "/admin/api/sessions/other"), other);
+  assert.equal(gets(host, "/admin/api/sessions/other?turns=1"), other);
   assert.equal(gets(host, "/admin/api/overview"), o);
   // A profile edit answers the overview: that is the record now, nothing is read again.
   // (Checked already: a profile not checked yet is checked as it appears, which reads the overview again.)
@@ -876,21 +878,21 @@ test("archive_fallback_updates_the_session_only_after_success", async () => {
   const { host, core } = await started(answers);
   await host.settle();
   const archive = op("chat.archive", { thread: 7, session: "k", archived: true });
-  const before = gets(host, "/admin/api/sessions/k");
+  const before = gets(host, "/admin/api/sessions/k?turns=1");
   const posts = (path: string) => host.requests.filter((r) => r.method === "POST" && r.url.endsWith(path)).length;
   answers["POST /threads/7/archive"] = status(403, { error: "denied" });
   assert.equal((await failure(core.inner.stations.perform(archive, null))).status, 403);
   assert.equal(posts("/admin/api/sessions/k/archive"), 0);
-  assert.equal(gets(host, "/admin/api/sessions/k"), before);
+  assert.equal(gets(host, "/admin/api/sessions/k?turns=1"), before);
   answers["POST /threads/7/archive"] = status(404, {});
   answers["POST /sessions/k/archive"] = status(500, {});
   await failure(core.inner.stations.perform(archive, null));
   await host.settle();
-  assert.equal(gets(host, "/admin/api/sessions/k"), before);
+  assert.equal(gets(host, "/admin/api/sessions/k?turns=1"), before);
   answers["POST /sessions/k/archive"] = {};
   await run(core.inner.stations.perform(archive, null));
   await host.settle();
-  assert.equal(gets(host, "/admin/api/sessions/k"), before + 1);
+  assert.equal(gets(host, "/admin/api/sessions/k?turns=1"), before + 1);
   assert.equal(posts("/admin/api/sessions/k/archive"), 2);
   core.close();
 });
@@ -1272,7 +1274,7 @@ test("session_events_update_in_place", async () => {
   push("session", summary("c", 0));
   await host.settle();
   assert.equal(reqs(host), reads + 1);
-  assert.equal(gets(host, "/admin/api/sessions/c"), 1);
+  assert.equal(gets(host, "/admin/api/sessions/c?turns=1"), 1);
   const list = () => core.inner.data.get({ topic: "sessions", station: ST }) as J[];
   assert.deepEqual(list().map((s) => s.key), ["c", "a", "b"]);
   assert.equal(list()[1].title, "新名字");
@@ -1280,23 +1282,47 @@ test("session_events_update_in_place", async () => {
   // The turn ended, said by a station from before (its last turn named by no id): the detail's turns are read again.
   push("session", { ...renamed, lastTurn: { ...renamed.lastTurn, endedAt: 2 } });
   await host.settle();
-  assert.equal(gets(host, "/admin/api/sessions/a"), 2);
+  assert.equal(gets(host, "/admin/api/sessions/a?turns=1"), 2);
   // Said with its id: the turn put in place, then one more, as they go on; nothing read.
   push("session", { ...renamed, lastTurn: { ...turn, endedAt: 3 } });
   push("session", { ...renamed, turns: 2, lastTurn: { ...turn, id: "t2", startedAt: 4 } });
   await host.settle();
-  assert.equal(gets(host, "/admin/api/sessions/a"), 2);
+  assert.equal(gets(host, "/admin/api/sessions/a?turns=1"), 2);
   assert.deepEqual(sessionOf(core, "a").turns.map((t: J) => [t.id, t.endedAt]), [["t1", 3], ["t2", null]]);
   // Turns it did not hear of (two at once): read again.
   push("session", { ...renamed, turns: 4, lastTurn: { ...turn, id: "t4", startedAt: 9 } });
   await host.settle();
-  assert.equal(gets(host, "/admin/api/sessions/a"), 3);
+  assert.equal(gets(host, "/admin/api/sessions/a?turns=1"), 3);
   // Archived: gone from the list. Removed: gone, and its topic says so.
   push("session", { ...summary("b", 0), archivedAt: 5 });
   push("session-removed", { key: "a" });
   await host.settle();
   assert.deepEqual(list().map((s) => s.key), ["c"]);
   assert.equal(topicOf(core, { topic: "session", station: ST, key: "a" }).err.status, 404);
+  core.close();
+});
+
+// On ccvm (2026-11-03) a session's detail with its 3,685 turns took 25 s to read, again after each turn: the device
+// read them all to add up how long they ran.
+test("a station that counts a sessions turns has its detail read once, its latest turn alone, and its work said from the summary", async () => {
+  const turn = { id: "t9", kind: "chat", outcome: null, declared: null, detail: null, startedAt: 90 * 60_000, endedAt: null };
+  const counted = (n: number, workMs: number, last: J) => ({ ...summary("a", n), turns: n, workMs, lastTurn: last });
+  const { host, core, push } = await started({
+    ...base(),
+    "GET /sessions": [counted(9, 72 * 60_000, turn)],
+    "GET /sessions/a?turns=1": { session: counted(9, 72 * 60_000, turn), threads: [], turns: [turn] },
+  });
+  await host.settle();
+  const once = gets(host, "/admin/api/sessions/a?turns=1");
+  assert.equal(once, 1, "its latest turn alone, asked as such");
+  assert.equal(gets(host, "/admin/api/sessions/a"), 0, "never all of them");
+  // Its turn ends, another starts and ends: the summary says so, and nothing is read.
+  push("session", counted(9, 75 * 60_000, { ...turn, endedAt: 93 * 60_000 }));
+  push("session", counted(10, 75 * 60_000, { ...turn, id: "t10", startedAt: 94 * 60_000 }));
+  push("session", counted(10, 80 * 60_000, { ...turn, id: "t10", startedAt: 94 * 60_000, endedAt: 99 * 60_000 }));
+  await host.settle();
+  assert.equal(gets(host, "/admin/api/sessions/a?turns=1"), once);
+  assert.equal(card(sessionOf(core, "a"), null).work, t("core-views.agent.work", { n: 10, time: t("core-views.agent.hours", { h: 1, m: 20 }) }), "as many turns and as long as the summary says");
   core.close();
 });
 

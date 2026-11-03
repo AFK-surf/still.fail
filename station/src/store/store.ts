@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addSessionTurns, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addCardOutcomes, addListState, addLetters, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
@@ -206,6 +206,7 @@ export class Store {
       addLetters(db);
       addCardOutcomes(db);
       addSessionTurns(db);
+      addSessionWork(db);
       addTellIndexes(db);
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
@@ -1765,10 +1766,12 @@ export class Store {
     return out;
   }
 
-  /// Per session (or for one): turn count, the latest turn, undelivered messages and the first one it heard.
+  /// Per session (or for one): turn count and how long its ended turns ran (added up from them here, what the readers
+  /// have kept: read/store.ts `sessionStats`), the latest turn, undelivered messages and the first one it heard.
   sessionStats(key: string | null): Map<string, SessionStats> {
     const sql = `SELECT s.key,
          (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
+         (SELECT COALESCE(SUM(t.ended_at - t.started_at), 0) FROM turns t WHERE t.session_key = s.key AND t.ended_at > t.started_at) AS work_ms,
          ((SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) +
          (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
          (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
@@ -1781,7 +1784,7 @@ export class Store {
       rows
         .map((r): [string, SessionStats] => [
           r.key,
-          { turns: r.turns, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : toTurnSummary(r) },
+          { turns: r.turns, workMs: r.work_ms, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : toTurnSummary(r) },
         ])
         .sort(([a], [b]) => byBytes(a, b)),
     );
